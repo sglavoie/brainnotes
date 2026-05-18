@@ -1,0 +1,304 @@
+// Package wikilink parses and rewrites Obsidian-style [[wikilinks]] in markdown
+// text. Parsing is code-block aware: links inside fenced, indented, or inline
+// code are ignored so that documentation samples and code snippets are never
+// touched by rewrites. All offsets are byte offsets in the input string.
+package wikilink
+
+import (
+	"regexp"
+	"strings"
+)
+
+// Link is a single wikilink occurrence.
+//
+// Target is the full path-or-title before the optional `#heading` and `|alias`
+// (e.g. "Books/Foo" for `[[Books/Foo]]`). Folder is the prefix up to the last
+// `/`, empty when the link has no folder component. Heading and Alias capture
+// the optional fragment and display text. Start/End are byte offsets in the
+// source text — End is exclusive (`text[Start:End]` returns the full `[[...]]`
+// span).
+type Link struct {
+	Raw     string
+	Target  string
+	Folder  string
+	Heading string
+	Alias   string
+	Start   int
+	End     int
+}
+
+// Title returns the last path segment of Target — the bit after the final `/`,
+// or Target itself when there is no folder prefix.
+func (l Link) Title() string {
+	if l.Folder == "" {
+		return l.Target
+	}
+	return l.Target[len(l.Folder)+1:]
+}
+
+// wikilinkRE matches `[[Target]]`, `[[Target#Heading]]`, `[[Target|Alias]]`,
+// or any combination. Capture groups: 1=Target, 2=Heading, 3=Alias.
+var wikilinkRE = regexp.MustCompile(`\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]`)
+
+// Parse returns every wikilink in s, in source order, skipping any match that
+// falls inside a fenced code block, indented code block, or inline code span.
+// The returned slice is nil when s contains no links.
+func Parse(s string) []Link {
+	mask := buildCodeMask(s)
+	matches := wikilinkRE.FindAllStringSubmatchIndex(s, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	var links []Link
+	for _, m := range matches {
+		start, end := m[0], m[1]
+		if rangeOverlapsAny(start, end, mask) {
+			continue
+		}
+		target := s[m[2]:m[3]]
+		var heading, alias string
+		if m[4] != -1 {
+			heading = s[m[4]:m[5]]
+		}
+		if m[6] != -1 {
+			alias = s[m[6]:m[7]]
+		}
+		folder := ""
+		if idx := strings.LastIndex(target, "/"); idx >= 0 {
+			folder = target[:idx]
+		}
+		links = append(links, Link{
+			Raw:     s[start:end],
+			Target:  target,
+			Folder:  folder,
+			Heading: heading,
+			Alias:   alias,
+			Start:   start,
+			End:     end,
+		})
+	}
+	return links
+}
+
+// byteRange is a half-open [start, end) span in the source.
+type byteRange struct {
+	start, end int
+}
+
+// rangeOverlapsAny reports whether [start, end) overlaps any range in ranges.
+func rangeOverlapsAny(start, end int, ranges []byteRange) bool {
+	for _, r := range ranges {
+		if start < r.end && end > r.start {
+			return true
+		}
+	}
+	return false
+}
+
+// buildCodeMask returns the byte ranges in s that should not be scanned for
+// wikilinks: fenced code blocks, indented code blocks, and inline backtick
+// spans.
+func buildCodeMask(s string) []byteRange {
+	var ranges []byteRange
+	lines := splitLineSpans(s)
+
+	var (
+		fenceOpen      bool
+		fenceChar      byte
+		fenceLen       int
+		inIndentedCode bool
+		prevBlank      = true // treat document start as following a blank line
+	)
+
+	for _, ln := range lines {
+		text := s[ln.start:ln.end]
+
+		if fenceOpen {
+			ranges = append(ranges, byteRange{ln.start, ln.end})
+			if isFenceCloser(text, fenceChar, fenceLen) {
+				fenceOpen = false
+			}
+			prevBlank = false
+			continue
+		}
+
+		if ch, n, ok := isFenceOpener(text); ok {
+			ranges = append(ranges, byteRange{ln.start, ln.end})
+			fenceOpen = true
+			fenceChar = ch
+			fenceLen = n
+			inIndentedCode = false
+			prevBlank = false
+			continue
+		}
+
+		if isBlankLine(text) {
+			inIndentedCode = false
+			prevBlank = true
+			continue
+		}
+
+		if startsWithIndentedCode(text) && (prevBlank || inIndentedCode) {
+			ranges = append(ranges, byteRange{ln.start, ln.end})
+			inIndentedCode = true
+			prevBlank = false
+			continue
+		}
+
+		inIndentedCode = false
+		for _, sp := range inlineCodeSpans(text) {
+			ranges = append(ranges, byteRange{ln.start + sp.start, ln.start + sp.end})
+		}
+		prevBlank = false
+	}
+
+	return ranges
+}
+
+// splitLineSpans returns the [start, end) byte spans of each line in s. The
+// trailing newline is not included in the span. Both `\n` and `\r\n` are
+// handled (`\r` ends up as the last byte of the line's span and is harmless
+// for the checks we perform).
+func splitLineSpans(s string) []byteRange {
+	if s == "" {
+		return nil
+	}
+	var out []byteRange
+	pos := 0
+	for pos <= len(s) {
+		nl := strings.IndexByte(s[pos:], '\n')
+		if nl < 0 {
+			if pos < len(s) {
+				out = append(out, byteRange{pos, len(s)})
+			}
+			break
+		}
+		end := pos + nl
+		// strip trailing \r so isBlankLine and fence checks see clean content
+		trimEnd := end
+		if trimEnd > pos && s[trimEnd-1] == '\r' {
+			trimEnd--
+		}
+		out = append(out, byteRange{pos, trimEnd})
+		pos = end + 1
+	}
+	return out
+}
+
+// isBlankLine reports whether the line contains only whitespace.
+func isBlankLine(line string) bool {
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		if c != ' ' && c != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+// startsWithIndentedCode reports whether the line begins with 4+ spaces or a
+// leading tab — the CommonMark indented-code-block trigger.
+func startsWithIndentedCode(line string) bool {
+	if len(line) == 0 {
+		return false
+	}
+	if line[0] == '\t' {
+		return true
+	}
+	if len(line) >= 4 && line[0] == ' ' && line[1] == ' ' && line[2] == ' ' && line[3] == ' ' {
+		return true
+	}
+	return false
+}
+
+// isFenceOpener reports whether line opens a fenced code block. It returns the
+// fence character (“ ` “ or `~`), its length, and true. Up to 3 leading
+// spaces of indentation are tolerated per CommonMark.
+func isFenceOpener(line string) (byte, int, bool) {
+	i := 0
+	for i < 4 && i < len(line) && line[i] == ' ' {
+		i++
+	}
+	if i >= 4 || i >= len(line) {
+		return 0, 0, false
+	}
+	ch := line[i]
+	if ch != '`' && ch != '~' {
+		return 0, 0, false
+	}
+	n := 0
+	for i+n < len(line) && line[i+n] == ch {
+		n++
+	}
+	if n < 3 {
+		return 0, 0, false
+	}
+	// Info string after the fence (e.g. ```go) is allowed for openers.
+	return ch, n, true
+}
+
+// isFenceCloser reports whether line closes a fenced block opened with ch
+// repeated openLen times. A closer may not have a trailing info string — only
+// whitespace after the fence run.
+func isFenceCloser(line string, ch byte, openLen int) bool {
+	i := 0
+	for i < 4 && i < len(line) && line[i] == ' ' {
+		i++
+	}
+	if i >= 4 || i >= len(line) || line[i] != ch {
+		return false
+	}
+	n := 0
+	for i+n < len(line) && line[i+n] == ch {
+		n++
+	}
+	if n < openLen {
+		return false
+	}
+	rest := line[i+n:]
+	return strings.TrimSpace(rest) == ""
+}
+
+// inlineCodeSpans returns the spans (relative to line) covered by inline code.
+// A backtick run of length N is closed by the next run of exactly N backticks
+// per CommonMark. Unmatched openings are ignored — they aren't code spans.
+func inlineCodeSpans(line string) []byteRange {
+	var spans []byteRange
+	i := 0
+	for i < len(line) {
+		if line[i] != '`' {
+			i++
+			continue
+		}
+		start := i
+		n := 0
+		for i < len(line) && line[i] == '`' {
+			n++
+			i++
+		}
+		j := i
+		found := false
+		for j < len(line) {
+			if line[j] != '`' {
+				j++
+				continue
+			}
+			m := 0
+			for j < len(line) && line[j] == '`' {
+				m++
+				j++
+			}
+			if m == n {
+				spans = append(spans, byteRange{start, j})
+				i = j
+				found = true
+				break
+			}
+		}
+		if !found {
+			// No closer — the opening backticks aren't a code span. i is
+			// already past them, so we keep scanning.
+		}
+	}
+	return spans
+}

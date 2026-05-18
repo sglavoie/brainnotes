@@ -1,0 +1,170 @@
+package frontmatter
+
+import (
+	"fmt"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Parse extracts frontmatter and body from a markdown document. A file that
+// does not begin with `---\n` (or `---\r\n`) is treated as body-only with an
+// empty Front map. A file that opens a frontmatter block but never closes it
+// is also treated as body-only — the alternative (an error) would prevent
+// editing notes that happen to begin with a literal `---` line.
+//
+// Windows line endings (`\r\n`) are accepted on the delimiter lines; the body
+// is preserved verbatim.
+func Parse(data []byte) (Document, error) {
+	s := string(data)
+
+	startLen, ok := openDelimLen(s)
+	if !ok {
+		return Document{Front: NewMap(), Body: s}, nil
+	}
+
+	rest := s[startLen:]
+	closeOff, bodyOff, ok := findCloseDelim(rest)
+	if !ok {
+		return Document{Front: NewMap(), Body: s}, nil
+	}
+
+	yamlText := rest[:closeOff]
+	body := rest[bodyOff:]
+
+	m, err := parseYAML([]byte(yamlText))
+	if err != nil {
+		return Document{}, fmt.Errorf("frontmatter: parse yaml: %w", err)
+	}
+	return Document{Front: m, Body: body}, nil
+}
+
+// openDelimLen reports the byte length of the opening `---` line if s starts
+// with one.
+func openDelimLen(s string) (int, bool) {
+	switch {
+	case strings.HasPrefix(s, "---\n"):
+		return 4, true
+	case strings.HasPrefix(s, "---\r\n"):
+		return 5, true
+	}
+	return 0, false
+}
+
+// findCloseDelim scans s line-by-line for a closing `---` (optionally with a
+// trailing `\r`). It returns the byte offset at which the closing line starts
+// and the byte offset at which the body begins (just past the closing line's
+// newline). A trailing `---` with no newline (end of file) is also accepted,
+// in which case bodyOff == len(s).
+func findCloseDelim(s string) (closeOff, bodyOff int, ok bool) {
+	i := 0
+	for i < len(s) {
+		// Locate end of the current line.
+		eol := strings.IndexByte(s[i:], '\n')
+		var line string
+		var lineEnd int
+		if eol == -1 {
+			line = s[i:]
+			lineEnd = len(s)
+		} else {
+			line = s[i : i+eol]
+			lineEnd = i + eol + 1
+		}
+		if line == "---" || line == "---\r" {
+			return i, lineEnd, true
+		}
+		if eol == -1 {
+			break
+		}
+		i = lineEnd
+	}
+	return 0, 0, false
+}
+
+// parseYAML decodes a YAML mapping while preserving the source key order.
+func parseYAML(data []byte) (Map, error) {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return NewMap(), nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return Map{}, err
+	}
+	if doc.Kind == 0 || len(doc.Content) == 0 {
+		return NewMap(), nil
+	}
+	root := doc.Content[0]
+	switch root.Kind {
+	case yaml.MappingNode:
+		// fall through
+	case yaml.ScalarNode:
+		// A document that is just `null` is treated as empty.
+		if root.Tag == "!!null" {
+			return NewMap(), nil
+		}
+		return Map{}, fmt.Errorf("frontmatter: top-level must be a mapping, got scalar")
+	default:
+		return Map{}, fmt.Errorf("frontmatter: top-level must be a mapping")
+	}
+
+	m := NewMap()
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		keyNode := root.Content[i]
+		valNode := root.Content[i+1]
+		var key string
+		if err := keyNode.Decode(&key); err != nil {
+			return Map{}, fmt.Errorf("decode key: %w", err)
+		}
+		val, err := decodeNode(valNode)
+		if err != nil {
+			return Map{}, fmt.Errorf("decode value for %q: %w", key, err)
+		}
+		m.Set(key, val)
+	}
+	return m, nil
+}
+
+// decodeNode converts a yaml.Node into Go-native types. Lists become []any,
+// nested mappings become map[string]any, and scalars defer to yaml.v3's
+// default tag resolution (which yields string, int, float64, bool, time.Time,
+// or nil).
+func decodeNode(n *yaml.Node) (any, error) {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		if n.Tag == "!!null" || (n.Tag == "" && n.Value == "") {
+			return nil, nil
+		}
+		var v any
+		if err := n.Decode(&v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	case yaml.SequenceNode:
+		out := make([]any, 0, len(n.Content))
+		for _, c := range n.Content {
+			item, err := decodeNode(c)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, item)
+		}
+		return out, nil
+	case yaml.MappingNode:
+		var v map[string]any
+		if err := n.Decode(&v); err != nil {
+			return nil, err
+		}
+		return v, nil
+	case yaml.AliasNode:
+		if n.Alias == nil {
+			return nil, fmt.Errorf("dangling alias")
+		}
+		return decodeNode(n.Alias)
+	}
+	var v any
+	if err := n.Decode(&v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}

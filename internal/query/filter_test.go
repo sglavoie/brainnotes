@@ -1,0 +1,375 @@
+package query
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+)
+
+// newVault writes files into a temp dir and returns an opened *vault.Vault
+// plus a map from vault-relative path → loaded note for direct assertion.
+func newVault(t *testing.T, files map[string]string) (*vault.Vault, map[string]*vault.Note) {
+	t.Helper()
+	dir := t.TempDir()
+	for rel, body := range files {
+		full := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir parent of %s: %v", full, err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", full, err)
+		}
+	}
+	v, err := vault.Open(&config.Config{Vault: dir})
+	if err != nil {
+		t.Fatalf("open vault: %v", err)
+	}
+	notes, err := v.Notes()
+	if err != nil {
+		t.Fatalf("notes: %v", err)
+	}
+	out := make(map[string]*vault.Note, len(notes))
+	for _, n := range notes {
+		rel, err := filepath.Rel(v.Root, n.Path)
+		if err != nil {
+			t.Fatalf("rel: %v", err)
+		}
+		out[filepath.ToSlash(rel)] = n
+	}
+	return v, out
+}
+
+func TestTagPredicate(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo, bar]\n---\nbody\n",
+		"b.md": "---\ntags: [bar]\n---\nbody\n",
+		"c.md": "---\ntitle: c\n---\nbody\n",
+		"d.md": "---\ntags: Foo\n---\nbody (scalar tag)\n",
+	})
+	p := Tag("foo")
+	cases := map[string]bool{"a.md": true, "b.md": false, "c.md": false, "d.md": true}
+	for path, want := range cases {
+		if got := p(notes[path]); got != want {
+			t.Errorf("Tag(foo)(%s) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+func TestCategoryPredicate(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ncategories:\n  - \"[[Books]]\"\n---\nbody\n",
+		"b.md": "---\ncategories:\n  - \"[[People]]\"\n  - \"[[Books]]\"\n---\nbody\n",
+		"c.md": "---\ncategories:\n  - \"[[People]]\"\n---\nbody\n",
+		"d.md": "---\ntitle: d\n---\nbody\n",
+	})
+	p := Category("books")
+	cases := map[string]bool{"a.md": true, "b.md": true, "c.md": false, "d.md": false}
+	for path, want := range cases {
+		if got := p(notes[path]); got != want {
+			t.Errorf("Category(books)(%s) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+func TestStatusAndType(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\nstatus: Reading\ntype: Goal\n---\nbody\n",
+		"b.md": "---\nstatus: Completed\nkind: Project\n---\nbody\n",
+		"c.md": "---\ntitle: c\n---\nbody\n",
+	})
+
+	if !Status("reading")(notes["a.md"]) {
+		t.Errorf("Status(reading)(a) = false, want true")
+	}
+	if Status("reading")(notes["b.md"]) {
+		t.Errorf("Status(reading)(b) = true, want false")
+	}
+	if !Type("goal")(notes["a.md"]) {
+		t.Errorf("Type(goal)(a) = false, want true")
+	}
+	if !Type("project")(notes["b.md"]) {
+		t.Errorf("Type(project)(b) = false, want true (kind fallback)")
+	}
+	if Type("goal")(notes["c.md"]) {
+		t.Errorf("Type(goal)(c) = true, want false")
+	}
+}
+
+func TestHasMissing(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\nstatus: Reading\n---\nbody\n",
+		"b.md": "---\ntitle: b\n---\nbody\n",
+	})
+	if !Has("status")(notes["a.md"]) {
+		t.Errorf("Has(status)(a) = false")
+	}
+	if Has("status")(notes["b.md"]) {
+		t.Errorf("Has(status)(b) = true")
+	}
+	if !Missing("status")(notes["b.md"]) {
+		t.Errorf("Missing(status)(b) = false")
+	}
+	if Missing("status")(notes["a.md"]) {
+		t.Errorf("Missing(status)(a) = true")
+	}
+}
+
+func TestFolderPredicate(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"root.md":            "# r\n",
+		"People/a.md":        "# a\n",
+		"People/Nested/b.md": "# b\n",
+		"Other/c.md":         "# c\n",
+	})
+	p := Folder("People", v.Root)
+	cases := map[string]bool{
+		"root.md":            false,
+		"People/a.md":        true,
+		"People/Nested/b.md": true,
+		"Other/c.md":         false,
+	}
+	for path, want := range cases {
+		if got := p(notes[path]); got != want {
+			t.Errorf("Folder(People)(%s) = %v, want %v", path, got, want)
+		}
+	}
+
+	// empty folder matches every note
+	if !Folder("", v.Root)(notes["root.md"]) {
+		t.Errorf("Folder(\"\") should match root note")
+	}
+}
+
+func TestAgePredicate(t *testing.T) {
+	now := time.Now()
+	old := now.Add(-40 * 24 * time.Hour).Format("2006-01-02")
+	recent := now.Add(-2 * 24 * time.Hour).Format("2006-01-02")
+	today := now.Format("2006-01-02")
+	_, notes := newVault(t, map[string]string{
+		"old.md":    "---\ncreated: " + old + "\n---\n",
+		"recent.md": "---\ncreated: " + recent + "\n---\n",
+		"today.md":  "---\ncreated: " + today + "\n---\n",
+		"nofm.md":   "no fm\n",
+	})
+
+	gt30 := Age(">", 30*24*time.Hour, "created")
+	if !gt30(notes["old.md"]) {
+		t.Errorf(">30d should match old")
+	}
+	if gt30(notes["recent.md"]) {
+		t.Errorf(">30d should not match recent")
+	}
+	if gt30(notes["nofm.md"]) {
+		t.Errorf(">30d should not match note without timestamp")
+	}
+
+	lt7 := Age("<", 7*24*time.Hour, "created")
+	if !lt7(notes["recent.md"]) {
+		t.Errorf("<7d should match recent")
+	}
+	if lt7(notes["old.md"]) {
+		t.Errorf("<7d should not match old")
+	}
+
+	eq0 := Age("=", 0, "created")
+	if !eq0(notes["today.md"]) {
+		t.Errorf("=0d should match today")
+	}
+	if eq0(notes["recent.md"]) {
+		t.Errorf("=0d should not match recent")
+	}
+}
+
+func TestParseAge(t *testing.T) {
+	cases := []struct {
+		in     string
+		op     string
+		dur    time.Duration
+		hasErr bool
+	}{
+		{">30d", ">", 30 * 24 * time.Hour, false},
+		{"<7d", "<", 7 * 24 * time.Hour, false},
+		{"=0d", "=", 0, false},
+		{">12h", ">", 12 * time.Hour, false},
+		{"<15m", "<", 15 * time.Minute, false},
+		{"=45s", "=", 45 * time.Second, false},
+		{"", "", 0, true},
+		{"30d", "", 0, true},
+		{">30x", "", 0, true},
+		{">d", "", 0, true},
+		{">-1d", "", 0, true},
+	}
+	for _, c := range cases {
+		op, dur, err := ParseAge(c.in)
+		if c.hasErr {
+			if err == nil {
+				t.Errorf("ParseAge(%q) = (%q,%v,nil); expected error", c.in, op, dur)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("ParseAge(%q) err: %v", c.in, err)
+			continue
+		}
+		if op != c.op || dur != c.dur {
+			t.Errorf("ParseAge(%q) = (%q,%v); want (%q,%v)", c.in, op, dur, c.op, c.dur)
+		}
+	}
+}
+
+func TestBuildBacklinkIndex(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Apple.md":  "Body links to [[Banana]] and [[Cherry|Cherries]].\n",
+		"Banana.md": "---\ncategories:\n  - \"[[Apple]]\"\n---\nBody.\n",
+		"Cherry.md": "---\ntitle: c\n---\nNo links here.\n",
+		"Lonely.md": "---\ntitle: l\n---\nNothing references me.\n",
+	})
+
+	all := []*vault.Note{notes["Apple.md"], notes["Banana.md"], notes["Cherry.md"], notes["Lonely.md"]}
+	idx := BuildBacklinkIndex(all)
+
+	if len(idx["banana"]) != 1 {
+		t.Errorf("expected one referrer for Banana, got %v", idx["banana"])
+	}
+	if len(idx["cherry"]) != 1 {
+		t.Errorf("expected one referrer for Cherry, got %v", idx["cherry"])
+	}
+	if len(idx["apple"]) != 1 {
+		t.Errorf("expected one referrer for Apple (from Banana frontmatter), got %v", idx["apple"])
+	}
+	if _, ok := idx["lonely"]; ok {
+		t.Errorf("Lonely should have no index entry, got %v", idx["lonely"])
+	}
+
+	orphan := Orphan(idx)
+	if orphan(notes["Apple.md"]) {
+		t.Errorf("Apple has an incoming link; not orphan")
+	}
+	if !orphan(notes["Lonely.md"]) {
+		t.Errorf("Lonely should be orphan")
+	}
+}
+
+func TestAndOr(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo, bar]\nstatus: Reading\n---\n",
+		"b.md": "---\ntags: [foo]\nstatus: Completed\n---\n",
+	})
+	combined := And(Tag("foo"), Status("Reading"))
+	if !combined(notes["a.md"]) {
+		t.Errorf("And: a should match foo+Reading")
+	}
+	if combined(notes["b.md"]) {
+		t.Errorf("And: b should not match foo+Reading")
+	}
+
+	either := Or(Tag("bar"), Status("Completed"))
+	if !either(notes["a.md"]) || !either(notes["b.md"]) {
+		t.Errorf("Or should match both notes")
+	}
+
+	// And with no terms = match everything
+	all := And()
+	for _, n := range notes {
+		if !all(n) {
+			t.Errorf("And() should match every note")
+		}
+	}
+	if all(nil) {
+		t.Errorf("And() should reject nil note")
+	}
+}
+
+func TestFromFlags(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"References/a.md": "---\ntags: [foo]\ncategories:\n  - \"[[Books]]\"\nstatus: Reading\n---\nLinks to [[b]].\n",
+		"b.md":            "---\ntags: [foo, bar]\n---\nbody\n",
+		"c.md":            "---\ntitle: c\n---\nbody\n",
+	})
+
+	all := []*vault.Note{notes["References/a.md"], notes["b.md"], notes["c.md"]}
+
+	t.Run("multi-term AND", func(t *testing.T) {
+		pred, err := FromFlags(Flags{Tags: []string{"foo"}, Status: "Reading"})
+		if err != nil {
+			t.Fatalf("FromFlags: %v", err)
+		}
+		if !pred(notes["References/a.md"]) {
+			t.Errorf("a should match")
+		}
+		if pred(notes["b.md"]) {
+			t.Errorf("b should not match (no status)")
+		}
+	})
+
+	t.Run("folder requires root", func(t *testing.T) {
+		pred, err := FromFlags(Flags{Folder: "References", Root: v.Root})
+		if err != nil {
+			t.Fatalf("FromFlags: %v", err)
+		}
+		if !pred(notes["References/a.md"]) {
+			t.Errorf("a should match folder")
+		}
+		if pred(notes["b.md"]) {
+			t.Errorf("b should not match folder")
+		}
+	})
+
+	t.Run("orphan needs index", func(t *testing.T) {
+		if _, err := FromFlags(Flags{Orphan: true}); err == nil {
+			t.Errorf("expected error: orphan without index")
+		}
+		idx := BuildBacklinkIndex(all)
+		pred, err := FromFlags(Flags{Orphan: true, BacklinkIndex: idx})
+		if err != nil {
+			t.Fatalf("FromFlags: %v", err)
+		}
+		if pred(notes["b.md"]) {
+			t.Errorf("b is linked from a, not orphan")
+		}
+		if !pred(notes["c.md"]) {
+			t.Errorf("c should be orphan")
+		}
+	})
+
+	t.Run("age error", func(t *testing.T) {
+		if _, err := FromFlags(Flags{Age: "bogus"}); err == nil {
+			t.Errorf("expected error from bogus age")
+		}
+	})
+
+	t.Run("empty flags matches all", func(t *testing.T) {
+		pred, err := FromFlags(Flags{})
+		if err != nil {
+			t.Fatalf("FromFlags: %v", err)
+		}
+		for path, n := range notes {
+			if !pred(n) {
+				t.Errorf("empty flags should match %s", path)
+			}
+		}
+	})
+}
+
+// Smoke check that the path of a referrer is recorded correctly.
+func TestBacklinkPathsRecorded(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"Source.md": "Reference to [[Target]].\n",
+		"Target.md": "# t\n",
+	})
+	idx := BuildBacklinkIndex([]*vault.Note{notes["Source.md"], notes["Target.md"]})
+	refs := idx["target"]
+	if len(refs) != 1 {
+		t.Fatalf("want 1 ref, got %d", len(refs))
+	}
+	rel, _ := filepath.Rel(v.Root, refs[0])
+	if filepath.ToSlash(rel) != "Source.md" {
+		t.Errorf("ref path = %s, want Source.md", rel)
+	}
+	_ = strings.TrimSpace // keep strings import used if tests trimmed later
+}
