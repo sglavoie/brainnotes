@@ -276,30 +276,57 @@ func buildRenamePlan(v *vault.Vault, targetPath, newPath, oldTitle, newTitle str
 }
 
 // scanBodyChanges returns one renameChange per body line whose content shifts
-// after applying RewriteTitle. Line numbers are 1-based.
+// after applying RewriteTitle. Line numbers are 1-based. The rewrite is run
+// on the whole body first so that code-fence masking in `wikilink.Parse` sees
+// the multi-line context — a per-line rewrite would miss fence openers on a
+// preceding line and produce phantom changes for masked links.
 func scanBodyChanges(file, body, oldTitle, newTitle string) []renameChange {
 	if body == "" {
 		return nil
 	}
+	newBody := wikilink.RewriteTitle(body, oldTitle, newTitle)
+	if newBody == body {
+		return nil
+	}
+	return diffBodyLines(file, body, newBody)
+}
+
+// diffBodyLines walks oldBody/newBody in lockstep (the rewrite never adds or
+// removes newlines, so line counts match) and emits one renameChange per
+// differing line. Line numbers are 1-based.
+func diffBodyLines(file, oldBody, newBody string) []renameChange {
 	var changes []renameChange
 	line := 1
-	start := 0
-	for i := 0; i <= len(body); i++ {
-		if i == len(body) || body[i] == '\n' {
-			lineText := body[start:i]
-			newLineText := wikilink.RewriteTitle(lineText, oldTitle, newTitle)
-			if newLineText != lineText {
-				changes = append(changes, renameChange{
-					File:    file,
-					Kind:    changeBody,
-					Line:    line,
-					OldText: lineText,
-					NewText: newLineText,
-				})
-			}
-			line++
-			start = i + 1
+	oStart, nStart := 0, 0
+	for oStart <= len(oldBody) && nStart <= len(newBody) {
+		oEnd := strings.IndexByte(oldBody[oStart:], '\n')
+		nEnd := strings.IndexByte(newBody[nStart:], '\n')
+		var oldLine, newLine string
+		if oEnd < 0 {
+			oldLine = oldBody[oStart:]
+		} else {
+			oldLine = oldBody[oStart : oStart+oEnd]
 		}
+		if nEnd < 0 {
+			newLine = newBody[nStart:]
+		} else {
+			newLine = newBody[nStart : nStart+nEnd]
+		}
+		if oldLine != newLine {
+			changes = append(changes, renameChange{
+				File:    file,
+				Kind:    changeBody,
+				Line:    line,
+				OldText: oldLine,
+				NewText: newLine,
+			})
+		}
+		if oEnd < 0 || nEnd < 0 {
+			break
+		}
+		oStart += oEnd + 1
+		nStart += nEnd + 1
+		line++
 	}
 	return changes
 }

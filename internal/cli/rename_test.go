@@ -145,6 +145,58 @@ func TestRenameDryRunWritesNothing(t *testing.T) {
 	}
 }
 
+// TestRenameDryRunMasksCodeBlockReferences asserts that wikilinks inside a
+// fenced code block do not appear in the rename dry-run output, while bare,
+// aliased, and heading references in prose do.
+func TestRenameDryRunMasksCodeBlockReferences(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"Dune.md":      "---\ntitle: Dune\n---\nOriginal body.\n",
+		"bare.md":      "---\ntitle: Bare\n---\nPlain prose link: [[Dune]] in a sentence.\n",
+		"alias.md":     "---\ntitle: Alias\n---\nWith alias: [[Dune|the book]].\n",
+		"heading.md":   "---\ntitle: Heading\n---\nAt heading: [[Dune#Sequels]].\n",
+		"codeblock.md": "---\ntitle: Code\n---\nDocumentation example:\n\n```\nUse [[Dune]] like this.\n```\n\nDone.\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("BNOTES_CONFIG", cfgPath)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_VAULT", "")
+
+	beforeMtimes := snapshotMtimes(t, root)
+
+	out, err := runCLI(t, "", "rename", "Dune", "Sand Worms", "--dry-run")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+
+	for _, want := range []string{"bare.md:", "alias.md:", "heading.md:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in dry-run output:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "codeblock.md:") {
+		t.Errorf("expected codeblock.md to be absent from dry-run output (link is fenced):\n%s", out)
+	}
+
+	afterMtimes := snapshotMtimes(t, root)
+	if !mtimesEqual(beforeMtimes, afterMtimes) {
+		t.Fatalf("dry-run modified file mtimes:\nbefore=%v\nafter=%v", beforeMtimes, afterMtimes)
+	}
+}
+
 func TestRenameAmbiguousTitle(t *testing.T) {
 	root := buildRenameFixture(t)
 	// Plant a second note with the same stem.
@@ -285,6 +337,44 @@ func snapshotVault(t *testing.T, root string) map[string]string {
 		t.Fatalf("snapshot: %v", err)
 	}
 	return out
+}
+
+// snapshotMtimes maps every regular file under root to its mod-time. Used to
+// assert that --dry-run does not so much as touch any file (a stronger check
+// than content equality when paired with mapsEqual).
+func snapshotMtimes(t *testing.T, root string) map[string]int64 {
+	t.Helper()
+	out := map[string]int64{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		out[rel] = info.ModTime().UnixNano()
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("mtime snapshot: %v", err)
+	}
+	return out
+}
+
+func mtimesEqual(a, b map[string]int64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if bv, ok := b[k]; !ok || bv != v {
+			return false
+		}
+	}
+	return true
 }
 
 func mapsEqual(a, b map[string]string) bool {

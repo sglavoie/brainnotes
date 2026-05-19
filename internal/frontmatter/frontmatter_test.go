@@ -1,6 +1,7 @@
 package frontmatter
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -329,6 +330,345 @@ func TestGetTypedAccessors(t *testing.T) {
 	}
 	if tm, ok := m.GetTime("created"); !ok || tm.Year() != 2026 {
 		t.Errorf("GetTime(created): %v %v", tm, ok)
+	}
+}
+
+func TestListAdd_NewKey(t *testing.T) {
+	m := NewMap()
+	changed, err := m.ListAdd("tags", "go", "yaml")
+	if err != nil {
+		t.Fatalf("ListAdd: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true when creating a new list")
+	}
+	got, ok := m.GetList("tags")
+	if !ok {
+		t.Fatalf("tags should be present as a list")
+	}
+	if !reflect.DeepEqual(got, []any{"go", "yaml"}) {
+		t.Errorf("tags: got %v want [go yaml]", got)
+	}
+	if !reflect.DeepEqual(m.Keys(), []string{"tags"}) {
+		t.Errorf("keys: got %v want [tags]", m.Keys())
+	}
+}
+
+func TestListAdd_NewKeyDeduplicatesInput(t *testing.T) {
+	m := NewMap()
+	changed, err := m.ListAdd("tags", "go", "go", "yaml")
+	if err != nil {
+		t.Fatalf("ListAdd: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go", "yaml"}) {
+		t.Errorf("tags: got %v want [go yaml]", got)
+	}
+}
+
+func TestListAdd_NewKeyEmptyInput(t *testing.T) {
+	m := NewMap()
+	changed, err := m.ListAdd("tags")
+	if err != nil {
+		t.Fatalf("ListAdd: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false when no values provided")
+	}
+	got, ok := m.GetList("tags")
+	if !ok {
+		t.Fatalf("tags should be present as an empty list")
+	}
+	if len(got) != 0 {
+		t.Errorf("tags: got %v want empty", got)
+	}
+}
+
+func TestListAdd_AppendUnique(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go"})
+	changed, err := m.ListAdd("tags", "yaml")
+	if err != nil {
+		t.Fatalf("ListAdd: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go", "yaml"}) {
+		t.Errorf("tags: got %v want [go yaml]", got)
+	}
+}
+
+func TestListAdd_AppendDuplicateIsNoOp(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go", "yaml"})
+	changed, err := m.ListAdd("tags", "go")
+	if err != nil {
+		t.Fatalf("ListAdd: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false for an existing value")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go", "yaml"}) {
+		t.Errorf("tags: got %v want [go yaml]", got)
+	}
+}
+
+func TestListAdd_AppendMixedDuplicateAndNew(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go"})
+	changed, err := m.ListAdd("tags", "go", "rust")
+	if err != nil {
+		t.Fatalf("ListAdd: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true when at least one new value is added")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go", "rust"}) {
+		t.Errorf("tags: got %v want [go rust]", got)
+	}
+}
+
+func TestListAdd_NonListReturnsError(t *testing.T) {
+	m := NewMap()
+	m.Set("title", "Hello")
+	_, err := m.ListAdd("title", "x")
+	if err == nil {
+		t.Fatalf("expected error for non-list value")
+	}
+	if !errors.Is(err, ErrNotAList) {
+		t.Errorf("got %v want ErrNotAList", err)
+	}
+}
+
+func TestListRemove_PresentValue(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go", "yaml", "rust"})
+	changed, err := m.ListRemove("tags", "yaml")
+	if err != nil {
+		t.Fatalf("ListRemove: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go", "rust"}) {
+		t.Errorf("tags: got %v want [go rust]", got)
+	}
+}
+
+func TestListRemove_AbsentValueIsNoOp(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go"})
+	changed, err := m.ListRemove("tags", "yaml")
+	if err != nil {
+		t.Fatalf("ListRemove: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go"}) {
+		t.Errorf("tags: got %v want [go]", got)
+	}
+}
+
+func TestListRemove_AbsentKeyIsNoOp(t *testing.T) {
+	m := NewMap()
+	changed, err := m.ListRemove("tags", "go")
+	if err != nil {
+		t.Fatalf("ListRemove: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false")
+	}
+	if m.Has("tags") {
+		t.Errorf("absent key should not be created")
+	}
+}
+
+func TestListRemove_NonListReturnsError(t *testing.T) {
+	m := NewMap()
+	m.Set("title", "Hello")
+	_, err := m.ListRemove("title", "Hello")
+	if err == nil {
+		t.Fatalf("expected error for non-list value")
+	}
+	if !errors.Is(err, ErrNotAList) {
+		t.Errorf("got %v want ErrNotAList", err)
+	}
+}
+
+func TestListRemove_LeavesEmptyList(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go"})
+	changed, err := m.ListRemove("tags", "go")
+	if err != nil {
+		t.Fatalf("ListRemove: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true")
+	}
+	got, ok := m.GetList("tags")
+	if !ok {
+		t.Fatalf("tags should remain present as an empty list, not deleted")
+	}
+	if len(got) != 0 {
+		t.Errorf("tags should be empty, got %v", got)
+	}
+}
+
+func TestReplaceValue_ScalarMatch(t *testing.T) {
+	m := NewMap()
+	m.Set("status", "draft")
+	changed, err := m.ReplaceValue("status", "draft", "published")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true")
+	}
+	got, _ := m.GetString("status")
+	if got != "published" {
+		t.Errorf("status: got %q want published", got)
+	}
+}
+
+func TestReplaceValue_ScalarNoMatch(t *testing.T) {
+	m := NewMap()
+	m.Set("status", "draft")
+	changed, err := m.ReplaceValue("status", "archived", "published")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false")
+	}
+	got, _ := m.GetString("status")
+	if got != "draft" {
+		t.Errorf("status: got %q want draft", got)
+	}
+}
+
+func TestReplaceValue_AbsentKeyIsNoOp(t *testing.T) {
+	m := NewMap()
+	changed, err := m.ReplaceValue("status", "draft", "published")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false")
+	}
+	if m.Has("status") {
+		t.Errorf("absent key should not be created")
+	}
+}
+
+func TestReplaceValue_ListSingleMatch(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go", "draft", "yaml"})
+	changed, err := m.ReplaceValue("tags", "draft", "published")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go", "published", "yaml"}) {
+		t.Errorf("tags: got %v want [go published yaml]", got)
+	}
+}
+
+func TestReplaceValue_ListMultipleMatches(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"draft", "go", "draft"})
+	changed, err := m.ReplaceValue("tags", "draft", "published")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"published", "go", "published"}) {
+		t.Errorf("tags: got %v want [published go published]", got)
+	}
+}
+
+func TestReplaceValue_NoMatchesInList(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []any{"go", "yaml"})
+	changed, err := m.ReplaceValue("tags", "draft", "published")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false")
+	}
+	got, _ := m.GetList("tags")
+	if !reflect.DeepEqual(got, []any{"go", "yaml"}) {
+		t.Errorf("tags: got %v want [go yaml]", got)
+	}
+}
+
+func TestReplaceValue_FromEqualsToIsNoOp(t *testing.T) {
+	m := NewMap()
+	m.Set("status", "draft")
+	changed, err := m.ReplaceValue("status", "draft", "draft")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false when from == to")
+	}
+}
+
+func TestMutateRoundTrip(t *testing.T) {
+	src := readFixture(t, "mutate.in.md")
+	cfg := defaultCfg()
+
+	doc, err := Parse(src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if _, err := doc.Front.ListAdd("topics", "yaml"); err != nil {
+		t.Fatalf("ListAdd topics: %v", err)
+	}
+	if _, err := doc.Front.ListRemove("topics", "go"); err != nil {
+		t.Fatalf("ListRemove topics: %v", err)
+	}
+	if _, err := doc.Front.ReplaceValue("status", "draft", "published"); err != nil {
+		t.Fatalf("ReplaceValue status: %v", err)
+	}
+
+	got, err := Marshal(doc, cfg)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	want := readFixture(t, "mutate.out.md")
+	if string(got) != string(want) {
+		t.Errorf("golden mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+
+	// Re-parse and confirm alphabetical order is stable.
+	doc2, err := Parse(got)
+	if err != nil {
+		t.Fatalf("Parse round-trip: %v", err)
+	}
+	out2, err := Marshal(doc2, cfg)
+	if err != nil {
+		t.Fatalf("Marshal round-trip: %v", err)
+	}
+	if string(out2) != string(got) {
+		t.Errorf("not idempotent after mutation:\nfirst:\n%s\nsecond:\n%s", got, out2)
 	}
 }
 

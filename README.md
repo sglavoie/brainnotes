@@ -291,22 +291,87 @@ bn move Dune References/Books                    # demote, by bare title
 bn move "Old/Foo.md" .                           # move to vault root
 ```
 
+### `bn replace` — rewrite a frontmatter value across notes
+
+```sh
+bn replace <key> <from> <to> [notes...] [find flags] [--dry-run]
+```
+
+Rewrites the value of `<key>` from `<from>` to `<to>` in every matching note.
+For list-valued keys, every matching element is replaced in place (so
+duplicates are all updated). For scalar keys, the stored value is replaced
+when it equals `<from>`. Keys absent from a note, or present with a different
+value, are skipped silently.
+
+Scope:
+
+- No notes and no find flags: the entire vault.
+- One or more `find`-style flags (`--tag`, `--folder`, `--status`, ...): notes
+  matching the filter, with the same semantics as `bn find`.
+- Positional note paths: only those notes. Mutually exclusive with find flags
+  (passing both is an error).
+
+Type coercion of `<from>`/`<to>` matches `bn set` (`true`/`false` → bool,
+integer → int, `YYYY-MM-DD` → date, else string). Properties listed in
+`wikilink_properties` have both ends wrapped in `[[ ]]` before comparison so
+`bn replace categories Books Films` rewrites a stored `[[Books]]` to
+`[[Films]]`.
+
+Each file is rewritten atomically, but there is no cross-file transaction: if
+an error stops the run mid-way, prior writes stand — use `git diff` to
+recover.
+
+`--dry-run` prints the same unified-diff preview as `bn set --dry-run`
+(`--- path`, then `- key: old` / `+ key: new`) and skips all writes.
+
+Examples:
+
+```sh
+bn replace status wip done                                  # vault-wide
+bn replace status wip done --tag project                    # scoped by tag
+bn replace categories Books Films --folder References       # scoped by folder
+bn replace tags shared common Areas/Alpha.md Areas/Beta.md  # explicit notes
+bn replace status wip done --dry-run                        # preview only
+```
+
 ### `bn set` — write frontmatter properties
 
 ```sh
-bn set <note...> <key=value...> [--type date|int|bool|raw] [-0]
+bn set <note...> <key[=|+=|-=]value...> [--type date|int|bool|raw] [--dry-run] [-0]
 ```
 
-Positional args are split: anything containing `=` is a key=value pair, and
-all preceding args are note paths. Use `-` as the sole note arg to read paths
-from stdin (so it composes with `bn find`).
+Positional args are split: anything containing an operator (`=`, `+=`, `-=`)
+is a pair, and all preceding args are note paths. Use `-` as the sole note
+arg to read paths from stdin (so it composes with `bn find`).
+
+Operators:
+
+- `key=value` — set the property (overwriting any prior value).
+- `key+=value` — append to a list property; no-op if the value is already
+  present (the file is not rewritten, so mtime is unchanged).
+- `key-=value` — remove a value from a list property; no-op if absent.
+
+`+=` and `-=` require the key to be in `[frontmatter].list_properties`; using
+them on any other key is an error. Values are comma-split for list properties
+the same way `=` does (`tags+=foo,bar` adds two entries). Operators can be
+mixed in one invocation and apply left-to-right.
 
 Type coercion is automatic: `true`/`false` → bool, integer → int, `YYYY-MM-DD`
 → date, else string. Use `--type` to force. Properties listed in
-`list_properties` are comma-split into a YAML list before coercion. Properties
-listed in `wikilink_properties` are wrapped in `[[ ]]` on write.
+`wikilink_properties` are wrapped in `[[ ]]` on write; for `+=`/`-=` the
+wrapping happens before the comparison so `tags+=Books` matches an existing
+`[[Books]]` entry.
 
-Frontmatter is rewritten with **alphabetically sorted top-level keys**.
+Frontmatter is rewritten with **alphabetically sorted top-level keys**. Each
+file is rewritten atomically, but there is no cross-file transaction: if an
+error stops the run mid-way, prior writes stand — use `git diff` to recover.
+
+`--dry-run` prints a unified-diff preview per affected file and skips all
+writes. Files with no effective change are omitted from the preview, and
+blocks are emitted in stable (sorted) path order. The format is intentionally
+distinct from `rename --dry-run` / `move --dry-run`; the two will likely be
+harmonized in a follow-up release. The same flag is being rolled out to other
+mutating commands.
 
 Examples:
 
@@ -314,7 +379,13 @@ Examples:
 bn set References/Books/Dune.md status=Reading rating=7
 bn set note.md categories=Books,Personal                    # → wikilink list
 bn set note.md created=2026-01-01 --type=date
+bn set note.md tags+=project                                # append a tag
+bn set note.md tags+=foo,bar                                # append multiple
+bn set note.md tags-=draft                                  # drop a tag
+bn set note.md tags+=alpha tags-=beta                       # combined
+bn set note.md status=done --dry-run                        # preview only
 bn find --tag drafts | bn set - status=done                 # stdin pipeline
+bn find --tag drafts | bn set - tags+=triage                # bulk append
 ```
 
 ### `bn tags` — count tag occurrences
@@ -328,7 +399,7 @@ Alias for `bn values tags`. See `bn values` for flag behavior.
 ### `bn unset` — remove frontmatter properties
 
 ```sh
-bn unset <note> <property...> [-0]
+bn unset <note> <property...> [--dry-run] [-0]
 bn unset <note...> -- <property...>
 ```
 
@@ -336,13 +407,17 @@ Without `--`, the first positional is the note (or `-` for stdin) and the rest
 are property names. To pass multiple notes, use `--` to separate them from
 the property list.
 
-Removing a missing property is a silent no-op.
+Removing a missing property is a silent no-op. `--dry-run` previews the
+removal in the same unified-diff format as `bn set --dry-run` (one `- key:
+value` line per present property) without touching disk; missing properties
+remain silent in dry-run mode too.
 
 Examples:
 
 ```sh
 bn unset note.md rating
 bn unset a.md b.md -- title status                          # multi-note
+bn unset note.md rating --dry-run                           # preview only
 bn find --has rating | bn unset - rating                    # bulk wipe
 ```
 
@@ -447,6 +522,24 @@ bn find --tag projetc | bn set - tags=project
 
 # Mark every note linking to a hub note as 'referenced'.
 bn backlinks "Project Alpha" | bn set - status=referenced
+```
+
+### Refactoring workflows
+
+Preview-first refactors compose `bn find` (scope), `bn replace` (rewrite a
+single value), and `bn set --dry-run` (any-shape mutation) so the diff is
+visible before any file is touched:
+
+```sh
+# Rename the 'WIP' status to 'in-progress' across every project note. Preview
+# first, then re-run without --dry-run once the diff looks right.
+bn find --tag project --status WIP
+bn replace status WIP in-progress --tag project --dry-run
+bn replace status WIP in-progress --tag project
+
+# Stage a tag rename without leaving anything half-done: find → preview → apply.
+bn find --tag drafts | bn set - tags-=drafts tags+=draft --dry-run
+bn find --tag drafts | bn set - tags-=drafts tags+=draft
 ```
 
 ## Performance

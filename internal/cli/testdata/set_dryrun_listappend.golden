@@ -1,0 +1,3 @@
+--- tags.md
+- tags: [foo, bar]
++ tags: [foo, bar, baz]

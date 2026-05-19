@@ -204,6 +204,49 @@ func TestMoveDryRunWritesNothing(t *testing.T) {
 	}
 }
 
+// TestMoveDryRunOmitsBareReferences asserts that for a note referenced via
+// both folder-prefixed and bare wikilink forms, only the folder-prefixed
+// entries appear in the dry-run output (bare [[Title]] is intentionally
+// untouched), and that no file on disk is modified.
+func TestMoveDryRunOmitsBareReferences(t *testing.T) {
+	root := buildMoveFixture(t)
+
+	beforeMtimes := snapshotMtimes(t, root)
+
+	src := filepath.Join(root, "Books", "Dune.md")
+	out, err := runCLI(t, "", "move", src, "References/Books", "--dry-run")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+
+	// Folder-prefixed body refs in Reviews/Dune Review.md must appear in the
+	// preview alongside the folder-prefixed self-references in the moved note.
+	wantSubstrings := []string{
+		"Read [[Books/Dune]] last week. -> Read [[References/Books/Dune]] last week.",
+		"Also see [[Books/Dune|the book]]. -> Also see [[References/Books/Dune|the book]].",
+		"Jump to [[Books/Dune#Sequels]]. -> Jump to [[References/Books/Dune#Sequels]].",
+	}
+	for _, w := range wantSubstrings {
+		if !strings.Contains(out, w) {
+			t.Errorf("expected %q in dry-run output:\n%s", w, out)
+		}
+	}
+
+	// The bare [[Dune]] occurrences in Reviews/Dune Review.md (line "Bare:
+	// [[Dune]].") and Books/Dune.md ("Bare self: [[Dune]].") must NOT appear
+	// in the preview, since `move` leaves bare links alone by design.
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "Bare:") || strings.Contains(line, "Bare self:") {
+			t.Errorf("bare-only line leaked into move dry-run output: %q\nfull output:\n%s", line, out)
+		}
+	}
+
+	afterMtimes := snapshotMtimes(t, root)
+	if !mtimesEqual(beforeMtimes, afterMtimes) {
+		t.Fatalf("dry-run modified file mtimes:\nbefore=%v\nafter=%v", beforeMtimes, afterMtimes)
+	}
+}
+
 func TestMoveRejectsSameFolder(t *testing.T) {
 	root := buildMoveFixture(t)
 

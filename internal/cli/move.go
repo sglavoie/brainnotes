@@ -251,32 +251,17 @@ func buildMovePlan(v *vault.Vault, targetPath, newPath, oldRel, newRel string, c
 }
 
 // scanBodyMove returns one renameChange per body line whose content shifts
-// after applying RewriteMove. Line numbers are 1-based.
+// after applying RewriteMove. Line numbers are 1-based. See scanBodyChanges
+// for why the rewrite runs on the whole body before being diffed per line.
 func scanBodyMove(file, body, oldRel, newRel string) []renameChange {
 	if body == "" {
 		return nil
 	}
-	var changes []renameChange
-	line := 1
-	start := 0
-	for i := 0; i <= len(body); i++ {
-		if i == len(body) || body[i] == '\n' {
-			lineText := body[start:i]
-			newLineText := wikilink.RewriteMove(lineText, oldRel, newRel)
-			if newLineText != lineText {
-				changes = append(changes, renameChange{
-					File:    file,
-					Kind:    changeBody,
-					Line:    line,
-					OldText: lineText,
-					NewText: newLineText,
-				})
-			}
-			line++
-			start = i + 1
-		}
+	newBody := wikilink.RewriteMove(body, oldRel, newRel)
+	if newBody == body {
+		return nil
 	}
-	return changes
+	return diffBodyLines(file, body, newBody)
 }
 
 // scanFrontmatterMove inspects every wikilink-typed property and records a

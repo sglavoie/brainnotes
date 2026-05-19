@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -12,7 +13,10 @@ import (
 
 // NewUnsetCmd returns the `unset` subcommand. Exported for tests.
 func NewUnsetCmd() *cobra.Command {
-	var nullSep bool
+	var (
+		nullSep bool
+		dryRun  bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "unset <note...> [--] <property...>",
@@ -23,7 +27,9 @@ Without '--', the first positional arg is the note path (or '-' for stdin) and
 all subsequent args are property names. To pass multiple notes use '--' to
 separate them from the property list: 'bn unset a.md b.md -- prop1 prop2'.
 
-Removing a missing property is a silent no-op.`,
+Removing a missing property is a silent no-op.
+
+Use --dry-run to preview which properties would be removed without writing.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.MinimumNArgs(2),
@@ -49,14 +55,19 @@ Removing a missing property is a silent no-op.`,
 			if err != nil {
 				return err
 			}
+			sort.Strings(paths)
 
 			out := cmd.OutOrStdout()
+			var dry *DryRun
+			if dryRun {
+				dry = &DryRun{Out: out}
+			}
 			for _, p := range paths {
-				changed, err := applyUnset(p, props, cfg)
+				changed, err := applyUnset(p, props, cfg, v.Root, dry)
 				if err != nil {
 					return err
 				}
-				if changed {
+				if changed && dry == nil {
 					if _, err := fmt.Fprintf(out, "%s: updated\n", p); err != nil {
 						return err
 					}
@@ -66,6 +77,7 @@ Removing a missing property is a silent no-op.`,
 		},
 	}
 	cmd.Flags().BoolVarP(&nullSep, "null", "0", false, "read NUL-separated paths from stdin")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview removals without writing")
 	return cmd
 }
 
@@ -86,7 +98,10 @@ func splitUnsetArgs(args []string, dashAt int) (notes, props []string) {
 // applyUnset loads the note, removes every named property that exists, and
 // saves atomically. Returns (changed, err) so callers can keep silent on
 // no-op invocations as the spec requires.
-func applyUnset(path string, props []string, cfg *config.Config) (bool, error) {
+//
+// When dry is non-nil, the file is left untouched and a per-file `- key: value`
+// block is emitted for every present property in props.
+func applyUnset(path string, props []string, cfg *config.Config, vaultRoot string, dry *DryRun) (bool, error) {
 	n := &vault.Note{Path: path}
 	if err := n.Load(); err != nil {
 		return false, err
@@ -94,6 +109,20 @@ func applyUnset(path string, props []string, cfg *config.Config) (bool, error) {
 	front, err := n.Front()
 	if err != nil {
 		return false, err
+	}
+	if dry != nil {
+		block := newFileBlock(displayPath(path, vaultRoot))
+		for _, p := range props {
+			v, ok := front.Get(p)
+			if !ok {
+				continue
+			}
+			block.removed(p, v)
+		}
+		if err := block.flush(dry.Out); err != nil {
+			return false, err
+		}
+		return !block.empty(), nil
 	}
 	changed := false
 	for _, p := range props {
