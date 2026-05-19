@@ -118,6 +118,33 @@ bn find --tag drafts -i                   # interactive fzf pick
 bn find --tag drafts -0 | xargs -0 nvim   # safe for spaces in paths
 ```
 
+### `bn backlinks` — list notes that link to a target
+
+```sh
+bn backlinks <note> [-0] [--verbose]
+```
+
+`<note>` is either a bare title (case-insensitive stem lookup) or a path/glob.
+Prints the absolute paths of every note whose body or frontmatter contains a
+`[[wikilink]]` to the target, one per line (or NUL-separated with `-0`). Links
+inside fenced, indented, or inline code are not counted.
+
+With `--verbose`, each occurrence is printed on its own line as
+`<path>:<line>\t<snippet>` for body links, or `<path>:fm:<key>\t<value>` for
+frontmatter links. Output is tab-separated so it pipes cleanly into
+`awk -F'\t'`. Snippets are trimmed and truncated to 120 characters with an
+`…` ellipsis. `--verbose` has no `-v` short form because the root `--verbose`
+already claims `-v`.
+
+Examples:
+
+```sh
+bn backlinks "Crafting Interpreters"
+bn backlinks References/Books/Dune.md
+bn backlinks Dune | xargs bn set status=referenced
+bn backlinks Dune --verbose | awk -F'\t' '{print $1}'
+```
+
 ### `bn config` — show or edit the config file
 
 ```sh
@@ -198,6 +225,25 @@ bn new book "Crafting Interpreters" --var author="Robert Nystrom"
 # → References/Books/Crafting Interpreters.md
 ```
 
+### `bn open` — pick a note with fzf and edit it
+
+```sh
+bn open [query] [--print] [-0]
+```
+
+Pipes every vault note path into `fzf`; on selection, exec-replaces with
+`$EDITOR <path>`. With `<query>`, fzf opens pre-filtered (no auto-select).
+`--print` emits the chosen path instead of invoking the editor — useful for
+shell composition. `-0` (with `--print`) NUL-terminates the output.
+
+Examples:
+
+```sh
+bn open                          # full picker
+bn open dune                     # fzf prefiltered with 'dune'
+cd "$(dirname "$(bn open --print)")"
+```
+
 ### `bn rename` — change a note's title and rewrite wikilinks
 
 ```sh
@@ -271,6 +317,14 @@ bn set note.md created=2026-01-01 --type=date
 bn find --tag drafts | bn set - status=done                 # stdin pipeline
 ```
 
+### `bn tags` — count tag occurrences
+
+```sh
+bn tags [--sort count|name] [--count=false]
+```
+
+Alias for `bn values tags`. See `bn values` for flag behavior.
+
 ### `bn unset` — remove frontmatter properties
 
 ```sh
@@ -290,6 +344,34 @@ Examples:
 bn unset note.md rating
 bn unset a.md b.md -- title status                          # multi-note
 bn find --has rating | bn unset - rating                    # bulk wipe
+```
+
+### `bn values` — count occurrences of a frontmatter property's values
+
+```sh
+bn values <property> [--sort count|name] [--count=false]
+```
+
+Walks every note, parses frontmatter, and counts how often each value of
+`<property>` appears across the vault. Useful for hygiene: typos and stray
+variants surface in the long tail.
+
+- String values are counted once; list values are flattened. Map-typed values
+  are skipped (use `-v` to surface a one-per-note warning on stderr).
+- Wikilink-typed values are emitted with `[[ ]]` intact, since drift between
+  `[[Project Alpha]]` and `[[project alpha]]` is exactly the kind of mismatch
+  this command exists to surface.
+- Default sort is count desc with alphabetical tie-break. `--sort=name` sorts
+  alphabetically. `--count=false` emits values only (one per line), handy for
+  piping to `grep` or `fzf`.
+
+Examples:
+
+```sh
+bn tags                                # count desc, project=42, meeting=18, …
+bn tags --sort=name                    # alphabetical
+bn values category                     # category-value hygiene
+bn values tags --count=false | fzf     # pick a tag to inspect
 ```
 
 ## Shell completion
@@ -358,6 +440,13 @@ bn find --orphan -i
 # Sweep stale 'WIP' projects to an Archive folder, preserving wikilinks.
 bn find --status WIP --created '>180d' -0 |
   while IFS= read -r -d '' p; do bn move "$p" Archive/Projects; done
+
+# Spot typo'd tags in the long tail, then rewrite every occurrence.
+bn tags | tail -20
+bn find --tag projetc | bn set - tags=project
+
+# Mark every note linking to a hub note as 'referenced'.
+bn backlinks "Project Alpha" | bn set - status=referenced
 ```
 
 ## Performance
@@ -375,9 +464,13 @@ Typical run: <50 ms.
 
 ## Differences from `vault-cli`
 
-`bn` is a deliberate trim of the previous Python `vault-cli` to six commands
-that justify themselves in daily use. Omitted commands and the reason each
-was dropped:
+`bn` is a deliberate trim of the previous Python `vault-cli`: the core surface
+is the six file-mutating / query commands (`find`, `new`, `rename`, `move`,
+`set`, `unset`), with three thin quick-access shortcuts on top (`open`,
+`backlinks`, `values` + the `tags` alias). The shortcuts compose with the core
+commands rather than introducing new categories of feature — they exist to
+make the next pipeline shorter, not to broaden scope. Omitted commands and the
+reason each was dropped:
 
 | Command                              | Why dropped                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------ |

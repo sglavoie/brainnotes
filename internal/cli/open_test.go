@@ -1,0 +1,225 @@
+package cli
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// buildOpenVault writes a tiny vault and returns its root. Reused across
+// `open` tests; isolates the test from the user's real config via env vars.
+func buildOpenVault(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	files := map[string]string{
+		"Apple.md":           "---\ntitle: Apple\n---\nA.\n",
+		"References/Book.md": "---\ntitle: Book\n---\nB.\n",
+		"People/Charlie.md":  "---\ntitle: Charlie\n---\nC.\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	return root
+}
+
+// isolateBnEnv points config lookup at an empty dir so user config is not picked up.
+func isolateBnEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_CONFIG", "")
+	t.Setenv("BNOTES_VAULT", "")
+}
+
+// runOpen executes the root command with the given args. It returns stdout
+// and stderr separately.
+func runOpen(t *testing.T, vaultRoot string, args ...string) (string, string, error) {
+	t.Helper()
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(errBuf)
+	root.SetArgs(append([]string{"--vault", vaultRoot}, args...))
+	err := root.Execute()
+	return out.String(), errBuf.String(), err
+}
+
+func TestOpen_PrintReturnsSelection(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+	want := filepath.Join(vaultRoot, "Apple.md")
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return []string{want}, nil
+	}
+	editorCalled := false
+	openExec = func(editor, file string) error {
+		editorCalled = true
+		return nil
+	}
+
+	stdout, _, err := runOpen(t, vaultRoot, "open", "--print")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if editorCalled {
+		t.Fatalf("editor seam should not be called with --print")
+	}
+	got := strings.TrimRight(stdout, "\n")
+	if got != want {
+		t.Fatalf("stdout: got %q, want %q", got, want)
+	}
+}
+
+func TestOpen_QueryForwardedToPicker(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	var capturedArgs []string
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		capturedArgs = append([]string(nil), extraArgs...)
+		return []string{filepath.Join(vaultRoot, "Apple.md")}, nil
+	}
+	openExec = func(editor, file string) error { return nil }
+	t.Setenv("EDITOR", "true")
+
+	if _, _, err := runOpen(t, vaultRoot, "open", "foo"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	var sawQuery bool
+	for i := 0; i+1 < len(capturedArgs); i++ {
+		if capturedArgs[i] == "--query" && capturedArgs[i+1] == "foo" {
+			sawQuery = true
+			break
+		}
+	}
+	if !sawQuery {
+		t.Fatalf("expected --query foo in picker args; got %v", capturedArgs)
+	}
+}
+
+func TestOpen_PickerAbort(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return nil, nil
+	}
+	editorCalled := false
+	openExec = func(editor, file string) error {
+		editorCalled = true
+		return nil
+	}
+	t.Setenv("EDITOR", "true")
+
+	stdout, stderr, err := runOpen(t, vaultRoot, "open")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if editorCalled {
+		t.Fatalf("editor should not run on abort")
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("expected no output on abort; stdout=%q stderr=%q", stdout, stderr)
+	}
+}
+
+func TestOpen_EditorSeamCalled(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+	want := filepath.Join(vaultRoot, "References", "Book.md")
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return []string{want}, nil
+	}
+	var gotEditor, gotFile string
+	openExec = func(editor, file string) error {
+		gotEditor = editor
+		gotFile = file
+		return nil
+	}
+	t.Setenv("EDITOR", "nvim")
+
+	if _, _, err := runOpen(t, vaultRoot, "open"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if gotEditor != "nvim" {
+		t.Fatalf("editor: got %q, want %q", gotEditor, "nvim")
+	}
+	if gotFile != want {
+		t.Fatalf("file: got %q, want %q", gotFile, want)
+	}
+}
+
+func TestOpen_EmptyVault(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := t.TempDir()
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	pickerCalled := false
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		pickerCalled = true
+		return nil, nil
+	}
+	openExec = func(editor, file string) error { return nil }
+
+	stdout, stderr, err := runOpen(t, vaultRoot, "open")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if pickerCalled {
+		t.Fatalf("picker should not be called on empty vault")
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "no notes in vault") {
+		t.Fatalf("expected stderr to mention 'no notes in vault'; got %q", stderr)
+	}
+}
+
+func TestOpen_MissingEditor(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return []string{filepath.Join(vaultRoot, "Apple.md")}, nil
+	}
+	openExec = func(editor, file string) error { return errors.New("seam should not be called") }
+	t.Setenv("EDITOR", "")
+
+	_, _, err := runOpen(t, vaultRoot, "open")
+	if err == nil {
+		t.Fatalf("expected error when $EDITOR is missing")
+	}
+	if !strings.Contains(err.Error(), "$EDITOR") {
+		t.Fatalf("error should mention $EDITOR; got %v", err)
+	}
+}

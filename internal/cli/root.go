@@ -61,13 +61,17 @@ func NewRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&configPath, "config", "", "path to config file (overrides BNOTES_CONFIG and default search)")
 	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
+	cmd.AddCommand(NewBacklinksCmd())
 	cmd.AddCommand(NewConfigCmd(func() string { return configPath }))
 	cmd.AddCommand(NewFindCmd())
 	cmd.AddCommand(NewMoveCmd())
 	cmd.AddCommand(NewNewCmd())
+	cmd.AddCommand(NewOpenCmd())
 	cmd.AddCommand(NewRenameCmd())
 	cmd.AddCommand(NewSetCmd())
+	cmd.AddCommand(NewTagsCmd())
 	cmd.AddCommand(NewUnsetCmd())
+	cmd.AddCommand(NewValuesCmd())
 
 	return cmd
 }
