@@ -83,17 +83,21 @@ Use --dry-run to preview changes without writing.`,
 			}
 
 			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, query.Flags{
-				Tags:       tags,
-				Categories: categories,
-				Status:     status,
-				Type:       typeProp,
-				Has:        hasProp,
-				Missing:    missingProp,
-				Age:        age,
-				Created:    created,
-				Folder:     folder,
-				Orphan:     orphan,
-				Root:       v.Root,
+				Tags:         tags,
+				Categories:   categories,
+				Status:       status,
+				Type:         typeProp,
+				Has:          hasProp,
+				Missing:      missingProp,
+				Age:          age,
+				Created:      created,
+				Folder:       folder,
+				Orphan:       orphan,
+				MinBacklinks: -1,
+				MaxBacklinks: -1,
+				MinLinks:     -1,
+				MaxLinks:     -1,
+				Root:         v.Root,
 			})
 			if err != nil {
 				return err

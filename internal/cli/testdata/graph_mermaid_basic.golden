@@ -1,0 +1,4 @@
+graph LR
+  alpha["Alpha"] --> beta["Beta"]
+  alpha --> gamma["Gamma"]
+  beta --> gamma

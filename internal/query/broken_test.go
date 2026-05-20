@@ -6,7 +6,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
-func TestBuildTitleIndex(t *testing.T) {
+func TestGraphTitles(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		_, notes := newVault(t, map[string]string{
 			"Alpha.md": "---\ntitle: Alpha\n---\n",
@@ -16,23 +16,23 @@ func TestBuildTitleIndex(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		if _, ok := idx["alpha"]; !ok {
-			t.Error("expected alpha in index")
+		g := BuildGraph(all)
+		if _, ok := g.Titles["alpha"]; !ok {
+			t.Error("expected alpha in titles")
 		}
-		if _, ok := idx["beta"]; !ok {
-			t.Error("expected beta in index")
+		if _, ok := g.Titles["beta"]; !ok {
+			t.Error("expected beta in titles")
 		}
 	})
 
 	t.Run("nil-safe", func(t *testing.T) {
-		idx := BuildTitleIndex(nil)
-		if len(idx) != 0 {
-			t.Errorf("expected empty index, got %d entries", len(idx))
+		g := BuildGraph(nil)
+		if len(g.Titles) != 0 {
+			t.Errorf("expected empty titles, got %d entries", len(g.Titles))
 		}
-		idx = BuildTitleIndex([]*vault.Note{nil, nil})
-		if len(idx) != 0 {
-			t.Errorf("expected empty index with nil notes, got %d entries", len(idx))
+		g = BuildGraph([]*vault.Note{nil, nil})
+		if len(g.Titles) != 0 {
+			t.Errorf("expected empty titles with nil notes, got %d entries", len(g.Titles))
 		}
 	})
 
@@ -44,8 +44,8 @@ func TestBuildTitleIndex(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		if _, ok := idx["upper"]; !ok {
+		g := BuildGraph(all)
+		if _, ok := g.Titles["upper"]; !ok {
 			t.Error("expected lowercased key 'upper'")
 		}
 	})
@@ -61,8 +61,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
 			t.Errorf("expected 0 broken links, got %d", len(broken))
 		}
@@ -76,8 +76,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 1 {
 			t.Fatalf("expected 1 broken link, got %d", len(broken))
 		}
@@ -101,8 +101,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
 			t.Errorf("expected 0 broken links, got %d", len(broken))
 		}
@@ -117,8 +117,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
 			t.Errorf("expected 0 broken links, got %d", len(broken))
 		}
@@ -133,8 +133,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
 			t.Errorf("expected 0 broken links (folder-prefixed resolves by title), got %d", len(broken))
 		}
@@ -148,8 +148,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 1 {
 			t.Fatalf("expected 1 broken link, got %d", len(broken))
 		}
@@ -169,8 +169,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 2 {
 			t.Fatalf("expected 2 broken links, got %d", len(broken))
 		}
@@ -189,8 +189,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
 			t.Errorf("expected 0 broken links (code-fenced), got %d", len(broken))
 		}
@@ -204,8 +204,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
 			t.Errorf("expected 0 broken links (media embeds), got %d", len(broken))
 		}
@@ -219,8 +219,8 @@ func TestUnresolvedLinks(t *testing.T) {
 		for _, n := range notes {
 			all = append(all, n)
 		}
-		idx := BuildTitleIndex(all)
-		broken := UnresolvedLinks(notes["Alpha.md"], idx)
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
 			t.Errorf("expected 0 broken links (empty target), got %d", len(broken))
 		}

@@ -76,9 +76,9 @@ func NewBacklinksCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			idx := query.BuildBacklinkIndex(notes)
+			graph := query.BuildGraph(notes)
 
-			referrers := backlinkReferrers(idx, target)
+			referrers := backlinkReferrers(graph, target)
 
 			out := cmd.OutOrStdout()
 			if verbose {
@@ -135,11 +135,11 @@ func resolveBacklinkTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 }
 
 // backlinkReferrers returns the sorted, deduped, self-filtered list of paths
-// that reference target according to idx.
-func backlinkReferrers(idx query.BacklinkIndex, target *vault.Note) []string {
+// that reference target according to the graph's backward index.
+func backlinkReferrers(g *query.Graph, target *vault.Note) []string {
 	key := backlinkKey(target)
 	seen := make(map[string]struct{})
-	for _, p := range idx[key] {
+	for _, p := range g.BackLinks(key) {
 		if p == target.Path {
 			continue
 		}
@@ -221,12 +221,10 @@ func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Not
 	return nil
 }
 
-// renderVerboseBody returns one row per body wikilink whose title matches
-// wantKey (case-insensitive).
-func renderVerboseBody(path, body, wantKey string) []verboseRow {
+func renderBodyLinks(path, body string, filter func(string) bool) []verboseRow {
 	var rows []verboseRow
 	for _, link := range wikilink.Parse(body) {
-		if strings.ToLower(link.Title()) != wantKey {
+		if !filter(strings.ToLower(link.Title())) {
 			continue
 		}
 		lineNum := strings.Count(body[:link.Start], "\n") + 1
@@ -243,23 +241,20 @@ func renderVerboseBody(path, body, wantKey string) []verboseRow {
 	return rows
 }
 
-// renderVerboseFront returns one row per top-level frontmatter key whose value
-// (or a nested list/map leaf string) contains a wikilink whose title matches
-// wantKey. Mirrors the recursion in query.BacklinkIndex.scanValue.
-func renderVerboseFront(path string, fm *frontmatter.Map, wantKey string) []verboseRow {
+func renderFrontLinks(path string, fm *frontmatter.Map, filter func(string) bool) []verboseRow {
 	var rows []verboseRow
 	for _, k := range fm.Keys() {
 		v, _ := fm.Get(k)
-		rows = append(rows, scanFrontValue(path, k, v, wantKey)...)
+		rows = append(rows, scanFrontLinks(path, k, v, filter)...)
 	}
 	return rows
 }
 
-func scanFrontValue(path, key string, v any, wantKey string) []verboseRow {
+func scanFrontLinks(path, key string, v any, filter func(string) bool) []verboseRow {
 	switch vv := v.(type) {
 	case string:
 		for _, link := range wikilink.Parse(vv) {
-			if strings.ToLower(link.Title()) == wantKey {
+			if filter(strings.ToLower(link.Title())) {
 				return []verboseRow{{path: path, key: key, isFront: true, text: truncateSnippet(vv)}}
 			}
 		}
@@ -267,17 +262,25 @@ func scanFrontValue(path, key string, v any, wantKey string) []verboseRow {
 	case []any:
 		var rows []verboseRow
 		for _, item := range vv {
-			rows = append(rows, scanFrontValue(path, key, item, wantKey)...)
+			rows = append(rows, scanFrontLinks(path, key, item, filter)...)
 		}
 		return rows
 	case map[string]any:
 		var rows []verboseRow
 		for _, item := range vv {
-			rows = append(rows, scanFrontValue(path, key, item, wantKey)...)
+			rows = append(rows, scanFrontLinks(path, key, item, filter)...)
 		}
 		return rows
 	}
 	return nil
+}
+
+func renderVerboseBody(path, body, wantKey string) []verboseRow {
+	return renderBodyLinks(path, body, func(t string) bool { return t == wantKey })
+}
+
+func renderVerboseFront(path string, fm *frontmatter.Map, wantKey string) []verboseRow {
+	return renderFrontLinks(path, fm, func(t string) bool { return t == wantKey })
 }
 
 // truncateSnippet caps s at maxVerboseSnippet runes, replacing the tail with

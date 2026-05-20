@@ -11,24 +11,28 @@ import (
 // Flags is the flattened set of values produced by the `find` Cobra flags. It
 // is consumed by FromFlags to build a single predicate.
 type Flags struct {
-	Tags        []string
-	Categories  []string
-	Status      string
-	Type        string
-	Has         string
-	Missing     string
-	Age         string
-	Created     string
-	Folder      string
-	Orphan      bool
-	BrokenLinks bool
+	Tags         []string
+	Categories   []string
+	Status       string
+	Type         string
+	Has          string
+	Missing      string
+	Age          string
+	Created      string
+	Folder       string
+	Orphan       bool
+	BrokenLinks  bool
+	MinBacklinks int
+	MaxBacklinks int
+	MinLinks     int
+	MaxLinks     int
+	DeadEnd      bool
 
 	// Root is the absolute vault root; required when Folder is set.
 	Root string
-	// BacklinkIndex must be populated by the caller when Orphan is true.
-	BacklinkIndex BacklinkIndex
-	// TitleIndex must be populated by the caller when BrokenLinks is true.
-	TitleIndex TitleIndex
+	// Graph must be populated by the caller when Orphan, BrokenLinks, or
+	// link-count predicates are active.
+	Graph *Graph
 }
 
 // FromFlags translates a Flags value into a single combined predicate. Empty
@@ -78,16 +82,46 @@ func FromFlags(f Flags) (Predicate, error) {
 		ps = append(ps, Folder(f.Folder, f.Root))
 	}
 	if f.Orphan {
-		if f.BacklinkIndex == nil {
-			return nil, errors.New("query: --orphan requires a backlink index")
+		if f.Graph == nil {
+			return nil, errors.New("query: --orphan requires a graph")
 		}
-		ps = append(ps, Orphan(f.BacklinkIndex))
+		ps = append(ps, Orphan(f.Graph))
 	}
 	if f.BrokenLinks {
-		if f.TitleIndex == nil {
-			return nil, errors.New("query: --broken-links requires a title index")
+		if f.Graph == nil {
+			return nil, errors.New("query: --broken-links requires a graph")
 		}
-		ps = append(ps, BrokenLinks(f.TitleIndex))
+		ps = append(ps, BrokenLinks(f.Graph))
+	}
+	if f.MinBacklinks >= 0 {
+		if f.Graph == nil {
+			return nil, errors.New("query: --min-backlinks requires a graph")
+		}
+		ps = append(ps, MinBacklinks(f.Graph, f.MinBacklinks))
+	}
+	if f.MaxBacklinks >= 0 {
+		if f.Graph == nil {
+			return nil, errors.New("query: --max-backlinks requires a graph")
+		}
+		ps = append(ps, MaxBacklinks(f.Graph, f.MaxBacklinks))
+	}
+	if f.MinLinks >= 0 {
+		if f.Graph == nil {
+			return nil, errors.New("query: --min-links requires a graph")
+		}
+		ps = append(ps, MinLinks(f.Graph, f.MinLinks))
+	}
+	if f.MaxLinks >= 0 {
+		if f.Graph == nil {
+			return nil, errors.New("query: --max-links requires a graph")
+		}
+		ps = append(ps, MaxLinks(f.Graph, f.MaxLinks))
+	}
+	if f.DeadEnd {
+		if f.Graph == nil {
+			return nil, errors.New("query: --dead-end requires a graph")
+		}
+		ps = append(ps, DeadEnd(f.Graph))
 	}
 	return And(ps...), nil
 }

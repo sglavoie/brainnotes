@@ -8,22 +8,6 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
-// TitleIndex is the set of lowercased note stems present in the vault.
-type TitleIndex map[string]struct{}
-
-// BuildTitleIndex populates a TitleIndex from the given notes.
-func BuildTitleIndex(notes []*vault.Note) TitleIndex {
-	idx := make(TitleIndex, len(notes))
-	for _, n := range notes {
-		if n == nil {
-			continue
-		}
-		stem := strings.ToLower(strings.TrimSuffix(filepath.Base(n.Path), ".md"))
-		idx[stem] = struct{}{}
-	}
-	return idx
-}
-
 // BrokenLink describes a single unresolved wikilink in a note.
 type BrokenLink struct {
 	Link           wikilink.Link
@@ -43,8 +27,8 @@ func isMediaEmbed(title string) bool {
 }
 
 // UnresolvedLinks returns every wikilink in n (body and frontmatter) whose
-// title does not appear in idx.
-func UnresolvedLinks(n *vault.Note, idx TitleIndex) []BrokenLink {
+// title does not appear in the graph's title set.
+func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 	if n == nil {
 		return nil
 	}
@@ -59,7 +43,7 @@ func UnresolvedLinks(n *vault.Note, idx TitleIndex) []BrokenLink {
 			if title == "" || isMediaEmbed(title) {
 				continue
 			}
-			if _, ok := idx[strings.ToLower(title)]; ok {
+			if _, ok := g.Titles[strings.ToLower(title)]; ok {
 				continue
 			}
 			line := lineFromOffset(nlOffsets, link.Start)
@@ -73,12 +57,12 @@ func UnresolvedLinks(n *vault.Note, idx TitleIndex) []BrokenLink {
 	}
 	for _, k := range fm.Keys() {
 		v, _ := fm.Get(k)
-		scanBrokenValue(v, k, idx, &out)
+		scanBrokenValue(v, k, g, &out)
 	}
 	return out
 }
 
-func scanBrokenValue(v any, key string, idx TitleIndex, out *[]BrokenLink) {
+func scanBrokenValue(v any, key string, g *Graph, out *[]BrokenLink) {
 	switch vv := v.(type) {
 	case string:
 		for _, link := range wikilink.Parse(vv) {
@@ -86,17 +70,17 @@ func scanBrokenValue(v any, key string, idx TitleIndex, out *[]BrokenLink) {
 			if title == "" || isMediaEmbed(title) {
 				continue
 			}
-			if _, ok := idx[strings.ToLower(title)]; !ok {
+			if _, ok := g.Titles[strings.ToLower(title)]; !ok {
 				*out = append(*out, BrokenLink{Link: link, FrontmatterKey: key, Line: 0})
 			}
 		}
 	case []any:
 		for _, item := range vv {
-			scanBrokenValue(item, key, idx, out)
+			scanBrokenValue(item, key, g, out)
 		}
 	case map[string]any:
 		for _, item := range vv {
-			scanBrokenValue(item, key, idx, out)
+			scanBrokenValue(item, key, g, out)
 		}
 	}
 }
@@ -125,8 +109,8 @@ func lineFromOffset(nlOffsets []int, offset int) int {
 
 // BrokenLinks returns a predicate that matches notes with at least one
 // unresolved wikilink.
-func BrokenLinks(idx TitleIndex) Predicate {
+func BrokenLinks(g *Graph) Predicate {
 	return func(n *vault.Note) bool {
-		return len(UnresolvedLinks(n, idx)) > 0
+		return len(UnresolvedLinks(n, g)) > 0
 	}
 }

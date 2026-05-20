@@ -278,6 +278,64 @@ func TestFind_BrokenLinks_ErrorCombinations(t *testing.T) {
 	}
 }
 
+func buildLinkCountFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	files := map[string]string{
+		"Hub.md":    "---\ntags:\n  - important\n---\n[[A]] and [[B]] and [[C]].\n",
+		"A.md":      "---\ntags:\n  - important\n---\n[[Hub]] back.\n",
+		"B.md":      "---\n---\n[[Hub]] back.\n",
+		"C.md":      "---\n---\n[[Hub]] back.\n",
+		"Island.md": "---\n---\nNo links at all.\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	return root
+}
+
+func TestFind_MinBacklinks(t *testing.T) {
+	root := buildLinkCountFixture(t)
+	got := runFind(t, root, "find", "--min-backlinks", "3")
+	want := []string{"Hub.md"}
+	if !equalStrings(got, want) {
+		t.Fatalf("find --min-backlinks 3:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+func TestFind_DeadEnd(t *testing.T) {
+	root := buildLinkCountFixture(t)
+	got := runFind(t, root, "find", "--dead-end")
+	want := []string{"Island.md"}
+	sort.Strings(want)
+	if !equalStrings(got, want) {
+		t.Fatalf("find --dead-end:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+func TestFind_ComposedMetrics(t *testing.T) {
+	root := buildLinkCountFixture(t)
+	got := runFind(t, root, "find", "--min-backlinks", "1", "--dead-end")
+	if len(got) != 0 {
+		t.Fatalf("find --min-backlinks 1 --dead-end: expected no matches (no note is both linked-to and has zero outgoing), got %v", got)
+	}
+}
+
+func TestFind_MinBacklinksWithTag(t *testing.T) {
+	root := buildLinkCountFixture(t)
+	got := runFind(t, root, "find", "--min-backlinks", "2", "--tag", "important")
+	want := []string{"Hub.md"}
+	if !equalStrings(got, want) {
+		t.Fatalf("find --min-backlinks 2 --tag important:\n got=%v\nwant=%v", got, want)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

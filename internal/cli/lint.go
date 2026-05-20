@@ -23,19 +23,9 @@ func (e *LintError) Error() string {
 }
 
 func NewLintCmd() *cobra.Command {
-	var (
-		tags        []string
-		categories  []string
-		status      string
-		typeProp    string
-		hasProp     string
-		missingProp string
-		age         string
-		created     string
-		folder      string
-		orphan      bool
-		property    string
-	)
+	var property string
+
+	ff := new(findFlags)
 
 	cmd := &cobra.Command{
 		Use:   "lint",
@@ -75,22 +65,11 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 				return err
 			}
 
-			flags := query.Flags{
-				Tags:       tags,
-				Categories: categories,
-				Status:     status,
-				Type:       typeProp,
-				Has:        hasProp,
-				Missing:    missingProp,
-				Age:        age,
-				Created:    created,
-				Folder:     folder,
-				Orphan:     orphan,
-				Root:       v.Root,
+			var g *query.Graph
+			if ff.needsGraph() {
+				g = query.BuildGraph(notes)
 			}
-			if flags.Orphan {
-				flags.BacklinkIndex = query.BuildBacklinkIndex(notes)
-			}
+			flags := ff.toQueryFlags(v.Root, g)
 			pred, err := query.FromFlags(flags)
 			if err != nil {
 				return err
@@ -118,18 +97,8 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 		},
 	}
 
-	f := cmd.Flags()
-	f.StringSliceVar(&tags, "tag", nil, "filter by tag (repeatable; AND semantics)")
-	f.StringSliceVar(&categories, "category", nil, "filter by category target (repeatable; AND semantics)")
-	f.StringVar(&status, "status", "", "filter by status property")
-	f.StringVar(&typeProp, "type", "", "filter by type/kind property")
-	f.StringVar(&hasProp, "has", "", "require property present")
-	f.StringVar(&missingProp, "missing", "", "require property absent")
-	f.StringVar(&age, "age", "", "filter by 'last' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&created, "created", "", "filter by 'created' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&folder, "folder", "", "limit to a vault-relative folder (matches descendants)")
-	f.BoolVar(&orphan, "orphan", false, "only notes nothing in the vault links to")
-	f.StringVar(&property, "property", "", "lint only this schema property")
+	ff.register(cmd)
+	cmd.Flags().StringVar(&property, "property", "", "lint only this schema property")
 
 	return cmd
 }

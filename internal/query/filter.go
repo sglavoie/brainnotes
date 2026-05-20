@@ -230,25 +230,70 @@ func Folder(folder, root string) Predicate {
 	}
 }
 
-// Orphan matches notes that no *other* note in the vault links to. The index
-// is built once per find run via BuildBacklinkIndex.
+// Orphan matches notes that no *other* note in the vault links to. The graph
+// is built once per find run via BuildGraph.
 //
 // Self-references are excluded so a note that only links to itself still
 // counts as an orphan — this matches `bn backlinks`, which also excludes the
 // target's own path from its referrers list.
-func Orphan(idx BacklinkIndex) Predicate {
+func Orphan(g *Graph) Predicate {
 	return func(n *vault.Note) bool {
 		if n == nil {
 			return false
 		}
 		t := strings.ToLower(n.Title())
-		for _, p := range idx[t] {
+		for _, p := range g.BackLinks(t) {
 			if p != n.Path {
 				return false
 			}
 		}
 		return true
 	}
+}
+
+// MinBacklinks matches notes with at least n inbound links from other notes.
+func MinBacklinks(g *Graph, n int) Predicate {
+	return func(note *vault.Note) bool {
+		if note == nil {
+			return false
+		}
+		return g.InDegree(note.Title()) >= n
+	}
+}
+
+// MaxBacklinks matches notes with at most n inbound links from other notes.
+func MaxBacklinks(g *Graph, n int) Predicate {
+	return func(note *vault.Note) bool {
+		if note == nil {
+			return false
+		}
+		return g.InDegree(note.Title()) <= n
+	}
+}
+
+// MinLinks matches notes with at least n outgoing links to other notes.
+func MinLinks(g *Graph, n int) Predicate {
+	return func(note *vault.Note) bool {
+		if note == nil {
+			return false
+		}
+		return g.OutDegree(note.Title()) >= n
+	}
+}
+
+// MaxLinks matches notes with at most n outgoing links to other notes.
+func MaxLinks(g *Graph, n int) Predicate {
+	return func(note *vault.Note) bool {
+		if note == nil {
+			return false
+		}
+		return g.OutDegree(note.Title()) <= n
+	}
+}
+
+// DeadEnd matches notes with zero outgoing links to other notes.
+func DeadEnd(g *Graph) Predicate {
+	return MaxLinks(g, 0)
 }
 
 // Age matches notes whose date at prop satisfies the comparison. op is one of

@@ -387,7 +387,7 @@ func TestParseAge(t *testing.T) {
 	}
 }
 
-func TestBuildBacklinkIndex(t *testing.T) {
+func TestBuildGraphBacklinks(t *testing.T) {
 	_, notes := newVault(t, map[string]string{
 		"Apple.md":  "Body links to [[Banana]] and [[Cherry|Cherries]].\n",
 		"Banana.md": "---\ncategories:\n  - \"[[Apple]]\"\n---\nBody.\n",
@@ -396,22 +396,22 @@ func TestBuildBacklinkIndex(t *testing.T) {
 	})
 
 	all := []*vault.Note{notes["Apple.md"], notes["Banana.md"], notes["Cherry.md"], notes["Lonely.md"]}
-	idx := BuildBacklinkIndex(all)
+	g := BuildGraph(all)
 
-	if len(idx["banana"]) != 1 {
-		t.Errorf("expected one referrer for Banana, got %v", idx["banana"])
+	if len(g.BackLinks("banana")) != 1 {
+		t.Errorf("expected one referrer for Banana, got %v", g.BackLinks("banana"))
 	}
-	if len(idx["cherry"]) != 1 {
-		t.Errorf("expected one referrer for Cherry, got %v", idx["cherry"])
+	if len(g.BackLinks("cherry")) != 1 {
+		t.Errorf("expected one referrer for Cherry, got %v", g.BackLinks("cherry"))
 	}
-	if len(idx["apple"]) != 1 {
-		t.Errorf("expected one referrer for Apple (from Banana frontmatter), got %v", idx["apple"])
+	if len(g.BackLinks("apple")) != 1 {
+		t.Errorf("expected one referrer for Apple (from Banana frontmatter), got %v", g.BackLinks("apple"))
 	}
-	if _, ok := idx["lonely"]; ok {
-		t.Errorf("Lonely should have no index entry, got %v", idx["lonely"])
+	if len(g.BackLinks("lonely")) != 0 {
+		t.Errorf("Lonely should have no backlinks, got %v", g.BackLinks("lonely"))
 	}
 
-	orphan := Orphan(idx)
+	orphan := Orphan(g)
 	if orphan(notes["Apple.md"]) {
 		t.Errorf("Apple has an incoming link; not orphan")
 	}
@@ -432,8 +432,8 @@ func TestOrphanIgnoresSelfReferences(t *testing.T) {
 		"Referrer.md":   "---\n---\nLinks to [[Referenced]].\n",
 	})
 	all := []*vault.Note{notes["SelfOnly.md"], notes["Referenced.md"], notes["Referrer.md"]}
-	idx := BuildBacklinkIndex(all)
-	o := Orphan(idx)
+	g := BuildGraph(all)
+	o := Orphan(g)
 
 	if !o(notes["SelfOnly.md"]) {
 		t.Errorf("SelfOnly should be an orphan: its only inbound link is from itself")
@@ -486,7 +486,7 @@ func TestFromFlags(t *testing.T) {
 	all := []*vault.Note{notes["References/a.md"], notes["b.md"], notes["c.md"]}
 
 	t.Run("multi-term AND", func(t *testing.T) {
-		pred, err := FromFlags(Flags{Tags: []string{"foo"}, Status: "Reading"})
+		pred, err := FromFlags(Flags{Tags: []string{"foo"}, Status: "Reading", MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1})
 		if err != nil {
 			t.Fatalf("FromFlags: %v", err)
 		}
@@ -499,7 +499,7 @@ func TestFromFlags(t *testing.T) {
 	})
 
 	t.Run("folder requires root", func(t *testing.T) {
-		pred, err := FromFlags(Flags{Folder: "References", Root: v.Root})
+		pred, err := FromFlags(Flags{Folder: "References", Root: v.Root, MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1})
 		if err != nil {
 			t.Fatalf("FromFlags: %v", err)
 		}
@@ -511,12 +511,12 @@ func TestFromFlags(t *testing.T) {
 		}
 	})
 
-	t.Run("orphan needs index", func(t *testing.T) {
-		if _, err := FromFlags(Flags{Orphan: true}); err == nil {
-			t.Errorf("expected error: orphan without index")
+	t.Run("orphan needs graph", func(t *testing.T) {
+		if _, err := FromFlags(Flags{Orphan: true, MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1}); err == nil {
+			t.Errorf("expected error: orphan without graph")
 		}
-		idx := BuildBacklinkIndex(all)
-		pred, err := FromFlags(Flags{Orphan: true, BacklinkIndex: idx})
+		g := BuildGraph(all)
+		pred, err := FromFlags(Flags{Orphan: true, Graph: g, MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1})
 		if err != nil {
 			t.Fatalf("FromFlags: %v", err)
 		}
@@ -529,13 +529,13 @@ func TestFromFlags(t *testing.T) {
 	})
 
 	t.Run("age error", func(t *testing.T) {
-		if _, err := FromFlags(Flags{Age: "bogus"}); err == nil {
+		if _, err := FromFlags(Flags{Age: "bogus", MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1}); err == nil {
 			t.Errorf("expected error from bogus age")
 		}
 	})
 
 	t.Run("empty flags matches all", func(t *testing.T) {
-		pred, err := FromFlags(Flags{})
+		pred, err := FromFlags(Flags{MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1})
 		if err != nil {
 			t.Fatalf("FromFlags: %v", err)
 		}
@@ -625,8 +625,8 @@ func TestBacklinkPathsRecorded(t *testing.T) {
 		"Source.md": "Reference to [[Target]].\n",
 		"Target.md": "# t\n",
 	})
-	idx := BuildBacklinkIndex([]*vault.Note{notes["Source.md"], notes["Target.md"]})
-	refs := idx["target"]
+	g := BuildGraph([]*vault.Note{notes["Source.md"], notes["Target.md"]})
+	refs := g.BackLinks("target")
 	if len(refs) != 1 {
 		t.Fatalf("want 1 ref, got %d", len(refs))
 	}
@@ -643,14 +643,14 @@ func TestBacklinkPathsRecorded(t *testing.T) {
 // n.Title() — which panics on a nil *Note. The guard makes Orphan consistent
 // with And/Or (false on nil) so callers can compose it safely.
 func TestOrphanRejectsNilNote(t *testing.T) {
-	idx := BacklinkIndex{}
+	g := BuildGraph(nil)
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("Orphan should not panic on nil note, got panic: %v", r)
 		}
 	}()
-	if Orphan(idx)(nil) {
-		t.Errorf("Orphan(idx)(nil) = true, want false")
+	if Orphan(g)(nil) {
+		t.Errorf("Orphan(g)(nil) = true, want false")
 	}
 }
 
@@ -665,14 +665,12 @@ func TestOrphanLinkedOnlyByAlias(t *testing.T) {
 		"Referrer.md": "---\n---\nSee [[Target|the target]] for details.\n",
 	})
 	all := []*vault.Note{notes["Target.md"], notes["Referrer.md"]}
-	idx := BuildBacklinkIndex(all)
-	if Orphan(idx)(notes["Target.md"]) {
+	g := BuildGraph(all)
+	if Orphan(g)(notes["Target.md"]) {
 		t.Errorf("Target should not be an orphan: Referrer links it via an alias")
 	}
-	// And the alias text "the target" should not itself create a phantom
-	// orphan-killer entry under key "the target".
-	if _, ok := idx["the target"]; ok {
-		t.Errorf("alias text should not produce a backlink-index entry")
+	if len(g.BackLinks("the target")) != 0 {
+		t.Errorf("alias text should not produce a backlink entry")
 	}
 }
 
@@ -686,8 +684,8 @@ func TestOrphanLinkedByFolderPrefixedWikilink(t *testing.T) {
 		"Referrer.md":     "---\n---\nSee [[Books/Target]].\n",
 	})
 	all := []*vault.Note{notes["Books/Target.md"], notes["Referrer.md"]}
-	idx := BuildBacklinkIndex(all)
-	if Orphan(idx)(notes["Books/Target.md"]) {
+	g := BuildGraph(all)
+	if Orphan(g)(notes["Books/Target.md"]) {
 		t.Errorf("Books/Target should not be an orphan: Referrer links it with a folder prefix")
 	}
 }
@@ -880,6 +878,168 @@ func TestStatusAndTypeMatchNonStringValues(t *testing.T) {
 	}
 	if !Status("reading")(notes["plain.md"]) {
 		t.Errorf("Status(reading) should still match a plain string status")
+	}
+}
+
+func TestMinBacklinks(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Hub.md":    "---\n---\nbody\n",
+		"A.md":      "---\n---\n[[Hub]] link.\n",
+		"B.md":      "---\n---\n[[Hub]] link.\n",
+		"C.md":      "---\n---\n[[Hub]] link.\n",
+		"Lonely.md": "---\n---\nNo links.\n",
+	})
+	all := []*vault.Note{notes["Hub.md"], notes["A.md"], notes["B.md"], notes["C.md"], notes["Lonely.md"]}
+	g := BuildGraph(all)
+
+	if !MinBacklinks(g, 2)(notes["Hub.md"]) {
+		t.Errorf("Hub has 3 inbound; MinBacklinks(2) should match")
+	}
+	if MinBacklinks(g, 4)(notes["Hub.md"]) {
+		t.Errorf("Hub has 3 inbound; MinBacklinks(4) should not match")
+	}
+	if MinBacklinks(g, 1)(notes["Lonely.md"]) {
+		t.Errorf("Lonely has 0 inbound; MinBacklinks(1) should not match")
+	}
+}
+
+func TestMaxBacklinks(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Target.md":   "---\n---\nbody\n",
+		"Referrer.md": "---\n---\n[[Target]] link.\n",
+		"Lonely.md":   "---\n---\nNo links.\n",
+	})
+	all := []*vault.Note{notes["Target.md"], notes["Referrer.md"], notes["Lonely.md"]}
+	g := BuildGraph(all)
+
+	if !MaxBacklinks(g, 2)(notes["Target.md"]) {
+		t.Errorf("Target has 1 inbound; MaxBacklinks(2) should match")
+	}
+	if MaxBacklinks(g, 0)(notes["Target.md"]) {
+		t.Errorf("Target has 1 inbound; MaxBacklinks(0) should not match")
+	}
+	if !MaxBacklinks(g, 0)(notes["Lonely.md"]) {
+		t.Errorf("Lonely has 0 inbound; MaxBacklinks(0) should match")
+	}
+}
+
+func TestMinLinks(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Hub.md": "---\n---\n[[A]] [[B]] [[C]] [[D]] [[E]]\n",
+		"A.md":   "---\n---\nbody\n",
+		"B.md":   "---\n---\nbody\n",
+		"C.md":   "---\n---\nbody\n",
+		"D.md":   "---\n---\nbody\n",
+		"E.md":   "---\n---\nbody\n",
+	})
+	all := []*vault.Note{notes["Hub.md"], notes["A.md"], notes["B.md"], notes["C.md"], notes["D.md"], notes["E.md"]}
+	g := BuildGraph(all)
+
+	if !MinLinks(g, 3)(notes["Hub.md"]) {
+		t.Errorf("Hub has 5 outgoing; MinLinks(3) should match")
+	}
+	if MinLinks(g, 1)(notes["A.md"]) {
+		t.Errorf("A has 0 outgoing; MinLinks(1) should not match")
+	}
+}
+
+func TestMaxLinks(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Hub.md":  "---\n---\n[[A]] [[B]]\n",
+		"A.md":    "---\n---\nbody\n",
+		"B.md":    "---\n---\nbody\n",
+		"Dead.md": "---\n---\nNo outgoing links.\n",
+	})
+	all := []*vault.Note{notes["Hub.md"], notes["A.md"], notes["B.md"], notes["Dead.md"]}
+	g := BuildGraph(all)
+
+	if !MaxLinks(g, 0)(notes["Dead.md"]) {
+		t.Errorf("Dead has 0 outgoing; MaxLinks(0) should match")
+	}
+	if MaxLinks(g, 0)(notes["Hub.md"]) {
+		t.Errorf("Hub has 2 outgoing; MaxLinks(0) should not match")
+	}
+}
+
+func TestDeadEnd(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Linker.md": "---\n---\n[[Target]]\n",
+		"Target.md": "---\n---\nbody\n",
+		"Island.md": "---\n---\nNo links at all.\n",
+	})
+	all := []*vault.Note{notes["Linker.md"], notes["Target.md"], notes["Island.md"]}
+	g := BuildGraph(all)
+
+	if DeadEnd(g)(notes["Linker.md"]) {
+		t.Errorf("Linker has outgoing links; should not be dead end")
+	}
+	if !DeadEnd(g)(notes["Target.md"]) {
+		t.Errorf("Target has no outgoing links; should be dead end")
+	}
+	if !DeadEnd(g)(notes["Island.md"]) {
+		t.Errorf("Island has no outgoing links; should be dead end")
+	}
+}
+
+func TestDeadEnd_EquivalentToMaxLinksZero(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Linker.md": "---\n---\n[[A]] [[B]]\n",
+		"A.md":      "---\n---\nbody\n",
+		"B.md":      "---\n---\n[[A]]\n",
+		"Island.md": "---\n---\nNo links.\n",
+	})
+	all := []*vault.Note{notes["Linker.md"], notes["A.md"], notes["B.md"], notes["Island.md"]}
+	g := BuildGraph(all)
+
+	deadEnd := DeadEnd(g)
+	maxZero := MaxLinks(g, 0)
+	for name, n := range notes {
+		if deadEnd(n) != maxZero(n) {
+			t.Errorf("%s: DeadEnd=%v MaxLinks(0)=%v — should be identical", name, deadEnd(n), maxZero(n))
+		}
+	}
+}
+
+func TestLinkPredicatesSelfLinkExcluded(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Self.md":  "---\n---\n[[Self]] only links to itself.\n",
+		"Other.md": "---\n---\n[[Self]]\n",
+	})
+	all := []*vault.Note{notes["Self.md"], notes["Other.md"]}
+	g := BuildGraph(all)
+
+	if g.InDegree("self") != 1 {
+		t.Errorf("Self should have 1 inbound (from Other), got %d", g.InDegree("self"))
+	}
+	if g.OutDegree("self") != 0 {
+		t.Errorf("Self should have 0 outgoing (self-link excluded), got %d", g.OutDegree("self"))
+	}
+	if !DeadEnd(g)(notes["Self.md"]) {
+		t.Errorf("Self-link only: should be a dead end")
+	}
+}
+
+func TestLinkPredicatesRejectNil(t *testing.T) {
+	g := BuildGraph(nil)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("link predicates should not panic on nil note, got: %v", r)
+		}
+	}()
+	if MinBacklinks(g, 0)(nil) {
+		t.Errorf("MinBacklinks should reject nil")
+	}
+	if MaxBacklinks(g, 0)(nil) {
+		t.Errorf("MaxBacklinks should reject nil")
+	}
+	if MinLinks(g, 0)(nil) {
+		t.Errorf("MinLinks should reject nil")
+	}
+	if MaxLinks(g, 0)(nil) {
+		t.Errorf("MaxLinks should reject nil")
+	}
+	if DeadEnd(g)(nil) {
+		t.Errorf("DeadEnd should reject nil")
 	}
 }
 

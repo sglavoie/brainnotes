@@ -17,22 +17,13 @@ import (
 // NewFindCmd returns the `find` subcommand. Exported for tests.
 func NewFindCmd() *cobra.Command {
 	var (
-		tags              []string
-		categories        []string
-		status            string
-		typeProp          string
-		hasProp           string
-		missingProp       string
-		age               string
-		created           string
-		orphan            bool
-		folder            string
 		interactive       bool
 		nullSep           bool
-		brokenLinks       bool
 		showBroken        bool
 		listBrokenTargets bool
 	)
+
+	ff := new(findFlags)
 
 	cmd := &cobra.Command{
 		Use:           "find",
@@ -45,10 +36,10 @@ func NewFindCmd() *cobra.Command {
 			if cfg == nil {
 				return errors.New("find: no config in context")
 			}
-			if showBroken && !brokenLinks {
+			if showBroken && !ff.brokenLinks {
 				return errors.New("--show-broken requires --broken-links")
 			}
-			if listBrokenTargets && !brokenLinks {
+			if listBrokenTargets && !ff.brokenLinks {
 				return errors.New("--list-broken-targets requires --broken-links")
 			}
 			if showBroken && listBrokenTargets {
@@ -69,26 +60,11 @@ func NewFindCmd() *cobra.Command {
 				return err
 			}
 
-			flags := query.Flags{
-				Tags:        tags,
-				Categories:  categories,
-				Status:      status,
-				Type:        typeProp,
-				Has:         hasProp,
-				Missing:     missingProp,
-				Age:         age,
-				Created:     created,
-				Folder:      folder,
-				Orphan:      orphan,
-				BrokenLinks: brokenLinks,
-				Root:        v.Root,
+			var g *query.Graph
+			if ff.needsGraph() {
+				g = query.BuildGraph(notes)
 			}
-			if orphan {
-				flags.BacklinkIndex = query.BuildBacklinkIndex(notes)
-			}
-			if brokenLinks {
-				flags.TitleIndex = query.BuildTitleIndex(notes)
-			}
+			flags := ff.toQueryFlags(v.Root, g)
 			pred, err := query.FromFlags(flags)
 			if err != nil {
 				return err
@@ -107,10 +83,10 @@ func NewFindCmd() *cobra.Command {
 			out := cmd.OutOrStdout()
 
 			if showBroken {
-				return printShowBroken(out, matched, flags.TitleIndex, v.Root)
+				return printShowBroken(out, matched, flags.Graph, v.Root)
 			}
 			if listBrokenTargets {
-				return printListBrokenTargets(out, matched, flags.TitleIndex)
+				return printListBrokenTargets(out, matched, flags.Graph)
 			}
 
 			paths := make([]string, len(matched))
@@ -139,20 +115,10 @@ func NewFindCmd() *cobra.Command {
 		},
 	}
 
+	ff.register(cmd)
 	f := cmd.Flags()
-	f.StringSliceVar(&tags, "tag", nil, "filter by tag (repeatable; AND semantics)")
-	f.StringSliceVar(&categories, "category", nil, "filter by category target (repeatable; AND semantics)")
-	f.StringVar(&status, "status", "", "filter by status property")
-	f.StringVar(&typeProp, "type", "", "filter by type/kind property")
-	f.StringVar(&hasProp, "has", "", "require property present")
-	f.StringVar(&missingProp, "missing", "", "require property absent")
-	f.StringVar(&age, "age", "", "filter by 'last' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&created, "created", "", "filter by 'created' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&folder, "folder", "", "limit to a vault-relative folder (matches descendants)")
-	f.BoolVar(&orphan, "orphan", false, "only notes nothing in the vault links to")
 	f.BoolVarP(&interactive, "interactive", "i", false, "pipe matches into fzf for selection")
 	f.BoolVarP(&nullSep, "null", "0", false, "separate paths with NUL instead of newline")
-	f.BoolVar(&brokenLinks, "broken-links", false, "only notes with unresolved wikilinks")
 	f.BoolVar(&showBroken, "show-broken", false, "show each broken link (requires --broken-links)")
 	f.BoolVar(&listBrokenTargets, "list-broken-targets", false, "list unique broken targets (requires --broken-links)")
 
@@ -166,14 +132,14 @@ type brokenRecord struct {
 	raw            string
 }
 
-func printShowBroken(out io.Writer, matched []*vault.Note, idx query.TitleIndex, root string) error {
+func printShowBroken(out io.Writer, matched []*vault.Note, g *query.Graph, root string) error {
 	var records []brokenRecord
 	for _, n := range matched {
 		rel, err := filepath.Rel(root, n.Path)
 		if err != nil {
 			rel = n.Path
 		}
-		for _, bl := range query.UnresolvedLinks(n, idx) {
+		for _, bl := range query.UnresolvedLinks(n, g) {
 			records = append(records, brokenRecord{
 				relpath:        rel,
 				line:           bl.Line,
@@ -208,10 +174,10 @@ func printShowBroken(out io.Writer, matched []*vault.Note, idx query.TitleIndex,
 	return nil
 }
 
-func printListBrokenTargets(out io.Writer, matched []*vault.Note, idx query.TitleIndex) error {
+func printListBrokenTargets(out io.Writer, matched []*vault.Note, g *query.Graph) error {
 	seen := make(map[string]string)
 	for _, n := range matched {
-		for _, bl := range query.UnresolvedLinks(n, idx) {
+		for _, bl := range query.UnresolvedLinks(n, g) {
 			title := bl.Link.Title()
 			key := strings.ToLower(title)
 			if _, ok := seen[key]; !ok {

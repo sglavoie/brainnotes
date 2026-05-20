@@ -100,17 +100,21 @@ printed as a unified diff block; unchanged files are omitted.`,
 			}
 
 			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, query.Flags{
-				Tags:       tags,
-				Categories: categories,
-				Status:     status,
-				Type:       typeProp,
-				Has:        hasProp,
-				Missing:    missingProp,
-				Age:        age,
-				Created:    created,
-				Folder:     folder,
-				Orphan:     orphan,
-				Root:       v.Root,
+				Tags:         tags,
+				Categories:   categories,
+				Status:       status,
+				Type:         typeProp,
+				Has:          hasProp,
+				Missing:      missingProp,
+				Age:          age,
+				Created:      created,
+				Folder:       folder,
+				Orphan:       orphan,
+				MinBacklinks: -1,
+				MaxBacklinks: -1,
+				MinLinks:     -1,
+				MaxLinks:     -1,
+				Root:         v.Root,
 			})
 			if err != nil {
 				return err
@@ -208,7 +212,7 @@ func collectReplaceCandidates(v *vault.Vault, cmd *cobra.Command, noteArgs []str
 		return nil, err
 	}
 	if flags.Orphan {
-		flags.BacklinkIndex = query.BuildBacklinkIndex(notes)
+		flags.Graph = query.BuildGraph(notes)
 	}
 	pred, err := query.FromFlags(flags)
 	if err != nil {

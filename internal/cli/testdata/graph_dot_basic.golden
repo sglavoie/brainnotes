@@ -1,0 +1,6 @@
+digraph vault {
+  rankdir=LR;
+  "Alpha" -> "Beta";
+  "Alpha" -> "Gamma";
+  "Beta" -> "Gamma";
+}
