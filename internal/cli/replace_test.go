@@ -239,3 +239,36 @@ func TestReplace_RejectsInvalidKey(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+// TestReplace_WikilinkSkipsAutoCoerce asserts that for wikilink-typed
+// properties, a literal token that would otherwise auto-coerce (e.g. "true",
+// "42", "2026-01-01") is treated as a string and wrapped in [[ ]] before
+// comparison. Before the fix, coerceValue("true", "") returned a bool and the
+// replacement never matched the string entry `[[true]]`.
+func TestReplace_WikilinkSkipsAutoCoerce(t *testing.T) {
+	root := t.TempDir()
+	notePath := filepath.Join(root, "x.md")
+	body := "---\ncategories:\n  - \"[[true]]\"\n---\nbody\n"
+	if err := os.WriteFile(notePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BNOTES_CONFIG", cfgPath)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_VAULT", "")
+
+	if _, err := runCLI(t, "", "replace", "categories", "true", "false", notePath); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readNote(t, notePath)
+	if !strings.Contains(got, "[[false]]") {
+		t.Fatalf("expected [[false]], got:\n%s", got)
+	}
+	if strings.Contains(got, "[[true]]") {
+		t.Fatalf("expected [[true]] gone, got:\n%s", got)
+	}
+}

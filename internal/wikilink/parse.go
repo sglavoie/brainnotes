@@ -38,7 +38,12 @@ func (l Link) Title() string {
 
 // wikilinkRE matches `[[Target]]`, `[[Target#Heading]]`, `[[Target|Alias]]`,
 // or any combination. Capture groups: 1=Target, 2=Heading, 3=Alias.
-var wikilinkRE = regexp.MustCompile(`\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]`)
+//
+// The negated character classes exclude `\n` and `\r` so a stray `[[` followed
+// by a `]]` on a later line is not mistaken for a single multi-line wikilink.
+// Obsidian wikilinks are single-line by convention, so this restriction
+// removes a class of false positives without losing real matches.
+var wikilinkRE = regexp.MustCompile(`\[\[([^\]|#\r\n]+)(?:#([^\]|\r\n]+))?(?:\|([^\]\r\n]+))?\]\]`)
 
 // Parse returns every wikilink in s, in source order, skipping any match that
 // falls inside a fenced code block, indented code block, or inline code span.

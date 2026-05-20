@@ -204,6 +204,12 @@ func TestParseNoFalsePositives(t *testing.T) {
 		{"only one bracket", "[[A]"},
 		{"empty body", "[[]]"},
 		{"plain text", "no wikilinks here"},
+		{"opening brackets one line, close on next", "stray [[ open\nlater ]] close"},
+		{"opener and close separated by paragraph", "[[Foo\n\nBar]]"},
+		{"wikilink target spans multiple lines (LF)", "[[Foo\nBar]]"},
+		{"wikilink target spans multiple lines (CRLF)", "[[Foo\r\nBar]]"},
+		{"wikilink with newline in alias", "[[Foo|with\nalias]]"},
+		{"wikilink with newline in heading", "[[Foo#hd\nline]]"},
 	}
 	for _, tc := range tests {
 		tc := tc

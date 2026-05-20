@@ -164,8 +164,13 @@ func Missing(prop string) Predicate {
 // Folder matches notes that live in folder or one of its descendants. folder is
 // vault-relative with forward slashes; an empty folder matches every note.
 // root is the absolute vault root (used to compute each note's folder).
+//
+// Leading/trailing slashes and backslashes in the user-supplied folder are
+// normalized: `--folder /References`, `--folder References/`, and
+// `--folder References\Books` all behave like `References` (or
+// `References/Books`).
 func Folder(folder, root string) Predicate {
-	want := strings.TrimSuffix(folder, "/")
+	want := strings.Trim(strings.ReplaceAll(folder, "\\", "/"), "/")
 	return func(n *vault.Note) bool {
 		if want == "" {
 			return true

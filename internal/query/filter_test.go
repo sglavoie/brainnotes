@@ -145,6 +145,30 @@ func TestFolderPredicate(t *testing.T) {
 	}
 }
 
+// TestFolderPredicateNormalizesSlashes asserts that leading slashes, trailing
+// slashes, and backslashes in the user-supplied folder arg are all normalized
+// to a plain forward-slash path. Before the fix, "/People" did not match
+// "People/a.md" because the leading slash was retained verbatim.
+func TestFolderPredicateNormalizesSlashes(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"People/a.md":        "# a\n",
+		"People/Nested/b.md": "# b\n",
+		"Other/c.md":         "# c\n",
+	})
+	for _, raw := range []string{"People", "/People", "People/", "/People/", "People\\", "\\People\\"} {
+		p := Folder(raw, v.Root)
+		if !p(notes["People/a.md"]) {
+			t.Errorf("Folder(%q) should match People/a.md", raw)
+		}
+		if !p(notes["People/Nested/b.md"]) {
+			t.Errorf("Folder(%q) should match People/Nested/b.md", raw)
+		}
+		if p(notes["Other/c.md"]) {
+			t.Errorf("Folder(%q) should not match Other/c.md", raw)
+		}
+	}
+}
+
 func TestAgePredicate(t *testing.T) {
 	now := time.Now()
 	old := now.Add(-40 * 24 * time.Hour).Format("2006-01-02")

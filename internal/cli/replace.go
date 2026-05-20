@@ -167,15 +167,17 @@ printed as a unified diff block; unchanged files are omitted.`,
 // coerceReplaceValue runs raw through coerceValue (auto-detect) and then wraps
 // the result in [[...]] when the target key is wikilink-typed. Auto-coercion
 // matches 'bn set' so user input like "true" or "2026-01-02" round-trips.
+//
+// For wikilink-typed properties, auto-coercion is skipped: stored values are
+// always strings of the form `[[X]]`, so coercing user input like `true` to a
+// bool would prevent any match. The raw string is wrapped in `[[ ]]` instead.
 func coerceReplaceValue(raw string, isWikilink bool) (any, error) {
+	if isWikilink {
+		return wrapWikilinkValue(raw), nil
+	}
 	v, err := coerceValue(raw, "")
 	if err != nil {
 		return nil, err
-	}
-	if isWikilink {
-		if s, ok := v.(string); ok {
-			return wrapWikilinkValue(s), nil
-		}
 	}
 	return v, nil
 }

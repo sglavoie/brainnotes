@@ -99,7 +99,17 @@ func readStdinPaths(in io.Reader, vaultRoot string, nullSep bool) ([]string, err
 	var paths []string
 	seen := make(map[string]struct{})
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		// NUL-separated input is meant to preserve paths byte-for-byte (the
+		// whole point of -0 is to support paths with spaces/newlines), so we
+		// must not strip whitespace from the token. Line-separated input is
+		// trimmed so CRLF and stray indentation don't make valid paths look
+		// out-of-vault.
+		var line string
+		if nullSep {
+			line = scanner.Text()
+		} else {
+			line = strings.TrimSpace(scanner.Text())
+		}
 		if line == "" {
 			continue
 		}
