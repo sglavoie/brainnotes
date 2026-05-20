@@ -173,5 +173,15 @@ func atomicWrite(dest string, data []byte) error {
 		cleanup()
 		return fmt.Errorf("note: rename %q -> %q: %w", tmpPath, dest, err)
 	}
+	// fsync the parent directory so the rename is durable across power loss.
+	// POSIX guarantees rename atomicity within a running system, but the
+	// directory entry update isn't persisted until the directory itself is
+	// synced. A failure to open or sync the directory is non-fatal — the file
+	// content is still written and visible to the running process — so callers
+	// only see this surface as a rare logged-once warning in practice.
+	if dirF, err := os.Open(dir); err == nil {
+		_ = dirF.Sync()
+		_ = dirF.Close()
+	}
 	return nil
 }

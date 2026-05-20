@@ -26,7 +26,7 @@ func TestResolveByTitleNormalizesFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	for _, folder := range []string{"People", "People/", "/People", "/People/", "People\\"} {
+	for _, folder := range []string{"People", "People/", "/People", "/People/", "People\\", "./People", "People/.", "./People/", "People//"} {
 		n, err := v.ResolveByTitle("Alice", folder)
 		if err != nil {
 			t.Errorf("ResolveByTitle(Alice, %q): %v", folder, err)

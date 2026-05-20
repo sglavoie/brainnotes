@@ -771,6 +771,26 @@ func TestCandidates_BadEnvIgnoredWhenFlagSet(t *testing.T) {
 	}
 }
 
+func TestLoad_TemplatesDirNormalized(t *testing.T) {
+	// A user writing `dir = "Templates/"` or stray whitespace must still land
+	// on a normalized value so Walk's pruning matches the relative path.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{"Templates/", "  Templates  ", "Templates"} {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "config.toml")
+		writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \""+raw+"\"\n")
+		cfg, err := Load("", cfgPath)
+		if err != nil {
+			t.Fatalf("Load (%q): %v", raw, err)
+		}
+		if cfg.Templates.Dir != "Templates" {
+			t.Errorf("raw %q: got %q, want %q", raw, cfg.Templates.Dir, "Templates")
+		}
+	}
+}
+
 func TestCandidates_BadEnvStillErrorsWhenNoHigherSource(t *testing.T) {
 	resetEnv(t)
 	os.Unsetenv("HOME")

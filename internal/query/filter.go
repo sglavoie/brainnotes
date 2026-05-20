@@ -141,8 +141,9 @@ func Category(v string) Predicate {
 	}
 }
 
-// Status matches notes whose `status` frontmatter string equals v
-// (case-insensitive).
+// Status matches notes whose `status` frontmatter equals v (case-insensitive).
+// Non-string values (e.g. an int stored by `bn set status=5`'s auto-coercion)
+// are stringified before comparison so the same value remains query-able.
 func Status(v string) Predicate {
 	want := strings.ToLower(v)
 	return func(n *vault.Note) bool {
@@ -150,18 +151,19 @@ func Status(v string) Predicate {
 		if err != nil {
 			return false
 		}
-		s, ok := fm.GetString("status")
+		raw, ok := fm.Get("status")
 		if !ok {
 			return false
 		}
-		return strings.ToLower(s) == want
+		return strings.ToLower(stringifyTag(raw)) == want
 	}
 }
 
 // Type matches notes whose `type` (non-project) or `kind` (project) frontmatter
-// string equals v (case-insensitive). Vault convention puts project notes
-// under `kind` and other notes under `type`; this predicate accepts either so
-// queries don't need to know the difference.
+// equals v (case-insensitive). Vault convention puts project notes under
+// `kind` and other notes under `type`; this predicate accepts either so
+// queries don't need to know the difference. Non-string values are stringified
+// before comparison (see Status for the rationale).
 func Type(v string) Predicate {
 	want := strings.ToLower(v)
 	return func(n *vault.Note) bool {
@@ -169,10 +171,10 @@ func Type(v string) Predicate {
 		if err != nil {
 			return false
 		}
-		if s, ok := fm.GetString("type"); ok && strings.ToLower(s) == want {
+		if raw, ok := fm.Get("type"); ok && strings.ToLower(stringifyTag(raw)) == want {
 			return true
 		}
-		if s, ok := fm.GetString("kind"); ok && strings.ToLower(s) == want {
+		if raw, ok := fm.Get("kind"); ok && strings.ToLower(stringifyTag(raw)) == want {
 			return true
 		}
 		return false

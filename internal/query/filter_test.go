@@ -856,6 +856,33 @@ func TestAndOrSkipNilPredicates(t *testing.T) {
 	}
 }
 
+// TestStatusAndTypeMatchNonStringValues asserts that `bn set status=5` (which
+// auto-coerces to int) and similar numeric/bool-valued status/type fields stay
+// query-able. Without this, the same `--status 5` round-trip that works for
+// tags would silently miss notes whose status was auto-coerced to a non-string.
+func TestStatusAndTypeMatchNonStringValues(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"int.md":   "---\nstatus: 5\ntype: 7\n---\nbody\n",
+		"bool.md":  "---\nstatus: true\nkind: false\n---\nbody\n",
+		"plain.md": "---\nstatus: Reading\n---\nbody\n",
+	})
+	if !Status("5")(notes["int.md"]) {
+		t.Errorf("Status(5) should match an int-valued status")
+	}
+	if !Type("7")(notes["int.md"]) {
+		t.Errorf("Type(7) should match an int-valued type")
+	}
+	if !Status("true")(notes["bool.md"]) {
+		t.Errorf("Status(true) should match a bool-valued status")
+	}
+	if !Type("false")(notes["bool.md"]) {
+		t.Errorf("Type(false) should match a bool-valued kind fallback")
+	}
+	if !Status("reading")(notes["plain.md"]) {
+		t.Errorf("Status(reading) should still match a plain string status")
+	}
+}
+
 // TestParseAgeRoundTripsAllUnits verifies every documented unit (s, m, h, d)
 // is accepted with a non-zero value.
 func TestParseAgeRoundTripsAllUnits(t *testing.T) {

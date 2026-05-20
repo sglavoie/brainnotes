@@ -309,6 +309,13 @@ func DefaultTemplate() string {
 }
 
 func applyDefaults(cfg *Config) {
+	// Trim surrounding whitespace and any trailing path separators so the
+	// configured templates dir matches the vault-relative paths Walk compares
+	// against. Without this, `dir = "Templates/"` (or with stray spaces) would
+	// silently fail to be pruned and template files would be walked.
+	cfg.Templates.Dir = strings.TrimSpace(cfg.Templates.Dir)
+	cfg.Templates.Dir = strings.TrimRight(cfg.Templates.Dir, "/")
+	cfg.Templates.Dir = strings.TrimRight(cfg.Templates.Dir, string(os.PathSeparator))
 	if cfg.Templates.Dir == "" {
 		cfg.Templates.Dir = "Templates"
 	}
