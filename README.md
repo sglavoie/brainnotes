@@ -272,6 +272,61 @@ bn open dune                     # fzf prefiltered with 'dune'
 cd "$(dirname "$(bn open --print)")"
 ```
 
+### `bn repair` — fix safe schema violations in frontmatter
+
+```sh
+bn repair [notes...] [find flags] [--property key] [--dry-run]
+```
+
+Inspects frontmatter against the property schema defined in `config.toml` and
+applies safe, deterministic fixes. Fix categories:
+
+| Category | What it does |
+| --- | --- |
+| Type coercion | Convert when the stored value is lossless (e.g. `"true"` → `true`) |
+| Allowed-value canonicalization | Case-only normalization to an allowed value (e.g. `wip` → `WIP`) |
+| Wikilink wrapping | Bare strings → `[[...]]` for wikilink properties |
+| List deduplication | Remove duplicate list entries, preserving order |
+
+Issues that cannot be fixed mechanically (unknown values, missing required
+properties with no default) are reported on stderr as `SKIP:` lines and left
+untouched.
+
+Scope:
+
+- No notes and no find flags: every note in the vault.
+- One or more find flags (`--tag`, `--folder`, `--status`, …): notes matching
+  the filter.
+- Positional notes: only those notes. Mutually exclusive with find flags.
+
+`--property` restricts repair to a single schema property.
+
+Each file is rewritten atomically, but there is no cross-file transaction: if a
+mid-apply error occurs, prior writes stand — use `git diff` to recover.
+
+`--dry-run` previews changes in the same unified-diff format as `bn set
+--dry-run` (`--- path`, then `- key: old` / `+ key: new`) without writing.
+
+The intended workflow is:
+
+```sh
+bn lint                  # detect violations
+bn repair --dry-run      # preview safe fixes
+bn repair                # apply
+bn lint                  # verify residue
+```
+
+Examples:
+
+```sh
+bn repair                                   # fix everything safe
+bn repair --dry-run                         # preview only
+bn repair --property status                 # fix only status violations
+bn repair --folder References               # scoped by folder
+bn repair --tag project --property status   # combined scoping
+bn repair note.md                           # single note
+```
+
 ### `bn rename` — change a note's title and rewrite wikilinks
 
 ```sh
@@ -572,6 +627,12 @@ bn replace status WIP in-progress --tag project
 # Stage a tag rename without leaving anything half-done: find → preview → apply.
 bn find --tag drafts | bn set - tags-=drafts tags+=draft --dry-run
 bn find --tag drafts | bn set - tags-=drafts tags+=draft
+
+# Lint → repair cycle: detect violations, preview fixes, apply, verify.
+bn lint
+bn repair --dry-run
+bn repair
+bn lint
 ```
 
 ## Performance

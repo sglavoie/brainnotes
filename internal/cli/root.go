@@ -72,6 +72,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewOpenCmd())
 	cmd.AddCommand(NewRenameCmd())
 	cmd.AddCommand(NewRenameKeyCmd())
+	cmd.AddCommand(NewRepairCmd())
 	cmd.AddCommand(NewReplaceCmd())
 	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewTagsCmd())
