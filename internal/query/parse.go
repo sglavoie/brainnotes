@@ -11,21 +11,24 @@ import (
 // Flags is the flattened set of values produced by the `find` Cobra flags. It
 // is consumed by FromFlags to build a single predicate.
 type Flags struct {
-	Tags       []string
-	Categories []string
-	Status     string
-	Type       string
-	Has        string
-	Missing    string
-	Age        string
-	Created    string
-	Folder     string
-	Orphan     bool
+	Tags        []string
+	Categories  []string
+	Status      string
+	Type        string
+	Has         string
+	Missing     string
+	Age         string
+	Created     string
+	Folder      string
+	Orphan      bool
+	BrokenLinks bool
 
 	// Root is the absolute vault root; required when Folder is set.
 	Root string
 	// BacklinkIndex must be populated by the caller when Orphan is true.
 	BacklinkIndex BacklinkIndex
+	// TitleIndex must be populated by the caller when BrokenLinks is true.
+	TitleIndex TitleIndex
 }
 
 // FromFlags translates a Flags value into a single combined predicate. Empty
@@ -79,6 +82,12 @@ func FromFlags(f Flags) (Predicate, error) {
 			return nil, errors.New("query: --orphan requires a backlink index")
 		}
 		ps = append(ps, Orphan(f.BacklinkIndex))
+	}
+	if f.BrokenLinks {
+		if f.TitleIndex == nil {
+			return nil, errors.New("query: --broken-links requires a title index")
+		}
+		ps = append(ps, BrokenLinks(f.TitleIndex))
 	}
 	return And(ps...), nil
 }

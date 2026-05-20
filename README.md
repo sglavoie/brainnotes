@@ -98,6 +98,7 @@ that aren't valid YAML.
 bn find [--tag t]... [--category c]... [--status s] [--type t]
         [--folder rel] [--has key] [--missing key]
         [--created EXPR] [--age EXPR] [--orphan]
+        [--broken-links [--show-broken | --list-broken-targets]]
         [-i | --interactive] [-0]
 ```
 
@@ -107,6 +108,20 @@ Pipe into `fzf` with `-i` for an interactive picker.
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.
 
+`--broken-links` selects notes containing at least one wikilink whose target
+does not match any note title in the vault. Resolution is title-only
+(case-insensitive stem match) — a folder prefix like `[[Folder/Title]]` still
+resolves by title alone, matching Obsidian's behavior. Media embeds
+(`![[image.png]]`) and links inside code fences are ignored.
+
+Two companion flags provide detail views (mutually exclusive, both require
+`--broken-links`):
+
+| Flag | Output |
+| --- | --- |
+| `--show-broken` | One line per broken link: `<relpath>:<line>: [[target]]` for body links, `<relpath>:frontmatter[<key>]: [[target]]` for frontmatter links. |
+| `--list-broken-targets` | Unique broken target titles, sorted case-insensitively, one per line. |
+
 Examples:
 
 ```sh
@@ -114,9 +129,22 @@ bn find --tag books                       # all notes tagged 'books'
 bn find --category Books --status WIP
 bn find --has rating --created '>365d'    # stale ratings
 bn find --orphan                          # no inbound wikilinks
+bn find --broken-links                    # notes with unresolved wikilinks
+bn find --broken-links --show-broken      # per-link detail
+bn find --broken-links --list-broken-targets  # unique missing titles
 bn find --tag drafts -i                   # interactive fzf pick
 bn find --tag drafts -0 | xargs -0 nvim   # safe for spaces in paths
 ```
+
+#### Repair broken links
+
+List all missing targets and create stub notes for each:
+
+```sh
+bn find --broken-links --list-broken-targets | xargs -I{} bn new "{}"
+```
+
+Re-run `bn find --broken-links` afterward to verify zero residue.
 
 ### `bn backlinks` — list notes that link to a target
 

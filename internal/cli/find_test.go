@@ -154,6 +154,130 @@ func TestFindEmptyResult(t *testing.T) {
 	}
 }
 
+func buildBrokenLinkFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+
+	files := map[string]string{
+		// Resolved target — exists in the vault.
+		"References/Dune.md": "---\ntitle: Dune\n---\nA book about sand.\n",
+
+		// Resolved body link only.
+		"Notes/Resolved.md": "---\ntitle: Resolved\n---\nSee [[Dune]] for details.\n",
+
+		// Unresolved body link.
+		"Notes/Missing Body.md": "---\ntitle: Missing Body\n---\nReading [[Foundation]] soon.\n",
+
+		// Resolved alias + unresolved heading-anchored link.
+		"Notes/Mixed.md": "---\ntitle: Mixed\n---\nSee [[Dune|the book]] and [[Atreides#House]].\n",
+
+		// Frontmatter with one broken, one resolved category.
+		"Notes/FM Broken.md": "---\ncategories:\n  - \"[[Books]]\"\n  - \"[[Dune]]\"\ntitle: FM Broken\n---\nBody.\n",
+
+		// Code-fenced link — must NOT be flagged.
+		"Notes/Code Fence.md": "---\ntitle: Code Fence\n---\nSample:\n```\n[[Foundation]]\n```\n",
+
+		// Media embed — must NOT be flagged.
+		"Notes/Embed.md": "---\ntitle: Embed\n---\n![[diagram.png]]\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	return root
+}
+
+func TestFind_BrokenLinks(t *testing.T) {
+	root := buildBrokenLinkFixture(t)
+	got := runFind(t, root, "find", "--broken-links")
+	want := readGolden(t, "find-broken-links.golden")
+	if !equalStrings(got, want) {
+		t.Fatalf("find --broken-links:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+func runFindRaw(t *testing.T, vaultRoot string, args ...string) string {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_CONFIG", "")
+	t.Setenv("BNOTES_VAULT", "")
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetErr(out)
+	root.SetArgs(append([]string{"--vault", vaultRoot}, args...))
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute %v: %v\noutput: %s", args, err, out.String())
+	}
+	return out.String()
+}
+
+func TestFind_BrokenLinks_Show(t *testing.T) {
+	root := buildBrokenLinkFixture(t)
+	got := runFindRaw(t, root, "find", "--broken-links", "--show-broken")
+	assertGolden(t, "find-broken-links-show.golden", got)
+}
+
+func TestFind_BrokenLinks_Targets(t *testing.T) {
+	root := buildBrokenLinkFixture(t)
+	got := runFindRaw(t, root, "find", "--broken-links", "--list-broken-targets")
+	assertGolden(t, "find-broken-links-targets.golden", got)
+}
+
+func TestFind_BrokenLinks_ErrorCombinations(t *testing.T) {
+	root := buildBrokenLinkFixture(t)
+
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_CONFIG", "")
+	t.Setenv("BNOTES_VAULT", "")
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "show-broken without broken-links",
+			args: []string{"--vault", root, "find", "--show-broken"},
+			want: "--show-broken requires --broken-links",
+		},
+		{
+			name: "list-broken-targets without broken-links",
+			args: []string{"--vault", root, "find", "--list-broken-targets"},
+			want: "--list-broken-targets requires --broken-links",
+		},
+		{
+			name: "show-broken and list-broken-targets",
+			args: []string{"--vault", root, "find", "--broken-links", "--show-broken", "--list-broken-targets"},
+			want: "--show-broken and --list-broken-targets are mutually exclusive",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := NewRootCmd()
+			out := &bytes.Buffer{}
+			cmd.SetOut(out)
+			cmd.SetErr(out)
+			cmd.SetArgs(tt.args)
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("expected error containing %q, got %q", tt.want, err.Error())
+			}
+		})
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
