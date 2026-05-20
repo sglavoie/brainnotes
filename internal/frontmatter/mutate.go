@@ -37,6 +37,13 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 		m.vals[k] = uniq
 		return len(uniq) > 0, nil
 	}
+	// A nil-valued key (YAML `tags: ~` / `tags:` / `tags: null`) is treated as
+	// an empty list so `+=` can append to it. Without this, common notes that
+	// declare an empty-but-present list property could not be mutated by
+	// `bn set tags+=foo` and would fail with ErrNotAList.
+	if existing == nil {
+		existing = []any{}
+	}
 	list, ok := existing.([]any)
 	if !ok {
 		return false, ErrNotAList
@@ -68,6 +75,11 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 func (m *Map) ListRemove(k string, values ...any) (bool, error) {
 	existing, present := m.Get(k)
 	if !present {
+		return false, nil
+	}
+	// A nil-valued key (YAML `tags: ~` / `tags:` / `tags: null`) is treated as
+	// an empty list: removal is a silent no-op, mirroring the absent-key path.
+	if existing == nil {
 		return false, nil
 	}
 	list, ok := existing.([]any)

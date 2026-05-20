@@ -447,6 +447,33 @@ func TestListAdd_NonListReturnsError(t *testing.T) {
 	}
 }
 
+// TestListAdd_NullExistingValueTreatedAsEmptyList verifies that a key whose
+// stored YAML value is null (e.g. `tags: ~`, `tags:`, `tags: null`) is treated
+// as an empty list for the purpose of `+=`. Before the fix, ListAdd returned
+// ErrNotAList for such notes because the parsed value is Go-native nil, not a
+// []any. That made `bn set note.md tags+=foo` fail on otherwise-valid notes.
+func TestListAdd_NullExistingValueTreatedAsEmptyList(t *testing.T) {
+	src := "---\ntags: ~\n---\nbody\n"
+	doc, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	changed, err := doc.Front.ListAdd("tags", "foo", "bar")
+	if err != nil {
+		t.Fatalf("ListAdd on null-valued key: %v", err)
+	}
+	if !changed {
+		t.Errorf("changed should be true when appending to a null-valued key")
+	}
+	got, ok := doc.Front.GetList("tags")
+	if !ok {
+		t.Fatalf("tags should be a list after ListAdd")
+	}
+	if !reflect.DeepEqual(got, []any{"foo", "bar"}) {
+		t.Errorf("tags: got %v want [foo bar]", got)
+	}
+}
+
 func TestListRemove_PresentValue(t *testing.T) {
 	m := NewMap()
 	m.Set("tags", []any{"go", "yaml", "rust"})
@@ -521,6 +548,26 @@ func TestListRemove_LeavesEmptyList(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("tags should be empty, got %v", got)
+	}
+}
+
+// TestListRemove_NullExistingValueIsNoOp verifies that a key whose stored YAML
+// value is null (e.g. `tags: ~`) is treated as an empty list for the purpose
+// of `-=`: the call is a silent no-op. Before the fix, ListRemove returned
+// ErrNotAList in this case, so `bn set note.md tags-=foo` failed on
+// otherwise-valid notes even though the value to remove was not present.
+func TestListRemove_NullExistingValueIsNoOp(t *testing.T) {
+	src := "---\ntags: ~\n---\nbody\n"
+	doc, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	changed, err := doc.Front.ListRemove("tags", "foo")
+	if err != nil {
+		t.Fatalf("ListRemove on null-valued key: %v", err)
+	}
+	if changed {
+		t.Errorf("changed should be false (nothing to remove from null)")
 	}
 }
 
