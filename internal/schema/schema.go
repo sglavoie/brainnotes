@@ -97,6 +97,14 @@ func stripWikilink(s string) string {
 	return s
 }
 
+func RuleSummary(rule config.PropertySchema) string {
+	s := "type: " + rule.Type
+	if len(rule.Allowed) > 0 {
+		s += ", allowed: " + strings.Join(rule.Allowed, ", ")
+	}
+	return s
+}
+
 func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]config.PropertySchema, wikilinkProps []string) []Violation {
 	wlSet := make(map[string]struct{}, len(wikilinkProps))
 	for _, p := range wikilinkProps {
@@ -117,7 +125,7 @@ func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]con
 				violations = append(violations, Violation{
 					Property: key,
 					Kind:     "missing",
-					Detail:   "required property is missing",
+					Detail:   RuleSummary(rule),
 					NotePath: notePath,
 				})
 			}

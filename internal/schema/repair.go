@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func PlanRepairs(front *frontmatter.Map, sch map[string]config.PropertySchema, w
 				result.Skips = append(result.Skips, RepairSkip{
 					Property: key,
 					Kind:     "missing_required",
-					Detail:   "required property is missing; no default available",
+					Detail:   "required property is missing; no default available (" + RuleSummary(rule) + ")",
 				})
 			}
 			continue
@@ -289,12 +290,7 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 }
 
 func isAllowedValue(s string, allowed []string) bool {
-	for _, a := range allowed {
-		if s == a {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, s)
 }
 
 func wrapAllWikilinks(val any) any {

@@ -47,7 +47,7 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 			}
 
 			if len(cfg.Frontmatter.Schema) == 0 {
-				fmt.Fprintln(cmd.ErrOrStderr(), "lint: no schema defined in config; see [frontmatter.schema]")
+				writeSchemaHint(cmd.ErrOrStderr(), "lint", cfg.SourcePath)
 				return nil
 			}
 
@@ -145,7 +145,7 @@ func formatViolations(cmd *cobra.Command, violations []schema.Violation) {
 
 		switch key.Kind {
 		case "missing":
-			fmt.Fprintf(out, "%s: missing in %d %s\n", key.Property, n, noun)
+			fmt.Fprintf(out, "%s: missing in %d %s (%s)\n", key.Property, n, noun, key.Detail)
 		case "type":
 			fmt.Fprintf(out, "%s: wrong type in %d %s (%s)\n", key.Property, n, noun, key.Detail)
 		case "value":

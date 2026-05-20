@@ -25,6 +25,9 @@ type Config struct {
 	Frontmatter FrontmatterConfig `toml:"frontmatter"`
 	Fzf         FzfConfig         `toml:"fzf"`
 	New         NewConfig         `toml:"new"`
+
+	// SourcePath is the resolved path of the config file that was loaded.
+	SourcePath string `toml:"-"`
 }
 
 // TemplatesConfig configures where templates live and how they are extended.
@@ -103,6 +106,8 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 			return nil, fmt.Errorf("config: file %s does not exist", configPath)
 		}
 	}
+
+	cfg.SourcePath = configPath
 
 	if flagVaultPath != "" {
 		cfg.Vault = flagVaultPath

@@ -185,6 +185,9 @@ func TestRepair_SkipOutput(t *testing.T) {
 	if !strings.Contains(out, "skipped") {
 		t.Errorf("expected skip count in summary, got:\n%s", out)
 	}
+	if !strings.Contains(out, "bn set <note> <property>=<value>") {
+		t.Errorf("expected bn set hint for missing required, got:\n%s", out)
+	}
 }
 
 func TestRepair_NoSchema(t *testing.T) {
@@ -213,6 +216,12 @@ func TestRepair_NoSchema(t *testing.T) {
 	}
 	if !strings.Contains(out, "no schema defined") {
 		t.Errorf("expected 'no schema defined' message, got %q", out)
+	}
+	if !strings.Contains(out, "bn config edit") {
+		t.Errorf("expected 'bn config edit' hint, got %q", out)
+	}
+	if !strings.Contains(out, "[frontmatter.schema") {
+		t.Errorf("expected schema example, got %q", out)
 	}
 }
 

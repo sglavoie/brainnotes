@@ -231,6 +231,12 @@ func TestLint_NoSchema(t *testing.T) {
 	if !strings.Contains(out, "no schema defined") {
 		t.Errorf("expected 'no schema defined' message, got %q", out)
 	}
+	if !strings.Contains(out, "bn config edit") {
+		t.Errorf("expected 'bn config edit' hint, got %q", out)
+	}
+	if !strings.Contains(out, "[frontmatter.schema") {
+		t.Errorf("expected schema example, got %q", out)
+	}
 }
 
 func TestLint_MultipleViolationsPerNote(t *testing.T) {

@@ -66,7 +66,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 			}
 
 			if len(cfg.Frontmatter.Schema) == 0 {
-				fmt.Fprintln(cmd.ErrOrStderr(), "repair: no schema defined in config; see [frontmatter.schema]")
+				writeSchemaHint(cmd.ErrOrStderr(), "repair", cfg.SourcePath)
 				return nil
 			}
 
@@ -120,6 +120,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 
 			repaired := 0
 			totalSkips := 0
+			hasMissingRequired := false
 			for _, n := range candidates {
 				front, err := n.Front()
 				if err != nil {
@@ -138,6 +139,9 @@ printed as a unified diff block; unchanged files are omitted.`,
 					relPath := displayPath(n.Path, v.Root)
 					fmt.Fprintf(stderr, "SKIP: %s: %s: %s (%s)\n", relPath, s.Property, s.Detail, s.Kind)
 					totalSkips++
+					if s.Kind == "missing_required" {
+						hasMissingRequired = true
+					}
 				}
 
 				if len(result.Actions) == 0 {
@@ -164,6 +168,9 @@ printed as a unified diff block; unchanged files are omitted.`,
 					summary += fmt.Sprintf(", %d skipped", totalSkips)
 				}
 				fmt.Fprintln(out, summary)
+			}
+			if hasMissingRequired {
+				fmt.Fprintln(stderr, "\nhint: set missing properties with: bn set <note> <property>=<value>")
 			}
 			return nil
 		},
