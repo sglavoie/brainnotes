@@ -116,11 +116,27 @@ func (n *Note) Folder(root string) (string, error) {
 // atomicWrite writes data to dest atomically by writing a sibling temp file,
 // fsyncing it, and renaming over dest. The temp file is removed on any error
 // so it does not linger.
+//
+// If dest already exists, its file mode is preserved across the rewrite. Go's
+// os.CreateTemp creates files with mode 0600, so without this step every Save
+// would silently strip group/world read bits from a 0644 note. When dest does
+// not exist (new note) the default 0600 from CreateTemp is widened to 0644 to
+// match the usual umask-derived behavior of editors like Obsidian.
 func atomicWrite(dest string, data []byte) error {
 	dir := filepath.Dir(dest)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("note: mkdir %q: %w", dir, err)
 	}
+	// Capture the existing mode, if any, before writing the temp file. Stat
+	// errors other than "not exist" propagate so we don't silently clobber a
+	// file we couldn't introspect.
+	var destMode os.FileMode
+	if info, err := os.Stat(dest); err == nil {
+		destMode = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("note: stat %q: %w", dest, err)
+	}
+
 	tmp, err := os.CreateTemp(dir, ".note-*.tmp")
 	if err != nil {
 		return fmt.Errorf("note: tempfile in %q: %w", dir, err)
@@ -141,6 +157,17 @@ func atomicWrite(dest string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		cleanup()
 		return fmt.Errorf("note: close %q: %w", tmpPath, err)
+	}
+	// Apply the destination's prior mode (or a sensible default for a new file)
+	// before the rename so the final inode lands with the right perms. Doing
+	// this on the temp path keeps the operation atomic with respect to readers.
+	wantMode := destMode
+	if wantMode == 0 {
+		wantMode = 0o644
+	}
+	if err := os.Chmod(tmpPath, wantMode); err != nil {
+		cleanup()
+		return fmt.Errorf("note: chmod %q: %w", tmpPath, err)
 	}
 	if err := os.Rename(tmpPath, dest); err != nil {
 		cleanup()

@@ -636,3 +636,245 @@ func TestBacklinkPathsRecorded(t *testing.T) {
 	}
 	_ = strings.TrimSpace // keep strings import used if tests trimmed later
 }
+
+// TestOrphanRejectsNilNote pins down the defensive nil-note guard. Other
+// predicates rely on the And/Or wrapper to reject nil before they ever run,
+// but Orphan does not call Front() and previously dereferenced n.Path through
+// n.Title() — which panics on a nil *Note. The guard makes Orphan consistent
+// with And/Or (false on nil) so callers can compose it safely.
+func TestOrphanRejectsNilNote(t *testing.T) {
+	idx := BacklinkIndex{}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Orphan should not panic on nil note, got panic: %v", r)
+		}
+	}()
+	if Orphan(idx)(nil) {
+		t.Errorf("Orphan(idx)(nil) = true, want false")
+	}
+}
+
+// TestOrphanLinkedOnlyByAlias verifies that a link of the form
+// `[[Target|some alias]]` correctly marks Target as non-orphan. The alias is a
+// display label only — Title() must extract Target, not Alias. A bug in
+// wikilink.Parse that mixed those up would cause Orphan to misclassify aliased
+// notes as orphans.
+func TestOrphanLinkedOnlyByAlias(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Target.md":   "---\n---\nbody\n",
+		"Referrer.md": "---\n---\nSee [[Target|the target]] for details.\n",
+	})
+	all := []*vault.Note{notes["Target.md"], notes["Referrer.md"]}
+	idx := BuildBacklinkIndex(all)
+	if Orphan(idx)(notes["Target.md"]) {
+		t.Errorf("Target should not be an orphan: Referrer links it via an alias")
+	}
+	// And the alias text "the target" should not itself create a phantom
+	// orphan-killer entry under key "the target".
+	if _, ok := idx["the target"]; ok {
+		t.Errorf("alias text should not produce a backlink-index entry")
+	}
+}
+
+// TestOrphanLinkedByFolderPrefixedWikilink verifies that a link of the form
+// `[[Folder/Target]]` correctly marks Target as non-orphan. Orphan looks up by
+// the note's lowercased title (filename stem), and Link.Title() must strip the
+// folder prefix, otherwise a folder-prefixed link would never resolve.
+func TestOrphanLinkedByFolderPrefixedWikilink(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Books/Target.md": "---\n---\nbody\n",
+		"Referrer.md":     "---\n---\nSee [[Books/Target]].\n",
+	})
+	all := []*vault.Note{notes["Books/Target.md"], notes["Referrer.md"]}
+	idx := BuildBacklinkIndex(all)
+	if Orphan(idx)(notes["Books/Target.md"]) {
+		t.Errorf("Books/Target should not be an orphan: Referrer links it with a folder prefix")
+	}
+}
+
+// TestFolderTrimsWhitespace verifies that a folder argument padded with spaces
+// (e.g. from a shell that quoted the value with stray padding) is normalized.
+// Before the fix, `--folder "  References  "` retained the surrounding spaces
+// after path.Clean (which only collapses path syntax, not whitespace), so the
+// predicate matched a literal folder named "  References  " and never matched
+// the real "References" folder.
+func TestFolderTrimsWhitespace(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"References/a.md": "# a\n",
+		"Other/b.md":      "# b\n",
+	})
+	for _, raw := range []string{"  References  ", "\tReferences\t", " References/"} {
+		p := Folder(raw, v.Root)
+		if !p(notes["References/a.md"]) {
+			t.Errorf("Folder(%q) should match References/a.md", raw)
+		}
+		if p(notes["Other/b.md"]) {
+			t.Errorf("Folder(%q) should not match Other/b.md", raw)
+		}
+	}
+	// All-whitespace folder normalizes to empty -> match everything.
+	for _, raw := range []string{"   ", "\t", " / "} {
+		p := Folder(raw, v.Root)
+		if !p(notes["References/a.md"]) || !p(notes["Other/b.md"]) {
+			t.Errorf("Folder(%q) should match every note (normalizes to empty)", raw)
+		}
+	}
+}
+
+// TestCategoryScalarWikilink verifies that a scalar (non-list) categories
+// value like `categories: "[[Books]]"` matches Category("books"). The
+// frontmatter helper supports this, but a regression in either layer would
+// break the convenient single-category notation.
+func TestCategoryScalarWikilink(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ncategories: \"[[Books]]\"\n---\nbody\n",
+		"b.md": "---\ncategories: \"[[People]]\"\n---\nbody\n",
+	})
+	if !Category("books")(notes["a.md"]) {
+		t.Errorf("Category(books) should match a scalar `categories: [[Books]]`")
+	}
+	if Category("books")(notes["b.md"]) {
+		t.Errorf("Category(books) should not match a scalar `categories: [[People]]`")
+	}
+}
+
+// TestAgeFutureDate documents how the predicate handles a date in the future
+// (e.g. a note dated tomorrow). `time.Since` returns a negative duration for
+// future timestamps, so `>30d` rejects it (a future note is not "older than
+// 30 days") while `<30d` accepts it (it is trivially "younger than 30 days").
+// `=0d` rejects unless today.
+func TestAgeFutureDate(t *testing.T) {
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	_, notes := newVault(t, map[string]string{
+		"future.md": "---\ncreated: " + tomorrow + "\n---\n",
+	})
+	if Age(">", 30*24*time.Hour, "created")(notes["future.md"]) {
+		t.Errorf(">30d should not match a future note")
+	}
+	if !Age("<", 30*24*time.Hour, "created")(notes["future.md"]) {
+		t.Errorf("<30d should match a future note (negative since)")
+	}
+	if Age("=", 0, "created")(notes["future.md"]) {
+		t.Errorf("=0d should not match tomorrow's note")
+	}
+}
+
+// TestAgeBogusOp pins down the safety net for an unknown comparison operator
+// passed directly to Age (bypassing ParseAge). The predicate returns false
+// rather than panicking on a typo or programmer error.
+func TestAgeBogusOp(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ncreated: " + today + "\n---\n",
+	})
+	if Age("!?", 0, "created")(notes["a.md"]) {
+		t.Errorf("Age with unknown op should return false")
+	}
+}
+
+// TestHasAllowsNullValue documents that Has reports presence even when the
+// value is YAML null. This matches the broader frontmatter model: nil-valued
+// keys are present but empty, and `bn unset` is the only operation that
+// removes a key entirely. Has and Missing must therefore be exact inverses on
+// every note that loads.
+func TestHasAllowsNullValue(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: ~\n---\nbody\n",
+		"b.md": "---\ntags: []\n---\nbody\n",
+	})
+	for _, name := range []string{"a.md", "b.md"} {
+		n := notes[name]
+		if !Has("tags")(n) {
+			t.Errorf("Has(tags) should be true for %s (key is present, value is null/empty)", name)
+		}
+		if Missing("tags")(n) {
+			t.Errorf("Missing(tags) should be false for %s", name)
+		}
+	}
+}
+
+// TestAndShortCircuits verifies that And stops calling predicates after the
+// first failure. Without short-circuiting, a query with an expensive late
+// predicate would always pay its cost even when an early cheap predicate has
+// already excluded the note.
+func TestAndShortCircuits(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo]\n---\n",
+	})
+	calls := 0
+	count := Predicate(func(n *vault.Note) bool {
+		calls++
+		return true
+	})
+	fail := Predicate(func(n *vault.Note) bool { return false })
+
+	if And(fail, count)(notes["a.md"]) {
+		t.Errorf("And(fail, count) should be false")
+	}
+	if calls != 0 {
+		t.Errorf("And should short-circuit on first false; count called %d times, want 0", calls)
+	}
+}
+
+// TestOrShortCircuits verifies that Or stops calling predicates after the
+// first success.
+func TestOrShortCircuits(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo]\n---\n",
+	})
+	calls := 0
+	count := Predicate(func(n *vault.Note) bool {
+		calls++
+		return true
+	})
+	pass := Predicate(func(n *vault.Note) bool { return true })
+
+	if !Or(pass, count)(notes["a.md"]) {
+		t.Errorf("Or(pass, count) should be true")
+	}
+	if calls != 0 {
+		t.Errorf("Or should short-circuit on first true; count called %d times, want 0", calls)
+	}
+}
+
+// TestAndOrSkipNilPredicates verifies the documented behaviour that nil
+// entries in the predicate list are silently skipped rather than panicking.
+// This matters because FromFlags may compose lists where a builder returned
+// nil to mean "no predicate for this flag".
+func TestAndOrSkipNilPredicates(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo]\n---\n",
+	})
+	if !And(nil, Tag("foo"), nil)(notes["a.md"]) {
+		t.Errorf("And should skip nil predicates and still match")
+	}
+	if Or(nil, nil)(notes["a.md"]) {
+		t.Errorf("Or with only nil predicates should match nothing")
+	}
+	if !Or(nil, Tag("foo"))(notes["a.md"]) {
+		t.Errorf("Or with a nil mixed in should still consider the non-nil predicate")
+	}
+}
+
+// TestParseAgeRoundTripsAllUnits verifies every documented unit (s, m, h, d)
+// is accepted with a non-zero value.
+func TestParseAgeRoundTripsAllUnits(t *testing.T) {
+	cases := []struct {
+		in   string
+		want time.Duration
+	}{
+		{">10s", 10 * time.Second},
+		{"<3m", 3 * time.Minute},
+		{"=4h", 4 * time.Hour},
+		{">2d", 2 * 24 * time.Hour},
+	}
+	for _, c := range cases {
+		_, dur, err := ParseAge(c.in)
+		if err != nil {
+			t.Errorf("ParseAge(%q) unexpected err: %v", c.in, err)
+		}
+		if dur != c.want {
+			t.Errorf("ParseAge(%q) dur=%v, want %v", c.in, dur, c.want)
+		}
+	}
+}

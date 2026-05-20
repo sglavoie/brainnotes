@@ -1,6 +1,7 @@
 package frontmatter
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -320,6 +321,125 @@ func TestParseIndentedDelimiterIsBody(t *testing.T) {
 	}
 	if doc.Body != in {
 		t.Errorf("body should equal input verbatim")
+	}
+}
+
+// TestMarshalWholeNumberFloatPreservesType — a whole-number float (e.g. `3.0`)
+// must round-trip as a float, not an int. yaml.v3's default encoding emits the
+// scalar `3`, which the parser then reads back as int and silently changes the
+// value's type — causing spurious writes for notes whose frontmatter has
+// `rating: 3.0` and other whole-number floats.
+func TestMarshalWholeNumberFloatPreservesType(t *testing.T) {
+	in := "---\nrating: 3.0\ncount: 3\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	rating, _ := doc.Front.Get("rating")
+	if _, ok := rating.(float64); !ok {
+		t.Fatalf("rating parsed as %T, want float64", rating)
+	}
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "rating: 3.0") {
+		t.Errorf("rating: expected `3.0` in output, got %q", string(out))
+	}
+
+	// Re-parse and verify the type round-trips.
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse2: %v", err)
+	}
+	rating2, _ := doc2.Front.Get("rating")
+	if _, ok := rating2.(float64); !ok {
+		t.Errorf("rating re-parsed as %T, want float64", rating2)
+	}
+	count2, _ := doc2.Front.Get("count")
+	if _, ok := count2.(int); !ok {
+		t.Errorf("count re-parsed as %T, want int (should not be promoted)", count2)
+	}
+
+	// Idempotency: a second marshal must produce identical bytes.
+	out2, err := Marshal(doc2, nil)
+	if err != nil {
+		t.Fatalf("Marshal2: %v", err)
+	}
+	if string(out) != string(out2) {
+		t.Errorf("not idempotent:\nfirst: %q\nsecond: %q", out, out2)
+	}
+}
+
+// TestMarshalFractionalFloatRoundTrip — non-whole-number floats already round-
+// trip correctly under yaml.v3's default encoder; the new encoder must not
+// regress that path.
+func TestMarshalFractionalFloatRoundTrip(t *testing.T) {
+	doc := Document{Front: NewMap(), Body: ""}
+	doc.Front.Set("half", 0.5)
+	doc.Front.Set("big", 1.5e10)
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if v, _ := doc2.Front.Get("half"); v != 0.5 {
+		t.Errorf("half: got %T %v want 0.5", v, v)
+	}
+	if v, _ := doc2.Front.Get("big"); v != 1.5e10 {
+		t.Errorf("big: got %T %v want 1.5e10", v, v)
+	}
+	out2, _ := Marshal(doc2, nil)
+	if string(out) != string(out2) {
+		t.Errorf("not idempotent:\n%q\n%q", out, out2)
+	}
+}
+
+// TestMarshalSpecialFloats — NaN and +/-Inf must serialise with YAML's
+// canonical spellings (.nan / .inf / -.inf) and round-trip back as float64.
+func TestMarshalSpecialFloats(t *testing.T) {
+	doc := Document{Front: NewMap(), Body: ""}
+	doc.Front.Set("nan", math.NaN())
+	doc.Front.Set("pinf", math.Inf(1))
+	doc.Front.Set("ninf", math.Inf(-1))
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), ".nan") {
+		t.Errorf("NaN: expected .nan token in %q", string(out))
+	}
+	if !strings.Contains(string(out), ".inf") {
+		t.Errorf("+Inf: expected .inf token in %q", string(out))
+	}
+	if !strings.Contains(string(out), "-.inf") {
+		t.Errorf("-Inf: expected -.inf token in %q", string(out))
+	}
+
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	nan, _ := doc2.Front.Get("nan")
+	nf, ok := nan.(float64)
+	if !ok || !math.IsNaN(nf) {
+		t.Errorf("nan: got %T %v want NaN", nan, nan)
+	}
+	pinf, _ := doc2.Front.Get("pinf")
+	pf, ok := pinf.(float64)
+	if !ok || !math.IsInf(pf, 1) {
+		t.Errorf("pinf: got %T %v want +Inf", pinf, pinf)
+	}
+	ninf, _ := doc2.Front.Get("ninf")
+	nf2, ok := ninf.(float64)
+	if !ok || !math.IsInf(nf2, -1) {
+		t.Errorf("ninf: got %T %v want -Inf", ninf, ninf)
 	}
 }
 

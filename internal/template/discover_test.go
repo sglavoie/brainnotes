@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -134,6 +135,37 @@ func TestFindDirectoriesIgnored(t *testing.T) {
 	_, err := Find(cfg, "book")
 	if !errors.Is(err, ErrTemplateNotFound) {
 		t.Fatalf("expected ErrTemplateNotFound, got %v", err)
+	}
+}
+
+func TestFindStripsRedundantExtension(t *testing.T) {
+	// A user passing "Book.md" must still hit "Book Template.md" — the suffix
+	// candidate is built from the stem, not from "Book.md" + " Template.md".
+	cfg := newCfg(t)
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "Book Template.md"), "x")
+	got, err := Find(cfg, "Book.md")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Book Template.md" {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestFindNotFoundIncludesCandidates(t *testing.T) {
+	cfg := newCfg(t)
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Find(cfg, "ghost")
+	if !errors.Is(err, ErrTemplateNotFound) {
+		t.Fatalf("expected ErrTemplateNotFound, got %v", err)
+	}
+	msg := err.Error()
+	for _, want := range []string{"ghost", "ghost.md", "ghost template.md"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error %q missing candidate %q", msg, want)
+		}
 	}
 }
 

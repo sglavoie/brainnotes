@@ -379,11 +379,17 @@ func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultR
 	for _, p := range pairs {
 		switch p.Op {
 		case opSet:
+			// Normalize wikilink-typed values before storing so the in-memory
+			// state matches what Marshal will write to disk. Without this,
+			// dry-run output for keys like `categories` reports the raw user
+			// input (e.g. `Books`) even though the saved file would contain
+			// the wrapped form (`[[Books]]`), producing a misleading preview.
+			newVal := wikilinkNormalized(p.Value, p.Key, fm)
 			existing, present := front.Get(p.Key)
-			if present && dryRunValuesEqual(existing, wikilinkNormalized(p.Value, p.Key, fm)) {
+			if present && dryRunValuesEqual(existing, newVal) {
 				continue
 			}
-			front.Set(p.Key, p.Value)
+			front.Set(p.Key, newVal)
 			changed = true
 		case opAdd:
 			vals, ok := p.Value.([]any)

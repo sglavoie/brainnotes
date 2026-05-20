@@ -3,7 +3,9 @@ package frontmatter
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -82,6 +84,9 @@ func encodeValue(v any) (*yaml.Node, error) {
 	if t, ok := v.(time.Time); ok {
 		return encodeTime(t), nil
 	}
+	if f, ok := v.(float64); ok {
+		return encodeFloat(f), nil
+	}
 	if list, ok := v.([]any); ok {
 		n := &yaml.Node{Kind: yaml.SequenceNode}
 		if len(list) == 0 {
@@ -102,6 +107,51 @@ func encodeValue(v any) (*yaml.Node, error) {
 	}
 	forceBlockStyle(n)
 	return n, nil
+}
+
+// encodeFloat preserves the YAML float tag for whole-number floats. yaml.v3's
+// default encoding of float64(3) emits `3`, which then round-trips back as an
+// int — silently changing the value's type and causing spurious writes for
+// notes whose original frontmatter had `3.0`. Forcing the !!float tag with a
+// `.0` suffix keeps the type stable across parse/marshal cycles. Non-finite
+// floats (NaN/+Inf/-Inf) use YAML's canonical spellings.
+func encodeFloat(f float64) *yaml.Node {
+	var s string
+	switch {
+	case math.IsNaN(f):
+		s = ".nan"
+	case math.IsInf(f, 1):
+		s = ".inf"
+	case math.IsInf(f, -1):
+		s = "-.inf"
+	default:
+		s = strconv.FormatFloat(f, 'g', -1, 64)
+		// Ensure the scalar reads as a float rather than an int on re-parse.
+		// strconv.FormatFloat omits the decimal for whole numbers and may use
+		// scientific notation; in either of those cases the YAML parser would
+		// decode the value as int unless we also pin the !!float tag (which we
+		// do below). The textual suffix is purely cosmetic for the whole-number
+		// case so the file matches the typical vault convention of `3.0`.
+		if !hasFloatMarker(s) {
+			s += ".0"
+		}
+	}
+	return &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Tag:   "!!float",
+		Value: s,
+	}
+}
+
+// hasFloatMarker reports whether s contains a character that the YAML 1.2 core
+// schema treats as a float-only token (decimal point or exponent).
+func hasFloatMarker(s string) bool {
+	for _, r := range s {
+		if r == '.' || r == 'e' || r == 'E' {
+			return true
+		}
+	}
+	return false
 }
 
 // encodeTime emits a date-only scalar when the time has no time-of-day

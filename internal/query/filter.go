@@ -210,6 +210,7 @@ func Missing(prop string) Predicate {
 // `--folder ./References`, and `--folder References\Books` all behave like
 // `References` (or `References/Books`).
 func Folder(folder, root string) Predicate {
+	folder = strings.TrimSpace(folder)
 	want := strings.Trim(strings.ReplaceAll(folder, "\\", "/"), "/")
 	want = path.Clean(want)
 	if want == "." {
@@ -235,6 +236,9 @@ func Folder(folder, root string) Predicate {
 // target's own path from its referrers list.
 func Orphan(idx BacklinkIndex) Predicate {
 	return func(n *vault.Note) bool {
+		if n == nil {
+			return false
+		}
 		t := strings.ToLower(n.Title())
 		for _, p := range idx[t] {
 			if p != n.Path {

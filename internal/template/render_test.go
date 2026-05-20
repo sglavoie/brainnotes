@@ -127,3 +127,29 @@ func TestRenderEnv(t *testing.T) {
 		t.Fatalf("env = %q, want %q", got, "ok")
 	}
 }
+
+func TestWikilinkNoDoubleWrap(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in, want string
+	}{
+		{"Books", "[[Books]]"},
+		{"[[Books]]", "[[Books]]"},
+		{"  [[Books]]  ", "  [[Books]]  "},
+		{"", ""},
+		{"[[", "[[[[]]"},         // sentinel: too short to be a real link
+		{"[[a]]b", "[[[[a]]b]]"}, // not fully wrapped — wrap again
+	}
+	ctx := NewContext("x", "", "/v", nil, FixedClock{T: time.Unix(0, 0).UTC()})
+	for _, c := range cases {
+		body := `{{wikilink .Vars.v}}`
+		ctx.Vars = map[string]string{"v": c.in}
+		got, err := Render(body, ctx)
+		if err != nil {
+			t.Fatalf("Render(%q): %v", c.in, err)
+		}
+		if got != c.want {
+			t.Errorf("wikilink(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

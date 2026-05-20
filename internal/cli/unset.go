@@ -117,7 +117,16 @@ func applyUnset(path string, props []string, cfg *config.Config, vaultRoot strin
 	}
 	if dry != nil {
 		block := newFileBlock(displayPath(path, vaultRoot))
+		// Deduplicate property names so callers passing the same key twice
+		// (e.g. via shell expansion) do not see the same `- key: value` line
+		// repeated. The non-dry path is naturally idempotent because the
+		// second Unset finds Has=false; the dry preview must match.
+		seen := make(map[string]struct{}, len(props))
 		for _, p := range props {
+			if _, dup := seen[p]; dup {
+				continue
+			}
+			seen[p] = struct{}{}
 			v, ok := front.Get(p)
 			if !ok {
 				continue

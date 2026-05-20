@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -155,5 +156,40 @@ func TestWalkSkipsHiddenFiles(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("visible.md not found in %v", paths)
+	}
+}
+
+// Save previously inherited 0o600 from os.CreateTemp via the temp file's
+// rename, silently narrowing the permissions of any 0o644 note in the vault.
+// Round-tripping a save should leave the destination's existing mode intact.
+func TestSavePreservesFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX mode bits not meaningful on Windows")
+	}
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nbody\n",
+	})
+	notePath := filepath.Join(v.Root, "a.md")
+	// Force a recognizable mode that differs from os.CreateTemp's 0o600.
+	if err := os.Chmod(notePath, 0o664); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := n.SetBody("changed\n"); err != nil {
+		t.Fatalf("setbody: %v", err)
+	}
+	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	info, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o664 {
+		t.Errorf("mode preservation: got %o, want %o", got, 0o664)
 	}
 }

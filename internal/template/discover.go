@@ -56,10 +56,29 @@ func Find(cfg *config.Config, name string) (string, error) {
 		ext = ".md"
 	}
 
-	candidates := []string{
+	// stem is the user-supplied name with any trailing copy of the configured
+	// extension removed, so that callers passing "Book.md" still hit the
+	// "Book Template.md" candidate rather than searching for the silly
+	// "Book.md Template.md".
+	stem := name
+	if ext != "" && strings.EqualFold(filepath.Ext(stem), ext) {
+		stem = strings.TrimSuffix(stem, filepath.Ext(stem))
+	}
+
+	// Use a small de-dup set so that name="Book.md" doesn't produce
+	// "book.md" twice ("name" and "stem+ext" collapse to the same form).
+	seen := make(map[string]struct{}, 3)
+	var candidates []string
+	for _, c := range []string{
 		strings.ToLower(name),
-		strings.ToLower(name + ext),
-		strings.ToLower(name + " Template" + ext),
+		strings.ToLower(stem + ext),
+		strings.ToLower(stem + " Template" + ext),
+	} {
+		if _, ok := seen[c]; ok {
+			continue
+		}
+		seen[c] = struct{}{}
+		candidates = append(candidates, c)
 	}
 
 	for _, want := range candidates {
@@ -81,5 +100,5 @@ func Find(cfg *config.Config, name string) (string, error) {
 			return "", fmt.Errorf("%w: %q matches %v in %s", ErrTemplateAmbiguous, name, matches, dir)
 		}
 	}
-	return "", fmt.Errorf("%w: %q in %s", ErrTemplateNotFound, name, dir)
+	return "", fmt.Errorf("%w: %q in %s (tried %v)", ErrTemplateNotFound, name, dir, candidates)
 }

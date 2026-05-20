@@ -634,6 +634,50 @@ func TestRewriteMovePreservesHeadingAndAliasWithWhitespace(t *testing.T) {
 	}
 }
 
+func TestParseTripleBracketsDoesNotConsumeBracket(t *testing.T) {
+	t.Parallel()
+	// `[[[Foo]]]` is a literal `[` followed by a `[[Foo]]` wikilink and a
+	// trailing `]`. The previous regex would have matched `[[[Foo]]` with
+	// target `[Foo`, which is not a valid Obsidian title.
+	tests := []struct {
+		name    string
+		in      string
+		targets []string
+	}{
+		{"triple open, triple close", "[[[Foo]]]", []string{"Foo"}},
+		{"quadruple open and close", "[[[[Foo]]]]", []string{"Foo"}},
+		{"triple open mid-text", "see [[[Foo]]] please", []string{"Foo"}},
+		{"two links, second triple", "[[A]] [[[B]]", []string{"A", "B"}},
+		{"bracket inside alias rejected", "[[Foo|al[ias]]", nil},
+		{"bracket inside heading rejected", "[[Foo#h[d]]", nil},
+		{"bracket inside target rejected", "[[F[oo]]", nil},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if len(tc.targets) == 0 && len(got) == 0 {
+				return
+			}
+			if !reflect.DeepEqual(got, tc.targets) {
+				t.Fatalf("Parse(%q) targets = %v, want %v", tc.in, got, tc.targets)
+			}
+		})
+	}
+}
+
+func TestRewriteTripleBrackets(t *testing.T) {
+	t.Parallel()
+	// Renaming Foo to Bar inside `[[[Foo]]]` must preserve the surrounding
+	// literal brackets — only the inner `[[Foo]]` is the wikilink.
+	got := RewriteTitle("see [[[Foo]]] now", "Foo", "Bar")
+	want := "see [[[Bar]]] now"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
 func collectTargets(links []Link) []string {
 	out := make([]string, 0, len(links))
 	for _, l := range links {

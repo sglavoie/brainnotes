@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -152,5 +153,91 @@ func TestUnsetDryRun_MissingKeyPrintsNothing(t *testing.T) {
 	})
 	if out != "" {
 		t.Fatalf("expected empty output, got %q", out)
+	}
+}
+
+// TestUnsetDryRun_DuplicatePropName asserts that passing the same property
+// name twice on the command line produces exactly one `- key: value` line in
+// the dry-run output. Before the fix, the second occurrence emitted a
+// duplicate line that did not match what the non-dry path (idempotent) would
+// have done.
+func TestUnsetDryRun_DuplicatePropName(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "tags.md")
+
+	out, err := runCLI(t, "", "unset", "--dry-run", notePath, "tags", "tags")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if c := strings.Count(out, "- tags:"); c != 1 {
+		t.Fatalf("expected exactly one `- tags:` line, got %d in:\n%s", c, out)
+	}
+}
+
+// TestSetDryRun_WikilinkScalarShowsWrappedValue asserts that the dry-run
+// preview for a wikilink-typed scalar shows the value the Marshal step will
+// actually write (`[[Books]]`), not the raw user input (`Books`). Before the
+// fix, `bn set --dry-run note.md parent=Books` printed `+ parent: Books`
+// while the corresponding apply path would have written `parent: '[[Books]]'`.
+func TestSetDryRun_WikilinkScalarShowsWrappedValue(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	out, err := runCLI(t, "", "set", "--dry-run", notePath, "parent=Books")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "+ parent: [[Books]]") {
+		t.Fatalf("expected `+ parent: [[Books]]` (wrapped form) in dry-run output, got:\n%s", out)
+	}
+}
+
+// TestSetDryRun_WikilinkListShowsWrappedValues asserts the same wikilink
+// normalization for list-typed wikilink properties: each list element must
+// appear wrapped in `[[ ]]` in the dry-run preview so it matches what the
+// real save would produce.
+func TestSetDryRun_WikilinkListShowsWrappedValues(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	out, err := runCLI(t, "", "set", "--dry-run", notePath, "categories=Books,Personal")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "+ categories: [[[Books]], [[Personal]]]") {
+		t.Fatalf("expected wrapped categories in dry-run output, got:\n%s", out)
+	}
+}
+
+// TestSetDryRun_WikilinkAlreadyStoredIsNoOp asserts that `bn set --dry-run`
+// reports no change when the stored value is already the wrapped form of the
+// user-supplied value (e.g. `parent: '[[Books]]'` on disk, `parent=Books` on
+// the command line). The opSet branch was already comparing via
+// wikilinkNormalized; this test pins that behavior down end-to-end so the
+// dry-run path stays consistent with the apply path.
+func TestSetDryRun_WikilinkAlreadyStoredIsNoOp(t *testing.T) {
+	root := t.TempDir()
+	notePath := filepath.Join(root, "wl.md")
+	if err := os.WriteFile(notePath, []byte("---\nparent: '[[Books]]'\n---\nBody.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BNOTES_CONFIG", cfgPath)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_VAULT", "")
+
+	var out string
+	assertMtimeUnchanged(t, []string{notePath}, func() {
+		o, err := runCLI(t, "", "set", "--dry-run", notePath, "parent=Books")
+		if err != nil {
+			t.Fatalf("execute: %v\n%s", err, o)
+		}
+		out = o
+	})
+	if out != "" {
+		t.Fatalf("expected empty dry-run output for no-op wikilink set, got %q", out)
 	}
 }

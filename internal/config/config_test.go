@@ -692,6 +692,95 @@ func TestLoad_TemplatesDefaultExtensionWithoutDot(t *testing.T) {
 	}
 }
 
+func TestLoad_TemplatesDefaultExtensionTrimsWhitespace(t *testing.T) {
+	// A value of "  md  " in the TOML file used to flow through as
+	// ".  md  ", producing bogus filenames such as `Note.  md  `.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndefault_extension = \"  md  \"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Templates.DefaultExtension != ".md" {
+		t.Errorf("default_extension should be trimmed and dotted: got %q, want %q",
+			cfg.Templates.DefaultExtension, ".md")
+	}
+}
+
+func TestLoad_TemplatesDefaultExtensionWhitespaceOnlyFallsBackToDefault(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndefault_extension = \"   \"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Templates.DefaultExtension != ".md" {
+		t.Errorf("whitespace-only default_extension should fall back to .md, got %q",
+			cfg.Templates.DefaultExtension)
+	}
+}
+
+func TestCandidates_BadXDGIgnoredWhenFlagSet(t *testing.T) {
+	// Previously a bad ~-expansion in XDG_CONFIG_HOME (HOME unset)
+	// would error out Candidates even when --config was provided. The
+	// flag is highest priority, so it should still win cleanly.
+	resetEnv(t)
+	os.Unsetenv("HOME")
+	t.Setenv(envXDG, "~/broken")
+
+	flag := filepath.Join(t.TempDir(), "flag.toml")
+	cands, err := Candidates(flag)
+	if err != nil {
+		t.Fatalf("Candidates with flag set should not error: %v", err)
+	}
+	if !cands[0].Active || cands[0].Path != flag {
+		t.Errorf("flag candidate should be active with %q: %+v", flag, cands[0])
+	}
+	if cands[2].Path != "" {
+		t.Errorf("broken XDG path should be empty, got %q", cands[2].Path)
+	}
+}
+
+func TestCandidates_BadEnvIgnoredWhenFlagSet(t *testing.T) {
+	// Bad ~-expansion in $BNOTES_CONFIG (HOME unset) should not break
+	// resolution when --config is provided.
+	resetEnv(t)
+	os.Unsetenv("HOME")
+	t.Setenv(envConfig, "~/broken.toml")
+
+	flag := filepath.Join(t.TempDir(), "flag.toml")
+	cands, err := Candidates(flag)
+	if err != nil {
+		t.Fatalf("Candidates with flag set should not error: %v", err)
+	}
+	if !cands[0].Active || cands[0].Path != flag {
+		t.Errorf("flag candidate should be active with %q: %+v", flag, cands[0])
+	}
+	if cands[1].Path != "" {
+		t.Errorf("broken env path should be empty, got %q", cands[1].Path)
+	}
+}
+
+func TestCandidates_BadEnvStillErrorsWhenNoHigherSource(t *testing.T) {
+	resetEnv(t)
+	os.Unsetenv("HOME")
+	t.Setenv(envConfig, "~/broken.toml")
+
+	if _, err := Candidates(""); err == nil {
+		t.Fatalf("expected error when env expansion fails and no flag is set")
+	}
+}
+
 func equalSlices(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

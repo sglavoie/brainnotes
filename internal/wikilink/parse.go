@@ -43,7 +43,13 @@ func (l Link) Title() string {
 // by a `]]` on a later line is not mistaken for a single multi-line wikilink.
 // Obsidian wikilinks are single-line by convention, so this restriction
 // removes a class of false positives without losing real matches.
-var wikilinkRE = regexp.MustCompile(`\[\[([^\]|#\r\n]+)(?:#([^\]|\r\n]+))?(?:\|([^\]\r\n]+))?\]\]`)
+//
+// `[` is also excluded from the target, heading, and alias so that strings
+// like `[[[Foo]]]` (a literal `[` followed by a `[[Foo]]` wikilink and a
+// stray `]`) do not get parsed as a single wikilink whose target begins with
+// `[`. Obsidian rejects `[` and `]` in note titles, headings, and aliases,
+// so this restriction matches real-world data.
+var wikilinkRE = regexp.MustCompile(`\[\[([^\]\[|#\r\n]+)(?:#([^\]\[|\r\n]+))?(?:\|([^\]\[\r\n]+))?\]\]`)
 
 // Parse returns every wikilink in s, in source order, skipping any match that
 // falls inside a fenced code block, indented code block, or inline code span.

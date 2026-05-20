@@ -162,18 +162,36 @@ type CandidatePath struct {
 }
 
 // Candidates returns the full precedence chain (4 entries, in source order).
-// An error is only returned when no other source is set and os.UserHomeDir fails.
+// An error is only returned when the active (highest-precedence) candidate
+// cannot be resolved (e.g. tilde expansion failed for the source that would
+// be used, or os.UserHomeDir fails and the default-path source would be used).
+// Lower-precedence sources that fail to expand are reported with an empty
+// Path so a higher-precedence source can still produce a usable result.
+//
 // Leading "~"/"~/" in the --config flag, $BNOTES_CONFIG, and $XDG_CONFIG_HOME
 // values is expanded to the user's home directory.
 func Candidates(flagConfigPath string) ([]CandidatePath, error) {
+	// Track expansion errors per source so we can surface them only if the
+	// failing source would have been the active (highest-priority) candidate.
 	flagPath, flagErr := expandUser(flagConfigPath)
-	if flagErr != nil && flagConfigPath != "" {
+	if flagErr != nil {
+		// Flag is highest priority; if it was provided and fails to expand,
+		// surface the error immediately.
 		return nil, fmt.Errorf("config: expand --config %q: %w", flagConfigPath, flagErr)
 	}
-	envPath, envErr := expandUser(os.Getenv(envConfig))
-	if envErr != nil && os.Getenv(envConfig) != "" {
-		return nil, fmt.Errorf("config: expand $BNOTES_CONFIG: %w", envErr)
+
+	envRaw := os.Getenv(envConfig)
+	envPath, envErr := expandUser(envRaw)
+	if envErr != nil {
+		// If the flag is set, it wins anyway — degrade gracefully so a bad
+		// env value cannot break a working --config invocation.
+		if flagPath != "" {
+			envPath = ""
+		} else {
+			return nil, fmt.Errorf("config: expand $BNOTES_CONFIG: %w", envErr)
+		}
 	}
+
 	out := []CandidatePath{
 		{Source: SourceFlag, Label: "--config flag", Path: flagPath},
 		{Source: SourceEnv, Label: "$BNOTES_CONFIG", Path: envPath},
@@ -184,9 +202,13 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 	if xdg := os.Getenv(envXDG); xdg != "" {
 		expanded, xdgErr := expandUser(xdg)
 		if xdgErr != nil {
-			return nil, fmt.Errorf("config: expand $XDG_CONFIG_HOME: %w", xdgErr)
+			// XDG is third in precedence; if flag or env is set, fall through.
+			if flagPath == "" && envPath == "" {
+				return nil, fmt.Errorf("config: expand $XDG_CONFIG_HOME: %w", xdgErr)
+			}
+		} else {
+			out[2].Path = filepath.Join(expanded, configName)
 		}
-		out[2].Path = filepath.Join(expanded, configName)
 	}
 
 	anySet := out[0].Path != "" || out[1].Path != "" || out[2].Path != ""
@@ -290,6 +312,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Templates.Dir == "" {
 		cfg.Templates.Dir = "Templates"
 	}
+	// Normalize the configured extension: trim surrounding whitespace,
+	// fall back to ".md" when empty, then ensure a single leading dot.
+	cfg.Templates.DefaultExtension = strings.TrimSpace(cfg.Templates.DefaultExtension)
 	if cfg.Templates.DefaultExtension == "" {
 		cfg.Templates.DefaultExtension = ".md"
 	}

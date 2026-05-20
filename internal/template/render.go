@@ -100,7 +100,7 @@ func funcMap(ctx Context) template.FuncMap {
 		"upper":      strings.ToUpper,
 		"default":    defaultFn,
 		"env":        os.Getenv,
-		"wikilink":   func(s string) string { return "[[" + s + "]]" },
+		"wikilink":   wikilinkFn,
 	}
 }
 
@@ -110,6 +110,20 @@ func defaultFn(d, v string) string {
 		return d
 	}
 	return v
+}
+
+// wikilinkFn wraps s in [[ ]] unless it is already wrapped. The empty string
+// is passed through unchanged so authors can guard with `default`. Whitespace
+// around an already-wrapped value is preserved.
+func wikilinkFn(s string) string {
+	if s == "" {
+		return ""
+	}
+	trimmed := strings.TrimSpace(s)
+	if strings.HasPrefix(trimmed, "[[") && strings.HasSuffix(trimmed, "]]") && len(trimmed) >= 4 {
+		return s
+	}
+	return "[[" + s + "]]"
 }
 
 // Slug converts s to a lower-kebab-case slug: it lowercases Unicode letters,
