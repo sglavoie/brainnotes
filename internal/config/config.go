@@ -34,10 +34,18 @@ type TemplatesConfig struct {
 	DefaultExtension string `toml:"default_extension"`
 }
 
+// PropertySchema defines validation rules for a single frontmatter property.
+type PropertySchema struct {
+	Type     string   `toml:"type"`
+	Required bool     `toml:"required"`
+	Allowed  []string `toml:"allowed"`
+}
+
 // FrontmatterConfig configures property handling.
 type FrontmatterConfig struct {
-	WikilinkProperties []string `toml:"wikilink_properties"`
-	ListProperties     []string `toml:"list_properties"`
+	WikilinkProperties []string                  `toml:"wikilink_properties"`
+	ListProperties     []string                  `toml:"list_properties"`
+	Schema             map[string]PropertySchema `toml:"schema"`
 }
 
 // FzfConfig configures the fzf interactive shell-out.
@@ -296,6 +304,12 @@ func DefaultTemplate() string {
 # Property keys whose values are comma-separated lists.
 # list_properties = ["categories", "tags", "topics", "org", "type"]
 
+# Property schema for validation with 'bn lint'.
+# [frontmatter.schema.status]
+# type     = "string"        # string, list, date, int, bool, float
+# required = true
+# allowed  = ["WIP", "Done", "Archived"]
+
 [fzf]
 # Additional flags passed to fzf when --interactive is used.
 # args = ["--height=40%", "--reverse"]
@@ -333,6 +347,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Frontmatter.ListProperties == nil {
 		cfg.Frontmatter.ListProperties = []string{"categories", "tags", "topics", "org", "type"}
+	}
+	if cfg.Frontmatter.Schema == nil {
+		cfg.Frontmatter.Schema = map[string]PropertySchema{}
 	}
 	if cfg.New.Routes == nil {
 		cfg.New.Routes = map[string]string{}
@@ -399,6 +416,33 @@ func validate(cfg *Config) error {
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("config: vault path %q is not a directory", cfg.Vault)
+	}
+	if err := validateSchema(cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
+var validSchemaTypes = map[string]bool{
+	"string": true,
+	"list":   true,
+	"date":   true,
+	"int":    true,
+	"bool":   true,
+	"float":  true,
+}
+
+func validateSchema(cfg *Config) error {
+	for name, rule := range cfg.Frontmatter.Schema {
+		if rule.Type == "" {
+			return fmt.Errorf("config: schema: property %q: type is required", name)
+		}
+		if !validSchemaTypes[rule.Type] {
+			return fmt.Errorf("config: schema: property %q: unknown type %q", name, rule.Type)
+		}
+		if len(rule.Allowed) > 0 && rule.Type != "string" && rule.Type != "list" {
+			return fmt.Errorf("config: schema: property %q: allowed is only valid for string or list types, got %q", name, rule.Type)
+		}
 	}
 	return nil
 }

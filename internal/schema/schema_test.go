@@ -1,0 +1,245 @@
+package schema
+
+import (
+	"testing"
+	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+)
+
+func TestValidType(t *testing.T) {
+	valid := []string{"string", "list", "date", "int", "bool", "float"}
+	for _, v := range valid {
+		if !ValidType(v) {
+			t.Errorf("ValidType(%q) = false, want true", v)
+		}
+	}
+	invalid := []string{"", "str", "integer", "boolean", "array", "number"}
+	for _, v := range invalid {
+		if ValidType(v) {
+			t.Errorf("ValidType(%q) = true, want false", v)
+		}
+	}
+}
+
+func TestCheckType(t *testing.T) {
+	tests := []struct {
+		value      any
+		schemaType string
+		want       bool
+	}{
+		{"hello", "string", true},
+		{42, "string", false},
+		{[]any{"a", "b"}, "list", true},
+		{"not a list", "list", false},
+		{time.Now(), "date", true},
+		{"2024-01-01", "date", false},
+		{42, "int", true},
+		{42.5, "int", false},
+		{true, "bool", true},
+		{"true", "bool", false},
+		{3.14, "float", true},
+		{3, "float", false},
+		{"x", "unknown", false},
+	}
+	for _, tt := range tests {
+		got := CheckType(tt.value, tt.schemaType)
+		if got != tt.want {
+			t.Errorf("CheckType(%v, %q) = %v, want %v", tt.value, tt.schemaType, got, tt.want)
+		}
+	}
+}
+
+func TestCheckAllowed_Scalar(t *testing.T) {
+	allowed := []string{"WIP", "Done", "Archived"}
+
+	ok, bad := CheckAllowed("WIP", allowed, false)
+	if !ok {
+		t.Errorf("expected ok for WIP, got offending=%q", bad)
+	}
+
+	ok, bad = CheckAllowed("wip", allowed, false)
+	if ok {
+		t.Error("expected failure for case-sensitive mismatch")
+	}
+	if bad != "wip" {
+		t.Errorf("offending = %q, want %q", bad, "wip")
+	}
+}
+
+func TestCheckAllowed_List(t *testing.T) {
+	allowed := []string{"a", "b", "c"}
+
+	ok, _ := CheckAllowed([]any{"a", "b"}, allowed, false)
+	if !ok {
+		t.Error("expected ok for valid list")
+	}
+
+	ok, bad := CheckAllowed([]any{"a", "d"}, allowed, false)
+	if ok {
+		t.Error("expected failure for list with invalid element")
+	}
+	if bad != "d" {
+		t.Errorf("offending = %q, want %q", bad, "d")
+	}
+}
+
+func TestCheckAllowed_Wikilink(t *testing.T) {
+	allowed := []string{"Alice", "Bob"}
+
+	ok, _ := CheckAllowed("[[Alice]]", allowed, true)
+	if !ok {
+		t.Error("expected ok for wikilink-wrapped value")
+	}
+
+	ok, bad := CheckAllowed("[[Charlie]]", allowed, true)
+	if ok {
+		t.Error("expected failure for wikilink not in allowed")
+	}
+	if bad != "Charlie" {
+		t.Errorf("offending = %q, want %q", bad, "Charlie")
+	}
+
+	ok, _ = CheckAllowed([]any{"[[Alice]]", "[[Bob]]"}, allowed, true)
+	if !ok {
+		t.Error("expected ok for wikilink list")
+	}
+
+	ok, bad = CheckAllowed([]any{"[[Alice]]", "[[Eve]]"}, allowed, true)
+	if ok {
+		t.Error("expected failure for wikilink list with invalid element")
+	}
+	if bad != "Eve" {
+		t.Errorf("offending = %q, want %q", bad, "Eve")
+	}
+}
+
+func TestCheckAllowed_NonStringType(t *testing.T) {
+	ok, _ := CheckAllowed(42, []string{"42"}, false)
+	if !ok {
+		t.Error("non-string types should always return ok")
+	}
+}
+
+func TestValidateNote_Clean(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("status", "Done")
+	front.Set("tags", []any{"go", "cli"})
+
+	schema := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: true, Allowed: []string{"WIP", "Done"}},
+		"tags":   {Type: "list", Required: true},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 0 {
+		t.Errorf("expected 0 violations, got %d: %+v", len(vs), vs)
+	}
+}
+
+func TestValidateNote_MissingRequired(t *testing.T) {
+	front := frontmatter.NewMap()
+
+	schema := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: true},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d", len(vs))
+	}
+	if vs[0].Kind != "missing" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "missing")
+	}
+}
+
+func TestValidateNote_OptionalAbsent(t *testing.T) {
+	front := frontmatter.NewMap()
+
+	schema := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: false},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 0 {
+		t.Errorf("expected 0 violations for absent optional, got %d", len(vs))
+	}
+}
+
+func TestValidateNote_WrongType(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("status", []any{"WIP"})
+
+	schema := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: true},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d", len(vs))
+	}
+	if vs[0].Kind != "type" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "type")
+	}
+	if vs[0].Detail != "expected string, got list" {
+		t.Errorf("detail = %q", vs[0].Detail)
+	}
+}
+
+func TestValidateNote_DisallowedValue(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("status", "wip")
+
+	schema := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: true, Allowed: []string{"WIP", "Done", "Archived"}},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d", len(vs))
+	}
+	if vs[0].Kind != "value" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "value")
+	}
+}
+
+func TestValidateNote_MultipleViolations(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("status", 42)
+
+	schema := map[string]config.PropertySchema{
+		"status":  {Type: "string", Required: true},
+		"tags":    {Type: "list", Required: true},
+		"created": {Type: "date", Required: true},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 3 {
+		t.Errorf("expected 3 violations, got %d: %+v", len(vs), vs)
+	}
+}
+
+func TestValidateNote_WikilinkAllowed(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("category", "[[Work]]")
+
+	schema := map[string]config.PropertySchema{
+		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	}
+	vs := ValidateNote(&front, "note.md", schema, []string{"category"})
+	if len(vs) != 0 {
+		t.Errorf("expected 0 violations for valid wikilink, got %d: %+v", len(vs), vs)
+	}
+}
+
+func TestValidateNote_StableOrder(t *testing.T) {
+	front := frontmatter.NewMap()
+
+	schema := map[string]config.PropertySchema{
+		"z_prop": {Type: "string", Required: true},
+		"a_prop": {Type: "string", Required: true},
+		"m_prop": {Type: "string", Required: true},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 3 {
+		t.Fatalf("expected 3 violations, got %d", len(vs))
+	}
+	if vs[0].Property != "a_prop" || vs[1].Property != "m_prop" || vs[2].Property != "z_prop" {
+		t.Errorf("violations not sorted: %s, %s, %s", vs[0].Property, vs[1].Property, vs[2].Property)
+	}
+}

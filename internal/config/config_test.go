@@ -821,3 +821,164 @@ func contains(s []string, v string) bool {
 	}
 	return false
 }
+
+func TestLoad_SchemaParsesFromTOML(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[frontmatter.schema.status]
+type = "string"
+required = true
+allowed = ["WIP", "Done", "Archived"]
+
+[frontmatter.schema.tags]
+type = "list"
+required = true
+
+[frontmatter.schema.created]
+type = "date"
+`)
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Frontmatter.Schema) != 3 {
+		t.Fatalf("expected 3 schema entries, got %d", len(cfg.Frontmatter.Schema))
+	}
+	s := cfg.Frontmatter.Schema["status"]
+	if s.Type != "string" || !s.Required || len(s.Allowed) != 3 {
+		t.Errorf("status schema: %+v", s)
+	}
+	tags := cfg.Frontmatter.Schema["tags"]
+	if tags.Type != "list" || !tags.Required {
+		t.Errorf("tags schema: %+v", tags)
+	}
+	created := cfg.Frontmatter.Schema["created"]
+	if created.Type != "date" || created.Required {
+		t.Errorf("created schema: %+v", created)
+	}
+}
+
+func TestLoad_SchemaUnknownTypeRejected(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[frontmatter.schema.rating]
+type = "number"
+`)
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for unknown schema type")
+	}
+	if !strings.Contains(err.Error(), `unknown type "number"`) {
+		t.Fatalf("error should mention unknown type: %v", err)
+	}
+}
+
+func TestLoad_SchemaEmptyTypeRejected(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[frontmatter.schema.status]
+required = true
+`)
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for empty schema type")
+	}
+	if !strings.Contains(err.Error(), "type is required") {
+		t.Fatalf("error should mention type is required: %v", err)
+	}
+}
+
+func TestLoad_SchemaAllowedOnDateRejected(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[frontmatter.schema.created]
+type = "date"
+allowed = ["2024-01-01"]
+`)
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for allowed on date type")
+	}
+	if !strings.Contains(err.Error(), "allowed is only valid for string or list") {
+		t.Fatalf("error should mention allowed constraint: %v", err)
+	}
+}
+
+func TestLoad_SchemaAllowedOnStringAccepted(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[frontmatter.schema.status]
+type = "string"
+allowed = ["WIP", "Done"]
+`)
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Frontmatter.Schema["status"].Allowed) != 2 {
+		t.Errorf("expected 2 allowed values, got %d", len(cfg.Frontmatter.Schema["status"].Allowed))
+	}
+}
+
+func TestLoad_SchemaEmptyIsValid(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+`)
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Frontmatter.Schema) != 0 {
+		t.Errorf("expected empty schema after defaults, got %d entries", len(cfg.Frontmatter.Schema))
+	}
+}
+
+func TestLoad_SchemaAllowedOnAllInvalidTypes(t *testing.T) {
+	for _, typ := range []string{"int", "bool", "float", "date"} {
+		t.Run(typ, func(t *testing.T) {
+			resetEnv(t)
+			vault := t.TempDir()
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.toml")
+			writeFile(t, cfgPath, `vault = "`+vault+`"
+[frontmatter.schema.prop]
+type = "`+typ+`"
+allowed = ["x"]
+`)
+			_, err := Load("", cfgPath)
+			if err == nil {
+				t.Fatalf("expected error for allowed on %s type", typ)
+			}
+		})
+	}
+}

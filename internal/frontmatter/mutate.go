@@ -9,6 +9,8 @@ import (
 // but its value is not a YAML sequence.
 var ErrNotAList = errors.New("frontmatter: value is not a list")
 
+var ErrKeyConflict = errors.New("frontmatter: target key already exists")
+
 // ListAdd appends values to the list stored at key k, preserving existing
 // order and skipping duplicates. If k is absent, a new list is created
 // containing the deduplicated input values. If k is present but its value is
@@ -140,6 +142,27 @@ func (m *Map) ReplaceValue(k string, from, to any) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func (m *Map) RenameKey(oldK, newK string) (bool, error) {
+	if m.vals == nil {
+		return false, nil
+	}
+	if _, ok := m.vals[oldK]; !ok {
+		return false, nil
+	}
+	if _, ok := m.vals[newK]; ok {
+		return false, ErrKeyConflict
+	}
+	m.vals[newK] = m.vals[oldK]
+	delete(m.vals, oldK)
+	for i, k := range m.keys {
+		if k == oldK {
+			m.keys[i] = newK
+			break
+		}
+	}
+	return true, nil
 }
 
 // containsAny reports whether haystack contains an element equal (per
