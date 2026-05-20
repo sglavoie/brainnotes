@@ -137,6 +137,50 @@ func TestNewForceOverwrite(t *testing.T) {
 	}
 }
 
+// TestNewRejectsFolderOutsideVault verifies that `bn new --folder ../escape`
+// is rejected rather than silently writing past the vault root. Before the
+// fix, resolveDest produced an absolute path outside the vault and the
+// command happily created the file.
+func TestNewRejectsFolderOutsideVault(t *testing.T) {
+	root := buildNewFixture(t)
+	_, err := runNew(t, "new", "book", "Pwn", "--folder", "../escape", "--var", "author=x")
+	if err == nil {
+		t.Fatal("expected error for --folder ../escape, got nil")
+	}
+	if !strings.Contains(err.Error(), "outside the vault") {
+		t.Fatalf("expected 'outside the vault' error, got: %v", err)
+	}
+	// Ensure nothing leaked outside the vault.
+	parent := filepath.Dir(root)
+	if _, statErr := os.Stat(filepath.Join(parent, "escape", "Pwn.md")); statErr == nil {
+		t.Fatalf("file leaked outside vault at %s", filepath.Join(parent, "escape", "Pwn.md"))
+	}
+}
+
+// TestNewRejectsTitleWithSlash verifies that a title containing `/` is
+// rejected with a clear error rather than producing a confusing temp-file
+// failure deep in atomicWriteFile.
+func TestNewRejectsTitleWithSlash(t *testing.T) {
+	_ = buildNewFixture(t)
+	_, err := runNew(t, "new", "book", "Foo/Bar")
+	if err == nil {
+		t.Fatal("expected error for title containing '/', got nil")
+	}
+	if !strings.Contains(err.Error(), "/") && !strings.Contains(err.Error(), "title") {
+		t.Fatalf("expected error mentioning title/slash, got: %v", err)
+	}
+}
+
+// TestNewRejectsEmptyTitle keeps the empty-title contract (preserves existing
+// behaviour through the new validateNewTitle path).
+func TestNewRejectsEmptyTitle(t *testing.T) {
+	_ = buildNewFixture(t)
+	_, err := runNew(t, "new", "book", "")
+	if err == nil {
+		t.Fatal("expected error for empty title, got nil")
+	}
+}
+
 func TestNewParseVars(t *testing.T) {
 	tests := []struct {
 		in      []string

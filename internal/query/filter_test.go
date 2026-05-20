@@ -343,6 +343,32 @@ func TestBuildBacklinkIndex(t *testing.T) {
 	}
 }
 
+// TestOrphanIgnoresSelfReferences verifies that a note whose only "inbound"
+// wikilink is to itself still counts as an orphan. Before the fix, Orphan
+// matched any non-empty entry in idx[title], so a self-link silently kept the
+// note out of the orphan set. `bn backlinks` already filters self-references;
+// `--orphan` should behave consistently.
+func TestOrphanIgnoresSelfReferences(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"SelfOnly.md":   "---\n---\nI link to [[SelfOnly]] only.\n",
+		"Referenced.md": "---\n---\nBody.\n",
+		"Referrer.md":   "---\n---\nLinks to [[Referenced]].\n",
+	})
+	all := []*vault.Note{notes["SelfOnly.md"], notes["Referenced.md"], notes["Referrer.md"]}
+	idx := BuildBacklinkIndex(all)
+	o := Orphan(idx)
+
+	if !o(notes["SelfOnly.md"]) {
+		t.Errorf("SelfOnly should be an orphan: its only inbound link is from itself")
+	}
+	if o(notes["Referenced.md"]) {
+		t.Errorf("Referenced has an external inbound link; not orphan")
+	}
+	if !o(notes["Referrer.md"]) {
+		t.Errorf("Referrer has no inbound link; orphan")
+	}
+}
+
 func TestAndOr(t *testing.T) {
 	_, notes := newVault(t, map[string]string{
 		"a.md": "---\ntags: [foo, bar]\nstatus: Reading\n---\n",

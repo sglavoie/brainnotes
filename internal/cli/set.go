@@ -265,7 +265,9 @@ func wrapWikilinkValue(s string) string {
 }
 
 var (
-	intValueRe  = regexp.MustCompile(`^\d+$`)
+	// intValueRe accepts an optional leading `-` so negative integers
+	// auto-coerce. Before the fix `rating=-3` was stored as the string "-3".
+	intValueRe  = regexp.MustCompile(`^-?\d+$`)
 	dateValueRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 )
 

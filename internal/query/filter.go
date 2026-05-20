@@ -183,13 +183,21 @@ func Folder(folder, root string) Predicate {
 	}
 }
 
-// Orphan matches notes whose title has no entry in idx (i.e. nothing in the
-// vault links to them). The index is built once per find run via
-// BuildBacklinkIndex.
+// Orphan matches notes that no *other* note in the vault links to. The index
+// is built once per find run via BuildBacklinkIndex.
+//
+// Self-references are excluded so a note that only links to itself still
+// counts as an orphan — this matches `bn backlinks`, which also excludes the
+// target's own path from its referrers list.
 func Orphan(idx BacklinkIndex) Predicate {
 	return func(n *vault.Note) bool {
 		t := strings.ToLower(n.Title())
-		return len(idx[t]) == 0
+		for _, p := range idx[t] {
+			if p != n.Path {
+				return false
+			}
+		}
+		return true
 	}
 }
 

@@ -282,8 +282,11 @@ func TestCoerceValueAuto(t *testing.T) {
 		{"true", true},
 		{"FALSE", false},
 		{"42", 42},
+		{"-3", -3},          // negative integers should coerce to int
+		{"-0", 0},           // canonical zero, still int-typed
 		{"2026-01-01", nil}, // sentinel: time.Time checked below
 		{"hello", "hello"},
+		{"-hello", "-hello"}, // not numeric → string, no false positive
 	}
 	for _, c := range cases {
 		got, err := coerceValue(c.in, "")
@@ -299,5 +302,24 @@ func TestCoerceValueAuto(t *testing.T) {
 		if got != c.want {
 			t.Errorf("coerceValue(%q)=%v want %v", c.in, got, c.want)
 		}
+	}
+}
+
+// TestSetNegativeInt verifies that an integer literal with a leading `-` is
+// stored as an int, not a string. Before the fix, intValueRe rejected the
+// minus sign so `rating=-3` was written as `rating: "-3"`.
+func TestSetNegativeInt(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	if _, err := runCLI(t, "", "set", notePath, "rating=-3"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readNote(t, notePath)
+	if !strings.Contains(got, "rating: -3\n") {
+		t.Fatalf("expected `rating: -3` (int), got:\n%s", got)
+	}
+	if strings.Contains(got, `rating: "-3"`) || strings.Contains(got, "rating: '-3'") {
+		t.Fatalf("negative int should not be quoted as a string, got:\n%s", got)
 	}
 }

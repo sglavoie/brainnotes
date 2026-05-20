@@ -58,8 +58,9 @@ func NewNewCmd() *cobra.Command {
 			}
 			templateName := args[0]
 			title := args[1]
-			if title == "" {
-				return errors.New("new: empty title")
+			if err := validateNewTitle(title); err != nil {
+				// validateNewTitle prefixes with "rename:"; relabel for new.
+				return fmt.Errorf("new: %s", strings.TrimPrefix(err.Error(), "rename: "))
 			}
 
 			varMap, err := parseVars(vars)
@@ -74,6 +75,11 @@ func NewNewCmd() *cobra.Command {
 			relFolder, err := filepath.Rel(cfg.Vault, dest)
 			if err != nil {
 				return fmt.Errorf("new: rel %q: %w", dest, err)
+			}
+			// Reject destinations outside the vault so '--folder ../escape'
+			// (or a misconfigured route) can't write past the vault root.
+			if relFolder == ".." || strings.HasPrefix(relFolder, ".."+string(filepath.Separator)) {
+				return fmt.Errorf("new: destination %q is outside the vault", dest)
 			}
 			relFolderSlash := filepath.ToSlash(relFolder)
 			if relFolderSlash == "." {
