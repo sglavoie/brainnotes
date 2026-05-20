@@ -320,6 +320,49 @@ func TestMoveByBareTitle(t *testing.T) {
 	}
 }
 
+func TestMove_FzfPickNote(t *testing.T) {
+	root := buildMoveFixture(t)
+
+	orig := notePicker
+	t.Cleanup(func() { notePicker = orig })
+	notePicker = func(items []string, extraArgs []string) ([]string, error) {
+		return []string{filepath.Join(root, "Books", "Dune.md")}, nil
+	}
+
+	out, err := runCLI(t, "", "move", "References/Books")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "Books", "Dune.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected old path gone, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "References", "Books", "Dune.md")); err != nil {
+		t.Fatalf("expected new path present, stat err=%v", err)
+	}
+}
+
+func TestMove_FzfAbort(t *testing.T) {
+	root := buildMoveFixture(t)
+	before := snapshotVault(t, root)
+
+	orig := notePicker
+	t.Cleanup(func() { notePicker = orig })
+	notePicker = func(items []string, extraArgs []string) ([]string, error) {
+		return nil, nil
+	}
+
+	out, err := runCLI(t, "", "move", "References/Books")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+
+	after := snapshotVault(t, root)
+	if !mapsEqual(before, after) {
+		t.Fatalf("abort modified files:\nbefore=%v\nafter=%v", before, after)
+	}
+}
+
 func TestMoveToVaultRoot(t *testing.T) {
 	root := buildMoveFixture(t)
 

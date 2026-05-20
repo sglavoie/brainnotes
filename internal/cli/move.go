@@ -38,7 +38,7 @@ func NewMoveCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "move <note> <new-folder>",
+		Use:   "move [note] <new-folder>",
 		Short: "Move a note to a different folder, rewriting folder-prefixed [[wikilinks]]",
 		Long: `Move changes a note's containing folder. The filename (title) stays the same;
 only the folder portion changes. Every folder-prefixed wikilink in the vault
@@ -47,14 +47,15 @@ rewritten to the new folder. Bare [[Title]] links without a folder prefix are
 left untouched (Obsidian resolves them by title alone, so they remain valid).
 
 <note> may be a path or a bare title; bare titles are resolved case-insensitively
-against the vault. <new-folder> is vault-relative ("." or empty means the vault
+against the vault. When omitted, an fzf picker lets you select the note
+interactively. <new-folder> is vault-relative ("." or empty means the vault
 root); intermediate directories are created with mode 0755. Use 'bn rename' to
 change the title.
 
 Atomicity: each affected file is rewritten via a temp-file + rename. There is
 no transaction across files: if a mid-apply error occurs, prior writes stand.
 Inspect with 'git diff' to recover.`,
-		Args:          cobra.ExactArgs(2),
+		Args:          cobra.RangeArgs(1, 2),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -67,8 +68,21 @@ Inspect with 'git diff' to recover.`,
 				return err
 			}
 
-			noteArg := args[0]
-			newFolderArg := args[1]
+			var noteArg, newFolderArg string
+			if len(args) == 2 {
+				noteArg = args[0]
+				newFolderArg = args[1]
+			} else {
+				newFolderArg = args[0]
+				selected, pickErr := pickNotes(v, cfg, false)
+				if pickErr != nil {
+					return pickErr
+				}
+				if len(selected) == 0 {
+					return nil
+				}
+				noteArg = selected[0]
+			}
 
 			target, err := resolveRenameTarget(v, noteArg)
 			if err != nil {

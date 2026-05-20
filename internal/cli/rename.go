@@ -59,7 +59,7 @@ func NewRenameCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "rename <note> <new-title>",
+		Use:   "rename [note] <new-title>",
 		Short: "Rename a note and rewrite every [[wikilink]] pointing at it",
 		Long: `Rename changes a note's filename to <new-title>.md (same folder) and rewrites
 every wikilink in the vault that pointed at the old title — including
@@ -68,12 +68,13 @@ heading forms ([[OldTitle#Section]]), and wikilink-typed frontmatter values
 (categories, parent, ...).
 
 <note> may be a path or a bare title; bare titles are resolved
-case-insensitively against the vault.
+case-insensitively against the vault. When omitted, an fzf picker lets you
+select the note interactively.
 
 Atomicity: each affected file is rewritten via a temp-file + rename. There is
 no transaction across files: if a mid-apply error occurs, prior writes stand.
 Inspect with 'git diff' to recover.`,
-		Args:          cobra.ExactArgs(2),
+		Args:          cobra.RangeArgs(1, 2),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -86,8 +87,24 @@ Inspect with 'git diff' to recover.`,
 				return err
 			}
 
-			noteArg := args[0]
-			newTitle := args[1]
+			var noteArg, newTitle string
+			if len(args) == 2 {
+				noteArg = args[0]
+				newTitle = args[1]
+			} else {
+				newTitle = args[0]
+				if err := validateNewTitle(newTitle); err != nil {
+					return err
+				}
+				selected, pickErr := pickNotes(v, cfg, false)
+				if pickErr != nil {
+					return pickErr
+				}
+				if len(selected) == 0 {
+					return nil
+				}
+				noteArg = selected[0]
+			}
 			if err := validateNewTitle(newTitle); err != nil {
 				return err
 			}
