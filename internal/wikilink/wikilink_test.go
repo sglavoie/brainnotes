@@ -419,6 +419,221 @@ func TestFormatLink(t *testing.T) {
 	}
 }
 
+func TestParseTrimsWhitespace(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name                                           string
+		in                                             string
+		wantTarget, wantFolder, wantHeading, wantAlias string
+		wantTitle                                      string
+	}{
+		{
+			name:       "leading and trailing space in bare target",
+			in:         "[[ Foo ]]",
+			wantTarget: "Foo", wantTitle: "Foo",
+		},
+		{
+			name:       "space before alias separator",
+			in:         "[[Foo |alias]]",
+			wantTarget: "Foo", wantAlias: "alias", wantTitle: "Foo",
+		},
+		{
+			name:       "space after alias separator",
+			in:         "[[Foo| alias ]]",
+			wantTarget: "Foo", wantAlias: "alias", wantTitle: "Foo",
+		},
+		{
+			name:       "space around heading",
+			in:         "[[Foo # Section ]]",
+			wantTarget: "Foo", wantHeading: "Section", wantTitle: "Foo",
+		},
+		{
+			name:       "space around heading and alias",
+			in:         "[[ Foo # Section | disp ]]",
+			wantTarget: "Foo", wantHeading: "Section", wantAlias: "disp", wantTitle: "Foo",
+		},
+		{
+			name:       "tabs trimmed too",
+			in:         "[[\tFoo\t]]",
+			wantTarget: "Foo", wantTitle: "Foo",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := Parse(tc.in)
+			if len(got) != 1 {
+				t.Fatalf("Parse(%q) returned %d links, want 1", tc.in, len(got))
+			}
+			l := got[0]
+			if l.Target != tc.wantTarget {
+				t.Errorf("Target = %q, want %q", l.Target, tc.wantTarget)
+			}
+			if l.Folder != tc.wantFolder {
+				t.Errorf("Folder = %q, want %q", l.Folder, tc.wantFolder)
+			}
+			if l.Heading != tc.wantHeading {
+				t.Errorf("Heading = %q, want %q", l.Heading, tc.wantHeading)
+			}
+			if l.Alias != tc.wantAlias {
+				t.Errorf("Alias = %q, want %q", l.Alias, tc.wantAlias)
+			}
+			if l.Title() != tc.wantTitle {
+				t.Errorf("Title() = %q, want %q", l.Title(), tc.wantTitle)
+			}
+		})
+	}
+}
+
+func TestParseRejectsAllWhitespaceTarget(t *testing.T) {
+	t.Parallel()
+	// `[[   ]]` and `[[ \t ]]` are not real wikilinks once trimmed.
+	for _, in := range []string{"[[   ]]", "[[\t\t]]", "[[ | alias]]"} {
+		if got := Parse(in); len(got) != 0 {
+			t.Errorf("Parse(%q) = %+v, want no matches", in, got)
+		}
+	}
+}
+
+func TestRewriteTitleHandlesWhitespacePadding(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		in         string
+		oldT, newT string
+		want       string
+	}{
+		{
+			name: "bare target with surrounding spaces",
+			in:   "see [[ Foo ]] please",
+			oldT: "Foo", newT: "Bar",
+			want: "see [[Bar]] please",
+		},
+		{
+			name: "spaces around alias separator",
+			in:   "[[Foo |alias]]",
+			oldT: "Foo", newT: "Bar",
+			want: "[[Bar|alias]]",
+		},
+		{
+			name: "spaces around heading",
+			in:   "[[Foo # Section]]",
+			oldT: "Foo", newT: "Bar",
+			want: "[[Bar#Section]]",
+		},
+		{
+			name: "embed prefix preserved",
+			in:   "![[ Foo ]]",
+			oldT: "Foo", newT: "Bar",
+			want: "![[Bar]]",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteTitle(tc.in, tc.oldT, tc.newT)
+			if got != tc.want {
+				t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRewriteMoveHandlesWhitespacePadding(t *testing.T) {
+	t.Parallel()
+	in := "[[ Books/Foo ]] and bare [[Foo]]"
+	got := RewriteMove(in, "Books/Foo", "References/Books/Foo")
+	want := "[[References/Books/Foo]] and bare [[Foo]]"
+	if got != want {
+		t.Fatalf("RewriteMove\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
+func TestParseEmbedPreservesPrefix(t *testing.T) {
+	t.Parallel()
+	in := "before ![[Image]] after [[Note]]"
+	links := Parse(in)
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links, got %d", len(links))
+	}
+	if links[0].Target != "Image" || links[1].Target != "Note" {
+		t.Fatalf("targets = %q,%q want Image,Note", links[0].Target, links[1].Target)
+	}
+	// The leading `!` is not part of the Link span; rewriting must leave it.
+	got := RewriteTitle(in, "Image", "Picture")
+	want := "before ![[Picture]] after [[Note]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
+func TestParseSkipsFencedCodeWithCRLF(t *testing.T) {
+	t.Parallel()
+	in := "[[Before]]\r\n```\r\n[[Inside]]\r\n```\r\n[[After]]"
+	got := collectTargets(Parse(in))
+	want := []string{"Before", "After"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestParseSkipsIndentedCodeAfterCRLFBlank(t *testing.T) {
+	t.Parallel()
+	in := "para\r\n\r\n    [[Hidden]]\r\n\r\n[[Visible]]"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestParseUnclosedFenceMasksRest(t *testing.T) {
+	t.Parallel()
+	// An unclosed fence should mask everything that follows it; we err on the
+	// side of not rewriting documentation samples.
+	in := "[[Before]]\n```\n[[Inside]]\n[[StillInside]]"
+	got := collectTargets(Parse(in))
+	want := []string{"Before"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestParseLongerFenceAllowsBacktickRunsInside(t *testing.T) {
+	t.Parallel()
+	// A 4-backtick fence is closed only by 4+ backticks; an internal 3-backtick
+	// run must not prematurely close it.
+	in := "````\n```\n[[NotEscaping]]\n```\n````\n[[After]]"
+	got := collectTargets(Parse(in))
+	want := []string{"After"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestParseDifferentFenceCharsDontClose(t *testing.T) {
+	t.Parallel()
+	// A tilde fence inside a backtick fence is not a closer.
+	in := "```\n~~~\n[[Inside]]\n~~~\n```\n[[After]]"
+	got := collectTargets(Parse(in))
+	want := []string{"After"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestRewriteMovePreservesHeadingAndAliasWithWhitespace(t *testing.T) {
+	t.Parallel()
+	in := "[[ Books/Foo # Section | display ]]"
+	got := RewriteMove(in, "Books/Foo", "References/Books/Foo")
+	want := "[[References/Books/Foo#Section|display]]"
+	if got != want {
+		t.Fatalf("RewriteMove\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
 func collectTargets(links []Link) []string {
 	out := make([]string, 0, len(links))
 	for _, l := range links {

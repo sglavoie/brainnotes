@@ -465,6 +465,233 @@ func TestDefaultTemplate_Mentions_AllKnownKeys(t *testing.T) {
 	}
 }
 
+func TestLoad_TildeExpansionInVaultFlag(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	vault := filepath.Join(home, "vault")
+	if err := os.MkdirAll(vault, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+
+	cfg, err := Load("~/vault", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Fatalf("vault should expand ~: got %q, want %q", cfg.Vault, vault)
+	}
+}
+
+func TestLoad_TildeExpansionInVaultEnv(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	vault := filepath.Join(home, "myvault")
+	if err := os.MkdirAll(vault, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+	t.Setenv(envVault, "~/myvault")
+
+	cfg, err := Load("", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Fatalf("vault env should expand ~: got %q, want %q", cfg.Vault, vault)
+	}
+}
+
+func TestLoad_TildeExpansionInVaultFromConfigFile(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	vault := filepath.Join(home, "vfile")
+	if err := os.MkdirAll(vault, 0o755); err != nil {
+		t.Fatalf("mkdir vault: %v", err)
+	}
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \"~/vfile\"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Fatalf("vault from config file should expand ~: got %q, want %q", cfg.Vault, vault)
+	}
+}
+
+func TestLoad_TildeExpansionInConfigFlag(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	vault := t.TempDir()
+
+	cfgDir := filepath.Join(home, ".myconfig")
+	cfgPath := filepath.Join(cfgDir, "bn.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n")
+
+	cfg, err := Load("", "~/.myconfig/bn.toml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, vault)
+	}
+}
+
+func TestCandidates_TildeExpansionInEnv(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(envConfig, "~/somecfg.toml")
+
+	cands, err := Candidates("")
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	want := filepath.Join(home, "somecfg.toml")
+	if cands[1].Path != want {
+		t.Fatalf("env path should expand ~: got %q, want %q", cands[1].Path, want)
+	}
+}
+
+func TestCandidates_TildeExpansionInXDG(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(envXDG, "~/customxdg")
+
+	cands, err := Candidates("")
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	want := filepath.Join(home, "customxdg", "bnotes", "config.toml")
+	if cands[2].Path != want {
+		t.Fatalf("XDG path should expand ~: got %q, want %q", cands[2].Path, want)
+	}
+}
+
+func TestLoad_ConfigPathDirectoryIsError(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+	dir := t.TempDir() // exists but is a directory, not a TOML file
+
+	_, err := Load(vault, dir)
+	if err == nil {
+		t.Fatalf("expected error when --config points at a directory")
+	}
+	if !strings.Contains(err.Error(), "directory") {
+		t.Fatalf("error should mention directory; got %v", err)
+	}
+}
+
+func TestLoad_IgnoreNormalizesTrailingSlashAndDotSlash(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	// User provides variants that should all collapse to "Archive" (default).
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"Archive/\", \"./Archive\", \"  Archive  \", \"Drafts/\"]\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	archiveCount := 0
+	for _, p := range cfg.Ignore {
+		if p == "Archive" {
+			archiveCount++
+		}
+	}
+	if archiveCount != 1 {
+		t.Fatalf("expected Archive to appear exactly once after normalization, got %d (%v)", archiveCount, cfg.Ignore)
+	}
+	if !contains(cfg.Ignore, "Drafts") {
+		t.Fatalf("expected Drafts (trailing slash stripped) in ignore: %v", cfg.Ignore)
+	}
+	for _, p := range cfg.Ignore {
+		if strings.HasSuffix(p, "/") {
+			t.Errorf("ignore entry %q should have trailing slash trimmed", p)
+		}
+		if strings.HasPrefix(p, "./") {
+			t.Errorf("ignore entry %q should have leading ./ stripped", p)
+		}
+		if strings.TrimSpace(p) != p {
+			t.Errorf("ignore entry %q should have surrounding whitespace stripped", p)
+		}
+	}
+}
+
+func TestLoad_IgnoreDropsEmptyAndDotEntries(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"\", \"   \", \".\", \"./\"]\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	// Defaults still present.
+	for _, want := range DefaultIgnore {
+		if !contains(cfg.Ignore, want) {
+			t.Errorf("default %q missing: %v", want, cfg.Ignore)
+		}
+	}
+	// No empty or "." entries.
+	for _, p := range cfg.Ignore {
+		if p == "" || p == "." {
+			t.Errorf("ignore should not contain %q: %v", p, cfg.Ignore)
+		}
+	}
+}
+
+func TestLoad_FrontmatterEmptyListsOptOutOfDefaults(t *testing.T) {
+	// Users who write `wikilink_properties = []` should get an empty list,
+	// not the defaults — explicit empty differs from omitted.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[frontmatter]\nwikilink_properties = []\nlist_properties = []\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Frontmatter.WikilinkProperties) != 0 {
+		t.Errorf("explicit empty wikilink_properties should stay empty, got %v", cfg.Frontmatter.WikilinkProperties)
+	}
+	if len(cfg.Frontmatter.ListProperties) != 0 {
+		t.Errorf("explicit empty list_properties should stay empty, got %v", cfg.Frontmatter.ListProperties)
+	}
+}
+
+func TestLoad_TemplatesDefaultExtensionWithoutDot(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndefault_extension = \"markdown\"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Templates.DefaultExtension != ".markdown" {
+		t.Errorf("default_extension should be normalized with leading dot: got %q", cfg.Templates.DefaultExtension)
+	}
+}
+
 func equalSlices(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

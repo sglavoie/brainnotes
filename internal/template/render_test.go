@@ -18,6 +18,13 @@ func TestSlug(t *testing.T) {
 		{"Numbers 123 mix", "numbers-123-mix"},
 		{"", ""},
 		{"---", ""},
+		// Leading punctuation must not produce a leading dash.
+		{"-foo", "foo"},
+		{"!!!foo", "foo"},
+		// Unicode letters are lowercased and preserved (not stripped).
+		{"Café 2", "café-2"},
+		// Only whitespace/punctuation collapses to empty after trim.
+		{"   \t\n  ", ""},
 	}
 	for _, c := range cases {
 		if got := Slug(c.in); got != c.want {

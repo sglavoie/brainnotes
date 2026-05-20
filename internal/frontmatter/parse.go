@@ -117,9 +117,9 @@ func parseYAML(data []byte) (Map, error) {
 		if root.Tag == "!!null" {
 			return NewMap(), nil
 		}
-		return Map{}, fmt.Errorf("frontmatter: top-level must be a mapping, got scalar")
+		return Map{}, fmt.Errorf("top-level must be a mapping, got scalar")
 	default:
-		return Map{}, fmt.Errorf("frontmatter: top-level must be a mapping")
+		return Map{}, fmt.Errorf("top-level must be a mapping")
 	}
 
 	m := NewMap()

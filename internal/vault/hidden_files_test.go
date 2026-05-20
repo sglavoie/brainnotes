@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -33,6 +34,89 @@ func TestResolveByTitleNormalizesFolder(t *testing.T) {
 		if filepath.Base(n.Path) != "Alice.md" {
 			t.Errorf("ResolveByTitle(Alice, %q) = %q", folder, n.Path)
 		}
+	}
+}
+
+// Walk previously followed symlinks pointing outside the vault. WalkDir
+// reports a symlink-to-file with d.IsDir() == false, so a link named
+// `linked.md` would be emitted as a regular note even though its target
+// lives outside the vault root. The CLI assumes every note Walk emits is
+// contained in the vault, so that leak breaks rename/move/set guarantees.
+func TestWalkSkipsSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.md"), []byte("# secret\n"), 0o644); err != nil {
+		t.Fatalf("write outside: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "regular.md"), []byte("# r\n"), 0o644); err != nil {
+		t.Fatalf("write regular: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret.md"), filepath.Join(dir, "linked.md")); err != nil {
+		t.Skipf("symlinks unsupported on this platform: %v", err)
+	}
+	// A symlink pointing at a directory should also be skipped entirely.
+	if err := os.Symlink(outside, filepath.Join(dir, "linkdir")); err != nil {
+		t.Skipf("symlinks unsupported on this platform: %v", err)
+	}
+
+	v, err := Open(&config.Config{Vault: dir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	var paths []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, _ := filepath.Rel(v.Root, n.Path)
+		paths = append(paths, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	for _, p := range paths {
+		if p == "linked.md" || p == "linkdir/secret.md" {
+			t.Errorf("symlinked entry %q should be skipped, got %v", p, paths)
+		}
+	}
+	found := false
+	for _, p := range paths {
+		if p == "regular.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("regular.md not found in %v", paths)
+	}
+}
+
+// The ambiguity error must list candidates in a stable order and with
+// forward-slash paths so callers can render and diff it predictably. Without
+// sorting, two runs on the same vault can swap the order of candidates.
+func TestResolveByTitleAmbiguityCandidatesSorted(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"Zeta/dup.md":   "# z\n",
+		"alpha/dup.md":  "# a\n",
+		"middle/dup.md": "# m\n",
+	})
+	_, err := v.ResolveByTitle("dup", "")
+	if err == nil {
+		t.Fatalf("expected ambiguity error")
+	}
+	msg := err.Error()
+	// Each candidate must use forward slashes regardless of OS conventions.
+	for _, want := range []string{"alpha/dup.md", "middle/dup.md", "Zeta/dup.md"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("candidate %q missing from error: %s", want, msg)
+		}
+		if strings.Contains(msg, filepath.FromSlash(want)) && filepath.Separator != '/' {
+			t.Errorf("candidate %q rendered with OS separator in: %s", want, msg)
+		}
+	}
+	// Ensure ASCII byte-order sort: uppercase 'Z' sorts before lowercase
+	// letters because uppercase bytes are numerically smaller in ASCII.
+	aIdx := strings.Index(msg, "alpha/dup.md")
+	mIdx := strings.Index(msg, "middle/dup.md")
+	zIdx := strings.Index(msg, "Zeta/dup.md")
+	if !(zIdx < aIdx && aIdx < mIdx) {
+		t.Errorf("candidates not in stable byte-order: %s", msg)
 	}
 }
 

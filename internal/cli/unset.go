@@ -50,6 +50,11 @@ Use --dry-run to preview which properties would be removed without writing.`,
 			if len(props) == 0 {
 				return errors.New("unset: at least one property name is required")
 			}
+			for _, p := range props {
+				if p == "" {
+					return errors.New("unset: empty property name")
+				}
+			}
 
 			paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
 			if err != nil {

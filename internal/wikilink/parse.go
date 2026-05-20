@@ -60,13 +60,22 @@ func Parse(s string) []Link {
 		if rangeOverlapsAny(start, end, mask) {
 			continue
 		}
-		target := s[m[2]:m[3]]
+		// Obsidian trims surrounding whitespace around the target, heading,
+		// and alias when resolving the link, so we normalize them here. This
+		// keeps Title()-based comparisons (used by rewrite, backlinks, orphan
+		// detection) consistent for inputs like `[[ Foo ]]` or `[[Foo | a ]]`.
+		// Raw/Start/End preserve the original byte range for rewrite spans.
+		target := trimASCIISpace(s[m[2]:m[3]])
 		var heading, alias string
 		if m[4] != -1 {
-			heading = s[m[4]:m[5]]
+			heading = trimASCIISpace(s[m[4]:m[5]])
 		}
 		if m[6] != -1 {
-			alias = s[m[6]:m[7]]
+			alias = trimASCIISpace(s[m[6]:m[7]])
+		}
+		// An all-whitespace target is not a real link.
+		if target == "" {
+			continue
 		}
 		folder := ""
 		if idx := strings.LastIndex(target, "/"); idx >= 0 {
@@ -262,6 +271,22 @@ func isFenceCloser(line string, ch byte, openLen int) bool {
 	}
 	rest := line[i+n:]
 	return strings.TrimSpace(rest) == ""
+}
+
+// trimASCIISpace strips ASCII spaces and tabs from both ends of s. We avoid
+// strings.TrimSpace because it also strips newlines, but the wikilink regex
+// already rejects `\n` and `\r` inside the target/heading/alias so there is
+// nothing to gain from trimming those.
+func trimASCIISpace(s string) string {
+	start := 0
+	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	end := len(s)
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
 }
 
 // inlineCodeSpans returns the spans (relative to line) covered by inline code.

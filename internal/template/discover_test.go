@@ -84,3 +84,69 @@ func TestFindEmptyName(t *testing.T) {
 		t.Fatal("expected error for empty name")
 	}
 }
+
+func TestFindRejectsPathSeparators(t *testing.T) {
+	cfg := newCfg(t)
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"../etc/passwd", "sub/book", `sub\book`} {
+		if _, err := Find(cfg, name); err == nil {
+			t.Fatalf("Find(%q): expected error, got nil", name)
+		}
+	}
+}
+
+func TestFindAmbiguousMatch(t *testing.T) {
+	cfg := newCfg(t)
+	// Two filenames differing only in case match the same case-insensitive
+	// candidate "book.md". On case-sensitive filesystems both can coexist; on
+	// case-insensitive ones (macOS default) the second write replaces the
+	// first and the test degenerates to an exact match — skip it in that
+	// case rather than fail.
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "book.md"), "x")
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "BOOK.md"), "y")
+	entries, err := os.ReadDir(filepath.Join(cfg.Vault, "Templates"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 2 {
+		t.Skip("case-insensitive filesystem; cannot create ambiguous templates")
+	}
+	_, err = Find(cfg, "book")
+	if !errors.Is(err, ErrTemplateAmbiguous) {
+		t.Fatalf("expected ErrTemplateAmbiguous, got %v", err)
+	}
+}
+
+func TestFindNilConfig(t *testing.T) {
+	if _, err := Find(nil, "book"); err == nil {
+		t.Fatal("expected error for nil config")
+	}
+}
+
+func TestFindDirectoriesIgnored(t *testing.T) {
+	// A subdirectory named like a template must not be returned.
+	cfg := newCfg(t)
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates", "Book.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Find(cfg, "book")
+	if !errors.Is(err, ErrTemplateNotFound) {
+		t.Fatalf("expected ErrTemplateNotFound, got %v", err)
+	}
+}
+
+func TestFindDefaultExtensionFallback(t *testing.T) {
+	// An empty DefaultExtension must fall back to ".md".
+	cfg := newCfg(t)
+	cfg.Templates.DefaultExtension = ""
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "Book.md"), "x")
+	got, err := Find(cfg, "book")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Book.md" {
+		t.Fatalf("got %s", got)
+	}
+}

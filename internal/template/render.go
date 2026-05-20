@@ -112,9 +112,10 @@ func defaultFn(d, v string) string {
 	return v
 }
 
-// Slug converts s to a lower-kebab-case ASCII slug: it lowercases letters,
-// keeps digits, and folds runs of any other character into a single `-`.
-// Leading and trailing dashes are trimmed.
+// Slug converts s to a lower-kebab-case slug: it lowercases Unicode letters,
+// keeps Unicode digits, and folds runs of any other character into a single
+// `-`. Leading and trailing dashes are trimmed. The output is not restricted
+// to ASCII — input like "Café 2" yields "café-2".
 func Slug(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))

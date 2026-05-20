@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -60,6 +61,11 @@ type WalkFilter struct{}
 // unconditionally. Directories named in cfg.Ignore (vault-relative, slash-
 // separated) are pruned at any depth where their relative path matches.
 //
+// Symbolic links are skipped, regardless of whether they target a file or a
+// directory. Following symlinks would let a note escape the vault root, which
+// breaks the in-vault containment guarantee the rest of the CLI relies on; if
+// users want to include external files they should add them as regular files.
+//
 // Returning a non-nil error from fn aborts the walk and propagates the error.
 // filepath.SkipDir from fn is honored so callers can skip subtrees.
 func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
@@ -92,6 +98,18 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 			if _, skip := ignore[relSlash]; skip {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		// Skip symlinks so the walk cannot leak entries pointing outside the
+		// vault root. WalkDir reports symlinks with !d.IsDir() even when they
+		// target a directory, so this check catches both file and directory
+		// symlinks without recursing through them.
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		// Skip other non-regular files (devices, sockets, named pipes) — they
+		// can't be valid notes and reading them may block or fail.
+		if !d.Type().IsRegular() {
 			return nil
 		}
 		if strings.HasPrefix(d.Name(), ".") {
@@ -180,11 +198,15 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 		for i, n := range matches {
 			rel, relErr := filepath.Rel(v.Root, n.Path)
 			if relErr != nil {
-				paths[i] = n.Path
+				paths[i] = filepath.ToSlash(n.Path)
 			} else {
-				paths[i] = rel
+				paths[i] = filepath.ToSlash(rel)
 			}
 		}
+		// Sort so the error message is deterministic across filesystems with
+		// non-stable directory iteration order. Without this, two callers can
+		// see different orderings for the same ambiguity.
+		sort.Strings(paths)
 		return nil, fmt.Errorf("vault: %q is ambiguous; candidates: %s", title, strings.Join(paths, ", "))
 	}
 }

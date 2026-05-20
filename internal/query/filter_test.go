@@ -547,6 +547,78 @@ func TestFromFlags(t *testing.T) {
 	})
 }
 
+// TestFolderPredicateNoFalsePrefix verifies that the Folder predicate does not
+// match notes in sibling folders whose name shares a prefix with the requested
+// folder. Without the trailing "/" in the prefix check, `--folder Refs` would
+// erroneously match `Refs2/a.md`.
+func TestFolderPredicateNoFalsePrefix(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"Refs/a.md":  "# a\n",
+		"Refs2/b.md": "# b\n",
+		"Refsy/c.md": "# c\n",
+	})
+	p := Folder("Refs", v.Root)
+	if !p(notes["Refs/a.md"]) {
+		t.Errorf("Folder(Refs) should match Refs/a.md")
+	}
+	if p(notes["Refs2/b.md"]) {
+		t.Errorf("Folder(Refs) should not match Refs2/b.md (sibling with shared prefix)")
+	}
+	if p(notes["Refsy/c.md"]) {
+		t.Errorf("Folder(Refs) should not match Refsy/c.md (sibling with shared prefix)")
+	}
+}
+
+// TestOrEmpty pins down the documented behaviour of Or with no terms: it is the
+// identity element for logical OR (false), and it must still reject a nil note
+// for consistency with And.
+func TestOrEmpty(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo]\n---\n",
+	})
+	none := Or()
+	if none(notes["a.md"]) {
+		t.Errorf("Or() with no terms should match nothing (identity is false)")
+	}
+	if none(nil) {
+		t.Errorf("Or() should reject nil note")
+	}
+}
+
+// TestPredicatesRejectErrorFront verifies that predicates which read frontmatter
+// degrade gracefully when Front() returns an error or the requested key is
+// absent. We use notes that have neither frontmatter nor the target key.
+func TestPredicatesAbsentKey(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"empty.md": "no frontmatter at all\n",
+		"other.md": "---\ntitle: o\n---\nbody\n",
+	})
+	for _, name := range []string{"empty.md", "other.md"} {
+		n := notes[name]
+		if Tag("foo")(n) {
+			t.Errorf("Tag(foo) should not match %s (no tags)", name)
+		}
+		if Category("books")(n) {
+			t.Errorf("Category(books) should not match %s (no categories)", name)
+		}
+		if Status("reading")(n) {
+			t.Errorf("Status(reading) should not match %s (no status)", name)
+		}
+		if Type("goal")(n) {
+			t.Errorf("Type(goal) should not match %s (no type/kind)", name)
+		}
+		if Has("status")(n) {
+			t.Errorf("Has(status) should not match %s", name)
+		}
+		if !Missing("status")(n) {
+			t.Errorf("Missing(status) should match %s", name)
+		}
+		if Age(">", 24*time.Hour, "created")(n) {
+			t.Errorf("Age should not match %s (no date)", name)
+		}
+	}
+}
+
 // Smoke check that the path of a referrer is recorded correctly.
 func TestBacklinkPathsRecorded(t *testing.T) {
 	v, notes := newVault(t, map[string]string{

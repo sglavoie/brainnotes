@@ -69,6 +69,9 @@ const (
 // A missing config file is not an error provided the vault path can be resolved
 // from a flag or environment variable. The returned Config has defaults applied
 // for any unset fields, and the vault path is validated to exist and be a directory.
+//
+// Leading `~` or `~/` in vault and config paths (from flag, environment, or the
+// `vault` key in the config file) is expanded to the user's home directory.
 func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 	cfg := &Config{}
 
@@ -78,13 +81,17 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 	}
 
 	if configPath != "" {
-		if _, statErr := os.Stat(configPath); statErr == nil {
+		info, statErr := os.Stat(configPath)
+		switch {
+		case statErr == nil && info.IsDir():
+			return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", configPath)
+		case statErr == nil:
 			if _, decErr := toml.DecodeFile(configPath, cfg); decErr != nil {
 				return nil, fmt.Errorf("config: parse %s: %w", configPath, decErr)
 			}
-		} else if !os.IsNotExist(statErr) {
+		case !os.IsNotExist(statErr):
 			return nil, fmt.Errorf("config: stat %s: %w", configPath, statErr)
-		} else if explicit {
+		case explicit:
 			return nil, fmt.Errorf("config: file %s does not exist", configPath)
 		}
 	}
@@ -95,6 +102,12 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 		cfg.Vault = env
 	}
 
+	if expanded, expErr := expandUser(cfg.Vault); expErr != nil {
+		return nil, fmt.Errorf("config: vault path %q: %w", cfg.Vault, expErr)
+	} else {
+		cfg.Vault = expanded
+	}
+
 	applyDefaults(cfg)
 
 	if err := validate(cfg); err != nil {
@@ -102,6 +115,27 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// expandUser expands a leading "~" or "~/" in p to the user's home directory.
+// A bare "~" expands to the home directory; "~/foo" expands to "<home>/foo".
+// "~user" style paths are not supported and are returned unchanged.
+// An empty path is returned unchanged.
+func expandUser(p string) (string, error) {
+	if p == "" {
+		return p, nil
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~"+string(os.PathSeparator)) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return p, err
+		}
+		if p == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, p[2:]), nil
+	}
+	return p, nil
 }
 
 // ConfigSource identifies which mechanism contributed a candidate path.
@@ -129,16 +163,30 @@ type CandidatePath struct {
 
 // Candidates returns the full precedence chain (4 entries, in source order).
 // An error is only returned when no other source is set and os.UserHomeDir fails.
+// Leading "~"/"~/" in the --config flag, $BNOTES_CONFIG, and $XDG_CONFIG_HOME
+// values is expanded to the user's home directory.
 func Candidates(flagConfigPath string) ([]CandidatePath, error) {
+	flagPath, flagErr := expandUser(flagConfigPath)
+	if flagErr != nil && flagConfigPath != "" {
+		return nil, fmt.Errorf("config: expand --config %q: %w", flagConfigPath, flagErr)
+	}
+	envPath, envErr := expandUser(os.Getenv(envConfig))
+	if envErr != nil && os.Getenv(envConfig) != "" {
+		return nil, fmt.Errorf("config: expand $BNOTES_CONFIG: %w", envErr)
+	}
 	out := []CandidatePath{
-		{Source: SourceFlag, Label: "--config flag", Path: flagConfigPath},
-		{Source: SourceEnv, Label: "$BNOTES_CONFIG", Path: os.Getenv(envConfig)},
+		{Source: SourceFlag, Label: "--config flag", Path: flagPath},
+		{Source: SourceEnv, Label: "$BNOTES_CONFIG", Path: envPath},
 		{Source: SourceXDG, Label: "$XDG_CONFIG_HOME"},
 		{Source: SourceDefault, Label: "default path"},
 	}
 
 	if xdg := os.Getenv(envXDG); xdg != "" {
-		out[2].Path = filepath.Join(xdg, configName)
+		expanded, xdgErr := expandUser(xdg)
+		if xdgErr != nil {
+			return nil, fmt.Errorf("config: expand $XDG_CONFIG_HOME: %w", xdgErr)
+		}
+		out[2].Path = filepath.Join(expanded, configName)
 	}
 
 	anySet := out[0].Path != "" || out[1].Path != "" || out[2].Path != ""
@@ -264,24 +312,49 @@ func applyDefaults(cfg *Config) {
 func mergeIgnore(defaults, extra []string) []string {
 	seen := make(map[string]struct{}, len(defaults)+len(extra))
 	out := make([]string, 0, len(defaults)+len(extra))
-	for _, p := range defaults {
+	add := func(raw string) {
+		p := normalizeIgnore(raw)
+		if p == "" {
+			return
+		}
 		if _, ok := seen[p]; ok {
-			continue
+			return
 		}
 		seen[p] = struct{}{}
 		out = append(out, p)
+	}
+	for _, p := range defaults {
+		add(p)
 	}
 	for _, p := range extra {
-		if p == "" {
-			continue
-		}
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
+		add(p)
 	}
 	return out
+}
+
+// normalizeIgnore trims surrounding whitespace, strips a leading "./", and
+// removes trailing path separators so that variants like "Archive/",
+// "./Archive", and " Archive " all collapse to "Archive" for dedup purposes.
+// An entry that normalizes to "" (e.g. originally just whitespace, or ".") is
+// dropped by mergeIgnore.
+func normalizeIgnore(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return ""
+	}
+	// Strip a single leading "./" so "./Archive" matches "Archive".
+	if strings.HasPrefix(p, "./") {
+		p = p[2:]
+	} else if strings.HasPrefix(p, "."+string(os.PathSeparator)) {
+		p = p[2:]
+	}
+	// Trim trailing separators (but keep "/" itself meaningful as empty).
+	p = strings.TrimRight(p, "/")
+	p = strings.TrimRight(p, string(os.PathSeparator))
+	if p == "." {
+		return ""
+	}
+	return p
 }
 
 func validate(cfg *Config) error {
