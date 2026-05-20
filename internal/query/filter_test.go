@@ -60,6 +60,56 @@ func TestTagPredicate(t *testing.T) {
 	}
 }
 
+// TestTagPredicateMatchesNonStringListItems asserts that tag list items whose
+// YAML parsed type is not string (e.g. an int from `tags: [2026]` after
+// `bn set tags+=2026` auto-coerces the literal) are still matched by the Tag
+// predicate. Before the fix, non-string list items were silently skipped, so a
+// freshly set numeric tag could never be queried back via `bn find --tag`.
+func TestTagPredicateMatchesNonStringListItems(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"int.md":   "---\ntags:\n  - 2026\n---\nbody\n",
+		"bool.md":  "---\ntags:\n  - true\n---\nbody\n",
+		"date.md":  "---\ntags:\n  - 2026-05-19\n---\nbody\n",
+		"mixed.md": "---\ntags:\n  - foo\n  - 7\n---\nbody\n",
+	})
+
+	if !Tag("2026")(notes["int.md"]) {
+		t.Errorf("Tag(2026) should match a note whose tags list holds the int 2026")
+	}
+	if !Tag("true")(notes["bool.md"]) {
+		t.Errorf("Tag(true) should match a note whose tags list holds the bool true")
+	}
+	if !Tag("2026-05-19")(notes["date.md"]) {
+		t.Errorf("Tag(2026-05-19) should match a note whose tags list holds a YAML date scalar")
+	}
+	if !Tag("7")(notes["mixed.md"]) {
+		t.Errorf("Tag(7) should match a tags list mixing strings and ints")
+	}
+	if !Tag("foo")(notes["mixed.md"]) {
+		t.Errorf("Tag(foo) should still match the string entry of a mixed list")
+	}
+	if Tag("8")(notes["mixed.md"]) {
+		t.Errorf("Tag(8) should not match a list that contains only 7")
+	}
+}
+
+// TestTagPredicateScalarNonString asserts the same behaviour for a scalar
+// (non-list) tags value: `tags: 2026` (a YAML int scalar) should still match
+// `--tag 2026`. The GetString fast path returned false for non-strings before
+// the fix, so any auto-coerced scalar tag was unreachable.
+func TestTagPredicateScalarNonString(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"int.md":  "---\ntags: 2026\n---\nbody\n",
+		"bool.md": "---\ntags: false\n---\nbody\n",
+	})
+	if !Tag("2026")(notes["int.md"]) {
+		t.Errorf("Tag(2026) should match a scalar int tag value")
+	}
+	if !Tag("false")(notes["bool.md"]) {
+		t.Errorf("Tag(false) should match a scalar bool tag value")
+	}
+}
+
 func TestCategoryPredicate(t *testing.T) {
 	_, notes := newVault(t, map[string]string{
 		"a.md": "---\ncategories:\n  - \"[[Books]]\"\n---\nbody\n",

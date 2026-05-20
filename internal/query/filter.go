@@ -6,6 +6,7 @@
 package query
 
 import (
+	"fmt"
 	"path"
 	"strings"
 	"time"
@@ -56,7 +57,11 @@ func Or(ps ...Predicate) Predicate {
 }
 
 // Tag matches notes whose `tags` frontmatter list contains v (case-insensitive).
-// A scalar string tag is treated as a single-element list.
+// A scalar string tag is treated as a single-element list. Non-string list
+// items are stringified before comparison so a tag stored as a YAML int
+// (e.g. `tags: [2026]`) still matches `--tag 2026`. `bn set tags+=2026`
+// auto-coerces the literal to an int and would otherwise produce a tag that
+// nothing in the CLI could find again.
 func Tag(v string) Predicate {
 	want := strings.ToLower(v)
 	return func(n *vault.Note) bool {
@@ -66,16 +71,50 @@ func Tag(v string) Predicate {
 		}
 		if lst, ok := fm.GetList("tags"); ok {
 			for _, item := range lst {
-				if s, ok := item.(string); ok && strings.ToLower(s) == want {
+				if strings.ToLower(stringifyTag(item)) == want {
 					return true
 				}
 			}
 			return false
 		}
-		if s, ok := fm.GetString("tags"); ok {
-			return strings.ToLower(s) == want
+		if v, ok := fm.Get("tags"); ok {
+			if s, isStr := v.(string); isStr {
+				return strings.ToLower(s) == want
+			}
+			return strings.ToLower(stringifyTag(v)) == want
 		}
 		return false
+	}
+}
+
+// stringifyTag renders a non-string frontmatter list element as the text a user
+// would type for it. Strings pass through; ints/bools/floats render via their
+// canonical form; time.Time values render as YAML date or RFC3339 (matching
+// formatTimeValue in values.go). nil and unknown types render as "".
+func stringifyTag(v any) string {
+	switch vv := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return vv
+	case bool:
+		if vv {
+			return "true"
+		}
+		return "false"
+	case int:
+		return fmt.Sprintf("%d", vv)
+	case int64:
+		return fmt.Sprintf("%d", vv)
+	case float64:
+		return fmt.Sprintf("%v", vv)
+	case time.Time:
+		if vv.Hour() == 0 && vv.Minute() == 0 && vv.Second() == 0 && vv.Nanosecond() == 0 && vv.Location() == time.UTC {
+			return vv.Format("2006-01-02")
+		}
+		return vv.Format(time.RFC3339)
+	default:
+		return fmt.Sprintf("%v", vv)
 	}
 }
 

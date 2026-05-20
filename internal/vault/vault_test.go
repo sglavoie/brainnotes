@@ -120,6 +120,44 @@ func TestWalkRespectsIgnore(t *testing.T) {
 	}
 }
 
+// TestWalkIgnoreNormalizesDotSlash asserts that ignore entries written with a
+// leading `./` (or interior `/.`/double slash) still prune their directories.
+// Before the fix, `ignore = ["./Trash"]` was stored verbatim in the ignore set
+// and never matched the slash-relative path `Trash`, so the directory was
+// walked despite the user opting it out.
+func TestWalkIgnoreNormalizesDotSlash(t *testing.T) {
+	files := map[string]string{
+		"keep.md":         "# keep\n",
+		"Trash/junk.md":   "# trash\n",
+		"Sub/Deep/old.md": "# sub deep\n",
+	}
+	for _, ignoreEntry := range []string{"./Trash", "Trash/", "./Sub/Deep"} {
+		t.Run(ignoreEntry, func(t *testing.T) {
+			v := newTestVault(t, []string{ignoreEntry}, files)
+			var visited []string
+			if err := v.Walk(WalkFilter{}, func(n *Note) error {
+				rel, err := filepath.Rel(v.Root, n.Path)
+				if err != nil {
+					return err
+				}
+				visited = append(visited, filepath.ToSlash(rel))
+				return nil
+			}); err != nil {
+				t.Fatalf("walk: %v", err)
+			}
+			sort.Strings(visited)
+			for _, p := range visited {
+				if strings.HasPrefix(p, "Trash") && ignoreEntry != "./Sub/Deep" {
+					t.Errorf("ignore %q failed to prune %s", ignoreEntry, p)
+				}
+				if strings.HasPrefix(p, "Sub/Deep") && ignoreEntry == "./Sub/Deep" {
+					t.Errorf("ignore %q failed to prune nested %s", ignoreEntry, p)
+				}
+			}
+		})
+	}
+}
+
 func TestNotesSkipsTemplatesDir(t *testing.T) {
 	// A template file with unrendered placeholders is not valid YAML; the
 	// walker must skip it so commands like `find` aren't broken by it.

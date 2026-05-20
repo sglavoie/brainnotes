@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -200,6 +201,15 @@ func ignoreSet(cfg *config.Config) map[string]struct{} {
 	add := func(p string) {
 		p = strings.Trim(filepath.ToSlash(p), "/")
 		if p == "" {
+			return
+		}
+		// Normalize `./Foo`, `Foo/.`, etc. so an ignore entry written with a
+		// leading or interior `./` segment still matches the slash-separated
+		// relative path that Walk compares against. Without this, an entry
+		// like `./Trash` would never match `Trash/...` paths and the directory
+		// would be walked unexpectedly.
+		p = path.Clean(p)
+		if p == "" || p == "." {
 			return
 		}
 		set[p] = struct{}{}
