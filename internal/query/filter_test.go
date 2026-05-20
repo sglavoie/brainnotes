@@ -183,6 +183,70 @@ func TestAgePredicate(t *testing.T) {
 	if eq0(notes["recent.md"]) {
 		t.Errorf("=0d should not match recent")
 	}
+
+	eq3 := Age("=", 3*24*time.Hour, "created")
+	threeDays := now.AddDate(0, 0, -3).Format("2006-01-02")
+	twoDays := now.AddDate(0, 0, -2).Format("2006-01-02")
+	_, eqNotes := newVault(t, map[string]string{
+		"three.md": "---\ncreated: " + threeDays + "\n---\n",
+		"two.md":   "---\ncreated: " + twoDays + "\n---\n",
+	})
+	if !eq3(eqNotes["three.md"]) {
+		t.Errorf("=3d should match a date 3 days ago")
+	}
+	if eq3(eqNotes["two.md"]) {
+		t.Errorf("=3d should not match a date 2 days ago")
+	}
+}
+
+// TestAgeEqualDayLocalZone verifies that bare YAML date scalars (which parse
+// as midnight UTC) are reinterpreted in the local zone for `=` comparisons.
+// Without this, a user east of UTC would see `=0d` miss a note created today
+// (because midnight UTC today already lies more than a day in the past in their
+// local zone), and a user west of UTC would see `=0d` match yesterday's note.
+func TestAgeEqualDayLocalZone(t *testing.T) {
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+
+	_, notes := newVault(t, map[string]string{
+		"today.md":     "---\ncreated: " + today + "\n---\n",
+		"yesterday.md": "---\ncreated: " + yesterday + "\n---\n",
+	})
+
+	if !Age("=", 0, "created")(notes["today.md"]) {
+		t.Errorf("=0d should match today's note regardless of local zone")
+	}
+	if Age("=", 0, "created")(notes["yesterday.md"]) {
+		t.Errorf("=0d should not match yesterday's note")
+	}
+	if !Age("=", 24*time.Hour, "created")(notes["yesterday.md"]) {
+		t.Errorf("=1d should match yesterday's note regardless of local zone")
+	}
+	if Age("=", 24*time.Hour, "created")(notes["today.md"]) {
+		t.Errorf("=1d should not match today's note")
+	}
+}
+
+// TestAgeEqualUTCDateConvention pins down the YAML-date convention: a bare
+// `YYYY-MM-DD` parses as midnight UTC, and the predicate should treat that
+// instant as the same calendar day in the local zone (not the UTC day).
+func TestAgeEqualUTCDateConvention(t *testing.T) {
+	// Build a frontmatter time exactly as the YAML parser would: midnight UTC.
+	now := time.Now()
+	utcMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	if !equalDayAge(utcMidnight, 0) {
+		t.Errorf("equalDayAge(midnight-UTC, 0) = false; want true (today)")
+	}
+
+	// And a UTC midnight from three days ago should match =3d.
+	threeBack := utcMidnight.AddDate(0, 0, -3)
+	if !equalDayAge(threeBack, 3*24*time.Hour) {
+		t.Errorf("equalDayAge(midnight-UTC-3d, 3d) = false; want true")
+	}
+	if equalDayAge(threeBack, 0) {
+		t.Errorf("equalDayAge(midnight-UTC-3d, 0) = true; want false")
+	}
 }
 
 func TestParseAge(t *testing.T) {

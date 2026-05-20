@@ -194,6 +194,13 @@ func Orphan(idx BacklinkIndex) Predicate {
 //   - "<": note is younger than dur.
 //   - "=": note's age in days equals dur in days (e.g. =0d → today).
 //
+// For "=" comparisons, the comparison is performed on calendar dates in the
+// local time zone. This matters because YAML date scalars like `2026-05-19`
+// parse as midnight UTC, so a naive `time.Since` measurement can land on the
+// wrong side of a day boundary when the local zone differs from UTC. The
+// frontmatter date is interpreted as a local-time date when its time-of-day
+// component is zero and the zone is UTC (the YAML-date convention).
+//
 // Notes without a parseable timestamp at prop never match.
 func Age(op string, dur time.Duration, prop string) Predicate {
 	return func(n *vault.Note) bool {
@@ -205,19 +212,39 @@ func Age(op string, dur time.Duration, prop string) Predicate {
 		if !ok {
 			return false
 		}
-		age := time.Since(t)
 		switch op {
 		case ">":
-			return age > dur
+			return time.Since(t) > dur
 		case "<":
-			return age < dur
+			return time.Since(t) < dur
 		case "=":
-			return ageDays(age) == ageDays(dur)
+			return equalDayAge(t, dur)
 		}
 		return false
 	}
 }
 
-func ageDays(d time.Duration) int64 {
-	return int64(d / (24 * time.Hour))
+// equalDayAge reports whether t is exactly dur days old, with day boundaries
+// evaluated in the local time zone. A YAML date scalar (midnight UTC, zero
+// time-of-day) is reinterpreted as the same calendar date in local time so
+// that `=0d` reliably means "today" regardless of the user's timezone.
+func equalDayAge(t time.Time, dur time.Duration) bool {
+	now := time.Now()
+	noteDate := localDate(t, now.Location())
+	wantDate := now.AddDate(0, 0, -int(dur/(24*time.Hour))).In(now.Location())
+	wantY, wantM, wantD := wantDate.Date()
+	gotY, gotM, gotD := noteDate.Date()
+	return gotY == wantY && gotM == wantM && gotD == wantD
+}
+
+// localDate returns t shifted into loc. When t has no time-of-day component
+// and is in UTC — the YAML-date convention — its calendar date is preserved
+// rather than converted (so a `2026-05-19` value remains 2026-05-19 in any
+// local zone).
+func localDate(t time.Time, loc *time.Location) time.Time {
+	if t.Location() == time.UTC && t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
+		y, m, d := t.Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, loc)
+	}
+	return t.In(loc)
 }
