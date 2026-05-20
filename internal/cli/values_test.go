@@ -133,13 +133,79 @@ func TestValues_MissingPropertyExitsZero(t *testing.T) {
 	}
 }
 
-func TestValues_NoArgIsUsageError(t *testing.T) {
+func TestValues_FzfPickProperty(t *testing.T) {
 	isolateBnEnv(t)
 	root := buildValuesFixture(t)
 
-	_, _, err := runValuesCmd(t, root, "values")
-	if err == nil {
-		t.Fatalf("expected error when called with no property arg")
+	orig := propertyPicker
+	t.Cleanup(func() { propertyPicker = orig })
+	propertyPicker = func(items []string, extraArgs []string) ([]string, error) {
+		return []string{"tags"}, nil
+	}
+
+	fzfOut, _, err := runValuesCmd(t, root, "values")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	explicitOut, _, err := runValuesCmd(t, root, "values", "tags")
+	if err != nil {
+		t.Fatalf("execute explicit: %v", err)
+	}
+	if fzfOut != explicitOut {
+		t.Fatalf("fzf output diverges from explicit:\n fzf=%q\nexplicit=%q", fzfOut, explicitOut)
+	}
+}
+
+func TestValues_FzfAbort(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildValuesFixture(t)
+
+	orig := propertyPicker
+	t.Cleanup(func() { propertyPicker = orig })
+	propertyPicker = func(items []string, extraArgs []string) ([]string, error) {
+		return nil, nil
+	}
+
+	stdout, stderr, err := runValuesCmd(t, root, "values")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout on abort, got %q", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr on abort, got %q", stderr)
+	}
+}
+
+func TestValues_FzfNoProperties(t *testing.T) {
+	isolateBnEnv(t)
+	root := t.TempDir()
+	full := filepath.Join(root, "Empty.md")
+	if err := os.WriteFile(full, []byte("No frontmatter here.\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	orig := propertyPicker
+	t.Cleanup(func() { propertyPicker = orig })
+	pickerCalled := false
+	propertyPicker = func(items []string, extraArgs []string) ([]string, error) {
+		pickerCalled = true
+		return nil, nil
+	}
+
+	stdout, stderr, err := runValuesCmd(t, root, "values")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if pickerCalled {
+		t.Fatalf("picker should not be called when no properties exist")
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if !strings.Contains(stderr, "no properties in vault") {
+		t.Fatalf("expected stderr to mention 'no properties in vault'; got %q", stderr)
 	}
 }
 

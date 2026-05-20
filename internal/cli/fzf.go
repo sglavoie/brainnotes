@@ -10,7 +10,7 @@ import (
 )
 
 // ErrFZFNotFound is returned when the fzf binary cannot be located in PATH.
-var ErrFZFNotFound = errors.New("fzf not found; install via 'brew install fzf' or omit -i")
+var ErrFZFNotFound = errors.New("fzf not found; install via 'brew install fzf' or provide arguments explicitly")
 
 // RunFZF pipes paths into fzf, one per line, and returns the user's selection.
 // extraArgs is forwarded verbatim — typically from cfg.Fzf.Args (preview,

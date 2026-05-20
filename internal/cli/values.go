@@ -24,14 +24,40 @@ func NewValuesCmd() *cobra.Command {
 	opts := valuesOptions{sortMode: "count", showCount: true}
 
 	cmd := &cobra.Command{
-		Use:           "values <property>",
+		Use:           "values [property]",
 		Short:         "Count occurrences of each value for a frontmatter property",
-		Long:          "Walk every note in the vault, parse frontmatter, and count occurrences of each value for the named property. Useful for hygiene: spotting typos and stray variants in the long tail.",
-		Args:          cobra.ExactArgs(1),
+		Long:          "Walk every note in the vault, parse frontmatter, and count occurrences of each value for the named property. When called with no arguments, an fzf picker lets you select the property interactively. Useful for hygiene: spotting typos and stray variants in the long tail.",
+		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValues(cmd, args[0], opts)
+			if len(args) == 1 {
+				return runValues(cmd, args[0], opts)
+			}
+			cfg := ConfigFromContext(cmd.Context())
+			if cfg == nil {
+				return errors.New("values: no config in context")
+			}
+			v, err := vault.Open(cfg)
+			if err != nil {
+				return err
+			}
+			keys, err := collectPropertyKeys(v)
+			if err != nil {
+				return err
+			}
+			if len(keys) == 0 {
+				fmt.Fprintln(cmd.ErrOrStderr(), "values: no properties in vault")
+				return nil
+			}
+			selected, err := propertyPicker(keys, cfg.Fzf.Args)
+			if err != nil {
+				return err
+			}
+			if len(selected) == 0 {
+				return nil
+			}
+			return runValues(cmd, selected[0], opts)
 		},
 	}
 	addValuesFlags(cmd, &opts)

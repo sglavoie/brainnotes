@@ -29,10 +29,10 @@ func NewBacklinksCmd() *cobra.Command {
 	var verbose bool
 
 	cmd := &cobra.Command{
-		Use:           "backlinks <note>",
+		Use:           "backlinks [note]",
 		Short:         "List notes that link to <note>",
-		Long:          "List the paths of notes that reference the target note. The target may be specified as a title (case-insensitive stem) or a path/glob.",
-		Args:          cobra.ExactArgs(1),
+		Long:          "List the paths of notes that reference the target note. The target may be specified as a title (case-insensitive stem) or a path/glob. When called with no arguments, an fzf picker lets you select the target interactively.",
+		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,9 +45,31 @@ func NewBacklinksCmd() *cobra.Command {
 				return err
 			}
 
-			target, err := resolveBacklinkTarget(v, args[0])
-			if err != nil {
-				return err
+			var target *vault.Note
+			if len(args) == 0 {
+				paths, walkErr := collectNotePaths(v)
+				if walkErr != nil {
+					return walkErr
+				}
+				if len(paths) == 0 {
+					fmt.Fprintln(cmd.ErrOrStderr(), "backlinks: no notes in vault")
+					return nil
+				}
+				extraArgs := append([]string(nil), cfg.Fzf.Args...)
+				selected, pickErr := notePicker(paths, extraArgs)
+				if pickErr != nil {
+					return pickErr
+				}
+				if len(selected) == 0 {
+					return nil
+				}
+				target = &vault.Note{Path: selected[0]}
+			} else {
+				var resolveErr error
+				target, resolveErr = resolveBacklinkTarget(v, args[0])
+				if resolveErr != nil {
+					return resolveErr
+				}
 			}
 
 			notes, err := v.Notes()
