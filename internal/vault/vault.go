@@ -93,6 +93,9 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 			}
 			return nil
 		}
+		if strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
 		if !strings.EqualFold(filepath.Ext(path), ".md") {
 			return nil
 		}
@@ -135,7 +138,7 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 		return nil, errors.New("vault: empty title")
 	}
 	wantStem := strings.ToLower(title)
-	wantFolder := filepath.ToSlash(folder)
+	wantFolder := strings.Trim(strings.ReplaceAll(filepath.ToSlash(folder), "\\", "/"), "/")
 
 	var matches []*Note
 	err := v.Walk(WalkFilter{}, func(n *Note) error {

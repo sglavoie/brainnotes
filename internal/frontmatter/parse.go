@@ -17,6 +17,7 @@ import (
 // is preserved verbatim.
 func Parse(data []byte) (Document, error) {
 	s := string(data)
+	s = strings.TrimPrefix(s, "\ufeff")
 
 	startLen, ok := openDelimLen(s)
 	if !ok {
@@ -40,15 +41,28 @@ func Parse(data []byte) (Document, error) {
 }
 
 // openDelimLen reports the byte length of the opening `---` line if s starts
-// with one.
+// with one. The line may have trailing spaces or tabs before the newline.
 func openDelimLen(s string) (int, bool) {
-	switch {
-	case strings.HasPrefix(s, "---\n"):
-		return 4, true
-	case strings.HasPrefix(s, "---\r\n"):
-		return 5, true
+	if !strings.HasPrefix(s, "---") {
+		return 0, false
+	}
+	nl := strings.IndexByte(s, '\n')
+	if nl < 0 {
+		return 0, false
+	}
+	line := s[:nl]
+	if isDelimLine(line) {
+		return nl + 1, true
 	}
 	return 0, false
+}
+
+// isDelimLine reports whether line is a `---` frontmatter delimiter, tolerating
+// trailing whitespace and a trailing carriage return (for CRLF files).
+func isDelimLine(line string) bool {
+	line = strings.TrimRight(line, "\r")
+	line = strings.TrimRight(line, " \t")
+	return line == "---"
 }
 
 // findCloseDelim scans s line-by-line for a closing `---` (optionally with a
@@ -70,7 +84,7 @@ func findCloseDelim(s string) (closeOff, bodyOff int, ok bool) {
 			line = s[i : i+eol]
 			lineEnd = i + eol + 1
 		}
-		if line == "---" || line == "---\r" {
+		if isDelimLine(line) {
 			return i, lineEnd, true
 		}
 		if eol == -1 {
