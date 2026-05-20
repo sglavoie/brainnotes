@@ -135,10 +135,19 @@ Inspect with 'git diff' to recover.`,
 
 // resolveNewFolder normalizes the <new-folder> argument. Returns the vault-
 // relative slash-separated folder path (empty for the vault root) and its
-// absolute equivalent. Paths that escape the vault are rejected.
+// absolute equivalent. Paths that escape the vault, are whitespace-only, or
+// contain control characters are rejected.
 func resolveNewFolder(vaultRoot, arg string) (rel, abs string, err error) {
 	if arg == "" {
 		return "", vaultRoot, nil
+	}
+	if strings.TrimSpace(arg) == "" {
+		return "", "", fmt.Errorf("move: new folder %q is whitespace-only", arg)
+	}
+	for _, r := range arg {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return "", "", fmt.Errorf("move: new folder %q contains a control character (U+%04X)", arg, r)
+		}
 	}
 	cleaned := filepath.Clean(filepath.FromSlash(arg))
 	if cleaned == "." {

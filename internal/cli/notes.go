@@ -26,6 +26,9 @@ func resolveNoteInputs(vaultRoot string, args []string, in io.Reader, nullSep bo
 		if a == "-" {
 			return nil, errors.New("'-' may only be used as the sole note argument")
 		}
+		if strings.TrimSpace(a) == "" {
+			return nil, errors.New("empty note path argument")
+		}
 		matches, err := expandGlob(vaultRoot, a)
 		if err != nil {
 			return nil, err

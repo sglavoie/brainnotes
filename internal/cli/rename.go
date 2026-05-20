@@ -144,17 +144,30 @@ Inspect with 'git diff' to recover.`,
 	return cmd
 }
 
-// validateNewTitle rejects titles that would map to an invalid filename: empty,
-// contain `/` (use `move`), contain a NUL byte, or begin with `.` (hidden).
+// validateNewTitle rejects titles that would map to an invalid filename: empty
+// or whitespace-only, contain `/` (use `move`), contain a NUL byte or any
+// other ASCII control character (including newline/tab), have leading or
+// trailing whitespace, or begin with `.` (hidden).
 func validateNewTitle(t string) error {
 	if t == "" {
 		return errors.New("rename: empty new title")
 	}
+	if strings.TrimSpace(t) == "" {
+		return errors.New("rename: new title may not be whitespace-only")
+	}
+	if t != strings.TrimSpace(t) {
+		return errors.New("rename: new title may not have leading or trailing whitespace")
+	}
 	if strings.ContainsRune(t, '/') {
 		return errors.New("rename: new title may not contain '/'; use 'bn move' to change folders")
 	}
-	if strings.ContainsRune(t, 0) {
-		return errors.New("rename: new title contains a NUL byte")
+	for _, r := range t {
+		if r == 0 {
+			return errors.New("rename: new title contains a NUL byte")
+		}
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("rename: new title contains a control character (U+%04X)", r)
+		}
 	}
 	if strings.HasPrefix(t, ".") {
 		return errors.New("rename: new title may not start with '.'")
