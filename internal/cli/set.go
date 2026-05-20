@@ -250,6 +250,33 @@ func splitListValues(rawVal, typeFlag string) ([]any, error) {
 	return vals, nil
 }
 
+// wikilinkNormalized returns v with each string element wrapped as `[[X]]`
+// when key is a wikilink-typed property. It mirrors the wrap step performed
+// by frontmatter.Marshal so an `opSet` comparison can detect that the new
+// value would round-trip to the same on-disk bytes as the current value.
+// Without this, `bn set parent=Foo` would always rewrite a note whose stored
+// value is `[[Foo]]` because the raw user input differs byte-for-byte.
+func wikilinkNormalized(v any, key string, fm *config.FrontmatterConfig) any {
+	if fm == nil || !containsString(fm.WikilinkProperties, key) {
+		return v
+	}
+	switch vv := v.(type) {
+	case string:
+		return wrapWikilinkValue(vv)
+	case []any:
+		out := make([]any, len(vv))
+		for i, item := range vv {
+			if s, ok := item.(string); ok {
+				out[i] = wrapWikilinkValue(s)
+			} else {
+				out[i] = item
+			}
+		}
+		return out
+	}
+	return v
+}
+
 // wrapWikilinkValue wraps a bare string in `[[...]]` unless it is empty or
 // already wrapped. Mirrors the unexported helper in internal/frontmatter so
 // the CLI can normalize input before delegating to ListAdd/ListRemove, which
@@ -352,6 +379,10 @@ func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultR
 	for _, p := range pairs {
 		switch p.Op {
 		case opSet:
+			existing, present := front.Get(p.Key)
+			if present && dryRunValuesEqual(existing, wikilinkNormalized(p.Value, p.Key, fm)) {
+				continue
+			}
 			front.Set(p.Key, p.Value)
 			changed = true
 		case opAdd:

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // buildSetFixture writes a small vault and a config that the `set`/`unset`
@@ -302,6 +303,86 @@ func TestCoerceValueAuto(t *testing.T) {
 		if got != c.want {
 			t.Errorf("coerceValue(%q)=%v want %v", c.in, got, c.want)
 		}
+	}
+}
+
+// TestSetUnchangedValueSkipsWrite asserts that `bn set k=v` against a note
+// where k already equals v leaves the file's mtime and bytes untouched. Before
+// the fix, applySet always called front.Set and rewrote the file, bumping the
+// mtime on a logical no-op.
+func TestSetUnchangedValueSkipsWrite(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	if _, err := runCLI(t, "", "set", notePath, "status=reading"); err != nil {
+		t.Fatalf("first set: %v", err)
+	}
+	before, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	beforeBytes := readNote(t, notePath)
+
+	// Force a measurable mtime delta if a write happens.
+	past := time.Now().Add(-2 * time.Second)
+	if err := os.Chtimes(notePath, past, past); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	out, err := runCLI(t, "", "set", notePath, "status=reading")
+	if err != nil {
+		t.Fatalf("second set: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "updated") {
+		t.Errorf("expected no `updated` report for no-op, got %q", out)
+	}
+	after, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if !after.ModTime().Equal(past) {
+		t.Errorf("mtime changed on no-op set: before=%v after=%v", past, after.ModTime())
+	}
+	if readNote(t, notePath) != beforeBytes {
+		t.Errorf("bytes changed on no-op set")
+	}
+	_ = before
+}
+
+// TestSetWikilinkPropertySkipsWriteWhenWrapped asserts that `bn set parent=Foo`
+// is a no-op when the stored value is already `[[Foo]]`. The marshal step
+// auto-wraps wikilink-typed properties, so the on-disk bytes round-trip
+// identically — the apply path must reflect that and skip the write.
+func TestSetWikilinkPropertySkipsWriteWhenWrapped(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	if _, err := runCLI(t, "", "set", notePath, "parent=Foo"); err != nil {
+		t.Fatalf("first set: %v", err)
+	}
+	got := readNote(t, notePath)
+	if !strings.Contains(got, "parent: '[[Foo]]'") && !strings.Contains(got, "parent: \"[[Foo]]\"") && !strings.Contains(got, "parent: [[Foo]]") {
+		t.Fatalf("expected wrapped parent, got:\n%s", got)
+	}
+
+	past := time.Now().Add(-2 * time.Second)
+	if err := os.Chtimes(notePath, past, past); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	out, err := runCLI(t, "", "set", notePath, "parent=Foo")
+	if err != nil {
+		t.Fatalf("second set: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "updated") {
+		t.Errorf("expected no `updated` for wikilink no-op, got %q", out)
+	}
+	after, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if !after.ModTime().Equal(past) {
+		t.Errorf("mtime changed on wikilink no-op: want=%v got=%v", past, after.ModTime())
 	}
 }
 

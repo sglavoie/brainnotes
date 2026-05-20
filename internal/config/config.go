@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -243,6 +244,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Templates.DefaultExtension == "" {
 		cfg.Templates.DefaultExtension = ".md"
+	}
+	if !strings.HasPrefix(cfg.Templates.DefaultExtension, ".") {
+		cfg.Templates.DefaultExtension = "." + cfg.Templates.DefaultExtension
 	}
 	if cfg.Frontmatter.WikilinkProperties == nil {
 		cfg.Frontmatter.WikilinkProperties = []string{"categories", "org", "parent", "area"}

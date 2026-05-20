@@ -6,6 +6,7 @@
 package query
 
 import (
+	"path"
 	"strings"
 	"time"
 
@@ -165,12 +166,16 @@ func Missing(prop string) Predicate {
 // vault-relative with forward slashes; an empty folder matches every note.
 // root is the absolute vault root (used to compute each note's folder).
 //
-// Leading/trailing slashes and backslashes in the user-supplied folder are
-// normalized: `--folder /References`, `--folder References/`, and
-// `--folder References\Books` all behave like `References` (or
-// `References/Books`).
+// Leading/trailing slashes, backslashes, and `./` segments in the user-supplied
+// folder are normalized: `--folder /References`, `--folder References/`,
+// `--folder ./References`, and `--folder References\Books` all behave like
+// `References` (or `References/Books`).
 func Folder(folder, root string) Predicate {
 	want := strings.Trim(strings.ReplaceAll(folder, "\\", "/"), "/")
+	want = path.Clean(want)
+	if want == "." {
+		want = ""
+	}
 	return func(n *vault.Note) bool {
 		if want == "" {
 			return true

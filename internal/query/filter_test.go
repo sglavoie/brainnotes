@@ -145,6 +145,33 @@ func TestFolderPredicate(t *testing.T) {
 	}
 }
 
+// TestFolderPredicateNormalizesDotSlash asserts that `--folder ./References`
+// and `--folder .` are normalized. Before the fix, `./References` was compared
+// verbatim against note folders like `References` and matched nothing.
+func TestFolderPredicateNormalizesDotSlash(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"root.md":            "# r\n",
+		"People/a.md":        "# a\n",
+		"People/Nested/b.md": "# b\n",
+	})
+	for _, raw := range []string{"./People", "People/.", "./People/"} {
+		p := Folder(raw, v.Root)
+		if !p(notes["People/a.md"]) {
+			t.Errorf("Folder(%q) should match People/a.md", raw)
+		}
+		if !p(notes["People/Nested/b.md"]) {
+			t.Errorf("Folder(%q) should match People/Nested/b.md", raw)
+		}
+	}
+	// A bare "." (or "./") should match every note, like the empty folder.
+	for _, raw := range []string{".", "./"} {
+		p := Folder(raw, v.Root)
+		if !p(notes["root.md"]) || !p(notes["People/a.md"]) {
+			t.Errorf("Folder(%q) should match every note", raw)
+		}
+	}
+}
+
 // TestFolderPredicateNormalizesSlashes asserts that leading slashes, trailing
 // slashes, and backslashes in the user-supplied folder arg are all normalized
 // to a plain forward-slash path. Before the fix, "/People" did not match
