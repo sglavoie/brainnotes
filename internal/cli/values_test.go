@@ -239,6 +239,116 @@ func TestValues_TagsAliasMatchesValuesTags(t *testing.T) {
 	}
 }
 
+func TestValues_TagsFiles(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildValuesFixture(t)
+
+	stdout, stderr, err := runValuesCmd(t, root, "tags", "--files")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	want := string(readGoldenBytes(t, "values_files_count_desc.golden"))
+	if stdout != want {
+		t.Fatalf("--files default sort:\n got=%q\nwant=%q", stdout, want)
+	}
+}
+
+func TestValues_TagsFilesSortName(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildValuesFixture(t)
+
+	stdout, _, err := runValuesCmd(t, root, "tags", "--files", "--sort=name")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	want := string(readGoldenBytes(t, "values_files_sort_name.golden"))
+	if stdout != want {
+		t.Fatalf("--files --sort=name:\n got=%q\nwant=%q", stdout, want)
+	}
+}
+
+func TestValues_TagsFilesNoCount(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildValuesFixture(t)
+
+	stdout, _, err := runValuesCmd(t, root, "tags", "--files", "--count=false")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	want := string(readGoldenBytes(t, "values_files_no_count.golden"))
+	if stdout != want {
+		t.Fatalf("--files --count=false:\n got=%q\nwant=%q", stdout, want)
+	}
+}
+
+func TestValues_FilesAliasMatch(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildValuesFixture(t)
+
+	aliasOut, _, err := runValuesCmd(t, root, "tags", "--files")
+	if err != nil {
+		t.Fatalf("execute tags --files: %v", err)
+	}
+	longOut, _, err := runValuesCmd(t, root, "values", "tags", "--files")
+	if err != nil {
+		t.Fatalf("execute values tags --files: %v", err)
+	}
+	if aliasOut != longOut {
+		t.Fatalf("alias output diverges from long form:\n tags=%q\nvalues=%q", aliasOut, longOut)
+	}
+}
+
+func TestValues_CategoryFiles(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildValuesFixture(t)
+
+	stdout, _, err := runValuesCmd(t, root, "values", "category", "--files")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	want := "1  [[Project Alpha]]:\n  Note6.md\n"
+	if stdout != want {
+		t.Fatalf("values category --files:\n got=%q\nwant=%q", stdout, want)
+	}
+}
+
+func TestValues_FilesDedup(t *testing.T) {
+	isolateBnEnv(t)
+	root := t.TempDir()
+	body := "---\ntags:\n  - dup\n  - dup\n---\nBody.\n"
+	if err := os.WriteFile(filepath.Join(root, "Duped.md"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	stdout, _, err := runValuesCmd(t, root, "tags", "--files")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	want := "2  dup:\n  Duped.md\n"
+	if stdout != want {
+		t.Fatalf("dedup:\n got=%q\nwant=%q", stdout, want)
+	}
+}
+
+func TestValues_FilesMissingProperty(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildValuesFixture(t)
+
+	stdout, stderr, err := runValuesCmd(t, root, "values", "nonexistent", "--files")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+}
+
 // TestValues_MapElementSkippedWithoutVerbose verifies that a map element nested
 // inside a list value is silently skipped (no warning, count unaffected) when
 // -v is not passed. With -v, exactly one warning per affected note hits stderr.

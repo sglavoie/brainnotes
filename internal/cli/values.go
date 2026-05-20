@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
@@ -13,10 +14,15 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
-// valuesOptions captures the flag inputs shared by `bn values` and `bn tags`.
+type valEntry struct {
+	value string
+	count int
+}
+
 type valuesOptions struct {
 	sortMode  string
 	showCount bool
+	showFiles bool
 }
 
 // NewValuesCmd returns the `values` subcommand. Exported for tests.
@@ -87,6 +93,7 @@ func addValuesFlags(cmd *cobra.Command, opts *valuesOptions) {
 	f := cmd.Flags()
 	f.StringVar(&opts.sortMode, "sort", "count", "sort by 'count' (desc, alpha tie-break) or 'name' (alpha)")
 	f.BoolVar(&opts.showCount, "count", true, "prefix each line with its count (--count=false emits values only)")
+	f.BoolVar(&opts.showFiles, "files", false, "list the files containing each value")
 }
 
 func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
@@ -111,6 +118,10 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 	errOut := cmd.ErrOrStderr()
 
 	counts := map[string]int{}
+	var files map[string]map[string]struct{}
+	if opts.showFiles {
+		files = make(map[string]map[string]struct{})
+	}
 	warnedNotes := map[string]struct{}{}
 	for _, n := range notes {
 		if n == nil {
@@ -124,16 +135,16 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 		if !ok {
 			continue
 		}
-		countValue(raw, n.Path, counts, warnedNotes, verbose, errOut)
+		var relPath string
+		if opts.showFiles {
+			relPath, _ = filepath.Rel(v.Root, n.Path)
+		}
+		countValue(raw, n.Path, relPath, counts, files, warnedNotes, verbose, errOut)
 	}
 
-	type entry struct {
-		value string
-		count int
-	}
-	entries := make([]entry, 0, len(counts))
+	entries := make([]valEntry, 0, len(counts))
 	for k, c := range counts {
-		entries = append(entries, entry{value: k, count: c})
+		entries = append(entries, valEntry{value: k, count: c})
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		if opts.sortMode == "name" {
@@ -146,6 +157,19 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 	})
 
 	out := cmd.OutOrStdout()
+
+	if opts.showFiles {
+		width := 0
+		if opts.showCount {
+			for _, e := range entries {
+				if w := len(strconv.Itoa(e.count)); w > width {
+					width = w
+				}
+			}
+		}
+		return writeFilesOutput(out, entries, files, opts.showCount, width)
+	}
+
 	if !opts.showCount {
 		for _, e := range entries {
 			if _, err := fmt.Fprintln(out, e.value); err != nil {
@@ -171,15 +195,15 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 
 // countValue increments counts for v's contributions, recursing into lists.
 // Maps are skipped; with verbose=true, one warning is emitted per affected note.
-func countValue(v any, notePath string, counts map[string]int, warnedNotes map[string]struct{}, verbose bool, errOut io.Writer) {
+func countValue(v any, notePath string, relPath string, counts map[string]int, files map[string]map[string]struct{}, warnedNotes map[string]struct{}, verbose bool, errOut io.Writer) {
 	switch vv := v.(type) {
 	case nil:
 		return
 	case string:
-		counts[vv]++
+		record(vv, counts, files, relPath)
 	case []any:
 		for _, item := range vv {
-			countValue(item, notePath, counts, warnedNotes, verbose, errOut)
+			countValue(item, notePath, relPath, counts, files, warnedNotes, verbose, errOut)
 		}
 	case map[string]any:
 		if !verbose {
@@ -191,16 +215,60 @@ func countValue(v any, notePath string, counts map[string]int, warnedNotes map[s
 		warnedNotes[notePath] = struct{}{}
 		fmt.Fprintf(errOut, "values: skipping map-typed value in %s\n", notePath)
 	case time.Time:
-		counts[formatTimeValue(vv)]++
+		record(formatTimeValue(vv), counts, files, relPath)
 	case bool:
-		counts[strconv.FormatBool(vv)]++
+		record(strconv.FormatBool(vv), counts, files, relPath)
 	case int:
-		counts[strconv.Itoa(vv)]++
+		record(strconv.Itoa(vv), counts, files, relPath)
 	case float64:
-		counts[strconv.FormatFloat(vv, 'g', -1, 64)]++
+		record(strconv.FormatFloat(vv, 'g', -1, 64), counts, files, relPath)
 	default:
-		counts[fmt.Sprintf("%v", vv)]++
+		record(fmt.Sprintf("%v", vv), counts, files, relPath)
 	}
+}
+
+func record(key string, counts map[string]int, files map[string]map[string]struct{}, relPath string) {
+	counts[key]++
+	if files != nil {
+		if files[key] == nil {
+			files[key] = map[string]struct{}{}
+		}
+		files[key][relPath] = struct{}{}
+	}
+}
+
+func writeFilesOutput(out io.Writer, entries []valEntry, files map[string]map[string]struct{}, showCount bool, countWidth int) error {
+	for i, e := range entries {
+		if i > 0 {
+			if _, err := fmt.Fprintln(out); err != nil {
+				return err
+			}
+		}
+		if showCount {
+			if _, err := fmt.Fprintf(out, "%*d  %s:\n", countWidth, e.count, e.value); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(out, "%s:\n", e.value); err != nil {
+				return err
+			}
+		}
+		for _, f := range sortedKeys(files[e.value]) {
+			if _, err := fmt.Fprintf(out, "  %s\n", f); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func sortedKeys(m map[string]struct{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // formatTimeValue renders a time.Time as a date when the parsed value had no

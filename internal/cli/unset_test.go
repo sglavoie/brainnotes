@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -73,5 +74,65 @@ func TestUnsetSplitArgs(t *testing.T) {
 				t.Errorf("props: got %v, want %v", props, c.wantProps)
 			}
 		})
+	}
+}
+
+func TestUnset_FzfPickNotes(t *testing.T) {
+	root := buildSetFixture(t)
+
+	aPath := filepath.Join(root, "a.md")
+	bPath := filepath.Join(root, "b.md")
+
+	if _, err := runCLI(t, "", "set", aPath, "status=reading"); err != nil {
+		t.Fatalf("setup set a: %v", err)
+	}
+	if _, err := runCLI(t, "", "set", bPath, "status=reading"); err != nil {
+		t.Fatalf("setup set b: %v", err)
+	}
+
+	orig := notePicker
+	t.Cleanup(func() { notePicker = orig })
+	notePicker = func(items []string, extraArgs []string) ([]string, error) {
+		return []string{aPath, bPath}, nil
+	}
+
+	out, err := runCLI(t, "", "unset", "--", "status")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	for _, p := range []string{aPath, bPath} {
+		got := readNote(t, p)
+		if strings.Contains(got, "status:") {
+			t.Fatalf("%s should not have status, got:\n%s", p, got)
+		}
+	}
+}
+
+func TestUnset_FzfAbort(t *testing.T) {
+	root := buildSetFixture(t)
+
+	tagsPath := filepath.Join(root, "tags.md")
+	beforeBytes, err := os.ReadFile(tagsPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	orig := notePicker
+	t.Cleanup(func() { notePicker = orig })
+	notePicker = func(items []string, extraArgs []string) ([]string, error) {
+		return nil, nil
+	}
+
+	out, err := runCLI(t, "", "unset", "--", "tags")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+
+	afterBytes, err := os.ReadFile(tagsPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(afterBytes) != string(beforeBytes) {
+		t.Fatalf("abort should not modify files")
 	}
 }

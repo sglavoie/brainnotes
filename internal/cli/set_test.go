@@ -404,3 +404,60 @@ func TestSetNegativeInt(t *testing.T) {
 		t.Fatalf("negative int should not be quoted as a string, got:\n%s", got)
 	}
 }
+
+func TestSet_FzfPickNotes(t *testing.T) {
+	root := buildSetFixture(t)
+	aPath := filepath.Join(root, "a.md")
+	bPath := filepath.Join(root, "b.md")
+
+	orig := notePicker
+	t.Cleanup(func() { notePicker = orig })
+	notePicker = func(items []string, extraArgs []string) ([]string, error) {
+		return []string{aPath, bPath}, nil
+	}
+
+	out, err := runCLI(t, "", "set", "status=reading")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	for _, p := range []string{aPath, bPath} {
+		got := readNote(t, p)
+		if !strings.Contains(got, "status: reading") {
+			t.Fatalf("%s missing status: reading\n%s", p, got)
+		}
+	}
+}
+
+func TestSet_FzfAbort(t *testing.T) {
+	root := buildSetFixture(t)
+
+	orig := notePicker
+	t.Cleanup(func() { notePicker = orig })
+	notePicker = func(items []string, extraArgs []string) ([]string, error) {
+		return nil, nil
+	}
+
+	out, err := runCLI(t, "", "set", "status=reading")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+
+	for _, name := range []string{"a.md", "b.md", "note.md"} {
+		got := readNote(t, filepath.Join(root, name))
+		if strings.Contains(got, "status:") {
+			t.Fatalf("%s should not have status, got:\n%s", name, got)
+		}
+	}
+}
+
+func TestSet_FzfNoPairs(t *testing.T) {
+	buildSetFixture(t)
+
+	_, err := runCLI(t, "", "set", "justanote.md")
+	if err == nil {
+		t.Fatal("expected error for no key=value pairs")
+	}
+	if !strings.Contains(err.Error(), "at least one key=value pair") {
+		t.Fatalf("expected key=value pair error, got %v", err)
+	}
+}

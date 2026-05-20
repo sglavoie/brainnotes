@@ -419,7 +419,7 @@ bn find --tag drafts | bn set - tags+=triage                # bulk append
 ### `bn tags` — count tag occurrences
 
 ```sh
-bn tags [--sort count|name] [--count=false]
+bn tags [--sort count|name] [--count=false] [--files]
 ```
 
 Alias for `bn values tags`. See `bn values` for flag behavior.
@@ -452,7 +452,7 @@ bn find --has rating | bn unset - rating                    # bulk wipe
 ### `bn values` — count occurrences of a frontmatter property's values
 
 ```sh
-bn values <property> [--sort count|name] [--count=false]
+bn values <property> [--sort count|name] [--count=false] [--files]
 ```
 
 Walks every note, parses frontmatter, and counts how often each value of
@@ -467,6 +467,8 @@ variants surface in the long tail.
 - Default sort is count desc with alphabetical tie-break. `--sort=name` sorts
   alphabetically. `--count=false` emits values only (one per line), handy for
   piping to `grep` or `fzf`.
+- `--files` groups output by value and lists the vault-relative path of every
+  note containing that value. Combines with `--sort` and `--count=false`.
 
 Examples:
 
@@ -475,6 +477,8 @@ bn tags                                # count desc, project=42, meeting=18, …
 bn tags --sort=name                    # alphabetical
 bn values category                     # category-value hygiene
 bn values tags --count=false | fzf     # pick a tag to inspect
+bn tags --files                        # which notes have each tag?
+bn values category --files --sort=name # files per category, alphabetical
 ```
 
 ## Shell completion

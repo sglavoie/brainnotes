@@ -26,14 +26,15 @@ func NewSetCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "set <note...> <key[=|+=|-=]value...>",
+		Use:   "set [note...] <key[=|+=|-=]value...>",
 		Short: "Set frontmatter properties on one or more notes",
 		Long: `Set writes or updates frontmatter properties on one or more notes.
 
 Positional arguments are split into notes and pairs: any arg containing an
 operator ('=', '+=', '-=') is treated as a pair, and all preceding args are
 note paths. Use '-' as the sole note arg to read paths from stdin (composes
-with 'bn find').
+with 'bn find'). When no note args are given, an fzf multi-select picker
+launches to choose notes interactively.
 
 Operators:
   key=value    Set the property (overwriting any prior value).
@@ -55,7 +56,7 @@ Use --dry-run to preview changes without writing. Each affected file is
 printed as a unified diff block; unchanged files are omitted.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args:          cobra.MinimumNArgs(2),
+		Args:          cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := ConfigFromContext(cmd.Context())
 			if cfg == nil {
@@ -70,9 +71,6 @@ printed as a unified diff block; unchanged files are omitted.`,
 			if err != nil {
 				return err
 			}
-			if len(noteArgs) == 0 {
-				return errors.New("set: at least one note path is required")
-			}
 			if len(pairs) == 0 {
 				return errors.New("set: at least one key=value pair is required")
 			}
@@ -82,9 +80,21 @@ printed as a unified diff block; unchanged files are omitted.`,
 				return err
 			}
 
-			paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
-			if err != nil {
-				return err
+			var paths []string
+			if len(noteArgs) == 0 {
+				selected, err := pickNotes(v, cfg, true)
+				if err != nil {
+					return err
+				}
+				if len(selected) == 0 {
+					return nil
+				}
+				paths = selected
+			} else {
+				paths, err = resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
+				if err != nil {
+					return err
+				}
 			}
 			sort.Strings(paths)
 

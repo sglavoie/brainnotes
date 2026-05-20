@@ -19,20 +19,21 @@ func NewUnsetCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "unset <note...> [--] <property...>",
+		Use:   "unset [note...] [--] <property...>",
 		Short: "Remove frontmatter properties from one or more notes",
 		Long: `Unset removes frontmatter properties from one or more notes.
 
 Without '--', the first positional arg is the note path (or '-' for stdin) and
 all subsequent args are property names. To pass multiple notes use '--' to
 separate them from the property list: 'bn unset a.md b.md -- prop1 prop2'.
+Use 'bn unset -- prop1 prop2' to pick notes via an fzf multi-select picker.
 
 Removing a missing property is a silent no-op.
 
 Use --dry-run to preview which properties would be removed without writing.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args:          cobra.MinimumNArgs(2),
+		Args:          cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := ConfigFromContext(cmd.Context())
 			if cfg == nil {
@@ -44,9 +45,6 @@ Use --dry-run to preview which properties would be removed without writing.`,
 			}
 
 			noteArgs, props := splitUnsetArgs(args, cmd.ArgsLenAtDash())
-			if len(noteArgs) == 0 {
-				return errors.New("unset: at least one note path is required")
-			}
 			if len(props) == 0 {
 				return errors.New("unset: at least one property name is required")
 			}
@@ -56,9 +54,21 @@ Use --dry-run to preview which properties would be removed without writing.`,
 				}
 			}
 
-			paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
-			if err != nil {
-				return err
+			var paths []string
+			if len(noteArgs) == 0 {
+				selected, err := pickNotes(v, cfg, true)
+				if err != nil {
+					return err
+				}
+				if len(selected) == 0 {
+					return nil
+				}
+				paths = selected
+			} else {
+				paths, err = resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
+				if err != nil {
+					return err
+				}
 			}
 			sort.Strings(paths)
 
