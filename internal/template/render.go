@@ -122,10 +122,11 @@ func wikilinkFn(s string) string {
 	}
 	if strings.HasPrefix(trimmed, "[[") && strings.HasSuffix(trimmed, "]]") && len(trimmed) >= 4 {
 		// Verify the opening [[ and closing ]] form a single wrapping pair
-		// by checking no ]] appears inside the inner content. Without this,
-		// "[[a]] b [[c]]" would be misdetected as already wrapped.
+		// by checking neither [[ nor ]] appears inside the inner content.
+		// Without this, "[[a]] b [[c]]" (two separate links) or "[[a[[b]]"
+		// (malformed nested opener) would be misdetected as already wrapped.
 		inner := trimmed[2 : len(trimmed)-2]
-		if !strings.Contains(inner, "]]") {
+		if !strings.Contains(inner, "]]") && !strings.Contains(inner, "[[") {
 			return s
 		}
 	}

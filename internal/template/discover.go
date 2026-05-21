@@ -46,6 +46,12 @@ func Find(cfg *config.Config, name string) (string, error) {
 	if strings.ContainsAny(name, `/\`) {
 		return "", fmt.Errorf("template: name %q must not contain path separators", name)
 	}
+	if strings.ContainsRune(name, 0) {
+		return "", fmt.Errorf("template: name %q must not contain NUL bytes", name)
+	}
+	if name == "." || name == ".." {
+		return "", fmt.Errorf("template: name %q is not a valid template name", name)
+	}
 	dir := filepath.Join(cfg.Vault, cfg.Templates.Dir)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -54,6 +60,12 @@ func Find(cfg *config.Config, name string) (string, error) {
 	ext := cfg.Templates.DefaultExtension
 	if ext == "" {
 		ext = ".md"
+	}
+	// Defensive normalization: callers bypassing config.Load may pass an
+	// extension without the leading dot ("md"). Normalize so the candidate
+	// concatenation ("stem"+ext) produces a sensible filename.
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
 	}
 
 	// stem is the user-supplied name with any trailing copy of the configured

@@ -109,10 +109,10 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 		}
 	}
 
-	if flagVaultPath != "" {
-		cfg.Vault = flagVaultPath
-	} else if env := os.Getenv(envVault); env != "" {
-		cfg.Vault = env
+	if v := strings.TrimSpace(flagVaultPath); v != "" {
+		cfg.Vault = v
+	} else if v := strings.TrimSpace(os.Getenv(envVault)); v != "" {
+		cfg.Vault = v
 	}
 
 	cfg.Vault = strings.TrimSpace(cfg.Vault)

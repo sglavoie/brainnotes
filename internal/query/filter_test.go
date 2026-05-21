@@ -1118,6 +1118,210 @@ func TestFromFlagsZeroValueIntFieldsRequireGraph(t *testing.T) {
 	}
 }
 
+// TestTagPredicateRejectsNilNote verifies that the Tag predicate returns false
+// for a nil note rather than panicking. The frontmatter-reading predicates rely
+// on Note.Load() to return an error for a nil note; this asserts that contract.
+func TestTagPredicateRejectsNilNote(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Tag should not panic on nil note, got: %v", r)
+		}
+	}()
+	if Tag("foo")(nil) {
+		t.Errorf("Tag(foo)(nil) = true, want false")
+	}
+	if Category("books")(nil) {
+		t.Errorf("Category(books)(nil) = true, want false")
+	}
+	if Status("reading")(nil) {
+		t.Errorf("Status(reading)(nil) = true, want false")
+	}
+	if Type("goal")(nil) {
+		t.Errorf("Type(goal)(nil) = true, want false")
+	}
+	if Has("status")(nil) {
+		t.Errorf("Has(status)(nil) = true, want false")
+	}
+	if Missing("status")(nil) {
+		t.Errorf("Missing(status)(nil) = true, want false")
+	}
+	if Age(">", 24*time.Hour, "created")(nil) {
+		t.Errorf("Age(nil) = true, want false")
+	}
+}
+
+// TestTagPredicateEmptyList asserts that an empty tags list (`tags: []`) never
+// matches any tag query. Before the fix this was already correct; the test
+// pins down the behaviour against regressions where an empty list might be
+// confused for "matches anything".
+func TestTagPredicateEmptyList(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: []\n---\nbody\n",
+	})
+	if Tag("foo")(notes["a.md"]) {
+		t.Errorf("Tag(foo) should not match a note with empty tags list")
+	}
+	if Tag("")(notes["a.md"]) {
+		t.Errorf("Tag(empty) should not match a note with empty tags list")
+	}
+}
+
+// TestTagPredicateNullValue asserts that `tags: null` (a YAML null value) does
+// not match any tag query, including the empty string. The key is present but
+// has no value to match against.
+func TestTagPredicateNullValue(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: ~\n---\nbody\n",
+	})
+	if Tag("foo")(notes["a.md"]) {
+		t.Errorf("Tag(foo) should not match `tags: null`")
+	}
+}
+
+// TestCategoryPredicateEmptyList asserts that empty `categories: []` matches no
+// category query, mirroring TestTagPredicateEmptyList.
+func TestCategoryPredicateEmptyList(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ncategories: []\n---\nbody\n",
+	})
+	if Category("books")(notes["a.md"]) {
+		t.Errorf("Category(books) should not match an empty categories list")
+	}
+}
+
+// TestCategoryPredicateNullValue asserts that `categories: null` is handled
+// gracefully and does not match any category. GetWikilinkList returns an empty
+// slice (not nil) for a null value, so the empty-loop returns false correctly.
+func TestCategoryPredicateNullValue(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ncategories: ~\n---\nbody\n",
+	})
+	if Category("books")(notes["a.md"]) {
+		t.Errorf("Category(books) should not match `categories: null`")
+	}
+}
+
+// TestTypeMatchesEitherTypeOrKind verifies that when a note has both `type`
+// and `kind` set, a query for either value matches. The doc comment explicitly
+// states "accepts either so queries don't need to know the difference" — this
+// pins that OR semantics down.
+func TestTypeMatchesEitherTypeOrKind(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"both.md": "---\ntype: Article\nkind: Project\n---\nbody\n",
+	})
+	if !Type("article")(notes["both.md"]) {
+		t.Errorf("Type(article) should match when `type: Article` is set")
+	}
+	if !Type("project")(notes["both.md"]) {
+		t.Errorf("Type(project) should match when `kind: Project` is set (either-or semantics)")
+	}
+	if Type("other")(notes["both.md"]) {
+		t.Errorf("Type(other) should not match")
+	}
+}
+
+// TestFolderNestedDescendantMatch verifies the descendant-match contract: a
+// folder filter matches notes in any subfolder, however deeply nested.
+func TestFolderNestedDescendantMatch(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"References/a.md":                 "# a\n",
+		"References/Books/b.md":           "# b\n",
+		"References/Books/SciFi/c.md":     "# c\n",
+		"References/Books/SciFi/d/e.md":   "# e\n",
+		"References/Books/SciFi/d/f/g.md": "# g\n",
+	})
+	p := Folder("References", v.Root)
+	for _, path := range []string{
+		"References/a.md",
+		"References/Books/b.md",
+		"References/Books/SciFi/c.md",
+		"References/Books/SciFi/d/e.md",
+		"References/Books/SciFi/d/f/g.md",
+	} {
+		if !p(notes[path]) {
+			t.Errorf("Folder(References) should match deeply-nested %s", path)
+		}
+	}
+}
+
+// TestOrphanPredicateGraphLookupCaseInsensitive verifies that Orphan correctly
+// finds a backlink even when the note title's case differs from the link text's
+// case. The lookup must be case-folded both directions.
+func TestOrphanPredicateGraphLookupCaseInsensitive(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Target.md":   "---\n---\nbody\n",
+		"Referrer.md": "---\n---\nSee [[target]] (lowercase link text).\n",
+	})
+	all := []*vault.Note{notes["Target.md"], notes["Referrer.md"]}
+	g := BuildGraph(all)
+	if Orphan(g)(notes["Target.md"]) {
+		t.Errorf("Target should not be an orphan: Referrer links it (case-insensitive)")
+	}
+}
+
+// TestFolderPredicateRejectsParentEscape verifies that `..` segments in a
+// folder query are normalized but do not allow escaping the vault root: a query
+// that path.Cleans to a `..` prefix matches nothing real.
+func TestFolderPredicateRejectsParentEscape(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"People/a.md": "# a\n",
+		"Other/b.md":  "# b\n",
+	})
+	// "People/.." -> "."  -> "" -> match all.
+	if !Folder("People/..", v.Root)(notes["People/a.md"]) {
+		t.Errorf("Folder(People/..) normalizes to empty and should match all")
+	}
+	// "../Other" stays as "../Other" after Clean — should match nothing.
+	if Folder("../Other", v.Root)(notes["Other/b.md"]) {
+		t.Errorf("Folder(../Other) should not match a real folder (parent escape)")
+	}
+}
+
+// TestAndOrCompositionNested verifies that combinators compose recursively:
+// And(Or(A, B), C) should work as expected.
+func TestAndOrCompositionNested(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo]\nstatus: Reading\n---\n",
+		"b.md": "---\ntags: [bar]\nstatus: Reading\n---\n",
+		"c.md": "---\ntags: [baz]\nstatus: Reading\n---\n",
+		"d.md": "---\ntags: [foo]\nstatus: Done\n---\n",
+	})
+	// (tag=foo OR tag=bar) AND status=Reading
+	p := And(Or(Tag("foo"), Tag("bar")), Status("Reading"))
+	cases := map[string]bool{
+		"a.md": true,  // foo + Reading
+		"b.md": true,  // bar + Reading
+		"c.md": false, // baz + Reading: missing tag
+		"d.md": false, // foo + Done: wrong status
+	}
+	for path, want := range cases {
+		if got := p(notes[path]); got != want {
+			t.Errorf("(foo OR bar) AND Reading on %s = %v, want %v", path, got, want)
+		}
+	}
+}
+
+// TestFromFlagsSkipsEmptyTagsAndCategories verifies that empty strings in the
+// Tags/Categories slices are silently dropped rather than producing a
+// match-nothing predicate. This matters when callers build slices from raw user
+// input where an empty entry signals "no value given".
+func TestFromFlagsSkipsEmptyTagsAndCategories(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo]\ncategories:\n  - \"[[Books]]\"\n---\n",
+	})
+	pred, err := FromFlags(Flags{
+		Tags:         []string{"", "foo", ""},
+		Categories:   []string{"", "books"},
+		MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1,
+	})
+	if err != nil {
+		t.Fatalf("FromFlags: %v", err)
+	}
+	if !pred(notes["a.md"]) {
+		t.Errorf("empty entries in Tags/Categories should be skipped, leaving the real terms to match")
+	}
+}
+
 // TestParseAgeRoundTripsAllUnits verifies every documented unit (s, m, h, d)
 // is accepted with a non-zero value.
 func TestParseAgeRoundTripsAllUnits(t *testing.T) {

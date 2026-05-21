@@ -917,6 +917,95 @@ func TestRewriteConsecutiveLinks(t *testing.T) {
 	}
 }
 
+func TestParseEmptyAndWhitespaceInput(t *testing.T) {
+	t.Parallel()
+	// Empty/blank inputs must not panic and must return no links.
+	for _, in := range []string{"", "\n", "\r\n", "   ", "\t\n\n  "} {
+		if got := Parse(in); len(got) != 0 {
+			t.Errorf("Parse(%q) = %+v, want no matches", in, got)
+		}
+	}
+}
+
+func TestRewriteTitleRejectsInvalidNewTitle(t *testing.T) {
+	t.Parallel()
+	// An empty newTitle would collapse the link to `[[]]` or `[[Folder/]]`,
+	// neither of which round-trips through Parse. Brackets and line breaks
+	// in newTitle similarly corrupt the `[[...]]` span. RewriteTitle must
+	// leave the text untouched in these cases.
+	tests := []struct {
+		name     string
+		newTitle string
+	}{
+		{"empty", ""},
+		{"contains close bracket", "Bar]Bad"},
+		{"contains open bracket", "Bar[Bad"},
+		{"contains LF", "Bar\nBad"},
+		{"contains CR", "Bar\rBad"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for _, in := range []string{
+				"see [[Foo]] here",
+				"folder [[Refs/Foo]] case",
+				"[[Foo#Section|alias]]",
+			} {
+				got := RewriteTitle(in, "Foo", tc.newTitle)
+				if got != in {
+					t.Errorf("RewriteTitle(%q, Foo, %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newTitle, got, in)
+				}
+			}
+		})
+	}
+}
+
+func TestRewriteMoveRejectsInvalidNewPath(t *testing.T) {
+	t.Parallel()
+	// Same invariant as RewriteTitle: empty/bracket/newline newPath would
+	// produce a malformed link, so RewriteMove must leave the input as-is.
+	tests := []struct {
+		name    string
+		newPath string
+	}{
+		{"empty", ""},
+		{"contains close bracket", "X]Y/Z"},
+		{"contains open bracket", "X[Y/Z"},
+		{"contains LF", "X\nY/Z"},
+		{"contains CR", "X\rY/Z"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := "[[Books/Foo]] and [[Books/Foo#H|a]]"
+			got := RewriteMove(in, "Books/Foo", tc.newPath)
+			if got != in {
+				t.Errorf("RewriteMove(%q, ..., %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newPath, got, in)
+			}
+		})
+	}
+}
+
+func TestRewriteRoundTripAfterRename(t *testing.T) {
+	t.Parallel()
+	// After a valid rename, the output must re-parse to a link with the new
+	// target. This guards against accidental corruption of link structure.
+	in := "see [[Foo]] and [[Refs/Foo#H|disp]]"
+	out := RewriteTitle(in, "Foo", "Bar")
+	links := Parse(out)
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links after rename, got %d in %q", len(links), out)
+	}
+	if links[0].Target != "Bar" || links[0].Title() != "Bar" {
+		t.Errorf("first link target=%q title=%q, want Bar/Bar", links[0].Target, links[0].Title())
+	}
+	if links[1].Target != "Refs/Bar" || links[1].Title() != "Bar" || links[1].Heading != "H" || links[1].Alias != "disp" {
+		t.Errorf("second link = %+v", links[1])
+	}
+}
+
 func collectTargets(links []Link) []string {
 	out := make([]string, 0, len(links))
 	for _, l := range links {

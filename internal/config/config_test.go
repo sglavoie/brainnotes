@@ -1233,3 +1233,88 @@ func TestLoad_TemplatesDirDotSlashOnlyFallsBackToDefault(t *testing.T) {
 		t.Errorf("dir = './' should fall back to Templates, got %q", cfg.Templates.Dir)
 	}
 }
+
+func TestLoad_WhitespaceFlagVaultFallsThroughToEnv(t *testing.T) {
+	// A whitespace-only --vault flag must not shadow $BNOTES_VAULT. Previously
+	// the flag's whitespace was assigned to cfg.Vault, then trimmed to "", so
+	// the env-provided vault was silently dropped.
+	resetEnv(t)
+	envVaultPath := t.TempDir()
+	t.Setenv(envVault, envVaultPath)
+
+	cfg, err := Load("   ", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != envVaultPath {
+		t.Fatalf("whitespace flag should fall through to env: got %q, want %q",
+			cfg.Vault, envVaultPath)
+	}
+}
+
+func TestLoad_WhitespaceEnvVaultFallsThroughToFile(t *testing.T) {
+	// A whitespace-only $BNOTES_VAULT must not shadow the vault key in the
+	// config file. Previously the env's whitespace was assigned to cfg.Vault,
+	// then trimmed to "", so the file's vault key was silently dropped.
+	resetEnv(t)
+	fileVault := t.TempDir()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+fileVault+"\"\n")
+	t.Setenv(envVault, "   ")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != fileVault {
+		t.Fatalf("whitespace env should fall through to file: got %q, want %q",
+			cfg.Vault, fileVault)
+	}
+}
+
+func TestLoad_SymlinkedConfigFileResolves(t *testing.T) {
+	// A symlink pointing at a real config file should be followed by Load.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	realDir := t.TempDir()
+	realPath := filepath.Join(realDir, "real.toml")
+	writeFile(t, realPath, "vault = \""+vault+"\"\n")
+
+	linkDir := t.TempDir()
+	linkPath := filepath.Join(linkDir, "link.toml")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	cfg, err := Load("", linkPath)
+	if err != nil {
+		t.Fatalf("Load via symlink: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Errorf("vault via symlinked config: got %q, want %q", cfg.Vault, vault)
+	}
+	if cfg.SourcePath != linkPath {
+		t.Errorf("SourcePath should remain the link path: got %q, want %q",
+			cfg.SourcePath, linkPath)
+	}
+}
+
+func TestLoad_DanglingSymlinkConfigPathIsError(t *testing.T) {
+	// A dangling symlink (target missing) provided explicitly via --config
+	// should be a hard error rather than silently treated as missing.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	linkDir := t.TempDir()
+	linkPath := filepath.Join(linkDir, "dangling.toml")
+	if err := os.Symlink(filepath.Join(linkDir, "no-such-target.toml"), linkPath); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	_, err := Load(vault, linkPath)
+	if err == nil {
+		t.Fatalf("expected error for dangling symlink config")
+	}
+}

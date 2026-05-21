@@ -2,6 +2,16 @@ package wikilink
 
 import "strings"
 
+// invalidNewTarget reports whether s would produce a malformed wikilink if
+// emitted as the target of `[[ ... ]]`. Empty strings collapse the link to
+// `[[]]`; brackets and line-terminators break the `[[...]]` span on re-parse.
+func invalidNewTarget(s string) bool {
+	if s == "" {
+		return true
+	}
+	return strings.ContainsAny(s, "[]\r\n")
+}
+
 // Rewrite walks every wikilink in text and asks fn how to handle it. When fn
 // returns (replacement, true) the link's full `[[...]]` span is replaced with
 // replacement; when it returns (_, false) the original text is preserved.
@@ -56,6 +66,9 @@ func FormatLink(target, heading, alias string) string {
 // case-insensitively. The folder prefix, heading, and alias are preserved.
 // Both `[[OldTitle]]` and `[[Folder/OldTitle]]` are rewritten.
 func RewriteTitle(text, oldTitle, newTitle string) string {
+	if invalidNewTarget(newTitle) {
+		return text
+	}
 	return Rewrite(text, func(l Link) (string, bool) {
 		if !strings.EqualFold(l.Title(), oldTitle) {
 			return "", false
@@ -73,6 +86,9 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 // prefix are left untouched — moving a file across folders only invalidates
 // links that explicitly named the old folder.
 func RewriteMove(text, oldPath, newPath string) string {
+	if invalidNewTarget(newPath) {
+		return text
+	}
 	return Rewrite(text, func(l Link) (string, bool) {
 		if l.Folder == "" {
 			return "", false

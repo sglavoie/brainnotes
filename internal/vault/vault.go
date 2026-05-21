@@ -88,17 +88,27 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 		return errors.New("vault: nil walk callback")
 	}
 	ignore := ignoreSet(v.Cfg)
+	templatesDir := ""
+	if v.Cfg != nil {
+		templatesDir = strings.Trim(filepath.ToSlash(v.Cfg.Templates.Dir), "/")
+		if templatesDir != "" {
+			templatesDir = path.Clean(templatesDir)
+			if templatesDir == "." {
+				templatesDir = ""
+			}
+		}
+	}
 
-	walkErr := filepath.WalkDir(v.Root, func(path string, d fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(v.Root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if path == v.Root {
+		if p == v.Root {
 			return nil
 		}
-		rel, relErr := filepath.Rel(v.Root, path)
+		rel, relErr := filepath.Rel(v.Root, p)
 		if relErr != nil {
-			return fmt.Errorf("vault: rel %q: %w", path, relErr)
+			return fmt.Errorf("vault: rel %q: %w", p, relErr)
 		}
 		relSlash := filepath.ToSlash(rel)
 
@@ -108,6 +118,14 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 				return filepath.SkipDir
 			}
 			if _, skip := ignore[relSlash]; skip {
+				return filepath.SkipDir
+			}
+			// Templates dir is matched case-insensitively because the
+			// invariant "template files must never be walked" is load-bearing:
+			// on case-insensitive filesystems (macOS APFS, Windows NTFS) a
+			// directory created as "Templates" but configured as "templates"
+			// would otherwise leak unrendered placeholder files into the walk.
+			if templatesDir != "" && strings.EqualFold(relSlash, templatesDir) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -127,10 +145,10 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 		if strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
-		if !strings.EqualFold(filepath.Ext(path), ".md") {
+		if !strings.EqualFold(filepath.Ext(p), ".md") {
 			return nil
 		}
-		return fn(&Note{Path: path})
+		return fn(&Note{Path: p})
 	})
 	if walkErr != nil {
 		return fmt.Errorf("vault: walk: %w", walkErr)

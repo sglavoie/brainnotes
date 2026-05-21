@@ -237,6 +237,44 @@ func TestFindCaseInsensitiveMatch(t *testing.T) {
 	}
 }
 
+func TestFindRejectsNULByte(t *testing.T) {
+	cfg := newCfg(t)
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Find(cfg, "book\x00.md"); err == nil {
+		t.Fatal("expected error for NUL byte in name")
+	}
+}
+
+func TestFindRejectsDotNames(t *testing.T) {
+	cfg := newCfg(t)
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{".", ".."} {
+		if _, err := Find(cfg, name); err == nil {
+			t.Fatalf("Find(%q): expected error", name)
+		}
+	}
+}
+
+func TestFindExtensionWithoutDot(t *testing.T) {
+	// A direct caller bypassing config.Load may pass an extension without a
+	// leading dot. Find must normalize so candidate construction still
+	// produces "book.md" rather than "bookmd".
+	cfg := newCfg(t)
+	cfg.Templates.DefaultExtension = "md"
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "Book.md"), "x")
+	got, err := Find(cfg, "book")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Book.md" {
+		t.Fatalf("got %s, want Book.md", filepath.Base(got))
+	}
+}
+
 func TestFindNameWithMixedCaseExtension(t *testing.T) {
 	// Passing "Book.MD" when DefaultExtension is ".md" should still strip the
 	// extension and match "Book Template.md".

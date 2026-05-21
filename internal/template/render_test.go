@@ -307,6 +307,9 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		{"   ", "   "},
 		{"\t", "\t"},
 		{" \n ", " \n "},
+		// Inner [[ means the outer [[ ]] does NOT form a single wrap —
+		// must wrap rather than be detected as already-wrapped.
+		{"[[a[[b]]", "[[[[a[[b]]]]"},
 	}
 	ctx := NewContext("x", "", "/v", nil, FixedClock{T: time.Unix(0, 0).UTC()})
 	for _, c := range cases {

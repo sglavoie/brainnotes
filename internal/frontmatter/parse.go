@@ -165,9 +165,17 @@ func decodeNode(n *yaml.Node) (any, error) {
 		}
 		return out, nil
 	case yaml.MappingNode:
-		var v map[string]any
-		if err := n.Decode(&v); err != nil {
-			return nil, err
+		v := make(map[string]any, len(n.Content)/2)
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			var key string
+			if err := n.Content[i].Decode(&key); err != nil {
+				return nil, fmt.Errorf("decode nested key: %w", err)
+			}
+			val, err := decodeNode(n.Content[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("decode nested value for %q: %w", key, err)
+			}
+			v[key] = val
 		}
 		return v, nil
 	case yaml.AliasNode:

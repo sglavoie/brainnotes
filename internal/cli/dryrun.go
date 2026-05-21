@@ -75,6 +75,13 @@ func formatDryRunValue(v any) string {
 	case int64:
 		return fmt.Sprintf("%d", vv)
 	case float64:
+		// Whole-number floats must render with a `.0` suffix so the dry-run
+		// preview matches what yaml.v3 actually writes (`rating: 3.0`).
+		// Using `%v` (or `%g`) would emit `3`, which the parser would then
+		// read back as int — a real apply-vs-dry-run mismatch.
+		if vv == float64(int64(vv)) {
+			return fmt.Sprintf("%d.0", int64(vv))
+		}
 		return fmt.Sprintf("%v", vv)
 	case time.Time:
 		if vv.Hour() == 0 && vv.Minute() == 0 && vv.Second() == 0 && vv.Nanosecond() == 0 && vv.Location() == time.UTC {

@@ -338,3 +338,150 @@ func TestSavePreservesZeroMode(t *testing.T) {
 	// Clean up: restore permissions so t.TempDir removal succeeds.
 	_ = os.Chmod(notePath, 0o644)
 }
+
+// Walk previously matched the templates dir case-sensitively, so on macOS APFS
+// (case-insensitive, case-preserving) a directory created as "Templates" but
+// configured via cfg.Templates.Dir = "templates" leaked unrendered placeholder
+// files into the walk, breaking the documented invariant that template files
+// must never be walked.
+func TestWalkTemplatesCaseInsensitive(t *testing.T) {
+	cases := []struct {
+		name      string
+		dirOnDisk string
+		cfgDir    string
+	}{
+		{"lower disk, capital cfg", "templates", "Templates"},
+		{"capital disk, lower cfg", "Templates", "templates"},
+		{"mixed disk, plain cfg", "TempLates", "templates"},
+		{"nested dir matched insensitively", "Meta/Templates", "meta/templates"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tmplDir := filepath.Join(dir, filepath.FromSlash(tc.dirOnDisk))
+			if err := os.MkdirAll(tmplDir, 0o755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(tmplDir, "tpl.md"), []byte("---\ncreated: {{date}}\n---\nbroken\n"), 0o644); err != nil {
+				t.Fatalf("write tpl: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "good.md"), []byte("---\ntitle: G\n---\nbody\n"), 0o644); err != nil {
+				t.Fatalf("write good: %v", err)
+			}
+			cfg := &config.Config{
+				Vault:     dir,
+				Templates: config.TemplatesConfig{Dir: tc.cfgDir},
+			}
+			v, err := Open(cfg)
+			if err != nil {
+				t.Fatalf("open: %v", err)
+			}
+			var paths []string
+			if err := v.Walk(WalkFilter{}, func(n *Note) error {
+				rel, _ := filepath.Rel(v.Root, n.Path)
+				paths = append(paths, filepath.ToSlash(rel))
+				return nil
+			}); err != nil {
+				t.Fatalf("walk: %v", err)
+			}
+			for _, p := range paths {
+				if strings.Contains(strings.ToLower(p), "templates/") || strings.HasSuffix(strings.ToLower(p), "/tpl.md") || p == "tpl.md" {
+					t.Errorf("template file leaked into walk: %q (paths=%v)", p, paths)
+				}
+			}
+			foundGood := false
+			for _, p := range paths {
+				if p == "good.md" {
+					foundGood = true
+				}
+			}
+			if !foundGood {
+				t.Errorf("good.md missing from walk: %v", paths)
+			}
+		})
+	}
+}
+
+// Walk must still treat user-configured ignore entries case-sensitively because
+// the doc promises vault-relative slash-separated matching against on-disk
+// names. Adding case-insensitivity for templates must not silently widen this
+// contract for arbitrary cfg.Ignore entries.
+func TestWalkIgnoreRemainsCaseSensitive(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "Archive")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "old.md"), []byte("# old\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg := &config.Config{
+		Vault:  dir,
+		Ignore: []string{"archive"}, // lowercase, won't match capitalized dir
+	}
+	v, err := Open(cfg)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	var paths []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, _ := filepath.Rel(v.Root, n.Path)
+		paths = append(paths, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	found := false
+	for _, p := range paths {
+		if p == "Archive/old.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("case-sensitive Ignore mismatch should leave Archive/old.md visible: %v", paths)
+	}
+}
+
+// Walk must descend into a deeply nested templates dir's PARENT directories
+// even when the parents have case mismatches with the configured templates
+// path, only skipping the final templates segment.
+func TestWalkTemplatesDeepNestedDescendsParents(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "Meta", "Templates"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Meta", "manifest.md"), []byte("---\ntitle: M\n---\nx\n"), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Meta", "Templates", "tpl.md"), []byte("---\nfoo: {{bar}}\n---\nx\n"), 0o644); err != nil {
+		t.Fatalf("write tpl: %v", err)
+	}
+	cfg := &config.Config{
+		Vault:     dir,
+		Templates: config.TemplatesConfig{Dir: "meta/templates"}, // lowercased
+	}
+	v, err := Open(cfg)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	var paths []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, _ := filepath.Rel(v.Root, n.Path)
+		paths = append(paths, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	foundManifest := false
+	for _, p := range paths {
+		if p == "Meta/manifest.md" {
+			foundManifest = true
+		}
+		if p == "Meta/Templates/tpl.md" {
+			t.Errorf("template file %q leaked: %v", p, paths)
+		}
+	}
+	if !foundManifest {
+		t.Errorf("Meta/manifest.md should be walked: %v", paths)
+	}
+}

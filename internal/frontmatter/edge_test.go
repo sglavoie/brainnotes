@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestParseBOMWithCRLF covers a UTF-8 BOM combined with Windows line endings —
@@ -864,6 +865,109 @@ func TestGetOnZeroValueMap(t *testing.T) {
 	}
 	if _, ok := m.GetWikilinkList("k"); ok {
 		t.Error("GetWikilinkList should report absent")
+	}
+}
+
+// TestParseNestedDuplicateKeys — duplicate keys inside a nested map must
+// behave like top-level duplicates: last value wins, no error. Before the fix,
+// decodeNode used n.Decode(&v) for MappingNode which delegated to yaml.v3's
+// strict decoder and errored on duplicate keys, while top-level dup keys were
+// silently accepted (last wins). The inconsistency made it impossible to read
+// notes whose nested frontmatter happened to repeat a key.
+func TestParseNestedDuplicateKeys(t *testing.T) {
+	in := "---\nmeta:\n  key: first\n  key: second\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	meta, _ := doc.Front.Get("meta")
+	m, ok := meta.(map[string]any)
+	if !ok {
+		t.Fatalf("meta: got %T want map[string]any", meta)
+	}
+	if v := m["key"]; v != "second" {
+		t.Errorf("nested key: got %v want \"second\" (last wins)", v)
+	}
+}
+
+// TestParseNestedPreservesScalarTypes — the manual nested-map decoder must
+// preserve scalar types (int, float64, bool, time.Time) the same way the
+// top-level decoder does. A regression here would silently change types of
+// values nested inside a map property.
+func TestParseNestedPreservesScalarTypes(t *testing.T) {
+	in := "---\nmeta:\n  count: 5\n  rate: 3.0\n  flag: true\n  ts: 2025-12-13T10:30:00Z\n  date: 2025-12-13\n  s: hello\n  n: ~\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	meta, _ := doc.Front.Get("meta")
+	m, ok := meta.(map[string]any)
+	if !ok {
+		t.Fatalf("meta: got %T want map[string]any", meta)
+	}
+	if _, ok := m["count"].(int); !ok {
+		t.Errorf("count: got %T want int", m["count"])
+	}
+	if _, ok := m["rate"].(float64); !ok {
+		t.Errorf("rate: got %T want float64", m["rate"])
+	}
+	if _, ok := m["flag"].(bool); !ok {
+		t.Errorf("flag: got %T want bool", m["flag"])
+	}
+	if _, ok := m["ts"].(time.Time); !ok {
+		t.Errorf("ts: got %T want time.Time", m["ts"])
+	}
+	if _, ok := m["date"].(time.Time); !ok {
+		t.Errorf("date: got %T want time.Time", m["date"])
+	}
+	if _, ok := m["s"].(string); !ok {
+		t.Errorf("s: got %T want string", m["s"])
+	}
+	if m["n"] != nil {
+		t.Errorf("n: got %T %v want nil", m["n"], m["n"])
+	}
+}
+
+// TestParseNestedAnchorAlias — an alias inside a nested map must resolve at
+// parse, just like at the top level.
+func TestParseNestedAnchorAlias(t *testing.T) {
+	in := "---\nmeta:\n  a: &id hello\n  b: *id\n---\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	meta, _ := doc.Front.Get("meta")
+	m, ok := meta.(map[string]any)
+	if !ok {
+		t.Fatalf("meta: got %T", meta)
+	}
+	if m["a"] != "hello" || m["b"] != "hello" {
+		t.Errorf("nested alias did not resolve: a=%v b=%v", m["a"], m["b"])
+	}
+}
+
+// TestParseNestedListWithNullItem — null inside a list inside a nested map
+// must decode to Go nil, not be silently dropped or stringified.
+func TestParseNestedListWithNullItem(t *testing.T) {
+	in := "---\nmeta:\n  items:\n    - ~\n    - x\n---\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	meta, _ := doc.Front.Get("meta")
+	m := meta.(map[string]any)
+	items, ok := m["items"].([]any)
+	if !ok {
+		t.Fatalf("items: got %T", m["items"])
+	}
+	if len(items) != 2 {
+		t.Fatalf("items: got %d want 2", len(items))
+	}
+	if items[0] != nil {
+		t.Errorf("items[0]: got %v want nil", items[0])
+	}
+	if items[1] != "x" {
+		t.Errorf("items[1]: got %v want \"x\"", items[1])
 	}
 }
 

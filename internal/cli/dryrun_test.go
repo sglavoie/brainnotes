@@ -243,6 +243,66 @@ func TestSetDryRun_WikilinkAlreadyStoredIsNoOp(t *testing.T) {
 	}
 }
 
+// TestSetDryRun_WholeNumberFloatValueMatchesApplyPath verifies that the
+// dry-run preview for a key whose existing value is a whole-number float
+// (e.g. `rating: 3.0`) reflects the same `3.0` form that yaml.v3 actually
+// writes. Before the fix, the in-memory float64(3.0) rendered as `3` in the
+// dry-run output, while the apply path's YAML write preserved `3.0`.
+func TestSetDryRun_WholeNumberFloatValueMatchesApplyPath(t *testing.T) {
+	root := t.TempDir()
+	notePath := filepath.Join(root, "wn.md")
+	if err := os.WriteFile(notePath, []byte("---\nrating: 3.0\n---\nBody.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BNOTES_CONFIG", cfgPath)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_VAULT", "")
+
+	// Switching rating from 3.0 to 5 (an int) is a real change. The dry-run
+	// preview must show the existing value as `3.0`, not `3`.
+	out, err := runCLI(t, "", "set", "--dry-run", notePath, "rating=5")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "- rating: 3.0") {
+		t.Fatalf("expected `- rating: 3.0` (existing float form) in dry-run output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "+ rating: 5") {
+		t.Fatalf("expected `+ rating: 5` (new int value) in dry-run output, got:\n%s", out)
+	}
+}
+
+// TestFormatDryRunValue_WholeNumberFloat verifies that float64 values with a
+// whole-number value render with a `.0` suffix so the dry-run preview matches
+// what yaml.v3 actually writes (e.g. `rating: 3.0`). Before the fix, `%v`
+// formatting collapsed `3.0` to `3`, producing a dry-run preview that did not
+// match the apply path — `bn set --dry-run rating=3` printed `+ rating: 3`
+// while the corresponding YAML write would store `rating: 3` (int) instead.
+// The dry-run preview must reflect the actual on-disk form.
+func TestFormatDryRunValue_WholeNumberFloat(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want string
+	}{
+		{3.0, "3.0"},
+		{0.0, "0.0"},
+		{-7.0, "-7.0"},
+		{1.5, "1.5"},
+		{3.14, "3.14"},
+		{-2.5, "-2.5"},
+	}
+	for _, c := range cases {
+		got := formatDryRunValue(c.in)
+		if got != c.want {
+			t.Errorf("formatDryRunValue(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // TestFormatDryRunValue_TimeZoneAtMidnight verifies that a time.Time at midnight
 // in a non-UTC zone with offset 0 (e.g. time.FixedZone("", 0)) does NOT render
 // as date-only. Only times explicitly in time.UTC should use the short form.
