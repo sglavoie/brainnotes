@@ -30,6 +30,9 @@ func (n *Note) Load() error {
 	if n.loaded {
 		return nil
 	}
+	if n.Path == "" {
+		return errors.New("note: load: empty path")
+	}
 	data, err := os.ReadFile(n.Path)
 	if err != nil {
 		return fmt.Errorf("note: read %q: %w", n.Path, err)
@@ -56,6 +59,9 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	}
 	if !n.loaded {
 		return fmt.Errorf("note: save %q: not loaded", n.Path)
+	}
+	if n.Path == "" {
+		return errors.New("note: save: empty path")
 	}
 	data, err := frontmatter.Marshal(n.doc, fmCfg)
 	if err != nil {

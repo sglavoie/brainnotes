@@ -635,6 +635,42 @@ func TestWalkCaseInsensitiveExtension(t *testing.T) {
 	}
 }
 
+// TestLoadEmptyPath verifies that Load on a Note with an empty Path returns
+// an error rather than producing a confusing `open : no such file` from
+// os.ReadFile. Callers that set Path lazily can otherwise leak the call site
+// into a downstream error.
+func TestLoadEmptyPath(t *testing.T) {
+	n := &Note{Path: ""}
+	err := n.Load()
+	if err == nil {
+		t.Fatal("Load with empty Path should return an error")
+	}
+	if !strings.Contains(err.Error(), "empty path") {
+		t.Errorf("error should mention empty path: %v", err)
+	}
+}
+
+// TestSaveEmptyPath verifies that Save on a loaded Note with an empty Path
+// errors instead of writing temp files to the process cwd and then failing the
+// rename. atomicWrite is given a destination, so an empty Path used to call
+// os.CreateTemp(".", ...) and dump a sibling next to whatever the cwd was.
+func TestSaveEmptyPath(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nbody\n",
+	})
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := n.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	n.Path = ""
+	if err := n.Save(&v.Cfg.Frontmatter); err == nil {
+		t.Fatal("Save with empty Path should return an error")
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

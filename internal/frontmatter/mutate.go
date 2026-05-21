@@ -151,6 +151,12 @@ func (m *Map) RenameKey(oldK, newK string) (bool, error) {
 	if oldK == newK {
 		return false, nil
 	}
+	// An empty newK would silently insert a `""` key, which YAML re-parses as
+	// an unnamed property and is not addressable by callers. Reject it so the
+	// rename operation can't corrupt the frontmatter.
+	if newK == "" {
+		return false, errors.New("frontmatter: empty target key")
+	}
 	if _, ok := m.vals[oldK]; !ok {
 		return false, nil
 	}

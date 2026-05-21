@@ -7,11 +7,33 @@ import "strings"
 // `[[]]`; brackets and line-terminators break the `[[...]]` span on re-parse.
 // `#` and `|` are wikilink separators — embedding them in a target would
 // silently introduce a heading or alias on re-parse, changing link semantics.
+// Whitespace-only strings, a trailing `/` (empty title segment), and bare-or-
+// folder-prefixed `.md` suffixes that leave an empty title base are also
+// rejected: Parse would either reject the rewritten link or normalize it back
+// to something the rewrite didn't intend.
 func invalidNewTarget(s string) bool {
 	if s == "" {
 		return true
 	}
-	return strings.ContainsAny(s, "[]#|\r\n")
+	if strings.ContainsAny(s, "[]#|\r\n") {
+		return true
+	}
+	if trimASCIISpace(s) == "" {
+		return true
+	}
+	if strings.HasSuffix(s, "/") {
+		return true
+	}
+	// Reject targets whose final path segment is empty after stripping a
+	// trailing .md (case-insensitive). Examples: ".md", "Folder/.md".
+	base, _ := splitMDExt(s)
+	if base == "" {
+		return true
+	}
+	if idx := strings.LastIndex(base, "/"); idx >= 0 && idx == len(base)-1 {
+		return true
+	}
+	return false
 }
 
 // splitMDExt returns s with a trailing case-insensitive `.md` suffix removed

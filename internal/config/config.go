@@ -374,6 +374,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Templates.DefaultExtension == "" || cfg.Templates.DefaultExtension == "." {
 		cfg.Templates.DefaultExtension = ".md"
 	}
+	// Reject extensions containing path separators or NUL — they cannot appear
+	// in a sane filename suffix and would produce values like ".md/file" that
+	// silently corrupt the output path when `bn new` joins template name + ext.
+	if strings.ContainsAny(cfg.Templates.DefaultExtension, "/\\\x00") {
+		cfg.Templates.DefaultExtension = ".md"
+	}
 	if !strings.HasPrefix(cfg.Templates.DefaultExtension, ".") {
 		cfg.Templates.DefaultExtension = "." + cfg.Templates.DefaultExtension
 	}

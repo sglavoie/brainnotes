@@ -1425,6 +1425,31 @@ func TestLoad_TemplatesDirParentTraversalFallsBack(t *testing.T) {
 	}
 }
 
+func TestLoad_TemplatesDefaultExtensionRejectsPathSeparators(t *testing.T) {
+	// `default_extension` is joined as a suffix to the rendered filename. A
+	// value containing `/` or `\` would silently produce paths like
+	// "Note.md/file" — the resulting filename is unusable. Fall back to ".md"
+	// so the user gets predictable behavior instead of a corrupted path.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{"/", "md/file", ".md/x", `\bad`, `.md\x`} {
+		t.Run(raw, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.toml")
+			// Use TOML literal string (single quotes) so backslashes pass through verbatim.
+			writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndefault_extension = '"+raw+"'\n")
+			cfg, err := Load("", cfgPath)
+			if err != nil {
+				t.Fatalf("Load (%q): %v", raw, err)
+			}
+			if cfg.Templates.DefaultExtension != ".md" {
+				t.Errorf("raw %q: got %q, want %q", raw, cfg.Templates.DefaultExtension, ".md")
+			}
+		})
+	}
+}
+
 func TestLoad_TemplatesDefaultExtensionDotOnlyFallsBackToDefault(t *testing.T) {
 	// `default_extension = "."` would otherwise produce filenames like
 	// "Note." — a stray period with no real extension. Fall back to ".md".

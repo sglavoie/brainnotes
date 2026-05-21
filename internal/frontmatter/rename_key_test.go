@@ -106,6 +106,27 @@ func TestRenameKey_SameKeyAbsent(t *testing.T) {
 	}
 }
 
+func TestRenameKey_EmptyTargetKeyRejected(t *testing.T) {
+	// An empty newK silently inserted a "" key whose YAML round-trip is
+	// unaddressable. The rename must error and leave the map unchanged.
+	m := NewMap()
+	m.Set("kind", "article")
+
+	changed, err := m.RenameKey("kind", "")
+	if err == nil {
+		t.Fatal("RenameKey to empty key should error")
+	}
+	if changed {
+		t.Error("changed should be false on rejected rename")
+	}
+	if !m.Has("kind") {
+		t.Error("original key should be preserved when target is empty")
+	}
+	if m.Has("") {
+		t.Error("empty key should not be inserted")
+	}
+}
+
 func TestRenameKey_PreservesKeyOrder(t *testing.T) {
 	m := NewMap()
 	m.Set("alpha", 1)

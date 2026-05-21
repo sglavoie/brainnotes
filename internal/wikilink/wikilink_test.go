@@ -1159,6 +1159,65 @@ func TestRewriteMoveRejectsHashOrPipeInNewPath(t *testing.T) {
 	}
 }
 
+func TestRewriteTitleRejectsCorruptingNewTitle(t *testing.T) {
+	t.Parallel()
+	// New titles that would produce a malformed or unparseable link must be
+	// rejected so the rewrite is a no-op rather than silently corrupting the
+	// vault. These were previously accepted and produced links like `[[]]`,
+	// `[[ ]]`, or `[[Folder/]]` that Parse no longer recognizes as wikilinks.
+	tests := []struct {
+		name     string
+		newTitle string
+	}{
+		{"md ext only", ".md"},
+		{"md ext only uppercase", ".MD"},
+		{"whitespace only", "   "},
+		{"trailing slash", "Bar/"},
+		{"tab only", "\t"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for _, in := range []string{
+				"see [[Foo]] here",
+				"[[Folder/Foo]]",
+				"[[Foo#Section|alias]]",
+			} {
+				got := RewriteTitle(in, "Foo", tc.newTitle)
+				if got != in {
+					t.Errorf("RewriteTitle(%q, Foo, %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newTitle, got, in)
+				}
+			}
+		})
+	}
+}
+
+func TestRewriteMoveRejectsCorruptingNewPath(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		newPath string
+	}{
+		{"trailing slash", "Refs/Bar/"},
+		{"trailing slash bare", "Bar/"},
+		{"md only", ".md"},
+		{"folder slash md only", "Refs/.md"},
+		{"whitespace only", "  "},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := "[[Books/Foo]] and [[Books/Foo#H|a]]"
+			got := RewriteMove(in, "Books/Foo", tc.newPath)
+			if got != in {
+				t.Fatalf("RewriteMove(%q, ..., %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newPath, got, in)
+			}
+		})
+	}
+}
+
 func TestRewriteMDExtensionRoundTrip(t *testing.T) {
 	t.Parallel()
 	// After a rename that touches a `.md`-suffixed link, the output must
