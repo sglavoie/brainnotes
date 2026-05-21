@@ -109,6 +109,9 @@ func (n *Note) Folder(root string) (string, error) {
 	if n == nil {
 		return "", errors.New("vault: nil note")
 	}
+	if root == "" {
+		return "", errors.New("note: empty root")
+	}
 	rel, err := filepath.Rel(root, n.Path)
 	if err != nil {
 		return "", fmt.Errorf("note: rel %q: %w", n.Path, err)

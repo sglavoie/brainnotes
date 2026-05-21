@@ -422,6 +422,44 @@ func TestRename_FzfInvalidTitleBeforePicker(t *testing.T) {
 	}
 }
 
+// TestRenameRejectsDirectoryDestination locks in that a rename whose destination
+// path resolves to an existing directory is refused — even with --force. Before
+// the fix, --force trusted the user and let os.Rename fail mid-apply (after
+// every other note's wikilinks had already been rewritten), leaving the vault
+// in a half-rewritten state with no clear error pointing at the cause.
+func TestRenameRejectsDirectoryDestination(t *testing.T) {
+	root := buildRenameFixture(t)
+	dirAtDest := filepath.Join(root, "Sand Worms.md")
+	if err := os.MkdirAll(dirAtDest, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Without --force: directory check fires before the generic "already
+	// exists" path, producing a specific error.
+	_, err := runCLI(t, "", "rename", "Dune", "Sand Worms")
+	if err == nil {
+		t.Fatal("expected directory-destination error without --force")
+	}
+	if !strings.Contains(err.Error(), "existing directory") {
+		t.Fatalf("expected 'existing directory' error, got %v", err)
+	}
+
+	// Even with --force, the directory must be refused; otherwise we'd rewrite
+	// every backlink in the vault only to have os.Rename fail mid-apply.
+	_, err = runCLI(t, "", "rename", "Dune", "Sand Worms", "--force")
+	if err == nil {
+		t.Fatal("expected directory-destination error with --force")
+	}
+	if !strings.Contains(err.Error(), "existing directory") {
+		t.Fatalf("expected 'existing directory' error with --force, got %v", err)
+	}
+
+	// The original note must still exist; no rewrites should have happened.
+	if _, err := os.Stat(filepath.Join(root, "Dune.md")); err != nil {
+		t.Fatalf("original should still exist: %v", err)
+	}
+}
+
 // snapshotVault returns a map of relative-path -> content for every regular
 // file under root. Used to assert dry-run leaves the tree untouched.
 func snapshotVault(t *testing.T, root string) map[string]string {

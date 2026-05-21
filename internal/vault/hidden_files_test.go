@@ -442,6 +442,52 @@ func TestWalkIgnoreRemainsCaseSensitive(t *testing.T) {
 	}
 }
 
+// ResolveByTitle's folder scope was previously case-sensitive, which is
+// inconsistent with the case-insensitive title match and surprising on
+// case-insensitive filesystems (macOS APFS, Windows NTFS). A user with
+// `People/Alice.md` on disk should be able to find it via folder "people"
+// just like via title "alice".
+func TestResolveByTitleFolderCaseInsensitive(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"People/Alice.md": "# a\n",
+		"Refs/Book.md":    "# b\n",
+	})
+	cases := []struct {
+		folder string
+		want   string
+	}{
+		{"people", "Alice.md"},
+		{"PEOPLE", "Alice.md"},
+		{"PeOpLe", "Alice.md"},
+		{"refs", "Book.md"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.folder, func(t *testing.T) {
+			title := "Alice"
+			if tc.want == "Book.md" {
+				title = "Book"
+			}
+			n, err := v.ResolveByTitle(title, tc.folder)
+			if err != nil {
+				t.Fatalf("ResolveByTitle(%q, %q): %v", title, tc.folder, err)
+			}
+			if filepath.Base(n.Path) != tc.want {
+				t.Errorf("got %s, want %s", filepath.Base(n.Path), tc.want)
+			}
+		})
+	}
+}
+
+// Folder must reject an empty root with a clear error instead of falling
+// through to filepath.Rel which would silently produce a confusing path
+// (e.g. the full absolute path made relative to the cwd).
+func TestNoteFolderEmptyRoot(t *testing.T) {
+	n := &Note{Path: "/some/abs/path/note.md"}
+	if _, err := n.Folder(""); err == nil {
+		t.Fatal("Folder with empty root should return an error")
+	}
+}
+
 // Walk must descend into a deeply nested templates dir's PARENT directories
 // even when the parents have case mismatches with the configured templates
 // path, only skipping the final templates segment.

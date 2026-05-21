@@ -5,11 +5,25 @@ import "strings"
 // invalidNewTarget reports whether s would produce a malformed wikilink if
 // emitted as the target of `[[ ... ]]`. Empty strings collapse the link to
 // `[[]]`; brackets and line-terminators break the `[[...]]` span on re-parse.
+// `#` and `|` are wikilink separators — embedding them in a target would
+// silently introduce a heading or alias on re-parse, changing link semantics.
 func invalidNewTarget(s string) bool {
 	if s == "" {
 		return true
 	}
-	return strings.ContainsAny(s, "[]\r\n")
+	return strings.ContainsAny(s, "[]#|\r\n")
+}
+
+// splitMDExt returns s with a trailing case-insensitive `.md` suffix removed
+// and a bool indicating whether the suffix was present. Obsidian treats
+// `[[Note]]` and `[[Note.md]]` as equivalent link forms, so rename/move must
+// match both. The original suffix casing is preserved by the caller when
+// re-attaching the extension to the rewritten target.
+func splitMDExt(s string) (string, string) {
+	if len(s) >= 3 && strings.EqualFold(s[len(s)-3:], ".md") {
+		return s[:len(s)-3], s[len(s)-3:]
+	}
+	return s, ""
 }
 
 // Rewrite walks every wikilink in text and asks fn how to handle it. When fn
@@ -64,18 +78,27 @@ func FormatLink(target, heading, alias string) string {
 // RewriteTitle renames every wikilink whose title (the part after the last `/`
 // in Target, or the whole Target when there is no folder) equals oldTitle
 // case-insensitively. The folder prefix, heading, and alias are preserved.
-// Both `[[OldTitle]]` and `[[Folder/OldTitle]]` are rewritten.
+// Both `[[OldTitle]]` and `[[Folder/OldTitle]]` are rewritten. A trailing
+// `.md` extension on the link's title is also matched and preserved on the
+// rewritten target so `[[Note.md]]` is renamed alongside `[[Note]]`.
 func RewriteTitle(text, oldTitle, newTitle string) string {
 	if invalidNewTarget(newTitle) {
 		return text
 	}
+	oldBase, _ := splitMDExt(oldTitle)
+	newBase, _ := splitMDExt(newTitle)
+	if oldBase == "" {
+		return text
+	}
 	return Rewrite(text, func(l Link) (string, bool) {
-		if !strings.EqualFold(l.Title(), oldTitle) {
+		linkTitle := l.Title()
+		linkBase, ext := splitMDExt(linkTitle)
+		if !strings.EqualFold(linkBase, oldBase) {
 			return "", false
 		}
-		newTarget := newTitle
+		newTarget := newBase + ext
 		if l.Folder != "" {
-			newTarget = l.Folder + "/" + newTitle
+			newTarget = l.Folder + "/" + newBase + ext
 		}
 		return FormatLink(newTarget, l.Heading, l.Alias), true
 	})
@@ -84,18 +107,25 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 // RewriteMove updates folder-prefixed wikilinks whose Target matches oldPath
 // (case-insensitive) to point at newPath. Bare-title links without a folder
 // prefix are left untouched — moving a file across folders only invalidates
-// links that explicitly named the old folder.
+// links that explicitly named the old folder. A trailing `.md` extension on
+// the link's target is matched and preserved on the rewritten target.
 func RewriteMove(text, oldPath, newPath string) string {
 	if invalidNewTarget(newPath) {
+		return text
+	}
+	oldBase, _ := splitMDExt(oldPath)
+	newBase, _ := splitMDExt(newPath)
+	if oldBase == "" {
 		return text
 	}
 	return Rewrite(text, func(l Link) (string, bool) {
 		if l.Folder == "" {
 			return "", false
 		}
-		if !strings.EqualFold(l.Target, oldPath) {
+		targetBase, ext := splitMDExt(l.Target)
+		if !strings.EqualFold(targetBase, oldBase) {
 			return "", false
 		}
-		return FormatLink(newPath, l.Heading, l.Alias), true
+		return FormatLink(newBase+ext, l.Heading, l.Alias), true
 	})
 }

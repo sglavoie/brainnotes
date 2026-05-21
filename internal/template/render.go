@@ -167,7 +167,37 @@ func Slug(s string) string {
 		}
 	}
 	out := b.String()
-	return strings.TrimRight(out, "-")
+	// Trim trailing dashes; also trim any combining marks that are not
+	// attached to a base letter/digit (i.e. marks immediately preceded by a
+	// '-' or by another orphan mark). Marks attached to a base letter — e.g.
+	// the trailing combining acute on "abć" — are preserved.
+	runes := []rune(out)
+	trimming := true
+	for len(runes) > 0 && trimming {
+		last := runes[len(runes)-1]
+		switch {
+		case last == '-':
+			runes = runes[:len(runes)-1]
+		case unicode.IsMark(last):
+			// Only drop the mark if removing it would leave the prior rune
+			// also requiring removal (orphan run). A mark attached to a
+			// letter/digit must stay.
+			if len(runes) >= 2 {
+				prev := runes[len(runes)-2]
+				if prev == '-' || unicode.IsMark(prev) {
+					runes = runes[:len(runes)-1]
+					continue
+				}
+				trimming = false
+			} else {
+				// Single orphan mark in output — drop it.
+				runes = runes[:len(runes)-1]
+			}
+		default:
+			trimming = false
+		}
+	}
+	return string(runes)
 }
 
 // Title returns s with the first rune of each whitespace-separated word

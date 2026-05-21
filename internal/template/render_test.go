@@ -1,6 +1,7 @@
 package template
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -217,6 +218,30 @@ func TestSlugCombiningMarks(t *testing.T) {
 	}
 }
 
+func TestSlugTrailingOrphanMark(t *testing.T) {
+	t.Parallel()
+	// A combining mark that ends up at the end of the output after a
+	// separator-induced dash is an orphan (no preceding base letter). It
+	// must be trimmed along with the dash, instead of producing artifacts
+	// like "foo-́".
+	cases := []struct {
+		in, want string
+	}{
+		{"foo!́", "foo"},
+		{"abc-́", "abc"},
+		{"abc-́́́", "abc"}, // multiple orphan marks
+		// Mark attached to a real base letter must be preserved.
+		{"abć", "abć"},
+		// Leading orphan mark is preserved (per existing behavior).
+		{"́test", "́test"},
+	}
+	for _, c := range cases {
+		if got := Slug(c.in); got != c.want {
+			t.Errorf("Slug(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestSlugSingleChar(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -231,6 +256,50 @@ func TestSlugSingleChar(t *testing.T) {
 		if got := Slug(c.in); got != c.want {
 			t.Errorf("Slug(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestRenderEnvMissing(t *testing.T) {
+	// A missing env var must render as the empty string, matching os.Getenv.
+	os.Unsetenv("BN_RENDER_TEST_MISSING_VAR_XYZ")
+	ctx := NewContext("x", "", "/v", nil, nil)
+	got, err := Render(`v=[{{env "BN_RENDER_TEST_MISSING_VAR_XYZ"}}]`, ctx)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got != "v=[]" {
+		t.Fatalf("got %q, want %q", got, "v=[]")
+	}
+}
+
+func TestRenderUnknownFunction(t *testing.T) {
+	t.Parallel()
+	// Referencing a non-existent helper must produce a parse error.
+	ctx := NewContext("x", "", "/v", nil, nil)
+	_, err := Render(`{{ nosuchfunction "x" }}`, ctx)
+	if err == nil {
+		t.Fatal("expected parse error for unknown function")
+	}
+	if !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("expected parse error, got %v", err)
+	}
+}
+
+func TestRenderYAMLFrontmatterBody(t *testing.T) {
+	t.Parallel()
+	// A template body that contains a YAML frontmatter block must be
+	// rendered verbatim aside from {{...}} substitutions; the renderer must
+	// not strip or reformat the YAML.
+	clk := FixedClock{T: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
+	ctx := NewContext("My Note", "Refs", "/v", nil, clk)
+	body := "---\ntitle: {{.Title}}\ntags: [a, b]\ncreated: {{today}}\n---\n\n# Body\n"
+	got, err := Render(body, ctx)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	want := "---\ntitle: My Note\ntags: [a, b]\ncreated: 2024-01-01\n---\n\n# Body\n"
+	if got != want {
+		t.Fatalf("Render = %q, want %q", got, want)
 	}
 }
 

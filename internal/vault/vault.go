@@ -216,7 +216,7 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 			if noteFolder == "." {
 				noteFolder = ""
 			}
-			if noteFolder != wantFolder {
+			if !strings.EqualFold(noteFolder, wantFolder) {
 				return nil
 			}
 		}

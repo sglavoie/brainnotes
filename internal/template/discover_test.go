@@ -275,6 +275,21 @@ func TestFindExtensionWithoutDot(t *testing.T) {
 	}
 }
 
+func TestFindEmptyStemAfterExtensionStrip(t *testing.T) {
+	// A name that consists only of the configured extension reduces to an
+	// empty stem; the third candidate (" Template.md") would have a leading
+	// space and could accidentally match a poorly-named file. Reject early.
+	cfg := newCfg(t)
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{".md", ".MD"} {
+		if _, err := Find(cfg, name); err == nil {
+			t.Fatalf("Find(%q): expected error for empty stem", name)
+		}
+	}
+}
+
 func TestFindNameWithMixedCaseExtension(t *testing.T) {
 	// Passing "Book.MD" when DefaultExtension is ".md" should still strip the
 	// extension and match "Book Template.md".

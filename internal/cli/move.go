@@ -216,6 +216,12 @@ func checkMoveDestination(targetPath, newPath string, force bool) error {
 	if terr == nil && os.SameFile(targetInfo, newInfo) {
 		return nil
 	}
+	if newInfo.IsDir() {
+		// A directory at the destination would defeat os.Rename — it can't
+		// replace a non-empty directory, and --force would only get us partway
+		// (after wikilink rewrites had already touched other notes).
+		return fmt.Errorf("move: destination %s is an existing directory", newPath)
+	}
 	if force {
 		return nil
 	}

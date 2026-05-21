@@ -383,3 +383,40 @@ func TestMoveToVaultRoot(t *testing.T) {
 		t.Errorf("expected no [[Books/Dune...]] left, got:\n%s", review)
 	}
 }
+
+// TestMoveRejectsDirectoryDestination locks in that a move whose target path
+// resolves to an existing directory is refused — even with --force. Before the
+// fix, --force trusted the user and let os.Rename fail mid-apply (after every
+// other note's wikilinks had already been rewritten), leaving the vault in a
+// half-rewritten state with no clear error pointing at the cause.
+func TestMoveRejectsDirectoryDestination(t *testing.T) {
+	root := buildMoveFixture(t)
+	// Plant a directory at the destination note's path: References/Books/Dune.md
+	// as a directory (legal on POSIX, just unusual).
+	destDir := filepath.Join(root, "References", "Books", "Dune.md")
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	src := filepath.Join(root, "Books", "Dune.md")
+	_, err := runCLI(t, "", "move", src, "References/Books")
+	if err == nil {
+		t.Fatal("expected directory-destination error without --force")
+	}
+	if !strings.Contains(err.Error(), "existing directory") {
+		t.Fatalf("expected 'existing directory' error, got %v", err)
+	}
+
+	_, err = runCLI(t, "", "move", src, "References/Books", "--force")
+	if err == nil {
+		t.Fatal("expected directory-destination error with --force")
+	}
+	if !strings.Contains(err.Error(), "existing directory") {
+		t.Fatalf("expected 'existing directory' error with --force, got %v", err)
+	}
+
+	// Original note must still exist; no rewrites should have happened.
+	if _, err := os.Stat(filepath.Join(root, "Books", "Dune.md")); err != nil {
+		t.Fatalf("original should still exist: %v", err)
+	}
+}

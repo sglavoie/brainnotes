@@ -193,17 +193,22 @@ type CandidatePath struct {
 //
 // Leading "~"/"~/" in the --config flag, $BNOTES_CONFIG, and $XDG_CONFIG_HOME
 // values is expanded to the user's home directory.
+//
+// Whitespace-only values for the flag, $BNOTES_CONFIG, or $XDG_CONFIG_HOME
+// are treated as unset so they fall through to the next precedence level
+// rather than producing confusing "file does not exist" errors.
 func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 	// Track expansion errors per source so we can surface them only if the
 	// failing source would have been the active (highest-priority) candidate.
-	flagPath, flagErr := expandUser(flagConfigPath)
+	flagTrimmed := strings.TrimSpace(flagConfigPath)
+	flagPath, flagErr := expandUser(flagTrimmed)
 	if flagErr != nil {
 		// Flag is highest priority; if it was provided and fails to expand,
 		// surface the error immediately.
 		return nil, fmt.Errorf("config: expand --config %q: %w", flagConfigPath, flagErr)
 	}
 
-	envRaw := os.Getenv(envConfig)
+	envRaw := strings.TrimSpace(os.Getenv(envConfig))
 	envPath, envErr := expandUser(envRaw)
 	if envErr != nil {
 		// If the flag is set, it wins anyway — degrade gracefully so a bad
@@ -222,7 +227,7 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 		{Source: SourceDefault, Label: "default path"},
 	}
 
-	if xdg := os.Getenv(envXDG); xdg != "" {
+	if xdg := strings.TrimSpace(os.Getenv(envXDG)); xdg != "" {
 		expanded, xdgErr := expandUser(xdg)
 		if xdgErr != nil {
 			// XDG is third in precedence; if flag or env is set, fall through.
@@ -349,13 +354,24 @@ func applyDefaults(cfg *Config) {
 	if cfg.Templates.Dir != "" {
 		cfg.Templates.Dir = path.Clean(cfg.Templates.Dir)
 	}
+	// Reject absolute paths and parent-traversal — the templates dir must be
+	// vault-relative for Walk's pruning to match. Silently falling back to
+	// the default is safer than walking a value the user clearly intended
+	// but that cannot work as written.
+	if strings.HasPrefix(cfg.Templates.Dir, "/") ||
+		cfg.Templates.Dir == ".." ||
+		strings.HasPrefix(cfg.Templates.Dir, "../") {
+		cfg.Templates.Dir = "Templates"
+	}
 	if cfg.Templates.Dir == "" || cfg.Templates.Dir == "." {
 		cfg.Templates.Dir = "Templates"
 	}
 	// Normalize the configured extension: trim surrounding whitespace,
-	// fall back to ".md" when empty, then ensure a single leading dot.
+	// fall back to ".md" when empty or just ".", then ensure a single
+	// leading dot. A bare "." would otherwise produce filenames ending in
+	// a stray period (e.g. "Note.").
 	cfg.Templates.DefaultExtension = strings.TrimSpace(cfg.Templates.DefaultExtension)
-	if cfg.Templates.DefaultExtension == "" {
+	if cfg.Templates.DefaultExtension == "" || cfg.Templates.DefaultExtension == "." {
 		cfg.Templates.DefaultExtension = ".md"
 	}
 	if !strings.HasPrefix(cfg.Templates.DefaultExtension, ".") {

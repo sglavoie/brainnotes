@@ -249,6 +249,13 @@ func checkDestination(targetPath, newPath string, force bool) error {
 		// Case-only rename on case-insensitive filesystem — allowed.
 		return nil
 	}
+	if newInfo.IsDir() {
+		// A directory at the destination is never a valid rename target:
+		// os.Rename cannot replace a non-empty directory with a regular file,
+		// so --force would still fail mid-apply (after wikilink rewrites had
+		// already touched other notes). Reject upfront with a clear error.
+		return fmt.Errorf("rename: destination %s is an existing directory", newPath)
+	}
 	if force {
 		return nil
 	}

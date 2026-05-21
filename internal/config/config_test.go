@@ -1318,3 +1318,129 @@ func TestLoad_DanglingSymlinkConfigPathIsError(t *testing.T) {
 		t.Fatalf("expected error for dangling symlink config")
 	}
 }
+
+func TestLoad_WhitespaceBNOTES_CONFIGFallsThrough(t *testing.T) {
+	// A whitespace-only $BNOTES_CONFIG must not be treated as an explicit
+	// path; it should fall through to the next precedence level. Previously
+	// the whitespace value would be stat'd and produce a confusing
+	// "config: file    does not exist" error.
+	resetEnv(t)
+	vaultFile := t.TempDir()
+	xdg := t.TempDir()
+	cfgPath := filepath.Join(xdg, "bnotes", "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vaultFile+"\"\n")
+
+	t.Setenv(envConfig, "   ")
+	t.Setenv(envXDG, xdg)
+
+	cfg, err := Load("", "")
+	if err != nil {
+		t.Fatalf("Load with whitespace BNOTES_CONFIG: %v", err)
+	}
+	if cfg.Vault != vaultFile {
+		t.Fatalf("XDG should win when BNOTES_CONFIG is whitespace: got %q, want %q",
+			cfg.Vault, vaultFile)
+	}
+}
+
+func TestLoad_WhitespaceConfigFlagFallsThrough(t *testing.T) {
+	// A whitespace-only --config flag should not be treated as explicit;
+	// it should fall through so a working env or default still resolves.
+	resetEnv(t)
+	vaultFile := t.TempDir()
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "from-env.toml")
+	writeFile(t, cfgPath, "vault = \""+vaultFile+"\"\n")
+
+	t.Setenv(envConfig, cfgPath)
+
+	cfg, err := Load("", "   ")
+	if err != nil {
+		t.Fatalf("Load with whitespace --config: %v", err)
+	}
+	if cfg.Vault != vaultFile {
+		t.Fatalf("env should win when --config is whitespace: got %q, want %q",
+			cfg.Vault, vaultFile)
+	}
+}
+
+func TestCandidates_WhitespaceXDGTreatedAsUnset(t *testing.T) {
+	// Whitespace-only XDG_CONFIG_HOME used to produce a bogus path like
+	// " /bnotes/config.toml"; instead it should be ignored.
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(envXDG, "   ")
+
+	cands, err := Candidates("")
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	if cands[2].Path != "" {
+		t.Errorf("whitespace XDG should be empty, got %q", cands[2].Path)
+	}
+	if !cands[3].Active {
+		t.Errorf("default path should be active when XDG is whitespace: %+v", cands)
+	}
+}
+
+func TestLoad_TemplatesDirAbsolutePathFallsBack(t *testing.T) {
+	// An absolute templates dir cannot match vault-relative Walk paths,
+	// so it should fall back to the default rather than silently break
+	// template-dir pruning.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{"/abs/Templates", "/Templates"} {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "config.toml")
+		writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \""+raw+"\"\n")
+		cfg, err := Load("", cfgPath)
+		if err != nil {
+			t.Fatalf("Load (%q): %v", raw, err)
+		}
+		if cfg.Templates.Dir != "Templates" {
+			t.Errorf("absolute %q should fall back to Templates, got %q", raw, cfg.Templates.Dir)
+		}
+	}
+}
+
+func TestLoad_TemplatesDirParentTraversalFallsBack(t *testing.T) {
+	// A templates dir starting with ".." escapes the vault and cannot be
+	// pruned by Walk; it should fall back to the default.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{"..", "../escape", "../../escape"} {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "config.toml")
+		writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \""+raw+"\"\n")
+		cfg, err := Load("", cfgPath)
+		if err != nil {
+			t.Fatalf("Load (%q): %v", raw, err)
+		}
+		if cfg.Templates.Dir != "Templates" {
+			t.Errorf("traversal %q should fall back to Templates, got %q", raw, cfg.Templates.Dir)
+		}
+	}
+}
+
+func TestLoad_TemplatesDefaultExtensionDotOnlyFallsBackToDefault(t *testing.T) {
+	// `default_extension = "."` would otherwise produce filenames like
+	// "Note." — a stray period with no real extension. Fall back to ".md".
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndefault_extension = \".\"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Templates.DefaultExtension != ".md" {
+		t.Errorf("default_extension = '.' should fall back to .md, got %q",
+			cfg.Templates.DefaultExtension)
+	}
+}

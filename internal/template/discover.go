@@ -76,6 +76,9 @@ func Find(cfg *config.Config, name string) (string, error) {
 	if ext != "" && strings.EqualFold(filepath.Ext(stem), ext) {
 		stem = strings.TrimSuffix(stem, filepath.Ext(stem))
 	}
+	if strings.TrimSpace(stem) == "" {
+		return "", fmt.Errorf("template: name %q reduces to empty stem after extension strip", name)
+	}
 
 	// Use a small de-dup set so that name="Book.md" doesn't produce
 	// "book.md" twice ("name" and "stem+ext" collapse to the same form).

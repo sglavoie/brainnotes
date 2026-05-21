@@ -30,9 +30,25 @@ func Marshal(doc Document, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 		}
 		out.Write(yamlBytes)
 		out.WriteString("---\n")
+	} else if bodyStartsWithDelimiter(doc.Body) {
+		out.WriteString("---\n---\n")
 	}
 	out.WriteString(doc.Body)
 	return out.Bytes(), nil
+}
+
+// bodyStartsWithDelimiter reports whether body begins with content that Parse
+// would interpret as an opening frontmatter delimiter. When the Front map is
+// empty but the body begins this way, Marshal must emit an explicit empty
+// frontmatter block to prevent the body from being silently reinterpreted as
+// frontmatter on the next Parse.
+func bodyStartsWithDelimiter(body string) bool {
+	s := body
+	if len(s) >= 3 && s[0] == 0xEF && s[1] == 0xBB && s[2] == 0xBF {
+		s = s[3:]
+	}
+	_, ok := openDelimLen(s)
+	return ok
 }
 
 // marshalMap encodes the map as a sorted YAML mapping, applying wikilink

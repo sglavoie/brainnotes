@@ -1006,6 +1006,178 @@ func TestRewriteRoundTripAfterRename(t *testing.T) {
 	}
 }
 
+func TestRewriteTitleHandlesMDExtension(t *testing.T) {
+	t.Parallel()
+	// Obsidian treats `[[Note]]` and `[[Note.md]]` as the same link target.
+	// Rename must rewrite both forms and preserve the explicit extension.
+	tests := []struct {
+		name string
+		in   string
+		old  string
+		new  string
+		want string
+	}{
+		{
+			name: "bare with md extension",
+			in:   "[[Foo.md]] and [[Foo]]",
+			old:  "Foo", new: "Bar",
+			want: "[[Bar.md]] and [[Bar]]",
+		},
+		{
+			name: "folder prefixed with md extension",
+			in:   "[[Refs/Foo.md]] and [[Refs/Foo]]",
+			old:  "Foo", new: "Bar",
+			want: "[[Refs/Bar.md]] and [[Refs/Bar]]",
+		},
+		{
+			name: "uppercase md extension preserved",
+			in:   "[[Foo.MD]]",
+			old:  "Foo", new: "Bar",
+			want: "[[Bar.MD]]",
+		},
+		{
+			name: "md extension with heading and alias",
+			in:   "[[Foo.md#Section|disp]]",
+			old:  "Foo", new: "Bar",
+			want: "[[Bar.md#Section|disp]]",
+		},
+		{
+			name: "old title supplied with md suffix",
+			in:   "[[Foo.md]] and [[Foo]]",
+			old:  "Foo.md", new: "Bar",
+			want: "[[Bar.md]] and [[Bar]]",
+		},
+		{
+			name: "new title supplied with md suffix is normalized",
+			in:   "[[Foo]] and [[Foo.md]]",
+			old:  "Foo", new: "Bar.md",
+			want: "[[Bar]] and [[Bar.md]]",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteTitle(tc.in, tc.old, tc.new)
+			if got != tc.want {
+				t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRewriteMoveHandlesMDExtension(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name             string
+		in               string
+		oldPath, newPath string
+		want             string
+	}{
+		{
+			name:    "md extension preserved on move",
+			in:      "[[Books/Foo.md]]",
+			oldPath: "Books/Foo", newPath: "Refs/Books/Foo",
+			want: "[[Refs/Books/Foo.md]]",
+		},
+		{
+			name:    "bare and md form both rewritten",
+			in:      "[[Books/Foo.md]] and [[Books/Foo]]",
+			oldPath: "Books/Foo", newPath: "Refs/Books/Foo",
+			want: "[[Refs/Books/Foo.md]] and [[Refs/Books/Foo]]",
+		},
+		{
+			name:    "uppercase MD extension preserved",
+			in:      "[[Books/Foo.MD]]",
+			oldPath: "Books/Foo", newPath: "Refs/Books/Foo",
+			want: "[[Refs/Books/Foo.MD]]",
+		},
+		{
+			name:    "newPath supplied with md suffix is normalized",
+			in:      "[[Books/Foo]] and [[Books/Foo.md]]",
+			oldPath: "Books/Foo", newPath: "Refs/Books/Foo.md",
+			want: "[[Refs/Books/Foo]] and [[Refs/Books/Foo.md]]",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteMove(tc.in, tc.oldPath, tc.newPath)
+			if got != tc.want {
+				t.Fatalf("RewriteMove\n  got:  %q\n  want: %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRewriteTitleRejectsHashOrPipeInNewTitle(t *testing.T) {
+	t.Parallel()
+	// `#` and `|` in newTitle would silently introduce a heading or alias on
+	// re-parse, breaking the rewrite invariant. RewriteTitle must reject these
+	// and leave the input unchanged.
+	tests := []struct {
+		name     string
+		newTitle string
+	}{
+		{"contains hash", "Bar#Section"},
+		{"contains pipe", "Bar|alias"},
+		{"contains hash and pipe", "Bar#a|b"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := "see [[Foo]] and [[Refs/Foo|disp]]"
+			got := RewriteTitle(in, "Foo", tc.newTitle)
+			if got != in {
+				t.Fatalf("RewriteTitle(%q, Foo, %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newTitle, got, in)
+			}
+		})
+	}
+}
+
+func TestRewriteMoveRejectsHashOrPipeInNewPath(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		newPath string
+	}{
+		{"contains hash", "Refs/Bar#H"},
+		{"contains pipe", "Refs/Bar|a"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := "[[Books/Foo]] and [[Books/Foo#H|a]]"
+			got := RewriteMove(in, "Books/Foo", tc.newPath)
+			if got != in {
+				t.Fatalf("RewriteMove(%q, ..., %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newPath, got, in)
+			}
+		})
+	}
+}
+
+func TestRewriteMDExtensionRoundTrip(t *testing.T) {
+	t.Parallel()
+	// After a rename that touches a `.md`-suffixed link, the output must
+	// re-parse to a link whose Title() reflects the new name (with .md
+	// preserved), not a heading/alias drift.
+	in := "[[Foo.md]] and [[Refs/Foo.md#H|disp]]"
+	out := RewriteTitle(in, "Foo", "Bar")
+	links := Parse(out)
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links after rename, got %d in %q", len(links), out)
+	}
+	if links[0].Target != "Bar.md" || links[0].Heading != "" || links[0].Alias != "" {
+		t.Errorf("first link = %+v, want Target=Bar.md", links[0])
+	}
+	if links[1].Target != "Refs/Bar.md" || links[1].Heading != "H" || links[1].Alias != "disp" {
+		t.Errorf("second link = %+v", links[1])
+	}
+}
+
 func collectTargets(links []Link) []string {
 	out := make([]string, 0, len(links))
 	for _, l := range links {

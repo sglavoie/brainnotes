@@ -1322,6 +1322,41 @@ func TestFromFlagsSkipsEmptyTagsAndCategories(t *testing.T) {
 	}
 }
 
+// TestMissingIsStrictComplementOfHasOnParseError verifies that Missing returns
+// true when the note's frontmatter cannot be parsed, so that Has and Missing
+// partition every loadable note exactly. Before the fix both returned false on
+// a YAML parse error, leaving the note in neither set.
+func TestMissingIsStrictComplementOfHasOnParseError(t *testing.T) {
+	// Write a file whose frontmatter is a YAML sequence at the document root,
+	// which the frontmatter parser rejects ("top-level must be a mapping").
+	// Use a bare *vault.Note so we can bypass Vault.Notes (which fails fast on
+	// parse errors) and exercise the predicate's own error path.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "broken.md")
+	if err := os.WriteFile(path, []byte("---\n  - x\n---\nbody\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	n := &vault.Note{Path: path}
+	if Has("anything")(n) {
+		t.Errorf("Has(anything) should be false when frontmatter fails to parse")
+	}
+	if !Missing("anything")(n) {
+		t.Errorf("Missing(anything) should be true when frontmatter fails to parse (strict complement of Has)")
+	}
+}
+
+// TestMissingRejectsNilNote verifies that Missing rejects a nil note rather
+// than treating it as "frontmatter failed to load, so the key is absent". A
+// nil note isn't a real note and should match no predicate.
+func TestMissingRejectsNilNote(t *testing.T) {
+	if Missing("x")(nil) {
+		t.Errorf("Missing(x)(nil) = true, want false")
+	}
+	if Has("x")(nil) {
+		t.Errorf("Has(x)(nil) = true, want false")
+	}
+}
+
 // TestParseAgeRoundTripsAllUnits verifies every documented unit (s, m, h, d)
 // is accepted with a non-zero value.
 func TestParseAgeRoundTripsAllUnits(t *testing.T) {

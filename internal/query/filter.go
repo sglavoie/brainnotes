@@ -193,11 +193,17 @@ func Has(prop string) Predicate {
 }
 
 // Missing matches notes whose frontmatter does not contain the named property.
+// It is the strict complement of Has on every non-nil note: when the note
+// cannot be loaded or its frontmatter cannot be parsed, the property is treated
+// as absent (Missing matches, Has does not). A nil note matches neither.
 func Missing(prop string) Predicate {
 	return func(n *vault.Note) bool {
+		if n == nil {
+			return false
+		}
 		fm, err := n.Front()
 		if err != nil {
-			return false
+			return true
 		}
 		return !fm.Has(prop)
 	}
