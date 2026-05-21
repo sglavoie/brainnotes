@@ -193,6 +193,30 @@ func TestTitleUnicode(t *testing.T) {
 	}
 }
 
+func TestSlugCombiningMarks(t *testing.T) {
+	t.Parallel()
+	// NFD-normalized "Café" is C + a + f + e + U+0301 (COMBINING ACUTE ACCENT).
+	// The combining mark must stay attached to the base letter, producing
+	// "café" not "caf-e".
+	cases := []struct {
+		in, want string
+	}{
+		// NFD "Café 2": e + combining acute accent must produce café, not caf-e.
+		{"Café 2", "café-2"},
+		// NFD "über": u + combining diaeresis.
+		{"über", "über"},
+		// Multiple combining marks on one base letter (e.g. Vietnamese).
+		{"ạ́b", "ạ́b"},
+		// Orphan combining mark at start (pathological but should not panic).
+		{"́test", "́test"},
+	}
+	for _, c := range cases {
+		if got := Slug(c.in); got != c.want {
+			t.Errorf("Slug(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestSlugSingleChar(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

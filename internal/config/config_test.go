@@ -1123,3 +1123,113 @@ func TestLoad_EmptyConfigFileUsesDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_IgnoreNormalizesRepeatedDotSlashPrefix(t *testing.T) {
+	// "././Archive" should collapse to "Archive" and dedup with the default.
+	// Before the fix, normalizeIgnore only stripped a single "./" prefix,
+	// leaving "././Archive" as "./Archive" which did not dedup with "Archive".
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"././Archive\", \"./././Drafts\"]\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	archiveCount := 0
+	for _, p := range cfg.Ignore {
+		if p == "Archive" {
+			archiveCount++
+		}
+	}
+	if archiveCount != 1 {
+		t.Fatalf("expected Archive once after ././ normalization, got %d (%v)", archiveCount, cfg.Ignore)
+	}
+	if !contains(cfg.Ignore, "Drafts") {
+		t.Fatalf("expected Drafts after ./././ normalization: %v", cfg.Ignore)
+	}
+}
+
+func TestLoad_IgnoreNormalizesInteriorDotSegments(t *testing.T) {
+	// "sub/./dir" should clean to "sub/dir" via path.Clean.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"sub/./dir\", \"sub/dir\"]\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	count := 0
+	for _, p := range cfg.Ignore {
+		if p == "sub/dir" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected sub/dir once after path.Clean dedup, got %d (%v)", count, cfg.Ignore)
+	}
+}
+
+func TestLoad_TemplatesDirNormalizesDotSlashPrefix(t *testing.T) {
+	// A user writing `dir = "./Templates"` or `dir = "././Templates"`
+	// should still land on "Templates" after path.Clean normalization.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{"./Templates", "././Templates", "./Templates/"} {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "config.toml")
+		writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \""+raw+"\"\n")
+		cfg, err := Load("", cfgPath)
+		if err != nil {
+			t.Fatalf("Load (%q): %v", raw, err)
+		}
+		if cfg.Templates.Dir != "Templates" {
+			t.Errorf("raw %q: got %q, want %q", raw, cfg.Templates.Dir, "Templates")
+		}
+	}
+}
+
+func TestLoad_TemplatesDirDotOnlyFallsBackToDefault(t *testing.T) {
+	// A templates dir of "." should fall back to the default "Templates"
+	// since "." is the vault root itself.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \".\"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Templates.Dir != "Templates" {
+		t.Errorf("dir = '.' should fall back to Templates, got %q", cfg.Templates.Dir)
+	}
+}
+
+func TestLoad_TemplatesDirDotSlashOnlyFallsBackToDefault(t *testing.T) {
+	// "./" normalizes to "." which should then fall back to "Templates".
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \"./\"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Templates.Dir != "Templates" {
+		t.Errorf("dir = './' should fall back to Templates, got %q", cfg.Templates.Dir)
+	}
+}

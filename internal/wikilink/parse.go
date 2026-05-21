@@ -83,6 +83,17 @@ func Parse(s string) []Link {
 		if target == "" {
 			continue
 		}
+		// A heading or alias that is all whitespace after trimming means the
+		// separator (`#` or `|`) was present but the content was empty or
+		// blank. These are not valid Obsidian links; more importantly,
+		// FormatLink would silently drop the separator on rewrite, changing
+		// the link form. Reject them so rewrites never alter link semantics.
+		if m[4] != -1 && heading == "" {
+			continue
+		}
+		if m[6] != -1 && alias == "" {
+			continue
+		}
 		folder := ""
 		if idx := strings.LastIndex(target, "/"); idx >= 0 {
 			folder = target[:idx]

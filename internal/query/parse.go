@@ -10,6 +10,12 @@ import (
 
 // Flags is the flattened set of values produced by the `find` Cobra flags. It
 // is consumed by FromFlags to build a single predicate.
+//
+// The int fields MinBacklinks, MaxBacklinks, MinLinks, and MaxLinks use -1 as
+// the sentinel for "not set". A value of 0 IS a meaningful filter (e.g.
+// MaxBacklinks=0 matches notes with no inbound links). Callers that construct
+// Flags directly must initialise these fields to -1 to avoid unintended
+// filtering — the Go zero value (0) would activate MaxBacklinks/MaxLinks.
 type Flags struct {
 	Tags         []string
 	Categories   []string

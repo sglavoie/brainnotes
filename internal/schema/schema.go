@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,8 +87,19 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 			}
 		}
 		return true, ""
+	default:
+		// For non-string scalar types (int, bool, float64, time.Time),
+		// convert to the canonical string representation and check
+		// against the allowed list.
+		s := scalarToString(v)
+		if s == "" {
+			return true, ""
+		}
+		if !check(s) {
+			return false, s
+		}
+		return true, ""
 	}
-	return true, ""
 }
 
 func stripWikilink(s string) string {
@@ -160,6 +172,20 @@ func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]con
 		}
 	}
 	return violations
+}
+
+func scalarToString(v any) string {
+	switch val := v.(type) {
+	case int:
+		return strconv.Itoa(val)
+	case bool:
+		return strconv.FormatBool(val)
+	case float64:
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case time.Time:
+		return val.Format("2006-01-02")
+	}
+	return ""
 }
 
 func goTypeName(v any) string {

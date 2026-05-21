@@ -47,6 +47,11 @@ func BuildGraph(notes []*vault.Note) *Graph {
 		srcKey := strings.ToLower(srcStem)
 
 		targets := make(map[string]struct{})
+		// Track which backward targets this note has already been
+		// recorded against so that duplicate links (e.g. [[B]] in
+		// both body and frontmatter, or [[B]] mentioned twice in the
+		// body) produce only one backward entry per source note.
+		backSeen := make(map[string]struct{})
 
 		body, err := n.Body()
 		if err == nil {
@@ -59,7 +64,10 @@ func BuildGraph(notes []*vault.Note) *Graph {
 				if tKey == srcKey {
 					continue
 				}
-				g.Backward[tKey] = append(g.Backward[tKey], n.Path)
+				if _, dup := backSeen[tKey]; !dup {
+					g.Backward[tKey] = append(g.Backward[tKey], n.Path)
+					backSeen[tKey] = struct{}{}
+				}
 				if _, exists := g.Titles[tKey]; exists {
 					targets[tKey] = struct{}{}
 				}
@@ -70,7 +78,7 @@ func BuildGraph(notes []*vault.Note) *Graph {
 		if err == nil {
 			for _, k := range fm.Keys() {
 				v, _ := fm.Get(k)
-				g.scanValue(v, n.Path, srcKey, targets)
+				g.scanValue(v, n.Path, srcKey, targets, backSeen)
 			}
 		}
 
@@ -87,7 +95,7 @@ func BuildGraph(notes []*vault.Note) *Graph {
 	return g
 }
 
-func (g *Graph) scanValue(v any, path, srcKey string, targets map[string]struct{}) {
+func (g *Graph) scanValue(v any, path, srcKey string, targets, backSeen map[string]struct{}) {
 	switch vv := v.(type) {
 	case string:
 		for _, link := range wikilink.Parse(vv) {
@@ -99,18 +107,21 @@ func (g *Graph) scanValue(v any, path, srcKey string, targets map[string]struct{
 			if tKey == srcKey {
 				continue
 			}
-			g.Backward[tKey] = append(g.Backward[tKey], path)
+			if _, dup := backSeen[tKey]; !dup {
+				g.Backward[tKey] = append(g.Backward[tKey], path)
+				backSeen[tKey] = struct{}{}
+			}
 			if _, exists := g.Titles[tKey]; exists {
 				targets[tKey] = struct{}{}
 			}
 		}
 	case []any:
 		for _, item := range vv {
-			g.scanValue(item, path, srcKey, targets)
+			g.scanValue(item, path, srcKey, targets, backSeen)
 		}
 	case map[string]any:
 		for _, item := range vv {
-			g.scanValue(item, path, srcKey, targets)
+			g.scanValue(item, path, srcKey, targets, backSeen)
 		}
 	}
 }

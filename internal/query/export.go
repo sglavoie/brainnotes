@@ -72,6 +72,12 @@ func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {
 
 	sorted := sortedKeys(nodes)
 
+	// Build a collision-free slug map: each lowercase title key gets a
+	// unique Mermaid node identifier. When two titles slugify to the same
+	// string (e.g. "A-B" and "A B" both produce "a-b"), a numeric suffix
+	// is appended to disambiguate.
+	slugMap := buildSlugMap(sorted, g)
+
 	defined := make(map[string]struct{})
 
 	type edge struct{ from, to string }
@@ -93,7 +99,7 @@ func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {
 			continue
 		}
 		label := g.originalTitle(key)
-		slug := slugify(label)
+		slug := slugMap[key]
 		if _, err := fmt.Fprintf(w, "  %s[\"%s\"]\n", slug, mermaidEscape(label)); err != nil {
 			return err
 		}
@@ -103,8 +109,8 @@ func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {
 	for _, e := range edges {
 		srcLabel := g.originalTitle(e.from)
 		dstLabel := g.originalTitle(e.to)
-		srcSlug := slugify(srcLabel)
-		dstSlug := slugify(dstLabel)
+		srcSlug := slugMap[e.from]
+		dstSlug := slugMap[e.to]
 
 		var srcPart, dstPart string
 		if _, ok := defined[e.from]; !ok {
@@ -126,6 +132,27 @@ func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {
 	}
 
 	return nil
+}
+
+// buildSlugMap assigns a unique Mermaid node ID to each title key. When two
+// keys produce the same slug, the second (and subsequent) get a numeric suffix.
+func buildSlugMap(keys []string, g *Graph) map[string]string {
+	m := make(map[string]string, len(keys))
+	used := make(map[string]int) // slug -> count of times assigned
+	for _, key := range keys {
+		base := slugify(g.originalTitle(key))
+		if base == "" {
+			base = "node"
+		}
+		count := used[base]
+		used[base] = count + 1
+		if count == 0 {
+			m[key] = base
+		} else {
+			m[key] = fmt.Sprintf("%s-%d", base, count)
+		}
+	}
+	return m
 }
 
 func (g *Graph) originalTitle(key string) string {

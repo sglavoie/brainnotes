@@ -508,6 +508,133 @@ func TestResolveByTitleDeepFolders(t *testing.T) {
 	}
 }
 
+// TestTitleEmptyPath verifies that Title returns "" when Path is empty, rather
+// than the "." that filepath.Base("") produces. An empty-path note should
+// behave like a nil note for callers that branch on an empty title.
+func TestTitleEmptyPath(t *testing.T) {
+	n := &Note{Path: ""}
+	if got := n.Title(); got != "" {
+		t.Errorf("Title() on empty path = %q, want empty", got)
+	}
+}
+
+// TestResolveByTitleSlashOnlyFolder verifies that a folder argument that
+// normalizes to "" (e.g. "/" or "//") produces a vault-wide search and, on
+// no-match, an error that does NOT claim the search was scoped to a folder.
+// Before the fix, the not-found branch checked the raw folder argument,
+// producing a misleading "no note titled X in /" message even though the
+// actual search was vault-wide.
+func TestResolveByTitleSlashOnlyFolder(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"People/Alice.md": "# alice\n",
+	})
+	// A slash-only folder normalizes to "" -> vault-wide search.
+	n, err := v.ResolveByTitle("Alice", "/")
+	if err != nil {
+		t.Fatalf("expected vault-wide match for folder %q, got error: %v", "/", err)
+	}
+	if filepath.Base(n.Path) != "Alice.md" {
+		t.Fatalf("got %s, want Alice.md", filepath.Base(n.Path))
+	}
+
+	// Not-found with slash-only folder: error must NOT include the raw "/" folder.
+	_, err = v.ResolveByTitle("ZZZmissing", "/")
+	if err == nil {
+		t.Fatal("expected not-found error")
+	}
+	if strings.Contains(err.Error(), `in "/"`) || strings.Contains(err.Error(), "in `/`") {
+		t.Errorf("error should not mention slash-only folder: %v", err)
+	}
+}
+
+// TestWalkNilVault verifies that Walk on a nil vault returns an error rather
+// than panicking with a nil-pointer dereference.
+func TestWalkNilVault(t *testing.T) {
+	var v *Vault
+	err := v.Walk(WalkFilter{}, func(n *Note) error { return nil })
+	if err == nil {
+		t.Fatal("expected error from Walk on nil vault")
+	}
+}
+
+// TestWalkNilCallback verifies that Walk with a nil callback returns a clear
+// error rather than panicking inside filepath.WalkDir.
+func TestWalkNilCallback(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{"a.md": "# a\n"})
+	err := v.Walk(WalkFilter{}, nil)
+	if err == nil {
+		t.Fatal("expected error from Walk with nil callback")
+	}
+}
+
+// TestNilNoteAccessors verifies that Front, Body, and SetBody on a nil *Note
+// return errors rather than panicking.
+func TestNilNoteAccessors(t *testing.T) {
+	var n *Note
+
+	if _, err := n.Front(); err == nil {
+		t.Error("nil Front() should return an error")
+	}
+	if _, err := n.Body(); err == nil {
+		t.Error("nil Body() should return an error")
+	}
+	if err := n.SetBody("x"); err == nil {
+		t.Error("nil SetBody() should return an error")
+	}
+}
+
+// TestSaveCreatesParentDirs verifies that atomicWrite creates intermediate
+// directories when saving a note to a path whose parent does not yet exist.
+func TestSaveCreatesParentDirs(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nbody\n",
+	})
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	// Load the note before changing the path, so the content is in memory.
+	if err := n.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	// Move the note to a not-yet-existing subdirectory.
+	newPath := filepath.Join(v.Root, "NewDir", "SubDir", "moved.md")
+	n.Path = newPath
+	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+		t.Fatalf("save to new dir: %v", err)
+	}
+	data, err := os.ReadFile(newPath)
+	if err != nil {
+		t.Fatalf("read moved note: %v", err)
+	}
+	if !strings.Contains(string(data), "title: A") {
+		t.Errorf("moved note should contain 'title: A', got: %q", string(data))
+	}
+}
+
+// TestWalkCaseInsensitiveExtension verifies that Walk includes .MD and .Md
+// files, not just .md, matching the EqualFold check on the extension.
+func TestWalkCaseInsensitiveExtension(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"lower.md": "# lower\n",
+		"upper.MD": "# upper\n",
+		"mixed.Md": "# mixed\n",
+		"skip.txt": "not a note",
+	})
+	var visited []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		visited = append(visited, filepath.Base(n.Path))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	sort.Strings(visited)
+	want := []string{"lower.md", "mixed.Md", "upper.MD"}
+	if !equalStrings(visited, want) {
+		t.Errorf("walk visited %v, want %v", visited, want)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

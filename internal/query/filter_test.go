@@ -1093,6 +1093,31 @@ func TestFolderPredicateRejectsNilNote(t *testing.T) {
 	}
 }
 
+// TestFromFlagsZeroValueIntFieldsRequireGraph documents the sentinel convention:
+// the Go zero value (0) for MaxBacklinks/MaxLinks activates the filter, so
+// callers must set them to -1 to mean "not set". This test pins down the
+// expected error when a zero-valued Flags struct is used without a graph.
+func TestFromFlagsZeroValueIntFieldsRequireGraph(t *testing.T) {
+	// Zero-valued Flags has MaxBacklinks=0 and MaxLinks=0, both of which
+	// activate filters that require a graph.
+	_, err := FromFlags(Flags{})
+	if err == nil {
+		t.Errorf("FromFlags(Flags{}) should error because MaxBacklinks=0 and MaxLinks=0 require a graph")
+	}
+
+	// With sentinel values of -1, no graph is needed and all notes match.
+	pred, err := FromFlags(Flags{MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1})
+	if err != nil {
+		t.Fatalf("FromFlags with sentinel values: %v", err)
+	}
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntitle: a\n---\n",
+	})
+	if !pred(notes["a.md"]) {
+		t.Errorf("all-sentinel Flags should match every note")
+	}
+}
+
 // TestParseAgeRoundTripsAllUnits verifies every documented unit (s, m, h, d)
 // is accepted with a non-zero value.
 func TestParseAgeRoundTripsAllUnits(t *testing.T) {

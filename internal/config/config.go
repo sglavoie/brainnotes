@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -337,14 +338,18 @@ func DefaultTemplate() string {
 }
 
 func applyDefaults(cfg *Config) {
-	// Trim surrounding whitespace and any trailing path separators so the
-	// configured templates dir matches the vault-relative paths Walk compares
-	// against. Without this, `dir = "Templates/"` (or with stray spaces) would
-	// silently fail to be pruned and template files would be walked.
+	// Trim surrounding whitespace, convert platform separators to slash, and
+	// strip trailing slashes so the configured templates dir matches the
+	// vault-relative paths Walk compares against. Without this,
+	// `dir = "Templates/"` (or with stray spaces) would silently fail to be
+	// pruned and template files would be walked.
 	cfg.Templates.Dir = strings.TrimSpace(cfg.Templates.Dir)
+	cfg.Templates.Dir = filepath.ToSlash(cfg.Templates.Dir)
 	cfg.Templates.Dir = strings.TrimRight(cfg.Templates.Dir, "/")
-	cfg.Templates.Dir = strings.TrimRight(cfg.Templates.Dir, string(os.PathSeparator))
-	if cfg.Templates.Dir == "" {
+	if cfg.Templates.Dir != "" {
+		cfg.Templates.Dir = path.Clean(cfg.Templates.Dir)
+	}
+	if cfg.Templates.Dir == "" || cfg.Templates.Dir == "." {
 		cfg.Templates.Dir = "Templates"
 	}
 	// Normalize the configured extension: trim surrounding whitespace,
@@ -395,26 +400,25 @@ func mergeIgnore(defaults, extra []string) []string {
 	return out
 }
 
-// normalizeIgnore trims surrounding whitespace, strips a leading "./", and
-// removes trailing path separators so that variants like "Archive/",
-// "./Archive", and " Archive " all collapse to "Archive" for dedup purposes.
-// An entry that normalizes to "" (e.g. originally just whitespace, or ".") is
-// dropped by mergeIgnore.
+// normalizeIgnore trims surrounding whitespace, converts platform separators
+// to forward slashes, and applies path.Clean so that variants like "Archive/",
+// "./Archive", "././Archive", and " Archive " all collapse to "Archive" for
+// dedup purposes. An entry that normalizes to "" or "." (e.g. originally just
+// whitespace, or ".") is dropped by mergeIgnore.
 func normalizeIgnore(p string) string {
 	p = strings.TrimSpace(p)
 	if p == "" {
 		return ""
 	}
-	// Strip a single leading "./" so "./Archive" matches "Archive".
-	if strings.HasPrefix(p, "./") {
-		p = p[2:]
-	} else if strings.HasPrefix(p, "."+string(os.PathSeparator)) {
-		p = p[2:]
-	}
-	// Trim trailing separators (but keep "/" itself meaningful as empty).
+	// Convert platform separators to forward slash before cleaning so that
+	// entries like ".\Archive" on Windows are treated the same as "./Archive".
+	p = filepath.ToSlash(p)
+	// Trim trailing slashes so "Archive/" becomes "Archive".
 	p = strings.TrimRight(p, "/")
-	p = strings.TrimRight(p, string(os.PathSeparator))
-	if p == "." {
+	// path.Clean handles repeated "./", interior ".", and other artifacts,
+	// matching the normalization the vault walker applies in ignoreSet.
+	p = path.Clean(p)
+	if p == "" || p == "." {
 		return ""
 	}
 	return p

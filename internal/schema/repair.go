@@ -176,6 +176,11 @@ func TryCoerce(val any, targetType string) (any, bool) {
 			if math.IsNaN(f) || math.IsInf(f, 0) {
 				return nil, false
 			}
+			// float64(MaxInt64) rounds up to 2^63, which is already outside
+			// the int64 range, so >= is correct for the upper bound.
+			if f >= float64(math.MaxInt64) || f < float64(math.MinInt64) {
+				return nil, false
+			}
 			n := int(f)
 			if float64(n) == f {
 				return n, true
@@ -292,8 +297,21 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 			return out, unfixable
 		}
 		return val, unfixable
+	default:
+		// For non-string scalar types (int, bool, float64, time.Time),
+		// convert to the canonical string representation and check
+		// against the allowed list. Case-insensitive canonicalization
+		// is not applicable to numeric/bool/date types, so mismatches
+		// are reported as unfixable.
+		s := scalarToString(v)
+		if s == "" {
+			return val, nil
+		}
+		if isAllowedValue(s, allowed) {
+			return val, nil
+		}
+		return val, []string{s}
 	}
-	return val, nil
 }
 
 func isAllowedValue(s string, allowed []string) bool {

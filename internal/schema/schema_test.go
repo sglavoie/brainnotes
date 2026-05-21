@@ -116,9 +116,49 @@ func TestCheckAllowed_Wikilink(t *testing.T) {
 }
 
 func TestCheckAllowed_NonStringType(t *testing.T) {
+	// Int value whose string representation is in the allowed list.
 	ok, _ := CheckAllowed(42, []string{"42"}, false)
 	if !ok {
-		t.Error("non-string types should always return ok")
+		t.Error("expected ok when int string representation is in allowed list")
+	}
+
+	// Int value whose string representation is NOT in the allowed list.
+	ok, bad := CheckAllowed(99, []string{"1", "2", "3"}, false)
+	if ok {
+		t.Error("expected failure when int string representation is not in allowed list")
+	}
+	if bad != "99" {
+		t.Errorf("offending = %q, want %q", bad, "99")
+	}
+
+	// Bool value whose string representation is in the allowed list.
+	ok, _ = CheckAllowed(true, []string{"true", "false"}, false)
+	if !ok {
+		t.Error("expected ok when bool string representation is in allowed list")
+	}
+
+	// Bool value whose string representation is NOT in the allowed list.
+	ok, bad = CheckAllowed(true, []string{"yes", "no"}, false)
+	if ok {
+		t.Error("expected failure when bool string representation is not in allowed list")
+	}
+	if bad != "true" {
+		t.Errorf("offending = %q, want %q", bad, "true")
+	}
+
+	// Float value whose string representation is in the allowed list.
+	ok, _ = CheckAllowed(3.14, []string{"3.14", "2.71"}, false)
+	if !ok {
+		t.Error("expected ok when float string representation is in allowed list")
+	}
+
+	// Float value whose string representation is NOT in the allowed list.
+	ok, bad = CheckAllowed(9.99, []string{"1.5", "2.5"}, false)
+	if ok {
+		t.Error("expected failure when float string representation is not in allowed list")
+	}
+	if bad != "9.99" {
+		t.Errorf("offending = %q, want %q", bad, "9.99")
 	}
 }
 
@@ -275,6 +315,51 @@ func TestCheckAllowed_ListNonStringItemWikilink(t *testing.T) {
 	}
 	if bad != "true" {
 		t.Errorf("offending = %q, want %q", bad, "true")
+	}
+}
+
+func TestValidateNote_IntAllowedEnforced(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("priority", 99)
+
+	schema := map[string]config.PropertySchema{
+		"priority": {Type: "int", Allowed: []string{"1", "2", "3"}},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d: %+v", len(vs), vs)
+	}
+	if vs[0].Kind != "value" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "value")
+	}
+}
+
+func TestValidateNote_IntAllowedPasses(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("priority", 2)
+
+	schema := map[string]config.PropertySchema{
+		"priority": {Type: "int", Allowed: []string{"1", "2", "3"}},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 0 {
+		t.Errorf("expected 0 violations, got %d: %+v", len(vs), vs)
+	}
+}
+
+func TestValidateNote_BoolAllowedEnforced(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("draft", true)
+
+	schema := map[string]config.PropertySchema{
+		"draft": {Type: "bool", Allowed: []string{"false"}},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d: %+v", len(vs), vs)
+	}
+	if vs[0].Kind != "value" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "value")
 	}
 }
 

@@ -211,8 +211,8 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 
 	switch len(matches) {
 	case 0:
-		if folder != "" {
-			return nil, fmt.Errorf("vault: no note titled %q in %q", title, folder)
+		if wantFolder != "" {
+			return nil, fmt.Errorf("vault: no note titled %q in %q", title, wantFolder)
 		}
 		return nil, fmt.Errorf("vault: no note titled %q", title)
 	case 1:

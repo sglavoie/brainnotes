@@ -93,9 +93,10 @@ func (n *Note) SetBody(body string) error {
 	return nil
 }
 
-// Title returns the filename stem (no extension). Returns "" for a nil Note.
+// Title returns the filename stem (no extension). Returns "" for a nil Note
+// or a Note with an empty path.
 func (n *Note) Title() string {
-	if n == nil {
+	if n == nil || n.Path == "" {
 		return ""
 	}
 	base := filepath.Base(n.Path)

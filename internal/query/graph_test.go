@@ -223,6 +223,50 @@ func TestBuildGraph_NonLowercaseMDExtension(t *testing.T) {
 	}
 }
 
+// TestBuildGraph_BacklinkDeduplication verifies that a note linking to the same
+// target multiple times (in body, frontmatter, or both) produces only one
+// backward entry per source note. Before the fix, duplicate paths accumulated
+// in the Backward map, inflating InDegree results (though InDegree itself
+// deduplicates, BackLinks returned duplicates to callers).
+func TestBuildGraph_BacklinkDeduplication(t *testing.T) {
+	root := t.TempDir()
+	// A.md links to B three times: twice in body, once in frontmatter.
+	pA := writeNote(t, root, "A.md", "---\ntitle: A\ncategory: \"[[B]]\"\n---\n[[B]] and [[B|alias]].\n")
+	writeNote(t, root, "B.md", "---\ntitle: B\n---\nbody\n")
+
+	notes := []*vault.Note{
+		{Path: pA},
+		{Path: filepath.Join(root, "B.md")},
+	}
+	g := BuildGraph(notes)
+
+	back := g.BackLinks("b")
+	if len(back) != 1 {
+		t.Errorf("BackLinks(b) = %v (len %d), want exactly 1 entry (deduplicated)", back, len(back))
+	}
+}
+
+// TestBuildGraph_BacklinkDeduplicationMultipleSources verifies that when
+// multiple notes link to the same target, each source appears exactly once.
+func TestBuildGraph_BacklinkDeduplicationMultipleSources(t *testing.T) {
+	root := t.TempDir()
+	pA := writeNote(t, root, "A.md", "---\ntitle: A\n---\n[[C]] and [[C]].\n")
+	pB := writeNote(t, root, "B.md", "---\ntitle: B\ncategory: \"[[C]]\"\n---\n[[C]].\n")
+	writeNote(t, root, "C.md", "---\ntitle: C\n---\nbody\n")
+
+	notes := []*vault.Note{
+		{Path: pA},
+		{Path: pB},
+		{Path: filepath.Join(root, "C.md")},
+	}
+	g := BuildGraph(notes)
+
+	back := g.BackLinks("c")
+	if len(back) != 2 {
+		t.Errorf("BackLinks(c) = %v (len %d), want exactly 2 entries (one per source)", back, len(back))
+	}
+}
+
 func strEq(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

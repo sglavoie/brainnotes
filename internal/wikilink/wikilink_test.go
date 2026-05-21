@@ -838,6 +838,9 @@ func TestParseEmptyHeadingOrAlias(t *testing.T) {
 	t.Parallel()
 	// [[Foo#]] and [[Foo|]] and [[Foo#|Bar]] should all be rejected since
 	// the regex requires at least one character in each capture group.
+	// Whitespace-only heading/alias (e.g. [[Foo#   ]]) are also rejected
+	// because the separator was present but the content was blank — FormatLink
+	// would silently drop the separator on rewrite, changing the link form.
 	tests := []struct {
 		name string
 		in   string
@@ -847,6 +850,12 @@ func TestParseEmptyHeadingOrAlias(t *testing.T) {
 		{"empty heading with alias", "[[Foo#|Bar]]"},
 		{"heading-only no target", "[[#Heading]]"},
 		{"alias-only no target", "[[|Alias]]"},
+		{"whitespace-only heading", "[[Foo#   ]]"},
+		{"whitespace-only alias", "[[Foo|   ]]"},
+		{"whitespace-only heading with real alias", "[[Foo#   |alias]]"},
+		{"whitespace heading and alias", "[[Foo#   |   ]]"},
+		{"tab-only heading", "[[Foo#\t]]"},
+		{"tab-only alias", "[[Foo|\t]]"},
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -868,6 +877,31 @@ func TestParseUnicodeTarget(t *testing.T) {
 	}
 	if links[0].Target != "Café" {
 		t.Errorf("Target = %q, want %q", links[0].Target, "Café")
+	}
+}
+
+func TestRewriteDoesNotAlterWhitespaceOnlyHeadingOrAlias(t *testing.T) {
+	t.Parallel()
+	// Links with whitespace-only heading/alias are rejected by Parse, so
+	// Rewrite must leave them completely untouched. Before the fix, an
+	// identity rename would silently drop the # or | separator.
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"whitespace heading identity rename", "[[Foo#   ]]"},
+		{"whitespace alias identity rename", "[[Foo|   ]]"},
+		{"whitespace heading and alias", "[[Foo#   |   ]]"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteTitle(tc.in, "Foo", "Bar")
+			if got != tc.in {
+				t.Fatalf("RewriteTitle(%q, Foo, Bar)\n  got:  %q\n  want: %q (unchanged)", tc.in, got, tc.in)
+			}
+		})
 	}
 }
 

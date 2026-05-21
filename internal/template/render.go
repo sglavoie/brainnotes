@@ -133,9 +133,11 @@ func wikilinkFn(s string) string {
 }
 
 // Slug converts s to a lower-kebab-case slug: it lowercases Unicode letters,
-// keeps Unicode digits, and folds runs of any other character into a single
-// `-`. Leading and trailing dashes are trimmed. The output is not restricted
-// to ASCII — input like "Café 2" yields "café-2".
+// keeps Unicode digits and combining marks, and folds runs of any other
+// character into a single `-`. Leading and trailing dashes are trimmed. The
+// output is not restricted to ASCII — input like "Café 2" yields "café-2"
+// regardless of whether the input uses precomposed (NFC) or decomposed (NFD)
+// Unicode.
 func Slug(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -148,6 +150,14 @@ func Slug(s string) string {
 		case unicode.IsDigit(r):
 			b.WriteRune(r)
 			prevDash = false
+		case unicode.IsMark(r):
+			// Combining marks (e.g. U+0301 COMBINING ACUTE ACCENT) must
+			// stay attached to their preceding base letter so that NFD-
+			// normalized input like "Café" (e + U+0301) produces "café",
+			// not "caf-e".
+			b.WriteRune(r)
+			// prevDash intentionally unchanged: a combining mark does not
+			// start or break a word — it modifies the preceding letter.
 		default:
 			if !prevDash {
 				b.WriteByte('-')
