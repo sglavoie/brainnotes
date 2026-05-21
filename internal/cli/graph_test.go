@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func buildGraphFixture(t *testing.T) string {
@@ -111,5 +113,30 @@ func TestGraph_InvalidFormat(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown format") {
 		t.Fatalf("expected 'unknown format' error, got: %v", err)
+	}
+}
+
+// TestNoteKey_CaseInsensitiveExtension verifies that noteKey correctly strips
+// a case-insensitive .md extension. Before the fix, noteKey hardcoded ".md"
+// but the vault walker accepts ".MD", ".Md", etc. via case-insensitive
+// matching, so a note named "Foo.MD" would produce noteKey "foo.md" instead
+// of the expected "foo", misaligning with graph keys.
+func TestNoteKey_CaseInsensitiveExtension(t *testing.T) {
+	root := t.TempDir()
+	// Create a note with uppercase extension.
+	notePath := filepath.Join(root, "Foo.MD")
+	if err := os.WriteFile(notePath, []byte("# Foo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	n := &vault.Note{Path: notePath}
+	got := noteKey(n)
+	if got != "foo" {
+		t.Errorf("noteKey(%q) = %q, want %q", notePath, got, "foo")
+	}
+
+	// Verify a standard .md extension still works.
+	nStd := &vault.Note{Path: filepath.Join(root, "Bar.md")}
+	if got := noteKey(nStd); got != "bar" {
+		t.Errorf("noteKey(Bar.md) = %q, want %q", got, "bar")
 	}
 }

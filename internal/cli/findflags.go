@@ -79,5 +79,6 @@ func (ff *findFlags) toQueryFlags(root string, g *query.Graph) query.Flags {
 }
 
 func noteKey(n *vault.Note) string {
-	return strings.ToLower(strings.TrimSuffix(filepath.Base(n.Path), ".md"))
+	base := filepath.Base(n.Path)
+	return strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
 }

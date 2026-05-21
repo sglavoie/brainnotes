@@ -272,6 +272,7 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 		for i, item := range v {
 			s, ok := item.(string)
 			if !ok {
+				unfixable = append(unfixable, fmt.Sprintf("%v", item))
 				continue
 			}
 			bare := s

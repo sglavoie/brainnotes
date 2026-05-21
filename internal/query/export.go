@@ -136,20 +136,37 @@ func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {
 
 // buildSlugMap assigns a unique Mermaid node ID to each title key. When two
 // keys produce the same slug, the second (and subsequent) get a numeric suffix.
+// The generated suffix is itself checked against all assigned slugs to avoid
+// collisions with naturally occurring slugs (e.g. "a-b" and "a-b-1" both
+// existing as distinct titles).
 func buildSlugMap(keys []string, g *Graph) map[string]string {
 	m := make(map[string]string, len(keys))
-	used := make(map[string]int) // slug -> count of times assigned
+	assigned := make(map[string]struct{}) // all slugs assigned so far
+	counter := make(map[string]int)       // base slug -> next suffix to try
 	for _, key := range keys {
 		base := slugify(g.originalTitle(key))
 		if base == "" {
 			base = "node"
 		}
-		count := used[base]
-		used[base] = count + 1
-		if count == 0 {
+		if _, taken := assigned[base]; !taken {
 			m[key] = base
+			assigned[base] = struct{}{}
 		} else {
-			m[key] = fmt.Sprintf("%s-%d", base, count)
+			n := counter[base]
+			if n == 0 {
+				n = 1
+			}
+			candidate := fmt.Sprintf("%s-%d", base, n)
+			for {
+				if _, taken := assigned[candidate]; !taken {
+					break
+				}
+				n++
+				candidate = fmt.Sprintf("%s-%d", base, n)
+			}
+			m[key] = candidate
+			assigned[candidate] = struct{}{}
+			counter[base] = n + 1
 		}
 	}
 	return m

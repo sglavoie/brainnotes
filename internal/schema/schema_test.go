@@ -162,6 +162,27 @@ func TestCheckAllowed_NonStringType(t *testing.T) {
 	}
 }
 
+func TestCheckAllowed_NilValue(t *testing.T) {
+	allowed := []string{"a", "b"}
+
+	ok, bad := CheckAllowed(nil, allowed, false)
+	if ok {
+		t.Error("expected failure when value is nil")
+	}
+	if bad != "<nil>" {
+		t.Errorf("offending = %q, want %q", bad, "<nil>")
+	}
+}
+
+func TestCheckAllowed_MapValue(t *testing.T) {
+	allowed := []string{"a", "b"}
+
+	ok, _ := CheckAllowed(map[string]any{"x": 1}, allowed, false)
+	if ok {
+		t.Error("expected failure when value is a map")
+	}
+}
+
 func TestValidateNote_Clean(t *testing.T) {
 	front := frontmatter.NewMap()
 	front.Set("status", "Done")

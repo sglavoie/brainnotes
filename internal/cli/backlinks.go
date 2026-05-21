@@ -123,13 +123,13 @@ func resolveBacklinkTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 
 	paths, pathErr := resolveNoteInputs(v.Root, []string{arg}, nil, false)
 	if pathErr != nil {
-		return nil, err
+		return nil, pathErr
 	}
 	if len(paths) != 1 {
-		return nil, err
+		return nil, fmt.Errorf("expected exactly one path for %q, got %d", arg, len(paths))
 	}
 	if _, statErr := os.Stat(paths[0]); statErr != nil {
-		return nil, err
+		return nil, statErr
 	}
 	return &vault.Note{Path: paths[0]}, nil
 }

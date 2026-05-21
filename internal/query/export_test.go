@@ -261,6 +261,36 @@ func TestExportMermaid_SlugCollisionEdges(t *testing.T) {
 	}
 }
 
+// TestExportMermaid_SlugSuffixCollidesWithNaturalSlug verifies that when the
+// disambiguation suffix for a duplicate slug would itself collide with another
+// title's natural slug, the algorithm keeps incrementing until it finds a
+// unique ID. Before the fix, "A-B" and "A B" would both produce slug "a-b",
+// and the disambiguation would assign "a-b-1" to the second — but if a third
+// title "A B-1" naturally slugifies to "a-b-1", two nodes would share that ID.
+func TestExportMermaid_SlugSuffixCollidesWithNaturalSlug(t *testing.T) {
+	root := t.TempDir()
+	// "A B" and "A-B" both slugify to "a-b".
+	// "A B 1" slugifies to "a-b-1", which collides with the naive suffix.
+	pAB := writeNote(t, root, "A B.md", "---\ntitle: A B\n---\nBody.\n")
+	pABdash := writeNote(t, root, "A-B.md", "---\ntitle: A-B\n---\nBody.\n")
+	pAB1 := writeNote(t, root, "A B 1.md", "---\ntitle: A B 1\n---\nBody.\n")
+
+	notes := []*vault.Note{{Path: pAB}, {Path: pABdash}, {Path: pAB1}}
+	g := BuildGraph(notes)
+
+	var buf bytes.Buffer
+	if err := g.ExportMermaid(&buf, allNodes(g)); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	// Count unique node IDs. Each [" label "] definition should have a unique slug.
+	// The three nodes need three distinct IDs. One gets "a-b", one gets "a-b-1",
+	// and the last one must NOT also be "a-b-1" — it should get "a-b-2".
+	if !strings.Contains(got, "a-b-2") {
+		t.Fatalf("expected 'a-b-2' to avoid suffix collision with natural slug 'a-b-1':\n%s", got)
+	}
+}
+
 // buildExportGraph uses writeNote from graph_test.go — make sure it's accessible.
 func TestExportDot_UsesOriginalTitles(t *testing.T) {
 	root := t.TempDir()

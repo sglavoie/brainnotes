@@ -93,7 +93,9 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 		// against the allowed list.
 		s := scalarToString(v)
 		if s == "" {
-			return true, ""
+			// Unknown type (nil, map, etc.) — cannot match any allowed
+			// value, so reject.
+			return false, fmt.Sprintf("%v", v)
 		}
 		if !check(s) {
 			return false, s
