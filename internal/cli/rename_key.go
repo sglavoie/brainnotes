@@ -157,16 +157,19 @@ Use --dry-run to preview changes without writing.`,
 					summary += fmt.Sprintf(", %d skipped (conflict)", skipped)
 				}
 				fmt.Fprintln(out, summary)
-			}
 
-			if containsString(cfg.Frontmatter.ListProperties, oldK) {
-				fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter].list_properties; update your config.toml to use %q\n", oldK, newK)
-			}
-			if containsString(cfg.Frontmatter.WikilinkProperties, oldK) {
-				fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter].wikilink_properties; update your config.toml to use %q\n", oldK, newK)
-			}
-			if _, inSchema := cfg.Frontmatter.Schema[oldK]; inSchema {
-				fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter.schema]; update your config.toml to use %q\n", oldK, newK)
+				// Config-update warnings are only useful when files were
+				// actually rewritten; suppress during --dry-run to avoid
+				// confusing users.
+				if containsString(cfg.Frontmatter.ListProperties, oldK) {
+					fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter].list_properties; update your config.toml to use %q\n", oldK, newK)
+				}
+				if containsString(cfg.Frontmatter.WikilinkProperties, oldK) {
+					fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter].wikilink_properties; update your config.toml to use %q\n", oldK, newK)
+				}
+				if _, inSchema := cfg.Frontmatter.Schema[oldK]; inSchema {
+					fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter.schema]; update your config.toml to use %q\n", oldK, newK)
+				}
 			}
 
 			return nil

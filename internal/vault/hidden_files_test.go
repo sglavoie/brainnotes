@@ -193,6 +193,73 @@ func TestWalkSkipsHiddenFiles(t *testing.T) {
 	}
 }
 
+// Open must resolve chained symlinks (link2 -> link1 -> realdir) so that
+// WalkDir can descend into the real directory. Before the fix,
+// resolveRootSymlink only resolved one hop, leaving v.Root pointing at an
+// intermediate symlink that WalkDir treated as a non-directory.
+func TestOpenResolvesChainedSymlinkRoot(t *testing.T) {
+	real := t.TempDir()
+	if err := os.WriteFile(filepath.Join(real, "note.md"), []byte("# n\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	parent := t.TempDir()
+	link1 := filepath.Join(parent, "link1")
+	link2 := filepath.Join(parent, "link2")
+	if err := os.Symlink(real, link1); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if err := os.Symlink(link1, link2); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	v, err := Open(&config.Config{Vault: link2})
+	if err != nil {
+		t.Fatalf("open via chained symlink: %v", err)
+	}
+	// Root must be the final real directory, not any intermediate symlink.
+	fi, err := os.Lstat(v.Root)
+	if err != nil {
+		t.Fatalf("lstat root: %v", err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("Root %q is still a symlink after resolution", v.Root)
+	}
+
+	var paths []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		paths = append(paths, filepath.Base(n.Path))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	if len(paths) != 1 || paths[0] != "note.md" {
+		t.Errorf("expected [note.md], got %v", paths)
+	}
+}
+
+// Open must reject a vault root that is a cyclic symlink chain rather than
+// looping forever. The POSIX convention is to return ELOOP; we return a
+// descriptive error after a bounded number of hops.
+func TestOpenRejectsCyclicSymlinkRoot(t *testing.T) {
+	parent := t.TempDir()
+	a := filepath.Join(parent, "a")
+	b := filepath.Join(parent, "b")
+	if err := os.Symlink(b, a); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	if err := os.Symlink(a, b); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	_, err := Open(&config.Config{Vault: a})
+	if err == nil {
+		t.Fatal("expected error for cyclic symlink root")
+	}
+	if !strings.Contains(err.Error(), "symbolic links") {
+		t.Errorf("error should mention symbolic links: %v", err)
+	}
+}
+
 // Save previously inherited 0o600 from os.CreateTemp via the temp file's
 // rename, silently narrowing the permissions of any 0o644 note in the vault.
 // Round-tripping a save should leave the destination's existing mode intact.

@@ -391,10 +391,7 @@ func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultR
 		return false, err
 	}
 
-	var before map[string]snapshot
-	if dry != nil {
-		before = snapshotKeys(front, pairs)
-	}
+	before := snapshotKeys(front, pairs)
 
 	changed := false
 	for _, p := range pairs {
@@ -447,6 +444,28 @@ func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultR
 	if !changed {
 		return false, nil
 	}
+
+	// The changed flag tracks whether any individual operation mutated the
+	// map, but opposing operations (e.g. tags+=foo followed by tags-=foo) can
+	// produce a net-zero change. Compare the final state against the snapshot
+	// to avoid writing an identical file.
+	netChanged := false
+	for _, key := range orderedKeys(pairs) {
+		snap := before[key]
+		afterVal, afterOK := front.Get(key)
+		if !snap.present && !afterOK {
+			continue
+		}
+		if snap.present && afterOK && dryRunValuesEqual(snap.value, afterVal) {
+			continue
+		}
+		netChanged = true
+		break
+	}
+	if !netChanged {
+		return false, nil
+	}
+
 	if dry != nil {
 		block := newFileBlock(displayPath(path, vaultRoot))
 		for _, key := range orderedKeys(pairs) {

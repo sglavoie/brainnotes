@@ -243,3 +243,56 @@ func TestValidateNote_StableOrder(t *testing.T) {
 		t.Errorf("violations not sorted: %s, %s, %s", vs[0].Property, vs[1].Property, vs[2].Property)
 	}
 }
+
+func TestValidateNote_NilFront(t *testing.T) {
+	schema := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: true},
+	}
+	vs := ValidateNote(nil, "note.md", schema, nil)
+	if vs != nil {
+		t.Errorf("expected nil for nil front, got %+v", vs)
+	}
+}
+
+func TestCheckAllowed_ListNonStringItem(t *testing.T) {
+	allowed := []string{"apple", "banana"}
+
+	ok, bad := CheckAllowed([]any{42, "apple"}, allowed, false)
+	if ok {
+		t.Error("expected failure when list contains non-string item")
+	}
+	if bad != "42" {
+		t.Errorf("offending = %q, want %q", bad, "42")
+	}
+}
+
+func TestCheckAllowed_ListNonStringItemWikilink(t *testing.T) {
+	allowed := []string{"Alice", "Bob"}
+
+	ok, bad := CheckAllowed([]any{true, "[[Alice]]"}, allowed, true)
+	if ok {
+		t.Error("expected failure when wikilink list contains non-string item")
+	}
+	if bad != "true" {
+		t.Errorf("offending = %q, want %q", bad, "true")
+	}
+}
+
+func TestValidateNote_NilValue(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("status", nil)
+
+	schema := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: true},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d: %+v", len(vs), vs)
+	}
+	if vs[0].Kind != "type" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "type")
+	}
+	if vs[0].Detail != "expected string, got nil" {
+		t.Errorf("detail = %q, want %q", vs[0].Detail, "expected string, got nil")
+	}
+}

@@ -77,11 +77,8 @@ func formatDryRunValue(v any) string {
 	case float64:
 		return fmt.Sprintf("%v", vv)
 	case time.Time:
-		if vv.Hour() == 0 && vv.Minute() == 0 && vv.Second() == 0 && vv.Nanosecond() == 0 {
-			_, offset := vv.Zone()
-			if offset == 0 {
-				return vv.Format("2006-01-02")
-			}
+		if vv.Hour() == 0 && vv.Minute() == 0 && vv.Second() == 0 && vv.Nanosecond() == 0 && vv.Location() == time.UTC {
+			return vv.Format("2006-01-02")
 		}
 		return vv.Format(time.RFC3339)
 	case []any:

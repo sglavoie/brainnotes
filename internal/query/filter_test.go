@@ -1062,6 +1062,37 @@ func TestLinkPredicatesRejectNil(t *testing.T) {
 	}
 }
 
+// TestFolderPredicateRejectsNilNote verifies that the Folder predicate returns
+// false for nil notes, including when the folder is empty (matches everything
+// for non-nil notes). Before the fix, `Folder("", root)(nil)` returned true
+// because the early-return for the empty-folder case did not guard against nil.
+func TestFolderPredicateRejectsNilNote(t *testing.T) {
+	v, _ := newVault(t, map[string]string{
+		"a.md": "# a\n",
+	})
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Folder predicate should not panic on nil note, got: %v", r)
+		}
+	}()
+	// Non-empty folder with nil note.
+	if Folder("People", v.Root)(nil) {
+		t.Errorf("Folder(People)(nil) = true, want false")
+	}
+	// Empty folder (match-all) with nil note — this was the bug.
+	if Folder("", v.Root)(nil) {
+		t.Errorf("Folder(\"\")(nil) = true, want false")
+	}
+	// Whitespace-only folder normalizes to empty — same bug path.
+	if Folder("   ", v.Root)(nil) {
+		t.Errorf("Folder(\"   \")(nil) = true, want false")
+	}
+	// Dot folder normalizes to empty.
+	if Folder(".", v.Root)(nil) {
+		t.Errorf("Folder(\".\")(nil) = true, want false")
+	}
+}
+
 // TestParseAgeRoundTripsAllUnits verifies every documented unit (s, m, h, d)
 // is accepted with a non-zero value.
 func TestParseAgeRoundTripsAllUnits(t *testing.T) {

@@ -185,6 +185,9 @@ func encodeMap(m map[string]any) (*yaml.Node, error) {
 
 // encodeTime emits a date-only scalar when the time has no time-of-day
 // component and is in UTC; otherwise emits a full RFC3339 timestamp.
+// Sub-second precision is preserved via RFC3339Nano so that timestamps
+// like `2025-12-13T10:30:00.5Z` round-trip without losing fractional
+// seconds.
 func encodeTime(t time.Time) *yaml.Node {
 	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
 		_, offset := t.Zone()
@@ -199,7 +202,7 @@ func encodeTime(t time.Time) *yaml.Node {
 	return &yaml.Node{
 		Kind:  yaml.ScalarNode,
 		Tag:   "!!timestamp",
-		Value: t.Format(time.RFC3339),
+		Value: t.Format(time.RFC3339Nano),
 	}
 }
 

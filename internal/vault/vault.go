@@ -239,22 +239,30 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 // the link target and resolves it relative to the parent directory, producing
 // an absolute path to the real directory. Intermediate symlinks in the path
 // are not resolved, keeping the prefix stable for filepath.Rel.
+//
+// Chained symlinks (e.g. link2 -> link1 -> realdir) are followed up to
+// maxSymlinkHops times to reach the final non-symlink target. This mirrors
+// the POSIX ELOOP limit and prevents infinite loops on cyclic symlinks.
 func resolveRootSymlink(abs string) (string, error) {
-	fi, err := os.Lstat(abs)
-	if err != nil {
-		return abs, err
+	const maxSymlinkHops = 255
+	for i := 0; i < maxSymlinkHops; i++ {
+		fi, err := os.Lstat(abs)
+		if err != nil {
+			return abs, err
+		}
+		if fi.Mode()&os.ModeSymlink == 0 {
+			return abs, nil
+		}
+		target, err := os.Readlink(abs)
+		if err != nil {
+			return abs, err
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(abs), target)
+		}
+		abs = filepath.Clean(target)
 	}
-	if fi.Mode()&os.ModeSymlink == 0 {
-		return abs, nil
-	}
-	target, err := os.Readlink(abs)
-	if err != nil {
-		return abs, err
-	}
-	if !filepath.IsAbs(target) {
-		target = filepath.Join(filepath.Dir(abs), target)
-	}
-	return filepath.Clean(target), nil
+	return "", fmt.Errorf("too many levels of symbolic links resolving %q", abs)
 }
 
 // ignoreSet returns the paths pruned by Walk, normalized to forward slashes.

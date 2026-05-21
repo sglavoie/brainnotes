@@ -150,6 +150,85 @@ func TestParseDateTimeNonUTC(t *testing.T) {
 	}
 }
 
+// TestTimestampSubSecondPrecisionRoundTrip — timestamps with fractional seconds
+// (e.g. milliseconds, nanoseconds) must not lose their sub-second component on
+// round-trip. Before the fix, encodeTime used time.RFC3339 which silently
+// dropped nanoseconds, causing data loss for timestamps like
+// `2025-12-13T10:30:00.5Z`.
+func TestTimestampSubSecondPrecisionRoundTrip(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{"nanoseconds", "---\ncreated: 2025-12-13T10:30:00.123456789Z\n---\nbody\n"},
+		{"milliseconds", "---\ncreated: 2025-12-13T10:30:00.500Z\n---\nbody\n"},
+		{"microseconds", "---\ncreated: 2025-12-13T10:30:00.000001Z\n---\nbody\n"},
+		{"fractional with offset", "---\ncreated: 2025-12-13T10:30:00.5-05:00\n---\nbody\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, err := Parse([]byte(tc.in))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			tm, ok := doc.Front.GetTime("created")
+			if !ok {
+				t.Fatalf("created should be time.Time")
+			}
+			if tm.Nanosecond() == 0 {
+				t.Fatalf("expected non-zero nanoseconds after parse")
+			}
+
+			out, err := Marshal(doc, nil)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+
+			// Re-parse and verify nanoseconds are preserved.
+			doc2, err := Parse(out)
+			if err != nil {
+				t.Fatalf("Parse2: %v", err)
+			}
+			tm2, ok := doc2.Front.GetTime("created")
+			if !ok {
+				t.Fatalf("created should be time.Time after round-trip")
+			}
+			if tm.Nanosecond() != tm2.Nanosecond() {
+				t.Errorf("nanoseconds lost: %d -> %d", tm.Nanosecond(), tm2.Nanosecond())
+			}
+			if !tm.Equal(tm2) {
+				t.Errorf("timestamps differ: %v -> %v", tm, tm2)
+			}
+
+			// Idempotency.
+			out2, err := Marshal(doc2, nil)
+			if err != nil {
+				t.Fatalf("Marshal2: %v", err)
+			}
+			if string(out) != string(out2) {
+				t.Errorf("not idempotent:\n%q\n%q", out, out2)
+			}
+		})
+	}
+}
+
+// TestTimestampNoSubSecondUnchanged — timestamps without fractional seconds
+// must continue to emit the same format as before (no trailing `.0`).
+func TestTimestampNoSubSecondUnchanged(t *testing.T) {
+	in := "---\ncreated: 2025-12-13T10:30:00Z\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "2025-12-13T10:30:00Z") {
+		t.Errorf("expected clean timestamp without fractional part, got %q", string(out))
+	}
+}
+
 // TestParseQuotedNullString — a quoted `"null"` value must stay a string,
 // not be collapsed to nil. yaml.v3 distinguishes them via the !!str tag; this
 // test pins the behaviour so a future "simplification" of decodeNode does not

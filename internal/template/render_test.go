@@ -279,6 +279,10 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		{"[[Page#Heading|Alias]]", "[[Page#Heading|Alias]]"},
 		// Empty wikilink [[]] is treated as already wrapped (len==4).
 		{"[[]]", "[[]]"},
+		// Whitespace-only must not be wrapped into an invalid wikilink.
+		{"   ", "   "},
+		{"\t", "\t"},
+		{" \n ", " \n "},
 	}
 	ctx := NewContext("x", "", "/v", nil, FixedClock{T: time.Unix(0, 0).UTC()})
 	for _, c := range cases {

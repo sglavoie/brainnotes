@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -738,5 +739,79 @@ func TestPlanRepairs_TypeUnconvertible_SkipsAllowedCheck(t *testing.T) {
 	}
 	if result.Skips[0].Kind != "type_unconvertible" {
 		t.Errorf("skip kind = %q, want type_unconvertible", result.Skips[0].Kind)
+	}
+}
+
+func TestPlanRepairs_NilFront(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"status": {Type: "string", Required: true},
+	}
+	result := PlanRepairs(nil, sch, nil)
+	if len(result.Actions) != 0 {
+		t.Errorf("expected no actions for nil front, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 0 {
+		t.Errorf("expected no skips for nil front, got %+v", result.Skips)
+	}
+}
+
+func TestTryCoerce_FloatNaNToInt(t *testing.T) {
+	_, ok := TryCoerce(math.NaN(), "int")
+	if ok {
+		t.Error("TryCoerce(NaN, int) should return false")
+	}
+}
+
+func TestTryCoerce_FloatInfToInt(t *testing.T) {
+	_, ok := TryCoerce(math.Inf(1), "int")
+	if ok {
+		t.Error("TryCoerce(+Inf, int) should return false")
+	}
+	_, ok = TryCoerce(math.Inf(-1), "int")
+	if ok {
+		t.Error("TryCoerce(-Inf, int) should return false")
+	}
+}
+
+func TestPlanRepairs_WikilinkWrap_PartialPrefix(t *testing.T) {
+	front := buildFront("parent", "[[broken")
+	result := PlanRepairs(front, nil, []string{"parent"})
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	act := result.Actions[0]
+	if act.Kind != "wikilink_wrap" {
+		t.Errorf("kind = %q, want %q", act.Kind, "wikilink_wrap")
+	}
+	if act.NewValue != "[[broken]]" {
+		t.Errorf("new value = %q, want %q", act.NewValue, "[[broken]]")
+	}
+}
+
+func TestPlanRepairs_WikilinkWrap_PartialSuffix(t *testing.T) {
+	front := buildFront("parent", "broken]]")
+	result := PlanRepairs(front, nil, []string{"parent"})
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	act := result.Actions[0]
+	if act.Kind != "wikilink_wrap" {
+		t.Errorf("kind = %q, want %q", act.Kind, "wikilink_wrap")
+	}
+	if act.NewValue != "[[broken]]" {
+		t.Errorf("new value = %q, want %q", act.NewValue, "[[broken]]")
+	}
+}
+
+func TestPlanRepairs_WikilinkWrap_PartialInList(t *testing.T) {
+	front := buildFront("categories", []any{"[[broken", "good", "also]]"})
+	result := PlanRepairs(front, nil, []string{"categories"})
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	act := result.Actions[0]
+	want := []any{"[[broken]]", "[[good]]", "[[also]]"}
+	if !reflect.DeepEqual(act.NewValue, want) {
+		t.Errorf("new value = %v, want %v", act.NewValue, want)
 	}
 }

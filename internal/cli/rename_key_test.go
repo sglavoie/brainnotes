@@ -227,3 +227,29 @@ func TestRenameKey_MutualExclusion(t *testing.T) {
 	}
 	_ = root
 }
+
+// TestRenameKey_DryRunSuppressesConfigWarnings verifies that --dry-run does not
+// emit config-update warnings (list_properties, wikilink_properties, schema).
+// These warnings are actionable only when files were actually rewritten; during
+// dry-run they are misleading because no rename has been applied.
+func TestRenameKey_DryRunSuppressesConfigWarnings(t *testing.T) {
+	root := buildRenameKeyFixture(t)
+	note := filepath.Join(root, "alpha.md")
+
+	out, err := runCLI(t, "", "rename-key", "kind", "category", note, "--dry-run")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	// The fixture's config has `kind` in list_properties and in schema.
+	// Without the fix, these warnings would appear in the dry-run output.
+	if strings.Contains(out, "list_properties") {
+		t.Errorf("expected no list_properties warning during dry-run, got:\n%s", out)
+	}
+	if strings.Contains(out, "[frontmatter.schema]") {
+		t.Errorf("expected no schema warning during dry-run, got:\n%s", out)
+	}
+	// The dry-run diff output should still be present.
+	if !strings.Contains(out, "- kind: article") || !strings.Contains(out, "+ category: article") {
+		t.Errorf("expected dry-run diff output, got:\n%s", out)
+	}
+}

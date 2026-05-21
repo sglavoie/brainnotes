@@ -99,6 +99,9 @@ func NewNewCmd() *cobra.Command {
 			if ext == "" {
 				ext = ".md"
 			}
+			if !strings.HasPrefix(ext, ".") {
+				ext = "." + ext
+			}
 			outPath := filepath.Join(dest, title+ext)
 
 			if !force {

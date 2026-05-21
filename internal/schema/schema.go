@@ -76,7 +76,7 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 		for _, item := range v {
 			s, ok := item.(string)
 			if !ok {
-				continue
+				return false, fmt.Sprintf("%v", item)
 			}
 			if !check(s) {
 				if isWikilink {
@@ -106,6 +106,9 @@ func RuleSummary(rule config.PropertySchema) string {
 }
 
 func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]config.PropertySchema, wikilinkProps []string) []Violation {
+	if front == nil {
+		return nil
+	}
 	wlSet := make(map[string]struct{}, len(wikilinkProps))
 	for _, p := range wikilinkProps {
 		wlSet[p] = struct{}{}

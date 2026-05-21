@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"sort"
@@ -43,6 +44,9 @@ type RepairResult struct {
 //  4. list_dedup — remove duplicate list entries
 func PlanRepairs(front *frontmatter.Map, sch map[string]config.PropertySchema, wikilinkProps []string) RepairResult {
 	var result RepairResult
+	if front == nil {
+		return result
+	}
 	wlSet := make(map[string]bool, len(wikilinkProps))
 	for _, p := range wikilinkProps {
 		wlSet[p] = true
@@ -169,6 +173,9 @@ func TryCoerce(val any, targetType string) (any, bool) {
 			}
 		}
 		if f, ok := val.(float64); ok {
+			if math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil, false
+			}
 			n := int(f)
 			if float64(n) == f {
 				return n, true
@@ -296,10 +303,7 @@ func isAllowedValue(s string, allowed []string) bool {
 func wrapAllWikilinks(val any) any {
 	switch v := val.(type) {
 	case string:
-		if v == "" || (strings.HasPrefix(v, "[[") && strings.HasSuffix(v, "]]")) {
-			return v
-		}
-		return "[[" + v + "]]"
+		return wrapSingleWikilink(v)
 	case []any:
 		out := make([]any, len(v))
 		changed := false
@@ -326,6 +330,8 @@ func wrapSingleWikilink(s string) string {
 	if s == "" || (strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]")) {
 		return s
 	}
+	s = strings.TrimPrefix(s, "[[")
+	s = strings.TrimSuffix(s, "]]")
 	return "[[" + s + "]]"
 }
 

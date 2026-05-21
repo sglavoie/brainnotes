@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // assertMtimeUnchanged captures the mtime of every path before fn runs and
@@ -239,5 +240,42 @@ func TestSetDryRun_WikilinkAlreadyStoredIsNoOp(t *testing.T) {
 	})
 	if out != "" {
 		t.Fatalf("expected empty dry-run output for no-op wikilink set, got %q", out)
+	}
+}
+
+// TestFormatDryRunValue_TimeZoneAtMidnight verifies that a time.Time at midnight
+// in a non-UTC zone with offset 0 (e.g. time.FixedZone("", 0)) does NOT render
+// as date-only. Only times explicitly in time.UTC should use the short form.
+// Before the fix, formatDryRunValue checked the zone offset (== 0) rather than
+// the location pointer (== time.UTC), so FixedZone("", 0) would incorrectly
+// produce "2026-01-01" instead of the full RFC3339 representation.
+func TestFormatDryRunValue_TimeZoneAtMidnight(t *testing.T) {
+	// A time at midnight UTC should render as date-only.
+	utcMidnight := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	got := formatDryRunValue(utcMidnight)
+	if got != "2026-01-01" {
+		t.Errorf("UTC midnight: got %q, want %q", got, "2026-01-01")
+	}
+
+	// A time at midnight in FixedZone("", 0) should render as RFC3339, not
+	// as date-only. FixedZone has offset 0 but is not time.UTC.
+	fakeUTC := time.FixedZone("", 0)
+	fixedMidnight := time.Date(2026, 1, 1, 0, 0, 0, 0, fakeUTC)
+	got = formatDryRunValue(fixedMidnight)
+	if got == "2026-01-01" {
+		t.Errorf("FixedZone(0) midnight should NOT render as date-only, got %q", got)
+	}
+	// It should be the full RFC3339 form.
+	want := "2026-01-01T00:00:00Z"
+	if got != want {
+		t.Errorf("FixedZone(0) midnight: got %q, want %q", got, want)
+	}
+
+	// A time with a non-zero component should always be RFC3339.
+	withTime := time.Date(2026, 1, 1, 14, 30, 0, 0, time.UTC)
+	got = formatDryRunValue(withTime)
+	want = "2026-01-01T14:30:00Z"
+	if got != want {
+		t.Errorf("with time: got %q, want %q", got, want)
 	}
 }

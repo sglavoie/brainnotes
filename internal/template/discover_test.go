@@ -86,6 +86,18 @@ func TestFindEmptyName(t *testing.T) {
 	}
 }
 
+func TestFindWhitespaceOnlyName(t *testing.T) {
+	cfg := newCfg(t)
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"   ", "\t", " \n "} {
+		if _, err := Find(cfg, name); err == nil {
+			t.Fatalf("Find(%q): expected error for whitespace-only name", name)
+		}
+	}
+}
+
 func TestFindRejectsPathSeparators(t *testing.T) {
 	cfg := newCfg(t)
 	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {

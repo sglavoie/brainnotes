@@ -40,7 +40,7 @@ func Find(cfg *config.Config, name string) (string, error) {
 	if cfg == nil {
 		return "", errors.New("template: nil config")
 	}
-	if name == "" {
+	if strings.TrimSpace(name) == "" {
 		return "", errors.New("template: empty name")
 	}
 	if strings.ContainsAny(name, `/\`) {

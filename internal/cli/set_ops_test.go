@@ -403,3 +403,53 @@ func TestSetOp_WikilinkAddSkipsAutoCoerce(t *testing.T) {
 		t.Fatalf("expected [[true]] in categories, got:\n%s", got)
 	}
 }
+
+// TestSetOps_OpposingAddRemoveIsNoOp verifies that opposing operations in the
+// same invocation (e.g. tags+=foo followed by tags-=foo) produce no file write
+// when the net effect is zero. Before the fix, the per-operation `changed` flag
+// was set to true by the first operation and the file was rewritten even though
+// the final state matched the initial state.
+func TestSetOps_OpposingAddRemoveIsNoOp(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "tags.md")
+
+	beforeBytes := readNote(t, notePath)
+	beforeInfo, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+
+	out, err := runCLI(t, "", "set", notePath, "tags+=baz", "tags-=baz")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "updated") {
+		t.Errorf("expected no `updated` report for net-zero change, got %q", out)
+	}
+	afterBytes := readNote(t, notePath)
+	if afterBytes != beforeBytes {
+		t.Errorf("file bytes changed on net-zero set:\n--- before ---\n%s--- after ---\n%s", beforeBytes, afterBytes)
+	}
+	afterInfo, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if !afterInfo.ModTime().Equal(beforeInfo.ModTime()) {
+		t.Errorf("mtime changed on net-zero set: before=%v after=%v", beforeInfo.ModTime(), afterInfo.ModTime())
+	}
+}
+
+// TestSetOps_OpposingAddRemoveDryRunIsNoOp verifies the dry-run path also
+// correctly reports no change for opposing operations.
+func TestSetOps_OpposingAddRemoveDryRunIsNoOp(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "tags.md")
+
+	out, err := runCLI(t, "", "set", "--dry-run", notePath, "tags+=baz", "tags-=baz")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if out != "" {
+		t.Errorf("expected empty dry-run output for net-zero change, got %q", out)
+	}
+}

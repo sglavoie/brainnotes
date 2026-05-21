@@ -116,10 +116,10 @@ func defaultFn(d, v string) string {
 // is passed through unchanged so authors can guard with `default`. Whitespace
 // around an already-wrapped value is preserved.
 func wikilinkFn(s string) string {
-	if s == "" {
-		return ""
-	}
 	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return s
+	}
 	if strings.HasPrefix(trimmed, "[[") && strings.HasSuffix(trimmed, "]]") && len(trimmed) >= 4 {
 		// Verify the opening [[ and closing ]] form a single wrapping pair
 		// by checking no ]] appears inside the inner content. Without this,

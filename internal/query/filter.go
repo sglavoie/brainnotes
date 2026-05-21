@@ -219,6 +219,9 @@ func Folder(folder, root string) Predicate {
 		want = ""
 	}
 	return func(n *vault.Note) bool {
+		if n == nil {
+			return false
+		}
 		if want == "" {
 			return true
 		}
