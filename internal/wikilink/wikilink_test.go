@@ -717,6 +717,172 @@ func TestRewriteTripleBrackets(t *testing.T) {
 	}
 }
 
+func TestParseRejectsTrailingSlashTarget(t *testing.T) {
+	t.Parallel()
+	// Targets ending with "/" have an empty title component after the last
+	// slash. Obsidian does not allow empty note names, so these are invalid.
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"bare folder slash", "[[Folder/]]"},
+		{"nested folder slash", "[[A/B/]]"},
+		{"folder slash with spaces", "[[ Folder/ ]]"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := Parse(tc.in)
+			if len(got) != 0 {
+				t.Fatalf("Parse(%q) = %+v, want no matches", tc.in, got)
+			}
+		})
+	}
+}
+
+func TestParseConsecutiveLinks(t *testing.T) {
+	t.Parallel()
+	// Two links with no gap between them must both be parsed.
+	links := Parse("[[A]][[B]]")
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links, got %d", len(links))
+	}
+	if links[0].Target != "A" || links[0].Start != 0 || links[0].End != 5 {
+		t.Errorf("link 0: got %+v", links[0])
+	}
+	if links[1].Target != "B" || links[1].Start != 5 || links[1].End != 10 {
+		t.Errorf("link 1: got %+v", links[1])
+	}
+}
+
+func TestParseLinksAtBoundaries(t *testing.T) {
+	t.Parallel()
+	// Link at the very start and very end of the string.
+	in := "[[Start]]end"
+	links := Parse(in)
+	if len(links) != 1 || links[0].Start != 0 || links[0].End != 9 {
+		t.Fatalf("start boundary: got %+v", links)
+	}
+
+	in = "begin[[End]]"
+	links = Parse(in)
+	if len(links) != 1 || links[0].Start != 5 || links[0].End != 12 {
+		t.Fatalf("end boundary: got %+v", links)
+	}
+}
+
+func TestRewriteTitle_EmptyOldTitleNoMatch(t *testing.T) {
+	t.Parallel()
+	// After fixing the trailing-slash rejection, RewriteTitle with an empty
+	// oldTitle must not match anything (no valid link has an empty Title()).
+	in := "[[Folder/]] [[A]]"
+	got := RewriteTitle(in, "", "New")
+	// [[Folder/]] is now rejected by Parse, so it's not a link.
+	// [[A]] has Title()="A" which != "", so no match.
+	if got != in {
+		t.Fatalf("RewriteTitle with empty old\n  got:  %q\n  want: %q (unchanged)", got, in)
+	}
+}
+
+func TestParseLeadingSlash(t *testing.T) {
+	t.Parallel()
+	// [[/Note]] has folder="" (since idx==0 means empty prefix) and
+	// Title()="/Note". This is an unusual link but Obsidian does resolve it.
+	links := Parse("[[/Note]]")
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	l := links[0]
+	if l.Target != "/Note" {
+		t.Errorf("Target = %q, want %q", l.Target, "/Note")
+	}
+	if l.Folder != "" {
+		t.Errorf("Folder = %q, want %q", l.Folder, "")
+	}
+	if l.Title() != "/Note" {
+		t.Errorf("Title() = %q, want %q", l.Title(), "/Note")
+	}
+}
+
+func TestParseHashInHeading(t *testing.T) {
+	t.Parallel()
+	// The heading capture group allows # characters inside it, so
+	// [[Note#H1#H2]] parses as Target="Note", Heading="H1#H2".
+	links := Parse("[[Note#H1#H2]]")
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	if links[0].Target != "Note" {
+		t.Errorf("Target = %q, want %q", links[0].Target, "Note")
+	}
+	if links[0].Heading != "H1#H2" {
+		t.Errorf("Heading = %q, want %q", links[0].Heading, "H1#H2")
+	}
+}
+
+func TestParsePipeInAlias(t *testing.T) {
+	t.Parallel()
+	// The alias capture group allows | characters inside it, so
+	// [[Note|a|b]] parses as Target="Note", Alias="a|b".
+	links := Parse("[[Note|a|b]]")
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	if links[0].Alias != "a|b" {
+		t.Errorf("Alias = %q, want %q", links[0].Alias, "a|b")
+	}
+}
+
+func TestParseEmptyHeadingOrAlias(t *testing.T) {
+	t.Parallel()
+	// [[Foo#]] and [[Foo|]] and [[Foo#|Bar]] should all be rejected since
+	// the regex requires at least one character in each capture group.
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"empty heading", "[[Foo#]]"},
+		{"empty alias", "[[Foo|]]"},
+		{"empty heading with alias", "[[Foo#|Bar]]"},
+		{"heading-only no target", "[[#Heading]]"},
+		{"alias-only no target", "[[|Alias]]"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := Parse(tc.in)
+			if len(got) != 0 {
+				t.Fatalf("Parse(%q) = %+v, want no matches", tc.in, got)
+			}
+		})
+	}
+}
+
+func TestParseUnicodeTarget(t *testing.T) {
+	t.Parallel()
+	links := Parse("[[Café]]")
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	if links[0].Target != "Café" {
+		t.Errorf("Target = %q, want %q", links[0].Target, "Café")
+	}
+}
+
+func TestRewriteConsecutiveLinks(t *testing.T) {
+	t.Parallel()
+	// Rewriting consecutive links with no space between them.
+	got := Rewrite("[[A]][[B]]", func(l Link) (string, bool) {
+		return "[[" + l.Target + "2]]", true
+	})
+	want := "[[A2]][[B2]]"
+	if got != want {
+		t.Fatalf("Rewrite consecutive\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
 func collectTargets(links []Link) []string {
 	out := make([]string, 0, len(links))
 	for _, l := range links {

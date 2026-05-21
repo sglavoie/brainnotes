@@ -86,6 +86,11 @@ func Parse(s string) []Link {
 		folder := ""
 		if idx := strings.LastIndex(target, "/"); idx >= 0 {
 			folder = target[:idx]
+			// A target like "Folder/" has an empty title component after the
+			// last slash. Obsidian does not allow empty note names, so reject.
+			if idx == len(target)-1 {
+				continue
+			}
 		}
 		links = append(links, Link{
 			Raw:     s[start:end],

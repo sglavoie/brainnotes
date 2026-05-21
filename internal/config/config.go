@@ -114,10 +114,20 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 		cfg.Vault = env
 	}
 
+	cfg.Vault = strings.TrimSpace(cfg.Vault)
+
 	if expanded, expErr := expandUser(cfg.Vault); expErr != nil {
 		return nil, fmt.Errorf("config: vault path %q: %w", cfg.Vault, expErr)
 	} else {
 		cfg.Vault = expanded
+	}
+
+	if cfg.Vault != "" {
+		abs, absErr := filepath.Abs(cfg.Vault)
+		if absErr != nil {
+			return nil, fmt.Errorf("config: resolve vault path %q: %w", cfg.Vault, absErr)
+		}
+		cfg.Vault = abs
 	}
 
 	applyDefaults(cfg)

@@ -1014,3 +1014,112 @@ allowed = ["x"]
 		})
 	}
 }
+
+func TestLoad_VaultPathAbsolutized(t *testing.T) {
+	// A relative vault path should be converted to an absolute path by Load.
+	resetEnv(t)
+
+	// Create a directory that we can reference relatively.
+	base := t.TempDir()
+	vault := filepath.Join(base, "rel", "vault")
+	if err := os.MkdirAll(vault, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Use an absolute path in the config that has an un-cleaned trailing slash
+	// and double separators to verify Clean is applied.
+	trailingSlash := vault + "/"
+	cfg, err := Load(trailingSlash, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Errorf("vault should be cleaned: got %q, want %q", cfg.Vault, vault)
+	}
+	if !filepath.IsAbs(cfg.Vault) {
+		t.Errorf("vault should be absolute: got %q", cfg.Vault)
+	}
+}
+
+func TestLoad_VaultPathTrimsWhitespace(t *testing.T) {
+	// Surrounding whitespace in the vault path (from flag, env, or file)
+	// should be stripped so that `vault = " /path "` does not produce
+	// a stat error on a path containing stray spaces.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	// Whitespace in flag path.
+	cfg, err := Load("  "+vault+"  ", "")
+	if err != nil {
+		t.Fatalf("Load with whitespace flag: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Errorf("vault from flag should be trimmed: got %q, want %q", cfg.Vault, vault)
+	}
+
+	// Whitespace in env var.
+	resetEnv(t)
+	t.Setenv(envVault, "  "+vault+"  ")
+	cfg, err = Load("", "")
+	if err != nil {
+		t.Fatalf("Load with whitespace env: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Errorf("vault from env should be trimmed: got %q, want %q", cfg.Vault, vault)
+	}
+
+	// Whitespace in config file value.
+	resetEnv(t)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \"  "+vault+"  \"\n")
+	cfg, err = Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load with whitespace in file: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Errorf("vault from file should be trimmed: got %q, want %q", cfg.Vault, vault)
+	}
+}
+
+func TestLoad_VaultWhitespaceOnlyIsError(t *testing.T) {
+	// A vault path that is only whitespace should be treated as unset.
+	resetEnv(t)
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \"   \"\n")
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for whitespace-only vault path")
+	}
+	if !strings.Contains(err.Error(), "vault path is not set") {
+		t.Fatalf("error should say vault is not set; got %v", err)
+	}
+}
+
+func TestLoad_EmptyConfigFileUsesDefaults(t *testing.T) {
+	// An empty config file is valid TOML; all defaults should be applied.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "")
+
+	cfg, err := Load(vault, cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SourcePath != cfgPath {
+		t.Errorf("SourcePath: got %q, want %q", cfg.SourcePath, cfgPath)
+	}
+	if cfg.Templates.Dir != "Templates" {
+		t.Errorf("Templates.Dir: got %q, want %q", cfg.Templates.Dir, "Templates")
+	}
+	for _, want := range DefaultIgnore {
+		if !contains(cfg.Ignore, want) {
+			t.Errorf("default ignore %q missing: %v", want, cfg.Ignore)
+		}
+	}
+}

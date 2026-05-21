@@ -30,7 +30,8 @@ func BuildGraph(notes []*vault.Note) *Graph {
 		if n == nil {
 			continue
 		}
-		stem := strings.TrimSuffix(filepath.Base(n.Path), ".md")
+		base := filepath.Base(n.Path)
+		stem := strings.TrimSuffix(base, filepath.Ext(base))
 		key := strings.ToLower(stem)
 		g.Titles[key] = struct{}{}
 		g.PathsByTitle[key] = n.Path
@@ -41,7 +42,8 @@ func BuildGraph(notes []*vault.Note) *Graph {
 		if n == nil {
 			continue
 		}
-		srcStem := strings.TrimSuffix(filepath.Base(n.Path), ".md")
+		srcBase := filepath.Base(n.Path)
+		srcStem := strings.TrimSuffix(srcBase, filepath.Ext(srcBase))
 		srcKey := strings.ToLower(srcStem)
 
 		targets := make(map[string]struct{})

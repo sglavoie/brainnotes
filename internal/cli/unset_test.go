@@ -63,6 +63,13 @@ func TestUnsetSplitArgs(t *testing.T) {
 			wantNotes: []string{},
 			wantProps: []string{"p1", "p2"},
 		},
+		{
+			name:      "single arg no dash, treated as prop",
+			args:      []string{"status"},
+			dashAt:    -1,
+			wantNotes: nil,
+			wantProps: []string{"status"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -74,6 +81,33 @@ func TestUnsetSplitArgs(t *testing.T) {
 				t.Errorf("props: got %v, want %v", props, c.wantProps)
 			}
 		})
+	}
+}
+
+// TestUnset_SingleArgNoDashTreatsAsProp verifies that 'bn unset status' (single
+// arg, no '--') treats the arg as a property name and triggers the fzf picker
+// for note selection, instead of treating it as a note path.
+func TestUnset_SingleArgNoDashTreatsAsProp(t *testing.T) {
+	root := buildSetFixture(t)
+	aPath := filepath.Join(root, "a.md")
+
+	if _, err := runCLI(t, "", "set", aPath, "status=reading"); err != nil {
+		t.Fatalf("setup set: %v", err)
+	}
+
+	orig := notePicker
+	t.Cleanup(func() { notePicker = orig })
+	notePicker = func(items []string, extraArgs []string) ([]string, error) {
+		return []string{aPath}, nil
+	}
+
+	out, err := runCLI(t, "", "unset", "status")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	got := readNote(t, aPath)
+	if strings.Contains(got, "status:") {
+		t.Fatalf("expected status removed, got:\n%s", got)
 	}
 }
 

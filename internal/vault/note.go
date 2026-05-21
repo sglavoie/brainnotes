@@ -135,10 +135,14 @@ func atomicWrite(dest string, data []byte) error {
 	}
 	// Capture the existing mode, if any, before writing the temp file. Stat
 	// errors other than "not exist" propagate so we don't silently clobber a
-	// file we couldn't introspect.
+	// file we couldn't introspect. destExists distinguishes "file has 0o000
+	// permissions" from "file does not exist" so the mode check below does
+	// not silently widen a deliberately restrictive mode.
 	var destMode os.FileMode
+	var destExists bool
 	if info, err := os.Stat(dest); err == nil {
 		destMode = info.Mode().Perm()
+		destExists = true
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("note: stat %q: %w", dest, err)
 	}
@@ -168,7 +172,7 @@ func atomicWrite(dest string, data []byte) error {
 	// before the rename so the final inode lands with the right perms. Doing
 	// this on the temp path keeps the operation atomic with respect to readers.
 	wantMode := destMode
-	if wantMode == 0 {
+	if !destExists {
 		wantMode = 0o644
 	}
 	if err := os.Chmod(tmpPath, wantMode); err != nil {

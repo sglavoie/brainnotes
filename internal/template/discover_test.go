@@ -182,3 +182,59 @@ func TestFindDefaultExtensionFallback(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+func TestFindMissingTemplateDir(t *testing.T) {
+	// When the templates directory does not exist, Find should return an error
+	// (not panic or return an empty path).
+	cfg := newCfg(t)
+	// Do not create the Templates directory.
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for missing template dir")
+	}
+	if strings.Contains(err.Error(), "nil pointer") {
+		t.Fatalf("got nil pointer error; should be a clean read error: %v", err)
+	}
+}
+
+func TestFindPriorityOrder(t *testing.T) {
+	// When both the exact name and the stem+ext form exist, the exact name
+	// (candidate 1) must win because Find tries candidates in order.
+	cfg := newCfg(t)
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "book"), "exact")
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "book.md"), "with-ext")
+	got, err := Find(cfg, "book")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "book" {
+		t.Fatalf("expected exact match %q, got %q", "book", filepath.Base(got))
+	}
+}
+
+func TestFindCaseInsensitiveMatch(t *testing.T) {
+	// Lookup must be case-insensitive.
+	cfg := newCfg(t)
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "JOURNAL.md"), "x")
+	got, err := Find(cfg, "journal")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "JOURNAL.md" {
+		t.Fatalf("got %s, want JOURNAL.md", filepath.Base(got))
+	}
+}
+
+func TestFindNameWithMixedCaseExtension(t *testing.T) {
+	// Passing "Book.MD" when DefaultExtension is ".md" should still strip the
+	// extension and match "Book Template.md".
+	cfg := newCfg(t)
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "Book Template.md"), "x")
+	got, err := Find(cfg, "Book.MD")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Book Template.md" {
+		t.Fatalf("got %s, want Book Template.md", filepath.Base(got))
+	}
+}

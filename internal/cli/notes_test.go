@@ -43,6 +43,50 @@ func TestReadStdinPaths_NullSeparatedPreservesSpaces(t *testing.T) {
 	}
 }
 
+// TestReadStdinPaths_RelativePathResolvesAgainstVault verifies that relative
+// paths read from stdin are resolved against the vault root, not the current
+// working directory. This matches the behavior of positional-arg paths, which
+// go through expandGlob and are joined to vaultRoot.
+func TestReadStdinPaths_RelativePathResolvesAgainstVault(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "note.md"), []byte("body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	in := strings.NewReader("note.md\n")
+	got, err := readStdinPaths(in, root, false)
+	if err != nil {
+		t.Fatalf("readStdinPaths: %v", err)
+	}
+	want := []string{filepath.Join(root, "note.md")}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// TestReadStdinPaths_RelativePathNullSep verifies that NUL-separated relative
+// paths from stdin are also resolved against the vault root.
+func TestReadStdinPaths_RelativePathNullSep(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "deep.md"), []byte("body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	in := strings.NewReader("sub/deep.md\x00")
+	got, err := readStdinPaths(in, root, true)
+	if err != nil {
+		t.Fatalf("readStdinPaths: %v", err)
+	}
+	want := []string{filepath.Join(root, "sub", "deep.md")}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
 // TestReadStdinPaths_LineSeparatedTrimsCRLF verifies that newline-separated
 // stdin input still strips trailing \r so a Windows-piped path resolves.
 func TestReadStdinPaths_LineSeparatedTrimsCRLF(t *testing.T) {

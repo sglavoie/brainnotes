@@ -210,6 +210,56 @@ func TestSlugSingleChar(t *testing.T) {
 	}
 }
 
+func TestRenderEmptyTemplate(t *testing.T) {
+	t.Parallel()
+	ctx := NewContext("x", "", "/v", nil, nil)
+	got, err := Render("", ctx)
+	if err != nil {
+		t.Fatalf("Render empty: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("Render empty = %q, want %q", got, "")
+	}
+}
+
+func TestNewContextDateTruncation(t *testing.T) {
+	t.Parallel()
+	// Time with non-zero hours/minutes/seconds should truncate to midnight.
+	clk := FixedClock{T: time.Date(2024, 12, 25, 14, 30, 59, 123456789, time.UTC)}
+	ctx := NewContext("Christmas", "", "/v", nil, clk)
+	want := time.Date(2024, 12, 25, 0, 0, 0, 0, time.UTC)
+	if !ctx.Date.Equal(want) {
+		t.Fatalf("Date = %v, want %v", ctx.Date, want)
+	}
+	// Time field should preserve full precision.
+	if !ctx.Time.Equal(clk.T) {
+		t.Fatalf("Time = %v, want %v", ctx.Time, clk.T)
+	}
+}
+
+func TestNewContextSlugGeneration(t *testing.T) {
+	t.Parallel()
+	ctx := NewContext("My Great Note", "", "/v", nil, nil)
+	if ctx.Slug != "my-great-note" {
+		t.Fatalf("Slug = %q, want %q", ctx.Slug, "my-great-note")
+	}
+}
+
+func TestRenderAllFieldsAccessible(t *testing.T) {
+	t.Parallel()
+	clk := FixedClock{T: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)}
+	ctx := NewContext("Test Note", "subfolder", "/my/vault", map[string]string{"k": "v"}, clk)
+	body := "T={{.Title}} S={{.Slug}} F={{.Folder}} V={{.Vault}} K={{.Vars.k}}"
+	got, err := Render(body, ctx)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	want := "T=Test Note S=test-note F=subfolder V=/my/vault K=v"
+	if got != want {
+		t.Fatalf("Render = %q, want %q", got, want)
+	}
+}
+
 func TestWikilinkNoDoubleWrap(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -221,6 +271,14 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		{"", ""},
 		{"[[", "[[[[]]"},         // sentinel: too short to be a real link
 		{"[[a]]b", "[[[[a]]b]]"}, // not fully wrapped — wrap again
+		// Two separate wikilinks are not "already wrapped" — must wrap.
+		{"[[a]] and [[b]]", "[[[[a]] and [[b]]]]"},
+		// Closing ]] before end means outer pair is not a single wrap.
+		{"[[a]]b]]", "[[[[a]]b]]]]"},
+		// Single valid wikilink with heading/alias.
+		{"[[Page#Heading|Alias]]", "[[Page#Heading|Alias]]"},
+		// Empty wikilink [[]] is treated as already wrapped (len==4).
+		{"[[]]", "[[]]"},
 	}
 	ctx := NewContext("x", "", "/v", nil, FixedClock{T: time.Unix(0, 0).UTC()})
 	for _, c := range cases {

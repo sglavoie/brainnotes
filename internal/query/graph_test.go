@@ -175,6 +175,54 @@ func TestBuildGraph_NilNotesSkipped(t *testing.T) {
 	}
 }
 
+// TestBuildGraph_NonLowercaseMDExtension verifies that notes whose filename
+// uses an upper- or mixed-case `.MD` extension are registered correctly in the
+// graph. Before the fix, BuildGraph used strings.TrimSuffix(base, ".md") which
+// is case-sensitive — a file like "Note.MD" was registered under the key
+// "note.md" instead of "note", breaking all graph lookups (forward links,
+// backlinks, orphan detection, etc.) for that note.
+func TestBuildGraph_NonLowercaseMDExtension(t *testing.T) {
+	root := t.TempDir()
+	pA := writeNote(t, root, "Alpha.MD", "---\ntitle: Alpha\n---\nLinks to [[Beta]].\n")
+	pB := writeNote(t, root, "Beta.Md", "---\ntitle: Beta\n---\nLinks to [[Alpha]].\n")
+
+	notes := []*vault.Note{{Path: pA}, {Path: pB}}
+	g := BuildGraph(notes)
+
+	// Titles should be registered under lowercase stems without extension.
+	if _, ok := g.Titles["alpha"]; !ok {
+		t.Errorf("expected 'alpha' in Titles, got keys: %v", g.Titles)
+	}
+	if _, ok := g.Titles["beta"]; !ok {
+		t.Errorf("expected 'beta' in Titles, got keys: %v", g.Titles)
+	}
+
+	// Forward links should resolve correctly.
+	fwdA := g.ForwardLinks("Alpha")
+	if !strEq(fwdA, []string{"beta"}) {
+		t.Errorf("Forward[alpha] = %v, want [beta]", fwdA)
+	}
+	fwdB := g.ForwardLinks("Beta")
+	if !strEq(fwdB, []string{"alpha"}) {
+		t.Errorf("Forward[beta] = %v, want [alpha]", fwdB)
+	}
+
+	// InDegree should count correctly.
+	if g.InDegree("Alpha") != 1 {
+		t.Errorf("InDegree(Alpha) = %d, want 1", g.InDegree("Alpha"))
+	}
+	if g.InDegree("Beta") != 1 {
+		t.Errorf("InDegree(Beta) = %d, want 1", g.InDegree("Beta"))
+	}
+
+	// Self-link exclusion should still work.
+	pSelf := writeNote(t, root, "Self.MD", "---\ntitle: Self\n---\n[[Self]] only.\n")
+	gSelf := BuildGraph([]*vault.Note{{Path: pSelf}})
+	if len(gSelf.ForwardLinks("Self")) != 0 {
+		t.Errorf("self-link should be excluded even with .MD extension")
+	}
+}
+
 func strEq(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

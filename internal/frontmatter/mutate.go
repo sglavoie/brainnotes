@@ -148,6 +148,9 @@ func (m *Map) RenameKey(oldK, newK string) (bool, error) {
 	if m.vals == nil {
 		return false, nil
 	}
+	if oldK == newK {
+		return false, nil
+	}
 	if _, ok := m.vals[oldK]; !ok {
 		return false, nil
 	}

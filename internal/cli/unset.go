@@ -98,14 +98,16 @@ Use --dry-run to preview which properties would be removed without writing.`,
 
 // splitUnsetArgs partitions args into note paths and property names. Cobra
 // strips '--' from args but exposes its position via ArgsLenAtDash. When no
-// '--' was supplied, the first arg is the note (or '-') and the rest are
-// property names.
+// '--' was supplied and there are at least two args, the first arg is the note
+// (or '-') and the rest are property names. With a single arg and no '--',
+// the sole arg is treated as a property name (notes will be selected via fzf)
+// so that 'bn unset status' works without requiring 'bn unset -- status'.
 func splitUnsetArgs(args []string, dashAt int) (notes, props []string) {
 	if dashAt >= 0 {
 		return args[:dashAt], args[dashAt:]
 	}
 	if len(args) < 2 {
-		return args, nil
+		return nil, args
 	}
 	return args[:1], args[1:]
 }

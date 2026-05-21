@@ -96,7 +96,7 @@ func FromFlags(f Flags) (Predicate, error) {
 		}
 		ps = append(ps, BrokenLinks(f.Graph))
 	}
-	if f.MinBacklinks >= 0 {
+	if f.MinBacklinks > 0 {
 		if f.Graph == nil {
 			return nil, errors.New("query: --min-backlinks requires a graph")
 		}
@@ -108,7 +108,7 @@ func FromFlags(f Flags) (Predicate, error) {
 		}
 		ps = append(ps, MaxBacklinks(f.Graph, f.MaxBacklinks))
 	}
-	if f.MinLinks >= 0 {
+	if f.MinLinks > 0 {
 		if f.Graph == nil {
 			return nil, errors.New("query: --min-links requires a graph")
 		}

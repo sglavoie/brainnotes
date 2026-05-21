@@ -62,6 +62,50 @@ func TestRenameKey_Conflict(t *testing.T) {
 	}
 }
 
+func TestRenameKey_SameKeyIsNoOp(t *testing.T) {
+	m := NewMap()
+	m.Set("kind", "article")
+	m.Set("tags", []any{"go"})
+
+	changed, err := m.RenameKey("kind", "kind")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if changed {
+		t.Fatal("expected changed=false when renaming a key to itself")
+	}
+	v, ok := m.Get("kind")
+	if !ok {
+		t.Fatal("key should still exist")
+	}
+	if v != "article" {
+		t.Errorf("value = %v, want article", v)
+	}
+	keys := m.Keys()
+	want := []string{"kind", "tags"}
+	if len(keys) != len(want) {
+		t.Fatalf("keys = %v, want %v", keys, want)
+	}
+	for i, k := range keys {
+		if k != want[i] {
+			t.Errorf("keys[%d] = %q, want %q", i, k, want[i])
+		}
+	}
+}
+
+func TestRenameKey_SameKeyAbsent(t *testing.T) {
+	m := NewMap()
+	m.Set("status", "done")
+
+	changed, err := m.RenameKey("kind", "kind")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if changed {
+		t.Fatal("expected changed=false for absent key renamed to itself")
+	}
+}
+
 func TestRenameKey_PreservesKeyOrder(t *testing.T) {
 	m := NewMap()
 	m.Set("alpha", 1)

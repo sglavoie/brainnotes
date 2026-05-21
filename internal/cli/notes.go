@@ -116,6 +116,12 @@ func readStdinPaths(in io.Reader, vaultRoot string, nullSep bool) ([]string, err
 		if line == "" {
 			continue
 		}
+		// Resolve relative paths against vaultRoot, not CWD, so stdin
+		// paths behave identically to positional-arg paths (which go
+		// through expandGlob and are joined to vaultRoot).
+		if !filepath.IsAbs(line) {
+			line = filepath.Join(vaultRoot, filepath.FromSlash(line))
+		}
 		abs, err := absInVault(vaultRoot, line)
 		if err != nil {
 			return nil, err

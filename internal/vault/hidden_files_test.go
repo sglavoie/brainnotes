@@ -88,6 +88,40 @@ func TestWalkSkipsSymlinks(t *testing.T) {
 	}
 }
 
+// Open must resolve a symlink root to the real directory path. Without
+// resolution, filepath.WalkDir sees a symlink (not a directory) via Lstat on
+// the root entry and does not descend, silently returning zero notes.
+func TestOpenResolvesSymlinkRoot(t *testing.T) {
+	real := t.TempDir()
+	if err := os.WriteFile(filepath.Join(real, "note.md"), []byte("# n\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	link := filepath.Join(t.TempDir(), "vault_link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	v, err := Open(&config.Config{Vault: link})
+	if err != nil {
+		t.Fatalf("open via symlink: %v", err)
+	}
+	// Root should be the resolved real directory, not the symlink.
+	if v.Root == link {
+		t.Errorf("Root should be resolved, got symlink %q", v.Root)
+	}
+
+	var paths []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		paths = append(paths, filepath.Base(n.Path))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	if len(paths) != 1 || paths[0] != "note.md" {
+		t.Errorf("expected [note.md], got %v", paths)
+	}
+}
+
 // The ambiguity error must list candidates in a stable order and with
 // forward-slash paths so callers can render and diff it predictably. Without
 // sorting, two runs on the same vault can swap the order of candidates.
@@ -192,4 +226,48 @@ func TestSavePreservesFileMode(t *testing.T) {
 	if got := info.Mode().Perm(); got != 0o664 {
 		t.Errorf("mode preservation: got %o, want %o", got, 0o664)
 	}
+}
+
+// atomicWrite must not widen mode 0o000 to 0o644 on an existing file. The
+// zero-mode check previously used `wantMode == 0` to detect "file not found",
+// which also matches a file with deliberately restrictive 0o000 permissions.
+func TestSavePreservesZeroMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX mode bits not meaningful on Windows")
+	}
+	dir := t.TempDir()
+	notePath := filepath.Join(dir, "restricted.md")
+	if err := os.WriteFile(notePath, []byte("---\ntitle: R\n---\nbody\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	v, err := Open(&config.Config{Vault: dir})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	n, err := v.ResolveByTitle("restricted", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	// Load and mutate while the file is still readable, then restrict.
+	if err := n.SetBody("changed\n"); err != nil {
+		t.Fatalf("setbody: %v", err)
+	}
+	if err := os.Chmod(notePath, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	info, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o000 {
+		t.Errorf("zero-mode preservation: got %o, want %o", got, 0o000)
+	}
+
+	// Clean up: restore permissions so t.TempDir removal succeeds.
+	_ = os.Chmod(notePath, 0o644)
 }

@@ -39,6 +39,18 @@ func Open(cfg *config.Config) (*Vault, error) {
 	if err != nil {
 		return nil, fmt.Errorf("vault: resolve %q: %w", cfg.Vault, err)
 	}
+	// If the vault path itself is a symlink to a directory, resolve it.
+	// filepath.WalkDir uses os.Lstat on the root entry: if the root is a
+	// symlink, Lstat sees a symlink (not a directory) and WalkDir does not
+	// descend, silently returning zero notes. We resolve only the final
+	// component rather than calling filepath.EvalSymlinks on the whole path,
+	// because EvalSymlinks also canonicalizes intermediate components (e.g.
+	// /var -> /private/var on macOS), which would change the path prefix and
+	// break filepath.Rel comparisons with paths built via filepath.Abs.
+	abs, err = resolveRootSymlink(abs)
+	if err != nil {
+		return nil, fmt.Errorf("vault: resolve root symlink %q: %w", cfg.Vault, err)
+	}
 	info, err := os.Stat(abs)
 	if err != nil {
 		return nil, fmt.Errorf("vault: stat %q: %w", abs, err)
@@ -221,6 +233,28 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 		sort.Strings(paths)
 		return nil, fmt.Errorf("vault: %q is ambiguous; candidates: %s", title, strings.Join(paths, ", "))
 	}
+}
+
+// resolveRootSymlink checks whether abs itself is a symlink; if so it reads
+// the link target and resolves it relative to the parent directory, producing
+// an absolute path to the real directory. Intermediate symlinks in the path
+// are not resolved, keeping the prefix stable for filepath.Rel.
+func resolveRootSymlink(abs string) (string, error) {
+	fi, err := os.Lstat(abs)
+	if err != nil {
+		return abs, err
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		return abs, nil
+	}
+	target, err := os.Readlink(abs)
+	if err != nil {
+		return abs, err
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(abs), target)
+	}
+	return filepath.Clean(target), nil
 }
 
 // ignoreSet returns the paths pruned by Walk, normalized to forward slashes.

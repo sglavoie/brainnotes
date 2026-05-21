@@ -552,6 +552,18 @@ func TestFromFlags(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("min-backlinks zero is no-op without graph", func(t *testing.T) {
+		pred, err := FromFlags(Flags{MinBacklinks: 0, MinLinks: 0, MaxBacklinks: -1, MaxLinks: -1})
+		if err != nil {
+			t.Fatalf("FromFlags with MinBacklinks=0 should not require a graph: %v", err)
+		}
+		for path, n := range notes {
+			if !pred(n) {
+				t.Errorf("MinBacklinks=0 is trivially true, should match %s", path)
+			}
+		}
+	})
 }
 
 // TestFolderPredicateNoFalsePrefix verifies that the Folder predicate does not
