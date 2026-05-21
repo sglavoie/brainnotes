@@ -8,6 +8,7 @@ package query
 import (
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -107,7 +108,23 @@ func stringifyTag(v any) string {
 	case int64:
 		return fmt.Sprintf("%d", vv)
 	case float64:
-		return fmt.Sprintf("%v", vv)
+		// Preserve the decimal marker so whole-number floats remain queryable
+		// in the same textual form the user types (and that frontmatter.Marshal
+		// emits): `status: 3.0` round-trips through `--status 3.0`. The default
+		// fmt %v rendering drops the trailing ".0" for whole numbers, breaking
+		// queries against YAML float scalars.
+		s := strconv.FormatFloat(vv, 'g', -1, 64)
+		hasMarker := false
+		for _, r := range s {
+			if r == '.' || r == 'e' || r == 'E' {
+				hasMarker = true
+				break
+			}
+		}
+		if !hasMarker {
+			s += ".0"
+		}
+		return s
 	case time.Time:
 		if vv.Hour() == 0 && vv.Minute() == 0 && vv.Second() == 0 && vv.Nanosecond() == 0 && vv.Location() == time.UTC {
 			return vv.Format("2006-01-02")

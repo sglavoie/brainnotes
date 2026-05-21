@@ -1379,3 +1379,45 @@ func TestParseAgeRoundTripsAllUnits(t *testing.T) {
 		}
 	}
 }
+
+// TestStatusPredicateFloatStringification asserts that a YAML-typed float value
+// in the frontmatter status field is queryable using the same textual form the
+// user would type. Previously stringifyTag used "%v" for float64, which drops
+// the trailing ".0" on whole-number floats — so `bn find --status 3.0` against
+// a note whose frontmatter held `status: 3.0` (a YAML float scalar) silently
+// returned no results. The fix renders floats with their decimal marker
+// preserved so `3.0` round-trips through query stringification.
+func TestStatusPredicateFloatStringification(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"whole.md":  "---\nstatus: 3.0\n---\nbody\n",
+		"frac.md":   "---\nstatus: 1.5\n---\nbody\n",
+		"strnum.md": "---\nstatus: \"3.0\"\n---\nbody\n",
+	})
+	if !Status("3.0")(notes["whole.md"]) {
+		t.Errorf("Status(3.0) should match a note whose frontmatter holds the float 3.0")
+	}
+	if !Status("1.5")(notes["frac.md"]) {
+		t.Errorf("Status(1.5) should match a note whose frontmatter holds the float 1.5")
+	}
+	if !Status("3.0")(notes["strnum.md"]) {
+		t.Errorf("Status(3.0) should still match a string-typed \"3.0\" status (backcompat)")
+	}
+}
+
+// TestTagPredicateFloatStringification mirrors the float-stringification fix
+// for the tag predicate so that a tags list containing a YAML float scalar
+// (e.g. `tags: [3.0]`) is queryable as `--tag 3.0`. The previous "%v" path
+// would format the float as "3" and the textual `3.0` query would silently
+// miss it.
+func TestTagPredicateFloatStringification(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"list.md":   "---\ntags:\n  - 3.0\n---\nbody\n",
+		"scalar.md": "---\ntags: 3.0\n---\nbody\n",
+	})
+	if !Tag("3.0")(notes["list.md"]) {
+		t.Errorf("Tag(3.0) should match a tags list holding the float 3.0")
+	}
+	if !Tag("3.0")(notes["scalar.md"]) {
+		t.Errorf("Tag(3.0) should match a scalar float tag value 3.0")
+	}
+}
