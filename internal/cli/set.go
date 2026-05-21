@@ -194,17 +194,28 @@ func parsePairs(pairs []string, typeFlag string, cfg *config.Config) ([]setPair,
 		isList := containsString(cfg.Frontmatter.ListProperties, key)
 		isWikilink := containsString(cfg.Frontmatter.WikilinkProperties, key)
 
+		// Wikilink-typed properties are always stored on disk as strings of the
+		// form `[[X]]`. Auto-coercion (empty typeFlag) would turn user input
+		// like "true" into a bool, which would never match stored wikilink
+		// strings and would produce unexpected YAML output. To match the
+		// behaviour of `coerceReplaceValue`, skip auto-coercion for wikilink
+		// keys when no explicit --type flag is given.
+		effectiveType := typeFlag
+		if isWikilink && (effectiveType == "" || effectiveType == "auto") {
+			effectiveType = "raw"
+		}
+
 		switch opStr {
 		case "=":
 			if isList {
-				vals, err := splitListValues(rawVal, typeFlag)
+				vals, err := splitListValues(rawVal, effectiveType)
 				if err != nil {
 					return nil, err
 				}
 				out = append(out, setPair{Key: key, Op: opSet, Value: vals})
 				continue
 			}
-			v, err := coerceValue(rawVal, typeFlag)
+			v, err := coerceValue(rawVal, effectiveType)
 			if err != nil {
 				return nil, err
 			}
@@ -217,7 +228,7 @@ func parsePairs(pairs []string, typeFlag string, cfg *config.Config) ([]setPair,
 			if strings.TrimSpace(rawVal) == "" {
 				return nil, fmt.Errorf("set: empty value for %q on key %q", opStr, key)
 			}
-			vals, err := splitListValues(rawVal, typeFlag)
+			vals, err := splitListValues(rawVal, effectiveType)
 			if err != nil {
 				return nil, err
 			}

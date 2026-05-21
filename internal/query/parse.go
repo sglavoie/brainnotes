@@ -79,6 +79,9 @@ func FromFlags(f Flags) (Predicate, error) {
 		ps = append(ps, Age(op, dur, "created"))
 	}
 	if f.Folder != "" {
+		if f.Root == "" {
+			return nil, errors.New("query: --folder requires a vault root path")
+		}
 		ps = append(ps, Folder(f.Folder, f.Root))
 	}
 	if f.Orphan {

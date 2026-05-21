@@ -396,6 +396,118 @@ func TestFolderForRootNote(t *testing.T) {
 	}
 }
 
+func TestNilNoteMethods(t *testing.T) {
+	var n *Note
+
+	t.Run("Title returns empty", func(t *testing.T) {
+		if got := n.Title(); got != "" {
+			t.Errorf("nil Title() = %q, want empty", got)
+		}
+	})
+
+	t.Run("Folder returns error", func(t *testing.T) {
+		_, err := n.Folder("/some/root")
+		if err == nil {
+			t.Error("nil Folder() should return an error")
+		}
+	})
+
+	t.Run("Load returns error", func(t *testing.T) {
+		if err := n.Load(); err == nil {
+			t.Error("nil Load() should return an error")
+		}
+	})
+
+	t.Run("Loaded returns false", func(t *testing.T) {
+		if n.Loaded() {
+			t.Error("nil Loaded() should return false")
+		}
+	})
+
+	t.Run("Save returns error", func(t *testing.T) {
+		if err := n.Save(nil); err == nil {
+			t.Error("nil Save() should return an error")
+		}
+	})
+}
+
+func TestNotesEmptyVault(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{})
+	notes, err := v.Notes()
+	if err != nil {
+		t.Fatalf("Notes on empty vault: %v", err)
+	}
+	if len(notes) != 0 {
+		t.Fatalf("want 0 notes, got %d", len(notes))
+	}
+}
+
+func TestWalkCallbackSkipDir(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a.md":       "# a\n",
+		"Sub/b.md":   "# b\n",
+		"Sub/c.md":   "# c\n",
+		"Other/d.md": "# d\n",
+	})
+	// Return SkipDir on the first file inside Sub/ to skip the rest of that dir.
+	var visited []string
+	err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, _ := filepath.Rel(v.Root, n.Path)
+		relSlash := filepath.ToSlash(rel)
+		visited = append(visited, relSlash)
+		// SkipDir on a file skips remaining files in the same directory.
+		if relSlash == "Sub/b.md" {
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	// Sub/b.md should appear (it was visited before SkipDir was returned),
+	// but Sub/c.md should be skipped. Other/d.md and a.md should still appear.
+	for _, p := range visited {
+		if p == "Sub/c.md" {
+			t.Errorf("Sub/c.md should have been skipped after SkipDir, visited: %v", visited)
+		}
+	}
+}
+
+func TestOpenRejectsEmptyVaultPath(t *testing.T) {
+	_, err := Open(&config.Config{Vault: ""})
+	if err == nil {
+		t.Fatal("expected error on empty vault path")
+	}
+	if !strings.Contains(err.Error(), "empty vault path") {
+		t.Errorf("error should mention empty vault path: %v", err)
+	}
+}
+
+func TestResolveByTitleDeepFolders(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"A/B/C/deep.md": "# deep\n",
+		"deep.md":       "# shallow\n",
+	})
+
+	// Resolve in deep folder.
+	n, err := v.ResolveByTitle("deep", "A/B/C")
+	if err != nil {
+		t.Fatalf("deep folder resolve: %v", err)
+	}
+	if !strings.HasSuffix(filepath.ToSlash(n.Path), "A/B/C/deep.md") {
+		t.Errorf("got %s, want A/B/C/deep.md", n.Path)
+	}
+
+	// Root resolve should be ambiguous.
+	_, err = v.ResolveByTitle("deep", "")
+	if err == nil {
+		t.Fatal("expected ambiguity error for deep.md")
+	}
+	if !strings.Contains(err.Error(), "ambiguous") {
+		t.Errorf("error should mention ambiguity: %v", err)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

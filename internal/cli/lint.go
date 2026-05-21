@@ -136,11 +136,9 @@ func formatViolations(cmd *cobra.Command, violations []schema.Violation) {
 		sort.Strings(paths)
 
 		n := len(paths)
-		noun := "note(s)"
+		noun := "notes"
 		if n == 1 {
 			noun = "note"
-		} else {
-			noun = "notes"
 		}
 
 		switch key.Kind {

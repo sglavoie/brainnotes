@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -248,5 +249,30 @@ func TestConfigEdit_RespectsConfigFlag(t *testing.T) {
 	}
 	if len(*captured) != 2 || (*captured)[1] != flagPath {
 		t.Errorf("execReplace argv = %v, want [vim %s]", *captured, flagPath)
+	}
+}
+
+// errWriter is an io.Writer that always returns an error.
+type errWriter struct{ err error }
+
+func (ew errWriter) Write([]byte) (int, error) { return 0, ew.err }
+
+func TestPrintResolution_PropagatesWriteError(t *testing.T) {
+	want := errors.New("disk full")
+	cands := []config.CandidatePath{
+		{
+			Label:  "--config flag",
+			Path:   "/tmp/test.toml",
+			Source: config.SourceFlag,
+			Exists: true,
+			Active: true,
+		},
+	}
+	err := printResolution(errWriter{err: want}, cands)
+	if err == nil {
+		t.Fatal("expected error from broken writer, got nil")
+	}
+	if !errors.Is(err, want) {
+		t.Fatalf("expected wrapped %v, got %v", want, err)
 	}
 }

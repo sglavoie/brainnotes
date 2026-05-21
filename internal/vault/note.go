@@ -93,8 +93,11 @@ func (n *Note) SetBody(body string) error {
 	return nil
 }
 
-// Title returns the filename stem (no extension).
+// Title returns the filename stem (no extension). Returns "" for a nil Note.
 func (n *Note) Title() string {
+	if n == nil {
+		return ""
+	}
 	base := filepath.Base(n.Path)
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
@@ -102,6 +105,9 @@ func (n *Note) Title() string {
 // Folder returns the note's containing folder relative to the given vault
 // root, with forward slashes. A note directly under the root returns "".
 func (n *Note) Folder(root string) (string, error) {
+	if n == nil {
+		return "", errors.New("vault: nil note")
+	}
 	rel, err := filepath.Rel(root, n.Path)
 	if err != nil {
 		return "", fmt.Errorf("note: rel %q: %w", n.Path, err)

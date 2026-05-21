@@ -111,6 +111,9 @@ func lineFromOffset(nlOffsets []int, offset int) int {
 // unresolved wikilink.
 func BrokenLinks(g *Graph) Predicate {
 	return func(n *vault.Note) bool {
+		if n == nil {
+			return false
+		}
 		return len(UnresolvedLinks(n, g)) > 0
 	}
 }

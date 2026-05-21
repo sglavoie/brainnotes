@@ -460,3 +460,120 @@ func TestParseEmbeddedDelimiterMultiline(t *testing.T) {
 		t.Errorf("desc lost embedded `---`: %q", desc)
 	}
 }
+
+// TestMarshalNestedMapFloatPreservesType — a whole-number float inside a nested
+// map (e.g. `meta:\n  rating: 3.0`) must round-trip as float64, not silently
+// drift to int. Before the fix, encodeValue fell through to yaml.Node.Encode
+// for map[string]any values, bypassing the custom encodeFloat logic.
+func TestMarshalNestedMapFloatPreservesType(t *testing.T) {
+	in := "---\nmeta:\n  count: 3\n  rating: 3.0\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "rating: 3.0") {
+		t.Errorf("expected rating: 3.0, got:\n%s", out)
+	}
+
+	// Re-parse: the float must stay float64, the int must stay int.
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse2: %v", err)
+	}
+	meta, _ := doc2.Front.Get("meta")
+	m := meta.(map[string]any)
+	if _, ok := m["rating"].(float64); !ok {
+		t.Errorf("rating re-parsed as %T, want float64", m["rating"])
+	}
+	if _, ok := m["count"].(int); !ok {
+		t.Errorf("count re-parsed as %T, want int", m["count"])
+	}
+
+	// Idempotency.
+	out2, _ := Marshal(doc2, nil)
+	if string(out) != string(out2) {
+		t.Errorf("not idempotent:\nfirst:  %q\nsecond: %q", out, out2)
+	}
+}
+
+// TestMarshalNestedMapDateKeepsISO — a date-only value inside a nested map must
+// retain the YYYY-MM-DD format, not be expanded to a full RFC3339 timestamp.
+func TestMarshalNestedMapDateKeepsISO(t *testing.T) {
+	in := "---\nmeta:\n  created: 2025-12-13\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "created: 2025-12-13") {
+		t.Errorf("expected date-only format, got:\n%s", out)
+	}
+	if strings.Contains(string(out), "T00:00:00") {
+		t.Errorf("date should not be expanded to full timestamp, got:\n%s", out)
+	}
+
+	// Idempotency.
+	doc2, _ := Parse(out)
+	out2, _ := Marshal(doc2, nil)
+	if string(out) != string(out2) {
+		t.Errorf("not idempotent:\n%q\n%q", out, out2)
+	}
+}
+
+// TestMarshalListOfMapsWithFloat — floats inside maps that are themselves
+// inside a sequence must also get the encodeFloat treatment.
+func TestMarshalListOfMapsWithFloat(t *testing.T) {
+	in := "---\nitems:\n  - name: A\n    rating: 3.0\n  - name: B\n    rating: 4.0\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "rating: 3.0") {
+		t.Errorf("expected rating: 3.0, got:\n%s", out)
+	}
+	if !strings.Contains(string(out), "rating: 4.0") {
+		t.Errorf("expected rating: 4.0, got:\n%s", out)
+	}
+
+	// Idempotency.
+	doc2, _ := Parse(out)
+	out2, _ := Marshal(doc2, nil)
+	if string(out) != string(out2) {
+		t.Errorf("not idempotent:\n%s\nvs\n%s", out, out2)
+	}
+}
+
+// TestMarshalEmptyNestedMap — an empty nested map should render as `{}` (flow
+// style), matching the convention for empty sequences.
+func TestMarshalEmptyNestedMap(t *testing.T) {
+	doc := Document{Front: NewMap(), Body: "body\n"}
+	doc.Front.Set("meta", map[string]any{})
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "meta: {}") {
+		t.Errorf("expected empty map as {}, got:\n%s", out)
+	}
+
+	// Round-trip: re-parse must preserve the empty map, not collapse it to nil.
+	doc2, _ := Parse(out)
+	out2, _ := Marshal(doc2, nil)
+	if string(out) != string(out2) {
+		t.Errorf("not idempotent:\n%q\n%q", out, out2)
+	}
+}

@@ -100,14 +100,13 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 			if _, decErr := toml.DecodeFile(configPath, cfg); decErr != nil {
 				return nil, fmt.Errorf("config: parse %s: %w", configPath, decErr)
 			}
+			cfg.SourcePath = configPath
 		case !os.IsNotExist(statErr):
 			return nil, fmt.Errorf("config: stat %s: %w", configPath, statErr)
 		case explicit:
 			return nil, fmt.Errorf("config: file %s does not exist", configPath)
 		}
 	}
-
-	cfg.SourcePath = configPath
 
 	if flagVaultPath != "" {
 		cfg.Vault = flagVaultPath

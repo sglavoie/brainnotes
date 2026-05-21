@@ -534,6 +534,13 @@ func TestFromFlags(t *testing.T) {
 		}
 	})
 
+	t.Run("folder without root errors", func(t *testing.T) {
+		_, err := FromFlags(Flags{Folder: "People", MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1})
+		if err == nil {
+			t.Errorf("expected error: folder without root")
+		}
+	})
+
 	t.Run("empty flags matches all", func(t *testing.T) {
 		pred, err := FromFlags(Flags{MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1})
 		if err != nil {

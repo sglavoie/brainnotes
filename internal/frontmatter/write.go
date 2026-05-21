@@ -101,6 +101,9 @@ func encodeValue(v any) (*yaml.Node, error) {
 		}
 		return n, nil
 	}
+	if m, ok := v.(map[string]any); ok {
+		return encodeMap(m)
+	}
 	n := &yaml.Node{}
 	if err := n.Encode(v); err != nil {
 		return nil, err
@@ -152,6 +155,32 @@ func hasFloatMarker(s string) bool {
 		}
 	}
 	return false
+}
+
+// encodeMap builds a yaml.MappingNode from a map[string]any, sorting keys
+// alphabetically and encoding each value through encodeValue so that nested
+// floats, dates, and other special types receive the same treatment as
+// top-level values.
+func encodeMap(m map[string]any) (*yaml.Node, error) {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	n := &yaml.Node{Kind: yaml.MappingNode}
+	if len(keys) == 0 {
+		n.Style = yaml.FlowStyle
+	}
+	for _, k := range keys {
+		keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: k}
+		valNode, err := encodeValue(m[k])
+		if err != nil {
+			return nil, fmt.Errorf("encode nested %q: %w", k, err)
+		}
+		n.Content = append(n.Content, keyNode, valNode)
+	}
+	return n, nil
 }
 
 // encodeTime emits a date-only scalar when the time has no time-of-day

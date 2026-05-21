@@ -106,22 +106,33 @@ func printResolution(w io.Writer, cands []config.CandidatePath) error {
 		}
 	}
 
-	switch {
-	case active != nil && active.Exists:
-		fmt.Fprintf(w, "Active config: %s (%s, exists)\n", active.Path, sourceShort(active.Source))
-	case active != nil:
-		fmt.Fprintln(w, "Active config: none found")
-		fmt.Fprintf(w, "Default path:  %s (would be created by `bn config edit`)\n", active.Path)
-	default:
-		fmt.Fprintln(w, "Active config: none found")
+	var err error
+	pr := func(format string, a ...any) {
+		if err != nil {
+			return
+		}
+		_, err = fmt.Fprintf(w, format, a...)
 	}
 
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Resolution order (highest to lowest precedence):")
+	switch {
+	case active != nil && active.Exists:
+		pr("Active config: %s (%s, exists)\n", active.Path, sourceShort(active.Source))
+	case active != nil:
+		pr("Active config: none found\n")
+		pr("Default path:  %s (would be created by `bn config edit`)\n", active.Path)
+	default:
+		pr("Active config: none found\n")
+	}
+
+	pr("\n")
+	pr("Resolution order (highest to lowest precedence):\n")
 	for i, c := range cands {
+		if err != nil {
+			break
+		}
 		label := fmt.Sprintf("%-*s", labelWidth, c.Label)
 		if c.Path == "" {
-			fmt.Fprintf(w, "  %d. %snot set\n", i+1, label)
+			pr("  %d. %snot set\n", i+1, label)
 			continue
 		}
 		tags := ""
@@ -133,7 +144,7 @@ func printResolution(w io.Writer, cands []config.CandidatePath) error {
 		} else {
 			tags += " [missing]"
 		}
-		fmt.Fprintf(w, "  %d. %s%s %s\n", i+1, label, c.Path, tags)
+		pr("  %d. %s%s %s\n", i+1, label, c.Path, tags)
 	}
-	return nil
+	return err
 }

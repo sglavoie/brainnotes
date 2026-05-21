@@ -349,3 +349,57 @@ func TestSetOp_RejectsInvalidPair(t *testing.T) {
 		t.Fatal("expected error for pair with empty key")
 	}
 }
+
+// TestSetOp_WikilinkScalarSkipsAutoCoerce verifies that wikilink-typed scalar
+// properties skip auto-coercion. Without the fix, `bn set note.md parent=true`
+// stores the Go bool `true` instead of the string `[[true]]`.
+func TestSetOp_WikilinkScalarSkipsAutoCoerce(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	if _, err := runCLI(t, "", "set", notePath, "parent=true"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readNote(t, notePath)
+	if !strings.Contains(got, "[[true]]") {
+		t.Fatalf("expected parent stored as [[true]] (string), got:\n%s", got)
+	}
+	if strings.Contains(got, "parent: true\n") {
+		t.Fatalf("auto-coercion should be skipped for wikilink properties, got:\n%s", got)
+	}
+}
+
+// TestSetOp_WikilinkListSkipsAutoCoerce verifies that wikilink-typed list
+// properties skip auto-coercion. Before the fix, `bn set note.md
+// categories=true,42` stored a bool and an int instead of wrapped strings.
+func TestSetOp_WikilinkListSkipsAutoCoerce(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	if _, err := runCLI(t, "", "set", notePath, "categories=true,42"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readNote(t, notePath)
+	if !strings.Contains(got, "[[true]]") {
+		t.Fatalf("expected [[true]] in categories, got:\n%s", got)
+	}
+	if !strings.Contains(got, "[[42]]") {
+		t.Fatalf("expected [[42]] in categories, got:\n%s", got)
+	}
+}
+
+// TestSetOp_WikilinkAddSkipsAutoCoerce verifies that += on a wikilink-typed
+// list property skips auto-coercion, so values like "true" are stored as
+// the string "[[true]]" rather than the Go bool true.
+func TestSetOp_WikilinkAddSkipsAutoCoerce(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	if _, err := runCLI(t, "", "set", notePath, "categories+=true"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readNote(t, notePath)
+	if !strings.Contains(got, "[[true]]") {
+		t.Fatalf("expected [[true]] in categories, got:\n%s", got)
+	}
+}

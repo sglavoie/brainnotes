@@ -128,6 +128,88 @@ func TestRenderEnv(t *testing.T) {
 	}
 }
 
+func TestRenderMissingVarKey(t *testing.T) {
+	t.Parallel()
+	// A missing Vars key must produce an empty string, never "<no value>".
+	ctx := NewContext("x", "", "/v", nil, nil)
+	got, err := Render(`v=[{{ .Vars.missing }}]`, ctx)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got != "v=[]" {
+		t.Fatalf("got %q, want %q", got, "v=[]")
+	}
+}
+
+func TestRenderNilVarsContext(t *testing.T) {
+	t.Parallel()
+	// A Context constructed directly with nil Vars must still render safely.
+	ctx := Context{Title: "x", Vars: nil}
+	got, err := Render(`v=[{{ .Vars.missing }}]`, ctx)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got != "v=[]" {
+		t.Fatalf("got %q, want %q", got, "v=[]")
+	}
+}
+
+func TestRenderExecuteError(t *testing.T) {
+	t.Parallel()
+	ctx := NewContext("x", "", "/v", nil, nil)
+	// Calling a known function with the wrong number of args triggers an
+	// execute error (dateFormat expects two args).
+	_, err := Render(`{{ dateFormat "2006" }}`, ctx)
+	if err == nil {
+		t.Fatal("expected execute error")
+	}
+	if !strings.Contains(err.Error(), "execute") && !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("expected execute or parse error, got %v", err)
+	}
+}
+
+func TestNewContextNilVars(t *testing.T) {
+	t.Parallel()
+	ctx := NewContext("t", "", "/v", nil, nil)
+	if ctx.Vars == nil {
+		t.Fatal("Vars must not be nil")
+	}
+}
+
+func TestTitleUnicode(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in, want string
+	}{
+		{"café latte", "Café Latte"},
+		{"über cool", "Über Cool"},
+		// Digit at word start stays as-is (ToUpper is identity for digits).
+		{"123 abc", "123 Abc"},
+	}
+	for _, c := range cases {
+		if got := Title(c.in); got != c.want {
+			t.Errorf("Title(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestSlugSingleChar(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in, want string
+	}{
+		{"A", "a"},
+		{"1", "1"},
+		{"-", ""},
+		{".", ""},
+	}
+	for _, c := range cases {
+		if got := Slug(c.in); got != c.want {
+			t.Errorf("Slug(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestWikilinkNoDoubleWrap(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

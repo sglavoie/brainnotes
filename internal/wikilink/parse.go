@@ -253,7 +253,11 @@ func isFenceOpener(line string) (byte, int, bool) {
 	if n < 3 {
 		return 0, 0, false
 	}
-	// Info string after the fence (e.g. ```go) is allowed for openers.
+	// Per CommonMark, backtick fence info strings may not contain backtick
+	// characters. Tilde fences have no such restriction.
+	if ch == '`' && strings.IndexByte(line[i+n:], '`') >= 0 {
+		return 0, 0, false
+	}
 	return ch, n, true
 }
 

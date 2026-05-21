@@ -190,6 +190,45 @@ func TestParseSkipsCodeBlocks(t *testing.T) {
 			t.Fatalf("targets = %v, want %v", targets, want)
 		}
 	})
+
+	t.Run("backtick fence with backtick in info string is not a fence", func(t *testing.T) {
+		t.Parallel()
+		// Per CommonMark, a backtick fence opener's info string may not
+		// contain backtick characters. So ```foo`bar is NOT a valid fence.
+		// The subsequent bare ``` opens a real fence that masks [[After]].
+		in := "[[Before]]\n```foo`bar\n[[Visible]]\n```\n[[After]]"
+		targets := collectTargets(Parse(in))
+		want := []string{"Before", "Visible"}
+		if !reflect.DeepEqual(targets, want) {
+			t.Fatalf("targets = %v, want %v", targets, want)
+		}
+	})
+
+	t.Run("backtick fence with backtick in info string full round trip", func(t *testing.T) {
+		t.Parallel()
+		// Ensure the invalid fence opener doesn't mask the link after it,
+		// and that a real fence still works afterward.
+		in := "[[A]]\n```x`y\n[[B]]\ntext\n```\n[[C]]\n```\n[[D]]"
+		targets := collectTargets(Parse(in))
+		// ```x`y is not a fence (backtick in info); [[B]] is visible.
+		// First bare ``` opens a real fence; [[C]] is masked.
+		// Second bare ``` closes the fence; [[D]] is visible.
+		want := []string{"A", "B", "D"}
+		if !reflect.DeepEqual(targets, want) {
+			t.Fatalf("targets = %v, want %v", targets, want)
+		}
+	})
+
+	t.Run("tilde fence with backtick in info string is valid", func(t *testing.T) {
+		t.Parallel()
+		// Tilde fences have no restriction on backticks in the info string.
+		in := "[[Before]]\n~~~foo`bar\n[[Hidden]]\n~~~\n[[After]]"
+		targets := collectTargets(Parse(in))
+		want := []string{"Before", "After"}
+		if !reflect.DeepEqual(targets, want) {
+			t.Fatalf("targets = %v, want %v", targets, want)
+		}
+	})
 }
 
 func TestParseNoFalsePositives(t *testing.T) {

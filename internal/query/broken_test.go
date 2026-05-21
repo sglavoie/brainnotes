@@ -226,3 +226,18 @@ func TestUnresolvedLinks(t *testing.T) {
 		}
 	})
 }
+
+// TestBrokenLinksPredicateRejectsNil verifies that the BrokenLinks predicate
+// returns false for a nil note rather than panicking, consistent with all
+// other graph-based predicates (Orphan, MinBacklinks, etc.).
+func TestBrokenLinksPredicateRejectsNil(t *testing.T) {
+	g := BuildGraph(nil)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("BrokenLinks should not panic on nil note, got: %v", r)
+		}
+	}()
+	if BrokenLinks(g)(nil) {
+		t.Errorf("BrokenLinks(g)(nil) = true, want false")
+	}
+}

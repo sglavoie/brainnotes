@@ -76,7 +76,7 @@ func NewContext(title, folder, vault string, vars map[string]string, clk Clock) 
 // Render parses and executes templateBody against ctx, returning the produced
 // string. The FuncMap is documented in funcMap.
 func Render(templateBody string, ctx Context) (string, error) {
-	t, err := template.New("note").Funcs(funcMap(ctx)).Parse(templateBody)
+	t, err := template.New("note").Option("missingkey=zero").Funcs(funcMap(ctx)).Parse(templateBody)
 	if err != nil {
 		return "", fmt.Errorf("template: parse: %w", err)
 	}

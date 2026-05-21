@@ -963,6 +963,38 @@ func TestLoad_SchemaEmptyIsValid(t *testing.T) {
 	}
 }
 
+func TestLoad_SourcePathSetWhenFileLoaded(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SourcePath != cfgPath {
+		t.Errorf("SourcePath: got %q, want %q", cfg.SourcePath, cfgPath)
+	}
+}
+
+func TestLoad_SourcePathEmptyWhenNoConfigFileExists(t *testing.T) {
+	// When no config file exists on disk (implicit default search misses),
+	// SourcePath should be empty rather than pointing at a non-existent file.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	cfg, err := Load(vault, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SourcePath != "" {
+		t.Errorf("SourcePath should be empty when no config file was loaded, got %q", cfg.SourcePath)
+	}
+}
+
 func TestLoad_SchemaAllowedOnAllInvalidTypes(t *testing.T) {
 	for _, typ := range []string{"int", "bool", "float", "date"} {
 		t.Run(typ, func(t *testing.T) {

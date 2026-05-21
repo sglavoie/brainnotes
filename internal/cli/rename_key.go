@@ -151,11 +151,13 @@ Use --dry-run to preview changes without writing.`,
 				count++
 			}
 
-			summary := fmt.Sprintf("renamed %s -> %s in %d file(s)", oldK, newK, count)
-			if skipped > 0 {
-				summary += fmt.Sprintf(", %d skipped (conflict)", skipped)
+			if dry == nil {
+				summary := fmt.Sprintf("renamed %s -> %s in %d file(s)", oldK, newK, count)
+				if skipped > 0 {
+					summary += fmt.Sprintf(", %d skipped (conflict)", skipped)
+				}
+				fmt.Fprintln(out, summary)
 			}
-			fmt.Fprintln(out, summary)
 
 			if containsString(cfg.Frontmatter.ListProperties, oldK) {
 				fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter].list_properties; update your config.toml to use %q\n", oldK, newK)
