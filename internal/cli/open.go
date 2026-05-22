@@ -81,9 +81,12 @@ func NewOpenCmd() *cobra.Command {
 				return nil
 			}
 
-			editor := os.Getenv("EDITOR")
+			editor := cfg.Open.Editor
 			if editor == "" {
-				return errors.New("open: $EDITOR is not set")
+				editor = os.Getenv("EDITOR")
+			}
+			if editor == "" {
+				return errors.New("open: no editor configured (set [open].editor in config or $EDITOR)")
 			}
 			if err := openExec(editor, target); err != nil {
 				return fmt.Errorf("open: %w", err)

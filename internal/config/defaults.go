@@ -42,6 +42,11 @@ func DefaultTemplate() string {
 # Additional flags passed to fzf when --interactive is used.
 # args = ["--height=40%", "--reverse"]
 
+[open]
+# Editor binary to invoke when opening a note with 'bn open'.
+# Falls back to $EDITOR when not set.
+# editor = "nvim"
+
 # Default folders for ` + "`bn new <template>`" + `. Keys are template names,
 # values are vault-relative folders.
 # [new.routes]

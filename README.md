@@ -76,6 +76,10 @@ list_properties = ["categories", "tags", "topics", "org", "type"]
 # Args appended to the fzf invocation when `-i` is passed.
 args = ["--preview", "bat --style=plain --color=always {}"]
 
+[open]
+# Editor to invoke when opening a note. Falls back to $EDITOR when not set.
+# editor = "nvim"
+
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
 [new.routes]
 book    = "References/Books"
@@ -260,7 +264,8 @@ bn open [query] [--print] [-0]
 ```
 
 Pipes every vault note path into `fzf`; on selection, exec-replaces with
-`$EDITOR <path>`. With `<query>`, fzf opens pre-filtered (no auto-select).
+the configured editor (`[open].editor` in config, or `$EDITOR` as fallback).
+With `<query>`, fzf opens pre-filtered (no auto-select).
 `--print` emits the chosen path instead of invoking the editor — useful for
 shell composition. `-0` (with `--print`) NUL-terminates the output.
 

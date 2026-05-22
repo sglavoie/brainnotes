@@ -23,6 +23,7 @@ type Config struct {
 	Templates   TemplatesConfig   `toml:"templates"`
 	Frontmatter FrontmatterConfig `toml:"frontmatter"`
 	Fzf         FzfConfig         `toml:"fzf"`
+	Open        OpenConfig        `toml:"open"`
 	New         NewConfig         `toml:"new"`
 
 	// SourcePath is the resolved path of the config file that was loaded.
@@ -53,6 +54,13 @@ type FrontmatterConfig struct {
 // FzfConfig configures the fzf interactive shell-out.
 type FzfConfig struct {
 	Args []string `toml:"args"`
+}
+
+// OpenConfig configures the `open` command.
+type OpenConfig struct {
+	// Editor is the editor binary (or absolute path) to invoke when opening a
+	// note. When empty, bn falls back to $EDITOR.
+	Editor string `toml:"editor"`
 }
 
 // NewConfig configures the `new` command.

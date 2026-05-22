@@ -217,9 +217,72 @@ func TestOpen_MissingEditor(t *testing.T) {
 
 	_, _, err := runOpen(t, vaultRoot, "open")
 	if err == nil {
-		t.Fatalf("expected error when $EDITOR is missing")
+		t.Fatalf("expected error when neither config editor nor $EDITOR is set")
 	}
-	if !strings.Contains(err.Error(), "$EDITOR") {
-		t.Fatalf("error should mention $EDITOR; got %v", err)
+	if !strings.Contains(err.Error(), "[open].editor") || !strings.Contains(err.Error(), "$EDITOR") {
+		t.Fatalf("error should mention both [open].editor and $EDITOR; got %v", err)
+	}
+}
+
+func TestOpen_ConfigEditorTakesPriority(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+	want := filepath.Join(vaultRoot, "Apple.md")
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return []string{want}, nil
+	}
+	var gotEditor string
+	openExec = func(editor, file string) error {
+		gotEditor = editor
+		return nil
+	}
+	t.Setenv("EDITOR", "vim") // env editor should be ignored
+
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("vault = \""+vaultRoot+"\"\n[open]\neditor = \"nvim\"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	root := NewRootCmd()
+	out := &bytes.Buffer{}
+	root.SetOut(out)
+	root.SetArgs([]string{"--config", cfgPath, "open"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if gotEditor != "nvim" {
+		t.Fatalf("editor: got %q, want %q (config should take priority over $EDITOR)", gotEditor, "nvim")
+	}
+}
+
+func TestOpen_EnvEditorUsedWhenConfigEmpty(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+	want := filepath.Join(vaultRoot, "Apple.md")
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return []string{want}, nil
+	}
+	var gotEditor string
+	openExec = func(editor, file string) error {
+		gotEditor = editor
+		return nil
+	}
+	t.Setenv("EDITOR", "emacs")
+
+	// Config has no [open].editor set.
+	if _, _, err := runOpen(t, vaultRoot, "open"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if gotEditor != "emacs" {
+		t.Fatalf("editor: got %q, want %q ($EDITOR should be used when config editor is empty)", gotEditor, "emacs")
 	}
 }
