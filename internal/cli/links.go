@@ -28,6 +28,9 @@ func NewLinksCmd() *cobra.Command {
 			if cfg == nil {
 				return errors.New("links: no config in context")
 			}
+			if nullSep && verbose {
+				return errors.New("links: --null cannot be used with --verbose")
+			}
 			v, err := vault.Open(cfg)
 			if err != nil {
 				return err

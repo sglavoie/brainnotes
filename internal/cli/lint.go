@@ -34,6 +34,7 @@ func NewLintCmd() *cobra.Command {
 defined in config.toml and reports violations without modifying files.
 
 Exit code 0 means clean; exit code 1 means violations were found.`,
+		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

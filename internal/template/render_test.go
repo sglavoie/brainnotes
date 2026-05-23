@@ -186,6 +186,9 @@ func TestTitleUnicode(t *testing.T) {
 		{"über cool", "Über Cool"},
 		// Digit at word start stays as-is (ToUpper is identity for digits).
 		{"123 abc", "123 Abc"},
+		// A leading combining mark must not consume the word start; the first
+		// real letter still gets capitalized.
+		{"́test", "́Test"},
 	}
 	for _, c := range cases {
 		if got := Title(c.in); got != c.want {
@@ -208,8 +211,9 @@ func TestSlugCombiningMarks(t *testing.T) {
 		{"über", "über"},
 		// Multiple combining marks on one base letter (e.g. Vietnamese).
 		{"ạ́b", "ạ́b"},
-		// Orphan combining mark at start (pathological but should not panic).
-		{"́test", "́test"},
+		// Orphan combining mark at start (pathological but should not leak
+		// into the slug).
+		{"́test", "test"},
 	}
 	for _, c := range cases {
 		if got := Slug(c.in); got != c.want {
@@ -230,10 +234,11 @@ func TestSlugTrailingOrphanMark(t *testing.T) {
 		{"foo!́", "foo"},
 		{"abc-́", "abc"},
 		{"abc-́́́", "abc"}, // multiple orphan marks
+		{"abc-́def", "abc-def"},
 		// Mark attached to a real base letter must be preserved.
 		{"abć", "abć"},
-		// Leading orphan mark is preserved (per existing behavior).
-		{"́test", "́test"},
+		// Leading orphan mark is skipped.
+		{"́test", "test"},
 	}
 	for _, c := range cases {
 		if got := Slug(c.in); got != c.want {

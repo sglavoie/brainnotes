@@ -5,6 +5,7 @@
 package frontmatter
 
 import (
+	"strconv"
 	"strings"
 	"time"
 )
@@ -28,11 +29,16 @@ type Document struct {
 type Map struct {
 	keys []string
 	vals map[string]any
+	meta map[string]valueMeta
+}
+
+type valueMeta struct {
+	timestampDateOnly bool
 }
 
 // NewMap returns an empty Map ready for use.
 func NewMap() Map {
-	return Map{vals: map[string]any{}}
+	return Map{vals: map[string]any{}, meta: map[string]valueMeta{}}
 }
 
 // Len reports the number of entries.
@@ -74,6 +80,7 @@ func (m *Map) Set(k string, v any) {
 	if _, ok := m.vals[k]; !ok {
 		m.keys = append(m.keys, k)
 	}
+	m.clearMetaPrefix(k)
 	m.vals[k] = v
 }
 
@@ -86,6 +93,7 @@ func (m *Map) Unset(k string) {
 		return
 	}
 	delete(m.vals, k)
+	m.clearMetaPrefix(k)
 	for i, key := range m.keys {
 		if key == k {
 			m.keys = append(m.keys[:i], m.keys[i+1:]...)
@@ -171,4 +179,71 @@ func wrapWikilink(s string) string {
 		return s
 	}
 	return "[[" + s + "]]"
+}
+
+func (m *Map) setParsed(k string, v any) {
+	if m.vals == nil {
+		m.vals = map[string]any{}
+	}
+	if m.meta == nil {
+		m.meta = map[string]valueMeta{}
+	}
+	if _, ok := m.vals[k]; !ok {
+		m.keys = append(m.keys, k)
+	}
+	m.vals[k] = v
+}
+
+func (m *Map) clearMetaPrefix(k string) {
+	clearMetaPrefix(m.meta, []string{metaMapPart(k)})
+}
+
+func (m *Map) renameMetaPrefix(oldK, newK string) {
+	if len(m.meta) == 0 {
+		return
+	}
+	oldPrefix := metaPathKey([]string{metaMapPart(oldK)})
+	newPrefix := metaPathKey([]string{metaMapPart(newK)})
+	for k, v := range m.meta {
+		if !isMetaPrefixMatch(k, oldPrefix) {
+			continue
+		}
+		delete(m.meta, k)
+		m.meta[newPrefix+strings.TrimPrefix(k, oldPrefix)] = v
+	}
+}
+
+func clearMetaPrefix(meta map[string]valueMeta, path []string) {
+	if len(meta) == 0 {
+		return
+	}
+	prefix := metaPathKey(path)
+	for k := range meta {
+		if isMetaPrefixMatch(k, prefix) {
+			delete(meta, k)
+		}
+	}
+}
+
+func isMetaPrefixMatch(k, prefix string) bool {
+	return k == prefix || strings.HasPrefix(k, prefix+"\x00")
+}
+
+func metaPathKey(path []string) string {
+	return strings.Join(path, "\x00")
+}
+
+func metaMapPart(k string) string {
+	return "m" + strconv.Itoa(len(k)) + ":" + k
+}
+
+func metaIndexPart(i int) string {
+	return "i" + strconv.Itoa(i)
+}
+
+func appendMetaPath(path []string, part string) []string {
+	next := make([]string, len(path)+1)
+	copy(next, path)
+	next[len(path)] = part
+	return next
 }

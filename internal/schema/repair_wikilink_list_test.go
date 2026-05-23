@@ -128,6 +128,28 @@ func TestPlanRepairs_WikilinkAllowed_PartialListCanonicalizesWithoutStaleSkip(t 
 	}
 }
 
+func TestPlanRepairs_WikilinkAllowed_BareCanonicalizeThenWrap(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	}
+	front := buildFront("category", "work")
+
+	result := PlanRepairs(front, sch, []string{"category"})
+	if len(result.Skips) != 0 {
+		t.Fatalf("expected no skips, got %+v", result.Skips)
+	}
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	act := result.Actions[0]
+	if act.Kind != "canonicalize,wikilink_wrap" {
+		t.Errorf("kind = %q, want %q", act.Kind, "canonicalize,wikilink_wrap")
+	}
+	if act.NewValue != "[[Work]]" {
+		t.Errorf("new value = %q, want %q", act.NewValue, "[[Work]]")
+	}
+}
+
 func TestPlanRepairs_Canonicalize_ListNonStringItem(t *testing.T) {
 	// A list containing non-string items should flag those items as
 	// unfixable during canonicalization, not silently skip them.
@@ -156,6 +178,34 @@ func TestPlanRepairs_Canonicalize_ListNonStringItem(t *testing.T) {
 	}
 	if result.Skips[0].Kind != "value_not_allowed" {
 		t.Errorf("skip kind = %q, want %q", result.Skips[0].Kind, "value_not_allowed")
+	}
+}
+
+func TestPlanRepairs_Canonicalize_DeduplicatesRepeatedInvalidListSkips(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"tags": {Type: "list", Allowed: []string{"Go"}},
+	}
+	front := buildFront("tags", []any{"bad", "bad", "go"})
+
+	result := PlanRepairs(front, sch, nil)
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	if result.Actions[0].Kind != "canonicalize,list_dedup" {
+		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "canonicalize,list_dedup")
+	}
+	wantNew := []any{"bad", "Go"}
+	if !reflect.DeepEqual(result.Actions[0].NewValue, wantNew) {
+		t.Errorf("new value = %v, want %v", result.Actions[0].NewValue, wantNew)
+	}
+	if len(result.Skips) != 1 {
+		t.Fatalf("expected 1 skip for repeated invalid value, got %d: %+v", len(result.Skips), result.Skips)
+	}
+	if result.Skips[0].Kind != "value_not_allowed" {
+		t.Errorf("skip kind = %q, want %q", result.Skips[0].Kind, "value_not_allowed")
+	}
+	if result.Skips[0].Detail != `no allowed value matches "bad"` {
+		t.Errorf("skip detail = %q", result.Skips[0].Detail)
 	}
 }
 

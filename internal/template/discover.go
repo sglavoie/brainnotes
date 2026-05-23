@@ -32,9 +32,10 @@ var ErrTemplateAmbiguous = errors.New("template: ambiguous match")
 //
 // The templates directory is resolved case-insensitively when the exact
 // configured path does not exist. Its listing is compared against each
-// candidate lower-cased; the first candidate that matches wins. If more than
-// one file matches the same candidate (only possible on case-sensitive
-// filesystems), ErrTemplateAmbiguous is returned listing the colliding files.
+// candidate with Unicode case-folding; the first candidate that matches wins.
+// If more than one file matches the same candidate (only possible on
+// case-sensitive filesystems), ErrTemplateAmbiguous is returned listing the
+// colliding files.
 //
 // The name must be a bare filename: path separators in name are rejected so
 // that callers don't accidentally escape the templates directory.
@@ -58,16 +59,7 @@ func Find(cfg *config.Config, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ext := cfg.Templates.DefaultExtension
-	if ext == "" {
-		ext = ".md"
-	}
-	// Defensive normalization: callers bypassing config.Load may pass an
-	// extension without the leading dot ("md"). Normalize so the candidate
-	// concatenation ("stem"+ext) produces a sensible filename.
-	if !strings.HasPrefix(ext, ".") {
-		ext = "." + ext
-	}
+	ext := normalizeDefaultExtension(cfg.Templates.DefaultExtension)
 
 	// stem is the user-supplied name with any trailing copy of the configured
 	// extension removed, so that callers passing "Book.md" still hit the
@@ -103,7 +95,7 @@ func Find(cfg *config.Config, name string) (string, error) {
 			if e.IsDir() {
 				continue
 			}
-			if strings.ToLower(e.Name()) == want {
+			if strings.EqualFold(e.Name(), want) {
 				matches = append(matches, e.Name())
 			}
 		}
@@ -120,11 +112,12 @@ func Find(cfg *config.Config, name string) (string, error) {
 }
 
 func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
-	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
+	rel, err := normalizeTemplatesDir(cfg.Templates.Dir)
+	if err != nil {
 		return "", nil, err
 	}
 
-	dir := filepath.Join(cfg.Vault, cfg.Templates.Dir)
+	dir := filepath.Join(cfg.Vault, filepath.FromSlash(rel))
 	entries, err := os.ReadDir(dir)
 	if err == nil {
 		return dir, entries, nil
@@ -133,7 +126,7 @@ func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
 		return "", nil, fmt.Errorf("template: read %q: %w", dir, err)
 	}
 
-	resolved, resolveErr := resolveDirCaseInsensitive(cfg.Vault, cfg.Templates.Dir)
+	resolved, resolveErr := resolveDirCaseInsensitive(cfg.Vault, rel)
 	if resolveErr != nil {
 		return "", nil, resolveErr
 	}
@@ -148,19 +141,54 @@ func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
 	return resolved, entries, nil
 }
 
-func validateTemplatesDir(rel string) error {
+func normalizeDefaultExtension(ext string) string {
+	ext = strings.TrimSpace(ext)
+	if ext == "" || ext == "." {
+		return ".md"
+	}
+	if strings.ContainsAny(ext, "/\\\x00") {
+		return ".md"
+	}
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return ext
+}
+
+func normalizeTemplatesDir(rel string) (string, error) {
 	if strings.ContainsRune(rel, 0) {
-		return fmt.Errorf("template: templates dir %q must not contain NUL bytes", rel)
+		return "", fmt.Errorf("template: templates dir %q must not contain NUL bytes", rel)
 	}
-	normalized := strings.ReplaceAll(filepath.ToSlash(rel), `\`, `/`)
-	if filepath.IsAbs(rel) || path.IsAbs(normalized) {
-		return fmt.Errorf("template: templates dir %q must be relative", rel)
+	normalized := strings.ReplaceAll(filepath.ToSlash(strings.TrimSpace(rel)), `\`, `/`)
+	if isPathAbsoluteLike(normalized) {
+		return "", fmt.Errorf("template: templates dir %q must be relative", rel)
 	}
-	clean := path.Clean(normalized)
-	if clean == ".." || strings.HasPrefix(clean, "../") {
-		return fmt.Errorf("template: templates dir %q must not escape the vault", rel)
+	normalized = strings.TrimRight(normalized, "/")
+	if normalized != "" {
+		normalized = path.Clean(normalized)
 	}
-	return nil
+	if normalized == "" || normalized == "." {
+		return "Templates", nil
+	}
+	if normalized == ".." || strings.HasPrefix(normalized, "../") {
+		return "", fmt.Errorf("template: templates dir %q must not escape the vault", rel)
+	}
+	return normalized, nil
+}
+
+func isPathAbsoluteLike(p string) bool {
+	p = strings.ReplaceAll(filepath.ToSlash(strings.TrimSpace(p)), `\`, `/`)
+	if filepath.IsAbs(p) || path.IsAbs(p) {
+		return true
+	}
+	if len(p) >= 2 && isASCIIAlpha(p[0]) && p[1] == ':' {
+		return len(p) == 2 || p[2] == '/'
+	}
+	return false
+}
+
+func isASCIIAlpha(b byte) bool {
+	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
 }
 
 func resolveDirCaseInsensitive(root, rel string) (string, error) {

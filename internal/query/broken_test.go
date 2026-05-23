@@ -176,6 +176,41 @@ func TestUnresolvedLinks(t *testing.T) {
 		}
 	})
 
+	t.Run("markdown extension links resolve", func(t *testing.T) {
+		_, notes := newVault(t, map[string]string{
+			"Alpha.md":     "---\nrelated: \"[[Beta.md]]\"\n---\nSee [[Beta.md]] and [[Sub/Gamma.MD]] and [[Alpha.md]].\n",
+			"Beta.md":      "---\ntitle: Beta\n---\n",
+			"Sub/Gamma.md": "---\ntitle: Gamma\n---\n",
+		})
+		var all []*vault.Note
+		for _, n := range notes {
+			all = append(all, n)
+		}
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
+		if len(broken) != 0 {
+			t.Errorf("expected 0 broken links for explicit .md wikilinks, got %d: %v", len(broken), broken)
+		}
+	})
+
+	t.Run("missing markdown extension link still broken", func(t *testing.T) {
+		_, notes := newVault(t, map[string]string{
+			"Alpha.md": "---\ntitle: Alpha\n---\nSee [[Missing.md]].\n",
+		})
+		var all []*vault.Note
+		for _, n := range notes {
+			all = append(all, n)
+		}
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
+		if len(broken) != 1 {
+			t.Fatalf("expected 1 broken .md link, got %d", len(broken))
+		}
+		if broken[0].Link.Title() != "Missing.md" {
+			t.Errorf("expected original broken title Missing.md, got %q", broken[0].Link.Title())
+		}
+	})
+
 	t.Run("frontmatter scalar", func(t *testing.T) {
 		_, notes := newVault(t, map[string]string{
 			"Alpha.md": "---\ncategories: \"[[Books]]\"\n---\n",

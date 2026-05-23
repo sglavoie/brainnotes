@@ -29,6 +29,7 @@ func NewFindCmd() *cobra.Command {
 		Use:           "find",
 		Short:         "Find notes by frontmatter criteria",
 		Long:          "Find notes whose frontmatter matches every supplied filter. Prints matching absolute paths, one per line (or NUL-separated with -0). Pipe into fzf with -i for an interactive picker.",
+		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

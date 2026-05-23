@@ -2,6 +2,7 @@ package schema
 
 import (
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -64,5 +65,35 @@ func TestTryCoerce_FloatInfToInt(t *testing.T) {
 	_, ok = TryCoerce(math.Inf(-1), "int")
 	if ok {
 		t.Error("TryCoerce(-Inf, int) should return false")
+	}
+}
+
+func TestTryCoerce_IntPrecisionLossToFloat(t *testing.T) {
+	if strconv.IntSize < 64 {
+		t.Skip("requires 64-bit int")
+	}
+
+	exact := int(1 << 53)
+	got, ok := TryCoerce(exact, "float")
+	if !ok {
+		t.Fatal("TryCoerce(1<<53, float) should return true")
+	}
+	if got != float64(exact) {
+		t.Errorf("TryCoerce(1<<53, float) = %v, want %v", got, float64(exact))
+	}
+
+	exactLargePowerOfTwo := int(1 << 60)
+	got, ok = TryCoerce(exactLargePowerOfTwo, "float")
+	if !ok {
+		t.Fatal("TryCoerce(1<<60, float) should return true")
+	}
+	if got != float64(exactLargePowerOfTwo) {
+		t.Errorf("TryCoerce(1<<60, float) = %v, want %v", got, float64(exactLargePowerOfTwo))
+	}
+
+	inexact := int(1<<53) + 1
+	_, ok = TryCoerce(inexact, "float")
+	if ok {
+		t.Error("TryCoerce((1<<53)+1, float) should return false")
 	}
 }

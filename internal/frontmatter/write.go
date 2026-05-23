@@ -47,7 +47,11 @@ func bodyStartsWithDelimiter(body string) bool {
 	if len(s) >= 3 && s[0] == 0xEF && s[1] == 0xBB && s[2] == 0xBF {
 		s = s[3:]
 	}
-	_, ok := openDelimLen(s)
+	startLen, ok := openDelimLen(s)
+	if !ok {
+		return false
+	}
+	_, _, ok = findCloseDelim(s[startLen:])
 	return ok
 }
 
@@ -68,12 +72,12 @@ func marshalMap(m Map, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 
 	root := &yaml.Node{Kind: yaml.MappingNode}
 	for _, k := range sorted {
-		v, _ := m.Get(k)
+		v := m.vals[k]
 		if wikilinkSet[k] {
 			v = applyWikilinkWrap(v)
 		}
 		keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: k}
-		valNode, err := encodeValue(v)
+		valNode, err := encodeValueAt(v, m.meta, []string{metaMapPart(k)})
 		if err != nil {
 			return nil, fmt.Errorf("encode %q: %w", k, err)
 		}
@@ -97,8 +101,13 @@ func marshalMap(m Map, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 // emitted as `YYYY-MM-DD` rather than a full RFC3339 datetime so they
 // round-trip with the vault's existing convention.
 func encodeValue(v any) (*yaml.Node, error) {
+	return encodeValueAt(v, nil, nil)
+}
+
+func encodeValueAt(v any, meta map[string]valueMeta, path []string) (*yaml.Node, error) {
 	if t, ok := v.(time.Time); ok {
-		return encodeTime(t), nil
+		valueMeta, hasMeta := meta[metaPathKey(path)]
+		return encodeTime(t, valueMeta, hasMeta), nil
 	}
 	if f, ok := v.(float64); ok {
 		return encodeFloat(f), nil
@@ -108,8 +117,8 @@ func encodeValue(v any) (*yaml.Node, error) {
 		if len(list) == 0 {
 			n.Style = yaml.FlowStyle
 		}
-		for _, item := range list {
-			child, err := encodeValue(item)
+		for i, item := range list {
+			child, err := encodeValueAt(item, meta, appendMetaPath(path, metaIndexPart(i)))
 			if err != nil {
 				return nil, err
 			}
@@ -118,7 +127,7 @@ func encodeValue(v any) (*yaml.Node, error) {
 		return n, nil
 	}
 	if m, ok := v.(map[string]any); ok {
-		return encodeMap(m)
+		return encodeMapAt(m, meta, path)
 	}
 	n := &yaml.Node{}
 	if err := n.Encode(v); err != nil {
@@ -178,6 +187,10 @@ func hasFloatMarker(s string) bool {
 // floats, dates, and other special types receive the same treatment as
 // top-level values.
 func encodeMap(m map[string]any) (*yaml.Node, error) {
+	return encodeMapAt(m, nil, nil)
+}
+
+func encodeMapAt(m map[string]any, meta map[string]valueMeta, path []string) (*yaml.Node, error) {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -190,7 +203,7 @@ func encodeMap(m map[string]any) (*yaml.Node, error) {
 	}
 	for _, k := range keys {
 		keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: k}
-		valNode, err := encodeValue(m[k])
+		valNode, err := encodeValueAt(m[k], meta, appendMetaPath(path, metaMapPart(k)))
 		if err != nil {
 			return nil, fmt.Errorf("encode nested %q: %w", k, err)
 		}
@@ -200,12 +213,14 @@ func encodeMap(m map[string]any) (*yaml.Node, error) {
 }
 
 // encodeTime emits a date-only scalar when the time has no time-of-day
-// component and is in UTC; otherwise emits a full RFC3339 timestamp.
+// component and is in UTC, unless the value came from a parsed datetime scalar;
+// otherwise it emits a full RFC3339 timestamp.
 // Sub-second precision is preserved via RFC3339Nano so that timestamps
 // like `2025-12-13T10:30:00.5Z` round-trip without losing fractional
 // seconds.
-func encodeTime(t time.Time) *yaml.Node {
-	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
+func encodeTime(t time.Time, meta valueMeta, hasMeta bool) *yaml.Node {
+	if (!hasMeta || meta.timestampDateOnly) &&
+		t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
 		_, offset := t.Zone()
 		if offset == 0 {
 			return &yaml.Node{
@@ -241,8 +256,8 @@ func forceBlockStyle(n *yaml.Node) {
 	}
 }
 
-// applyWikilinkWrap recursively wraps bare strings as `[[X]]`. Non-string
-// values pass through unchanged.
+// applyWikilinkWrap wraps bare scalar strings and string items in a list as
+// `[[X]]`. Non-string values pass through unchanged.
 func applyWikilinkWrap(v any) any {
 	switch vv := v.(type) {
 	case string:

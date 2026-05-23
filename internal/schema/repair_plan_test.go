@@ -229,6 +229,28 @@ func TestPlanRepairs_SchemaKeysAreSorted(t *testing.T) {
 	}
 }
 
+func TestPlanRepairs_NonSchemaKeysAreSorted(t *testing.T) {
+	front := buildFront(
+		"z_prop", []any{"z", "z"},
+		"a_prop", "Bare",
+		"m_prop", []any{"m", "m"},
+	)
+
+	result := PlanRepairs(front, nil, []string{"a_prop"})
+	if len(result.Actions) != 3 {
+		t.Fatalf("expected 3 actions, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	if result.Actions[0].Property != "a_prop" {
+		t.Errorf("first action property = %q, want a_prop", result.Actions[0].Property)
+	}
+	if result.Actions[1].Property != "m_prop" {
+		t.Errorf("second action property = %q, want m_prop", result.Actions[1].Property)
+	}
+	if result.Actions[2].Property != "z_prop" {
+		t.Errorf("third action property = %q, want z_prop", result.Actions[2].Property)
+	}
+}
+
 // --- Edge cases ---
 
 func TestPlanRepairs_NilSchemaMap(t *testing.T) {

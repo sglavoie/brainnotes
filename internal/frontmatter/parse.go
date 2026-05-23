@@ -3,6 +3,7 @@ package frontmatter
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -130,11 +131,13 @@ func parseYAML(data []byte) (Map, error) {
 		if err := keyNode.Decode(&key); err != nil {
 			return Map{}, fmt.Errorf("decode key: %w", err)
 		}
-		val, err := decodeNode(valNode)
+		path := []string{metaMapPart(key)}
+		clearMetaPrefix(m.meta, path)
+		val, err := decodeNodeAt(valNode, path, m.meta)
 		if err != nil {
 			return Map{}, fmt.Errorf("decode value for %q: %w", key, err)
 		}
-		m.Set(key, val)
+		m.setParsed(key, val)
 	}
 	return m, nil
 }
@@ -144,20 +147,26 @@ func parseYAML(data []byte) (Map, error) {
 // default tag resolution (which yields string, int, float64, bool, time.Time,
 // or nil).
 func decodeNode(n *yaml.Node) (any, error) {
+	return decodeNodeAt(n, nil, nil)
+}
+
+func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta) (any, error) {
 	switch n.Kind {
 	case yaml.ScalarNode:
 		if n.Tag == "!!null" || (n.Tag == "" && n.Value == "") {
+			clearScalarMeta(path, meta, n)
 			return nil, nil
 		}
 		var v any
 		if err := n.Decode(&v); err != nil {
 			return nil, err
 		}
+		setScalarMeta(path, meta, n)
 		return v, nil
 	case yaml.SequenceNode:
 		out := make([]any, 0, len(n.Content))
-		for _, c := range n.Content {
-			item, err := decodeNode(c)
+		for i, c := range n.Content {
+			item, err := decodeNodeAt(c, appendMetaPath(path, metaIndexPart(i)), meta)
 			if err != nil {
 				return nil, err
 			}
@@ -171,7 +180,9 @@ func decodeNode(n *yaml.Node) (any, error) {
 			if err := n.Content[i].Decode(&key); err != nil {
 				return nil, fmt.Errorf("decode nested key: %w", err)
 			}
-			val, err := decodeNode(n.Content[i+1])
+			childPath := appendMetaPath(path, metaMapPart(key))
+			clearMetaPrefix(meta, childPath)
+			val, err := decodeNodeAt(n.Content[i+1], childPath, meta)
 			if err != nil {
 				return nil, fmt.Errorf("decode nested value for %q: %w", key, err)
 			}
@@ -182,11 +193,37 @@ func decodeNode(n *yaml.Node) (any, error) {
 		if n.Alias == nil {
 			return nil, fmt.Errorf("dangling alias")
 		}
-		return decodeNode(n.Alias)
+		return decodeNodeAt(n.Alias, path, meta)
 	}
 	var v any
 	if err := n.Decode(&v); err != nil {
 		return nil, err
 	}
 	return v, nil
+}
+
+func clearScalarMeta(path []string, meta map[string]valueMeta, n *yaml.Node) {
+	if len(path) == 0 || meta == nil {
+		return
+	}
+	if n.Tag != "!!timestamp" {
+		delete(meta, metaPathKey(path))
+	}
+}
+
+func setScalarMeta(path []string, meta map[string]valueMeta, n *yaml.Node) {
+	if len(path) == 0 || meta == nil {
+		return
+	}
+	key := metaPathKey(path)
+	if n.Tag != "!!timestamp" {
+		delete(meta, key)
+		return
+	}
+	meta[key] = valueMeta{timestampDateOnly: isDateOnlyTimestampLiteral(n.Value)}
+}
+
+func isDateOnlyTimestampLiteral(s string) bool {
+	_, err := time.Parse("2006-01-02", strings.TrimSpace(s))
+	return err == nil
 }

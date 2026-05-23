@@ -134,70 +134,43 @@ func wikilinkFn(s string) string {
 }
 
 // Slug converts s to a lower-kebab-case slug: it lowercases Unicode letters,
-// keeps Unicode digits and combining marks, and folds runs of any other
-// character into a single `-`. Leading and trailing dashes are trimmed. The
-// output is not restricted to ASCII — input like "Café 2" yields "café-2"
+// keeps Unicode digits and attached combining marks, and folds runs of any
+// other character into a single `-`. Leading and trailing dashes are trimmed.
+// The output is not restricted to ASCII — input like "Café 2" yields "café-2"
 // regardless of whether the input uses precomposed (NFC) or decomposed (NFD)
 // Unicode.
 func Slug(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	prevDash := true // suppresses a leading dash
+	markAttached := false
 	for _, r := range s {
 		switch {
 		case unicode.IsLetter(r):
 			b.WriteRune(unicode.ToLower(r))
 			prevDash = false
+			markAttached = true
 		case unicode.IsDigit(r):
 			b.WriteRune(r)
 			prevDash = false
+			markAttached = true
 		case unicode.IsMark(r):
-			// Combining marks (e.g. U+0301 COMBINING ACUTE ACCENT) must
-			// stay attached to their preceding base letter so that NFD-
-			// normalized input like "Café" (e + U+0301) produces "café",
-			// not "caf-e".
-			b.WriteRune(r)
-			// prevDash intentionally unchanged: a combining mark does not
-			// start or break a word — it modifies the preceding letter.
+			// Combining marks are kept only when attached to a preceding
+			// base letter/digit. Orphan marks at the start of a slug or
+			// immediately after punctuation are skipped.
+			if markAttached {
+				b.WriteRune(r)
+				prevDash = false
+			}
 		default:
 			if !prevDash {
 				b.WriteByte('-')
 				prevDash = true
 			}
+			markAttached = false
 		}
 	}
-	out := b.String()
-	// Trim trailing dashes; also trim any combining marks that are not
-	// attached to a base letter/digit (i.e. marks immediately preceded by a
-	// '-' or by another orphan mark). Marks attached to a base letter — e.g.
-	// the trailing combining acute on "abć" — are preserved.
-	runes := []rune(out)
-	trimming := true
-	for len(runes) > 0 && trimming {
-		last := runes[len(runes)-1]
-		switch {
-		case last == '-':
-			runes = runes[:len(runes)-1]
-		case unicode.IsMark(last):
-			// Only drop the mark if removing it would leave the prior rune
-			// also requiring removal (orphan run). A mark attached to a
-			// letter/digit must stay.
-			if len(runes) >= 2 {
-				prev := runes[len(runes)-2]
-				if prev == '-' || unicode.IsMark(prev) {
-					runes = runes[:len(runes)-1]
-					continue
-				}
-				trimming = false
-			} else {
-				// Single orphan mark in output — drop it.
-				runes = runes[:len(runes)-1]
-			}
-		default:
-			trimming = false
-		}
-	}
-	return string(runes)
+	return strings.TrimRight(b.String(), "-")
 }
 
 // Title returns s with the first rune of each whitespace-separated word
@@ -211,6 +184,10 @@ func Title(s string) string {
 		if unicode.IsSpace(r) {
 			b.WriteRune(r)
 			atWordStart = true
+			continue
+		}
+		if unicode.IsMark(r) {
+			b.WriteRune(r)
 			continue
 		}
 		if atWordStart {

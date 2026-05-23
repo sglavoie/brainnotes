@@ -118,9 +118,15 @@ func (n *Note) Folder(root string) (string, error) {
 	if root == "" {
 		return "", errors.New("note: empty root")
 	}
+	if n.Path == "" {
+		return "", errors.New("note: folder: empty path")
+	}
 	rel, err := filepath.Rel(root, n.Path)
 	if err != nil {
 		return "", fmt.Errorf("note: rel %q: %w", n.Path, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("note: path %q is outside root %q", n.Path, root)
 	}
 	dir := filepath.ToSlash(filepath.Dir(rel))
 	if dir == "." {

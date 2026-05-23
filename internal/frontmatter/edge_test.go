@@ -409,3 +409,34 @@ func TestMarshalEmptyFrontPreservesBodyStartingWithDelimiter(t *testing.T) {
 		t.Errorf("not idempotent:\n%q\n%q", out, out2)
 	}
 }
+
+func TestMarshalEmptyFrontDoesNotGuardUnterminatedDelimiterBody(t *testing.T) {
+	cases := map[string]string{
+		"lf":       "---\n# body\n",
+		"crlf":     "---\r\n# body\r\n",
+		"bom lf":   "\ufeff---\ntitle: Body only\n",
+		"bom crlf": "\ufeff---\r\ntitle: Body only\r\n",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			doc := Document{Front: NewMap(), Body: body}
+			out, err := Marshal(doc, nil)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			if string(out) != body {
+				t.Fatalf("body-only marshal changed bytes:\n got %q\nwant %q", out, body)
+			}
+			doc2, err := Parse(out)
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			if !doc2.Front.IsEmpty() {
+				t.Fatalf("unterminated delimiter body should not parse as frontmatter")
+			}
+			if doc2.Body != body {
+				t.Fatalf("body after parse changed:\n got %q\nwant %q", doc2.Body, body)
+			}
+		})
+	}
+}

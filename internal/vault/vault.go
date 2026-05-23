@@ -90,12 +90,9 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 	ignore := ignoreSet(v.Cfg)
 	templatesDir := ""
 	if v.Cfg != nil {
-		templatesDir = strings.Trim(filepath.ToSlash(v.Cfg.Templates.Dir), "/")
-		if templatesDir != "" {
-			templatesDir = path.Clean(templatesDir)
-			if templatesDir == "." {
-				templatesDir = ""
-			}
+		templatesDir = cleanSlashRel(v.Cfg.Templates.Dir)
+		if relEscapesRoot(templatesDir) {
+			templatesDir = ""
 		}
 	}
 
@@ -195,13 +192,9 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 	// so common variants ("./People", "People/") all compare equal to the
 	// note's noteFolder (which is also slash-relative, no leading/trailing
 	// separators).
-	wantFolder := strings.ReplaceAll(filepath.ToSlash(folder), "\\", "/")
-	wantFolder = strings.Trim(wantFolder, "/")
-	if wantFolder != "" {
-		wantFolder = path.Clean(wantFolder)
-		if wantFolder == "." {
-			wantFolder = ""
-		}
+	wantFolder := cleanSlashRel(folder)
+	if relEscapesRoot(wantFolder) {
+		return nil, fmt.Errorf("vault: folder %q escapes vault", folder)
 	}
 
 	var matches []*Note
@@ -296,17 +289,8 @@ func ignoreSet(cfg *config.Config) map[string]struct{} {
 		return set
 	}
 	add := func(p string) {
-		p = strings.Trim(filepath.ToSlash(p), "/")
-		if p == "" {
-			return
-		}
-		// Normalize `./Foo`, `Foo/.`, etc. so an ignore entry written with a
-		// leading or interior `./` segment still matches the slash-separated
-		// relative path that Walk compares against. Without this, an entry
-		// like `./Trash` would never match `Trash/...` paths and the directory
-		// would be walked unexpectedly.
-		p = path.Clean(p)
-		if p == "" || p == "." {
+		p = cleanSlashRel(p)
+		if p == "" || relEscapesRoot(p) {
 			return
 		}
 		set[p] = struct{}{}
@@ -316,4 +300,28 @@ func ignoreSet(cfg *config.Config) map[string]struct{} {
 	}
 	add(cfg.Templates.Dir)
 	return set
+}
+
+// cleanSlashRel normalizes user/config supplied vault-relative paths to the
+// slash-separated form Walk compares against. It intentionally treats a leading
+// slash as vault-root-relative so common inputs like "/People" still work.
+func cleanSlashRel(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return ""
+	}
+	p = strings.ReplaceAll(filepath.ToSlash(p), "\\", "/")
+	p = strings.Trim(p, "/")
+	if p == "" {
+		return ""
+	}
+	p = path.Clean(p)
+	if p == "." {
+		return ""
+	}
+	return p
+}
+
+func relEscapesRoot(p string) bool {
+	return p == ".." || strings.HasPrefix(p, "../")
 }

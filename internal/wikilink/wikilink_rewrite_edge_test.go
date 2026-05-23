@@ -67,6 +67,26 @@ func TestRewriteMovePreservesHeadingAndAliasWithWhitespace(t *testing.T) {
 	}
 }
 
+func TestRewriteTitleTrimsRewriteParameters(t *testing.T) {
+	t.Parallel()
+	in := "[[Foo]] and [[Refs/Foo.md#H|disp]]"
+	got := RewriteTitle(in, " Foo\t", "\tBar ")
+	want := "[[Bar]] and [[Refs/Bar.md#H|disp]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
+func TestRewriteMoveTrimsRewriteParameters(t *testing.T) {
+	t.Parallel()
+	in := "[[Books/Foo]] and [[Books/Foo.md#H|disp]]"
+	got := RewriteMove(in, "\tBooks/Foo ", " Refs/Books/Foo\t")
+	want := "[[Refs/Books/Foo]] and [[Refs/Books/Foo.md#H|disp]]"
+	if got != want {
+		t.Fatalf("RewriteMove\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
 func TestRewriteTripleBrackets(t *testing.T) {
 	t.Parallel()
 	// Renaming Foo to Bar inside `[[[Foo]]]` must preserve the surrounding
@@ -394,6 +414,30 @@ func TestRewriteTitleRejectsCorruptingNewTitle(t *testing.T) {
 	}
 }
 
+func TestRewriteTitleRejectsNewTitleThatTrimsToInvalid(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		newTitle string
+	}{
+		{"padded trailing slash", "Bar/ "},
+		{"padded md ext only", " .md "},
+		{"padded folder md ext only", "Refs/.md\t"},
+		{"padded slash only", " / "},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := "[[Foo]] and [[Refs/Foo.md#H|disp]]"
+			got := RewriteTitle(in, "Foo", tc.newTitle)
+			if got != in {
+				t.Fatalf("RewriteTitle(%q, Foo, %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newTitle, got, in)
+			}
+		})
+	}
+}
+
 func TestRewriteMoveRejectsCorruptingNewPath(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -411,6 +455,30 @@ func TestRewriteMoveRejectsCorruptingNewPath(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			in := "[[Books/Foo]] and [[Books/Foo#H|a]]"
+			got := RewriteMove(in, "Books/Foo", tc.newPath)
+			if got != in {
+				t.Fatalf("RewriteMove(%q, ..., %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newPath, got, in)
+			}
+		})
+	}
+}
+
+func TestRewriteMoveRejectsNewPathThatTrimsToInvalid(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		newPath string
+	}{
+		{"padded trailing slash", "Refs/Bar/ "},
+		{"padded md ext only", " .md "},
+		{"padded folder md ext only", "Refs/.md\t"},
+		{"padded slash only", " / "},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := "[[Books/Foo]] and [[Books/Foo.md#H|disp]]"
 			got := RewriteMove(in, "Books/Foo", tc.newPath)
 			if got != in {
 				t.Fatalf("RewriteMove(%q, ..., %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newPath, got, in)

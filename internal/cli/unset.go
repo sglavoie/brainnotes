@@ -45,6 +45,9 @@ Use --dry-run to preview which properties would be removed without writing.`,
 			}
 
 			noteArgs, props := splitUnsetArgs(args, cmd.ArgsLenAtDash())
+			if nullSep && !usesStdinNoteInput(noteArgs) {
+				return errors.New("unset: --null requires '-' stdin note input")
+			}
 			if len(props) == 0 {
 				return errors.New("unset: at least one property name is required")
 			}

@@ -87,7 +87,7 @@ required = true
 	}
 }
 
-func TestLoad_SchemaAllowedOnDateRejected(t *testing.T) {
+func TestLoad_SchemaAllowedOnDateAccepted(t *testing.T) {
 	resetEnv(t)
 	vault := t.TempDir()
 
@@ -99,12 +99,12 @@ type = "date"
 allowed = ["2024-01-01"]
 `)
 
-	_, err := Load("", cfgPath)
-	if err == nil {
-		t.Fatal("expected error for allowed on date type")
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
 	}
-	if !strings.Contains(err.Error(), "allowed is only valid for string or list") {
-		t.Fatalf("error should mention allowed constraint: %v", err)
+	if got := cfg.Frontmatter.Schema["created"].Allowed; len(got) != 1 || got[0] != "2024-01-01" {
+		t.Fatalf("allowed values not preserved: %v", got)
 	}
 }
 
@@ -179,21 +179,33 @@ func TestLoad_SourcePathEmptyWhenNoConfigFileExists(t *testing.T) {
 	}
 }
 
-func TestLoad_SchemaAllowedOnAllInvalidTypes(t *testing.T) {
-	for _, typ := range []string{"int", "bool", "float", "date"} {
-		t.Run(typ, func(t *testing.T) {
+func TestLoad_SchemaAllowedOnScalarTypesAccepted(t *testing.T) {
+	tests := []struct {
+		typ     string
+		allowed string
+	}{
+		{"int", "1"},
+		{"bool", "true"},
+		{"float", "3.14"},
+		{"date", "2024-01-01"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.typ, func(t *testing.T) {
 			resetEnv(t)
 			vault := t.TempDir()
 			dir := t.TempDir()
 			cfgPath := filepath.Join(dir, "config.toml")
 			writeFile(t, cfgPath, `vault = "`+vault+`"
 [frontmatter.schema.prop]
-type = "`+typ+`"
-allowed = ["x"]
+type = "`+tc.typ+`"
+allowed = ["`+tc.allowed+`"]
 `)
-			_, err := Load("", cfgPath)
-			if err == nil {
-				t.Fatalf("expected error for allowed on %s type", typ)
+			cfg, err := Load("", cfgPath)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got := cfg.Frontmatter.Schema["prop"].Allowed; len(got) != 1 || got[0] != tc.allowed {
+				t.Fatalf("allowed values not preserved: %v", got)
 			}
 		})
 	}

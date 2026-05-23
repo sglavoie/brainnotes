@@ -120,6 +120,26 @@ func TestFolderForRootNote(t *testing.T) {
 	}
 }
 
+func TestNoteFolderRejectsEmptyPath(t *testing.T) {
+	n := &Note{Path: ""}
+	if _, err := n.Folder(t.TempDir()); err == nil {
+		t.Fatal("Folder with empty note path should return an error")
+	}
+}
+
+func TestNoteFolderRejectsOutOfVaultPath(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	n := &Note{Path: filepath.Join(outside, "note.md")}
+	_, err := n.Folder(root)
+	if err == nil {
+		t.Fatal("Folder for out-of-vault note should return an error")
+	}
+	if !strings.Contains(err.Error(), "outside root") {
+		t.Errorf("error should mention outside root: %v", err)
+	}
+}
+
 func TestNilNoteMethods(t *testing.T) {
 	var n *Note
 
@@ -268,6 +288,23 @@ func TestResolveByTitleSlashOnlyFolder(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), `in "/"`) || strings.Contains(err.Error(), "in `/`") {
 		t.Errorf("error should not mention slash-only folder: %v", err)
+	}
+}
+
+func TestResolveByTitleRejectsTraversalFolder(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"People/Alice.md": "# alice\n",
+	})
+	for _, folder := range []string{"..", "../People", "People/../../Secrets"} {
+		t.Run(folder, func(t *testing.T) {
+			_, err := v.ResolveByTitle("Alice", folder)
+			if err == nil {
+				t.Fatal("expected traversal folder to be rejected")
+			}
+			if !strings.Contains(err.Error(), "escapes vault") {
+				t.Errorf("error should mention escaping vault: %v", err)
+			}
+		})
 	}
 }
 

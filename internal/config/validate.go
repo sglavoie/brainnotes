@@ -86,9 +86,6 @@ func validateSchema(cfg *Config) error {
 		if !validSchemaTypes[rule.Type] {
 			return fmt.Errorf("config: schema: property %q: unknown type %q", name, rule.Type)
 		}
-		if len(rule.Allowed) > 0 && rule.Type != "string" && rule.Type != "list" {
-			return fmt.Errorf("config: schema: property %q: allowed is only valid for string or list types, got %q", name, rule.Type)
-		}
 	}
 	return nil
 }

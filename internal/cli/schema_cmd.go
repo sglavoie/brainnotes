@@ -17,6 +17,7 @@ func NewSchemaCmd() *cobra.Command {
 		Long: `Schema prints the property schema defined in config.toml. Each property
 is shown with its type, whether it is required, and its allowed values
 (if any). Use this as a reference when fixing lint or repair violations.`,
+		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

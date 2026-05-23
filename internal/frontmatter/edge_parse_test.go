@@ -228,6 +228,114 @@ func TestTimestampNoSubSecondUnchanged(t *testing.T) {
 	}
 }
 
+func TestTimestampUTCMidnightDateTimeDoesNotBecomeDateOnly(t *testing.T) {
+	in := "---\ncreated: 2025-12-13T00:00:00Z\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if _, ok := doc.Front.GetTime("created"); !ok {
+		t.Fatalf("created should parse as time.Time")
+	}
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "created: 2025-12-13T00:00:00Z") {
+		t.Fatalf("UTC midnight datetime was not preserved:\n%s", out)
+	}
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse2: %v", err)
+	}
+	out2, err := Marshal(doc2, nil)
+	if err != nil {
+		t.Fatalf("Marshal2: %v", err)
+	}
+	if string(out) != string(out2) {
+		t.Fatalf("not idempotent:\n%q\n%q", out, out2)
+	}
+}
+
+func TestNestedTimestampUTCMidnightDateTimeDoesNotBecomeDateOnly(t *testing.T) {
+	in := "---\nevents:\n  - at: 2025-12-13T00:00:00Z\nmeta:\n  created: 2025-12-13T00:00:00Z\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if strings.Count(string(out), "2025-12-13T00:00:00Z") != 2 {
+		t.Fatalf("nested UTC midnight datetimes were not preserved:\n%s", out)
+	}
+	if strings.Contains(string(out), "created: 2025-12-13\n") {
+		t.Fatalf("nested map timestamp collapsed to date-only:\n%s", out)
+	}
+	if strings.Contains(string(out), "at: 2025-12-13\n") {
+		t.Fatalf("nested list timestamp collapsed to date-only:\n%s", out)
+	}
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse2: %v", err)
+	}
+	out2, err := Marshal(doc2, nil)
+	if err != nil {
+		t.Fatalf("Marshal2: %v", err)
+	}
+	if string(out) != string(out2) {
+		t.Fatalf("not idempotent:\n%q\n%q", out, out2)
+	}
+}
+
+func TestTimestampMetadataFollowsRename(t *testing.T) {
+	in := "---\ncreated: 2025-12-13T00:00:00Z\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if _, err := doc.Front.RenameKey("created", "updated"); err != nil {
+		t.Fatalf("RenameKey: %v", err)
+	}
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "updated: 2025-12-13T00:00:00Z") {
+		t.Fatalf("renamed timestamp lost datetime metadata:\n%s", out)
+	}
+}
+
+func TestTimestampMetadataClearedBySetAndReplace(t *testing.T) {
+	in := "---\ncreated: 2025-12-13T00:00:00Z\nreplaced: 2025-12-13T00:00:00Z\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	doc.Front.Set("created", time.Date(2025, 12, 14, 0, 0, 0, 0, time.UTC))
+
+	old, ok := doc.Front.GetTime("replaced")
+	if !ok {
+		t.Fatalf("replaced should parse as time.Time")
+	}
+	if _, err := doc.Front.ReplaceValue("replaced", old, time.Date(2025, 12, 15, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !strings.Contains(string(out), "created: 2025-12-14\n") {
+		t.Fatalf("Set should clear parsed datetime metadata and use date convention:\n%s", out)
+	}
+	if !strings.Contains(string(out), "replaced: 2025-12-15\n") {
+		t.Fatalf("ReplaceValue should clear parsed datetime metadata and use date convention:\n%s", out)
+	}
+}
+
 // TestParseQuotedNullString — a quoted `"null"` value must stay a string,
 // not be collapsed to nil. yaml.v3 distinguishes them via the !!str tag; this
 // test pins the behaviour so a future "simplification" of decodeNode does not

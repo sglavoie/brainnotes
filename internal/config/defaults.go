@@ -62,7 +62,7 @@ func applyDefaults(cfg *Config) {
 	// `dir = "Templates/"` (or with stray spaces) would silently fail to be
 	// pruned and template files would be walked.
 	cfg.Templates.Dir = strings.TrimSpace(cfg.Templates.Dir)
-	cfg.Templates.Dir = filepath.ToSlash(cfg.Templates.Dir)
+	cfg.Templates.Dir = normalizeSlashSeparators(cfg.Templates.Dir)
 	cfg.Templates.Dir = strings.TrimRight(cfg.Templates.Dir, "/")
 	if cfg.Templates.Dir != "" {
 		cfg.Templates.Dir = path.Clean(cfg.Templates.Dir)
@@ -111,9 +111,42 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.New.Routes == nil {
 		cfg.New.Routes = map[string]string{}
+	} else {
+		normalizeRoutes(cfg.New.Routes)
 	}
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
+}
+
+func normalizeRoutes(routes map[string]string) {
+	for name, dest := range routes {
+		p := normalizeRouteDest(dest)
+		if p == "" {
+			delete(routes, name)
+			continue
+		}
+		routes[name] = p
+	}
+}
+
+func normalizeRouteDest(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return ""
+	}
+	p = normalizeSlashSeparators(p)
+	if isAbsolutePathLike(p) {
+		return path.Clean(p)
+	}
+	p = strings.TrimRight(p, "/")
+	if p == "" {
+		return ""
+	}
+	return path.Clean(p)
+}
+
+func normalizeSlashSeparators(p string) string {
+	return strings.ReplaceAll(filepath.ToSlash(p), "\\", "/")
 }
 
 // normalizePropertyList trims surrounding whitespace, drops empty entries, and
@@ -174,8 +207,8 @@ func normalizeIgnore(p string) string {
 		return ""
 	}
 	// Convert platform separators to forward slash before cleaning so that
-	// entries like ".\Archive" on Windows are treated the same as "./Archive".
-	p = filepath.ToSlash(p)
+	// entries like ".\Archive" are treated the same as "./Archive".
+	p = normalizeSlashSeparators(p)
 	// Trim trailing slashes so "Archive/" becomes "Archive".
 	p = strings.TrimRight(p, "/")
 	// path.Clean handles repeated "./", interior ".", and other artifacts,

@@ -3,22 +3,21 @@ package wikilink
 import "strings"
 
 // invalidNewTarget reports whether s would produce a malformed wikilink if
-// emitted as the target of `[[ ... ]]`. Empty strings collapse the link to
-// `[[]]`; brackets and line-terminators break the `[[...]]` span on re-parse.
-// `#` and `|` are wikilink separators — embedding them in a target would
-// silently introduce a heading or alias on re-parse, changing link semantics.
-// Whitespace-only strings, a trailing `/` (empty title segment), and bare-or-
-// folder-prefixed `.md` suffixes that leave an empty title base are also
-// rejected: Parse would either reject the rewritten link or normalize it back
-// to something the rewrite didn't intend.
+// emitted as the target of `[[ ... ]]`. The check first applies the same
+// surrounding ASCII-space normalization Parse applies to wikilink fields.
+// Empty strings collapse the link to `[[]]`; brackets and line-terminators
+// break the `[[...]]` span on re-parse. `#` and `|` are wikilink separators —
+// embedding them in a target would silently introduce a heading or alias on
+// re-parse, changing link semantics. Whitespace-only strings, a trailing `/`
+// (empty title segment), and bare-or-folder-prefixed `.md` suffixes that leave
+// an empty title base are also rejected: Parse would either reject the
+// rewritten link or normalize it back to something the rewrite didn't intend.
 func invalidNewTarget(s string) bool {
+	s = trimASCIISpace(s)
 	if s == "" {
 		return true
 	}
 	if strings.ContainsAny(s, "[]#|\r\n") {
-		return true
-	}
-	if trimASCIISpace(s) == "" {
 		return true
 	}
 	if strings.HasSuffix(s, "/") {
@@ -104,6 +103,8 @@ func FormatLink(target, heading, alias string) string {
 // `.md` extension on the link's title is also matched and preserved on the
 // rewritten target so `[[Note.md]]` is renamed alongside `[[Note]]`.
 func RewriteTitle(text, oldTitle, newTitle string) string {
+	oldTitle = trimASCIISpace(oldTitle)
+	newTitle = trimASCIISpace(newTitle)
 	if invalidNewTarget(newTitle) {
 		return text
 	}
@@ -132,6 +133,8 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 // links that explicitly named the old folder. A trailing `.md` extension on
 // the link's target is matched and preserved on the rewritten target.
 func RewriteMove(text, oldPath, newPath string) string {
+	oldPath = trimASCIISpace(oldPath)
+	newPath = trimASCIISpace(newPath)
 	if invalidNewTarget(newPath) {
 		return text
 	}

@@ -37,6 +37,9 @@ func NewOpenCmd() *cobra.Command {
 			if cfg == nil {
 				return errors.New("open: no config in context")
 			}
+			if nullSep && !printOnly {
+				return errors.New("open: --null requires --print")
+			}
 			v, err := vault.Open(cfg)
 			if err != nil {
 				return err

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -95,13 +96,7 @@ func NewNewCmd() *cobra.Command {
 				return fmt.Errorf("new: read template %q: %w", tmplPath, err)
 			}
 
-			ext := cfg.Templates.DefaultExtension
-			if ext == "" {
-				ext = ".md"
-			}
-			if !strings.HasPrefix(ext, ".") {
-				ext = "." + ext
-			}
+			ext := normalizeNewDefaultExtension(cfg.Templates.DefaultExtension)
 			outPath := filepath.Join(dest, title+ext)
 
 			if !force {
@@ -170,12 +165,70 @@ func parseVars(vars []string) (map[string]string, error) {
 func resolveDest(cfg *config.Config, templateName, folderFlag string) (string, error) {
 	switch {
 	case folderFlag != "":
-		return filepath.Join(cfg.Vault, filepath.FromSlash(folderFlag)), nil
+		return resolveNewDestFolder(cfg.Vault, folderFlag, "new: --folder")
 	case cfg.New.Routes != nil && cfg.New.Routes[templateName] != "":
-		return filepath.Join(cfg.Vault, filepath.FromSlash(cfg.New.Routes[templateName])), nil
+		return resolveNewDestFolder(cfg.Vault, cfg.New.Routes[templateName], fmt.Sprintf("new: route for %q", templateName))
 	default:
 		return cfg.Vault, nil
 	}
+}
+
+func normalizeNewDefaultExtension(ext string) string {
+	ext = strings.TrimSpace(ext)
+	if ext == "" || ext == "." {
+		return ".md"
+	}
+	if strings.ContainsAny(ext, "/\\\x00") {
+		return ".md"
+	}
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return ext
+}
+
+func resolveNewDestFolder(vaultRoot, raw, label string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("%s %q is whitespace-only", label, raw)
+	}
+	for _, r := range raw {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("%s %q contains a control character (U+%04X)", label, raw, r)
+		}
+	}
+	normalized := filepath.ToSlash(trimmed)
+	normalized = strings.ReplaceAll(normalized, "\\", "/")
+	if isNewDestAbsLike(normalized) {
+		return "", fmt.Errorf("%s %q is an absolute path (must be vault-relative)", label, raw)
+	}
+	normalized = strings.TrimRight(normalized, "/")
+	if normalized == "" {
+		return "", fmt.Errorf("%s %q is whitespace-only", label, raw)
+	}
+	cleaned := path.Clean(normalized)
+	if cleaned == "." {
+		return vaultRoot, nil
+	}
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", fmt.Errorf("%s %q is outside the vault", label, raw)
+	}
+	return filepath.Join(vaultRoot, filepath.FromSlash(cleaned)), nil
+}
+
+func isNewDestAbsLike(p string) bool {
+	p = strings.TrimSpace(p)
+	if strings.HasPrefix(p, "/") {
+		return true
+	}
+	if len(p) >= 2 && isASCIIAlpha(p[0]) && p[1] == ':' {
+		return len(p) == 2 || p[2] == '/'
+	}
+	return false
+}
+
+func isASCIIAlpha(b byte) bool {
+	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
 }
 
 // atomicWriteFile writes data to dest by writing a sibling temp file, fsyncing,

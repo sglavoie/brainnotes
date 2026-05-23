@@ -19,6 +19,7 @@ func NewGraphCmd() *cobra.Command {
 		Use:           "graph",
 		Short:         "Export the vault link graph in dot or mermaid format",
 		Long:          "Export the vault's wikilink graph (or a filtered subgraph) in dot or mermaid format for visualization. Pipe the output to a file and open it in a Graphviz viewer or Mermaid renderer.",
+		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

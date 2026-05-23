@@ -45,7 +45,11 @@ func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 			if title == "" || isMediaEmbed(title) {
 				continue
 			}
-			if _, ok := g.Titles[strings.ToLower(title)]; ok {
+			tKey := linkTitleKey(title)
+			if tKey == "" {
+				continue
+			}
+			if _, ok := g.Titles[tKey]; ok {
 				continue
 			}
 			line := lineOffset + lineFromOffset(nlOffsets, link.Start)
@@ -72,7 +76,11 @@ func scanBrokenValue(v any, key string, g *Graph, out *[]BrokenLink) {
 			if title == "" || isMediaEmbed(title) {
 				continue
 			}
-			if _, ok := g.Titles[strings.ToLower(title)]; !ok {
+			tKey := linkTitleKey(title)
+			if tKey == "" {
+				continue
+			}
+			if _, ok := g.Titles[tKey]; !ok {
 				*out = append(*out, BrokenLink{Link: link, FrontmatterKey: key, Line: 0})
 			}
 		}

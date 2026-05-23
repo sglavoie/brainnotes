@@ -101,6 +101,38 @@ func TestBuildGraph_FrontmatterLinks(t *testing.T) {
 	}
 }
 
+func TestBuildGraph_MarkdownExtensionWikilinksResolve(t *testing.T) {
+	root := t.TempDir()
+	pA := writeNote(t, root, "A.md", "---\ntitle: A\nrelated: \"[[D.md]]\"\n---\n[[B.md]] [[Sub/C.MD]] [[A.md]]\n")
+	writeNote(t, root, "B.md", "---\ntitle: B\n---\nbody\n")
+	writeNote(t, root, "Sub/C.md", "---\ntitle: C\n---\nbody\n")
+	writeNote(t, root, "D.md", "---\ntitle: D\n---\nbody\n")
+
+	notes := []*vault.Note{
+		{Path: pA},
+		{Path: filepath.Join(root, "B.md")},
+		{Path: filepath.Join(root, "Sub", "C.md")},
+		{Path: filepath.Join(root, "D.md")},
+	}
+	g := BuildGraph(notes)
+
+	if got := g.ForwardLinks("A"); !strEq(got, []string{"b", "c", "d"}) {
+		t.Fatalf("Forward[a] = %v, want [b c d]", got)
+	}
+	if len(g.BackLinks("b")) != 1 {
+		t.Fatalf("[[B.md]] should record one backlink for B, got %v", g.BackLinks("b"))
+	}
+	if len(g.BackLinks("c")) != 1 {
+		t.Fatalf("[[Sub/C.MD]] should record one backlink for C, got %v", g.BackLinks("c"))
+	}
+	if len(g.BackLinks("d")) != 1 {
+		t.Fatalf("frontmatter [[D.md]] should record one backlink for D, got %v", g.BackLinks("d"))
+	}
+	if len(g.BackLinks("a")) != 0 {
+		t.Fatalf("[[A.md]] should be treated as a self-link and excluded, got %v", g.BackLinks("a"))
+	}
+}
+
 func TestBuildGraph_CodeFenceExcluded(t *testing.T) {
 	root := t.TempDir()
 	pA := writeNote(t, root, "A.md", "---\ntitle: A\n---\n```\n[[B]]\n```\n")

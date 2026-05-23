@@ -12,9 +12,9 @@ var ErrNotAList = errors.New("frontmatter: value is not a list")
 var ErrKeyConflict = errors.New("frontmatter: target key already exists")
 
 // ListAdd appends values to the list stored at key k, preserving existing
-// order and skipping duplicates. If k is absent, a new list is created
-// containing the deduplicated input values. If k is present but its value is
-// not a list, ErrNotAList is returned.
+// order and skipping duplicates. If k is absent and values is non-empty, a new
+// list is created containing the deduplicated input values. Empty values are a
+// no-op. If k is present but its value is not a list, ErrNotAList is returned.
 //
 // Adding an already-present value is a no-op for that value. changed is true
 // only if at least one value was actually appended.
@@ -23,6 +23,9 @@ var ErrKeyConflict = errors.New("frontmatter: target key already exists")
 // wikilink-typed properties must wrap values into `[[X]]` form before calling
 // so that the comparison treats them as equal to existing wrapped entries.
 func (m *Map) ListAdd(k string, values ...any) (bool, error) {
+	if len(values) == 0 {
+		return false, nil
+	}
 	if m.vals == nil {
 		m.vals = map[string]any{}
 	}
@@ -43,7 +46,8 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 	// an empty list so `+=` can append to it. Without this, common notes that
 	// declare an empty-but-present list property could not be mutated by
 	// `bn set tags+=foo` and would fail with ErrNotAList.
-	if existing == nil {
+	wasNil := existing == nil
+	if wasNil {
 		existing = []any{}
 	}
 	list, ok := existing.([]any)
@@ -60,14 +64,17 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 	}
 	if changed {
 		m.vals[k] = list
+		if wasNil {
+			m.clearMetaPrefix(k)
+		}
 	}
 	return changed, nil
 }
 
 // ListRemove removes values from the list stored at key k, preserving the
-// order of remaining elements. If k is absent or a given value is not in the
-// list, the call is a no-op for that value. If k is present but its value is
-// not a list, ErrNotAList is returned.
+// order of remaining elements. If k is absent, values is empty, or a given
+// value is not in the list, the call is a no-op for that value. If k is
+// present but its value is not a list, ErrNotAList is returned.
 //
 // If removal empties the list, an empty list is left in place — the key is
 // not deleted. Use Unset for key deletion.
@@ -75,6 +82,9 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 // Values are compared as-is with reflect.DeepEqual; callers responsible for
 // wikilink-typed properties must wrap values into `[[X]]` form before calling.
 func (m *Map) ListRemove(k string, values ...any) (bool, error) {
+	if len(values) == 0 {
+		return false, nil
+	}
 	existing, present := m.Get(k)
 	if !present {
 		return false, nil
@@ -99,6 +109,7 @@ func (m *Map) ListRemove(k string, values ...any) (bool, error) {
 		out = append(out, item)
 	}
 	if changed {
+		m.clearMetaPrefix(k)
 		m.vals[k] = out
 	}
 	return changed, nil
@@ -133,11 +144,13 @@ func (m *Map) ReplaceValue(k string, from, to any) (bool, error) {
 			out[i] = item
 		}
 		if changed {
+			m.clearMetaPrefix(k)
 			m.vals[k] = out
 		}
 		return changed, nil
 	}
 	if reflect.DeepEqual(existing, from) {
+		m.clearMetaPrefix(k)
 		m.vals[k] = to
 		return true, nil
 	}
@@ -165,6 +178,7 @@ func (m *Map) RenameKey(oldK, newK string) (bool, error) {
 	}
 	m.vals[newK] = m.vals[oldK]
 	delete(m.vals, oldK)
+	m.renameMetaPrefix(oldK, newK)
 	for i, k := range m.keys {
 		if k == oldK {
 			m.keys[i] = newK

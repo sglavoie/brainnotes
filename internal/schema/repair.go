@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"math"
+	"math/bits"
 	"reflect"
 	"slices"
 	"sort"
@@ -78,7 +79,9 @@ func PlanRepairs(front *frontmatter.Map, sch map[string]config.PropertySchema, w
 		planProperty(&result, front, key, &rule, wlSet[key])
 	}
 
-	for _, key := range front.Keys() {
+	frontKeys := front.Keys()
+	sort.Strings(frontKeys)
+	for _, key := range frontKeys {
 		if processed[key] {
 			continue
 		}
@@ -193,6 +196,9 @@ func TryCoerce(val any, targetType string) (any, bool) {
 			}
 		}
 		if n, ok := val.(int); ok {
+			if !intExactlyRepresentableAsFloat64(n) {
+				return nil, false
+			}
 			return float64(n), true
 		}
 	case "date":
@@ -246,6 +252,22 @@ func canonicalizeString(s string, allowed []string) (string, bool) {
 	return "", false
 }
 
+func intExactlyRepresentableAsFloat64(n int) bool {
+	n64 := int64(n)
+	if n64 == 0 {
+		return true
+	}
+
+	var magnitude uint64
+	if n64 < 0 {
+		magnitude = uint64(-(n64 + 1)) + 1
+	} else {
+		magnitude = uint64(n64)
+	}
+	oddPart := magnitude >> bits.TrailingZeros64(magnitude)
+	return bits.Len64(oddPart) <= 53
+}
+
 func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string) {
 	switch v := val.(type) {
 	case string:
@@ -261,7 +283,7 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 			return val, []string{bare}
 		}
 		if isWikilink {
-			if isPartialWikilink(v) {
+			if !isFullWikilink(v) {
 				return canon, nil
 			}
 			return "[[" + canon + "]]", nil
@@ -275,7 +297,7 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 		for i, item := range v {
 			s, ok := item.(string)
 			if !ok {
-				unfixable = append(unfixable, fmt.Sprintf("%v", item))
+				unfixable = appendUniqueString(unfixable, fmt.Sprintf("%v", item))
 				continue
 			}
 			bare := s
@@ -287,11 +309,11 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 			}
 			canon, ok := canonicalizeString(bare, allowed)
 			if !ok {
-				unfixable = append(unfixable, bare)
+				unfixable = appendUniqueString(unfixable, bare)
 				continue
 			}
 			if isWikilink {
-				if isPartialWikilink(s) {
+				if !isFullWikilink(s) {
 					out[i] = canon
 				} else {
 					out[i] = "[[" + canon + "]]"
@@ -328,13 +350,19 @@ func repairWikilinkTarget(s string) string {
 	return s
 }
 
-func isPartialWikilink(s string) bool {
-	return (strings.HasPrefix(s, "[[") || strings.HasSuffix(s, "]]")) &&
-		!(strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]") && len(s) >= 4)
+func isFullWikilink(s string) bool {
+	return strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]") && len(s) >= 4
 }
 
 func isAllowedValue(s string, allowed []string) bool {
 	return slices.Contains(allowed, s)
+}
+
+func appendUniqueString(values []string, value string) []string {
+	if slices.Contains(values, value) {
+		return values
+	}
+	return append(values, value)
 }
 
 func wrapAllWikilinks(val any) any {

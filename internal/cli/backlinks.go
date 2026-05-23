@@ -40,6 +40,9 @@ func NewBacklinksCmd() *cobra.Command {
 			if cfg == nil {
 				return errors.New("backlinks: no config in context")
 			}
+			if nullSep && verbose {
+				return errors.New("backlinks: --null cannot be used with --verbose")
+			}
 			v, err := vault.Open(cfg)
 			if err != nil {
 				return err

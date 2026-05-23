@@ -51,12 +51,8 @@ func TestListAdd_NewKeyEmptyInput(t *testing.T) {
 	if changed {
 		t.Errorf("changed should be false when no values provided")
 	}
-	got, ok := m.GetList("tags")
-	if !ok {
-		t.Fatalf("tags should be present as an empty list")
-	}
-	if len(got) != 0 {
-		t.Errorf("tags: got %v want empty", got)
+	if m.Has("tags") {
+		t.Fatalf("empty ListAdd should not create tags")
 	}
 }
 
@@ -117,6 +113,21 @@ func TestListAdd_NonListReturnsError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrNotAList) {
 		t.Errorf("got %v want ErrNotAList", err)
+	}
+}
+
+func TestListAdd_EmptyInputOnNonListIsNoOp(t *testing.T) {
+	m := NewMap()
+	m.Set("title", "Hello")
+	changed, err := m.ListAdd("title")
+	if err != nil {
+		t.Fatalf("ListAdd with no values should not validate type: %v", err)
+	}
+	if changed {
+		t.Fatal("changed should be false")
+	}
+	if got, _ := m.GetString("title"); got != "Hello" {
+		t.Fatalf("title changed to %q", got)
 	}
 }
 
@@ -202,6 +213,21 @@ func TestListRemove_NonListReturnsError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrNotAList) {
 		t.Errorf("got %v want ErrNotAList", err)
+	}
+}
+
+func TestListRemove_EmptyInputOnNonListIsNoOp(t *testing.T) {
+	m := NewMap()
+	m.Set("title", "Hello")
+	changed, err := m.ListRemove("title")
+	if err != nil {
+		t.Fatalf("ListRemove with no values should not validate type: %v", err)
+	}
+	if changed {
+		t.Fatal("changed should be false")
+	}
+	if got, _ := m.GetString("title"); got != "Hello" {
+		t.Fatalf("title changed to %q", got)
 	}
 }
 

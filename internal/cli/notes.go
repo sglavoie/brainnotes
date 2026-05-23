@@ -138,6 +138,10 @@ func readStdinPaths(in io.Reader, vaultRoot string, nullSep bool) ([]string, err
 	return paths, nil
 }
 
+func usesStdinNoteInput(args []string) bool {
+	return len(args) == 1 && args[0] == "-"
+}
+
 func splitNull(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil

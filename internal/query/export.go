@@ -19,17 +19,10 @@ func (g *Graph) ExportDot(w io.Writer, nodes map[string]struct{}) error {
 	sorted := sortedKeys(nodes)
 
 	edgeNodes := make(map[string]struct{})
-	type edge struct{ from, to string }
-	var edges []edge
-	for _, src := range sorted {
-		for _, dst := range g.Forward[src] {
-			if _, ok := nodes[dst]; !ok {
-				continue
-			}
-			edges = append(edges, edge{src, dst})
-			edgeNodes[src] = struct{}{}
-			edgeNodes[dst] = struct{}{}
-		}
+	edges := sortedExportEdges(g, nodes, sorted)
+	for _, e := range edges {
+		edgeNodes[e.from] = struct{}{}
+		edgeNodes[e.to] = struct{}{}
 	}
 
 	for _, key := range sorted {
@@ -80,18 +73,11 @@ func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {
 
 	defined := make(map[string]struct{})
 
-	type edge struct{ from, to string }
-	var edges []edge
+	edges := sortedExportEdges(g, nodes, sorted)
 	edgeNodes := make(map[string]struct{})
-	for _, src := range sorted {
-		for _, dst := range g.Forward[src] {
-			if _, ok := nodes[dst]; !ok {
-				continue
-			}
-			edges = append(edges, edge{src, dst})
-			edgeNodes[src] = struct{}{}
-			edgeNodes[dst] = struct{}{}
-		}
+	for _, e := range edges {
+		edgeNodes[e.from] = struct{}{}
+		edgeNodes[e.to] = struct{}{}
 	}
 
 	for _, key := range sorted {
@@ -132,6 +118,29 @@ func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {
 	}
 
 	return nil
+}
+
+type exportEdge struct{ from, to string }
+
+func sortedExportEdges(g *Graph, nodes map[string]struct{}, sources []string) []exportEdge {
+	var edges []exportEdge
+	seen := make(map[exportEdge]struct{})
+	for _, src := range sources {
+		dsts := append([]string(nil), g.Forward[src]...)
+		sort.Strings(dsts)
+		for _, dst := range dsts {
+			if _, ok := nodes[dst]; !ok {
+				continue
+			}
+			e := exportEdge{from: src, to: dst}
+			if _, ok := seen[e]; ok {
+				continue
+			}
+			seen[e] = struct{}{}
+			edges = append(edges, e)
+		}
+	}
+	return edges
 }
 
 // buildSlugMap assigns a unique Mermaid node ID to each title key. When two

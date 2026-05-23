@@ -226,6 +226,26 @@ func TestLoad_TemplatesDirDotSlashOnlyFallsBackToDefault(t *testing.T) {
 	}
 }
 
+func TestLoad_TemplatesDirNormalizesBackslashes(t *testing.T) {
+	// Backslash-separated config should normalize to the slash-separated
+	// vault-relative form Walk compares against, even on Unix hosts.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = 'Meta\\Templates\\'\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Templates.Dir != "Meta/Templates" {
+		t.Errorf("backslash templates dir should normalize to Meta/Templates, got %q",
+			cfg.Templates.Dir)
+	}
+}
+
 func TestLoad_WhitespaceFlagVaultFallsThroughToEnv(t *testing.T) {
 	// A whitespace-only --vault flag must not shadow $BNOTES_VAULT. Previously
 	// the flag's whitespace was assigned to cfg.Vault, then trimmed to "", so
@@ -481,5 +501,77 @@ func TestLoad_TemplatesDefaultExtensionDotOnlyFallsBackToDefault(t *testing.T) {
 	if cfg.Templates.DefaultExtension != ".md" {
 		t.Errorf("default_extension = '.' should fall back to .md, got %q",
 			cfg.Templates.DefaultExtension)
+	}
+}
+
+func TestLoad_IgnoreNormalizesBackslashes(t *testing.T) {
+	// Backslashes in config should be treated as path separators, so a Windows
+	// style ignore entry still matches slash-separated Walk paths on Unix.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = ['.\\Archive', 'Drafts\\Old']\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	archiveCount := 0
+	for _, p := range cfg.Ignore {
+		if p == "Archive" {
+			archiveCount++
+		}
+		if strings.Contains(p, "\\") {
+			t.Errorf("ignore entry should not contain backslash after normalization: %q", p)
+		}
+	}
+	if archiveCount != 1 {
+		t.Fatalf("expected Archive once after backslash normalization, got %d (%v)",
+			archiveCount, cfg.Ignore)
+	}
+	if !contains(cfg.Ignore, "Drafts/Old") {
+		t.Fatalf("expected Drafts/Old after backslash normalization: %v", cfg.Ignore)
+	}
+}
+
+func TestLoad_NewRoutesNormalizeValues(t *testing.T) {
+	// Route values are consumed by bn new via exact map lookup and filepath.Join.
+	// Normalize the stored value so whitespace, dot segments, trailing slashes,
+	// and backslashes don't leak into destination construction.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = ' ./References\\Books/ '\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.New.Routes["book"]; got != "References/Books" {
+		t.Fatalf("new.routes value should be normalized: got %q, want %q",
+			got, "References/Books")
+	}
+}
+
+func TestLoad_NewRoutesDropsWhitespaceOnlyValues(t *testing.T) {
+	// A whitespace-only route value should behave as unset, not as a folder
+	// literally named with spaces.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = '   '\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, ok := cfg.New.Routes["book"]; ok {
+		t.Fatalf("whitespace-only route should be dropped, got routes %v", cfg.New.Routes)
 	}
 }

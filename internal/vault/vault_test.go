@@ -124,6 +124,31 @@ func TestWalkIgnoreNormalizesDotSlash(t *testing.T) {
 	}
 }
 
+func TestWalkIgnoreNormalizesBackslashes(t *testing.T) {
+	v := newTestVault(t, []string{`Trash\Nested`}, map[string]string{
+		"keep.md":               "# keep\n",
+		"Trash/Nested/junk.md":  "# nested trash\n",
+		"Trash/visible-note.md": "# still visible\n",
+	})
+
+	var visited []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, err := filepath.Rel(v.Root, n.Path)
+		if err != nil {
+			return err
+		}
+		visited = append(visited, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	sort.Strings(visited)
+	want := []string{"Trash/visible-note.md", "keep.md"}
+	if !equalStrings(visited, want) {
+		t.Fatalf("walk visited:\n got=%v\nwant=%v", visited, want)
+	}
+}
+
 func TestWalkRespectsIgnoredFiles(t *testing.T) {
 	files := map[string]string{
 		"keep.md":             "# keep\n",
@@ -174,6 +199,43 @@ func TestNotesSkipsTemplatesDir(t *testing.T) {
 	}
 	if filepath.Base(notes[0].Path) != "a.md" {
 		t.Fatalf("want a.md, got %s", notes[0].Path)
+	}
+}
+
+func TestWalkTemplatesDirNormalizesBackslashes(t *testing.T) {
+	dir := t.TempDir()
+	tmplDir := filepath.Join(dir, "Meta", "Templates")
+	if err := os.MkdirAll(tmplDir, 0o755); err != nil {
+		t.Fatalf("mkdir templates: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmplDir, "tpl.md"), []byte("---\ncreated: {{date}}\n---\nbroken\n"), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Meta", "real.md"), []byte("---\ntitle: Real\n---\nbody\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	v, err := Open(&config.Config{
+		Vault:     dir,
+		Templates: config.TemplatesConfig{Dir: `Meta\Templates`},
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	var visited []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, err := filepath.Rel(v.Root, n.Path)
+		if err != nil {
+			return err
+		}
+		visited = append(visited, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	want := []string{"Meta/real.md"}
+	if !equalStrings(visited, want) {
+		t.Fatalf("walk visited:\n got=%v\nwant=%v", visited, want)
 	}
 }
 

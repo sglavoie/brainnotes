@@ -186,6 +186,60 @@ func TestExportMermaid_StableOrder(t *testing.T) {
 	}
 }
 
+func TestExportDot_DedupesAndSortsForwardEdges(t *testing.T) {
+	g := &Graph{
+		Forward: map[string][]string{
+			"a": {"c", "b", "b"},
+		},
+		Titles: map[string]struct{}{
+			"a": {}, "b": {}, "c": {},
+		},
+		OriginalTitles: map[string]string{
+			"a": "A", "b": "B", "c": "C",
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := g.ExportDot(&buf, allNodes(g)); err != nil {
+		t.Fatal(err)
+	}
+	want := `digraph vault {
+  rankdir=LR;
+  "A" -> "B";
+  "A" -> "C";
+}
+`
+	if buf.String() != want {
+		t.Fatalf("ExportDot should sort and dedupe manual Forward edges:\ngot:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestExportMermaid_DedupesAndSortsForwardEdges(t *testing.T) {
+	g := &Graph{
+		Forward: map[string][]string{
+			"a": {"c", "b", "b"},
+		},
+		Titles: map[string]struct{}{
+			"a": {}, "b": {}, "c": {},
+		},
+		OriginalTitles: map[string]string{
+			"a": "A", "b": "B", "c": "C",
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := g.ExportMermaid(&buf, allNodes(g)); err != nil {
+		t.Fatal(err)
+	}
+	want := `graph LR
+  a["A"] --> b["B"]
+  a --> c["C"]
+`
+	if buf.String() != want {
+		t.Fatalf("ExportMermaid should sort and dedupe manual Forward edges:\ngot:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Note A", "note-a"},

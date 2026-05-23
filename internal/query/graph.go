@@ -30,9 +30,8 @@ func BuildGraph(notes []*vault.Note) *Graph {
 		if n == nil {
 			continue
 		}
-		base := filepath.Base(n.Path)
-		stem := strings.TrimSuffix(base, filepath.Ext(base))
-		key := strings.ToLower(stem)
+		stem := noteTitle(n)
+		key := noteTitleKey(stem)
 		g.Titles[key] = struct{}{}
 		g.PathsByTitle[key] = n.Path
 		g.OriginalTitles[key] = stem
@@ -42,9 +41,7 @@ func BuildGraph(notes []*vault.Note) *Graph {
 		if n == nil {
 			continue
 		}
-		srcBase := filepath.Base(n.Path)
-		srcStem := strings.TrimSuffix(srcBase, filepath.Ext(srcBase))
-		srcKey := strings.ToLower(srcStem)
+		srcKey := noteTitleKey(noteTitle(n))
 
 		targets := make(map[string]struct{})
 		// Track which backward targets this note has already been
@@ -60,7 +57,10 @@ func BuildGraph(notes []*vault.Note) *Graph {
 				if title == "" {
 					continue
 				}
-				tKey := strings.ToLower(title)
+				tKey := linkTitleKey(title)
+				if tKey == "" {
+					continue
+				}
 				if tKey == srcKey {
 					continue
 				}
@@ -103,7 +103,10 @@ func (g *Graph) scanValue(v any, path, srcKey string, targets, backSeen map[stri
 			if title == "" {
 				continue
 			}
-			tKey := strings.ToLower(title)
+			tKey := linkTitleKey(title)
+			if tKey == "" {
+				continue
+			}
 			if tKey == srcKey {
 				continue
 			}
@@ -127,11 +130,11 @@ func (g *Graph) scanValue(v any, path, srcKey string, targets, backSeen map[stri
 }
 
 func (g *Graph) ForwardLinks(title string) []string {
-	return g.Forward[strings.ToLower(title)]
+	return g.Forward[noteTitleKey(title)]
 }
 
 func (g *Graph) BackLinks(title string) []string {
-	return g.Backward[strings.ToLower(title)]
+	return g.Backward[noteTitleKey(title)]
 }
 
 func (g *Graph) OutDegree(title string) int {
@@ -145,4 +148,36 @@ func (g *Graph) InDegree(title string) int {
 		seen[p] = struct{}{}
 	}
 	return len(seen)
+}
+
+func noteTitle(n *vault.Note) string {
+	if n == nil {
+		return ""
+	}
+	base := filepath.Base(n.Path)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+func noteTitleKey(title string) string {
+	return strings.ToLower(title)
+}
+
+func linkTitleKey(title string) string {
+	title = normalizeMarkdownLinkTitle(title)
+	if title == "" {
+		return ""
+	}
+	return strings.ToLower(title)
+}
+
+func normalizeMarkdownLinkTitle(title string) string {
+	ext := filepath.Ext(title)
+	if !strings.EqualFold(ext, ".md") {
+		return title
+	}
+	stem := strings.TrimSuffix(title, ext)
+	if stem == "" {
+		return title
+	}
+	return stem
 }

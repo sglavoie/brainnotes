@@ -275,6 +275,32 @@ func TestFindExtensionWithoutDot(t *testing.T) {
 	}
 }
 
+func TestFindNormalizesDefaultExtensionDirectConfig(t *testing.T) {
+	cases := []struct {
+		name string
+		ext  string
+	}{
+		{"trims whitespace", "  md  "},
+		{"dot only falls back", "."},
+		{"separator falls back", "md/file"},
+		{"nul falls back", "md\x00"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newCfg(t)
+			cfg.Templates.DefaultExtension = tc.ext
+			writeFile(t, filepath.Join(cfg.Vault, "Templates", "Book.md"), "x")
+			got, err := Find(cfg, "book")
+			if err != nil {
+				t.Fatalf("Find: %v", err)
+			}
+			if filepath.Base(got) != "Book.md" {
+				t.Fatalf("got %s, want Book.md", filepath.Base(got))
+			}
+		})
+	}
+}
+
 func TestFindEmptyStemAfterExtensionStrip(t *testing.T) {
 	// A name that consists only of the configured extension reduces to an
 	// empty stem; the third candidate (" Template.md") would have a leading
@@ -304,6 +330,18 @@ func TestFindNameWithMixedCaseExtension(t *testing.T) {
 	}
 }
 
+func TestFindUnicodeCaseFoldMatch(t *testing.T) {
+	cfg := newCfg(t)
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "Σ.md"), "x")
+	got, err := Find(cfg, "ς")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Σ.md" {
+		t.Fatalf("got %s, want Σ.md", filepath.Base(got))
+	}
+}
+
 func TestFindTemplatesDirCaseInsensitive(t *testing.T) {
 	// The configured templates dir may differ in case from the directory on
 	// disk. That should work on case-sensitive filesystems just as it does on
@@ -317,6 +355,33 @@ func TestFindTemplatesDirCaseInsensitive(t *testing.T) {
 	}
 	if filepath.Base(got) != "Book.md" {
 		t.Fatalf("got %s, want Book.md", filepath.Base(got))
+	}
+}
+
+func TestFindNormalizesTemplatesDirDirectConfig(t *testing.T) {
+	cases := []struct {
+		name    string
+		rawDir  string
+		diskDir string
+	}{
+		{"empty falls back", "", "Templates"},
+		{"dot falls back", ".", "Templates"},
+		{"trims whitespace", "  Templates/  ", "Templates"},
+		{"normalizes backslashes", `Meta\Templates\`, filepath.Join("Meta", "Templates")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newCfg(t)
+			cfg.Templates.Dir = tc.rawDir
+			writeFile(t, filepath.Join(cfg.Vault, tc.diskDir, "Book.md"), "x")
+			got, err := Find(cfg, "book")
+			if err != nil {
+				t.Fatalf("Find: %v", err)
+			}
+			if filepath.Base(got) != "Book.md" {
+				t.Fatalf("got %s, want Book.md", filepath.Base(got))
+			}
+		})
 	}
 }
 
@@ -365,6 +430,30 @@ func TestFindRejectsTemplatesDirTraversal(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "escape the vault") {
 		t.Fatalf("expected escape error, got %v", err)
+	}
+}
+
+func TestFindRejectsTemplatesDirAbsolutePath(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.Templates.Dir = string(filepath.Separator)
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for absolute templates dir")
+	}
+	if !strings.Contains(err.Error(), "relative") {
+		t.Fatalf("expected relative-path error, got %v", err)
+	}
+}
+
+func TestFindRejectsTemplatesDirWindowsAbsolutePath(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.Templates.Dir = `C:\Templates`
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for Windows absolute templates dir")
+	}
+	if !strings.Contains(err.Error(), "relative") {
+		t.Fatalf("expected relative-path error, got %v", err)
 	}
 }
 

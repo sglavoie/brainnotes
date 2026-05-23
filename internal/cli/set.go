@@ -70,6 +70,9 @@ printed as a unified diff block; unchanged files are omitted.`,
 			if err != nil {
 				return err
 			}
+			if nullSep && !usesStdinNoteInput(noteArgs) {
+				return errors.New("set: --null requires '-' stdin note input")
+			}
 			if len(pairs) == 0 {
 				return errors.New("set: at least one key=value pair is required")
 			}

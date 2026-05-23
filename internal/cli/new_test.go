@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
 )
 
@@ -93,6 +95,58 @@ func TestNewFolderOverride(t *testing.T) {
 	// Should not have been placed under the routed default.
 	if _, err := os.Stat(filepath.Join(root, "References", "Books", "Beloved.md")); err == nil {
 		t.Fatal("file leaked into routed folder despite --folder override")
+	}
+}
+
+func TestNewFolderOverrideNormalizesLikeRoute(t *testing.T) {
+	root := buildNewFixture(t)
+
+	out, err := runNew(t, "new", "book", "Beloved", "--folder", ` ./References\Books/ `, "--var", "author=Morrison")
+	if err != nil {
+		t.Fatalf("execute: %v\noutput: %s", err, out)
+	}
+	created := filepath.Join(root, "References", "Books", "Beloved.md")
+	if _, err := os.Stat(created); err != nil {
+		t.Fatalf("expected normalized destination %s to exist: %v", created, err)
+	}
+	if !strings.Contains(out, created) {
+		t.Fatalf("stdout %q does not mention normalized path %q", out, created)
+	}
+}
+
+func TestNewRejectsWhitespaceFolderOverride(t *testing.T) {
+	_ = buildNewFixture(t)
+
+	_, err := runNew(t, "new", "book", "Blank", "--folder", "   ")
+	if err == nil {
+		t.Fatal("expected error for whitespace-only --folder, got nil")
+	}
+	if !strings.Contains(err.Error(), "whitespace-only") {
+		t.Fatalf("expected whitespace-only error, got %v", err)
+	}
+}
+
+func TestNewRejectsAbsoluteFolderOverride(t *testing.T) {
+	_ = buildNewFixture(t)
+
+	_, err := runNew(t, "new", "book", "Abs", "--folder", "/tmp/books")
+	if err == nil {
+		t.Fatal("expected error for absolute --folder, got nil")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("expected absolute path error, got %v", err)
+	}
+}
+
+func TestNewRejectsWindowsAbsoluteFolderOverride(t *testing.T) {
+	_ = buildNewFixture(t)
+
+	_, err := runNew(t, "new", "book", "Abs", "--folder", `C:\Books`)
+	if err == nil {
+		t.Fatal("expected error for Windows absolute --folder, got nil")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("expected absolute path error, got %v", err)
 	}
 }
 
@@ -267,6 +321,38 @@ func TestNewNormalizesExtensionWithoutLeadingDot(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "Dune md")); err == nil {
 		t.Fatalf("file with non-normalized extension exists at %s", filepath.Join(root, "Dune md"))
+	}
+}
+
+func TestNewNormalizesExtensionFromDirectConfig(t *testing.T) {
+	root := t.TempDir()
+	tmplDir := filepath.Join(root, "Templates")
+	if err := os.MkdirAll(tmplDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmplDir, "Book Template.md"), []byte("body\n"), 0o644); err != nil {
+		t.Fatalf("write template: %v", err)
+	}
+
+	cfg := &config.Config{
+		Vault: root,
+		Templates: config.TemplatesConfig{
+			DefaultExtension: " md ",
+		},
+	}
+	cmd := NewNewCmd()
+	cmd.SetContext(context.WithValue(context.Background(), configKey, cfg))
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"book", "Dune"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v\noutput: %s", err, buf.String())
+	}
+	want := filepath.Join(root, "Dune.md")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("expected normalized output %s to exist: %v", want, err)
 	}
 }
 
