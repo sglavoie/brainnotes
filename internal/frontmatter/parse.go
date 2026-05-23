@@ -16,18 +16,18 @@ import (
 // Windows line endings (`\r\n`) are accepted on the delimiter lines; the body
 // is preserved verbatim.
 func Parse(data []byte) (Document, error) {
-	s := string(data)
-	s = strings.TrimPrefix(s, "\ufeff")
+	raw := string(data)
+	s := strings.TrimPrefix(raw, "\ufeff")
 
 	startLen, ok := openDelimLen(s)
 	if !ok {
-		return Document{Front: NewMap(), Body: s}, nil
+		return Document{Front: NewMap(), Body: raw}, nil
 	}
 
 	rest := s[startLen:]
 	closeOff, bodyOff, ok := findCloseDelim(rest)
 	if !ok {
-		return Document{Front: NewMap(), Body: s}, nil
+		return Document{Front: NewMap(), Body: raw}, nil
 	}
 
 	yamlText := rest[:closeOff]

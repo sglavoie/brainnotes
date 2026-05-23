@@ -70,8 +70,8 @@ type WalkFilter struct{}
 // inside the callback if frontmatter or body is needed.
 //
 // Hidden directories (names beginning with `.`) below the root are pruned
-// unconditionally. Directories named in cfg.Ignore (vault-relative, slash-
-// separated) are pruned at any depth where their relative path matches.
+// unconditionally. Paths named in cfg.Ignore (vault-relative, slash-separated)
+// are skipped; ignored directories are pruned before descent.
 //
 // Symbolic links are skipped, regardless of whether they target a file or a
 // directory. Following symlinks would let a note escape the vault root, which
@@ -143,6 +143,9 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 			return nil
 		}
 		if strings.HasPrefix(d.Name(), ".") {
+			return nil
+		}
+		if _, skip := ignore[relSlash]; skip {
 			return nil
 		}
 		if !strings.EqualFold(filepath.Ext(p), ".md") {

@@ -397,6 +397,28 @@ func TestLoad_TemplatesDirAbsolutePathFallsBack(t *testing.T) {
 	}
 }
 
+func TestLoad_TemplatesDirWindowsAbsolutePathFallsBack(t *testing.T) {
+	// A Windows drive-rooted templates dir is also absolute, even when the
+	// tests run on Unix. It cannot be a vault-relative templates directory.
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{`C:\Templates`, "D:/Templates"} {
+		t.Run(raw, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.toml")
+			writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = '"+raw+"'\n")
+			cfg, err := Load("", cfgPath)
+			if err != nil {
+				t.Fatalf("Load (%q): %v", raw, err)
+			}
+			if cfg.Templates.Dir != "Templates" {
+				t.Errorf("Windows absolute %q should fall back to Templates, got %q", raw, cfg.Templates.Dir)
+			}
+		})
+	}
+}
+
 func TestLoad_TemplatesDirParentTraversalFallsBack(t *testing.T) {
 	// A templates dir starting with ".." escapes the vault and cannot be
 	// pruned by Walk; it should fall back to the default.

@@ -39,7 +39,7 @@ func validateRoutes(cfg *Config) error {
 			continue
 		}
 		slash := filepath.ToSlash(trimmed)
-		if strings.HasPrefix(slash, "/") {
+		if isAbsolutePathLike(slash) {
 			return fmt.Errorf("config: new.routes[%q]: absolute path %q is not allowed (must be vault-relative)", name, dest)
 		}
 		cleaned := path.Clean(slash)
@@ -48,6 +48,22 @@ func validateRoutes(cfg *Config) error {
 		}
 	}
 	return nil
+}
+
+func isAbsolutePathLike(p string) bool {
+	p = filepath.ToSlash(strings.TrimSpace(p))
+	p = strings.ReplaceAll(p, "\\", "/")
+	if strings.HasPrefix(p, "/") {
+		return true
+	}
+	if len(p) >= 2 && isASCIIAlpha(p[0]) && p[1] == ':' {
+		return len(p) == 2 || p[2] == '/'
+	}
+	return false
+}
+
+func isASCIIAlpha(b byte) bool {
+	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
 }
 
 var validSchemaTypes = map[string]bool{

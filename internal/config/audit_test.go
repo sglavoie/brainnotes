@@ -24,6 +24,28 @@ func TestLoad_NewRoutesAbsolutePathRejected(t *testing.T) {
 	}
 }
 
+// TestLoad_NewRoutesWindowsAbsolutePathRejected verifies that Windows-style
+// absolute paths are rejected even when tests run on a Unix host. Without this,
+// a route such as "C:\Books" can pass validation despite not being
+// vault-relative on Windows.
+func TestLoad_NewRoutesWindowsAbsolutePathRejected(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{`C:\Books`, "D:/Notes"} {
+		t.Run(raw, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.toml")
+			writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = '"+raw+"'\n")
+
+			_, err := Load("", cfgPath)
+			if err == nil {
+				t.Fatalf("expected error for Windows absolute path %q in [new.routes]", raw)
+			}
+		})
+	}
+}
+
 // TestLoad_NewRoutesParentTraversalRejected verifies that ".." traversal in
 // [new.routes] is rejected; it would let `bn new` escape the vault.
 func TestLoad_NewRoutesParentTraversalRejected(t *testing.T) {

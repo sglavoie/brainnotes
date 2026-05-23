@@ -1,6 +1,7 @@
 package query
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -38,6 +39,7 @@ func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 	if err == nil && body != "" {
 		links := wikilink.Parse(body)
 		nlOffsets := buildNewlineOffsets(body)
+		lineOffset := bodyLineOffset(n.Path)
 		for _, link := range links {
 			title := link.Title()
 			if title == "" || isMediaEmbed(title) {
@@ -46,7 +48,7 @@ func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 			if _, ok := g.Titles[strings.ToLower(title)]; ok {
 				continue
 			}
-			line := lineFromOffset(nlOffsets, link.Start)
+			line := lineOffset + lineFromOffset(nlOffsets, link.Start)
 			out = append(out, BrokenLink{Link: link, Line: line})
 		}
 	}
@@ -93,6 +95,66 @@ func buildNewlineOffsets(s string) []int {
 		}
 	}
 	return offsets
+}
+
+func bodyLineOffset(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	raw := strings.TrimPrefix(string(data), "\ufeff")
+	startLen, ok := frontmatterOpenDelimLen(raw)
+	if !ok {
+		return 0
+	}
+	bodyOff, ok := frontmatterBodyOffset(raw[startLen:])
+	if !ok {
+		return 0
+	}
+	return strings.Count(raw[:startLen+bodyOff], "\n")
+}
+
+func frontmatterOpenDelimLen(s string) (int, bool) {
+	if !strings.HasPrefix(s, "---") {
+		return 0, false
+	}
+	nl := strings.IndexByte(s, '\n')
+	if nl < 0 {
+		return 0, false
+	}
+	if isFrontmatterDelimLine(s[:nl]) {
+		return nl + 1, true
+	}
+	return 0, false
+}
+
+func frontmatterBodyOffset(s string) (int, bool) {
+	for i := 0; i < len(s); {
+		eol := strings.IndexByte(s[i:], '\n')
+		var line string
+		var lineEnd int
+		if eol == -1 {
+			line = s[i:]
+			lineEnd = len(s)
+		} else {
+			line = s[i : i+eol]
+			lineEnd = i + eol + 1
+		}
+		if isFrontmatterDelimLine(line) {
+			return lineEnd, true
+		}
+		if eol == -1 {
+			break
+		}
+		i = lineEnd
+	}
+	return 0, false
+}
+
+func isFrontmatterDelimLine(line string) bool {
+	line = strings.TrimRight(line, "\r")
+	line = strings.TrimRight(line, " \t")
+	return line == "---"
 }
 
 func lineFromOffset(nlOffsets []int, offset int) int {

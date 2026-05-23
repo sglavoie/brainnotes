@@ -182,6 +182,15 @@ func resolveDest(cfg *config.Config, templateName, folderFlag string) (string, e
 // and renaming. Mirrors vault.atomicWrite which lives in another package.
 func atomicWriteFile(dest string, data []byte) error {
 	dir := filepath.Dir(dest)
+	var destMode os.FileMode
+	destExists := false
+	if info, err := os.Stat(dest); err == nil {
+		destMode = info.Mode().Perm()
+		destExists = true
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("new: stat %q: %w", dest, err)
+	}
+
 	tmp, err := os.CreateTemp(dir, ".new-*.tmp")
 	if err != nil {
 		return fmt.Errorf("new: tempfile in %q: %w", dir, err)
@@ -202,6 +211,14 @@ func atomicWriteFile(dest string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		cleanup()
 		return fmt.Errorf("new: close %q: %w", tmpPath, err)
+	}
+	wantMode := destMode
+	if !destExists {
+		wantMode = 0o644
+	}
+	if err := os.Chmod(tmpPath, wantMode); err != nil {
+		cleanup()
+		return fmt.Errorf("new: chmod %q: %w", tmpPath, err)
 	}
 	if err := os.Rename(tmpPath, dest); err != nil {
 		cleanup()

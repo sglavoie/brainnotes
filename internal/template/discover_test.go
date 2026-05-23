@@ -303,3 +303,76 @@ func TestFindNameWithMixedCaseExtension(t *testing.T) {
 		t.Fatalf("got %s, want Book Template.md", filepath.Base(got))
 	}
 }
+
+func TestFindTemplatesDirCaseInsensitive(t *testing.T) {
+	// The configured templates dir may differ in case from the directory on
+	// disk. That should work on case-sensitive filesystems just as it does on
+	// macOS/Windows case-insensitive filesystems.
+	cfg := newCfg(t)
+	cfg.Templates.Dir = "templates"
+	writeFile(t, filepath.Join(cfg.Vault, "Templates", "Book.md"), "x")
+	got, err := Find(cfg, "book")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Book.md" {
+		t.Fatalf("got %s, want Book.md", filepath.Base(got))
+	}
+}
+
+func TestFindTemplatesDirNestedCaseInsensitive(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.Templates.Dir = "meta/templates"
+	writeFile(t, filepath.Join(cfg.Vault, "Meta", "Templates", "Book.md"), "x")
+	got, err := Find(cfg, "book")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Book.md" {
+		t.Fatalf("got %s, want Book.md", filepath.Base(got))
+	}
+}
+
+func TestFindTemplatesDirAmbiguousCaseInsensitive(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.Templates.Dir = "TEMPLATES"
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(cfg.Vault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 2 {
+		t.Skip("case-insensitive filesystem; cannot create ambiguous template dirs")
+	}
+	_, err = Find(cfg, "book")
+	if !errors.Is(err, ErrTemplateAmbiguous) {
+		t.Fatalf("expected ErrTemplateAmbiguous, got %v", err)
+	}
+}
+
+func TestFindRejectsTemplatesDirTraversal(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.Templates.Dir = "../Templates"
+	writeFile(t, filepath.Join(cfg.Vault, "..", "Templates", "Book.md"), "x")
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for templates dir escaping vault")
+	}
+	if !strings.Contains(err.Error(), "escape the vault") {
+		t.Fatalf("expected escape error, got %v", err)
+	}
+}
+
+func TestFindRejectsTemplatesDirNULByte(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.Templates.Dir = "Templates\x00"
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for NUL byte in templates dir")
+	}
+}

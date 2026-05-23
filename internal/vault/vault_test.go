@@ -124,6 +124,37 @@ func TestWalkIgnoreNormalizesDotSlash(t *testing.T) {
 	}
 }
 
+func TestWalkRespectsIgnoredFiles(t *testing.T) {
+	files := map[string]string{
+		"keep.md":             "# keep\n",
+		"Drafts/private.md":   "# private\n",
+		"Drafts/public.md":    "# public\n",
+		"Nested/also-keep.md": "# keep\n",
+	}
+	v := newTestVault(t, []string{"Drafts/private.md"}, files)
+
+	var visited []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, err := filepath.Rel(v.Root, n.Path)
+		if err != nil {
+			return err
+		}
+		visited = append(visited, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	sort.Strings(visited)
+	want := []string{
+		"Drafts/public.md",
+		"Nested/also-keep.md",
+		"keep.md",
+	}
+	if !equalStrings(visited, want) {
+		t.Fatalf("walk visited:\n got=%v\nwant=%v", visited, want)
+	}
+}
+
 func TestNotesSkipsTemplatesDir(t *testing.T) {
 	// A template file with unrendered placeholders is not valid YAML; the
 	// walker must skip it so commands like `find` aren't broken by it.

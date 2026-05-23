@@ -144,7 +144,20 @@ func buildCodeMask(s string) []byteRange {
 		fenceLen       int
 		inIndentedCode bool
 		prevBlank      = true // treat document start as following a blank line
+		inlineStart    = -1
+		inlineEnd      int
 	)
+
+	flushInline := func() {
+		if inlineStart < 0 {
+			return
+		}
+		for _, sp := range inlineCodeSpans(s[inlineStart:inlineEnd]) {
+			ranges = append(ranges, byteRange{inlineStart + sp.start, inlineStart + sp.end})
+		}
+		inlineStart = -1
+		inlineEnd = 0
+	}
 
 	for _, ln := range lines {
 		text := s[ln.start:ln.end]
@@ -159,6 +172,7 @@ func buildCodeMask(s string) []byteRange {
 		}
 
 		if ch, n, ok := isFenceOpener(text); ok {
+			flushInline()
 			ranges = append(ranges, byteRange{ln.start, ln.end})
 			fenceOpen = true
 			fenceChar = ch
@@ -169,12 +183,14 @@ func buildCodeMask(s string) []byteRange {
 		}
 
 		if isBlankLine(text) {
+			flushInline()
 			inIndentedCode = false
 			prevBlank = true
 			continue
 		}
 
 		if startsWithIndentedCode(text) && (prevBlank || inIndentedCode) {
+			flushInline()
 			ranges = append(ranges, byteRange{ln.start, ln.end})
 			inIndentedCode = true
 			prevBlank = false
@@ -182,12 +198,14 @@ func buildCodeMask(s string) []byteRange {
 		}
 
 		inIndentedCode = false
-		for _, sp := range inlineCodeSpans(text) {
-			ranges = append(ranges, byteRange{ln.start + sp.start, ln.start + sp.end})
+		if inlineStart < 0 {
+			inlineStart = ln.start
 		}
+		inlineEnd = ln.end
 		prevBlank = false
 	}
 
+	flushInline()
 	return ranges
 }
 
@@ -315,32 +333,32 @@ func trimASCIISpace(s string) string {
 	return s[start:end]
 }
 
-// inlineCodeSpans returns the spans (relative to line) covered by inline code.
+// inlineCodeSpans returns the spans (relative to s) covered by inline code.
 // A backtick run of length N is closed by the next run of exactly N backticks
 // per CommonMark. Unmatched openings are ignored — they aren't code spans.
-func inlineCodeSpans(line string) []byteRange {
+func inlineCodeSpans(s string) []byteRange {
 	var spans []byteRange
 	i := 0
-	for i < len(line) {
-		if line[i] != '`' {
+	for i < len(s) {
+		if s[i] != '`' {
 			i++
 			continue
 		}
 		start := i
 		n := 0
-		for i < len(line) && line[i] == '`' {
+		for i < len(s) && s[i] == '`' {
 			n++
 			i++
 		}
 		j := i
 		found := false
-		for j < len(line) {
-			if line[j] != '`' {
+		for j < len(s) {
+			if s[j] != '`' {
 				j++
 				continue
 			}
 			m := 0
-			for j < len(line) && line[j] == '`' {
+			for j < len(s) && s[j] == '`' {
 				m++
 				j++
 			}

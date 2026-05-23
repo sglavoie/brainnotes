@@ -71,7 +71,7 @@ func applyDefaults(cfg *Config) {
 	// vault-relative for Walk's pruning to match. Silently falling back to
 	// the default is safer than walking a value the user clearly intended
 	// but that cannot work as written.
-	if strings.HasPrefix(cfg.Templates.Dir, "/") ||
+	if isAbsolutePathLike(cfg.Templates.Dir) ||
 		cfg.Templates.Dir == ".." ||
 		strings.HasPrefix(cfg.Templates.Dir, "../") {
 		cfg.Templates.Dir = "Templates"

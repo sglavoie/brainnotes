@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -14,11 +15,11 @@ import (
 // exists under the configured templates directory.
 var ErrTemplateNotFound = errors.New("template: not found")
 
-// ErrTemplateAmbiguous is returned by Find when more than one file under the
-// templates directory matches the same case-insensitive candidate (e.g.
-// "book.md" and "BOOK.md" coexisting on a case-sensitive filesystem). Callers
-// should surface the error so the user can disambiguate by renaming one of
-// the colliding files.
+// ErrTemplateAmbiguous is returned by Find when more than one template path
+// matches the same case-insensitive candidate (e.g. "book.md" and "BOOK.md",
+// or "Templates" and "templates", coexisting on a case-sensitive filesystem).
+// Callers should surface the error so the user can disambiguate by renaming
+// one of the colliding paths.
 var ErrTemplateAmbiguous = errors.New("template: ambiguous match")
 
 // Find resolves a template by name within <cfg.Vault>/<cfg.Templates.Dir>.
@@ -29,10 +30,11 @@ var ErrTemplateAmbiguous = errors.New("template: ambiguous match")
 //  3. The name suffixed with " Template" and the default extension
 //     (e.g. "Book Template.md") — the existing vault convention.
 //
-// The directory listing is read once and compared against each candidate
-// lower-cased; the first candidate that matches wins. If more than one file
-// matches the same candidate (only possible on case-sensitive filesystems),
-// ErrTemplateAmbiguous is returned listing the colliding files.
+// The templates directory is resolved case-insensitively when the exact
+// configured path does not exist. Its listing is compared against each
+// candidate lower-cased; the first candidate that matches wins. If more than
+// one file matches the same candidate (only possible on case-sensitive
+// filesystems), ErrTemplateAmbiguous is returned listing the colliding files.
 //
 // The name must be a bare filename: path separators in name are rejected so
 // that callers don't accidentally escape the templates directory.
@@ -52,10 +54,9 @@ func Find(cfg *config.Config, name string) (string, error) {
 	if name == "." || name == ".." {
 		return "", fmt.Errorf("template: name %q is not a valid template name", name)
 	}
-	dir := filepath.Join(cfg.Vault, cfg.Templates.Dir)
-	entries, err := os.ReadDir(dir)
+	dir, entries, err := readTemplatesDir(cfg)
 	if err != nil {
-		return "", fmt.Errorf("template: read %q: %w", dir, err)
+		return "", err
 	}
 	ext := cfg.Templates.DefaultExtension
 	if ext == "" {
@@ -116,4 +117,84 @@ func Find(cfg *config.Config, name string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%w: %q in %s (tried %v)", ErrTemplateNotFound, name, dir, candidates)
+}
+
+func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
+	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
+		return "", nil, err
+	}
+
+	dir := filepath.Join(cfg.Vault, cfg.Templates.Dir)
+	entries, err := os.ReadDir(dir)
+	if err == nil {
+		return dir, entries, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", nil, fmt.Errorf("template: read %q: %w", dir, err)
+	}
+
+	resolved, resolveErr := resolveDirCaseInsensitive(cfg.Vault, cfg.Templates.Dir)
+	if resolveErr != nil {
+		return "", nil, resolveErr
+	}
+	if resolved == dir {
+		return "", nil, fmt.Errorf("template: read %q: %w", dir, err)
+	}
+
+	entries, err = os.ReadDir(resolved)
+	if err != nil {
+		return "", nil, fmt.Errorf("template: read %q: %w", resolved, err)
+	}
+	return resolved, entries, nil
+}
+
+func validateTemplatesDir(rel string) error {
+	if strings.ContainsRune(rel, 0) {
+		return fmt.Errorf("template: templates dir %q must not contain NUL bytes", rel)
+	}
+	normalized := strings.ReplaceAll(filepath.ToSlash(rel), `\`, `/`)
+	if filepath.IsAbs(rel) || path.IsAbs(normalized) {
+		return fmt.Errorf("template: templates dir %q must be relative", rel)
+	}
+	clean := path.Clean(normalized)
+	if clean == ".." || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("template: templates dir %q must not escape the vault", rel)
+	}
+	return nil
+}
+
+func resolveDirCaseInsensitive(root, rel string) (string, error) {
+	clean := path.Clean(strings.ReplaceAll(filepath.ToSlash(rel), `\`, `/`))
+	if clean == "." {
+		return root, nil
+	}
+
+	cur := root
+	for _, part := range strings.Split(filepath.ToSlash(clean), "/") {
+		if part == "" || part == "." {
+			continue
+		}
+		entries, err := os.ReadDir(cur)
+		if err != nil {
+			return "", fmt.Errorf("template: read %q: %w", cur, err)
+		}
+		var matches []string
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			if strings.EqualFold(e.Name(), part) {
+				matches = append(matches, e.Name())
+			}
+		}
+		switch len(matches) {
+		case 0:
+			return filepath.Join(cur, part), nil
+		case 1:
+			cur = filepath.Join(cur, matches[0])
+		default:
+			return "", fmt.Errorf("%w: templates dir component %q matches %v in %s", ErrTemplateAmbiguous, part, matches, cur)
+		}
+	}
+	return cur, nil
 }

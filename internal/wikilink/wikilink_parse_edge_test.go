@@ -347,3 +347,23 @@ func TestParseEmptyAndWhitespaceInput(t *testing.T) {
 		}
 	}
 }
+
+func TestParseSkipsMultilineInlineCodeSpan(t *testing.T) {
+	t.Parallel()
+	in := "before `[[Hidden]]\n[[StillHidden]]` after [[Visible]]"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestParseInlineCodeSpanDoesNotCrossBlankLine(t *testing.T) {
+	t.Parallel()
+	in := "`[[Visible]]\n\n[[AlsoVisible]]`"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible", "AlsoVisible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}

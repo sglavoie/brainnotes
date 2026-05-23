@@ -437,3 +437,13 @@ func TestRewriteMDExtensionRoundTrip(t *testing.T) {
 		t.Errorf("second link = %+v", links[1])
 	}
 }
+
+func TestRewriteSkipsMultilineInlineCodeSpan(t *testing.T) {
+	t.Parallel()
+	in := "before `[[Foo]]\n[[Foo]]` after [[Foo]]"
+	got := RewriteTitle(in, "Foo", "Bar")
+	want := "before `[[Foo]]\n[[Foo]]` after [[Bar]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}

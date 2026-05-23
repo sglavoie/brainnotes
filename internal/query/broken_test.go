@@ -84,11 +84,47 @@ func TestUnresolvedLinks(t *testing.T) {
 		if broken[0].Link.Title() != "Missing" {
 			t.Errorf("expected title Missing, got %q", broken[0].Link.Title())
 		}
-		if broken[0].Line != 2 {
-			t.Errorf("expected line 2, got %d", broken[0].Line)
+		if broken[0].Line != 5 {
+			t.Errorf("expected file line 5, got %d", broken[0].Line)
 		}
 		if broken[0].FrontmatterKey != "" {
 			t.Errorf("expected empty FrontmatterKey, got %q", broken[0].FrontmatterKey)
+		}
+	})
+
+	t.Run("unresolved bare link line number without frontmatter", func(t *testing.T) {
+		_, notes := newVault(t, map[string]string{
+			"Alpha.md": "Line one.\nSee [[Missing]].\n",
+		})
+		var all []*vault.Note
+		for _, n := range notes {
+			all = append(all, n)
+		}
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
+		if len(broken) != 1 {
+			t.Fatalf("expected 1 broken link, got %d", len(broken))
+		}
+		if broken[0].Line != 2 {
+			t.Errorf("expected file line 2, got %d", broken[0].Line)
+		}
+	})
+
+	t.Run("unresolved bare link line number with CRLF frontmatter", func(t *testing.T) {
+		_, notes := newVault(t, map[string]string{
+			"Alpha.md": "---\r\ntitle: Alpha\r\n---\r\nLine one.\r\nSee [[Missing]].\r\n",
+		})
+		var all []*vault.Note
+		for _, n := range notes {
+			all = append(all, n)
+		}
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
+		if len(broken) != 1 {
+			t.Fatalf("expected 1 broken link, got %d", len(broken))
+		}
+		if broken[0].Line != 5 {
+			t.Errorf("expected file line 5, got %d", broken[0].Line)
 		}
 	})
 

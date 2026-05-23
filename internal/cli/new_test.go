@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -134,6 +135,58 @@ func TestNewForceOverwrite(t *testing.T) {
 	data, _ := os.ReadFile(target)
 	if !strings.Contains(string(data), "title: Dune") {
 		t.Fatalf("expected rendered content, got %q", data)
+	}
+}
+
+// TestNewCreatesNoteWithReadableMode verifies that the atomic temp-file
+// write used by `bn new` widens a brand-new note from os.CreateTemp's 0600 to
+// the normal 0644 note mode.
+func TestNewCreatesNoteWithReadableMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX mode bits not meaningful on Windows")
+	}
+	root := buildNewFixture(t)
+
+	if _, err := runNew(t, "new", "book", "Dune", "--var", "author=Herbert"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	created := filepath.Join(root, "References", "Books", "Dune.md")
+	info, err := os.Stat(created)
+	if err != nil {
+		t.Fatalf("stat created note: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Fatalf("created note mode = %o, want 0644", got)
+	}
+}
+
+// TestNewForcePreservesExistingMode verifies forced overwrites keep the
+// destination's existing permission bits instead of inheriting the 0600 mode
+// from the temporary file.
+func TestNewForcePreservesExistingMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX mode bits not meaningful on Windows")
+	}
+	root := buildNewFixture(t)
+	target := filepath.Join(root, "References", "Books", "Dune.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("existing"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runNew(t, "new", "book", "Dune", "--var", "author=H", "--force"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("stat overwritten note: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o640 {
+		t.Fatalf("overwritten note mode = %o, want 0640", got)
 	}
 }
 

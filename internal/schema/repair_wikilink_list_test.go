@@ -83,6 +83,51 @@ func TestPlanRepairs_WikilinkWrap_PartialInList(t *testing.T) {
 	}
 }
 
+func TestPlanRepairs_WikilinkAllowed_PartialWrapperNoStaleSkip(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	}
+	front := buildFront("category", "[[Work")
+
+	result := PlanRepairs(front, sch, []string{"category"})
+	if len(result.Skips) != 0 {
+		t.Fatalf("expected no stale skips after wrapper repair, got %+v", result.Skips)
+	}
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	act := result.Actions[0]
+	if act.Kind != "wikilink_wrap" {
+		t.Errorf("kind = %q, want %q", act.Kind, "wikilink_wrap")
+	}
+	if act.NewValue != "[[Work]]" {
+		t.Errorf("new value = %q, want %q", act.NewValue, "[[Work]]")
+	}
+}
+
+func TestPlanRepairs_WikilinkAllowed_PartialListCanonicalizesWithoutStaleSkip(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"categories": {Type: "list", Allowed: []string{"Work", "Personal", "Done"}},
+	}
+	front := buildFront("categories", []any{"[[work", "Personal]]", "Done"})
+
+	result := PlanRepairs(front, sch, []string{"categories"})
+	if len(result.Skips) != 0 {
+		t.Fatalf("expected no stale skips after wrapper repair, got %+v", result.Skips)
+	}
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	act := result.Actions[0]
+	if act.Kind != "canonicalize,wikilink_wrap" {
+		t.Errorf("kind = %q, want %q", act.Kind, "canonicalize,wikilink_wrap")
+	}
+	want := []any{"[[Work]]", "[[Personal]]", "[[Done]]"}
+	if !reflect.DeepEqual(act.NewValue, want) {
+		t.Errorf("new value = %v, want %v", act.NewValue, want)
+	}
+}
+
 func TestPlanRepairs_Canonicalize_ListNonStringItem(t *testing.T) {
 	// A list containing non-string items should flag those items as
 	// unfixable during canonicalization, not silently skip them.

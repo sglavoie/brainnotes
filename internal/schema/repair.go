@@ -251,7 +251,7 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 	case string:
 		bare := v
 		if isWikilink {
-			bare = stripWikilink(v)
+			bare = repairWikilinkTarget(v)
 		}
 		if isAllowedValue(bare, allowed) {
 			return val, nil
@@ -261,6 +261,9 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 			return val, []string{bare}
 		}
 		if isWikilink {
+			if isPartialWikilink(v) {
+				return canon, nil
+			}
 			return "[[" + canon + "]]", nil
 		}
 		return canon, nil
@@ -277,7 +280,7 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 			}
 			bare := s
 			if isWikilink {
-				bare = stripWikilink(s)
+				bare = repairWikilinkTarget(s)
 			}
 			if isAllowedValue(bare, allowed) {
 				continue
@@ -288,7 +291,11 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 				continue
 			}
 			if isWikilink {
-				out[i] = "[[" + canon + "]]"
+				if isPartialWikilink(s) {
+					out[i] = canon
+				} else {
+					out[i] = "[[" + canon + "]]"
+				}
 			} else {
 				out[i] = canon
 			}
@@ -313,6 +320,17 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 		}
 		return val, []string{s}
 	}
+}
+
+func repairWikilinkTarget(s string) string {
+	s = strings.TrimPrefix(s, "[[")
+	s = strings.TrimSuffix(s, "]]")
+	return s
+}
+
+func isPartialWikilink(s string) bool {
+	return (strings.HasPrefix(s, "[[") || strings.HasSuffix(s, "]]")) &&
+		!(strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]") && len(s) >= 4)
 }
 
 func isAllowedValue(s string, allowed []string) bool {
