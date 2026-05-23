@@ -367,6 +367,8 @@ func TestParseAge(t *testing.T) {
 		{">30x", "", 0, true},
 		{">d", "", 0, true},
 		{">-1d", "", 0, true},
+		{">106751d", ">", 106751 * 24 * time.Hour, false},
+		{">106752d", "", 0, true},
 	}
 	for _, c := range cases {
 		op, dur, err := ParseAge(c.in)

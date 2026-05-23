@@ -420,6 +420,28 @@ func TestFindTemplatesDirAmbiguousCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestFindTemplatesDirAmbiguousEvenWhenExactExists(t *testing.T) {
+	cfg := newCfg(t)
+	cfg.Templates.Dir = "Templates"
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "Templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.Vault, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(cfg.Vault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) < 2 {
+		t.Skip("case-insensitive filesystem; cannot create ambiguous template dirs")
+	}
+	_, err = Find(cfg, "book")
+	if !errors.Is(err, ErrTemplateAmbiguous) {
+		t.Fatalf("expected ErrTemplateAmbiguous, got %v", err)
+	}
+}
+
 func TestFindRejectsTemplatesDirTraversal(t *testing.T) {
 	cfg := newCfg(t)
 	cfg.Templates.Dir = "../Templates"

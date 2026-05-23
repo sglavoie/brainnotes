@@ -15,8 +15,9 @@ import (
 // that Marshal can reproduce the original byte stream when no fields are
 // mutated.
 type Document struct {
-	Front Map
-	Body  string
+	Front  Map
+	Body   string
+	hasBOM bool
 }
 
 // Map is an ordered map of frontmatter keys to values. Insertion order is

@@ -7,24 +7,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func NewRenameKeyCmd() *cobra.Command {
-	var (
-		tags        []string
-		categories  []string
-		status      string
-		typeProp    string
-		hasProp     string
-		missingProp string
-		age         string
-		created     string
-		folder      string
-		orphan      bool
-		dryRun      bool
-	)
+	var dryRun bool
+
+	ff := new(findFlags)
 
 	cmd := &cobra.Command{
 		Use:   "rename-key <old-key> <new-key> [notes...]",
@@ -82,23 +71,7 @@ Use --dry-run to preview changes without writing.`,
 				return errors.New("rename-key: cannot combine positional notes with find filter flags")
 			}
 
-			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, query.Flags{
-				Tags:         tags,
-				Categories:   categories,
-				Status:       status,
-				Type:         typeProp,
-				Has:          hasProp,
-				Missing:      missingProp,
-				Age:          age,
-				Created:      created,
-				Folder:       folder,
-				Orphan:       orphan,
-				MinBacklinks: -1,
-				MaxBacklinks: -1,
-				MinLinks:     -1,
-				MaxLinks:     -1,
-				Root:         v.Root,
-			})
+			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, ff.toQueryFlags(v.Root, nil))
 			if err != nil {
 				return err
 			}
@@ -177,16 +150,7 @@ Use --dry-run to preview changes without writing.`,
 	}
 
 	f := cmd.Flags()
-	f.StringSliceVar(&tags, "tag", nil, "filter by tag (repeatable; AND semantics)")
-	f.StringSliceVar(&categories, "category", nil, "filter by category target (repeatable; AND semantics)")
-	f.StringVar(&status, "status", "", "filter by status property")
-	f.StringVar(&typeProp, "type", "", "filter by type/kind property")
-	f.StringVar(&hasProp, "has", "", "require property present")
-	f.StringVar(&missingProp, "missing", "", "require property absent")
-	f.StringVar(&age, "age", "", "filter by 'last' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&created, "created", "", "filter by 'created' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&folder, "folder", "", "limit to a vault-relative folder (matches descendants)")
-	f.BoolVar(&orphan, "orphan", false, "only notes nothing in the vault links to")
+	ff.register(cmd)
 	f.BoolVar(&dryRun, "dry-run", false, "preview changes without writing")
 
 	return cmd

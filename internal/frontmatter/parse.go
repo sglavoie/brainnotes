@@ -18,7 +18,11 @@ import (
 // is preserved verbatim.
 func Parse(data []byte) (Document, error) {
 	raw := string(data)
-	s := strings.TrimPrefix(raw, "\ufeff")
+	hasBOM := strings.HasPrefix(raw, "\ufeff")
+	s := raw
+	if hasBOM {
+		s = strings.TrimPrefix(s, "\ufeff")
+	}
 
 	startLen, ok := openDelimLen(s)
 	if !ok {
@@ -38,7 +42,7 @@ func Parse(data []byte) (Document, error) {
 	if err != nil {
 		return Document{}, fmt.Errorf("frontmatter: parse yaml: %w", err)
 	}
-	return Document{Front: m, Body: body}, nil
+	return Document{Front: m, Body: body, hasBOM: hasBOM}, nil
 }
 
 // openDelimLen reports the byte length of the opening `---` line if s starts

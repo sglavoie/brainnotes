@@ -24,6 +24,9 @@ func TestValidType(t *testing.T) {
 }
 
 func TestCheckType(t *testing.T) {
+	dateOnly := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	dateTime := time.Date(2024, 1, 1, 12, 30, 0, 0, time.UTC)
+
 	tests := []struct {
 		value      any
 		schemaType string
@@ -33,7 +36,8 @@ func TestCheckType(t *testing.T) {
 		{42, "string", false},
 		{[]any{"a", "b"}, "list", true},
 		{"not a list", "list", false},
-		{time.Now(), "date", true},
+		{dateOnly, "date", true},
+		{dateTime, "date", false},
 		{"2024-01-01", "date", false},
 		{42, "int", true},
 		{42.5, "int", false},
@@ -159,6 +163,20 @@ func TestCheckAllowed_NonStringType(t *testing.T) {
 	}
 	if bad != "9.99" {
 		t.Errorf("offending = %q, want %q", bad, "9.99")
+	}
+}
+
+func TestCheckAllowed_DateOnlyTime(t *testing.T) {
+	dateOnly := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	ok, _ := CheckAllowed(dateOnly, []string{"2024-01-01"}, false)
+	if !ok {
+		t.Error("expected ok when date-only string representation is in allowed list")
+	}
+
+	dateTime := time.Date(2024, 1, 1, 12, 30, 0, 0, time.UTC)
+	ok, _ = CheckAllowed(dateTime, []string{"2024-01-01"}, false)
+	if ok {
+		t.Error("expected failure when full timestamp shares a day with an allowed date")
 	}
 }
 
@@ -400,5 +418,24 @@ func TestValidateNote_NilValue(t *testing.T) {
 	}
 	if vs[0].Detail != "expected string, got nil" {
 		t.Errorf("detail = %q, want %q", vs[0].Detail, "expected string, got nil")
+	}
+}
+
+func TestValidateNote_DateRejectsFullTimestamp(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("created", time.Date(2024, 1, 1, 12, 30, 0, 0, time.UTC))
+
+	schema := map[string]config.PropertySchema{
+		"created": {Type: "date", Allowed: []string{"2024-01-01"}},
+	}
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d: %+v", len(vs), vs)
+	}
+	if vs[0].Kind != "type" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "type")
+	}
+	if vs[0].Detail != "expected date, got datetime" {
+		t.Errorf("detail = %q, want %q", vs[0].Detail, "expected date, got datetime")
 	}
 }

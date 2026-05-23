@@ -22,6 +22,9 @@ import (
 // applied (callers that don't need wrapping can pass nil).
 func Marshal(doc Document, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 	var out bytes.Buffer
+	if doc.hasBOM {
+		out.WriteString("\ufeff")
+	}
 	if !doc.Front.IsEmpty() {
 		out.WriteString("---\n")
 		yamlBytes, err := marshalMap(doc.Front, fmCfg)

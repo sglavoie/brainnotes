@@ -170,5 +170,8 @@ func ParseAge(s string) (op string, dur time.Duration, err error) {
 	default:
 		return "", 0, fmt.Errorf("invalid age unit %q in %q: must be one of s, m, h, d", string(unit), s)
 	}
+	if int64(n) > int64(1<<63-1)/int64(mult) {
+		return "", 0, fmt.Errorf("invalid age value in %q: overflows duration", s)
+	}
 	return op, time.Duration(n) * mult, nil
 }

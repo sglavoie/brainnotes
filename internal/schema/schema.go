@@ -35,8 +35,8 @@ func CheckType(value any, schemaType string) bool {
 		_, ok := value.([]any)
 		return ok
 	case "date":
-		_, ok := value.(time.Time)
-		return ok
+		t, ok := value.(time.Time)
+		return ok && isDateOnlyTime(t)
 	case "int":
 		_, ok := value.(int)
 		return ok
@@ -185,18 +185,32 @@ func scalarToString(v any) string {
 	case float64:
 		return strconv.FormatFloat(val, 'f', -1, 64)
 	case time.Time:
+		if !isDateOnlyTime(val) {
+			return ""
+		}
 		return val.Format("2006-01-02")
 	}
 	return ""
 }
 
+func isDateOnlyTime(t time.Time) bool {
+	return t.Location() == time.UTC &&
+		t.Hour() == 0 &&
+		t.Minute() == 0 &&
+		t.Second() == 0 &&
+		t.Nanosecond() == 0
+}
+
 func goTypeName(v any) string {
-	switch v.(type) {
+	switch val := v.(type) {
 	case string:
 		return "string"
 	case []any:
 		return "list"
 	case time.Time:
+		if !isDateOnlyTime(val) {
+			return "datetime"
+		}
 		return "date"
 	case int:
 		return "int"

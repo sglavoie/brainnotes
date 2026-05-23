@@ -62,6 +62,27 @@ func TestLoad_NewRoutesParentTraversalRejected(t *testing.T) {
 	}
 }
 
+// TestLoad_NewRoutesWhitespaceTemplateNameRejected verifies route keys with
+// surrounding whitespace are rejected. Route keys are matched exactly against
+// the template name passed to `bn new`, so a key like " book " silently misses
+// the intended "book" template.
+func TestLoad_NewRoutesWhitespaceTemplateNameRejected(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\n\" book \" = \"References/Books\"\n")
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatalf("expected error for whitespace-padded template name in [new.routes]")
+	}
+	if !strings.Contains(err.Error(), "surrounding whitespace") {
+		t.Fatalf("error should mention surrounding whitespace: %v", err)
+	}
+}
+
 // TestLoad_PropertyListsTrimWhitespace verifies that whitespace around
 // property names in list_properties / wikilink_properties is stripped, so
 // `list_properties = [" tags "]` actually matches frontmatter key "tags"
@@ -160,6 +181,27 @@ func TestLoad_SchemaEmptyPropertyNameRejected(t *testing.T) {
 	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for empty schema property name")
+	}
+}
+
+// TestLoad_SchemaWhitespacePropertyNameRejected verifies quoted schema keys
+// with surrounding whitespace are rejected. Schema keys are matched exactly
+// against frontmatter keys, so accepting " status " would silently fail to
+// validate the user's intended "status" property.
+func TestLoad_SchemaWhitespacePropertyNameRejected(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[frontmatter.schema.\" status \"]\ntype = \"string\"\n")
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for whitespace-padded schema property name")
+	}
+	if !strings.Contains(err.Error(), "surrounding whitespace") {
+		t.Fatalf("error should mention surrounding whitespace: %v", err)
 	}
 }
 

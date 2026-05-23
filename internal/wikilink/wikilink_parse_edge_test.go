@@ -155,6 +155,41 @@ func TestParseDifferentFenceCharsDontClose(t *testing.T) {
 	}
 }
 
+func TestParseSkipsBlockquotedFencedCode(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "backtick fence",
+			in:   "[[Before]]\n> ```\n> [[Hidden]]\n> ```\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+		{
+			name: "nested blockquote tilde fence",
+			in:   "[[Before]]\n> > ~~~md\n> > [[Hidden]]\n> > ~~~\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+		{
+			name: "indented blockquote fence",
+			in:   "[[Before]]\n  > ```\n  > [[Hidden]]\n  > ```\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("targets = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParseTripleBracketsDoesNotConsumeBracket(t *testing.T) {
 	t.Parallel()
 	// `[[[Foo]]]` is a literal `[` followed by a `[[Foo]]` wikilink and a

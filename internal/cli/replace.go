@@ -18,24 +18,16 @@ import (
 // note-args / find-flags combination.
 var queryFlagNames = []string{
 	"tag", "category", "status", "type", "has", "missing",
-	"age", "created", "folder", "orphan",
+	"age", "created", "folder", "orphan", "broken-links",
+	"min-backlinks", "max-backlinks", "min-links", "max-links",
+	"dead-end",
 }
 
 // NewReplaceCmd returns the `replace` subcommand. Exported for tests.
 func NewReplaceCmd() *cobra.Command {
-	var (
-		tags        []string
-		categories  []string
-		status      string
-		typeProp    string
-		hasProp     string
-		missingProp string
-		age         string
-		created     string
-		folder      string
-		orphan      bool
-		dryRun      bool
-	)
+	var dryRun bool
+
+	ff := new(findFlags)
 
 	cmd := &cobra.Command{
 		Use:   "replace <key> <from> <to> [notes...]",
@@ -99,23 +91,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 				return fmt.Errorf("replace: invalid <to>: %w", err)
 			}
 
-			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, query.Flags{
-				Tags:         tags,
-				Categories:   categories,
-				Status:       status,
-				Type:         typeProp,
-				Has:          hasProp,
-				Missing:      missingProp,
-				Age:          age,
-				Created:      created,
-				Folder:       folder,
-				Orphan:       orphan,
-				MinBacklinks: -1,
-				MaxBacklinks: -1,
-				MinLinks:     -1,
-				MaxLinks:     -1,
-				Root:         v.Root,
-			})
+			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, ff.toQueryFlags(v.Root, nil))
 			if err != nil {
 				return err
 			}
@@ -153,16 +129,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 	}
 
 	f := cmd.Flags()
-	f.StringSliceVar(&tags, "tag", nil, "filter by tag (repeatable; AND semantics)")
-	f.StringSliceVar(&categories, "category", nil, "filter by category target (repeatable; AND semantics)")
-	f.StringVar(&status, "status", "", "filter by status property")
-	f.StringVar(&typeProp, "type", "", "filter by type/kind property")
-	f.StringVar(&hasProp, "has", "", "require property present")
-	f.StringVar(&missingProp, "missing", "", "require property absent")
-	f.StringVar(&age, "age", "", "filter by 'last' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&created, "created", "", "filter by 'created' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&folder, "folder", "", "limit to a vault-relative folder (matches descendants)")
-	f.BoolVar(&orphan, "orphan", false, "only notes nothing in the vault links to")
+	ff.register(cmd)
 	f.BoolVar(&dryRun, "dry-run", false, "preview changes without writing")
 
 	return cmd
@@ -211,7 +178,7 @@ func collectReplaceCandidates(v *vault.Vault, cmd *cobra.Command, noteArgs []str
 	if err != nil {
 		return nil, err
 	}
-	if flags.Orphan {
+	if queryFlagsNeedGraph(flags) {
 		flags.Graph = query.BuildGraph(notes)
 	}
 	pred, err := query.FromFlags(flags)
@@ -226,6 +193,12 @@ func collectReplaceCandidates(v *vault.Vault, cmd *cobra.Command, noteArgs []str
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
+}
+
+func queryFlagsNeedGraph(flags query.Flags) bool {
+	return flags.Orphan || flags.BrokenLinks || flags.DeadEnd ||
+		flags.MinBacklinks >= 0 || flags.MaxBacklinks >= 0 ||
+		flags.MinLinks >= 0 || flags.MaxLinks >= 0
 }
 
 // applyReplace performs the swap on a single note. On dry-run it emits a diff

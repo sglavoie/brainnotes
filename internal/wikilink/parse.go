@@ -269,6 +269,16 @@ func startsWithIndentedCode(line string) bool {
 // fence character (“ ` “ or `~`), its length, and true. Up to 3 leading
 // spaces of indentation are tolerated per CommonMark.
 func isFenceOpener(line string) (byte, int, bool) {
+	if ch, n, ok := isFenceOpenerPlain(line); ok {
+		return ch, n, true
+	}
+	if stripped, ok := stripBlockquotePrefixes(line); ok {
+		return isFenceOpenerPlain(stripped)
+	}
+	return 0, 0, false
+}
+
+func isFenceOpenerPlain(line string) (byte, int, bool) {
 	i := 0
 	for i < 4 && i < len(line) && line[i] == ' ' {
 		i++
@@ -299,6 +309,16 @@ func isFenceOpener(line string) (byte, int, bool) {
 // repeated openLen times. A closer may not have a trailing info string — only
 // whitespace after the fence run.
 func isFenceCloser(line string, ch byte, openLen int) bool {
+	if isFenceCloserPlain(line, ch, openLen) {
+		return true
+	}
+	if stripped, ok := stripBlockquotePrefixes(line); ok {
+		return isFenceCloserPlain(stripped, ch, openLen)
+	}
+	return false
+}
+
+func isFenceCloserPlain(line string, ch byte, openLen int) bool {
 	i := 0
 	for i < 4 && i < len(line) && line[i] == ' ' {
 		i++
@@ -315,6 +335,27 @@ func isFenceCloser(line string, ch byte, openLen int) bool {
 	}
 	rest := line[i+n:]
 	return strings.TrimSpace(rest) == ""
+}
+
+// stripBlockquotePrefixes removes one or more leading CommonMark block quote
+// markers so fence detection also works for quoted fenced code blocks.
+func stripBlockquotePrefixes(line string) (string, bool) {
+	stripped := false
+	for {
+		i := 0
+		for i < 4 && i < len(line) && line[i] == ' ' {
+			i++
+		}
+		if i >= 4 || i >= len(line) || line[i] != '>' {
+			return line, stripped
+		}
+		i++
+		if i < len(line) && (line[i] == ' ' || line[i] == '\t') {
+			i++
+		}
+		line = line[i:]
+		stripped = true
+	}
 }
 
 // trimASCIISpace strips ASCII spaces and tabs from both ends of s. We avoid

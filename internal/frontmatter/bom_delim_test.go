@@ -19,6 +19,63 @@ func TestParseStripsUTF8BOM(t *testing.T) {
 	}
 }
 
+// A valid BOM-prefixed frontmatter document should keep the BOM when written
+// back. Parse needs to strip it for delimiter recognition, but dropping it on
+// Marshal changes the file encoding marker for an otherwise valid note.
+func TestMarshalPreservesUTF8BOMWithFrontmatter(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	in := append(bom, []byte("---\ntitle: BOM\n---\nbody\n")...)
+	doc, err := Parse(in)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if len(out) < len(bom) || string(out[:len(bom)]) != string(bom) {
+		t.Fatalf("Marshal dropped UTF-8 BOM: %q", out)
+	}
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse round-trip: %v", err)
+	}
+	out2, err := Marshal(doc2, nil)
+	if err != nil {
+		t.Fatalf("Marshal round-trip: %v", err)
+	}
+	if string(out2) != string(out) {
+		t.Fatalf("BOM round-trip not idempotent:\n%q\n%q", out, out2)
+	}
+}
+
+func TestMarshalPreservesUTF8BOMWhenFrontmatterBecomesEmpty(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	in := append(bom, []byte("---\ntitle: BOM\n---\n---\nbody: literal\n---\n")...)
+	doc, err := Parse(in)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	doc.Front.Unset("title")
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if len(out) < len(bom) || string(out[:len(bom)]) != string(bom) {
+		t.Fatalf("Marshal dropped UTF-8 BOM after emptying frontmatter: %q", out)
+	}
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse round-trip: %v", err)
+	}
+	if !doc2.Front.IsEmpty() {
+		t.Fatalf("guarded body delimiter was reinterpreted as frontmatter: %v", doc2.Front.Keys())
+	}
+	if doc2.Body != "---\nbody: literal\n---\n" {
+		t.Fatalf("body changed:\n got %q\nwant %q", doc2.Body, "---\nbody: literal\n---\n")
+	}
+}
+
 // A body-only note that starts with a UTF-8 BOM should keep its bytes
 // verbatim. BOM stripping is only part of recognising a real frontmatter
 // fence, not a general body normalisation step.

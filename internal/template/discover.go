@@ -120,6 +120,9 @@ func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
 	dir := filepath.Join(cfg.Vault, filepath.FromSlash(rel))
 	entries, err := os.ReadDir(dir)
 	if err == nil {
+		if err := checkDirCaseAmbiguity(cfg.Vault, rel); err != nil {
+			return "", nil, err
+		}
 		return dir, entries, nil
 	}
 	if !os.IsNotExist(err) {
@@ -139,6 +142,42 @@ func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
 		return "", nil, fmt.Errorf("template: read %q: %w", resolved, err)
 	}
 	return resolved, entries, nil
+}
+
+func checkDirCaseAmbiguity(root, rel string) error {
+	clean := path.Clean(strings.ReplaceAll(filepath.ToSlash(rel), `\`, `/`))
+	if clean == "." {
+		return nil
+	}
+
+	cur := root
+	for _, part := range strings.Split(filepath.ToSlash(clean), "/") {
+		if part == "" || part == "." {
+			continue
+		}
+		entries, err := os.ReadDir(cur)
+		if err != nil {
+			return nil
+		}
+		var matches []string
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			if strings.EqualFold(e.Name(), part) {
+				matches = append(matches, e.Name())
+			}
+		}
+		switch len(matches) {
+		case 0:
+			return nil
+		case 1:
+			cur = filepath.Join(cur, matches[0])
+		default:
+			return fmt.Errorf("%w: templates dir component %q matches %v in %s", ErrTemplateAmbiguous, part, matches, cur)
+		}
+	}
+	return nil
 }
 
 func normalizeDefaultExtension(ext string) string {

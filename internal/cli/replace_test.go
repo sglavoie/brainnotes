@@ -156,6 +156,46 @@ func TestReplace_ScopedByTagFilter(t *testing.T) {
 	}
 }
 
+func TestReplace_ScopedByGraphFilter(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"Alpha.md": "---\nstatus: wip\n---\nLinks to [[Beta]].\n",
+		"Beta.md":  "---\nstatus: wip\n---\nNo outgoing links.\n",
+	}
+	for rel, body := range files {
+		path := filepath.Join(root, rel)
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	cfgDir := t.TempDir()
+	cfgPath := filepath.Join(cfgDir, "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("BNOTES_CONFIG", cfgPath)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("BNOTES_VAULT", "")
+
+	out, err := runCLI(t, "", "replace", "status", "wip", "done", "--min-links", "1")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "replaced 1 file(s)") {
+		t.Fatalf("expected one replacement, got %q", out)
+	}
+
+	alpha := readNote(t, filepath.Join(root, "Alpha.md"))
+	if !strings.Contains(alpha, "status: done") {
+		t.Fatalf("Alpha should be updated:\n%s", alpha)
+	}
+	beta := readNote(t, filepath.Join(root, "Beta.md"))
+	if !strings.Contains(beta, "status: wip") {
+		t.Fatalf("Beta should be untouched:\n%s", beta)
+	}
+}
+
 func TestReplace_ScopedByExplicitNoteArgs(t *testing.T) {
 	root := buildReplaceFixture(t)
 	alpha := filepath.Join(root, "Areas/Alpha.md")

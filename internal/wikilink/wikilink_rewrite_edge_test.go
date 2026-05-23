@@ -515,3 +515,13 @@ func TestRewriteSkipsMultilineInlineCodeSpan(t *testing.T) {
 		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
 	}
 }
+
+func TestRewriteSkipsBlockquotedFencedCode(t *testing.T) {
+	t.Parallel()
+	in := "[[Foo]]\n> ```\n> [[Foo]]\n> ```\n[[Foo]]"
+	got := RewriteTitle(in, "Foo", "Bar")
+	want := "[[Bar]]\n> ```\n> [[Foo]]\n> ```\n[[Bar]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}

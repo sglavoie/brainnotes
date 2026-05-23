@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestReadOnlyCommandsRejectUnexpectedArgs(t *testing.T) {
@@ -121,5 +123,28 @@ func TestUnsetNullRequiresStdinNoteInput(t *testing.T) {
 	}
 	if got := readNote(t, notePath); got != before {
 		t.Fatalf("invalid --null invocation modified the note:\n%s", got)
+	}
+}
+
+func TestMutationCommandsExposeGraphFindFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  func() *cobra.Command
+	}{
+		{name: "replace", cmd: NewReplaceCmd},
+		{name: "repair", cmd: NewRepairCmd},
+		{name: "rename-key", cmd: NewRenameKeyCmd},
+	}
+	flagNames := []string{"broken-links", "min-backlinks", "max-backlinks", "min-links", "max-links", "dead-end"}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := tt.cmd()
+			for _, name := range flagNames {
+				if cmd.Flag(name) == nil {
+					t.Fatalf("expected %s to expose --%s", tt.name, name)
+				}
+			}
+		})
 	}
 }

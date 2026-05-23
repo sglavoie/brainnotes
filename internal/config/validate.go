@@ -34,6 +34,13 @@ func validate(cfg *Config) error {
 // cause `bn new` to write outside the configured root.
 func validateRoutes(cfg *Config) error {
 	for name, dest := range cfg.New.Routes {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == "" {
+			return fmt.Errorf("config: new.routes: template name must not be empty or whitespace")
+		}
+		if trimmedName != name {
+			return fmt.Errorf("config: new.routes[%q]: template name must not have surrounding whitespace", name)
+		}
 		trimmed := strings.TrimSpace(dest)
 		if trimmed == "" {
 			continue
@@ -77,8 +84,12 @@ var validSchemaTypes = map[string]bool{
 
 func validateSchema(cfg *Config) error {
 	for name, rule := range cfg.Frontmatter.Schema {
-		if strings.TrimSpace(name) == "" {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName == "" {
 			return fmt.Errorf("config: schema: property name must not be empty or whitespace")
+		}
+		if trimmedName != name {
+			return fmt.Errorf("config: schema: property %q: name must not have surrounding whitespace", name)
 		}
 		if rule.Type == "" {
 			return fmt.Errorf("config: schema: property %q: type is required", name)
