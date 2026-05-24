@@ -2,6 +2,7 @@ package wikilink
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -460,5 +461,310 @@ func TestParseInlineCodeSpanDoesNotCrossBlankLine(t *testing.T) {
 	want := []string{"Visible", "AlsoVisible"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestParseHandlesLongFences(t *testing.T) {
+	t.Parallel()
+	// A fence longer than 3 backticks/tildes is closed only by a run of equal
+	// or greater length. A shorter inner run must not terminate it.
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "10-backtick fence",
+			in:   "``````````\n[[Hidden]]\n``````````\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "opener 4 closer 5 (longer closer ok)",
+			in:   "````\n[[Hidden]]\n`````\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "opener 4 closer 3 (too short) then opener 4 closer 4",
+			in:   "````\n[[Hidden]]\n```\n[[StillHidden]]\n````\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "tilde long fence",
+			in:   "~~~~~\n[[Hidden]]\n~~~\n[[StillHidden]]\n~~~~~\n[[After]]",
+			want: []string{"After"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseMixedFenceCharsDoNotCloseEachOther(t *testing.T) {
+	t.Parallel()
+	// Backtick and tilde fences are independent — a tilde line cannot close a
+	// backtick fence and vice versa.
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "tilde does not close backticks",
+			in:   "```\n[[Hidden]]\n~~~\n[[StillHidden]]\n```\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "backtick does not close tildes",
+			in:   "~~~\n[[Hidden]]\n```\n[[StillHidden]]\n~~~\n[[After]]",
+			want: []string{"After"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseFenceInfoStringEdgeCases(t *testing.T) {
+	t.Parallel()
+	// Backtick fences with backticks in the info string are not valid fences;
+	// tilde fences allow backticks in the info string. Trailing-whitespace info
+	// strings are valid for both. Info strings containing wikilinks must not
+	// expose those wikilinks (the whole opener line is masked when it is a
+	// valid fence opener).
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "fence opener line with wikilink-shaped info string",
+			in:   "```[[InOpener]]\n[[Hidden]]\n```\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "tilde opener with backtick in info",
+			in:   "~~~ go`info\n[[Hidden]]\n~~~\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "opener with only trailing whitespace info",
+			in:   "```   \n[[Hidden]]\n```\n[[After]]",
+			want: []string{"After"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseFenceCloserIndentedUpToThreeSpaces(t *testing.T) {
+	t.Parallel()
+	// Per CommonMark, a fence closer may be indented up to 3 spaces. Four or
+	// more spaces of indentation make it part of the code, not a closer.
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "closer indented 2 spaces",
+			in:   "```\n[[Hidden]]\n  ```\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "closer indented 3 spaces",
+			in:   "```\n[[Hidden]]\n   ```\n[[After]]",
+			want: []string{"After"},
+		},
+		{
+			name: "closer indented 4 spaces is NOT a closer (still inside fence)",
+			in:   "```\n[[Hidden]]\n    ```\n[[StillHidden]]",
+			want: nil,
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if len(got) == 0 && len(tc.want) == 0 {
+				return
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseFenceContentContainsBlankLine(t *testing.T) {
+	t.Parallel()
+	// Blank lines inside a fenced block are still inside the block.
+	in := "```\n[[A]]\n\n[[B]]\n```\n[[After]]"
+	got := collectTargets(Parse(in))
+	want := []string{"After"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Parse(%q) = %v, want %v", in, got, want)
+	}
+}
+
+func TestParseStrayBacktickBeforeFence(t *testing.T) {
+	t.Parallel()
+	// An unmatched inline backtick on a preceding line must not prevent the
+	// next line's fence opener from being recognized. The fence opens normally
+	// and masks the inner wikilink.
+	in := "abc `\n```\n[[Hidden]]\n```\nafter [[Visible]]"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Parse(%q) = %v, want %v", in, got, want)
+	}
+}
+
+func TestParseInlineCodeAdjacentToWikilink(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "wikilink follows inline code with no space",
+			in:   "`code`[[Visible]]",
+			want: []string{"Visible"},
+		},
+		{
+			name: "wikilink precedes inline code with no space",
+			in:   "[[Visible]]`code`",
+			want: []string{"Visible"},
+		},
+		{
+			name: "back-to-back inline code spans",
+			in:   "`a``b` outside [[Visible]]",
+			want: []string{"Visible"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseTitleAccessorEdgeCases(t *testing.T) {
+	t.Parallel()
+	// The Title() helper returns the slice after the last `/` in Target, or
+	// the whole target when there is no slash. Pathological-looking targets
+	// must not panic and must produce a sensible last segment.
+	tests := []struct {
+		name      string
+		in        string
+		wantTitle string
+	}{
+		{"leading slash treated as bare path", "[[/Note]]", "/Note"},
+		{"double slash mid-path", "[[Folder//Sub]]", "Sub"},
+		{"unicode segment", "[[Refs/Café]]", "Café"},
+		{"dotted segment", "[[Refs/.foo]]", ".foo"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			links := Parse(tc.in)
+			if len(links) != 1 {
+				t.Fatalf("Parse(%q): got %d links, want 1", tc.in, len(links))
+			}
+			if links[0].Title() != tc.wantTitle {
+				t.Errorf("Title() = %q, want %q", links[0].Title(), tc.wantTitle)
+			}
+		})
+	}
+}
+
+func TestParseRecognizesCRLFFenceCloser(t *testing.T) {
+	t.Parallel()
+	// Fence open and close lines may carry CRLF terminators; the trailing \r
+	// must be stripped from each line before fence detection.
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "CRLF backtick fence",
+			in:   "[[Before]]\r\n```\r\n[[Hidden]]\r\n```\r\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+		{
+			name: "CRLF tilde fence",
+			in:   "[[Before]]\r\n~~~go\r\n[[Hidden]]\r\n~~~\r\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+		{
+			name: "CRLF long fence",
+			in:   "[[Before]]\r\n````\r\n```\r\n[[Hidden]]\r\n```\r\n````\r\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseDoesNotPanicOnExoticInputs(t *testing.T) {
+	t.Parallel()
+	// None of these should panic; behaviour is not asserted, only safety.
+	inputs := []string{
+		"",
+		"\x00",
+		"[[",
+		"]]",
+		"[[]]",
+		"[[Foo\x00Bar]]",
+		"\r\r\r",
+		"\n\n\n",
+		"```",
+		"~~~",
+		"> > > [[",
+		strings.Repeat("[[Foo]] ", 100),
+	}
+	for _, in := range inputs {
+		_ = Parse(in)
+		_ = Rewrite(in, func(Link) (string, bool) { return "X", true })
+		_ = RewriteTitle(in, "Foo", "Bar")
+		_ = RewriteMove(in, "A/B", "C/D")
 	}
 }

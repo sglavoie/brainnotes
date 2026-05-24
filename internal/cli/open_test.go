@@ -260,6 +260,64 @@ func TestOpen_ConfigEditorTakesPriority(t *testing.T) {
 	}
 }
 
+// TestOpen_NullWithoutPrintIsRejected verifies that `bn open --null` without
+// `--print` produces an error rather than silently dropping the flag. The
+// editor handoff is meaningless to NUL-terminate; pairing the flags is almost
+// certainly a mistake.
+func TestOpen_NullWithoutPrintIsRejected(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	pickerCalled := false
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		pickerCalled = true
+		return []string{filepath.Join(vaultRoot, "Apple.md")}, nil
+	}
+	openExec = func(editor, file string) error { return nil }
+
+	_, _, err := runOpen(t, vaultRoot, "open", "--null")
+	if err == nil {
+		t.Fatalf("expected error for --null without --print")
+	}
+	if !strings.Contains(err.Error(), "--null requires --print") {
+		t.Fatalf("expected error to mention '--null requires --print'; got %v", err)
+	}
+	if pickerCalled {
+		t.Fatalf("picker should not run when flag validation fails")
+	}
+}
+
+// TestOpen_PrintNullSeparator verifies that --print --null emits the selected
+// path terminated with a NUL byte instead of a newline. This composes with
+// `xargs -0` and other NUL-aware tools.
+func TestOpen_PrintNullSeparator(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+	want := filepath.Join(vaultRoot, "Apple.md")
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return []string{want}, nil
+	}
+	openExec = func(editor, file string) error {
+		t.Fatalf("editor should not run with --print")
+		return nil
+	}
+
+	stdout, _, err := runOpen(t, vaultRoot, "open", "--print", "--null")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if stdout != want+"\x00" {
+		t.Fatalf("stdout: got %q, want %q", stdout, want+"\x00")
+	}
+}
+
 func TestOpen_EnvEditorUsedWhenConfigEmpty(t *testing.T) {
 	isolateBnEnv(t)
 	vaultRoot := buildOpenVault(t)

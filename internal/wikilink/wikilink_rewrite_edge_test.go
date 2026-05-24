@@ -525,3 +525,122 @@ func TestRewriteSkipsBlockquotedFencedCode(t *testing.T) {
 		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
 	}
 }
+
+func TestRewriteTitleIdentityRenameIsNoOp(t *testing.T) {
+	t.Parallel()
+	// A rename whose old and new title produce the same formatted link must
+	// not modify the source text — including not normalizing whitespace inside
+	// already-padded links. Without the no-op guard, `bn rename Foo Foo` would
+	// rewrite `[[ Foo ]]` to `[[Foo]]` and force a meaningless file change.
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"padded bare", "see [[ Foo ]] here"},
+		{"padded with alias", "[[ Foo | the alias ]]"},
+		{"padded with heading", "[[ Foo # Section ]]"},
+		{"padded folder prefix", "[[ Refs/Foo ]]"},
+		{"already canonical", "[[Foo]] and [[Refs/Foo#H|a]]"},
+		{"md extension preserved", "[[Foo.md]] and [[Refs/Foo.md]]"},
+		{"mixed with non-match", "[[ Foo ]] and [[Other]]"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteTitle(tc.in, "Foo", "Foo")
+			if got != tc.in {
+				t.Fatalf("RewriteTitle identity\n  got:  %q\n  want: %q (unchanged)", got, tc.in)
+			}
+		})
+	}
+}
+
+func TestRewriteMoveIdentityIsNoOp(t *testing.T) {
+	t.Parallel()
+	// Same invariant as RewriteTitle: when oldPath and newPath produce an
+	// identical link string, leave the document untouched. Whitespace-only
+	// edits inside `[[ ... ]]` are not user-visible changes.
+	tests := []struct {
+		name string
+		in   string
+	}{
+		{"padded folder/title", "[[ Books/Foo ]]"},
+		{"padded with heading", "[[ Books/Foo # Section ]]"},
+		{"padded with alias", "[[ Books/Foo | display ]]"},
+		{"already canonical", "[[Books/Foo]] and [[Books/Foo#H|a]]"},
+		{"md extension preserved", "[[Books/Foo.md]]"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteMove(tc.in, "Books/Foo", "Books/Foo")
+			if got != tc.in {
+				t.Fatalf("RewriteMove identity\n  got:  %q\n  want: %q (unchanged)", got, tc.in)
+			}
+		})
+	}
+}
+
+func TestRewriteTitleCaseOnlyChangeStillApplies(t *testing.T) {
+	t.Parallel()
+	// Case-only renames are NOT identity — even though the link normalizes
+	// whitespace, the rewritten target's spelling differs, so the change must
+	// be applied.
+	in := "[[ Foo ]] and [[Refs/foo]]"
+	got := RewriteTitle(in, "Foo", "foo")
+	want := "[[foo]] and [[Refs/foo]]"
+	if got != want {
+		t.Fatalf("RewriteTitle case-only\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
+func TestRewriteTitleSubstringTitleNotMatched(t *testing.T) {
+	t.Parallel()
+	// `[[FooBar]]` must NOT be rewritten when renaming `Foo`. Title comparison
+	// uses EqualFold on the whole base, not substring matching.
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "longer title not matched",
+			in:   "[[FooBar]] [[Foo]] [[BarFoo]]",
+			want: "[[FooBar]] [[NewFoo]] [[BarFoo]]",
+		},
+		{
+			name: "folder-prefixed longer title not matched",
+			in:   "[[Refs/FooBar]] [[Refs/Foo]]",
+			want: "[[Refs/FooBar]] [[Refs/NewFoo]]",
+		},
+		{
+			name: "case-insensitive substring not matched",
+			in:   "[[fooBar]] [[FOO]]",
+			want: "[[fooBar]] [[NewFoo]]",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteTitle(tc.in, "Foo", "NewFoo")
+			if got != tc.want {
+				t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRewriteMoveSubstringPathNotMatched(t *testing.T) {
+	t.Parallel()
+	// RewriteMove must not match path prefixes — `[[Books/FooBar]]` is not
+	// `Books/Foo`, even though one is a prefix of the other.
+	in := "[[Books/Foo]] [[Books/FooBar]] [[Books/Foo/Sub]]"
+	got := RewriteMove(in, "Books/Foo", "Refs/Foo")
+	want := "[[Refs/Foo]] [[Books/FooBar]] [[Books/Foo/Sub]]"
+	if got != want {
+		t.Fatalf("RewriteMove\n  got:  %q\n  want: %q", got, want)
+	}
+}

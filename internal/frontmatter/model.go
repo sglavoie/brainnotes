@@ -171,12 +171,17 @@ func unwrapWikilink(s string) string {
 	return s
 }
 
-// wrapWikilink returns `[[s]]` unless s is already wrapped or empty.
+// wrapWikilink returns `[[s]]` unless s is already wrapped, partially wrapped,
+// empty, or otherwise contains `[[` / `]]` brackets anywhere. The defensive
+// check guards against producing visibly malformed values like `[[[[X]]` for a
+// stored value of `[[X` (prefix only) or `[[X]] B` (wrapped + trailing text):
+// in either case the safer behaviour is to leave the value untouched rather
+// than emit triple/quadruple-bracket strings that no consumer can parse.
 func wrapWikilink(s string) string {
 	if s == "" {
 		return s
 	}
-	if strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]") {
+	if strings.Contains(s, "[[") || strings.Contains(s, "]]") {
 		return s
 	}
 	return "[[" + s + "]]"

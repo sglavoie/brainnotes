@@ -37,6 +37,9 @@ func NewOpenCmd() *cobra.Command {
 			if cfg == nil {
 				return errors.New("open: no config in context")
 			}
+			// --null only changes the separator on the printed path; pairing it
+			// with the editor handoff is meaningless and almost certainly a flag
+			// mistake. Reject upfront rather than silently dropping it.
 			if nullSep && !printOnly {
 				return errors.New("open: --null requires --print")
 			}

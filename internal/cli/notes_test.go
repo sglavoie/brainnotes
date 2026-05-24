@@ -87,6 +87,75 @@ func TestReadStdinPaths_RelativePathNullSep(t *testing.T) {
 	}
 }
 
+// TestResolveNoteInputs_DashMixedWithOtherArgs verifies that passing '-' as
+// one of several args is rejected with a clear error. The '-' sentinel is only
+// valid as the sole positional arg (it signals "read paths from stdin"); any
+// other usage is almost certainly a mistake.
+func TestResolveNoteInputs_DashMixedWithOtherArgs(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := resolveNoteInputs(root, []string{filepath.Join(root, "a.md"), "-"}, strings.NewReader(""), false)
+	if err == nil {
+		t.Fatal("expected error for '-' mixed with other args")
+	}
+	if !strings.Contains(err.Error(), "'-' may only be used as the sole note argument") {
+		t.Fatalf("expected '-' usage error, got %v", err)
+	}
+}
+
+// TestResolveNoteInputs_EmptyArg rejects an empty-string positional arg with a
+// clear message rather than letting it fall through to a confusing glob or
+// stat error downstream.
+func TestResolveNoteInputs_EmptyArg(t *testing.T) {
+	root := t.TempDir()
+	_, err := resolveNoteInputs(root, []string{""}, nil, false)
+	if err == nil {
+		t.Fatal("expected error for empty arg")
+	}
+	if !strings.Contains(err.Error(), "empty note path argument") {
+		t.Fatalf("expected empty-arg error, got %v", err)
+	}
+}
+
+// TestResolveNoteInputs_GlobNoMatch verifies that a glob pattern with no
+// filesystem matches returns an error (rather than silently proceeding with
+// zero paths, which would make `bn set notes/*.md key=v` look like it
+// succeeded even though it had no effect).
+func TestResolveNoteInputs_GlobNoMatch(t *testing.T) {
+	root := t.TempDir()
+	_, err := resolveNoteInputs(root, []string{"missing/*.md"}, nil, false)
+	if err == nil {
+		t.Fatal("expected error for glob with no matches")
+	}
+	if !strings.Contains(err.Error(), "no matches for glob") {
+		t.Fatalf("expected glob-no-matches error, got %v", err)
+	}
+}
+
+// TestResolveNoteInputs_DedupePreservesOrder verifies that duplicate args (the
+// same file specified twice, or via a literal-and-glob overlap) collapse to a
+// single entry while preserving first-seen order.
+func TestResolveNoteInputs_DedupePreservesOrder(t *testing.T) {
+	root := t.TempDir()
+	a := filepath.Join(root, "a.md")
+	b := filepath.Join(root, "b.md")
+	for _, p := range []string{a, b} {
+		if err := os.WriteFile(p, []byte("body"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := resolveNoteInputs(root, []string{a, b, a}, nil, false)
+	if err != nil {
+		t.Fatalf("resolveNoteInputs: %v", err)
+	}
+	if len(got) != 2 || got[0] != a || got[1] != b {
+		t.Fatalf("expected [a, b], got %v", got)
+	}
+}
+
 // TestReadStdinPaths_LineSeparatedTrimsCRLF verifies that newline-separated
 // stdin input still strips trailing \r so a Windows-piped path resolves.
 func TestReadStdinPaths_LineSeparatedTrimsCRLF(t *testing.T) {

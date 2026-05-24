@@ -121,6 +121,11 @@ func defaultFn(d, v string) string {
 // (\r/\n) — are sanitized from the inner content before wrapping. Without
 // this, `wikilink "Foo]]Bar"` would emit `[[Foo]]Bar]]`, which Obsidian
 // parses as a `[[Foo]]` link followed by literal `Bar]]` text.
+//
+// Leading and trailing whitespace on the inner content of a freshly-wrapped
+// value is trimmed: Obsidian treats whitespace inside the brackets as part of
+// the link target, so `wikilink " Books "` must emit `[[Books]]` rather than
+// `[[ Books ]]` (which would not resolve to the "Books" note).
 func wikilinkFn(s string) string {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
@@ -136,7 +141,10 @@ func wikilinkFn(s string) string {
 			return s
 		}
 	}
-	return "[[" + sanitizeWikilinkInner(s) + "]]"
+	// Sanitize first (so masked-bracket adjacent whitespace also collapses),
+	// then trim leading/trailing whitespace from the inner content.
+	inner := strings.TrimSpace(sanitizeWikilinkInner(s))
+	return "[[" + inner + "]]"
 }
 
 // sanitizeWikilinkInner removes or replaces characters in s that would break

@@ -703,3 +703,60 @@ func TestSaveWritesNewFileMode(t *testing.T) {
 		t.Errorf("new file mode: got %o, want %o", got, 0o644)
 	}
 }
+
+// TestNoteFolderRejectsEscape verifies that Folder returns an error when the
+// note's path is outside the supplied root. filepath.Rel happily emits a
+// `../...` traversal in that case, and without this guard the result would
+// be treated as a vault-relative folder by callers — silently leaking an
+// escape path past the in-vault containment contract.
+func TestNoteFolderRejectsEscape(t *testing.T) {
+	dir := t.TempDir()
+	// A path that is a sibling of root, not inside it.
+	outside := filepath.Join(dir, "elsewhere", "note.md")
+	root := filepath.Join(dir, "vault")
+	n := &Note{Path: outside}
+	_, err := n.Folder(root)
+	if err == nil {
+		t.Fatal("Folder should reject path outside root")
+	}
+	if !strings.Contains(err.Error(), "outside root") {
+		t.Errorf("error should mention 'outside root': %v", err)
+	}
+}
+
+// TestNoteFolderInsideRootStillWorks ensures the new containment check did not
+// regress the normal case: a note whose path is a child of root must still
+// return its slash-separated vault-relative folder.
+func TestNoteFolderInsideRootStillWorks(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"Sub/Inner/x.md": "# x\n",
+	})
+	n, err := v.ResolveByTitle("x", "Sub/Inner")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	folder, err := n.Folder(v.Root)
+	if err != nil {
+		t.Fatalf("Folder: %v", err)
+	}
+	if folder != "Sub/Inner" {
+		t.Errorf("got %q, want %q", folder, "Sub/Inner")
+	}
+}
+
+// TestOpenTrimsWhitespaceVaultPath verifies that a vault path consisting of
+// whitespace is rejected the same as the empty string. Without trimming, the
+// caller would see a confusing "no such file" pointing at a literal-space
+// directory under the process cwd (filepath.Abs(" ") => "<cwd>/ ").
+func TestOpenTrimsWhitespaceVaultPath(t *testing.T) {
+	for _, p := range []string{" ", "\t", "  \n"} {
+		_, err := Open(&config.Config{Vault: p})
+		if err == nil {
+			t.Errorf("Open(%q) should error", p)
+			continue
+		}
+		if !strings.Contains(err.Error(), "empty vault path") {
+			t.Errorf("Open(%q) error should mention 'empty vault path': %v", p, err)
+		}
+	}
+}

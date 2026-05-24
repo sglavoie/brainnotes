@@ -277,6 +277,53 @@ func TestRenderEnvMissing(t *testing.T) {
 	}
 }
 
+func TestRenderUndefinedField(t *testing.T) {
+	t.Parallel()
+	// Referencing a non-existent Context field must surface a clear execute
+	// error rather than panic or silently render the literal Go zero form.
+	ctx := NewContext("x", "", "/v", nil, nil)
+	_, err := Render(`{{ .NoSuchField }}`, ctx)
+	if err == nil {
+		t.Fatal("expected execute error for unknown field")
+	}
+	if !strings.Contains(err.Error(), "execute") {
+		t.Fatalf("expected execute error, got %v", err)
+	}
+}
+
+func TestRenderDateFormatBadLayout(t *testing.T) {
+	t.Parallel()
+	// time.Format does not error on a layout containing no reference tokens;
+	// it just emits the literal layout. Pin this behavior so callers know
+	// they get the raw layout back rather than a render failure.
+	clk := FixedClock{T: time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)}
+	ctx := NewContext("x", "", "/v", nil, clk)
+	got, err := Render(`{{dateFormat "qwerty" now}}`, ctx)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got != "qwerty" {
+		t.Fatalf("got %q, want %q", got, "qwerty")
+	}
+}
+
+func TestRenderVarsEqualsInValue(t *testing.T) {
+	t.Parallel()
+	// .Vars values containing `=` must be returned verbatim; the CLI parses
+	// `--var key=value` and is expected to split on the first `=` only. This
+	// test pins the render-side behavior: whatever was stored is what comes
+	// out, including `=`-containing values.
+	vars := map[string]string{"q": "a=b=c"}
+	ctx := NewContext("x", "", "/v", vars, nil)
+	got, err := Render(`{{ .Vars.q }}`, ctx)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if got != "a=b=c" {
+		t.Fatalf("got %q, want %q", got, "a=b=c")
+	}
+}
+
 func TestRenderUnknownFunction(t *testing.T) {
 	t.Parallel()
 	// Referencing a non-existent helper must produce a parse error.
@@ -399,6 +446,19 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		// Leading or trailing `]]` alone.
 		{"]]", "[[]]"},
 		{"[[Foo", "[[Foo]]"},
+		// Surrounding whitespace on a non-wrapped value must be trimmed —
+		// Obsidian treats whitespace inside [[ ]] as part of the link target,
+		// so "[[  Books  ]]" would not resolve to the "Books" note.
+		{"  Books  ", "[[Books]]"},
+		{"Books   ", "[[Books]]"},
+		{"   Books", "[[Books]]"},
+		{"\tBooks\t", "[[Books]]"},
+		// Sanitization of brackets followed by trimming: leading/trailing
+		// brackets that get stripped leave whitespace that must also go.
+		{" [Foo] ", "[[Foo]]"},
+		// Newline-bounded value: sanitize newlines to space, then trim.
+		{"\nBooks\n", "[[Books]]"},
+		{"Foo\nBar\n", "[[Foo Bar]]"},
 	}
 	ctx := NewContext("x", "", "/v", nil, FixedClock{T: time.Unix(0, 0).UTC()})
 	for _, c := range cases {

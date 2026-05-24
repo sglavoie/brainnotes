@@ -229,3 +229,223 @@ func TestMissingTrueForUnreadableNote(t *testing.T) {
 		t.Errorf("Missing(anything) should be true for an unreadable note")
 	}
 }
+
+// TestTagPredicateListContainingOnlyNull pins down the behaviour of a tags list
+// whose only entry is YAML null (`tags: [~]`). stringifyTag(nil) returns the
+// empty string, so the loop compares "" to the (non-empty) query and returns
+// false. A `Tag("")` call (which FromFlags filters out before it reaches the
+// predicate) would technically match, but the FromFlags guard makes that
+// unreachable through normal use — this test pins the predicate-level
+// behaviour to guard against regressions in stringifyTag's nil handling.
+func TestTagPredicateListContainingOnlyNull(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags:\n  - ~\n---\nbody\n",
+	})
+	if Tag("foo")(notes["a.md"]) {
+		t.Errorf("Tag(foo) should not match a tags list containing only YAML null")
+	}
+	if Tag("null")(notes["a.md"]) {
+		t.Errorf("Tag(null) should not match a YAML null tag (stringifyTag emits empty string, not \"null\")")
+	}
+}
+
+// TestTagPredicateListMixedWithNull verifies that a string entry sitting next
+// to a null entry in the same list still matches. Without correct handling of
+// the nil branch in stringifyTag, the loop could panic or miss the string item.
+func TestTagPredicateListMixedWithNull(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags:\n  - ~\n  - foo\n---\nbody\n",
+	})
+	if !Tag("foo")(notes["a.md"]) {
+		t.Errorf("Tag(foo) should match a tags list containing [null, foo]")
+	}
+}
+
+// TestCategoryPredicateNonStringNonListScalar verifies that a `categories`
+// frontmatter value that is neither a string nor a list (e.g. an int from a
+// typo or mis-coercion) is treated as absent rather than producing a match or
+// a panic. GetWikilinkList returns (nil, false) for non-string non-list types;
+// the predicate must propagate that as a non-match.
+func TestCategoryPredicateNonStringNonListScalar(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"int.md":  "---\ncategories: 5\n---\nbody\n",
+		"bool.md": "---\ncategories: true\n---\nbody\n",
+	})
+	if Category("5")(notes["int.md"]) {
+		t.Errorf("Category(5) should not match a numeric scalar categories value")
+	}
+	if Category("true")(notes["bool.md"]) {
+		t.Errorf("Category(true) should not match a boolean scalar categories value")
+	}
+}
+
+// TestFolderPredicateRootNoteWithFolderFilter verifies that a note sitting at
+// the vault root (Folder() returns "") is correctly rejected when the folder
+// filter is non-empty. Before the fix to this audit's predecessors, an empty
+// `nf` could match a non-empty `want` because of a bad HasPrefix call.
+func TestFolderPredicateRootNoteWithFolderFilter(t *testing.T) {
+	v, notes := newVault(t, map[string]string{
+		"root.md":     "# r\n",
+		"People/a.md": "# a\n",
+	})
+	if Folder("People", v.Root)(notes["root.md"]) {
+		t.Errorf("Folder(People) should not match a note at the vault root")
+	}
+	// And the inverse: an empty-folder filter matches the root note.
+	if !Folder("", v.Root)(notes["root.md"]) {
+		t.Errorf("Folder(\"\") should match the root note (vacuous filter)")
+	}
+}
+
+// TestAgeEqualSubDayDuration pins down the documented day-granularity of the
+// `=` operator: a sub-day duration like `=12h` truncates to 0 days, so it
+// behaves as `=0d` (matches today). The doc comment says "note's age in days
+// equals dur in days" and gives `=0d → today` as the canonical example; this
+// test asserts the truncation direction.
+func TestAgeEqualSubDayDuration(t *testing.T) {
+	today := time.Now().Format("2006-01-02")
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	_, notes := newVault(t, map[string]string{
+		"today.md":     "---\ncreated: " + today + "\n---\n",
+		"yesterday.md": "---\ncreated: " + yesterday + "\n---\n",
+	})
+	// 12h truncates to 0 days → equivalent to =0d (today).
+	if !Age("=", 12*time.Hour, "created")(notes["today.md"]) {
+		t.Errorf("=12h should match today (12h truncates to 0d)")
+	}
+	if Age("=", 12*time.Hour, "created")(notes["yesterday.md"]) {
+		t.Errorf("=12h should not match yesterday")
+	}
+	// 25h truncates to 1 day → equivalent to =1d (yesterday).
+	if !Age("=", 25*time.Hour, "created")(notes["yesterday.md"]) {
+		t.Errorf("=25h should match yesterday (25h truncates to 1d)")
+	}
+	if Age("=", 25*time.Hour, "created")(notes["today.md"]) {
+		t.Errorf("=25h should not match today")
+	}
+}
+
+// TestAgePredicateMonthBoundary verifies that the `=` operator's calendar-day
+// math correctly walks across month boundaries (e.g. =1d on March 1 matches a
+// note dated Feb 28 or Feb 29). time.Time.AddDate handles this automatically;
+// this test pins down the integration so a future refactor of equalDayAge that
+// reinvented the math would not silently break.
+func TestAgePredicateMonthBoundary(t *testing.T) {
+	// Pick a known month-boundary date: yesterday from "today" reliably
+	// crosses a month or year boundary one day per month, but on most days
+	// it's still the same month. Rather than fix the date, we verify the
+	// invariant: =1d always matches the date that is "yesterday" relative to
+	// now, regardless of which month/year that lands on.
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	_, notes := newVault(t, map[string]string{
+		"y.md": "---\ncreated: " + yesterday + "\n---\n",
+	})
+	if !Age("=", 24*time.Hour, "created")(notes["y.md"]) {
+		t.Errorf("=1d should match a note dated yesterday, regardless of month boundary")
+	}
+}
+
+// TestOrphanPredicateGraphMissingNoteEntry verifies that Orphan returns true
+// when the note's title key has no Backward entries (the typical orphan
+// scenario). This is the positive case for Orphan and pins down that an empty
+// BackLinks list correctly produces "orphan = true".
+func TestOrphanPredicateGraphMissingNoteEntry(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Alone.md": "---\n---\nNo links anywhere.\n",
+	})
+	all := []*vault.Note{notes["Alone.md"]}
+	g := BuildGraph(all)
+	if !Orphan(g)(notes["Alone.md"]) {
+		t.Errorf("Orphan should match a note with no inbound links")
+	}
+}
+
+// TestStringifyTagRFC3339Timestamp pins down the RFC3339 path of stringifyTag
+// (non-bare YAML timestamps with a time-of-day component). A note whose tags
+// list includes a fully-qualified timestamp should be queryable via the same
+// RFC3339 string the user would see if they dumped the frontmatter.
+func TestStringifyTagRFC3339Timestamp(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags:\n  - 2026-05-19T10:00:00Z\n---\nbody\n",
+	})
+	if !Tag("2026-05-19T10:00:00Z")(notes["a.md"]) {
+		t.Errorf("Tag should match a YAML timestamp tag via its RFC3339 form")
+	}
+	// The bare-date form should NOT match a timestamp tag because the
+	// rendering paths diverge (RFC3339 vs date-only).
+	if Tag("2026-05-19")(notes["a.md"]) {
+		t.Errorf("Tag with bare-date form should not match a YAML timestamp tag")
+	}
+}
+
+// TestParseAgeRejectsEmptyValue verifies that an age expression with no value
+// (just an operator and a unit, e.g. ">d") is rejected. Without this guard,
+// strconv.Atoi("") would surface a confusing error to the user.
+func TestParseAgeRejectsEmptyValue(t *testing.T) {
+	for _, raw := range []string{">d", "<s", "=h", ">m"} {
+		if _, _, err := ParseAge(raw); err == nil {
+			t.Errorf("ParseAge(%q) should error: empty numeric value", raw)
+		}
+	}
+}
+
+// TestParseAgeRejectsMissingUnit verifies that an age expression with no unit
+// (e.g. ">30") is rejected. Without this guard, the predicate would treat the
+// trailing digit as the unit and fail with a confusing error.
+func TestParseAgeRejectsMissingUnit(t *testing.T) {
+	for _, raw := range []string{">30", "<7", "=0"} {
+		if _, _, err := ParseAge(raw); err == nil {
+			t.Errorf("ParseAge(%q) should error: missing unit", raw)
+		}
+	}
+}
+
+// TestFromFlagsAgeAndCreatedComposeOnDifferentFields verifies that --age and
+// --created produce predicates over different frontmatter keys (`last` vs
+// `created`) so they compose correctly in an AND query. A note with the right
+// `created` but missing `last` should not match a combined query.
+func TestFromFlagsAgeAndCreatedComposeOnDifferentFields(t *testing.T) {
+	recent := time.Now().AddDate(0, 0, -2).Format("2006-01-02")
+	_, notes := newVault(t, map[string]string{
+		"both.md":         "---\ncreated: " + recent + "\nlast: " + recent + "\n---\n",
+		"created-only.md": "---\ncreated: " + recent + "\n---\n",
+	})
+	pred, err := FromFlags(Flags{
+		Age:          "<30d",
+		Created:      "<30d",
+		MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1,
+	})
+	if err != nil {
+		t.Fatalf("FromFlags: %v", err)
+	}
+	if !pred(notes["both.md"]) {
+		t.Errorf("a note with both `last` and `created` recent should match --age<30d AND --created<30d")
+	}
+	if pred(notes["created-only.md"]) {
+		t.Errorf("a note missing `last` should not match --age<30d (which queries `last`) even if `created` is recent")
+	}
+}
+
+// TestBuildGraphCaseDifferingTitlesShareKey documents the behaviour when two
+// notes with case-differing filenames (e.g. "Foo.md" and "foo.md") would
+// produce the same lowercased title key. The graph keys by lowercased stem,
+// so the second note's entry clobbers the first in Titles/PathsByTitle.
+// In practice case-insensitive filesystems prevent this, but this test pins
+// the contract for case-sensitive filesystems (e.g. Linux): the latter note
+// wins, and consumers must accept a single PathsByTitle entry per key.
+func TestBuildGraphCaseDifferingTitlesShareKey(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Foo.md":     "---\n---\nbody\n",
+		"sub/foo.md": "---\n---\nbody\n",
+	})
+	all := []*vault.Note{notes["Foo.md"], notes["sub/foo.md"]}
+	g := BuildGraph(all)
+	// Exactly one entry for the shared key.
+	if _, ok := g.Titles["foo"]; !ok {
+		t.Errorf("expected 'foo' in Titles when two notes share the lowercased stem")
+	}
+	// PathsByTitle holds a single path (the last one inserted wins).
+	if p := g.PathsByTitle["foo"]; p == "" {
+		t.Errorf("PathsByTitle[foo] should be non-empty; got empty")
+	}
+}

@@ -113,6 +113,14 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 	if oldBase == "" {
 		return text
 	}
+	// A true no-op rename (`bn rename Foo Foo`) must leave the document
+	// untouched, including any whitespace padding inside the brackets. The
+	// comparison is case-sensitive so a case-only change (`Foo` -> `foo`)
+	// still applies — that IS a real rename even though it folds to the same
+	// match key.
+	if oldBase == newBase {
+		return text
+	}
 	return Rewrite(text, func(l Link) (string, bool) {
 		linkTitle := l.Title()
 		linkBase, ext := splitMDExt(linkTitle)
@@ -141,6 +149,11 @@ func RewriteMove(text, oldPath, newPath string) string {
 	oldBase, _ := splitMDExt(oldPath)
 	newBase, _ := splitMDExt(newPath)
 	if oldBase == "" {
+		return text
+	}
+	// True no-op move: leave the document untouched. See RewriteTitle for
+	// the rationale. A case-only path change still applies.
+	if oldBase == newBase {
 		return text
 	}
 	return Rewrite(text, func(l Link) (string, bool) {

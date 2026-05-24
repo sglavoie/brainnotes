@@ -97,6 +97,15 @@ func validateSchema(cfg *Config) error {
 		if !validSchemaTypes[rule.Type] {
 			return fmt.Errorf("config: schema: property %q: unknown type %q", name, rule.Type)
 		}
+		// Reject empty / whitespace-only entries inside `allowed` — they
+		// would silently let an empty (or pure-whitespace) value pass the
+		// allowed-values check at lint time, defeating the intent of the
+		// constraint.
+		for i, v := range rule.Allowed {
+			if strings.TrimSpace(v) == "" {
+				return fmt.Errorf("config: schema: property %q: allowed[%d] must not be empty or whitespace", name, i)
+			}
+		}
 	}
 	return nil
 }
