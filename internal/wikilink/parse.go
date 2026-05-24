@@ -142,6 +142,7 @@ func buildCodeMask(s string) []byteRange {
 		fenceOpen      bool
 		fenceChar      byte
 		fenceLen       int
+		fenceQuoted    bool // true when the opener line was inside a blockquote
 		inIndentedCode bool
 		prevBlank      = true // treat document start as following a blank line
 		inlineStart    = -1
@@ -164,19 +165,20 @@ func buildCodeMask(s string) []byteRange {
 
 		if fenceOpen {
 			ranges = append(ranges, byteRange{ln.start, ln.end})
-			if isFenceCloser(text, fenceChar, fenceLen) {
+			if isFenceCloser(text, fenceChar, fenceLen, fenceQuoted) {
 				fenceOpen = false
 			}
 			prevBlank = false
 			continue
 		}
 
-		if ch, n, ok := isFenceOpener(text); ok {
+		if ch, n, quoted, ok := isFenceOpener(text); ok {
 			flushInline()
 			ranges = append(ranges, byteRange{ln.start, ln.end})
 			fenceOpen = true
 			fenceChar = ch
 			fenceLen = n
+			fenceQuoted = quoted
 			inIndentedCode = false
 			prevBlank = false
 			continue
@@ -266,16 +268,18 @@ func startsWithIndentedCode(line string) bool {
 }
 
 // isFenceOpener reports whether line opens a fenced code block. It returns the
-// fence character (“ ` “ or `~`), its length, and true. Up to 3 leading
-// spaces of indentation are tolerated per CommonMark.
-func isFenceOpener(line string) (byte, int, bool) {
+// fence character (“ ` “ or `~`), its length, a flag indicating whether the
+// opener appeared inside a blockquote, and true. Up to 3 leading spaces of
+// indentation are tolerated per CommonMark.
+func isFenceOpener(line string) (byte, int, bool, bool) {
 	if ch, n, ok := isFenceOpenerPlain(line); ok {
-		return ch, n, true
+		return ch, n, false, true
 	}
 	if stripped, ok := stripBlockquotePrefixes(line); ok {
-		return isFenceOpenerPlain(stripped)
+		ch, n, ok2 := isFenceOpenerPlain(stripped)
+		return ch, n, ok2, ok2
 	}
-	return 0, 0, false
+	return 0, 0, false, false
 }
 
 func isFenceOpenerPlain(line string) (byte, int, bool) {
@@ -307,10 +311,18 @@ func isFenceOpenerPlain(line string) (byte, int, bool) {
 
 // isFenceCloser reports whether line closes a fenced block opened with ch
 // repeated openLen times. A closer may not have a trailing info string — only
-// whitespace after the fence run.
-func isFenceCloser(line string, ch byte, openLen int) bool {
+// whitespace after the fence run. When openerQuoted is true the opener appeared
+// inside a blockquote, in which case either a plain or blockquote-prefixed
+// closer is accepted (lazy continuation / block-quote termination is treated
+// conservatively). When openerQuoted is false the opener was unquoted, and
+// only a plain closer is accepted — a blockquote-prefixed `> ```` does not
+// terminate a fence opened outside the quote per CommonMark.
+func isFenceCloser(line string, ch byte, openLen int, openerQuoted bool) bool {
 	if isFenceCloserPlain(line, ch, openLen) {
 		return true
+	}
+	if !openerQuoted {
+		return false
 	}
 	if stripped, ok := stripBlockquotePrefixes(line); ok {
 		return isFenceCloserPlain(stripped, ch, openLen)

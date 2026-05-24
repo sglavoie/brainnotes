@@ -100,16 +100,24 @@ func (m *Map) ListRemove(k string, values ...any) (bool, error) {
 	}
 	toRemove := values
 	out := make([]any, 0, len(list))
+	// keepIndexMap maps an old index in the source list to its new index in the
+	// surviving list. Indices that were removed are not present in the map.
+	keepIndexMap := make(map[int]int, len(list))
 	changed := false
-	for _, item := range list {
+	for i, item := range list {
 		if containsAny(toRemove, item) {
 			changed = true
 			continue
 		}
+		keepIndexMap[i] = len(out)
 		out = append(out, item)
 	}
 	if changed {
-		m.clearMetaPrefix(k)
+		// Rewrite the list's index meta so surviving items keep their
+		// timestamp-format metadata at the new (shifted) indices. Clearing the
+		// whole prefix here would cause kept midnight-UTC datetimes to silently
+		// downgrade to date-only on the next Marshal.
+		m.remapListIndexMeta(k, keepIndexMap)
 		m.vals[k] = out
 	}
 	return changed, nil
@@ -135,16 +143,24 @@ func (m *Map) ReplaceValue(k string, from, to any) (bool, error) {
 	if list, ok := existing.([]any); ok {
 		changed := false
 		out := make([]any, len(list))
+		replacedIdx := make([]int, 0, len(list))
 		for i, item := range list {
 			if reflect.DeepEqual(item, from) {
 				out[i] = to
+				replacedIdx = append(replacedIdx, i)
 				changed = true
 				continue
 			}
 			out[i] = item
 		}
 		if changed {
-			m.clearMetaPrefix(k)
+			// Clear meta only for the replaced indices so that surviving list
+			// items keep their timestamp-format metadata. Clearing the whole
+			// prefix here would cause kept midnight-UTC datetimes elsewhere in
+			// the list to silently downgrade to date-only on Marshal.
+			for _, i := range replacedIdx {
+				m.clearListIndexMeta(k, i)
+			}
 			m.vals[k] = out
 		}
 		return changed, nil

@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -429,5 +430,276 @@ func TestSaveEmptyPath(t *testing.T) {
 	n.Path = ""
 	if err := n.Save(&v.Cfg.Frontmatter); err == nil {
 		t.Fatal("Save with empty Path should return an error")
+	}
+}
+
+// TestTitleMultiDotFilename verifies that Title strips only the final
+// extension, preserving interior dots in the stem. A file named
+// "archive.tar.md" must have title "archive.tar", not "archive".
+func TestTitleMultiDotFilename(t *testing.T) {
+	cases := map[string]string{
+		"archive.tar.md": "archive.tar",
+		"v1.2.3.md":      "v1.2.3",
+		"plain.md":       "plain",
+		// filepath.Ext(".md") returns ".md" (no non-dot before the extension),
+		// so TrimSuffix yields "". The file ".md" is also a hidden file that
+		// Walk skips entirely, so this path is mostly for completeness.
+		".md": "",
+	}
+	for path, wantTitle := range cases {
+		n := &Note{Path: filepath.Join("/vault", path)}
+		if got := n.Title(); got != wantTitle {
+			t.Errorf("Title(%q) = %q, want %q", path, got, wantTitle)
+		}
+	}
+}
+
+// TestResolveByTitleMultiDotStem verifies that a note named "archive.tar.md"
+// is resolvable by its full multi-dot stem.
+func TestResolveByTitleMultiDotStem(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"archive.tar.md": "# a\n",
+	})
+	n, err := v.ResolveByTitle("archive.tar", "")
+	if err != nil {
+		t.Fatalf("ResolveByTitle: %v", err)
+	}
+	if filepath.Base(n.Path) != "archive.tar.md" {
+		t.Errorf("got %s, want archive.tar.md", filepath.Base(n.Path))
+	}
+	// Resolving by just "archive" must not match a stem of "archive.tar".
+	if _, err := v.ResolveByTitle("archive", ""); err == nil {
+		t.Errorf("partial stem 'archive' should not match 'archive.tar.md'")
+	}
+}
+
+// TestResolveByTitleSlashInTitle verifies that a title containing a path
+// separator cannot match (filename stems never contain slashes), and the
+// error message is the regular not-found form.
+func TestResolveByTitleSlashInTitle(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"People/Alice.md": "# a\n",
+	})
+	if _, err := v.ResolveByTitle("People/Alice", ""); err == nil {
+		t.Fatal("title with slash should not match a note's stem")
+	}
+}
+
+// TestWalkDeeplyNested verifies Walk descends into arbitrarily deep folder
+// hierarchies (no early termination by depth).
+func TestWalkDeeplyNested(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a/b/c/d/e/f/g/h/deep.md": "# deep\n",
+		"shallow.md":              "# shallow\n",
+	})
+	var visited []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, _ := filepath.Rel(v.Root, n.Path)
+		visited = append(visited, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	sort.Strings(visited)
+	want := []string{"a/b/c/d/e/f/g/h/deep.md", "shallow.md"}
+	if !equalStrings(visited, want) {
+		t.Errorf("walk visited %v, want %v", visited, want)
+	}
+}
+
+// TestWalkRegularNonMarkdownExtensions verifies that files with non-.md
+// extensions (.txt, .json, no extension, .markdown) are skipped.
+func TestWalkRegularNonMarkdownExtensions(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"note.md":       "# n\n",
+		"data.json":     "{}",
+		"readme":        "no ext",
+		"long.markdown": "# m",
+		"weird.md.bak":  "# b",
+	})
+	var visited []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		visited = append(visited, filepath.Base(n.Path))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	sort.Strings(visited)
+	want := []string{"note.md"}
+	if !equalStrings(visited, want) {
+		t.Errorf("walk visited %v, want %v", visited, want)
+	}
+}
+
+// TestWalkHandlesNilCfg verifies that Walk does not panic on a vault whose
+// Cfg field is nil (defensive — Open always populates Cfg, but a hand-built
+// Vault should still behave). ignoreSet(nil) returns an empty set.
+func TestWalkHandlesNilCfg(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# a\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	v := &Vault{Root: dir, Cfg: nil}
+	var count int
+	err := v.Walk(WalkFilter{}, func(n *Note) error {
+		count++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk with nil cfg: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("want 1 note, got %d", count)
+	}
+}
+
+// TestCleanSlashRelEdgeCases exercises the unexported cleanSlashRel directly
+// for inputs Walk/ResolveByTitle/ignoreSet rely on: whitespace, dot segments,
+// duplicate slashes, backslashes, and traversal forms.
+func TestCleanSlashRelEdgeCases(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"   ", ""},
+		{".", ""},
+		{"./", ""},
+		{"/", ""},
+		{"//", ""},
+		{"/.", ""},
+		{"/./", ""},
+		{"a", "a"},
+		{"a/", "a"},
+		{"/a", "a"},
+		{"/a/", "a"},
+		{"a//b", "a/b"},
+		{"a/./b", "a/b"},
+		{`a\b`, "a/b"},
+		{`a\b\c`, "a/b/c"},
+		{"a/b/..", "a"},
+		{"..", ".."},
+		{"../foo", "../foo"},
+		{"a/../..", ".."},
+		{"/..", ".."},
+	}
+	for _, tc := range cases {
+		got := cleanSlashRel(tc.in)
+		if got != tc.want {
+			t.Errorf("cleanSlashRel(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestRelEscapesRoot verifies the escape predicate for outputs of
+// cleanSlashRel: anything matching ".." or "../*" escapes.
+func TestRelEscapesRoot(t *testing.T) {
+	escape := []string{"..", "../foo", "../../bar"}
+	safe := []string{"", "a", "a/b", "...", "....", "a/..b"}
+	for _, p := range escape {
+		if !relEscapesRoot(p) {
+			t.Errorf("relEscapesRoot(%q) = false, want true", p)
+		}
+	}
+	for _, p := range safe {
+		if relEscapesRoot(p) {
+			t.Errorf("relEscapesRoot(%q) = true, want false", p)
+		}
+	}
+}
+
+// TestIgnoreSetSkipsEmptyAndEscaping verifies that empty/whitespace ignore
+// entries are dropped, and entries that normalize to a traversal form are
+// rejected rather than added to the set.
+func TestIgnoreSetSkipsEmptyAndEscaping(t *testing.T) {
+	cfg := &config.Config{
+		Ignore: []string{"", "  ", "Archive", "../escape", "Trash/"},
+		Templates: config.TemplatesConfig{
+			Dir: "../../bad", // also escaping; must not land in the set.
+		},
+	}
+	set := ignoreSet(cfg)
+	if _, ok := set["Archive"]; !ok {
+		t.Error("Archive should be in ignore set")
+	}
+	if _, ok := set["Trash"]; !ok {
+		t.Error("Trash (from Trash/) should be in ignore set")
+	}
+	if _, ok := set[""]; ok {
+		t.Error("empty string should not be in ignore set")
+	}
+	if _, ok := set["../escape"]; ok {
+		t.Error("escaping entry should not be in ignore set")
+	}
+	if _, ok := set["../../bad"]; ok {
+		t.Error("escaping templates dir should not be in ignore set")
+	}
+}
+
+// TestWalkSkipsNestedHiddenDirs verifies that hidden directories anywhere in
+// the tree (not just at the root) are pruned. A note inside `Sub/.cache/` must
+// not be visited.
+func TestWalkSkipsNestedHiddenDirs(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"keep.md":              "# keep\n",
+		"Sub/note.md":          "# n\n",
+		"Sub/.cache/hidden.md": "# h\n",
+		"Sub/.git/HEAD.md":     "# g\n",
+	})
+	var visited []string
+	if err := v.Walk(WalkFilter{}, func(n *Note) error {
+		rel, _ := filepath.Rel(v.Root, n.Path)
+		visited = append(visited, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
+	}
+	sort.Strings(visited)
+	want := []string{"Sub/note.md", "keep.md"}
+	if !equalStrings(visited, want) {
+		t.Errorf("walk visited %v, want %v", visited, want)
+	}
+}
+
+// TestResolveByTitleEmptyVault verifies that ResolveByTitle returns a
+// not-found error (not a nil/panic) on an empty vault.
+func TestResolveByTitleEmptyVault(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{})
+	_, err := v.ResolveByTitle("anything", "")
+	if err == nil {
+		t.Fatal("expected not-found error on empty vault")
+	}
+	if !strings.Contains(err.Error(), "no note titled") {
+		t.Errorf("error should mention not-found: %v", err)
+	}
+}
+
+// TestSaveWritesNewFileMode verifies that a fresh save (no existing file at
+// dest) lands with 0o644 rather than leaking the temp file's 0o600 default
+// from os.CreateTemp.
+func TestSaveWritesNewFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX mode bits not meaningful on Windows")
+	}
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nbody\n",
+	})
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := n.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	newPath := filepath.Join(v.Root, "brand-new.md")
+	n.Path = newPath
+	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	info, err := os.Stat(newPath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("new file mode: got %o, want %o", got, 0o644)
 	}
 }

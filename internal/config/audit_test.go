@@ -248,3 +248,70 @@ func TestLoad_VaultSymlinkResolvesToDirectory(t *testing.T) {
 		t.Errorf("vault should keep symlink path: got %q, want %q", cfg.Vault, linkPath)
 	}
 }
+
+// TestLoad_OpenEditorTrimsWhitespace verifies surrounding whitespace in
+// [open].editor is stripped. A value like "  " would otherwise be treated
+// as set, shadowing the $EDITOR fallback in `bn open` and producing an
+// opaque exec error when run.
+func TestLoad_OpenEditorTrimsWhitespace(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[open]\neditor = \"  nvim  \"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Open.Editor != "nvim" {
+		t.Errorf("Open.Editor should be trimmed: got %q, want %q", cfg.Open.Editor, "nvim")
+	}
+}
+
+// TestLoad_OpenEditorWhitespaceOnlyBecomesEmpty verifies a whitespace-only
+// editor value collapses to empty, so the `bn open` fallback to $EDITOR
+// continues to fire rather than dispatching a blank command.
+func TestLoad_OpenEditorWhitespaceOnlyBecomesEmpty(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[open]\neditor = \"   \"\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Open.Editor != "" {
+		t.Errorf("whitespace-only Open.Editor should be empty, got %q", cfg.Open.Editor)
+	}
+}
+
+// TestLoad_OpenEditorUnsetStaysEmpty confirms an omitted [open].editor key
+// remains empty after defaults are applied (the $EDITOR fallback path).
+func TestLoad_OpenEditorUnsetStaysEmpty(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	cfg, err := Load(vault, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Open.Editor != "" {
+		t.Errorf("unset Open.Editor should be empty, got %q", cfg.Open.Editor)
+	}
+}
+
+// TestDefaultTemplate_MentionsOpenSection ensures the starter template
+// documents the [open].editor key that downstream commands rely on.
+func TestDefaultTemplate_MentionsOpenSection(t *testing.T) {
+	tmpl := DefaultTemplate()
+	for _, want := range []string{"[open]", "editor"} {
+		if !strings.Contains(tmpl, want) {
+			t.Errorf("template missing %q", want)
+		}
+	}
+}

@@ -115,6 +115,11 @@ func applyDefaults(cfg *Config) {
 		normalizeRoutes(cfg.New.Routes)
 	}
 
+	// Trim surrounding whitespace from [open].editor. Without this, a value
+	// like `editor = "  "` is non-empty and shadows the $EDITOR fallback in
+	// `bn open`, then fails with an opaque exec error.
+	cfg.Open.Editor = strings.TrimSpace(cfg.Open.Editor)
+
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
 }
 

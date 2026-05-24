@@ -190,6 +190,66 @@ func TestParseSkipsBlockquotedFencedCode(t *testing.T) {
 	}
 }
 
+func TestParseQuotedCloserDoesNotCloseUnquotedFence(t *testing.T) {
+	t.Parallel()
+	// Per CommonMark, a fence opened outside a blockquote is not closed by a
+	// blockquote-prefixed `> ```` line — the prefix is content, not structure.
+	// Before the fix, isFenceCloser stripped blockquote prefixes unconditionally
+	// so `> ```` closed an unquoted fence, exposing wikilinks that are actually
+	// still inside the code block per CommonMark.
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "quoted closer does not close plain fence",
+			in:   "[[Before]]\n```\n[[InsideA]]\n> ```\n[[InsideB]]",
+			want: []string{"Before"},
+		},
+		{
+			name: "quoted closer does not close plain tilde fence",
+			in:   "[[Before]]\n~~~\n[[InsideA]]\n> ~~~\n[[InsideB]]",
+			want: []string{"Before"},
+		},
+		{
+			name: "plain closer still closes plain fence",
+			in:   "[[Before]]\n```\n[[Inside]]\n```\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+		{
+			name: "quoted opener accepts plain closer (conservative)",
+			in:   "[[Before]]\n> ```\n> [[Inside]]\n```\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := collectTargets(Parse(tc.in))
+			if len(got) == 0 && len(tc.want) == 0 {
+				return
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) targets = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRewriteQuotedCloserDoesNotCloseUnquotedFence(t *testing.T) {
+	t.Parallel()
+	// Rewrite must not touch wikilinks that remain inside a code block when a
+	// blockquoted `> ```` falsely "closes" an unquoted fence.
+	in := "[[Foo]]\n```\n[[Foo]]\n> ```\n[[Foo]]"
+	got := RewriteTitle(in, "Foo", "Bar")
+	want := "[[Bar]]\n```\n[[Foo]]\n> ```\n[[Foo]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
 func TestParseTripleBracketsDoesNotConsumeBracket(t *testing.T) {
 	t.Parallel()
 	// `[[[Foo]]]` is a literal `[` followed by a `[[Foo]]` wikilink and a

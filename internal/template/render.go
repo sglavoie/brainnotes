@@ -115,6 +115,12 @@ func defaultFn(d, v string) string {
 // wikilinkFn wraps s in [[ ]] unless it is already wrapped. The empty string
 // is passed through unchanged so authors can guard with `default`. Whitespace
 // around an already-wrapped value is preserved.
+//
+// Characters that would silently corrupt the produced [[ ... ]] span — the
+// `]]` and `[[` sequences, single `]`/`[` brackets, and line terminators
+// (\r/\n) — are sanitized from the inner content before wrapping. Without
+// this, `wikilink "Foo]]Bar"` would emit `[[Foo]]Bar]]`, which Obsidian
+// parses as a `[[Foo]]` link followed by literal `Bar]]` text.
 func wikilinkFn(s string) string {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
@@ -130,7 +136,36 @@ func wikilinkFn(s string) string {
 			return s
 		}
 	}
-	return "[[" + s + "]]"
+	return "[[" + sanitizeWikilinkInner(s) + "]]"
+}
+
+// sanitizeWikilinkInner removes or replaces characters in s that would break
+// the surrounding `[[ ... ]]` span on re-parse. Brackets are stripped; line
+// terminators collapse to a single space. The result is safe to embed inside
+// `[[` / `]]`.
+func sanitizeWikilinkInner(s string) string {
+	if !strings.ContainsAny(s, "[]\r\n") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	lastSpace := false
+	for _, r := range s {
+		switch r {
+		case '[', ']':
+			lastSpace = false
+			continue
+		case '\r', '\n':
+			if !lastSpace {
+				b.WriteByte(' ')
+				lastSpace = true
+			}
+		default:
+			b.WriteRune(r)
+			lastSpace = false
+		}
+	}
+	return b.String()
 }
 
 // Slug converts s to a lower-kebab-case slug: it lowercases Unicode letters,

@@ -213,15 +213,22 @@ func resolveRenameTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 }
 
 // computeNewPath returns the destination path: same directory as target, new
-// filename = <newTitle><default-extension>.
+// filename = <newTitle><source-extension>. The source file's extension is
+// preserved so a `.markdown` or other non-default-extension note keeps its
+// extension across a rename. This mirrors `bn move`, which also reuses
+// filepath.Ext(target.Path). Falls back to cfg.Templates.DefaultExtension
+// (then ".md") when the source has no extension.
 func computeNewPath(targetPath, newTitle string, cfg *config.Config) (string, error) {
 	dir := filepath.Dir(targetPath)
-	ext := cfg.Templates.DefaultExtension
+	ext := filepath.Ext(targetPath)
 	if ext == "" {
-		ext = ".md"
-	}
-	if !strings.HasPrefix(ext, ".") {
-		ext = "." + ext
+		ext = cfg.Templates.DefaultExtension
+		if ext == "" {
+			ext = ".md"
+		}
+		if !strings.HasPrefix(ext, ".") {
+			ext = "." + ext
+		}
 	}
 	return filepath.Join(dir, newTitle+ext), nil
 }

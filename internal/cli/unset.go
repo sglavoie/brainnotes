@@ -51,9 +51,18 @@ Use --dry-run to preview which properties would be removed without writing.`,
 			if len(props) == 0 {
 				return errors.New("unset: at least one property name is required")
 			}
+			// Reject the stdin sentinel '-' when it appears as a property name.
+			// With no '--' and a single positional arg, splitUnsetArgs routes
+			// that arg to props (so 'bn unset status' triggers an fzf picker).
+			// 'bn unset -' would route '-' to props and try to remove a
+			// property literally named '-', which is never what the user
+			// meant — error explicitly so they re-run with '-- propname'.
 			for _, p := range props {
 				if p == "" {
 					return errors.New("unset: empty property name")
+				}
+				if p == "-" {
+					return errors.New("unset: '-' is the stdin sentinel, not a property name; use 'bn unset - -- <prop...>' to read paths from stdin")
 				}
 			}
 

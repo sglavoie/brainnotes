@@ -367,12 +367,16 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		{"[[Books]]", "[[Books]]"},
 		{"  [[Books]]  ", "  [[Books]]  "},
 		{"", ""},
-		{"[[", "[[[[]]"},         // sentinel: too short to be a real link
-		{"[[a]]b", "[[[[a]]b]]"}, // not fully wrapped — wrap again
-		// Two separate wikilinks are not "already wrapped" — must wrap.
-		{"[[a]] and [[b]]", "[[[[a]] and [[b]]]]"},
+		// "[[ " (just brackets) sanitized to empty inner, but wrap is
+		// still emitted because trimmed is non-empty.
+		{"[[", "[[]]"},
+		// Not fully wrapped — must wrap *and* sanitize inner brackets to
+		// avoid emitting a malformed [[...]] span.
+		{"[[a]]b", "[[ab]]"},
+		// Two separate wikilinks are not "already wrapped" — sanitize and wrap.
+		{"[[a]] and [[b]]", "[[a and b]]"},
 		// Closing ]] before end means outer pair is not a single wrap.
-		{"[[a]]b]]", "[[[[a]]b]]]]"},
+		{"[[a]]b]]", "[[ab]]"},
 		// Single valid wikilink with heading/alias.
 		{"[[Page#Heading|Alias]]", "[[Page#Heading|Alias]]"},
 		// Empty wikilink [[]] is treated as already wrapped (len==4).
@@ -382,8 +386,19 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		{"\t", "\t"},
 		{" \n ", " \n "},
 		// Inner [[ means the outer [[ ]] does NOT form a single wrap —
-		// must wrap rather than be detected as already-wrapped.
-		{"[[a[[b]]", "[[[[a[[b]]]]"},
+		// sanitize inner brackets and wrap.
+		{"[[a[[b]]", "[[ab]]"},
+		// A title containing `]]` must not produce a malformed wikilink.
+		{"Foo]]Bar", "[[FooBar]]"},
+		// Single `]` and `[` are also stripped because they break parsing.
+		{"Foo]Bar", "[[FooBar]]"},
+		{"Foo[Bar", "[[FooBar]]"},
+		// Line terminators inside the title collapse to a single space.
+		{"Foo\nBar", "[[Foo Bar]]"},
+		{"Foo\r\nBar", "[[Foo Bar]]"},
+		// Leading or trailing `]]` alone.
+		{"]]", "[[]]"},
+		{"[[Foo", "[[Foo]]"},
 	}
 	ctx := NewContext("x", "", "/v", nil, FixedClock{T: time.Unix(0, 0).UTC()})
 	for _, c := range cases {

@@ -361,8 +361,19 @@ func coerceValue(s, typeFlag string) (any, error) {
 		return false, nil
 	}
 	if intValueRe.MatchString(s) {
-		if n, err := strconv.Atoi(s); err == nil {
-			return n, nil
+		// Strings with a leading zero (e.g. "01", "007") are kept as strings to
+		// preserve the original formatting. Auto-coercing would silently drop
+		// the leading zero — surprising for version numbers, IDs, and the
+		// like. Use `--type int` to force coercion. "-0", "0", "-1" still
+		// coerce.
+		hasLeadingZero := len(s) > 1 && s[0] == '0'
+		if s[0] == '-' && len(s) > 2 && s[1] == '0' {
+			hasLeadingZero = true
+		}
+		if !hasLeadingZero {
+			if n, err := strconv.Atoi(s); err == nil {
+				return n, nil
+			}
 		}
 	}
 	if dateValueRe.MatchString(s) {
