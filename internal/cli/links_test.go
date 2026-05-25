@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -236,12 +235,4 @@ func TestLinks_FzfAbort(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("expected empty stderr on abort, got %q", stderr)
 	}
-}
-
-// relSlashLinesSorted is a helper that returns sorted relative paths.
-func relSlashLinesSorted(t *testing.T, vaultRoot, s string) []string {
-	t.Helper()
-	rels := relSlashLines(t, vaultRoot, s)
-	sort.Strings(rels)
-	return rels
 }

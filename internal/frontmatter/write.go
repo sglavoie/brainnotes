@@ -99,14 +99,6 @@ func marshalMap(m Map, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// encodeValue builds a yaml.Node for v, using block style for sequences so
-// the output is line-oriented (one item per line). Date-only timestamps are
-// emitted as `YYYY-MM-DD` rather than a full RFC3339 datetime so they
-// round-trip with the vault's existing convention.
-func encodeValue(v any) (*yaml.Node, error) {
-	return encodeValueAt(v, nil, nil)
-}
-
 func encodeValueAt(v any, meta map[string]valueMeta, path []string) (*yaml.Node, error) {
 	if t, ok := v.(time.Time); ok {
 		valueMeta, hasMeta := meta[metaPathKey(path)]
@@ -183,14 +175,6 @@ func hasFloatMarker(s string) bool {
 		}
 	}
 	return false
-}
-
-// encodeMap builds a yaml.MappingNode from a map[string]any, sorting keys
-// alphabetically and encoding each value through encodeValue so that nested
-// floats, dates, and other special types receive the same treatment as
-// top-level values.
-func encodeMap(m map[string]any) (*yaml.Node, error) {
-	return encodeMapAt(m, nil, nil)
 }
 
 func encodeMapAt(m map[string]any, meta map[string]valueMeta, path []string) (*yaml.Node, error) {

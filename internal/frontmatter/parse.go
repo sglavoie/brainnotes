@@ -146,14 +146,6 @@ func parseYAML(data []byte) (Map, error) {
 	return m, nil
 }
 
-// decodeNode converts a yaml.Node into Go-native types. Lists become []any,
-// nested mappings become map[string]any, and scalars defer to yaml.v3's
-// default tag resolution (which yields string, int, float64, bool, time.Time,
-// or nil).
-func decodeNode(n *yaml.Node) (any, error) {
-	return decodeNodeAt(n, nil, nil)
-}
-
 func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta) (any, error) {
 	switch n.Kind {
 	case yaml.ScalarNode:
