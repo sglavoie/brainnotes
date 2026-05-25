@@ -46,91 +46,105 @@ type Flags struct {
 // active term (matching every note when no terms are active).
 func FromFlags(f Flags) (Predicate, error) {
 	var ps []Predicate
-	for _, t := range f.Tags {
-		if t == "" {
+	for _, spec := range []struct {
+		values []string
+		build  func(string) Predicate
+	}{
+		{values: f.Tags, build: Tag},
+		{values: f.Categories, build: Category},
+	} {
+		for _, value := range spec.values {
+			if value == "" {
+				continue
+			}
+			ps = append(ps, spec.build(value))
+		}
+	}
+
+	for _, spec := range []struct {
+		value string
+		build func(string) Predicate
+	}{
+		{value: f.Status, build: Status},
+		{value: f.Type, build: Type},
+		{value: f.Has, build: Has},
+		{value: f.Missing, build: Missing},
+	} {
+		if spec.value == "" {
 			continue
 		}
-		ps = append(ps, Tag(t))
+		ps = append(ps, spec.build(spec.value))
 	}
-	for _, c := range f.Categories {
-		if c == "" {
+
+	for _, spec := range []struct {
+		flag  string
+		value string
+		field string
+	}{
+		{flag: "--age", value: f.Age, field: "last"},
+		{flag: "--created", value: f.Created, field: "created"},
+	} {
+		if spec.value == "" {
 			continue
 		}
-		ps = append(ps, Category(c))
-	}
-	if f.Status != "" {
-		ps = append(ps, Status(f.Status))
-	}
-	if f.Type != "" {
-		ps = append(ps, Type(f.Type))
-	}
-	if f.Has != "" {
-		ps = append(ps, Has(f.Has))
-	}
-	if f.Missing != "" {
-		ps = append(ps, Missing(f.Missing))
-	}
-	if f.Age != "" {
-		op, dur, err := ParseAge(f.Age)
+		op, dur, err := ParseAge(spec.value)
 		if err != nil {
-			return nil, fmt.Errorf("query: --age: %w", err)
+			return nil, fmt.Errorf("query: %s: %w", spec.flag, err)
 		}
-		ps = append(ps, Age(op, dur, "last"))
+		ps = append(ps, Age(op, dur, spec.field))
 	}
-	if f.Created != "" {
-		op, dur, err := ParseAge(f.Created)
-		if err != nil {
-			return nil, fmt.Errorf("query: --created: %w", err)
-		}
-		ps = append(ps, Age(op, dur, "created"))
-	}
+
 	if f.Folder != "" {
 		if f.Root == "" {
 			return nil, errors.New("query: --folder requires a vault root path")
 		}
 		ps = append(ps, Folder(f.Folder, f.Root))
 	}
-	if f.Orphan {
-		if f.Graph == nil {
-			return nil, errors.New("query: --orphan requires a graph")
+
+	for _, spec := range []struct {
+		active bool
+		flag   string
+		build  func(*Graph) Predicate
+	}{
+		{active: f.Orphan, flag: "--orphan", build: Orphan},
+		{active: f.BrokenLinks, flag: "--broken-links", build: BrokenLinks},
+		{
+			active: f.MinBacklinks > 0,
+			flag:   "--min-backlinks",
+			build: func(g *Graph) Predicate {
+				return MinBacklinks(g, f.MinBacklinks)
+			},
+		},
+		{
+			active: f.MaxBacklinks >= 0,
+			flag:   "--max-backlinks",
+			build: func(g *Graph) Predicate {
+				return MaxBacklinks(g, f.MaxBacklinks)
+			},
+		},
+		{
+			active: f.MinLinks > 0,
+			flag:   "--min-links",
+			build: func(g *Graph) Predicate {
+				return MinLinks(g, f.MinLinks)
+			},
+		},
+		{
+			active: f.MaxLinks >= 0,
+			flag:   "--max-links",
+			build: func(g *Graph) Predicate {
+				return MaxLinks(g, f.MaxLinks)
+			},
+		},
+		{active: f.DeadEnd, flag: "--dead-end", build: DeadEnd},
+	} {
+		if !spec.active {
+			continue
 		}
-		ps = append(ps, Orphan(f.Graph))
-	}
-	if f.BrokenLinks {
 		if f.Graph == nil {
-			return nil, errors.New("query: --broken-links requires a graph")
+			return nil, errors.New("query: " + spec.flag + " requires a graph")
 		}
-		ps = append(ps, BrokenLinks(f.Graph))
-	}
-	if f.MinBacklinks > 0 {
-		if f.Graph == nil {
-			return nil, errors.New("query: --min-backlinks requires a graph")
-		}
-		ps = append(ps, MinBacklinks(f.Graph, f.MinBacklinks))
-	}
-	if f.MaxBacklinks >= 0 {
-		if f.Graph == nil {
-			return nil, errors.New("query: --max-backlinks requires a graph")
-		}
-		ps = append(ps, MaxBacklinks(f.Graph, f.MaxBacklinks))
-	}
-	if f.MinLinks > 0 {
-		if f.Graph == nil {
-			return nil, errors.New("query: --min-links requires a graph")
-		}
-		ps = append(ps, MinLinks(f.Graph, f.MinLinks))
-	}
-	if f.MaxLinks >= 0 {
-		if f.Graph == nil {
-			return nil, errors.New("query: --max-links requires a graph")
-		}
-		ps = append(ps, MaxLinks(f.Graph, f.MaxLinks))
-	}
-	if f.DeadEnd {
-		if f.Graph == nil {
-			return nil, errors.New("query: --dead-end requires a graph")
-		}
-		ps = append(ps, DeadEnd(f.Graph))
+		ps = append(ps, spec.build(f.Graph))
 	}
 	return And(ps...), nil
 }
