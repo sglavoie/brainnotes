@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"path/filepath"
 	"strings"
 )
@@ -88,12 +89,11 @@ func absInVault(vaultRoot, p string) (string, error) {
 	}
 	// If the path exists, resolve it fully (catches symlinked files pointing
 	// outside the vault). If it doesn't exist yet (new note), fall back to
-	// resolving the parent directory so symlinked directories are still caught.
+	// resolving the deepest existing ancestor so symlinked directories anywhere
+	// in the destination path are still caught.
 	checkPath := abs
-	if resolved, evalErr := filepath.EvalSymlinks(abs); evalErr == nil {
+	if resolved, evalErr := resolveExistingPath(abs); evalErr == nil {
 		checkPath = resolved
-	} else if resolvedDir, evalErr := filepath.EvalSymlinks(filepath.Dir(abs)); evalErr == nil {
-		checkPath = filepath.Join(resolvedDir, filepath.Base(abs))
 	}
 	rel, err := filepath.Rel(checkRoot, checkPath)
 	if err != nil {
@@ -103,6 +103,41 @@ func absInVault(vaultRoot, p string) (string, error) {
 		return "", fmt.Errorf("path %q is outside the vault", abs)
 	}
 	return abs, nil
+}
+
+func resolveExistingPath(abs string) (string, error) {
+	current := abs
+	var suffix []string
+
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			if len(suffix) == 0 {
+				return resolved, nil
+			}
+			parts := make([]string, 0, 1+len(suffix))
+			parts = append(parts, resolved)
+			parts = append(parts, suffix...)
+			return filepath.Join(parts...), nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", err
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			if len(suffix) == 0 {
+				return current, nil
+			}
+			parts := make([]string, 0, 1+len(suffix))
+			parts = append(parts, current)
+			parts = append(parts, suffix...)
+			return filepath.Join(parts...), nil
+		}
+
+		suffix = append([]string{filepath.Base(current)}, suffix...)
+		current = parent
+	}
 }
 
 // readStdinPaths reads paths from in, one per line (or NUL-separated when

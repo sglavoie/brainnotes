@@ -304,6 +304,42 @@ func TestPlanRepairs_TypeUnconvertible_SkipsAllowedCheck(t *testing.T) {
 	}
 }
 
+func TestPlanRepairs_TypeUnconvertible_SuppressesListDedup(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"status": {Type: "string"},
+	}
+	front := buildFront("status", []any{"WIP", "WIP"})
+
+	result := PlanRepairs(front, sch, nil)
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected no actions after type_unconvertible, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 1 {
+		t.Fatalf("expected 1 skip, got %d: %+v", len(result.Skips), result.Skips)
+	}
+	if result.Skips[0].Kind != "type_unconvertible" {
+		t.Errorf("skip kind = %q, want type_unconvertible", result.Skips[0].Kind)
+	}
+}
+
+func TestPlanRepairs_TypeUnconvertible_SuppressesWikilinkWrap(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"parent": {Type: "string"},
+	}
+	front := buildFront("parent", []any{"Books", "[[Papers]]"})
+
+	result := PlanRepairs(front, sch, []string{"parent"})
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected no actions after type_unconvertible, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 1 {
+		t.Fatalf("expected 1 skip, got %d: %+v", len(result.Skips), result.Skips)
+	}
+	if result.Skips[0].Kind != "type_unconvertible" {
+		t.Errorf("skip kind = %q, want type_unconvertible", result.Skips[0].Kind)
+	}
+}
+
 func TestPlanRepairs_NilFront(t *testing.T) {
 	sch := map[string]config.PropertySchema{
 		"status": {Type: "string", Required: true},

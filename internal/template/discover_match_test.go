@@ -203,3 +203,63 @@ func TestFindUnicodeExactNameWithoutLowercasing(t *testing.T) {
 		t.Fatalf("got %s, want İdea.md", filepath.Base(got))
 	}
 }
+
+func TestFindUnicodeCanonicalEquivalenceFilenameNFCQueryNFD(t *testing.T) {
+	cfg := newDiscoverConfig(t)
+	nameNFC := "Café.md"
+	nameNFD := "Cafe\u0301.md"
+	writeFile(t, vaultPath(cfg, "Templates", nameNFC), "nfc")
+
+	got, err := Find(cfg, nameNFD)
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if !equalFoldCanonical(filepath.Base(got), nameNFC) {
+		t.Fatalf("got %q, want canonical match for %q", filepath.Base(got), nameNFC)
+	}
+	body, err := os.ReadFile(got)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(body) != "nfc" {
+		t.Fatalf("got body %q, want %q", string(body), "nfc")
+	}
+}
+
+func TestFindUnicodeCanonicalEquivalenceFilenameNFDQueryNFC(t *testing.T) {
+	cfg := newDiscoverConfig(t)
+	nameNFC := "Café.md"
+	nameNFD := "Cafe\u0301.md"
+	writeFile(t, vaultPath(cfg, "Templates", nameNFD), "nfd")
+
+	got, err := Find(cfg, nameNFC)
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if !equalFoldCanonical(filepath.Base(got), nameNFD) {
+		t.Fatalf("got %q, want canonical match for %q", filepath.Base(got), nameNFD)
+	}
+	body, err := os.ReadFile(got)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(body) != "nfd" {
+		t.Fatalf("got body %q, want %q", string(body), "nfd")
+	}
+}
+
+func TestUniqueFoldCanonicalEquivalence(t *testing.T) {
+	nameNFC := "Café.md"
+	nameNFD := "Cafe\u0301.md"
+
+	got := uniqueFold([]string{nameNFC, nameNFD, "BOOK.md", "book.md"})
+	if len(got) != 2 {
+		t.Fatalf("got %d entries, want 2: %q", len(got), got)
+	}
+	if got[0] != nameNFC {
+		t.Fatalf("got first entry %q, want %q", got[0], nameNFC)
+	}
+	if got[1] != "BOOK.md" {
+		t.Fatalf("got second entry %q, want %q", got[1], "BOOK.md")
+	}
+}

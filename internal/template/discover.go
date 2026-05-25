@@ -32,7 +32,8 @@ var ErrTemplateAmbiguous = errors.New("template: ambiguous match")
 //
 // The templates directory is resolved case-insensitively when the exact
 // configured path does not exist. Its listing is compared against each
-// candidate with Unicode case-folding; the first candidate that matches wins.
+// candidate with Unicode canonical normalization plus case-folding; the first
+// candidate that matches wins.
 // If more than one file matches the same candidate (only possible on
 // case-sensitive filesystems), ErrTemplateAmbiguous is returned listing the
 // colliding files.
@@ -66,7 +67,7 @@ func Find(cfg *config.Config, name string) (string, error) {
 	// "Book Template.md" candidate rather than searching for the silly
 	// "Book.md Template.md".
 	stem := name
-	if ext != "" && strings.EqualFold(filepath.Ext(stem), ext) {
+	if ext != "" && equalFoldCanonical(filepath.Ext(stem), ext) {
 		stem = strings.TrimSuffix(stem, filepath.Ext(stem))
 	}
 	if strings.TrimSpace(stem) == "" {
@@ -89,7 +90,7 @@ func Find(cfg *config.Config, name string) (string, error) {
 			if e.IsDir() {
 				continue
 			}
-			if strings.EqualFold(e.Name(), want) {
+			if equalFoldCanonical(e.Name(), want) {
 				matches = append(matches, e.Name())
 			}
 		}
@@ -166,7 +167,7 @@ func checkTemplatesDirNonDir(root, rel string, fold bool) error {
 		for _, e := range entries {
 			match := e.Name() == part
 			if fold {
-				match = strings.EqualFold(e.Name(), part)
+				match = equalFoldCanonical(e.Name(), part)
 			}
 			if !match {
 				continue
@@ -216,7 +217,7 @@ func checkDirCaseAmbiguity(root, rel string) error {
 			if !e.IsDir() {
 				continue
 			}
-			if strings.EqualFold(e.Name(), part) {
+			if equalFoldCanonical(e.Name(), part) {
 				matches = append(matches, e.Name())
 			}
 		}
@@ -287,7 +288,7 @@ func uniqueFold(candidates []string) []string {
 	for _, candidate := range candidates {
 		duplicate := false
 		for _, existing := range out {
-			if strings.EqualFold(existing, candidate) {
+			if equalFoldCanonical(existing, candidate) {
 				duplicate = true
 				break
 			}
@@ -317,7 +318,7 @@ func resolveDirCaseInsensitive(root, rel string) (string, error) {
 		var matches []string
 		var nonDirMatches []string
 		for _, e := range entries {
-			if strings.EqualFold(e.Name(), part) {
+			if equalFoldCanonical(e.Name(), part) {
 				if e.IsDir() {
 					matches = append(matches, e.Name())
 					continue

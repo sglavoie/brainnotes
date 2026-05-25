@@ -45,9 +45,12 @@ func exitCode(err error) int {
 		}
 	}
 
-	// Handle errors that directly wrap exec.ErrNotFound (e.g., ErrFZFNotFound).
-	if errors.Is(err, exec.ErrNotFound) {
+	// Handle errors that directly wrap exec sentinels (e.g., ErrFZFNotFound).
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
 		return 127
+	case errors.Is(err, exec.ErrDot):
+		return 126
 	}
 
 	var execErr *exec.Error

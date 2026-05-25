@@ -176,7 +176,7 @@ func TestUnresolvedLinks(t *testing.T) {
 		}
 	})
 
-	t.Run("folder-prefixed duplicate title resolves by title", func(t *testing.T) {
+	t.Run("folder-prefixed duplicate title stays broken when path is wrong", func(t *testing.T) {
 		_, notes := newVault(t, map[string]string{
 			"Alpha.md":      "---\ntitle: Alpha\n---\nSee [[Projects/Beta]].\n",
 			"Areas/Beta.md": "---\ntitle: Beta\n---\n",
@@ -188,8 +188,17 @@ func TestUnresolvedLinks(t *testing.T) {
 		}
 		g := BuildGraph(all)
 		broken := UnresolvedLinks(notes["Alpha.md"], g)
-		if len(broken) != 0 {
-			t.Fatalf("expected 0 broken links: broken-link resolution is title-only, got %d (%v)", len(broken), broken)
+		if len(broken) != 1 {
+			t.Fatalf("expected 1 broken link for wrong folder-qualified duplicate title, got %d (%v)", len(broken), broken)
+		}
+		if broken[0].Link.Target != "Projects/Beta" {
+			t.Fatalf("expected broken target Projects/Beta, got %q", broken[0].Link.Target)
+		}
+		if got := g.ForwardLinksForNote(notes["Alpha.md"]); len(got) != 0 {
+			t.Fatalf("expected no graph forward links for unresolved target, got %v", got)
+		}
+		if !DeadEnd(g)(notes["Alpha.md"]) {
+			t.Fatalf("expected Alpha to be a dead-end when its only link is unresolved")
 		}
 	})
 

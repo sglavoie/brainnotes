@@ -42,7 +42,12 @@ func Parse(data []byte) (Document, error) {
 	if err != nil {
 		return Document{}, fmt.Errorf("frontmatter: parse yaml: %w", err)
 	}
-	return Document{Front: m, Body: body, hasBOM: hasBOM}, nil
+	return Document{
+		Front:                 m,
+		Body:                  body,
+		hasBOM:                hasBOM,
+		frontmatterLineEnding: frontmatterDelimiterLineEnding(s[:startLen]),
+	}, nil
 }
 
 // openDelimLen reports the byte length of the opening `---` line if s starts
@@ -68,6 +73,13 @@ func isDelimLine(line string) bool {
 	line = strings.TrimRight(line, "\r")
 	line = strings.TrimRight(line, " \t")
 	return line == "---"
+}
+
+func frontmatterDelimiterLineEnding(line string) string {
+	if strings.HasSuffix(line, "\r\n") {
+		return "\r\n"
+	}
+	return "\n"
 }
 
 // findCloseDelim scans s line-by-line for a closing `---` (optionally with a

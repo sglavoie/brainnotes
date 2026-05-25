@@ -109,6 +109,20 @@ func TestRunMapsNonExecutableCommandTo126(t *testing.T) {
 	}
 }
 
+func TestRunMapsWrappedErrDotTo126(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error {
+		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "./editor", Err: exec.ErrDot})
+	})
+
+	if code := run(stderr); code != 126 {
+		t.Fatalf("run() exit code = %d, want 126", code)
+	}
+	if got := stderr.String(); !strings.Contains(got, "wrapped") || !strings.Contains(got, "./editor") || !strings.Contains(got, exec.ErrDot.Error()) {
+		t.Fatalf("stderr = %q, want wrapped ErrDot error", got)
+	}
+}
+
 func TestExitCodeMapsForkExecPermissionDeniedTo126(t *testing.T) {
 	err := fmt.Errorf("wrapped: %w", &os.PathError{
 		Op:   "fork/exec",

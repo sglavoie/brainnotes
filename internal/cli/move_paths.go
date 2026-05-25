@@ -34,6 +34,10 @@ func resolveNewFolder(vaultRoot, arg string) (rel, abs string, err error) {
 	if !filepath.IsAbs(cleaned) {
 		fullPath = filepath.Join(vaultRoot, cleaned)
 	}
+	fullPath, err = absInVault(vaultRoot, fullPath)
+	if err != nil {
+		return "", "", fmt.Errorf("move: %w", err)
+	}
 
 	relPath, relErr := filepath.Rel(vaultRoot, fullPath)
 	if relErr != nil {

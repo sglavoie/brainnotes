@@ -178,6 +178,39 @@ func TestMoveRejectsOutsideVault(t *testing.T) {
 	}
 }
 
+func TestMoveRejectsSymlinkDestinationOutsideVault(t *testing.T) {
+	if os.Getenv("GO_SKIP_SYMLINK_TEST") == "1" {
+		t.Skip("symlink tests disabled")
+	}
+
+	root := buildMoveFixture(t)
+	outside := t.TempDir()
+	symlinkDir := filepath.Join(root, "escaped")
+	if err := os.Symlink(outside, symlinkDir); err != nil {
+		t.Skip("cannot create symlinks:", err)
+	}
+
+	src := filepath.Join(root, "Books", "Dune.md")
+	sourceBefore := readNote(t, src)
+	reviewBefore := readNote(t, filepath.Join(root, "Reviews", "Dune Review.md"))
+	_, err := runCLI(t, "", "move", src, "escaped/subdir")
+	if err == nil {
+		t.Fatal("expected error for symlink-escaped destination")
+	}
+	if !strings.Contains(err.Error(), "outside the vault") {
+		t.Fatalf("expected outside-the-vault error, got %v", err)
+	}
+	if got := readNote(t, src); got != sourceBefore {
+		t.Fatalf("source note changed after rejected move:\nbefore=%s\nafter=%s", sourceBefore, got)
+	}
+	if got := readNote(t, filepath.Join(root, "Reviews", "Dune Review.md")); got != reviewBefore {
+		t.Fatalf("referencing note changed after rejected move:\nbefore=%s\nafter=%s", reviewBefore, got)
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "subdir", "Dune.md")); statErr == nil {
+		t.Fatalf("move leaked note outside vault at %s", filepath.Join(outside, "subdir", "Dune.md"))
+	}
+}
+
 func TestMoveDryRunWritesNothing(t *testing.T) {
 	root := buildMoveFixture(t)
 

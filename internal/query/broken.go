@@ -28,10 +28,9 @@ func isMediaEmbed(title string) bool {
 }
 
 // UnresolvedLinks returns every wikilink in n (body and frontmatter) whose
-// target does not resolve to any note title in the graph. Broken-link detection
-// is intentionally title-only: a folder-qualified link like [[Books/Foo]] is
-// considered resolved when any note titled "Foo" exists, matching the README's
-// documented `bn find --broken-links` behaviour.
+// target does not resolve in the graph. Folder-qualified targets follow the
+// same semantics as BuildGraph: exact path match first, then title fallback
+// only when the title is unique.
 func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 	if n == nil {
 		return nil
@@ -92,14 +91,7 @@ func scanBrokenValue(v any, key string, g *Graph, out *[]BrokenLink) {
 }
 
 func brokenLinkResolves(link wikilink.Link, g *Graph) bool {
-	if g == nil {
-		return false
-	}
-	titleKey := linkTitleKey(link.Title())
-	if titleKey == "" {
-		return false
-	}
-	return len(g.NoteKeysByTitle[titleKey]) > 0
+	return len(g.resolveLink(link)) > 0
 }
 
 func buildNewlineOffsets(s string) []int {

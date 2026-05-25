@@ -203,3 +203,26 @@ func TestLoad_XDGDirectoryDoesNotFallThroughToDefaultConfig(t *testing.T) {
 		t.Fatalf("error should mention XDG directory path, got %v", err)
 	}
 }
+
+func TestLoad_DanglingSymlinkXDGAncestorDoesNotFallThroughToDefaultConfig(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	xdgLink := filepath.Join(t.TempDir(), "xdg-link")
+	if err := os.Symlink(filepath.Join(t.TempDir(), "missing-xdg-root"), xdgLink); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	t.Setenv(envXDG, xdgLink)
+
+	vaultFile := t.TempDir()
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "vault = \""+vaultFile+"\"\n")
+
+	wantPath := filepath.Join(xdgLink, "bnotes", "config.toml")
+	if _, err := Load("", ""); err == nil {
+		t.Fatal("expected dangling XDG ancestor symlink to be rejected")
+	} else if !strings.Contains(err.Error(), wantPath) {
+		t.Fatalf("error should mention dangling XDG candidate path %q, got %v", wantPath, err)
+	}
+}

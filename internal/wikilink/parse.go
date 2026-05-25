@@ -164,6 +164,10 @@ func buildCodeMask(s string) []byteRange {
 	for _, ln := range lines {
 		text := s[ln.start:ln.end]
 		strippedQuote, quoteDepth, quoted := stripBlockquotePrefixesDepth(text)
+		inlineText := text
+		if quoted {
+			inlineText = strippedQuote
+		}
 
 		if fenceOpen {
 			ranges = append(ranges, byteRange{ln.start, ln.end})
@@ -216,12 +220,23 @@ func buildCodeMask(s string) []byteRange {
 			// previous line cannot hide real wikilinks in the new quoted block.
 			flushInline()
 		}
+		startsBlock := startsNonParagraphBlock(inlineText)
+		if startsBlock {
+			// CommonMark only lets inline code spans continue across soft line
+			// breaks inside the same paragraph. Starting a heading, list item,
+			// or similar block closes the previous paragraph, so an unmatched
+			// backtick above must not hide real wikilinks here.
+			flushInline()
+		}
 
 		inIndentedCode = false
 		if inlineStart < 0 {
 			inlineStart = ln.start
 		}
 		inlineEnd = ln.end
+		if isStandaloneInlineBlock(inlineText) {
+			flushInline()
+		}
 		prevBlank = false
 		prevQuoteDepth = quoteDepth
 	}
@@ -416,6 +431,89 @@ func trimASCIISpace(s string) string {
 		end--
 	}
 	return s[start:end]
+}
+
+// startsNonParagraphBlock reports whether line starts a block that interrupts
+// paragraph continuation for inline parsing. This keeps inline-code masking from
+// leaking from one markdown block into the next.
+func startsNonParagraphBlock(line string) bool {
+	return isATXHeading(line) || isListItem(line) || isStandaloneInlineBlock(line)
+}
+
+// isStandaloneInlineBlock reports whether line is a standalone block whose
+// inline parsing must not carry to the next line.
+func isStandaloneInlineBlock(line string) bool {
+	return isATXHeading(line) || isRuleOrSetextUnderline(line)
+}
+
+func isATXHeading(line string) bool {
+	i := skipBlockIndent(line)
+	if i >= len(line) || line[i] != '#' {
+		return false
+	}
+	n := 0
+	for i+n < len(line) && line[i+n] == '#' {
+		n++
+	}
+	if n == 0 || n > 6 {
+		return false
+	}
+	j := i + n
+	return j == len(line) || line[j] == ' ' || line[j] == '\t'
+}
+
+func isListItem(line string) bool {
+	i := skipBlockIndent(line)
+	if i >= len(line) {
+		return false
+	}
+	switch line[i] {
+	case '-', '+', '*':
+		j := i + 1
+		return j == len(line) || line[j] == ' ' || line[j] == '\t'
+	}
+	j := i
+	for j < len(line) && line[j] >= '0' && line[j] <= '9' {
+		j++
+	}
+	if j == i || j-i > 9 || j >= len(line) {
+		return false
+	}
+	if line[j] != '.' && line[j] != ')' {
+		return false
+	}
+	j++
+	return j == len(line) || line[j] == ' ' || line[j] == '\t'
+}
+
+func isRuleOrSetextUnderline(line string) bool {
+	i := skipBlockIndent(line)
+	if i >= len(line) {
+		return false
+	}
+	ch := line[i]
+	if ch != '-' && ch != '*' && ch != '_' && ch != '=' {
+		return false
+	}
+	count := 0
+	for ; i < len(line); i++ {
+		switch line[i] {
+		case ch:
+			count++
+		case ' ', '\t':
+		default:
+			return false
+		}
+	}
+	return count >= 3
+}
+
+func skipBlockIndent(line string) int {
+	i := 0
+	for i < 3 && i < len(line) && line[i] == ' ' {
+		i++
+	}
+	return i
 }
 
 // inlineCodeSpans returns the spans (relative to s) covered by inline code.

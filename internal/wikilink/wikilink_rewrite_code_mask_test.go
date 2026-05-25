@@ -74,3 +74,23 @@ func TestRewriteInlineCodeSpanDoesNotCrossOutOfNestedBlockquote(t *testing.T) {
 		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
 	}
 }
+
+func TestRewriteInlineCodeSpanDoesNotCrossHeadingBoundary(t *testing.T) {
+	t.Parallel()
+	in := "`code\n# [[Foo]]`\n[[Foo]]"
+	got := RewriteTitle(in, "Foo", "Bar")
+	want := "`code\n# [[Bar]]`\n[[Bar]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
+func TestRewriteInlineCodeSpanDoesNotCrossListItemBoundary(t *testing.T) {
+	t.Parallel()
+	in := "`code\n- [[Foo]]`\n[[Foo]]"
+	got := RewriteTitle(in, "Foo", "Bar")
+	want := "`code\n- [[Bar]]`\n[[Bar]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}

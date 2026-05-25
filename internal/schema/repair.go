@@ -136,6 +136,10 @@ func planProperty(result *RepairResult, front *frontmatter.Map, key string, rule
 		}
 	}
 
+	if skipRest {
+		return
+	}
+
 	if isWikilink {
 		wrapped := wrapAllWikilinks(working)
 		if !reflect.DeepEqual(working, wrapped) {

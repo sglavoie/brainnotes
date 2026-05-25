@@ -1,7 +1,9 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -230,5 +232,78 @@ func TestResolvePath_DefaultBeatsMissingXDG(t *testing.T) {
 	}
 	if got != defaultPath {
 		t.Fatalf("ResolvePath should fall through to existing default path: got %q, want %q", got, defaultPath)
+	}
+}
+
+func TestCandidates_DanglingSymlinkXDGDoesNotFallThroughToDefault(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	xdg := t.TempDir()
+	t.Setenv(envXDG, xdg)
+
+	xdgPath := filepath.Join(xdg, "bnotes", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(xdgPath), 0o755); err != nil {
+		t.Fatalf("mkdir xdg config dir: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(xdg, "bnotes", "missing.toml"), xdgPath); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "")
+
+	if _, err := Candidates(""); err == nil {
+		t.Fatal("expected dangling XDG symlink to be rejected")
+	} else if !strings.Contains(err.Error(), xdgPath) {
+		t.Fatalf("error should mention dangling XDG path, got %v", err)
+	}
+}
+
+func TestCandidates_DanglingSymlinkXDGAncestorDoesNotFallThroughToDefault(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	xdgLink := filepath.Join(t.TempDir(), "xdg-link")
+	if err := os.Symlink(filepath.Join(t.TempDir(), "missing-xdg-root"), xdgLink); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	t.Setenv(envXDG, xdgLink)
+
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "")
+
+	wantPath := filepath.Join(xdgLink, "bnotes", "config.toml")
+	if _, err := Candidates(""); err == nil {
+		t.Fatal("expected dangling XDG ancestor symlink to be rejected")
+	} else if !strings.Contains(err.Error(), wantPath) {
+		t.Fatalf("error should mention dangling XDG candidate path %q, got %v", wantPath, err)
+	}
+}
+
+func TestResolvePath_XDGPathComponentNotDirectoryDoesNotFallThroughToDefault(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	xdgFile := filepath.Join(t.TempDir(), "xdg-file")
+	writeFile(t, xdgFile, "")
+	t.Setenv(envXDG, xdgFile)
+
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "")
+
+	wantPath := filepath.Join(xdgFile, "bnotes", "config.toml")
+	_, ok, err := ResolvePath("")
+	if err == nil {
+		t.Fatal("expected invalid XDG path component to be rejected")
+	}
+	if ok {
+		t.Fatal("ok should be false on error")
+	}
+	if !strings.Contains(err.Error(), wantPath) {
+		t.Fatalf("error should mention invalid XDG path %q, got %v", wantPath, err)
 	}
 }

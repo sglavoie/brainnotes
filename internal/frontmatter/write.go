@@ -24,6 +24,7 @@ import (
 func Marshal(doc Document, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 	var out bytes.Buffer
 	body := doc.Body
+	lineEnding := docFrontmatterLineEnding(doc)
 	if doc.hasBOM {
 		out.WriteString("\ufeff")
 		if doc.bodyStartsWithFileBOM {
@@ -31,18 +32,33 @@ func Marshal(doc Document, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 		}
 	}
 	if !doc.Front.IsEmpty() {
-		out.WriteString("---\n")
+		out.WriteString("---" + lineEnding)
 		yamlBytes, err := marshalMap(doc.Front, fmCfg)
 		if err != nil {
 			return nil, fmt.Errorf("frontmatter: marshal: %w", err)
 		}
+		yamlBytes = rewriteLineEndings(yamlBytes, lineEnding)
 		out.Write(yamlBytes)
-		out.WriteString("---\n")
+		out.WriteString("---" + lineEnding)
 	} else if bodyStartsWithDelimiter(body) {
-		out.WriteString("---\n---\n")
+		out.WriteString("---" + lineEnding + "---" + lineEnding)
 	}
 	out.WriteString(body)
 	return out.Bytes(), nil
+}
+
+func docFrontmatterLineEnding(doc Document) string {
+	if doc.frontmatterLineEnding == "\r\n" {
+		return "\r\n"
+	}
+	return "\n"
+}
+
+func rewriteLineEndings(data []byte, lineEnding string) []byte {
+	if lineEnding != "\r\n" {
+		return data
+	}
+	return bytes.ReplaceAll(data, []byte("\n"), []byte("\r\n"))
 }
 
 // bodyStartsWithDelimiter reports whether body begins with content that Parse

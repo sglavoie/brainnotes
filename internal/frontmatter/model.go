@@ -19,6 +19,7 @@ type Document struct {
 	Body                  string
 	hasBOM                bool
 	bodyStartsWithFileBOM bool
+	frontmatterLineEnding string
 }
 
 // Map is an ordered map of frontmatter keys to values. Insertion order is

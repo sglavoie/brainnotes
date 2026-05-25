@@ -59,6 +59,49 @@ const (
 	candidatePathDirectory
 )
 
+func inspectCandidatePath(path string) (candidatePathState, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		if info.IsDir() {
+			return candidatePathDirectory, nil
+		}
+		return candidatePathFile, nil
+	}
+	if os.IsNotExist(err) {
+		if ancestorErr := inspectCandidateAncestorPath(path, err); ancestorErr != nil {
+			return candidatePathMissing, ancestorErr
+		}
+		return candidatePathMissing, nil
+	}
+	return candidatePathMissing, fmt.Errorf("config: stat %s: %w", path, err)
+}
+
+func inspectCandidateAncestorPath(path string, statErr error) error {
+	for current := filepath.Clean(path); ; {
+		info, err := os.Lstat(current)
+		switch {
+		case err == nil:
+			if info.Mode()&os.ModeSymlink != 0 {
+				if _, serr := os.Stat(current); serr != nil {
+					if !os.IsNotExist(serr) {
+						return fmt.Errorf("config: stat %s: %w", current, serr)
+					}
+					return fmt.Errorf("config: stat %s: %w", path, statErr)
+				}
+			}
+		case os.IsNotExist(err):
+		default:
+			return fmt.Errorf("config: lstat %s: %w", current, err)
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return nil
+		}
+		current = parent
+	}
+}
+
 // Candidates returns the full precedence chain (4 entries, in source order).
 // An error is only returned when the active (highest-precedence) candidate
 // cannot be resolved (e.g. tilde expansion failed for the source that would
@@ -73,9 +116,11 @@ const (
 // are treated as unset so they fall through to the next precedence level
 // rather than producing confusing "file does not exist" errors.
 //
-// If the active candidate names a directory instead of a TOML file, Candidates
-// returns an error rather than silently falling through to a lower-precedence
-// source or handing the directory path to callers such as `bn config edit`.
+// If the active candidate names a directory instead of a TOML file, or if
+// statting that candidate fails for a reason other than a genuinely missing
+// file, Candidates returns an error rather than silently falling through to a
+// lower-precedence source or handing the bad path to callers such as
+// `bn config edit`.
 func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 	// Track expansion errors per source so we can surface them only if the
 	// failing source would have been the active (highest-priority) candidate.
@@ -106,6 +151,7 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 		{Source: SourceDefault, Label: "default path"},
 	}
 	states := make([]candidatePathState, len(out))
+	statErrs := make([]error, len(out))
 
 	if xdg := strings.TrimSpace(os.Getenv(envXDG)); xdg != "" {
 		expanded, xdgErr := expandUser(xdg)
@@ -133,23 +179,27 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 		if out[i].Path == "" {
 			continue
 		}
-		if info, err := os.Stat(out[i].Path); err == nil {
-			if info.IsDir() {
-				states[i] = candidatePathDirectory
-				continue
-			}
-			states[i] = candidatePathFile
+		state, err := inspectCandidatePath(out[i].Path)
+		states[i] = state
+		statErrs[i] = err
+		if state == candidatePathFile {
 			out[i].Exists = true
 		}
 	}
 
 	switch {
 	case out[0].Path != "":
+		if statErrs[0] != nil {
+			return nil, statErrs[0]
+		}
 		if states[0] == candidatePathDirectory {
 			return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", out[0].Path)
 		}
 		out[0].Active = true
 	case out[1].Path != "":
+		if statErrs[1] != nil {
+			return nil, statErrs[1]
+		}
 		if states[1] == candidatePathDirectory {
 			return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", out[1].Path)
 		}
@@ -162,6 +212,9 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 			}
 			if firstImplicit == -1 {
 				firstImplicit = i
+			}
+			if statErrs[i] != nil {
+				return nil, statErrs[i]
 			}
 			if states[i] == candidatePathDirectory {
 				return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", out[i].Path)

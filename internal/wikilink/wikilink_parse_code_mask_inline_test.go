@@ -102,3 +102,25 @@ func TestParseInlineCodeAdjacentToWikilink(t *testing.T) {
 		})
 	}
 }
+
+func TestParseInlineCodeSpanDoesNotCrossHeadingBoundary(t *testing.T) {
+	t.Parallel()
+
+	in := "`code\n# [[Visible]]`\n[[AlsoVisible]]"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible", "AlsoVisible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
+
+func TestParseInlineCodeSpanDoesNotCrossListItemBoundary(t *testing.T) {
+	t.Parallel()
+
+	in := "`code\n- [[Visible]]`\n[[AlsoVisible]]"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible", "AlsoVisible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}
