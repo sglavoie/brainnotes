@@ -156,13 +156,3 @@ func splitNull(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	}
 	return 0, nil, nil
 }
-
-// containsString reports whether x is in s.
-func containsString(s []string, x string) bool {
-	for _, v := range s {
-		if v == x {
-			return true
-		}
-	}
-	return false
-}

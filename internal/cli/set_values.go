@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ func splitListValues(rawVal, typeFlag string) ([]any, error) {
 // Without this, `bn set parent=Foo` would always rewrite a note whose stored
 // value is `[[Foo]]` because the raw user input differs byte-for-byte.
 func wikilinkNormalized(v any, key string, fm *config.FrontmatterConfig) any {
-	if fm == nil || !containsString(fm.WikilinkProperties, key) {
+	if fm == nil || !slices.Contains(fm.WikilinkProperties, key) {
 		return v
 	}
 

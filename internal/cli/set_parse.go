@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -84,8 +85,8 @@ func parsePair(rawPair, typeFlag string, fm *config.FrontmatterConfig) (setPair,
 		return setPair{}, fmt.Errorf("set: invalid key %q (allowed: letters, digits, '_', '-')", key)
 	}
 
-	isList := containsString(fm.ListProperties, key)
-	isWikilink := containsString(fm.WikilinkProperties, key)
+	isList := slices.Contains(fm.ListProperties, key)
+	isWikilink := slices.Contains(fm.WikilinkProperties, key)
 	effectiveType := effectiveSetType(typeFlag, isWikilink)
 
 	switch opStr {
