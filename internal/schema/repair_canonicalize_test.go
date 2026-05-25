@@ -141,3 +141,45 @@ func TestPlanRepairs_Canonicalize_Wikilink(t *testing.T) {
 		t.Errorf("new value = %v, want %q", result.Actions[0].NewValue, "[[Work]]")
 	}
 }
+
+func TestPlanRepairs_Canonicalize_WikilinkPreservesHeadingAndAlias(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	}
+	front := buildFront("category", "[[work#Today|Focus]]")
+
+	result := PlanRepairs(front, sch, []string{"category"})
+	if len(result.Skips) != 0 {
+		t.Errorf("unexpected skips: %+v", result.Skips)
+	}
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	if result.Actions[0].Kind != "canonicalize" {
+		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "canonicalize")
+	}
+	if result.Actions[0].NewValue != "[[Work#Today|Focus]]" {
+		t.Errorf("new value = %v, want %q", result.Actions[0].NewValue, "[[Work#Today|Focus]]")
+	}
+}
+
+func TestPlanRepairs_CanonicalizeThenWrap_BareWikilinkHeadingAndAlias(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	}
+	front := buildFront("category", "work#Today|Focus")
+
+	result := PlanRepairs(front, sch, []string{"category"})
+	if len(result.Skips) != 0 {
+		t.Errorf("unexpected skips: %+v", result.Skips)
+	}
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	if result.Actions[0].Kind != "canonicalize,wikilink_wrap" {
+		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "canonicalize,wikilink_wrap")
+	}
+	if result.Actions[0].NewValue != "[[Work#Today|Focus]]" {
+		t.Errorf("new value = %v, want %q", result.Actions[0].NewValue, "[[Work#Today|Focus]]")
+	}
+}

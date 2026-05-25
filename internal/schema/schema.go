@@ -58,8 +58,8 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 	}
 
 	check := func(s string) bool {
-		if isWikilink {
-			s = stripWikilink(s)
+		if isWikilink && isAllowedWikilinkValue(s, set) {
+			return true
 		}
 		_, found := set[s]
 		return found
@@ -103,6 +103,18 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 		}
 		return true, ""
 	}
+}
+
+func isAllowedWikilinkValue(s string, set map[string]struct{}) bool {
+	if _, found := set[stripWikilink(s)]; found {
+		return true
+	}
+	parts, ok := parseWikilinkRepairParts(s)
+	if !ok {
+		return false
+	}
+	_, found := set[parts.target]
+	return found
 }
 
 func stripWikilink(s string) string {

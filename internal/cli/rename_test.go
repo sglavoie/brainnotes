@@ -102,3 +102,27 @@ func TestRenameByExplicitPath(t *testing.T) {
 		t.Fatalf("expected renamed file, got %v", err)
 	}
 }
+
+func TestRenameByRelativePathOutsideVaultCWD(t *testing.T) {
+	root := buildRenameFixture(t)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	outside := t.TempDir()
+	if err := os.Chdir(outside); err != nil {
+		t.Fatalf("chdir(%q): %v", outside, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+
+	if _, err := runCLI(t, "", "rename", "Dune.md", "Sand Worms"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Sand Worms.md")); err != nil {
+		t.Fatalf("expected renamed file, got %v", err)
+	}
+}

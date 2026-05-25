@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -59,18 +60,34 @@ func NewContext(title, folder, vault string, vars map[string]string, clk Clock) 
 		clk = SystemClock{}
 	}
 	now := clk.Now()
-	if vars == nil {
-		vars = map[string]string{}
-	}
 	return Context{
 		Title:  title,
 		Slug:   Slug(title),
-		Folder: folder,
+		Folder: normalizeFolder(folder),
 		Vault:  vault,
 		Time:   now,
 		Date:   time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()),
-		Vars:   vars,
+		Vars:   cloneVars(vars),
 	}
+}
+
+func normalizeFolder(folder string) string {
+	folder = strings.ReplaceAll(filepath.ToSlash(folder), `\`, `/`)
+	if folder == "." {
+		return ""
+	}
+	return folder
+}
+
+func cloneVars(vars map[string]string) map[string]string {
+	if len(vars) == 0 {
+		return map[string]string{}
+	}
+	cloned := make(map[string]string, len(vars))
+	for k, v := range vars {
+		cloned[k] = v
+	}
+	return cloned
 }
 
 // Render parses and executes templateBody against ctx, returning the produced

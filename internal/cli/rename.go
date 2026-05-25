@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -127,6 +126,9 @@ Inspect with 'git diff' to recover.`,
 			if err := checkDestination(target.Path, newPath, force); err != nil {
 				return err
 			}
+			if err := ensureUniqueRenameDestinationTitle(v, target.Path, newPath, newTitle, force); err != nil {
+				return err
+			}
 
 			plan, err := buildRenamePlan(v, target.Path, newPath, oldTitle, newTitle, cfg)
 			if err != nil {
@@ -190,30 +192,6 @@ func validateNewTitle(t string) error {
 		return errors.New("rename: new title may not start with '.'")
 	}
 	return nil
-}
-
-// resolveRenameTarget treats arg as a path when it looks like one (contains a
-// path separator, is absolute, or ends in .md and exists), otherwise resolves
-// it case-insensitively as a bare title.
-func resolveRenameTarget(v *vault.Vault, arg string) (*vault.Note, error) {
-	looksLikePath := filepath.IsAbs(arg) ||
-		strings.ContainsRune(arg, filepath.Separator) ||
-		strings.HasSuffix(strings.ToLower(arg), ".md")
-	if looksLikePath {
-		abs, err := absInVault(v.Root, arg)
-		if err != nil {
-			return nil, fmt.Errorf("rename: %w", err)
-		}
-		if _, err := os.Stat(abs); err != nil {
-			return nil, fmt.Errorf("rename: %w", err)
-		}
-		return &vault.Note{Path: abs}, nil
-	}
-	n, err := v.ResolveByTitle(arg, "")
-	if err != nil {
-		return nil, fmt.Errorf("rename: %w", err)
-	}
-	return n, nil
 }
 
 // computeNewPath returns the destination path: same directory as target, new
@@ -317,27 +295,4 @@ func buildRenamePlan(v *vault.Vault, targetPath, newPath, oldTitle, newTitle str
 		return nil, fmt.Errorf("rename: scan vault: %w", err)
 	}
 	return plan, nil
-}
-
-func ensureUniqueRenameSourceTitle(v *vault.Vault, targetPath, title string) error {
-	var duplicates []string
-	err := v.Walk(vault.WalkFilter{}, func(n *vault.Note) error {
-		if n.Path == targetPath || !strings.EqualFold(n.Title(), title) {
-			return nil
-		}
-		rel, err := filepath.Rel(v.Root, n.Path)
-		if err != nil {
-			rel = n.Path
-		}
-		duplicates = append(duplicates, rel)
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("rename: scan vault for duplicate titles: %w", err)
-	}
-	if len(duplicates) == 0 {
-		return nil
-	}
-	sort.Strings(duplicates)
-	return fmt.Errorf("rename: title %q is duplicated elsewhere in the vault (%s); refusing title-only rewrite", title, strings.Join(duplicates, ", "))
 }

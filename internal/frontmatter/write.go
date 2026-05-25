@@ -213,8 +213,7 @@ func encodeMapAt(m map[string]any, meta map[string]valueMeta, path []string) (*y
 func encodeTime(t time.Time, meta valueMeta, hasMeta bool) *yaml.Node {
 	if (!hasMeta || meta.timestampDateOnly) &&
 		t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
-		_, offset := t.Zone()
-		if offset == 0 {
+		if t.Location() == time.UTC {
 			return &yaml.Node{
 				Kind:  yaml.ScalarNode,
 				Tag:   "!!timestamp",

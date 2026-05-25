@@ -43,11 +43,13 @@ func TestCleanSlashRelEdgeCases(t *testing.T) {
 	}
 }
 
-// TestRelEscapesRoot verifies the escape predicate for outputs of
-// cleanSlashRel: anything matching ".." or "../*" escapes.
+// TestRelEscapesRoot verifies the escape predicate for both slash-normalized
+// paths (cleanSlashRel outputs) and native filepath.Rel outputs on Windows,
+// which use backslashes. Save containment relies on the latter form to reject
+// destinations outside the vault root.
 func TestRelEscapesRoot(t *testing.T) {
-	escape := []string{"..", "../foo", "../../bar"}
-	safe := []string{"", "a", "a/b", "...", "....", "a/..b"}
+	escape := []string{"..", "../foo", "../../bar", `..\foo`, `..\..\bar`}
+	safe := []string{"", "a", "a/b", `a\b`, "...", "....", "a/..b", `a\..b`}
 	for _, p := range escape {
 		if !relEscapesRoot(p) {
 			t.Errorf("relEscapesRoot(%q) = false, want true", p)

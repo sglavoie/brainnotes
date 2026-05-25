@@ -320,6 +320,30 @@ func TestMoveByBareTitle(t *testing.T) {
 	}
 }
 
+func TestMoveByRelativePathOutsideVaultCWD(t *testing.T) {
+	root := buildMoveFixture(t)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	outside := t.TempDir()
+	if err := os.Chdir(outside); err != nil {
+		t.Fatalf("chdir(%q): %v", outside, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+
+	if _, err := runCLI(t, "", "move", "Books/Dune.md", "References/Books"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "References", "Books", "Dune.md")); err != nil {
+		t.Fatalf("expected moved file, got %v", err)
+	}
+}
+
 func TestMove_FzfPickNote(t *testing.T) {
 	root := buildMoveFixture(t)
 

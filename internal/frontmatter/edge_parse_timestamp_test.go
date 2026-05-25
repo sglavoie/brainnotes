@@ -153,6 +153,23 @@ func TestTimestampUTCMidnightDateTimeDoesNotBecomeDateOnly(t *testing.T) {
 	}
 }
 
+func TestMarshalZeroOffsetNonUTCDoesNotBecomeDateOnly(t *testing.T) {
+	doc := Document{Front: NewMap(), Body: "body\n"}
+	doc.Front.Set("created", time.Date(2025, 12, 13, 0, 0, 0, 0, time.FixedZone("zero", 0)))
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	got := string(out)
+	if strings.Contains(got, "created: 2025-12-13\n") {
+		t.Fatalf("zero-offset non-UTC time collapsed to date-only:\n%s", got)
+	}
+	if !strings.Contains(got, "created: 2025-12-13T00:00:00Z") {
+		t.Fatalf("expected full timestamp for zero-offset non-UTC time:\n%s", got)
+	}
+}
+
 func TestNestedTimestampUTCMidnightDateTimeDoesNotBecomeDateOnly(t *testing.T) {
 	in := "---\nevents:\n  - at: 2025-12-13T00:00:00Z\nmeta:\n  created: 2025-12-13T00:00:00Z\n---\nbody\n"
 	doc, err := Parse([]byte(in))

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -133,12 +132,4 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	}
 	_, err = fmt.Fprintf(out, "moved: %s -> %s\n", plan.Target, plan.NewPath)
 	return err
-}
-
-func resolveMoveTarget(v *vault.Vault, noteArg string) (*vault.Note, error) {
-	target, err := resolveRenameTarget(v, noteArg)
-	if err != nil {
-		return nil, fmt.Errorf("move: %s", strings.TrimPrefix(err.Error(), "rename: "))
-	}
-	return target, nil
 }

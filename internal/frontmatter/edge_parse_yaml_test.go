@@ -209,6 +209,48 @@ func TestParseNestedAnchorAlias(t *testing.T) {
 	}
 }
 
+func TestParseTopLevelMergeKeyHonorsExplicitOverride(t *testing.T) {
+	in := "---\nbase: &base\n  a: 1\n  b: 2\na: 9\n<<: *base\nc: 3\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if got, _ := doc.Front.Get("a"); got != 9 {
+		t.Fatalf("a: got %v want 9", got)
+	}
+	if got, _ := doc.Front.Get("b"); got != 2 {
+		t.Fatalf("b: got %v want 2", got)
+	}
+	if got, _ := doc.Front.Get("c"); got != 3 {
+		t.Fatalf("c: got %v want 3", got)
+	}
+	if doc.Front.Has("<<") {
+		t.Fatalf("merge key should not survive as a literal property")
+	}
+}
+
+func TestParseNestedMergeSequenceHonorsMergePrecedence(t *testing.T) {
+	in := "---\none: &one\n  a: 1\n  b: 1\ntwo: &two\n  b: 2\n  c: 2\nmeta:\n  <<: [*one, *two]\n  c: 9\n---\nbody\n"
+	doc, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	meta, _ := doc.Front.Get("meta")
+	got, ok := meta.(map[string]any)
+	if !ok {
+		t.Fatalf("meta: got %T want map[string]any", meta)
+	}
+	want := map[string]any{"a": 1, "b": 1, "c": 9}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("meta: got %#v want %#v", got, want)
+	}
+	if _, ok := got["<<"]; ok {
+		t.Fatalf("merge key should not survive inside nested map")
+	}
+}
+
 // TestParseNestedListWithNullItem — null inside a list inside a nested map
 // must decode to Go nil, not be silently dropped or stringified.
 func TestParseNestedListWithNullItem(t *testing.T) {

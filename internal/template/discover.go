@@ -273,7 +273,7 @@ func isPathAbsoluteLike(p string) bool {
 		return true
 	}
 	if len(p) >= 2 && isASCIIAlpha(p[0]) && p[1] == ':' {
-		return len(p) == 2 || p[2] == '/'
+		return true
 	}
 	return false
 }

@@ -69,6 +69,28 @@ func TestCheckAllowed_Wikilink(t *testing.T) {
 	}
 }
 
+func TestCheckAllowed_WikilinkHeadingAndAliasUsesTarget(t *testing.T) {
+	allowed := []string{"Books", "People"}
+
+	ok, bad := CheckAllowed("[[Books#Now|To Read]]", allowed, true)
+	if !ok {
+		t.Errorf("expected ok for wikilink target match, got offending=%q", bad)
+	}
+
+	ok, bad = CheckAllowed("People#Team|Core", allowed, true)
+	if !ok {
+		t.Errorf("expected ok for bare wikilink-shaped target match, got offending=%q", bad)
+	}
+
+	ok, bad = CheckAllowed("[[Archive#Old|Ignored]]", allowed, true)
+	if ok {
+		t.Error("expected failure when wikilink target is not in allowed list")
+	}
+	if bad != "Archive#Old|Ignored" {
+		t.Errorf("offending = %q, want %q", bad, "Archive#Old|Ignored")
+	}
+}
+
 func TestCheckAllowed_NonStringType(t *testing.T) {
 	ok, _ := CheckAllowed(42, []string{"42"}, false)
 	if !ok {

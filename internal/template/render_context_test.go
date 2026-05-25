@@ -36,6 +36,43 @@ func TestNewContextSlugGeneration(t *testing.T) {
 	}
 }
 
+func TestNewContextCopiesVars(t *testing.T) {
+	t.Parallel()
+	vars := map[string]string{"k": "v"}
+	ctx := NewContext("t", "", "/v", vars, nil)
+
+	vars["k"] = "changed"
+	vars["new"] = "later"
+
+	if got := ctx.Vars["k"]; got != "v" {
+		t.Fatalf("ctx.Vars[k] = %q, want %q", got, "v")
+	}
+	if _, ok := ctx.Vars["new"]; ok {
+		t.Fatalf("ctx.Vars unexpectedly observed caller mutation: %#v", ctx.Vars)
+	}
+}
+
+func TestNewContextNormalizesFolder(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		folder string
+		want   string
+	}{
+		{"backslashes", `Projects\Ideas`, "Projects/Ideas"},
+		{"dot becomes empty", ".", ""},
+		{"already normalized", "Projects/Ideas", "Projects/Ideas"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := NewContext("t", tc.folder, "/v", nil, nil)
+			if ctx.Folder != tc.want {
+				t.Fatalf("Folder = %q, want %q", ctx.Folder, tc.want)
+			}
+		})
+	}
+}
+
 func TestRenderAllFieldsAccessible(t *testing.T) {
 	t.Parallel()
 	clk := FixedClock{T: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)}

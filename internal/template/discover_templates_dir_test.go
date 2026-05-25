@@ -137,6 +137,18 @@ func TestFindRejectsTemplatesDirWindowsAbsolutePath(t *testing.T) {
 	}
 }
 
+func TestFindRejectsTemplatesDirWindowsDriveRelativePath(t *testing.T) {
+	cfg := newDiscoverConfig(t)
+	cfg.Templates.Dir = `C:Templates`
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for Windows drive-relative templates dir")
+	}
+	if !strings.Contains(err.Error(), "relative") {
+		t.Fatalf("expected relative-path error, got %v", err)
+	}
+}
+
 func TestFindRejectsTemplatesDirNULByte(t *testing.T) {
 	cfg := newDiscoverConfig(t)
 	cfg.Templates.Dir = "Templates\x00"

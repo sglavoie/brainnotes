@@ -45,7 +45,7 @@ func exitCode(err error) int {
 	var execErr *exec.Error
 	if errors.As(err, &execErr) {
 		switch {
-		case errors.Is(execErr, exec.ErrNotFound):
+		case errors.Is(execErr, exec.ErrNotFound), errors.Is(execErr, fs.ErrNotExist):
 			return 127
 		case errors.Is(execErr, fs.ErrPermission):
 			return 126
@@ -53,8 +53,13 @@ func exitCode(err error) int {
 	}
 
 	var pathErr *os.PathError
-	if errors.As(err, &pathErr) && (pathErr.Op == "fork/exec" || pathErr.Op == "exec") && errors.Is(pathErr, fs.ErrPermission) {
-		return 126
+	if errors.As(err, &pathErr) && (pathErr.Op == "fork/exec" || pathErr.Op == "exec") {
+		switch {
+		case errors.Is(pathErr, fs.ErrNotExist):
+			return 127
+		case errors.Is(pathErr, fs.ErrPermission), errors.Is(pathErr, syscall.ENOEXEC):
+			return 126
+		}
 	}
 
 	return 1

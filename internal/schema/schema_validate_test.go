@@ -120,6 +120,20 @@ func TestValidateNote_WikilinkAllowed(t *testing.T) {
 	}
 }
 
+func TestValidateNote_WikilinkAllowedHeadingAndAlias(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("category", "[[Work#Today|Focus]]")
+
+	schema := map[string]config.PropertySchema{
+		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	}
+
+	vs := ValidateNote(&front, "note.md", schema, []string{"category"})
+	if len(vs) != 0 {
+		t.Errorf("expected 0 violations for wikilink target match, got %d: %+v", len(vs), vs)
+	}
+}
+
 func TestValidateNote_StableOrder(t *testing.T) {
 	front := frontmatter.NewMap()
 

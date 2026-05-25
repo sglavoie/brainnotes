@@ -331,5 +331,8 @@ func cleanSlashRel(p string) string {
 }
 
 func relEscapesRoot(p string) bool {
-	return p == ".." || strings.HasPrefix(p, "../")
+	if p == ".." {
+		return true
+	}
+	return strings.HasPrefix(p, "../") || strings.HasPrefix(p, `..\`)
 }

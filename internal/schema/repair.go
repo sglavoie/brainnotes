@@ -33,6 +33,13 @@ type RepairResult struct {
 	Skips   []RepairSkip
 }
 
+type wikilinkRepairParts struct {
+	target  string
+	heading string
+	alias   string
+	full    bool
+}
+
 // PlanRepairs inspects a note's frontmatter against the schema and config,
 // returning safe mechanical fixes and reasons for skipped issues. Each
 // property produces at most one action (combining all applicable fix
@@ -276,22 +283,19 @@ func intExactlyRepresentableAsFloat64(n int) bool {
 func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string) {
 	switch v := val.(type) {
 	case string:
-		bare := v
 		if isWikilink {
-			bare = repairWikilinkTarget(v)
+			canon, ok := canonicalizeWikilinkString(v, allowed)
+			if !ok {
+				return val, []string{stripWikilink(v)}
+			}
+			return canon, nil
 		}
-		if isAllowedValue(bare, allowed) {
+		if isAllowedValue(v, allowed) {
 			return val, nil
 		}
-		canon, ok := canonicalizeString(bare, allowed)
+		canon, ok := canonicalizeString(v, allowed)
 		if !ok {
-			return val, []string{bare}
-		}
-		if isWikilink {
-			if !isFullWikilink(v) {
-				return canon, nil
-			}
-			return "[[" + canon + "]]", nil
+			return val, []string{v}
 		}
 		return canon, nil
 	case []any:
@@ -305,27 +309,27 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 				unfixable = appendUniqueString(unfixable, fmt.Sprintf("%v", item))
 				continue
 			}
-			bare := s
 			if isWikilink {
-				bare = repairWikilinkTarget(s)
-			}
-			if isAllowedValue(bare, allowed) {
-				continue
-			}
-			canon, ok := canonicalizeString(bare, allowed)
-			if !ok {
-				unfixable = appendUniqueString(unfixable, bare)
-				continue
-			}
-			if isWikilink {
-				if !isFullWikilink(s) {
-					out[i] = canon
-				} else {
-					out[i] = "[[" + canon + "]]"
+				canon, ok := canonicalizeWikilinkString(s, allowed)
+				if ok {
+					if canon != s {
+						out[i] = canon
+						changed = true
+					}
+					continue
 				}
-			} else {
-				out[i] = canon
+				unfixable = appendUniqueString(unfixable, stripWikilink(s))
+				continue
 			}
+			if isAllowedValue(s, allowed) {
+				continue
+			}
+			canon, ok := canonicalizeString(s, allowed)
+			if !ok {
+				unfixable = appendUniqueString(unfixable, s)
+				continue
+			}
+			out[i] = canon
 			changed = true
 		}
 		if changed {
@@ -350,16 +354,16 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 }
 
 func repairWikilinkTarget(s string) string {
-	target, _, ok := wikilinkRepairTarget(s)
+	parts, ok := parseWikilinkRepairParts(s)
 	if !ok {
 		return s
 	}
-	return target
+	return parts.target
 }
 
 func isFullWikilink(s string) bool {
-	_, full, ok := wikilinkRepairTarget(s)
-	return ok && full
+	parts, ok := parseWikilinkRepairParts(s)
+	return ok && parts.full
 }
 
 func isAllowedValue(s string, allowed []string) bool {
@@ -400,11 +404,11 @@ func wrapAllWikilinks(val any) any {
 }
 
 func wrapSingleWikilink(s string) string {
-	target, full, ok := wikilinkRepairTarget(s)
-	if !ok || full {
+	parts, ok := parseWikilinkRepairParts(s)
+	if !ok || parts.full {
 		return s
 	}
-	return "[[" + target + "]]"
+	return formatWikilinkRepairParts(parts, true)
 }
 
 // wikilinkRepairTarget extracts the target from forms that are safe for repair:
@@ -413,26 +417,110 @@ func wrapSingleWikilink(s string) string {
 // extra text around a wrapped link are left untouched because wrapping them
 // would produce malformed output such as `[[[[X]] B]]`.
 func wikilinkRepairTarget(s string) (target string, full bool, ok bool) {
-	if s == "" {
+	parts, ok := parseWikilinkRepairParts(s)
+	if !ok {
 		return "", false, false
+	}
+	return parts.target, parts.full, true
+}
+
+func parseWikilinkRepairParts(s string) (wikilinkRepairParts, bool) {
+	if s == "" {
+		return wikilinkRepairParts{}, false
 	}
 	starts := strings.HasPrefix(s, "[[")
 	ends := strings.HasSuffix(s, "]]")
 	openCount := strings.Count(s, "[[")
 	closeCount := strings.Count(s, "]]")
 
+	var raw string
+	full := false
 	switch {
 	case starts && ends && len(s) >= 4 && openCount == 1 && closeCount == 1:
-		return s[2 : len(s)-2], true, true
+		raw = s[2 : len(s)-2]
+		full = true
 	case starts && !ends && openCount == 1 && closeCount == 0 && len(s) > 2:
-		return s[2:], false, true
+		raw = s[2:]
 	case !starts && ends && openCount == 0 && closeCount == 1 && len(s) > 2:
-		return s[:len(s)-2], false, true
+		raw = s[:len(s)-2]
 	case openCount == 0 && closeCount == 0:
-		return s, false, true
+		raw = s
 	default:
-		return "", false, false
+		return wikilinkRepairParts{}, false
 	}
+
+	parts, ok := splitWikilinkRepairContent(raw)
+	if !ok {
+		return wikilinkRepairParts{}, false
+	}
+	parts.full = full
+	return parts, true
+}
+
+func splitWikilinkRepairContent(raw string) (wikilinkRepairParts, bool) {
+	if raw == "" || strings.Contains(raw, "[[") || strings.Contains(raw, "]]") {
+		return wikilinkRepairParts{}, false
+	}
+
+	parts := wikilinkRepairParts{}
+	targetPart := raw
+	if pipe := strings.IndexByte(targetPart, '|'); pipe >= 0 {
+		parts.alias = targetPart[pipe+1:]
+		targetPart = targetPart[:pipe]
+	}
+
+	if hash := strings.IndexByte(targetPart, '#'); hash >= 0 {
+		parts.heading = targetPart[hash+1:]
+		targetPart = targetPart[:hash]
+	}
+
+	if targetPart == "" {
+		return wikilinkRepairParts{}, false
+	}
+
+	parts.target = targetPart
+	return parts, true
+}
+
+func canonicalizeWikilinkString(s string, allowed []string) (string, bool) {
+	parts, ok := parseWikilinkRepairParts(s)
+	if !ok {
+		return "", false
+	}
+
+	raw := formatWikilinkRepairParts(parts, false)
+	switch {
+	case isAllowedValue(raw, allowed), isAllowedValue(parts.target, allowed):
+		return s, true
+	}
+
+	if canon, ok := canonicalizeString(raw, allowed); ok {
+		if parts.full {
+			return "[[" + canon + "]]", true
+		}
+		return canon, true
+	}
+
+	if canon, ok := canonicalizeString(parts.target, allowed); ok {
+		parts.target = canon
+		return formatWikilinkRepairParts(parts, parts.full), true
+	}
+
+	return "", false
+}
+
+func formatWikilinkRepairParts(parts wikilinkRepairParts, full bool) string {
+	raw := parts.target
+	if parts.heading != "" {
+		raw += "#" + parts.heading
+	}
+	if parts.alias != "" {
+		raw += "|" + parts.alias
+	}
+	if full {
+		return "[[" + raw + "]]"
+	}
+	return raw
 }
 
 func dedupList(list []any) []any {

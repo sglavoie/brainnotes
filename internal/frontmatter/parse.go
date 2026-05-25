@@ -127,26 +127,133 @@ func parseYAML(data []byte) (Map, error) {
 		return Map{}, fmt.Errorf("top-level must be a mapping")
 	}
 
-	m := NewMap()
-	for i := 0; i+1 < len(root.Content); i += 2 {
-		keyNode := root.Content[i]
-		valNode := root.Content[i+1]
+	return decodeMappingNode(root, nil, map[string]valueMeta{}, make(map[*yaml.Node]bool))
+}
+
+func decodeMappingNode(n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool) (Map, error) {
+	if visiting[n] {
+		return Map{}, fmt.Errorf("cyclic alias")
+	}
+	visiting[n] = true
+	defer delete(visiting, n)
+
+	if meta == nil {
+		meta = map[string]valueMeta{}
+	}
+	m := Map{vals: map[string]any{}, meta: meta}
+
+	explicitKeys, err := collectExplicitKeys(n)
+	if err != nil {
+		return Map{}, err
+	}
+
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		keyNode := n.Content[i]
+		valNode := n.Content[i+1]
+		if isMergeKeyNode(keyNode) {
+			if err := mergeMappingValue(&m, valNode, path, meta, visiting, explicitKeys); err != nil {
+				return Map{}, fmt.Errorf("merge key: %w", err)
+			}
+			continue
+		}
+
 		var key string
 		if err := keyNode.Decode(&key); err != nil {
 			return Map{}, fmt.Errorf("decode key: %w", err)
 		}
-		path := []string{metaMapPart(key)}
-		clearMetaPrefix(m.meta, path)
-		val, err := decodeNodeAt(valNode, path, m.meta, make(map[*yaml.Node]bool))
+		childPath := appendMetaPath(path, metaMapPart(key))
+		clearMetaPrefix(meta, childPath)
+		val, err := decodeNodeAt(valNode, childPath, meta, visiting)
 		if err != nil {
 			return Map{}, fmt.Errorf("decode value for %q: %w", key, err)
 		}
 		m.setParsed(key, val)
 	}
+
 	return m, nil
 }
 
+func collectExplicitKeys(n *yaml.Node) (map[string]struct{}, error) {
+	keys := make(map[string]struct{}, len(n.Content)/2)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		keyNode := n.Content[i]
+		if isMergeKeyNode(keyNode) {
+			continue
+		}
+		var key string
+		if err := keyNode.Decode(&key); err != nil {
+			return nil, fmt.Errorf("decode key: %w", err)
+		}
+		keys[key] = struct{}{}
+	}
+	return keys, nil
+}
+
+func mergeMappingValue(dst *Map, n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool, explicitKeys map[string]struct{}) error {
+	switch n.Kind {
+	case yaml.AliasNode:
+		if n.Alias == nil {
+			return fmt.Errorf("dangling alias")
+		}
+		return mergeMappingValue(dst, n.Alias, path, meta, visiting, explicitKeys)
+	case yaml.MappingNode:
+		srcMeta := map[string]valueMeta{}
+		src, err := decodeMappingNode(n, path, srcMeta, visiting)
+		if err != nil {
+			return err
+		}
+		applyMergedEntries(dst, src, meta, explicitKeys, path)
+		return nil
+	case yaml.SequenceNode:
+		for _, item := range n.Content {
+			if err := mergeMappingValue(dst, item, path, meta, visiting, explicitKeys); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("merge value must be a mapping or sequence of mappings")
+	}
+}
+
+func applyMergedEntries(dst *Map, src Map, meta map[string]valueMeta, explicitKeys map[string]struct{}, path []string) {
+	for _, key := range src.keys {
+		if _, ok := explicitKeys[key]; ok {
+			continue
+		}
+		if dst.Has(key) {
+			continue
+		}
+		childPath := appendMetaPath(path, metaMapPart(key))
+		copyMetaPrefix(meta, src.meta, childPath)
+		dst.setParsed(key, src.vals[key])
+	}
+}
+
+func copyMetaPrefix(dst, src map[string]valueMeta, path []string) {
+	if dst == nil || len(src) == 0 {
+		return
+	}
+	prefix := metaPathKey(path)
+	for k, v := range src {
+		if isMetaPrefixMatch(k, prefix) {
+			dst[k] = v
+		}
+	}
+}
+
+func isMergeKeyNode(n *yaml.Node) bool {
+	return n != nil && n.Kind == yaml.ScalarNode && n.Tag == "!!merge"
+}
+
 func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool) (any, error) {
+	if n.Kind == yaml.MappingNode {
+		m, err := decodeMappingNode(n, path, meta, visiting)
+		if err != nil {
+			return nil, err
+		}
+		return m.vals, nil
+	}
 	if visiting[n] {
 		return nil, fmt.Errorf("cyclic alias")
 	}
@@ -174,22 +281,6 @@ func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta, visiti
 			out = append(out, item)
 		}
 		return out, nil
-	case yaml.MappingNode:
-		v := make(map[string]any, len(n.Content)/2)
-		for i := 0; i+1 < len(n.Content); i += 2 {
-			var key string
-			if err := n.Content[i].Decode(&key); err != nil {
-				return nil, fmt.Errorf("decode nested key: %w", err)
-			}
-			childPath := appendMetaPath(path, metaMapPart(key))
-			clearMetaPrefix(meta, childPath)
-			val, err := decodeNodeAt(n.Content[i+1], childPath, meta, visiting)
-			if err != nil {
-				return nil, fmt.Errorf("decode nested value for %q: %w", key, err)
-			}
-			v[key] = val
-		}
-		return v, nil
 	case yaml.AliasNode:
 		if n.Alias == nil {
 			return nil, fmt.Errorf("dangling alias")

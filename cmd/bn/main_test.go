@@ -76,6 +76,23 @@ func TestRunMapsCommandNotFoundTo127(t *testing.T) {
 	}
 }
 
+func TestRunMapsMissingCommandPathTo127(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error {
+		return fmt.Errorf("wrapped: %w", &exec.Error{
+			Name: "./missing-editor",
+			Err:  &os.PathError{Op: "stat", Path: "./missing-editor", Err: fs.ErrNotExist},
+		})
+	})
+
+	if code := run(stderr); code != 127 {
+		t.Fatalf("run() exit code = %d, want 127", code)
+	}
+	if got := stderr.String(); !strings.Contains(got, `bn: wrapped: exec: "./missing-editor": stat ./missing-editor:`) {
+		t.Fatalf("stderr = %q, want missing-path error", got)
+	}
+}
+
 func TestRunMapsNonExecutableCommandTo126(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	stubExecute(t, func() error {
@@ -95,6 +112,30 @@ func TestExitCodeMapsForkExecPermissionDeniedTo126(t *testing.T) {
 		Op:   "fork/exec",
 		Path: "/vault/scripts/non-executable",
 		Err:  fs.ErrPermission,
+	})
+
+	if code := exitCode(err); code != 126 {
+		t.Fatalf("exitCode() = %d, want 126", code)
+	}
+}
+
+func TestExitCodeMapsExecMissingPathTo127(t *testing.T) {
+	err := fmt.Errorf("wrapped: %w", &os.PathError{
+		Op:   "exec",
+		Path: "/vault/bin/missing-editor",
+		Err:  fs.ErrNotExist,
+	})
+
+	if code := exitCode(err); code != 127 {
+		t.Fatalf("exitCode() = %d, want 127", code)
+	}
+}
+
+func TestExitCodeMapsExecFormatErrorTo126(t *testing.T) {
+	err := fmt.Errorf("wrapped: %w", &os.PathError{
+		Op:   "exec",
+		Path: "/vault/bin/bad-editor",
+		Err:  syscall.ENOEXEC,
 	})
 
 	if code := exitCode(err); code != 126 {

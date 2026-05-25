@@ -204,8 +204,9 @@ func mergeIgnore(defaults, extra []string) []string {
 // normalizeIgnore trims surrounding whitespace, converts platform separators
 // to forward slashes, and applies path.Clean so that variants like "Archive/",
 // "./Archive", "././Archive", and " Archive " all collapse to "Archive" for
-// dedup purposes. An entry that normalizes to "" or "." (e.g. originally just
-// whitespace, or ".") is dropped by mergeIgnore.
+// dedup purposes. Entries that are empty, point at the vault root itself, are
+// absolute, or escape upward via ".." are dropped because ignore values are
+// documented to be vault-relative paths.
 func normalizeIgnore(p string) string {
 	p = strings.TrimSpace(p)
 	if p == "" {
@@ -219,7 +220,8 @@ func normalizeIgnore(p string) string {
 	// path.Clean handles repeated "./", interior ".", and other artifacts,
 	// matching the normalization the vault walker applies in ignoreSet.
 	p = path.Clean(p)
-	if p == "" || p == "." {
+	if p == "" || p == "." || isAbsolutePathLike(p) ||
+		p == ".." || strings.HasPrefix(p, "../") {
 		return ""
 	}
 	return p

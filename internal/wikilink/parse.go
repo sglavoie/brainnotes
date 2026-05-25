@@ -197,6 +197,7 @@ func buildCodeMask(s string) []byteRange {
 		}
 
 		quotedIndented := quoted && startsWithIndentedCodePlain(strippedQuote)
+		quoteDepthChanged := quoted && quoteDepth != prevQuoteDepth
 		startsQuotedBlock := quoted && quoteDepth > prevQuoteDepth
 		if (startsWithIndentedCode(text) && (prevBlank || inIndentedCode)) ||
 			(quotedIndented && (prevBlank || inIndentedCode || startsQuotedBlock)) {
@@ -208,11 +209,11 @@ func buildCodeMask(s string) []byteRange {
 			continue
 		}
 
-		if startsQuotedBlock {
+		if quoteDepthChanged {
 			// An inline code span may continue across a soft line break inside the
-			// same paragraph, but entering a deeper blockquote container starts a
-			// new block. Flush any pending inline scan so a stray backtick on the
-			// previous line cannot hide real wikilinks in the quoted block.
+			// same paragraph, but changing blockquote nesting depth starts a new
+			// block. Flush any pending inline scan so a stray backtick on the
+			// previous line cannot hide real wikilinks in the new quoted block.
 			flushInline()
 		}
 

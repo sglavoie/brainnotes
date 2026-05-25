@@ -116,3 +116,51 @@ func TestLoad_IgnoreNormalizesBackslashes(t *testing.T) {
 		t.Fatalf("expected Drafts/Old after backslash normalization: %v", cfg.Ignore)
 	}
 }
+
+func TestLoad_IgnoreDropsAbsoluteEntries(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	for _, raw := range []string{"/abs/Archive", `/rooted`, `C:\Vault\Archive`, "D:/Vault/Drafts"} {
+		t.Run(raw, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.toml")
+			writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = ['"+raw+"', 'Drafts']\n")
+
+			cfg, err := Load("", cfgPath)
+			if err != nil {
+				t.Fatalf("Load (%q): %v", raw, err)
+			}
+			for _, p := range cfg.Ignore {
+				if isAbsolutePathLike(p) {
+					t.Fatalf("absolute ignore entry should be dropped, got %v", cfg.Ignore)
+				}
+			}
+			if !contains(cfg.Ignore, "Drafts") {
+				t.Fatalf("valid ignore entry should remain after dropping absolute path: %v", cfg.Ignore)
+			}
+		})
+	}
+}
+
+func TestLoad_IgnoreDropsParentTraversal(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = ['../Archive', '..\\\\Drafts', 'Notes']\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, p := range cfg.Ignore {
+		if p == "../Archive" || p == "../Drafts" || p == "..\\Drafts" {
+			t.Fatalf("parent-traversal ignore entry should be dropped, got %v", cfg.Ignore)
+		}
+	}
+	if !contains(cfg.Ignore, "Notes") {
+		t.Fatalf("valid ignore entry should remain after dropping traversal: %v", cfg.Ignore)
+	}
+}
