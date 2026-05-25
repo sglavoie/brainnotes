@@ -126,3 +126,14 @@ func TestParseSkipsBlockquotedIndentedCode(t *testing.T) {
 		})
 	}
 }
+
+func TestParseInlineCodeSpanDoesNotCrossIntoBlockquote(t *testing.T) {
+	t.Parallel()
+
+	in := "`code\n> [[Visible]]`"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}

@@ -51,6 +51,14 @@ type CandidatePath struct {
 	Active bool   // true on the path Load/ResolvePath would consult
 }
 
+type candidatePathState uint8
+
+const (
+	candidatePathMissing candidatePathState = iota
+	candidatePathFile
+	candidatePathDirectory
+)
+
 // Candidates returns the full precedence chain (4 entries, in source order).
 // An error is only returned when the active (highest-precedence) candidate
 // cannot be resolved (e.g. tilde expansion failed for the source that would
@@ -64,6 +72,10 @@ type CandidatePath struct {
 // Whitespace-only values for the flag, $BNOTES_CONFIG, or $XDG_CONFIG_HOME
 // are treated as unset so they fall through to the next precedence level
 // rather than producing confusing "file does not exist" errors.
+//
+// If the active candidate names a directory instead of a TOML file, Candidates
+// returns an error rather than silently falling through to a lower-precedence
+// source or handing the directory path to callers such as `bn config edit`.
 func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 	// Track expansion errors per source so we can surface them only if the
 	// failing source would have been the active (highest-priority) candidate.
@@ -93,6 +105,7 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 		{Source: SourceXDG, Label: "$XDG_CONFIG_HOME"},
 		{Source: SourceDefault, Label: "default path"},
 	}
+	states := make([]candidatePathState, len(out))
 
 	if xdg := strings.TrimSpace(os.Getenv(envXDG)); xdg != "" {
 		expanded, xdgErr := expandUser(xdg)
@@ -120,15 +133,26 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 		if out[i].Path == "" {
 			continue
 		}
-		if info, err := os.Stat(out[i].Path); err == nil && !info.IsDir() {
+		if info, err := os.Stat(out[i].Path); err == nil {
+			if info.IsDir() {
+				states[i] = candidatePathDirectory
+				continue
+			}
+			states[i] = candidatePathFile
 			out[i].Exists = true
 		}
 	}
 
 	switch {
 	case out[0].Path != "":
+		if states[0] == candidatePathDirectory {
+			return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", out[0].Path)
+		}
 		out[0].Active = true
 	case out[1].Path != "":
+		if states[1] == candidatePathDirectory {
+			return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", out[1].Path)
+		}
 		out[1].Active = true
 	default:
 		firstImplicit := -1
@@ -138,6 +162,9 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 			}
 			if firstImplicit == -1 {
 				firstImplicit = i
+			}
+			if states[i] == candidatePathDirectory {
+				return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", out[i].Path)
 			}
 			if out[i].Exists {
 				out[i].Active = true

@@ -14,6 +14,8 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
+var renameFileRename = os.Rename
+
 // scanBodyChanges returns one renameChange per body line whose content shifts
 // after applying RewriteTitle. Line numbers are 1-based. The rewrite is run
 // on the whole body first so that code-fence masking in `wikilink.Parse` sees
@@ -263,15 +265,18 @@ func renameFile(target, newPath string) error {
 		tmpPath := tmp.Name()
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
-		if err := os.Rename(target, tmpPath); err != nil {
+		if err := renameFileRename(target, tmpPath); err != nil {
 			return fmt.Errorf("rename: pivot %q -> %q: %w", target, tmpPath, err)
 		}
-		if err := os.Rename(tmpPath, newPath); err != nil {
+		if err := renameFileRename(tmpPath, newPath); err != nil {
+			if restoreErr := renameFileRename(tmpPath, target); restoreErr != nil {
+				return fmt.Errorf("rename: pivot %q -> %q: %w; restore to %q failed: %v", tmpPath, newPath, err, target, restoreErr)
+			}
 			return fmt.Errorf("rename: pivot %q -> %q: %w", tmpPath, newPath, err)
 		}
 		return nil
 	}
-	if err := os.Rename(target, newPath); err != nil {
+	if err := renameFileRename(target, newPath); err != nil {
 		return fmt.Errorf("rename: %q -> %q: %w", target, newPath, err)
 	}
 	return nil

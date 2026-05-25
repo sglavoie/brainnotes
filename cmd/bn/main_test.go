@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -57,6 +59,46 @@ func TestRunPreservesSubprocessExitCode(t *testing.T) {
 	}
 	if got := stderr.String(); !strings.Contains(got, "bn: wrapped: exit status 23\n") {
 		t.Fatalf("stderr = %q, want wrapped subprocess failure", got)
+	}
+}
+
+func TestRunMapsCommandNotFoundTo127(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error {
+		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "missing-editor", Err: exec.ErrNotFound})
+	})
+
+	if code := run(stderr); code != 127 {
+		t.Fatalf("run() exit code = %d, want 127", code)
+	}
+	if got := stderr.String(); !strings.Contains(got, `bn: wrapped: exec: "missing-editor": executable file not found in $PATH`) {
+		t.Fatalf("stderr = %q, want command-not-found error", got)
+	}
+}
+
+func TestRunMapsNonExecutableCommandTo126(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error {
+		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "non-executable", Err: fs.ErrPermission})
+	})
+
+	if code := run(stderr); code != 126 {
+		t.Fatalf("run() exit code = %d, want 126", code)
+	}
+	if got := stderr.String(); !strings.Contains(got, `bn: wrapped: exec: "non-executable": permission denied`) {
+		t.Fatalf("stderr = %q, want permission-denied error", got)
+	}
+}
+
+func TestExitCodeMapsForkExecPermissionDeniedTo126(t *testing.T) {
+	err := fmt.Errorf("wrapped: %w", &os.PathError{
+		Op:   "fork/exec",
+		Path: "/vault/scripts/non-executable",
+		Err:  fs.ErrPermission,
+	})
+
+	if code := exitCode(err); code != 126 {
+		t.Fatalf("exitCode() = %d, want 126", code)
 	}
 }
 

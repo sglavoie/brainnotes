@@ -121,6 +121,58 @@ func TestFromFlagsZeroValueIntFieldsRequireGraph(t *testing.T) {
 	}
 }
 
+func TestFromFlagsRejectsInvalidNegativeLinkCounts(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		flags Flags
+	}{
+		{
+			name:  "min backlinks",
+			flags: Flags{MinBacklinks: -2, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1},
+		},
+		{
+			name:  "max backlinks",
+			flags: Flags{MinBacklinks: -1, MaxBacklinks: -2, MinLinks: -1, MaxLinks: -1},
+		},
+		{
+			name:  "min links",
+			flags: Flags{MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -2, MaxLinks: -1},
+		},
+		{
+			name:  "max links",
+			flags: Flags{MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -2},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := FromFlags(tc.flags); err == nil {
+				t.Fatalf("FromFlags(%+v) should reject values below the -1 sentinel", tc.flags)
+			}
+		})
+	}
+}
+
+func TestFromFlagsRejectsInvertedLinkCountRanges(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		flags Flags
+	}{
+		{
+			name:  "backlinks",
+			flags: Flags{MinBacklinks: 3, MaxBacklinks: 1, MinLinks: -1, MaxLinks: -1},
+		},
+		{
+			name:  "links",
+			flags: Flags{MinBacklinks: -1, MaxBacklinks: -1, MinLinks: 2, MaxLinks: 1},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := FromFlags(tc.flags); err == nil {
+				t.Fatalf("FromFlags(%+v) should reject a min count above the corresponding max", tc.flags)
+			}
+		})
+	}
+}
+
 // TestFromFlagsSkipsEmptyTagsAndCategories verifies that empty strings in the
 // Tags/Categories slices are silently dropped rather than producing a
 // match-nothing predicate. This matters when callers build slices from raw user

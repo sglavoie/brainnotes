@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"syscall"
@@ -40,6 +41,22 @@ func exitCode(err error) int {
 			return 128 + int(status.Signal())
 		}
 	}
+
+	var execErr *exec.Error
+	if errors.As(err, &execErr) {
+		switch {
+		case errors.Is(execErr, exec.ErrNotFound):
+			return 127
+		case errors.Is(execErr, fs.ErrPermission):
+			return 126
+		}
+	}
+
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) && (pathErr.Op == "fork/exec" || pathErr.Op == "exec") && errors.Is(pathErr, fs.ErrPermission) {
+		return 126
+	}
+
 	return 1
 }
 

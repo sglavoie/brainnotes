@@ -54,3 +54,13 @@ func TestRewriteSkipsBlockquotedIndentedCode(t *testing.T) {
 		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
 	}
 }
+
+func TestRewriteInlineCodeSpanDoesNotCrossIntoBlockquote(t *testing.T) {
+	t.Parallel()
+	in := "`code\n> [[Foo]]`"
+	got := RewriteTitle(in, "Foo", "Bar")
+	want := "`code\n> [[Bar]]`"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}

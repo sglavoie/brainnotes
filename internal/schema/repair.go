@@ -347,13 +347,16 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 }
 
 func repairWikilinkTarget(s string) string {
-	s = strings.TrimPrefix(s, "[[")
-	s = strings.TrimSuffix(s, "]]")
-	return s
+	target, _, ok := wikilinkRepairTarget(s)
+	if !ok {
+		return s
+	}
+	return target
 }
 
 func isFullWikilink(s string) bool {
-	return strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]") && len(s) >= 4
+	_, full, ok := wikilinkRepairTarget(s)
+	return ok && full
 }
 
 func isAllowedValue(s string, allowed []string) bool {
@@ -394,12 +397,39 @@ func wrapAllWikilinks(val any) any {
 }
 
 func wrapSingleWikilink(s string) string {
-	if s == "" || (strings.HasPrefix(s, "[[") && strings.HasSuffix(s, "]]")) {
+	target, full, ok := wikilinkRepairTarget(s)
+	if !ok || full {
 		return s
 	}
-	s = strings.TrimPrefix(s, "[[")
-	s = strings.TrimSuffix(s, "]]")
-	return "[[" + s + "]]"
+	return "[[" + target + "]]"
+}
+
+// wikilinkRepairTarget extracts the target from forms that are safe for repair:
+// bare strings, fully wrapped `[[target]]`, and simple one-sided partial wraps
+// (`[[target` or `target]]`). Values containing embedded bracket markers or
+// extra text around a wrapped link are left untouched because wrapping them
+// would produce malformed output such as `[[[[X]] B]]`.
+func wikilinkRepairTarget(s string) (target string, full bool, ok bool) {
+	if s == "" {
+		return "", false, false
+	}
+	starts := strings.HasPrefix(s, "[[")
+	ends := strings.HasSuffix(s, "]]")
+	openCount := strings.Count(s, "[[")
+	closeCount := strings.Count(s, "]]")
+
+	switch {
+	case starts && ends && len(s) >= 4 && openCount == 1 && closeCount == 1:
+		return s[2 : len(s)-2], true, true
+	case starts && !ends && openCount == 1 && closeCount == 0 && len(s) > 2:
+		return s[2:], false, true
+	case !starts && ends && openCount == 0 && closeCount == 1 && len(s) > 2:
+		return s[:len(s)-2], false, true
+	case openCount == 0 && closeCount == 0:
+		return s, false, true
+	default:
+		return "", false, false
+	}
 }
 
 func dedupList(list []any) []any {

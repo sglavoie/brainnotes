@@ -137,7 +137,7 @@ func parseYAML(data []byte) (Map, error) {
 		}
 		path := []string{metaMapPart(key)}
 		clearMetaPrefix(m.meta, path)
-		val, err := decodeNodeAt(valNode, path, m.meta)
+		val, err := decodeNodeAt(valNode, path, m.meta, make(map[*yaml.Node]bool))
 		if err != nil {
 			return Map{}, fmt.Errorf("decode value for %q: %w", key, err)
 		}
@@ -146,7 +146,12 @@ func parseYAML(data []byte) (Map, error) {
 	return m, nil
 }
 
-func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta) (any, error) {
+func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool) (any, error) {
+	if visiting[n] {
+		return nil, fmt.Errorf("cyclic alias")
+	}
+	visiting[n] = true
+	defer delete(visiting, n)
 	switch n.Kind {
 	case yaml.ScalarNode:
 		if n.Tag == "!!null" || (n.Tag == "" && n.Value == "") {
@@ -162,7 +167,7 @@ func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta) (any, 
 	case yaml.SequenceNode:
 		out := make([]any, 0, len(n.Content))
 		for i, c := range n.Content {
-			item, err := decodeNodeAt(c, appendMetaPath(path, metaIndexPart(i)), meta)
+			item, err := decodeNodeAt(c, appendMetaPath(path, metaIndexPart(i)), meta, visiting)
 			if err != nil {
 				return nil, err
 			}
@@ -178,7 +183,7 @@ func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta) (any, 
 			}
 			childPath := appendMetaPath(path, metaMapPart(key))
 			clearMetaPrefix(meta, childPath)
-			val, err := decodeNodeAt(n.Content[i+1], childPath, meta)
+			val, err := decodeNodeAt(n.Content[i+1], childPath, meta, visiting)
 			if err != nil {
 				return nil, fmt.Errorf("decode nested value for %q: %w", key, err)
 			}
@@ -189,7 +194,7 @@ func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta) (any, 
 		if n.Alias == nil {
 			return nil, fmt.Errorf("dangling alias")
 		}
-		return decodeNodeAt(n.Alias, path, meta)
+		return decodeNodeAt(n.Alias, path, meta, visiting)
 	}
 	var v any
 	if err := n.Decode(&v); err != nil {

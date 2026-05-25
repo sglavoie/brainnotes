@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -175,5 +176,30 @@ func TestLoad_MissingXDGFallsThroughToDefaultConfig(t *testing.T) {
 	}
 	if cfg.SourcePath != defaultPath {
 		t.Fatalf("SourcePath: got %q, want %q", cfg.SourcePath, defaultPath)
+	}
+}
+
+func TestLoad_XDGDirectoryDoesNotFallThroughToDefaultConfig(t *testing.T) {
+	// An existing XDG config path that is a directory is invalid and should
+	// block resolution rather than silently falling through to ~/.config.
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	xdg := t.TempDir()
+	xdgPath := filepath.Join(xdg, "bnotes", "config.toml")
+	if err := os.MkdirAll(xdgPath, 0o755); err != nil {
+		t.Fatalf("mkdir xdg config dir: %v", err)
+	}
+	t.Setenv(envXDG, xdg)
+
+	vaultFile := t.TempDir()
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "vault = \""+vaultFile+"\"\n")
+
+	if _, err := Load("", ""); err == nil {
+		t.Fatal("expected XDG config directory to be rejected")
+	} else if !strings.Contains(err.Error(), xdgPath) || !strings.Contains(err.Error(), "directory") {
+		t.Fatalf("error should mention XDG directory path, got %v", err)
 	}
 }

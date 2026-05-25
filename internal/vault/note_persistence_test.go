@@ -3,7 +3,6 @@ package vault
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -127,36 +126,5 @@ func TestSaveEmptyPath(t *testing.T) {
 	n.Path = ""
 	if err := n.Save(&v.Cfg.Frontmatter); err == nil {
 		t.Fatal("Save with empty Path should return an error")
-	}
-}
-
-// TestSaveWritesNewFileMode verifies that a fresh save (no existing file at
-// dest) lands with 0o644 rather than leaking the temp file's 0o600 default
-// from os.CreateTemp.
-func TestSaveWritesNewFileMode(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX mode bits not meaningful on Windows")
-	}
-	v := newTestVault(t, nil, map[string]string{
-		"a.md": "---\ntitle: A\n---\nbody\n",
-	})
-	n, err := v.ResolveByTitle("a", "")
-	if err != nil {
-		t.Fatalf("resolve: %v", err)
-	}
-	if err := n.Load(); err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	newPath := filepath.Join(v.Root, "brand-new.md")
-	n.Path = newPath
-	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
-		t.Fatalf("save: %v", err)
-	}
-	info, err := os.Stat(newPath)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if got := info.Mode().Perm(); got != 0o644 {
-		t.Errorf("new file mode: got %o, want %o", got, 0o644)
 	}
 }

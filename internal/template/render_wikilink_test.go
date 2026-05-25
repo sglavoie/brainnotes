@@ -46,6 +46,11 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		// Leading or trailing `]]` alone.
 		{"]]", "[[]]"},
 		{"[[Foo", "[[Foo]]"},
+		// Already-wrapped values with stray inner brackets are malformed; the
+		// helper must sanitize them rather than pass them through unchanged.
+		{"[[Foo]Bar]]", "[[FooBar]]"},
+		{"[[Foo[Bar]]", "[[FooBar]]"},
+		{"[[[]]", "[[]]"},
 		// Surrounding whitespace on a non-wrapped value must be trimmed —
 		// Obsidian treats whitespace inside [[ ]] as part of the link target,
 		// so "[[  Books  ]]" would not resolve to the "Books" note.

@@ -80,6 +80,27 @@ func TestParseAnchorAlias(t *testing.T) {
 	}
 }
 
+// TestParseCyclicAliasErrors ensures self-referential anchors fail fast instead
+// of recursing forever. Before the fix, decodeNodeAt followed alias targets with
+// no cycle detection, so inputs like `a: &x [*x]` hung Parse indefinitely.
+func TestParseCyclicAliasErrors(t *testing.T) {
+	cases := map[string]string{
+		"self-referential sequence": "---\na: &x [*x]\n---\n",
+		"self-referential mapping":  "---\na: &x {self: *x}\n---\n",
+	}
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse([]byte(in))
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), "cyclic alias") {
+				t.Fatalf("expected cyclic alias error, got %v", err)
+			}
+		})
+	}
+}
+
 // TestParseNullDocument — a YAML `null` document between the delimiters should
 // parse as an empty Map, not return an error.
 func TestParseNullDocument(t *testing.T) {

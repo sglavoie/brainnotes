@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"os"
@@ -142,8 +143,9 @@ func (n *Note) Folder(root string) (string, error) {
 // If dest already exists, its file mode is preserved across the rewrite. Go's
 // os.CreateTemp creates files with mode 0600, so without this step every Save
 // would silently strip group/world read bits from a 0644 note. When dest does
-// not exist (new note) the default 0600 from CreateTemp is widened to 0644 to
-// match the usual umask-derived behavior of editors like Obsidian.
+// not exist (new note), the mode is derived from a sibling probe file created
+// with 0666 so the final note respects the process umask instead of forcing
+// world-readable 0644 permissions.
 func atomicWrite(dest string, data []byte) error {
 	dir := filepath.Dir(dest)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -163,11 +165,10 @@ func atomicWrite(dest string, data []byte) error {
 		return fmt.Errorf("note: stat %q: %w", dest, err)
 	}
 
-	tmp, err := os.CreateTemp(dir, ".note-*.tmp")
+	tmp, tmpPath, err := openExclusiveTemp(dir, ".note-", ".tmp", 0o600)
 	if err != nil {
 		return fmt.Errorf("note: tempfile in %q: %w", dir, err)
 	}
-	tmpPath := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpPath) }
 
 	if _, err := tmp.Write(data); err != nil {
@@ -189,7 +190,11 @@ func atomicWrite(dest string, data []byte) error {
 	// this on the temp path keeps the operation atomic with respect to readers.
 	wantMode := destMode
 	if !destExists {
-		wantMode = 0o644
+		wantMode, err = defaultNewFileMode(dir)
+		if err != nil {
+			cleanup()
+			return err
+		}
 	}
 	if err := os.Chmod(tmpPath, wantMode); err != nil {
 		cleanup()
@@ -210,4 +215,43 @@ func atomicWrite(dest string, data []byte) error {
 		_ = dirF.Close()
 	}
 	return nil
+}
+
+func openExclusiveTemp(dir, prefix, suffix string, perm os.FileMode) (*os.File, string, error) {
+	const attempts = 1000
+	for i := 0; i < attempts; i++ {
+		var randBytes [8]byte
+		if _, err := rand.Read(randBytes[:]); err != nil {
+			return nil, "", fmt.Errorf("note: random temp suffix: %w", err)
+		}
+		path := filepath.Join(dir, fmt.Sprintf("%s%x%s", prefix, randBytes, suffix))
+		f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
+		if err == nil {
+			return f, path, nil
+		}
+		if os.IsExist(err) {
+			continue
+		}
+		return nil, "", err
+	}
+	return nil, "", fmt.Errorf("note: unique temp file in %q: too many collisions", dir)
+}
+
+func defaultNewFileMode(dir string) (os.FileMode, error) {
+	probe, probePath, err := openExclusiveTemp(dir, ".note-mode-", ".tmp", 0o666)
+	if err != nil {
+		return 0, fmt.Errorf("note: probe tempfile in %q: %w", dir, err)
+	}
+	cleanup := func() { _ = os.Remove(probePath) }
+	if err := probe.Close(); err != nil {
+		cleanup()
+		return 0, fmt.Errorf("note: close %q: %w", probePath, err)
+	}
+	info, err := os.Stat(probePath)
+	if err != nil {
+		cleanup()
+		return 0, fmt.Errorf("note: stat %q: %w", probePath, err)
+	}
+	cleanup()
+	return info.Mode().Perm(), nil
 }

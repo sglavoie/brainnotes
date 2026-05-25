@@ -208,6 +208,14 @@ func buildCodeMask(s string) []byteRange {
 			continue
 		}
 
+		if startsQuotedBlock {
+			// An inline code span may continue across a soft line break inside the
+			// same paragraph, but entering a deeper blockquote container starts a
+			// new block. Flush any pending inline scan so a stray backtick on the
+			// previous line cannot hide real wikilinks in the quoted block.
+			flushInline()
+		}
+
 		inIndentedCode = false
 		if inlineStart < 0 {
 			inlineStart = ln.start

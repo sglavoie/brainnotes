@@ -96,3 +96,18 @@ func TestLoad_WhitespaceConfigFlagFallsThrough(t *testing.T) {
 			cfg.Vault, vaultFile)
 	}
 }
+
+func TestResolvePath_ConfigDirectoryIsError(t *testing.T) {
+	// ResolvePath feeds `bn config edit`; returning a directory path would hand
+	// $EDITOR something unusable instead of surfacing the invalid config target.
+	resetEnv(t)
+	dir := t.TempDir()
+
+	_, ok, err := ResolvePath(dir)
+	if err == nil {
+		t.Fatal("expected error when resolved config path is a directory")
+	}
+	if ok {
+		t.Fatal("ok should be false on error")
+	}
+}

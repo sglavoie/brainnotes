@@ -13,9 +13,10 @@ import (
 //
 // The int fields MinBacklinks, MaxBacklinks, MinLinks, and MaxLinks use -1 as
 // the sentinel for "not set". A value of 0 IS a meaningful filter (e.g.
-// MaxBacklinks=0 matches notes with no inbound links). Callers that construct
-// Flags directly must initialise these fields to -1 to avoid unintended
-// filtering — the Go zero value (0) would activate MaxBacklinks/MaxLinks.
+// MaxBacklinks=0 matches notes with no inbound links). Values below -1 are
+// invalid. Callers that construct Flags directly must initialise these fields
+// to -1 to avoid unintended filtering — the Go zero value (0) would activate
+// MaxBacklinks/MaxLinks.
 type Flags struct {
 	Tags         []string
 	Categories   []string
@@ -45,6 +46,33 @@ type Flags struct {
 // strings and nil slices contribute nothing; the result is the And of every
 // active term (matching every note when no terms are active).
 func FromFlags(f Flags) (Predicate, error) {
+	for _, spec := range []struct {
+		flag  string
+		value int
+	}{
+		{flag: "--min-backlinks", value: f.MinBacklinks},
+		{flag: "--max-backlinks", value: f.MaxBacklinks},
+		{flag: "--min-links", value: f.MinLinks},
+		{flag: "--max-links", value: f.MaxLinks},
+	} {
+		if spec.value < -1 {
+			return nil, fmt.Errorf("query: %s must be >= 0 (or -1 to disable), got %d", spec.flag, spec.value)
+		}
+	}
+	for _, spec := range []struct {
+		minFlag string
+		min     int
+		maxFlag string
+		max     int
+	}{
+		{minFlag: "--min-backlinks", min: f.MinBacklinks, maxFlag: "--max-backlinks", max: f.MaxBacklinks},
+		{minFlag: "--min-links", min: f.MinLinks, maxFlag: "--max-links", max: f.MaxLinks},
+	} {
+		if spec.min >= 0 && spec.max >= 0 && spec.min > spec.max {
+			return nil, fmt.Errorf("query: %s (%d) cannot exceed %s (%d)", spec.minFlag, spec.min, spec.maxFlag, spec.max)
+		}
+	}
+
 	var ps []Predicate
 	for _, spec := range []struct {
 		values []string

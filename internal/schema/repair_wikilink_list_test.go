@@ -150,6 +150,49 @@ func TestPlanRepairs_WikilinkAllowed_BareCanonicalizeThenWrap(t *testing.T) {
 	}
 }
 
+func TestPlanRepairs_WikilinkWrap_ComplexBracketedScalarUnchanged(t *testing.T) {
+	cases := []string{
+		"[[Books]] extra",
+		"prefix [[Books]]",
+		"[[[[Books]]]]",
+	}
+
+	for _, value := range cases {
+		t.Run(value, func(t *testing.T) {
+			front := buildFront("parent", value)
+
+			result := PlanRepairs(front, nil, []string{"parent"})
+			if len(result.Actions) != 0 {
+				t.Fatalf("expected no unsafe wrap action, got %+v", result.Actions)
+			}
+			if len(result.Skips) != 0 {
+				t.Fatalf("expected no skips without schema, got %+v", result.Skips)
+			}
+		})
+	}
+}
+
+func TestPlanRepairs_WikilinkAllowed_ComplexBracketedValueSkippedWithoutMangle(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"category": {Type: "string", Allowed: []string{"Books", "Papers"}},
+	}
+	front := buildFront("category", "[[Books]] extra")
+
+	result := PlanRepairs(front, sch, []string{"category"})
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected no unsafe action, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 1 {
+		t.Fatalf("expected 1 skip, got %d: %+v", len(result.Skips), result.Skips)
+	}
+	if result.Skips[0].Kind != "value_not_allowed" {
+		t.Errorf("skip kind = %q, want %q", result.Skips[0].Kind, "value_not_allowed")
+	}
+	if result.Skips[0].Detail != `no allowed value matches "[[Books]] extra"` {
+		t.Errorf("skip detail = %q", result.Skips[0].Detail)
+	}
+}
+
 func TestPlanRepairs_Canonicalize_ListNonStringItem(t *testing.T) {
 	// A list containing non-string items should flag those items as
 	// unfixable during canonicalization, not silently skip them.
