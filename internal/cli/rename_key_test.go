@@ -120,6 +120,9 @@ func TestRenameKey_ConflictSkipping(t *testing.T) {
 	if !strings.Contains(out, "WARN") {
 		t.Fatalf("expected WARN for conflict, got: %q", out)
 	}
+	if strings.Contains(out, "list_properties") || strings.Contains(out, "[frontmatter.schema]") {
+		t.Fatalf("expected no config warnings when no files were renamed, got:\n%s", out)
+	}
 
 	got := readNote(t, note)
 	if !strings.Contains(got, "kind: article") {
@@ -127,6 +130,22 @@ func TestRenameKey_ConflictSkipping(t *testing.T) {
 	}
 	if !strings.Contains(got, "type: note") {
 		t.Fatalf("existing new key should be preserved on conflict:\n%s", got)
+	}
+}
+
+func TestRenameKey_NoOpSuppressesConfigWarnings(t *testing.T) {
+	root := buildRenameKeyFixture(t)
+	note := filepath.Join(root, "no_kind.md")
+
+	out, err := runCLI(t, "", "rename-key", "kind", "category", note)
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "renamed kind -> category in 0 file(s)") {
+		t.Fatalf("expected zero-change summary, got: %q", out)
+	}
+	if strings.Contains(out, "list_properties") || strings.Contains(out, "[frontmatter.schema]") {
+		t.Fatalf("expected no config warnings when nothing changed, got:\n%s", out)
 	}
 }
 

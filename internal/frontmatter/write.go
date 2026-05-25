@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -22,8 +23,12 @@ import (
 // applied (callers that don't need wrapping can pass nil).
 func Marshal(doc Document, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 	var out bytes.Buffer
+	body := doc.Body
 	if doc.hasBOM {
 		out.WriteString("\ufeff")
+		if doc.bodyStartsWithFileBOM {
+			body = strings.TrimPrefix(body, "\ufeff")
+		}
 	}
 	if !doc.Front.IsEmpty() {
 		out.WriteString("---\n")
@@ -33,10 +38,10 @@ func Marshal(doc Document, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 		}
 		out.Write(yamlBytes)
 		out.WriteString("---\n")
-	} else if bodyStartsWithDelimiter(doc.Body) {
+	} else if bodyStartsWithDelimiter(body) {
 		out.WriteString("---\n---\n")
 	}
-	out.WriteString(doc.Body)
+	out.WriteString(body)
 	return out.Bytes(), nil
 }
 

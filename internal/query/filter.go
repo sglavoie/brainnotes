@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 // Predicate evaluates a note against a query term. A nil note is rejected.
@@ -127,8 +128,10 @@ func stringifyTag(v any) string {
 }
 
 // Category matches notes whose `categories` frontmatter contains v
-// (case-insensitive) as a wikilink target. A frontmatter value of
-// `[[Books]]` matches v == "books".
+// (case-insensitive) as a wikilink target title. Folder prefixes, `.md`
+// suffixes, headings, and aliases are ignored, so `[[Library/Books.md#Now|To
+// Read]]` matches v == "books". Plain scalar/list string values still match by
+// their literal text.
 func Category(v string) Predicate {
 	want := strings.ToLower(v)
 	return func(n *vault.Note) bool {
@@ -136,17 +139,42 @@ func Category(v string) Predicate {
 		if err != nil {
 			return false
 		}
-		cats, ok := fm.GetWikilinkList("categories")
+		raw, ok := fm.Get("categories")
 		if !ok {
 			return false
 		}
-		for _, c := range cats {
-			if strings.ToLower(c) == want {
+		return categoryMatches(raw, want)
+	}
+}
+
+func categoryMatches(v any, want string) bool {
+	switch vv := v.(type) {
+	case string:
+		return categoryStringMatches(vv, want)
+	case []any:
+		for _, item := range vv {
+			s, ok := item.(string)
+			if ok && categoryStringMatches(s, want) {
 				return true
 			}
 		}
-		return false
 	}
+	return false
+}
+
+func categoryStringMatches(s, want string) bool {
+	if title, ok := exactWikilinkTitle(s); ok {
+		return title == want
+	}
+	return strings.ToLower(s) == want
+}
+
+func exactWikilinkTitle(s string) (string, bool) {
+	links := wikilink.Parse(s)
+	if len(links) != 1 || links[0].Start != 0 || links[0].End != len(s) {
+		return "", false
+	}
+	return linkTitleKey(links[0].Title()), true
 }
 
 // Status matches notes whose `status` frontmatter equals v (case-insensitive).

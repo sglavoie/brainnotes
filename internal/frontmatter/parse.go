@@ -26,13 +26,13 @@ func Parse(data []byte) (Document, error) {
 
 	startLen, ok := openDelimLen(s)
 	if !ok {
-		return Document{Front: NewMap(), Body: raw}, nil
+		return Document{Front: NewMap(), Body: raw, hasBOM: hasBOM, bodyStartsWithFileBOM: hasBOM}, nil
 	}
 
 	rest := s[startLen:]
 	closeOff, bodyOff, ok := findCloseDelim(rest)
 	if !ok {
-		return Document{Front: NewMap(), Body: raw}, nil
+		return Document{Front: NewMap(), Body: raw, hasBOM: hasBOM, bodyStartsWithFileBOM: hasBOM}, nil
 	}
 
 	yamlText := rest[:closeOff]

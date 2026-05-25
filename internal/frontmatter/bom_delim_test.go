@@ -94,6 +94,73 @@ func TestParsePreservesUTF8BOMWithoutFrontmatter(t *testing.T) {
 	}
 }
 
+func TestMarshalPreservesUTF8BOMForBodyOnlyNotes(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	cases := map[string]string{
+		"plain body":               string(append(bom, []byte("# Body\n")...)),
+		"unterminated frontmatter": string(append(bom, []byte("---\ntitle: Body only\n")...)),
+	}
+	for name, in := range cases {
+		doc, err := Parse([]byte(in))
+		if err != nil {
+			t.Fatalf("%s: Parse: %v", name, err)
+		}
+		out, err := Marshal(doc, nil)
+		if err != nil {
+			t.Fatalf("%s: Marshal: %v", name, err)
+		}
+		if string(out) != in {
+			t.Fatalf("%s: Marshal changed bytes:\n got %q\nwant %q", name, out, in)
+		}
+	}
+}
+
+func TestMarshalKeepsUTF8BOMAtFileStartWhenAddingFrontmatter(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	in := append(bom, []byte("# Body\n")...)
+	doc, err := Parse(in)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	doc.Front.Set("title", "Added")
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	want := string(append(bom, []byte("---\ntitle: Added\n---\n# Body\n")...))
+	if string(out) != want {
+		t.Fatalf("Marshal misplaced BOM when adding frontmatter:\n got %q\nwant %q", out, want)
+	}
+
+	doc2, err := Parse(out)
+	if err != nil {
+		t.Fatalf("Parse round-trip: %v", err)
+	}
+	if got, _ := doc2.Front.GetString("title"); got != "Added" {
+		t.Fatalf("round-trip title: got %q want %q", got, "Added")
+	}
+	if doc2.Body != "# Body\n" {
+		t.Fatalf("round-trip body: got %q want %q", doc2.Body, "# Body\n")
+	}
+}
+
+func TestMarshalPreservesBodyLeadingBOMAfterFrontmatter(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	in := append(append(bom, []byte("---\ntitle: BOM\n---\n")...), append(bom, []byte("body\n")...)...)
+	doc, err := Parse(in)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if string(out) != string(in) {
+		t.Fatalf("Marshal stripped a real body BOM:\n got %q\nwant %q", out, in)
+	}
+}
+
 // If a BOM-prefixed file looks like frontmatter but has no closing delimiter,
 // Parse treats it as body-only and must still preserve the original bytes.
 func TestParsePreservesUTF8BOMForUnterminatedFrontmatter(t *testing.T) {

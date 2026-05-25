@@ -48,7 +48,7 @@ type CandidatePath struct {
 	Label  string // human-readable source label
 	Path   string // empty when the source is not set
 	Exists bool   // true only if Path != "" and the file exists
-	Active bool   // true on the first entry with a non-empty Path
+	Active bool   // true on the path Load/ResolvePath would consult
 }
 
 // Candidates returns the full precedence chain (4 entries, in source order).
@@ -116,17 +116,36 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 		out[3].Path = filepath.Join(home, ".config", configName)
 	}
 
-	activeSet := false
 	for i := range out {
 		if out[i].Path == "" {
 			continue
 		}
-		if !activeSet {
-			out[i].Active = true
-			activeSet = true
-		}
 		if info, err := os.Stat(out[i].Path); err == nil && !info.IsDir() {
 			out[i].Exists = true
+		}
+	}
+
+	switch {
+	case out[0].Path != "":
+		out[0].Active = true
+	case out[1].Path != "":
+		out[1].Active = true
+	default:
+		firstImplicit := -1
+		for i := 2; i < len(out); i++ {
+			if out[i].Path == "" {
+				continue
+			}
+			if firstImplicit == -1 {
+				firstImplicit = i
+			}
+			if out[i].Exists {
+				out[i].Active = true
+				return out, nil
+			}
+		}
+		if firstImplicit != -1 {
+			out[firstImplicit].Active = true
 		}
 	}
 

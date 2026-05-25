@@ -64,6 +64,31 @@ func TestCandidates_XDGFallback(t *testing.T) {
 	}
 }
 
+func TestCandidates_DefaultBeatsMissingXDG(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	xdg := t.TempDir()
+	t.Setenv(envXDG, xdg)
+
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "")
+
+	cands, err := Candidates("")
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	if cands[2].Active {
+		t.Fatalf("missing XDG path should not stay active when default exists: %+v", cands[2])
+	}
+	if !cands[3].Active {
+		t.Fatalf("default path should become active when XDG is missing: %+v", cands)
+	}
+	if !cands[3].Exists {
+		t.Fatalf("default path should report Exists=true: %+v", cands[3])
+	}
+}
+
 func TestCandidates_WhitespaceXDGTreatedAsUnset(t *testing.T) {
 	// Whitespace-only XDG_CONFIG_HOME used to produce a bogus path like
 	// " /bnotes/config.toml"; instead it should be ignored.
@@ -183,5 +208,27 @@ func TestResolvePath_MatchesActiveCandidate(t *testing.T) {
 	}
 	if got != wantPath {
 		t.Errorf("ResolvePath: got %q, want %q", got, wantPath)
+	}
+}
+
+func TestResolvePath_DefaultBeatsMissingXDG(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	xdg := t.TempDir()
+	t.Setenv(envXDG, xdg)
+
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "")
+
+	got, ok, err := ResolvePath("")
+	if err != nil {
+		t.Fatalf("ResolvePath: %v", err)
+	}
+	if !ok {
+		t.Fatal("ResolvePath should report ok=true")
+	}
+	if got != defaultPath {
+		t.Fatalf("ResolvePath should fall through to existing default path: got %q, want %q", got, defaultPath)
 	}
 }

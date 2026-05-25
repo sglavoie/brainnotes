@@ -73,21 +73,15 @@ func Find(cfg *config.Config, name string) (string, error) {
 		return "", fmt.Errorf("template: name %q reduces to empty stem after extension strip", name)
 	}
 
-	// Use a small de-dup set so that name="Book.md" doesn't produce
-	// "book.md" twice ("name" and "stem+ext" collapse to the same form).
-	seen := make(map[string]struct{}, 3)
-	var candidates []string
-	for _, c := range []string{
-		strings.ToLower(name),
-		strings.ToLower(stem + ext),
-		strings.ToLower(stem + " Template" + ext),
-	} {
-		if _, ok := seen[c]; ok {
-			continue
-		}
-		seen[c] = struct{}{}
-		candidates = append(candidates, c)
-	}
+	// Preserve the caller's casing in each candidate: lower-casing here breaks
+	// exact lookups for some Unicode names (for example Turkish dotted İ) because
+	// strings.ToLower and strings.EqualFold are not interchangeable. Deduplicate
+	// with EqualFold instead so "Book.md" and "book.md" still collapse.
+	candidates := uniqueFold([]string{
+		name,
+		stem + ext,
+		stem + " Template" + ext,
+	})
 
 	for _, want := range candidates {
 		var matches []string
@@ -228,6 +222,23 @@ func isPathAbsoluteLike(p string) bool {
 
 func isASCIIAlpha(b byte) bool {
 	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
+}
+
+func uniqueFold(candidates []string) []string {
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		duplicate := false
+		for _, existing := range out {
+			if strings.EqualFold(existing, candidate) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			out = append(out, candidate)
+		}
+	}
+	return out
 }
 
 func resolveDirCaseInsensitive(root, rel string) (string, error) {

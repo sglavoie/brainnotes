@@ -66,7 +66,7 @@ func TestFindNotFoundIncludesCandidates(t *testing.T) {
 		t.Fatalf("expected ErrTemplateNotFound, got %v", err)
 	}
 	msg := err.Error()
-	for _, want := range []string{"ghost", "ghost.md", "ghost template.md"} {
+	for _, want := range []string{"ghost", "ghost.md", "ghost Template.md"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("error %q missing candidate %q", msg, want)
 		}

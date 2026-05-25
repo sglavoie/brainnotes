@@ -131,6 +131,11 @@ func TestPlanRepairs_TypeCoerce_Skip(t *testing.T) {
 			front:  buildFront("status", nil),
 			schema: map[string]config.PropertySchema{"status": {Type: "string"}},
 		},
+		{
+			name:   "datetime_to_string_lossy",
+			front:  buildFront("created", time.Date(2024, 1, 15, 9, 45, 30, 0, time.FixedZone("EST", -5*60*60))),
+			schema: map[string]config.PropertySchema{"created": {Type: "string"}},
+		},
 	}
 
 	for _, tt := range tests {

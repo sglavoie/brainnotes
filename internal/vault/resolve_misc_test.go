@@ -108,6 +108,23 @@ func TestResolveByTitleMultiDotStem(t *testing.T) {
 	}
 }
 
+// ResolveByTitle promises case-insensitive title matching. strings.ToLower is
+// not enough for full Unicode simple folding: Greek sigma has two lowercase
+// forms ("σ" and final "ς"), so a lowercase note stem could fail to match an
+// uppercase query even though strings.EqualFold reports them equal.
+func TestResolveByTitleUnicodeCaseFold(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"ος.md": "# sigma\n",
+	})
+	n, err := v.ResolveByTitle("ΟΣ", "")
+	if err != nil {
+		t.Fatalf("ResolveByTitle: %v", err)
+	}
+	if filepath.Base(n.Path) != "ος.md" {
+		t.Errorf("got %s, want ος.md", filepath.Base(n.Path))
+	}
+}
+
 // TestResolveByTitleSlashInTitle verifies that a title containing a path
 // separator cannot match (filename stems never contain slashes), and the
 // error message is the regular not-found form.

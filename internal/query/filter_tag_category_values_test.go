@@ -150,6 +150,29 @@ func TestCategoryPredicateUnbracketedScalar(t *testing.T) {
 	}
 }
 
+// TestCategoryPredicateMatchesWikilinkTargetTitle verifies that Category
+// compares against the wikilink target title, not the raw `[[...]]` payload.
+// Headings, aliases, folder prefixes, and `.md` suffixes should not stop a
+// category query from finding the underlying target note.
+func TestCategoryPredicateMatchesWikilinkTargetTitle(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"scalar.md": "---\ncategories: \"[[Library/Books.md#Now|To Read]]\"\n---\nbody\n",
+		"list.md":   "---\ncategories:\n  - \"[[People#Team|Core]]\"\n---\nbody\n",
+	})
+	if !Category("books")(notes["scalar.md"]) {
+		t.Errorf("Category(books) should match wikilink target [[Library/Books.md#Now|To Read]]")
+	}
+	if Category("to read")(notes["scalar.md"]) {
+		t.Errorf("Category(to read) should not match the wikilink alias")
+	}
+	if Category("now")(notes["scalar.md"]) {
+		t.Errorf("Category(now) should not match the wikilink heading")
+	}
+	if !Category("people")(notes["list.md"]) {
+		t.Errorf("Category(people) should match wikilink target [[People#Team|Core]]")
+	}
+}
+
 // TestStatusNullValueDoesNotMatchEmpty verifies that a YAML null `status: ~`
 // value does not produce a spurious match for non-empty queries. The
 // stringifyTag(nil) fallback returns "", so a programmer-supplied empty query

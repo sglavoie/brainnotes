@@ -188,3 +188,18 @@ func TestFindUnicodeCaseFoldMatch(t *testing.T) {
 		t.Fatalf("got %s, want Σ.md", filepath.Base(got))
 	}
 }
+
+func TestFindUnicodeExactNameWithoutLowercasing(t *testing.T) {
+	// Preserve the user's original candidate text: lower-casing before matching
+	// breaks exact lookups for some Unicode names like Turkish dotted İ, where
+	// strings.ToLower("İ") != a string EqualFold considers equivalent to "İ".
+	cfg := newDiscoverConfig(t)
+	writeFile(t, vaultPath(cfg, "Templates", "İdea.md"), "x")
+	got, err := Find(cfg, "İdea")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "İdea.md" {
+		t.Fatalf("got %s, want İdea.md", filepath.Base(got))
+	}
+}

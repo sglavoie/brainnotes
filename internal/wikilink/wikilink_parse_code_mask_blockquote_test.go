@@ -88,3 +88,41 @@ func TestParseQuotedCloserDoesNotCloseUnquotedFence(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSkipsBlockquotedIndentedCode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "single blockquote prefix",
+			in:   "[[Before]]\n>     [[Hidden]]\n>     still code\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+		{
+			name: "nested blockquote prefix",
+			in:   "[[Before]]\n> >     [[Hidden]]\n> >     still code\n[[After]]",
+			want: []string{"Before", "After"},
+		},
+		{
+			name: "same blockquote paragraph indentation is not code",
+			in:   "> intro\n>     [[Visible]]\n[[After]]",
+			want: []string{"Visible", "After"},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := collectTargets(Parse(tc.in))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Parse(%q) targets = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}

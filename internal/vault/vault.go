@@ -191,7 +191,6 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 	if title == "" {
 		return nil, errors.New("vault: empty title")
 	}
-	wantStem := strings.ToLower(title)
 	// Normalize to slash-relative form: convert OS separators, collapse `.`/
 	// `./`/double slashes via path.Clean, then trim leading and trailing slashes
 	// so common variants ("./People", "People/") all compare equal to the
@@ -204,8 +203,8 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 
 	var matches []*Note
 	err := v.Walk(WalkFilter{}, func(n *Note) error {
-		stem := strings.ToLower(strings.TrimSuffix(filepath.Base(n.Path), filepath.Ext(n.Path)))
-		if stem != wantStem {
+		stem := strings.TrimSuffix(filepath.Base(n.Path), filepath.Ext(n.Path))
+		if !strings.EqualFold(stem, title) {
 			return nil
 		}
 		if wantFolder != "" {

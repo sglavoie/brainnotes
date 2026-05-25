@@ -219,7 +219,9 @@ func TryCoerce(val any, targetType string) (any, bool) {
 		case float64:
 			return strconv.FormatFloat(v, 'f', -1, 64), true
 		case time.Time:
-			return v.Format("2006-01-02"), true
+			if isDateOnlyTime(v) {
+				return v.Format("2006-01-02"), true
+			}
 		}
 	case "list":
 		switch v := val.(type) {

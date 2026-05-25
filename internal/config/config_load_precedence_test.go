@@ -155,3 +155,25 @@ func TestLoad_XDGConfigPath(t *testing.T) {
 		t.Fatalf("vault from XDG path: got %q, want %q", cfg.Vault, vaultFile)
 	}
 }
+
+func TestLoad_MissingXDGFallsThroughToDefaultConfig(t *testing.T) {
+	resetEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(envXDG, t.TempDir())
+
+	vaultFile := t.TempDir()
+	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+	writeFile(t, defaultPath, "vault = \""+vaultFile+"\"\n")
+
+	cfg, err := Load("", "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != vaultFile {
+		t.Fatalf("Load should fall through to default config when XDG path is missing: got %q, want %q", cfg.Vault, vaultFile)
+	}
+	if cfg.SourcePath != defaultPath {
+		t.Fatalf("SourcePath: got %q, want %q", cfg.SourcePath, defaultPath)
+	}
+}

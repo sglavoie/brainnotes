@@ -41,6 +41,13 @@ func TestTryCoerce(t *testing.T) {
 		{"int_to_string", 42, "string", "42", true},
 		{"float_to_string", 3.14, "string", "3.14", true},
 		{"date_to_string", date, "string", "2024-01-15", true},
+		{
+			"datetime_to_string_lossy",
+			time.Date(2024, 1, 15, 9, 45, 30, 0, time.FixedZone("EST", -5*60*60)),
+			"string",
+			nil,
+			false,
+		},
 		{"bool_to_list", true, "list", []any{true}, true},
 		{"list_to_string", []any{"a"}, "string", nil, false},
 		{"list_to_int", []any{"a"}, "int", nil, false},

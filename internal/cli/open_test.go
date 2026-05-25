@@ -35,6 +35,7 @@ func buildOpenVault(t *testing.T) string {
 func isolateBnEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("BNOTES_CONFIG", "")
 	t.Setenv("BNOTES_VAULT", "")
 }

@@ -145,6 +145,7 @@ func buildCodeMask(s string) []byteRange {
 		fenceQuoted    bool // true when the opener line was inside a blockquote
 		inIndentedCode bool
 		prevBlank      = true // treat document start as following a blank line
+		prevQuoteDepth int
 		inlineStart    = -1
 		inlineEnd      int
 	)
@@ -162,6 +163,7 @@ func buildCodeMask(s string) []byteRange {
 
 	for _, ln := range lines {
 		text := s[ln.start:ln.end]
+		strippedQuote, quoteDepth, quoted := stripBlockquotePrefixesDepth(text)
 
 		if fenceOpen {
 			ranges = append(ranges, byteRange{ln.start, ln.end})
@@ -169,6 +171,7 @@ func buildCodeMask(s string) []byteRange {
 				fenceOpen = false
 			}
 			prevBlank = false
+			prevQuoteDepth = quoteDepth
 			continue
 		}
 
@@ -181,21 +184,27 @@ func buildCodeMask(s string) []byteRange {
 			fenceQuoted = quoted
 			inIndentedCode = false
 			prevBlank = false
+			prevQuoteDepth = quoteDepth
 			continue
 		}
 
-		if isBlankLine(text) {
+		if isBlankLine(text) || (quoted && isBlankLine(strippedQuote)) {
 			flushInline()
 			inIndentedCode = false
 			prevBlank = true
+			prevQuoteDepth = quoteDepth
 			continue
 		}
 
-		if startsWithIndentedCode(text) && (prevBlank || inIndentedCode) {
+		quotedIndented := quoted && startsWithIndentedCodePlain(strippedQuote)
+		startsQuotedBlock := quoted && quoteDepth > prevQuoteDepth
+		if (startsWithIndentedCode(text) && (prevBlank || inIndentedCode)) ||
+			(quotedIndented && (prevBlank || inIndentedCode || startsQuotedBlock)) {
 			flushInline()
 			ranges = append(ranges, byteRange{ln.start, ln.end})
 			inIndentedCode = true
 			prevBlank = false
+			prevQuoteDepth = quoteDepth
 			continue
 		}
 
@@ -205,6 +214,7 @@ func buildCodeMask(s string) []byteRange {
 		}
 		inlineEnd = ln.end
 		prevBlank = false
+		prevQuoteDepth = quoteDepth
 	}
 
 	flushInline()
@@ -255,6 +265,12 @@ func isBlankLine(line string) bool {
 // startsWithIndentedCode reports whether the line begins with 4+ spaces or a
 // leading tab — the CommonMark indented-code-block trigger.
 func startsWithIndentedCode(line string) bool {
+	return startsWithIndentedCodePlain(line)
+}
+
+// startsWithIndentedCodePlain reports whether line begins with 4+ spaces or a
+// leading tab — the CommonMark indented-code-block trigger.
+func startsWithIndentedCodePlain(line string) bool {
 	if len(line) == 0 {
 		return false
 	}
@@ -352,14 +368,20 @@ func isFenceCloserPlain(line string, ch byte, openLen int) bool {
 // stripBlockquotePrefixes removes one or more leading CommonMark block quote
 // markers so fence detection also works for quoted fenced code blocks.
 func stripBlockquotePrefixes(line string) (string, bool) {
+	stripped, _, ok := stripBlockquotePrefixesDepth(line)
+	return stripped, ok
+}
+
+func stripBlockquotePrefixesDepth(line string) (string, int, bool) {
 	stripped := false
+	depth := 0
 	for {
 		i := 0
 		for i < 4 && i < len(line) && line[i] == ' ' {
 			i++
 		}
 		if i >= 4 || i >= len(line) || line[i] != '>' {
-			return line, stripped
+			return line, depth, stripped
 		}
 		i++
 		if i < len(line) && (line[i] == ' ' || line[i] == '\t') {
@@ -367,6 +389,7 @@ func stripBlockquotePrefixes(line string) (string, bool) {
 		}
 		line = line[i:]
 		stripped = true
+		depth++
 	}
 }
 
