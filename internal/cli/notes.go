@@ -70,14 +70,32 @@ func expandGlob(vaultRoot, pattern string) ([]string, error) {
 }
 
 // absInVault returns the absolute form of p and verifies it lives inside
-// vaultRoot. The check uses filepath.Rel so symlinks pointing outside are not
-// detected; that is a deliberate trade-off matching the rest of the codebase.
+// vaultRoot. When the path already exists on disk, the full path (including
+// the file itself) is resolved through symlinks so that a symlinked file
+// inside the vault that targets a location outside is rejected. When the path
+// does not yet exist (new note), the deepest existing ancestor is resolved and
+// the lexical remainder is appended, which catches symlinked directories while
+// still permitting new-file creation. The returned path retains the original
+// (unresolved) form so it stays consistent with the vault root callers hold.
 func absInVault(vaultRoot, p string) (string, error) {
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return "", fmt.Errorf("resolve %q: %w", p, err)
 	}
-	rel, err := filepath.Rel(vaultRoot, abs)
+	checkRoot := vaultRoot
+	if resolvedRoot, evalErr := filepath.EvalSymlinks(vaultRoot); evalErr == nil {
+		checkRoot = resolvedRoot
+	}
+	// If the path exists, resolve it fully (catches symlinked files pointing
+	// outside the vault). If it doesn't exist yet (new note), fall back to
+	// resolving the parent directory so symlinked directories are still caught.
+	checkPath := abs
+	if resolved, evalErr := filepath.EvalSymlinks(abs); evalErr == nil {
+		checkPath = resolved
+	} else if resolvedDir, evalErr := filepath.EvalSymlinks(filepath.Dir(abs)); evalErr == nil {
+		checkPath = filepath.Join(resolvedDir, filepath.Base(abs))
+	}
+	rel, err := filepath.Rel(checkRoot, checkPath)
 	if err != nil {
 		return "", fmt.Errorf("rel %q: %w", abs, err)
 	}

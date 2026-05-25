@@ -172,3 +172,85 @@ func TestReadStdinPaths_LineSeparatedTrimsCRLF(t *testing.T) {
 		t.Fatalf("got %v, want one alpha.md", got)
 	}
 }
+
+// TestAbsInVault_SymlinkDirEscapingVaultRejected verifies that a symlinked
+// directory inside the vault that resolves to a location outside the vault is
+// rejected by absInVault. Previously only a lexical filepath.Rel check was
+// performed, which allowed symlinks through.
+func TestAbsInVault_SymlinkDirEscapingVaultRejected(t *testing.T) {
+	if os.Getenv("GO_SKIP_SYMLINK_TEST") == "1" {
+		t.Skip("symlink tests disabled")
+	}
+	vault := t.TempDir()
+	outside := t.TempDir()
+
+	// Create a note in the "outside" directory.
+	outsideNote := filepath.Join(outside, "secret.md")
+	if err := os.WriteFile(outsideNote, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink inside the vault that points to the outside directory.
+	symlinkDir := filepath.Join(vault, "escaped")
+	if err := os.Symlink(outside, symlinkDir); err != nil {
+		t.Skip("cannot create symlinks:", err)
+	}
+
+	// A path that lexically appears inside the vault but physically escapes it.
+	escapingPath := filepath.Join(symlinkDir, "secret.md")
+
+	_, err := absInVault(vault, escapingPath)
+	if err == nil {
+		t.Fatalf("absInVault: expected error for symlink-escaped path %q, got nil", escapingPath)
+	}
+}
+
+// TestAbsInVault_SymlinkFileEscapingVaultRejected verifies that a symlinked
+// file inside the vault that targets a file outside the vault is rejected by
+// absInVault. The previous implementation only resolved the parent directory,
+// so a file-level symlink like vault/link.md -> /outside/secret.md passed the
+// containment check because the parent (vault/) resolved correctly.
+func TestAbsInVault_SymlinkFileEscapingVaultRejected(t *testing.T) {
+	if os.Getenv("GO_SKIP_SYMLINK_TEST") == "1" {
+		t.Skip("symlink tests disabled")
+	}
+	vault := t.TempDir()
+	outside := t.TempDir()
+
+	// Create a real file outside the vault.
+	outsideNote := filepath.Join(outside, "secret.md")
+	if err := os.WriteFile(outsideNote, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Plant a symlink inside the vault that points directly at the outside file.
+	symlinkFile := filepath.Join(vault, "link.md")
+	if err := os.Symlink(outsideNote, symlinkFile); err != nil {
+		t.Skip("cannot create symlinks:", err)
+	}
+
+	_, err := absInVault(vault, symlinkFile)
+	if err == nil {
+		t.Fatalf("absInVault: expected error for file symlink escaping vault %q, got nil", symlinkFile)
+	}
+}
+
+// TestAbsInVault_NewNoteInSymlinkDirInsideVaultAllowed verifies that a new
+// (not-yet-created) note inside a regular subdirectory of the vault is still
+// accepted. This ensures the missing-file fallback path works correctly.
+func TestAbsInVault_NewNoteInSymlinkDirInsideVaultAllowed(t *testing.T) {
+	vault := t.TempDir()
+	sub := filepath.Join(vault, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	newNote := filepath.Join(sub, "new.md")
+	got, err := absInVault(vault, newNote)
+	if err != nil {
+		t.Fatalf("absInVault: unexpected error for new note inside vault: %v", err)
+	}
+	if got != newNote {
+		t.Fatalf("absInVault: got %q, want %q", got, newNote)
+	}
+}

@@ -104,8 +104,16 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 		case statErr == nil && info.IsDir():
 			return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", configPath)
 		case statErr == nil:
-			if _, decErr := toml.DecodeFile(configPath, cfg); decErr != nil {
+			meta, decErr := toml.DecodeFile(configPath, cfg)
+			if decErr != nil {
 				return nil, fmt.Errorf("config: parse %s: %w", configPath, decErr)
+			}
+			if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+				keys := make([]string, len(undecoded))
+				for i, k := range undecoded {
+					keys[i] = k.String()
+				}
+				return nil, fmt.Errorf("config: %s: unknown keys: %s", configPath, strings.Join(keys, ", "))
 			}
 			cfg.SourcePath = configPath
 		case !os.IsNotExist(statErr):

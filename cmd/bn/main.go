@@ -27,6 +27,9 @@ func run(stderr io.Writer) int {
 	if isBrokenPipe(err) {
 		return 0
 	}
+	if errors.Is(err, cli.ErrFZFInterrupted) {
+		return 130
+	}
 	_, _ = fmt.Fprintln(stderr, "bn:", err)
 	return exitCode(err)
 }
@@ -40,6 +43,11 @@ func exitCode(err error) int {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() {
 			return 128 + int(status.Signal())
 		}
+	}
+
+	// Handle errors that directly wrap exec.ErrNotFound (e.g., ErrFZFNotFound).
+	if errors.Is(err, exec.ErrNotFound) {
+		return 127
 	}
 
 	var execErr *exec.Error

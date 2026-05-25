@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/cli"
 )
 
 func TestRunSuccess(t *testing.T) {
@@ -140,6 +142,32 @@ func TestExitCodeMapsExecFormatErrorTo126(t *testing.T) {
 
 	if code := exitCode(err); code != 126 {
 		t.Fatalf("exitCode() = %d, want 126", code)
+	}
+}
+
+func TestRunMapsFZFNotFoundTo127(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error { return cli.ErrFZFNotFound })
+
+	if code := run(stderr); code != 127 {
+		t.Fatalf("run() exit code = %d, want 127 for ErrFZFNotFound", code)
+	}
+	// The error message must be printed so the user knows why bn exited.
+	if got := stderr.String(); !strings.Contains(got, "fzf not found") {
+		t.Fatalf("stderr = %q, want fzf-not-found message", got)
+	}
+}
+
+func TestRunMapsFZFInterruptedTo130Silently(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error { return cli.ErrFZFInterrupted })
+
+	if code := run(stderr); code != 130 {
+		t.Fatalf("run() exit code = %d, want 130 for ErrFZFInterrupted", code)
+	}
+	// Ctrl-C is user-initiated; no error message should be printed.
+	if got := stderr.String(); got != "" {
+		t.Fatalf("stderr = %q, want empty (interrupt should be silent)", got)
 	}
 }
 
