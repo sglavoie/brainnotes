@@ -119,6 +119,9 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return fmt.Errorf("move: mkdir %q: %w", newFolderAbs, err)
 	}
+	if err := checkMoveDestination(plan.Target, plan.NewPath, opts.force); err != nil {
+		return err
+	}
 
 	if err := applyMovePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted; run 'git diff' to inspect partial state")

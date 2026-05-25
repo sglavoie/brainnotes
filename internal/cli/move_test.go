@@ -397,6 +397,7 @@ func TestMoveRejectsDirectoryDestination(t *testing.T) {
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
+	before := snapshotVault(t, root)
 
 	src := filepath.Join(root, "Books", "Dune.md")
 	_, err := runCLI(t, "", "move", src, "References/Books")
@@ -406,6 +407,9 @@ func TestMoveRejectsDirectoryDestination(t *testing.T) {
 	if !strings.Contains(err.Error(), "existing directory") {
 		t.Fatalf("expected 'existing directory' error, got %v", err)
 	}
+	if after := snapshotVault(t, root); !mapsEqual(before, after) {
+		t.Fatalf("move without --force rewrote files:\nbefore=%v\nafter=%v", before, after)
+	}
 
 	_, err = runCLI(t, "", "move", src, "References/Books", "--force")
 	if err == nil {
@@ -413,6 +417,9 @@ func TestMoveRejectsDirectoryDestination(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "existing directory") {
 		t.Fatalf("expected 'existing directory' error with --force, got %v", err)
+	}
+	if after := snapshotVault(t, root); !mapsEqual(before, after) {
+		t.Fatalf("move with --force rewrote files:\nbefore=%v\nafter=%v", before, after)
 	}
 
 	// Original note must still exist; no rewrites should have happened.

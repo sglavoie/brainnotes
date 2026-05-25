@@ -1,6 +1,7 @@
 package frontmatter
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -236,7 +237,7 @@ func TestParseNestedListWithNullItem(t *testing.T) {
 // TestParseDuplicateKeys — when YAML contains duplicate keys, the last value
 // wins (standard YAML behavior) and no panic occurs.
 func TestParseDuplicateKeys(t *testing.T) {
-	in := "---\nkey: first\nkey: second\n---\nbody\n"
+	in := "---\nfirst: keep\nkey: first\nbetween: stay\nkey: second\n---\nbody\n"
 	doc, err := Parse([]byte(in))
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
@@ -248,14 +249,10 @@ func TestParseDuplicateKeys(t *testing.T) {
 	if v != "second" {
 		t.Errorf("key: got %q want %q (last value should win)", v, "second")
 	}
-	// The key should appear only once in the keys list.
-	count := 0
-	for _, k := range doc.Front.Keys() {
-		if k == "key" {
-			count++
-		}
+	if got := doc.Front.Keys(); !reflect.DeepEqual(got, []string{"first", "key", "between"}) {
+		t.Errorf("Keys(): got %v want %v", got, []string{"first", "key", "between"})
 	}
-	if count != 1 {
-		t.Errorf("expected key to appear once in Keys(), appeared %d times", count)
+	if got := doc.Front.Len(); got != 3 {
+		t.Errorf("Len(): got %d want 3", got)
 	}
 }

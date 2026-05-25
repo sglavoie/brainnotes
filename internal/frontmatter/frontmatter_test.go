@@ -269,6 +269,26 @@ func TestMapOrderAndMutations(t *testing.T) {
 	}
 }
 
+func TestMapSetNormalizesDuplicateKeyOrder(t *testing.T) {
+	m := Map{
+		keys: []string{"title", "count", "title"},
+		vals: map[string]any{"title": "old", "count": 1},
+		meta: map[string]valueMeta{},
+	}
+
+	m.Set("title", "new")
+
+	if got := m.Keys(); !reflect.DeepEqual(got, []string{"title", "count"}) {
+		t.Errorf("Keys(): got %v want %v", got, []string{"title", "count"})
+	}
+	if got := m.Len(); got != 2 {
+		t.Errorf("Len(): got %d want 2", got)
+	}
+	if v, _ := m.GetString("title"); v != "new" {
+		t.Errorf("GetString(title): got %q want %q", v, "new")
+	}
+}
+
 func TestGetWikilinkList(t *testing.T) {
 	m := NewMap()
 	m.Set("categories", []any{"[[Books]]", "[[Reading]]"})

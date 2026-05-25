@@ -120,6 +120,12 @@ func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
 		return dir, entries, nil
 	}
 	if !os.IsNotExist(err) {
+		if info, statErr := os.Stat(dir); statErr == nil && !info.IsDir() {
+			return "", nil, templatesDirNotDirError(dir)
+		}
+		if nonDirErr := checkTemplatesDirNonDir(cfg.Vault, rel, false); nonDirErr != nil {
+			return "", nil, nonDirErr
+		}
 		return "", nil, fmt.Errorf("template: read %q: %w", dir, err)
 	}
 
@@ -136,6 +142,58 @@ func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
 		return "", nil, fmt.Errorf("template: read %q: %w", resolved, err)
 	}
 	return resolved, entries, nil
+}
+
+func checkTemplatesDirNonDir(root, rel string, fold bool) error {
+	clean := path.Clean(strings.ReplaceAll(filepath.ToSlash(rel), `\`, `/`))
+	if clean == "." {
+		return nil
+	}
+
+	cur := root
+	for _, part := range strings.Split(filepath.ToSlash(clean), "/") {
+		if part == "" || part == "." {
+			continue
+		}
+
+		entries, err := os.ReadDir(cur)
+		if err != nil {
+			return nil
+		}
+
+		var dirMatches []string
+		var nonDirMatches []os.DirEntry
+		for _, e := range entries {
+			match := e.Name() == part
+			if fold {
+				match = strings.EqualFold(e.Name(), part)
+			}
+			if !match {
+				continue
+			}
+			if e.IsDir() {
+				dirMatches = append(dirMatches, e.Name())
+				continue
+			}
+			nonDirMatches = append(nonDirMatches, e)
+		}
+
+		switch {
+		case len(dirMatches) > 1:
+			return fmt.Errorf("%w: templates dir component %q matches %v in %s", ErrTemplateAmbiguous, part, dirMatches, cur)
+		case len(dirMatches) == 1:
+			cur = filepath.Join(cur, dirMatches[0])
+		case len(nonDirMatches) > 0:
+			return templatesDirNotDirError(filepath.Join(cur, nonDirMatches[0].Name()))
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
+func templatesDirNotDirError(path string) error {
+	return fmt.Errorf("template: templates path %q must be a directory, not a file; move or remove the file, or set templates.dir to a directory", path)
 }
 
 func checkDirCaseAmbiguity(root, rel string) error {
@@ -257,16 +315,21 @@ func resolveDirCaseInsensitive(root, rel string) (string, error) {
 			return "", fmt.Errorf("template: read %q: %w", cur, err)
 		}
 		var matches []string
+		var nonDirMatches []string
 		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
 			if strings.EqualFold(e.Name(), part) {
-				matches = append(matches, e.Name())
+				if e.IsDir() {
+					matches = append(matches, e.Name())
+					continue
+				}
+				nonDirMatches = append(nonDirMatches, e.Name())
 			}
 		}
 		switch len(matches) {
 		case 0:
+			if len(nonDirMatches) > 0 {
+				return "", templatesDirNotDirError(filepath.Join(cur, nonDirMatches[0]))
+			}
 			return filepath.Join(cur, part), nil
 		case 1:
 			cur = filepath.Join(cur, matches[0])

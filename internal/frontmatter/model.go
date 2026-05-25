@@ -90,9 +90,7 @@ func (m *Map) Set(k string, v any) {
 	if m.vals == nil {
 		m.vals = map[string]any{}
 	}
-	if _, ok := m.vals[k]; !ok {
-		m.keys = append(m.keys, k)
-	}
+	m.ensureKeyOrder(k)
 	m.clearMetaPrefix(k)
 	m.vals[k] = v
 }
@@ -107,12 +105,7 @@ func (m *Map) Unset(k string) {
 	}
 	delete(m.vals, k)
 	m.clearMetaPrefix(k)
-	for i, key := range m.keys {
-		if key == k {
-			m.keys = append(m.keys[:i], m.keys[i+1:]...)
-			return
-		}
-	}
+	m.removeKeyOrder(k)
 }
 
 // GetString returns the value at k as a string when its underlying type is
@@ -206,10 +199,39 @@ func (m *Map) setParsed(k string, v any) {
 	if m.meta == nil {
 		m.meta = map[string]valueMeta{}
 	}
-	if _, ok := m.vals[k]; !ok {
+	m.ensureKeyOrder(k)
+	m.vals[k] = v
+}
+
+func (m *Map) ensureKeyOrder(k string) {
+	out := m.keys[:0]
+	seen := false
+	for _, existing := range m.keys {
+		if existing != k {
+			out = append(out, existing)
+			continue
+		}
+		if seen {
+			continue
+		}
+		out = append(out, existing)
+		seen = true
+	}
+	m.keys = out
+	if !seen {
 		m.keys = append(m.keys, k)
 	}
-	m.vals[k] = v
+}
+
+func (m *Map) removeKeyOrder(k string) {
+	out := m.keys[:0]
+	for _, existing := range m.keys {
+		if existing == k {
+			continue
+		}
+		out = append(out, existing)
+	}
+	m.keys = out
 }
 
 func (m *Map) clearMetaPrefix(k string) {

@@ -145,3 +145,44 @@ func TestFindRejectsTemplatesDirNULByte(t *testing.T) {
 		t.Fatal("expected error for NUL byte in templates dir")
 	}
 }
+
+func TestFindTemplatesDirMustBeDirectory(t *testing.T) {
+	cfg := newDiscoverConfig(t)
+	writeFile(t, vaultPath(cfg, "Templates"), "not a directory")
+
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for file-backed templates path")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		`templates path "`,
+		`must be a directory, not a file`,
+		`set templates.dir to a directory`,
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error %q missing %q", msg, want)
+		}
+	}
+}
+
+func TestFindTemplatesDirCaseInsensitiveFileMatch(t *testing.T) {
+	cfg := newDiscoverConfig(t)
+	cfg.Templates.Dir = "templates"
+	writeFile(t, vaultPath(cfg, "Templates"), "not a directory")
+
+	_, err := Find(cfg, "book")
+	if err == nil {
+		t.Fatal("expected error for case-insensitive file-backed templates path")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		`templates path "`,
+		`must be a directory, not a file`,
+		`set templates.dir to a directory`,
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error %q missing %q", msg, want)
+		}
+	}
+}

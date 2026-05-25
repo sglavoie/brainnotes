@@ -38,7 +38,7 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 			}
 			uniq = append(uniq, v)
 		}
-		m.keys = append(m.keys, k)
+		m.ensureKeyOrder(k)
 		m.vals[k] = uniq
 		return len(uniq) > 0, nil
 	}
@@ -201,6 +201,8 @@ func (m *Map) RenameKey(oldK, newK string) (bool, error) {
 			break
 		}
 	}
+	m.removeKeyOrder(oldK)
+	m.ensureKeyOrder(newK)
 	return true, nil
 }
 
