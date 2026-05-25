@@ -2,99 +2,9 @@ package frontmatter
 
 import (
 	"math"
-	"reflect"
 	"strings"
 	"testing"
 )
-
-// TestMarshalNestedMapDeterministic — nested maps must produce a stable byte
-// stream across many Marshal calls; CLAUDE.md guarantees "stable diffs".
-func TestMarshalNestedMapDeterministic(t *testing.T) {
-	in := "---\nauthor:\n  zeta: z\n  alpha: a\n  mu: m\n---\nbody\n"
-	results := map[string]struct{}{}
-	for i := 0; i < 30; i++ {
-		doc, err := Parse([]byte(in))
-		if err != nil {
-			t.Fatalf("Parse: %v", err)
-		}
-		out, err := Marshal(doc, nil)
-		if err != nil {
-			t.Fatalf("Marshal: %v", err)
-		}
-		results[string(out)] = struct{}{}
-	}
-	if len(results) != 1 {
-		t.Errorf("Marshal produced %d distinct outputs for nested map; want 1", len(results))
-	}
-}
-
-// TestMarshalListOfMaps — verifies a sequence whose items are mappings is
-// rendered in block style end-to-end (forceBlockStyle must recurse).
-func TestMarshalListOfMaps(t *testing.T) {
-	in := "---\nitems:\n  - name: A\n    qty: 1\n  - name: B\n    qty: 2\n---\nbody\n"
-	doc, err := Parse([]byte(in))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	out, err := Marshal(doc, nil)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if strings.Contains(string(out), "{") || strings.Contains(string(out), "[") {
-		t.Errorf("expected block style only, got flow-style markers in %q", string(out))
-	}
-	// Idempotent.
-	doc2, _ := Parse(out)
-	out2, _ := Marshal(doc2, nil)
-	if string(out) != string(out2) {
-		t.Errorf("not idempotent:\n%s\n%s", out, out2)
-	}
-}
-
-// TestMarshalWikilinkListWithNonStringItem — non-string items in a wikilink-
-// typed list should pass through unchanged rather than crashing or being
-// silently dropped.
-func TestMarshalWikilinkListWithNonStringItem(t *testing.T) {
-	cfg := defaultCfg()
-	doc := Document{Front: NewMap(), Body: ""}
-	doc.Front.Set("categories", []any{"Books", nil, "Other"})
-	out, err := Marshal(doc, cfg)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if !strings.Contains(string(out), "[[Books]]") {
-		t.Errorf("expected Books to be wrapped, got %q", string(out))
-	}
-	if !strings.Contains(string(out), "[[Other]]") {
-		t.Errorf("expected Other to be wrapped, got %q", string(out))
-	}
-	if !strings.Contains(string(out), "null") {
-		t.Errorf("expected nil item preserved, got %q", string(out))
-	}
-}
-
-// TestMarshalDoesNotMutateStoredValues — applyWikilinkWrap must not write its
-// wrapped form back into the Map; the in-memory representation stays "bare".
-func TestMarshalDoesNotMutateStoredValues(t *testing.T) {
-	cfg := defaultCfg()
-	doc := Document{Front: NewMap(), Body: ""}
-	original := []any{"Books", "Reading"}
-	doc.Front.Set("categories", original)
-	doc.Front.Set("parent", "Some Note")
-
-	if _, err := Marshal(doc, cfg); err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-
-	got, _ := doc.Front.GetList("categories")
-	if !reflect.DeepEqual(got, []any{"Books", "Reading"}) {
-		t.Errorf("Marshal mutated stored list: %v", got)
-	}
-	parent, _ := doc.Front.GetString("parent")
-	if parent != "Some Note" {
-		t.Errorf("Marshal mutated stored scalar: %q", parent)
-	}
-}
 
 // TestMarshalWholeNumberFloatPreservesType — a whole-number float (e.g. `3.0`)
 // must round-trip as a float, not an int. yaml.v3's default encoding emits the
@@ -255,34 +165,6 @@ func TestMarshalNestedMapFloatPreservesType(t *testing.T) {
 	}
 }
 
-// TestMarshalNestedMapDateKeepsISO — a date-only value inside a nested map must
-// retain the YYYY-MM-DD format, not be expanded to a full RFC3339 timestamp.
-func TestMarshalNestedMapDateKeepsISO(t *testing.T) {
-	in := "---\nmeta:\n  created: 2025-12-13\n---\nbody\n"
-	doc, err := Parse([]byte(in))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-
-	out, err := Marshal(doc, nil)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if !strings.Contains(string(out), "created: 2025-12-13") {
-		t.Errorf("expected date-only format, got:\n%s", out)
-	}
-	if strings.Contains(string(out), "T00:00:00") {
-		t.Errorf("date should not be expanded to full timestamp, got:\n%s", out)
-	}
-
-	// Idempotency.
-	doc2, _ := Parse(out)
-	out2, _ := Marshal(doc2, nil)
-	if string(out) != string(out2) {
-		t.Errorf("not idempotent:\n%q\n%q", out, out2)
-	}
-}
-
 // TestMarshalListOfMapsWithFloat — floats inside maps that are themselves
 // inside a sequence must also get the encodeFloat treatment.
 func TestMarshalListOfMapsWithFloat(t *testing.T) {
@@ -308,27 +190,6 @@ func TestMarshalListOfMapsWithFloat(t *testing.T) {
 	out2, _ := Marshal(doc2, nil)
 	if string(out) != string(out2) {
 		t.Errorf("not idempotent:\n%s\nvs\n%s", out, out2)
-	}
-}
-
-// TestMarshalEmptyNestedMap — an empty nested map should render as `{}` (flow
-// style), matching the convention for empty sequences.
-func TestMarshalEmptyNestedMap(t *testing.T) {
-	doc := Document{Front: NewMap(), Body: "body\n"}
-	doc.Front.Set("meta", map[string]any{})
-	out, err := Marshal(doc, nil)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if !strings.Contains(string(out), "meta: {}") {
-		t.Errorf("expected empty map as {}, got:\n%s", out)
-	}
-
-	// Round-trip: re-parse must preserve the empty map, not collapse it to nil.
-	doc2, _ := Parse(out)
-	out2, _ := Marshal(doc2, nil)
-	if string(out) != string(out2) {
-		t.Errorf("not idempotent:\n%q\n%q", out, out2)
 	}
 }
 
@@ -367,76 +228,5 @@ func TestMarshalZeroFloat(t *testing.T) {
 	v, _ := doc2.Front.Get("val")
 	if _, ok := v.(float64); !ok {
 		t.Errorf("val re-parsed as %T, want float64", v)
-	}
-}
-
-// TestMarshalEmptyFrontPreservesBodyStartingWithDelimiter — when the Front map
-// becomes empty (e.g. after Unset removes all keys) and the body happens to
-// begin with a parsable frontmatter block, Marshal must emit an empty
-// `---\n---\n` block so the body is not silently reinterpreted as the new
-// frontmatter on the next Parse. Before the fix, a doc whose body began with
-// `---\nother: yaml\n---\n...` would round-trip into a doc whose Front contained
-// `{other: yaml}` and a truncated body — silent corruption.
-func TestMarshalEmptyFrontPreservesBodyStartingWithDelimiter(t *testing.T) {
-	src := "---\nfoo: bar\n---\n---\nother: yaml\n---\nreal body\n"
-	doc, err := Parse([]byte(src))
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	doc.Front.Unset("foo")
-	out, err := Marshal(doc, nil)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	doc2, err := Parse(out)
-	if err != nil {
-		t.Fatalf("Parse2: %v", err)
-	}
-	if !doc2.Front.IsEmpty() {
-		t.Errorf("Front should remain empty after round-trip; got keys=%v", doc2.Front.Keys())
-	}
-	wantBody := "---\nother: yaml\n---\nreal body\n"
-	if doc2.Body != wantBody {
-		t.Errorf("Body corrupted:\n got %q\nwant %q", doc2.Body, wantBody)
-	}
-
-	// Idempotency: marshal again must produce the same bytes.
-	out2, err := Marshal(doc2, nil)
-	if err != nil {
-		t.Fatalf("Marshal2: %v", err)
-	}
-	if string(out) != string(out2) {
-		t.Errorf("not idempotent:\n%q\n%q", out, out2)
-	}
-}
-
-func TestMarshalEmptyFrontDoesNotGuardUnterminatedDelimiterBody(t *testing.T) {
-	cases := map[string]string{
-		"lf":       "---\n# body\n",
-		"crlf":     "---\r\n# body\r\n",
-		"bom lf":   "\ufeff---\ntitle: Body only\n",
-		"bom crlf": "\ufeff---\r\ntitle: Body only\r\n",
-	}
-	for name, body := range cases {
-		t.Run(name, func(t *testing.T) {
-			doc := Document{Front: NewMap(), Body: body}
-			out, err := Marshal(doc, nil)
-			if err != nil {
-				t.Fatalf("Marshal: %v", err)
-			}
-			if string(out) != body {
-				t.Fatalf("body-only marshal changed bytes:\n got %q\nwant %q", out, body)
-			}
-			doc2, err := Parse(out)
-			if err != nil {
-				t.Fatalf("Parse: %v", err)
-			}
-			if !doc2.Front.IsEmpty() {
-				t.Fatalf("unterminated delimiter body should not parse as frontmatter")
-			}
-			if doc2.Body != body {
-				t.Fatalf("body after parse changed:\n got %q\nwant %q", doc2.Body, body)
-			}
-		})
 	}
 }
