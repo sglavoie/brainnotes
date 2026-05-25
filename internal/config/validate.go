@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -45,7 +46,9 @@ func validateTemplatesDir(dir string) error {
 // vault-relative folders; an absolute path or one beginning with ".." would
 // cause `bn new` to write outside the configured root.
 func validateRoutes(cfg *Config) error {
+	names := make([]string, 0, len(cfg.New.Routes))
 	for name, dest := range cfg.New.Routes {
+		names = append(names, name)
 		trimmedName := strings.TrimSpace(name)
 		if trimmedName == "" {
 			return fmt.Errorf("config: new.routes: template name must not be empty or whitespace")
@@ -64,6 +67,14 @@ func validateRoutes(cfg *Config) error {
 		cleaned := path.Clean(slash)
 		if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
 			return fmt.Errorf("config: new.routes[%q]: path %q escapes the vault", name, dest)
+		}
+	}
+	sort.Strings(names)
+	for i := 0; i < len(names); i++ {
+		for j := i + 1; j < len(names); j++ {
+			if strings.EqualFold(names[i], names[j]) {
+				return fmt.Errorf("config: new.routes: template names %q and %q collide case-insensitively", names[i], names[j])
+			}
 		}
 	}
 	return nil

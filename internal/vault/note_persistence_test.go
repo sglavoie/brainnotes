@@ -93,6 +93,38 @@ func TestSaveCreatesParentDirs(t *testing.T) {
 	}
 }
 
+func TestSaveRejectsSymlinkParentEscape(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nbody\n",
+	})
+	outside := t.TempDir()
+	link := filepath.Join(v.Root, "linked")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unsupported on this platform: %v", err)
+	}
+
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := n.SetBody("changed\n"); err != nil {
+		t.Fatalf("setbody: %v", err)
+	}
+	outsidePath := filepath.Join(outside, "escape.md")
+	n.Path = filepath.Join(link, "escape.md")
+
+	err = n.Save(&v.Cfg.Frontmatter)
+	if err == nil {
+		t.Fatal("save through symlinked parent should fail")
+	}
+	if !strings.Contains(err.Error(), "outside vault root") {
+		t.Fatalf("error should mention outside vault root: %v", err)
+	}
+	if _, statErr := os.Stat(outsidePath); !os.IsNotExist(statErr) {
+		t.Fatalf("outside file should not be created, stat err = %v", statErr)
+	}
+}
+
 // TestLoadEmptyPath verifies that Load on a Note with an empty Path returns
 // an error rather than producing a confusing `open : no such file` from
 // os.ReadFile. Callers that set Path lazily can otherwise leak the call site

@@ -125,6 +125,28 @@ func TestPlanRepairs_TypeCoerceThenCanonicalizeString(t *testing.T) {
 	}
 }
 
+func TestPlanRepairs_TypeCoerceWholeNumberFloatToString(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"rating": {Type: "string", Allowed: []string{"3.0", "4.0"}},
+	}
+	front := buildFront("rating", 3.0)
+
+	result := PlanRepairs(front, sch, nil)
+	if len(result.Skips) != 0 {
+		t.Errorf("unexpected skips: %+v", result.Skips)
+	}
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	act := result.Actions[0]
+	if act.Kind != "type_coerce" {
+		t.Errorf("kind = %q, want %q", act.Kind, "type_coerce")
+	}
+	if act.NewValue != "3.0" {
+		t.Errorf("new value = %v, want %q", act.NewValue, "3.0")
+	}
+}
+
 func TestPlanRepairs_TypeCoercePlusValueSkip(t *testing.T) {
 	sch := map[string]config.PropertySchema{
 		"status": {Type: "string", Allowed: []string{"WIP", "Done"}},

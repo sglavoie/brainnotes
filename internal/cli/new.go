@@ -242,11 +242,26 @@ func resolveDest(cfg *config.Config, templateName, folderFlag string) (string, e
 	switch {
 	case folderFlag != "":
 		return resolveNewDestFolder(cfg.Vault, folderFlag, "new: --folder")
-	case cfg.New.Routes != nil && cfg.New.Routes[templateName] != "":
-		return resolveNewDestFolder(cfg.Vault, cfg.New.Routes[templateName], fmt.Sprintf("new: route for %q", templateName))
+	case cfg.New.Routes != nil:
+		if dest, ok := routeForTemplate(cfg.New.Routes, templateName); ok {
+			return resolveNewDestFolder(cfg.Vault, dest, fmt.Sprintf("new: route for %q", templateName))
+		}
+		return cfg.Vault, nil
 	default:
 		return cfg.Vault, nil
 	}
+}
+
+func routeForTemplate(routes map[string]string, templateName string) (string, bool) {
+	if dest, ok := routes[templateName]; ok && dest != "" {
+		return dest, true
+	}
+	for name, dest := range routes {
+		if dest != "" && strings.EqualFold(name, templateName) {
+			return dest, true
+		}
+	}
+	return "", false
 }
 
 func normalizeNewDefaultExtension(ext string) string {

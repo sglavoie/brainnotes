@@ -153,12 +153,16 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 		if !strings.EqualFold(filepath.Ext(p), ".md") {
 			return nil
 		}
-		return fn(&Note{Path: p})
+		return fn(v.note(p))
 	})
 	if walkErr != nil {
 		return fmt.Errorf("vault: walk: %w", walkErr)
 	}
 	return nil
+}
+
+func (v *Vault) note(path string) *Note {
+	return &Note{Path: path, root: v.Root}
 }
 
 // Notes loads every note in the vault into memory and returns them. Convenient

@@ -110,6 +110,21 @@ func TestCheckAllowed_NonStringType(t *testing.T) {
 	}
 }
 
+func TestCheckAllowed_WholeNumberFloatPreservesDecimal(t *testing.T) {
+	ok, _ := CheckAllowed(3.0, []string{"3.0", "4.0"}, false)
+	if !ok {
+		t.Error("expected ok when allowed list contains the whole-number float form")
+	}
+
+	ok, bad := CheckAllowed(3.0, []string{"3", "4"}, false)
+	if ok {
+		t.Error("expected failure when allowed list only contains the int form")
+	}
+	if bad != "3.0" {
+		t.Errorf("offending = %q, want %q", bad, "3.0")
+	}
+}
+
 func TestCheckAllowed_DateOnlyTime(t *testing.T) {
 	dateOnly := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	ok, _ := CheckAllowed(dateOnly, []string{"2024-01-01"}, false)

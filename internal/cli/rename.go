@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -113,6 +114,9 @@ Inspect with 'git diff' to recover.`,
 			oldTitle := target.Title()
 			if oldTitle == newTitle {
 				return fmt.Errorf("rename: new title %q is identical to current title", newTitle)
+			}
+			if err := ensureUniqueRenameSourceTitle(v, target.Path, oldTitle); err != nil {
+				return err
 			}
 
 			newPath, err := computeNewPath(target.Path, newTitle, cfg)
@@ -313,4 +317,27 @@ func buildRenamePlan(v *vault.Vault, targetPath, newPath, oldTitle, newTitle str
 		return nil, fmt.Errorf("rename: scan vault: %w", err)
 	}
 	return plan, nil
+}
+
+func ensureUniqueRenameSourceTitle(v *vault.Vault, targetPath, title string) error {
+	var duplicates []string
+	err := v.Walk(vault.WalkFilter{}, func(n *vault.Note) error {
+		if n.Path == targetPath || !strings.EqualFold(n.Title(), title) {
+			return nil
+		}
+		rel, err := filepath.Rel(v.Root, n.Path)
+		if err != nil {
+			rel = n.Path
+		}
+		duplicates = append(duplicates, rel)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("rename: scan vault for duplicate titles: %w", err)
+	}
+	if len(duplicates) == 0 {
+		return nil
+	}
+	sort.Strings(duplicates)
+	return fmt.Errorf("rename: title %q is duplicated elsewhere in the vault (%s); refusing title-only rewrite", title, strings.Join(duplicates, ", "))
 }

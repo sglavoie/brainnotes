@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,5 +43,22 @@ func TestLoad_NewRoutesDropsWhitespaceOnlyValues(t *testing.T) {
 	}
 	if _, ok := cfg.New.Routes["book"]; ok {
 		t.Fatalf("whitespace-only route should be dropped, got routes %v", cfg.New.Routes)
+	}
+}
+
+func TestLoad_NewRoutesRejectCaseFoldCollisions(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = 'Books'\nBOOK = 'References/Books'\n")
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for case-fold-colliding route keys")
+	}
+	if !strings.Contains(err.Error(), "collide case-insensitively") {
+		t.Fatalf("expected case-fold collision error, got %v", err)
 	}
 }

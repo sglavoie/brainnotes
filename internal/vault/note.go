@@ -18,6 +18,8 @@ type Note struct {
 	// Path is the absolute path on disk.
 	Path string
 
+	root string
+
 	doc    frontmatter.Document
 	loaded bool
 }
@@ -64,11 +66,75 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if n.Path == "" {
 		return errors.New("note: save: empty path")
 	}
+	if err := n.ensureSavePathContained(); err != nil {
+		return err
+	}
 	data, err := frontmatter.Marshal(n.doc, fmCfg)
 	if err != nil {
 		return fmt.Errorf("note: marshal %q: %w", n.Path, err)
 	}
 	return atomicWrite(n.Path, data)
+}
+
+func (n *Note) ensureSavePathContained() error {
+	if n.root == "" {
+		return nil
+	}
+	realRoot, err := filepath.EvalSymlinks(n.root)
+	if err != nil {
+		return fmt.Errorf("note: resolve root %q: %w", n.root, err)
+	}
+	realDir, err := resolveDirForWrite(filepath.Dir(n.Path))
+	if err != nil {
+		return fmt.Errorf("note: resolve save dir %q: %w", filepath.Dir(n.Path), err)
+	}
+	realDest := filepath.Join(realDir, filepath.Base(n.Path))
+	rel, err := filepath.Rel(realRoot, realDest)
+	if err != nil {
+		return fmt.Errorf("note: rel %q: %w", realDest, err)
+	}
+	if relEscapesRoot(rel) || filepath.IsAbs(rel) {
+		return fmt.Errorf("note: save path %q resolves outside vault root %q", n.Path, n.root)
+	}
+	return nil
+}
+
+// resolveDirForWrite resolves dir to the real location a create/rename would
+// use: it follows symlinks on the deepest existing ancestor, then reapplies any
+// still-missing suffix underneath that resolved ancestor.
+func resolveDirForWrite(dir string) (string, error) {
+	dir = filepath.Clean(dir)
+	var suffix []string
+	for {
+		_, err := os.Lstat(dir)
+		switch {
+		case err == nil:
+			targetInfo, statErr := os.Stat(dir)
+			if statErr != nil {
+				return "", statErr
+			}
+			if !targetInfo.IsDir() {
+				return "", fmt.Errorf("%q is not a directory", dir)
+			}
+			resolved, evalErr := filepath.EvalSymlinks(dir)
+			if evalErr != nil {
+				return "", evalErr
+			}
+			for i := len(suffix) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, suffix[i])
+			}
+			return resolved, nil
+		case os.IsNotExist(err):
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				return "", fmt.Errorf("no existing ancestor for %q", dir)
+			}
+			suffix = append(suffix, filepath.Base(dir))
+			dir = parent
+		default:
+			return "", err
+		}
+	}
 }
 
 // Front returns a pointer to the note's frontmatter map. Load is called

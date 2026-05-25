@@ -18,6 +18,10 @@ import (
 // template required by most `new` tests, then writes a config that routes
 // `book` to References/Books.
 func buildNewFixture(t *testing.T) string {
+	return buildNewFixtureWithRouteKey(t, "book")
+}
+
+func buildNewFixtureWithRouteKey(t *testing.T, routeKey string) string {
 	t.Helper()
 	root := t.TempDir()
 	tmplDir := filepath.Join(root, "Templates")
@@ -31,7 +35,7 @@ func buildNewFixture(t *testing.T) string {
 
 	cfgDir := t.TempDir()
 	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n\n[new.routes]\nbook = \"References/Books\"\n"
+	cfg := "vault = \"" + root + "\"\n\n[new.routes]\n" + routeKey + " = \"References/Books\"\n"
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -78,6 +82,23 @@ func TestNewBookRouting(t *testing.T) {
 	want := "---\ntitle: Dune\ncreated: 2026-05-18\nauthor: Herbert\n---\nslug: dune\n"
 	if got != want {
 		t.Fatalf("content mismatch:\n got=%q\nwant=%q", got, want)
+	}
+}
+
+func TestNewRouteLookupCaseInsensitive(t *testing.T) {
+	root := buildNewFixtureWithRouteKey(t, "BOOK")
+
+	out, err := runNew(t, "new", "book", "Dune", "--var", "author=Herbert")
+	if err != nil {
+		t.Fatalf("execute: %v\noutput: %s", err, out)
+	}
+
+	created := filepath.Join(root, "References", "Books", "Dune.md")
+	if !strings.Contains(out, created) {
+		t.Fatalf("stdout %q does not mention %q", out, created)
+	}
+	if _, err := os.Stat(created); err != nil {
+		t.Fatalf("expected %s to exist: %v", created, err)
 	}
 }
 

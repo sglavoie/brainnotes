@@ -180,7 +180,7 @@ func collectReplaceCandidates(v *vault.Vault, cmd *cobra.Command, noteArgs []str
 		return nil, err
 	}
 	if queryFlagsNeedGraph(flags) {
-		flags.Graph = query.BuildGraph(notes)
+		flags.Graph = query.BuildGraphForRoot(v.Root, notes)
 	}
 	pred, err := query.FromFlags(flags)
 	if err != nil {

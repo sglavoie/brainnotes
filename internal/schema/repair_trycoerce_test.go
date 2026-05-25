@@ -40,6 +40,7 @@ func TestTryCoerce(t *testing.T) {
 		{"bool_false_to_string", false, "string", "false", true},
 		{"int_to_string", 42, "string", "42", true},
 		{"float_to_string", 3.14, "string", "3.14", true},
+		{"whole_float_to_string", 3.0, "string", "3.0", true},
 		{"date_to_string", date, "string", "2024-01-15", true},
 		{
 			"datetime_to_string_lossy",

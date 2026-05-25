@@ -116,8 +116,8 @@ func TestBuildGraph_MarkdownExtensionWikilinksResolve(t *testing.T) {
 	}
 	g := BuildGraph(notes)
 
-	if got := g.ForwardLinks("A"); !strEq(got, []string{"b", "c", "d"}) {
-		t.Fatalf("Forward[a] = %v, want [b c d]", got)
+	if got := g.ForwardLinks("A"); !strEq(got, []string{"b", "d", "sub/c"}) {
+		t.Fatalf("Forward[a] = %v, want [b d sub/c]", got)
 	}
 	if len(g.BackLinks("b")) != 1 {
 		t.Fatalf("[[B.md]] should record one backlink for B, got %v", g.BackLinks("b"))
@@ -296,6 +296,49 @@ func TestBuildGraph_BacklinkDeduplicationMultipleSources(t *testing.T) {
 	back := g.BackLinks("c")
 	if len(back) != 2 {
 		t.Errorf("BackLinks(c) = %v (len %d), want exactly 2 entries (one per source)", back, len(back))
+	}
+}
+
+func TestBuildGraph_FolderQualifiedDuplicateTitleResolvesExactPath(t *testing.T) {
+	root := t.TempDir()
+	pSource := writeNote(t, root, "Source.md", "---\ntitle: Source\n---\n[[Areas/Foo]]\n")
+	pRootFoo := writeNote(t, root, "Foo.md", "---\ntitle: Foo\n---\nbody\n")
+	pAreaFoo := writeNote(t, root, "Areas/Foo.md", "---\ntitle: Foo\n---\nbody\n")
+
+	notes := []*vault.Note{
+		{Path: pSource},
+		{Path: pRootFoo},
+		{Path: pAreaFoo},
+	}
+	g := BuildGraph(notes)
+
+	if got := g.ForwardLinks("Source"); !strEq(got, []string{"areas/foo"}) {
+		t.Fatalf("Forward[source] = %v, want [areas/foo]", got)
+	}
+	if got := g.BackLinks("areas/foo"); len(got) != 1 || got[0] != pSource {
+		t.Fatalf("BackLinks(areas/foo) = %v, want [%s]", got, pSource)
+	}
+	if got := g.BackLinksForNote(&vault.Note{Path: pRootFoo}); len(got) != 0 {
+		t.Fatalf("root Foo should not receive folder-qualified backlink, got %v", got)
+	}
+}
+
+func TestBuildGraph_FolderQualifiedUniqueTitleFallsBackToTitleMatch(t *testing.T) {
+	root := t.TempDir()
+	pSource := writeNote(t, root, "Source.md", "---\ntitle: Source\n---\n[[Folder/Foo]]\n")
+	pFoo := writeNote(t, root, "Foo.md", "---\ntitle: Foo\n---\nbody\n")
+
+	notes := []*vault.Note{
+		{Path: pSource},
+		{Path: pFoo},
+	}
+	g := BuildGraph(notes)
+
+	if got := g.ForwardLinks("Source"); !strEq(got, []string{"foo"}) {
+		t.Fatalf("Forward[source] = %v, want [foo]", got)
+	}
+	if got := g.BackLinks("foo"); len(got) != 1 || got[0] != pSource {
+		t.Fatalf("BackLinks(foo) = %v, want [%s]", got, pSource)
 	}
 }
 

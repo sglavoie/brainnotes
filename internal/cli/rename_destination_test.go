@@ -62,6 +62,28 @@ func TestRenameDestinationExistsForce(t *testing.T) {
 	}
 }
 
+func TestRenameRejectsExplicitPathWhenTitleDuplicatedElsewhere(t *testing.T) {
+	root := buildRenameFixture(t)
+	dup := filepath.Join(root, "Reviews", "Dune.md")
+	if err := os.WriteFile(dup, []byte("---\ntitle: Dune Copy\n---\nDup body.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := snapshotVault(t, root)
+
+	_, err := runCLI(t, "", "rename", filepath.Join(root, "Dune.md"), "Sand Worms")
+	if err == nil {
+		t.Fatal("expected duplicate-title refusal")
+	}
+	if !strings.Contains(err.Error(), "duplicated elsewhere in the vault") {
+		t.Fatalf("expected duplicate-title error, got %v", err)
+	}
+
+	after := snapshotVault(t, root)
+	if !mapsEqual(before, after) {
+		t.Fatalf("duplicate-title refusal modified files:\nbefore=%v\nafter=%v", before, after)
+	}
+}
+
 // TestRenameRejectsDirectoryDestination locks in that a rename whose destination
 // path resolves to an existing directory is refused — even with --force. Before
 // the fix, --force trusted the user and let os.Rename fail mid-apply (after

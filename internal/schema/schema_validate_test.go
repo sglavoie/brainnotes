@@ -180,6 +180,40 @@ func TestValidateNote_IntAllowedPasses(t *testing.T) {
 	}
 }
 
+func TestValidateNote_FloatAllowedWholeNumberPasses(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("rating", 3.0)
+
+	schema := map[string]config.PropertySchema{
+		"rating": {Type: "float", Allowed: []string{"3.0", "4.0"}},
+	}
+
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 0 {
+		t.Errorf("expected 0 violations, got %d: %+v", len(vs), vs)
+	}
+}
+
+func TestValidateNote_FloatAllowedWholeNumberViolationDetail(t *testing.T) {
+	front := frontmatter.NewMap()
+	front.Set("rating", 3.0)
+
+	schema := map[string]config.PropertySchema{
+		"rating": {Type: "float", Allowed: []string{"4.0"}},
+	}
+
+	vs := ValidateNote(&front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d: %+v", len(vs), vs)
+	}
+	if vs[0].Kind != "value" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "value")
+	}
+	if vs[0].Detail != `invalid value "3.0" (allowed: 4.0)` {
+		t.Errorf("detail = %q, want %q", vs[0].Detail, `invalid value "3.0" (allowed: 4.0)`)
+	}
+}
+
 func TestValidateNote_BoolAllowedEnforced(t *testing.T) {
 	front := frontmatter.NewMap()
 	front.Set("draft", true)

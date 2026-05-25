@@ -68,7 +68,7 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 
 			var g *query.Graph
 			if ff.needsGraph() {
-				g = query.BuildGraph(notes)
+				g = query.BuildGraphForRoot(v.Root, notes)
 			}
 			flags := ff.toQueryFlags(v.Root, g)
 			pred, err := query.FromFlags(flags)

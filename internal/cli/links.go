@@ -67,17 +67,15 @@ func NewLinksCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			g := query.BuildGraph(notes)
-
-			targetKey := backlinkKey(target)
-			fwdTitles := g.ForwardLinks(targetKey)
+			g := query.BuildGraphForRoot(v.Root, notes)
 
 			if verbose {
-				return writeVerboseLinks(cmd.OutOrStdout(), target, g, fwdTitles)
+				return writeVerboseLinks(cmd.OutOrStdout(), target, g, g.ForwardLinks(backlinkKey(target)))
 			}
 
-			paths := make([]string, 0, len(fwdTitles))
-			for _, title := range fwdTitles {
+			exactTargets := g.ForwardLinksForNote(target)
+			paths := make([]string, 0, len(exactTargets))
+			for _, title := range exactTargets {
 				if p, ok := g.PathsByTitle[title]; ok {
 					paths = append(paths, p)
 				}

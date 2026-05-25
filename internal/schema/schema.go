@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -183,7 +184,7 @@ func scalarToString(v any) string {
 	case bool:
 		return strconv.FormatBool(val)
 	case float64:
-		return strconv.FormatFloat(val, 'f', -1, 64)
+		return formatScalarFloat(val)
 	case time.Time:
 		if !isDateOnlyTime(val) {
 			return ""
@@ -191,6 +192,17 @@ func scalarToString(v any) string {
 		return val.Format("2006-01-02")
 	}
 	return ""
+}
+
+func formatScalarFloat(f float64) string {
+	s := strconv.FormatFloat(f, 'g', -1, 64)
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return s
+	}
+	if !strings.ContainsAny(s, ".eE") {
+		s += ".0"
+	}
+	return s
 }
 
 func isDateOnlyTime(t time.Time) bool {

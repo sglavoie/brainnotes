@@ -220,7 +220,7 @@ func TryCoerce(val any, targetType string) (any, bool) {
 		case int:
 			return strconv.Itoa(v), true
 		case float64:
-			return strconv.FormatFloat(v, 'f', -1, 64), true
+			return scalarToString(v), true
 		case time.Time:
 			if isDateOnlyTime(v) {
 				return v.Format("2006-01-02"), true

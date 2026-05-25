@@ -63,7 +63,7 @@ func NewFindCmd() *cobra.Command {
 
 			var g *query.Graph
 			if ff.needsGraph() {
-				g = query.BuildGraph(notes)
+				g = query.BuildGraphForRoot(v.Root, notes)
 			}
 			flags := ff.toQueryFlags(v.Root, g)
 			pred, err := query.FromFlags(flags)

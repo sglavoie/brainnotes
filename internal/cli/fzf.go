@@ -12,17 +12,21 @@ import (
 // ErrFZFNotFound is returned when the fzf binary cannot be located in PATH.
 var ErrFZFNotFound = errors.New("fzf not found; install via 'brew install fzf' or provide arguments explicitly")
 
+var fzfLookPath = exec.LookPath
+
+var fzfCommand = exec.Command
+
 // RunFZF pipes paths into fzf, one per line, and returns the user's selection.
 // extraArgs is forwarded verbatim — typically from cfg.Fzf.Args (preview,
-// height, etc.). A user-aborted fzf (exit code 130) returns (nil, nil) so the
-// command can exit cleanly. fzf's stderr is forwarded to the parent so the
+// height, etc.). A user-aborted fzf (exit code 1 or 130) returns (nil, nil) so
+// the command can exit cleanly. fzf's stderr is forwarded to the parent so the
 // TUI renders in the user's terminal.
 func RunFZF(paths []string, extraArgs []string) ([]string, error) {
-	if _, err := exec.LookPath("fzf"); err != nil {
+	if _, err := fzfLookPath("fzf"); err != nil {
 		return nil, ErrFZFNotFound
 	}
 	args := append([]string(nil), extraArgs...)
-	cmd := exec.Command("fzf", args...)
+	cmd := fzfCommand("fzf", args...)
 	cmd.Stdin = strings.NewReader(strings.Join(paths, "\n"))
 	cmd.Stderr = os.Stderr
 	var out bytes.Buffer
@@ -30,7 +34,7 @@ func RunFZF(paths []string, extraArgs []string) ([]string, error) {
 
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 130 {
+		if errors.As(err, &exitErr) && (exitErr.ExitCode() == 1 || exitErr.ExitCode() == 130) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("fzf: %w", err)

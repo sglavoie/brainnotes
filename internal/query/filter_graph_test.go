@@ -137,6 +137,23 @@ func TestOrphanLinkedByFolderPrefixedWikilink(t *testing.T) {
 	}
 }
 
+func TestOrphanDuplicateTitlesUseExactFolderQualifiedBacklinks(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"Foo.md":       "---\n---\nbody\n",
+		"Areas/Foo.md": "---\n---\nbody\n",
+		"Referrer.md":  "---\n---\nSee [[Areas/Foo]].\n",
+	})
+	all := []*vault.Note{notes["Foo.md"], notes["Areas/Foo.md"], notes["Referrer.md"]}
+	g := BuildGraph(all)
+
+	if !Orphan(g)(notes["Foo.md"]) {
+		t.Errorf("root Foo should remain orphan: only Areas/Foo is linked")
+	}
+	if Orphan(g)(notes["Areas/Foo.md"]) {
+		t.Errorf("Areas/Foo should not be orphan: Referrer links its exact folder-qualified path")
+	}
+}
+
 func TestMinBacklinks(t *testing.T) {
 	_, notes := newVault(t, map[string]string{
 		"Hub.md":    "---\n---\nbody\n",

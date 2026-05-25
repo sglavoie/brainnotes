@@ -66,26 +66,23 @@ func TestOrphanPredicateGraphMissingNoteEntry(t *testing.T) {
 // list includes a fully-qualified timestamp should be queryable via the same
 // RFC3339 string the user would see if they dumped the frontmatter.
 
-// TestBuildGraphCaseDifferingTitlesShareKey documents the behaviour when two
-// notes with case-differing filenames (e.g. "Foo.md" and "foo.md") would
-// produce the same lowercased title key. The graph keys by lowercased stem,
-// so the second note's entry clobbers the first in Titles/PathsByTitle.
-// In practice case-insensitive filesystems prevent this, but this test pins
-// the contract for case-sensitive filesystems (e.g. Linux): the latter note
-// wins, and consumers must accept a single PathsByTitle entry per key.
-func TestBuildGraphCaseDifferingTitlesShareKey(t *testing.T) {
+func TestBuildGraphDuplicateTitlesKeepDistinctPathKeys(t *testing.T) {
 	_, notes := newVault(t, map[string]string{
 		"Foo.md":     "---\n---\nbody\n",
 		"sub/foo.md": "---\n---\nbody\n",
 	})
 	all := []*vault.Note{notes["Foo.md"], notes["sub/foo.md"]}
 	g := BuildGraph(all)
-	// Exactly one entry for the shared key.
 	if _, ok := g.Titles["foo"]; !ok {
-		t.Errorf("expected 'foo' in Titles when two notes share the lowercased stem")
+		t.Errorf("expected root note key 'foo' in Titles")
 	}
-	// PathsByTitle holds a single path (the last one inserted wins).
-	if p := g.PathsByTitle["foo"]; p == "" {
-		t.Errorf("PathsByTitle[foo] should be non-empty; got empty")
+	if _, ok := g.Titles["sub/foo"]; !ok {
+		t.Errorf("expected folder-qualified note key 'sub/foo' in Titles")
+	}
+	if p := g.PathsByTitle["foo"]; p != notes["Foo.md"].Path {
+		t.Errorf("PathsByTitle[foo] = %q, want %q", p, notes["Foo.md"].Path)
+	}
+	if p := g.PathsByTitle["sub/foo"]; p != notes["sub/foo.md"].Path {
+		t.Errorf("PathsByTitle[sub/foo] = %q, want %q", p, notes["sub/foo.md"].Path)
 	}
 }

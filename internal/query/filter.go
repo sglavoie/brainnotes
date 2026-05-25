@@ -286,8 +286,7 @@ func Orphan(g *Graph) Predicate {
 		if n == nil {
 			return false
 		}
-		t := strings.ToLower(n.Title())
-		for _, p := range g.BackLinks(t) {
+		for _, p := range g.BackLinksForNote(n) {
 			if p != n.Path {
 				return false
 			}
@@ -302,7 +301,7 @@ func MinBacklinks(g *Graph, n int) Predicate {
 		if note == nil {
 			return false
 		}
-		return g.InDegree(note.Title()) >= n
+		return g.InDegreeForNote(note) >= n
 	}
 }
 
@@ -312,7 +311,7 @@ func MaxBacklinks(g *Graph, n int) Predicate {
 		if note == nil {
 			return false
 		}
-		return g.InDegree(note.Title()) <= n
+		return g.InDegreeForNote(note) <= n
 	}
 }
 
@@ -322,7 +321,7 @@ func MinLinks(g *Graph, n int) Predicate {
 		if note == nil {
 			return false
 		}
-		return g.OutDegree(note.Title()) >= n
+		return g.OutDegreeForNote(note) >= n
 	}
 }
 
@@ -332,7 +331,7 @@ func MaxLinks(g *Graph, n int) Predicate {
 		if note == nil {
 			return false
 		}
-		return g.OutDegree(note.Title()) <= n
+		return g.OutDegreeForNote(note) <= n
 	}
 }
 

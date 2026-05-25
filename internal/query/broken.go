@@ -28,7 +28,7 @@ func isMediaEmbed(title string) bool {
 }
 
 // UnresolvedLinks returns every wikilink in n (body and frontmatter) whose
-// title does not appear in the graph's title set.
+// target does not resolve in the graph.
 func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 	if n == nil {
 		return nil
@@ -45,11 +45,7 @@ func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 			if title == "" || isMediaEmbed(title) {
 				continue
 			}
-			tKey := linkTitleKey(title)
-			if tKey == "" {
-				continue
-			}
-			if _, ok := g.Titles[tKey]; ok {
+			if len(g.resolveLink(link)) > 0 {
 				continue
 			}
 			line := lineOffset + lineFromOffset(nlOffsets, link.Start)
@@ -76,13 +72,10 @@ func scanBrokenValue(v any, key string, g *Graph, out *[]BrokenLink) {
 			if title == "" || isMediaEmbed(title) {
 				continue
 			}
-			tKey := linkTitleKey(title)
-			if tKey == "" {
+			if len(g.resolveLink(link)) > 0 {
 				continue
 			}
-			if _, ok := g.Titles[tKey]; !ok {
-				*out = append(*out, BrokenLink{Link: link, FrontmatterKey: key, Line: 0})
-			}
+			*out = append(*out, BrokenLink{Link: link, FrontmatterKey: key, Line: 0})
 		}
 	case []any:
 		for _, item := range vv {

@@ -160,7 +160,7 @@ func TestUnresolvedLinks(t *testing.T) {
 		}
 	})
 
-	t.Run("folder-prefixed link resolves by title", func(t *testing.T) {
+	t.Run("folder-prefixed link resolves by exact path", func(t *testing.T) {
 		_, notes := newVault(t, map[string]string{
 			"Alpha.md":    "---\ntitle: Alpha\n---\nSee [[Sub/Beta]].\n",
 			"Sub/Beta.md": "---\ntitle: Beta\n---\n",
@@ -172,7 +172,27 @@ func TestUnresolvedLinks(t *testing.T) {
 		g := BuildGraph(all)
 		broken := UnresolvedLinks(notes["Alpha.md"], g)
 		if len(broken) != 0 {
-			t.Errorf("expected 0 broken links (folder-prefixed resolves by title), got %d", len(broken))
+			t.Errorf("expected 0 broken links for an exact folder-qualified target, got %d", len(broken))
+		}
+	})
+
+	t.Run("folder-prefixed duplicate title must match exact path", func(t *testing.T) {
+		_, notes := newVault(t, map[string]string{
+			"Alpha.md":      "---\ntitle: Alpha\n---\nSee [[Projects/Beta]].\n",
+			"Areas/Beta.md": "---\ntitle: Beta\n---\n",
+			"Beta.md":       "---\ntitle: Beta\n---\n",
+		})
+		var all []*vault.Note
+		for _, n := range notes {
+			all = append(all, n)
+		}
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
+		if len(broken) != 1 {
+			t.Fatalf("expected 1 broken folder-qualified link, got %d", len(broken))
+		}
+		if broken[0].Link.Target != "Projects/Beta" {
+			t.Errorf("expected broken target Projects/Beta, got %q", broken[0].Link.Target)
 		}
 	})
 

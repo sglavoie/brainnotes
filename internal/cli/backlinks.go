@@ -79,7 +79,7 @@ func NewBacklinksCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			graph := query.BuildGraph(notes)
+			graph := query.BuildGraphForRoot(v.Root, notes)
 
 			referrers := backlinkReferrers(graph, target)
 
@@ -140,9 +140,8 @@ func resolveBacklinkTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 // backlinkReferrers returns the sorted, deduped, self-filtered list of paths
 // that reference target according to the graph's backward index.
 func backlinkReferrers(g *query.Graph, target *vault.Note) []string {
-	key := backlinkKey(target)
 	seen := make(map[string]struct{})
-	for _, p := range g.BackLinks(key) {
+	for _, p := range g.BackLinksForNote(target) {
 		if p == target.Path {
 			continue
 		}
