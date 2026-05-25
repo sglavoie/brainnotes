@@ -192,6 +192,25 @@ func TestNewForceOverwrite(t *testing.T) {
 	}
 }
 
+func TestNewEdit_EditorArgsSupported(t *testing.T) {
+	root := buildNewFixture(t)
+	t.Setenv("EDITOR", "go env")
+	captured := stubExecReplace(t)
+
+	out, err := runNew(t, "new", "book", "Dune", "--var", "author=Herbert", "--edit")
+	if err != nil {
+		t.Fatalf("execute: %v\noutput: %s", err, out)
+	}
+
+	created := filepath.Join(root, "References", "Books", "Dune.md")
+	if _, err := os.Stat(created); err != nil {
+		t.Fatalf("expected created note at %s: %v", created, err)
+	}
+	if got, want := *captured, []string{"go", "env", created}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("execReplace argv = %v, want %v", got, want)
+	}
+}
+
 // TestNewCreatesNoteWithReadableMode verifies that the atomic temp-file
 // write used by `bn new` widens a brand-new note from os.CreateTemp's 0600 to
 // the normal 0644 note mode.

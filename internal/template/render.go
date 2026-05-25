@@ -139,7 +139,7 @@ func wikilinkFn(s string) string {
 		// would be misdetected as already wrapped and passed through
 		// unchanged as an invalid wikilink.
 		inner := trimmed[2 : len(trimmed)-2]
-		if !strings.ContainsAny(inner, "[]") {
+		if !strings.ContainsAny(inner, "[]\r\n") {
 			return s
 		}
 	}

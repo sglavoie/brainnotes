@@ -7,46 +7,47 @@ import (
 )
 
 func TestTryCoerce_FloatOverflowToInt(t *testing.T) {
-	// A float64 value larger than MaxInt64 should not be coerced to int.
-	_, ok := TryCoerce(float64(math.MaxInt64)+2048, "int")
+	intUpperExclusive := math.Ldexp(1, strconv.IntSize-1)
+	intLowerInclusive := -intUpperExclusive
+
+	// A float64 value larger than the platform int range should not be coerced to int.
+	_, ok := TryCoerce(intUpperExclusive+2048, "int")
 	if ok {
-		t.Error("TryCoerce(>MaxInt64, int) should return false")
+		t.Error("TryCoerce(>MaxInt, int) should return false")
 	}
 
-	// A float64 value smaller than MinInt64 should not be coerced to int.
-	_, ok = TryCoerce(float64(math.MinInt64)-2048, "int")
+	// A float64 value smaller than the platform int range should not be coerced to int.
+	_, ok = TryCoerce(intLowerInclusive-2048, "int")
 	if ok {
-		t.Error("TryCoerce(<MinInt64, int) should return false")
+		t.Error("TryCoerce(<MinInt, int) should return false")
 	}
 
-	// 1e19 exceeds MaxInt64 (~9.2e18).
-	_, ok = TryCoerce(1e19, "int")
+	// Two exact powers-of-two beyond the upper bound must be rejected on every platform.
+	_, ok = TryCoerce(intUpperExclusive*4, "int")
 	if ok {
-		t.Error("TryCoerce(1e19, int) should return false")
+		t.Error("TryCoerce(4*upperExclusive, int) should return false")
 	}
 
-	// -1e19 is below MinInt64.
-	_, ok = TryCoerce(-1e19, "int")
+	_, ok = TryCoerce(intLowerInclusive*4, "int")
 	if ok {
-		t.Error("TryCoerce(-1e19, int) should return false")
+		t.Error("TryCoerce(4*lowerInclusive, int) should return false")
 	}
 
-	// float64(MaxInt64) is 2^63 (one beyond MaxInt64); must be rejected
-	// even though the round-trip float64(int(f)) == f would pass due
-	// to precision loss.
-	_, ok = TryCoerce(float64(math.MaxInt64), "int")
+	// The exclusive upper bound itself must be rejected even though it is an
+	// exactly representable float64.
+	_, ok = TryCoerce(intUpperExclusive, "int")
 	if ok {
-		t.Error("TryCoerce(float64(MaxInt64), int) should return false")
+		t.Error("TryCoerce(upperExclusive, int) should return false")
 	}
 
-	// The largest float64 strictly less than 2^63 should still work.
-	prev := math.Nextafter(float64(math.MaxInt64), 0)
+	// The largest float64 strictly less than the exclusive upper bound should still work.
+	prev := math.Nextafter(intUpperExclusive, 0)
 	got, ok := TryCoerce(prev, "int")
 	if !ok {
-		t.Error("TryCoerce(prev-of-MaxInt64, int) should return true")
+		t.Error("TryCoerce(prev-of-upperExclusive, int) should return true")
 	}
 	if n, isInt := got.(int); !isInt || float64(n) != prev {
-		t.Errorf("TryCoerce(prev-of-MaxInt64, int) = %v, expected lossless int", got)
+		t.Errorf("TryCoerce(prev-of-upperExclusive, int) = %v, expected lossless int", got)
 	}
 }
 

@@ -51,6 +51,8 @@ func TestWikilinkNoDoubleWrap(t *testing.T) {
 		{"[[Foo]Bar]]", "[[FooBar]]"},
 		{"[[Foo[Bar]]", "[[FooBar]]"},
 		{"[[[]]", "[[]]"},
+		{"[[Foo\nBar]]", "[[Foo Bar]]"},
+		{"[[Foo\r\nBar]]", "[[Foo Bar]]"},
 		// Surrounding whitespace on a non-wrapped value must be trimmed —
 		// Obsidian treats whitespace inside [[ ]] as part of the link target,
 		// so "[[  Books  ]]" would not resolve to the "Books" note.

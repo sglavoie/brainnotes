@@ -45,13 +45,13 @@ func NewMap() Map {
 
 // FormatTimestamp renders t as a date string ("2006-01-02") when the value was
 // parsed from a bare YAML date scalar (midnight UTC, no time-of-day component),
-// and as RFC 3339 otherwise. This heuristic is the only way to distinguish a
+// and as RFC3339Nano otherwise. This heuristic is the only way to distinguish a
 // YAML date from a full timestamp because yaml.v3 surfaces both as time.Time.
 func FormatTimestamp(t time.Time) string {
 	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 && t.Location() == time.UTC {
 		return t.Format("2006-01-02")
 	}
-	return t.Format(time.RFC3339)
+	return t.Format(time.RFC3339Nano)
 }
 
 // Len reports the number of entries.

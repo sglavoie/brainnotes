@@ -227,6 +227,74 @@ func TestConfigEdit_NoEditor(t *testing.T) {
 	}
 }
 
+func TestConfigEdit_NoEditorDoesNotCreateConfig(t *testing.T) {
+	resetConfigEnv(t)
+	home := os.Getenv("HOME")
+	wantPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+
+	_, stderr, err := runConfig(t, "config", "edit")
+	if err == nil {
+		t.Fatal("expected error when $EDITOR is unset")
+	}
+	if !strings.Contains(err.Error(), "$EDITOR") {
+		t.Fatalf("expected error mentioning $EDITOR, got: %v", err)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if _, statErr := os.Stat(wantPath); !os.IsNotExist(statErr) {
+		t.Fatalf("config file should not be created; stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Dir(wantPath)); !os.IsNotExist(statErr) {
+		t.Fatalf("config dir should not be created; stat err = %v", statErr)
+	}
+}
+
+func TestConfigEdit_InvalidEditorDoesNotCreateConfig(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("EDITOR", "definitely-missing-editor --wait")
+	home := os.Getenv("HOME")
+	wantPath := filepath.Join(home, ".config", "bnotes", "config.toml")
+
+	_, stderr, err := runConfig(t, "config", "edit")
+	if err == nil {
+		t.Fatal("expected error for missing editor binary")
+	}
+	if !strings.Contains(err.Error(), "locate editor") {
+		t.Fatalf("expected locate-editor error, got: %v", err)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if _, statErr := os.Stat(wantPath); !os.IsNotExist(statErr) {
+		t.Fatalf("config file should not be created; stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Dir(wantPath)); !os.IsNotExist(statErr) {
+		t.Fatalf("config dir should not be created; stat err = %v", statErr)
+	}
+}
+
+func TestConfigEdit_EditorArgsSupported(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("EDITOR", "go env")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte("vault = \"/vault\"\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Setenv("BNOTES_CONFIG", path)
+
+	captured := stubExecReplace(t)
+
+	_, _, err := runConfig(t, "config", "edit")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got, want := *captured, []string{"go", "env", path}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("execReplace argv = %v, want %v", got, want)
+	}
+}
+
 func TestConfigEdit_RespectsConfigFlag(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("EDITOR", "vim")

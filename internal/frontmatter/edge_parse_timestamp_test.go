@@ -115,6 +115,15 @@ func TestTimestampNoSubSecondUnchanged(t *testing.T) {
 	}
 }
 
+func TestFormatTimestamp_PreservesFractionalSeconds(t *testing.T) {
+	ts := time.Date(2025, 12, 13, 10, 30, 0, 123456789, time.FixedZone("", -5*60*60))
+	got := FormatTimestamp(ts)
+	want := "2025-12-13T10:30:00.123456789-05:00"
+	if got != want {
+		t.Fatalf("FormatTimestamp(%v) = %q, want %q", ts, got, want)
+	}
+}
+
 func TestTimestampUTCMidnightDateTimeDoesNotBecomeDateOnly(t *testing.T) {
 	in := "---\ncreated: 2025-12-13T00:00:00Z\n---\nbody\n"
 	doc, err := Parse([]byte(in))

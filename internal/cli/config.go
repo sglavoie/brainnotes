@@ -69,6 +69,15 @@ func newConfigEditCmd(getConfigPath func() string) *cobra.Command {
 				return errors.New("config edit: no config path could be resolved")
 			}
 
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				return errors.New("config edit: $EDITOR is not set")
+			}
+			bin, argv, err := editorInvocation(editor, path)
+			if err != nil {
+				return fmt.Errorf("config edit: %w", err)
+			}
+
 			if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
 				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 					return fmt.Errorf("config edit: mkdir %q: %w", filepath.Dir(path), err)
@@ -81,11 +90,7 @@ func newConfigEditCmd(getConfigPath func() string) *cobra.Command {
 				return fmt.Errorf("config edit: stat %q: %w", path, statErr)
 			}
 
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
-				return errors.New("config edit: $EDITOR is not set")
-			}
-			if err := runEditor(editor, path); err != nil {
+			if err := execEditor(bin, argv); err != nil {
 				return fmt.Errorf("config edit: %w", err)
 			}
 			return nil

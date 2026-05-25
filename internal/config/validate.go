@@ -20,11 +20,23 @@ func validate(cfg *Config) error {
 	if !info.IsDir() {
 		return fmt.Errorf("config: vault path %q is not a directory", cfg.Vault)
 	}
+	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
+		return err
+	}
 	if err := validateSchema(cfg); err != nil {
 		return err
 	}
 	if err := validateRoutes(cfg); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateTemplatesDir(dir string) error {
+	for _, r := range dir {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return fmt.Errorf("config: templates.dir %q contains a control character (U+%04X)", dir, r)
+		}
 	}
 	return nil
 }

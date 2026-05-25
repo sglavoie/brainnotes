@@ -345,3 +345,26 @@ func TestOpen_EnvEditorUsedWhenConfigEmpty(t *testing.T) {
 		t.Fatalf("editor: got %q, want %q ($EDITOR should be used when config editor is empty)", gotEditor, "emacs")
 	}
 }
+
+func TestOpen_EnvEditorWithArgs(t *testing.T) {
+	isolateBnEnv(t)
+	vaultRoot := buildOpenVault(t)
+	want := filepath.Join(vaultRoot, "Apple.md")
+
+	origPicker, origExec := openPicker, openExec
+	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
+
+	openPicker = func(paths []string, extraArgs []string) ([]string, error) {
+		return []string{want}, nil
+	}
+	openExec = func(editor, file string) error { return runEditor(editor, file) }
+	t.Setenv("EDITOR", "go env")
+	captured := stubExecReplace(t)
+
+	if _, _, err := runOpen(t, vaultRoot, "open"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got, wantArgv := *captured, []string{"go", "env", want}; len(got) != len(wantArgv) || got[0] != wantArgv[0] || got[1] != wantArgv[1] || got[2] != wantArgv[2] {
+		t.Fatalf("execReplace argv = %v, want %v", got, wantArgv)
+	}
+}

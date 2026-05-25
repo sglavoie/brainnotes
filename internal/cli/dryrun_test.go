@@ -339,3 +339,12 @@ func TestFormatDryRunValue_TimeZoneAtMidnight(t *testing.T) {
 		t.Errorf("with time: got %q, want %q", got, want)
 	}
 }
+
+func TestFormatDryRunValue_PreservesFractionalSeconds(t *testing.T) {
+	ts := time.Date(2026, 1, 1, 14, 30, 0, 123456789, time.UTC)
+	got := formatDryRunValue(ts)
+	want := "2026-01-01T14:30:00.123456789Z"
+	if got != want {
+		t.Fatalf("formatDryRunValue(%v) = %q, want %q", ts, got, want)
+	}
+}

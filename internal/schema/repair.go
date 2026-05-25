@@ -179,9 +179,12 @@ func TryCoerce(val any, targetType string) (any, bool) {
 			if math.IsNaN(f) || math.IsInf(f, 0) {
 				return nil, false
 			}
-			// float64(MaxInt64) rounds up to 2^63, which is already outside
-			// the int64 range, so >= is correct for the upper bound.
-			if f >= float64(math.MaxInt64) || f < float64(math.MinInt64) {
+			// Use the platform-sized int bounds, not int64. The upper bound is
+			// exclusive so float64(MaxInt) rounding on 64-bit platforms still
+			// rejects 2^63 (already outside the signed-int range).
+			intUpperExclusive := math.Ldexp(1, bits.UintSize-1)
+			intLowerInclusive := -intUpperExclusive
+			if f >= intUpperExclusive || f < intLowerInclusive {
 				return nil, false
 			}
 			n := int(f)

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -19,17 +20,92 @@ import (
 // execReplace is patched in tests to avoid actually replacing the test process.
 var execReplace = syscall.Exec
 
-// runEditor resolves editor against $PATH (or treats it as a path if it
-// contains a separator) and exec-replaces the current process. argv[0] is
-// preserved as the user-supplied editor name so the spawned editor sees a
-// conventional argv[0]. syscall.Exec does not search $PATH itself, hence the
-// LookPath step.
+// runEditor resolves the editor command against $PATH and exec-replaces the
+// current process. A limited shell-like split supports common "editor plus
+// args" values such as `code --wait` or `nvim -f` without invoking a shell.
 func runEditor(editor, file string) error {
-	bin, err := exec.LookPath(editor)
+	bin, argv, err := editorInvocation(editor, file)
 	if err != nil {
-		return fmt.Errorf("locate editor %q: %w", editor, err)
+		return err
 	}
-	return execReplace(bin, []string{editor, file}, os.Environ())
+	return execEditor(bin, argv)
+}
+
+func execEditor(bin string, argv []string) error {
+	return execReplace(bin, argv, os.Environ())
+}
+
+func editorInvocation(editor, file string) (string, []string, error) {
+	argv, err := splitEditorCommand(editor)
+	if err != nil {
+		return "", nil, err
+	}
+	bin, err := exec.LookPath(argv[0])
+	if err != nil {
+		return "", nil, fmt.Errorf("locate editor %q: %w", argv[0], err)
+	}
+	argv = append(argv, file)
+	return bin, argv, nil
+}
+
+func splitEditorCommand(editor string) ([]string, error) {
+	var (
+		args    []string
+		current strings.Builder
+		quote   rune
+	)
+	runes := []rune(editor)
+	flush := func() {
+		if current.Len() == 0 {
+			return
+		}
+		args = append(args, current.String())
+		current.Reset()
+	}
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if quote != 0 {
+			switch {
+			case r == quote:
+				quote = 0
+			case r == '\\' && quote != '\'' && i+1 < len(runes):
+				next := runes[i+1]
+				if next == quote || next == '\\' || unicode.IsSpace(next) {
+					current.WriteRune(next)
+					i++
+				} else {
+					current.WriteRune(r)
+				}
+			default:
+				current.WriteRune(r)
+			}
+			continue
+		}
+		switch {
+		case unicode.IsSpace(r):
+			flush()
+		case r == '\'' || r == '"':
+			quote = r
+		case r == '\\' && i+1 < len(runes):
+			next := runes[i+1]
+			if next == '\\' || next == '\'' || next == '"' || unicode.IsSpace(next) {
+				current.WriteRune(next)
+				i++
+			} else {
+				current.WriteRune(r)
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("parse editor %q: unterminated quote", editor)
+	}
+	flush()
+	if len(args) == 0 {
+		return nil, errors.New("editor command is empty")
+	}
+	return args, nil
 }
 
 // clockForNew is the clock used by the `new` command. Tests swap this for a

@@ -217,14 +217,29 @@ func TestLoad_TemplatesDirWithNUL(t *testing.T) {
 	// Use literal string ('...') so the NUL byte is preserved verbatim.
 	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \"Tem\x00plates\"\n")
 
-	cfg, err := Load("", cfgPath)
-	if err != nil {
-		// Either reject or sanitize is acceptable, but the dir must not
-		// contain a NUL byte after Load returns.
-		return
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for NUL byte in templates.dir")
 	}
-	if strings.ContainsRune(cfg.Templates.Dir, 0) {
-		t.Errorf("Templates.Dir should not contain NUL after Load: %q", cfg.Templates.Dir)
+	if !strings.Contains(err.Error(), "control character") {
+		t.Fatalf("expected control-character error, got: %v", err)
+	}
+}
+
+func TestLoad_TemplatesDirWithControlCharacter(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndir = \"Tem\\tplates\"\n")
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for control character in templates.dir")
+	}
+	if !strings.Contains(err.Error(), "control character") {
+		t.Fatalf("expected control-character error, got: %v", err)
 	}
 }
 

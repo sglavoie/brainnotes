@@ -115,6 +115,10 @@ func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
 		}
 	}
 
+	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
+		return nil, err
+	}
+
 	if v := strings.TrimSpace(flagVaultPath); v != "" {
 		cfg.Vault = v
 	} else if v := strings.TrimSpace(os.Getenv(envVault)); v != "" {
