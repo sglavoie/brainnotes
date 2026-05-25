@@ -115,14 +115,7 @@ func stringifyTag(v any) string {
 		// fmt %v rendering drops the trailing ".0" for whole numbers, breaking
 		// queries against YAML float scalars.
 		s := strconv.FormatFloat(vv, 'g', -1, 64)
-		hasMarker := false
-		for _, r := range s {
-			if r == '.' || r == 'e' || r == 'E' {
-				hasMarker = true
-				break
-			}
-		}
-		if !hasMarker {
+		if !strings.ContainsAny(s, ".eE") {
 			s += ".0"
 		}
 		return s
