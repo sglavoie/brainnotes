@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 )
 
 // DryRun captures the destination for dry-run output. A nil *DryRun means
@@ -84,10 +86,7 @@ func formatDryRunValue(v any) string {
 		}
 		return fmt.Sprintf("%v", vv)
 	case time.Time:
-		if vv.Hour() == 0 && vv.Minute() == 0 && vv.Second() == 0 && vv.Nanosecond() == 0 && vv.Location() == time.UTC {
-			return vv.Format("2006-01-02")
-		}
-		return vv.Format(time.RFC3339)
+		return frontmatter.FormatTimestamp(vv)
 	case []any:
 		parts := make([]string, len(vv))
 		for i, item := range vv {

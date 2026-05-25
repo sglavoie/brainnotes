@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -215,7 +216,7 @@ func countValue(v any, notePath string, relPath string, counts map[string]int, f
 		warnedNotes[notePath] = struct{}{}
 		fmt.Fprintf(errOut, "values: skipping map-typed value in %s\n", notePath)
 	case time.Time:
-		record(formatTimeValue(vv), counts, files, relPath)
+		record(frontmatter.FormatTimestamp(vv), counts, files, relPath)
 	case bool:
 		record(strconv.FormatBool(vv), counts, files, relPath)
 	case int:
@@ -269,15 +270,4 @@ func sortedKeys(m map[string]struct{}) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// formatTimeValue renders a time.Time as a date when the parsed value had no
-// time component (frontmatter parser yields midnight UTC for `YYYY-MM-DD`);
-// otherwise as RFC3339. The heuristic is the only way to distinguish the two
-// since yaml.v3 surfaces both as time.Time without a marker.
-func formatTimeValue(t time.Time) string {
-	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 && t.Location() == time.UTC {
-		return t.Format("2006-01-02")
-	}
-	return t.Format(time.RFC3339)
 }

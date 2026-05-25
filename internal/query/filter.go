@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -126,10 +127,7 @@ func stringifyTag(v any) string {
 		}
 		return s
 	case time.Time:
-		if vv.Hour() == 0 && vv.Minute() == 0 && vv.Second() == 0 && vv.Nanosecond() == 0 && vv.Location() == time.UTC {
-			return vv.Format("2006-01-02")
-		}
-		return vv.Format(time.RFC3339)
+		return frontmatter.FormatTimestamp(vv)
 	default:
 		return fmt.Sprintf("%v", vv)
 	}
