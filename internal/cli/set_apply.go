@@ -19,7 +19,7 @@ import (
 // When dry is non-nil, the mutation is computed in memory, a per-file diff is
 // emitted to dry.Out, and the file is not written. vaultRoot is used to
 // shorten paths in the diff header; pass "" to fall back to the absolute path.
-func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun) (bool, error) {
+func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
 	note, front, err := loadSetNote(path)
 	if err != nil {
 		return false, err
@@ -35,6 +35,9 @@ func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultR
 	}
 	if dry != nil {
 		return writeSetDryRun(path, vaultRoot, front, before, pairs, dry)
+	}
+	if err := journaler.Capture(path); err != nil {
+		return false, err
 	}
 	if err := note.Save(fm); err != nil {
 		return false, err

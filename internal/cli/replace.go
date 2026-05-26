@@ -102,10 +102,14 @@ printed as a unified diff block; unchanged files are omitted.`,
 			if dryRun {
 				dry = &DryRun{Out: out}
 			}
+			var journaler *mutationJournal
+			if dry == nil {
+				journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+			}
 
 			count := 0
 			for _, n := range candidates {
-				changed, err := applyReplace(n, key, fromVal, toVal, &cfg.Frontmatter, v.Root, dry)
+				changed, err := applyReplace(n, key, fromVal, toVal, &cfg.Frontmatter, v.Root, dry, journaler)
 				if err != nil {
 					_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: replace interrupted; run 'git diff' to inspect partial state")
 					return err
@@ -119,6 +123,9 @@ printed as a unified diff block; unchanged files are omitted.`,
 						return err
 					}
 				}
+			}
+			if err := journaler.Finalize(); err != nil {
+				return err
 			}
 			if dry == nil {
 				if _, err := fmt.Fprintf(out, "replaced %d file(s)\n", count); err != nil {
@@ -204,7 +211,7 @@ func queryFlagsNeedGraph(flags query.Flags) bool {
 
 // applyReplace performs the swap on a single note. On dry-run it emits a diff
 // block and skips the write; otherwise the file is rewritten atomically.
-func applyReplace(n *vault.Note, key string, fromVal, toVal any, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun) (bool, error) {
+func applyReplace(n *vault.Note, key string, fromVal, toVal any, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
 	front, err := n.Front()
 	if err != nil {
 		return false, err
@@ -233,6 +240,9 @@ func applyReplace(n *vault.Note, key string, fromVal, toVal any, fm *config.Fron
 			return false, err
 		}
 		return !block.empty(), nil
+	}
+	if err := journaler.Capture(n.Path); err != nil {
+		return false, err
 	}
 	if err := n.Save(fm); err != nil {
 		return false, err

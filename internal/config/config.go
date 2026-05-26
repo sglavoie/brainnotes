@@ -72,6 +72,10 @@ type NewConfig struct {
 // DefaultIgnore lists the vault-relative paths that are always skipped.
 var DefaultIgnore = []string{".git", ".obsidian", "Attachments", "Archive"}
 
+// DefaultJournalDir is the vault-relative directory reserved for undo journal
+// entries.
+const DefaultJournalDir = ".bnotes/journal"
+
 const (
 	envVault   = "BNOTES_VAULT"
 	envConfig  = "BNOTES_CONFIG"

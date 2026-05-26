@@ -190,11 +190,18 @@ func NewNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			journaler := newMutationJournal(cfg.Vault, commandInvocation(cmd, args))
 
 			if err := os.MkdirAll(dest, 0o755); err != nil {
 				return fmt.Errorf("new: mkdir %q: %w", dest, err)
 			}
+			if err := journaler.Capture(outPath); err != nil {
+				return err
+			}
 			if err := atomicWriteFile(outPath, []byte(rendered)); err != nil {
+				return err
+			}
+			if err := journaler.Finalize(); err != nil {
 				return err
 			}
 

@@ -133,6 +133,7 @@ func TestMutationCommandsExposeGraphFindFlags(t *testing.T) {
 	}{
 		{name: "replace", cmd: NewReplaceCmd},
 		{name: "repair", cmd: NewRepairCmd},
+		{name: "relink", cmd: NewRelinkCmd},
 		{name: "rename-key", cmd: NewRenameKeyCmd},
 	}
 	flagNames := []string{"broken-links", "min-backlinks", "max-backlinks", "min-links", "max-links", "dead-end"}

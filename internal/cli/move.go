@@ -118,12 +118,24 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	if opts.dryRun {
 		return printMovePlan(out, v.Root, plan)
 	}
+	journaler := newMutationJournal(v.Root, commandInvocation(cmd, args))
 
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return fmt.Errorf("move: mkdir %q: %w", newFolderAbs, err)
 	}
 	if err := checkMoveDestination(plan.Target, plan.NewPath, opts.force); err != nil {
 		return err
+	}
+	if err := journaler.Capture(plan.Target); err != nil {
+		return err
+	}
+	if err := journaler.Capture(plan.NewPath); err != nil {
+		return err
+	}
+	for _, p := range plan.FileOrder {
+		if err := journaler.Capture(p); err != nil {
+			return err
+		}
 	}
 
 	if err := applyMovePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
@@ -132,6 +144,9 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	}
 	if err := renameFile(plan.Target, plan.NewPath); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted after content rewrites; run 'git diff' to inspect partial state")
+		return err
+	}
+	if err := journaler.Finalize(); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(out, "moved: %s -> %s\n", plan.Target, plan.NewPath)

@@ -29,7 +29,7 @@ func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "bn",
 		Short:         "Brain Notes: a CLI for plain-markdown vaults",
-		Long:          "Brain Notes (bn) is a small, fast CLI for editing and querying a plain-Markdown notes vault.",
+		Long:          "Brain Notes (bn) is a small, fast CLI for editing and querying a plain-Markdown notes vault. Use --dry-run previews where available, inspect with 'git diff', and use 'bn history' / 'bn undo' for short-term rollback.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -65,6 +65,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewConfigCmd(func() string { return configPath }))
 	cmd.AddCommand(NewFindCmd())
 	cmd.AddCommand(NewGraphCmd())
+	cmd.AddCommand(NewHistoryCmd())
 	cmd.AddCommand(NewLintCmd())
 	cmd.AddCommand(NewLinksCmd())
 	cmd.AddCommand(NewMoveCmd())
@@ -73,10 +74,12 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewRenameCmd())
 	cmd.AddCommand(NewRenameKeyCmd())
 	cmd.AddCommand(NewRepairCmd())
+	cmd.AddCommand(NewRelinkCmd())
 	cmd.AddCommand(NewSchemaCmd())
 	cmd.AddCommand(NewReplaceCmd())
 	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewTagsCmd())
+	cmd.AddCommand(NewUndoCmd())
 	cmd.AddCommand(NewUnsetCmd())
 	cmd.AddCommand(NewValuesCmd())
 

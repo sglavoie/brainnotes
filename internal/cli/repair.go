@@ -92,6 +92,10 @@ printed as a unified diff block; unchanged files are omitted.`,
 			if dryRun {
 				dry = &DryRun{Out: out}
 			}
+			var journaler *mutationJournal
+			if dry == nil {
+				journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+			}
 
 			repaired := 0
 			totalSkips := 0
@@ -122,6 +126,11 @@ printed as a unified diff block; unchanged files are omitted.`,
 				if len(result.Actions) == 0 {
 					continue
 				}
+				if dry == nil {
+					if err := journaler.Capture(n.Path); err != nil {
+						return err
+					}
+				}
 
 				changed, err := applyRepairs(n, result, &cfg.Frontmatter, v.Root, dry)
 				if err != nil {
@@ -135,6 +144,9 @@ printed as a unified diff block; unchanged files are omitted.`,
 				if dry == nil {
 					fmt.Fprintf(out, "repaired: %s\n", displayPath(n.Path, v.Root))
 				}
+			}
+			if err := journaler.Finalize(); err != nil {
+				return err
 			}
 
 			if dry == nil {

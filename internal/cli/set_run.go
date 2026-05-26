@@ -54,9 +54,13 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 	if opts.dryRun {
 		dry = &DryRun{Out: out}
 	}
+	var journaler *mutationJournal
+	if dry == nil {
+		journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+	}
 
 	for _, path := range paths {
-		changed, err := applySet(path, parsedPairs, &cfg.Frontmatter, v.Root, dry)
+		changed, err := applySet(path, parsedPairs, &cfg.Frontmatter, v.Root, dry, journaler)
 		if err != nil {
 			return err
 		}
@@ -65,6 +69,9 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 				return err
 			}
 		}
+	}
+	if err := journaler.Finalize(); err != nil {
+		return err
 	}
 	return nil
 }

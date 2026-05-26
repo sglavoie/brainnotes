@@ -89,8 +89,12 @@ Use --dry-run to preview which properties would be removed without writing.`,
 			if dryRun {
 				dry = &DryRun{Out: out}
 			}
+			var journaler *mutationJournal
+			if dry == nil {
+				journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+			}
 			for _, p := range paths {
-				changed, err := applyUnset(p, props, cfg, v.Root, dry)
+				changed, err := applyUnset(p, props, cfg, v.Root, dry, journaler)
 				if err != nil {
 					return err
 				}
@@ -99,6 +103,9 @@ Use --dry-run to preview which properties would be removed without writing.`,
 						return err
 					}
 				}
+			}
+			if err := journaler.Finalize(); err != nil {
+				return err
 			}
 			return nil
 		},
@@ -130,7 +137,7 @@ func splitUnsetArgs(args []string, dashAt int) (notes, props []string) {
 //
 // When dry is non-nil, the file is left untouched and a per-file `- key: value`
 // block is emitted for every present property in props.
-func applyUnset(path string, props []string, cfg *config.Config, vaultRoot string, dry *DryRun) (bool, error) {
+func applyUnset(path string, props []string, cfg *config.Config, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
 	n := &vault.Note{Path: path}
 	if err := n.Load(); err != nil {
 		return false, err
@@ -171,6 +178,9 @@ func applyUnset(path string, props []string, cfg *config.Config, vaultRoot strin
 	}
 	if !changed {
 		return false, nil
+	}
+	if err := journaler.Capture(path); err != nil {
+		return false, err
 	}
 	if err := n.Save(&cfg.Frontmatter); err != nil {
 		return false, err

@@ -140,6 +140,18 @@ Inspect with 'git diff' to recover.`,
 			if dryRun {
 				return printPlan(out, v.Root, plan)
 			}
+			journaler := newMutationJournal(v.Root, commandInvocation(cmd, args))
+			if err := journaler.Capture(plan.Target); err != nil {
+				return err
+			}
+			if err := journaler.Capture(plan.NewPath); err != nil {
+				return err
+			}
+			for _, p := range plan.FileOrder {
+				if err := journaler.Capture(p); err != nil {
+					return err
+				}
+			}
 
 			if err := applyRenamePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted; run 'git diff' to inspect partial state")
@@ -147,6 +159,9 @@ Inspect with 'git diff' to recover.`,
 			}
 			if err := renameFile(plan.Target, plan.NewPath); err != nil {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted after content rewrites; run 'git diff' to inspect partial state")
+				return err
+			}
+			if err := journaler.Finalize(); err != nil {
 				return err
 			}
 			rel, relErr := filepath.Rel(v.Root, plan.NewPath)

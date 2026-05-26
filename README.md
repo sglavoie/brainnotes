@@ -142,7 +142,15 @@ bn find --tag drafts -0 | xargs -0 nvim   # safe for spaces in paths
 
 #### Repair broken links
 
-List all missing targets and create stub notes for each:
+Start with safe deterministic rewrites:
+
+```sh
+bn relink --dry-run
+bn relink
+bn find --broken-links --show-broken
+```
+
+Then (optionally) create stub notes for any remaining targets:
 
 ```sh
 bn find --broken-links --list-broken-targets | xargs -I{} bn new "{}"
@@ -206,6 +214,45 @@ Resolution order (highest to lowest precedence):
   3. $XDG_CONFIG_HOME     not set
   4. default path         /Users/you/.config/bnotes/config.toml  [active] [exists]
 ```
+
+### `bn history` — list recent undo journal entries
+
+```sh
+bn history
+```
+
+Lists entries newest-first from `<vault>/.bnotes/journal/`. Output is
+tab-separated with columns:
+
+- `TIMESTAMP` (RFC3339Nano UTC),
+- `ID` (entry id),
+- `COMMAND` (recorded source command).
+
+Use the entry ID with `bn undo <id>`.
+
+### `bn undo` — restore one undo journal entry
+
+```sh
+bn undo [id] [--dry-run] [--force]
+```
+
+Restores every path recorded in one journal entry to its pre-command state.
+When `id` is omitted, `bn undo` restores the most recent entry.
+
+By default, undo is fail-fast: if any current file state no longer matches the
+journaled post-command state, the restore aborts with no writes. Use `--force`
+to overwrite conflicts.
+
+`--dry-run` prints deterministic preview blocks:
+
+```text
+undo: <entry-id> (<source-command>)
+--- <path>
+- state: <current-state>
++ state: <restored-state>
+```
+
+v1 limit: restore is whole-entry only (no per-file interactive restore).
 
 ### `bn new` — create a note from a template
 
@@ -330,6 +377,40 @@ bn repair --property status                 # fix only status violations
 bn repair --folder References               # scoped by folder
 bn repair --tag project --property status   # combined scoping
 bn repair note.md                           # single note
+```
+
+### `bn relink` — repair unresolved wikilinks with deterministic rewrites
+
+```sh
+bn relink [notes...] [find flags] [--dry-run]
+```
+
+Scans unresolved wikilinks and rewrites only links with a deterministic target:
+
+- exact path/key match after path normalization (for example, links using
+  backslashes on Unix vaults),
+- exact title match (case-insensitive, optional `.md`) when unique.
+
+Ambiguous targets are skipped and reported as `SKIP:` lines for manual follow-up.
+
+Scope:
+
+- No notes and no find flags: entire vault.
+- One or more `find`-style flags (`--tag`, `--folder`, `--status`, ...):
+  matching notes only.
+- Positional note paths: only those notes. Mutually exclusive with find flags.
+
+`--dry-run` prints unified-diff-style blocks per changed file (`--- path`, then
+`- body[...]` / `+ body[...]` or frontmatter key lines) and skips all writes.
+
+Examples:
+
+```sh
+bn relink --dry-run                         # preview only
+bn relink                                   # apply safe rewrites
+bn relink --folder References               # scoped by folder
+bn relink --tag project --broken-links      # scoped by find flags
+bn relink Notes/Index.md                    # explicit note
 ```
 
 ### `bn rename` — change a note's title and rewrite wikilinks
@@ -640,6 +721,31 @@ bn repair
 bn lint
 ```
 
+## Undo/history safety workflow (v1)
+
+`bn` keeps a vault-local operation journal at `<vault>/.bnotes/journal/`.
+
+- Journaled commands (apply mode): `new`, `set`, `unset`, `replace`, `rename`,
+  `move`, `repair`, `relink`.
+- Read-only commands never journal.
+- Any `--dry-run` invocation never writes journal entries.
+
+Recommended safety workflow:
+
+1. Run `--dry-run` first (for commands that support it).
+2. Re-run without `--dry-run` to apply.
+3. Inspect `git diff`.
+4. If needed, run `bn history`, then `bn undo <id>` (or `bn undo` for latest).
+5. Re-check with `git diff` before committing.
+
+v1 limits and non-goals:
+
+- Undo restores whole entries only (no per-file interactive restore).
+- No redo stack.
+- No auto-merge conflict resolution.
+- No cross-machine/distributed journal sync.
+- `git` remains the long-term audit/history system.
+
 ## Performance
 
 Measured against a 309-note vault on Darwin/arm64:
@@ -676,5 +782,5 @@ reason each was dropped:
 | `export`                             | The vault is already plain Markdown.                                     |
 | `categories` / `links` / `discover`  | Hub-style navigation; the editor's outline + `find --orphan` cover it.   |
 | `attachments`                        | Attachments folder is ignored; binary asset management isn't a fit.      |
-| `history` / `timeline` / `recall`    | `git log` is the canonical history source.                               |
+| `timeline` / `recall`                | `git log` is the canonical long-term history source; `bn history` / `bn undo` are scoped to short-term operational safety. |
 | `properties` / `content`             | Subsumed by `bn set` / `bn unset` / `bn find`.                           |
