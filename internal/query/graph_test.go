@@ -353,3 +353,39 @@ func strEq(a, b []string) bool {
 	}
 	return true
 }
+
+// Nil-receiver safety: all public Graph methods must return zero values rather
+// than panicking when called on a nil *Graph.
+func TestGraph_NilReceiver(t *testing.T) {
+	var g *Graph
+
+	if got := g.ForwardLinks("x"); got != nil {
+		t.Errorf("ForwardLinks on nil = %v, want nil", got)
+	}
+	if got := g.BackLinks("x"); got != nil {
+		t.Errorf("BackLinks on nil = %v, want nil", got)
+	}
+	if got := g.OutDegree("x"); got != 0 {
+		t.Errorf("OutDegree on nil = %d, want 0", got)
+	}
+	if got := g.InDegree("x"); got != 0 {
+		t.Errorf("InDegree on nil = %d, want 0", got)
+	}
+
+	note := &vault.Note{Path: "/vault/A.md"}
+	if got := g.KeyForNote(note); got != "" {
+		t.Errorf("KeyForNote on nil = %q, want %q", got, "")
+	}
+	if got := g.ForwardLinksForNote(note); got != nil {
+		t.Errorf("ForwardLinksForNote on nil = %v, want nil", got)
+	}
+	if got := g.BackLinksForNote(note); got != nil {
+		t.Errorf("BackLinksForNote on nil = %v, want nil", got)
+	}
+	if got := g.OutDegreeForNote(note); got != 0 {
+		t.Errorf("OutDegreeForNote on nil = %d, want 0", got)
+	}
+	if got := g.InDegreeForNote(note); got != 0 {
+		t.Errorf("InDegreeForNote on nil = %d, want 0", got)
+	}
+}

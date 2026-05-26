@@ -220,7 +220,7 @@ func (g *Graph) InDegreeForNote(n *vault.Note) int {
 }
 
 func (g *Graph) keyForNote(n *vault.Note) string {
-	if n == nil {
+	if g == nil || n == nil {
 		return ""
 	}
 	return notePathKey(g.Root, n.Path)

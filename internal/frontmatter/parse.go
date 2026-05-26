@@ -40,7 +40,7 @@ func Parse(data []byte) (Document, error) {
 
 	m, err := parseYAML([]byte(yamlText))
 	if err != nil {
-		return Document{}, fmt.Errorf("frontmatter: parse yaml: %w", err)
+		return Document{Front: NewMap()}, fmt.Errorf("frontmatter: parse yaml: %w", err)
 	}
 	return Document{
 		Front:                 m,

@@ -78,7 +78,14 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 		for _, item := range v {
 			s, ok := item.(string)
 			if !ok {
-				return false, fmt.Sprintf("%v", item)
+				s = scalarToString(item)
+				if s == "" {
+					return false, fmt.Sprintf("%v", item)
+				}
+				if !check(s) {
+					return false, s
+				}
+				continue
 			}
 			if !check(s) {
 				if isWikilink {

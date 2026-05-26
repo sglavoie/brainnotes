@@ -205,3 +205,47 @@ func TestCheckAllowed_ListNonStringItemWikilink(t *testing.T) {
 		t.Errorf("offending = %q, want %q", bad, "true")
 	}
 }
+
+// Non-string list items are coerced via scalarToString so they participate in
+// the same allowed-value check as top-level scalars.
+
+func TestCheckAllowed_ListIntMatchesAllowed(t *testing.T) {
+	ok, _ := CheckAllowed([]any{42, 7}, []string{"42", "7"}, false)
+	if !ok {
+		t.Error("expected ok when int list items match allowed list")
+	}
+}
+
+func TestCheckAllowed_ListBoolMatchesAllowed(t *testing.T) {
+	ok, _ := CheckAllowed([]any{true, false}, []string{"true", "false"}, false)
+	if !ok {
+		t.Error("expected ok when bool list items match allowed list")
+	}
+}
+
+// Whole-number floats must use the ".0" suffix (consistent with the scalar
+// path) rather than the bare integer form produced by fmt.Sprintf("%v").
+func TestCheckAllowed_ListWholeNumberFloatMatchesAllowed(t *testing.T) {
+	ok, _ := CheckAllowed([]any{3.0}, []string{"3.0"}, false)
+	if !ok {
+		t.Error("expected ok when float list item matches allowed list with .0 suffix")
+	}
+
+	ok, bad := CheckAllowed([]any{3.0}, []string{"3"}, false)
+	if ok {
+		t.Error("expected failure when allowed list only contains the bare int form")
+	}
+	if bad != "3.0" {
+		t.Errorf("offending = %q, want %q", bad, "3.0")
+	}
+}
+
+func TestCheckAllowed_ListNilItem(t *testing.T) {
+	ok, bad := CheckAllowed([]any{nil}, []string{"a"}, false)
+	if ok {
+		t.Error("expected failure for nil list item")
+	}
+	if bad != "<nil>" {
+		t.Errorf("offending = %q, want %q", bad, "<nil>")
+	}
+}

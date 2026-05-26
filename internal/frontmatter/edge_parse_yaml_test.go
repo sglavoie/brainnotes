@@ -298,3 +298,33 @@ func TestParseDuplicateKeys(t *testing.T) {
 		t.Errorf("Len(): got %d want 3", got)
 	}
 }
+
+// TestParseInvalidYAMLReturnsInitializedFront verifies that even when Parse
+// returns an error (invalid YAML), the returned Document has an initialized
+// Front map so callers that inspect the partial result do not panic.
+func TestParseInvalidYAMLReturnsInitializedFront(t *testing.T) {
+	cases := map[string]string{
+		"top-level sequence": "---\n- one\n- two\n---\nbody\n",
+		"top-level scalar":   "---\nhello\n---\nbody\n",
+	}
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			doc, err := Parse([]byte(in))
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			// Front.IsEmpty() and Front.Has() must not panic.
+			if doc.Front.IsEmpty() != true {
+				t.Errorf("expected empty Front on error, got non-empty")
+			}
+			if doc.Front.Has("any") {
+				t.Errorf("expected Has to return false on error result")
+			}
+			// Mutating the error-path Front must not panic.
+			doc.Front.Set("k", "v")
+			if v, ok := doc.Front.GetString("k"); !ok || v != "v" {
+				t.Errorf("Set after parse error: got %q, %v", v, ok)
+			}
+		})
+	}
+}
