@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 type moveOptions struct {
@@ -101,6 +102,9 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 
 	oldRel := joinFolderTitle(oldFolder, title)
 	newRel := joinFolderTitle(newFolderRel, title)
+	if err := validateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
+		return err
+	}
 	if oldRel == newRel {
 		return fmt.Errorf("move: destination is the same as source: %s", oldRel)
 	}
@@ -132,4 +136,11 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	}
 	_, err = fmt.Fprintf(out, "moved: %s -> %s\n", plan.Target, plan.NewPath)
 	return err
+}
+
+func validateMoveTargetPath(newFolderArg, folder string) error {
+	if r, ok := wikilink.FirstReservedTargetRune(folder); ok {
+		return fmt.Errorf("move: new folder %q may not contain %q; folder-qualified wikilinks would become invalid", newFolderArg, r)
+	}
+	return nil
 }

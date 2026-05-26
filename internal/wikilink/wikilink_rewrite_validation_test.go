@@ -67,6 +67,29 @@ func TestRewriteTitleRejectsInvalidNewTitle(t *testing.T) {
 	}
 }
 
+func TestFirstReservedTargetRune(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in   string
+		want rune
+		ok   bool
+	}{
+		{in: "Plain", ok: false},
+		{in: "Foo#Bar", want: '#', ok: true},
+		{in: "Foo|Bar", want: '|', ok: true},
+		{in: "Foo[Bar", want: '[', ok: true},
+		{in: "Foo]Bar", want: ']', ok: true},
+		{in: "Foo\nBar", want: '\n', ok: true},
+	}
+	for _, tc := range tests {
+		got, ok := FirstReservedTargetRune(tc.in)
+		if ok != tc.ok || got != tc.want {
+			t.Fatalf("FirstReservedTargetRune(%q) = (%q, %v), want (%q, %v)", tc.in, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
 func TestRewriteMoveRejectsInvalidNewPath(t *testing.T) {
 	t.Parallel()
 

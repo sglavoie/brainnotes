@@ -293,6 +293,81 @@ func TestMoveRejectsSameFolder(t *testing.T) {
 	}
 }
 
+func TestMoveRejectsAbsoluteFolderPath(t *testing.T) {
+	root := buildMoveFixture(t)
+	src := filepath.Join(root, "Books", "Dune.md")
+	before := snapshotVault(t, root)
+
+	_, err := runCLI(t, "", "move", src, filepath.Join(root, "References"))
+	if err == nil {
+		t.Fatal("expected error for absolute destination folder")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("expected absolute-path error, got %v", err)
+	}
+	if after := snapshotVault(t, root); !mapsEqual(before, after) {
+		t.Fatalf("move with absolute folder rewrote files:\nbefore=%v\nafter=%v", before, after)
+	}
+}
+
+func TestMoveRejectsWindowsAbsoluteFolderPath(t *testing.T) {
+	root := buildMoveFixture(t)
+	src := filepath.Join(root, "Books", "Dune.md")
+	before := snapshotVault(t, root)
+
+	_, err := runCLI(t, "", "move", src, `C:\References`)
+	if err == nil {
+		t.Fatal("expected error for Windows absolute destination folder")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("expected absolute-path error, got %v", err)
+	}
+	if after := snapshotVault(t, root); !mapsEqual(before, after) {
+		t.Fatalf("move with Windows absolute folder rewrote files:\nbefore=%v\nafter=%v", before, after)
+	}
+}
+
+func TestMoveRejectsFoldersWithWikilinkReservedChars(t *testing.T) {
+	cases := []string{"References#Books", "References|Books", "References[Books", "References]Books"}
+	for _, folder := range cases {
+		t.Run(folder, func(t *testing.T) {
+			root := buildMoveFixture(t)
+			src := filepath.Join(root, "Books", "Dune.md")
+			before := snapshotVault(t, root)
+
+			_, err := runCLI(t, "", "move", src, folder)
+			if err == nil {
+				t.Fatalf("expected error for reserved-char folder %q", folder)
+			}
+			if !strings.Contains(err.Error(), "wikilink") && !strings.Contains(err.Error(), "may not contain") {
+				t.Fatalf("expected wikilink-safe folder error for %q, got %v", folder, err)
+			}
+			if after := snapshotVault(t, root); !mapsEqual(before, after) {
+				t.Fatalf("move rewrote files for rejected folder %q:\nbefore=%v\nafter=%v", folder, before, after)
+			}
+		})
+	}
+}
+
+func TestMoveAllowsExistingReservedCharTitleWhenFolderIsSafe(t *testing.T) {
+	root := buildMoveFixture(t)
+	src := filepath.Join(root, "Books", "Dune#1.md")
+	if err := os.WriteFile(src, []byte("---\ntitle: Dune#1\n---\nOriginal body.\n"), 0o644); err != nil {
+		t.Fatalf("write weird-title note: %v", err)
+	}
+
+	out, err := runCLI(t, "", "move", src, "References/Books")
+	if err != nil {
+		t.Fatalf("execute: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("expected old path gone, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "References", "Books", "Dune#1.md")); err != nil {
+		t.Fatalf("expected moved note with reserved-char title, stat err=%v", err)
+	}
+}
+
 func TestMoveDestinationExistsRefused(t *testing.T) {
 	root := buildMoveFixture(t)
 	// Plant a conflicting file at the destination.

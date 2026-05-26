@@ -76,3 +76,24 @@ func TestRenameRejectsControlCharsInTitle(t *testing.T) {
 		}
 	}
 }
+
+func TestRenameRejectsWikilinkReservedCharsInTitle(t *testing.T) {
+	cases := []string{"Foo#Bar", "Foo|Bar", "Foo[Bar", "Foo]Bar"}
+	for _, title := range cases {
+		t.Run(title, func(t *testing.T) {
+			root := buildRenameFixture(t)
+			before := snapshotVault(t, root)
+
+			_, err := runCLI(t, "", "rename", "Dune", title)
+			if err == nil {
+				t.Fatalf("expected rejection for reserved-char title %q", title)
+			}
+			if !strings.Contains(err.Error(), "wikilink") && !strings.Contains(err.Error(), "may not contain") {
+				t.Fatalf("expected wikilink-safe title error for %q, got %v", title, err)
+			}
+			if after := snapshotVault(t, root); !mapsEqual(before, after) {
+				t.Fatalf("rename rewrote files for rejected title %q:\nbefore=%v\nafter=%v", title, before, after)
+			}
+		})
+	}
+}

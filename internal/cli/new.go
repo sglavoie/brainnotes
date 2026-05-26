@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"unicode"
@@ -145,7 +146,12 @@ func NewNewCmd() *cobra.Command {
 				return err
 			}
 
-			dest, err := resolveDest(cfg, templateName, folder)
+			tmplPath, err := tmpl.Find(cfg, templateName)
+			if err != nil {
+				return fmt.Errorf("new: %w", err)
+			}
+
+			dest, err := resolveDest(cfg, tmplPath, folder)
 			if err != nil {
 				return err
 			}
@@ -163,10 +169,6 @@ func NewNewCmd() *cobra.Command {
 				relFolderSlash = ""
 			}
 
-			tmplPath, err := tmpl.Find(cfg, templateName)
-			if err != nil {
-				return fmt.Errorf("new: %w", err)
-			}
 			body, err := os.ReadFile(tmplPath)
 			if err != nil {
 				return fmt.Errorf("new: read template %q: %w", tmplPath, err)
@@ -238,13 +240,15 @@ func parseVars(vars []string) (map[string]string, error) {
 
 // resolveDest picks the destination folder using the documented precedence:
 // explicit --folder > cfg.New.Routes[template] > vault root.
-func resolveDest(cfg *config.Config, templateName, folderFlag string) (string, error) {
+func resolveDest(cfg *config.Config, resolvedTemplatePath, folderFlag string) (string, error) {
 	switch {
 	case folderFlag != "":
 		return resolveNewDestFolder(cfg.Vault, folderFlag, "new: --folder")
 	case cfg.New.Routes != nil:
-		if dest, ok := routeForTemplate(cfg.New.Routes, templateName); ok {
-			return resolveNewDestFolder(cfg.Vault, dest, fmt.Sprintf("new: route for %q", templateName))
+		if dest, ok, err := routeForTemplate(cfg, cfg.New.Routes, resolvedTemplatePath); err != nil {
+			return "", err
+		} else if ok {
+			return dest, nil
 		}
 		return cfg.Vault, nil
 	default:
@@ -252,16 +256,127 @@ func resolveDest(cfg *config.Config, templateName, folderFlag string) (string, e
 	}
 }
 
-func routeForTemplate(routes map[string]string, templateName string) (string, bool) {
-	if dest, ok := routes[templateName]; ok && dest != "" {
-		return dest, true
+func routeForTemplate(cfg *config.Config, routes map[string]string, resolvedTemplatePath string) (string, bool, error) {
+	names := make([]string, 0, len(routes))
+	for name := range routes {
+		names = append(names, name)
 	}
-	for name, dest := range routes {
-		if dest != "" && strings.EqualFold(name, templateName) {
-			return dest, true
+	sort.Strings(names)
+	resolvedTemplatePath = filepath.Clean(resolvedTemplatePath)
+	type routeMatch struct {
+		name         string
+		rawDest      string
+		resolvedDest string
+	}
+	var matches []routeMatch
+	for _, name := range names {
+		dest := routes[name]
+		if dest == "" {
+			continue
+		}
+		matchedPath, err := tmpl.Find(cfg, name)
+		if err != nil {
+			continue
+		}
+		if filepath.Clean(matchedPath) != resolvedTemplatePath {
+			continue
+		}
+		resolvedDest, err := resolveNewDestFolder(cfg.Vault, dest, fmt.Sprintf("new: route for %q", name))
+		if err != nil {
+			return "", false, err
+		}
+		matches = append(matches, routeMatch{name: name, rawDest: dest, resolvedDest: resolvedDest})
+	}
+	if len(matches) == 0 {
+		return "", false, nil
+	}
+	canonicalDest := matches[0].resolvedDest
+	for _, match := range matches[1:] {
+		if sameNewRouteDestination(cfg.Vault, resolvedTemplatePath, canonicalDest, match.resolvedDest) {
+			continue
+		}
+		parts := make([]string, 0, len(matches))
+		for _, m := range matches {
+			parts = append(parts, fmt.Sprintf("%q -> %q", m.name, m.rawDest))
+		}
+		return "", false, fmt.Errorf("new: conflicting routes for resolved template %q: %s", describeNewResolvedTemplate(cfg.Vault, resolvedTemplatePath), strings.Join(parts, ", "))
+	}
+	return canonicalDest, true, nil
+}
+
+// sameNewRouteDestination compares route destinations using the lookup rules of
+// the underlying filesystem. Existing directories are compared with os.SameFile;
+// otherwise we probe an already-resolved path on the same volume to see whether
+// case-only spellings alias each other before falling back to relpath folding.
+func sameNewRouteDestination(vaultRoot, probePath, a, b string) bool {
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	if a == b {
+		return true
+	}
+	if infoA, err := os.Stat(a); err == nil {
+		if infoB, err := os.Stat(b); err == nil && os.SameFile(infoA, infoB) {
+			return true
 		}
 	}
-	return "", false
+	if !pathUsesCaseInsensitiveLookup(probePath) && !pathUsesCaseInsensitiveLookup(vaultRoot) {
+		return false
+	}
+	relA, err := filepath.Rel(vaultRoot, a)
+	if err != nil {
+		return false
+	}
+	relB, err := filepath.Rel(vaultRoot, b)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(filepath.ToSlash(relA), filepath.ToSlash(relB))
+}
+
+func pathUsesCaseInsensitiveLookup(probePath string) bool {
+	for current := filepath.Clean(probePath); ; {
+		info, err := os.Stat(current)
+		if err == nil {
+			alt := toggleCaseProbePath(current)
+			if alt != current {
+				altInfo, altErr := os.Stat(alt)
+				switch {
+				case altErr == nil:
+					return os.SameFile(info, altInfo)
+				case os.IsNotExist(altErr):
+					return false
+				}
+			}
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return false
+		}
+		current = parent
+	}
+}
+
+func toggleCaseProbePath(path string) string {
+	for i := len(path) - 1; i >= 0; i-- {
+		switch c := path[i]; {
+		case 'a' <= c && c <= 'z':
+			return path[:i] + string(c-'a'+'A') + path[i+1:]
+		case 'A' <= c && c <= 'Z':
+			return path[:i] + string(c-'A'+'a') + path[i+1:]
+		}
+	}
+	return path
+}
+
+func describeNewResolvedTemplate(vaultRoot, templatePath string) string {
+	rel, err := filepath.Rel(vaultRoot, templatePath)
+	if err != nil {
+		return templatePath
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return templatePath
+	}
+	return filepath.ToSlash(rel)
 }
 
 func normalizeNewDefaultExtension(ext string) string {

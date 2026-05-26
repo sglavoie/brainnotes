@@ -12,6 +12,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 // renameChangeKind tags a change with the locus that was rewritten so the
@@ -89,7 +90,7 @@ Inspect with 'git diff' to recover.`,
 				newTitle = args[1]
 			} else {
 				newTitle = args[0]
-				if err := validateNewTitle(newTitle); err != nil {
+				if err := validateRenameTitle(newTitle); err != nil {
 					return err
 				}
 				selected, pickErr := pickNotes(v, cfg, false)
@@ -101,7 +102,7 @@ Inspect with 'git diff' to recover.`,
 				}
 				noteArg = selected[0]
 			}
-			if err := validateNewTitle(newTitle); err != nil {
+			if err := validateRenameTitle(newTitle); err != nil {
 				return err
 			}
 
@@ -190,6 +191,16 @@ func validateNewTitle(t string) error {
 	}
 	if strings.HasPrefix(t, ".") {
 		return errors.New("rename: new title may not start with '.'")
+	}
+	return nil
+}
+
+func validateRenameTitle(t string) error {
+	if err := validateNewTitle(t); err != nil {
+		return err
+	}
+	if r, ok := wikilink.FirstReservedTargetRune(t); ok {
+		return fmt.Errorf("rename: new title may not contain %q; wikilink rewrites require plain note titles", r)
 	}
 	return nil
 }

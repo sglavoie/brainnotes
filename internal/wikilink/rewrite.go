@@ -2,6 +2,19 @@ package wikilink
 
 import "strings"
 
+// FirstReservedTargetRune returns the first rune in s that cannot appear
+// literally inside a wikilink target because it would terminate or change the
+// meaning of the target on re-parse.
+func FirstReservedTargetRune(s string) (rune, bool) {
+	for _, r := range s {
+		switch r {
+		case '[', ']', '#', '|', '\r', '\n':
+			return r, true
+		}
+	}
+	return 0, false
+}
+
 // invalidNewTarget reports whether s would produce a malformed wikilink if
 // emitted as the target of `[[ ... ]]`. The check first applies the same
 // surrounding ASCII-space normalization Parse applies to wikilink fields.
@@ -17,7 +30,7 @@ func invalidNewTarget(s string) bool {
 	if s == "" {
 		return true
 	}
-	if strings.ContainsAny(s, "[]#|\r\n") {
+	if _, ok := FirstReservedTargetRune(s); ok {
 		return true
 	}
 	if strings.HasSuffix(s, "/") {

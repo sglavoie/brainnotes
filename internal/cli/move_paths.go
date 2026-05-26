@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // resolveNewFolder normalizes the <new-folder> argument. Returns the vault-
@@ -17,22 +16,9 @@ func resolveNewFolder(vaultRoot, arg string) (rel, abs string, err error) {
 	if arg == "" {
 		return "", vaultRoot, nil
 	}
-	if strings.TrimSpace(arg) == "" {
-		return "", "", fmt.Errorf("move: new folder %q is whitespace-only", arg)
-	}
-	for _, r := range arg {
-		if r == 0 || r < 0x20 || r == 0x7f {
-			return "", "", fmt.Errorf("move: new folder %q contains a control character (U+%04X)", arg, r)
-		}
-	}
-	cleaned := filepath.Clean(filepath.FromSlash(arg))
-	if cleaned == "." {
-		return "", vaultRoot, nil
-	}
-
-	fullPath := cleaned
-	if !filepath.IsAbs(cleaned) {
-		fullPath = filepath.Join(vaultRoot, cleaned)
+	fullPath, err := resolveNewDestFolder(vaultRoot, arg, "move: new folder")
+	if err != nil {
+		return "", "", err
 	}
 	fullPath, err = absInVault(vaultRoot, fullPath)
 	if err != nil {
@@ -42,9 +28,6 @@ func resolveNewFolder(vaultRoot, arg string) (rel, abs string, err error) {
 	relPath, relErr := filepath.Rel(vaultRoot, fullPath)
 	if relErr != nil {
 		return "", "", fmt.Errorf("move: resolve %q: %w", arg, relErr)
-	}
-	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
-		return "", "", fmt.Errorf("move: new folder %q is outside the vault", arg)
 	}
 	if relPath == "." {
 		return "", vaultRoot, nil
