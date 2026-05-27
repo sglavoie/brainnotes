@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
 func TestFindMissing(t *testing.T) {
@@ -45,6 +47,19 @@ func TestFindRejectsPathSeparators(t *testing.T) {
 func TestFindNilConfig(t *testing.T) {
 	if _, err := Find(nil, "book"); err == nil {
 		t.Fatal("expected error for nil config")
+	}
+}
+
+func TestFindEmptyVault(t *testing.T) {
+	for _, cfg := range []*config.Config{
+		{},
+		{Vault: "   "},
+	} {
+		if _, err := Find(cfg, "book"); err == nil {
+			t.Fatal("expected error for empty vault")
+		} else if !strings.Contains(err.Error(), "vault path is not set") {
+			t.Fatalf("expected vault-path error, got %v", err)
+		}
 	}
 }
 

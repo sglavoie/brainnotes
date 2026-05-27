@@ -13,6 +13,23 @@ import (
 	"time"
 )
 
+func TestNormalizeWithinRootRejectsSymlinkedAncestorEscape(t *testing.T) {
+	vaultRoot := t.TempDir()
+	outsideRoot := t.TempDir()
+	linkPath := filepath.Join(vaultRoot, "linked")
+	if err := os.Symlink(outsideRoot, linkPath); err != nil {
+		t.Fatalf("symlink %q -> %q: %v", linkPath, outsideRoot, err)
+	}
+
+	_, _, err := normalizeWithinRoot(vaultRoot, filepath.Join("linked", "Escape.md"))
+	if err == nil {
+		t.Fatal("normalizeWithinRoot should reject symlinked ancestor escape")
+	}
+	if !strings.Contains(err.Error(), "resolves outside root") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRecorderCapturesFirstSnapshotAndWritesManifest(t *testing.T) {
 	vaultRoot := t.TempDir()
 	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
@@ -462,5 +479,49 @@ func TestRestoreConflictErrorMessageDeterministic(t *testing.T) {
 	if !strings.Contains(msg, "b.md expected=file(sha256=111,size=3) actual=missing") ||
 		!strings.Contains(msg, "a.md expected=missing actual=file(sha256=222,size=4)") {
 		t.Fatalf("error missing conflict details: %q", msg)
+	}
+}
+
+func TestRestoreRejectsSymlinkedAncestorEscape(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	outsideRoot := t.TempDir()
+	linkPath := filepath.Join(vaultRoot, "linked")
+	if err := os.MkdirAll(filepath.Join(journalRoot, "entry-escape"), 0o755); err != nil {
+		t.Fatalf("mkdir entry: %v", err)
+	}
+	if err := os.Symlink(outsideRoot, linkPath); err != nil {
+		t.Fatalf("symlink %q -> %q: %v", linkPath, outsideRoot, err)
+	}
+
+	outsideNote := filepath.Join(outsideRoot, "Escape.md")
+	writeFile(t, outsideNote, "outside\n")
+	entry := Entry{
+		ID:        "entry-escape",
+		Timestamp: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		Command:   "bn restore",
+		Files: []FileRecord{{
+			Path: "linked/Escape.md",
+			Before: FileState{
+				Kind: KindMissing,
+			},
+			After: FileState{
+				Kind:   KindFile,
+				SHA256: hashHex("outside\n"),
+				Size:   int64(len("outside\n")),
+				Mode:   0o644,
+			},
+		}},
+	}
+	if err := writeJSONAtomic(filepath.Join(journalRoot, "entry-escape", ManifestFileName), entry); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err := Restore(vaultRoot, journalRoot, "entry-escape", RestoreOptions{DryRun: true})
+	if err == nil {
+		t.Fatal("restore should reject symlinked ancestor escape")
+	}
+	if !strings.Contains(err.Error(), "resolves outside root") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -85,7 +85,7 @@ func NewBacklinksCmd() *cobra.Command {
 
 			out := cmd.OutOrStdout()
 			if verbose {
-				return writeVerboseBacklinks(out, notes, target, referrers)
+				return writeVerboseBacklinks(out, notes, target, referrers, graph)
 			}
 
 			sep := byte('\n')
@@ -182,11 +182,14 @@ func (r verboseRow) format() string {
 // writeVerboseBacklinks emits one row per occurrence of a link to target inside
 // each referrer's body or frontmatter. Rows are sorted by path, frontmatter
 // rows before body rows for the same path, then by line number.
-func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Note, referrers []string) error {
-	wantKey := backlinkKey(target)
+func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Note, referrers []string, g *query.Graph) error {
+	wantKey := g.KeyForNote(target)
 	referrerSet := make(map[string]struct{}, len(referrers))
 	for _, p := range referrers {
 		referrerSet[p] = struct{}{}
+	}
+	filter := func(link wikilink.Link) bool {
+		return linkMatchesGraphKey(g, link, wantKey)
 	}
 
 	var rows []verboseRow
@@ -198,10 +201,10 @@ func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Not
 			continue
 		}
 		if body, err := n.Body(); err == nil {
-			rows = append(rows, renderVerboseBody(n.Path, body, wantKey)...)
+			rows = append(rows, renderVerboseBody(n.Path, body, filter)...)
 		}
 		if fm, err := n.Front(); err == nil {
-			rows = append(rows, renderVerboseFront(n.Path, fm, wantKey)...)
+			rows = append(rows, renderVerboseFront(n.Path, fm, filter)...)
 		}
 	}
 
@@ -223,10 +226,10 @@ func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Not
 	return nil
 }
 
-func renderBodyLinks(path, body string, filter func(string) bool) []verboseRow {
+func renderBodyLinks(path, body string, filter func(wikilink.Link) bool) []verboseRow {
 	var rows []verboseRow
 	for _, link := range wikilink.Parse(body) {
-		if !filter(strings.ToLower(link.Title())) {
+		if !filter(link) {
 			continue
 		}
 		lineNum := strings.Count(body[:link.Start], "\n") + 1
@@ -243,7 +246,7 @@ func renderBodyLinks(path, body string, filter func(string) bool) []verboseRow {
 	return rows
 }
 
-func renderFrontLinks(path string, fm *frontmatter.Map, filter func(string) bool) []verboseRow {
+func renderFrontLinks(path string, fm *frontmatter.Map, filter func(wikilink.Link) bool) []verboseRow {
 	var rows []verboseRow
 	for _, k := range fm.Keys() {
 		v, _ := fm.Get(k)
@@ -252,11 +255,11 @@ func renderFrontLinks(path string, fm *frontmatter.Map, filter func(string) bool
 	return rows
 }
 
-func scanFrontLinks(path, key string, v any, filter func(string) bool) []verboseRow {
+func scanFrontLinks(path, key string, v any, filter func(wikilink.Link) bool) []verboseRow {
 	switch vv := v.(type) {
 	case string:
 		for _, link := range wikilink.Parse(vv) {
-			if filter(strings.ToLower(link.Title())) {
+			if filter(link) {
 				return []verboseRow{{path: path, key: key, isFront: true, text: truncateSnippet(vv)}}
 			}
 		}
@@ -277,12 +280,53 @@ func scanFrontLinks(path, key string, v any, filter func(string) bool) []verbose
 	return nil
 }
 
-func renderVerboseBody(path, body, wantKey string) []verboseRow {
-	return renderBodyLinks(path, body, func(t string) bool { return t == wantKey })
+func renderVerboseBody(path, body string, filter func(wikilink.Link) bool) []verboseRow {
+	return renderBodyLinks(path, body, filter)
 }
 
-func renderVerboseFront(path string, fm *frontmatter.Map, wantKey string) []verboseRow {
-	return renderFrontLinks(path, fm, func(t string) bool { return t == wantKey })
+func renderVerboseFront(path string, fm *frontmatter.Map, filter func(wikilink.Link) bool) []verboseRow {
+	return renderFrontLinks(path, fm, filter)
+}
+
+func linkMatchesGraphKey(g *query.Graph, link wikilink.Link, wantKey string) bool {
+	if wantKey == "" {
+		return false
+	}
+	for _, key := range graphLinkKeys(g, link) {
+		if key == wantKey {
+			return true
+		}
+	}
+	return false
+}
+
+func graphLinkKeys(g *query.Graph, link wikilink.Link) []string {
+	if g == nil {
+		return nil
+	}
+	if link.Folder != "" {
+		targetKey := relinkNormalizeTarget(link.Target)
+		if targetKey == "" {
+			return nil
+		}
+		if _, ok := g.Titles[targetKey]; ok {
+			return []string{targetKey}
+		}
+		titleKey := relinkNormalizeTitle(link.Title())
+		if titleKey == "" {
+			return nil
+		}
+		if keys := g.NoteKeysByTitle[titleKey]; len(keys) == 1 {
+			return append([]string(nil), keys...)
+		}
+		return nil
+	}
+
+	titleKey := relinkNormalizeTitle(link.Title())
+	if titleKey == "" {
+		return nil
+	}
+	return append([]string(nil), g.NoteKeysByTitle[titleKey]...)
 }
 
 // truncateSnippet caps s at maxVerboseSnippet runes, replacing the tail with

@@ -310,7 +310,15 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 		for i, item := range v {
 			s, ok := item.(string)
 			if !ok {
-				unfixable = appendUniqueString(unfixable, fmt.Sprintf("%v", item))
+				scalar := scalarToString(item)
+				if scalar == "" {
+					unfixable = appendUniqueString(unfixable, fmt.Sprintf("%v", item))
+					continue
+				}
+				if isAllowedValue(scalar, allowed) {
+					continue
+				}
+				unfixable = appendUniqueString(unfixable, scalar)
 				continue
 			}
 			if isWikilink {

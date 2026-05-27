@@ -3,6 +3,7 @@ package schema
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
@@ -221,6 +222,48 @@ func TestPlanRepairs_Canonicalize_ListNonStringItem(t *testing.T) {
 	}
 	if result.Skips[0].Kind != "value_not_allowed" {
 		t.Errorf("skip kind = %q, want %q", result.Skips[0].Kind, "value_not_allowed")
+	}
+}
+
+func TestPlanRepairs_Canonicalize_ListAllowedScalarItems_DoNotProduceSkips(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"tags": {Type: "list", Allowed: []string{"42", "Go"}},
+	}
+	front := buildFront("tags", []any{42, "go"})
+
+	result := PlanRepairs(front, sch, nil)
+
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	if result.Actions[0].Kind != "canonicalize" {
+		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "canonicalize")
+	}
+	wantNew := []any{42, "Go"}
+	if !reflect.DeepEqual(result.Actions[0].NewValue, wantNew) {
+		t.Errorf("new value = %v, want %v", result.Actions[0].NewValue, wantNew)
+	}
+	if len(result.Skips) != 0 {
+		t.Fatalf("expected no skips for already-allowed scalar list items, got %+v", result.Skips)
+	}
+}
+
+func TestPlanRepairs_Canonicalize_ListWholeNumberFloatAllowed_NoSkip(t *testing.T) {
+	sch := map[string]config.PropertySchema{
+		"ratings": {Type: "list", Allowed: []string{"3.0", "2024-01-01"}},
+	}
+	front := buildFront("ratings", []any{
+		3.0,
+		time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	})
+
+	result := PlanRepairs(front, sch, nil)
+
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected no actions, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 0 {
+		t.Fatalf("expected no skips for scalar items matching allowed values, got %+v", result.Skips)
 	}
 }
 

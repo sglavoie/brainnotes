@@ -66,6 +66,17 @@ func TestNoteFolderRejectsEmptyPath(t *testing.T) {
 	}
 }
 
+func TestNoteFolderRejectsRelativePath(t *testing.T) {
+	n := &Note{Path: filepath.Join("relative", "note.md")}
+	_, err := n.Folder(t.TempDir())
+	if err == nil {
+		t.Fatal("Folder with relative note path should return an error")
+	}
+	if !strings.Contains(err.Error(), "must be absolute") {
+		t.Errorf("error should mention absolute path requirement: %v", err)
+	}
+}
+
 func TestNoteFolderRejectsOutOfVaultPath(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()

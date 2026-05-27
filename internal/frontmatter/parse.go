@@ -26,13 +26,25 @@ func Parse(data []byte) (Document, error) {
 
 	startLen, ok := openDelimLen(s)
 	if !ok {
-		return Document{Front: NewMap(), Body: raw, hasBOM: hasBOM, bodyStartsWithFileBOM: hasBOM}, nil
+		return Document{
+			Front:                 NewMap(),
+			Body:                  raw,
+			hasBOM:                hasBOM,
+			bodyStartsWithFileBOM: hasBOM,
+			frontmatterLineEnding: preferredLineEnding(s),
+		}, nil
 	}
 
 	rest := s[startLen:]
 	closeOff, bodyOff, ok := findCloseDelim(rest)
 	if !ok {
-		return Document{Front: NewMap(), Body: raw, hasBOM: hasBOM, bodyStartsWithFileBOM: hasBOM}, nil
+		return Document{
+			Front:                 NewMap(),
+			Body:                  raw,
+			hasBOM:                hasBOM,
+			bodyStartsWithFileBOM: hasBOM,
+			frontmatterLineEnding: preferredLineEnding(s),
+		}, nil
 	}
 
 	yamlText := rest[:closeOff]
@@ -77,6 +89,13 @@ func isDelimLine(line string) bool {
 
 func frontmatterDelimiterLineEnding(line string) string {
 	if strings.HasSuffix(line, "\r\n") {
+		return "\r\n"
+	}
+	return "\n"
+}
+
+func preferredLineEnding(s string) string {
+	if i := strings.IndexByte(s, '\n'); i > 0 && s[i-1] == '\r' {
 		return "\r\n"
 	}
 	return "\n"

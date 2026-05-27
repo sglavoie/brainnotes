@@ -170,6 +170,35 @@ func TestLoad_TemplatesDefaultExtensionRejectsPathSeparators(t *testing.T) {
 	}
 }
 
+func TestLoad_TemplatesDefaultExtensionRejectsControlCharacters(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{name: "tab", raw: `m\td`},
+		{name: "del", raw: `m\u007fd`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.toml")
+			writeFile(t, cfgPath, "vault = \""+vault+"\"\n[templates]\ndefault_extension = \""+tc.raw+"\"\n")
+
+			cfg, err := Load("", cfgPath)
+			if err != nil {
+				t.Fatalf("Load (%q): %v", tc.raw, err)
+			}
+			if cfg.Templates.DefaultExtension != ".md" {
+				t.Errorf("raw %q: got %q, want %q", tc.raw, cfg.Templates.DefaultExtension, ".md")
+			}
+		})
+	}
+}
+
 func TestLoad_TemplatesDefaultExtensionDotOnlyFallsBackToDefault(t *testing.T) {
 	// `default_extension = "."` would otherwise produce filenames like
 	// "Note." — a stray period with no real extension. Fall back to ".md".

@@ -19,6 +19,10 @@ func normalizeWithinRoot(root, p string) (abs, relSlash string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("resolve root %q: %w", root, err)
 	}
+	rootResolved, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve root symlinks %q: %w", rootAbs, err)
+	}
 	if strings.TrimSpace(p) == "" {
 		return "", "", fmt.Errorf("empty path")
 	}
@@ -30,7 +34,12 @@ func normalizeWithinRoot(root, p string) (abs, relSlash string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("resolve path %q: %w", p, err)
 	}
-	rel, err := filepath.Rel(rootAbs, targetAbs)
+	targetParentResolved, err := resolveExistingPath(filepath.Dir(targetAbs))
+	if err != nil {
+		return "", "", fmt.Errorf("resolve parent %q: %w", filepath.Dir(targetAbs), err)
+	}
+	targetAbs = filepath.Join(targetParentResolved, filepath.Base(targetAbs))
+	rel, err := filepath.Rel(rootResolved, targetAbs)
 	if err != nil {
 		return "", "", fmt.Errorf("rel %q: %w", targetAbs, err)
 	}
@@ -39,6 +48,34 @@ func normalizeWithinRoot(root, p string) (abs, relSlash string, err error) {
 	}
 	relSlash = filepath.ToSlash(rel)
 	return targetAbs, relSlash, nil
+}
+
+func resolveExistingPath(path string) (string, error) {
+	path = filepath.Clean(path)
+	missing := make([]string, 0, 4)
+	current := path
+	for {
+		_, err := os.Lstat(current)
+		if err == nil {
+			resolved, err := filepath.EvalSymlinks(current)
+			if err != nil {
+				return "", fmt.Errorf("eval symlinks %q: %w", current, err)
+			}
+			for i := len(missing) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missing[i])
+			}
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("lstat %q: %w", current, err)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", fmt.Errorf("no existing ancestor for %q", path)
+		}
+		missing = append(missing, filepath.Base(current))
+		current = parent
+	}
 }
 
 func isEscapingRel(rel string) bool {

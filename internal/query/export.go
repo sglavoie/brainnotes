@@ -55,7 +55,7 @@ func slugify(s string) string {
 }
 
 func mermaidEscape(s string) string {
-	return strings.ReplaceAll(s, `"`, "#quot;")
+	return strings.ReplaceAll(s, `"`, "&quot;")
 }
 
 func (g *Graph) ExportMermaid(w io.Writer, nodes map[string]struct{}) error {

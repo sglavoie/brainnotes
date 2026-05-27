@@ -140,6 +140,17 @@ func TestLoadEmptyPath(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsRelativePath(t *testing.T) {
+	n := &Note{Path: filepath.Join("relative", "note.md")}
+	err := n.Load()
+	if err == nil {
+		t.Fatal("Load with relative Path should return an error")
+	}
+	if !strings.Contains(err.Error(), "must be absolute") {
+		t.Errorf("error should mention absolute path requirement: %v", err)
+	}
+}
+
 // TestSaveEmptyPath verifies that Save on a loaded Note with an empty Path
 // errors instead of writing temp files to the process cwd and then failing the
 // rename. atomicWrite is given a destination, so an empty Path used to call
@@ -158,5 +169,26 @@ func TestSaveEmptyPath(t *testing.T) {
 	n.Path = ""
 	if err := n.Save(&v.Cfg.Frontmatter); err == nil {
 		t.Fatal("Save with empty Path should return an error")
+	}
+}
+
+func TestSaveRejectsRelativePath(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nbody\n",
+	})
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := n.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	n.Path = filepath.Join("relative", "saved.md")
+	err = n.Save(&v.Cfg.Frontmatter)
+	if err == nil {
+		t.Fatal("Save with relative Path should return an error")
+	}
+	if !strings.Contains(err.Error(), "must be absolute") {
+		t.Errorf("error should mention absolute path requirement: %v", err)
 	}
 }

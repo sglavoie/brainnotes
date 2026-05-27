@@ -159,6 +159,42 @@ func TestExitCodeMapsExecFormatErrorTo126(t *testing.T) {
 	}
 }
 
+func TestRunMapsWrappedExecErrnoNotFoundTo127(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error { return fmt.Errorf("open: %w", syscall.ENOENT) })
+
+	if code := run(stderr); code != 127 {
+		t.Fatalf("run() exit code = %d, want 127", code)
+	}
+	if got := stderr.String(); got != "bn: open: no such file or directory\n" {
+		t.Fatalf("stderr = %q, want wrapped syscall errno message", got)
+	}
+}
+
+func TestRunMapsWrappedExecErrnoPermissionTo126(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error { return fmt.Errorf("open: %w", syscall.EACCES) })
+
+	if code := run(stderr); code != 126 {
+		t.Fatalf("run() exit code = %d, want 126", code)
+	}
+	if got := stderr.String(); got != "bn: open: permission denied\n" {
+		t.Fatalf("stderr = %q, want wrapped syscall errno message", got)
+	}
+}
+
+func TestRunMapsWrappedExecErrnoExecFormatTo126(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error { return fmt.Errorf("open: %w", syscall.ENOEXEC) })
+
+	if code := run(stderr); code != 126 {
+		t.Fatalf("run() exit code = %d, want 126", code)
+	}
+	if got := stderr.String(); got != "bn: open: exec format error\n" {
+		t.Fatalf("stderr = %q, want wrapped syscall errno message", got)
+	}
+}
+
 func TestRunMapsFZFNotFoundTo127(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	stubExecute(t, func() error { return cli.ErrFZFNotFound })

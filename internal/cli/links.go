@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 func NewLinksCmd() *cobra.Command {
@@ -70,7 +71,7 @@ func NewLinksCmd() *cobra.Command {
 			g := query.BuildGraphForRoot(v.Root, notes)
 
 			if verbose {
-				return writeVerboseLinks(cmd.OutOrStdout(), target, g, g.ForwardLinks(backlinkKey(target)))
+				return writeVerboseLinks(cmd.OutOrStdout(), target, g)
 			}
 
 			exactTargets := g.ForwardLinksForNote(target)
@@ -103,19 +104,20 @@ func NewLinksCmd() *cobra.Command {
 	return cmd
 }
 
-func writeVerboseLinks(out io.Writer, target *vault.Note, g *query.Graph, fwdTitles []string) error {
-	targetKey := backlinkKey(target)
-	fwdSet := make(map[string]struct{}, len(fwdTitles))
-	for _, t := range fwdTitles {
-		fwdSet[t] = struct{}{}
+func writeVerboseLinks(out io.Writer, target *vault.Note, g *query.Graph) error {
+	fwdKeys := g.ForwardLinksForNote(target)
+	fwdSet := make(map[string]struct{}, len(fwdKeys))
+	for _, key := range fwdKeys {
+		fwdSet[key] = struct{}{}
 	}
 
-	filter := func(t string) bool {
-		if t == targetKey {
-			return false
+	filter := func(link wikilink.Link) bool {
+		for _, key := range graphLinkKeys(g, link) {
+			if _, ok := fwdSet[key]; ok {
+				return true
+			}
 		}
-		_, ok := fwdSet[t]
-		return ok
+		return false
 	}
 
 	var rows []verboseRow

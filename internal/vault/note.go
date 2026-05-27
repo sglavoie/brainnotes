@@ -36,6 +36,9 @@ func (n *Note) Load() error {
 	if n.Path == "" {
 		return errors.New("note: load: empty path")
 	}
+	if !filepath.IsAbs(n.Path) {
+		return fmt.Errorf("note: load %q: path must be absolute", n.Path)
+	}
 	data, err := os.ReadFile(n.Path)
 	if err != nil {
 		return fmt.Errorf("note: read %q: %w", n.Path, err)
@@ -65,6 +68,9 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	}
 	if n.Path == "" {
 		return errors.New("note: save: empty path")
+	}
+	if !filepath.IsAbs(n.Path) {
+		return fmt.Errorf("note: save %q: path must be absolute", n.Path)
 	}
 	if err := n.ensureSavePathContained(); err != nil {
 		return err
@@ -187,6 +193,9 @@ func (n *Note) Folder(root string) (string, error) {
 	}
 	if n.Path == "" {
 		return "", errors.New("note: folder: empty path")
+	}
+	if !filepath.IsAbs(n.Path) {
+		return "", fmt.Errorf("note: folder %q: path must be absolute", n.Path)
 	}
 	rel, err := filepath.Rel(root, n.Path)
 	if err != nil {

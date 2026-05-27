@@ -164,6 +164,34 @@ func TestLinks_VerboseFrontmatter(t *testing.T) {
 	}
 }
 
+func TestLinks_VerboseIncludesFolderQualifiedLinks(t *testing.T) {
+	isolateBnEnv(t)
+	root := t.TempDir()
+	files := map[string]string{
+		"Source.md":        "See [[Folder/Target|folder alias]].\n",
+		"Folder/Target.md": "Target body.\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	stdout, _, err := runLinks(t, root, "links", "Source", "--verbose")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := stripVaultLines(t, root, stdout)
+	want := []string{"Source.md:1\tSee [[Folder/Target|folder alias]]."}
+	if !equalStrings(got, want) {
+		t.Fatalf("folder-qualified verbose mismatch:\n got=%v\nwant=%v", got, want)
+	}
+}
+
 func TestLinks_SelfReferenceExcluded(t *testing.T) {
 	isolateBnEnv(t)
 	root := newLinksFixture(t)

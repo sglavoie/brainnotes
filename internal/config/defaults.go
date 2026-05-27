@@ -87,10 +87,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Templates.DefaultExtension == "" || cfg.Templates.DefaultExtension == "." {
 		cfg.Templates.DefaultExtension = ".md"
 	}
-	// Reject extensions containing path separators or NUL — they cannot appear
-	// in a sane filename suffix and would produce values like ".md/file" that
-	// silently corrupt the output path when `bn new` joins template name + ext.
-	if strings.ContainsAny(cfg.Templates.DefaultExtension, "/\\\x00") {
+	// Reject extensions containing path separators or control characters — they
+	// cannot appear in a sane filename suffix and would produce unusable output
+	// paths or template lookup candidates when `bn new` / `template.Find`
+	// concatenate title + extension.
+	if strings.ContainsAny(cfg.Templates.DefaultExtension, "/\\") ||
+		containsControlRune(cfg.Templates.DefaultExtension) {
 		cfg.Templates.DefaultExtension = ".md"
 	}
 	if !strings.HasPrefix(cfg.Templates.DefaultExtension, ".") {
@@ -121,6 +123,15 @@ func applyDefaults(cfg *Config) {
 	cfg.Open.Editor = strings.TrimSpace(cfg.Open.Editor)
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
+}
+
+func containsControlRune(s string) bool {
+	for _, r := range s {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeRoutes(routes map[string]string) {

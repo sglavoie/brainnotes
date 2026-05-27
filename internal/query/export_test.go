@@ -128,7 +128,7 @@ func TestExportMermaid_SpecialChars(t *testing.T) {
 	if err := g.ExportMermaid(&buf, allNodes(g)); err != nil {
 		t.Fatal(err)
 	}
-	want := "graph LR\n  say-hello[\"Say #quot;hello#quot;\"]\n"
+	want := "graph LR\n  say-hello[\"Say &quot;hello&quot;\"]\n"
 	if buf.String() != want {
 		t.Fatalf("ExportMermaid special chars:\ngot:\n%s\nwant:\n%s", buf.String(), want)
 	}
@@ -256,7 +256,7 @@ func TestSlugify(t *testing.T) {
 }
 
 func TestMermaidEscape(t *testing.T) {
-	if got := mermaidEscape(`say "hi"`); got != `say #quot;hi#quot;` {
+	if got := mermaidEscape(`say "hi"`); got != `say &quot;hi&quot;` {
 		t.Errorf("mermaidEscape: got %q", got)
 	}
 }

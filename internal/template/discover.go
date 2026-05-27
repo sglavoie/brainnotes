@@ -44,6 +44,9 @@ func Find(cfg *config.Config, name string) (string, error) {
 	if cfg == nil {
 		return "", errors.New("template: nil config")
 	}
+	if strings.TrimSpace(cfg.Vault) == "" {
+		return "", errors.New("template: vault path is not set")
+	}
 	if strings.TrimSpace(name) == "" {
 		return "", errors.New("template: empty name")
 	}

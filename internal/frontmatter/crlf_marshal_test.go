@@ -39,3 +39,23 @@ func TestMarshalPreservesCRLFWhenFrontmatterMutates(t *testing.T) {
 		t.Fatalf("mutated output changed line endings:\n got %q\nwant %q", out, want)
 	}
 }
+
+func TestMarshalAddsFrontmatterToBodyOnlyCRLFUsingCRLF(t *testing.T) {
+	src := "Body.\r\n"
+
+	doc, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	doc.Front.Set("title", "Windows")
+
+	out, err := Marshal(doc, nil)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	want := "---\r\ntitle: Windows\r\n---\r\nBody.\r\n"
+	if string(out) != want {
+		t.Fatalf("added-frontmatter output changed line endings:\n got %q\nwant %q", out, want)
+	}
+}

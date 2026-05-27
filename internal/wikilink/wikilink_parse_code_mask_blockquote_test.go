@@ -148,3 +148,14 @@ func TestParseInlineCodeSpanDoesNotCrossOutOfNestedBlockquote(t *testing.T) {
 		t.Fatalf("targets = %v, want %v", got, want)
 	}
 }
+
+func TestParseInlineCodeSpanDoesNotCrossOutOfBlockquote(t *testing.T) {
+	t.Parallel()
+
+	in := "> `code\n[[Visible]]`"
+	got := collectTargets(Parse(in))
+	want := []string{"Visible"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, want %v", got, want)
+	}
+}

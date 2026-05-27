@@ -129,3 +129,32 @@ func TestBacklinks_VerboseCodeSpanIgnored(t *testing.T) {
 		}
 	}
 }
+
+func TestBacklinks_VerboseOnlyShowsLinksToSelectedDuplicateTarget(t *testing.T) {
+	isolateBnEnv(t)
+	root := t.TempDir()
+	files := map[string]string{
+		"Folder/Target.md": "Folder target.\n",
+		"Other/Target.md":  "Other target.\n",
+		"Ref.md":           "One [[Folder/Target]].\nTwo [[Other/Target]].\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	stdout, _, err := runBacklinks(t, root, "backlinks", "Folder/Target.md", "--verbose")
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := stripVaultLines(t, root, stdout)
+	want := []string{"Ref.md:1\tOne [[Folder/Target]]."}
+	if !equalStrings(got, want) {
+		t.Fatalf("duplicate-target verbose mismatch:\n got=%v\nwant=%v", got, want)
+	}
+}

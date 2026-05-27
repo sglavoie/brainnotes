@@ -72,10 +72,34 @@ func exitCode(err error) int {
 			return 126
 		}
 	}
+	if errno, ok := directErrno(err); ok {
+		switch errno {
+		case syscall.ENOENT:
+			return 127
+		case syscall.EACCES, syscall.ENOEXEC:
+			return 126
+		}
+	}
 
 	return 1
 }
 
 func isBrokenPipe(err error) bool {
 	return errors.Is(err, syscall.EPIPE) || errors.Is(err, io.ErrClosedPipe)
+}
+
+func directErrno(err error) (syscall.Errno, bool) {
+	for err != nil {
+		switch e := err.(type) {
+		case syscall.Errno:
+			return e, true
+		case *os.PathError, *exec.Error, *exec.ExitError:
+			return 0, false
+		case interface{ Unwrap() error }:
+			err = e.Unwrap()
+		default:
+			return 0, false
+		}
+	}
+	return 0, false
 }
