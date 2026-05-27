@@ -193,3 +193,41 @@ func TestFromFlagsSkipsEmptyTagsAndCategories(t *testing.T) {
 		t.Errorf("empty entries in Tags/Categories should be skipped, leaving the real terms to match")
 	}
 }
+
+func TestFromFlagsTrimsWhitespaceTerms(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntags: [foo]\ncategories:\n  - \"[[Books]]\"\nstatus: Reading\ntype: Goal\n---\n",
+	})
+	pred, err := FromFlags(Flags{
+		Tags:         []string{"  foo  "},
+		Categories:   []string{"  books  "},
+		Status:       "  reading  ",
+		Type:         "  goal  ",
+		Has:          "  status  ",
+		Missing:      "  done  ",
+		MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1,
+	})
+	if err != nil {
+		t.Fatalf("FromFlags: %v", err)
+	}
+	if !pred(notes["a.md"]) {
+		t.Fatalf("whitespace-padded terms should be trimmed before predicates are built")
+	}
+}
+
+func TestFromFlagsIgnoresWhitespaceOnlyFolder(t *testing.T) {
+	pred, err := FromFlags(Flags{
+		Folder:       "   \t   ",
+		MinBacklinks: -1, MaxBacklinks: -1, MinLinks: -1, MaxLinks: -1,
+	})
+	if err != nil {
+		t.Fatalf("whitespace-only --folder should be treated as unset, got error: %v", err)
+	}
+
+	_, notes := newVault(t, map[string]string{
+		"a.md": "---\ntitle: a\n---\n",
+	})
+	if !pred(notes["a.md"]) {
+		t.Fatalf("whitespace-only --folder should not filter notes")
+	}
+}

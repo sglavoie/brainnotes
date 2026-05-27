@@ -112,6 +112,11 @@ func TestPlanRepairs_TypeCoerce_Skip(t *testing.T) {
 			schema: map[string]config.PropertySchema{"count": {Type: "int"}},
 		},
 		{
+			name:   "string_leading_zero_to_int_lossy",
+			front:  buildFront("count", "007"),
+			schema: map[string]config.PropertySchema{"count": {Type: "int"}},
+		},
+		{
 			name:   "float_lossy_to_int",
 			front:  buildFront("count", 3.14),
 			schema: map[string]config.PropertySchema{"count": {Type: "int"}},

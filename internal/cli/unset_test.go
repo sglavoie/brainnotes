@@ -64,11 +64,11 @@ func TestUnsetSplitArgs(t *testing.T) {
 			wantProps: []string{"p1", "p2"},
 		},
 		{
-			name:      "single arg no dash, treated as prop",
+			name:      "single arg no dash, treated as note",
 			args:      []string{"status"},
 			dashAt:    -1,
-			wantNotes: nil,
-			wantProps: []string{"status"},
+			wantNotes: []string{"status"},
+			wantProps: nil,
 		},
 	}
 	for _, c := range cases {
@@ -84,10 +84,10 @@ func TestUnsetSplitArgs(t *testing.T) {
 	}
 }
 
-// TestUnset_SingleArgNoDashTreatsAsProp verifies that 'bn unset status' (single
-// arg, no '--') treats the arg as a property name and triggers the fzf picker
-// for note selection, instead of treating it as a note path.
-func TestUnset_SingleArgNoDashTreatsAsProp(t *testing.T) {
+// TestUnset_SingleArgNoDashRequiresProperty verifies that a single positional
+// arg without '--' is treated as a note path and therefore fails with a clear
+// "missing property" error. Property-only mode must use '--'.
+func TestUnset_SingleArgNoDashRequiresProperty(t *testing.T) {
 	root := buildSetFixture(t)
 	aPath := filepath.Join(root, "a.md")
 
@@ -95,19 +95,16 @@ func TestUnset_SingleArgNoDashTreatsAsProp(t *testing.T) {
 		t.Fatalf("setup set: %v", err)
 	}
 
-	orig := notePicker
-	t.Cleanup(func() { notePicker = orig })
-	notePicker = func(items []string, extraArgs []string) ([]string, error) {
-		return []string{aPath}, nil
-	}
-
 	out, err := runCLI(t, "", "unset", "status")
-	if err != nil {
-		t.Fatalf("execute: %v\n%s", err, out)
+	if err == nil {
+		t.Fatalf("expected missing-property error, got nil with output:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "at least one property name is required") {
+		t.Fatalf("expected missing-property error, got %v", err)
 	}
 	got := readNote(t, aPath)
-	if strings.Contains(got, "status:") {
-		t.Fatalf("expected status removed, got:\n%s", got)
+	if !strings.Contains(got, "status: reading") {
+		t.Fatalf("expected note unchanged, got:\n%s", got)
 	}
 }
 

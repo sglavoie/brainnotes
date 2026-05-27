@@ -147,6 +147,28 @@ func TestRewriteMove(t *testing.T) {
 	}
 }
 
+func TestRewriteTitlePreservesLeadingSlashPrefix(t *testing.T) {
+	t.Parallel()
+
+	in := "see [[/Foo]] and [[Foo]]"
+	got := RewriteTitle(in, "Foo", "Bar")
+	want := "see [[/Bar]] and [[Bar]]"
+	if got != want {
+		t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
+func TestRewriteMoveMatchesLeadingSlashPath(t *testing.T) {
+	t.Parallel()
+
+	in := "see [[/Foo]] and [[Foo]]"
+	got := RewriteMove(in, "/Foo", "/Bar")
+	want := "see [[/Bar]] and [[Foo]]"
+	if got != want {
+		t.Fatalf("RewriteMove\n  got:  %q\n  want: %q", got, want)
+	}
+}
+
 func TestRewriteInsideFrontmatter(t *testing.T) {
 	t.Parallel()
 	in := "---\ncategories:\n  - '[[Books]]'\n  - '[[References]]'\nparent: '[[Books]]'\n---\nbody links to [[Books]]\n"

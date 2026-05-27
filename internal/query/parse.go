@@ -82,6 +82,7 @@ func FromFlags(f Flags) (Predicate, error) {
 		{values: f.Categories, build: Category},
 	} {
 		for _, value := range spec.values {
+			value = strings.TrimSpace(value)
 			if value == "" {
 				continue
 			}
@@ -98,6 +99,7 @@ func FromFlags(f Flags) (Predicate, error) {
 		{value: f.Has, build: Has},
 		{value: f.Missing, build: Missing},
 	} {
+		spec.value = strings.TrimSpace(spec.value)
 		if spec.value == "" {
 			continue
 		}
@@ -112,6 +114,7 @@ func FromFlags(f Flags) (Predicate, error) {
 		{flag: "--age", value: f.Age, field: "last"},
 		{flag: "--created", value: f.Created, field: "created"},
 	} {
+		spec.value = strings.TrimSpace(spec.value)
 		if spec.value == "" {
 			continue
 		}
@@ -122,11 +125,12 @@ func FromFlags(f Flags) (Predicate, error) {
 		ps = append(ps, Age(op, dur, spec.field))
 	}
 
-	if f.Folder != "" {
+	folder := strings.TrimSpace(f.Folder)
+	if folder != "" {
 		if f.Root == "" {
 			return nil, errors.New("query: --folder requires a vault root path")
 		}
-		ps = append(ps, Folder(f.Folder, f.Root))
+		ps = append(ps, Folder(folder, f.Root))
 	}
 
 	for _, spec := range []struct {

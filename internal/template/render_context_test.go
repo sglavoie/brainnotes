@@ -61,6 +61,10 @@ func TestNewContextNormalizesFolder(t *testing.T) {
 	}{
 		{"backslashes", `Projects\Ideas`, "Projects/Ideas"},
 		{"dot becomes empty", ".", ""},
+		{"empty stays empty", "", ""},
+		{"clean dot segments", "Projects/./Ideas", "Projects/Ideas"},
+		{"clean parent segments", "Projects/Old/../Ideas", "Projects/Ideas"},
+		{"trim trailing slash", "Projects/Ideas/", "Projects/Ideas"},
 		{"already normalized", "Projects/Ideas", "Projects/Ideas"},
 	}
 	for _, tc := range cases {

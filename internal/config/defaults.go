@@ -110,6 +110,8 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Frontmatter.Schema == nil {
 		cfg.Frontmatter.Schema = map[string]PropertySchema{}
+	} else {
+		normalizeSchema(cfg.Frontmatter.Schema)
 	}
 	if cfg.New.Routes == nil {
 		cfg.New.Routes = map[string]string{}
@@ -123,6 +125,13 @@ func applyDefaults(cfg *Config) {
 	cfg.Open.Editor = strings.TrimSpace(cfg.Open.Editor)
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
+}
+
+func normalizeSchema(schema map[string]PropertySchema) {
+	for key, rule := range schema {
+		rule.Type = strings.ToLower(strings.TrimSpace(rule.Type))
+		schema[key] = rule
+	}
 }
 
 func containsControlRune(s string) bool {

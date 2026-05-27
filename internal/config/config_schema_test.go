@@ -67,6 +67,26 @@ type = "number"
 	}
 }
 
+func TestLoad_SchemaTypeWhitespaceAndCaseNormalized(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[frontmatter.schema.rating]
+type = " String "
+`)
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Frontmatter.Schema["rating"].Type; got != "string" {
+		t.Fatalf("schema type should be normalized to lower-case trimmed value, got %q", got)
+	}
+}
+
 func TestLoad_SchemaEmptyTypeRejected(t *testing.T) {
 	resetEnv(t)
 	vault := t.TempDir()

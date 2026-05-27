@@ -279,6 +279,12 @@ func applyWikilinkWrap(v any) any {
 			}
 		}
 		return out
+	case []string:
+		out := make([]string, len(vv))
+		for i, item := range vv {
+			out[i] = wrapWikilink(item)
+		}
+		return out
 	default:
 		return v
 	}

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -73,6 +74,10 @@ func NewContext(title, folder, vault string, vars map[string]string, clk Clock) 
 
 func normalizeFolder(folder string) string {
 	folder = strings.ReplaceAll(filepath.ToSlash(folder), `\`, `/`)
+	if folder == "" {
+		return ""
+	}
+	folder = path.Clean(folder)
 	if folder == "." {
 		return ""
 	}

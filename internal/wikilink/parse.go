@@ -30,10 +30,11 @@ type Link struct {
 // Title returns the last path segment of Target — the bit after the final `/`,
 // or Target itself when there is no folder prefix.
 func (l Link) Title() string {
-	if l.Folder == "" {
+	idx := strings.LastIndex(l.Target, "/")
+	if idx < 0 {
 		return l.Target
 	}
-	return l.Target[len(l.Folder)+1:]
+	return l.Target[idx+1:]
 }
 
 // wikilinkRE matches `[[Target]]`, `[[Target#Heading]]`, `[[Target|Alias]]`,

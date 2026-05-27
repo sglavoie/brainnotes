@@ -525,3 +525,56 @@ func TestRestoreRejectsSymlinkedAncestorEscape(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestRestoreRejectsSnapshotSymlinkEscape(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	entryID := "entry-snapshot-escape"
+	entryDir := filepath.Join(journalRoot, entryID)
+	snapshotsDir := filepath.Join(entryDir, SnapshotsDirName)
+	outsideRoot := t.TempDir()
+	outsideSnapshot := filepath.Join(outsideRoot, "outside.snap")
+	notePath := filepath.Join(vaultRoot, "A.md")
+	if err := os.MkdirAll(snapshotsDir, 0o755); err != nil {
+		t.Fatalf("mkdir snapshots: %v", err)
+	}
+	writeFile(t, outsideSnapshot, "outside-before\n")
+	if err := os.Symlink(outsideSnapshot, filepath.Join(snapshotsDir, "bad.snap")); err != nil {
+		t.Fatalf("symlink snapshot: %v", err)
+	}
+	writeFile(t, notePath, "after\n")
+
+	entry := Entry{
+		ID:        entryID,
+		Timestamp: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		Command:   "bn restore",
+		Files: []FileRecord{{
+			Path: "A.md",
+			Before: FileState{
+				Kind:     KindFile,
+				SHA256:   hashHex("outside-before\n"),
+				Size:     int64(len("outside-before\n")),
+				Mode:     0o644,
+				Snapshot: filepath.ToSlash(filepath.Join(SnapshotsDirName, "bad.snap")),
+			},
+			After: FileState{
+				Kind:   KindFile,
+				SHA256: hashHex("after\n"),
+				Size:   int64(len("after\n")),
+				Mode:   0o644,
+			},
+		}},
+	}
+	if err := writeJSONAtomic(filepath.Join(entryDir, ManifestFileName), entry); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err := Restore(vaultRoot, journalRoot, entryID, RestoreOptions{})
+	if err == nil {
+		t.Fatal("restore should reject snapshot symlink escape")
+	}
+	if !strings.Contains(err.Error(), "snapshot escapes entry dir") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	assertFile(t, notePath, "after\n")
+}

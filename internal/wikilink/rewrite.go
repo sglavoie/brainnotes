@@ -60,6 +60,14 @@ func splitMDExt(s string) (string, string) {
 	return s, ""
 }
 
+func targetPrefix(target string) string {
+	idx := strings.LastIndex(target, "/")
+	if idx < 0 {
+		return ""
+	}
+	return target[:idx+1]
+}
+
 // Rewrite walks every wikilink in text and asks fn how to handle it. When fn
 // returns (replacement, true) the link's full `[[...]]` span is replaced with
 // replacement; when it returns (_, false) the original text is preserved.
@@ -140,10 +148,7 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 		if !strings.EqualFold(linkBase, oldBase) {
 			return "", false
 		}
-		newTarget := newBase + ext
-		if l.Folder != "" {
-			newTarget = l.Folder + "/" + newBase + ext
-		}
+		newTarget := targetPrefix(l.Target) + newBase + ext
 		return FormatLink(newTarget, l.Heading, l.Alias), true
 	})
 }
@@ -170,7 +175,7 @@ func RewriteMove(text, oldPath, newPath string) string {
 		return text
 	}
 	return Rewrite(text, func(l Link) (string, bool) {
-		if l.Folder == "" {
+		if !strings.Contains(l.Target, "/") {
 			return "", false
 		}
 		targetBase, ext := splitMDExt(l.Target)

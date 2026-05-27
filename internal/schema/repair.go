@@ -182,8 +182,10 @@ func TryCoerce(val any, targetType string) (any, bool) {
 		}
 	case "int":
 		if s, ok := val.(string); ok {
-			if n, err := strconv.Atoi(s); err == nil {
-				return n, true
+			if isAutoIntString(s) {
+				if n, err := strconv.Atoi(s); err == nil {
+					return n, true
+				}
 			}
 		}
 		if f, ok := val.(float64); ok {
@@ -252,6 +254,31 @@ func TryCoerce(val any, targetType string) (any, bool) {
 		}
 	}
 	return nil, false
+}
+
+func isAutoIntString(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	start := 0
+	if s[0] == '-' {
+		if len(s) == 1 {
+			return false
+		}
+		start = 1
+	}
+
+	for i := start; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+
+	if len(s)-start > 1 && s[start] == '0' {
+		return false
+	}
+	return true
 }
 
 func canonicalizeString(s string, allowed []string) (string, bool) {

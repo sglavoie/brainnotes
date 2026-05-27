@@ -50,3 +50,38 @@ func TestMarshalDoesNotMutateStoredValues(t *testing.T) {
 		t.Errorf("Marshal mutated stored scalar: %q", parent)
 	}
 }
+
+func TestMarshalWikilinkStringSliceWrapsValues(t *testing.T) {
+	cfg := defaultCfg()
+	doc := Document{Front: NewMap(), Body: ""}
+	doc.Front.Set("categories", []string{"Books", "Reading"})
+	out, err := Marshal(doc, cfg)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	s := string(out)
+	if !strings.Contains(s, "- '[[Books]]'") {
+		t.Fatalf("expected Books to be wrapped, got %q", s)
+	}
+	if !strings.Contains(s, "- '[[Reading]]'") {
+		t.Fatalf("expected Reading to be wrapped, got %q", s)
+	}
+}
+
+func TestMarshalWikilinkStringSliceDoesNotMutateStoredValues(t *testing.T) {
+	cfg := defaultCfg()
+	doc := Document{Front: NewMap(), Body: ""}
+	original := []string{"Books", "Reading"}
+	doc.Front.Set("categories", original)
+	if _, err := Marshal(doc, cfg); err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	got, ok := doc.Front.Get("categories")
+	if !ok {
+		t.Fatal("categories key missing after Marshal")
+	}
+	want := []string{"Books", "Reading"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Marshal mutated stored []string: got %#v want %#v", got, want)
+	}
+}

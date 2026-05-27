@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,9 @@ func run(stderr io.Writer) int {
 	}
 	if isBrokenPipe(err) {
 		return 0
+	}
+	if errors.Is(err, context.Canceled) {
+		return 130
 	}
 	if errors.Is(err, cli.ErrFZFInterrupted) {
 		return 130

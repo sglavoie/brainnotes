@@ -236,8 +236,8 @@ func TestParseLeadingSlash(t *testing.T) {
 	if l.Folder != "" {
 		t.Errorf("Folder = %q, want %q", l.Folder, "")
 	}
-	if l.Title() != "/Note" {
-		t.Errorf("Title() = %q, want %q", l.Title(), "/Note")
+	if l.Title() != "Note" {
+		t.Errorf("Title() = %q, want %q", l.Title(), "Note")
 	}
 }
 
@@ -287,7 +287,7 @@ func TestParseTitleAccessorEdgeCases(t *testing.T) {
 		in        string
 		wantTitle string
 	}{
-		{"leading slash treated as bare path", "[[/Note]]", "/Note"},
+		{"leading slash keeps terminal segment as title", "[[/Note]]", "Note"},
 		{"double slash mid-path", "[[Folder//Sub]]", "Sub"},
 		{"unicode segment", "[[Refs/Café]]", "Café"},
 		{"dotted segment", "[[Refs/.foo]]", ".foo"},

@@ -63,6 +63,34 @@ func describeState(s FileState) string {
 	return fmt.Sprintf("file(sha256=%s,size=%d)", s.SHA256, s.Size)
 }
 
+func resolveSnapshotPath(entryDirectory, snapshotRel string) (string, error) {
+	snapshotAbs := filepath.Join(entryDirectory, filepath.FromSlash(snapshotRel))
+	relToEntry, err := filepath.Rel(entryDirectory, snapshotAbs)
+	if err != nil {
+		return "", fmt.Errorf("snapshot rel: %w", err)
+	}
+	if isEscapingRel(relToEntry) || filepath.IsAbs(relToEntry) {
+		return "", fmt.Errorf("snapshot escapes entry dir")
+	}
+
+	entryResolved, err := filepath.EvalSymlinks(entryDirectory)
+	if err != nil {
+		return "", fmt.Errorf("resolve entry dir symlinks: %w", err)
+	}
+	snapshotResolved, err := resolveExistingPath(snapshotAbs)
+	if err != nil {
+		return "", fmt.Errorf("resolve snapshot symlinks: %w", err)
+	}
+	relResolved, err := filepath.Rel(entryResolved, snapshotResolved)
+	if err != nil {
+		return "", fmt.Errorf("snapshot rel resolved: %w", err)
+	}
+	if isEscapingRel(relResolved) || filepath.IsAbs(relResolved) {
+		return "", fmt.Errorf("snapshot escapes entry dir")
+	}
+	return snapshotResolved, nil
+}
+
 type restoreTarget struct {
 	record FileRecord
 	abs    string
@@ -151,13 +179,9 @@ func Restore(vaultRoot, journalRoot, entryID string, opts RestoreOptions) (*Rest
 			if strings.TrimSpace(snapshotRel) == "" {
 				return nil, fmt.Errorf("journal: restore %q: missing snapshot", target.record.Path)
 			}
-			snapshotAbs := filepath.Join(entryDirectory, filepath.FromSlash(snapshotRel))
-			relToEntry, err := filepath.Rel(entryDirectory, snapshotAbs)
+			snapshotAbs, err := resolveSnapshotPath(entryDirectory, snapshotRel)
 			if err != nil {
-				return nil, fmt.Errorf("journal: restore %q: snapshot rel: %w", target.record.Path, err)
-			}
-			if isEscapingRel(relToEntry) || filepath.IsAbs(relToEntry) {
-				return nil, fmt.Errorf("journal: restore %q: snapshot escapes entry dir", target.record.Path)
+				return nil, fmt.Errorf("journal: restore %q: %w", target.record.Path, err)
 			}
 			data, err := os.ReadFile(snapshotAbs)
 			if err != nil {

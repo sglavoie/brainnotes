@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -218,6 +219,18 @@ func TestRunMapsFZFInterruptedTo130Silently(t *testing.T) {
 	// Ctrl-C is user-initiated; no error message should be printed.
 	if got := stderr.String(); got != "" {
 		t.Fatalf("stderr = %q, want empty (interrupt should be silent)", got)
+	}
+}
+
+func TestRunMapsContextCanceledTo130Silently(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error { return context.Canceled })
+
+	if code := run(stderr); code != 130 {
+		t.Fatalf("run() exit code = %d, want 130 for context cancellation", code)
+	}
+	if got := stderr.String(); got != "" {
+		t.Fatalf("stderr = %q, want empty (cancellation should be silent)", got)
 	}
 }
 

@@ -101,10 +101,10 @@ func TestSet_ForceIntStripsLeadingZero(t *testing.T) {
 	}
 }
 
-// TestUnset_StdinSentinelAsPropRejected verifies that 'bn unset -' (with no
-// '--' and no other args) errors instead of silently treating '-' as a
-// property name and attempting to remove a property literally named '-'.
-func TestUnset_StdinSentinelAsPropRejected(t *testing.T) {
+// TestUnset_StdinSentinelAsNoteNeedsProperty verifies that 'bn unset -' (with
+// no '--' and no other args) is parsed as stdin note input and fails clearly
+// because no property names were supplied.
+func TestUnset_StdinSentinelAsNoteNeedsProperty(t *testing.T) {
 	root := buildSetFixture(t)
 	_ = root
 
@@ -112,8 +112,8 @@ func TestUnset_StdinSentinelAsPropRejected(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for 'bn unset -', got nil; output=%q", out)
 	}
-	if !strings.Contains(err.Error(), "stdin sentinel") {
-		t.Fatalf("expected 'stdin sentinel' in error, got: %v", err)
+	if !strings.Contains(err.Error(), "at least one property name is required") {
+		t.Fatalf("expected missing-property error, got: %v", err)
 	}
 }
 
