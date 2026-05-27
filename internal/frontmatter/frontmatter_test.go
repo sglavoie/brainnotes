@@ -321,6 +321,32 @@ func TestGetWikilinkList(t *testing.T) {
 	}
 }
 
+func TestGetList_StringSliceStoredValue(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []string{"a", "b"})
+
+	got, ok := m.GetList("tags")
+	if !ok {
+		t.Fatal("tags should report as a list")
+	}
+	if !reflect.DeepEqual(got, []any{"a", "b"}) {
+		t.Fatalf("GetList(tags): got %v want %v", got, []any{"a", "b"})
+	}
+}
+
+func TestGetWikilinkList_StringSliceStoredValue(t *testing.T) {
+	m := NewMap()
+	m.Set("categories", []string{"[[Books]]", "Reading"})
+
+	got, ok := m.GetWikilinkList("categories")
+	if !ok {
+		t.Fatal("categories should report as present")
+	}
+	if !reflect.DeepEqual(got, []string{"Books", "Reading"}) {
+		t.Fatalf("GetWikilinkList(categories): got %v want %v", got, []string{"Books", "Reading"})
+	}
+}
+
 func TestGetTypedAccessors(t *testing.T) {
 	m := NewMap()
 	m.Set("title", "Hello")

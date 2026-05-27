@@ -422,6 +422,88 @@ func TestPruneRejectsNegativePolicyValues(t *testing.T) {
 	}
 }
 
+func TestListEntriesSkipsIncompleteEntryDirectories(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+
+	rec, err := NewRecorder(
+		vaultRoot,
+		journalRoot,
+		"bn noop",
+		WithClock(func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }),
+		WithIDGenerator(func(time.Time) (string, error) { return "entry-good", nil }),
+	)
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	if _, err := rec.Finalize(); err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(journalRoot, "entry-incomplete", SnapshotsDirName), 0o755); err != nil {
+		t.Fatalf("mkdir incomplete entry: %v", err)
+	}
+
+	entries, err := ListEntries(journalRoot)
+	if err != nil {
+		t.Fatalf("list entries: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("len(entries) = %d, want 1", len(entries))
+	}
+	if entries[0].ID != "entry-good" {
+		t.Fatalf("entry id = %q, want entry-good", entries[0].ID)
+	}
+}
+
+func TestPruneSkipsIncompleteEntryDirectories(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	now := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+
+	makeEntry := func(id string, ts time.Time) {
+		t.Helper()
+		rec, err := NewRecorder(
+			vaultRoot,
+			journalRoot,
+			"bn noop",
+			WithClock(func() time.Time { return ts }),
+			WithIDGenerator(func(time.Time) (string, error) { return id, nil }),
+		)
+		if err != nil {
+			t.Fatalf("new recorder %q: %v", id, err)
+		}
+		if _, err := rec.Finalize(); err != nil {
+			t.Fatalf("finalize %q: %v", id, err)
+		}
+	}
+
+	makeEntry("entry-old", now.Add(-48*time.Hour))
+	makeEntry("entry-new", now.Add(-time.Hour))
+	if err := os.MkdirAll(filepath.Join(journalRoot, "entry-incomplete", SnapshotsDirName), 0o755); err != nil {
+		t.Fatalf("mkdir incomplete entry: %v", err)
+	}
+
+	removed, err := Prune(journalRoot, RetentionPolicy{
+		MaxEntries: 1,
+		Now:        func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if !reflect.DeepEqual(removed, []string{"entry-old"}) {
+		t.Fatalf("removed = %v, want [entry-old]", removed)
+	}
+
+	assertDirMissing(t, filepath.Join(journalRoot, "entry-old"))
+	if _, err := os.Stat(filepath.Join(journalRoot, "entry-new")); err != nil {
+		t.Fatalf("entry-new should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(journalRoot, "entry-incomplete")); err != nil {
+		t.Fatalf("entry-incomplete should remain skipped: %v", err)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -180,3 +180,47 @@ func TestPlanRepairs_MissingRequired_Skip(t *testing.T) {
 		t.Errorf("skip property = %q, want %q", skip.Property, "status")
 	}
 }
+
+func TestPlanRepairs_ParsedUTCMidnightDateTimeRejectedAsDate(t *testing.T) {
+	doc, err := frontmatter.Parse([]byte("---\ncreated: 2025-12-13T00:00:00Z\n---\nbody\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	sch := map[string]config.PropertySchema{
+		"created": {Type: "date"},
+	}
+
+	result := PlanRepairs(&doc.Front, sch, nil)
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected no actions, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 1 {
+		t.Fatalf("expected 1 skip, got %d: %+v", len(result.Skips), result.Skips)
+	}
+	if result.Skips[0].Kind != "type_unconvertible" {
+		t.Errorf("skip kind = %q, want %q", result.Skips[0].Kind, "type_unconvertible")
+	}
+	if result.Skips[0].Detail != "cannot safely convert datetime to date" {
+		t.Errorf("skip detail = %q, want %q", result.Skips[0].Detail, "cannot safely convert datetime to date")
+	}
+}
+
+func TestPlanRepairs_ParsedDateOnlyAcceptedAsDate(t *testing.T) {
+	doc, err := frontmatter.Parse([]byte("---\ncreated: 2025-12-13\n---\nbody\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	sch := map[string]config.PropertySchema{
+		"created": {Type: "date"},
+	}
+
+	result := PlanRepairs(&doc.Front, sch, nil)
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected no actions, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 0 {
+		t.Fatalf("expected no skips, got %+v", result.Skips)
+	}
+}

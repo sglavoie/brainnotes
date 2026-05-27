@@ -105,7 +105,7 @@ func planProperty(result *RepairResult, front *frontmatter.Map, key string, rule
 	skipRest := false
 
 	if rule != nil {
-		if !CheckType(working, rule.Type) {
+		if !checkPropertyType(front, key, working, rule.Type) {
 			coerced, ok := TryCoerce(working, rule.Type)
 			if ok {
 				working = coerced
@@ -114,7 +114,7 @@ func planProperty(result *RepairResult, front *frontmatter.Map, key string, rule
 				result.Skips = append(result.Skips, RepairSkip{
 					Property: key,
 					Kind:     "type_unconvertible",
-					Detail:   fmt.Sprintf("cannot safely convert %s to %s", goTypeName(working), rule.Type),
+					Detail:   fmt.Sprintf("cannot safely convert %s to %s", propertyTypeName(front, key, working), rule.Type),
 				})
 				skipRest = true
 			}

@@ -44,6 +44,22 @@ func TestOpen(t *testing.T) {
 			t.Fatalf("expected error on nil config")
 		}
 	})
+
+	t.Run("preserves surrounding spaces in valid path", func(t *testing.T) {
+		parent := t.TempDir()
+		dir := filepath.Join(parent, " vault with spaces ")
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+
+		v, err := Open(&config.Config{Vault: dir})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if v.Root != dir {
+			t.Fatalf("root: got %q want %q", v.Root, dir)
+		}
+	})
 }
 
 func TestWalkRespectsIgnore(t *testing.T) {

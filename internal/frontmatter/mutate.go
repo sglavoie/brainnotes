@@ -50,7 +50,7 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 	if wasNil {
 		existing = []any{}
 	}
-	list, ok := existing.([]any)
+	list, ok := asAnyList(existing)
 	if !ok {
 		return false, ErrNotAList
 	}
@@ -94,7 +94,7 @@ func (m *Map) ListRemove(k string, values ...any) (bool, error) {
 	if existing == nil {
 		return false, nil
 	}
-	list, ok := existing.([]any)
+	list, ok := asAnyList(existing)
 	if !ok {
 		return false, ErrNotAList
 	}
@@ -140,7 +140,7 @@ func (m *Map) ReplaceValue(k string, from, to any) (bool, error) {
 	if !present {
 		return false, nil
 	}
-	if list, ok := existing.([]any); ok {
+	if list, ok := asAnyList(existing); ok {
 		changed := false
 		out := make([]any, len(list))
 		replacedIdx := make([]int, 0, len(list))

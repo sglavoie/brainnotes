@@ -48,6 +48,19 @@ func invalidNewTarget(s string) bool {
 	return false
 }
 
+// invalidNewTitle reports whether s is not a valid bare note title for
+// RewriteTitle. In addition to the general target checks, titles may not carry
+// folder separators: RewriteTitle preserves each matched link's existing folder
+// prefix, so accepting a slash here would silently turn a simple rename into a
+// path rewrite.
+func invalidNewTitle(s string) bool {
+	if invalidNewTarget(s) {
+		return true
+	}
+	base, _ := splitMDExt(trimASCIISpace(s))
+	return strings.Contains(base, "/")
+}
+
 // splitMDExt returns s with a trailing case-insensitive `.md` suffix removed
 // and a bool indicating whether the suffix was present. Obsidian treats
 // `[[Note]]` and `[[Note.md]]` as equivalent link forms, so rename/move must
@@ -122,11 +135,13 @@ func FormatLink(target, heading, alias string) string {
 // case-insensitively. The folder prefix, heading, and alias are preserved.
 // Both `[[OldTitle]]` and `[[Folder/OldTitle]]` are rewritten. A trailing
 // `.md` extension on the link's title is also matched and preserved on the
-// rewritten target so `[[Note.md]]` is renamed alongside `[[Note]]`.
+// rewritten target so `[[Note.md]]` is renamed alongside `[[Note]]`. newTitle
+// must be a bare title, not a path; any folder separator leaves the document
+// unchanged rather than splicing extra path segments into matched links.
 func RewriteTitle(text, oldTitle, newTitle string) string {
 	oldTitle = trimASCIISpace(oldTitle)
 	newTitle = trimASCIISpace(newTitle)
-	if invalidNewTarget(newTitle) {
+	if invalidNewTitle(newTitle) {
 		return text
 	}
 	oldBase, _ := splitMDExt(oldTitle)

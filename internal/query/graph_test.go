@@ -342,6 +342,28 @@ func TestBuildGraph_FolderQualifiedUniqueTitleFallsBackToTitleMatch(t *testing.T
 	}
 }
 
+func TestBuildGraph_RejectsParentEscapeWikilinks(t *testing.T) {
+	root := t.TempDir()
+	pSource := writeNote(t, root, "Source.md", "---\ntitle: Source\n---\n[[../Beta]]\n[[Folder/../Beta]]\n")
+	pBeta := writeNote(t, root, "Beta.md", "---\ntitle: Beta\n---\nbody\n")
+
+	notes := []*vault.Note{
+		{Path: pSource},
+		{Path: pBeta},
+	}
+	g := BuildGraph(notes)
+
+	if got := g.ForwardLinks("Source"); len(got) != 0 {
+		t.Fatalf("Forward[source] = %v, want no resolved targets for parent-escape wikilinks", got)
+	}
+	if got := g.BackLinks("beta"); len(got) != 0 {
+		t.Fatalf("BackLinks(beta) = %v, want no backlinks from parent-escape wikilinks", got)
+	}
+	if got := g.InDegree("Beta"); got != 0 {
+		t.Fatalf("InDegree(Beta) = %d, want 0 for parent-escape wikilinks", got)
+	}
+}
+
 func strEq(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

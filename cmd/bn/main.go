@@ -62,7 +62,7 @@ func exitCode(err error) int {
 		switch {
 		case errors.Is(execErr, exec.ErrNotFound), errors.Is(execErr, fs.ErrNotExist):
 			return 127
-		case errors.Is(execErr, fs.ErrPermission):
+		case errors.Is(execErr, fs.ErrPermission), errors.Is(execErr, syscall.ENOEXEC):
 			return 126
 		}
 	}

@@ -68,8 +68,11 @@ func TestReplace_ScalarSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "updated: "+note) {
+	if !strings.Contains(out, "updated: Areas/Alpha.md") {
 		t.Fatalf("expected updated line, got %q", out)
+	}
+	if strings.Contains(out, root) {
+		t.Fatalf("expected vault-relative output, got %q", out)
 	}
 	if !strings.Contains(out, "replaced 1 file(s)") {
 		t.Fatalf("expected replaced summary, got %q", out)

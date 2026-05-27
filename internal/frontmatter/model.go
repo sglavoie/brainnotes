@@ -127,8 +127,7 @@ func (m *Map) GetList(k string) ([]any, bool) {
 	if !ok {
 		return nil, false
 	}
-	lst, ok := v.([]any)
-	return lst, ok
+	return asAnyList(v)
 }
 
 // GetTime returns the value at k as a time.Time when it parsed as a YAML
@@ -140,6 +139,27 @@ func (m *Map) GetTime(k string) (time.Time, bool) {
 	}
 	t, ok := v.(time.Time)
 	return t, ok
+}
+
+// TimeIsDateOnly reports whether the time-valued property at k should be treated
+// as a YAML date scalar instead of a full timestamp. Parsed values consult the
+// preserved timestamp metadata; values set programmatically fall back to the
+// same midnight-UTC heuristic used during marshal.
+func (m *Map) TimeIsDateOnly(k string) bool {
+	t, ok := m.GetTime(k)
+	if !ok {
+		return false
+	}
+	if m != nil && m.meta != nil {
+		if meta, ok := m.meta[metaPathKey([]string{metaMapPart(k)})]; ok {
+			return meta.timestampDateOnly
+		}
+	}
+	return t.Location() == time.UTC &&
+		t.Hour() == 0 &&
+		t.Minute() == 0 &&
+		t.Second() == 0 &&
+		t.Nanosecond() == 0
 }
 
 // GetWikilinkList returns wikilink-typed values at k with `[[...]]` stripped.
@@ -156,6 +176,12 @@ func (m *Map) GetWikilinkList(k string) ([]string, bool) {
 		return []string{}, true
 	case string:
 		return []string{unwrapWikilink(vv)}, true
+	case []string:
+		out := make([]string, len(vv))
+		for i, item := range vv {
+			out[i] = unwrapWikilink(item)
+		}
+		return out, true
 	case []any:
 		out := make([]string, 0, len(vv))
 		for _, item := range vv {
@@ -166,6 +192,21 @@ func (m *Map) GetWikilinkList(k string) ([]string, bool) {
 		return out, true
 	}
 	return nil, false
+}
+
+func asAnyList(v any) ([]any, bool) {
+	switch vv := v.(type) {
+	case []any:
+		return vv, true
+	case []string:
+		out := make([]any, len(vv))
+		for i, item := range vv {
+			out[i] = item
+		}
+		return out, true
+	default:
+		return nil, false
+	}
 }
 
 // unwrapWikilink returns the inner text of a `[[X]]` wikilink, or s unchanged

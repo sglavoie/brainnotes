@@ -32,15 +32,13 @@ func Open(cfg *config.Config) (*Vault, error) {
 	if cfg == nil {
 		return nil, errors.New("vault: nil config")
 	}
-	// Trim whitespace defensively: a whitespace-only vault path otherwise slips
-	// past the empty check and filepath.Abs(" ") resolves to "<cwd>/ " (a
-	// literal-space directory under the cwd), producing a confusing "no such
-	// file" error far from the real configuration mistake.
-	vaultPath := strings.TrimSpace(cfg.Vault)
-	if vaultPath == "" {
+	// Reject whitespace-only vault paths, but preserve surrounding spaces on
+	// real paths. Trimming before filepath.Abs would make a valid directory
+	// like " Notes " unreachable by silently retargeting it to "Notes".
+	if strings.TrimSpace(cfg.Vault) == "" {
 		return nil, errors.New("vault: config has empty vault path")
 	}
-	abs, err := filepath.Abs(vaultPath)
+	abs, err := filepath.Abs(cfg.Vault)
 	if err != nil {
 		return nil, fmt.Errorf("vault: resolve %q: %w", cfg.Vault, err)
 	}
@@ -54,7 +52,7 @@ func Open(cfg *config.Config) (*Vault, error) {
 	// break filepath.Rel comparisons with paths built via filepath.Abs.
 	abs, err = resolveRootSymlink(abs)
 	if err != nil {
-		return nil, fmt.Errorf("vault: resolve root symlink %q: %w", vaultPath, err)
+		return nil, fmt.Errorf("vault: resolve root symlink %q: %w", cfg.Vault, err)
 	}
 	info, err := os.Stat(abs)
 	if err != nil {

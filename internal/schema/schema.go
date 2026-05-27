@@ -171,11 +171,11 @@ func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]con
 
 		val, _ := front.Get(key)
 
-		if !CheckType(val, rule.Type) {
+		if !checkPropertyType(front, key, val, rule.Type) {
 			violations = append(violations, Violation{
 				Property: key,
 				Kind:     "type",
-				Detail:   fmt.Sprintf("expected %s, got %s", rule.Type, goTypeName(val)),
+				Detail:   fmt.Sprintf("expected %s, got %s", rule.Type, propertyTypeName(front, key, val)),
 				NotePath: notePath,
 			})
 			continue
@@ -194,6 +194,32 @@ func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]con
 		}
 	}
 	return violations
+}
+
+func checkPropertyType(front *frontmatter.Map, key string, value any, schemaType string) bool {
+	if schemaType == "date" {
+		if _, ok := value.(time.Time); ok {
+			return isFrontmatterDateOnly(front, key)
+		}
+	}
+	return CheckType(value, schemaType)
+}
+
+func propertyTypeName(front *frontmatter.Map, key string, value any) string {
+	if _, ok := value.(time.Time); ok {
+		if isFrontmatterDateOnly(front, key) {
+			return "date"
+		}
+		return "datetime"
+	}
+	return goTypeName(value)
+}
+
+func isFrontmatterDateOnly(front *frontmatter.Map, key string) bool {
+	if front != nil {
+		return front.TimeIsDateOnly(key)
+	}
+	return false
 }
 
 func scalarToString(v any) string {

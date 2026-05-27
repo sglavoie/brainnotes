@@ -110,6 +110,20 @@ func TestRunMapsNonExecutableCommandTo126(t *testing.T) {
 	}
 }
 
+func TestRunMapsExecFormatExecErrorTo126(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error {
+		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "bad-binary", Err: syscall.ENOEXEC})
+	})
+
+	if code := run(stderr); code != 126 {
+		t.Fatalf("run() exit code = %d, want 126", code)
+	}
+	if got := stderr.String(); got != "bn: wrapped: exec: \"bad-binary\": exec format error\n" {
+		t.Fatalf("stderr = %q, want exec-format error", got)
+	}
+}
+
 func TestRunMapsWrappedErrDotTo126(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	stubExecute(t, func() error {

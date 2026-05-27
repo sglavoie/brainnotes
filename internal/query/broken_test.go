@@ -202,6 +202,27 @@ func TestUnresolvedLinks(t *testing.T) {
 		}
 	})
 
+	t.Run("parent-escape path stays broken", func(t *testing.T) {
+		_, notes := newVault(t, map[string]string{
+			"Alpha.md": "---\ntitle: Alpha\n---\nSee [[../Beta]] and [[Folder/../Beta]].\n",
+			"Beta.md":  "---\ntitle: Beta\n---\n",
+		})
+		all := []*vault.Note{notes["Alpha.md"], notes["Beta.md"]}
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
+		if len(broken) != 2 {
+			t.Fatalf("expected 2 broken parent-escape links, got %d (%v)", len(broken), broken)
+		}
+		for _, bl := range broken {
+			if bl.Line != 4 {
+				t.Fatalf("expected broken parent-escape link on line 4, got %d", bl.Line)
+			}
+		}
+		if !BrokenLinks(g)(notes["Alpha.md"]) {
+			t.Fatalf("BrokenLinks should match a note whose only folder-qualified links escape via ..")
+		}
+	})
+
 	t.Run("markdown extension links resolve", func(t *testing.T) {
 		_, notes := newVault(t, map[string]string{
 			"Alpha.md":     "---\nrelated: \"[[Beta.md]]\"\n---\nSee [[Beta.md]] and [[Sub/Gamma.MD]] and [[Alpha.md]].\n",

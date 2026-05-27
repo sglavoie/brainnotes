@@ -213,6 +213,27 @@ func TestResolvePath_MatchesActiveCandidate(t *testing.T) {
 	}
 }
 
+func TestCandidates_NoHomeLeavesDefaultCandidateEmpty(t *testing.T) {
+	resetEnv(t)
+	os.Unsetenv("HOME")
+
+	cands, err := Candidates("")
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	if len(cands) != 4 {
+		t.Fatalf("want 4 candidates, got %d", len(cands))
+	}
+	if cands[3].Path != "" {
+		t.Fatalf("default candidate path should be empty when home is unavailable, got %q", cands[3].Path)
+	}
+	for i, c := range cands {
+		if c.Active {
+			t.Fatalf("candidate %d should not be active when no config path can be resolved: %+v", i, c)
+		}
+	}
+}
+
 func TestResolvePath_DefaultBeatsMissingXDG(t *testing.T) {
 	resetEnv(t)
 	home := t.TempDir()

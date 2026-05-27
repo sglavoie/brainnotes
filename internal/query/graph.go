@@ -152,8 +152,8 @@ func (g *Graph) resolveLink(link wikilink.Link) []string {
 		return nil
 	}
 	if link.Folder != "" {
-		targetKey := linkTargetKey(link.Target)
-		if targetKey == "" {
+		targetKey, ok := linkTargetResolveKey(link.Target)
+		if !ok {
 			return nil
 		}
 		if _, ok := g.Titles[targetKey]; ok {
@@ -178,7 +178,11 @@ func (g *Graph) resolveLink(link wikilink.Link) []string {
 
 func unresolvedLinkKey(link wikilink.Link) string {
 	if link.Folder != "" {
-		return linkTargetKey(link.Target)
+		targetKey, ok := linkTargetResolveKey(link.Target)
+		if !ok {
+			return ""
+		}
+		return targetKey
 	}
 	return linkTitleKey(link.Title())
 }
@@ -231,8 +235,8 @@ func (g *Graph) lookupKeys(query string) []string {
 		return nil
 	}
 	if strings.Contains(query, "/") || strings.Contains(query, "\\") {
-		key := linkTargetKey(query)
-		if key == "" {
+		key, ok := linkTargetResolveKey(query)
+		if !ok {
 			return nil
 		}
 		return []string{key}
@@ -321,6 +325,23 @@ func linkTargetKey(target string) string {
 		return ""
 	}
 	return strings.ToLower(target)
+}
+
+// linkTargetResolveKey normalizes a folder-qualified wikilink target when it is
+// safe to interpret as a vault-relative path. Dot segments are rejected so
+// links like [[../Beta]] stay broken instead of collapsing onto a real note.
+func linkTargetResolveKey(target string) (string, bool) {
+	target = strings.TrimSpace(strings.ReplaceAll(target, "\\", "/"))
+	for _, part := range strings.Split(target, "/") {
+		if part == "." || part == ".." {
+			return "", false
+		}
+	}
+	key := linkTargetKey(target)
+	if key == "" {
+		return "", false
+	}
+	return key, true
 }
 
 func notePathKey(root, notePath string) string {

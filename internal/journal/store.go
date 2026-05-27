@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,6 +82,11 @@ func listEntries(journalRoot string) ([]listedEntry, error) {
 		dir := filepath.Join(root, name)
 		e, err := loadEntryFromDir(dir)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				// Skip incomplete entry directories left behind by interrupted
+				// recordings. They have no committed manifest yet.
+				continue
+			}
 			return nil, err
 		}
 		if e.ID != name {

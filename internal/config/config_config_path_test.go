@@ -111,3 +111,19 @@ func TestResolvePath_ConfigDirectoryIsError(t *testing.T) {
 		t.Fatal("ok should be false on error")
 	}
 }
+
+func TestResolvePath_NoHomeAndNoSourcesReturnsNoPath(t *testing.T) {
+	resetEnv(t)
+	os.Unsetenv("HOME")
+
+	got, ok, err := ResolvePath("")
+	if err != nil {
+		t.Fatalf("ResolvePath: %v", err)
+	}
+	if ok {
+		t.Fatal("ok should be false when no config path can be resolved")
+	}
+	if got != "" {
+		t.Fatalf("path should be empty when no config path can be resolved, got %q", got)
+	}
+}

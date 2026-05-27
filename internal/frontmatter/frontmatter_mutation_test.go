@@ -104,6 +104,26 @@ func TestListAdd_AppendMixedDuplicateAndNew(t *testing.T) {
 	}
 }
 
+func TestListAdd_StringSliceStoredValue(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []string{"go"})
+
+	changed, err := m.ListAdd("tags", "yaml")
+	if err != nil {
+		t.Fatalf("ListAdd: %v", err)
+	}
+	if !changed {
+		t.Fatal("changed should be true")
+	}
+	got, ok := m.GetList("tags")
+	if !ok {
+		t.Fatal("tags should still report as a list")
+	}
+	if !reflect.DeepEqual(got, []any{"go", "yaml"}) {
+		t.Fatalf("tags: got %v want %v", got, []any{"go", "yaml"})
+	}
+}
+
 func TestListAdd_NonListReturnsError(t *testing.T) {
 	m := NewMap()
 	m.Set("title", "Hello")
@@ -250,6 +270,26 @@ func TestListRemove_LeavesEmptyList(t *testing.T) {
 	}
 }
 
+func TestListRemove_StringSliceStoredValue(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []string{"go", "yaml"})
+
+	changed, err := m.ListRemove("tags", "go")
+	if err != nil {
+		t.Fatalf("ListRemove: %v", err)
+	}
+	if !changed {
+		t.Fatal("changed should be true")
+	}
+	got, ok := m.GetList("tags")
+	if !ok {
+		t.Fatal("tags should still report as a list")
+	}
+	if !reflect.DeepEqual(got, []any{"yaml"}) {
+		t.Fatalf("tags: got %v want %v", got, []any{"yaml"})
+	}
+}
+
 // TestListRemove_NullExistingValueIsNoOp verifies that a key whose stored YAML
 // value is null (e.g. `tags: ~`) is treated as an empty list for the purpose
 // of `-=`: the call is a silent no-op. Before the fix, ListRemove returned
@@ -345,6 +385,26 @@ func TestReplaceValue_ListMultipleMatches(t *testing.T) {
 	got, _ := m.GetList("tags")
 	if !reflect.DeepEqual(got, []any{"published", "go", "published"}) {
 		t.Errorf("tags: got %v want [published go published]", got)
+	}
+}
+
+func TestReplaceValue_StringSliceStoredValue(t *testing.T) {
+	m := NewMap()
+	m.Set("tags", []string{"draft", "go"})
+
+	changed, err := m.ReplaceValue("tags", "draft", "published")
+	if err != nil {
+		t.Fatalf("ReplaceValue: %v", err)
+	}
+	if !changed {
+		t.Fatal("changed should be true")
+	}
+	got, ok := m.GetList("tags")
+	if !ok {
+		t.Fatal("tags should still report as a list")
+	}
+	if !reflect.DeepEqual(got, []any{"published", "go"}) {
+		t.Fatalf("tags: got %v want %v", got, []any{"published", "go"})
 	}
 }
 

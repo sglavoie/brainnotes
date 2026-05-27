@@ -119,7 +119,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 				}
 				count++
 				if dry == nil {
-					if _, err := fmt.Fprintf(out, "updated: %s\n", n.Path); err != nil {
+					if _, err := fmt.Fprintf(out, "updated: %s\n", displayPath(n.Path, v.Root)); err != nil {
 						return err
 					}
 				}

@@ -140,6 +140,30 @@ func TestRewriteTitleRejectsHashOrPipeInNewTitle(t *testing.T) {
 	}
 }
 
+func TestRewriteTitleRejectsPathLikeNewTitle(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		newTitle string
+	}{
+		{"folder prefixed", "Refs/Bar"},
+		{"folder prefixed with md suffix", "Refs/Bar.md"},
+		{"leading slash", "/Bar"},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := "[[Foo]] and [[Books/Foo#H|a]]"
+			got := RewriteTitle(in, "Foo", tc.newTitle)
+			if got != in {
+				t.Fatalf("RewriteTitle(%q, Foo, %q)\n  got:  %q\n  want: %q (unchanged)", in, tc.newTitle, got, in)
+			}
+		})
+	}
+}
+
 func TestRewriteMoveRejectsHashOrPipeInNewPath(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

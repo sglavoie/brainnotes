@@ -105,9 +105,11 @@ func inspectCandidateAncestorPath(path string, statErr error) error {
 // Candidates returns the full precedence chain (4 entries, in source order).
 // An error is only returned when the active (highest-precedence) candidate
 // cannot be resolved (e.g. tilde expansion failed for the source that would
-// be used, or os.UserHomeDir fails and the default-path source would be used).
-// Lower-precedence sources that fail to expand are reported with an empty
-// Path so a higher-precedence source can still produce a usable result.
+// be used). Lower-precedence sources that fail to expand are reported with an
+// empty Path so a higher-precedence source can still produce a usable result.
+// If the home directory cannot be resolved, the default-path candidate is left
+// empty so callers that already have a vault from flag/env can still proceed
+// without a config file.
 //
 // Leading "~"/"~/" in the --config flag, $BNOTES_CONFIG, and $XDG_CONFIG_HOME
 // values is expanded to the user's home directory.
@@ -165,13 +167,8 @@ func Candidates(flagConfigPath string) ([]CandidatePath, error) {
 		}
 	}
 
-	anySet := out[0].Path != "" || out[1].Path != "" || out[2].Path != ""
 	home, homeErr := os.UserHomeDir()
-	if homeErr != nil {
-		if !anySet {
-			return nil, fmt.Errorf("config: resolve home dir: %w", homeErr)
-		}
-	} else {
+	if homeErr == nil {
 		out[3].Path = filepath.Join(home, ".config", configName)
 	}
 

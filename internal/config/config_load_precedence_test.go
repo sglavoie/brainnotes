@@ -80,6 +80,23 @@ func TestLoad_MissingConfigOKWhenVaultFlagGiven(t *testing.T) {
 	}
 }
 
+func TestLoad_MissingHomeStillWorksWhenVaultFlagGiven(t *testing.T) {
+	resetEnv(t)
+	os.Unsetenv("HOME")
+	vault := t.TempDir()
+
+	cfg, err := Load(vault, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != vault {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, vault)
+	}
+	if cfg.SourcePath != "" {
+		t.Fatalf("SourcePath should be empty when no config file could be resolved, got %q", cfg.SourcePath)
+	}
+}
+
 func TestLoad_ExplicitConfigPathMissingIsError(t *testing.T) {
 	resetEnv(t)
 	vault := t.TempDir()

@@ -198,3 +198,39 @@ func TestFindTemplatesDirCaseInsensitiveFileMatch(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveDirCaseInsensitiveSymlinkDirectory(t *testing.T) {
+	root := t.TempDir()
+	realTemplates := filepath.Join(root, "ActualTemplates")
+	mustMkdirAll(t, realTemplates)
+	if err := os.Symlink(realTemplates, filepath.Join(root, "Templates")); err != nil {
+		t.Skipf("symlinks unsupported on this platform: %v", err)
+	}
+
+	got, err := resolveDirCaseInsensitive(root, "templates")
+	if err != nil {
+		t.Fatalf("resolveDirCaseInsensitive: %v", err)
+	}
+	if got != filepath.Join(root, "Templates") {
+		t.Fatalf("got %q, want %q", got, filepath.Join(root, "Templates"))
+	}
+}
+
+func TestFindTemplatesDirCaseInsensitiveSymlinkDirectory(t *testing.T) {
+	cfg := newDiscoverConfig(t)
+	cfg.Templates.Dir = "templates"
+
+	realTemplates := vaultPath(cfg, "ActualTemplates")
+	writeFile(t, filepath.Join(realTemplates, "Book.md"), "x")
+	if err := os.Symlink(realTemplates, vaultPath(cfg, "Templates")); err != nil {
+		t.Skipf("symlinks unsupported on this platform: %v", err)
+	}
+
+	got, err := Find(cfg, "book")
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if filepath.Base(got) != "Book.md" {
+		t.Fatalf("got %s, want Book.md", filepath.Base(got))
+	}
+}

@@ -175,7 +175,11 @@ func checkTemplatesDirNonDir(root, rel string, fold bool) error {
 			if !match {
 				continue
 			}
-			if e.IsDir() {
+			isDir, err := dirEntryIsDir(cur, e)
+			if err != nil {
+				return err
+			}
+			if isDir {
 				dirMatches = append(dirMatches, e.Name())
 				continue
 			}
@@ -217,7 +221,11 @@ func checkDirCaseAmbiguity(root, rel string) error {
 		}
 		var matches []string
 		for _, e := range entries {
-			if !e.IsDir() {
+			isDir, err := dirEntryIsDir(cur, e)
+			if err != nil {
+				return err
+			}
+			if !isDir {
 				continue
 			}
 			if equalFoldCanonical(e.Name(), part) {
@@ -322,7 +330,11 @@ func resolveDirCaseInsensitive(root, rel string) (string, error) {
 		var nonDirMatches []string
 		for _, e := range entries {
 			if equalFoldCanonical(e.Name(), part) {
-				if e.IsDir() {
+				isDir, err := dirEntryIsDir(cur, e)
+				if err != nil {
+					return "", err
+				}
+				if isDir {
 					matches = append(matches, e.Name())
 					continue
 				}
@@ -342,4 +354,22 @@ func resolveDirCaseInsensitive(root, rel string) (string, error) {
 		}
 	}
 	return cur, nil
+}
+
+func dirEntryIsDir(parent string, entry os.DirEntry) (bool, error) {
+	if entry.IsDir() {
+		return true, nil
+	}
+	if entry.Type()&os.ModeSymlink == 0 {
+		return false, nil
+	}
+	path := filepath.Join(parent, entry.Name())
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("template: stat %q: %w", path, err)
+	}
+	return info.IsDir(), nil
 }

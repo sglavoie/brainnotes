@@ -284,3 +284,41 @@ func TestValidateNote_DateRejectsFullTimestamp(t *testing.T) {
 		t.Errorf("detail = %q, want %q", vs[0].Detail, "expected date, got datetime")
 	}
 }
+
+func TestValidateNote_ParsedUTCMidnightDateTimeRejectedAsDate(t *testing.T) {
+	doc, err := frontmatter.Parse([]byte("---\ncreated: 2025-12-13T00:00:00Z\n---\nbody\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	schema := map[string]config.PropertySchema{
+		"created": {Type: "date"},
+	}
+
+	vs := ValidateNote(&doc.Front, "note.md", schema, nil)
+	if len(vs) != 1 {
+		t.Fatalf("expected 1 violation, got %d: %+v", len(vs), vs)
+	}
+	if vs[0].Kind != "type" {
+		t.Errorf("kind = %q, want %q", vs[0].Kind, "type")
+	}
+	if vs[0].Detail != "expected date, got datetime" {
+		t.Errorf("detail = %q, want %q", vs[0].Detail, "expected date, got datetime")
+	}
+}
+
+func TestValidateNote_ParsedDateOnlyAcceptedAsDate(t *testing.T) {
+	doc, err := frontmatter.Parse([]byte("---\ncreated: 2025-12-13\n---\nbody\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	schema := map[string]config.PropertySchema{
+		"created": {Type: "date"},
+	}
+
+	vs := ValidateNote(&doc.Front, "note.md", schema, nil)
+	if len(vs) != 0 {
+		t.Fatalf("expected no violations, got %+v", vs)
+	}
+}
