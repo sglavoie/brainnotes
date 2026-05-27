@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
@@ -76,61 +75,17 @@ func buildMovePlan(v *vault.Vault, targetPath, newPath, oldRel, newRel string, c
 }
 
 // scanBodyMove returns one renameChange per body line whose content shifts
-// after applying RewriteMove. Line numbers are 1-based. See scanBodyChanges
-// for why the rewrite runs on the whole body before being diffed per line.
+// after applying RewriteMove. Delegates to the shared scanBodyWithRewrite.
 func scanBodyMove(file, body, oldRel, newRel string) []renameChange {
-	if body == "" {
-		return nil
-	}
-	newBody := wikilink.RewriteMove(body, oldRel, newRel)
-	if newBody == body {
-		return nil
-	}
-	return diffBodyLines(file, body, newBody)
+	return scanBodyWithRewrite(file, body, oldRel, newRel, wikilink.RewriteMove)
 }
 
 // scanFrontmatterMove inspects every wikilink-typed property and records a
 // change when any string value (scalar or list element) contains a folder-
-// prefixed link whose Target equals oldRel.
+// prefixed link whose Target equals oldRel. Delegates to the shared
+// scanFrontmatterWithRewrite.
 func scanFrontmatterMove(file string, front *frontmatter.Map, oldRel, newRel string, wikilinkProps []string) []renameChange {
-	var changes []renameChange
-	for _, key := range wikilinkProps {
-		value, ok := front.Get(key)
-		if !ok {
-			continue
-		}
-		switch typed := value.(type) {
-		case string:
-			newValue := wikilink.RewriteMove(typed, oldRel, newRel)
-			if newValue != typed {
-				changes = append(changes, renameChange{
-					File:    file,
-					Kind:    changeFrontmatter,
-					Key:     key,
-					OldText: typed,
-					NewText: newValue,
-				})
-			}
-		case []any:
-			for _, item := range typed {
-				text, ok := item.(string)
-				if !ok {
-					continue
-				}
-				newValue := wikilink.RewriteMove(text, oldRel, newRel)
-				if newValue != text {
-					changes = append(changes, renameChange{
-						File:    file,
-						Kind:    changeFrontmatter,
-						Key:     key,
-						OldText: text,
-						NewText: newValue,
-					})
-				}
-			}
-		}
-	}
-	return changes
+	return scanFrontmatterWithRewrite(file, front, oldRel, newRel, wikilinkProps, wikilink.RewriteMove)
 }
 
 // printMovePlan renders the plan in source order: file move first, then each
@@ -148,38 +103,7 @@ func printMovePlan(out io.Writer, vaultRoot string, plan *movePlan) error {
 	if _, err := fmt.Fprintf(out, "move: %s -> %s\n", relTarget, relNew); err != nil {
 		return err
 	}
-
-	sorted := make([]renameChange, len(plan.Changes))
-	copy(sorted, plan.Changes)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		if sorted[i].File != sorted[j].File {
-			return sorted[i].File < sorted[j].File
-		}
-		if sorted[i].Kind != sorted[j].Kind {
-			return sorted[i].Kind < sorted[j].Kind
-		}
-		if sorted[i].Line != sorted[j].Line {
-			return sorted[i].Line < sorted[j].Line
-		}
-		return sorted[i].Key < sorted[j].Key
-	})
-	for _, change := range sorted {
-		rel, err := filepath.Rel(vaultRoot, change.File)
-		if err != nil {
-			rel = change.File
-		}
-		switch change.Kind {
-		case changeBody:
-			if _, err := fmt.Fprintf(out, "%s:%d: %s -> %s\n", rel, change.Line, change.OldText, change.NewText); err != nil {
-				return err
-			}
-		case changeFrontmatter:
-			if _, err := fmt.Fprintf(out, "%s:frontmatter[%s]: %s -> %s\n", rel, change.Key, change.OldText, change.NewText); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return printChanges(out, vaultRoot, plan.Changes)
 }
 
 // applyMovePlan rewrites every affected file in walk order. The actual file
@@ -228,39 +152,7 @@ func rewriteFileMove(path, oldRel, newRel string, fmCfg *config.FrontmatterConfi
 
 // rewriteFrontmatterMove mutates front in place: every string value (scalar or
 // list element) under a wikilink-typed key whose embedded Target equals oldRel
-// is rewritten to newRel.
+// is rewritten to newRel. Delegates to the shared rewriteFrontmatterProps.
 func rewriteFrontmatterMove(front *frontmatter.Map, oldRel, newRel string, fmCfg *config.FrontmatterConfig) {
-	if fmCfg == nil {
-		return
-	}
-	for _, key := range fmCfg.WikilinkProperties {
-		value, ok := front.Get(key)
-		if !ok {
-			continue
-		}
-		switch typed := value.(type) {
-		case string:
-			newValue := wikilink.RewriteMove(typed, oldRel, newRel)
-			if newValue != typed {
-				front.Set(key, newValue)
-			}
-		case []any:
-			changed := false
-			newList := make([]any, len(typed))
-			for i, item := range typed {
-				if text, ok := item.(string); ok {
-					newValue := wikilink.RewriteMove(text, oldRel, newRel)
-					if newValue != text {
-						changed = true
-					}
-					newList[i] = newValue
-				} else {
-					newList[i] = item
-				}
-			}
-			if changed {
-				front.Set(key, newList)
-			}
-		}
-	}
+	rewriteFrontmatterProps(front, oldRel, newRel, fmCfg, wikilink.RewriteMove)
 }
