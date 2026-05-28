@@ -31,7 +31,7 @@ func NewSearchCmd() *cobra.Command {
 	ff := new(findFlags)
 
 	cmd := &cobra.Command{
-		Use:   "search <pattern> [note...]",
+		Use:   "search [pattern] [note...]",
 		Short: "Search note bodies for a pattern",
 		Long: `Search note bodies for a text pattern and print matching note paths (one per line).
 By default the search is case-insensitive and treats the pattern as a literal string.
@@ -49,7 +49,7 @@ Examples:
   bn search "TODO" --context 2
   bn search "meeting" --count
   bn find --tag drafts | bn search "review" -`,
-		Args:          cobra.MinimumNArgs(1),
+		Args:          cobra.ArbitraryArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -58,12 +58,24 @@ Examples:
 				return errors.New("search: no config in context")
 			}
 
-			pattern := args[0]
-			noteArgs := args[1:]
+			var pattern string
+			var noteArgs []string
+			if len(args) == 0 {
+				if !interactive {
+					return errors.New("search: pattern required; use -i for interactive mode without a pattern")
+				}
+			} else {
+				pattern = args[0]
+				noteArgs = args[1:]
+			}
 
-			matcher, err := buildMatcher(pattern, regex, caseSensitive)
-			if err != nil {
-				return err
+			var matcher func(string) bool
+			if pattern != "" {
+				var err error
+				matcher, err = buildMatcher(pattern, regex, caseSensitive)
+				if err != nil {
+					return err
+				}
 			}
 
 			anyFlagSet := false
@@ -145,6 +157,30 @@ Examples:
 				if err != nil {
 					return err
 				}
+			}
+
+			if interactive {
+				var m func(string) bool
+				if pattern != "" {
+					m = matcher
+				}
+				corpusLines, err := buildInteractiveLines(notes, v.Root, m)
+				if err != nil {
+					return err
+				}
+				selected, err := RunFZFLines(corpusLines, cfg.Fzf.Args)
+				if err != nil {
+					return err
+				}
+				out := cmd.OutOrStdout()
+				sep := byte('\n')
+				if nullSep {
+					sep = 0
+				}
+				for _, p := range selected {
+					fmt.Fprintf(out, "%s%c", p, sep)
+				}
+				return nil
 			}
 
 			if contextN > 0 {
@@ -236,14 +272,6 @@ Examples:
 				paths[i] = n.Path
 			}
 
-			if interactive {
-				selected, err := RunFZF(paths, cfg.Fzf.Args)
-				if err != nil {
-					return err
-				}
-				paths = selected
-			}
-
 			out := cmd.OutOrStdout()
 			sep := byte('\n')
 			if nullSep {
@@ -319,35 +347,43 @@ func mergeWindows(wins []window) []window {
 	return merged
 }
 
+// readBodyLines reads the file at path, splits it into lines (dropping a
+// trailing empty string), and returns the 0-based index of the first body
+// line (the line after the closing "---" of the frontmatter, or 0 if there
+// is no frontmatter).
+func readBodyLines(path string) (lines []string, bodyStart int, err error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	lines = strings.Split(string(raw), "\n")
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		return nil, 0, nil
+	}
+	if strings.TrimSpace(lines[0]) == "---" {
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) == "---" {
+				bodyStart = i + 1
+				break
+			}
+		}
+	}
+	return lines, bodyStart, nil
+}
+
 // contextOutput writes grep-style context output for a single note to out.
 // It reads the raw file, skips frontmatter, finds matches, builds context
 // windows (clamped to body), merges overlapping windows, and emits them
 // with "--" separators between non-adjacent blocks.
 func contextOutput(out io.Writer, n *vault.Note, vaultRoot string, match func(string) bool, contextN int) error {
-	raw, err := os.ReadFile(n.Path)
+	fileLines, bodyStartIdx, err := readBodyLines(n.Path)
 	if err != nil {
 		return err
 	}
-	fileLines := strings.Split(string(raw), "\n")
-	// Drop the trailing empty string left by a file ending with '\n'.
-	for len(fileLines) > 0 && fileLines[len(fileLines)-1] == "" {
-		fileLines = fileLines[:len(fileLines)-1]
-	}
-	if len(fileLines) == 0 {
-		return nil
-	}
-
-	// Locate first body line (after closing "---" of frontmatter).
-	bodyStartIdx := 0
-	if strings.TrimSpace(fileLines[0]) == "---" {
-		for i := 1; i < len(fileLines); i++ {
-			if strings.TrimSpace(fileLines[i]) == "---" {
-				bodyStartIdx = i + 1
-				break
-			}
-		}
-	}
-	if bodyStartIdx >= len(fileLines) {
+	if len(fileLines) == 0 || bodyStartIdx >= len(fileLines) {
 		return nil
 	}
 
@@ -398,4 +434,40 @@ func contextOutput(out io.Writer, n *vault.Note, vaultRoot string, match func(st
 		}
 	}
 	return nil
+}
+
+// buildInteractiveLines builds the fzf input corpus for interactive search.
+// Each element is a tab-separated record: absPath\tfileLineNum\trelpath:fileLineNum:content
+// where fileLineNum is 1-based. If matcher is nil, all body lines are included;
+// otherwise only lines for which matcher returns true are included.
+// content is run through truncateSnippet. Notes with empty bodies are skipped.
+func buildInteractiveLines(
+	notes []*vault.Note,
+	vaultRoot string,
+	matcher func(string) bool,
+) ([]string, error) {
+	var result []string
+	for _, n := range notes {
+		lines, bodyStart, err := readBodyLines(n.Path)
+		if err != nil {
+			return nil, err
+		}
+		if bodyStart >= len(lines) {
+			continue
+		}
+		relPath := n.Path
+		if rel, err2 := filepath.Rel(vaultRoot, n.Path); err2 == nil {
+			relPath = filepath.ToSlash(rel)
+		}
+		for i := bodyStart; i < len(lines); i++ {
+			line := lines[i]
+			if matcher != nil && !matcher(line) {
+				continue
+			}
+			fileLineNum := i + 1
+			content := truncateSnippet(line)
+			result = append(result, fmt.Sprintf("%s\t%d\t%s:%d:%s", n.Path, fileLineNum, relPath, fileLineNum, content))
+		}
+	}
+	return result, nil
 }

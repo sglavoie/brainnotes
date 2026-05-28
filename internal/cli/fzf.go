@@ -62,3 +62,81 @@ func splitSelection(s string) []string {
 	}
 	return strings.Split(s, "\n")
 }
+
+// RunFZFLines pipes grep-style records into fzf and returns the selected note
+// paths (absolute, deduplicated). Records must be tab-separated as:
+//
+//	absPath\tlineNum\tdisplayString
+//
+// where displayString is typically "relpath:linenum:content".
+//
+// Injects the following fzf args unless already present in extraArgs:
+//
+//	--delimiter \t
+//	--with-nth 3          (show only the display field)
+//	--preview cat {1}     (full note in preview pane)
+//	--preview-window right:60%:+{2}/3   (scroll to matched line)
+//
+// Returns (nil, nil) on fzf exit 1 (no match) and
+// (nil, ErrFZFInterrupted) on exit 130 (Ctrl-C/Escape).
+func RunFZFLines(lines []string, extraArgs []string) ([]string, error) {
+	if _, err := fzfLookPath("fzf"); err != nil {
+		return nil, ErrFZFNotFound
+	}
+
+	hasFlag := func(flag string) bool {
+		for _, a := range extraArgs {
+			if a == flag || strings.HasPrefix(a, flag+"=") {
+				return true
+			}
+		}
+		return false
+	}
+
+	var injected []string
+	if !hasFlag("--delimiter") {
+		injected = append(injected, "--delimiter", "\t")
+	}
+	if !hasFlag("--with-nth") {
+		injected = append(injected, "--with-nth", "3")
+	}
+	if !hasFlag("--preview") {
+		injected = append(injected, "--preview", "cat {1}")
+	}
+	if !hasFlag("--preview-window") {
+		injected = append(injected, "--preview-window", "right:60%:+{2}/3")
+	}
+	args := append(injected, extraArgs...)
+
+	cmd := fzfCommand("fzf", args...)
+	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n"))
+	cmd.Stderr = os.Stderr
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			switch exitErr.ExitCode() {
+			case 1:
+				return nil, nil
+			case 130:
+				return nil, ErrFZFInterrupted
+			}
+		}
+		return nil, fmt.Errorf("fzf: %w", err)
+	}
+
+	selected := splitSelection(out.String())
+	seen := make(map[string]struct{})
+	var paths []string
+	for _, line := range selected {
+		parts := strings.SplitN(line, "\t", 2)
+		path := parts[0]
+		if _, ok := seen[path]; !ok {
+			seen[path] = struct{}{}
+			paths = append(paths, path)
+		}
+	}
+	return paths, nil
+}

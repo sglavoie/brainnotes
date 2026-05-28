@@ -158,6 +158,51 @@ bn find --broken-links --list-broken-targets | xargs -I{} bn new "{}"
 
 Re-run `bn find --broken-links` afterward to verify zero residue.
 
+### `bn search` — search note bodies
+
+```sh
+bn search [pattern] [note...] [find-flags]
+          [-e | --regex] [--case-sensitive]
+          [-C N | --context N] [--count]
+          [-i | --interactive] [-0]
+```
+
+Searches note bodies for a literal string or regex, printing matching note paths one per line.
+By default the match is case-insensitive. Find flags (`--tag`, `--category`, `--folder`, etc.) scope
+the search corpus; positional note arguments and find flags are mutually exclusive.
+
+**Pattern is optional with `-i`**: when omitted, all body lines of matching notes are fed to fzf for
+arbitrary interactive filtering.
+
+**Interactive mode** (`-i`) opens a two-pane fzf view — the main pane shows matching lines in grep
+style (`relpath:linenum:content`), the preview pane shows the full note scrolled to the matched line.
+Settings from `cfg.Fzf.Args` apply — for example, add to your config for a syntax-highlighted preview:
+
+```toml
+[fzf]
+args = ["--preview", "bat --style=numbers --color=always --highlight-line {2} {1}"]
+```
+
+Here `{1}` is the absolute note path and `{2}` is the matched line number.
+
+| Output mode | Flag | Description |
+| --- | --- | --- |
+| paths (default) | — | One absolute path per matching note, sorted. |
+| context | `--context N` / `-C N` | Each match with N lines of surrounding body context (grep-style). |
+| count | `--count` | Match count per note, sorted by count descending then path. |
+
+Examples:
+
+```sh
+bn search "activation energy" --tag physics
+bn search "TODO" --context 2
+bn search "meeting" --count
+bn search -i                            # interactive, all notes
+bn search -i --tag drafts               # interactive, scoped to drafts
+bn search "energy" -i                   # pre-filtered, then interactive
+bn find --tag drafts | bn search "review" -
+```
+
 ### `bn backlinks` — list notes that link to a target
 
 ```sh
@@ -771,7 +816,6 @@ reason each was dropped:
 
 | Command                              | Why dropped                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------ |
-| `search`                             | `ripgrep` and editor search already excel at this.                       |
 | `touch`                              | Editors handle file creation; `bn new` covers templated cases.           |
 | `validate` / `lint`                  | Vault conventions are loose by design; no schema to validate.            |
 | `stats` / `analyze` / `health`       | Reports without an obvious next action.                                  |

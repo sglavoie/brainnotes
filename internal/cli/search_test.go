@@ -2,12 +2,16 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func buildSearchVault(t *testing.T) string {
@@ -557,5 +561,226 @@ func TestSearch_Context_NoFrontmatter(t *testing.T) {
 	// First line should be the match at line 1 (1-based).
 	if !strings.Contains(lines[0], ":1:") {
 		t.Fatalf("expected match at line 1, got: %q", lines[0])
+	}
+}
+
+func TestSearch_InteractiveRequiresPatternOrFlag(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildSearchVault(t)
+	_, err := runSearch(t, root)
+	if err == nil {
+		t.Fatal("expected error when no args and no -i, got nil")
+	}
+	if !strings.Contains(err.Error(), "pattern required") {
+		t.Fatalf("expected 'pattern required' in error, got: %v", err)
+	}
+}
+
+func TestSearch_NoPatterRequired_WithInteractive(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildSearchVault(t)
+
+	origLookPath := fzfLookPath
+	origCommand := fzfCommand
+	t.Cleanup(func() {
+		fzfLookPath = origLookPath
+		fzfCommand = origCommand
+	})
+
+	fzfLookPath = func(string) (string, error) { return "fzf", nil }
+	fzfCommand = func(name string, args ...string) *exec.Cmd {
+		cmdArgs := []string{"-test.run=TestRunFZFHelperProcess", "--", name}
+		cmdArgs = append(cmdArgs, args...)
+		cmd := exec.Command(os.Args[0], cmdArgs...)
+		cmd.Env = append(os.Environ(), "GO_WANT_FZF_HELPER=1", "FZF_HELPER_EXIT_CODE=1")
+		return cmd
+	}
+
+	_, err := runSearch(t, root, "-i")
+	if err != nil {
+		t.Fatalf("expected no error with -i and no pattern, got: %v", err)
+	}
+}
+
+func TestBuildInteractiveLines_AllLines(t *testing.T) {
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Test.md": "---\ntitle: Test\n---\nfirst body line\nsecond body line\n",
+	})
+	notePath := filepath.Join(root, "Notes", "Test.md")
+	notes := []*vault.Note{{Path: notePath}}
+
+	got, err := buildInteractiveLines(notes, root, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 records, got %d: %v", len(got), got)
+	}
+	// "first body line" is raw file line 4 (3 frontmatter lines + 1).
+	relPath := "Notes/Test.md"
+	want0 := fmt.Sprintf("%s\t4\t%s:4:first body line", notePath, relPath)
+	want1 := fmt.Sprintf("%s\t5\t%s:5:second body line", notePath, relPath)
+	if got[0] != want0 {
+		t.Fatalf("record[0]:\n got %q\nwant %q", got[0], want0)
+	}
+	if got[1] != want1 {
+		t.Fatalf("record[1]:\n got %q\nwant %q", got[1], want1)
+	}
+}
+
+func TestBuildInteractiveLines_Filtered(t *testing.T) {
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Test.md": "---\ntitle: Test\n---\nno match here\ntarget line content\nalso no match\n",
+	})
+	notePath := filepath.Join(root, "Notes", "Test.md")
+	notes := []*vault.Note{{Path: notePath}}
+
+	matcher := func(s string) bool { return strings.Contains(s, "target") }
+	got, err := buildInteractiveLines(notes, root, matcher)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 record, got %d: %v", len(got), got)
+	}
+	// "target line content" is raw file line 5 (3 frontmatter + 1 non-matching + 1 match).
+	if !strings.Contains(got[0], "\t5\t") {
+		t.Fatalf("expected line 5 in record, got: %q", got[0])
+	}
+	if !strings.Contains(got[0], "target line content") {
+		t.Fatalf("expected content in record, got: %q", got[0])
+	}
+}
+
+func TestBuildInteractiveLines_TabInContent(t *testing.T) {
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Test.md": "---\ntitle: Test\n---\nbefore\tafter\n",
+	})
+	notePath := filepath.Join(root, "Notes", "Test.md")
+	notes := []*vault.Note{{Path: notePath}}
+
+	got, err := buildInteractiveLines(notes, root, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(got))
+	}
+	// SplitN with limit 3 must yield absPath, lineNum, displayString.
+	parts := strings.SplitN(got[0], "\t", 3)
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 tab-separated fields, got %d: %q", len(parts), got[0])
+	}
+	if parts[0] != notePath {
+		t.Fatalf("field[0]: expected %q, got %q", notePath, parts[0])
+	}
+	if parts[1] != "4" {
+		t.Fatalf("field[1]: expected line 4, got %q", parts[1])
+	}
+}
+
+func TestBuildInteractiveLines_EmptyBody(t *testing.T) {
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Test.md": "---\ntitle: Test\n---\n",
+	})
+	notePath := filepath.Join(root, "Notes", "Test.md")
+	notes := []*vault.Note{{Path: notePath}}
+
+	got, err := buildInteractiveLines(notes, root, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected no records for empty body, got %d: %v", len(got), got)
+	}
+}
+
+func TestBuildInteractiveLines_NoFrontmatter(t *testing.T) {
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Test.md": "first line\nsecond line\n",
+	})
+	notePath := filepath.Join(root, "Notes", "Test.md")
+	notes := []*vault.Note{{Path: notePath}}
+
+	got, err := buildInteractiveLines(notes, root, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 records, got %d: %v", len(got), got)
+	}
+	// bodyStart=0, so first line is raw file line 1.
+	if !strings.Contains(got[0], "\t1\t") {
+		t.Fatalf("expected line 1 for first record, got: %q", got[0])
+	}
+	if !strings.Contains(got[0], "first line") {
+		t.Fatalf("expected 'first line' in first record, got: %q", got[0])
+	}
+}
+
+func TestSearch_InteractiveNullSep(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildSearchVault(t)
+
+	alphaPath := filepath.Join(root, "Notes", "Alpha.md")
+	betaPath := filepath.Join(root, "Notes", "Beta.md")
+	fzfOut := fmt.Sprintf("%s\t4\tNotes/Alpha.md:4:the keyword is here\n%s\t4\tNotes/Beta.md:4:another keyword usage\n", alphaPath, betaPath)
+
+	origLookPath := fzfLookPath
+	origCommand := fzfCommand
+	t.Cleanup(func() {
+		fzfLookPath = origLookPath
+		fzfCommand = origCommand
+	})
+
+	fzfLookPath = func(string) (string, error) { return "fzf", nil }
+	fzfCommand = func(name string, args ...string) *exec.Cmd {
+		cmdArgs := []string{"-test.run=TestRunFZFHelperProcess", "--", name}
+		cmdArgs = append(cmdArgs, args...)
+		cmd := exec.Command(os.Args[0], cmdArgs...)
+		cmd.Env = append(os.Environ(), "GO_WANT_FZF_HELPER=1", "FZF_HELPER_OUTPUT="+fzfOut)
+		return cmd
+	}
+
+	stdout, err := runSearch(t, root, "-i", "-0")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout, "\x00") {
+		t.Fatalf("expected NUL separator in interactive -0 output, got: %q", stdout)
+	}
+	parts := strings.Split(stdout, "\x00")
+	var nonEmpty []string
+	for _, p := range parts {
+		if p != "" {
+			nonEmpty = append(nonEmpty, p)
+		}
+	}
+	if len(nonEmpty) != 2 {
+		t.Fatalf("expected 2 NUL-separated paths, got %d: %v", len(nonEmpty), nonEmpty)
+	}
+}
+
+func TestSearch_InteractiveCountError(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildSearchVault(t)
+	_, err := runSearch(t, root, "--count", "-i")
+	if err == nil {
+		t.Fatal("expected error for --count -i, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot be combined") {
+		t.Fatalf("expected 'cannot be combined' in error, got: %v", err)
+	}
+}
+
+func TestSearch_InteractiveContextError(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildSearchVault(t)
+	_, err := runSearch(t, root, "--context", "2", "-i")
+	if err == nil {
+		t.Fatal("expected error for --context 2 -i, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot be combined") {
+		t.Fatalf("expected 'cannot be combined' in error, got: %v", err)
 	}
 }
