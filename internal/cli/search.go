@@ -168,7 +168,25 @@ Examples:
 				if err != nil {
 					return err
 				}
-				selected, err := RunFZFLines(corpusLines, cfg.Fzf.Args)
+				fzfArgs := cfg.Fzf.Args
+				hasUserPreview := false
+				for _, a := range fzfArgs {
+					if a == "--preview" || strings.HasPrefix(a, "--preview=") {
+						hasUserPreview = true
+						break
+					}
+				}
+				if !hasUserPreview {
+					var preview string
+					if pattern != "" {
+						preview = buildHighlightPreview(pattern, regex, caseSensitive)
+					} else {
+						preview = buildLiveQueryHighlightPreview()
+					}
+					inject := []string{"--preview", preview}
+					fzfArgs = append(inject, fzfArgs...)
+				}
+				selected, err := RunFZFLines(corpusLines, fzfArgs)
 				if err != nil {
 					return err
 				}
@@ -322,6 +340,29 @@ func buildMatcher(pattern string, isRegex, caseSensitive bool) (func(string) boo
 	return func(s string) bool {
 		return strings.Contains(strings.ToLower(s), lower)
 	}, nil
+}
+
+// buildHighlightPreview returns a grep --preview command. 'PATTERN|$' shows
+// every line while coloring matches, preserving line count for +{2}/3 scroll.
+func buildHighlightPreview(pattern string, isRegex, caseSensitive bool) string {
+	p := pattern
+	if !isRegex {
+		p = regexp.QuoteMeta(p)
+	}
+	p = strings.ReplaceAll(p, "'", `'\''`)
+	flags := "--color=always -n -E"
+	if !caseSensitive {
+		flags = "--color=always -n -iE"
+	}
+	return fmt.Sprintf("grep %s -- '%s|$' {1}", flags, p)
+}
+
+func buildLiveQueryHighlightPreview() string {
+	// Keep {q} as its own shell argument. fzf shell-quotes placeholders, so
+	// embedding {q} inside another quoted string makes grep search for literal
+	// quote characters instead of the live query. Do not put a bare "{}" in
+	// this command: fzf expands it as the current item before the shell runs.
+	return `sh -c 'q=$(printf "%s\n" "$1" | sed '"'"'s/[][()}.^$?+*|\\{]/\\&/g'"'"'); grep --color=always -n -iE -- "$q|$" "$2" 2>/dev/null || cat "$2"' sh {q} {1}`
 }
 
 // window is an inclusive 0-based file-line index range.

@@ -602,6 +602,94 @@ func TestSearch_NoPatterRequired_WithInteractive(t *testing.T) {
 	}
 }
 
+func TestSearch_InteractiveNoPatternPreviewUsesLiveQuery(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildSearchVault(t)
+
+	origLookPath := fzfLookPath
+	origCommand := fzfCommand
+	t.Cleanup(func() {
+		fzfLookPath = origLookPath
+		fzfCommand = origCommand
+	})
+
+	var capturedArgs []string
+	fzfLookPath = func(string) (string, error) { return "fzf", nil }
+	fzfCommand = func(name string, args ...string) *exec.Cmd {
+		capturedArgs = append([]string(nil), args...)
+		cmdArgs := []string{"-test.run=TestRunFZFHelperProcess", "--", name}
+		cmdArgs = append(cmdArgs, args...)
+		cmd := exec.Command(os.Args[0], cmdArgs...)
+		cmd.Env = append(os.Environ(), "GO_WANT_FZF_HELPER=1", "FZF_HELPER_EXIT_CODE=1")
+		return cmd
+	}
+
+	_, err := runSearch(t, root, "-i")
+	if err != nil {
+		t.Fatalf("expected no error with -i and no pattern, got: %v", err)
+	}
+
+	preview, ok := fzfArgValue(capturedArgs, "--preview")
+	if !ok {
+		t.Fatalf("expected --preview in fzf args, got %v", capturedArgs)
+	}
+	if !strings.Contains(preview, "{q}") {
+		t.Fatalf("live preview should pass fzf query placeholder as an argument, got %q", preview)
+	}
+	if strings.Contains(preview, `"{q}`) || strings.Contains(preview, "{q}|") {
+		t.Fatalf("live preview must not quote {q} inside the grep pattern, got %q", preview)
+	}
+	if strings.Contains(preview, "{}") {
+		t.Fatalf("live preview must not contain bare fzf current-item placeholder, got %q", preview)
+	}
+}
+
+func TestBuildLiveQueryHighlightPreviewEscapesQuery(t *testing.T) {
+	for _, bin := range []string{"sh", "sed", "grep"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("%s not available", bin)
+		}
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	if err := os.WriteFile(path, []byte("test{ing} here\ntesting here\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	preview := buildLiveQueryHighlightPreview()
+	preview = strings.ReplaceAll(preview, "{q}", shellQuoteForTest("test{ing}"))
+	preview = strings.ReplaceAll(preview, "{1}", shellQuoteForTest(path))
+
+	out, err := exec.Command("sh", "-c", preview).CombinedOutput()
+	if err != nil {
+		t.Fatalf("preview command: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "\x1b[01;31m\x1b[Ktest{ing}") && !strings.Contains(got, "\x1b[01;31mtest{ing}") {
+		t.Fatalf("expected literal query to be highlighted, got %q", got)
+	}
+	if strings.Contains(got, "\x1b[01;31m\x1b[Ktesting") || strings.Contains(got, "\x1b[01;31mtesting") {
+		t.Fatalf("query should be escaped as a literal string, got %q", got)
+	}
+}
+
+func fzfArgValue(args []string, flag string) (string, bool) {
+	for i, arg := range args {
+		if arg == flag && i+1 < len(args) {
+			return args[i+1], true
+		}
+		if strings.HasPrefix(arg, flag+"=") {
+			return strings.TrimPrefix(arg, flag+"="), true
+		}
+	}
+	return "", false
+}
+
+func shellQuoteForTest(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 func TestBuildInteractiveLines_AllLines(t *testing.T) {
 	root := buildVaultFromFiles(t, map[string]string{
 		"Notes/Test.md": "---\ntitle: Test\n---\nfirst body line\nsecond body line\n",
