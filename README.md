@@ -163,7 +163,7 @@ Re-run `bn find --broken-links` afterward to verify zero residue.
 ```sh
 bn search [pattern] [note...] [find-flags]
           [-e | --regex] [--case-sensitive]
-          [-C N | --context N] [--count]
+          [-C N | --context N] [--count] [--open]
           [-i | --interactive] [-0]
 ```
 
@@ -185,11 +185,16 @@ args = ["--preview", "bat --style=numbers --color=always --highlight-line {2} {1
 
 Here `{1}` is the absolute note path and `{2}` is the matched line number.
 
+With `--open`, `bn search` opens the first matching result in the configured editor
+(`[open].editor`, then `$EDITOR`) at the matching file line. When combined with `-i`, it opens the
+selected fzf row instead.
+
 | Output mode | Flag | Description |
 | --- | --- | --- |
 | paths (default) | — | One absolute path per matching note, sorted. |
 | context | `--context N` / `-C N` | Each match with N lines of surrounding body context (grep-style). |
 | count | `--count` | Match count per note, sorted by count descending then path. |
+| open | `--open` | Open the first matching note at its first matching line, or the selected row with `-i`. |
 
 Examples:
 
@@ -197,9 +202,11 @@ Examples:
 bn search "activation energy" --tag physics
 bn search "TODO" --context 2
 bn search "meeting" --count
+bn search "activation energy" --open
 bn search -i                            # interactive, all notes
 bn search -i --tag drafts               # interactive, scoped to drafts
 bn search "energy" -i                   # pre-filtered, then interactive
+bn search "energy" -i --open            # choose a line, then open it in the editor
 bn find --tag drafts | bn search "review" -
 ```
 

@@ -203,6 +203,37 @@ func TestRunFZFLines_DeduplicatesPaths(t *testing.T) {
 	}
 }
 
+func TestRunFZFLinesSelections_ReturnsPathAndLine(t *testing.T) {
+	origLookPath := fzfLookPath
+	origCommand := fzfCommand
+	t.Cleanup(func() {
+		fzfLookPath = origLookPath
+		fzfCommand = origCommand
+	})
+
+	fzfOutput := "/vault/a.md\t5\ta.md\tline two\n"
+
+	fzfLookPath = func(string) (string, error) { return "fzf", nil }
+	fzfCommand = func(name string, args ...string) *exec.Cmd {
+		cmdArgs := []string{"-test.run=TestRunFZFHelperProcess", "--", name}
+		cmdArgs = append(cmdArgs, args...)
+		cmd := exec.Command(os.Args[0], cmdArgs...)
+		cmd.Env = append(os.Environ(), "GO_WANT_FZF_HELPER=1", "FZF_HELPER_OUTPUT="+fzfOutput)
+		return cmd
+	}
+
+	selected, err := runFZFLinesSelections([]string{"/vault/a.md\t5\ta.md\tline two"}, nil)
+	if err != nil {
+		t.Fatalf("runFZFLinesSelections: unexpected error: %v", err)
+	}
+	if len(selected) != 1 {
+		t.Fatalf("expected 1 selection, got %v", selected)
+	}
+	if selected[0].path != "/vault/a.md" || selected[0].line != 5 {
+		t.Fatalf("selection = %+v, want path /vault/a.md line 5", selected[0])
+	}
+}
+
 func TestRunFZFLines_InjectsDelimiter(t *testing.T) {
 	origLookPath := fzfLookPath
 	origCommand := fzfCommand

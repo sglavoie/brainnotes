@@ -17,6 +17,12 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
+// searchOpenExec is the editor invocation used by `search --open`.
+// Tests swap it to avoid exec-replacing the test process.
+var searchOpenExec = func(editor, file string, line int) error {
+	return runEditorAtLine(editor, file, line)
+}
+
 // NewSearchCmd returns the `search` subcommand. Exported for tests.
 func NewSearchCmd() *cobra.Command {
 	var (
@@ -26,6 +32,7 @@ func NewSearchCmd() *cobra.Command {
 		interactive   bool
 		contextN      int
 		count         bool
+		openResult    bool
 	)
 
 	ff := new(findFlags)
@@ -40,6 +47,7 @@ Output modes:
   paths (default)  One absolute path per matching note, sorted.
   --context N      Each match with N lines of surrounding body context (grep-style).
   --count          Match count per note, sorted by count descending then path.
+  --open           Open the first matching result in the configured editor at the matching line.
 
 Find flags (--tag, --category, --status, --type, --folder, etc.) scope the search to
 matching notes. Positional note arguments and find flags are mutually exclusive.
@@ -48,6 +56,7 @@ Examples:
   bn search "activation energy" --tag physics
   bn search "TODO" --context 2
   bn search "meeting" --count
+  bn search "activation energy" --open
   bn find --tag drafts | bn search "review" -`,
 		Args:          cobra.ArbitraryArgs,
 		SilenceUsage:  true,
@@ -56,6 +65,19 @@ Examples:
 			cfg := ConfigFromContext(cmd.Context())
 			if cfg == nil {
 				return errors.New("search: no config in context")
+			}
+			openMatch := func(path string, line int) error {
+				editor := cfg.Open.Editor
+				if editor == "" {
+					editor = os.Getenv("EDITOR")
+				}
+				if editor == "" {
+					return errors.New("search: --open requires [open].editor or $EDITOR")
+				}
+				if err := searchOpenExec(editor, path, line); err != nil {
+					return fmt.Errorf("search: %w", err)
+				}
+				return nil
 			}
 
 			var pattern string
@@ -98,6 +120,9 @@ Examples:
 				if nullSep {
 					return errors.New("search: --context cannot be combined with --null")
 				}
+				if openResult {
+					return errors.New("search: --context cannot be combined with --open")
+				}
 			}
 			if count {
 				if interactive {
@@ -106,6 +131,12 @@ Examples:
 				if nullSep {
 					return errors.New("search: --count cannot be combined with --null")
 				}
+				if openResult {
+					return errors.New("search: --count cannot be combined with --open")
+				}
+			}
+			if openResult && nullSep {
+				return errors.New("search: --open cannot be combined with --null")
 			}
 
 			v, err := vault.Open(cfg)
@@ -185,6 +216,16 @@ Examples:
 					}
 					inject := []string{"--preview", preview}
 					fzfArgs = append(inject, fzfArgs...)
+				}
+				if openResult {
+					selected, err := runFZFLinesSelections(corpusLines, fzfArgs)
+					if err != nil {
+						return err
+					}
+					if len(selected) == 0 {
+						return nil
+					}
+					return openMatch(selected[0].path, selected[0].line)
 				}
 				selected, err := RunFZFLines(corpusLines, fzfArgs)
 				if err != nil {
@@ -268,6 +309,26 @@ Examples:
 				return nil
 			}
 
+			if openResult {
+				var matched []searchMatch
+				for _, n := range notes {
+					line, ok, err := firstMatchingLine(n.Path, matcher)
+					if err != nil {
+						return err
+					}
+					if ok {
+						matched = append(matched, searchMatch{path: n.Path, line: line})
+					}
+				}
+				sort.Slice(matched, func(i, j int) bool {
+					return matched[i].path < matched[j].path
+				})
+				if len(matched) == 0 {
+					return nil
+				}
+				return openMatch(matched[0].path, matched[0].line)
+			}
+
 			var matched []*vault.Note
 			for _, n := range notes {
 				body, err := n.Body()
@@ -312,6 +373,7 @@ Examples:
 	f.BoolVarP(&interactive, "interactive", "i", false, "pipe matching note paths into fzf")
 	f.IntVarP(&contextN, "context", "C", 0, "show N lines of context around each match")
 	f.BoolVar(&count, "count", false, "print match count per note, sorted by count desc")
+	f.BoolVar(&openResult, "open", false, "open the first matching result in the configured editor at the matching line")
 
 	return cmd
 }
@@ -340,6 +402,30 @@ func buildMatcher(pattern string, isRegex, caseSensitive bool) (func(string) boo
 	return func(s string) bool {
 		return strings.Contains(strings.ToLower(s), lower)
 	}, nil
+}
+
+type searchMatch struct {
+	path string
+	line int
+}
+
+func firstMatchingLine(path string, matcher func(string) bool) (int, bool, error) {
+	if matcher == nil {
+		return 0, false, nil
+	}
+	fileLines, bodyStartIdx, err := readBodyLines(path)
+	if err != nil {
+		return 0, false, err
+	}
+	if len(fileLines) == 0 || bodyStartIdx >= len(fileLines) {
+		return 0, false, nil
+	}
+	for i := bodyStartIdx; i < len(fileLines); i++ {
+		if matcher(fileLines[i]) {
+			return i + 1, true, nil
+		}
+	}
+	return 0, false, nil
 }
 
 // buildHighlightPreview returns a grep --preview command. 'PATTERN|$' shows

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -83,6 +84,49 @@ func splitSelection(s string) []string {
 // Returns (nil, nil) on fzf exit 1 (no match) and
 // (nil, ErrFZFInterrupted) on exit 130 (Ctrl-C/Escape).
 func RunFZFLines(lines []string, extraArgs []string) ([]string, error) {
+	selected, err := runFZFLinesRaw(lines, extraArgs)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	var paths []string
+	for _, line := range selected {
+		parts := strings.SplitN(line, "\t", 2)
+		path := parts[0]
+		if _, ok := seen[path]; !ok {
+			seen[path] = struct{}{}
+			paths = append(paths, path)
+		}
+	}
+	return paths, nil
+}
+
+type fzfLineSelection struct {
+	path string
+	line int
+}
+
+func runFZFLinesSelections(lines []string, extraArgs []string) ([]fzfLineSelection, error) {
+	selected, err := runFZFLinesRaw(lines, extraArgs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]fzfLineSelection, 0, len(selected))
+	for _, row := range selected {
+		parts := strings.SplitN(row, "\t", 3)
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("fzf: invalid search selection %q", row)
+		}
+		lineNum, err := strconv.Atoi(parts[1])
+		if err != nil || lineNum <= 0 {
+			return nil, fmt.Errorf("fzf: invalid search selection line %q", parts[1])
+		}
+		out = append(out, fzfLineSelection{path: parts[0], line: lineNum})
+	}
+	return out, nil
+}
+
+func runFZFLinesRaw(lines []string, extraArgs []string) ([]string, error) {
 	if _, err := fzfLookPath("fzf"); err != nil {
 		return nil, ErrFZFNotFound
 	}
@@ -142,16 +186,5 @@ func RunFZFLines(lines []string, extraArgs []string) ([]string, error) {
 		return nil, fmt.Errorf("fzf: %w", err)
 	}
 
-	selected := splitSelection(out.String())
-	seen := make(map[string]struct{})
-	var paths []string
-	for _, line := range selected {
-		parts := strings.SplitN(line, "\t", 2)
-		path := parts[0]
-		if _, ok := seen[path]; !ok {
-			seen[path] = struct{}{}
-			paths = append(paths, path)
-		}
-	}
-	return paths, nil
+	return splitSelection(out.String()), nil
 }
