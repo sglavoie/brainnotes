@@ -222,7 +222,7 @@ func TestRunFZFLines_InjectsDelimiter(t *testing.T) {
 		return cmd
 	}
 
-	// Without extraArgs: --delimiter and --with-nth must be injected.
+	// Without extraArgs: --delimiter, --with-nth, and --nth must be injected.
 	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md:1:text"}, nil)
 	has := func(flag string) bool {
 		for _, a := range capturedArgs {
@@ -247,13 +247,26 @@ func TestRunFZFLines_InjectsDelimiter(t *testing.T) {
 	if !has("--with-nth") {
 		t.Fatal("expected --with-nth to be injected when absent from extraArgs")
 	}
+	if !has("--nth") {
+		t.Fatal("expected --nth to be injected when absent from extraArgs")
+	}
 
-	// With extraArgs already containing --delimiter and --with-nth: must not duplicate.
-	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md:1:text"}, []string{"--delimiter", ",", "--with-nth", "2"})
+	// With extraArgs already containing --delimiter, --with-nth, and --nth: must not duplicate.
+	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md:1:text"}, []string{"--delimiter", ",", "--with-nth", "2", "--nth", "3"})
 	if count("--delimiter") != 1 {
 		t.Fatalf("--delimiter should appear exactly once when already in extraArgs, got %d", count("--delimiter"))
 	}
 	if count("--with-nth") != 1 {
 		t.Fatalf("--with-nth should appear exactly once when already in extraArgs, got %d", count("--with-nth"))
+	}
+	if count("--nth") != 1 {
+		t.Fatalf("--nth should appear exactly once when already in extraArgs, got %d", count("--nth"))
+	}
+
+	// A caller-provided --with-nth changes the transformed row shape, so RunFZFLines
+	// should not inject a default --nth that may target the wrong field.
+	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md\ttext"}, []string{"--with-nth", "3"})
+	if count("--nth") != 0 {
+		t.Fatalf("--nth should not be injected with caller-provided --with-nth, got %d", count("--nth"))
 	}
 }

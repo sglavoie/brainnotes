@@ -172,7 +172,7 @@ By default the match is case-insensitive. Find flags (`--tag`, `--category`, `--
 the search corpus; positional note arguments and find flags are mutually exclusive.
 
 **Pattern is optional with `-i`**: when omitted, all body lines of matching notes are fed to fzf for
-arbitrary interactive filtering.
+interactive filtering. fzf matching is limited to body text; filenames are display/preview metadata.
 
 **Interactive mode** (`-i`) opens a two-pane fzf view — the main pane shows matching lines in grep
 style (`relpath:linenum:content`), the preview pane shows the full note scrolled to the matched line.

@@ -81,6 +81,21 @@ func TestSearch_BasicMatch(t *testing.T) {
 	}
 }
 
+func TestSearch_DoesNotMatchFilename(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/filename-only-term.md": "---\ntitle: Filename Only\n---\nbody has no requested token\n",
+	})
+
+	stdout, err := runSearch(t, root, "filename-only-term")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout != "" {
+		t.Fatalf("expected filename-only term not to match, got: %q", stdout)
+	}
+}
+
 func TestSearch_CaseFold(t *testing.T) {
 	isolateBnEnv(t)
 	root := buildSearchVault(t)
@@ -642,6 +657,13 @@ func TestSearch_InteractiveNoPatternPreviewUsesLiveQuery(t *testing.T) {
 	if strings.Contains(preview, "{}") {
 		t.Fatalf("live preview must not contain bare fzf current-item placeholder, got %q", preview)
 	}
+	nth, ok := fzfArgValue(capturedArgs, "--nth")
+	if !ok {
+		t.Fatalf("expected --nth in fzf args, got %v", capturedArgs)
+	}
+	if nth != "2.." {
+		t.Fatalf("interactive search should match only the body field, got --nth %q", nth)
+	}
 }
 
 func TestBuildLiveQueryHighlightPreviewEscapesQuery(t *testing.T) {
@@ -706,8 +728,8 @@ func TestBuildInteractiveLines_AllLines(t *testing.T) {
 	}
 	// "first body line" is raw file line 4 (3 frontmatter lines + 1).
 	relPath := "Notes/Test.md"
-	want0 := fmt.Sprintf("%s\t4\t%s:4:first body line", notePath, relPath)
-	want1 := fmt.Sprintf("%s\t5\t%s:5:second body line", notePath, relPath)
+	want0 := fmt.Sprintf("%s\t4\t%s\tfirst body line", notePath, relPath)
+	want1 := fmt.Sprintf("%s\t5\t%s\tsecond body line", notePath, relPath)
 	if got[0] != want0 {
 		t.Fatalf("record[0]:\n got %q\nwant %q", got[0], want0)
 	}
@@ -754,16 +776,22 @@ func TestBuildInteractiveLines_TabInContent(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(got))
 	}
-	// SplitN with limit 3 must yield absPath, lineNum, displayString.
-	parts := strings.SplitN(got[0], "\t", 3)
-	if len(parts) != 3 {
-		t.Fatalf("expected 3 tab-separated fields, got %d: %q", len(parts), got[0])
+	// SplitN with limit 4 must yield absPath, lineNum, display path, and searchable body content.
+	parts := strings.SplitN(got[0], "\t", 4)
+	if len(parts) != 4 {
+		t.Fatalf("expected 4 tab-separated fields, got %d: %q", len(parts), got[0])
 	}
 	if parts[0] != notePath {
 		t.Fatalf("field[0]: expected %q, got %q", notePath, parts[0])
 	}
 	if parts[1] != "4" {
 		t.Fatalf("field[1]: expected line 4, got %q", parts[1])
+	}
+	if parts[2] != "Notes/Test.md" {
+		t.Fatalf("field[2]: expected display path, got %q", parts[2])
+	}
+	if parts[3] != "before\tafter" {
+		t.Fatalf("searchable body field: expected %q, got %q", "before\tafter", parts[3])
 	}
 }
 

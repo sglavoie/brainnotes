@@ -66,14 +66,15 @@ func splitSelection(s string) []string {
 // RunFZFLines pipes grep-style records into fzf and returns the selected note
 // paths (absolute, deduplicated). Records must be tab-separated as:
 //
-//	absPath\tlineNum\tdisplayString
+//	absPath\tlineNum\trelPath\tbodyContent
 //
-// where displayString is typically "relpath:linenum:content".
+// The displayed row is transformed to "relpath:linenum:\tbodyContent".
 //
 // Injects the following fzf args unless already present in extraArgs:
 //
 //	--delimiter \t
-//	--with-nth 3          (show only the display field)
+//	--with-nth {3}:{2}:\t{4..}  (show path, line number, and body)
+//	--nth 2..             (match only body content, not paths)
 //	--preview cat {1}     (full note in preview pane)
 //	--preview-window right:60%:+{2}/3   (scroll to matched line)
 //
@@ -93,12 +94,18 @@ func RunFZFLines(lines []string, extraArgs []string) ([]string, error) {
 		return false
 	}
 
+	hasWithNth := hasFlag("--with-nth")
+	hasNth := hasFlag("--nth")
+
 	var injected []string
 	if !hasFlag("--delimiter") {
 		injected = append(injected, "--delimiter", "\t")
 	}
-	if !hasFlag("--with-nth") {
-		injected = append(injected, "--with-nth", "3")
+	if !hasWithNth {
+		injected = append(injected, "--with-nth", "{3}:{2}:\t{4..}")
+	}
+	if !hasNth && !hasWithNth {
+		injected = append(injected, "--nth", "2..")
 	}
 	if !hasFlag("--preview") {
 		injected = append(injected, "--preview", "cat {1}")

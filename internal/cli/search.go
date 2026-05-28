@@ -478,10 +478,13 @@ func contextOutput(out io.Writer, n *vault.Note, vaultRoot string, match func(st
 }
 
 // buildInteractiveLines builds the fzf input corpus for interactive search.
-// Each element is a tab-separated record: absPath\tfileLineNum\trelpath:fileLineNum:content
+// Each element is a tab-separated record:
+//
+//	absPath\tfileLineNum\trelpath\tbodyLine
+//
 // where fileLineNum is 1-based. If matcher is nil, all body lines are included;
-// otherwise only lines for which matcher returns true are included.
-// content is run through truncateSnippet. Notes with empty bodies are skipped.
+// otherwise only lines for which matcher returns true are included. Notes with
+// empty bodies are skipped.
 func buildInteractiveLines(
 	notes []*vault.Note,
 	vaultRoot string,
@@ -506,8 +509,8 @@ func buildInteractiveLines(
 				continue
 			}
 			fileLineNum := i + 1
-			content := truncateSnippet(line)
-			result = append(result, fmt.Sprintf("%s\t%d\t%s:%d:%s", n.Path, fileLineNum, relPath, fileLineNum, content))
+			displayPath := strings.ReplaceAll(relPath, "\t", "    ")
+			result = append(result, fmt.Sprintf("%s\t%d\t%s\t%s", n.Path, fileLineNum, displayPath, line))
 		}
 	}
 	return result, nil
