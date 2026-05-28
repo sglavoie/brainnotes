@@ -77,6 +77,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewRelinkCmd())
 	cmd.AddCommand(NewSchemaCmd())
 	cmd.AddCommand(NewReplaceCmd())
+	cmd.AddCommand(NewSearchCmd())
 	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewTagsCmd())
 	cmd.AddCommand(NewUndoCmd())
