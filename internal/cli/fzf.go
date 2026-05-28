@@ -75,6 +75,8 @@ func splitSelection(s string) []string {
 //	--delimiter \t
 //	--with-nth {3}:{2}:\t{4..}  (show path, line number, and body)
 //	--nth 2..             (match only body content, not paths)
+//	--tabstop 1           (render the visible body delimiter compactly)
+//	--no-hscroll          (clip long rows instead of horizontally shifting them)
 //	--preview cat {1}     (full note in preview pane)
 //	--preview-window right:60%:+{2}/3   (scroll to matched line)
 //
@@ -106,6 +108,12 @@ func RunFZFLines(lines []string, extraArgs []string) ([]string, error) {
 	}
 	if !hasNth && !hasWithNth {
 		injected = append(injected, "--nth", "2..")
+	}
+	if !hasFlag("--tabstop") {
+		injected = append(injected, "--tabstop", "1")
+	}
+	if !hasFlag("--no-hscroll") && !hasFlag("--hscroll-off") {
+		injected = append(injected, "--no-hscroll")
 	}
 	if !hasFlag("--preview") {
 		injected = append(injected, "--preview", "cat {1}")

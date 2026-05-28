@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -222,7 +223,7 @@ func TestRunFZFLines_InjectsDelimiter(t *testing.T) {
 		return cmd
 	}
 
-	// Without extraArgs: --delimiter, --with-nth, and --nth must be injected.
+	// Without extraArgs: grep-style search/display defaults must be injected.
 	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md:1:text"}, nil)
 	has := func(flag string) bool {
 		for _, a := range capturedArgs {
@@ -231,6 +232,17 @@ func TestRunFZFLines_InjectsDelimiter(t *testing.T) {
 			}
 		}
 		return false
+	}
+	value := func(flag string) (string, bool) {
+		for i, a := range capturedArgs {
+			if a == flag && i+1 < len(capturedArgs) {
+				return capturedArgs[i+1], true
+			}
+			if strings.HasPrefix(a, flag+"=") {
+				return strings.TrimPrefix(a, flag+"="), true
+			}
+		}
+		return "", false
 	}
 	count := func(flag string) int {
 		n := 0
@@ -250,9 +262,21 @@ func TestRunFZFLines_InjectsDelimiter(t *testing.T) {
 	if !has("--nth") {
 		t.Fatal("expected --nth to be injected when absent from extraArgs")
 	}
+	if !has("--tabstop") {
+		t.Fatal("expected --tabstop to be injected when absent from extraArgs")
+	}
+	if !has("--no-hscroll") {
+		t.Fatal("expected --no-hscroll to be injected when absent from extraArgs")
+	}
+	if got, ok := value("--with-nth"); !ok || got != "{3}:{2}:\t{4..}" {
+		t.Fatalf("expected compact grep-style --with-nth, got %q (present=%v)", got, ok)
+	}
+	if got, ok := value("--tabstop"); !ok || got != "1" {
+		t.Fatalf("expected --tabstop 1, got %q (present=%v)", got, ok)
+	}
 
-	// With extraArgs already containing --delimiter, --with-nth, and --nth: must not duplicate.
-	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md:1:text"}, []string{"--delimiter", ",", "--with-nth", "2", "--nth", "3"})
+	// With extraArgs already containing injected flags: must not duplicate.
+	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md:1:text"}, []string{"--delimiter", ",", "--with-nth", "2", "--nth", "3", "--tabstop", "4", "--no-hscroll"})
 	if count("--delimiter") != 1 {
 		t.Fatalf("--delimiter should appear exactly once when already in extraArgs, got %d", count("--delimiter"))
 	}
@@ -261,6 +285,18 @@ func TestRunFZFLines_InjectsDelimiter(t *testing.T) {
 	}
 	if count("--nth") != 1 {
 		t.Fatalf("--nth should appear exactly once when already in extraArgs, got %d", count("--nth"))
+	}
+	if count("--tabstop") != 1 {
+		t.Fatalf("--tabstop should appear exactly once when already in extraArgs, got %d", count("--tabstop"))
+	}
+	if count("--no-hscroll") != 1 {
+		t.Fatalf("--no-hscroll should appear exactly once when already in extraArgs, got %d", count("--no-hscroll"))
+	}
+
+	// A caller-provided hscroll setting opts back into fzf's horizontal scroll.
+	_, _ = RunFZFLines([]string{"/a.md\t1\ta.md\ttext"}, []string{"--hscroll-off", "5"})
+	if count("--no-hscroll") != 0 {
+		t.Fatalf("--no-hscroll should not be injected with caller-provided --hscroll-off, got %d", count("--no-hscroll"))
 	}
 
 	// A caller-provided --with-nth changes the transformed row shape, so RunFZFLines
