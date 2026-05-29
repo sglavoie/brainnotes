@@ -61,6 +61,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&configPath, "config", "", "path to config file (overrides BNOTES_CONFIG and default search)")
 	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
+	cmd.AddCommand(NewBackupCmd())
 	cmd.AddCommand(NewBacklinksCmd())
 	cmd.AddCommand(NewConfigCmd(func() string { return configPath }))
 	cmd.AddCommand(NewFindCmd())
@@ -75,8 +76,9 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewRenameKeyCmd())
 	cmd.AddCommand(NewRepairCmd())
 	cmd.AddCommand(NewRelinkCmd())
-	cmd.AddCommand(NewSchemaCmd())
 	cmd.AddCommand(NewReplaceCmd())
+	cmd.AddCommand(NewRestoreCmd())
+	cmd.AddCommand(NewSchemaCmd())
 	cmd.AddCommand(NewSearchCmd())
 	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewTagsCmd())

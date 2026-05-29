@@ -267,6 +267,49 @@ Resolution order (highest to lowest precedence):
   4. default path         /Users/you/.config/bnotes/config.toml  [active] [exists]
 ```
 
+### `bn backup` — create a vault snapshot archive
+
+```sh
+bn backup
+```
+
+Creates `<vault>/backups/backup-<UTC timestamp>.tar.gz`.
+
+Existing `backups/` contents and `.git/` are excluded from the archive.
+Success output is:
+
+```text
+backup: created <archive-path> (files=<n> bytes=<n> [skipped_symlinks=<n>])
+```
+
+If the vault contains symlinks, `bn backup` skips them and reports the skipped
+count instead of aborting the snapshot.
+
+### `bn restore` — restore a vault snapshot archive
+
+```sh
+bn restore <archive> [--wipe]
+```
+
+By default, restore runs in overlay mode: files from the archive overwrite any
+existing file at the same path, while unrelated files stay in place.
+
+The command validates the full archive before writing and aborts without
+changes if the archive is corrupt/unsafe or if overlay mode hits a destination
+type conflict (for example, a file where a directory is required).
+
+Relative archive paths are resolved from the vault root; absolute paths are
+also accepted. Success output is:
+
+```text
+restore: restored <archive-path> (mode=<overlay|wipe> files=<n>)
+```
+
+With `--wipe`, `bn restore` deletes everything in the vault except the root
+`backups/` directory and its contents before applying the archive. That
+includes `.git/` and any other non-archived extras. `bn backup` / `bn restore`
+are vault-level snapshot commands; they do not create undo journal entries.
+
 ### `bn history` — list recent undo journal entries
 
 ```sh
@@ -779,6 +822,8 @@ bn lint
 
 - Journaled commands (apply mode): `new`, `set`, `unset`, `replace`, `rename`,
   `move`, `repair`, `relink`.
+- Snapshot commands `backup` / `restore` are separate from the undo journal and
+  do not create journal entries.
 - Read-only commands never journal.
 - Any `--dry-run` invocation never writes journal entries.
 
