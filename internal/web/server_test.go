@@ -881,7 +881,48 @@ func TestServer_PagesIncludeSearchUI(t *testing.T) {
 	assertSearchUI("/")
 	assertSearchUI("/n/source")
 	assertSearchUI("/broken")
-	assertSearchUI("/graph")
+}
+
+func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/graph") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /graph: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status for /graph: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(body, `id="graph-filter-input"`) {
+		t.Fatalf("missing graph filter input on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `Filter graph`) {
+		t.Fatalf("missing graph filter label on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `placeholder="Filter graph by title or body..."`) {
+		t.Fatalf("missing graph filter placeholder on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-spread-input"`) {
+		t.Fatalf("missing graph spread slider on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-spread-value"`) {
+		t.Fatalf("missing graph spread value text on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `>1.0x</output>`) {
+		t.Fatalf("missing default spread multiplier on /graph, got %q", body)
+	}
+	if strings.Contains(body, `id="search-input"`) {
+		t.Fatalf("unexpected shared search input on /graph, got %q", body)
+	}
+	if strings.Contains(body, `id="search-results"`) {
+		t.Fatalf("unexpected shared search result list on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `/static/app.js`) {
+		t.Fatalf("missing app.js asset on /graph, got %q", body)
+	}
 }
 
 func TestServer_GraphAPIJSON_Golden(t *testing.T) {
@@ -955,6 +996,71 @@ func TestServer_GraphAPIJSON_SelfLoopExclusion(t *testing.T) {
 		if edge.Data.Source == edge.Data.Target {
 			t.Fatalf("unexpected self-loop edge: %#v", edge.Data)
 		}
+	}
+}
+
+func TestServer_GraphAPIJSON_QueryFiltersTitleBodyAndEdges(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"NeedleA.md":  []byte("---\ntitle: Needle A\n---\n[[NeedleB]] [[Other]]\n"),
+		"NeedleB.md":  []byte("---\ntitle: Needle B\n---\nBody\n"),
+		"BodyOnly.md": []byte("---\ntitle: Body Only\n---\ncontains nEeDlE token\n"),
+		"Other.md":    []byte("---\ntitle: Other\n---\nBody\n"),
+	})
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=NEEDLE")
+	if len(payload.Nodes) != 3 {
+		t.Fatalf("node count: got %d, want %d", len(payload.Nodes), 3)
+	}
+
+	nodeIDs := make(map[string]struct{}, len(payload.Nodes))
+	for _, node := range payload.Nodes {
+		nodeIDs[node.Data.ID] = struct{}{}
+	}
+
+	for _, id := range []string{"needlea", "needleb", "bodyonly"} {
+		if _, ok := nodeIDs[id]; !ok {
+			t.Fatalf("expected node %q to be included; got %#v", id, payload.Nodes)
+		}
+	}
+	if _, ok := nodeIDs["other"]; ok {
+		t.Fatalf("expected non-matching node to be excluded; got %#v", payload.Nodes)
+	}
+
+	if len(payload.Edges) != 1 {
+		t.Fatalf("edge count: got %d, want %d", len(payload.Edges), 1)
+	}
+	edge := payload.Edges[0].Data
+	if edge.Source != "needlea" || edge.Target != "needleb" {
+		t.Fatalf("unexpected edge: got %#v, want NeedleA->NeedleB only", edge)
+	}
+}
+
+func TestServer_GraphAPIJSON_QueryIsUncapped(t *testing.T) {
+	files := make(map[string][]byte, 60)
+	for i := 0; i < 60; i++ {
+		rel := fmt.Sprintf("Graph%02d.md", i)
+		files[rel] = []byte(fmt.Sprintf("---\ntitle: Graph %02d\n---\nneedle body text\n", i))
+	}
+	ts, _ := newHTTPServerForFiles(t, files)
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle")
+	if len(payload.Nodes) != 60 {
+		t.Fatalf("node count: got %d, want %d", len(payload.Nodes), 60)
+	}
+}
+
+func TestServer_GraphAPIJSON_EmptyQueryMatchesDefaultGraph(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Target]]\n"),
+		"Target.md": []byte("---\ntitle: Target\n---\nBody\n"),
+		"Other.md":  []byte("---\ntitle: Other\n---\nBody\n"),
+	})
+
+	_, rawDefault, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json")
+	_, rawEmpty, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=")
+	_, rawWhitespace, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q="+url.QueryEscape("  "))
+	if rawDefault != rawEmpty || rawDefault != rawWhitespace {
+		t.Fatalf("empty graph query should match default output")
 	}
 }
 

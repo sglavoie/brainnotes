@@ -36,11 +36,10 @@ func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]sear
 		return nil, errorsf("empty vault root")
 	}
 
-	queryText = strings.TrimSpace(queryText)
-	if queryText == "" {
+	queryFolded := foldSearchQuery(queryText)
+	if queryFolded == "" {
 		return []searchResult{}, nil
 	}
-	queryFolded := strings.ToLower(queryText)
 
 	candidates := make([]searchCandidate, 0, len(snapshot.notes))
 	for _, note := range snapshot.notes {
@@ -53,18 +52,15 @@ func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]sear
 			continue
 		}
 
-		title := note.Title()
-		titleMatch := strings.Contains(strings.ToLower(title), queryFolded)
-
-		body, err := note.Body()
+		match, matched, err := matchNoteText(note, queryFolded)
 		if err != nil {
-			return nil, fmt.Errorf("body for %q: %w", note.Path, err)
+			return nil, err
 		}
-		bodyMatchIndex := strings.Index(strings.ToLower(body), queryFolded)
-		if !titleMatch && bodyMatchIndex < 0 {
+		if !matched {
 			continue
 		}
 
+		title := note.Title()
 		folder, err := note.Folder(root)
 		if err != nil {
 			return nil, fmt.Errorf("folder for %q: %w", key, err)
@@ -80,9 +76,9 @@ func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]sear
 				Title:   title,
 				Folder:  folder,
 				Path:    path,
-				Snippet: html.EscapeString(makeSearchSnippet(body, bodyMatchIndex)),
+				Snippet: html.EscapeString(makeSearchSnippet(match.Body, match.BodyMatchIndex)),
 			},
-			titleMatch:  titleMatch,
+			titleMatch:  match.TitleMatch,
 			lowerTitle:  strings.ToLower(title),
 			lowerFolder: strings.ToLower(folder),
 		})

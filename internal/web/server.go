@@ -314,7 +314,7 @@ func (s *Server) handleGraphJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := buildGraphResponse(snapshot, s.vault.Root)
+	payload, err := buildGraphResponse(snapshot, s.vault.Root, r.URL.Query().Get("q"))
 	if err != nil {
 		http.Error(w, "graph error", http.StatusInternalServerError)
 		return

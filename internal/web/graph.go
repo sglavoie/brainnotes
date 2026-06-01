@@ -33,16 +33,20 @@ type graphJSONEdgeData struct {
 	Target string `json:"target"`
 }
 
-func buildGraphResponse(snapshot vaultSnapshot, root string) (graphJSON, error) {
+func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJSON, error) {
 	if snapshot.graph == nil {
 		return graphJSON{}, errorsf("nil graph")
 	}
 	if strings.TrimSpace(root) == "" {
 		return graphJSON{}, errorsf("empty vault root")
 	}
+	queryFolded := foldSearchQuery(queryText)
 
 	noteByKey := make(map[string]*vault.Note, len(snapshot.notes))
 	for _, note := range snapshot.notes {
+		if note == nil {
+			continue
+		}
 		key := snapshot.graph.KeyForNote(note)
 		if key == "" {
 			continue
@@ -50,8 +54,32 @@ func buildGraphResponse(snapshot vaultSnapshot, root string) (graphJSON, error) 
 		noteByKey[key] = note
 	}
 
-	keys := make([]string, 0, len(snapshot.graph.Titles))
-	for key := range snapshot.graph.Titles {
+	included := make(map[string]struct{}, len(snapshot.graph.Titles))
+	if queryFolded == "" {
+		for key := range snapshot.graph.Titles {
+			included[key] = struct{}{}
+		}
+	} else {
+		for _, note := range snapshot.notes {
+			if note == nil {
+				continue
+			}
+			key := snapshot.graph.KeyForNote(note)
+			if key == "" {
+				continue
+			}
+			_, matched, err := matchNoteText(note, queryFolded)
+			if err != nil {
+				return graphJSON{}, err
+			}
+			if matched {
+				included[key] = struct{}{}
+			}
+		}
+	}
+
+	keys := make([]string, 0, len(included))
+	for key := range included {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
@@ -88,7 +116,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root string) (graphJSON, error) 
 	edges := make([]graphJSONEdge, 0, len(sources))
 	seen := make(map[string]struct{})
 	for _, source := range sources {
-		if _, ok := snapshot.graph.Titles[source]; !ok {
+		if _, ok := included[source]; !ok {
 			continue
 		}
 
@@ -98,7 +126,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root string) (graphJSON, error) 
 			if source == target {
 				continue
 			}
-			if _, ok := snapshot.graph.Titles[target]; !ok {
+			if _, ok := included[target]; !ok {
 				continue
 			}
 

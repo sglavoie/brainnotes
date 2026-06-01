@@ -20,7 +20,34 @@
             <a href="/broken">Broken links</a>
           </p>
         </div>
-        {{template "headerSearch" .}}
+        <section class="graph-controls" aria-label="Graph controls">
+          <div class="graph-filter">
+            <label class="graph-control-label" for="graph-filter-input">Filter graph</label>
+            <input
+              id="graph-filter-input"
+              class="graph-filter-input"
+              type="search"
+              placeholder="Filter graph by title or body..."
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <div class="graph-spread">
+            <div class="graph-spread-header">
+              <label class="graph-control-label" for="graph-spread-input">Spread</label>
+              <output id="graph-spread-value" for="graph-spread-input">1.0x</output>
+            </div>
+            <input
+              id="graph-spread-input"
+              class="graph-spread-input"
+              type="range"
+              min="0.6"
+              max="3.0"
+              step="0.1"
+              value="1.0"
+            />
+          </div>
+        </section>
       </header>
       <section class="graph-panel">
         <div id="graph-canvas" aria-label="Notes graph"></div>
