@@ -18,9 +18,12 @@ type graphJSONNode struct {
 }
 
 type graphJSONNodeData struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Folder string `json:"folder"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Folder    string `json:"folder"`
+	InDegree  int    `json:"inDegree"`
+	OutDegree int    `json:"outDegree"`
+	Degree    int    `json:"degree"`
 }
 
 type graphJSONEdge struct {
@@ -53,6 +56,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 		}
 		noteByKey[key] = note
 	}
+	degrees := graphNodeDegrees(snapshot)
 
 	included := make(map[string]struct{}, len(snapshot.graph.Titles))
 	if queryFolded == "" {
@@ -98,11 +102,15 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 				return graphJSON{}, fmt.Errorf("folder for %q: %w", key, err)
 			}
 		}
+		degree := degrees[key]
 		nodes = append(nodes, graphJSONNode{
 			Data: graphJSONNodeData{
-				ID:     key,
-				Title:  title,
-				Folder: folder,
+				ID:        key,
+				Title:     title,
+				Folder:    folder,
+				InDegree:  degree.inDegree,
+				OutDegree: degree.outDegree,
+				Degree:    degree.inDegree + degree.outDegree,
 			},
 		})
 	}
@@ -150,4 +158,62 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 		Nodes: nodes,
 		Edges: edges,
 	}, nil
+}
+
+type graphNodeDegree struct {
+	inDegree  int
+	outDegree int
+}
+
+func graphNodeDegrees(snapshot vaultSnapshot) map[string]graphNodeDegree {
+	degrees := make(map[string]graphNodeDegree, len(snapshot.graph.Titles))
+	for key := range snapshot.graph.Titles {
+		degrees[key] = graphNodeDegree{}
+	}
+
+	for source, targets := range snapshot.graph.Forward {
+		if _, ok := snapshot.graph.Titles[source]; !ok {
+			continue
+		}
+		outDegree := uniqueLinkedTargetCount(source, targets, snapshot.graph.Titles)
+		degree := degrees[source]
+		degree.outDegree = outDegree
+		degrees[source] = degree
+	}
+
+	for target, referrers := range snapshot.graph.Backward {
+		if _, ok := snapshot.graph.Titles[target]; !ok {
+			continue
+		}
+		degree := degrees[target]
+		degree.inDegree = uniqueStringCount(referrers)
+		degrees[target] = degree
+	}
+
+	return degrees
+}
+
+func uniqueLinkedTargetCount(source string, targets []string, noteKeys map[string]struct{}) int {
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		if target == "" || target == source {
+			continue
+		}
+		if _, ok := noteKeys[target]; !ok {
+			continue
+		}
+		seen[target] = struct{}{}
+	}
+	return len(seen)
+}
+
+func uniqueStringCount(values []string) int {
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		seen[value] = struct{}{}
+	}
+	return len(seen)
 }

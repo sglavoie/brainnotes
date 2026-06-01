@@ -449,6 +449,16 @@ Starts a local HTTP server for vault browsing:
 - `/broken` unresolved wikilink diagnostics
 - `/graph` interactive Cytoscape graph
 
+The graph view loads the whole vault by default and can be filtered by note
+title or body text. Filtering keeps only matching notes and links between the
+visible notes, while the status line reports the reduced node and edge counts.
+Use the Spread slider to rerun the layout from a compact overview up to a much
+wider graph. Labels default to Auto: small graphs are fully labeled, dense
+graphs reveal labels for hovered or selected nodes, nearby context, and zoomed
+views, and the All mode is available when every label is needed. Click a node
+to lock its details, highlight its one-hop neighborhood, and enable Open note;
+click empty graph space to clear the selection.
+
 `--addr` overrides `[serve].addr`. `--port` rewrites only the port on the
 resolved address host. `--no-open` forces browser launch off even when
 `[serve].open_browser = true`.

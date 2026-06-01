@@ -336,6 +336,27 @@ func fetchGraphJSON(t *testing.T, rawURL string) (graphJSON, string, string) {
 	return payload, string(body), resp.Header.Get("Content-Type")
 }
 
+func graphNodeDataByID(payload graphJSON) map[string]graphJSONNodeData {
+	nodes := make(map[string]graphJSONNodeData, len(payload.Nodes))
+	for _, node := range payload.Nodes {
+		nodes[node.Data.ID] = node.Data
+	}
+	return nodes
+}
+
+func denseGraphVaultFixture() map[string][]byte {
+	return map[string][]byte{
+		"Hub.md":    []byte("---\ntitle: Hub\n---\n[[SpokeA]] [[SpokeB]] [[SpokeC]] [[SpokeD]] [[SpokeE]]\n"),
+		"SpokeA.md": []byte("---\ntitle: Spoke A\n---\n[[Hub]] [[SpokeB]] [[SpokeC]]\n"),
+		"SpokeB.md": []byte("---\ntitle: Spoke B\n---\n[[Hub]] [[SpokeC]] [[SpokeD]]\n"),
+		"SpokeC.md": []byte("---\ntitle: Spoke C\n---\n[[Hub]] [[SpokeD]] [[SpokeE]]\n"),
+		"SpokeD.md": []byte("---\ntitle: Spoke D\n---\n[[Hub]] [[SpokeE]] [[SpokeA]]\n"),
+		"SpokeE.md": []byte("---\ntitle: Spoke E\n---\n[[Hub]] [[SpokeA]] [[SpokeB]]\n"),
+		"Leaf.md":   []byte("---\ntitle: Leaf\n---\n[[Hub]]\n"),
+		"Island.md": []byte("---\ntitle: Island\n---\nNo links.\n"),
+	}
+}
+
 func fetchSearchJSON(t *testing.T, rawURL string) ([]searchResult, string, int) {
 	t.Helper()
 
@@ -870,6 +891,12 @@ func TestServer_PagesIncludeSearchUI(t *testing.T) {
 		if !strings.Contains(body, `id="search-input"`) {
 			t.Fatalf("missing search input on %s, got %q", path, body)
 		}
+		if !strings.Contains(body, `Search notes`) {
+			t.Fatalf("missing search label on %s, got %q", path, body)
+		}
+		if !strings.Contains(body, `placeholder="Search title or body..."`) {
+			t.Fatalf("missing search placeholder on %s, got %q", path, body)
+		}
 		if !strings.Contains(body, `id="search-results"`) {
 			t.Fatalf("missing search result list on %s, got %q", path, body)
 		}
@@ -908,11 +935,50 @@ func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	if !strings.Contains(body, `id="graph-spread-input"`) {
 		t.Fatalf("missing graph spread slider on /graph, got %q", body)
 	}
+	if !strings.Contains(body, `min="0.8"`) {
+		t.Fatalf("missing graph spread min on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `max="6.0"`) {
+		t.Fatalf("missing graph spread max on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `step="0.1"`) {
+		t.Fatalf("missing graph spread step on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `value="2.0"`) {
+		t.Fatalf("missing graph spread default value on /graph, got %q", body)
+	}
 	if !strings.Contains(body, `id="graph-spread-value"`) {
 		t.Fatalf("missing graph spread value text on /graph, got %q", body)
 	}
-	if !strings.Contains(body, `>1.0x</output>`) {
+	if !strings.Contains(body, `>2.0x</output>`) {
 		t.Fatalf("missing default spread multiplier on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-fit-button"`) {
+		t.Fatalf("missing graph fit button on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-reset-layout-button"`) {
+		t.Fatalf("missing graph reset layout button on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-label-mode-auto"`) {
+		t.Fatalf("missing graph auto label control on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `name="graph-label-mode" value="auto" checked`) {
+		t.Fatalf("missing checked auto label mode on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-label-mode-all"`) {
+		t.Fatalf("missing graph all label control on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-open-note"`) {
+		t.Fatalf("missing graph open note link on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-hover-degree"`) {
+		t.Fatalf("missing graph degree detail on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `aria-disabled="true"`) {
+		t.Fatalf("missing initially disabled graph open note link on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-canvas" aria-label="Notes graph" tabindex="0"`) {
+		t.Fatalf("missing focusable graph canvas on /graph, got %q", body)
 	}
 	if strings.Contains(body, `id="search-input"`) {
 		t.Fatalf("unexpected shared search input on /graph, got %q", body)
@@ -950,6 +1016,23 @@ func TestServer_GraphAPIJSON_Golden(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Fatalf("graph json mismatch\n--- got ---\n%s\n--- want ---\n%s", string(got), string(want))
+	}
+}
+
+func TestServer_GraphAPIJSON_DegreeMetadata(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, denseGraphVaultFixture())
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json")
+	nodes := graphNodeDataByID(payload)
+
+	hub := nodes["hub"]
+	if hub.InDegree != 6 || hub.OutDegree != 5 || hub.Degree != 11 {
+		t.Fatalf("hub degrees: got in=%d out=%d total=%d, want in=6 out=5 total=11", hub.InDegree, hub.OutDegree, hub.Degree)
+	}
+
+	island := nodes["island"]
+	if island.InDegree != 0 || island.OutDegree != 0 || island.Degree != 0 {
+		t.Fatalf("island degrees: got in=%d out=%d total=%d, want all zero", island.InDegree, island.OutDegree, island.Degree)
 	}
 }
 
@@ -1032,6 +1115,31 @@ func TestServer_GraphAPIJSON_QueryFiltersTitleBodyAndEdges(t *testing.T) {
 	edge := payload.Edges[0].Data
 	if edge.Source != "needlea" || edge.Target != "needleb" {
 		t.Fatalf("unexpected edge: got %#v, want NeedleA->NeedleB only", edge)
+	}
+}
+
+func TestServer_GraphAPIJSON_QueryKeepsFullGraphDegreeMetadata(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Target.md":  []byte("---\ntitle: Target\n---\nrareword body [[Other]]\n"),
+		"SourceA.md": []byte("---\ntitle: Source A\n---\n[[Target]]\n"),
+		"SourceB.md": []byte("---\ntitle: Source B\n---\n[[Target]]\n"),
+		"Other.md":   []byte("---\ntitle: Other\n---\nBody\n"),
+	})
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=rareword")
+	if len(payload.Nodes) != 1 {
+		t.Fatalf("node count: got %d, want 1", len(payload.Nodes))
+	}
+	if len(payload.Edges) != 0 {
+		t.Fatalf("edge count: got %d, want 0", len(payload.Edges))
+	}
+
+	target := payload.Nodes[0].Data
+	if target.ID != "target" {
+		t.Fatalf("node id: got %q, want target", target.ID)
+	}
+	if target.InDegree != 2 || target.OutDegree != 1 || target.Degree != 3 {
+		t.Fatalf("target degrees: got in=%d out=%d total=%d, want in=2 out=1 total=3", target.InDegree, target.OutDegree, target.Degree)
 	}
 }
 

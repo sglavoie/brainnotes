@@ -35,26 +35,45 @@
           <div class="graph-spread">
             <div class="graph-spread-header">
               <label class="graph-control-label" for="graph-spread-input">Spread</label>
-              <output id="graph-spread-value" for="graph-spread-input">1.0x</output>
+              <output id="graph-spread-value" for="graph-spread-input">2.0x</output>
             </div>
             <input
               id="graph-spread-input"
               class="graph-spread-input"
               type="range"
-              min="0.6"
-              max="3.0"
+              min="0.8"
+              max="6.0"
               step="0.1"
-              value="1.0"
+              value="2.0"
             />
           </div>
+          <div class="graph-action-controls" aria-label="Graph viewport">
+            <button id="graph-fit-button" class="graph-control-button" type="button">Fit graph</button>
+            <button id="graph-reset-layout-button" class="graph-control-button" type="button">Reset layout</button>
+          </div>
+          <fieldset class="graph-label-mode" aria-label="Label mode">
+            <legend class="graph-control-label">Labels</legend>
+            <div class="graph-label-mode-options">
+              <label class="graph-label-mode-option">
+                <input id="graph-label-mode-auto" type="radio" name="graph-label-mode" value="auto" checked />
+                <span>Auto</span>
+              </label>
+              <label class="graph-label-mode-option">
+                <input id="graph-label-mode-all" type="radio" name="graph-label-mode" value="all" />
+                <span>All</span>
+              </label>
+            </div>
+          </fieldset>
         </section>
       </header>
       <section class="graph-panel">
-        <div id="graph-canvas" aria-label="Notes graph"></div>
+        <div id="graph-canvas" aria-label="Notes graph" tabindex="0"></div>
         <aside class="graph-hover" aria-live="polite">
           <h2>Node details</h2>
           <p id="graph-hover-title">Hover a node</p>
           <p id="graph-hover-folder"></p>
+          <p id="graph-hover-degree"></p>
+          <a id="graph-open-note" class="graph-open-note is-disabled" aria-disabled="true" tabindex="-1">Open note</a>
         </aside>
       </section>
     </main>

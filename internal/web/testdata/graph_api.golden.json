@@ -4,28 +4,40 @@
       "data": {
         "id": "loner",
         "title": "Loner",
-        "folder": ""
+        "folder": "",
+        "inDegree": 0,
+        "outDegree": 0,
+        "degree": 0
       }
     },
     {
       "data": {
         "id": "source",
         "title": "Source",
-        "folder": ""
+        "folder": "",
+        "inDegree": 0,
+        "outDegree": 1,
+        "degree": 1
       }
     },
     {
       "data": {
         "id": "target",
         "title": "Target",
-        "folder": ""
+        "folder": "",
+        "inDegree": 1,
+        "outDegree": 0,
+        "degree": 1
       }
     },
     {
       "data": {
         "id": "work/alpha",
         "title": "Alpha",
-        "folder": "Work"
+        "folder": "Work",
+        "inDegree": 0,
+        "outDegree": 0,
+        "degree": 0
       }
     }
   ],
