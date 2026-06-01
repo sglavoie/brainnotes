@@ -17,14 +17,14 @@ func NewGraphCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "graph",
-		Short:         "Export the vault link graph in dot or mermaid format",
-		Long:          "Export the vault's wikilink graph (or a filtered subgraph) in dot or mermaid format for visualization. Pipe the output to a file and open it in a Graphviz viewer or Mermaid renderer.",
+		Short:         "Export the vault link graph in dot, mermaid, or code format",
+		Long:          "Export the vault's wikilink graph (or a filtered subgraph) as `dot` or `mermaid` for visualization, or as `code`, a list of edges with absolute file:line references that are cmd+clickable in editor terminals.",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if format != "dot" && format != "mermaid" {
-				return fmt.Errorf("graph: unknown format %q (must be dot or mermaid)", format)
+			if format != "dot" && format != "mermaid" && format != "code" {
+				return fmt.Errorf("graph: unknown format %q (must be dot, mermaid, or code)", format)
 			}
 
 			cfg := ConfigFromContext(cmd.Context())
@@ -61,12 +61,14 @@ func NewGraphCmd() *cobra.Command {
 				return g.ExportDot(out, nodeSet)
 			case "mermaid":
 				return g.ExportMermaid(out, nodeSet)
+			case "code":
+				return g.ExportCode(out, notes, nodeSet)
 			}
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&format, "format", "dot", "output format: dot or mermaid")
+	cmd.Flags().StringVar(&format, "format", "dot", "output format: dot, mermaid, or code")
 	ff.register(cmd)
 
 	return cmd

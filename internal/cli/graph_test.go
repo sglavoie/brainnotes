@@ -114,6 +114,81 @@ func TestGraph_InvalidFormat(t *testing.T) {
 	if !strings.Contains(err.Error(), "unknown format") {
 		t.Fatalf("expected 'unknown format' error, got: %v", err)
 	}
+	if !strings.Contains(err.Error(), "code") {
+		t.Fatalf("expected error message to list 'code' as a valid format, got: %v", err)
+	}
+}
+
+func TestGraph_CodeOutput(t *testing.T) {
+	root := t.TempDir()
+	alpha := filepath.Join(root, "Alpha.md")
+	beta := filepath.Join(root, "Beta.md")
+	// Frontmatter lines 1-3, body line 1 ("intro") is file line 4, [[Beta]]
+	// on file line 5.
+	if err := os.WriteFile(alpha, []byte("---\ntitle: Alpha\n---\nintro\n[[Beta]]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(beta, []byte("---\ntitle: Beta\n---\nNo links.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := runGraphRaw(t, root, "graph", "--format", "code")
+	// Beta has no outgoing edges, so it's emitted as isolated. Isolated
+	// nodes come first (sorted by path), then edges.
+	want := beta + ":1\n" + alpha + ":5: [[Beta]] -> " + beta + ":1\n"
+	if got != want {
+		t.Fatalf("graph --format code:\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestGraph_CodeOutput_FrontmatterEdge(t *testing.T) {
+	root := t.TempDir()
+	alpha := filepath.Join(root, "Alpha.md")
+	beta := filepath.Join(root, "Beta.md")
+	if err := os.WriteFile(alpha, []byte("---\ntitle: Alpha\nrelated: \"[[Beta]]\"\n---\nBody.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(beta, []byte("---\ntitle: Beta\n---\nNo links.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := runGraphRaw(t, root, "graph", "--format", "code")
+	// Beta has no outgoing edges, so it is emitted as isolated first.
+	want := beta + ":1\n" + alpha + ":1: frontmatter[related] [[Beta]] -> " + beta + ":1\n"
+	if got != want {
+		t.Fatalf("graph --format code (frontmatter):\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestGraph_CodeOutput_IsolatedNode(t *testing.T) {
+	root := t.TempDir()
+	lonely := filepath.Join(root, "Lonely.md")
+	if err := os.WriteFile(lonely, []byte("---\ntitle: Lonely\n---\nNo links.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := runGraphRaw(t, root, "graph", "--format", "code")
+	want := lonely + ":1\n"
+	if got != want {
+		t.Fatalf("graph --format code (isolated):\ngot:\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestGraph_CodeOutput_FilteredSubgraph(t *testing.T) {
+	root := buildGraphFixture(t)
+	alpha := filepath.Join(root, "Alpha.md")
+	beta := filepath.Join(root, "Beta.md")
+
+	// Alpha and Beta both have tag foo. Alpha body links to [[Beta]] and
+	// [[Gamma]]. With --tag foo, Gamma is filtered out, so only the Beta
+	// edge remains. Beta also remains as a source but contributes no
+	// in-filter edges (its only link is to Gamma), so it becomes isolated.
+	got := runGraphRaw(t, root, "graph", "--format", "code", "--tag", "foo")
+	// Alpha.md line 5 contains `[[Beta]] and [[Gamma]].` per the fixture.
+	want := beta + ":1\n" + alpha + ":5: [[Beta]] -> " + beta + ":1\n"
+	if got != want {
+		t.Fatalf("graph --format code --tag foo:\ngot:\n%q\nwant:\n%q", got, want)
+	}
 }
 
 // TestNoteKey_CaseInsensitiveExtension verifies that noteKey correctly strips

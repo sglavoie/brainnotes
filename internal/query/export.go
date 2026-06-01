@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 func (g *Graph) ExportDot(w io.Writer, nodes map[string]struct{}) error {
@@ -195,4 +198,163 @@ func sortedKeys(m map[string]struct{}) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// codeEdge is one emitted edge line in the `code` format.
+type codeEdge struct {
+	srcPath string
+	srcLine int
+	rawLink string
+	fmKey   string // empty for body edges
+	dstPath string
+}
+
+// ExportCode writes the graph as a list of edges in a VS Code-navigable
+// "path:line" format. Unlike ExportDot / ExportMermaid, this exporter needs to
+// re-walk each source note to recover per-link line numbers (the Graph struct
+// deliberately does not carry them). Body edges include the line of the link;
+// frontmatter edges go to source line 1 with a `frontmatter[<key>]` tag so
+// they remain distinguishable. Isolated nodes (keys in nodes that contribute
+// no edges) are emitted first as `path:1` lines.
+func (g *Graph) ExportCode(w io.Writer, notes []*vault.Note, nodes map[string]struct{}) error {
+	var edges []codeEdge
+	sourcesWithEdges := make(map[string]struct{})
+
+	for _, n := range notes {
+		if n == nil {
+			continue
+		}
+		srcKey := g.keyForNote(n)
+		if srcKey == "" {
+			continue
+		}
+		if _, ok := nodes[srcKey]; !ok {
+			continue
+		}
+
+		body, err := n.Body()
+		if err == nil && body != "" {
+			links := wikilink.Parse(body)
+			nlOffsets := buildNewlineOffsets(body)
+			lineOffset := bodyLineOffset(n.Path)
+			for _, link := range links {
+				for _, e := range g.codeEdgesForLink(link, n.Path, srcKey, "", nodes) {
+					e.srcLine = lineOffset + lineFromOffset(nlOffsets, link.Start)
+					edges = append(edges, e)
+					sourcesWithEdges[srcKey] = struct{}{}
+				}
+			}
+		}
+
+		fm, err := n.Front()
+		if err == nil {
+			for _, k := range fm.Keys() {
+				v, _ := fm.Get(k)
+				g.scanCodeValue(v, k, n.Path, srcKey, nodes, &edges, sourcesWithEdges)
+			}
+		}
+	}
+
+	sort.Slice(edges, func(i, j int) bool {
+		if edges[i].srcPath != edges[j].srcPath {
+			return edges[i].srcPath < edges[j].srcPath
+		}
+		if edges[i].srcLine != edges[j].srcLine {
+			return edges[i].srcLine < edges[j].srcLine
+		}
+		if edges[i].fmKey != edges[j].fmKey {
+			return edges[i].fmKey < edges[j].fmKey
+		}
+		return edges[i].rawLink < edges[j].rawLink
+	})
+
+	var isolated []string
+	for _, key := range sortedKeys(nodes) {
+		if _, ok := sourcesWithEdges[key]; ok {
+			continue
+		}
+		p, ok := g.PathsByTitle[key]
+		if !ok || p == "" {
+			continue
+		}
+		isolated = append(isolated, p)
+	}
+	sort.Strings(isolated)
+
+	for _, p := range isolated {
+		if _, err := fmt.Fprintf(w, "%s:1\n", p); err != nil {
+			return err
+		}
+	}
+
+	for _, e := range edges {
+		var line string
+		if e.fmKey != "" {
+			line = fmt.Sprintf("%s:%d: frontmatter[%s] %s -> %s:1\n", e.srcPath, e.srcLine, e.fmKey, e.rawLink, e.dstPath)
+		} else {
+			line = fmt.Sprintf("%s:%d: %s -> %s:1\n", e.srcPath, e.srcLine, e.rawLink, e.dstPath)
+		}
+		if _, err := fmt.Fprint(w, line); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (g *Graph) codeEdgesForLink(link wikilink.Link, srcPath, srcKey, fmKey string, nodes map[string]struct{}) []codeEdge {
+	title := link.Title()
+	if title == "" {
+		return nil
+	}
+	targetKeys := g.resolveLink(link)
+	if len(targetKeys) == 0 {
+		return nil
+	}
+	var out []codeEdge
+	seen := make(map[string]struct{})
+	for _, tk := range targetKeys {
+		if tk == "" || tk == srcKey {
+			continue
+		}
+		if _, ok := nodes[tk]; !ok {
+			continue
+		}
+		dstPath, ok := g.PathsByTitle[tk]
+		if !ok || dstPath == "" {
+			continue
+		}
+		if _, dup := seen[tk]; dup {
+			continue
+		}
+		seen[tk] = struct{}{}
+		out = append(out, codeEdge{
+			srcPath: srcPath,
+			rawLink: link.Raw,
+			fmKey:   fmKey,
+			dstPath: dstPath,
+		})
+	}
+	return out
+}
+
+func (g *Graph) scanCodeValue(v any, fmKey, srcPath, srcKey string, nodes map[string]struct{}, edges *[]codeEdge, sourcesWithEdges map[string]struct{}) {
+	switch vv := v.(type) {
+	case string:
+		for _, link := range wikilink.Parse(vv) {
+			for _, e := range g.codeEdgesForLink(link, srcPath, srcKey, fmKey, nodes) {
+				e.srcLine = 1
+				*edges = append(*edges, e)
+				sourcesWithEdges[srcKey] = struct{}{}
+			}
+		}
+	case []any:
+		for _, item := range vv {
+			g.scanCodeValue(item, fmKey, srcPath, srcKey, nodes, edges, sourcesWithEdges)
+		}
+	case map[string]any:
+		for _, item := range vv {
+			g.scanCodeValue(item, fmKey, srcPath, srcKey, nodes, edges, sourcesWithEdges)
+		}
+	}
 }
