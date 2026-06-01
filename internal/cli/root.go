@@ -85,6 +85,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewUndoCmd())
 	cmd.AddCommand(NewUnsetCmd())
 	cmd.AddCommand(NewValuesCmd())
+	cmd.AddCommand(NewVaultCmd())
 
 	return cmd
 }

@@ -419,6 +419,17 @@ bn open dune                     # fzf prefiltered with 'dune'
 cd "$(dirname "$(bn open --print)")"
 ```
 
+### `bn vault` — open the vault root in your editor
+
+```sh
+bn vault
+```
+
+Exec-replaces with the configured editor opened on the vault root
+(`[open].editor` in config, or `$EDITOR` as fallback). Useful for
+launching the vault as a project/workspace in editors that treat a
+directory argument as a session root (`nvim`, `code`, `subl`, etc.).
+
 ### `bn repair` — fix safe schema violations in frontmatter
 
 ```sh
