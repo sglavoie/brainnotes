@@ -176,6 +176,16 @@ func (g *Graph) resolveLink(link wikilink.Link) []string {
 	return append([]string(nil), g.NoteKeysByTitle[titleKey]...)
 }
 
+// ResolveTarget resolves a raw wikilink target to note keys using the same
+// semantics as graph construction.
+func (g *Graph) ResolveTarget(target string) []string {
+	link, ok := targetLink(target)
+	if !ok {
+		return nil
+	}
+	return g.resolveLink(link)
+}
+
 func unresolvedLinkKey(link wikilink.Link) string {
 	if link.Folder != "" {
 		targetKey, ok := linkTargetResolveKey(link.Target)
@@ -185,6 +195,23 @@ func unresolvedLinkKey(link wikilink.Link) string {
 		return targetKey
 	}
 	return linkTitleKey(link.Title())
+}
+
+// UnresolvedTargetKey returns the normalized unresolved-link key for a target.
+func (g *Graph) UnresolvedTargetKey(target string) string {
+	link, ok := targetLink(target)
+	if !ok {
+		return ""
+	}
+	return unresolvedLinkKey(link)
+}
+
+func targetLink(target string) (wikilink.Link, bool) {
+	links := wikilink.Parse("[[" + target + "]]")
+	if len(links) == 0 {
+		return wikilink.Link{}, false
+	}
+	return links[0], true
 }
 
 func (g *Graph) ForwardLinks(title string) []string {

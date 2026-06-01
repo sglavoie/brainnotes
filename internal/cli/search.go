@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -67,14 +68,14 @@ Examples:
 				return errors.New("search: no config in context")
 			}
 			openMatch := func(path string, line int) error {
-				editor := cfg.Open.Editor
-				if editor == "" {
-					editor = os.Getenv("EDITOR")
-				}
-				if editor == "" {
+				editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
+				if errors.Is(err, editutil.ErrNoEditorConfigured) {
 					return errors.New("search: --open requires [open].editor or $EDITOR")
 				}
-				if err := searchOpenExec(editor, path, line); err != nil {
+				if err != nil {
+					return fmt.Errorf("search: %w", err)
+				}
+				if err := searchOpenExec(editorSpec, path, line); err != nil {
 					return fmt.Errorf("search: %w", err)
 				}
 				return nil

@@ -1,0 +1,41 @@
+{
+  "nodes": [
+    {
+      "data": {
+        "id": "loner",
+        "title": "Loner",
+        "folder": ""
+      }
+    },
+    {
+      "data": {
+        "id": "source",
+        "title": "Source",
+        "folder": ""
+      }
+    },
+    {
+      "data": {
+        "id": "target",
+        "title": "Target",
+        "folder": ""
+      }
+    },
+    {
+      "data": {
+        "id": "work/alpha",
+        "title": "Alpha",
+        "folder": "Work"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "data": {
+        "id": "source|target",
+        "source": "source",
+        "target": "target"
+      }
+    }
+  ]
+}

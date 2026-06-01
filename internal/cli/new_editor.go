@@ -1,25 +1,21 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"unicode"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 )
 
-func runEditor(editor, file string) error {
-	bin, argv, err := editorInvocation(editor, file)
+func runEditor(editorSpec, file string) error {
+	bin, argv, err := editor.Resolve(editorSpec, file, 0)
 	if err != nil {
 		return err
 	}
 	return execEditor(bin, argv)
 }
 
-func runEditorAtLine(editor, file string, line int) error {
-	bin, argv, err := editorInvocationAtLine(editor, file, line)
+func runEditorAtLine(editorSpec, file string, line int) error {
+	bin, argv, err := editor.Resolve(editorSpec, file, line)
 	if err != nil {
 		return err
 	}
@@ -28,119 +24,4 @@ func runEditorAtLine(editor, file string, line int) error {
 
 func execEditor(bin string, argv []string) error {
 	return execReplace(bin, argv, os.Environ())
-}
-
-func editorInvocation(editor, file string) (string, []string, error) {
-	argv, err := splitEditorCommand(editor)
-	if err != nil {
-		return "", nil, err
-	}
-	bin, err := exec.LookPath(argv[0])
-	if err != nil {
-		return "", nil, fmt.Errorf("locate editor %q: %w", argv[0], err)
-	}
-	argv = append(argv, file)
-	return bin, argv, nil
-}
-
-func editorInvocationAtLine(editor, file string, line int) (string, []string, error) {
-	argv, err := splitEditorCommand(editor)
-	if err != nil {
-		return "", nil, err
-	}
-	bin, err := exec.LookPath(argv[0])
-	if err != nil {
-		return "", nil, fmt.Errorf("locate editor %q: %w", argv[0], err)
-	}
-	argv = appendEditorLineTarget(argv, file, line)
-	return bin, argv, nil
-}
-
-func appendEditorLineTarget(argv []string, file string, line int) []string {
-	if line <= 0 {
-		return append(argv, file)
-	}
-
-	name := strings.ToLower(filepath.Base(argv[0]))
-	name = strings.TrimSuffix(name, ".exe")
-	switch name {
-	case "code", "code-insiders", "codium", "vscodium", "cursor", "windsurf":
-		if !hasEditorGotoArg(argv[1:]) {
-			argv = append(argv, "-g")
-		}
-		return append(argv, fmt.Sprintf("%s:%d", file, line))
-	case "subl", "sublime_text", "mate", "zed", "hx", "helix":
-		return append(argv, fmt.Sprintf("%s:%d", file, line))
-	default:
-		return append(argv, fmt.Sprintf("+%d", line), file)
-	}
-}
-
-func hasEditorGotoArg(args []string) bool {
-	for _, arg := range args {
-		if arg == "-g" || arg == "--goto" {
-			return true
-		}
-	}
-	return false
-}
-
-func splitEditorCommand(editor string) ([]string, error) {
-	var (
-		args    []string
-		current strings.Builder
-		quote   rune
-	)
-	runes := []rune(editor)
-	flush := func() {
-		if current.Len() == 0 {
-			return
-		}
-		args = append(args, current.String())
-		current.Reset()
-	}
-	for i := 0; i < len(runes); i++ {
-		r := runes[i]
-		if quote != 0 {
-			switch {
-			case r == quote:
-				quote = 0
-			case r == '\\' && quote != '\'' && i+1 < len(runes):
-				next := runes[i+1]
-				if next == quote || next == '\\' || unicode.IsSpace(next) {
-					current.WriteRune(next)
-					i++
-				} else {
-					current.WriteRune(r)
-				}
-			default:
-				current.WriteRune(r)
-			}
-			continue
-		}
-		switch {
-		case unicode.IsSpace(r):
-			flush()
-		case r == '\'' || r == '"':
-			quote = r
-		case r == '\\' && i+1 < len(runes):
-			next := runes[i+1]
-			if next == '\\' || next == '\'' || next == '"' || unicode.IsSpace(next) {
-				current.WriteRune(next)
-				i++
-			} else {
-				current.WriteRune(r)
-			}
-		default:
-			current.WriteRune(r)
-		}
-	}
-	if quote != 0 {
-		return nil, fmt.Errorf("parse editor %q: unterminated quote", editor)
-	}
-	flush()
-	if len(args) == 0 {
-		return nil, errors.New("editor command is empty")
-	}
-	return args, nil
 }

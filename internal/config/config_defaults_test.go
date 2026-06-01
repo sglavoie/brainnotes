@@ -48,6 +48,12 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	if cfg.Templates.DefaultExtension != ".md" {
 		t.Errorf("Templates.DefaultExtension: got %q, want %q", cfg.Templates.DefaultExtension, ".md")
 	}
+	if cfg.Serve.Addr != DefaultServeAddr {
+		t.Errorf("Serve.Addr: got %q, want %q", cfg.Serve.Addr, DefaultServeAddr)
+	}
+	if !cfg.Serve.BrowserEnabled() {
+		t.Errorf("Serve.BrowserEnabled: got false, want true")
+	}
 	wantWiki := []string{"categories", "org", "parent", "area"}
 	if !equalSlices(cfg.Frontmatter.WikilinkProperties, wantWiki) {
 		t.Errorf("WikilinkProperties: got %v, want %v", cfg.Frontmatter.WikilinkProperties, wantWiki)
@@ -88,16 +94,36 @@ func TestDefaultTemplate_ParsesAsEmptyConfig(t *testing.T) {
 	if len(cfg.New.Routes) != 0 {
 		t.Errorf("New.Routes should be empty, got %v", cfg.New.Routes)
 	}
+	if cfg.Serve.Addr != "" || cfg.Serve.OpenBrowser != nil {
+		t.Errorf("Serve should be zero, got %+v", cfg.Serve)
+	}
 }
 
 func TestDefaultTemplate_Mentions_AllKnownKeys(t *testing.T) {
 	tmpl := DefaultTemplate()
 	for _, want := range []string{
-		"vault", "ignore", "[templates]", "[frontmatter]", "[fzf]", "[new.routes]",
+		"vault", "ignore", "[templates]", "[frontmatter]", "[fzf]", "[serve]", "[new.routes]",
 		"wikilink_properties", "list_properties",
 	} {
 		if !strings.Contains(tmpl, want) {
 			t.Errorf("template missing %q", want)
 		}
 	}
+}
+
+func TestServeConfig_BrowserEnabled_DefaultAndExplicitFalse(t *testing.T) {
+	t.Run("default true when unset", func(t *testing.T) {
+		var s ServeConfig
+		if !s.BrowserEnabled() {
+			t.Fatal("BrowserEnabled: got false, want true when open_browser is unset")
+		}
+	})
+
+	t.Run("explicit false disables browser", func(t *testing.T) {
+		disabled := false
+		s := ServeConfig{OpenBrowser: &disabled}
+		if s.BrowserEnabled() {
+			t.Fatal("BrowserEnabled: got true, want false when open_browser=false")
+		}
+	})
 }

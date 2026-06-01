@@ -1,0 +1,36 @@
+{{define "graph"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/cytoscape.min.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body class="graph-page">
+    <main class="graph-main">
+      <header class="graph-header">
+        <div class="graph-header-copy">
+          <h1>Graph</h1>
+          <p id="graph-status" role="status">Loading graph...</p>
+          <p class="graph-links">
+            <a href="/">Overview</a>
+            <a href="/broken">Broken links</a>
+          </p>
+        </div>
+        {{template "headerSearch" .}}
+      </header>
+      <section class="graph-panel">
+        <div id="graph-canvas" aria-label="Notes graph"></div>
+        <aside class="graph-hover" aria-live="polite">
+          <h2>Node details</h2>
+          <p id="graph-hover-title">Hover a node</p>
+          <p id="graph-hover-folder"></p>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>
+{{end}}

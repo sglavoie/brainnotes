@@ -47,6 +47,12 @@ func DefaultTemplate() string {
 # Falls back to $EDITOR when not set.
 # editor = "nvim"
 
+[serve]
+# HTTP listen address for ` + "`bn serve`" + `.
+# addr = "` + DefaultServeAddr + `"
+# Open the browser automatically on startup. Defaults to true.
+# open_browser = true
+
 # Default folders for ` + "`bn new <template>`" + `. Keys are template names,
 # values are vault-relative folders.
 # [new.routes]
@@ -123,6 +129,11 @@ func applyDefaults(cfg *Config) {
 	// like `editor = "  "` is non-empty and shadows the $EDITOR fallback in
 	// `bn open`, then fails with an opaque exec error.
 	cfg.Open.Editor = strings.TrimSpace(cfg.Open.Editor)
+
+	cfg.Serve.Addr = strings.TrimSpace(cfg.Serve.Addr)
+	if cfg.Serve.Addr == "" {
+		cfg.Serve.Addr = DefaultServeAddr
+	}
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
 }

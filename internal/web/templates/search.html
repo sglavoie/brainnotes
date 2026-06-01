@@ -1,0 +1,18 @@
+{{define "headerSearch"}}
+  <section class="search-box" data-search-box>
+    <label class="search-label" for="search-input">Search notes</label>
+    <input
+      id="search-input"
+      class="search-input"
+      type="search"
+      placeholder="Search title or body..."
+      autocomplete="off"
+      spellcheck="false"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-controls="search-results"
+      aria-expanded="false"
+    />
+    <ul id="search-results" class="search-results" role="listbox" hidden></ul>
+  </section>
+{{end}}

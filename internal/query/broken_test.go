@@ -359,3 +359,22 @@ func TestBrokenLinksPredicateRejectsNil(t *testing.T) {
 		t.Errorf("BrokenLinks(g)(nil) = true, want false")
 	}
 }
+
+func TestIsMediaTarget(t *testing.T) {
+	tests := []struct {
+		title string
+		want  bool
+	}{
+		{title: "diagram.png", want: true},
+		{title: "VIDEO.MP4", want: true},
+		{title: "note.md", want: false},
+		{title: "noextension", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			if got := IsMediaTarget(tt.title); got != tt.want {
+				t.Fatalf("IsMediaTarget(%q) = %v, want %v", tt.title, got, tt.want)
+			}
+		})
+	}
+}

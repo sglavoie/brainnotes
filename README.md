@@ -80,6 +80,12 @@ args = ["--preview", "bat --style=plain --color=always {}"]
 # Editor to invoke when opening a note. Falls back to $EDITOR when not set.
 # editor = "nvim"
 
+[serve]
+# HTTP listen address for `bn serve`.
+addr = "127.0.0.1:8729"
+# Open your browser on startup. Set false for headless use.
+open_browser = true
+
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
 [new.routes]
 book    = "References/Books"
@@ -429,6 +435,36 @@ Exec-replaces with the configured editor opened on the vault root
 (`[open].editor` in config, or `$EDITOR` as fallback). Useful for
 launching the vault as a project/workspace in editors that treat a
 directory argument as a session root (`nvim`, `code`, `subl`, etc.).
+
+### `bn serve` — run the local vault browser
+
+```sh
+bn serve [--addr host:port] [--port N] [--no-open]
+```
+
+Starts a local HTTP server for vault browsing:
+
+- `/` overview with note counts, recent notes, and primary search
+- `/n/<note-key>` rendered note view (body, frontmatter, backlinks/outgoing, broken affordances)
+- `/broken` unresolved wikilink diagnostics
+- `/graph` interactive Cytoscape graph
+
+`--addr` overrides `[serve].addr`. `--port` rewrites only the port on the
+resolved address host. `--no-open` forces browser launch off even when
+`[serve].open_browser = true`.
+
+The default bind is localhost (`127.0.0.1:8729`). This is single-user local
+software; there is no auth layer. Side-effecting opens (`POST /api/open`)
+require a per-process CSRF token (`X-BN-CSRF` header or `token` form field),
+and note containment checks reject paths outside the vault.
+
+Editor opens from the note page use the same editor resolution as CLI open
+commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
+if editing changes the file, refresh the page manually to see updates.
+
+Media embeds (`![[image.png]]`) render through `/media/...` only when the file
+exists. Missing media embeds remain plain text (they do not redirect to
+`/broken`).
 
 ### `bn repair` — fix safe schema violations in frontmatter
 

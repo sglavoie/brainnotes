@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 )
 
 // sourceShort maps a ConfigSource to the short tag used in the "Active config"
@@ -69,11 +70,15 @@ func newConfigEditCmd(getConfigPath func() string) *cobra.Command {
 				return errors.New("config edit: no config path could be resolved")
 			}
 
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
+			editorEnv := os.Getenv("EDITOR")
+			spec, err := editutil.Spec("", editorEnv)
+			if errors.Is(err, editutil.ErrNoEditorConfigured) {
 				return errors.New("config edit: $EDITOR is not set")
 			}
-			bin, argv, err := editorInvocation(editor, path)
+			if err != nil {
+				return fmt.Errorf("config edit: %w", err)
+			}
+			bin, argv, err := editutil.Resolve(spec, path, 0)
 			if err != nil {
 				return fmt.Errorf("config edit: %w", err)
 			}

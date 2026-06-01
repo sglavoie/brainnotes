@@ -80,6 +80,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewRestoreCmd())
 	cmd.AddCommand(NewSchemaCmd())
 	cmd.AddCommand(NewSearchCmd())
+	cmd.AddCommand(NewServeCmd())
 	cmd.AddCommand(NewSetCmd())
 	cmd.AddCommand(NewTagsCmd())
 	cmd.AddCommand(NewUndoCmd())

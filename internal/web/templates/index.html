@@ -1,0 +1,64 @@
+{{define "index"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>{{ .Title }}</h1>
+        <p class="page-subtitle">Local vault browser for search, graph navigation, and quick diagnostics.</p>
+      </div>
+      {{template "headerSearch" .}}
+    </header>
+
+    <section class="metric-grid" aria-label="Vault statistics">
+      <article class="metric-card">
+        <h2>Total notes</h2>
+        <p class="metric-value">{{.NoteCount}}</p>
+      </article>
+      <article class="metric-card">
+        <h2>Broken targets</h2>
+        <p class="metric-value">{{.BrokenTargetCount}}</p>
+        <p><a href="{{.BrokenPath}}">Review broken links</a></p>
+      </article>
+      <article class="metric-card">
+        <h2>Orphans</h2>
+        <p class="metric-value">{{.OrphanCount}}</p>
+      </article>
+      <article class="metric-card">
+        <h2>Graph</h2>
+        <p><a href="{{.GraphPath}}">Open interactive graph</a></p>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Recent notes</h2>
+      </div>
+      {{if .Recent}}
+        <ul class="recent-list">
+          {{range .Recent}}
+            <li class="recent-list-item">
+              <a class="recent-note-title" href="{{.Path}}">{{.Title}}</a>
+              <div class="recent-note-meta">
+                <span>{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
+                <span>{{.Updated}}</span>
+              </div>
+            </li>
+          {{end}}
+        </ul>
+      {{else}}
+        <p>No notes found.</p>
+      {{end}}
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

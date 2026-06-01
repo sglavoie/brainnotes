@@ -1,0 +1,115 @@
+{{define "frontmatterValue"}}
+  {{if eq .Kind "list"}}
+    <ul class="frontmatter-list">
+      {{range .Items}}
+        <li>{{template "frontmatterValue" .}}</li>
+      {{end}}
+    </ul>
+  {{else if eq .Kind "map"}}
+    <ul class="frontmatter-map">
+      {{range .Pairs}}
+        <li><strong>{{.Key}}:</strong> {{template "frontmatterValue" .Value}}</li>
+      {{end}}
+    </ul>
+  {{else}}
+    <span>{{.Text}}</span>
+    {{if .Anchors}}
+      <span class="frontmatter-anchors">
+        {{range .Anchors}}
+          <a href="{{.Path}}">{{.Label}}</a>
+        {{end}}
+      </span>
+    {{end}}
+  {{end}}
+{{end}}
+
+{{define "note"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{.Title}} - bn serve</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <main>
+      <header class="site-header">
+        <h1>{{.Title}}</h1>
+        {{template "headerSearch" .}}
+      </header>
+
+      <div class="note-actions" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
+        <button type="button" class="open-editor-button" data-open-button>Open in editor</button>
+        <p class="open-editor-status" data-open-status role="status" aria-live="polite"> </p>
+      </div>
+
+      <section class="panel">
+        <h2>Body</h2>
+        <div class="note-body">{{.BodyHTML}}</div>
+      </section>
+
+      <section class="panel">
+        <h2>Frontmatter</h2>
+        {{if .Frontmatter}}
+          <div class="table-wrap">
+            <table>
+              <tbody>
+                {{range .Frontmatter}}
+                  <tr>
+                    <th>{{.Key}}</th>
+                    <td>{{template "frontmatterValue" .Value}}</td>
+                  </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+        {{else}}
+          <p>No frontmatter.</p>
+        {{end}}
+      </section>
+
+      <section class="panel">
+        <h2>Backlinks</h2>
+        {{if .Backlinks}}
+          <ul class="link-list">
+            {{range .Backlinks}}
+              <li><a href="{{.Path}}">{{.Title}}</a></li>
+            {{end}}
+          </ul>
+        {{else}}
+          <p>None.</p>
+        {{end}}
+      </section>
+
+      <section class="panel">
+        <h2>Outgoing links</h2>
+        {{if .Outgoing}}
+          <ul class="link-list">
+            {{range .Outgoing}}
+              <li><a href="{{.Path}}">{{.Title}}</a></li>
+            {{end}}
+          </ul>
+        {{else}}
+          <p>None.</p>
+        {{end}}
+      </section>
+
+      {{if .Broken}}
+        <section class="panel">
+          <h2>Broken links</h2>
+          <ul class="link-list broken-list">
+            {{range .Broken}}
+              <li>
+                <a href="{{.Path}}">{{.Target}}</a>
+                {{if .Location}}<span class="broken-location">({{.Location}})</span>{{end}}
+              </li>
+            {{end}}
+          </ul>
+        </section>
+      {{end}}
+    </main>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
+{{end}}

@@ -21,7 +21,8 @@ var mediaExts = map[string]struct{}{
 	".pdf": {}, ".mp4": {}, ".mov": {}, ".mp3": {}, ".wav": {}, ".ogg": {}, ".heic": {},
 }
 
-func isMediaEmbed(title string) bool {
+// IsMediaTarget reports whether title points to a media file extension.
+func IsMediaTarget(title string) bool {
 	ext := strings.ToLower(filepath.Ext(title))
 	_, ok := mediaExts[ext]
 	return ok
@@ -44,7 +45,7 @@ func UnresolvedLinks(n *vault.Note, g *Graph) []BrokenLink {
 		lineOffset := bodyLineOffset(n.Path)
 		for _, link := range links {
 			title := link.Title()
-			if title == "" || isMediaEmbed(title) {
+			if title == "" || IsMediaTarget(title) {
 				continue
 			}
 			if brokenLinkResolves(link, g) {
@@ -71,7 +72,7 @@ func scanBrokenValue(v any, key string, g *Graph, out *[]BrokenLink) {
 	case string:
 		for _, link := range wikilink.Parse(vv) {
 			title := link.Title()
-			if title == "" || isMediaEmbed(title) {
+			if title == "" || IsMediaTarget(title) {
 				continue
 			}
 			if brokenLinkResolves(link, g) {

@@ -58,6 +58,30 @@ bad_nested = true
 	}
 }
 
+func TestLoad_RejectsUnknownServeNestedKey(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[serve]
+addr = "127.0.0.1:8729"
+bad_nested = true
+`)
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for unknown nested key, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown keys") {
+		t.Fatalf("error should mention 'unknown keys', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "bad_nested") {
+		t.Fatalf("error should name the unknown key 'bad_nested', got: %v", err)
+	}
+}
+
 // TestLoad_AcceptsAllKnownKeys verifies that a config file using every valid
 // known key still loads without error, so the unknown-key check does not
 // false-positive on legitimate keys.
@@ -88,6 +112,10 @@ args = ["--height=40%"]
 
 [open]
 editor = "vim"
+
+[serve]
+addr = "127.0.0.1:8729"
+open_browser = true
 
 [new]
 `)

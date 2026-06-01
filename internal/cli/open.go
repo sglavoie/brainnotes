@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -87,14 +88,14 @@ func NewOpenCmd() *cobra.Command {
 				return nil
 			}
 
-			editor := cfg.Open.Editor
-			if editor == "" {
-				editor = os.Getenv("EDITOR")
-			}
-			if editor == "" {
+			editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
+			if errors.Is(err, editutil.ErrNoEditorConfigured) {
 				return errors.New("open: no editor configured (set [open].editor in config or $EDITOR)")
 			}
-			if err := openExec(editor, target); err != nil {
+			if err != nil {
+				return fmt.Errorf("open: %w", err)
+			}
+			if err := openExec(editorSpec, target); err != nil {
 				return fmt.Errorf("open: %w", err)
 			}
 			return nil

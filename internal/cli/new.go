@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
 )
 
@@ -119,11 +120,14 @@ func NewNewCmd() *cobra.Command {
 			}
 
 			if edit {
-				editor := os.Getenv("EDITOR")
-				if editor == "" {
+				editorSpec, err := editutil.Spec("", os.Getenv("EDITOR"))
+				if errors.Is(err, editutil.ErrNoEditorConfigured) {
 					return errors.New("new: --edit requires $EDITOR to be set")
 				}
-				if err := runEditor(editor, outPath); err != nil {
+				if err != nil {
+					return fmt.Errorf("new: %w", err)
+				}
+				if err := runEditor(editorSpec, outPath); err != nil {
 					return fmt.Errorf("new: %w", err)
 				}
 			}

@@ -24,6 +24,7 @@ type Config struct {
 	Frontmatter FrontmatterConfig `toml:"frontmatter"`
 	Fzf         FzfConfig         `toml:"fzf"`
 	Open        OpenConfig        `toml:"open"`
+	Serve       ServeConfig       `toml:"serve"`
 	New         NewConfig         `toml:"new"`
 
 	// SourcePath is the resolved path of the config file that was loaded.
@@ -63,6 +64,15 @@ type OpenConfig struct {
 	Editor string `toml:"editor"`
 }
 
+type ServeConfig struct {
+	Addr        string `toml:"addr"`
+	OpenBrowser *bool  `toml:"open_browser"`
+}
+
+func (s ServeConfig) BrowserEnabled() bool {
+	return s.OpenBrowser == nil || *s.OpenBrowser
+}
+
 // NewConfig configures the `new` command.
 type NewConfig struct {
 	// Routes maps a template name to a vault-relative folder.
@@ -75,6 +85,8 @@ var DefaultIgnore = []string{".git", ".obsidian", "Attachments", "Archive"}
 // DefaultJournalDir is the vault-relative directory reserved for undo journal
 // entries.
 const DefaultJournalDir = ".bnotes/journal"
+
+const DefaultServeAddr = "127.0.0.1:8729"
 
 const (
 	envVault   = "BNOTES_VAULT"

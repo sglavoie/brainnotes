@@ -69,6 +69,35 @@ func TestNewEdit_EditorArgsSupported(t *testing.T) {
 	}
 }
 
+func TestNewEdit_UsesOnlyEnvEditor(t *testing.T) {
+	root := buildNewFixture(t)
+	cfgPath := os.Getenv("BNOTES_CONFIG")
+	if cfgPath == "" {
+		t.Fatal("expected BNOTES_CONFIG to be set by fixture")
+	}
+	cfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	cfg = append(cfg, []byte("\n[open]\neditor = \"configured-editor\"\n")...)
+	if err := os.WriteFile(cfgPath, cfg, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	t.Setenv("EDITOR", "go env")
+	captured := stubExecReplace(t)
+
+	out, err := runNew(t, "new", "book", "Dune", "--var", "author=Herbert", "--edit")
+	if err != nil {
+		t.Fatalf("execute: %v\noutput: %s", err, out)
+	}
+
+	created := filepath.Join(root, "References", "Books", "Dune.md")
+	if got, want := *captured, []string{"go", "env", created}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("execReplace argv = %v, want %v", got, want)
+	}
+}
+
 func TestNewCreatesNoteWithReadableMode(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX mode bits not meaningful on Windows")

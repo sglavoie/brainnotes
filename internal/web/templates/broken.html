@@ -1,0 +1,62 @@
+{{define "broken"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Broken links - bn serve</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <main>
+      <header class="site-header">
+        <div class="site-header-copy">
+          <h1>Broken links</h1>
+          <p class="page-subtitle">Unresolved wikilinks and where they appear.</p>
+        </div>
+        {{template "headerSearch" .}}
+      </header>
+
+      <section class="panel">
+        <form class="filter-form" method="get" action="/broken">
+          <label for="q">Filter target</label>
+          <input id="q" name="q" value="{{.Query}}" />
+          <button type="submit">Filter</button>
+        </form>
+      </section>
+      {{if .HasQuery}}
+        <p>Showing matches for: {{.Query}}</p>
+      {{end}}
+      <section class="panel">
+        {{if .Entries}}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Target</th>
+                  <th>Location</th>
+                  <th>Link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Entries}}
+                  <tr>
+                    <td><a href="{{.SourcePath}}">{{.SourceTitle}}</a></td>
+                    <td><code>{{.Target}}</code></td>
+                    <td>{{.Location}}</td>
+                    <td><code>{{.LinkText}}</code></td>
+                  </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+        {{else}}
+          <p>No broken links found.</p>
+        {{end}}
+      </section>
+    </main>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
+{{end}}
