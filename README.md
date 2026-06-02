@@ -465,6 +465,10 @@ Starts a local HTTP server for vault browsing:
 - `/broken` unresolved wikilink diagnostics
 - `/graph` interactive Cytoscape graph
 
+Rendered note pages syntax-highlight fenced code blocks that include a language
+info string, such as `go`, `sh`, or `json`, on the server. Unlabeled fences
+remain plain escaped code blocks.
+
 Local binaries built with `just build` or `just install` remember this checkout
 path. `bn serve` rebuilds web assets there before starting, preferring the local
 native `node_modules/esbuild/bin/esbuild` binary so an already-installed checkout

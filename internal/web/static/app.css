@@ -760,12 +760,25 @@ code {
   overflow-x: auto;
   border: 1px solid #2a3242;
   border-radius: 0.5rem;
-  background: #0c1018;
+  background: #0c1018 !important;
   padding: 0.65rem;
+}
+
+.note-body pre:focus {
+  outline: 2px solid #5f8fff;
+  outline-offset: 1px;
 }
 
 .note-body code {
   word-break: break-word;
+}
+
+.note-body pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .note-body h1,

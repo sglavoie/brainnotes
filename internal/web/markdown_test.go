@@ -70,16 +70,7 @@ func TestMarkdownRenderer_DoesNotRenderUnsafeRawHTML(t *testing.T) {
 	t.Parallel()
 
 	root := buildWebTestVault(t)
-	_, v := testVaultOpen(t, root, "127.0.0.1:0")
-
-	state, err := newVaultState(v, time.Second)
-	if err != nil {
-		t.Fatalf("newVaultState: %v", err)
-	}
-	renderer, err := newMarkdownRenderer(state)
-	if err != nil {
-		t.Fatalf("newMarkdownRenderer: %v", err)
-	}
+	renderer := newTestMarkdownRenderer(t, root)
 
 	out, err := renderer.render("raw <script>alert(1)</script>")
 	if err != nil {
@@ -90,20 +81,100 @@ func TestMarkdownRenderer_DoesNotRenderUnsafeRawHTML(t *testing.T) {
 	}
 }
 
+func TestMarkdownRenderer_HighlightsRecognizedCodeFence(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("```go\npackage main\n\nfunc main() {\n\tfmt.Println(\"ok\")\n}\n```\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{`<pre tabindex="0"`, `<span`, `style="color:`, `package`, `Println`} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected highlighted code fence to contain %q, got %q", want, html)
+		}
+	}
+	for _, unwanted := range []string{`<table`, `class="ln"`, `class="lnt"`} {
+		if strings.Contains(html, unwanted) {
+			t.Fatalf("expected highlighted code fence without line numbers, got %q", html)
+		}
+	}
+}
+
+func TestMarkdownRenderer_HighlightedCodeFenceEscapesUnsafeHTML(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("```go\nfmt.Println(\"<script>alert(1)</script>\")\n```\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	if strings.Contains(html, "<script>") || strings.Contains(html, "</script>") {
+		t.Fatalf("expected unsafe html in code fence to be escaped, got %q", html)
+	}
+	if !strings.Contains(html, `&lt;script&gt;alert(1)&lt;/script&gt;`) {
+		t.Fatalf("expected escaped script text in code fence, got %q", html)
+	}
+}
+
+func TestMarkdownRenderer_LeavesUnlabeledCodeFencePlain(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("```\npackage main\nfunc main() {}\n```\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	if !strings.Contains(html, "<pre><code>package main\nfunc main() {}\n</code></pre>") {
+		t.Fatalf("expected unlabeled code fence to render as plain code, got %q", html)
+	}
+	for _, unwanted := range []string{`<pre tabindex="0"`, `<span`, `style="color:`, `<table`, `class="ln"`, `class="lnt"`} {
+		if strings.Contains(html, unwanted) {
+			t.Fatalf("expected unlabeled code fence without guessed highlighting or line numbers, got %q", html)
+		}
+	}
+}
+
+func TestMarkdownRenderer_LeavesUnknownCodeFencePlain(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("```brainnotes\n<script>alert(1)</script>\n```\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{`class="language-brainnotes"`, `&lt;script&gt;alert(1)&lt;/script&gt;`} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected unknown code fence to contain %q, got %q", want, html)
+		}
+	}
+	if strings.Contains(html, "<script>") || strings.Contains(html, "</script>") {
+		t.Fatalf("expected unsafe html in unknown code fence to be escaped, got %q", html)
+	}
+	for _, unwanted := range []string{`<pre tabindex="0"`, `<span`, `style="color:`, `<table`, `class="ln"`, `class="lnt"`} {
+		if strings.Contains(html, unwanted) {
+			t.Fatalf("expected unknown code fence without guessed highlighting or line numbers, got %q", html)
+		}
+	}
+}
+
 func TestMarkdownRenderer_AddsHeadingAnchorsWithoutUnsafeRawHTML(t *testing.T) {
 	t.Parallel()
 
 	root := buildWebTestVault(t)
-	_, v := testVaultOpen(t, root, "127.0.0.1:0")
-
-	state, err := newVaultState(v, time.Second)
-	if err != nil {
-		t.Fatalf("newVaultState: %v", err)
-	}
-	renderer, err := newMarkdownRenderer(state)
-	if err != nil {
-		t.Fatalf("newMarkdownRenderer: %v", err)
-	}
+	renderer := newTestMarkdownRenderer(t, root)
 
 	out, err := renderer.render("## Safe Heading\n\nraw <script>alert(1)</script>")
 	if err != nil {
@@ -184,4 +255,19 @@ func TestMarkdownRenderer_MediaEmbedsUseMediaRouteWhenFileExists(t *testing.T) {
 	if strings.Contains(html, `/broken?q=missing.png`) {
 		t.Fatalf("expected missing media embed to avoid broken-link routing, got %q", html)
 	}
+}
+
+func newTestMarkdownRenderer(t *testing.T, root string) *markdownRenderer {
+	t.Helper()
+
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+	state, err := newVaultState(v, time.Second)
+	if err != nil {
+		t.Fatalf("newVaultState: %v", err)
+	}
+	renderer, err := newMarkdownRenderer(state)
+	if err != nil {
+		t.Fatalf("newMarkdownRenderer: %v", err)
+	}
+	return renderer
 }

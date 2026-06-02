@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/yuin/goldmark"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
@@ -42,9 +43,15 @@ func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
 			parser.WithAutoHeadingID(),
 			parser.WithASTTransformers(util.Prioritized(headingAnchorTransformer{}, 100)),
 		),
-		goldmark.WithExtensions(&wikilink.Extender{
-			Resolver: resolver,
-		}),
+		goldmark.WithExtensions(
+			highlighting.NewHighlighting(
+				highlighting.WithStyle("nord"),
+				highlighting.WithGuessLanguage(false),
+			),
+			&wikilink.Extender{
+				Resolver: resolver,
+			},
+		),
 	)
 }
 
