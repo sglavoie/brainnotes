@@ -1063,7 +1063,8 @@ code {
 }
 
 .note-main {
-  max-width: 94rem;
+  width: 100%;
+  max-width: none;
   box-sizing: border-box;
 }
 
@@ -1107,20 +1108,27 @@ code {
 
 @media (min-width: 961px) {
   .note-layout {
-    grid-template-columns: minmax(13.5rem, 17rem) minmax(0, 48rem);
-    justify-content: center;
+    grid-template-columns: minmax(13.5rem, 31.25rem) minmax(0, 1fr);
   }
 
   .note-layout-with-toc {
     grid-template-columns:
-      minmax(13.5rem, 17rem)
+      minmax(13.5rem, 1fr)
       minmax(0, 48rem)
-      minmax(12rem, 16rem);
+      minmax(12rem, 1fr);
+  }
+
+  .note-meta-sidebar,
+  .note-toc-sidebar {
+    width: 100%;
+    max-width: 31.25rem;
+    box-sizing: border-box;
   }
 
   .note-meta-sidebar {
     grid-column: 1;
     grid-row: 1;
+    justify-self: start;
   }
 
   .note-content {
@@ -1131,6 +1139,7 @@ code {
   .note-toc-sidebar {
     grid-column: 3;
     grid-row: 1;
+    justify-self: end;
   }
 
   .note-meta-sidebar,

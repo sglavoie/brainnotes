@@ -33,12 +33,38 @@ func TestNoteLayoutCSSResponsiveContract(t *testing.T) {
 		".note-layout",
 		".note-layout-with-toc",
 		"grid-template-columns:",
+		"minmax(13.5rem, 31.25rem) minmax(0, 1fr)",
+		"minmax(13.5rem, 1fr)",
+		"minmax(0, 48rem)",
+		"minmax(12rem, 1fr)",
+		"max-width: 31.25rem;",
+		"box-sizing: border-box;",
+		"justify-self: start;",
+		"justify-self: end;",
 		"position: sticky;",
 		"max-height: calc(100vh - 2rem);",
 		"overflow-y: auto;",
 	} {
 		if !strings.Contains(desktop, want) {
 			t.Fatalf("desktop note layout CSS missing %q in block:\n%s", want, desktop)
+		}
+	}
+	for _, unwanted := range []string{
+		"justify-content: center;",
+		"minmax(13.5rem, 17rem)",
+		"minmax(12rem, 16rem)",
+	} {
+		if strings.Contains(desktop, unwanted) {
+			t.Fatalf("desktop note layout CSS should not contain %q in block:\n%s", unwanted, desktop)
+		}
+	}
+	for _, want := range []string{
+		".note-main",
+		"width: 100%;",
+		"max-width: none;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("note page width CSS missing %q", want)
 		}
 	}
 }
