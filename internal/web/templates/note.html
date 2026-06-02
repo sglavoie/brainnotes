@@ -12,7 +12,7 @@
       {{end}}
     </ul>
   {{else}}
-    <span>{{.Text}}</span>
+    <span class="frontmatter-text">{{.Text}}</span>
     {{if .Anchors}}
       <span class="frontmatter-anchors">
         {{range .Anchors}}
@@ -33,7 +33,7 @@
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
-    <main>
+    <main class="note-main">
       {{if .Breadcrumbs}}
         <nav class="note-breadcrumbs" aria-label="Breadcrumb">
           <ol>
@@ -72,100 +72,104 @@
         {{end}}
       </div>
 
-      {{if .TOC}}
-        <section class="panel note-toc" aria-labelledby="note-toc-heading">
-          <h2 id="note-toc-heading">Contents</h2>
-          <ol class="note-toc-list">
-            {{range .TOC}}
-              <li class="toc-level-{{.Level}}"><a href="{{.Path}}">{{.Text}}</a></li>
-            {{end}}
-          </ol>
-        </section>
-      {{end}}
-
-      <section class="panel">
-        <h2>Body</h2>
-        <div class="note-body">{{.BodyHTML}}</div>
-      </section>
-
-      <section class="panel">
-        <h2>Frontmatter</h2>
-        {{if .Frontmatter}}
-          <div class="table-wrap">
-            <table>
-              <tbody>
+      <div class="note-layout{{if .TOC}} note-layout-with-toc{{end}}">
+        <aside class="note-meta-sidebar" aria-label="Note metadata">
+          <section class="panel">
+            <h2>Frontmatter</h2>
+            {{if .Frontmatter}}
+              <dl class="frontmatter-rows">
                 {{range .Frontmatter}}
-                  <tr>
-                    <th>{{.Key}}</th>
-                    <td>{{template "frontmatterValue" .Value}}</td>
-                  </tr>
+                  <div class="frontmatter-row">
+                    <dt>{{.Key}}</dt>
+                    <dd>{{template "frontmatterValue" .Value}}</dd>
+                  </div>
                 {{end}}
-              </tbody>
-            </table>
-          </div>
-        {{else}}
-          <p>No frontmatter.</p>
-        {{end}}
-      </section>
+              </dl>
+            {{else}}
+              <p>No frontmatter.</p>
+            {{end}}
+          </section>
 
-      <section class="panel">
-        <h2>Backlinks</h2>
-        {{if .Backlinks}}
-          <ul class="link-list">
-            {{range .Backlinks}}
-              <li class="backlink-item">
-                <div class="backlink-summary">
-                  <a href="{{.Path}}">{{.Title}}</a>
-                  {{if .Count}}
-                    <span class="backlink-count">
-                      {{if eq .Count 1}}1 mention{{else}}{{.Count}} mentions{{end}}
-                    </span>
-                  {{end}}
-                </div>
-                {{if .Occurrences}}
-                  <ul class="backlink-occurrences">
-                    {{range .Occurrences}}
-                      <li>
-                        {{if .Location}}<span class="backlink-location">{{.Location}}</span>{{end}}
-                        {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
-                      </li>
+          <section class="panel">
+            <h2>Backlinks</h2>
+            {{if .Backlinks}}
+              <ul class="link-list">
+                {{range .Backlinks}}
+                  <li class="backlink-item">
+                    <div class="backlink-summary">
+                      <a href="{{.Path}}">{{.Title}}</a>
+                      {{if .Count}}
+                        <span class="backlink-count">
+                          {{if eq .Count 1}}1 mention{{else}}{{.Count}} mentions{{end}}
+                        </span>
+                      {{end}}
+                    </div>
+                    {{if .Occurrences}}
+                      <ul class="backlink-occurrences">
+                        {{range .Occurrences}}
+                          <li>
+                            {{if .Location}}<span class="backlink-location">{{.Location}}</span>{{end}}
+                            {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
+                          </li>
+                        {{end}}
+                      </ul>
                     {{end}}
-                  </ul>
+                  </li>
                 {{end}}
-              </li>
+              </ul>
+            {{else}}
+              <p>None.</p>
             {{end}}
-          </ul>
-        {{else}}
-          <p>None.</p>
-        {{end}}
-      </section>
+          </section>
 
-      <section class="panel">
-        <h2>Outgoing links</h2>
-        {{if .Outgoing}}
-          <ul class="link-list">
-            {{range .Outgoing}}
-              <li><a href="{{.Path}}">{{.Title}}</a></li>
+          <section class="panel">
+            <h2>Outgoing links</h2>
+            {{if .Outgoing}}
+              <ul class="link-list">
+                {{range .Outgoing}}
+                  <li><a href="{{.Path}}">{{.Title}}</a></li>
+                {{end}}
+              </ul>
+            {{else}}
+              <p>None.</p>
             {{end}}
-          </ul>
-        {{else}}
-          <p>None.</p>
-        {{end}}
-      </section>
+          </section>
+        </aside>
 
-      {{if .Broken}}
-        <section class="panel">
-          <h2>Broken links</h2>
-          <ul class="link-list broken-list">
-            {{range .Broken}}
-              <li>
-                <a href="{{.Path}}">{{.Target}}</a>
-                {{if .Location}}<span class="broken-location">({{.Location}})</span>{{end}}
-              </li>
-            {{end}}
-          </ul>
-        </section>
-      {{end}}
+        {{if .TOC}}
+          <aside class="note-toc-sidebar" aria-label="Table of contents">
+            <section class="panel note-toc" aria-labelledby="note-toc-heading">
+              <h2 id="note-toc-heading">Contents</h2>
+              <ol class="note-toc-list">
+                {{range .TOC}}
+                  <li class="toc-level-{{.Level}}"><a href="{{.Path}}">{{.Text}}</a></li>
+                {{end}}
+              </ol>
+            </section>
+          </aside>
+        {{end}}
+
+        <div class="note-content">
+          <section class="panel">
+            <h2>Body</h2>
+            <div class="note-body">{{.BodyHTML}}</div>
+          </section>
+
+          {{if .Broken}}
+            <section class="panel">
+              <h2>Broken links</h2>
+              <ul class="link-list broken-list">
+                {{range .Broken}}
+                  <li>
+                    <a href="{{.Path}}">{{.Target}}</a>
+                    {{if .Location}}<span class="broken-location">({{.Location}})</span>{{end}}
+                  </li>
+                {{end}}
+              </ul>
+            </section>
+          {{end}}
+        </div>
+      </div>
     </main>
     <script src="/static/app.js" defer></script>
   </body>

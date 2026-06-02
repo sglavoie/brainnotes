@@ -726,6 +726,110 @@ code {
   color: #ff9090;
 }
 
+.note-main {
+  max-width: 94rem;
+  box-sizing: border-box;
+}
+
+.note-main h1,
+.note-layout h1,
+.note-layout h2,
+.note-layout h3,
+.note-layout h4,
+.note-layout h5,
+.note-layout h6 {
+  overflow-wrap: anywhere;
+}
+
+.note-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.note-meta-sidebar,
+.note-toc-sidebar,
+.note-content {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.note-layout .panel {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.note-layout a,
+.note-layout code,
+.note-layout li,
+.note-layout p {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 961px) {
+  .note-layout {
+    grid-template-columns: minmax(13.5rem, 17rem) minmax(0, 48rem);
+    justify-content: center;
+  }
+
+  .note-layout-with-toc {
+    grid-template-columns:
+      minmax(13.5rem, 17rem)
+      minmax(0, 48rem)
+      minmax(12rem, 16rem);
+  }
+
+  .note-meta-sidebar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .note-content {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .note-toc-sidebar {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .note-meta-sidebar,
+  .note-toc-sidebar {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding-right: 0.1rem;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 960px) {
+  .note-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .note-meta-sidebar,
+  .note-toc-sidebar,
+  .note-content {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .note-meta-sidebar,
+  .note-toc-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+    scrollbar-gutter: auto;
+  }
+}
+
 .note-toc-list {
   display: grid;
   gap: 0.25rem;
@@ -746,6 +850,22 @@ code {
 .note-toc-list .toc-level-5,
 .note-toc-list .toc-level-6 {
   margin-left: 2rem;
+}
+
+.note-toc-sidebar .note-toc-list {
+  padding-left: 1rem;
+  font-size: 0.92rem;
+}
+
+.note-toc-sidebar .note-toc-list .toc-level-2 {
+  margin-left: 0.65rem;
+}
+
+.note-toc-sidebar .note-toc-list .toc-level-3,
+.note-toc-sidebar .note-toc-list .toc-level-4,
+.note-toc-sidebar .note-toc-list .toc-level-5,
+.note-toc-sidebar .note-toc-list .toc-level-6 {
+  margin-left: 1.1rem;
 }
 
 .note-body > :first-child {
@@ -819,7 +939,52 @@ code {
 }
 
 .frontmatter-anchors a {
-  margin-left: 0.5rem;
+  margin-left: 0;
+}
+
+.frontmatter-rows {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.frontmatter-row {
+  min-width: 0;
+  border-top: 1px solid #253044;
+  padding-top: 0.65rem;
+}
+
+.frontmatter-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.frontmatter-row dt {
+  margin: 0 0 0.18rem;
+  color: #9aa5bd;
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.frontmatter-row dd {
+  min-width: 0;
+  margin: 0;
+  color: #d6deee;
+  overflow-wrap: anywhere;
+}
+
+.frontmatter-text {
+  overflow-wrap: anywhere;
+}
+
+.frontmatter-anchors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-width: 100%;
+  margin-left: 0.4rem;
+  vertical-align: baseline;
 }
 
 .frontmatter-list,
@@ -827,6 +992,13 @@ code {
 .link-list {
   margin: 0;
   padding-left: 1.25rem;
+}
+
+.frontmatter-list li,
+.frontmatter-map li,
+.link-list li {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .backlink-item + .backlink-item {
@@ -838,6 +1010,12 @@ code {
   gap: 0.5rem;
   flex-wrap: wrap;
   align-items: baseline;
+  min-width: 0;
+}
+
+.backlink-summary a {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .backlink-count,
@@ -846,22 +1024,31 @@ code {
   font-size: 0.85rem;
 }
 
+.backlink-count {
+  flex: 0 0 auto;
+}
+
 .backlink-occurrences {
   display: grid;
   gap: 0.35rem;
   margin: 0.35rem 0 0;
-  padding-left: 1rem;
+  padding-left: 0;
   color: #c8d1e3;
+  font-size: 0.9rem;
+  list-style: none;
 }
 
 .backlink-occurrences li {
   min-width: 0;
+  border-left: 2px solid #2a3242;
+  padding-left: 0.55rem;
 }
 
 .backlink-location {
-  display: inline-block;
-  margin-right: 0.4rem;
-  white-space: nowrap;
+  display: block;
+  margin-right: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .backlink-snippet {

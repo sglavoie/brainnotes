@@ -604,7 +604,7 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 			"# Overview",
 			"",
 			"## Details",
-			"Body",
+			"Body [[Ref]] [[Missing]]",
 			"",
 		}, "\n")),
 		"Ref.md": []byte(strings.Join([]string{
@@ -627,6 +627,7 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 	}
 
 	for _, want := range []string{
+		`<main class="note-main">`,
 		`<nav class="note-breadcrumbs" aria-label="Breadcrumb">`,
 		`href="/?folder=Projects"`,
 		`<span aria-current="page">Source</span>`,
@@ -635,23 +636,64 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 		`data-copy-text="Projects/Source.md"`,
 		`data-copy-text="/n/projects/source"`,
 		`data-copy-text="[Source](/n/projects/source)"`,
+		`<div class="note-layout note-layout-with-toc">`,
+		`<aside class="note-meta-sidebar" aria-label="Note metadata">`,
+		`<aside class="note-toc-sidebar" aria-label="Table of contents">`,
+		`<div class="note-content">`,
 		`<section class="panel note-toc" aria-labelledby="note-toc-heading">`,
 		`href="/n/projects/source#overview"`,
 		`href="/n/projects/source#details"`,
 		`id="overview"`,
 		`href="#overview"`,
 		`class="heading-anchor"`,
+		`<h2>Frontmatter</h2>`,
+		`<dl class="frontmatter-rows">`,
+		`<div class="frontmatter-row">`,
+		`<dt>title</dt>`,
+		`<dd>`,
+		`<span class="frontmatter-text">Source</span>`,
 		`class="backlink-occurrences"`,
 		`frontmatter.related`,
 		`See [[Source]]`,
 		`&lt;script&gt;alert(1)&lt;/script&gt; [[Source]]`,
+		`<h2>Outgoing links</h2>`,
+		`href="/n/ref"`,
+		`<h2>Broken links</h2>`,
+		`href="/broken?q=missing"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected note HTML to contain %q, got %q", want, body)
 		}
 	}
+	for _, fragments := range [][]string{
+		{
+			`<aside class="note-meta-sidebar"`,
+			`<aside class="note-toc-sidebar"`,
+			`<div class="note-content">`,
+		},
+		{
+			`<div class="note-content">`,
+			`<h2>Body</h2>`,
+			`<h2>Broken links</h2>`,
+		},
+	} {
+		last := -1
+		for _, fragment := range fragments {
+			idx := strings.Index(body, fragment)
+			if idx == -1 {
+				t.Fatalf("expected note HTML to contain %q, got %q", fragment, body)
+			}
+			if idx <= last {
+				t.Fatalf("expected %q to appear after previous fragment in %v, got %q", fragment, fragments, body)
+			}
+			last = idx
+		}
+	}
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("backlink snippet rendered unsafe raw HTML, got %q", body)
+	}
+	if strings.Contains(body, "<table>") {
+		t.Fatalf("frontmatter should render as compact metadata rows, got %q", body)
 	}
 }
 
