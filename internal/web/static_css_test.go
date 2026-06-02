@@ -43,6 +43,44 @@ func TestNoteLayoutCSSResponsiveContract(t *testing.T) {
 	}
 }
 
+func TestManagementCSSAccessibilityAndMobileContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		"a:focus-visible",
+		".overview-result-link:focus-visible",
+		".overview-bulk-button:focus-visible",
+		".history-button:focus-visible",
+		".trash-note-button:focus-visible",
+		".frontmatter-button:focus-visible",
+		".create-note-button:focus-visible",
+		"outline: 2px solid #5f8fff;",
+		"white-space: nowrap;",
+		".history-item > .history-button",
+		"justify-self: end;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("management accessibility CSS missing %q", want)
+		}
+	}
+
+	narrow := cssBlockAfter(t, css, "@media (max-width: 640px)")
+	for _, want := range []string{
+		".overview-bulk-form",
+		"width: 100%;",
+		".overview-bulk-form input",
+		".overview-bulk-form select",
+		"flex: 1 1 10rem;",
+		".history-item",
+		"grid-template-columns: minmax(0, 1fr);",
+		"justify-self: stretch;",
+	} {
+		if !strings.Contains(narrow, want) {
+			t.Fatalf("narrow management CSS missing %q in block:\n%s", want, narrow)
+		}
+	}
+}
+
 func readStaticCSS(t *testing.T) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("static", "app.css"))

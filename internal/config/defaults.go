@@ -16,10 +16,10 @@ func DefaultTemplate() string {
 # vault = "/Users/you/vault"
 
 # Extra vault-relative paths to skip when walking notes. These are MERGED
-# with the built-in defaults: .git, .obsidian, Attachments, Archive.
+# with the built-in defaults: .git, .obsidian, Attachments, Archive, Trash.
 # The configured [templates].dir (default "Templates") is also skipped
 # automatically.
-# ignore = ["Trash", "Drafts"]
+# ignore = ["Drafts"]
 
 [templates]
 # Directory where note templates live (vault-relative).

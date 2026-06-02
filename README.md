@@ -74,7 +74,7 @@ Vault path resolution, in order:
 vault = "/path/to/vault"
 
 # Extra vault-relative paths to skip during Walk; merged with hard-coded
-# defaults: .git, .obsidian, Attachments, Archive. The configured
+# defaults: .git, .obsidian, Attachments, Archive, Trash. The configured
 # [templates].dir is also skipped automatically.
 ignore = []
 
@@ -112,7 +112,7 @@ daily   = "Daily"
 ```
 
 Default ignore entries (always applied): `.git`, `.obsidian`, `Attachments`,
-`Archive`. The configured `[templates].dir` (default `Templates`) is also
+`Archive`, `Trash`. The configured `[templates].dir` (default `Templates`) is also
 skipped automatically, since template files contain unrendered placeholders
 that aren't valid YAML.
 
@@ -458,12 +458,26 @@ directory argument as a session root (`nvim`, `code`, `subl`, etc.).
 bn serve [--addr host:port] [--port N] [--no-open]
 ```
 
-Starts a local HTTP server for vault browsing:
+Starts a local HTTP server for vault browsing and lightweight note management:
 
 - `/` overview with note counts, filtered search results, diagnostics, and primary search
-- `/n/<note-key>` rendered note view (body, frontmatter, backlinks/outgoing, broken affordances)
-- `/broken` unresolved wikilink diagnostics
+- `/n/<note-key>` rendered note view (body, editable frontmatter, backlinks/outgoing, broken affordances)
+- `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
+- `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
+
+The overview search results can select notes for batch lifecycle work: move to
+Trash, move to a folder, set/list-edit frontmatter, or unset frontmatter. Note
+pages can move the current note to Trash, edit frontmatter in place, create a
+blank note for a broken wikilink target, and open the file in the configured
+editor for body edits. These web actions use the same note-management code as
+the CLI where practical, refresh the served vault state after success, and
+return structured JSON for automation.
+
+Trash is a visible vault-root `Trash/` folder. Trashing a note moves the file
+there, chooses a non-conflicting destination name, and leaves `Trash/` ignored by
+default so trashed notes do not continue to appear in search, graph, or
+diagnostics.
 
 Rendered note pages syntax-highlight fenced code blocks that include a language
 info string, such as `go`, `sh`, or `json`, on the server. Unlabeled fences
@@ -498,13 +512,16 @@ resolved address host. `--no-open` forces browser launch off even when
 `[serve].open_browser = true`.
 
 The default bind is localhost (`127.0.0.1:8729`). This is single-user local
-software; there is no auth layer. Side-effecting opens (`POST /api/open`)
+software; there is no auth layer. All side-effecting web routes use `POST`,
 require a per-process CSRF token (`X-BN-CSRF` header or `token` form field),
-and note containment checks reject paths outside the vault.
+validate note route keys, and reject paths outside the vault. File-changing web
+actions write undo journal entries with `bn web ...` command names; `POST
+/api/undo` restores the latest entry by default or a selected entry ID.
 
 Editor opens from the note page use the same editor resolution as CLI open
 commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
-if editing changes the file, refresh the page manually to see updates.
+if editing the file outside the web UI changes the body, refresh the page
+manually to see updates.
 
 Media embeds (`![[image.png]]`) render through `/media/...` only when the file
 exists. Missing media embeds remain plain text (they do not redirect to
@@ -912,7 +929,9 @@ bn lint
 `bn` keeps a vault-local operation journal at `<vault>/.bnotes/journal/`.
 
 - Journaled commands (apply mode): `new`, `set`, `unset`, `replace`, `rename`,
-  `move`, `repair`, `relink`.
+  `move`, `repair`, `relink`, plus `bn serve` management actions such as
+  `bn web trash`, `bn web move`, `bn web frontmatter set`,
+  `bn web frontmatter unset`, and broken-link stub creation.
 - Snapshot commands `backup` / `restore` are separate from the undo journal and
   do not create journal entries.
 - Read-only commands never journal.
@@ -924,6 +943,8 @@ Recommended safety workflow:
 2. Re-run without `--dry-run` to apply.
 3. Inspect `git diff`.
 4. If needed, run `bn history`, then `bn undo <id>` (or `bn undo` for latest).
+   In `bn serve`, use the Recent changes panel or `POST /api/undo` for the same
+   journal entries.
 5. Re-check with `git diff` before committing.
 
 v1 limits and non-goals:

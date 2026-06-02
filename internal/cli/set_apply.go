@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -20,29 +18,25 @@ import (
 // emitted to dry.Out, and the file is not written. vaultRoot is used to
 // shorten paths in the diff header; pass "" to fall back to the absolute path.
 func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
+	if dry == nil {
+		return noteops.ApplyFrontmatterMutations(path, pairs, fm, journaler)
+	}
+
 	note, front, err := loadSetNote(path)
 	if err != nil {
 		return false, err
 	}
 
 	before := snapshotKeys(front, pairs)
-	changed, err := applySetPairs(front, pairs, fm)
+	changed, err := noteops.ApplyFrontmatterMutationsToMap(front, pairs, fm)
 	if err != nil || !changed {
 		return false, err
 	}
 	if !setPairsNetChanged(front, before, pairs) {
 		return false, nil
 	}
-	if dry != nil {
-		return writeSetDryRun(path, vaultRoot, front, before, pairs, dry)
-	}
-	if err := journaler.Capture(path); err != nil {
-		return false, err
-	}
-	if err := note.Save(fm); err != nil {
-		return false, err
-	}
-	return true, nil
+	_ = note
+	return writeSetDryRun(path, vaultRoot, front, before, pairs, dry)
 }
 
 func loadSetNote(path string) (*vault.Note, *frontmatter.Map, error) {
@@ -58,60 +52,23 @@ func loadSetNote(path string) (*vault.Note, *frontmatter.Map, error) {
 }
 
 func applySetPairs(front *frontmatter.Map, pairs []setPair, fm *config.FrontmatterConfig) (bool, error) {
-	changed := false
-	for _, pair := range pairs {
-		pairChanged, err := applySetPair(front, pair, fm)
-		if err != nil {
-			return false, err
-		}
-		if pairChanged {
-			changed = true
-		}
-	}
-	return changed, nil
+	return noteops.ApplyFrontmatterMutationsToMap(front, pairs, fm)
 }
 
 func applySetPair(front *frontmatter.Map, pair setPair, fm *config.FrontmatterConfig) (bool, error) {
-	switch pair.Op {
-	case opSet:
-		newVal := wikilinkNormalized(pair.Value, pair.Key, fm)
-		existing, present := front.Get(pair.Key)
-		if present && dryRunValuesEqual(existing, newVal) {
-			return false, nil
-		}
-		front.Set(pair.Key, newVal)
-		return true, nil
-	case opAdd:
-		return applySetListMutation(front, pair.Key, pair.Value, "+=")
-	case opRemove:
-		return applySetListMutation(front, pair.Key, pair.Value, "-=")
-	default:
-		return false, fmt.Errorf("set: internal error: unsupported operation for %q", pair.Key)
-	}
+	return noteops.ApplyFrontmatterMutation(front, pair, fm)
 }
 
 func applySetListMutation(front *frontmatter.Map, key string, value any, op string) (bool, error) {
-	vals, ok := value.([]any)
-	if !ok {
-		return false, fmt.Errorf("set: internal error: %s value for %q is not a list", op, key)
+	mutationOp := noteops.FrontmatterListAdd
+	if op == "-=" {
+		mutationOp = noteops.FrontmatterListRemove
 	}
-
-	var (
-		changed bool
-		err     error
-	)
-	if op == "+=" {
-		changed, err = front.ListAdd(key, vals...)
-	} else {
-		changed, err = front.ListRemove(key, vals...)
-	}
-	if err != nil {
-		if errors.Is(err, frontmatter.ErrNotAList) {
-			return false, fmt.Errorf("set: cannot apply %q to %q: existing value is not a list", op, key)
-		}
-		return false, err
-	}
-	return changed, nil
+	return noteops.ApplyFrontmatterMutation(front, noteops.FrontmatterMutation{
+		Key:   key,
+		Op:    mutationOp,
+		Value: value,
+	}, nil)
 }
 
 func setPairsNetChanged(front *frontmatter.Map, before map[string]snapshot, pairs []setPair) bool {

@@ -1,0 +1,399 @@
+package noteops
+
+import (
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
+)
+
+// MovePlan captures every edit required to move a note across folders.
+type MovePlan struct {
+	Target    string
+	NewPath   string
+	OldRel    string
+	NewRel    string
+	Changes   []Change
+	FileOrder []string
+}
+
+// MoveResult describes a completed note move.
+type MoveResult struct {
+	Source      PathResolution
+	Destination PathResolution
+	Plan        *MovePlan
+	Journal     *journal.Entry
+}
+
+type moveOptions struct {
+	command        string
+	force          bool
+	out            io.Writer
+	journalOptions []journal.RecorderOption
+}
+
+// MoveOption customizes MoveNote.
+type MoveOption func(*moveOptions)
+
+func WithMoveCommand(command string) MoveOption {
+	return func(o *moveOptions) {
+		o.command = strings.TrimSpace(command)
+	}
+}
+
+func WithMoveForce(force bool) MoveOption {
+	return func(o *moveOptions) {
+		o.force = force
+	}
+}
+
+func WithMoveOutput(out io.Writer) MoveOption {
+	return func(o *moveOptions) {
+		o.out = out
+	}
+}
+
+func WithMoveJournalOptions(opts ...journal.RecorderOption) MoveOption {
+	return func(o *moveOptions) {
+		o.journalOptions = append(o.journalOptions, opts...)
+	}
+}
+
+// MoveNote moves targetPath into newFolderArg, preserving its filename and
+// rewriting only folder-qualified wikilinks.
+func MoveNote(v *vault.Vault, cfg *config.Config, targetPath, newFolderArg string, opts ...MoveOption) (*MoveResult, error) {
+	if v == nil {
+		return nil, Errorf(CodeInvalidRequest, "move: nil vault")
+	}
+	if cfg == nil {
+		return nil, Errorf(CodeInvalidRequest, "move: nil config")
+	}
+	options := defaultMoveOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+
+	source, err := resolveExistingMutationPath(v.Root, mutationTargetPath(v.Root, targetPath), "move:")
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureRegularSource(source.AbsPath, "move:"); err != nil {
+		return nil, err
+	}
+	target := &vault.Note{Path: source.AbsPath}
+	title := target.Title()
+	oldFolder, err := target.Folder(v.Root)
+	if err != nil {
+		return nil, WrapError(CodeInvalidRequest, "move: resolve source folder", err)
+	}
+
+	newFolderRel, newFolderAbs, err := ResolveNewFolder(v.Root, newFolderArg)
+	if err != nil {
+		return nil, err
+	}
+	newPath := filepath.Join(newFolderAbs, title+filepath.Ext(source.AbsPath))
+	dest, err := resolveWritableMutationPath(v.Root, newPath, "move:")
+	if err != nil {
+		return nil, err
+	}
+	if err := CheckMoveDestination(source.AbsPath, dest.AbsPath, options.force); err != nil {
+		return nil, err
+	}
+
+	oldRel := JoinFolderTitle(oldFolder, title)
+	newRel := JoinFolderTitle(newFolderRel, title)
+	if err := ValidateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
+		return nil, err
+	}
+	if oldRel == newRel {
+		return nil, Errorf(CodeInvalidRequest, "move: destination is the same as source: %s", oldRel)
+	}
+
+	plan, err := BuildMovePlan(v, source.AbsPath, dest.AbsPath, oldRel, newRel, cfg)
+	if err != nil {
+		return nil, err
+	}
+	j := NewJournal(v.Root, options.command, options.journalOptions...)
+	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
+		return nil, WrapError(CodeInternal, fmt.Sprintf("move: mkdir %q", newFolderAbs), err)
+	}
+	if err := CheckMoveDestination(plan.Target, plan.NewPath, options.force); err != nil {
+		return nil, err
+	}
+	if err := j.Capture(plan.Target); err != nil {
+		return nil, err
+	}
+	if err := j.Capture(plan.NewPath); err != nil {
+		return nil, err
+	}
+	for _, p := range plan.FileOrder {
+		if err := j.Capture(p); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
+		return nil, err
+	}
+	if err := RenameFile(plan.Target, plan.NewPath); err != nil {
+		return nil, err
+	}
+	entry, err := j.Finalize()
+	if err != nil {
+		return nil, err
+	}
+	return &MoveResult{
+		Source:      source,
+		Destination: dest,
+		Plan:        plan,
+		Journal:     entry,
+	}, nil
+}
+
+func defaultMoveOptions() moveOptions {
+	return moveOptions{
+		command: "bn web move",
+		out:     io.Discard,
+	}
+}
+
+func ResolveNewFolder(vaultRoot, arg string) (rel, abs string, err error) {
+	if arg == "" {
+		return "", vaultRoot, nil
+	}
+	fullPath, err := resolveNewDestFolder(vaultRoot, arg, "move: new folder")
+	if err != nil {
+		return "", "", err
+	}
+	fullPath, err = filepath.Abs(fullPath)
+	if err != nil {
+		return "", "", WrapError(CodeInternal, "move: resolve new folder", err)
+	}
+	if err := checkMutationPathContained(vaultRoot, fullPath); err != nil {
+		return "", "", Errorf(CodeForbidden, "move: new folder %q is outside the vault", arg)
+	}
+
+	relPath, relErr := filepath.Rel(vaultRoot, fullPath)
+	if relErr != nil {
+		return "", "", WrapError(CodeInternal, fmt.Sprintf("move: resolve %q", arg), relErr)
+	}
+	if relPath == "." {
+		return "", vaultRoot, nil
+	}
+	if RelEscapesRoot(relPath) || filepath.IsAbs(relPath) {
+		return "", "", Errorf(CodeForbidden, "move: new folder %q is outside the vault", arg)
+	}
+	if info, statErr := os.Stat(fullPath); statErr == nil && !info.IsDir() {
+		return "", "", Errorf(CodeConflict, "move: new folder %q exists but is not a directory", arg)
+	}
+	return filepath.ToSlash(relPath), fullPath, nil
+}
+
+func JoinFolderTitle(folder, title string) string {
+	if folder == "" {
+		return title
+	}
+	return folder + "/" + title
+}
+
+func CheckMoveDestination(targetPath, newPath string, force bool) error {
+	if newPath == targetPath {
+		return Errorf(CodeInvalidRequest, "move: new path is identical to current path: %s", newPath)
+	}
+	newInfo, err := os.Lstat(newPath)
+	if err != nil {
+		if errorsIs(err, fs.ErrNotExist) {
+			return nil
+		}
+		return WrapError(CodeConflict, fmt.Sprintf("move: stat %q", newPath), err)
+	}
+	targetInfo, terr := os.Lstat(targetPath)
+	if terr == nil && os.SameFile(targetInfo, newInfo) {
+		return nil
+	}
+	if newInfo.IsDir() {
+		return Errorf(CodeConflict, "move: destination %s is an existing directory", newPath)
+	}
+	if force {
+		return nil
+	}
+	return Errorf(CodeConflict, "move: destination %s already exists (use --force to overwrite)", newPath)
+}
+
+func ValidateMoveTargetPath(newFolderArg, folder string) error {
+	if r, ok := wikilink.FirstReservedTargetRune(folder); ok {
+		return Errorf(CodeInvalidRequest, "move: new folder %q may not contain %q; folder-qualified wikilinks would become invalid", newFolderArg, r)
+	}
+	return nil
+}
+
+func BuildMovePlan(v *vault.Vault, targetPath, newPath, oldRel, newRel string, cfg *config.Config) (*MovePlan, error) {
+	plan := &MovePlan{
+		Target:  targetPath,
+		NewPath: newPath,
+		OldRel:  oldRel,
+		NewRel:  newRel,
+	}
+	seenFiles := make(map[string]struct{})
+	addFile := func(path string) {
+		if _, ok := seenFiles[path]; ok {
+			return
+		}
+		seenFiles[path] = struct{}{}
+		plan.FileOrder = append(plan.FileOrder, path)
+	}
+
+	err := v.Walk(vault.WalkFilter{}, func(n *vault.Note) error {
+		if err := n.Load(); err != nil {
+			return err
+		}
+		body, err := n.Body()
+		if err != nil {
+			return err
+		}
+		bodyChanges := ScanBodyMove(n.Path, body, oldRel, newRel)
+		if len(bodyChanges) > 0 {
+			plan.Changes = append(plan.Changes, bodyChanges...)
+			addFile(n.Path)
+		}
+
+		front, err := n.Front()
+		if err != nil {
+			return err
+		}
+		fmChanges := ScanFrontmatterMove(n.Path, front, oldRel, newRel, cfg.Frontmatter.WikilinkProperties)
+		if len(fmChanges) > 0 {
+			plan.Changes = append(plan.Changes, fmChanges...)
+			addFile(n.Path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("move: scan vault: %w", err)
+	}
+	return plan, nil
+}
+
+func ScanBodyMove(file, body, oldRel, newRel string) []Change {
+	return scanBodyWithRewrite(file, body, oldRel, newRel, wikilink.RewriteMove)
+}
+
+func ScanFrontmatterMove(file string, front *frontmatter.Map, oldRel, newRel string, wikilinkProps []string) []Change {
+	return scanFrontmatterWithRewrite(file, front, oldRel, newRel, wikilinkProps, wikilink.RewriteMove)
+}
+
+func PrintMovePlan(out io.Writer, vaultRoot string, plan *MovePlan) error {
+	relTarget, err := filepath.Rel(vaultRoot, plan.Target)
+	if err != nil {
+		relTarget = plan.Target
+	}
+	relNew, err := filepath.Rel(vaultRoot, plan.NewPath)
+	if err != nil {
+		relNew = plan.NewPath
+	}
+	if _, err := fmt.Fprintf(out, "move: %s -> %s\n", relTarget, relNew); err != nil {
+		return err
+	}
+	return printChanges(out, vaultRoot, plan.Changes)
+}
+
+func ApplyMovePlan(vaultRoot string, plan *MovePlan, fmCfg *config.FrontmatterConfig, out io.Writer) error {
+	if out == nil {
+		out = io.Discard
+	}
+	for _, file := range plan.FileOrder {
+		if err := RewriteFileMove(file, plan.OldRel, plan.NewRel, fmCfg); err != nil {
+			return fmt.Errorf("move: rewrite %s: %w", file, err)
+		}
+		rel, err := filepath.Rel(vaultRoot, file)
+		if err != nil {
+			rel = file
+		}
+		if _, err := fmt.Fprintf(out, "%s: updated\n", rel); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func RewriteFileMove(path, oldRel, newRel string, fmCfg *config.FrontmatterConfig) error {
+	note := &vault.Note{Path: path}
+	if err := note.Load(); err != nil {
+		return err
+	}
+	body, err := note.Body()
+	if err != nil {
+		return err
+	}
+	newBody := wikilink.RewriteMove(body, oldRel, newRel)
+	if newBody != body {
+		if err := note.SetBody(newBody); err != nil {
+			return err
+		}
+	}
+	front, err := note.Front()
+	if err != nil {
+		return err
+	}
+	RewriteFrontmatterMove(front, oldRel, newRel, fmCfg)
+	return note.Save(fmCfg)
+}
+
+func RewriteFrontmatterMove(front *frontmatter.Map, oldRel, newRel string, fmCfg *config.FrontmatterConfig) {
+	rewriteFrontmatterProps(front, oldRel, newRel, fmCfg, wikilink.RewriteMove)
+}
+
+func resolveNewDestFolder(vaultRoot, raw, label string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", Errorf(CodeInvalidRequest, "%s %q is whitespace-only", label, raw)
+	}
+	for _, r := range raw {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return "", Errorf(CodeInvalidRequest, "%s %q contains a control character (U+%04X)", label, raw, r)
+		}
+	}
+	normalized := filepath.ToSlash(trimmed)
+	normalized = strings.ReplaceAll(normalized, "\\", "/")
+	if isNewDestAbsLike(normalized) {
+		return "", Errorf(CodeInvalidRequest, "%s %q is an absolute path (must be vault-relative)", label, raw)
+	}
+	normalized = strings.TrimRight(normalized, "/")
+	if normalized == "" {
+		return "", Errorf(CodeInvalidRequest, "%s %q is whitespace-only", label, raw)
+	}
+	cleaned := path.Clean(normalized)
+	if cleaned == "." {
+		return vaultRoot, nil
+	}
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", Errorf(CodeForbidden, "%s %q is outside the vault", label, raw)
+	}
+	return filepath.Join(vaultRoot, filepath.FromSlash(cleaned)), nil
+}
+
+func isNewDestAbsLike(p string) bool {
+	p = strings.TrimSpace(p)
+	if strings.HasPrefix(p, "/") {
+		return true
+	}
+	if len(p) >= 2 && isASCIIAlpha(p[0]) && p[1] == ':' {
+		return len(p) == 2 || p[2] == '/'
+	}
+	return false
+}
+
+func isASCIIAlpha(b byte) bool {
+	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
+}

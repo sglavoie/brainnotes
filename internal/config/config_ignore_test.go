@@ -32,6 +32,32 @@ func TestLoad_IgnoreMergesUserAndDefaults(t *testing.T) {
 	}
 }
 
+func TestLoad_TrashIsDefaultIgnoredAndDeduped(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"./Trash\", \"Drafts\"]\n")
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	trashCount := 0
+	for _, p := range cfg.Ignore {
+		if p == "Trash" {
+			trashCount++
+		}
+	}
+	if trashCount != 1 {
+		t.Fatalf("expected Trash once after default merge, got %d (%v)", trashCount, cfg.Ignore)
+	}
+	if !contains(cfg.Ignore, "Drafts") {
+		t.Fatalf("user ignore missing: %v", cfg.Ignore)
+	}
+}
+
 func TestLoad_IgnoreNormalizesRepeatedDotSlashPrefix(t *testing.T) {
 	// "././Archive" should collapse to "Archive" and dedup with the default.
 	// Before the fix, normalizeIgnore only stripped a single "./" prefix,

@@ -80,7 +80,7 @@ type NewConfig struct {
 }
 
 // DefaultIgnore lists the vault-relative paths that are always skipped.
-var DefaultIgnore = []string{".git", ".obsidian", "Attachments", "Archive"}
+var DefaultIgnore = []string{".git", ".obsidian", "Attachments", "Archive", "Trash"}
 
 // DefaultJournalDir is the vault-relative directory reserved for undo journal
 // entries.

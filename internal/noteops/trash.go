@@ -1,0 +1,229 @@
+package noteops
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+)
+
+const trashTimestampFormat = "20060102T150405Z"
+
+// TrashResult describes a note moved into the vault-local Trash folder.
+type TrashResult struct {
+	Source      PathResolution
+	Destination PathResolution
+	Journal     *journal.Entry
+}
+
+type trashOptions struct {
+	command        string
+	now            func() time.Time
+	shortID        func() (string, error)
+	journalOptions []journal.RecorderOption
+}
+
+// TrashOption customizes TrashNote.
+type TrashOption func(*trashOptions)
+
+// WithTrashCommand sets the command stored in the undo journal entry.
+func WithTrashCommand(command string) TrashOption {
+	return func(o *trashOptions) {
+		o.command = strings.TrimSpace(command)
+	}
+}
+
+// WithTrashClock sets the timestamp source for collision suffixes and journaling.
+func WithTrashClock(now func() time.Time) TrashOption {
+	return func(o *trashOptions) {
+		if now == nil {
+			return
+		}
+		o.now = now
+		o.journalOptions = append(o.journalOptions, journal.WithClock(now))
+	}
+}
+
+// WithTrashShortIDGenerator sets the short ID source used in collision suffixes.
+func WithTrashShortIDGenerator(gen func() (string, error)) TrashOption {
+	return func(o *trashOptions) {
+		if gen != nil {
+			o.shortID = gen
+		}
+	}
+}
+
+// WithTrashJournalOptions passes recorder options through to the undo journal.
+func WithTrashJournalOptions(opts ...journal.RecorderOption) TrashOption {
+	return func(o *trashOptions) {
+		o.journalOptions = append(o.journalOptions, opts...)
+	}
+}
+
+// TrashNote moves sourceRel to Trash/<sourceRel> without rewriting backlinks.
+func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, error) {
+	cfg := defaultTrashOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+
+	source, err := resolveTrashSource(vaultRoot, sourceRel)
+	if err != nil {
+		return nil, err
+	}
+	dest, err := resolveTrashDestination(vaultRoot, path.Join("Trash", source.RelPath), cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	j := NewJournal(vaultRoot, cfg.command, cfg.journalOptions...)
+	if err := j.Capture(source.AbsPath); err != nil {
+		return nil, err
+	}
+	if err := j.Capture(dest.AbsPath); err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
+		return nil, WrapError(CodeInternal, "create trash folder", err)
+	}
+	if exists, err := pathExists(dest.AbsPath); err != nil {
+		return nil, WrapError(CodeConflict, "check trash destination", err)
+	} else if exists {
+		return nil, Errorf(CodeConflict, "trash destination already exists")
+	}
+	if err := os.Rename(source.AbsPath, dest.AbsPath); err != nil {
+		return nil, WrapError(CodeInternal, "move note to trash", err)
+	}
+
+	entry, err := j.Finalize()
+	if err != nil {
+		return nil, err
+	}
+	return &TrashResult{
+		Source:      source,
+		Destination: dest,
+		Journal:     entry,
+	}, nil
+}
+
+func defaultTrashOptions() trashOptions {
+	return trashOptions{
+		command: "bn web trash",
+		now:     func() time.Time { return time.Now().UTC() },
+		shortID: defaultTrashShortID,
+	}
+}
+
+func resolveTrashSource(vaultRoot, sourceRel string) (PathResolution, error) {
+	cleanRel, err := CleanRelPath(sourceRel)
+	if err != nil {
+		return PathResolution{}, err
+	}
+	source, err := ResolveExistingPath(vaultRoot, filepath.FromSlash(cleanRel))
+	if err != nil {
+		return PathResolution{}, err
+	}
+	if source.RelPath != cleanRel {
+		return PathResolution{}, Errorf(CodeForbidden, "source path must not resolve through a symlink")
+	}
+	info, err := os.Lstat(source.AbsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return PathResolution{}, Errorf(CodeNotFound, "note not found")
+		}
+		return PathResolution{}, WrapError(CodeConflict, "stat source note", err)
+	}
+	if !info.Mode().IsRegular() {
+		return PathResolution{}, Errorf(CodeConflict, "source is not a regular file")
+	}
+	return source, nil
+}
+
+func resolveTrashDestination(vaultRoot, baseRel string, cfg trashOptions) (PathResolution, error) {
+	baseRel, err := CleanRelPath(baseRel)
+	if err != nil {
+		return PathResolution{}, err
+	}
+	now := cfg.now().UTC()
+	if now.IsZero() {
+		return PathResolution{}, Errorf(CodeInternal, "trash timestamp is zero")
+	}
+
+	candidateRel := baseRel
+	for attempt := 0; attempt < 16; attempt++ {
+		dest, err := PathForRel(vaultRoot, candidateRel)
+		if err != nil {
+			return PathResolution{}, err
+		}
+		if dest.RelPath != candidateRel {
+			return PathResolution{}, Errorf(CodeForbidden, "trash destination must not resolve through a symlink")
+		}
+		exists, err := pathExists(dest.AbsPath)
+		if err != nil {
+			return PathResolution{}, WrapError(CodeConflict, "stat trash destination", err)
+		}
+		if !exists {
+			return dest, nil
+		}
+
+		shortID, err := cfg.shortID()
+		if err != nil {
+			return PathResolution{}, WrapError(CodeInternal, "generate trash collision id", err)
+		}
+		shortID = strings.TrimSpace(shortID)
+		if shortID == "" || strings.ContainsAny(shortID, `/\`) || containsControlRune(shortID) {
+			return PathResolution{}, Errorf(CodeInternal, "invalid trash collision id")
+		}
+		candidateRel = trashCollisionRel(baseRel, now.Format(trashTimestampFormat), shortID)
+	}
+	return PathResolution{}, Errorf(CodeConflict, "could not choose a unique trash destination")
+}
+
+func trashCollisionRel(baseRel, timestamp, shortID string) string {
+	dir := path.Dir(baseRel)
+	name := path.Base(baseRel)
+	ext := path.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	next := fmt.Sprintf("%s.deleted-%s-%s%s", stem, timestamp, shortID, ext)
+	if dir == "." || dir == "" {
+		return next
+	}
+	return path.Join(dir, next)
+}
+
+func defaultTrashShortID() (string, error) {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+func pathExists(p string) (bool, error) {
+	_, err := os.Lstat(p)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+func containsControlRune(s string) bool {
+	for _, r := range s {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
+}

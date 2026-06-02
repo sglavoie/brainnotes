@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -137,6 +138,10 @@ func splitUnsetArgs(args []string, dashAt int) (notes, props []string) {
 // When dry is non-nil, the file is left untouched and a per-file `- key: value`
 // block is emitted for every present property in props.
 func applyUnset(path string, props []string, cfg *config.Config, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
+	if dry == nil {
+		return noteops.ApplyFrontmatterUnset(path, props, &cfg.Frontmatter, journaler)
+	}
+
 	n := &vault.Note{Path: path}
 	if err := n.Load(); err != nil {
 		return false, err

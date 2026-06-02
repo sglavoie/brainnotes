@@ -18,6 +18,7 @@ const (
 
 type indexPageData struct {
 	Title             string
+	CSRFToken         string
 	NoteCount         int
 	BrokenTargetCount int
 	OrphanCount       int

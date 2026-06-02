@@ -60,3 +60,10 @@ func (s *vaultState) currentSnapshot() (vaultSnapshot, error) {
 	}
 	return s.snapshot, nil
 }
+
+func (s *vaultState) invalidate() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.snapshot = vaultSnapshot{}
+}

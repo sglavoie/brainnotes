@@ -61,6 +61,11 @@
           <p class="open-editor-status" data-open-status role="status" aria-live="polite"> </p>
         </div>
 
+        <div class="note-action-group" data-trash-note data-trash-key="{{.Key}}" data-trash-csrf="{{.CSRFToken}}" data-trash-confirm="Move &quot;{{.Title}}&quot; to Trash?" data-trash-redirect="/">
+          <button type="button" class="trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
+          <p class="trash-note-status" data-trash-status role="status" aria-live="polite"> </p>
+        </div>
+
         {{if .Copy.Wikilink}}
           <div class="note-action-group note-copy-actions" data-copy-controls>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
@@ -74,19 +79,79 @@
 
       <div class="note-layout{{if .TOC}} note-layout-with-toc{{end}}">
         <aside class="note-meta-sidebar" aria-label="Note metadata">
-          <section class="panel">
-            <h2>Frontmatter</h2>
+          <section class="panel frontmatter-panel" data-frontmatter-panel data-frontmatter-key="{{.Key}}" data-frontmatter-csrf="{{.CSRFToken}}">
+            <div class="frontmatter-panel-header">
+              <h2>Frontmatter</h2>
+              <p class="frontmatter-edit-status" data-frontmatter-status role="status" aria-live="polite"> </p>
+            </div>
             {{if .Frontmatter}}
               <dl class="frontmatter-rows">
                 {{range .Frontmatter}}
                   <div class="frontmatter-row">
                     <dt>{{.Key}}</dt>
-                    <dd>{{template "frontmatterValue" .Value}}</dd>
+                    <dd>
+                      {{template "frontmatterValue" .Value}}
+                      <div class="frontmatter-controls">
+                        {{if .CanSet}}
+                          <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="=">
+                            <label>
+                              <span>Value</span>
+                              <input type="text" name="value" value="{{.EditValue}}" {{if .Allowed}}list="{{.InputID}}-allowed"{{end}} />
+                            </label>
+                            <button type="submit" class="frontmatter-button">Set</button>
+                          </form>
+                          {{if .IsList}}
+                            <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="+=">
+                              <label>
+                                <span>Add</span>
+                                <input type="text" name="value" {{if .Allowed}}list="{{.InputID}}-allowed"{{end}} />
+                              </label>
+                              <button type="submit" class="frontmatter-button">Add</button>
+                            </form>
+                            <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="-=">
+                              <label>
+                                <span>Remove</span>
+                                <input type="text" name="value" {{if .Allowed}}list="{{.InputID}}-allowed"{{end}} />
+                              </label>
+                              <button type="submit" class="frontmatter-button">Remove</button>
+                            </form>
+                          {{end}}
+                        {{end}}
+                        <form class="frontmatter-inline-form" data-frontmatter-unset data-frontmatter-property="{{.Key}}">
+                          <button type="submit" class="frontmatter-button frontmatter-unset-button">Unset</button>
+                        </form>
+                        {{if .Allowed}}
+                          <datalist id="{{.InputID}}-allowed">
+                            {{range .Allowed}}
+                              <option value="{{.}}"></option>
+                            {{end}}
+                          </datalist>
+                        {{end}}
+                      </div>
+                    </dd>
                   </div>
                 {{end}}
               </dl>
             {{else}}
               <p>No frontmatter.</p>
+            {{end}}
+            <form class="frontmatter-add-form" data-frontmatter-set data-frontmatter-op="=">
+              <label>
+                <span>Key</span>
+                <input type="text" name="property" pattern="[A-Za-z0-9_-]+" list="frontmatter-property-choices" />
+              </label>
+              <label>
+                <span>Value</span>
+                <input type="text" name="value" />
+              </label>
+              <button type="submit" class="frontmatter-button">Add property</button>
+            </form>
+            {{if .FrontmatterChoices}}
+              <datalist id="frontmatter-property-choices">
+                {{range .FrontmatterChoices}}
+                  <option value="{{.}}"></option>
+                {{end}}
+              </datalist>
             {{end}}
           </section>
 
@@ -161,8 +226,16 @@
               <ul class="link-list broken-list">
                 {{range .Broken}}
                   <li>
-                    <a href="{{.Path}}">{{.Target}}</a>
-                    {{if .Location}}<span class="broken-location">({{.Location}})</span>{{end}}
+                    <div class="broken-link-row">
+                      <span class="broken-link-main">
+                        <a href="{{.Path}}">{{.Target}}</a>
+                        {{if .Location}}<span class="broken-location">({{.Location}})</span>{{end}}
+                      </span>
+                      <span class="broken-create-action" data-create-note data-create-source-key="{{$.Key}}" data-create-target="{{.Target}}" data-create-csrf="{{$.CSRFToken}}">
+                        <button type="button" class="create-note-button" data-create-button aria-label="Create missing note">Create note</button>
+                        <span class="create-note-status" data-create-status role="status" aria-live="polite"> </span>
+                      </span>
+                    </div>
                   </li>
                 {{end}}
               </ul>

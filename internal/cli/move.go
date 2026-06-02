@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 type moveOptions struct {
@@ -90,40 +90,40 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 		return fmt.Errorf("move: %w", err)
 	}
 
-	newFolderRel, newFolderAbs, err := resolveNewFolder(v.Root, newFolderArg)
+	newFolderRel, newFolderAbs, err := noteops.ResolveNewFolder(v.Root, newFolderArg)
 	if err != nil {
 		return err
 	}
 
 	newPath := filepath.Join(newFolderAbs, title+filepath.Ext(target.Path))
-	if err := checkMoveDestination(target.Path, newPath, opts.force); err != nil {
+	if err := noteops.CheckMoveDestination(target.Path, newPath, opts.force); err != nil {
 		return err
 	}
 
-	oldRel := joinFolderTitle(oldFolder, title)
-	newRel := joinFolderTitle(newFolderRel, title)
-	if err := validateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
+	oldRel := noteops.JoinFolderTitle(oldFolder, title)
+	newRel := noteops.JoinFolderTitle(newFolderRel, title)
+	if err := noteops.ValidateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
 		return err
 	}
 	if oldRel == newRel {
 		return fmt.Errorf("move: destination is the same as source: %s", oldRel)
 	}
 
-	plan, err := buildMovePlan(v, target.Path, newPath, oldRel, newRel, cfg)
+	plan, err := noteops.BuildMovePlan(v, target.Path, newPath, oldRel, newRel, cfg)
 	if err != nil {
 		return err
 	}
 
 	out := cmd.OutOrStdout()
 	if opts.dryRun {
-		return printMovePlan(out, v.Root, plan)
+		return noteops.PrintMovePlan(out, v.Root, plan)
 	}
 	journaler := newMutationJournal(v.Root, commandInvocation(cmd, args))
 
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return fmt.Errorf("move: mkdir %q: %w", newFolderAbs, err)
 	}
-	if err := checkMoveDestination(plan.Target, plan.NewPath, opts.force); err != nil {
+	if err := noteops.CheckMoveDestination(plan.Target, plan.NewPath, opts.force); err != nil {
 		return err
 	}
 	if err := journaler.Capture(plan.Target); err != nil {
@@ -138,11 +138,11 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 		}
 	}
 
-	if err := applyMovePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
+	if err := noteops.ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted; run 'git diff' to inspect partial state")
 		return err
 	}
-	if err := renameFile(plan.Target, plan.NewPath); err != nil {
+	if err := noteops.RenameFile(plan.Target, plan.NewPath); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted after content rewrites; run 'git diff' to inspect partial state")
 		return err
 	}
@@ -151,11 +151,4 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	}
 	_, err = fmt.Fprintf(out, "moved: %s -> %s\n", plan.Target, plan.NewPath)
 	return err
-}
-
-func validateMoveTargetPath(newFolderArg, folder string) error {
-	if r, ok := wikilink.FirstReservedTargetRune(folder); ok {
-		return fmt.Errorf("move: new folder %q may not contain %q; folder-qualified wikilinks would become invalid", newFolderArg, r)
-	}
-	return nil
 }

@@ -2,9 +2,16 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { normalizeSearchResults, searchResultPath, type SearchResult } from "./api";
+import {
+  buildBulkNotesForm,
+  normalizeBulkNoteKeys,
+  normalizeSearchResults,
+  searchResultPath,
+  type SearchResult,
+} from "./api";
 import { buildSearchAPIURL, dispatchFiltersChange } from "./filters";
 import {
+  initOverviewSearchResults,
   overviewSearchEmptyMessage,
   renderOverviewSearchResult,
 } from "./overview-search";
@@ -77,6 +84,25 @@ describe("search URL and result contracts", () => {
     expect(searchResultPath(results[0])).toBe("/n/server/path");
     expect(searchResultPath(results[1])).toBe("/n/folder/name%20with%20spaces.md");
   });
+
+  it("normalizes explicit selected keys for bulk requests", () => {
+    expect(normalizeBulkNoteKeys([" source ", "", "Source", "folder/Note"])).toEqual([
+      "source",
+      "folder/Note",
+    ]);
+
+    const body = buildBulkNotesForm({
+      action: "move",
+      keys: [" source ", "Source", "archive/a"],
+      token: "csrf-token",
+      folder: "Archive",
+    });
+
+    expect(body.get("action")).toBe("move");
+    expect(body.get("token")).toBe("csrf-token");
+    expect(body.get("folder")).toBe("Archive");
+    expect(body.getAll("keys[]")).toEqual(["source", "archive/a"]);
+  });
 });
 
 describe("search result rendering", () => {
@@ -136,6 +162,75 @@ describe("search result rendering", () => {
     );
     expect(overviewSearchEmptyMessage("")).toBe("No notes match the active filters.");
     expect(overviewSearchEmptyMessage("zettel")).toBe('No notes match "zettel".');
+  });
+
+  it("selects overview rows and submits confirmed bulk trash requests", async () => {
+    vi.useFakeTimers();
+    setURL("/?q=source");
+    document.body.innerHTML = `
+      <input id="search-input" />
+      <section data-overview-search-results aria-busy="false">
+        <p data-overview-search-status></p>
+        <div data-overview-bulk data-overview-csrf="csrf-token" hidden>
+          <p data-overview-selected-count></p>
+          <button type="button" data-bulk-trash>Trash</button>
+          <p data-overview-bulk-status></p>
+        </div>
+        <ul data-overview-search-list hidden></ul>
+      </section>
+    `;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      if (String(input) === "/api/notes/bulk") {
+        return new Response(JSON.stringify({
+          ok: true,
+          message: "Moved 1 note to Trash. 1 failed.",
+          changed: 1,
+          failed: 1,
+          failures: [{ key: "missing", message: "note not found" }],
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([searchResult({
+        key: "source",
+        path: "/n/source",
+        title: "Source",
+      })]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const confirmMock = vi.fn(() => true);
+
+    initOverviewSearchResults({ fetch: fetchMock, confirm: confirmMock });
+    await vi.runAllTimersAsync();
+
+    const checkbox = document.querySelector<HTMLInputElement>(".overview-result-select input");
+    const bulkRoot = document.querySelector<HTMLElement>("[data-overview-bulk]");
+    const selectedCount = document.querySelector<HTMLElement>("[data-overview-selected-count]");
+    expect(checkbox).not.toBeNull();
+    expect(bulkRoot?.hidden).toBe(true);
+
+    checkbox!.checked = true;
+    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(bulkRoot?.hidden).toBe(false);
+    expect(selectedCount?.textContent).toBe("1 selected");
+
+    document.querySelector<HTMLButtonElement>("[data-bulk-trash]")?.click();
+    await vi.runAllTimersAsync();
+
+    expect(confirmMock).toHaveBeenCalledWith("Move 1 selected note to Trash?");
+    const bulkCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/notes/bulk");
+    expect(bulkCall).toBeTruthy();
+    const init = bulkCall?.[1] as RequestInit;
+    expect(init.method).toBe("POST");
+    expect(String(init.body)).toContain("keys%5B%5D=source");
+    expect(String(init.body)).toContain("action=trash");
+    expect(document.querySelector("[data-overview-bulk-status]")?.textContent).toContain(
+      "Failures: missing: note not found."
+    );
   });
 });
 

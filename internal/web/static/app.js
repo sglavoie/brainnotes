@@ -1,74 +1,4 @@
 var BrainNotesApp = (() => {
-  // internal/web/static_src/dom.ts
-  var narrowElement = (element, constructor) => element instanceof constructor ? element : null;
-  var queryElement = (root, selector, constructor) => narrowElement(root.querySelector(selector), constructor);
-  var queryAllElements = (root, selector, constructor) => Array.from(root.querySelectorAll(selector)).flatMap((element) => {
-    const narrowed = narrowElement(element, constructor);
-    return narrowed ? [narrowed] : [];
-  });
-  var getElementByID = (id, constructor) => narrowElement(document.getElementById(id), constructor);
-
-  // internal/web/static_src/status.ts
-  var statusClassNames = ["is-success", "is-error", "is-loading", "is-empty"];
-  var setStatusText = (element, message, kind = "", classNames = statusClassNames) => {
-    if (!element) {
-      return;
-    }
-    element.textContent = message;
-    element.classList.remove(...classNames);
-    if (kind) {
-      element.classList.add(kind);
-    }
-  };
-
-  // internal/web/static_src/clipboard.ts
-  var readCopyPayload = (button) => ({
-    text: button.getAttribute("data-copy-text") || "",
-    label: button.getAttribute("data-copy-label") || "Value"
-  });
-  var copySuccessMessage = (label) => `${label || "Value"} copied.`;
-  var hasWritableClipboard = (clipboard) => Boolean(clipboard && typeof clipboard.writeText === "function");
-  var initCopyControls = () => {
-    const roots = queryAllElements(document, "[data-copy-controls]", HTMLElement);
-    if (roots.length === 0) {
-      return;
-    }
-    const clipboard = navigator.clipboard;
-    const canWriteClipboard = hasWritableClipboard(clipboard);
-    roots.forEach((root) => {
-      const statusEl = queryElement(root, "[data-copy-status]", HTMLElement);
-      const buttons = queryAllElements(root, "[data-copy-text]", HTMLButtonElement);
-      if (!statusEl || buttons.length === 0) {
-        return;
-      }
-      const setStatus = (message, kind = "") => {
-        setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
-      };
-      buttons.forEach((button) => {
-        button.addEventListener("click", async () => {
-          const payload = readCopyPayload(button);
-          if (!payload.text) {
-            setStatus("Nothing to copy.", "is-error");
-            return;
-          }
-          if (!canWriteClipboard) {
-            setStatus("Clipboard unavailable.", "is-error");
-            return;
-          }
-          button.disabled = true;
-          try {
-            await clipboard.writeText(payload.text);
-            setStatus(copySuccessMessage(payload.label), "is-success");
-          } catch {
-            setStatus("Copy failed.", "is-error");
-          } finally {
-            button.disabled = false;
-          }
-        });
-      });
-    });
-  };
-
   // internal/web/static_src/filters.ts
   var filterChangeEventName = "bn:filterschange";
   var sharedFilterParamKeys = [
@@ -168,6 +98,7 @@ var BrainNotesApp = (() => {
   var shouldHandleFilterChangeForMode = (event, mode) => !event.detail.mode || event.detail.mode === mode;
 
   // internal/web/static_src/api.ts
+  var managementMutationEventName = "bn:management:mutated";
   var asRecord = (value) => value && typeof value === "object" ? value : null;
   var normalizeStringArray = (value) => Array.isArray(value) ? value.map((item) => normalizeParamValue(item)).filter((item) => item !== "") : [];
   var readCount = (value) => {
@@ -289,15 +220,278 @@ var BrainNotesApp = (() => {
       return left.label.localeCompare(right.label);
     });
   };
-  var buildOpenNoteForm = (request) => {
+  var buildNoteKeyMutationForm = (request) => {
     const body = new URLSearchParams();
     body.set("key", request.key);
     body.set("token", request.token);
     return body;
   };
+  var buildCreateNoteForm = (request) => {
+    const body = buildNoteKeyMutationForm(request);
+    body.set("target", request.target);
+    return body;
+  };
+  var buildFrontmatterSetForm = (request) => {
+    const body = buildNoteKeyMutationForm(request);
+    body.set("property", request.property);
+    body.set("op", request.op);
+    body.set("value", request.value);
+    return body;
+  };
+  var buildFrontmatterUnsetForm = (request) => {
+    const body = buildNoteKeyMutationForm(request);
+    body.set("property", request.property);
+    return body;
+  };
+  var normalizeBulkNoteKeys = (keys) => {
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const rawKey of keys) {
+      const key = normalizeParamValue(rawKey);
+      if (key === "") {
+        continue;
+      }
+      const folded = key.toLowerCase();
+      if (seen.has(folded)) {
+        continue;
+      }
+      seen.add(folded);
+      out.push(key);
+    }
+    return out;
+  };
+  var buildBulkNotesForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("action", request.action);
+    body.set("token", request.token);
+    for (const key of normalizeBulkNoteKeys(request.keys)) {
+      body.append("keys[]", key);
+    }
+    if (request.folder !== void 0) {
+      body.set("folder", request.folder);
+    }
+    if (request.property !== void 0) {
+      body.set("property", request.property);
+    }
+    if (request.op !== void 0) {
+      body.set("op", request.op);
+    }
+    if (request.value !== void 0) {
+      body.set("value", request.value);
+    }
+    return body;
+  };
+  var buildUndoForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("token", request.token);
+    if (request.entryID !== void 0 && request.entryID.trim() !== "") {
+      body.set("id", request.entryID.trim());
+    }
+    if (request.force) {
+      body.set("force", "1");
+    }
+    if (request.confirmForce) {
+      body.set("confirm_force", "1");
+    }
+    return body;
+  };
+  var buildOpenNoteForm = (request) => buildNoteKeyMutationForm(request);
+  var normalizeHistoryEntries = (payload) => {
+    const data = asRecord(payload);
+    const rawEntries = data && Array.isArray(data.entries) ? data.entries : [];
+    return rawEntries.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const id = normalizeParamValue(record.id);
+      if (id === "") {
+        return [];
+      }
+      const rawFiles = Array.isArray(record.files) ? record.files : [];
+      const files = rawFiles.flatMap((rawFile) => {
+        const file = asRecord(rawFile);
+        if (!file) {
+          return [];
+        }
+        return [{
+          path: normalizeParamValue(file.path),
+          before: normalizeParamValue(file.before),
+          after: normalizeParamValue(file.after)
+        }];
+      });
+      return [{
+        id,
+        timestamp: normalizeParamValue(record.timestamp),
+        command: normalizeParamValue(record.command),
+        file_count: readCount(record.file_count),
+        files
+      }];
+    });
+  };
+  var normalizeManagementErrorMessage = (status, detail) => {
+    const record = asRecord(detail);
+    if (record) {
+      const message2 = normalizeParamValue(record.message);
+      if (message2) {
+        return message2;
+      }
+    }
+    const message = normalizeParamValue(detail);
+    return message || `Request failed (${status}).`;
+  };
   var normalizeOpenErrorMessage = (status, detail) => {
     const message = normalizeParamValue(detail);
     return message || `Open failed (${status}).`;
+  };
+
+  // internal/web/static_src/dom.ts
+  var narrowElement = (element, constructor) => element instanceof constructor ? element : null;
+  var queryElement = (root, selector, constructor) => narrowElement(root.querySelector(selector), constructor);
+  var queryAllElements = (root, selector, constructor) => Array.from(root.querySelectorAll(selector)).flatMap((element) => {
+    const narrowed = narrowElement(element, constructor);
+    return narrowed ? [narrowed] : [];
+  });
+  var getElementByID = (id, constructor) => narrowElement(document.getElementById(id), constructor);
+
+  // internal/web/static_src/status.ts
+  var statusClassNames = ["is-success", "is-error", "is-loading", "is-empty"];
+  var setStatusText = (element, message, kind = "", classNames = statusClassNames) => {
+    if (!element) {
+      return;
+    }
+    element.textContent = message;
+    element.classList.remove(...classNames);
+    if (kind) {
+      element.classList.add(kind);
+    }
+  };
+
+  // internal/web/static_src/broken-create.ts
+  var readCreateNoteConfig = (container) => ({
+    sourceKey: container.getAttribute("data-create-source-key") || "",
+    target: container.getAttribute("data-create-target") || "",
+    csrfToken: container.getAttribute("data-create-csrf") || ""
+  });
+  var buildCreateNoteFetchRequest = (config) => {
+    const body = buildCreateNoteForm({
+      key: config.sourceKey,
+      target: config.target,
+      token: config.csrfToken
+    });
+    return {
+      url: "/api/notes/create",
+      init: {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-BN-CSRF": config.csrfToken
+        },
+        body: body.toString()
+      }
+    };
+  };
+  var initBrokenCreateActions = (deps = {}) => {
+    const containers = queryAllElements(document, "[data-create-note]", HTMLElement);
+    if (containers.length === 0) {
+      return;
+    }
+    const fetcher = deps.fetch || fetch;
+    for (const container of containers) {
+      const button = queryElement(container, "[data-create-button]", HTMLButtonElement);
+      const statusEl = queryElement(container, "[data-create-status]", HTMLElement);
+      if (!button || !statusEl) {
+        continue;
+      }
+      const config = readCreateNoteConfig(container);
+      const setStatus = (message, kind = "") => {
+        setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+      };
+      button.addEventListener("click", async () => {
+        if (!config.sourceKey || !config.target || !config.csrfToken) {
+          setStatus("Create action unavailable.", "is-error");
+          return;
+        }
+        button.disabled = true;
+        setStatus("Creating note...");
+        try {
+          const request = buildCreateNoteFetchRequest(config);
+          const resp = await fetcher(request.url, request.init);
+          const payload = await readCreateResponsePayload(resp);
+          if (!resp.ok) {
+            setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+            return;
+          }
+          const result = payload;
+          const message = result && result.ok && result.message ? result.message : "Created note.";
+          setStatus(message, "is-success");
+        } catch {
+          setStatus("Create failed.", "is-error");
+        } finally {
+          button.disabled = false;
+        }
+      });
+    }
+  };
+  var readCreateResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
+  // internal/web/static_src/clipboard.ts
+  var readCopyPayload = (button) => ({
+    text: button.getAttribute("data-copy-text") || "",
+    label: button.getAttribute("data-copy-label") || "Value"
+  });
+  var copySuccessMessage = (label) => `${label || "Value"} copied.`;
+  var hasWritableClipboard = (clipboard) => Boolean(clipboard && typeof clipboard.writeText === "function");
+  var initCopyControls = () => {
+    const roots = queryAllElements(document, "[data-copy-controls]", HTMLElement);
+    if (roots.length === 0) {
+      return;
+    }
+    const clipboard = navigator.clipboard;
+    const canWriteClipboard = hasWritableClipboard(clipboard);
+    roots.forEach((root) => {
+      const statusEl = queryElement(root, "[data-copy-status]", HTMLElement);
+      const buttons = queryAllElements(root, "[data-copy-text]", HTMLButtonElement);
+      if (!statusEl || buttons.length === 0) {
+        return;
+      }
+      const setStatus = (message, kind = "") => {
+        setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+      };
+      buttons.forEach((button) => {
+        button.addEventListener("click", async () => {
+          const payload = readCopyPayload(button);
+          if (!payload.text) {
+            setStatus("Nothing to copy.", "is-error");
+            return;
+          }
+          if (!canWriteClipboard) {
+            setStatus("Clipboard unavailable.", "is-error");
+            return;
+          }
+          button.disabled = true;
+          try {
+            await clipboard.writeText(payload.text);
+            setStatus(copySuccessMessage(payload.label), "is-success");
+          } catch {
+            setStatus("Copy failed.", "is-error");
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+    });
   };
 
   // internal/web/static_src/editor-open.ts
@@ -656,6 +850,153 @@ var BrainNotesApp = (() => {
         renderEmptyOption("Facets unavailable.");
       });
     });
+  };
+
+  // internal/web/static_src/frontmatter-edit.ts
+  var readFrontmatterPanelConfig = (panel) => ({
+    noteKey: panel.getAttribute("data-frontmatter-key") || "",
+    csrfToken: panel.getAttribute("data-frontmatter-csrf") || ""
+  });
+  var readFrontmatterSetConfig = (form) => {
+    const panel = form.closest("[data-frontmatter-panel]");
+    const panelConfig = panel ? readFrontmatterPanelConfig(panel) : { noteKey: "", csrfToken: "" };
+    const formData = new FormData(form);
+    return {
+      ...panelConfig,
+      property: form.getAttribute("data-frontmatter-property") || String(formData.get("property") || "").trim(),
+      op: normalizeFrontmatterOp(form.getAttribute("data-frontmatter-op")),
+      value: String(formData.get("value") || "")
+    };
+  };
+  var readFrontmatterUnsetConfig = (form) => {
+    const panel = form.closest("[data-frontmatter-panel]");
+    const panelConfig = panel ? readFrontmatterPanelConfig(panel) : { noteKey: "", csrfToken: "" };
+    return {
+      ...panelConfig,
+      property: form.getAttribute("data-frontmatter-property") || ""
+    };
+  };
+  var buildFrontmatterSetFetchRequest = (config) => frontmatterFetchRequest(
+    "/api/notes/frontmatter/set",
+    config.csrfToken,
+    buildFrontmatterSetForm({
+      key: config.noteKey,
+      token: config.csrfToken,
+      property: config.property,
+      op: config.op,
+      value: config.value
+    })
+  );
+  var buildFrontmatterUnsetFetchRequest = (config) => frontmatterFetchRequest(
+    "/api/notes/frontmatter/unset",
+    config.csrfToken,
+    buildFrontmatterUnsetForm({
+      key: config.noteKey,
+      token: config.csrfToken,
+      property: config.property
+    })
+  );
+  var initFrontmatterEditing = (deps = {}) => {
+    const panel = queryElement(document, "[data-frontmatter-panel]", HTMLElement);
+    if (!panel) {
+      return;
+    }
+    const statusEl = queryElement(panel, "[data-frontmatter-status]", HTMLElement);
+    const fetcher = deps.fetch || fetch;
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+    };
+    for (const form of queryAllElements(panel, "[data-frontmatter-set]", HTMLFormElement)) {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const config = readFrontmatterSetConfig(form);
+        if (!validFrontmatterBaseConfig(config)) {
+          setStatus("Frontmatter action unavailable.", "is-error");
+          return;
+        }
+        setFormDisabled(form, true);
+        setStatus("Updating frontmatter...");
+        try {
+          const request = buildFrontmatterSetFetchRequest(config);
+          const resp = await fetcher(request.url, request.init);
+          const payload = await readFrontmatterResponsePayload(resp);
+          if (!resp.ok) {
+            setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+            return;
+          }
+          const result = payload;
+          setStatus(result && result.ok && result.message ? result.message : "Updated frontmatter.", "is-success");
+        } catch {
+          setStatus("Frontmatter update failed.", "is-error");
+        } finally {
+          setFormDisabled(form, false);
+        }
+      });
+    }
+    for (const form of queryAllElements(panel, "[data-frontmatter-unset]", HTMLFormElement)) {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const config = readFrontmatterUnsetConfig(form);
+        if (!validFrontmatterBaseConfig(config)) {
+          setStatus("Frontmatter action unavailable.", "is-error");
+          return;
+        }
+        setFormDisabled(form, true);
+        setStatus("Updating frontmatter...");
+        try {
+          const request = buildFrontmatterUnsetFetchRequest(config);
+          const resp = await fetcher(request.url, request.init);
+          const payload = await readFrontmatterResponsePayload(resp);
+          if (!resp.ok) {
+            setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+            return;
+          }
+          const result = payload;
+          setStatus(result && result.ok && result.message ? result.message : "Unset frontmatter.", "is-success");
+        } catch {
+          setStatus("Frontmatter update failed.", "is-error");
+        } finally {
+          setFormDisabled(form, false);
+        }
+      });
+    }
+  };
+  var normalizeFrontmatterOp = (value) => {
+    if (value === "+=" || value === "-=") {
+      return value;
+    }
+    return "=";
+  };
+  var validFrontmatterBaseConfig = (config) => config.noteKey.trim() !== "" && config.csrfToken.trim() !== "" && config.property.trim() !== "";
+  var frontmatterFetchRequest = (url, csrfToken, body) => ({
+    url,
+    init: {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-BN-CSRF": csrfToken
+      },
+      body: body.toString()
+    }
+  });
+  var setFormDisabled = (form, disabled) => {
+    for (const control of queryAllElements(form, "button, input", HTMLElement)) {
+      if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement) {
+        control.disabled = disabled;
+      }
+    }
+  };
+  var readFrontmatterResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
   };
 
   // internal/web/static_src/graph.ts
@@ -1714,9 +2055,322 @@ var BrainNotesApp = (() => {
     scheduleLoad(initialQuery, 0);
   };
 
+  // internal/web/static_src/history-panel.ts
+  var formatHistoryTimestamp = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    return date.toLocaleString(void 0, {
+      dateStyle: "short",
+      timeStyle: "short"
+    });
+  };
+  var historyFileCountLabel = (count) => count === 1 ? "1 path" : `${count} paths`;
+  var historyConflictSummary = (conflicts) => {
+    if (conflicts.length === 0) {
+      return "Undo has conflicts.";
+    }
+    const sample = conflicts.slice(0, 3).map((conflict) => {
+      const path = conflict.path || "path";
+      const expected = conflict.expected_state || "expected";
+      const current = conflict.current_state || "current";
+      return `${path}: expected ${expected}, current ${current}`;
+    });
+    const suffix = conflicts.length > sample.length ? `; ${conflicts.length - sample.length} more` : "";
+    return `Undo has conflicts: ${sample.join("; ")}${suffix}.`;
+  };
+  var initHistoryPanel = (deps = {}) => {
+    const root = queryElement(document, "[data-history-panel]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const listEl = queryElement(root, "[data-history-list]", HTMLElement);
+    const statusEl = queryElement(root, "[data-history-status]", HTMLElement);
+    const refreshButton = queryElement(root, "[data-history-refresh]", HTMLButtonElement);
+    const undoLatestButton = queryElement(root, "[data-history-undo-latest]", HTMLButtonElement);
+    const conflictBox = queryElement(root, "[data-history-conflict]", HTMLElement);
+    const conflictSummaryEl = queryElement(root, "[data-history-conflict-summary]", HTMLElement);
+    const forceButton = queryElement(root, "[data-history-force]", HTMLButtonElement);
+    if (!listEl || !statusEl) {
+      return;
+    }
+    const csrfToken = root.getAttribute("data-history-csrf") || "";
+    const fetcher = deps.fetch || fetch;
+    const confirmAction = deps.confirm || ((message) => window.confirm(message));
+    let entries = [];
+    let pendingConflict = null;
+    let busy = false;
+    const setBusy = (next) => {
+      busy = next;
+      root.setAttribute("aria-busy", next ? "true" : "false");
+      if (refreshButton) {
+        refreshButton.disabled = next;
+      }
+      if (undoLatestButton) {
+        undoLatestButton.disabled = next || entries.length === 0;
+      }
+      for (const button of queryAllElements(listEl, "[data-history-undo-entry]", HTMLButtonElement)) {
+        button.disabled = next;
+      }
+      if (forceButton) {
+        forceButton.disabled = next || !pendingConflict?.entry_id;
+      }
+    };
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message, kind);
+    };
+    const hideConflict = () => {
+      pendingConflict = null;
+      if (conflictBox) {
+        conflictBox.hidden = true;
+      }
+      if (conflictSummaryEl) {
+        conflictSummaryEl.textContent = "";
+      }
+      if (forceButton) {
+        forceButton.disabled = true;
+      }
+    };
+    const showConflict = (result) => {
+      pendingConflict = result;
+      const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
+      if (conflictSummaryEl) {
+        conflictSummaryEl.textContent = historyConflictSummary(conflicts);
+      }
+      if (conflictBox) {
+        conflictBox.hidden = false;
+      }
+      if (forceButton) {
+        forceButton.disabled = !result.entry_id;
+      }
+    };
+    const renderEntries = () => {
+      listEl.textContent = "";
+      for (const entry of entries) {
+        const item = document.createElement("li");
+        item.className = "history-item";
+        const main = document.createElement("div");
+        main.className = "history-item-main";
+        const command = document.createElement("span");
+        command.className = "history-command";
+        command.textContent = entry.command || entry.id;
+        main.appendChild(command);
+        const meta = document.createElement("span");
+        meta.className = "history-meta";
+        const time = formatHistoryTimestamp(entry.timestamp);
+        const count = historyFileCountLabel(entry.file_count || entry.files.length);
+        meta.textContent = time ? `${time} - ${count}` : count;
+        main.appendChild(meta);
+        const undoButton = document.createElement("button");
+        undoButton.className = "history-button history-danger";
+        undoButton.type = "button";
+        undoButton.setAttribute("data-history-undo-entry", entry.id);
+        undoButton.setAttribute("aria-label", `Undo ${entry.command || "change"}`);
+        undoButton.textContent = "Undo";
+        undoButton.addEventListener("click", () => {
+          void runUndo(entry.id, false);
+        });
+        item.appendChild(main);
+        item.appendChild(undoButton);
+        listEl.appendChild(item);
+      }
+      setBusy(busy);
+    };
+    const loadHistory = async (successMessage = "") => {
+      setBusy(true);
+      setStatus("Loading history...", "is-loading");
+      try {
+        const resp = await fetcher("/api/history", {
+          headers: { Accept: "application/json" }
+        });
+        const payload = await readHistoryPanelPayload(resp);
+        if (!resp.ok) {
+          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        entries = normalizeHistoryEntries(payload);
+        renderEntries();
+        if (entries.length === 0) {
+          setStatus("No recent changes.", "is-empty");
+        } else {
+          setStatus(successMessage || `${entries.length} recent changes.`, successMessage ? "is-success" : "");
+        }
+      } catch {
+        setStatus("History unavailable.", "is-error");
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runUndo = async (entryID, force) => {
+      if (csrfToken.trim() === "") {
+        setStatus("Undo unavailable.", "is-error");
+        return;
+      }
+      if (!force && !confirmAction("Undo this change?")) {
+        setStatus("Undo canceled.");
+        return;
+      }
+      if (force && !confirmAction("Force undo and overwrite conflicting paths?")) {
+        setStatus("Force undo canceled.");
+        return;
+      }
+      setBusy(true);
+      setStatus(force ? "Forcing undo..." : "Undoing change...", "is-loading");
+      try {
+        const body = buildUndoForm({
+          token: csrfToken,
+          entryID,
+          force,
+          confirmForce: force
+        });
+        const resp = await fetcher("/api/undo", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-BN-CSRF": csrfToken
+          },
+          body: body.toString()
+        });
+        const payload = await readHistoryPanelPayload(resp);
+        const result = payload;
+        if (resp.status === 409 && result?.requires_force) {
+          showConflict(result);
+          setStatus("Undo has conflicts.", "is-error");
+          return;
+        }
+        if (!resp.ok) {
+          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        hideConflict();
+        const message = result && result.ok && result.message ? result.message : "Undo restored paths.";
+        await loadHistory(message);
+      } catch {
+        setStatus("Undo failed.", "is-error");
+      } finally {
+        setBusy(false);
+      }
+    };
+    refreshButton?.addEventListener("click", () => {
+      hideConflict();
+      void loadHistory();
+    });
+    undoLatestButton?.addEventListener("click", () => {
+      void runUndo("", false);
+    });
+    forceButton?.addEventListener("click", () => {
+      const entryID = pendingConflict?.entry_id || "";
+      if (entryID === "") {
+        setStatus("No conflict selected.", "is-error");
+        return;
+      }
+      void runUndo(entryID, true);
+    });
+    window.addEventListener(managementMutationEventName, () => {
+      hideConflict();
+      void loadHistory("History refreshed.");
+    });
+    hideConflict();
+    void loadHistory();
+  };
+  var readHistoryPanelPayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
+  // internal/web/static_src/note-trash.ts
+  var readTrashNoteConfig = (container) => ({
+    key: container.getAttribute("data-trash-key") || "",
+    csrfToken: container.getAttribute("data-trash-csrf") || "",
+    confirmMessage: container.getAttribute("data-trash-confirm") || "Move this note to Trash?",
+    redirectPath: container.getAttribute("data-trash-redirect") || "/"
+  });
+  var buildTrashNoteFetchRequest = (config) => {
+    const body = buildNoteKeyMutationForm({ key: config.key, token: config.csrfToken });
+    return {
+      url: "/api/notes/trash",
+      init: {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-BN-CSRF": config.csrfToken
+        },
+        body: body.toString()
+      }
+    };
+  };
+  var initTrashNoteAction = (deps = {}) => {
+    const container = queryElement(document, "[data-trash-note]", HTMLElement);
+    if (!container) {
+      return;
+    }
+    const button = queryElement(container, "[data-trash-button]", HTMLButtonElement);
+    const statusEl = queryElement(container, "[data-trash-status]", HTMLElement);
+    if (!button || !statusEl) {
+      return;
+    }
+    const config = readTrashNoteConfig(container);
+    const fetcher = deps.fetch || fetch;
+    const confirmAction = deps.confirm || ((message) => window.confirm(message));
+    const redirect = deps.redirect || ((path) => window.location.assign(path));
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+    };
+    button.addEventListener("click", async () => {
+      if (!config.key || !config.csrfToken) {
+        setStatus("Trash action unavailable.", "is-error");
+        return;
+      }
+      if (!confirmAction(config.confirmMessage)) {
+        setStatus("Trash canceled.");
+        return;
+      }
+      button.disabled = true;
+      setStatus("Moving note to Trash...");
+      try {
+        const request = buildTrashNoteFetchRequest(config);
+        const resp = await fetcher(request.url, request.init);
+        const payload = await readTrashResponsePayload(resp);
+        if (!resp.ok) {
+          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = payload;
+        const message = result && result.ok && result.message ? result.message : "Moved note to Trash.";
+        setStatus(`${message} Redirecting...`, "is-success");
+        redirect(config.redirectPath);
+      } catch {
+        setStatus("Trash failed.", "is-error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  };
+  var readTrashResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
   // internal/web/static_src/overview-search.ts
   var overviewSearchEmptyMessage = (query) => query ? `No notes match "${query}".` : "No notes match the active filters.";
-  var renderOverviewSearchResult = (listEl, result) => {
+  var renderOverviewSearchResult = (listEl, result, options = {}) => {
     const path = searchResultPath(result);
     if (!path) {
       return false;
@@ -1724,6 +2378,31 @@ var BrainNotesApp = (() => {
     const doc = listEl.ownerDocument;
     const item = doc.createElement("li");
     item.className = "overview-result-item";
+    if (result.key) {
+      item.setAttribute("data-overview-result-key", result.key);
+    }
+    const row = doc.createElement("div");
+    row.className = "overview-result-row";
+    if (result.key) {
+      row.classList.add("has-selection");
+      const selectWrap = doc.createElement("label");
+      selectWrap.className = "overview-result-select";
+      const checkbox = doc.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = result.key;
+      checkbox.checked = Boolean(options.selected);
+      checkbox.setAttribute(
+        "aria-label",
+        `Select ${result.title || result.key || "note"}`
+      );
+      checkbox.addEventListener("change", () => {
+        if (options.onSelectionChange) {
+          options.onSelectionChange(result, checkbox.checked);
+        }
+      });
+      selectWrap.appendChild(checkbox);
+      row.appendChild(selectWrap);
+    }
     const link = doc.createElement("a");
     link.className = "overview-result-link";
     link.setAttribute("href", path);
@@ -1755,11 +2434,12 @@ var BrainNotesApp = (() => {
       snippet.innerHTML = result.snippet;
       link.appendChild(snippet);
     }
-    item.appendChild(link);
+    row.appendChild(link);
+    item.appendChild(row);
     listEl.appendChild(item);
     return true;
   };
-  var initOverviewSearchResults = () => {
+  var initOverviewSearchResults = (deps = {}) => {
     const root = queryElement(document, "[data-overview-search-results]", HTMLElement);
     if (!root) {
       return;
@@ -1770,6 +2450,14 @@ var BrainNotesApp = (() => {
     if (!statusEl || !listEl) {
       return;
     }
+    const bulkRoot = queryElement(root, "[data-overview-bulk]", HTMLElement);
+    const selectedCountEl = bulkRoot ? queryElement(bulkRoot, "[data-overview-selected-count]", HTMLElement) : null;
+    const bulkStatusEl = bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement) : null;
+    const csrfToken = bulkRoot?.getAttribute("data-overview-csrf") || "";
+    const fetcher = deps.fetch || fetch;
+    const confirmAction = deps.confirm || ((message) => window.confirm(message));
+    const selectedKeys = /* @__PURE__ */ new Map();
+    let bulkBusy = false;
     let debounceToken = 0;
     let requestToken = 0;
     const currentQuery = () => input instanceof HTMLInputElement ? normalizeParamValue(input.value) : readPageQuery();
@@ -1779,20 +2467,78 @@ var BrainNotesApp = (() => {
     const setStatus = (message, kind = "") => {
       setStatusText(statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
     };
+    const setBulkStatus = (message, kind = "") => {
+      setStatusText(bulkStatusEl, message || " ", kind, [
+        "is-success",
+        "is-error",
+        "is-loading"
+      ]);
+    };
+    const selectedKeyList = () => normalizeBulkNoteKeys(Array.from(selectedKeys.keys()));
+    const updateBulkControls = () => {
+      if (!bulkRoot) {
+        return;
+      }
+      const count = selectedKeys.size;
+      bulkRoot.hidden = count === 0;
+      if (selectedCountEl) {
+        selectedCountEl.textContent = count === 1 ? "1 selected" : `${count} selected`;
+      }
+      for (const control of queryAllElements(bulkRoot, "button, input, select", HTMLElement)) {
+        if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+          control.disabled = bulkBusy || count === 0;
+        }
+      }
+    };
+    const setBulkBusy = (busy) => {
+      bulkBusy = busy;
+      updateBulkControls();
+    };
+    const setSelected = (result, selected) => {
+      const key = normalizeBulkNoteKeys([result.key])[0] || "";
+      if (key === "") {
+        return;
+      }
+      if (selected) {
+        selectedKeys.set(key, result.title || key);
+      } else {
+        selectedKeys.delete(key);
+      }
+      updateBulkControls();
+    };
+    const pruneSelectionToRenderedKeys = (visibleKeys) => {
+      for (const key of selectedKeys.keys()) {
+        if (!visibleKeys.has(key)) {
+          selectedKeys.delete(key);
+        }
+      }
+      updateBulkControls();
+    };
     const clearResults = (message, kind) => {
       listEl.textContent = "";
       listEl.hidden = true;
+      selectedKeys.clear();
+      updateBulkControls();
       setStatus(message, kind);
     };
     const renderResults = (payload, query) => {
       const results = normalizeSearchResults(payload);
       listEl.textContent = "";
       let renderedCount = 0;
+      const visibleKeys = /* @__PURE__ */ new Set();
       for (const result of results) {
-        if (renderOverviewSearchResult(listEl, result)) {
+        const key = normalizeBulkNoteKeys([result.key])[0] || "";
+        if (renderOverviewSearchResult(listEl, result, {
+          selected: key !== "" && selectedKeys.has(key),
+          onSelectionChange: setSelected
+        })) {
           renderedCount += 1;
+          if (key !== "") {
+            visibleKeys.add(key);
+          }
         }
       }
+      pruneSelectionToRenderedKeys(visibleKeys);
       if (renderedCount === 0) {
         clearResults(overviewSearchEmptyMessage(query), "is-empty");
         return;
@@ -1817,7 +2563,7 @@ var BrainNotesApp = (() => {
       setStatus("Loading matching notes...", "is-loading");
       debounceToken = window.setTimeout(async () => {
         try {
-          const resp = await fetch(buildSearchAPIURL(query, true), {
+          const resp = await fetcher(buildSearchAPIURL(query, true), {
             headers: { Accept: "application/json" }
           });
           if (!resp.ok) {
@@ -1851,7 +2597,139 @@ var BrainNotesApp = (() => {
       }
       scheduleSearch(0);
     });
+    const runBulkAction = async (action, fields, fallbackMessage, confirmMessage = "") => {
+      const keys = selectedKeyList();
+      if (!bulkRoot || csrfToken.trim() === "") {
+        setBulkStatus("Bulk action unavailable.", "is-error");
+        return;
+      }
+      if (keys.length === 0) {
+        setBulkStatus("Select one or more notes.", "is-error");
+        return;
+      }
+      if (confirmMessage && !confirmAction(confirmMessage)) {
+        setBulkStatus("Bulk action canceled.");
+        return;
+      }
+      setBulkBusy(true);
+      setBulkStatus("Applying bulk action...", "is-loading");
+      try {
+        const body = buildBulkNotesForm({
+          action,
+          keys,
+          token: csrfToken,
+          folder: fields.folder,
+          property: fields.property,
+          op: normalizeBulkFrontmatterOp(fields.op),
+          value: fields.value
+        });
+        const resp = await fetcher("/api/notes/bulk", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-BN-CSRF": csrfToken
+          },
+          body: body.toString()
+        });
+        const payload = await readBulkResponsePayload(resp);
+        if (!resp.ok) {
+          setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = payload;
+        const failures = Array.isArray(result.failures) ? result.failures : [];
+        setBulkStatus(
+          bulkStatusMessage(result, fallbackMessage),
+          failures.length > 0 ? "is-error" : "is-success"
+        );
+        window.dispatchEvent(new CustomEvent(managementMutationEventName, {
+          detail: result
+        }));
+        selectedKeys.clear();
+        scheduleSearch(0);
+      } catch {
+        setBulkStatus("Bulk action failed.", "is-error");
+      } finally {
+        setBulkBusy(false);
+      }
+    };
+    const trashButton = bulkRoot ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement) : null;
+    trashButton?.addEventListener("click", () => {
+      const count = selectedKeys.size;
+      void runBulkAction(
+        "trash",
+        {},
+        "Moved selected notes to Trash.",
+        `Move ${count === 1 ? "1 selected note" : `${count} selected notes`} to Trash?`
+      );
+    });
+    const moveForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement) : null;
+    moveForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(moveForm);
+      void runBulkAction("move", {
+        folder: String(formData.get("folder") || "")
+      }, "Moved selected notes.");
+    });
+    const setForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement) : null;
+    setForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(setForm);
+      const property = String(formData.get("property") || "").trim();
+      if (property === "") {
+        setBulkStatus("Property is required.", "is-error");
+        return;
+      }
+      void runBulkAction("frontmatter_set", {
+        property,
+        op: String(formData.get("op") || "="),
+        value: String(formData.get("value") || "")
+      }, "Updated selected notes.");
+    });
+    const unsetForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement) : null;
+    unsetForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(unsetForm);
+      const property = String(formData.get("property") || "").trim();
+      if (property === "") {
+        setBulkStatus("Property is required.", "is-error");
+        return;
+      }
+      void runBulkAction("frontmatter_unset", { property }, "Updated selected notes.");
+    });
+    updateBulkControls();
     scheduleSearch(0);
+  };
+  var normalizeBulkFrontmatterOp = (value) => {
+    if (value === "+=" || value === "-=" || value === "=") {
+      return value;
+    }
+    return void 0;
+  };
+  var readBulkResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+  var bulkStatusMessage = (result, fallback) => {
+    const message = result && result.ok && result.message ? result.message : fallback;
+    const failures = Array.isArray(result.failures) ? result.failures : [];
+    if (failures.length === 0) {
+      return message;
+    }
+    const summary = failures.slice(0, 3).map((failure) => {
+      const key = failure.key || failure.rel_path || "note";
+      return `${key}: ${failure.message || failure.code || "failed"}`;
+    });
+    const suffix = failures.length > summary.length ? `; ${failures.length - summary.length} more` : "";
+    return `${message} Failures: ${summary.join("; ")}${suffix}.`;
   };
 
   // internal/web/static_src/search.ts
@@ -2055,9 +2933,13 @@ var BrainNotesApp = (() => {
   (function() {
     initFacets();
     initOpenInEditor();
+    initTrashNoteAction();
+    initFrontmatterEditing();
+    initBrokenCreateActions();
     initCopyControls();
     initGraph();
     initSearch();
     initOverviewSearchResults();
+    initHistoryPanel();
   })();
 })();

@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
@@ -49,13 +51,20 @@ type backlinkOccurrence struct {
 
 type brokenAffordance struct {
 	Target   string
+	Key      string
 	Path     string
 	Location string
 }
 
 type frontmatterEntry struct {
-	Key   string
-	Value frontmatterValue
+	Key       string
+	Value     frontmatterValue
+	EditValue string
+	InputID   string
+	CanSet    bool
+	IsList    bool
+	Type      string
+	Allowed   []string
 }
 
 type frontmatterValue struct {
@@ -74,34 +83,19 @@ type frontmatterAnchor struct {
 type brokenPageEntry struct {
 	SourceTitle string
 	SourcePath  string
+	SourceKey   string
 	Target      string
+	Key         string
 	Location    string
 	LinkText    string
 }
 
 func noteForRoute(snapshot vaultSnapshot, routeKey string) (*vault.Note, string, bool) {
-	if snapshot.graph == nil {
+	note, key, err := noteops.ResolveRouteNote(snapshot.notes, snapshot.graph, routeKey)
+	if err != nil {
 		return nil, "", false
 	}
-	key := snapshot.graph.UnresolvedTargetKey(routeKey)
-	if key == "" {
-		key = strings.ToLower(strings.TrimSpace(routeKey))
-	}
-	if key == "" {
-		return nil, "", false
-	}
-
-	path, ok := snapshot.graph.PathsByTitle[key]
-	if !ok {
-		return nil, "", false
-	}
-	for _, n := range snapshot.notes {
-		if n != nil && n.Path == path {
-			return n, key, true
-		}
-	}
-
-	return &vault.Note{Path: path}, key, true
+	return note, key, true
 }
 
 func outgoingLinksForNote(graph *query.Graph, note *vault.Note) []noteLinkView {
@@ -213,19 +207,23 @@ func brokenAffordancesForNote(note *vault.Note, graph *query.Graph) []brokenAffo
 			continue
 		}
 		location := brokenLocation(issue.Line, issue.FrontmatterKey)
-		signature := key + "\x00" + location
+		signature := key + "\x00" + issue.Link.Target + "\x00" + location
 		if _, ok := seen[signature]; ok {
 			continue
 		}
 		seen[signature] = struct{}{}
 		items = append(items, brokenAffordance{
-			Target:   key,
+			Target:   issue.Link.Target,
+			Key:      key,
 			Path:     "/broken?" + url.Values{"q": []string{key}}.Encode(),
 			Location: location,
 		})
 	}
 
 	sort.Slice(items, func(i, j int) bool {
+		if items[i].Key != items[j].Key {
+			return items[i].Key < items[j].Key
+		}
 		if items[i].Target != items[j].Target {
 			return items[i].Target < items[j].Target
 		}
@@ -234,7 +232,7 @@ func brokenAffordancesForNote(note *vault.Note, graph *query.Graph) []brokenAffo
 	return items
 }
 
-func renderFrontmatterEntries(front *frontmatter.Map, graph *query.Graph) []frontmatterEntry {
+func renderFrontmatterEntries(front *frontmatter.Map, graph *query.Graph, fmCfg *config.FrontmatterConfig) []frontmatterEntry {
 	if front == nil || front.IsEmpty() {
 		return nil
 	}
@@ -242,17 +240,119 @@ func renderFrontmatterEntries(front *frontmatter.Map, graph *query.Graph) []fron
 	keys := front.Keys()
 	sort.Strings(keys)
 	entries := make([]frontmatterEntry, 0, len(keys))
-	for _, key := range keys {
+	for i, key := range keys {
 		value, ok := front.Get(key)
 		if !ok {
 			continue
 		}
-		entries = append(entries, frontmatterEntry{
-			Key:   key,
-			Value: renderFrontmatterValue(value, graph),
-		})
+		entries = append(entries, renderFrontmatterEntry(key, value, i, graph, fmCfg))
 	}
 	return entries
+}
+
+func renderFrontmatterEntry(key string, value any, index int, graph *query.Graph, fmCfg *config.FrontmatterConfig) frontmatterEntry {
+	entry := frontmatterEntry{
+		Key:       key,
+		Value:     renderFrontmatterValue(value, graph),
+		EditValue: frontmatterEditValue(value),
+		InputID:   frontmatterInputID(key, index),
+		CanSet:    noteops.ValidFrontmatterKey(key),
+	}
+	if fmCfg == nil {
+		return entry
+	}
+	entry.IsList = stringInSlice(fmCfg.ListProperties, key)
+	if rule, ok := fmCfg.Schema[key]; ok {
+		entry.Type = rule.Type
+		entry.Allowed = append([]string(nil), rule.Allowed...)
+	}
+	return entry
+}
+
+func frontmatterPropertyChoices(fmCfg *config.FrontmatterConfig) []string {
+	if fmCfg == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	add := func(key string) {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return
+		}
+		seen[key] = struct{}{}
+	}
+	for key := range fmCfg.Schema {
+		add(key)
+	}
+	for _, key := range fmCfg.ListProperties {
+		add(key)
+	}
+	for _, key := range fmCfg.WikilinkProperties {
+		add(key)
+	}
+	out := make([]string, 0, len(seen))
+	for key := range seen {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func frontmatterInputID(key string, index int) string {
+	var b strings.Builder
+	b.WriteString("frontmatter-")
+	b.WriteString(fmt.Sprintf("%d", index))
+	for _, r := range strings.ToLower(key) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+	}
+	return strings.TrimRight(b.String(), "-")
+}
+
+func frontmatterEditValue(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case time.Time:
+		return frontmatter.FormatTimestamp(typed)
+	case bool:
+		return fmt.Sprintf("%t", typed)
+	case int:
+		return fmt.Sprintf("%d", typed)
+	case int8, int16, int32, int64:
+		return fmt.Sprintf("%d", typed)
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", typed)
+	case float32, float64:
+		return fmt.Sprintf("%v", typed)
+	case []string:
+		return strings.Join(typed, ", ")
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			parts = append(parts, frontmatterEditValue(item))
+		}
+		return strings.Join(parts, ", ")
+	default:
+		return fmt.Sprintf("%v", typed)
+	}
+}
+
+func stringInSlice(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func renderFrontmatterValue(value any, graph *query.Graph) frontmatterValue {
@@ -409,6 +509,10 @@ func brokenEntries(snapshot vaultSnapshot, filter string) []brokenPageEntry {
 		if err != nil {
 			continue
 		}
+		sourceKey := snapshot.graph.KeyForNote(note)
+		if sourceKey == "" {
+			continue
+		}
 
 		for _, issue := range query.UnresolvedLinks(note, snapshot.graph) {
 			key := snapshot.graph.UnresolvedTargetKey(issue.Link.Target)
@@ -425,7 +529,9 @@ func brokenEntries(snapshot vaultSnapshot, filter string) []brokenPageEntry {
 			entries = append(entries, brokenPageEntry{
 				SourceTitle: note.Title(),
 				SourcePath:  sourcePath,
-				Target:      key,
+				SourceKey:   sourceKey,
+				Target:      issue.Link.Target,
+				Key:         key,
 				Location:    brokenLocation(issue.Line, issue.FrontmatterKey),
 				LinkText:    issue.Link.Raw,
 			})
@@ -433,6 +539,9 @@ func brokenEntries(snapshot vaultSnapshot, filter string) []brokenPageEntry {
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Key != entries[j].Key {
+			return entries[i].Key < entries[j].Key
+		}
 		if entries[i].Target != entries[j].Target {
 			return entries[i].Target < entries[j].Target
 		}

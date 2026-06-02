@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -90,7 +91,7 @@ Inspect with 'git diff' to recover.`,
 				newTitle = args[1]
 			} else {
 				newTitle = args[0]
-				if err := validateRenameTitle(newTitle); err != nil {
+				if err := noteops.ValidateRenameTitle(newTitle); err != nil {
 					return err
 				}
 				selected, pickErr := pickNotes(v, cfg, false)
@@ -102,7 +103,7 @@ Inspect with 'git diff' to recover.`,
 				}
 				noteArg = selected[0]
 			}
-			if err := validateRenameTitle(newTitle); err != nil {
+			if err := noteops.ValidateRenameTitle(newTitle); err != nil {
 				return err
 			}
 
@@ -115,30 +116,30 @@ Inspect with 'git diff' to recover.`,
 			if oldTitle == newTitle {
 				return fmt.Errorf("rename: new title %q is identical to current title", newTitle)
 			}
-			if err := ensureUniqueRenameSourceTitle(v, target.Path, oldTitle); err != nil {
+			if err := noteops.EnsureUniqueRenameSourceTitle(v, target.Path, oldTitle); err != nil {
 				return err
 			}
 
-			newPath, err := computeNewPath(target.Path, newTitle, cfg)
+			newPath, err := noteops.ComputeRenamePath(target.Path, newTitle, cfg)
 			if err != nil {
 				return err
 			}
 
-			if err := checkDestination(target.Path, newPath, force); err != nil {
+			if err := noteops.CheckRenameDestination(target.Path, newPath, force); err != nil {
 				return err
 			}
-			if err := ensureUniqueRenameDestinationTitle(v, target.Path, newPath, newTitle, force); err != nil {
+			if err := noteops.EnsureUniqueRenameDestinationTitle(v, target.Path, newPath, newTitle, force); err != nil {
 				return err
 			}
 
-			plan, err := buildRenamePlan(v, target.Path, newPath, oldTitle, newTitle, cfg)
+			plan, err := noteops.BuildRenamePlan(v, target.Path, newPath, oldTitle, newTitle, cfg)
 			if err != nil {
 				return err
 			}
 
 			out := cmd.OutOrStdout()
 			if dryRun {
-				return printPlan(out, v.Root, plan)
+				return noteops.PrintRenamePlan(out, v.Root, plan)
 			}
 			journaler := newMutationJournal(v.Root, commandInvocation(cmd, args))
 			if err := journaler.Capture(plan.Target); err != nil {
@@ -153,11 +154,11 @@ Inspect with 'git diff' to recover.`,
 				}
 			}
 
-			if err := applyRenamePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
+			if err := noteops.ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted; run 'git diff' to inspect partial state")
 				return err
 			}
-			if err := renameFile(plan.Target, plan.NewPath); err != nil {
+			if err := noteops.RenameFile(plan.Target, plan.NewPath); err != nil {
 				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted after content rewrites; run 'git diff' to inspect partial state")
 				return err
 			}

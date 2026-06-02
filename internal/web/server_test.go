@@ -289,7 +289,7 @@ func TestServer_IndexIncludesOverviewSearchResultsPanel(t *testing.T) {
 		`aria-describedby="overview-results-status"`,
 		`aria-busy="false"`,
 		`id="overview-results-heading"`,
-		`Filtered results`,
+		`Search results`,
 		`id="overview-results-status"`,
 		`data-overview-search-status`,
 		`role="status"`,
@@ -298,6 +298,17 @@ func TestServer_IndexIncludesOverviewSearchResultsPanel(t *testing.T) {
 		`class="overview-result-list"`,
 		`data-overview-search-list`,
 		`hidden`,
+		`data-history-panel`,
+		`data-history-csrf=`,
+		`aria-labelledby="history-heading"`,
+		`id="history-status"`,
+		`data-history-status`,
+		`data-history-refresh`,
+		`data-history-undo-latest`,
+		`Undo latest change`,
+		`data-history-force`,
+		`data-history-force disabled`,
+		`aria-label="Move selected notes to Trash"`,
 	}
 	for _, want := range required {
 		if !strings.Contains(body, want) {
@@ -406,6 +417,15 @@ func writeTestFile(t *testing.T, root, rel, body string) {
 	}
 }
 
+func readNoteFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %q: %v", path, err)
+	}
+	return string(data)
+}
+
 func postOpenRequest(t *testing.T, baseURL, key, headerToken, formToken string) *http.Response {
 	t.Helper()
 
@@ -429,6 +449,353 @@ func postOpenRequest(t *testing.T, baseURL, key, headerToken, formToken string) 
 		t.Fatalf("POST /api/open: %v", err)
 	}
 	return resp
+}
+
+func postTrashRequest(t *testing.T, baseURL, key, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if key != "" {
+		form.Set("key", key)
+	}
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/notes/trash", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/notes/trash: %v", err)
+	}
+	return resp
+}
+
+func postCreateRequest(t *testing.T, baseURL, key, target, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if key != "" {
+		form.Set("key", key)
+	}
+	form.Set("target", target)
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/notes/create", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/notes/create: %v", err)
+	}
+	return resp
+}
+
+func postRenameRequest(t *testing.T, baseURL, key, title, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if key != "" {
+		form.Set("key", key)
+	}
+	form.Set("title", title)
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/notes/rename", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/notes/rename: %v", err)
+	}
+	return resp
+}
+
+func postMoveRequest(t *testing.T, baseURL, key, folder, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if key != "" {
+		form.Set("key", key)
+	}
+	form.Set("folder", folder)
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/notes/move", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/notes/move: %v", err)
+	}
+	return resp
+}
+
+func postFrontmatterSetRequest(t *testing.T, baseURL, key, property, op, value, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if key != "" {
+		form.Set("key", key)
+	}
+	form.Set("property", property)
+	if op != "" {
+		form.Set("op", op)
+	}
+	form.Set("value", value)
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/notes/frontmatter/set", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/notes/frontmatter/set: %v", err)
+	}
+	return resp
+}
+
+func postFrontmatterUnsetRequest(t *testing.T, baseURL, key, property, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if key != "" {
+		form.Set("key", key)
+	}
+	form.Set("property", property)
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/notes/frontmatter/unset", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/notes/frontmatter/unset: %v", err)
+	}
+	return resp
+}
+
+func postBulkRequest(t *testing.T, baseURL, action string, keys []string, fields map[string]string, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	form.Set("action", action)
+	for _, key := range keys {
+		form.Add("keys[]", key)
+	}
+	for name, value := range fields {
+		form.Set(name, value)
+	}
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/notes/bulk", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/notes/bulk: %v", err)
+	}
+	return resp
+}
+
+func postUndoRequest(t *testing.T, baseURL, entryID, headerToken, formToken string, force, confirmForce bool) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if entryID != "" {
+		form.Set("id", entryID)
+	}
+	if force {
+		form.Set("force", "1")
+	}
+	if confirmForce {
+		form.Set("confirm_force", "1")
+	}
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/undo", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/undo: %v", err)
+	}
+	return resp
+}
+
+type managementResultPayload struct {
+	OK        bool   `json:"ok"`
+	Message   string `json:"message"`
+	Key       string `json:"key"`
+	Path      string `json:"path"`
+	RelPath   string `json:"rel_path"`
+	JournalID string `json:"journal_id"`
+}
+
+type managementErrorPayload struct {
+	OK      bool   `json:"ok"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type bulkManagementPayload struct {
+	OK        bool                 `json:"ok"`
+	Code      string               `json:"code"`
+	Message   string               `json:"message"`
+	Changed   int                  `json:"changed"`
+	Unchanged int                  `json:"unchanged"`
+	Failed    int                  `json:"failed"`
+	JournalID string               `json:"journal_id"`
+	Results   []bulkResultPayload  `json:"results"`
+	Failures  []bulkFailurePayload `json:"failures"`
+}
+
+type bulkResultPayload struct {
+	Key     string `json:"key"`
+	Path    string `json:"path"`
+	RelPath string `json:"rel_path"`
+	Changed bool   `json:"changed"`
+}
+
+type bulkFailurePayload struct {
+	Key     string `json:"key"`
+	RelPath string `json:"rel_path"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type historyPayload struct {
+	OK      bool                  `json:"ok"`
+	Entries []historyEntryPayload `json:"entries"`
+}
+
+type historyEntryPayload struct {
+	ID        string               `json:"id"`
+	Timestamp string               `json:"timestamp"`
+	Command   string               `json:"command"`
+	FileCount int                  `json:"file_count"`
+	Files     []historyFilePayload `json:"files"`
+}
+
+type historyFilePayload struct {
+	Path   string `json:"path"`
+	Before string `json:"before"`
+	After  string `json:"after"`
+}
+
+type undoPayload struct {
+	OK            bool                  `json:"ok"`
+	Code          string                `json:"code"`
+	Message       string                `json:"message"`
+	EntryID       string                `json:"entry_id"`
+	Command       string                `json:"command"`
+	RequiresForce bool                  `json:"requires_force"`
+	Changes       []undoChangePayload   `json:"changes"`
+	Conflicts     []undoConflictPayload `json:"conflicts"`
+}
+
+type undoChangePayload struct {
+	Path          string `json:"path"`
+	CurrentState  string `json:"current_state"`
+	RestoredState string `json:"restored_state"`
+}
+
+type undoConflictPayload struct {
+	Path          string `json:"path"`
+	ExpectedState string `json:"expected_state"`
+	CurrentState  string `json:"current_state"`
+}
+
+func decodeManagementResult(t *testing.T, body string) managementResultPayload {
+	t.Helper()
+	var payload managementResultPayload
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode management result: %v; body=%q", err, body)
+	}
+	return payload
+}
+
+func decodeManagementError(t *testing.T, body string) managementErrorPayload {
+	t.Helper()
+	var payload managementErrorPayload
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode management error: %v; body=%q", err, body)
+	}
+	return payload
+}
+
+func decodeBulkManagementResult(t *testing.T, body string) bulkManagementPayload {
+	t.Helper()
+	var payload bulkManagementPayload
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode bulk management result: %v; body=%q", err, body)
+	}
+	return payload
+}
+
+func decodeHistoryResult(t *testing.T, body string) historyPayload {
+	t.Helper()
+	var payload historyPayload
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode history result: %v; body=%q", err, body)
+	}
+	return payload
+}
+
+func decodeUndoResult(t *testing.T, body string) undoPayload {
+	t.Helper()
+	var payload undoPayload
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode undo result: %v; body=%q", err, body)
+	}
+	return payload
 }
 
 func readResponseBody(t *testing.T, resp *http.Response) string {
@@ -746,6 +1113,111 @@ func TestServer_NoteViewIncludesOpenEditorControls(t *testing.T) {
 	}
 }
 
+func TestServer_NoteViewIncludesTrashControls(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-test-token",
+	})
+
+	resp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	for _, want := range []string{
+		`data-trash-note`,
+		`data-trash-key="source"`,
+		`data-trash-csrf="csrf-test-token"`,
+		`data-trash-confirm="Move &quot;Source&quot; to Trash?"`,
+		`data-trash-redirect="/"`,
+		`data-trash-button`,
+		`aria-label="Move this note to Trash"`,
+		`data-trash-status`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing trash control fragment %q, got %q", want, body)
+		}
+	}
+}
+
+func TestServer_NoteViewIncludesCreateControlsForBrokenLinks(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Notes/Source.md": []byte("---\ntitle: Source\n---\n[[MiXeD Missing#Heading|Alias]]\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-test-token",
+	})
+
+	resp, err := http.Get(ts.URL + "/n/notes/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/notes/source: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	for _, want := range []string{
+		`data-create-note`,
+		`data-create-source-key="notes/source"`,
+		`data-create-target="MiXeD Missing"`,
+		`data-create-csrf="csrf-test-token"`,
+		`data-create-button`,
+		`aria-label="Create missing note"`,
+		`data-create-status`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing create control fragment %q, got %q", want, body)
+		}
+	}
+}
+
+func TestServer_NoteViewIncludesFrontmatterEditControls(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nparent: \"[[Other]]\"\nstatus: active\ntags:\n  - alpha\n---\nBody\n"),
+	}, func(cfg *config.Config) {
+		cfg.Frontmatter.ListProperties = []string{"tags"}
+		cfg.Frontmatter.WikilinkProperties = []string{"parent"}
+		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
+			"status": {Type: "string", Allowed: []string{"active", "done"}},
+			"tags":   {Type: "list", Allowed: []string{"alpha", "beta"}},
+		}
+	}, Options{
+		CSRFToken: "csrf-test-token",
+	})
+
+	resp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	for _, want := range []string{
+		`data-frontmatter-panel`,
+		`data-frontmatter-key="source"`,
+		`data-frontmatter-csrf="csrf-test-token"`,
+		`data-frontmatter-status`,
+		`data-frontmatter-set data-frontmatter-property="status" data-frontmatter-op="="`,
+		`data-frontmatter-unset data-frontmatter-property="status"`,
+		`data-frontmatter-set data-frontmatter-property="tags" data-frontmatter-op="+="`,
+		`data-frontmatter-set data-frontmatter-property="tags" data-frontmatter-op="-="`,
+		`<option value="active"></option>`,
+		`<option value="done"></option>`,
+		`list="frontmatter-property-choices"`,
+		`<option value="parent"></option>`,
+		`<option value="status"></option>`,
+		`<option value="tags"></option>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing frontmatter edit fragment %q, got %q", want, body)
+		}
+	}
+}
+
 func TestServer_OpenAPI_SuccessWithEditorArgs(t *testing.T) {
 	var (
 		gotBin  string
@@ -932,6 +1404,919 @@ func TestServer_OpenAPI_MissingEditorConfigured(t *testing.T) {
 	}
 }
 
+func TestServer_TrashAPI_SuccessMovesNoteJournalsAndInvalidatesState(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	noteResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	readResponseBody(t, noteResp)
+	if noteResp.StatusCode != http.StatusOK {
+		t.Fatalf("initial note status: got %d, want %d", noteResp.StatusCode, http.StatusOK)
+	}
+
+	resp := postTrashRequest(t, ts.URL, "source", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("content-type: got %q, want application/json...", got)
+	}
+	payload := decodeManagementResult(t, body)
+	if !payload.OK {
+		t.Fatalf("payload ok = false, body=%q", body)
+	}
+	if payload.Message != "Moved note to Trash." {
+		t.Fatalf("message = %q, want trash success", payload.Message)
+	}
+	if payload.Key != "source" || payload.Path != "/n/source" || payload.RelPath != "Trash/Source.md" {
+		t.Fatalf("payload path fields unexpected: %#v", payload)
+	}
+	if strings.TrimSpace(payload.JournalID) == "" {
+		t.Fatalf("journal id missing in payload: %#v", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Source.md")); !os.IsNotExist(err) {
+		t.Fatalf("source stat err = %v, want missing", err)
+	}
+	moved, err := os.ReadFile(filepath.Join(root, "Trash", "Source.md"))
+	if err != nil {
+		t.Fatalf("read trashed note: %v", err)
+	}
+	if string(moved) != "---\ntitle: Source\n---\nBody\n" {
+		t.Fatalf("trashed note body = %q", string(moved))
+	}
+	if _, err := os.Stat(filepath.Join(root, config.DefaultJournalDir, payload.JournalID, "manifest.json")); err != nil {
+		t.Fatalf("journal manifest missing: %v", err)
+	}
+
+	afterResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET trashed note: %v", err)
+	}
+	readResponseBody(t, afterResp)
+	if afterResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("post-trash note status: got %d, want %d", afterResp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestServer_TrashAPI_CSRFRequired(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postTrashRequest(t, ts.URL, "source", "", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden error", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Source.md")); err != nil {
+		t.Fatalf("source should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Trash", "Source.md")); !os.IsNotExist(err) {
+		t.Fatalf("trash destination stat err = %v, want missing", err)
+	}
+}
+
+func TestServer_TrashAPI_InvalidAndUnknownKeys(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postTrashRequest(t, ts.URL, "../source", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid key status: got %d, want %d; body=%q", resp.StatusCode, http.StatusBadRequest, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "invalid_key" {
+		t.Fatalf("invalid key payload = %#v", payload)
+	}
+
+	resp = postTrashRequest(t, ts.URL, "missing", "csrf-token", "")
+	body = readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown key status: got %d, want %d; body=%q", resp.StatusCode, http.StatusNotFound, body)
+	}
+	payload = decodeManagementError(t, body)
+	if payload.OK || payload.Code != "not_found" {
+		t.Fatalf("unknown key payload = %#v", payload)
+	}
+}
+
+func TestServer_TrashAPI_GraphKnownMissingFileReturnsConflict(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	warmResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	readResponseBody(t, warmResp)
+	if warmResp.StatusCode != http.StatusOK {
+		t.Fatalf("warm status: got %d, want %d", warmResp.StatusCode, http.StatusOK)
+	}
+	if err := os.Remove(filepath.Join(root, "Source.md")); err != nil {
+		t.Fatalf("remove source: %v", err)
+	}
+
+	resp := postTrashRequest(t, ts.URL, "source", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusConflict, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "conflict" {
+		t.Fatalf("payload = %#v, want conflict error", payload)
+	}
+}
+
+func TestServer_TrashAPI_RejectsEscapingGraphPath(t *testing.T) {
+	root := t.TempDir()
+	outsideRoot := t.TempDir()
+	outsideNote := filepath.Join(outsideRoot, "Outside.md")
+	if err := os.WriteFile(outsideNote, []byte("---\ntitle: Outside\n---\nBody\n"), 0o644); err != nil {
+		t.Fatalf("write outside note: %v", err)
+	}
+
+	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
+	srv, err := NewServer(cfg, v, Options{
+		CSRFToken: "csrf-token",
+	})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	now := time.Unix(0, 0)
+	srv.state.mu.Lock()
+	srv.state.now = func() time.Time { return now }
+	srv.state.snapshot = vaultSnapshot{
+		graph:    &query.Graph{PathsByTitle: map[string]string{"source": outsideNote}},
+		loadedAt: now,
+	}
+	srv.state.mu.Unlock()
+
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	resp := postTrashRequest(t, ts.URL, "source", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden error", payload)
+	}
+	if _, err := os.Stat(outsideNote); err != nil {
+		t.Fatalf("outside note should remain untouched: %v", err)
+	}
+}
+
+func TestServer_CreateAPI_BareTargetCreatesStubJournalsAndInvalidatesState(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Notes/Source.md": []byte("---\ntitle: Source\n---\nBody [[Missing Target]].\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	warmResp, err := http.Get(ts.URL + "/n/notes/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/notes/source: %v", err)
+	}
+	warmBody := readResponseBody(t, warmResp)
+	if warmResp.StatusCode != http.StatusOK {
+		t.Fatalf("warm status: got %d, want %d", warmResp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(warmBody, `/broken?q=missing&#43;target`) {
+		t.Fatalf("warm note should show a broken-link route, got %q", warmBody)
+	}
+
+	resp := postCreateRequest(t, ts.URL, "notes/source", "Missing Target", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeManagementResult(t, body)
+	if !payload.OK || payload.Message != "Created note." {
+		t.Fatalf("payload = %#v, want create success", payload)
+	}
+	if payload.Key != "notes/missing target" || payload.Path != "/n/notes/missing%20target" || payload.RelPath != "Notes/Missing Target.md" {
+		t.Fatalf("payload path fields unexpected: %#v", payload)
+	}
+	if strings.TrimSpace(payload.JournalID) == "" {
+		t.Fatalf("journal id missing in payload: %#v", payload)
+	}
+	assertFile := filepath.Join(root, "Notes", "Missing Target.md")
+	created := readNoteFile(t, assertFile)
+	if created != "---\ntitle: Missing Target\n---\n" {
+		t.Fatalf("created stub = %q, want title-only frontmatter", created)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.DefaultJournalDir, payload.JournalID, "manifest.json")); err != nil {
+		t.Fatalf("journal manifest missing: %v", err)
+	}
+
+	sourceResp, err := http.Get(ts.URL + "/n/notes/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET refreshed source note: %v", err)
+	}
+	sourceBody := readResponseBody(t, sourceResp)
+	if sourceResp.StatusCode != http.StatusOK {
+		t.Fatalf("refreshed source status: got %d, want %d", sourceResp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(sourceBody, `href="/n/notes/missing%20target"`) {
+		t.Fatalf("source note did not resolve created target after refresh, got %q", sourceBody)
+	}
+	if strings.Contains(sourceBody, `/broken?q=missing&#43;target`) {
+		t.Fatalf("source note still renders created target as broken, got %q", sourceBody)
+	}
+}
+
+func TestServer_CreateAPI_CSRFRequired(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postCreateRequest(t, ts.URL, "source", "Missing", "", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Missing.md")); !os.IsNotExist(err) {
+		t.Fatalf("created file stat err = %v, want missing", err)
+	}
+}
+
+func TestServer_CreateAPI_InvalidTargetReturnsBadRequest(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[../Escape]]\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postCreateRequest(t, ts.URL, "source", "../Escape", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusBadRequest, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "invalid_request" {
+		t.Fatalf("payload = %#v, want invalid_request", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Escape.md")); !os.IsNotExist(err) {
+		t.Fatalf("invalid target created file, stat err=%v", err)
+	}
+}
+
+func TestServer_RenameAPI_RewritesWikilinksJournalsAndInvalidatesState(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nSelf [[Source]].\n"),
+		"Ref.md":    []byte("---\ntitle: Ref\ncategories:\n  - \"[[Source]]\"\n---\nSee [[Source]] and [[Source|alias]].\n"),
+	}, func(cfg *config.Config) {
+		cfg.Frontmatter.WikilinkProperties = []string{"categories"}
+	}, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	warmResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	readResponseBody(t, warmResp)
+	if warmResp.StatusCode != http.StatusOK {
+		t.Fatalf("warm status: got %d, want %d", warmResp.StatusCode, http.StatusOK)
+	}
+
+	resp := postRenameRequest(t, ts.URL, "source", "Renamed", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeManagementResult(t, body)
+	if !payload.OK || payload.Message != "Renamed note." {
+		t.Fatalf("payload = %#v, want rename success", payload)
+	}
+	if payload.Key != "renamed" || payload.Path != "/n/renamed" || payload.RelPath != "Renamed.md" {
+		t.Fatalf("payload path fields unexpected: %#v", payload)
+	}
+	if strings.TrimSpace(payload.JournalID) == "" {
+		t.Fatalf("journal id missing in payload: %#v", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Source.md")); !os.IsNotExist(err) {
+		t.Fatalf("source stat err = %v, want missing", err)
+	}
+	renamed := readNoteFile(t, filepath.Join(root, "Renamed.md"))
+	if !strings.Contains(renamed, "Self [[Renamed]].") {
+		t.Fatalf("renamed note self-link not rewritten:\n%s", renamed)
+	}
+	ref := readNoteFile(t, filepath.Join(root, "Ref.md"))
+	if strings.Count(ref, "[[Renamed]]") < 2 {
+		t.Fatalf("ref body/frontmatter links not rewritten after rename:\n%s", ref)
+	}
+	if !strings.Contains(ref, "[[Renamed|alias]]") || strings.Contains(ref, "[[Source]]") {
+		t.Fatalf("ref links unexpected after rename:\n%s", ref)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.DefaultJournalDir, payload.JournalID, "manifest.json")); err != nil {
+		t.Fatalf("journal manifest missing: %v", err)
+	}
+
+	oldResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET old note: %v", err)
+	}
+	readResponseBody(t, oldResp)
+	if oldResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("old route status: got %d, want %d", oldResp.StatusCode, http.StatusNotFound)
+	}
+	newResp, err := http.Get(ts.URL + "/n/renamed") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET renamed note: %v", err)
+	}
+	readResponseBody(t, newResp)
+	if newResp.StatusCode != http.StatusOK {
+		t.Fatalf("new route status: got %d, want %d", newResp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestServer_RenameAPI_ConflictDoesNotRewrite(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md":  []byte("---\ntitle: Source\n---\nBody\n"),
+		"Renamed.md": []byte("---\ntitle: Renamed\n---\nExisting\n"),
+		"Ref.md":     []byte("---\ntitle: Ref\n---\nSee [[Source]].\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postRenameRequest(t, ts.URL, "source", "Renamed", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusConflict, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "conflict" {
+		t.Fatalf("payload = %#v, want conflict", payload)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Ref.md")); !strings.Contains(got, "[[Source]]") || strings.Contains(got, "[[Renamed]]") {
+		t.Fatalf("reference was rewritten despite conflict:\n%s", got)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Renamed.md")); !strings.Contains(got, "Existing") {
+		t.Fatalf("destination was overwritten despite conflict:\n%s", got)
+	}
+}
+
+func TestServer_RenameAPI_CSRFRequired(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postRenameRequest(t, ts.URL, "source", "Renamed", "", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Source.md")); err != nil {
+		t.Fatalf("source should remain: %v", err)
+	}
+}
+
+func TestServer_MoveAPI_RewritesWikilinksJournalsAndInvalidatesState(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Books/Source.md": []byte("---\ntitle: Source\n---\nFolder self [[Books/Source]]. Bare [[Source]].\n"),
+		"Ref.md":          []byte("---\ntitle: Ref\ncategories:\n  - \"[[Books/Source]]\"\n---\nSee [[Books/Source]] and bare [[Source]].\n"),
+	}, func(cfg *config.Config) {
+		cfg.Frontmatter.WikilinkProperties = []string{"categories"}
+	}, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	warmResp, err := http.Get(ts.URL + "/n/books/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/books/source: %v", err)
+	}
+	readResponseBody(t, warmResp)
+	if warmResp.StatusCode != http.StatusOK {
+		t.Fatalf("warm status: got %d, want %d", warmResp.StatusCode, http.StatusOK)
+	}
+
+	resp := postMoveRequest(t, ts.URL, "books/source", "Archive", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeManagementResult(t, body)
+	if !payload.OK || payload.Message != "Moved note." {
+		t.Fatalf("payload = %#v, want move success", payload)
+	}
+	if payload.Key != "archive/source" || payload.Path != "/n/archive/source" || payload.RelPath != "Archive/Source.md" {
+		t.Fatalf("payload path fields unexpected: %#v", payload)
+	}
+	if strings.TrimSpace(payload.JournalID) == "" {
+		t.Fatalf("journal id missing in payload: %#v", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Books", "Source.md")); !os.IsNotExist(err) {
+		t.Fatalf("source stat err = %v, want missing", err)
+	}
+	moved := readNoteFile(t, filepath.Join(root, "Archive", "Source.md"))
+	if !strings.Contains(moved, "Folder self [[Archive/Source]]. Bare [[Source]].") {
+		t.Fatalf("moved note links unexpected:\n%s", moved)
+	}
+	ref := readNoteFile(t, filepath.Join(root, "Ref.md"))
+	if strings.Count(ref, "[[Archive/Source]]") < 2 {
+		t.Fatalf("ref body/frontmatter links not rewritten after move:\n%s", ref)
+	}
+	if !strings.Contains(ref, "bare [[Source]]") || strings.Contains(ref, "[[Books/Source]]") {
+		t.Fatalf("ref links unexpected after move:\n%s", ref)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.DefaultJournalDir, payload.JournalID, "manifest.json")); err != nil {
+		t.Fatalf("journal manifest missing: %v", err)
+	}
+
+	oldResp, err := http.Get(ts.URL + "/n/books/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET old note: %v", err)
+	}
+	readResponseBody(t, oldResp)
+	if oldResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("old route status: got %d, want %d", oldResp.StatusCode, http.StatusNotFound)
+	}
+	newResp, err := http.Get(ts.URL + "/n/archive/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET moved note: %v", err)
+	}
+	readResponseBody(t, newResp)
+	if newResp.StatusCode != http.StatusOK {
+		t.Fatalf("new route status: got %d, want %d", newResp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestServer_MoveAPI_ConflictDoesNotRewrite(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Books/Source.md":   []byte("---\ntitle: Source\n---\nBody\n"),
+		"Archive/Source.md": []byte("---\ntitle: Source\n---\nExisting\n"),
+		"Ref.md":            []byte("---\ntitle: Ref\n---\nSee [[Books/Source]].\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postMoveRequest(t, ts.URL, "books/source", "Archive", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusConflict, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "conflict" {
+		t.Fatalf("payload = %#v, want conflict", payload)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Ref.md")); !strings.Contains(got, "[[Books/Source]]") || strings.Contains(got, "[[Archive/Source]]") {
+		t.Fatalf("reference was rewritten despite conflict:\n%s", got)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Archive", "Source.md")); !strings.Contains(got, "Existing") {
+		t.Fatalf("destination was overwritten despite conflict:\n%s", got)
+	}
+}
+
+func TestServer_FrontmatterAPI_SetUnsetJournalsAndInvalidatesState(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody marker.\n"),
+	}, func(cfg *config.Config) {
+		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
+			"status": {Type: "string", Allowed: []string{"draft", "done"}},
+		}
+	}, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	warmResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	warmBody := readResponseBody(t, warmResp)
+	if warmResp.StatusCode != http.StatusOK || !strings.Contains(warmBody, "draft") {
+		t.Fatalf("warm note response unexpected: status=%d body=%q", warmResp.StatusCode, warmBody)
+	}
+
+	resp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("set status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeManagementResult(t, body)
+	if !payload.OK || payload.Message != "Updated frontmatter." {
+		t.Fatalf("payload = %#v, want frontmatter update", payload)
+	}
+	if payload.Key != "source" || payload.Path != "/n/source" || payload.RelPath != "Source.md" {
+		t.Fatalf("payload path fields unexpected: %#v", payload)
+	}
+	if strings.TrimSpace(payload.JournalID) == "" {
+		t.Fatalf("journal id missing in payload: %#v", payload)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.DefaultJournalDir, payload.JournalID, "manifest.json")); err != nil {
+		t.Fatalf("journal manifest missing: %v", err)
+	}
+	updated := readNoteFile(t, filepath.Join(root, "Source.md"))
+	if !strings.Contains(updated, "status: done") || !strings.Contains(updated, "Body marker.") {
+		t.Fatalf("set output unexpected:\n%s", updated)
+	}
+
+	refreshedResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET refreshed /n/source: %v", err)
+	}
+	refreshedBody := readResponseBody(t, refreshedResp)
+	if refreshedResp.StatusCode != http.StatusOK ||
+		!strings.Contains(refreshedBody, `<span class="frontmatter-text">done</span>`) ||
+		strings.Contains(refreshedBody, `<span class="frontmatter-text">draft</span>`) {
+		t.Fatalf("state was not refreshed after set: status=%d body=%q", refreshedResp.StatusCode, refreshedBody)
+	}
+
+	unsetResp := postFrontmatterUnsetRequest(t, ts.URL, "source", "status", "csrf-token", "")
+	unsetBody := readResponseBody(t, unsetResp)
+	if unsetResp.StatusCode != http.StatusOK {
+		t.Fatalf("unset status: got %d, want %d; body=%q", unsetResp.StatusCode, http.StatusOK, unsetBody)
+	}
+	unsetPayload := decodeManagementResult(t, unsetBody)
+	if !unsetPayload.OK || unsetPayload.Message != "Unset frontmatter." || strings.TrimSpace(unsetPayload.JournalID) == "" {
+		t.Fatalf("unset payload = %#v, want unset success with journal", unsetPayload)
+	}
+	afterUnset := readNoteFile(t, filepath.Join(root, "Source.md"))
+	if strings.Contains(afterUnset, "status:") || !strings.Contains(afterUnset, "title: Source") || !strings.Contains(afterUnset, "Body marker.") {
+		t.Fatalf("unset output unexpected:\n%s", afterUnset)
+	}
+}
+
+func TestServer_FrontmatterAPI_ListAndWikilinkMutations(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nparent: \"[[Old]]\"\ntags:\n  - alpha\n---\nBody marker.\n"),
+	}, func(cfg *config.Config) {
+		cfg.Frontmatter.ListProperties = []string{"tags"}
+		cfg.Frontmatter.WikilinkProperties = []string{"parent"}
+	}, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	for _, step := range []struct {
+		prop  string
+		op    string
+		value string
+	}{
+		{prop: "tags", op: "+=", value: "beta"},
+		{prop: "tags", op: "-=", value: "alpha"},
+		{prop: "parent", op: "=", value: "New Parent"},
+	} {
+		resp := postFrontmatterSetRequest(t, ts.URL, "source", step.prop, step.op, step.value, "csrf-token", "")
+		body := readResponseBody(t, resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("set %s %s: got %d, want %d; body=%q", step.prop, step.op, resp.StatusCode, http.StatusOK, body)
+		}
+		payload := decodeManagementResult(t, body)
+		if !payload.OK || strings.TrimSpace(payload.JournalID) == "" {
+			t.Fatalf("payload = %#v, want success with journal", payload)
+		}
+	}
+
+	got := readNoteFile(t, filepath.Join(root, "Source.md"))
+	if !strings.Contains(got, "- beta") || strings.Contains(got, "- alpha") {
+		t.Fatalf("list mutation output unexpected:\n%s", got)
+	}
+	if !strings.Contains(got, "[[New Parent]]") || strings.Contains(got, "[[Old]]") {
+		t.Fatalf("wikilink mutation output unexpected:\n%s", got)
+	}
+	if !strings.Contains(got, "Body marker.") {
+		t.Fatalf("body changed unexpectedly:\n%s", got)
+	}
+}
+
+func TestServer_FrontmatterAPI_CSRFRequired(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden", payload)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Source.md")); !strings.Contains(got, "status: draft") {
+		t.Fatalf("note changed without csrf:\n%s", got)
+	}
+}
+
+func TestServer_BulkAPI_FrontmatterSetPartialMissingKeysJournalsAndInvalidatesState(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody marker.\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	warmResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	warmBody := readResponseBody(t, warmResp)
+	if warmResp.StatusCode != http.StatusOK || !strings.Contains(warmBody, "draft") {
+		t.Fatalf("warm response unexpected: status=%d body=%q", warmResp.StatusCode, warmBody)
+	}
+
+	resp := postBulkRequest(t, ts.URL, "frontmatter_set",
+		[]string{" source ", "missing", "source"},
+		map[string]string{
+			"property": "status",
+			"value":    "done",
+		},
+		"csrf-token",
+		"",
+	)
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeBulkManagementResult(t, body)
+	if !payload.OK || payload.Changed != 1 || payload.Failed != 1 || strings.TrimSpace(payload.JournalID) == "" {
+		t.Fatalf("payload = %#v, want one change, one stale-key failure, and a journal", payload)
+	}
+	if len(payload.Results) != 1 || payload.Results[0].Key != "source" || !payload.Results[0].Changed {
+		t.Fatalf("results = %#v, want one changed source result", payload.Results)
+	}
+	if len(payload.Failures) != 1 || payload.Failures[0].Key != "missing" || payload.Failures[0].Code != "not_found" {
+		t.Fatalf("failures = %#v, want missing not_found", payload.Failures)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Source.md")); !strings.Contains(got, "status: done") {
+		t.Fatalf("note was not updated:\n%s", got)
+	}
+
+	manifestPath := filepath.Join(root, config.DefaultJournalDir, payload.JournalID, "manifest.json")
+	manifestData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("journal manifest missing: %v", err)
+	}
+	var manifest struct {
+		Files []struct {
+			Path string `json:"path"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v; body=%q", err, string(manifestData))
+	}
+	if len(manifest.Files) != 1 || manifest.Files[0].Path != "Source.md" {
+		t.Fatalf("journal files = %#v, want only Source.md", manifest.Files)
+	}
+
+	refreshedResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET refreshed /n/source: %v", err)
+	}
+	refreshedBody := readResponseBody(t, refreshedResp)
+	if refreshedResp.StatusCode != http.StatusOK ||
+		!strings.Contains(refreshedBody, `<span class="frontmatter-text">done</span>`) ||
+		strings.Contains(refreshedBody, `<span class="frontmatter-text">draft</span>`) {
+		t.Fatalf("state was not refreshed after bulk set: status=%d body=%q", refreshedResp.StatusCode, refreshedBody)
+	}
+}
+
+func TestServer_BulkAPI_CSRFRequired(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	resp := postBulkRequest(t, ts.URL, "frontmatter_set",
+		[]string{"source"},
+		map[string]string{
+			"property": "status",
+			"value":    "done",
+		},
+		"",
+		"",
+	)
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden", payload)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Source.md")); !strings.Contains(got, "status: draft") {
+		t.Fatalf("note changed without csrf:\n%s", got)
+	}
+}
+
+func TestServer_HistoryAPI_ListsRecentJournalEntries(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody marker.\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	mutationResp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "csrf-token", "")
+	mutationBody := readResponseBody(t, mutationResp)
+	if mutationResp.StatusCode != http.StatusOK {
+		t.Fatalf("mutation status: got %d, want %d; body=%q", mutationResp.StatusCode, http.StatusOK, mutationBody)
+	}
+	mutationPayload := decodeManagementResult(t, mutationBody)
+
+	resp, err := http.Get(ts.URL + "/api/history") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/history: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("content-type: got %q, want application/json...", got)
+	}
+	payload := decodeHistoryResult(t, body)
+	if !payload.OK || len(payload.Entries) != 1 {
+		t.Fatalf("history payload = %#v, want one entry", payload)
+	}
+	entry := payload.Entries[0]
+	if entry.ID != mutationPayload.JournalID || entry.Command != "bn web frontmatter set" {
+		t.Fatalf("entry = %#v, want mutation journal %q", entry, mutationPayload.JournalID)
+	}
+	if entry.FileCount != 1 || len(entry.Files) != 1 || entry.Files[0].Path != "Source.md" {
+		t.Fatalf("entry files = %#v, want Source.md", entry.Files)
+	}
+	if entry.Files[0].Before != "file" || entry.Files[0].After != "file" || strings.TrimSpace(entry.Timestamp) == "" {
+		t.Fatalf("entry state/timestamp unexpected: %#v", entry)
+	}
+}
+
+func TestServer_UndoAPI_DefaultsToLatestAndInvalidatesState(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody marker.\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	warmResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	readResponseBody(t, warmResp)
+	if warmResp.StatusCode != http.StatusOK {
+		t.Fatalf("warm status: got %d, want %d", warmResp.StatusCode, http.StatusOK)
+	}
+
+	mutationResp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "csrf-token", "")
+	mutationBody := readResponseBody(t, mutationResp)
+	if mutationResp.StatusCode != http.StatusOK {
+		t.Fatalf("mutation status: got %d, want %d; body=%q", mutationResp.StatusCode, http.StatusOK, mutationBody)
+	}
+	mutationPayload := decodeManagementResult(t, mutationBody)
+	if got := readNoteFile(t, filepath.Join(root, "Source.md")); !strings.Contains(got, "status: done") {
+		t.Fatalf("mutation did not update note:\n%s", got)
+	}
+
+	resp := postUndoRequest(t, ts.URL, "", "csrf-token", "", false, false)
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeUndoResult(t, body)
+	if !payload.OK || payload.EntryID != mutationPayload.JournalID || payload.Message != "Undo restored 1 path." {
+		t.Fatalf("undo payload = %#v, want latest undo success", payload)
+	}
+	if len(payload.Changes) != 1 || payload.Changes[0].Path != "Source.md" {
+		t.Fatalf("undo changes = %#v, want Source.md", payload.Changes)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Source.md")); !strings.Contains(got, "status: draft") || strings.Contains(got, "status: done") {
+		t.Fatalf("undo did not restore note:\n%s", got)
+	}
+
+	refreshedResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET refreshed /n/source: %v", err)
+	}
+	refreshedBody := readResponseBody(t, refreshedResp)
+	if refreshedResp.StatusCode != http.StatusOK ||
+		!strings.Contains(refreshedBody, `<span class="frontmatter-text">draft</span>`) ||
+		strings.Contains(refreshedBody, `<span class="frontmatter-text">done</span>`) {
+		t.Fatalf("state was not refreshed after undo: status=%d body=%q", refreshedResp.StatusCode, refreshedBody)
+	}
+}
+
+func TestServer_UndoAPI_ConflictPreviewAndConfirmedForce(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody marker.\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	mutationResp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "csrf-token", "")
+	mutationBody := readResponseBody(t, mutationResp)
+	if mutationResp.StatusCode != http.StatusOK {
+		t.Fatalf("mutation status: got %d, want %d; body=%q", mutationResp.StatusCode, http.StatusOK, mutationBody)
+	}
+	entryID := decodeManagementResult(t, mutationBody).JournalID
+	notePath := filepath.Join(root, "Source.md")
+	if err := os.WriteFile(notePath, []byte("---\nstatus: blocked\ntitle: Source\n---\nBody marker.\n"), 0o644); err != nil {
+		t.Fatalf("write conflicting note: %v", err)
+	}
+
+	resp := postUndoRequest(t, ts.URL, entryID, "csrf-token", "", false, false)
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("conflict status: got %d, want %d; body=%q", resp.StatusCode, http.StatusConflict, body)
+	}
+	payload := decodeUndoResult(t, body)
+	if payload.OK || payload.Code != "conflict" || !payload.RequiresForce || payload.EntryID != entryID {
+		t.Fatalf("conflict payload = %#v, want force-required conflict", payload)
+	}
+	if len(payload.Conflicts) != 1 || payload.Conflicts[0].Path != "Source.md" {
+		t.Fatalf("conflicts = %#v, want Source.md", payload.Conflicts)
+	}
+	if strings.TrimSpace(payload.Conflicts[0].ExpectedState) == "" || strings.TrimSpace(payload.Conflicts[0].CurrentState) == "" {
+		t.Fatalf("conflict states missing: %#v", payload.Conflicts[0])
+	}
+	if got := readNoteFile(t, notePath); !strings.Contains(got, "status: blocked") {
+		t.Fatalf("conflict preview should not change note:\n%s", got)
+	}
+
+	unconfirmedForceResp := postUndoRequest(t, ts.URL, entryID, "csrf-token", "", true, false)
+	unconfirmedForceBody := readResponseBody(t, unconfirmedForceResp)
+	if unconfirmedForceResp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unconfirmed force status: got %d, want %d; body=%q", unconfirmedForceResp.StatusCode, http.StatusBadRequest, unconfirmedForceBody)
+	}
+	if got := readNoteFile(t, notePath); !strings.Contains(got, "status: blocked") {
+		t.Fatalf("unconfirmed force should not change note:\n%s", got)
+	}
+
+	forceResp := postUndoRequest(t, ts.URL, entryID, "csrf-token", "", true, true)
+	forceBody := readResponseBody(t, forceResp)
+	if forceResp.StatusCode != http.StatusOK {
+		t.Fatalf("force status: got %d, want %d; body=%q", forceResp.StatusCode, http.StatusOK, forceBody)
+	}
+	forcePayload := decodeUndoResult(t, forceBody)
+	if !forcePayload.OK || forcePayload.EntryID != entryID {
+		t.Fatalf("force payload = %#v, want undo success", forcePayload)
+	}
+	if got := readNoteFile(t, notePath); !strings.Contains(got, "status: draft") || strings.Contains(got, "status: blocked") {
+		t.Fatalf("force undo did not restore note:\n%s", got)
+	}
+}
+
+func TestServer_UndoAPI_CSRFRequired(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody marker.\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+	})
+
+	mutationResp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "csrf-token", "")
+	readResponseBody(t, mutationResp)
+	if mutationResp.StatusCode != http.StatusOK {
+		t.Fatalf("mutation status: got %d, want %d", mutationResp.StatusCode, http.StatusOK)
+	}
+
+	resp := postUndoRequest(t, ts.URL, "", "", "", false, false)
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden", payload)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Source.md")); !strings.Contains(got, "status: done") {
+		t.Fatalf("note changed without csrf:\n%s", got)
+	}
+}
+
 func TestServer_MediaRouteContainment(t *testing.T) {
 	ts, root := newHTTPServerForFiles(t, map[string][]byte{
 		"Source.md":  []byte("---\ntitle: Source\n---\n![[image.png]]\n![[missing.png]]\n"),
@@ -1014,6 +2399,35 @@ func TestServer_BrokenPageEscapesQuery(t *testing.T) {
 	}
 	if !strings.Contains(body, "&lt;script&gt;alert(1)&lt;/script&gt;") {
 		t.Fatalf("escaped query not found in response: %q", body)
+	}
+}
+
+func TestServer_BrokenPageIncludesCreateControls(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Notes/Source.md": []byte("---\ntitle: Source\n---\n[[MiXeD Missing]]\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-test-token",
+	})
+
+	resp, err := http.Get(ts.URL + "/broken") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /broken: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	for _, want := range []string{
+		`data-create-note`,
+		`data-create-source-key="notes/source"`,
+		`data-create-target="MiXeD Missing"`,
+		`data-create-csrf="csrf-test-token"`,
+		`aria-label="Create missing note"`,
+		`MiXeD Missing`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing broken create fragment %q, got %q", want, body)
+		}
 	}
 }
 

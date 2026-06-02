@@ -48,24 +48,26 @@ type Server struct {
 }
 
 type notePageData struct {
-	Title       string
-	Path        string
-	Key         string
-	CSRFToken   string
-	BodyHTML    template.HTML
-	Breadcrumbs []breadcrumbItem
-	TOC         []tableOfContentsItem
-	Copy        noteCopyPayloads
-	Frontmatter []frontmatterEntry
-	Backlinks   []noteLinkView
-	Outgoing    []noteLinkView
-	Broken      []brokenAffordance
+	Title              string
+	Path               string
+	Key                string
+	CSRFToken          string
+	BodyHTML           template.HTML
+	Breadcrumbs        []breadcrumbItem
+	TOC                []tableOfContentsItem
+	Copy               noteCopyPayloads
+	Frontmatter        []frontmatterEntry
+	FrontmatterChoices []string
+	Backlinks          []noteLinkView
+	Outgoing           []noteLinkView
+	Broken             []brokenAffordance
 }
 
 type brokenPageData struct {
-	Query    string
-	Entries  []brokenPageEntry
-	HasQuery bool
+	Query     string
+	CSRFToken string
+	Entries   []brokenPageEntry
+	HasQuery  bool
 }
 
 type graphPageData struct {
@@ -157,6 +159,15 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/facets", srv.handleFacets)
 	mux.HandleFunc("/api/search", srv.handleSearch)
 	mux.HandleFunc("/api/open", srv.handleOpen)
+	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
+	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)
+	mux.HandleFunc("/api/notes/rename", srv.handleNoteRename)
+	mux.HandleFunc("/api/notes/move", srv.handleNoteMove)
+	mux.HandleFunc("/api/notes/frontmatter/set", srv.handleNoteFrontmatterSet)
+	mux.HandleFunc("/api/notes/frontmatter/unset", srv.handleNoteFrontmatterUnset)
+	mux.HandleFunc("/api/notes/bulk", srv.handleNotesBulk)
+	mux.HandleFunc("/api/history", srv.handleHistory)
+	mux.HandleFunc("/api/undo", srv.handleUndo)
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
 	mux.HandleFunc("/graph", srv.handleGraph)
 	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
@@ -192,6 +203,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "index error", http.StatusInternalServerError)
 		return
 	}
+	data.CSRFToken = s.csrfToken
 	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
 	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
@@ -247,18 +259,19 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := notePageData{
-		Title:       note.Title(),
-		Path:        notePath,
-		Key:         normalizedKey,
-		CSRFToken:   s.csrfToken,
-		BodyHTML:    bodyHTML,
-		Breadcrumbs: breadcrumbsForNote(s.vault.Root, note, notePath),
-		TOC:         tableOfContentsForMarkdown(body, notePath),
-		Copy:        copyPayloadsForNote(s.vault.Root, note, notePath),
-		Frontmatter: renderFrontmatterEntries(front, snapshot.graph),
-		Backlinks:   backlinksForNote(snapshot, note),
-		Outgoing:    outgoingLinksForNote(snapshot.graph, note),
-		Broken:      brokenAffordancesForNote(note, snapshot.graph),
+		Title:              note.Title(),
+		Path:               notePath,
+		Key:                normalizedKey,
+		CSRFToken:          s.csrfToken,
+		BodyHTML:           bodyHTML,
+		Breadcrumbs:        breadcrumbsForNote(s.vault.Root, note, notePath),
+		TOC:                tableOfContentsForMarkdown(body, notePath),
+		Copy:               copyPayloadsForNote(s.vault.Root, note, notePath),
+		Frontmatter:        renderFrontmatterEntries(front, snapshot.graph, &s.cfg.Frontmatter),
+		FrontmatterChoices: frontmatterPropertyChoices(&s.cfg.Frontmatter),
+		Backlinks:          backlinksForNote(snapshot, note),
+		Outgoing:           outgoingLinksForNote(snapshot.graph, note),
+		Broken:             brokenAffordancesForNote(note, snapshot.graph),
 	}
 	if err := s.templates.ExecuteTemplate(w, "note", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
@@ -285,9 +298,10 @@ func (s *Server) handleBroken(w http.ResponseWriter, r *http.Request) {
 	queryText := strings.TrimSpace(r.URL.Query().Get("q"))
 	filter := normalizeBrokenFilter(snapshot.graph, queryText)
 	data := brokenPageData{
-		Query:    queryText,
-		Entries:  brokenEntries(snapshot, filter),
-		HasQuery: queryText != "",
+		Query:     queryText,
+		CSRFToken: s.csrfToken,
+		Entries:   brokenEntries(snapshot, filter),
+		HasQuery:  queryText != "",
 	}
 	if err := s.templates.ExecuteTemplate(w, "broken", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
