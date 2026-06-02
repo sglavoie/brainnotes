@@ -3,8 +3,11 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -30,7 +33,17 @@ func TestServe_FlagPrecedence(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 
 	origRun := runServe
-	t.Cleanup(func() { runServe = origRun })
+	origBuild := runWebBuild
+	origSourceRoot := sourceCheckoutRoot
+	t.Cleanup(func() {
+		runServe = origRun
+		runWebBuild = origBuild
+		sourceCheckoutRoot = origSourceRoot
+	})
+	sourceCheckoutRoot = ""
+	runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
+		return nil
+	}
 
 	var got config.ServeConfig
 	runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opts web.Options) error {
@@ -88,4 +101,222 @@ func TestServe_FlagPrecedence(t *testing.T) {
 			t.Fatal("BrowserEnabled: got true, want false")
 		}
 	})
+}
+
+func TestServe_BuildsWebAssetsInSourceCheckout(t *testing.T) {
+	isolateBnEnv(t)
+	projectRoot := buildServeWebProject(t)
+	nested := filepath.Join(projectRoot, "nested")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+	t.Chdir(nested)
+
+	vaultRoot := buildOpenVault(t)
+	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+
+	origRun := runServe
+	origBuild := runWebBuild
+	origSourceRoot := sourceCheckoutRoot
+	t.Cleanup(func() {
+		runServe = origRun
+		runWebBuild = origBuild
+		sourceCheckoutRoot = origSourceRoot
+	})
+	sourceCheckoutRoot = ""
+
+	var buildRoot string
+	runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
+		buildRoot = root
+		return os.WriteFile(filepath.Join(root, "internal", "web", "static", "app.js"), []byte("fresh build"), 0o644)
+	}
+
+	var served bool
+	runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opts web.Options) error {
+		served = true
+		if opts.StaticFiles == nil {
+			t.Fatal("StaticFiles is nil, want disk static assets")
+		}
+		f, err := opts.StaticFiles.Open("app.js")
+		if err != nil {
+			t.Fatalf("open app.js: %v", err)
+		}
+		defer f.Close()
+		body, err := io.ReadAll(f)
+		if err != nil {
+			t.Fatalf("read app.js: %v", err)
+		}
+		if string(body) != "fresh build" {
+			t.Fatalf("app.js = %q, want fresh build", string(body))
+		}
+		return nil
+	}
+
+	if _, _, err := runServeCmd(t, "--config", cfgPath, "serve"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if buildRoot != projectRoot {
+		t.Fatalf("build root = %q, want %q", buildRoot, projectRoot)
+	}
+	if !served {
+		t.Fatal("runServe was not called")
+	}
+}
+
+func TestServe_BuildsWebAssetsFromStampedCheckoutOutsideCheckout(t *testing.T) {
+	isolateBnEnv(t)
+	projectRoot := buildServeWebProject(t)
+	t.Chdir(t.TempDir())
+
+	vaultRoot := buildOpenVault(t)
+	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+
+	origRun := runServe
+	origBuild := runWebBuild
+	origSourceRoot := sourceCheckoutRoot
+	t.Cleanup(func() {
+		runServe = origRun
+		runWebBuild = origBuild
+		sourceCheckoutRoot = origSourceRoot
+	})
+	sourceCheckoutRoot = projectRoot
+
+	var buildRoot string
+	runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
+		buildRoot = root
+		return os.WriteFile(filepath.Join(root, "internal", "web", "static", "app.js"), []byte("fresh build"), 0o644)
+	}
+
+	runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opts web.Options) error {
+		if opts.StaticFiles == nil {
+			t.Fatal("StaticFiles is nil, want disk static assets")
+		}
+		f, err := opts.StaticFiles.Open("app.js")
+		if err != nil {
+			t.Fatalf("open app.js: %v", err)
+		}
+		defer f.Close()
+		body, err := io.ReadAll(f)
+		if err != nil {
+			t.Fatalf("read app.js: %v", err)
+		}
+		if string(body) != "fresh build" {
+			t.Fatalf("app.js = %q, want fresh build", string(body))
+		}
+		return nil
+	}
+
+	if _, _, err := runServeCmd(t, "--config", cfgPath, "serve"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if buildRoot != projectRoot {
+		t.Fatalf("build root = %q, want %q", buildRoot, projectRoot)
+	}
+}
+
+func TestServe_SkipsWebBuildOutsideSourceCheckout(t *testing.T) {
+	isolateBnEnv(t)
+	t.Chdir(t.TempDir())
+
+	vaultRoot := buildOpenVault(t)
+	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+
+	origRun := runServe
+	origBuild := runWebBuild
+	origSourceRoot := sourceCheckoutRoot
+	t.Cleanup(func() {
+		runServe = origRun
+		runWebBuild = origBuild
+		sourceCheckoutRoot = origSourceRoot
+	})
+	sourceCheckoutRoot = ""
+
+	var buildCalled bool
+	runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
+		buildCalled = true
+		return nil
+	}
+
+	runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opts web.Options) error {
+		if opts.StaticFiles != nil {
+			t.Fatal("StaticFiles is set, want embedded assets outside source checkout")
+		}
+		return nil
+	}
+
+	if _, _, err := runServeCmd(t, "--config", cfgPath, "serve"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if buildCalled {
+		t.Fatal("runWebBuild was called outside a source checkout")
+	}
+}
+
+func TestServe_WebBuildFailureStopsBeforeServing(t *testing.T) {
+	isolateBnEnv(t)
+	projectRoot := buildServeWebProject(t)
+	t.Chdir(projectRoot)
+
+	vaultRoot := buildOpenVault(t)
+	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+
+	origRun := runServe
+	origBuild := runWebBuild
+	origSourceRoot := sourceCheckoutRoot
+	t.Cleanup(func() {
+		runServe = origRun
+		runWebBuild = origBuild
+		sourceCheckoutRoot = origSourceRoot
+	})
+	sourceCheckoutRoot = ""
+
+	runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
+		return errors.New("npm failed")
+	}
+
+	var served bool
+	runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opts web.Options) error {
+		served = true
+		return nil
+	}
+
+	_, _, err := runServeCmd(t, "--config", cfgPath, "serve")
+	if err == nil {
+		t.Fatal("execute succeeded, want build error")
+	}
+	if !strings.Contains(err.Error(), "serve: build web assets") {
+		t.Fatalf("error = %q, want build failure context", err)
+	}
+	if served {
+		t.Fatal("runServe was called after build failure")
+	}
+}
+
+func buildServeWebProject(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	writeFile := func(rel, body string) {
+		t.Helper()
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	writeFile("package.json", `{"scripts":{"build:web":"echo ok"}}`)
+	writeFile("internal/web/static_src/main.ts", "console.log('source');")
+	writeFile("internal/web/static/app.js", "stale build")
+	return root
+}
+
+func writeServeTestConfig(t *testing.T, vaultRoot, serveBlock string) string {
+	t.Helper()
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	body := "vault = \"" + vaultRoot + "\"\n" + serveBlock + "\n"
+	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return cfgPath
 }

@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -237,6 +238,33 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 	}
 	if !(newestIdx < middleIdx && middleIdx < oldestIdx) {
 		t.Fatalf("recent notes not sorted by recency; indexes newest=%d middle=%d oldest=%d", newestIdx, middleIdx, oldestIdx)
+	}
+}
+
+func TestServer_UsesInjectedStaticFiles(t *testing.T) {
+	root := buildWebTestVault(t)
+	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
+	srv, err := NewServer(cfg, v, Options{
+		StaticFiles: fstest.MapFS{
+			"app.js": {Data: []byte("fresh build")},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/static/app.js") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /static/app.js: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if body != "fresh build" {
+		t.Fatalf("body = %q, want fresh build", body)
 	}
 }
 

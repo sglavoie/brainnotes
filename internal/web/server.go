@@ -29,6 +29,7 @@ var embeddedFiles embed.FS
 type Options struct {
 	OpenBrowser     func(url string) error
 	NotifyListening func(url string)
+	StaticFiles     fs.FS
 	CSRFToken       string
 	StartEditor     func(bin string, argv []string) error
 }
@@ -120,9 +121,12 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	if err != nil {
 		return nil, err
 	}
-	staticRoot, err := fs.Sub(embeddedFiles, "static")
-	if err != nil {
-		return nil, fmt.Errorf("web: static assets: %w", err)
+	staticRoot := opts.StaticFiles
+	if staticRoot == nil {
+		staticRoot, err = fs.Sub(embeddedFiles, "static")
+		if err != nil {
+			return nil, fmt.Errorf("web: static assets: %w", err)
+		}
 	}
 
 	srv := &Server{

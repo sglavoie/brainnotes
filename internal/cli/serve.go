@@ -4,7 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -22,6 +27,19 @@ var runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opt
 	}
 	return srv.Run(ctx)
 }
+
+var runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
+	fmt.Fprintln(out, "building web assets...")
+	cmd := exec.CommandContext(ctx, "npm", "run", "build:web")
+	cmd.Dir = root
+	cmd.Stdout = out
+	cmd.Stderr = out
+	return cmd.Run()
+}
+
+// sourceCheckoutRoot is stamped by local just build/install recipes so a
+// developer binary can rebuild web assets even when bn is launched elsewhere.
+var sourceCheckoutRoot string
 
 func NewServeCmd() *cobra.Command {
 	var (
@@ -52,6 +70,11 @@ func NewServeCmd() *cobra.Command {
 				return err
 			}
 
+			staticFiles, err := prepareServeStaticFiles(cmd.Context(), cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+
 			cfgCopy := *cfg
 			cfgCopy.Serve = serveCfg
 
@@ -64,6 +87,7 @@ func NewServeCmd() *cobra.Command {
 				NotifyListening: func(url string) {
 					fmt.Fprintf(cmd.ErrOrStderr(), "serving at %s\n", url)
 				},
+				StaticFiles: staticFiles,
 			}
 
 			return runServe(cmd.Context(), &cfgCopy, v, opts)
@@ -75,6 +99,73 @@ func NewServeCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noOpen, "no-open", false, "do not open a browser on startup")
 
 	return cmd
+}
+
+func prepareServeStaticFiles(ctx context.Context, out io.Writer) (fs.FS, error) {
+	root, ok, err := serveWebProjectRoot()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	if err := runWebBuild(ctx, root, out); err != nil {
+		return nil, fmt.Errorf("serve: build web assets: %w", err)
+	}
+	return os.DirFS(filepath.Join(root, "internal", "web", "static")), nil
+}
+
+func serveWebProjectRoot() (string, bool, error) {
+	if root, ok := validateWebProjectRoot(sourceCheckoutRoot); ok {
+		return root, true, nil
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", false, fmt.Errorf("serve: determine working directory: %w", err)
+	}
+	root, ok := findWebProjectRoot(wd)
+	return root, ok, nil
+}
+
+func findWebProjectRoot(start string) (string, bool) {
+	dir, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+	for {
+		if _, ok := validateWebProjectRoot(dir); ok {
+			return dir, true
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
+}
+
+func validateWebProjectRoot(root string) (string, bool) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return "", false
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", false
+	}
+	if fileExists(filepath.Join(abs, "package.json")) &&
+		fileExists(filepath.Join(abs, "internal", "web", "static_src", "main.ts")) {
+		return abs, true
+	}
+	return "", false
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bool, port int, portChanged bool, noOpen bool) (config.ServeConfig, error) {

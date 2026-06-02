@@ -2,6 +2,8 @@
 
 binary_name := "bn"
 pkg := "./cmd/bn"
+source_checkout_root := justfile_directory()
+source_checkout_ldflags := "-X github.com/sglavoie/sglavoie_brainnotes/internal/cli.sourceCheckoutRoot=" + source_checkout_root
 
 # Show available recipes
 help:
@@ -10,19 +12,29 @@ help:
 # Build the binary in the current directory
 build:
     @echo "Building {{ binary_name }}..."
-    go build -o {{ binary_name }} {{ pkg }}
+    go build -ldflags '{{source_checkout_ldflags}}' -o {{ binary_name }} {{ pkg }}
     @echo "Built {{ binary_name }}"
 
 # Install the binary into $GOPATH/bin via `go install`
 install:
     @echo "Installing {{ binary_name }}..."
-    go install {{ pkg }}
+    go install -ldflags '{{source_checkout_ldflags}}' {{ pkg }}
     @echo "Installed {{ binary_name }}"
 
 # Run the full test suite
 test:
     @echo "Running tests..."
     go test ./...
+
+# Build the browser JavaScript bundle
+web-build:
+    npm run build:web
+
+# Type-check and build the browser JavaScript bundle
+web-check:
+    npm run typecheck:web
+    npm run test:web
+    npm run build:web
 
 # Run go vet across all packages
 vet:
@@ -44,6 +56,7 @@ lint:
         exit 1
     fi
     go vet ./...
+    just web-check
     echo "Lint clean"
 
 # Remove build artifacts

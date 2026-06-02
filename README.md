@@ -17,6 +17,22 @@ Or, from a local clone:
 just install
 ```
 
+## Development
+
+```sh
+npm ci
+just web-check
+just lint
+```
+
+Run `npm ci` before frontend work or after package-lock changes. `just web-build`
+regenerates the committed `internal/web/static/app.js` from
+`internal/web/static_src`; `just web-check` type-checks, runs frontend tests, and
+rebuilds it. The generated JavaScript is committed so Go-only builds do not need
+Node. Local `just build` and `just install` stamp this checkout path into the
+binary so `bn serve` can refresh web assets from this source tree even when
+launched from another directory.
+
 ## Quick start
 
 ```sh
@@ -448,6 +464,12 @@ Starts a local HTTP server for vault browsing:
 - `/n/<note-key>` rendered note view (body, frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics
 - `/graph` interactive Cytoscape graph
+
+Local binaries built with `just build` or `just install` remember this checkout
+path. `bn serve` runs `npm run build:web` there before starting, then serves the
+freshly generated static assets from disk. Binaries without that local stamp
+fall back to detecting a checkout from the current directory, then to embedded
+assets.
 
 The overview and graph views share the same URL filter parameters for text,
 tags, category, status, type, folder, property presence, issue filters

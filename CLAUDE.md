@@ -13,8 +13,12 @@ The repo uses `just` for development tasks (see `justfile`):
 - `just build` — build the `bn` binary in the repo root via `go build -o bn ./cmd/bn`.
 - `just install` — `go install ./cmd/bn` (puts `bn` in `$GOPATH/bin`).
 - `just test` — `go test ./...`.
-- `just lint` — fails on `gofmt -l .` output, then runs `go vet ./...`. Run this before declaring work complete.
+- `npm ci` — install pinned frontend tooling before changing TypeScript source or running frontend checks.
+- `just web-build` — bundle `internal/web/static_src/main.ts` into committed `internal/web/static/app.js`.
+- `just web-check` — run frontend typecheck, Vitest/jsdom tests, and the browser bundle build.
+- `just lint` — fails on `gofmt -l .` output, runs `go vet ./...`, then runs `just web-check`. Run this before declaring work complete.
 - `just fmt` — `gofmt -w .`.
+- `bn serve` — local `just build`/`just install` binaries remember this checkout path, run `npm run build:web` here before serving, and serve static assets from `internal/web/static` on disk. Unstamped binaries fall back to current-directory checkout detection, then embedded assets.
 
 Run a single test: `go test ./internal/cli -run TestFind_TagFilter` (standard Go test selectors). Integration tests in `internal/cli/integration_test.go` use golden files under `internal/cli/testdata/`.
 
@@ -32,6 +36,8 @@ Layered packages, each with a focused responsibility. Commands compose primitive
 - `internal/wikilink` — Obsidian-style `[[Target#Heading|Alias]]` parsing and rewriting. **Code-block aware**: links inside fenced, indented, or inline code are masked out so rewrites never touch documentation samples or code snippets. Used by `rename` (rewrite all forms when title changes) and `move` (rewrite folder-prefixed forms only — bare `[[Title]]` links resolve by title alone in Obsidian and are deliberately left untouched).
 - `internal/query` — composable `Predicate` functions over `*vault.Note` for the `find` command's frontmatter dimensions (tag/category/status/type/has/missing/folder/age/orphan). `And` is the identity-with-no-args combinator; queries with no flags match everything.
 - `internal/template` — discovery and rendering for `bn new`. Template lookup is case-insensitive and tries `<name>`, `<name>.md`, `<name> Template.md`. Render helpers: `now`, `today`, `dateFormat`, `slug`, `title`, `lower`/`upper`, `default`, `env`, `wikilink`. The `.Vars` map holds repeatable `--var key=value` pairs.
+- `internal/web/static_src` — strict TypeScript source for first-party browser behavior. `esbuild` bundles it into `internal/web/static/app.js`, which stays committed so Go builds and installs do not require Node. `internal/web/static/cytoscape.min.js` remains vendored and is not bundled.
+- `internal/web/server.go` serves embedded static files by default, but accepts an injected static filesystem. `internal/cli/serve.go` uses a `sourceCheckoutRoot` value stamped via justfile `-ldflags` first, then current-directory checkout detection, and injects disk static assets after a successful web build so the current `bn serve` process sees freshly generated browser JavaScript.
 
 ## Implementation notes
 
