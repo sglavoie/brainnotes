@@ -58,12 +58,12 @@
       <div class="note-actions">
         <div class="note-action-group" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
           <button type="button" class="open-editor-button" data-open-button>Open in editor</button>
-          <p class="open-editor-status" data-open-status role="status" aria-live="polite"> </p>
+          <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>
         </div>
 
         <div class="note-action-group" data-trash-note data-trash-key="{{.Key}}" data-trash-csrf="{{.CSRFToken}}" data-trash-confirm="Move &quot;{{.Title}}&quot; to Trash?" data-trash-redirect="/">
           <button type="button" class="trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
-          <p class="trash-note-status" data-trash-status role="status" aria-live="polite"> </p>
+          <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
         </div>
 
         {{if .Copy.Wikilink}}
@@ -72,7 +72,7 @@
             <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
-            <p class="copy-status" data-copy-status role="status" aria-live="polite"> </p>
+            <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
           </div>
         {{end}}
       </div>

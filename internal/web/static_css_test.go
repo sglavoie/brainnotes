@@ -81,6 +81,31 @@ func TestManagementCSSAccessibilityAndMobileContract(t *testing.T) {
 	}
 }
 
+func TestNoteActionsStatusLineDoesNotResizeButtonRow(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".note-action-group",
+		"display: contents;",
+		".note-actions .open-editor-button",
+		".note-actions .trash-note-button",
+		".note-actions .copy-button",
+		"order: 1;",
+		".note-actions .open-editor-status",
+		".note-actions .trash-note-status",
+		".note-actions .copy-status",
+		"order: 2;",
+		"flex: 0 0 100%;",
+		"overflow-wrap: anywhere;",
+		".note-actions .open-editor-status:empty",
+		"display: none;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("note action status CSS missing %q", want)
+		}
+	}
+}
+
 func readStaticCSS(t *testing.T) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("static", "app.css"))
