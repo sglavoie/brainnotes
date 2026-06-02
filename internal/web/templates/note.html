@@ -34,15 +34,54 @@
   </head>
   <body>
     <main>
+      {{if .Breadcrumbs}}
+        <nav class="note-breadcrumbs" aria-label="Breadcrumb">
+          <ol>
+            {{range .Breadcrumbs}}
+              <li>
+                {{if .Current}}
+                  <span aria-current="page">{{.Label}}</span>
+                {{else}}
+                  <a href="{{.Path}}">{{.Label}}</a>
+                {{end}}
+              </li>
+            {{end}}
+          </ol>
+        </nav>
+      {{end}}
+
       <header class="site-header">
         <h1>{{.Title}}</h1>
         {{template "headerSearch" .}}
       </header>
 
-      <div class="note-actions" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
-        <button type="button" class="open-editor-button" data-open-button>Open in editor</button>
-        <p class="open-editor-status" data-open-status role="status" aria-live="polite"> </p>
+      <div class="note-actions">
+        <div class="note-action-group" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
+          <button type="button" class="open-editor-button" data-open-button>Open in editor</button>
+          <p class="open-editor-status" data-open-status role="status" aria-live="polite"> </p>
+        </div>
+
+        {{if .Copy.Wikilink}}
+          <div class="note-action-group note-copy-actions" data-copy-controls>
+            <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
+            <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
+            <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
+            <button type="button" class="copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
+            <p class="copy-status" data-copy-status role="status" aria-live="polite"> </p>
+          </div>
+        {{end}}
       </div>
+
+      {{if .TOC}}
+        <section class="panel note-toc" aria-labelledby="note-toc-heading">
+          <h2 id="note-toc-heading">Contents</h2>
+          <ol class="note-toc-list">
+            {{range .TOC}}
+              <li class="toc-level-{{.Level}}"><a href="{{.Path}}">{{.Text}}</a></li>
+            {{end}}
+          </ol>
+        </section>
+      {{end}}
 
       <section class="panel">
         <h2>Body</h2>
@@ -74,7 +113,26 @@
         {{if .Backlinks}}
           <ul class="link-list">
             {{range .Backlinks}}
-              <li><a href="{{.Path}}">{{.Title}}</a></li>
+              <li class="backlink-item">
+                <div class="backlink-summary">
+                  <a href="{{.Path}}">{{.Title}}</a>
+                  {{if .Count}}
+                    <span class="backlink-count">
+                      {{if eq .Count 1}}1 mention{{else}}{{.Count}} mentions{{end}}
+                    </span>
+                  {{end}}
+                </div>
+                {{if .Occurrences}}
+                  <ul class="backlink-occurrences">
+                    {{range .Occurrences}}
+                      <li>
+                        {{if .Location}}<span class="backlink-location">{{.Location}}</span>{{end}}
+                        {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
+                      </li>
+                    {{end}}
+                  </ul>
+                {{end}}
+              </li>
             {{end}}
           </ul>
         {{else}}

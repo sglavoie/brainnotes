@@ -1,0 +1,32 @@
+{{define "facetControls"}}
+  <section
+    class="facet-controls"
+    data-facet-controls
+    data-facet-mode="{{.Mode}}"
+    aria-label="{{.Label}}"
+  >
+    <div class="facet-control-row">
+      <div class="facet-picker">
+        <label class="facet-label" for="{{.IDPrefix}}-facet-input">{{.Label}}</label>
+        <div class="facet-input-wrap">
+          <input
+            id="{{.IDPrefix}}-facet-input"
+            class="facet-input"
+            type="search"
+            placeholder="{{.Placeholder}}"
+            autocomplete="off"
+            spellcheck="false"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="{{.IDPrefix}}-facet-options"
+            aria-expanded="false"
+          />
+          <button class="facet-input-clear" type="button" data-facet-input-clear hidden>Clear</button>
+        </div>
+        <ul id="{{.IDPrefix}}-facet-options" class="facet-options" role="listbox" hidden></ul>
+      </div>
+      <button class="facet-clear-all" type="button" data-facet-clear-all hidden>Clear filters</button>
+    </div>
+    <div id="{{.IDPrefix}}-facet-chips" class="facet-chips" data-facet-chips hidden></div>
+  </section>
+{{end}}

@@ -16,6 +16,27 @@
       </div>
       {{template "headerSearch" .}}
     </header>
+    {{template "facetControls" .FacetControls}}
+
+    <section
+      class="panel overview-results"
+      data-overview-search-results
+      aria-labelledby="overview-results-heading"
+      aria-describedby="overview-results-status"
+      aria-busy="false"
+    >
+      <div class="panel-header">
+        <h2 id="overview-results-heading">Filtered results</h2>
+      </div>
+      <p
+        id="overview-results-status"
+        class="overview-results-status is-empty"
+        data-overview-search-status
+        role="status"
+        aria-live="polite"
+      >No query or filters selected.</p>
+      <ul class="overview-result-list" data-overview-search-list hidden></ul>
+    </section>
 
     <section class="metric-grid" aria-label="Vault statistics">
       <article class="metric-card">
@@ -35,6 +56,232 @@
         <h2>Graph</h2>
         <p><a href="{{.GraphPath}}">Open interactive graph</a></p>
       </article>
+    </section>
+
+    <section class="panel diagnostics-panel" aria-labelledby="diagnostics-heading">
+      <div class="panel-header">
+        <h2 id="diagnostics-heading">Vault health</h2>
+      </div>
+
+      {{if .Diagnostics.Cards}}
+        <div class="diagnostic-card-grid" aria-label="Health checks">
+          {{range .Diagnostics.Cards}}
+            <a class="metric-card diagnostic-card diagnostic-card-{{.Key}}" href="{{.Path}}">
+              <span class="diagnostic-card-label">{{.Label}}</span>
+              <span class="metric-value">{{.Count}}</span>
+            </a>
+          {{end}}
+        </div>
+      {{end}}
+
+      <div class="diagnostic-sections">
+        {{if .Diagnostics.BrokenTargets}}
+          <section class="diagnostic-section" id="diagnostic-broken-targets" aria-labelledby="diagnostic-broken-targets-heading">
+            <h3 id="diagnostic-broken-targets-heading">Broken targets</h3>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>Target</th>
+                    <th>Count</th>
+                    <th>Sources</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.BrokenTargets}}
+                    <tr>
+                      <th scope="row"><a href="{{.Path}}"><code>{{.Label}}</code></a></th>
+                      <td class="diagnostic-count">{{.Count}}</td>
+                      <td>
+                        <ul class="diagnostic-note-list">
+                          {{range .Items}}
+                            <li>
+                              <a href="{{.Path}}">{{if .Title}}{{.Title}}{{else}}{{.Path}}{{end}}</a>
+                              {{if .Folder}}<a class="diagnostic-folder" href="{{.FolderPath}}">{{.Folder}}</a>{{end}}
+                              {{if .Location}}<span class="diagnostic-location">{{.Location}}</span>{{end}}
+                            </li>
+                          {{end}}
+                        </ul>
+                      </td>
+                    </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+
+        {{if .Diagnostics.OrphanNotes}}
+          <section class="diagnostic-section" id="diagnostic-orphans" aria-labelledby="diagnostic-orphans-heading">
+            <h3 id="diagnostic-orphans-heading">Orphan notes</h3>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>Note</th>
+                    <th>Folder</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.OrphanNotes}}
+                    <tr>
+                      <th scope="row"><a href="{{.Path}}">{{if .Title}}{{.Title}}{{else}}{{.Path}}{{end}}</a></th>
+                      <td>{{if .Folder}}<a class="diagnostic-folder" href="{{.FolderPath}}">{{.Folder}}</a>{{else}}/{{end}}</td>
+                    </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+
+        {{if .Diagnostics.DeadEndNotes}}
+          <section class="diagnostic-section" id="diagnostic-dead-ends" aria-labelledby="diagnostic-dead-ends-heading">
+            <h3 id="diagnostic-dead-ends-heading">Dead-end notes</h3>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>Note</th>
+                    <th>Folder</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.DeadEndNotes}}
+                    <tr>
+                      <th scope="row"><a href="{{.Path}}">{{if .Title}}{{.Title}}{{else}}{{.Path}}{{end}}</a></th>
+                      <td>{{if .Folder}}<a class="diagnostic-folder" href="{{.FolderPath}}">{{.Folder}}</a>{{else}}/{{end}}</td>
+                    </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+
+        {{if .Diagnostics.DuplicateTitles}}
+          <section class="diagnostic-section" id="diagnostic-duplicate-titles" aria-labelledby="diagnostic-duplicate-titles-heading">
+            <h3 id="diagnostic-duplicate-titles-heading">Duplicate titles</h3>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Count</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.DuplicateTitles}}
+                    <tr>
+                      <th scope="row">{{.Label}}</th>
+                      <td class="diagnostic-count">{{.Count}}</td>
+                      <td>
+                        <ul class="diagnostic-note-list">
+                          {{range .Items}}
+                            <li>
+                              <a href="{{.Path}}">{{if .Title}}{{.Title}}{{else}}{{.Path}}{{end}}</a>
+                              {{if .Folder}}<a class="diagnostic-folder" href="{{.FolderPath}}">{{.Folder}}</a>{{end}}
+                            </li>
+                          {{end}}
+                        </ul>
+                      </td>
+                    </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+
+        {{if .Diagnostics.FrontmatterErrors}}
+          <section class="diagnostic-section" id="diagnostic-frontmatter-errors" aria-labelledby="diagnostic-frontmatter-errors-heading">
+            <h3 id="diagnostic-frontmatter-errors-heading">Frontmatter errors</h3>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.FrontmatterErrors}}
+                    <tr>
+                      <th scope="row"><code>{{.Path}}</code></th>
+                      <td>{{.Error}}</td>
+                    </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+
+        {{if .Diagnostics.SchemaViolations}}
+          <section class="diagnostic-section" id="diagnostic-schema-violations" aria-labelledby="diagnostic-schema-violations-heading">
+            <h3 id="diagnostic-schema-violations-heading">Schema violations</h3>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>Rule</th>
+                    <th>Count</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.SchemaViolations}}
+                    <tr>
+                      <th scope="row">{{.Label}}</th>
+                      <td class="diagnostic-count">{{.Count}}</td>
+                      <td>
+                        <ul class="diagnostic-note-list">
+                          {{range .Items}}
+                            <li>
+                              <a href="{{.Path}}">{{if .Title}}{{.Title}}{{else}}{{.Path}}{{end}}</a>
+                              {{if .Folder}}<a class="diagnostic-folder" href="{{.FolderPath}}">{{.Folder}}</a>{{end}}
+                            </li>
+                          {{end}}
+                        </ul>
+                      </td>
+                    </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+
+        {{if .Diagnostics.LongTailValues}}
+          <section class="diagnostic-section" id="diagnostic-long-tail-values" aria-labelledby="diagnostic-long-tail-values-heading">
+            <h3 id="diagnostic-long-tail-values-heading">Long-tail values</h3>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>Property</th>
+                    <th>Value</th>
+                    <th>Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.LongTailValues}}
+                    {{$property := .Property}}
+                    {{range .Values}}
+                      <tr>
+                        <th scope="row">{{ $property }}</th>
+                        <td><code>{{.Value}}</code></td>
+                        <td class="diagnostic-count">{{.Count}}</td>
+                      </tr>
+                    {{end}}
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+      </div>
     </section>
 
     <section class="panel">

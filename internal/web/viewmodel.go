@@ -14,8 +14,37 @@ import (
 )
 
 type noteLinkView struct {
-	Title string
+	Title       string
+	Path        string
+	Count       int
+	Occurrences []backlinkOccurrence
+}
+
+type breadcrumbItem struct {
+	Label   string
+	Path    string
+	Current bool
+}
+
+type tableOfContentsItem struct {
+	ID    string
+	Level int
+	Text  string
 	Path  string
+}
+
+type noteCopyPayloads struct {
+	Wikilink     string
+	VaultPath    string
+	RoutePath    string
+	MarkdownLink string
+}
+
+type backlinkOccurrence struct {
+	Location       string
+	Line           int
+	FrontmatterKey string
+	Snippet        string
 }
 
 type brokenAffordance struct {
@@ -99,14 +128,27 @@ func outgoingLinksForNote(graph *query.Graph, note *vault.Note) []noteLinkView {
 	return links
 }
 
-func backlinksForNote(graph *query.Graph, note *vault.Note) []noteLinkView {
+func backlinksForNote(snapshot vaultSnapshot, note *vault.Note) []noteLinkView {
+	graph := snapshot.graph
 	if graph == nil || note == nil {
+		return nil
+	}
+
+	targetKey := graph.KeyForNote(note)
+	if targetKey == "" {
 		return nil
 	}
 
 	keysByPath := make(map[string]string, len(graph.PathsByTitle))
 	for key, path := range graph.PathsByTitle {
 		keysByPath[path] = key
+	}
+	notesByPath := make(map[string]*vault.Note, len(snapshot.notes))
+	for _, source := range snapshot.notes {
+		if source == nil {
+			continue
+		}
+		notesByPath[source.Path] = source
 	}
 
 	paths := graph.BackLinksForNote(note)
@@ -130,9 +172,16 @@ func backlinksForNote(graph *query.Graph, note *vault.Note) []noteLinkView {
 		if title == "" {
 			title = key
 		}
+		sourceNote := notesByPath[path]
+		if sourceNote == nil {
+			sourceNote = &vault.Note{Path: path}
+		}
+		occurrences := backlinkOccurrencesForNote(graph, targetKey, sourceNote)
 		links = append(links, noteLinkView{
-			Title: title,
-			Path:  notePath,
+			Title:       title,
+			Path:        notePath,
+			Count:       len(occurrences),
+			Occurrences: occurrences,
 		})
 	}
 

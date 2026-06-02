@@ -9,6 +9,10 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 	"go.abhg.dev/goldmark/wikilink"
 )
 
@@ -22,18 +26,26 @@ func newMarkdownRenderer(state *vaultState) (*markdownRenderer, error) {
 		return nil, fmt.Errorf("web: nil vault state")
 	}
 
-	md := goldmark.New(
-		goldmark.WithExtensions(&wikilink.Extender{
-			Resolver: wikilinkResolver{
-				state: state,
-				root:  state.vault.Root,
-			},
-		}),
-	)
+	md := goldmarkWithResolver(wikilinkResolver{
+		state: state,
+		root:  state.vault.Root,
+	})
 	return &markdownRenderer{
 		md:    md,
 		state: state,
 	}, nil
+}
+
+func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
+	return goldmark.New(
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(),
+			parser.WithASTTransformers(util.Prioritized(headingAnchorTransformer{}, 100)),
+		),
+		goldmark.WithExtensions(&wikilink.Extender{
+			Resolver: resolver,
+		}),
+	)
 }
 
 func (r *markdownRenderer) render(source string) (template.HTML, error) {
@@ -44,14 +56,10 @@ func (r *markdownRenderer) renderWithGraph(source string, graph *query.Graph) (t
 	if graph == nil {
 		return "", errorsf("nil graph for markdown render")
 	}
-	md := goldmark.New(
-		goldmark.WithExtensions(&wikilink.Extender{
-			Resolver: wikilinkResolver{
-				graph: graph,
-				root:  r.state.vault.Root,
-			},
-		}),
-	)
+	md := goldmarkWithResolver(wikilinkResolver{
+		graph: graph,
+		root:  r.state.vault.Root,
+	})
 	return renderWithMarkdown(md, source)
 }
 
@@ -61,6 +69,32 @@ func renderWithMarkdown(md goldmark.Markdown, source string) (template.HTML, err
 		return "", fmt.Errorf("web: render markdown: %w", err)
 	}
 	return template.HTML(buf.String()), nil
+}
+
+type headingAnchorTransformer struct{}
+
+func (headingAnchorTransformer) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
+	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering || node.Kind() != ast.KindHeading {
+			return ast.WalkContinue, nil
+		}
+
+		id := nodeAttributeString(node, "id")
+		if id == "" {
+			return ast.WalkContinue, nil
+		}
+
+		link := ast.NewLink()
+		link.Destination = []byte("#" + url.PathEscape(id))
+		link.Title = []byte("Heading link")
+		link.SetAttributeString("class", "heading-anchor")
+		link.SetAttributeString("aria-label", "Heading link")
+		link.AppendChild(link, ast.NewString([]byte("#")))
+
+		node.AppendChild(node, ast.NewString([]byte(" ")))
+		node.AppendChild(node, link)
+		return ast.WalkContinue, nil
+	})
 }
 
 type wikilinkResolver struct {

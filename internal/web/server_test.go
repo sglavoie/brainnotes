@@ -240,6 +240,102 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 	}
 }
 
+func TestServer_IndexIncludesOverviewSearchResultsPanel(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	required := []string{
+		`data-facet-mode="search"`,
+		`data-overview-search-results`,
+		`aria-labelledby="overview-results-heading"`,
+		`aria-describedby="overview-results-status"`,
+		`aria-busy="false"`,
+		`id="overview-results-heading"`,
+		`Filtered results`,
+		`id="overview-results-status"`,
+		`data-overview-search-status`,
+		`role="status"`,
+		`aria-live="polite"`,
+		`No query or filters selected.`,
+		`class="overview-result-list"`,
+		`data-overview-search-list`,
+		`hidden`,
+	}
+	for _, want := range required {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in overview search panel, got %q", want, body)
+		}
+	}
+}
+
+func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Work/Source.md":    []byte("---\ntitle: Source <script>\nstatus: invalid\n---\n[[Missing <target>]]\n"),
+		"Work/Twin.md":      []byte("---\ntitle: Twin\nstatus: invalid\n---\nBody\n"),
+		"Archive/Twin.md":   []byte("---\ntitle: Twin\nstatus: active\n---\nBody\n"),
+		"Bad <meta>.md":     []byte("---\n: bad\n---\nBody\n"),
+		"Linked/Target.md":  []byte("---\ntitle: Target\nstatus: active\n---\n[[Work/Source]]\n"),
+		"Linked/Source.md":  []byte("---\ntitle: Linked Source\nstatus: active\n---\n[[Work/Source]]\n"),
+		"Linked/Another.md": []byte("---\ntitle: Another\nstatus: active\n---\n[[Archive/Twin]]\n"),
+	}, func(cfg *config.Config) {
+		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
+			"status": {Type: "string", Required: true, Allowed: []string{"active"}},
+			"type":   {Type: "string", Required: true},
+		}
+	}, Options{})
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+
+	required := []string{
+		`id="diagnostics-heading"`,
+		`Vault health`,
+		`class="diagnostic-card-grid"`,
+		`href="/?broken=1"`,
+		`href="/?orphan=1"`,
+		`href="/?dead_end=1"`,
+		`href="#diagnostic-duplicate-titles"`,
+		`Broken targets`,
+		`Orphan notes`,
+		`Dead-end notes`,
+		`Duplicate titles`,
+		`Frontmatter errors`,
+		`Schema violations`,
+		`Long-tail values`,
+		`href="/broken?q=missing&#43;%3Ctarget%3E"`,
+		`missing &lt;target&gt;`,
+		`href="/?folder=Work"`,
+		`Source &lt;script&gt;`,
+		`Bad &lt;meta&gt;.md`,
+		`status invalid value`,
+		`allowed: active`,
+	}
+	for _, want := range required {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in diagnostics dashboard, got %q", want, body)
+		}
+	}
+	if strings.Contains(body, "Source <script>") || strings.Contains(body, "Bad <meta>.md") {
+		t.Fatalf("diagnostics dashboard did not escape unsafe fixture text: %q", body)
+	}
+}
+
 func newHTTPServerForFiles(t *testing.T, files map[string][]byte) (*httptest.Server, string) {
 	return newHTTPServerForFilesWithOptions(t, files, nil, Options{})
 }
@@ -254,13 +350,7 @@ func newHTTPServerForFilesWithOptions(
 
 	root := t.TempDir()
 	for rel, data := range files {
-		abs := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
-			t.Fatalf("mkdir %q: %v", filepath.Dir(abs), err)
-		}
-		if err := os.WriteFile(abs, data, 0o644); err != nil {
-			t.Fatalf("write %q: %v", rel, err)
-		}
+		writeTestFile(t, root, rel, string(data))
 	}
 
 	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
@@ -274,6 +364,18 @@ func newHTTPServerForFilesWithOptions(
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, root
+}
+
+func writeTestFile(t *testing.T, root, rel, body string) {
+	t.Helper()
+
+	abs := filepath.Join(root, rel)
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		t.Fatalf("mkdir %q: %v", filepath.Dir(abs), err)
+	}
+	if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %q: %v", rel, err)
+	}
 }
 
 func postOpenRequest(t *testing.T, baseURL, key, headerToken, formToken string) *http.Response {
@@ -342,6 +444,14 @@ func graphNodeDataByID(payload graphJSON) map[string]graphJSONNodeData {
 		nodes[node.Data.ID] = node.Data
 	}
 	return nodes
+}
+
+func graphNodeIDs(payload graphJSON) []string {
+	ids := make([]string, 0, len(payload.Nodes))
+	for _, node := range payload.Nodes {
+		ids = append(ids, node.Data.ID)
+	}
+	return ids
 }
 
 func denseGraphVaultFixture() map[string][]byte {
@@ -454,6 +564,66 @@ func TestServer_NoteViewFrontmatterWikilinkAnchors(t *testing.T) {
 	}
 	if !strings.Contains(body, `href="/broken?q=missing"`) {
 		t.Fatalf("missing broken-link affordance for frontmatter link, got %q", body)
+	}
+}
+
+func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Projects/Source.md": []byte(strings.Join([]string{
+			"---",
+			"title: Source",
+			"---",
+			"# Overview",
+			"",
+			"## Details",
+			"Body",
+			"",
+		}, "\n")),
+		"Ref.md": []byte(strings.Join([]string{
+			"---",
+			"title: Ref",
+			"related: \"See [[Source]]\"",
+			"---",
+			"Body <script>alert(1)</script> [[Source]]",
+			"",
+		}, "\n")),
+	})
+
+	resp, err := http.Get(ts.URL + "/n/projects/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/projects/source: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	for _, want := range []string{
+		`<nav class="note-breadcrumbs" aria-label="Breadcrumb">`,
+		`href="/?folder=Projects"`,
+		`<span aria-current="page">Source</span>`,
+		`data-copy-controls`,
+		`data-copy-text="[[Projects/Source]]"`,
+		`data-copy-text="Projects/Source.md"`,
+		`data-copy-text="/n/projects/source"`,
+		`data-copy-text="[Source](/n/projects/source)"`,
+		`<section class="panel note-toc" aria-labelledby="note-toc-heading">`,
+		`href="/n/projects/source#overview"`,
+		`href="/n/projects/source#details"`,
+		`id="overview"`,
+		`href="#overview"`,
+		`class="heading-anchor"`,
+		`class="backlink-occurrences"`,
+		`frontmatter.related`,
+		`See [[Source]]`,
+		`&lt;script&gt;alert(1)&lt;/script&gt; [[Source]]`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected note HTML to contain %q, got %q", want, body)
+		}
+	}
+	if strings.Contains(body, "<script>alert(1)</script>") {
+		t.Fatalf("backlink snippet rendered unsafe raw HTML, got %q", body)
 	}
 }
 
@@ -800,8 +970,14 @@ func TestServer_SearchAPI_ResultShapeAndRanking(t *testing.T) {
 	if results[0].Title != "NeedleGuide" {
 		t.Fatalf("expected title match to rank first, got %#v", results[0])
 	}
+	if !sameStrings(results[0].MatchedFields, []string{"title"}) {
+		t.Fatalf("title result matched fields: got %#v, want [title]", results[0].MatchedFields)
+	}
 	if results[1].Title != "BodyOne" || results[2].Title != "BodyTwo" || results[3].Title != "Escape" {
 		t.Fatalf("unexpected body-match ordering: %#v", results)
+	}
+	if !sameStrings(results[1].MatchedFields, []string{"body"}) {
+		t.Fatalf("body result matched fields: got %#v, want [body]", results[1].MatchedFields)
 	}
 
 	for _, result := range results {
@@ -811,6 +987,83 @@ func TestServer_SearchAPI_ResultShapeAndRanking(t *testing.T) {
 		if !strings.HasPrefix(result.Path, "/n/") {
 			t.Fatalf("expected note path to start with /n/, got %#v", result)
 		}
+	}
+	pathsByTitle := make(map[string]string, len(results))
+	for _, result := range results {
+		pathsByTitle[result.Title] = result.Path
+	}
+	if got, want := pathsByTitle["BodyTwo"], "/n/work/bodytwo"; got != want {
+		t.Fatalf("nested result path: got %q, want %q; results=%#v", got, want, results)
+	}
+}
+
+func TestServer_SearchAPI_FilterOnlyAndCombinedFilters(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Work/Alpha.md":     []byte("---\ntags: [foo]\nstatus: active\n---\nAlpha body.\n"),
+		"Work/Needle.md":    []byte("---\ntags: [foo]\nstatus: active\n---\nNeedle body.\n"),
+		"Archive/Needle.md": []byte("---\ntags: [foo]\nstatus: archived\n---\nNeedle body.\n"),
+		"Work/Other.md":     []byte("---\ntags: [bar]\nstatus: active\n---\nNeedle body.\n"),
+	})
+
+	filterOnly, _, filterStatus := fetchSearchJSON(t, ts.URL+"/api/search?tag=foo&folder=Work")
+	if filterStatus != http.StatusOK {
+		t.Fatalf("filter-only status: got %d, want %d", filterStatus, http.StatusOK)
+	}
+	if len(filterOnly) != 2 {
+		t.Fatalf("filter-only result count: got %d, want 2; results=%#v", len(filterOnly), filterOnly)
+	}
+	if filterOnly[0].Title != "Alpha" || filterOnly[1].Title != "Needle" {
+		t.Fatalf("filter-only results not sorted as expected: %#v", filterOnly)
+	}
+	if filterOnly[0].Snippet != "" || len(filterOnly[0].MatchedFields) != 0 {
+		t.Fatalf("filter-only result should not include text metadata: %#v", filterOnly[0])
+	}
+
+	combined, _, combinedStatus := fetchSearchJSON(t, ts.URL+"/api/search?q=needle&tag=foo&folder=Work&status=active")
+	if combinedStatus != http.StatusOK {
+		t.Fatalf("combined status: got %d, want %d", combinedStatus, http.StatusOK)
+	}
+	if len(combined) != 1 || combined[0].Title != "Needle" {
+		t.Fatalf("combined result mismatch: %#v", combined)
+	}
+	if !sameStrings(combined[0].MatchedFields, []string{"title", "body"}) {
+		t.Fatalf("combined matched fields: got %#v, want [title body]", combined[0].MatchedFields)
+	}
+}
+
+func TestServer_SearchAPI_IssueMetadata(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Broken.md": []byte("---\ntitle: Broken\n---\nNeedle [[Missing]]\n"),
+		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Broken]]\n"),
+	})
+
+	results, _, statusCode := fetchSearchJSON(t, ts.URL+"/api/search?q=needle")
+	if statusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", statusCode, http.StatusOK)
+	}
+	if len(results) != 1 {
+		t.Fatalf("result count: got %d, want 1; results=%#v", len(results), results)
+	}
+	if !sameStrings(results[0].MatchedFields, []string{"body"}) {
+		t.Fatalf("matched fields: got %#v, want [body]", results[0].MatchedFields)
+	}
+	if !sameStrings(results[0].Issues, []string{"broken", "dead_end"}) {
+		t.Fatalf("issue metadata: got %#v, want [broken dead_end]", results[0].Issues)
+	}
+}
+
+func TestServer_SearchAPI_InvalidFilterParams(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Note.md": []byte("---\ntitle: Note\n---\nBody text.\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/api/search?broken=maybe") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/search: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 }
 
@@ -910,6 +1163,46 @@ func TestServer_PagesIncludeSearchUI(t *testing.T) {
 	assertSearchUI("/broken")
 }
 
+func TestServer_PagesIncludeFacetControls(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	assertFacetUI := func(path, prefix, mode, label string) {
+		t.Helper()
+		resp, err := http.Get(ts.URL + path) // #nosec G107 -- test-only local URL
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		body := readResponseBody(t, resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status for %s: got %d, want %d", path, resp.StatusCode, http.StatusOK)
+		}
+		required := []string{
+			`data-facet-controls`,
+			`data-facet-mode="` + mode + `"`,
+			`id="` + prefix + `-facet-input"`,
+			`role="combobox"`,
+			`aria-controls="` + prefix + `-facet-options"`,
+			`id="` + prefix + `-facet-options"`,
+			`role="listbox"`,
+			`id="` + prefix + `-facet-chips"`,
+			`data-facet-chips`,
+			`data-facet-input-clear`,
+			`data-facet-clear-all`,
+			label,
+		}
+		for _, want := range required {
+			if !strings.Contains(body, want) {
+				t.Fatalf("missing %q on %s, got %q", want, path, body)
+			}
+		}
+	}
+
+	assertFacetUI("/", "overview", "search", "Filter notes")
+	assertFacetUI("/graph", "graph", "graph", "Filter graph facets")
+}
+
 func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
@@ -973,6 +1266,9 @@ func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="graph-hover-degree"`) {
 		t.Fatalf("missing graph degree detail on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-hover-issues"`) {
+		t.Fatalf("missing graph issue detail on /graph, got %q", body)
 	}
 	if !strings.Contains(body, `aria-disabled="true"`) {
 		t.Fatalf("missing initially disabled graph open note link on /graph, got %q", body)
@@ -1115,6 +1411,90 @@ func TestServer_GraphAPIJSON_QueryFiltersTitleBodyAndEdges(t *testing.T) {
 	edge := payload.Edges[0].Data
 	if edge.Source != "needlea" || edge.Target != "needleb" {
 		t.Fatalf("unexpected edge: got %#v, want NeedleA->NeedleB only", edge)
+	}
+}
+
+func TestServer_GraphAPIJSON_FiltersNodesEdgesAndFilteredDegrees(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Work/Alpha.md":    []byte("---\ntitle: Alpha\ntags: [keep]\nstatus: active\n---\n[[Beta]] [[Gamma]]\n"),
+		"Work/Beta.md":     []byte("---\ntitle: Beta\ntags: [keep]\nstatus: active\n---\n[[Gamma]]\n"),
+		"Work/Gamma.md":    []byte("---\ntitle: Gamma\ntags: [drop]\nstatus: active\n---\nBody\n"),
+		"Archive/Delta.md": []byte("---\ntitle: Delta\ntags: [keep]\nstatus: active\n---\n[[Alpha]]\n"),
+	})
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?tag=keep&folder=Work")
+	if !sameStrings(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
+		t.Fatalf("filtered node ids: got %#v, want work/alpha and work/beta", graphNodeIDs(payload))
+	}
+	if len(payload.Edges) != 1 {
+		t.Fatalf("edge count: got %d, want 1", len(payload.Edges))
+	}
+	edge := payload.Edges[0].Data
+	if edge.Source != "work/alpha" || edge.Target != "work/beta" {
+		t.Fatalf("filtered edge: got %#v, want work/alpha->work/beta", edge)
+	}
+
+	nodes := graphNodeDataByID(payload)
+	alpha := nodes["work/alpha"]
+	if alpha.InDegree != 1 || alpha.OutDegree != 2 || alpha.Degree != 3 {
+		t.Fatalf("alpha full degrees: got in=%d out=%d total=%d, want in=1 out=2 total=3", alpha.InDegree, alpha.OutDegree, alpha.Degree)
+	}
+	if alpha.FilteredInDegree != 0 || alpha.FilteredOutDegree != 1 || alpha.FilteredDegree != 1 {
+		t.Fatalf("alpha filtered degrees: got in=%d out=%d total=%d, want in=0 out=1 total=1", alpha.FilteredInDegree, alpha.FilteredOutDegree, alpha.FilteredDegree)
+	}
+	beta := nodes["work/beta"]
+	if beta.InDegree != 1 || beta.OutDegree != 1 || beta.Degree != 2 {
+		t.Fatalf("beta full degrees: got in=%d out=%d total=%d, want in=1 out=1 total=2", beta.InDegree, beta.OutDegree, beta.Degree)
+	}
+	if beta.FilteredInDegree != 1 || beta.FilteredOutDegree != 0 || beta.FilteredDegree != 1 {
+		t.Fatalf("beta filtered degrees: got in=%d out=%d total=%d, want in=1 out=0 total=1", beta.FilteredInDegree, beta.FilteredOutDegree, beta.FilteredDegree)
+	}
+}
+
+func TestServer_GraphAPIJSON_IssueMetadataAndBrokenFilter(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Broken.md": []byte("---\ntitle: Broken\n---\n[[Missing]]\n"),
+		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Broken]]\n"),
+		"Island.md": []byte("---\ntitle: Island\n---\nNo links\n"),
+	})
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json")
+	nodes := graphNodeDataByID(payload)
+
+	broken := nodes["broken"]
+	if !broken.HasBroken || broken.BrokenCount != 1 || broken.IsOrphan || !broken.IsDeadEnd {
+		t.Fatalf("broken metadata: got %#v, want broken count 1, not orphan, dead-end", broken)
+	}
+	linked := nodes["linked"]
+	if linked.HasBroken || linked.BrokenCount != 0 || !linked.IsOrphan || linked.IsDeadEnd {
+		t.Fatalf("linked metadata: got %#v, want clean orphan with outgoing link", linked)
+	}
+	island := nodes["island"]
+	if island.HasBroken || island.BrokenCount != 0 || !island.IsOrphan || !island.IsDeadEnd {
+		t.Fatalf("island metadata: got %#v, want clean orphan dead-end", island)
+	}
+
+	brokenOnly, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?broken=1")
+	if !sameStrings(graphNodeIDs(brokenOnly), []string{"broken"}) {
+		t.Fatalf("broken filter node ids: got %#v, want broken", graphNodeIDs(brokenOnly))
+	}
+	if len(brokenOnly.Edges) != 0 {
+		t.Fatalf("broken filter edges: got %#v, want none", brokenOnly.Edges)
+	}
+}
+
+func TestServer_GraphAPIJSON_InvalidFilterParams(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Note.md": []byte("---\ntitle: Note\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/api/graph.json?broken=maybe") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/graph.json: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 }
 

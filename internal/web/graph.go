@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -18,12 +19,19 @@ type graphJSONNode struct {
 }
 
 type graphJSONNodeData struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Folder    string `json:"folder"`
-	InDegree  int    `json:"inDegree"`
-	OutDegree int    `json:"outDegree"`
-	Degree    int    `json:"degree"`
+	ID                string `json:"id"`
+	Title             string `json:"title"`
+	Folder            string `json:"folder"`
+	InDegree          int    `json:"inDegree"`
+	OutDegree         int    `json:"outDegree"`
+	Degree            int    `json:"degree"`
+	FilteredInDegree  int    `json:"filteredInDegree"`
+	FilteredOutDegree int    `json:"filteredOutDegree"`
+	FilteredDegree    int    `json:"filteredDegree"`
+	HasBroken         bool   `json:"hasBroken"`
+	BrokenCount       int    `json:"brokenCount"`
+	IsOrphan          bool   `json:"isOrphan"`
+	IsDeadEnd         bool   `json:"isDeadEnd"`
 }
 
 type graphJSONEdge struct {
@@ -36,14 +44,13 @@ type graphJSONEdgeData struct {
 	Target string `json:"target"`
 }
 
-func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJSON, error) {
+func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters) (graphJSON, error) {
 	if snapshot.graph == nil {
 		return graphJSON{}, errorsf("nil graph")
 	}
 	if strings.TrimSpace(root) == "" {
 		return graphJSON{}, errorsf("empty vault root")
 	}
-	queryFolded := foldSearchQuery(queryText)
 
 	noteByKey := make(map[string]*vault.Note, len(snapshot.notes))
 	for _, note := range snapshot.notes {
@@ -59,7 +66,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 	degrees := graphNodeDegrees(snapshot)
 
 	included := make(map[string]struct{}, len(snapshot.graph.Titles))
-	if queryFolded == "" {
+	if filters.foldedQuery == "" && !filters.hasNonTextFilters() {
 		for key := range snapshot.graph.Titles {
 			included[key] = struct{}{}
 		}
@@ -72,7 +79,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 			if key == "" {
 				continue
 			}
-			_, matched, err := matchNoteText(note, queryFolded)
+			_, matched, err := matchNoteWithFilters(note, filters)
 			if err != nil {
 				return graphJSON{}, err
 			}
@@ -81,6 +88,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 			}
 		}
 	}
+	filteredDegrees := graphFilteredNodeDegrees(snapshot, included)
 
 	keys := make([]string, 0, len(included))
 	for key := range included {
@@ -88,6 +96,8 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 	}
 	sort.Strings(keys)
 
+	orphan := query.Orphan(snapshot.graph)
+	deadEnd := query.DeadEnd(snapshot.graph)
 	nodes := make([]graphJSONNode, 0, len(keys))
 	for _, key := range keys {
 		title := snapshot.graph.OriginalTitles[key]
@@ -95,22 +105,36 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 			title = key
 		}
 		folder := ""
+		var hasBroken, isOrphan, isDeadEnd bool
+		var brokenCount int
 		if note := noteByKey[key]; note != nil {
 			var err error
 			folder, err = note.Folder(root)
 			if err != nil {
 				return graphJSON{}, fmt.Errorf("folder for %q: %w", key, err)
 			}
+			brokenCount = len(query.UnresolvedLinks(note, snapshot.graph))
+			hasBroken = brokenCount > 0
+			isOrphan = orphan(note)
+			isDeadEnd = deadEnd(note)
 		}
 		degree := degrees[key]
+		filteredDegree := filteredDegrees[key]
 		nodes = append(nodes, graphJSONNode{
 			Data: graphJSONNodeData{
-				ID:        key,
-				Title:     title,
-				Folder:    folder,
-				InDegree:  degree.inDegree,
-				OutDegree: degree.outDegree,
-				Degree:    degree.inDegree + degree.outDegree,
+				ID:                key,
+				Title:             title,
+				Folder:            folder,
+				InDegree:          degree.inDegree,
+				OutDegree:         degree.outDegree,
+				Degree:            degree.inDegree + degree.outDegree,
+				FilteredInDegree:  filteredDegree.inDegree,
+				FilteredOutDegree: filteredDegree.outDegree,
+				FilteredDegree:    filteredDegree.inDegree + filteredDegree.outDegree,
+				HasBroken:         hasBroken,
+				BrokenCount:       brokenCount,
+				IsOrphan:          isOrphan,
+				IsDeadEnd:         isDeadEnd,
 			},
 		})
 	}
@@ -128,16 +152,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root, queryText string) (graphJS
 			continue
 		}
 
-		targets := append([]string(nil), snapshot.graph.Forward[source]...)
-		sort.Strings(targets)
-		for _, target := range targets {
-			if source == target {
-				continue
-			}
-			if _, ok := included[target]; !ok {
-				continue
-			}
-
+		for _, target := range visibleGraphTargets(source, snapshot.graph.Forward[source], included) {
 			edgeID := source + "|" + target
 			if _, exists := seen[edgeID]; exists {
 				continue
@@ -191,6 +206,50 @@ func graphNodeDegrees(snapshot vaultSnapshot) map[string]graphNodeDegree {
 	}
 
 	return degrees
+}
+
+func graphFilteredNodeDegrees(snapshot vaultSnapshot, included map[string]struct{}) map[string]graphNodeDegree {
+	degrees := make(map[string]graphNodeDegree, len(included))
+	for key := range included {
+		degrees[key] = graphNodeDegree{}
+	}
+
+	for source, targets := range snapshot.graph.Forward {
+		if _, ok := included[source]; !ok {
+			continue
+		}
+		for _, target := range visibleGraphTargets(source, targets, included) {
+			sourceDegree := degrees[source]
+			sourceDegree.outDegree++
+			degrees[source] = sourceDegree
+
+			targetDegree := degrees[target]
+			targetDegree.inDegree++
+			degrees[target] = targetDegree
+		}
+	}
+
+	return degrees
+}
+
+func visibleGraphTargets(source string, targets []string, included map[string]struct{}) []string {
+	seen := make(map[string]struct{}, len(targets))
+	visible := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if target == "" || target == source {
+			continue
+		}
+		if _, ok := included[target]; !ok {
+			continue
+		}
+		if _, ok := seen[target]; ok {
+			continue
+		}
+		seen[target] = struct{}{}
+		visible = append(visible, target)
+	}
+	sort.Strings(visible)
+	return visible
 }
 
 func uniqueLinkedTargetCount(source string, targets []string, noteKeys map[string]struct{}) int {

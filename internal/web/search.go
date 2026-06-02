@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 const (
@@ -14,11 +17,13 @@ const (
 )
 
 type searchResult struct {
-	Key     string `json:"key"`
-	Title   string `json:"title"`
-	Folder  string `json:"folder"`
-	Path    string `json:"path"`
-	Snippet string `json:"snippet"`
+	Key           string   `json:"key"`
+	Title         string   `json:"title"`
+	Folder        string   `json:"folder"`
+	Path          string   `json:"path"`
+	Snippet       string   `json:"snippet"`
+	MatchedFields []string `json:"matched_fields,omitempty"`
+	Issues        []string `json:"issues,omitempty"`
 }
 
 type searchCandidate struct {
@@ -28,7 +33,12 @@ type searchCandidate struct {
 	lowerFolder string
 }
 
-func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]searchResult, error) {
+type searchIssuePredicate struct {
+	name  string
+	match query.Predicate
+}
+
+func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilters) ([]searchResult, error) {
 	if snapshot.graph == nil {
 		return nil, errorsf("nil graph")
 	}
@@ -36,9 +46,14 @@ func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]sear
 		return nil, errorsf("empty vault root")
 	}
 
-	queryFolded := foldSearchQuery(queryText)
-	if queryFolded == "" {
+	if filters.foldedQuery == "" && !filters.hasNonTextFilters() {
 		return []searchResult{}, nil
+	}
+
+	issuePredicates := []searchIssuePredicate{
+		{name: "broken", match: query.BrokenLinks(snapshot.graph)},
+		{name: "dead_end", match: query.DeadEnd(snapshot.graph)},
+		{name: "orphan", match: query.Orphan(snapshot.graph)},
 	}
 
 	candidates := make([]searchCandidate, 0, len(snapshot.notes))
@@ -52,7 +67,7 @@ func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]sear
 			continue
 		}
 
-		match, matched, err := matchNoteText(note, queryFolded)
+		match, matched, err := matchNoteWithFilters(note, filters)
 		if err != nil {
 			return nil, err
 		}
@@ -72,11 +87,13 @@ func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]sear
 
 		candidates = append(candidates, searchCandidate{
 			result: searchResult{
-				Key:     key,
-				Title:   title,
-				Folder:  folder,
-				Path:    path,
-				Snippet: html.EscapeString(makeSearchSnippet(match.Body, match.BodyMatchIndex)),
+				Key:           key,
+				Title:         title,
+				Folder:        folder,
+				Path:          path,
+				Snippet:       html.EscapeString(makeSearchSnippet(match.Body, match.BodyMatchIndex)),
+				MatchedFields: searchMatchedFields(match, filters.foldedQuery != ""),
+				Issues:        searchIssueFlags(note, issuePredicates),
 			},
 			titleMatch:  match.TitleMatch,
 			lowerTitle:  strings.ToLower(title),
@@ -108,6 +125,30 @@ func buildSearchResponse(snapshot vaultSnapshot, root, queryText string) ([]sear
 		results = append(results, candidate.result)
 	}
 	return results, nil
+}
+
+func searchMatchedFields(match noteTextMatch, hasQuery bool) []string {
+	if !hasQuery {
+		return nil
+	}
+	var fields []string
+	if match.TitleMatch {
+		fields = append(fields, "title")
+	}
+	if match.BodyMatchIndex >= 0 {
+		fields = append(fields, "body")
+	}
+	return fields
+}
+
+func searchIssueFlags(note *vault.Note, issuePredicates []searchIssuePredicate) []string {
+	var issues []string
+	for _, issue := range issuePredicates {
+		if issue.match(note) {
+			issues = append(issues, issue.name)
+		}
+	}
+	return issues
 }
 
 func makeSearchSnippet(body string, bodyMatchIndex int) string {

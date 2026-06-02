@@ -444,20 +444,27 @@ bn serve [--addr host:port] [--port N] [--no-open]
 
 Starts a local HTTP server for vault browsing:
 
-- `/` overview with note counts, recent notes, and primary search
+- `/` overview with note counts, filtered search results, diagnostics, and primary search
 - `/n/<note-key>` rendered note view (body, frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics
 - `/graph` interactive Cytoscape graph
 
-The graph view loads the whole vault by default and can be filtered by note
-title or body text. Filtering keeps only matching notes and links between the
-visible notes, while the status line reports the reduced node and edge counts.
-Use the Spread slider to rerun the layout from a compact overview up to a much
-wider graph. Labels default to Auto: small graphs are fully labeled, dense
-graphs reveal labels for hovered or selected nodes, nearby context, and zoomed
-views, and the All mode is available when every label is needed. Click a node
-to lock its details, highlight its one-hop neighborhood, and enable Open note;
-click empty graph space to clear the selection.
+The overview and graph views share the same URL filter parameters for text,
+tags, category, status, type, folder, property presence, issue filters
+(`broken=1`, `orphan=1`, `dead_end=1`), date/age filters, and link-count
+ranges. The facet picker is searchable, count-labeled, keyboard usable, and
+writes selected filters into the URL, so filtered views can be shared.
+
+The graph view loads the whole vault by default. Filtering keeps only matching
+notes and links between visible notes, while the status line reports the
+reduced node and edge counts. Nodes with broken links, orphan status, or
+dead-end status are styled distinctly and expose those issues in the node
+details panel. Use the Spread slider to rerun the layout from a compact
+overview up to a wider graph. Labels default to Auto: small graphs are fully
+labeled, dense graphs reveal labels for hovered or selected nodes, nearby
+context, and zoomed views, and the All mode is available when every label is
+needed. Click a node to lock its details, highlight its one-hop neighborhood,
+and enable Open note; click empty graph space to clear the selection.
 
 `--addr` overrides `[serve].addr`. `--port` rewrites only the port on the
 resolved address host. `--no-open` forces browser launch off even when

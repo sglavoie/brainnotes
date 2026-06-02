@@ -1,0 +1,170 @@
+package web
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+)
+
+func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
+	v, snapshot, _ := newFilterTestSnapshot(t, map[string]string{
+		"Work/Source.md":    "---\ntags: [alpha, alpha, rare-source]\nstatus: active\n---\n[[Target]] [[Missing]]\n",
+		"Work/Target.md":    "---\ntags: [alpha, rare-target]\nstatus: active\n---\nNo links.\n",
+		"Archive/Target.md": "---\ntags: [beta]\nstatus: someday\n---\nNo links.\n",
+		"Island.md":         "---\ntags: [lonely]\nstatus: someday\n---\nNo links.\n",
+	})
+	cfg := &config.Config{
+		Frontmatter: config.FrontmatterConfig{
+			Schema: map[string]config.PropertySchema{
+				"status": {Type: "string", Required: true, Allowed: []string{"active", "done"}},
+				"type":   {Type: "string", Required: true},
+			},
+		},
+	}
+
+	got, err := buildDiagnosticsSummary(v, cfg)
+	if err != nil {
+		t.Fatalf("buildDiagnosticsSummary: %v", err)
+	}
+
+	if len(snapshot.notes) != 4 {
+		t.Fatalf("test snapshot should include every valid note, got %d", len(snapshot.notes))
+	}
+
+	if got.BrokenTargets[0].Label != "missing" || got.BrokenTargets[0].Count != 1 {
+		t.Fatalf("broken target aggregate = %#v, want missing count 1", got.BrokenTargets)
+	}
+	if got.BrokenTargets[0].Items[0].Title != "Source" || got.BrokenTargets[0].Items[0].Location == "" {
+		t.Fatalf("broken target source details missing: %#v", got.BrokenTargets[0].Items)
+	}
+	if got.BrokenTargets[0].Items[0].FolderPath != "/?folder=Work" {
+		t.Fatalf("broken target folder path = %q, want /?folder=Work", got.BrokenTargets[0].Items[0].FolderPath)
+	}
+
+	if titles := diagnosticTitles(got.OrphanNotes); !sameStrings(titles, []string{"Island", "Source"}) {
+		t.Fatalf("orphan notes = %#v, want Island and Source; notes=%#v", titles, got.OrphanNotes)
+	}
+	if titles := diagnosticTitles(got.DeadEndNotes); !sameStrings(titles, []string{"Island", "Target", "Target"}) {
+		t.Fatalf("dead-end notes = %#v, want Island and both Target notes; notes=%#v", titles, got.DeadEndNotes)
+	}
+
+	if len(got.DuplicateTitles) != 1 || got.DuplicateTitles[0].Label != "Target" || got.DuplicateTitles[0].Count != 2 {
+		t.Fatalf("duplicate title groups = %#v, want Target count 2", got.DuplicateTitles)
+	}
+
+	if got.FrontmatterErrors != nil {
+		t.Fatalf("valid fixture should have no frontmatter errors: %#v", got.FrontmatterErrors)
+	}
+	if len(got.SchemaViolations) != 2 {
+		t.Fatalf("schema groups count = %d, want 2; groups=%#v", len(got.SchemaViolations), got.SchemaViolations)
+	}
+	if got.SchemaViolations[0].Label != "status invalid value \"someday\" (allowed: active, done)" {
+		t.Fatalf("first schema label = %q; groups=%#v", got.SchemaViolations[0].Label, got.SchemaViolations)
+	}
+	if got.SchemaViolations[0].Count != 2 {
+		t.Fatalf("someday violation count = %d, want 2", got.SchemaViolations[0].Count)
+	}
+
+	longTail := longTailByProperty(got.LongTailValues)
+	if values := longTail["tags"]; len(values) == 0 || values[0].Value != "beta" || values[0].Count != 1 {
+		t.Fatalf("tags long-tail values = %#v, want rare values first", values)
+	}
+
+	cards := diagnosticCardsByKey(got.Cards)
+	if cards["broken"].Count != 1 || cards["orphan"].Count != 2 || cards["dead_end"].Count != 3 ||
+		cards["duplicate_titles"].Count != 2 || cards["schema_violations"].Count != 6 {
+		t.Fatalf("diagnostic card counts = %#v", got.Cards)
+	}
+	if cards["broken"].Path != "/?broken=1" || cards["orphan"].Path != "/?orphan=1" ||
+		cards["dead_end"].Path != "/?dead_end=1" || cards["duplicate_titles"].Path != "#diagnostic-duplicate-titles" {
+		t.Fatalf("diagnostic card filter paths = %#v", got.Cards)
+	}
+}
+
+func TestBuildDiagnosticsSummaryCollectsFrontmatterParseErrors(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "Good.md", "---\nstatus: active\n---\n[[Missing]]\n")
+	writeTestFile(t, root, "Bad.md", "---\n: bad\n---\nBody\n")
+	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	got, err := buildDiagnosticsSummary(v, cfg)
+	if err != nil {
+		t.Fatalf("buildDiagnosticsSummary: %v", err)
+	}
+
+	if len(got.FrontmatterErrors) != 1 {
+		t.Fatalf("frontmatter errors = %#v, want one", got.FrontmatterErrors)
+	}
+	if got.FrontmatterErrors[0].Path != "Bad.md" {
+		t.Fatalf("frontmatter error path = %q, want Bad.md", got.FrontmatterErrors[0].Path)
+	}
+	if len(got.BrokenTargets) != 1 || got.BrokenTargets[0].Label != "missing" {
+		t.Fatalf("valid notes should still be diagnosed after parse error: %#v", got.BrokenTargets)
+	}
+	if diagnosticCardsByKey(got.Cards)["frontmatter_errors"].Count != 1 {
+		t.Fatalf("frontmatter card count not updated: %#v", got.Cards)
+	}
+}
+
+func TestServerIndexToleratesFrontmatterParseErrors(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Good.md": []byte("---\nstatus: active\n---\nBody\n"),
+		"Bad.md":  []byte("---\n: bad\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	if !strings.Contains(body, "<h1>bn serve</h1>") {
+		t.Fatalf("index did not render expected heading: %q", body)
+	}
+}
+
+func TestBuildDiagnosticsSummarySchemaEmptyBehavior(t *testing.T) {
+	v, _, _ := newFilterTestSnapshot(t, map[string]string{
+		"Note.md": "---\nstatus: someday\n---\nBody\n",
+	})
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{Schema: map[string]config.PropertySchema{}}}
+
+	got, err := buildDiagnosticsSummary(v, cfg)
+	if err != nil {
+		t.Fatalf("buildDiagnosticsSummary: %v", err)
+	}
+	if got.SchemaViolations != nil {
+		t.Fatalf("empty schema should not produce violations: %#v", got.SchemaViolations)
+	}
+	if diagnosticCardsByKey(got.Cards)["schema_violations"].Count != 0 {
+		t.Fatalf("empty schema should have zero schema card count: %#v", got.Cards)
+	}
+}
+
+func diagnosticTitles(notes []diagnosticNote) []string {
+	titles := make([]string, 0, len(notes))
+	for _, note := range notes {
+		titles = append(titles, note.Title)
+	}
+	return titles
+}
+
+func diagnosticCardsByKey(cards []diagnosticCard) map[string]diagnosticCard {
+	out := make(map[string]diagnosticCard, len(cards))
+	for _, card := range cards {
+		out[card.Key] = card
+	}
+	return out
+}
+
+func longTailByProperty(groups []diagnosticLongTailGroup) map[string][]diagnosticValueCount {
+	out := make(map[string][]diagnosticValueCount, len(groups))
+	for _, group := range groups {
+		out[group.Property] = group.Values
+	}
+	return out
+}

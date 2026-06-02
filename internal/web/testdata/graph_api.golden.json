@@ -7,7 +7,14 @@
         "folder": "",
         "inDegree": 0,
         "outDegree": 0,
-        "degree": 0
+        "degree": 0,
+        "filteredInDegree": 0,
+        "filteredOutDegree": 0,
+        "filteredDegree": 0,
+        "hasBroken": false,
+        "brokenCount": 0,
+        "isOrphan": true,
+        "isDeadEnd": true
       }
     },
     {
@@ -17,7 +24,14 @@
         "folder": "",
         "inDegree": 0,
         "outDegree": 1,
-        "degree": 1
+        "degree": 1,
+        "filteredInDegree": 0,
+        "filteredOutDegree": 1,
+        "filteredDegree": 1,
+        "hasBroken": false,
+        "brokenCount": 0,
+        "isOrphan": true,
+        "isDeadEnd": false
       }
     },
     {
@@ -27,7 +41,14 @@
         "folder": "",
         "inDegree": 1,
         "outDegree": 0,
-        "degree": 1
+        "degree": 1,
+        "filteredInDegree": 1,
+        "filteredOutDegree": 0,
+        "filteredDegree": 1,
+        "hasBroken": false,
+        "brokenCount": 0,
+        "isOrphan": false,
+        "isDeadEnd": true
       }
     },
     {
@@ -37,7 +58,14 @@
         "folder": "Work",
         "inDegree": 0,
         "outDegree": 0,
-        "degree": 0
+        "degree": 0,
+        "filteredInDegree": 0,
+        "filteredOutDegree": 0,
+        "filteredDegree": 0,
+        "hasBroken": false,
+        "brokenCount": 0,
+        "isOrphan": true,
+        "isDeadEnd": true
       }
     }
   ],

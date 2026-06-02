@@ -8,6 +8,530 @@
     return `/n/${escaped.join("/")}`;
   };
 
+  const sharedFilterParamKeys = [
+    "tag",
+    "category",
+    "status",
+    "type",
+    "folder",
+    "has",
+    "missing",
+    "orphan",
+    "broken",
+    "dead_end",
+    "age",
+    "created",
+    "min_backlinks",
+    "max_backlinks",
+    "min_links",
+    "max_links",
+  ];
+  const repeatedFilterParams = new Set(["tag", "category"]);
+
+  const facetGroups = [
+    { key: "tags", label: "Tags", param: "tag", repeat: true },
+    { key: "categories", label: "Categories", param: "category", repeat: true },
+    { key: "status", label: "Status", param: "status" },
+    { key: "types", label: "Types", param: "type" },
+    { key: "folders", label: "Folders", param: "folder" },
+    { key: "properties", label: "Properties", param: "has" },
+    { key: "issues", label: "Issues", issue: true },
+  ];
+
+  const normalizeParamValue = (value) => String(value || "").trim();
+
+  const readPageQuery = () => {
+    const params = new URLSearchParams(window.location.search);
+    return normalizeParamValue(params.get("q"));
+  };
+
+  const hasActiveSharedFilters = (params) => {
+    const source = params || new URLSearchParams(window.location.search);
+    return sharedFilterParamKeys.some((key) =>
+      source.getAll(key).some((value) => normalizeParamValue(value) !== "")
+    );
+  };
+
+  const copySharedFilterParams = (fromParams, toParams) => {
+    for (const key of sharedFilterParamKeys) {
+      for (const value of fromParams.getAll(key)) {
+        const normalized = normalizeParamValue(value);
+        if (normalized !== "") {
+          toParams.append(key, normalized);
+        }
+      }
+    }
+  };
+
+  const updateBrowserQuery = (params) => {
+    if (!window.history || typeof window.history.replaceState !== "function") {
+      return;
+    }
+    const query = params.toString();
+    const nextURL = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+    const currentURL = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextURL !== currentURL) {
+      window.history.replaceState(null, "", nextURL);
+    }
+  };
+
+  const syncPageQueryParam = (query) => {
+    const params = new URLSearchParams(window.location.search);
+    const normalized = normalizeParamValue(query);
+    if (normalized === "") {
+      params.delete("q");
+    } else {
+      params.set("q", normalized);
+    }
+    updateBrowserQuery(params);
+  };
+
+  const buildFilteredAPIURL = (path, query) => {
+    const params = new URLSearchParams();
+    const normalizedQuery = normalizeParamValue(query);
+    if (normalizedQuery !== "") {
+      params.set("q", normalizedQuery);
+    }
+    copySharedFilterParams(new URLSearchParams(window.location.search), params);
+    const queryString = params.toString();
+    return queryString ? `${path}?${queryString}` : path;
+  };
+
+  const buildSearchAPIURL = (query, includeSharedFilters) => {
+    if (includeSharedFilters) {
+      return buildFilteredAPIURL("/api/search", query);
+    }
+    const params = new URLSearchParams();
+    const normalized = normalizeParamValue(query);
+    if (normalized !== "") {
+      params.set("q", normalized);
+    }
+    const queryString = params.toString();
+    return queryString ? `/api/search?${queryString}` : "/api/search";
+  };
+
+  const searchResultPath = (result) => {
+    if (!result) {
+      return "";
+    }
+    const path = typeof result.path === "string" ? result.path.trim() : "";
+    if (path.startsWith("/n/")) {
+      return path;
+    }
+    return notePathForKey(result.key);
+  };
+
+  const initFacets = () => {
+    const roots = Array.from(document.querySelectorAll("[data-facet-controls]"));
+    if (roots.length === 0) {
+      return;
+    }
+
+    const makeOptionKey = (option) => `${option.param}\u0000${option.value}`;
+    const fallbackGroupForParam = (param) => {
+      for (const group of facetGroups) {
+        if (group.issue) {
+          continue;
+        }
+        if (group.param === param) {
+          return group;
+        }
+      }
+      if (param === "broken" || param === "dead_end" || param === "orphan") {
+        return { label: "Issues", issue: true };
+      }
+      return { label: "Filters" };
+    };
+    const labelForIssueParam = (param) => {
+      switch (param) {
+        case "broken":
+          return "Broken links";
+        case "dead_end":
+          return "Dead ends";
+        case "orphan":
+          return "Orphans";
+        default:
+          return param;
+      }
+    };
+    const fallbackOption = (param, value) => {
+      const group = fallbackGroupForParam(param);
+      const label = group.issue ? labelForIssueParam(param) : value;
+      return {
+        param,
+        value,
+        label,
+        count: 0,
+        groupLabel: group.label,
+        repeat: repeatedFilterParams.has(param),
+      };
+    };
+
+    const normalizeFacetOptions = (payload) => {
+      const options = [];
+      for (const group of facetGroups) {
+        const values = Array.isArray(payload && payload[group.key]) ? payload[group.key] : [];
+        for (const item of values) {
+          if (!item) {
+            continue;
+          }
+          const param = group.issue ? normalizeParamValue(item.param) : group.param;
+          const value = normalizeParamValue(item.value);
+          if (param === "" || value === "") {
+            continue;
+          }
+          options.push({
+            param,
+            value,
+            label: group.issue ? item.label || labelForIssueParam(param) : value,
+            count: Number.isFinite(Number(item.count)) ? Number(item.count) : 0,
+            groupLabel: group.label,
+            repeat: Boolean(group.repeat),
+          });
+        }
+      }
+      return options.sort((left, right) => {
+        if (left.groupLabel !== right.groupLabel) {
+          return left.groupLabel.localeCompare(right.groupLabel);
+        }
+        if (right.count !== left.count) {
+          return right.count - left.count;
+        }
+        return left.label.localeCompare(right.label);
+      });
+    };
+
+    roots.forEach((root) => {
+      const input = root.querySelector(".facet-input");
+      const optionsEl = root.querySelector(".facet-options");
+      const chipsEl = root.querySelector("[data-facet-chips]");
+      const inputClear = root.querySelector("[data-facet-input-clear]");
+      const clearAll = root.querySelector("[data-facet-clear-all]");
+      if (!(input instanceof HTMLInputElement) || !optionsEl || !chipsEl) {
+        return;
+      }
+
+      let allOptions = [];
+      let filteredOptions = [];
+      let activeIndex = -1;
+      let loaded = false;
+      const selected = new Map();
+
+      const setExpanded = (expanded) => {
+        input.setAttribute("aria-expanded", expanded ? "true" : "false");
+        optionsEl.hidden = !expanded;
+      };
+
+      const setActive = (nextIndex) => {
+        activeIndex = nextIndex;
+        const options = optionsEl.querySelectorAll("[data-facet-index]");
+        for (const option of options) {
+          const index = Number(option.getAttribute("data-facet-index"));
+          const active = index === activeIndex;
+          option.classList.toggle("is-active", active);
+          if (active) {
+            input.setAttribute("aria-activedescendant", option.id);
+          }
+        }
+        if (activeIndex < 0) {
+          input.removeAttribute("aria-activedescendant");
+        }
+      };
+
+      const optionMatchesQuery = (option, query) => {
+        if (query === "") {
+          return true;
+        }
+        const haystack = `${option.groupLabel} ${option.label} ${option.value}`.toLowerCase();
+        return haystack.includes(query);
+      };
+
+      const currentFilterParams = () => {
+        const params = new URLSearchParams();
+        for (const option of selected.values()) {
+          params.append(option.param, option.value);
+        }
+        return params;
+      };
+
+      const renderChips = () => {
+        chipsEl.textContent = "";
+        const options = Array.from(selected.values());
+        chipsEl.hidden = options.length === 0;
+        if (clearAll instanceof HTMLButtonElement) {
+          clearAll.hidden = options.length === 0;
+        }
+
+        for (const option of options) {
+          const chip = document.createElement("span");
+          chip.className = "facet-chip";
+
+          const text = document.createElement("span");
+          text.className = "facet-chip-text";
+          text.textContent = `${option.groupLabel}: ${option.label}`;
+          chip.appendChild(text);
+
+          if (option.count > 0) {
+            const count = document.createElement("span");
+            count.className = "facet-chip-count";
+            count.textContent = `(${option.count})`;
+            chip.appendChild(count);
+          }
+
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "facet-chip-remove";
+          remove.textContent = "x";
+          remove.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
+          remove.addEventListener("click", () => {
+            selected.delete(makeOptionKey(option));
+            renderChips();
+            renderOptions();
+            emitChange();
+            input.focus();
+          });
+          chip.appendChild(remove);
+          chipsEl.appendChild(chip);
+        }
+      };
+
+      const renderEmptyOption = (message) => {
+        optionsEl.textContent = "";
+        const item = document.createElement("li");
+        item.className = "facet-option-empty";
+        item.textContent = message;
+        optionsEl.appendChild(item);
+        setActive(-1);
+      };
+
+      const renderOptions = () => {
+        if (inputClear instanceof HTMLButtonElement) {
+          inputClear.hidden = input.value.trim() === "";
+        }
+        if (!loaded) {
+          renderEmptyOption("Loading facets...");
+          return;
+        }
+
+        const query = input.value.trim().toLowerCase();
+        filteredOptions = allOptions.filter((option) => optionMatchesQuery(option, query)).slice(0, 80);
+        optionsEl.textContent = "";
+        if (filteredOptions.length === 0) {
+          renderEmptyOption("No matching facets.");
+          return;
+        }
+
+        filteredOptions.forEach((option, index) => {
+          const item = document.createElement("li");
+          const button = document.createElement("button");
+          const selectedOption = selected.has(makeOptionKey(option));
+          button.type = "button";
+          button.id = `${input.id || "facet"}-option-${index}`;
+          button.className = "facet-option";
+          button.setAttribute("role", "option");
+          button.setAttribute("aria-selected", selectedOption ? "true" : "false");
+          button.setAttribute("data-facet-index", String(index));
+
+          const main = document.createElement("span");
+          main.className = "facet-option-main";
+
+          const label = document.createElement("span");
+          label.className = "facet-option-label";
+          label.textContent = option.label;
+          main.appendChild(label);
+
+          const group = document.createElement("span");
+          group.className = "facet-option-group";
+          group.textContent = option.groupLabel;
+          main.appendChild(group);
+          button.appendChild(main);
+
+          const count = document.createElement("span");
+          count.className = "facet-option-count";
+          count.textContent = String(option.count);
+          button.appendChild(count);
+
+          button.addEventListener("mouseenter", () => {
+            setActive(index);
+          });
+          button.addEventListener("click", () => {
+            toggleOption(option);
+          });
+
+          item.appendChild(button);
+          optionsEl.appendChild(item);
+        });
+        setActive(filteredOptions.length > 0 ? Math.min(Math.max(activeIndex, -1), filteredOptions.length - 1) : -1);
+      };
+
+      const writeFiltersToURL = () => {
+        const params = new URLSearchParams(window.location.search);
+        for (const key of sharedFilterParamKeys) {
+          params.delete(key);
+        }
+        for (const [key, value] of currentFilterParams()) {
+          params.append(key, value);
+        }
+        updateBrowserQuery(params);
+      };
+
+      function emitChange() {
+        writeFiltersToURL();
+        window.dispatchEvent(
+          new CustomEvent("bn:filterschange", {
+            detail: {
+              mode: root.getAttribute("data-facet-mode") || "",
+              params: currentFilterParams(),
+            },
+          })
+        );
+      }
+
+      function toggleOption(option) {
+        const key = makeOptionKey(option);
+        if (selected.has(key)) {
+          selected.delete(key);
+        } else {
+          if (!option.repeat) {
+            for (const selectedOption of Array.from(selected.values())) {
+              if (selectedOption.param === option.param) {
+                selected.delete(makeOptionKey(selectedOption));
+              }
+            }
+          }
+          selected.set(key, option);
+        }
+        input.value = "";
+        setExpanded(true);
+        renderChips();
+        renderOptions();
+        emitChange();
+      }
+
+      const readInitialSelection = () => {
+        const params = new URLSearchParams(window.location.search);
+        for (const param of sharedFilterParamKeys) {
+          for (const rawValue of params.getAll(param)) {
+            const value = normalizeParamValue(rawValue);
+            if (value === "") {
+              continue;
+            }
+            const option = fallbackOption(param, value);
+            if (!option.repeat) {
+              for (const selectedOption of Array.from(selected.values())) {
+                if (selectedOption.param === option.param) {
+                  selected.delete(makeOptionKey(selectedOption));
+                }
+              }
+            }
+            selected.set(makeOptionKey(option), option);
+          }
+        }
+      };
+
+      const hydrateSelection = () => {
+        const catalog = new Map(allOptions.map((option) => [makeOptionKey(option), option]));
+        for (const option of Array.from(selected.values())) {
+          const hydrated = catalog.get(makeOptionKey(option));
+          if (hydrated) {
+            selected.set(makeOptionKey(option), hydrated);
+          }
+        }
+      };
+
+      input.addEventListener("focus", () => {
+        setExpanded(true);
+        renderOptions();
+      });
+      input.addEventListener("input", () => {
+        setExpanded(true);
+        setActive(-1);
+        renderOptions();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          setExpanded(true);
+          const next = activeIndex < filteredOptions.length - 1 ? activeIndex + 1 : 0;
+          setActive(filteredOptions.length > 0 ? next : -1);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setExpanded(true);
+          const next = activeIndex > 0 ? activeIndex - 1 : filteredOptions.length - 1;
+          setActive(filteredOptions.length > 0 ? next : -1);
+          return;
+        }
+        if (event.key === "Enter" && activeIndex >= 0 && activeIndex < filteredOptions.length) {
+          event.preventDefault();
+          toggleOption(filteredOptions[activeIndex]);
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          input.value = "";
+          setExpanded(false);
+          setActive(-1);
+          renderOptions();
+        }
+      });
+
+      if (inputClear instanceof HTMLButtonElement) {
+        inputClear.addEventListener("click", () => {
+          input.value = "";
+          setExpanded(true);
+          renderOptions();
+          input.focus();
+        });
+      }
+
+      if (clearAll instanceof HTMLButtonElement) {
+        clearAll.addEventListener("click", () => {
+          selected.clear();
+          renderChips();
+          renderOptions();
+          emitChange();
+          input.focus();
+        });
+      }
+
+      document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target instanceof Node && !root.contains(target)) {
+          setExpanded(false);
+          setActive(-1);
+        }
+      });
+
+      readInitialSelection();
+      renderChips();
+      renderOptions();
+
+      fetch("/api/facets", {
+        headers: { Accept: "application/json" },
+      })
+        .then((resp) => {
+          if (!resp.ok) {
+            throw new Error("facets request failed");
+          }
+          return resp.json();
+        })
+        .then((payload) => {
+          allOptions = normalizeFacetOptions(payload);
+          loaded = true;
+          hydrateSelection();
+          renderChips();
+          renderOptions();
+        })
+        .catch(() => {
+          loaded = true;
+          allOptions = [];
+          renderEmptyOption("Facets unavailable.");
+        });
+    });
+  };
+
   const initOpenInEditor = () => {
     const container = document.querySelector("[data-open-editor]");
     if (!container) {
@@ -68,6 +592,61 @@
     });
   };
 
+  const initCopyControls = () => {
+    const roots = Array.from(document.querySelectorAll("[data-copy-controls]"));
+    if (roots.length === 0) {
+      return;
+    }
+
+    const canWriteClipboard =
+      navigator.clipboard && typeof navigator.clipboard.writeText === "function";
+
+    roots.forEach((root) => {
+      const statusEl = root.querySelector("[data-copy-status]");
+      const buttons = Array.from(root.querySelectorAll("[data-copy-text]"));
+      if (!statusEl || buttons.length === 0) {
+        return;
+      }
+
+      const setStatus = (message, kind) => {
+        statusEl.textContent = message || " ";
+        statusEl.classList.remove("is-success", "is-error");
+        if (kind) {
+          statusEl.classList.add(kind);
+        }
+      };
+
+      buttons.forEach((button) => {
+        if (!(button instanceof HTMLButtonElement)) {
+          return;
+        }
+
+        button.addEventListener("click", async () => {
+          const text = button.getAttribute("data-copy-text") || "";
+          const label = button.getAttribute("data-copy-label") || "Value";
+          if (!text) {
+            setStatus("Nothing to copy.", "is-error");
+            return;
+          }
+          if (!canWriteClipboard) {
+            setStatus("Clipboard unavailable.", "is-error");
+            return;
+          }
+
+          button.disabled = true;
+          try {
+            await navigator.clipboard.writeText(text);
+            setStatus(`${label} copied.`, "is-success");
+          } catch {
+            setStatus("Copy failed.", "is-error");
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+    });
+  };
+
   const initGraph = () => {
     const dom = {
       canvas: document.getElementById("graph-canvas"),
@@ -76,6 +655,7 @@
       hoverTitle: document.getElementById("graph-hover-title"),
       hoverFolder: document.getElementById("graph-hover-folder"),
       hoverDegree: document.getElementById("graph-hover-degree"),
+      hoverIssues: document.getElementById("graph-hover-issues"),
       openNote: document.getElementById("graph-open-note"),
       filterInput: document.getElementById("graph-filter-input"),
       spreadInput: document.getElementById("graph-spread-input"),
@@ -144,7 +724,61 @@
       const inDegree = readDegreeValue(data.inDegree, 0);
       const outDegree = readDegreeValue(data.outDegree, 0);
       const degree = readDegreeValue(data.degree, inDegree + outDegree);
-      return `Degree: ${degree} (${inDegree} in, ${outDegree} out)`;
+      const filteredInDegree = readDegreeValue(data.filteredInDegree, inDegree);
+      const filteredOutDegree = readDegreeValue(data.filteredOutDegree, outDegree);
+      const filteredDegree = readDegreeValue(data.filteredDegree, filteredInDegree + filteredOutDegree);
+      const visibleDetail = `Visible degree: ${filteredDegree} (${filteredInDegree} in, ${filteredOutDegree} out)`;
+      if (filteredDegree === degree && filteredInDegree === inDegree && filteredOutDegree === outDegree) {
+        return visibleDetail;
+      }
+      return `${visibleDetail}. Full graph: ${degree} (${inDegree} in, ${outDegree} out)`;
+    }
+
+    function issueItemsForNode(data) {
+      if (!data) {
+        return [];
+      }
+      const items = [];
+      const brokenCount = readDegreeValue(data.brokenCount, 0);
+      if (data.hasBroken || brokenCount > 0) {
+        items.push({
+          className: "is-broken",
+          label:
+            brokenCount > 0
+              ? brokenCount === 1
+                ? "1 broken link"
+                : `${brokenCount} broken links`
+              : "Broken links",
+        });
+      }
+      if (data.isOrphan) {
+        items.push({
+          className: "is-orphan",
+          label: "Orphan",
+        });
+      }
+      if (data.isDeadEnd) {
+        items.push({
+          className: "is-dead-end",
+          label: "Dead end",
+        });
+      }
+      return items;
+    }
+
+    function renderIssueDetails(model) {
+      if (!dom.hoverIssues) {
+        return;
+      }
+      dom.hoverIssues.textContent = "";
+      const items = issueItemsForNode(model);
+      dom.hoverIssues.hidden = items.length === 0;
+      for (const item of items) {
+        const issue = document.createElement("li");
+        issue.className = `graph-issue-item ${item.className}`;
+        issue.textContent = item.label;
+        dom.hoverIssues.appendChild(issue);
+      }
     }
 
     function renderDetailsPanel(fallbackHoveredModel) {
@@ -163,6 +797,7 @@
       if (dom.hoverDegree) {
         dom.hoverDegree.textContent = model ? formatDegreeDetails(model) : "";
       }
+      renderIssueDetails(model);
       if (dom.detailsPanel) {
         dom.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
         dom.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
@@ -265,6 +900,28 @@
         selector: "node.is-labeled",
         style: {
           label: "data(title)",
+        },
+      },
+      {
+        selector: "node.has-broken",
+        style: {
+          "border-width": 3,
+          "border-color": "#ff9d9d",
+          shape: "diamond",
+        },
+      },
+      {
+        selector: "node.is-orphan",
+        style: {
+          "border-width": 2,
+          "border-style": "dashed",
+          "border-color": "#c7d2e7",
+        },
+      },
+      {
+        selector: "node.is-dead-end",
+        style: {
+          "background-blacken": -0.12,
         },
       },
       {
@@ -499,16 +1156,27 @@
         return;
       }
 
-      const fallbackModel = fallbackData
-        ? {
-            id: fallbackData.id || state.hoveredNodeID,
-            title: fallbackData.title || fallbackData.id || state.hoveredNodeID,
-            folder: fallbackData.folder || "",
-            inDegree: fallbackData.inDegree || 0,
-            outDegree: fallbackData.outDegree || 0,
-            degree: fallbackData.degree || 0,
-          }
-        : null;
+      let fallbackModel = null;
+      if (fallbackData) {
+        const inDegree = readDegreeValue(fallbackData.inDegree, 0);
+        const outDegree = readDegreeValue(fallbackData.outDegree, 0);
+        const degree = readDegreeValue(fallbackData.degree, inDegree + outDegree);
+        fallbackModel = {
+          id: fallbackData.id || state.hoveredNodeID,
+          title: fallbackData.title || fallbackData.id || state.hoveredNodeID,
+          folder: fallbackData.folder || "",
+          inDegree,
+          outDegree,
+          degree,
+          filteredInDegree: readDegreeValue(fallbackData.filteredInDegree, inDegree),
+          filteredOutDegree: readDegreeValue(fallbackData.filteredOutDegree, outDegree),
+          filteredDegree: readDegreeValue(fallbackData.filteredDegree, degree),
+          hasBroken: Boolean(fallbackData.hasBroken),
+          brokenCount: readDegreeValue(fallbackData.brokenCount, 0),
+          isOrphan: Boolean(fallbackData.isOrphan),
+          isDeadEnd: Boolean(fallbackData.isDeadEnd),
+        };
+      }
       renderDetailsPanel(fallbackModel);
       applyGraphVisualState();
     }
@@ -559,6 +1227,10 @@
     function nodeDegree(node) {
       if (!node) {
         return 0;
+      }
+      const filteredDegree = Number(node.data("filteredDegree"));
+      if (Number.isFinite(filteredDegree) && filteredDegree > 0) {
+        return filteredDegree;
       }
       const degree = Number(node.data("degree"));
       return Number.isFinite(degree) && degree > 0 ? degree : 0;
@@ -849,10 +1521,7 @@
     }
 
     function buildQueryURL(query) {
-      if (!query) {
-        return "/api/graph.json";
-      }
-      return `/api/graph.json?q=${encodeURIComponent(query)}`;
+      return buildFilteredAPIURL("/api/graph.json", query);
     }
 
     function asArray(value) {
@@ -937,6 +1606,13 @@
         const inDegree = readDegreeValue(data.inDegree, fallback.inDegree);
         const outDegree = readDegreeValue(data.outDegree, fallback.outDegree);
         const degree = readDegreeValue(data.degree, inDegree + outDegree);
+        const filteredInDegree = readDegreeValue(data.filteredInDegree, inDegree);
+        const filteredOutDegree = readDegreeValue(data.filteredOutDegree, outDegree);
+        const filteredDegree = readDegreeValue(
+          data.filteredDegree,
+          filteredInDegree + filteredOutDegree
+        );
+        const brokenCount = readDegreeValue(data.brokenCount, 0);
         return {
           id,
           title: data.title || id,
@@ -945,7 +1621,14 @@
           inDegree,
           outDegree,
           degree,
-          size: nodeSizeForDegree(degree),
+          filteredInDegree,
+          filteredOutDegree,
+          filteredDegree,
+          hasBroken: Boolean(data.hasBroken) || brokenCount > 0,
+          brokenCount,
+          isOrphan: Boolean(data.isOrphan),
+          isDeadEnd: Boolean(data.isDeadEnd),
+          size: nodeSizeForDegree(filteredDegree),
         };
       });
 
@@ -964,9 +1647,24 @@
       };
     }
 
+    function graphNodeClasses(node) {
+      const classes = [];
+      if (node.hasBroken) {
+        classes.push("has-broken");
+      }
+      if (node.isOrphan) {
+        classes.push("is-orphan");
+      }
+      if (node.isDeadEnd) {
+        classes.push("is-dead-end");
+      }
+      return classes.join(" ");
+    }
+
     function toCytoscapeElements(graphElements) {
       return [
         ...graphElements.nodes.map((node) => ({
+          classes: graphNodeClasses(node),
           data: {
             id: node.id,
             title: node.title,
@@ -975,6 +1673,13 @@
             inDegree: node.inDegree,
             outDegree: node.outDegree,
             degree: node.degree,
+            filteredInDegree: node.filteredInDegree,
+            filteredOutDegree: node.filteredOutDegree,
+            filteredDegree: node.filteredDegree,
+            hasBroken: node.hasBroken,
+            brokenCount: node.brokenCount,
+            isOrphan: node.isOrphan,
+            isDeadEnd: node.isDeadEnd,
             size: node.size,
           },
         })),
@@ -986,6 +1691,19 @@
           },
         })),
       ];
+    }
+
+    function graphScopeLabel(query, hasFilters) {
+      if (query && hasFilters) {
+        return `"${query}" with the active filters`;
+      }
+      if (query) {
+        return `"${query}"`;
+      }
+      if (hasFilters) {
+        return "the active filters";
+      }
+      return "";
     }
 
     async function loadGraph(query, localToken) {
@@ -1024,13 +1742,15 @@
       state.currentGraphElements = normalizeGraphPayload(payload);
       applyGraphElements(state.currentGraphElements, true);
 
-      if (query) {
+      const hasFilters = hasActiveSharedFilters();
+      const scopeLabel = graphScopeLabel(query, hasFilters);
+      if (scopeLabel) {
         if (state.currentGraphElements.nodes.length === 0) {
-          setStatus(`No notes match "${query}".`, "is-empty");
+          setStatus(`No notes match ${scopeLabel}.`, "is-empty");
           return;
         }
         setStatus(
-          `Showing ${state.currentGraphElements.nodes.length} nodes and ${state.currentGraphElements.edges.length} edges for "${query}".`
+          `Showing ${state.currentGraphElements.nodes.length} nodes and ${state.currentGraphElements.edges.length} edges for ${scopeLabel}.`
         );
         return;
       }
@@ -1066,7 +1786,9 @@
 
       if (dom.filterInput instanceof HTMLInputElement) {
         dom.filterInput.addEventListener("input", () => {
-          scheduleLoad(dom.filterInput.value.trim(), 150);
+          const query = dom.filterInput.value.trim();
+          syncPageQueryParam(query);
+          scheduleLoad(query, 150);
         });
       }
 
@@ -1106,8 +1828,189 @@
       }
     }
 
+    const initialQuery = readPageQuery();
+    if (dom.filterInput instanceof HTMLInputElement) {
+      dom.filterInput.value = initialQuery;
+    }
+    window.addEventListener("bn:filterschange", () => {
+      const query = dom.filterInput instanceof HTMLInputElement ? dom.filterInput.value.trim() : state.currentQuery;
+      scheduleLoad(query, 0);
+    });
+
     bindControls();
-    scheduleLoad("", 0);
+    scheduleLoad(initialQuery, 0);
+  };
+
+  const initOverviewSearchResults = () => {
+    const root = document.querySelector("[data-overview-search-results]");
+    if (!root) {
+      return;
+    }
+
+    const input = document.getElementById("search-input");
+    const statusEl = root.querySelector("[data-overview-search-status]");
+    const listEl = root.querySelector("[data-overview-search-list]");
+    if (!statusEl || !listEl) {
+      return;
+    }
+
+    const statusClasses = ["is-loading", "is-empty", "is-error"];
+    let debounceToken = 0;
+    let requestToken = 0;
+
+    const currentQuery = () =>
+      input instanceof HTMLInputElement ? normalizeParamValue(input.value) : readPageQuery();
+
+    const setBusy = (busy) => {
+      root.setAttribute("aria-busy", busy ? "true" : "false");
+    };
+
+    const setStatus = (message, kind) => {
+      statusEl.textContent = message;
+      statusEl.classList.remove(...statusClasses);
+      if (kind) {
+        statusEl.classList.add(kind);
+      }
+    };
+
+    const clearResults = (message, kind) => {
+      listEl.textContent = "";
+      listEl.hidden = true;
+      setStatus(message, kind);
+    };
+
+    const renderResult = (result) => {
+      const path = searchResultPath(result);
+      if (!path) {
+        return false;
+      }
+
+      const item = document.createElement("li");
+      item.className = "overview-result-item";
+
+      const link = document.createElement("a");
+      link.className = "overview-result-link";
+      link.setAttribute("href", path);
+
+      const title = document.createElement("span");
+      title.className = "overview-result-title";
+      title.textContent = result.title || result.key || "Untitled";
+      link.appendChild(title);
+
+      const meta = document.createElement("span");
+      meta.className = "overview-result-meta";
+
+      const folder = document.createElement("span");
+      folder.textContent = result.folder ? `Folder: ${result.folder}` : "Folder: /";
+      meta.appendChild(folder);
+
+      const matchedFields = Array.isArray(result.matched_fields) ? result.matched_fields : [];
+      if (matchedFields.length > 0) {
+        const fields = document.createElement("span");
+        fields.className = "overview-result-badge";
+        fields.textContent = `Matched: ${matchedFields.join(", ")}`;
+        meta.appendChild(fields);
+      }
+
+      const issues = Array.isArray(result.issues) ? result.issues : [];
+      for (const issue of issues) {
+        const badge = document.createElement("span");
+        badge.className = "overview-result-badge is-issue";
+        badge.textContent = String(issue).replace(/_/g, " ");
+        meta.appendChild(badge);
+      }
+      link.appendChild(meta);
+
+      if (result.snippet) {
+        const snippet = document.createElement("p");
+        snippet.className = "overview-result-snippet";
+        snippet.innerHTML = result.snippet;
+        link.appendChild(snippet);
+      }
+
+      item.appendChild(link);
+      listEl.appendChild(item);
+      return true;
+    };
+
+    const renderResults = (payload, query) => {
+      const results = Array.isArray(payload) ? payload : [];
+      listEl.textContent = "";
+
+      let renderedCount = 0;
+      for (const result of results) {
+        if (renderResult(result)) {
+          renderedCount += 1;
+        }
+      }
+
+      if (renderedCount === 0) {
+        const message = query ? `No notes match "${query}".` : "No notes match the active filters.";
+        clearResults(message, "is-empty");
+        return;
+      }
+
+      listEl.hidden = false;
+      const noun = renderedCount === 1 ? "note" : "notes";
+      const scope = query ? ` for "${query}"` : "";
+      setStatus(`${renderedCount} matching ${noun}${scope}.`, "");
+    };
+
+    const scheduleSearch = (delay) => {
+      const query = currentQuery();
+      window.clearTimeout(debounceToken);
+      syncPageQueryParam(query);
+
+      if (query === "" && !hasActiveSharedFilters()) {
+        requestToken += 1;
+        setBusy(false);
+        clearResults("No query or filters selected.", "is-empty");
+        return;
+      }
+
+      const localToken = ++requestToken;
+      setBusy(true);
+      setStatus("Loading matching notes...", "is-loading");
+      debounceToken = window.setTimeout(async () => {
+        try {
+          const resp = await fetch(buildSearchAPIURL(query, true), {
+            headers: { Accept: "application/json" },
+          });
+          if (!resp.ok) {
+            throw new Error("search request failed");
+          }
+          const payload = await resp.json();
+          if (localToken !== requestToken) {
+            return;
+          }
+          renderResults(payload, query);
+        } catch {
+          if (localToken === requestToken) {
+            clearResults("Search unavailable.", "is-error");
+          }
+        } finally {
+          if (localToken === requestToken) {
+            setBusy(false);
+          }
+        }
+      }, delay);
+    };
+
+    if (input instanceof HTMLInputElement) {
+      input.value = readPageQuery();
+      input.addEventListener("input", () => {
+        scheduleSearch(150);
+      });
+    }
+
+    window.addEventListener("bn:filterschange", (event) => {
+      if (event.detail && event.detail.mode && event.detail.mode !== "search") {
+        return;
+      }
+      scheduleSearch(0);
+    });
+
+    scheduleSearch(0);
   };
 
   const initSearch = () => {
@@ -1118,6 +2021,7 @@
       return;
     }
 
+    const syncSearchURL = Boolean(document.querySelector('[data-facet-controls][data-facet-mode="search"]'));
     let debounceToken = 0;
     let requestToken = 0;
     let results = [];
@@ -1152,15 +2056,14 @@
       setActive(-1);
     };
 
+    const hasActiveSearchFilters = () => syncSearchURL && hasActiveSharedFilters();
+
     const navigateToResult = (index) => {
       if (index < 0 || index >= results.length) {
         return;
       }
       const result = results[index];
-      const path =
-        typeof result.path === "string" && result.path
-          ? result.path
-          : notePathForKey(result.key);
+      const path = searchResultPath(result);
       if (!path) {
         return;
       }
@@ -1217,11 +2120,15 @@
       setActive(-1);
     };
 
-    input.addEventListener("input", () => {
+    const scheduleSearch = (delay) => {
       const query = input.value.trim();
       window.clearTimeout(debounceToken);
+      if (syncSearchURL) {
+        syncPageQueryParam(query);
+      }
 
-      if (query === "") {
+      if (query === "" && !hasActiveSearchFilters()) {
+        requestToken += 1;
         clearResults();
         return;
       }
@@ -1229,7 +2136,7 @@
       const localToken = ++requestToken;
       debounceToken = window.setTimeout(async () => {
         try {
-          const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+          const resp = await fetch(buildSearchAPIURL(query, syncSearchURL), {
             headers: { Accept: "application/json" },
           });
           if (!resp.ok || localToken !== requestToken) {
@@ -1246,7 +2153,24 @@
             clearResults();
           }
         }
-      }, 150);
+      }, delay);
+    };
+
+    if (syncSearchURL) {
+      input.value = readPageQuery();
+      if (input.value.trim() !== "" || hasActiveSearchFilters()) {
+        scheduleSearch(0);
+      }
+      window.addEventListener("bn:filterschange", (event) => {
+        if (event.detail && event.detail.mode && event.detail.mode !== "search") {
+          return;
+        }
+        scheduleSearch(0);
+      });
+    }
+
+    input.addEventListener("input", () => {
+      scheduleSearch(150);
     });
 
     input.addEventListener("keydown", (event) => {
@@ -1288,7 +2212,10 @@
     });
   };
 
+  initFacets();
   initOpenInEditor();
+  initCopyControls();
   initGraph();
   initSearch();
+  initOverviewSearchResults();
 })();

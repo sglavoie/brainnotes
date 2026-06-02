@@ -90,6 +90,36 @@ func TestMarkdownRenderer_DoesNotRenderUnsafeRawHTML(t *testing.T) {
 	}
 }
 
+func TestMarkdownRenderer_AddsHeadingAnchorsWithoutUnsafeRawHTML(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	state, err := newVaultState(v, time.Second)
+	if err != nil {
+		t.Fatalf("newVaultState: %v", err)
+	}
+	renderer, err := newMarkdownRenderer(state)
+	if err != nil {
+		t.Fatalf("newMarkdownRenderer: %v", err)
+	}
+
+	out, err := renderer.render("## Safe Heading\n\nraw <script>alert(1)</script>")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{`id="safe-heading"`, `href="#safe-heading"`, `class="heading-anchor"`} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected rendered markdown to contain %q, got %q", want, html)
+		}
+	}
+	if strings.Contains(html, "<script>") {
+		t.Fatalf("expected unsafe html to be escaped/omitted, got %q", html)
+	}
+}
+
 func TestMarkdownRenderer_DoesNotLinkCodeFenceText(t *testing.T) {
 	t.Parallel()
 

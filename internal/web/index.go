@@ -23,6 +23,8 @@ type indexPageData struct {
 	OrphanCount       int
 	GraphPath         string
 	BrokenPath        string
+	FacetControls     facetControlsData
+	Diagnostics       diagnosticsSummary
 	Recent            []indexRecentNote
 }
 
@@ -133,6 +135,7 @@ func buildIndexPageData(snapshot vaultSnapshot, root string) (indexPageData, err
 		OrphanCount:       orphanCount,
 		GraphPath:         "/graph",
 		BrokenPath:        "/broken",
+		FacetControls:     overviewFacetControlsData(),
 		Recent:            recentViews,
 	}, nil
 }

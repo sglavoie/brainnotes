@@ -32,6 +32,7 @@
               spellcheck="false"
             />
           </div>
+          {{template "facetControls" .FacetControls}}
           <div class="graph-spread">
             <div class="graph-spread-header">
               <label class="graph-control-label" for="graph-spread-input">Spread</label>
@@ -73,6 +74,7 @@
           <p id="graph-hover-title">Hover a node</p>
           <p id="graph-hover-folder"></p>
           <p id="graph-hover-degree"></p>
+          <ul id="graph-hover-issues" class="graph-issue-list" aria-label="Node issues" hidden></ul>
           <a id="graph-open-note" class="graph-open-note is-disabled" aria-disabled="true" tabindex="-1">Open note</a>
         </aside>
       </section>

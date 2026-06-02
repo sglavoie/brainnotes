@@ -52,6 +52,9 @@ type notePageData struct {
 	Key         string
 	CSRFToken   string
 	BodyHTML    template.HTML
+	Breadcrumbs []breadcrumbItem
+	TOC         []tableOfContentsItem
+	Copy        noteCopyPayloads
 	Frontmatter []frontmatterEntry
 	Backlinks   []noteLinkView
 	Outgoing    []noteLinkView
@@ -62,6 +65,36 @@ type brokenPageData struct {
 	Query    string
 	Entries  []brokenPageEntry
 	HasQuery bool
+}
+
+type graphPageData struct {
+	Title         string
+	FacetControls facetControlsData
+}
+
+type facetControlsData struct {
+	IDPrefix    string
+	Mode        string
+	Label       string
+	Placeholder string
+}
+
+func overviewFacetControlsData() facetControlsData {
+	return facetControlsData{
+		IDPrefix:    "overview",
+		Mode:        "search",
+		Label:       "Filter notes",
+		Placeholder: "Find tags, folders, properties...",
+	}
+}
+
+func graphFacetControlsData() facetControlsData {
+	return facetControlsData{
+		IDPrefix:    "graph",
+		Mode:        "graph",
+		Label:       "Filter graph facets",
+		Placeholder: "Find tags, folders, properties...",
+	}
 }
 
 func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error) {
@@ -117,6 +150,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot))))
 	mux.HandleFunc(noteRoutePrefix, srv.handleNote)
 	mux.HandleFunc("/broken", srv.handleBroken)
+	mux.HandleFunc("/api/facets", srv.handleFacets)
 	mux.HandleFunc("/api/search", srv.handleSearch)
 	mux.HandleFunc("/api/open", srv.handleOpen)
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
@@ -143,16 +177,18 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	snapshot, err := s.state.currentSnapshot()
+	diagnosticsData, err := loadDiagnosticsData(s.vault)
 	if err != nil {
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		http.Error(w, "diagnostics error", http.StatusInternalServerError)
 		return
 	}
+	snapshot := vaultSnapshot{notes: diagnosticsData.notes, graph: diagnosticsData.graph}
 	data, err := buildIndexPageData(snapshot, s.vault.Root)
 	if err != nil {
 		http.Error(w, "index error", http.StatusInternalServerError)
 		return
 	}
+	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
 	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
@@ -212,8 +248,11 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Key:         normalizedKey,
 		CSRFToken:   s.csrfToken,
 		BodyHTML:    bodyHTML,
+		Breadcrumbs: breadcrumbsForNote(s.vault.Root, note, notePath),
+		TOC:         tableOfContentsForMarkdown(body, notePath),
+		Copy:        copyPayloadsForNote(s.vault.Root, note, notePath),
 		Frontmatter: renderFrontmatterEntries(front, snapshot.graph),
-		Backlinks:   backlinksForNote(snapshot.graph, note),
+		Backlinks:   backlinksForNote(snapshot, note),
 		Outgoing:    outgoingLinksForNote(snapshot.graph, note),
 		Broken:      brokenAffordancesForNote(note, snapshot.graph),
 	}
@@ -261,9 +300,11 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := s.templates.ExecuteTemplate(w, "graph", map[string]string{
-		"Title": "Graph - bn serve",
-	}); err != nil {
+	data := graphPageData{
+		Title:         "Graph - bn serve",
+		FacetControls: graphFacetControlsData(),
+	}
+	if err := s.templates.ExecuteTemplate(w, "graph", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
 }
@@ -285,9 +326,44 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := buildSearchResponse(snapshot, s.vault.Root, r.URL.Query().Get("q"))
+	filters, err := parseNoteFilters(r.URL.Query(), s.vault.Root, snapshot.graph)
+	if err != nil {
+		http.Error(w, "bad search filters", http.StatusBadRequest)
+		return
+	}
+
+	payload, err := buildSearchResponse(snapshot, s.vault.Root, filters)
 	if err != nil {
 		http.Error(w, "search error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		http.Error(w, "encode error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleFacets(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/facets" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	snapshot, err := s.state.currentSnapshot()
+	if err != nil {
+		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		return
+	}
+
+	payload, err := buildFacetsResponse(snapshot, s.vault.Root)
+	if err != nil {
+		http.Error(w, "facets error", http.StatusInternalServerError)
 		return
 	}
 
@@ -314,7 +390,13 @@ func (s *Server) handleGraphJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := buildGraphResponse(snapshot, s.vault.Root, r.URL.Query().Get("q"))
+	filters, err := parseNoteFilters(r.URL.Query(), s.vault.Root, snapshot.graph)
+	if err != nil {
+		http.Error(w, "bad graph filters", http.StatusBadRequest)
+		return
+	}
+
+	payload, err := buildGraphResponse(snapshot, s.vault.Root, filters)
 	if err != nil {
 		http.Error(w, "graph error", http.StatusInternalServerError)
 		return
