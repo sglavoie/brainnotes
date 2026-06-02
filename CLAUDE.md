@@ -18,7 +18,7 @@ The repo uses `just` for development tasks (see `justfile`):
 - `just web-check` — run frontend typecheck, Vitest/jsdom tests, and the browser bundle build.
 - `just lint` — fails on `gofmt -l .` output, runs `go vet ./...`, then runs `just web-check`. Run this before declaring work complete.
 - `just fmt` — `gofmt -w .`.
-- `bn serve` — local `just build`/`just install` binaries remember this checkout path, run `npm run build:web` here before serving, and serve static assets from `internal/web/static` on disk. Unstamped binaries fall back to current-directory checkout detection, then embedded assets.
+- `bn serve` — local `just build`/`just install` binaries remember this checkout path, rebuild web assets here before serving, and serve static assets from `internal/web/static` on disk. The serve-time build prefers the native `node_modules/esbuild/bin/esbuild` binary to avoid requiring `node`/`npm` when dependencies are already installed; unstamped binaries fall back to current-directory checkout detection, then embedded assets.
 
 Run a single test: `go test ./internal/cli -run TestFind_TagFilter` (standard Go test selectors). Integration tests in `internal/cli/integration_test.go` use golden files under `internal/cli/testdata/`.
 

@@ -30,11 +30,39 @@ var runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opt
 
 var runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
 	fmt.Fprintln(out, "building web assets...")
+	if bin, ok := localEsbuildBinary(root); ok {
+		cmd := exec.CommandContext(ctx, bin, webBuildArgs()...)
+		cmd.Dir = root
+		cmd.Stdout = out
+		cmd.Stderr = out
+		return cmd.Run()
+	}
+
+	fmt.Fprintln(out, "local esbuild binary not found; falling back to npm run build:web")
 	cmd := exec.CommandContext(ctx, "npm", "run", "build:web")
 	cmd.Dir = root
 	cmd.Stdout = out
 	cmd.Stderr = out
 	return cmd.Run()
+}
+
+func localEsbuildBinary(root string) (string, bool) {
+	bin := filepath.Join(root, "node_modules", "esbuild", "bin", "esbuild")
+	info, err := os.Stat(bin)
+	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+		return "", false
+	}
+	return bin, true
+}
+
+func webBuildArgs() []string {
+	return []string{
+		"internal/web/static_src/main.ts",
+		"--bundle",
+		"--format=iife",
+		"--global-name=BrainNotesApp",
+		"--outfile=internal/web/static/app.js",
+	}
 }
 
 // sourceCheckoutRoot is stamped by local just build/install recipes so a

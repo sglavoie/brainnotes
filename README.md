@@ -466,10 +466,11 @@ Starts a local HTTP server for vault browsing:
 - `/graph` interactive Cytoscape graph
 
 Local binaries built with `just build` or `just install` remember this checkout
-path. `bn serve` runs `npm run build:web` there before starting, then serves the
-freshly generated static assets from disk. Binaries without that local stamp
-fall back to detecting a checkout from the current directory, then to embedded
-assets.
+path. `bn serve` rebuilds web assets there before starting, preferring the local
+native `node_modules/esbuild/bin/esbuild` binary so an already-installed checkout
+does not need to launch `node` or `npm`. If that binary is missing, it falls back
+to `npm run build:web`. Binaries without the local checkout stamp fall back to
+detecting a checkout from the current directory, then to embedded assets.
 
 The overview and graph views share the same URL filter parameters for text,
 tags, category, status, type, folder, property presence, issue filters

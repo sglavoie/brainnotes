@@ -292,6 +292,37 @@ func TestServe_WebBuildFailureStopsBeforeServing(t *testing.T) {
 	}
 }
 
+func TestRunWebBuildPrefersLocalEsbuildBinary(t *testing.T) {
+	isolateBnEnv(t)
+	root := t.TempDir()
+	esbuildPath := filepath.Join(root, "node_modules", "esbuild", "bin", "esbuild")
+	if err := os.MkdirAll(filepath.Dir(esbuildPath), 0o755); err != nil {
+		t.Fatalf("mkdir esbuild bin: %v", err)
+	}
+	argsPath := filepath.Join(root, "args.txt")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > args.txt\n"
+	if err := os.WriteFile(esbuildPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write esbuild script: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := runWebBuild(context.Background(), root, &out); err != nil {
+		t.Fatalf("runWebBuild: %v\n%s", err, out.String())
+	}
+
+	if strings.Contains(out.String(), "npm run build:web") {
+		t.Fatalf("runWebBuild fell back to npm despite local esbuild: %q", out.String())
+	}
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args: %v", err)
+	}
+	want := strings.Join(webBuildArgs(), "\n") + "\n"
+	if string(args) != want {
+		t.Fatalf("esbuild args = %q, want %q", string(args), want)
+	}
+}
+
 func buildServeWebProject(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
