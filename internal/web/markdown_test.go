@@ -191,6 +191,93 @@ func TestMarkdownRenderer_AddsHeadingAnchorsWithoutUnsafeRawHTML(t *testing.T) {
 	}
 }
 
+func TestMarkdownRenderer_LinkifiesBareURLs(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	source := strings.Join([]string{
+		"https://www.merakialive.com",
+		"www.example.com",
+		"foo@example.com",
+		"ftp://example.com",
+		"https://example.com/search?q=a&hl=en",
+		"https://github.com?q=stars:>1",
+		"https://example.com/path.",
+		"javascript:alert(1)",
+	}, "\n")
+	out, err := renderer.render(source)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{
+		`<a href="https://www.merakialive.com">https://www.merakialive.com</a>`,
+		`<a href="http://www.example.com">www.example.com</a>`,
+		`<a href="mailto:foo@example.com">foo@example.com</a>`,
+		`<a href="ftp://example.com">ftp://example.com</a>`,
+		`<a href="https://example.com/search?q=a&amp;hl=en">https://example.com/search?q=a&amp;hl=en</a>`,
+		`<a href="https://github.com?q=stars:%3E1">https://github.com?q=stars:&gt;1</a>`,
+		`<a href="https://example.com/path">https://example.com/path</a>.`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected rendered markdown to contain %q, got %q", want, html)
+		}
+	}
+	if strings.Contains(html, `href="javascript:alert(1)"`) {
+		t.Fatalf("expected javascript URL to remain plain text, got %q", html)
+	}
+}
+
+func TestMarkdownRenderer_DoesNotLinkifyCodeText(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("Outside https://example.com\n\nInside `https://example.com`\n\n```\nhttps://example.com\n```")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	if got := strings.Count(html, `href="https://example.com"`); got != 1 {
+		t.Fatalf("expected only one bare URL link outside code, got %d in %q", got, html)
+	}
+	if !strings.Contains(html, `<code>https://example.com</code>`) {
+		t.Fatalf("expected inline code to preserve URL text, got %q", html)
+	}
+	if !strings.Contains(html, "https://example.com\n</code></pre>") {
+		t.Fatalf("expected fenced code to preserve URL text, got %q", html)
+	}
+}
+
+func TestMarkdownRenderer_PreservesExplicitLinksAndWikilinksWithLinkify(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	notePath := filepath.Join(root, "Project Note.md")
+	if err := os.WriteFile(notePath, []byte("---\ntitle: Project Note\n---\nBody\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("[explicit](https://example.com) [[Project Note]]")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	if got := strings.Count(html, `href="https://example.com"`); got != 1 {
+		t.Fatalf("expected explicit markdown link to render once, got %d in %q", got, html)
+	}
+	if !strings.Contains(html, `<a href="https://example.com">explicit</a>`) {
+		t.Fatalf("expected explicit markdown link text to be preserved, got %q", html)
+	}
+	if !strings.Contains(html, `href="/n/project%20note"`) {
+		t.Fatalf("expected wikilink to still resolve, got %q", html)
+	}
+}
+
 func TestMarkdownRenderer_DoesNotLinkCodeFenceText(t *testing.T) {
 	t.Parallel()
 

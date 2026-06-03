@@ -484,7 +484,8 @@ diagnostics.
 
 Rendered note pages syntax-highlight fenced code blocks that include a language
 info string, such as `go`, `sh`, or `json`, on the server. Unlabeled fences
-remain plain escaped code blocks.
+remain plain escaped code blocks. Note bodies also auto-link GFM-style bare URLs
+such as `https://example.com`.
 
 Local binaries built with `just build` or `just install` remember this checkout
 path. `bn serve` rebuilds web assets there before starting, preferring the local

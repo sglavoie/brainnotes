@@ -11,6 +11,7 @@ import (
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
@@ -48,6 +49,7 @@ func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
 				highlighting.WithStyle("nord"),
 				highlighting.WithGuessLanguage(false),
 			),
+			extension.Linkify,
 			&wikilink.Extender{
 				Resolver: resolver,
 			},

@@ -982,7 +982,7 @@ func fetchSearchJSON(t *testing.T, rawURL string) ([]searchResult, string, int) 
 
 func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
-		"Source.md": []byte("---\nmeta: \"[[Target]]\"\n---\nBody [[Target]]\n"),
+		"Source.md": []byte("---\nmeta: \"[[Target]]\"\n---\nBody [[Target]]\nhttps://www.merakialive.com\n<script>alert(1)</script>\n"),
 		"Target.md": []byte("---\ntitle: Target\n---\nTarget body\n"),
 	})
 
@@ -999,6 +999,19 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	}
 	if !strings.Contains(body, `href="/n/target"`) {
 		t.Fatalf("resolved note link missing, got %q", body)
+	}
+	for _, want := range []string{
+		`<main class="note-main">`,
+		`<div class="note-content">`,
+		`<div class="note-body">`,
+		`href="https://www.merakialive.com"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected note HTML to contain %q, got %q", want, body)
+		}
+	}
+	if strings.Contains(body, "<script>alert(1)</script>") {
+		t.Fatalf("unsafe raw HTML rendered in note body, got %q", body)
 	}
 
 	missingResp, err := http.Get(ts.URL + "/n/does-not-exist") // #nosec G107 -- test-only local URL
