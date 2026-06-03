@@ -140,6 +140,29 @@ func TestNoteActionsStatusLineDoesNotResizeButtonRow(t *testing.T) {
 	}
 }
 
+func TestScrollbarsUseDarkTheme(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		"color-scheme: dark;",
+		"scrollbar-color: #3a465c transparent;",
+		"scrollbar-width: thin;",
+		"*::-webkit-scrollbar",
+		"width: 0.7rem;",
+		"height: 0.7rem;",
+		"*::-webkit-scrollbar-thumb",
+		"border-radius: 999px;",
+		"background-color: #3a465c;",
+		"background-clip: content-box;",
+		"*::-webkit-scrollbar-thumb:hover",
+		"background-color: #52617a;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("dark scrollbar CSS missing %q", want)
+		}
+	}
+}
+
 func readStaticCSS(t *testing.T) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("static", "app.css"))
