@@ -3,8 +3,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  buildBulkApplyForm,
   buildBulkNotesForm,
+  buildBulkPreviewForm,
+  normalizeBulkFrontmatterChanges,
   normalizeBulkNoteKeys,
+  normalizeBulkManagementResult,
+  normalizeBulkPreviewManagementResult,
+  normalizeBulkPreviewValue,
+  normalizeManagementErrorMessage,
   normalizeSearchResults,
   searchResultPath,
   type SearchResult,
@@ -85,23 +92,259 @@ describe("search URL and result contracts", () => {
     expect(searchResultPath(results[1])).toBe("/n/folder/name%20with%20spaces.md");
   });
 
-  it("normalizes explicit selected keys for bulk requests", () => {
+  it("normalizes explicit selected keys for bulk preview and apply requests", () => {
     expect(normalizeBulkNoteKeys([" source ", "", "Source", "folder/Note"])).toEqual([
       "source",
       "folder/Note",
     ]);
 
-    const body = buildBulkNotesForm({
+    const previewBody = buildBulkPreviewForm({
       action: "move",
       keys: [" source ", "Source", "archive/a"],
       token: "csrf-token",
       folder: "Archive",
     });
+    const applyBody = buildBulkApplyForm({
+      action: "frontmatter_set",
+      keys: [" source ", "Source", "archive/a"],
+      token: "csrf-token",
+      property: "status",
+      op: "=",
+      value: "done",
+      previewID: " preview-123 ",
+    });
+    const compatBody = buildBulkNotesForm({
+      action: "frontmatter_unset",
+      keys: [" source ", "Source"],
+      token: "csrf-token",
+      property: "status",
+      previewID: "preview-compat",
+    });
 
-    expect(body.get("action")).toBe("move");
-    expect(body.get("token")).toBe("csrf-token");
-    expect(body.get("folder")).toBe("Archive");
-    expect(body.getAll("keys[]")).toEqual(["source", "archive/a"]);
+    expect(previewBody.get("action")).toBe("move");
+    expect(previewBody.get("token")).toBe("csrf-token");
+    expect(previewBody.get("folder")).toBe("Archive");
+    expect(previewBody.get("preview_id")).toBeNull();
+    expect(previewBody.getAll("keys[]")).toEqual(["source", "archive/a"]);
+
+    expect(applyBody.get("action")).toBe("frontmatter_set");
+    expect(applyBody.get("property")).toBe("status");
+    expect(applyBody.get("op")).toBe("=");
+    expect(applyBody.get("value")).toBe("done");
+    expect(applyBody.get("preview_id")).toBe("preview-123");
+    expect(applyBody.getAll("keys[]")).toEqual(["source", "archive/a"]);
+
+    expect(compatBody.get("preview_id")).toBe("preview-compat");
+  });
+
+  it("normalizes bulk preview rows, frontmatter changes, failures, and expiry timestamps", () => {
+    const payload = normalizeBulkPreviewManagementResult({
+      ok: true,
+      action: " move ",
+      message: " Preview: 1 note would be moved. 1 failed. ",
+      changed: "1",
+      unchanged: "0",
+      failed: "1",
+      preview_id: " preview-123 ",
+      expires_at: "2026-06-02T12:34:56-04:00",
+      results: [
+        {
+          key: " inbox/source ",
+          path: " /n/archive/source ",
+          rel_path: " Archive/Source.md ",
+          source: {
+            key: " inbox/source ",
+            path: " /n/inbox/source ",
+            rel_path: " Inbox/Source.md ",
+          },
+          destination: {
+            key: " archive/source ",
+            path: " /n/archive/source ",
+            rel_path: " Archive/Source.md ",
+          },
+          changed: true,
+          move: {
+            rewrite_count: "2",
+            rewrite_file_count: "2",
+            body_rewrite_count: "1",
+            frontmatter_rewrite_count: "1",
+          },
+          frontmatter: [
+            {
+              key: "status",
+              before: { present: true, value: "draft" },
+              after: { present: true, value: "done" },
+              changed: 1,
+            },
+            {
+              key: "empty_value",
+              before: { present: true, value: "" },
+              after: { present: false, value: "ignored" },
+              changed: true,
+            },
+          ],
+          affected: [
+            {
+              role: " source ",
+              key: " inbox/source ",
+              path: " /n/inbox/source ",
+              rel_path: " Inbox/Source.md ",
+              exists: 1,
+            },
+            {
+              role: " destination ",
+              key: " archive/source ",
+              path: " /n/archive/source ",
+              rel_path: " Archive/Source.md ",
+              exists: false,
+            },
+          ],
+        },
+        "bad",
+      ],
+      failures: [
+        { key: " missing ", rel_path: " Missing.md ", code: " not_found ", message: " note not found " },
+        {},
+      ],
+    });
+
+    expect(payload).toEqual({
+      ok: true,
+      action: "move",
+      message: "Preview: 1 note would be moved. 1 failed.",
+      changed: 1,
+      unchanged: 0,
+      failed: 1,
+      preview_id: "preview-123",
+      expires_at: "2026-06-02T16:34:56.000Z",
+      results: [
+        {
+          key: "inbox/source",
+          path: "/n/archive/source",
+          rel_path: "Archive/Source.md",
+          source: {
+            key: "inbox/source",
+            path: "/n/inbox/source",
+            rel_path: "Inbox/Source.md",
+          },
+          destination: {
+            key: "archive/source",
+            path: "/n/archive/source",
+            rel_path: "Archive/Source.md",
+          },
+          changed: true,
+          move: {
+            rewrite_count: 2,
+            rewrite_file_count: 2,
+            body_rewrite_count: 1,
+            frontmatter_rewrite_count: 1,
+          },
+          frontmatter: [
+            {
+              key: "status",
+              before: { present: true, value: "draft" },
+              after: { present: true, value: "done" },
+              changed: true,
+            },
+            {
+              key: "empty_value",
+              before: { present: true, value: "" },
+              after: { present: false },
+              changed: true,
+            },
+          ],
+          affected: [
+            {
+              role: "source",
+              key: "inbox/source",
+              path: "/n/inbox/source",
+              rel_path: "Inbox/Source.md",
+              exists: true,
+            },
+            {
+              role: "destination",
+              key: "archive/source",
+              path: "/n/archive/source",
+              rel_path: "Archive/Source.md",
+              exists: false,
+            },
+          ],
+        },
+      ],
+      failures: [
+        {
+          key: "missing",
+          rel_path: "Missing.md",
+          code: "not_found",
+          message: "note not found",
+        },
+      ],
+    });
+
+    expect(normalizeBulkPreviewValue({ present: false, value: "ignored" })).toEqual({
+      present: false,
+    });
+    expect(normalizeBulkFrontmatterChanges([
+      { key: "status", before: { present: false }, after: { present: true, value: "done" }, changed: "true" },
+    ])).toEqual([
+      {
+        key: "status",
+        before: { present: false },
+        after: { present: true, value: "done" },
+        changed: true,
+      },
+    ]);
+  });
+
+  it("normalizes bulk apply results and preserves preview error messages", () => {
+    expect(normalizeBulkManagementResult({
+      ok: true,
+      message: " Updated frontmatter on 1 note. ",
+      changed: "1",
+      unchanged: "2",
+      failed: "1",
+      journal_id: " journal-123 ",
+      results: [
+        { key: " source ", path: " /n/source ", rel_path: " Source.md ", changed: 1 },
+      ],
+      failures: [
+        { key: " missing ", code: " not_found ", message: " note not found " },
+      ],
+    })).toEqual({
+      ok: true,
+      message: "Updated frontmatter on 1 note.",
+      changed: 1,
+      unchanged: 2,
+      failed: 1,
+      journal_id: "journal-123",
+      results: [
+        {
+          key: "source",
+          path: "/n/source",
+          rel_path: "Source.md",
+          changed: true,
+        },
+      ],
+      failures: [
+        {
+          key: "missing",
+          code: "not_found",
+          message: "note not found",
+        },
+      ],
+    });
+
+    expect(normalizeManagementErrorMessage(409, {
+      code: "preview_required",
+      message: " bulk preview required ",
+    })).toBe("bulk preview required");
+    expect(normalizeManagementErrorMessage(409, {
+      code: "preview_stale",
+      message: " bulk preview is stale ",
+    })).toBe("bulk preview is stale");
+    expect(normalizeManagementErrorMessage(503, { code: "preview_stale" })).toBe(
+      "Request failed (503)."
+    );
   });
 });
 
@@ -164,9 +407,7 @@ describe("search result rendering", () => {
     expect(overviewSearchEmptyMessage("zettel")).toBe('No notes match "zettel".');
   });
 
-  it("selects overview rows and submits confirmed bulk trash requests", async () => {
-    vi.useFakeTimers();
-    setURL("/?q=source");
+  const renderOverviewBulkFixture = (): void => {
     document.body.innerHTML = `
       <input id="search-input" />
       <section data-overview-search-results aria-busy="false">
@@ -174,12 +415,87 @@ describe("search result rendering", () => {
         <div data-overview-bulk data-overview-csrf="csrf-token" hidden>
           <p data-overview-selected-count></p>
           <button type="button" data-bulk-trash>Trash</button>
+          <form data-bulk-move>
+            <input name="folder" type="text" />
+            <button type="submit">Move</button>
+          </form>
+          <form data-bulk-frontmatter-set>
+            <input name="property" type="text" />
+            <select name="op">
+              <option value="=">=</option>
+              <option value="+=">+=</option>
+              <option value="-=">-=</option>
+            </select>
+            <input name="value" type="text" />
+            <button type="submit">Apply</button>
+          </form>
+          <form data-bulk-frontmatter-unset>
+            <input name="property" type="text" />
+            <button type="submit">Unset</button>
+          </form>
+          <section data-overview-bulk-preview hidden>
+            <h3 data-overview-bulk-preview-title>Bulk preview</h3>
+            <p data-overview-bulk-preview-message></p>
+            <button type="button" data-overview-bulk-preview-apply>Apply</button>
+            <button type="button" data-overview-bulk-preview-clear>Clear</button>
+            <dl data-overview-bulk-preview-counts></dl>
+            <ul data-overview-bulk-preview-results></ul>
+            <ul data-overview-bulk-preview-failures></ul>
+          </section>
           <p data-overview-bulk-status></p>
         </div>
         <ul data-overview-search-list hidden></ul>
       </section>
     `;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+  };
+
+  const selectOverviewResult = (): HTMLInputElement => {
+    const checkbox = document.querySelector<HTMLInputElement>(".overview-result-select input");
+    expect(checkbox).not.toBeNull();
+    checkbox!.checked = true;
+    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    return checkbox!;
+  };
+
+  it("renders trash preview details and applies from the preview panel", async () => {
+    vi.useFakeTimers();
+    setURL("/?q=source");
+    renderOverviewBulkFixture();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/notes/bulk/preview") {
+        expect(String(init?.body)).toContain("action=trash");
+        return new Response(JSON.stringify({
+          ok: true,
+          action: "trash",
+          message: "Preview: 1 note would be moved to Trash. 1 failed.",
+          changed: 1,
+          failed: 1,
+          preview_id: "preview-trash-1",
+          expires_at: "2026-06-02T16:34:56Z",
+          results: [
+            {
+              key: "source",
+              path: "/n/trash/source",
+              rel_path: "Trash/Source.md",
+              source: {
+                key: "source",
+                path: "/n/source",
+                rel_path: "Source.md",
+              },
+              destination: {
+                key: "trash/source",
+                path: "/n/trash/source",
+                rel_path: "Trash/Source.md",
+              },
+              changed: true,
+            },
+          ],
+          failures: [{ key: "missing", message: "note not found" }],
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       if (String(input) === "/api/notes/bulk") {
         return new Response(JSON.stringify({
           ok: true,
@@ -206,31 +522,321 @@ describe("search result rendering", () => {
     initOverviewSearchResults({ fetch: fetchMock, confirm: confirmMock });
     await vi.runAllTimersAsync();
 
-    const checkbox = document.querySelector<HTMLInputElement>(".overview-result-select input");
     const bulkRoot = document.querySelector<HTMLElement>("[data-overview-bulk]");
     const selectedCount = document.querySelector<HTMLElement>("[data-overview-selected-count]");
-    expect(checkbox).not.toBeNull();
     expect(bulkRoot?.hidden).toBe(true);
 
-    checkbox!.checked = true;
-    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    selectOverviewResult();
 
     expect(bulkRoot?.hidden).toBe(false);
     expect(selectedCount?.textContent).toBe("1 selected");
+    const trashButton = document.querySelector<HTMLButtonElement>("[data-bulk-trash]");
+    expect(trashButton?.textContent).toBe("Preview Trash");
 
-    document.querySelector<HTMLButtonElement>("[data-bulk-trash]")?.click();
+    trashButton?.click();
     await vi.runAllTimersAsync();
 
-    expect(confirmMock).toHaveBeenCalledWith("Move 1 selected note to Trash?");
+    expect(confirmMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk")).toHaveLength(0);
+    expect(trashButton?.textContent).toBe("Apply Trash");
+    expect(bulkRoot?.getAttribute("data-overview-preview-id")).toBe("preview-trash-1");
+    const previewPanel = document.querySelector<HTMLElement>("[data-overview-bulk-preview]");
+    const previewTitle = document.querySelector<HTMLElement>("[data-overview-bulk-preview-title]");
+    const previewCounts = document.querySelector<HTMLElement>("[data-overview-bulk-preview-counts]");
+    const previewResults = document.querySelector<HTMLElement>("[data-overview-bulk-preview-results]");
+    const previewFailures = document.querySelector<HTMLElement>("[data-overview-bulk-preview-failures]");
+    expect(previewPanel?.hidden).toBe(false);
+    expect(previewTitle?.textContent).toBe("Trash preview");
+    expect(previewCounts?.textContent).toContain("Changed1");
+    expect(previewCounts?.textContent).toContain("Failed1");
+    expect(previewResults?.textContent).toContain("Source.md -> Trash/Source.md");
+    expect(previewFailures?.textContent).toContain("missing: note not found");
+
+    const previewApplyButton = document.querySelector<HTMLButtonElement>("[data-overview-bulk-preview-apply]");
+    previewApplyButton?.click();
+    await vi.runAllTimersAsync();
+
     const bulkCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/notes/bulk");
     expect(bulkCall).toBeTruthy();
     const init = bulkCall?.[1] as RequestInit;
     expect(init.method).toBe("POST");
     expect(String(init.body)).toContain("keys%5B%5D=source");
     expect(String(init.body)).toContain("action=trash");
+    expect(String(init.body)).toContain("preview_id=preview-trash-1");
     expect(document.querySelector("[data-overview-bulk-status]")?.textContent).toContain(
       "Failures: missing: note not found."
     );
+    expect(bulkRoot?.hidden).toBe(true);
+  });
+
+  it("renders move and frontmatter preview details and clears the panel", async () => {
+    vi.useFakeTimers();
+    setURL("/?q=source");
+    renderOverviewBulkFixture();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/notes/bulk/preview") {
+        return new Response(JSON.stringify({
+          ok: true,
+          action: "move",
+          message: "Preview: 1 note would be moved.",
+          changed: 1,
+          preview_id: "preview-move-1",
+          expires_at: "2026-06-02T16:34:56Z",
+          results: [
+            {
+              key: "source",
+              path: "/n/archive/source",
+              rel_path: "Archive/Source.md",
+              source: {
+                key: "source",
+                path: "/n/source",
+                rel_path: "Source.md",
+              },
+              destination: {
+                key: "archive/source",
+                path: "/n/archive/source",
+                rel_path: "Archive/Source.md",
+              },
+              changed: true,
+              move: {
+                rewrite_count: 2,
+                rewrite_file_count: 2,
+                body_rewrite_count: 1,
+                frontmatter_rewrite_count: 1,
+              },
+              frontmatter: [
+                {
+                  key: "status",
+                  before: { present: true, value: "draft" },
+                  after: { present: true, value: "done" },
+                  changed: true,
+                },
+              ],
+            },
+          ],
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([searchResult({
+        key: "source",
+        path: "/n/source",
+        title: "Source",
+      })]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    initOverviewSearchResults({ fetch: fetchMock });
+    await vi.runAllTimersAsync();
+    selectOverviewResult();
+
+    const moveForm = document.querySelector<HTMLFormElement>("[data-bulk-move]");
+    const moveInput = moveForm?.querySelector<HTMLInputElement>("input[name=\"folder\"]");
+    moveInput!.value = "Archive";
+    moveForm?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.runAllTimersAsync();
+
+    const previewPanel = document.querySelector<HTMLElement>("[data-overview-bulk-preview]");
+    const previewResults = document.querySelector<HTMLElement>("[data-overview-bulk-preview-results]");
+    expect(previewPanel?.hidden).toBe(false);
+    expect(previewResults?.textContent).toContain("Source.md -> Archive/Source.md");
+    expect(previewResults?.textContent).toContain("2 rewrites across 2 files");
+    expect(previewResults?.textContent).toContain('status: "draft" -> "done"');
+
+    const clearButton = document.querySelector<HTMLButtonElement>("[data-overview-bulk-preview-clear]");
+    clearButton?.click();
+
+    expect(previewPanel?.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>("[data-overview-bulk]")?.hasAttribute("data-overview-preview-id")).toBe(false);
+    expect(document.querySelector<HTMLButtonElement>("[data-bulk-move] button[type=\"submit\"]")?.textContent).toBe("Preview Move");
+  });
+
+  it("clears a move preview when the form changes and requires a fresh preview", async () => {
+    vi.useFakeTimers();
+    setURL("/?q=source");
+    renderOverviewBulkFixture();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/notes/bulk/preview") {
+        const body = String(init?.body);
+        const previewID = body.includes("folder=Later") ? "preview-move-2" : "preview-move-1";
+        return new Response(JSON.stringify({
+          ok: true,
+          action: "move",
+          message: "Preview: 1 note would be moved.",
+          changed: 1,
+          preview_id: previewID,
+          expires_at: "2026-06-02T16:34:56Z",
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (String(input) === "/api/notes/bulk") {
+        return new Response(JSON.stringify({
+          ok: true,
+          message: "Moved 1 note.",
+          changed: 1,
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([searchResult({
+        key: "source",
+        path: "/n/source",
+        title: "Source",
+      })]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    initOverviewSearchResults({ fetch: fetchMock });
+    await vi.runAllTimersAsync();
+    selectOverviewResult();
+
+    const moveForm = document.querySelector<HTMLFormElement>("[data-bulk-move]");
+    const moveInput = moveForm?.querySelector<HTMLInputElement>("input[name=\"folder\"]");
+    const moveButton = moveForm?.querySelector<HTMLButtonElement>("button[type=\"submit\"]");
+    expect(moveInput).not.toBeNull();
+
+    moveInput!.value = "Archive";
+    moveForm?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.runAllTimersAsync();
+
+    expect(moveButton?.textContent).toBe("Apply Move");
+
+    moveInput!.value = "Later";
+    moveInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(moveButton?.textContent).toBe("Preview Move");
+
+    moveForm?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.runAllTimersAsync();
+
+    const previewCalls = fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk/preview");
+    expect(previewCalls).toHaveLength(2);
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk")).toHaveLength(0);
+    expect(String(previewCalls[1]?.[1]?.body)).toContain("folder=Later");
+    expect(moveButton?.textContent).toBe("Apply Move");
+  });
+
+  it("clears preview state when search filters refresh", async () => {
+    vi.useFakeTimers();
+    setURL("/?q=source");
+    renderOverviewBulkFixture();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/notes/bulk/preview") {
+        return new Response(JSON.stringify({
+          ok: true,
+          action: "trash",
+          message: "Preview: 1 note would be moved to Trash.",
+          changed: 1,
+          preview_id: "preview-trash-refresh",
+          expires_at: "2026-06-02T16:34:56Z",
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([searchResult({
+        key: "source",
+        path: "/n/source",
+        title: "Source",
+      })]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    initOverviewSearchResults({ fetch: fetchMock });
+    await vi.runAllTimersAsync();
+    selectOverviewResult();
+
+    const trashButton = document.querySelector<HTMLButtonElement>("[data-bulk-trash]");
+    const bulkRoot = document.querySelector<HTMLElement>("[data-overview-bulk]");
+    trashButton?.click();
+    await vi.runAllTimersAsync();
+
+    expect(trashButton?.textContent).toBe("Apply Trash");
+    setURL("/?q=source&tag=work");
+    dispatchFiltersChange(window, {
+      mode: "search",
+      params: new URLSearchParams("tag=work"),
+    });
+    await vi.runAllTimersAsync();
+
+    expect(trashButton?.textContent).toBe("Preview Trash");
+    expect(bulkRoot?.hasAttribute("data-overview-preview-id")).toBe(false);
+
+    trashButton?.click();
+    await vi.runAllTimersAsync();
+
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk/preview")).toHaveLength(2);
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk")).toHaveLength(0);
+  });
+
+  it("clears stale preview ids after an apply conflict", async () => {
+    vi.useFakeTimers();
+    setURL("/?q=source");
+    renderOverviewBulkFixture();
+    let applyCalls = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/notes/bulk/preview") {
+        return new Response(JSON.stringify({
+          ok: true,
+          action: "trash",
+          message: "Preview: 1 note would be moved to Trash.",
+          changed: 1,
+          preview_id: "preview-trash-stale",
+          expires_at: "2026-06-02T16:34:56Z",
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (String(input) === "/api/notes/bulk") {
+        applyCalls += 1;
+        return new Response(JSON.stringify({
+          ok: false,
+          code: "preview_stale",
+          message: "bulk preview is stale",
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify([searchResult({
+        key: "source",
+        path: "/n/source",
+        title: "Source",
+      })]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    initOverviewSearchResults({ fetch: fetchMock });
+    await vi.runAllTimersAsync();
+    selectOverviewResult();
+
+    const trashButton = document.querySelector<HTMLButtonElement>("[data-bulk-trash]");
+    trashButton?.click();
+    await vi.runAllTimersAsync();
+    expect(trashButton?.textContent).toBe("Apply Trash");
+
+    trashButton?.click();
+    await vi.runAllTimersAsync();
+
+    expect(applyCalls).toBe(1);
+    expect(document.querySelector("[data-overview-bulk-status]")?.textContent).toBe("bulk preview is stale");
+    expect(trashButton?.textContent).toBe("Preview Trash");
+
+    trashButton?.click();
+    await vi.runAllTimersAsync();
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk/preview")).toHaveLength(2);
   });
 });
 

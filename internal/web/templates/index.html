@@ -70,6 +70,21 @@
             <button class="overview-bulk-button" type="submit">Unset</button>
           </form>
         </div>
+        <section class="overview-bulk-preview" data-overview-bulk-preview hidden aria-label="Bulk preview">
+          <div class="overview-bulk-preview-header">
+            <div class="overview-bulk-preview-copy">
+              <h3 class="overview-bulk-preview-title" data-overview-bulk-preview-title>Bulk preview</h3>
+              <p class="overview-bulk-preview-message" data-overview-bulk-preview-message></p>
+            </div>
+            <div class="overview-bulk-preview-actions">
+              <button class="overview-bulk-button" type="button" data-overview-bulk-preview-apply>Apply</button>
+              <button class="overview-bulk-button" type="button" data-overview-bulk-preview-clear>Clear</button>
+            </div>
+          </div>
+          <dl class="overview-bulk-preview-counts" data-overview-bulk-preview-counts></dl>
+          <ul class="overview-bulk-preview-results" data-overview-bulk-preview-results></ul>
+          <ul class="overview-bulk-preview-failures" data-overview-bulk-preview-failures></ul>
+        </section>
         <p class="overview-bulk-status" data-overview-bulk-status role="status" aria-live="polite"></p>
       </div>
       <ul class="overview-result-list" data-overview-search-list hidden></ul>

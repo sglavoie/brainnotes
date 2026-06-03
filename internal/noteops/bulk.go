@@ -52,6 +52,7 @@ type bulkOptions struct {
 	out            io.Writer
 	now            func() time.Time
 	shortID        func() (string, error)
+	trashPlans     map[string]TrashDestinationPlan
 	journalOptions []journal.RecorderOption
 }
 
@@ -99,6 +100,29 @@ func WithBulkTrashShortIDGenerator(gen func() (string, error)) BulkOption {
 	}
 }
 
+// WithBulkTrashDestinationPlans reuses preview-planned Trash destinations.
+func WithBulkTrashDestinationPlans(plans []TrashDestinationPlan) BulkOption {
+	return func(o *bulkOptions) {
+		if len(plans) == 0 {
+			return
+		}
+		if o.trashPlans == nil {
+			o.trashPlans = make(map[string]TrashDestinationPlan, len(plans))
+		}
+		for _, plan := range plans {
+			sourceRel := strings.TrimSpace(filepath.ToSlash(plan.SourceRelPath))
+			if sourceRel == "" {
+				continue
+			}
+			plan.SourceRelPath = sourceRel
+			plan.BaseRelPath = strings.TrimSpace(filepath.ToSlash(plan.BaseRelPath))
+			plan.DestinationRelPath = strings.TrimSpace(filepath.ToSlash(plan.DestinationRelPath))
+			plan.CollisionIDs = append([]string(nil), plan.CollisionIDs...)
+			o.trashPlans[sourceRel] = plan
+		}
+	}
+}
+
 // WithBulkJournalOptions passes recorder options through to the undo journal.
 func WithBulkJournalOptions(opts ...journal.RecorderOption) BulkOption {
 	return func(o *bulkOptions) {
@@ -141,7 +165,7 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
 		}
-		dest, err := resolveTrashDestination(vaultRoot, path.Join("Trash", source.RelPath), trashCfg)
+		dest, _, err := resolveBulkTrashDestination(vaultRoot, source.RelPath, path.Join("Trash", source.RelPath), trashCfg, options.trashPlans)
 		if err != nil {
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue

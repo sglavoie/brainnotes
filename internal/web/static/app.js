@@ -105,6 +105,164 @@ var BrainNotesApp = (() => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
   };
+  var readBoolean = (value) => {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    const normalized = normalizeParamValue(value).toLowerCase();
+    return normalized === "true" || normalized === "1";
+  };
+  var normalizeBulkAction = (value) => {
+    switch (normalizeParamValue(value)) {
+      case "trash":
+      case "move":
+      case "frontmatter_set":
+      case "frontmatter_unset":
+        return normalizeParamValue(value);
+      default:
+        return void 0;
+    }
+  };
+  var normalizeBulkManagementPath = (value) => {
+    const record = asRecord(value) || {};
+    return {
+      key: normalizeParamValue(record.key),
+      path: normalizeParamValue(record.path),
+      rel_path: normalizeParamValue(record.rel_path)
+    };
+  };
+  var normalizeBulkManagementItem = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+    return {
+      key: normalizeParamValue(record.key) || void 0,
+      path: normalizeParamValue(record.path) || void 0,
+      rel_path: normalizeParamValue(record.rel_path) || void 0,
+      changed: readBoolean(record.changed)
+    };
+  };
+  var normalizeBulkFailures = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const key = normalizeParamValue(record.key);
+      const relPath = normalizeParamValue(record.rel_path);
+      const code = normalizeParamValue(record.code);
+      const message = normalizeParamValue(record.message);
+      if (key === "" && relPath === "" && code === "" && message === "") {
+        return [];
+      }
+      return [{
+        key: key || void 0,
+        rel_path: relPath || void 0,
+        code: code || void 0,
+        message: message || void 0
+      }];
+    });
+  };
+  var normalizeBulkAffectedPaths = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      return [{
+        role: normalizeParamValue(record.role),
+        key: normalizeParamValue(record.key),
+        path: normalizeParamValue(record.path),
+        rel_path: normalizeParamValue(record.rel_path),
+        exists: readBoolean(record.exists)
+      }];
+    });
+  };
+  var normalizeBulkPreviewValue = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return { present: false };
+    }
+    if (!readBoolean(record.present)) {
+      return { present: false };
+    }
+    return {
+      present: true,
+      value: record.value
+    };
+  };
+  var normalizeBulkFrontmatterChanges = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const key = normalizeParamValue(record.key);
+      if (key === "") {
+        return [];
+      }
+      return [{
+        key,
+        before: normalizeBulkPreviewValue(record.before),
+        after: normalizeBulkPreviewValue(record.after),
+        changed: readBoolean(record.changed)
+      }];
+    });
+  };
+  var normalizeBulkMovePreview = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return void 0;
+    }
+    return {
+      rewrite_count: readCount(record.rewrite_count),
+      rewrite_file_count: readCount(record.rewrite_file_count),
+      body_rewrite_count: readCount(record.body_rewrite_count),
+      frontmatter_rewrite_count: readCount(record.frontmatter_rewrite_count)
+    };
+  };
+  var normalizeExpiryString = (value) => {
+    const raw = normalizeParamValue(value);
+    if (raw === "") {
+      return "";
+    }
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+  };
+  var normalizeBulkPreviewRows = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const source = normalizeBulkManagementPath(record.source);
+      const destinationRecord = asRecord(record.destination);
+      return [{
+        key: normalizeParamValue(record.key),
+        path: normalizeParamValue(record.path),
+        rel_path: normalizeParamValue(record.rel_path),
+        source,
+        destination: destinationRecord ? normalizeBulkManagementPath(destinationRecord) : void 0,
+        changed: readBoolean(record.changed),
+        move: normalizeBulkMovePreview(record.move),
+        frontmatter: normalizeBulkFrontmatterChanges(record.frontmatter),
+        affected: normalizeBulkAffectedPaths(record.affected)
+      }];
+    });
+  };
   var normalizeSearchResults = (payload) => {
     if (!Array.isArray(payload)) {
       return [];
@@ -260,7 +418,7 @@ var BrainNotesApp = (() => {
     }
     return out;
   };
-  var buildBulkNotesForm = (request) => {
+  var buildBulkRequestForm = (request) => {
     const body = new URLSearchParams();
     body.set("action", request.action);
     body.set("token", request.token);
@@ -279,8 +437,13 @@ var BrainNotesApp = (() => {
     if (request.value !== void 0) {
       body.set("value", request.value);
     }
+    if (request.previewID !== void 0 && request.previewID.trim() !== "") {
+      body.set("preview_id", request.previewID.trim());
+    }
     return body;
   };
+  var buildBulkPreviewForm = (request) => buildBulkRequestForm(request);
+  var buildBulkApplyForm = (request) => buildBulkRequestForm(request);
   var buildUndoForm = (request) => {
     const body = new URLSearchParams();
     body.set("token", request.token);
@@ -329,15 +492,57 @@ var BrainNotesApp = (() => {
       }];
     });
   };
+  var normalizeManagementResult = (payload) => {
+    const record = asRecord(payload) || {};
+    return readBoolean(record.ok) ? {
+      ok: true,
+      message: normalizeParamValue(record.message) || void 0,
+      key: normalizeParamValue(record.key) || void 0,
+      path: normalizeParamValue(record.path) || void 0,
+      rel_path: normalizeParamValue(record.rel_path) || void 0,
+      journal_id: normalizeParamValue(record.journal_id) || void 0
+    } : {
+      ok: false,
+      code: normalizeParamValue(record.code) || void 0,
+      message: normalizeParamValue(record.message) || void 0
+    };
+  };
+  var normalizeBulkManagementResult = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ...base,
+      changed: readCount(record.changed),
+      unchanged: readCount(record.unchanged),
+      failed: readCount(record.failed),
+      results: Array.isArray(record.results) ? record.results.flatMap((item) => {
+        const normalized = normalizeBulkManagementItem(item);
+        return normalized ? [normalized] : [];
+      }) : [],
+      failures: normalizeBulkFailures(record.failures)
+    };
+  };
+  var normalizeBulkPreviewManagementResult = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ...base,
+      action: normalizeBulkAction(record.action),
+      changed: readCount(record.changed),
+      unchanged: readCount(record.unchanged),
+      failed: readCount(record.failed),
+      preview_id: normalizeParamValue(record.preview_id) || void 0,
+      expires_at: normalizeExpiryString(record.expires_at) || void 0,
+      results: normalizeBulkPreviewRows(record.results),
+      failures: normalizeBulkFailures(record.failures)
+    };
+  };
   var normalizeManagementErrorMessage = (status, detail) => {
-    const record = asRecord(detail);
-    if (record) {
-      const message2 = normalizeParamValue(record.message);
-      if (message2) {
-        return message2;
-      }
+    const result = normalizeManagementResult(detail);
+    if (!result.ok && result.message) {
+      return result.message;
     }
-    const message = normalizeParamValue(detail);
+    const message = asRecord(detail) ? "" : normalizeParamValue(detail);
     return message || `Request failed (${status}).`;
   };
   var normalizeOpenErrorMessage = (status, detail) => {
@@ -2370,6 +2575,103 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/overview-search.ts
   var overviewSearchEmptyMessage = (query) => query ? `No notes match "${query}".` : "No notes match the active filters.";
+  var bulkApplyFallbackMessage = (action) => {
+    switch (action) {
+      case "trash":
+        return "Moved selected notes to Trash.";
+      case "move":
+        return "Moved selected notes.";
+      case "frontmatter_set":
+      case "frontmatter_unset":
+        return "Updated selected notes.";
+      default:
+        return "Applied selected notes.";
+    }
+  };
+  var previewHeading = (action) => {
+    switch (action) {
+      case "trash":
+        return "Trash preview";
+      case "move":
+        return "Move preview";
+      case "frontmatter_set":
+        return "Frontmatter set preview";
+      case "frontmatter_unset":
+        return "Frontmatter unset preview";
+      default:
+        return "Bulk preview";
+    }
+  };
+  var formatPreviewValue = (value) => {
+    if (!value.present) {
+      return "(absent)";
+    }
+    if (typeof value.value === "string") {
+      return JSON.stringify(value.value);
+    }
+    if (typeof value.value === "number" || typeof value.value === "boolean" || value.value === null) {
+      return String(value.value);
+    }
+    try {
+      return JSON.stringify(value.value);
+    } catch {
+      return String(value.value);
+    }
+  };
+  var renderPreviewFrontmatterItem = (listEl, change) => {
+    const doc = listEl.ownerDocument;
+    const item = doc.createElement("li");
+    item.className = "overview-bulk-preview-frontmatter-item";
+    if (!change.changed) {
+      item.classList.add("is-unchanged");
+    }
+    item.textContent = `${change.key}: ${formatPreviewValue(change.before)} -> ${formatPreviewValue(change.after)}`;
+    listEl.appendChild(item);
+  };
+  var renderPreviewResultRow = (listEl, result) => {
+    const doc = listEl.ownerDocument;
+    const item = doc.createElement("li");
+    item.className = "overview-bulk-preview-result";
+    if (!result.changed) {
+      item.classList.add("is-unchanged");
+    }
+    const header = doc.createElement("div");
+    header.className = "overview-bulk-preview-result-header";
+    const path = doc.createElement("p");
+    path.className = "overview-bulk-preview-path";
+    const sourcePath = result.source.rel_path || result.rel_path || result.key;
+    const destinationPath = result.destination?.rel_path || result.rel_path;
+    path.textContent = destinationPath && destinationPath !== sourcePath ? `${sourcePath} -> ${destinationPath}` : sourcePath;
+    header.appendChild(path);
+    const status = doc.createElement("span");
+    status.className = "overview-bulk-preview-result-state";
+    status.textContent = result.changed ? "Will change" : "No change";
+    header.appendChild(status);
+    item.appendChild(header);
+    if (result.move) {
+      const move = doc.createElement("p");
+      move.className = "overview-bulk-preview-detail";
+      move.textContent = `${result.move.rewrite_count} rewrites across ${result.move.rewrite_file_count} files (body ${result.move.body_rewrite_count}, frontmatter ${result.move.frontmatter_rewrite_count})`;
+      item.appendChild(move);
+    }
+    if (result.frontmatter.length > 0) {
+      const frontmatterList = doc.createElement("ul");
+      frontmatterList.className = "overview-bulk-preview-frontmatter";
+      for (const change of result.frontmatter) {
+        renderPreviewFrontmatterItem(frontmatterList, change);
+      }
+      item.appendChild(frontmatterList);
+    }
+    listEl.appendChild(item);
+  };
+  var renderPreviewFailureItem = (listEl, failure) => {
+    const doc = listEl.ownerDocument;
+    const item = doc.createElement("li");
+    item.className = "overview-bulk-preview-failure";
+    const label = failure.rel_path || failure.key || "note";
+    item.textContent = `${label}: ${failure.message || failure.code || "failed"}`;
+    listEl.appendChild(item);
+  };
   var renderOverviewSearchResult = (listEl, result, options = {}) => {
     const path = searchResultPath(result);
     if (!path) {
@@ -2453,12 +2755,28 @@ var BrainNotesApp = (() => {
     const bulkRoot = queryElement(root, "[data-overview-bulk]", HTMLElement);
     const selectedCountEl = bulkRoot ? queryElement(bulkRoot, "[data-overview-selected-count]", HTMLElement) : null;
     const bulkStatusEl = bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement) : null;
+    const previewPanel = bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement) : null;
+    const previewTitleEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement) : null;
+    const previewMessageEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement) : null;
+    const previewCountsEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement) : null;
+    const previewResultsEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement) : null;
+    const previewFailuresEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement) : null;
+    const previewApplyButton = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement) : null;
+    const previewClearButton = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement) : null;
     const csrfToken = bulkRoot?.getAttribute("data-overview-csrf") || "";
     const fetcher = deps.fetch || fetch;
-    const confirmAction = deps.confirm || ((message) => window.confirm(message));
+    const trashButton = bulkRoot ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement) : null;
+    const moveForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement) : null;
+    const moveButton = moveForm ? queryElement(moveForm, 'button[type="submit"]', HTMLButtonElement) : null;
+    const setForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement) : null;
+    const setButton = setForm ? queryElement(setForm, 'button[type="submit"]', HTMLButtonElement) : null;
+    const unsetForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement) : null;
+    const unsetButton = unsetForm ? queryElement(unsetForm, 'button[type="submit"]', HTMLButtonElement) : null;
     const selectedKeys = /* @__PURE__ */ new Map();
     let bulkBusy = false;
+    let previewState = null;
     let debounceToken = 0;
+    let ignoreNextManagementMutationClear = false;
     let requestToken = 0;
     const currentQuery = () => input instanceof HTMLInputElement ? normalizeParamValue(input.value) : readPageQuery();
     const setBusy = (busy) => {
@@ -2475,6 +2793,182 @@ var BrainNotesApp = (() => {
       ]);
     };
     const selectedKeyList = () => normalizeBulkNoteKeys(Array.from(selectedKeys.keys()));
+    const readMoveFields = () => {
+      if (!moveForm) {
+        return {};
+      }
+      const formData = new FormData(moveForm);
+      return {
+        folder: String(formData.get("folder") || "").trim()
+      };
+    };
+    const readSetFields = () => {
+      if (!setForm) {
+        return {};
+      }
+      const formData = new FormData(setForm);
+      return {
+        property: String(formData.get("property") || "").trim(),
+        op: String(formData.get("op") || "="),
+        value: String(formData.get("value") || "")
+      };
+    };
+    const readUnsetFields = () => {
+      if (!unsetForm) {
+        return {};
+      }
+      const formData = new FormData(unsetForm);
+      return {
+        property: String(formData.get("property") || "").trim()
+      };
+    };
+    const normalizeBulkFields = (fields) => {
+      const out = {};
+      if (typeof fields.folder === "string") {
+        out.folder = fields.folder.trim();
+      }
+      if (typeof fields.property === "string") {
+        out.property = fields.property.trim();
+      }
+      if (typeof fields.value === "string") {
+        out.value = fields.value;
+      }
+      const op = normalizeBulkFrontmatterOp(fields.op);
+      if (op) {
+        out.op = op;
+      }
+      return out;
+    };
+    const previewFingerprint = (action, fields, keys = selectedKeyList()) => JSON.stringify({
+      action,
+      keys,
+      ...normalizeBulkFields(fields)
+    });
+    const previewMatches = (action, fields, keys = selectedKeyList()) => Boolean(
+      previewState && previewState.previewID && previewState.fingerprint === previewFingerprint(action, fields, keys)
+    );
+    const syncPreviewAttributes = () => {
+      if (!bulkRoot) {
+        return;
+      }
+      if (!previewState) {
+        bulkRoot.removeAttribute("data-overview-preview-ready");
+        bulkRoot.removeAttribute("data-overview-preview-action");
+        bulkRoot.removeAttribute("data-overview-preview-id");
+        bulkRoot.removeAttribute("data-overview-preview-expires-at");
+        return;
+      }
+      bulkRoot.setAttribute("data-overview-preview-ready", "true");
+      bulkRoot.setAttribute("data-overview-preview-action", previewState.action);
+      bulkRoot.setAttribute("data-overview-preview-id", previewState.previewID);
+      if (previewState.expiresAt) {
+        bulkRoot.setAttribute("data-overview-preview-expires-at", previewState.expiresAt);
+      } else {
+        bulkRoot.removeAttribute("data-overview-preview-expires-at");
+      }
+    };
+    const readFieldsForAction = (action) => {
+      switch (action) {
+        case "move":
+          return readMoveFields();
+        case "frontmatter_set":
+          return readSetFields();
+        case "frontmatter_unset":
+          return readUnsetFields();
+        default:
+          return {};
+      }
+    };
+    const renderPreviewCounts = (result) => {
+      if (!previewCountsEl) {
+        return;
+      }
+      const doc = previewCountsEl.ownerDocument;
+      previewCountsEl.textContent = "";
+      const counts = [
+        ["Changed", result.changed || 0],
+        ["Unchanged", result.unchanged || 0],
+        ["Failed", result.failed || 0]
+      ];
+      for (const [label, value] of counts) {
+        const row = doc.createElement("div");
+        row.className = "overview-bulk-preview-count";
+        const term = doc.createElement("dt");
+        term.textContent = label;
+        const detail = doc.createElement("dd");
+        detail.textContent = String(value);
+        row.append(term, detail);
+        previewCountsEl.appendChild(row);
+      }
+    };
+    const renderPreviewPanel = () => {
+      if (!previewPanel) {
+        return;
+      }
+      if (!previewState) {
+        previewPanel.hidden = true;
+        if (previewCountsEl) {
+          previewCountsEl.textContent = "";
+        }
+        if (previewResultsEl) {
+          previewResultsEl.textContent = "";
+        }
+        if (previewFailuresEl) {
+          previewFailuresEl.textContent = "";
+        }
+        if (previewApplyButton) {
+          previewApplyButton.textContent = "Apply";
+        }
+        return;
+      }
+      previewPanel.hidden = false;
+      if (previewTitleEl) {
+        previewTitleEl.textContent = previewHeading(previewState.action);
+      }
+      if (previewMessageEl) {
+        previewMessageEl.textContent = previewState.result.message || "Preview ready.";
+      }
+      renderPreviewCounts(previewState.result);
+      if (previewResultsEl) {
+        previewResultsEl.textContent = "";
+        for (const result of previewState.result.results || []) {
+          renderPreviewResultRow(previewResultsEl, result);
+        }
+      }
+      if (previewFailuresEl) {
+        previewFailuresEl.textContent = "";
+        const failures = previewState.result.failures || [];
+        previewFailuresEl.hidden = failures.length === 0;
+        for (const failure of failures) {
+          renderPreviewFailureItem(previewFailuresEl, failure);
+        }
+      }
+      if (previewApplyButton) {
+        previewApplyButton.textContent = bulkActionLabel(previewState.action, "apply");
+      }
+    };
+    const bulkActionLabel = (action, phase) => {
+      switch (action) {
+        case "trash":
+          return phase === "preview" ? "Preview Trash" : "Apply Trash";
+        case "move":
+          return phase === "preview" ? "Preview Move" : "Apply Move";
+        case "frontmatter_set":
+          return phase === "preview" ? "Preview Set" : "Apply Set";
+        case "frontmatter_unset":
+          return phase === "preview" ? "Preview Unset" : "Apply Unset";
+        default:
+          return phase === "preview" ? "Preview" : "Apply";
+      }
+    };
+    const syncActionButton = (button, action, fields) => {
+      if (!button) {
+        return;
+      }
+      const phase = previewMatches(action, fields) ? "apply" : "preview";
+      button.textContent = bulkActionLabel(action, phase);
+      button.setAttribute("data-bulk-phase", phase);
+    };
     const updateBulkControls = () => {
       if (!bulkRoot) {
         return;
@@ -2489,6 +2983,37 @@ var BrainNotesApp = (() => {
           control.disabled = bulkBusy || count === 0;
         }
       }
+      syncActionButton(trashButton, "trash", {});
+      syncActionButton(moveButton, "move", readMoveFields());
+      syncActionButton(setButton, "frontmatter_set", readSetFields());
+      syncActionButton(unsetButton, "frontmatter_unset", readUnsetFields());
+      if (previewApplyButton) {
+        previewApplyButton.disabled = bulkBusy || count === 0 || previewState === null;
+      }
+      if (previewClearButton) {
+        previewClearButton.disabled = bulkBusy || previewState === null;
+      }
+      renderPreviewPanel();
+    };
+    const clearPreviewState = ({ clearStatus = false } = {}) => {
+      const hadPreview = previewState !== null;
+      previewState = null;
+      syncPreviewAttributes();
+      updateBulkControls();
+      if (clearStatus && hadPreview) {
+        setBulkStatus("");
+      }
+    };
+    const setPreviewState = (action, fields, result) => {
+      previewState = {
+        action,
+        fingerprint: previewFingerprint(action, fields),
+        previewID: result.preview_id || "",
+        expiresAt: result.expires_at,
+        result
+      };
+      syncPreviewAttributes();
+      updateBulkControls();
     };
     const setBulkBusy = (busy) => {
       bulkBusy = busy;
@@ -2499,6 +3024,7 @@ var BrainNotesApp = (() => {
       if (key === "") {
         return;
       }
+      clearPreviewState({ clearStatus: true });
       if (selected) {
         selectedKeys.set(key, result.title || key);
       } else {
@@ -2507,10 +3033,15 @@ var BrainNotesApp = (() => {
       updateBulkControls();
     };
     const pruneSelectionToRenderedKeys = (visibleKeys) => {
+      let changed = false;
       for (const key of selectedKeys.keys()) {
         if (!visibleKeys.has(key)) {
           selectedKeys.delete(key);
+          changed = true;
         }
+      }
+      if (changed) {
+        clearPreviewState({ clearStatus: true });
       }
       updateBulkControls();
     };
@@ -2518,7 +3049,7 @@ var BrainNotesApp = (() => {
       listEl.textContent = "";
       listEl.hidden = true;
       selectedKeys.clear();
-      updateBulkControls();
+      clearPreviewState({ clearStatus: true });
       setStatus(message, kind);
     };
     const renderResults = (payload, query) => {
@@ -2552,6 +3083,7 @@ var BrainNotesApp = (() => {
       const query = currentQuery();
       window.clearTimeout(debounceToken);
       syncPageQueryParam(query);
+      clearPreviewState({ clearStatus: true });
       if (query === "" && !hasActiveSharedFilters()) {
         requestToken += 1;
         setBusy(false);
@@ -2597,7 +3129,14 @@ var BrainNotesApp = (() => {
       }
       scheduleSearch(0);
     });
-    const runBulkAction = async (action, fields, fallbackMessage, confirmMessage = "") => {
+    window.addEventListener(managementMutationEventName, () => {
+      if (ignoreNextManagementMutationClear) {
+        ignoreNextManagementMutationClear = false;
+        return;
+      }
+      clearPreviewState({ clearStatus: true });
+    });
+    const runBulkPreview = async (action, fields, fallbackMessage) => {
       const keys = selectedKeyList();
       if (!bulkRoot || csrfToken.trim() === "") {
         setBulkStatus("Bulk action unavailable.", "is-error");
@@ -2607,14 +3146,10 @@ var BrainNotesApp = (() => {
         setBulkStatus("Select one or more notes.", "is-error");
         return;
       }
-      if (confirmMessage && !confirmAction(confirmMessage)) {
-        setBulkStatus("Bulk action canceled.");
-        return;
-      }
       setBulkBusy(true);
-      setBulkStatus("Applying bulk action...", "is-loading");
+      setBulkStatus("Previewing bulk action...", "is-loading");
       try {
-        const body = buildBulkNotesForm({
+        const body = buildBulkPreviewForm({
           action,
           keys,
           token: csrfToken,
@@ -2622,6 +3157,68 @@ var BrainNotesApp = (() => {
           property: fields.property,
           op: normalizeBulkFrontmatterOp(fields.op),
           value: fields.value
+        });
+        const resp = await fetcher("/api/notes/bulk/preview", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-BN-CSRF": csrfToken
+          },
+          body: body.toString()
+        });
+        const payload = await readBulkResponsePayload(resp);
+        if (!resp.ok) {
+          clearPreviewState();
+          setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeBulkPreviewManagementResult(payload);
+        if (!result.ok || !result.preview_id) {
+          clearPreviewState();
+          setBulkStatus(result.message || "Bulk preview failed.", "is-error");
+          return;
+        }
+        setPreviewState(action, fields, result);
+        const failures = Array.isArray(result.failures) ? result.failures : [];
+        setBulkStatus(
+          bulkStatusMessage(result, fallbackMessage),
+          failures.length > 0 ? "is-error" : "is-success"
+        );
+      } catch {
+        clearPreviewState();
+        setBulkStatus("Bulk preview failed.", "is-error");
+      } finally {
+        setBulkBusy(false);
+      }
+    };
+    const runBulkApply = async (action, fields, fallbackMessage) => {
+      const keys = selectedKeyList();
+      if (!bulkRoot || csrfToken.trim() === "") {
+        setBulkStatus("Bulk action unavailable.", "is-error");
+        return;
+      }
+      if (keys.length === 0) {
+        setBulkStatus("Select one or more notes.", "is-error");
+        return;
+      }
+      if (!previewState || !previewMatches(action, fields, keys)) {
+        clearPreviewState();
+        setBulkStatus("Preview the bulk action before applying it.", "is-error");
+        return;
+      }
+      setBulkBusy(true);
+      setBulkStatus("Applying bulk action...", "is-loading");
+      try {
+        const body = buildBulkApplyForm({
+          action,
+          keys,
+          token: csrfToken,
+          folder: fields.folder,
+          property: fields.property,
+          op: normalizeBulkFrontmatterOp(fields.op),
+          value: fields.value,
+          previewID: previewState.previewID
         });
         const resp = await fetcher("/api/notes/bulk", {
           method: "POST",
@@ -2634,70 +3231,91 @@ var BrainNotesApp = (() => {
         });
         const payload = await readBulkResponsePayload(resp);
         if (!resp.ok) {
+          clearPreviewState();
           setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
-        const result = payload;
+        const result = normalizeBulkManagementResult(payload);
         const failures = Array.isArray(result.failures) ? result.failures : [];
         setBulkStatus(
           bulkStatusMessage(result, fallbackMessage),
           failures.length > 0 ? "is-error" : "is-success"
         );
+        clearPreviewState();
+        selectedKeys.clear();
+        updateBulkControls();
+        ignoreNextManagementMutationClear = true;
         window.dispatchEvent(new CustomEvent(managementMutationEventName, {
           detail: result
         }));
-        selectedKeys.clear();
         scheduleSearch(0);
       } catch {
+        clearPreviewState();
         setBulkStatus("Bulk action failed.", "is-error");
       } finally {
         setBulkBusy(false);
       }
     };
-    const trashButton = bulkRoot ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement) : null;
+    const runBulkAction = async (action, fields, fallbackMessage) => {
+      if (previewMatches(action, fields)) {
+        await runBulkApply(action, fields, fallbackMessage);
+        return;
+      }
+      await runBulkPreview(action, fields, fallbackMessage);
+    };
     trashButton?.addEventListener("click", () => {
-      const count = selectedKeys.size;
-      void runBulkAction(
-        "trash",
-        {},
-        "Moved selected notes to Trash.",
-        `Move ${count === 1 ? "1 selected note" : `${count} selected notes`} to Trash?`
-      );
+      void runBulkAction("trash", {}, bulkApplyFallbackMessage("trash"));
     });
-    const moveForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement) : null;
     moveForm?.addEventListener("submit", (event) => {
       event.preventDefault();
-      const formData = new FormData(moveForm);
-      void runBulkAction("move", {
-        folder: String(formData.get("folder") || "")
-      }, "Moved selected notes.");
+      void runBulkAction("move", readMoveFields(), bulkApplyFallbackMessage("move"));
     });
-    const setForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement) : null;
     setForm?.addEventListener("submit", (event) => {
       event.preventDefault();
-      const formData = new FormData(setForm);
-      const property = String(formData.get("property") || "").trim();
-      if (property === "") {
+      const fields = readSetFields();
+      if (!fields.property) {
         setBulkStatus("Property is required.", "is-error");
         return;
       }
-      void runBulkAction("frontmatter_set", {
-        property,
-        op: String(formData.get("op") || "="),
-        value: String(formData.get("value") || "")
-      }, "Updated selected notes.");
+      void runBulkAction("frontmatter_set", fields, bulkApplyFallbackMessage("frontmatter_set"));
     });
-    const unsetForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement) : null;
     unsetForm?.addEventListener("submit", (event) => {
       event.preventDefault();
-      const formData = new FormData(unsetForm);
-      const property = String(formData.get("property") || "").trim();
-      if (property === "") {
+      const fields = readUnsetFields();
+      if (!fields.property) {
         setBulkStatus("Property is required.", "is-error");
         return;
       }
-      void runBulkAction("frontmatter_unset", { property }, "Updated selected notes.");
+      void runBulkAction("frontmatter_unset", fields, bulkApplyFallbackMessage("frontmatter_unset"));
     });
+    previewApplyButton?.addEventListener("click", () => {
+      if (!previewState) {
+        setBulkStatus("Preview the bulk action before applying it.", "is-error");
+        return;
+      }
+      void runBulkApply(
+        previewState.action,
+        readFieldsForAction(previewState.action),
+        bulkApplyFallbackMessage(previewState.action)
+      );
+    });
+    previewClearButton?.addEventListener("click", () => {
+      clearPreviewState({ clearStatus: true });
+    });
+    const bindPreviewInvalidation = (form) => {
+      if (!form) {
+        return;
+      }
+      form.addEventListener("input", () => {
+        clearPreviewState({ clearStatus: true });
+      });
+      form.addEventListener("change", () => {
+        clearPreviewState({ clearStatus: true });
+      });
+    };
+    bindPreviewInvalidation(moveForm);
+    bindPreviewInvalidation(setForm);
+    bindPreviewInvalidation(unsetForm);
     updateBulkControls();
     scheduleSearch(0);
   };

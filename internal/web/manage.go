@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
@@ -354,48 +355,91 @@ func (s *Server) handleNotesBulk(w http.ResponseWriter, r *http.Request) {
 		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
 		return
 	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
-		return
-	}
 
-	action := strings.TrimSpace(r.Form.Get("action"))
-	if action == "" {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: missing action"))
-		return
-	}
-
-	sources, keyFailures, err := s.resolveBulkSources(r)
+	req, err := s.parseBulkManagementRequest(r)
 	if err != nil {
 		writeManagementError(w, err)
 		return
 	}
-	if len(sources) == 0 {
-		writeManagementJSON(w, bulkFailureStatus(keyFailures), bulkManagementResponse{
+
+	record, err := s.previewStore.consume(r.Form.Get("preview_id"))
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
+	if err := s.validateBulkPreviewForApply(req, record); err != nil {
+		writeManagementError(w, err)
+		return
+	}
+
+	if len(req.Sources) == 0 {
+		writeManagementJSON(w, bulkFailureStatus(req.KeyFailures), bulkManagementResponse{
 			OK:       false,
-			Code:     string(bulkFailureCode(keyFailures)),
+			Code:     string(bulkFailureCode(req.KeyFailures)),
 			Message:  "No selected notes could be resolved.",
-			Failed:   len(keyFailures),
-			Failures: keyFailures,
+			Failed:   len(req.KeyFailures),
+			Failures: req.KeyFailures,
 		})
 		return
 	}
 
-	result, err := s.runBulkAction(action, r, sources)
+	result, err := s.runBulkAction(req, bulkPreviewApplyOptions(record)...)
 	if err != nil {
 		writeManagementError(w, err)
 		return
 	}
-	result.Failures = append(keyFailures, result.Failures...)
+	result.Failures = append(req.KeyFailures, result.Failures...)
 	if result.Changed > 0 {
 		s.state.invalidate()
 	}
 
-	writeManagementJSON(w, http.StatusOK, bulkManagementResponseForResult(action, result))
+	writeManagementJSON(w, http.StatusOK, bulkManagementResponseForResult(req.Action, result))
+}
+
+func (s *Server) handleNotesBulkPreview(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/notes/bulk/preview" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
+		return
+	}
+
+	req, err := s.parseBulkManagementRequest(r)
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
+	if len(req.Sources) == 0 {
+		writeManagementJSON(w, bulkFailureStatus(req.KeyFailures), bulkPreviewManagementResponse{
+			OK:        false,
+			Code:      string(bulkFailureCode(req.KeyFailures)),
+			Action:    req.Action,
+			Message:   "No selected notes could be resolved.",
+			Failed:    len(req.KeyFailures),
+			PreviewID: "",
+			ExpiresAt: "",
+			Failures:  req.KeyFailures,
+		})
+		return
+	}
+
+	result, err := s.runBulkPreview(req)
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
+	result.Failures = append(req.KeyFailures, result.Failures...)
+
+	receipt, err := s.previewStore.store(req, result)
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
+
+	writeManagementJSON(w, http.StatusOK, bulkPreviewManagementResponseForResult(req.Action, result, receipt))
 }
 
 func (s *Server) resolveManagementSource(r *http.Request) (noteops.PathResolution, error) {
@@ -411,12 +455,7 @@ func (s *Server) resolveManagementSource(r *http.Request) (noteops.PathResolutio
 	return source, nil
 }
 
-func (s *Server) resolveBulkSources(r *http.Request) ([]noteops.BulkSource, []noteops.BulkFailure, error) {
-	keys := readBulkKeys(r.Form)
-	if len(keys) == 0 {
-		return nil, nil, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: no notes selected")
-	}
-
+func (s *Server) resolveBulkSources(keys []string) ([]noteops.BulkSource, []noteops.BulkFailure, error) {
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
 		return nil, nil, noteops.WrapError(noteops.CodeInternal, "snapshot error", err)
@@ -443,20 +482,130 @@ func (s *Server) resolveBulkSources(r *http.Request) ([]noteops.BulkSource, []no
 	return sources, failures, nil
 }
 
-func (s *Server) runBulkAction(action string, r *http.Request, sources []noteops.BulkSource) (*noteops.BulkResult, error) {
+type bulkManagementRequest struct {
+	Action                     string
+	SelectedKeys               []string
+	Sources                    []noteops.BulkSource
+	KeyFailures                []noteops.BulkFailure
+	MoveFolder                 string
+	FrontmatterProperty        string
+	FrontmatterOp              string
+	FrontmatterValue           string
+	FrontmatterType            string
+	FrontmatterMutations       []noteops.FrontmatterMutation
+	FrontmatterUnsetProperties []string
+}
+
+type bulkManagementRequestFingerprint struct {
+	Action              string
+	SelectedKeys        []string
+	Sources             []bulkManagementSourceFingerprint
+	MoveFolder          string
+	FrontmatterProperty string
+	FrontmatterOp       string
+	FrontmatterValue    string
+	FrontmatterType     string
+}
+
+type bulkManagementSourceFingerprint struct {
+	Key     string
+	RelPath string
+}
+
+func (req bulkManagementRequest) fingerprint() bulkManagementRequestFingerprint {
+	sources := make([]bulkManagementSourceFingerprint, 0, len(req.Sources))
+	for _, source := range req.Sources {
+		sources = append(sources, bulkManagementSourceFingerprint{
+			Key:     source.Key,
+			RelPath: source.RelPath,
+		})
+	}
+	return bulkManagementRequestFingerprint{
+		Action:              req.Action,
+		SelectedKeys:        append([]string(nil), req.SelectedKeys...),
+		Sources:             sources,
+		MoveFolder:          req.MoveFolder,
+		FrontmatterProperty: req.FrontmatterProperty,
+		FrontmatterOp:       req.FrontmatterOp,
+		FrontmatterValue:    req.FrontmatterValue,
+		FrontmatterType:     req.FrontmatterType,
+	}
+}
+
+func (s *Server) parseBulkManagementRequest(r *http.Request) (bulkManagementRequest, error) {
+	var req bulkManagementRequest
+	if err := r.ParseForm(); err != nil {
+		return req, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err)
+	}
+	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
+		return req, noteops.Errorf(noteops.CodeForbidden, "csrf token required")
+	}
+
+	action := strings.TrimSpace(r.Form.Get("action"))
+	if action == "" {
+		return req, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: missing action")
+	}
+	req.Action = action
+
+	keys := readBulkKeys(r.Form)
+	if len(keys) == 0 {
+		return req, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: no notes selected")
+	}
+	req.SelectedKeys = keys
+
+	sources, keyFailures, err := s.resolveBulkSources(keys)
+	if err != nil {
+		return req, err
+	}
+	req.Sources = sources
+	req.KeyFailures = keyFailures
+	canonicalAction, ok := canonicalBulkAction(action)
+	if ok {
+		req.Action = canonicalAction
+	}
+	if len(req.Sources) == 0 {
+		return req, nil
+	}
+	if !ok {
+		return req, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: unsupported action %q", action)
+	}
+
+	if err := s.parseBulkActionFields(r, &req); err != nil {
+		return req, err
+	}
+	return req, nil
+}
+
+func canonicalBulkAction(action string) (string, bool) {
 	switch action {
 	case "trash":
-		return noteops.BulkTrashNotes(s.vault.Root, sources)
+		return "trash", true
+	case "move":
+		return "move", true
+	case "frontmatter_set", "frontmatter-set", "set_frontmatter":
+		return "frontmatter_set", true
+	case "frontmatter_unset", "frontmatter-unset", "unset_frontmatter":
+		return "frontmatter_unset", true
+	default:
+		return "", false
+	}
+}
+
+func (s *Server) parseBulkActionFields(r *http.Request, req *bulkManagementRequest) error {
+	switch req.Action {
+	case "trash":
+		return nil
 	case "move":
 		newFolder, ok := managementFormValue(r, "folder", "new_folder")
 		if !ok {
-			return nil, noteops.Errorf(noteops.CodeInvalidRequest, "move: missing new folder")
+			return noteops.Errorf(noteops.CodeInvalidRequest, "move: missing new folder")
 		}
-		return noteops.BulkMoveNotes(s.vault, s.cfg, sources, newFolder)
-	case "frontmatter_set", "frontmatter-set", "set_frontmatter":
+		req.MoveFolder = newFolder
+		return nil
+	case "frontmatter_set":
 		property, ok := managementFormValue(r, "property", "prop", "frontmatter_key")
 		if !ok {
-			return nil, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing property")
+			return noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing property")
 		}
 		op := strings.TrimSpace(r.Form.Get("op"))
 		if op == "" {
@@ -464,7 +613,7 @@ func (s *Server) runBulkAction(action string, r *http.Request, sources []noteops
 		}
 		value, ok := managementFormValue(r, "value")
 		if !ok {
-			return nil, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing value")
+			return noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing value")
 		}
 		typeFlag := strings.TrimSpace(r.Form.Get("type"))
 		if typeFlag == "" {
@@ -472,18 +621,88 @@ func (s *Server) runBulkAction(action string, r *http.Request, sources []noteops
 		}
 		mutation, err := noteops.NewFrontmatterMutation(property, op, value, typeFlag, &s.cfg.Frontmatter)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return noteops.BulkSetFrontmatter(s.vault.Root, sources, []noteops.FrontmatterMutation{mutation}, &s.cfg.Frontmatter)
-	case "frontmatter_unset", "frontmatter-unset", "unset_frontmatter":
+		req.FrontmatterProperty = property
+		req.FrontmatterOp = op
+		req.FrontmatterValue = value
+		req.FrontmatterType = typeFlag
+		req.FrontmatterMutations = []noteops.FrontmatterMutation{mutation}
+		return nil
+	case "frontmatter_unset":
 		property, ok := managementFormValue(r, "property", "prop", "frontmatter_key")
 		if !ok {
-			return nil, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing property")
+			return noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing property")
 		}
-		return noteops.BulkUnsetFrontmatter(s.vault.Root, sources, []string{property}, &s.cfg.Frontmatter)
+		req.FrontmatterProperty = property
+		req.FrontmatterUnsetProperties = []string{property}
+		return nil
 	default:
-		return nil, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: unsupported action %q", action)
+		return noteops.Errorf(noteops.CodeInvalidRequest, "bulk: unsupported action %q", req.Action)
 	}
+}
+
+func (s *Server) runBulkAction(req bulkManagementRequest, opts ...noteops.BulkOption) (*noteops.BulkResult, error) {
+	switch req.Action {
+	case "trash":
+		return noteops.BulkTrashNotes(s.vault.Root, req.Sources, opts...)
+	case "move":
+		return noteops.BulkMoveNotes(s.vault, s.cfg, req.Sources, req.MoveFolder, opts...)
+	case "frontmatter_set":
+		return noteops.BulkSetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterMutations, &s.cfg.Frontmatter, opts...)
+	case "frontmatter_unset":
+		return noteops.BulkUnsetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterUnsetProperties, &s.cfg.Frontmatter, opts...)
+	default:
+		return nil, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: unsupported action %q", req.Action)
+	}
+}
+
+func (s *Server) runBulkPreview(req bulkManagementRequest, opts ...noteops.BulkOption) (*noteops.BulkPreviewResult, error) {
+	switch req.Action {
+	case "trash":
+		return noteops.BulkPreviewTrashNotes(s.vault.Root, req.Sources, opts...)
+	case "move":
+		return noteops.BulkPreviewMoveNotes(s.vault, s.cfg, req.Sources, req.MoveFolder, opts...)
+	case "frontmatter_set":
+		return noteops.BulkPreviewSetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterMutations, &s.cfg.Frontmatter)
+	case "frontmatter_unset":
+		return noteops.BulkPreviewUnsetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterUnsetProperties, &s.cfg.Frontmatter)
+	default:
+		return nil, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: unsupported action %q", req.Action)
+	}
+}
+
+func (s *Server) validateBulkPreviewForApply(req bulkManagementRequest, record bulkPreviewRecord) error {
+	currentStates, err := bulkPreviewCurrentAffectedStates(record.Affected)
+	if err != nil {
+		return err
+	}
+	if !bulkPreviewStatesMatch(record.Affected, currentStates) {
+		return noteops.Errorf(noteops.CodePreviewStale, "bulk preview is stale")
+	}
+	if err := bulkPreviewRecordMatchesRequest(record, req); err != nil {
+		return err
+	}
+
+	preview, err := s.runBulkPreview(req, bulkPreviewApplyOptions(record)...)
+	if err != nil {
+		return noteops.WrapError(noteops.CodePreviewStale, "bulk preview is stale", err)
+	}
+	recomputedStates, err := bulkPreviewAffectedStates(preview)
+	if err != nil {
+		return err
+	}
+	if !bulkPreviewStatesMatch(record.Affected, recomputedStates) {
+		return noteops.Errorf(noteops.CodePreviewStale, "bulk preview is stale")
+	}
+	return nil
+}
+
+func bulkPreviewApplyOptions(record bulkPreviewRecord) []noteops.BulkOption {
+	if len(record.TrashPlans) == 0 {
+		return nil
+	}
+	return []noteops.BulkOption{noteops.WithBulkTrashDestinationPlans(record.TrashPlans)}
 }
 
 func managementFormValue(r *http.Request, names ...string) (string, bool) {
@@ -549,6 +768,46 @@ type bulkManagementItem struct {
 	Changed bool   `json:"changed"`
 }
 
+type bulkPreviewManagementResponse struct {
+	OK        bool                        `json:"ok"`
+	Code      string                      `json:"code,omitempty"`
+	Action    string                      `json:"action"`
+	Message   string                      `json:"message"`
+	Changed   int                         `json:"changed"`
+	Unchanged int                         `json:"unchanged"`
+	Failed    int                         `json:"failed"`
+	PreviewID string                      `json:"preview_id"`
+	ExpiresAt string                      `json:"expires_at"`
+	Results   []bulkPreviewManagementItem `json:"results,omitempty"`
+	Failures  []noteops.BulkFailure       `json:"failures,omitempty"`
+}
+
+type bulkPreviewManagementItem struct {
+	Key         string                           `json:"key"`
+	Path        string                           `json:"path"`
+	RelPath     string                           `json:"rel_path"`
+	Source      bulkManagementPath               `json:"source"`
+	Destination *bulkManagementPath              `json:"destination,omitempty"`
+	Changed     bool                             `json:"changed"`
+	Move        *noteops.BulkMovePreview         `json:"move,omitempty"`
+	Frontmatter []noteops.BulkFrontmatterPreview `json:"frontmatter,omitempty"`
+	Affected    []bulkManagementAffectedPath     `json:"affected,omitempty"`
+}
+
+type bulkManagementPath struct {
+	Key     string `json:"key"`
+	Path    string `json:"path"`
+	RelPath string `json:"rel_path"`
+}
+
+type bulkManagementAffectedPath struct {
+	Role    string `json:"role"`
+	Key     string `json:"key"`
+	Path    string `json:"path"`
+	RelPath string `json:"rel_path"`
+	Exists  bool   `json:"exists"`
+}
+
 func bulkManagementResponseForResult(action string, result *noteops.BulkResult) bulkManagementResponse {
 	if result == nil {
 		return bulkManagementResponse{
@@ -585,6 +844,113 @@ func bulkManagementItems(result *noteops.BulkResult) []bulkManagementItem {
 		})
 	}
 	return items
+}
+
+func bulkPreviewManagementResponseForResult(action string, result *noteops.BulkPreviewResult, receipt bulkPreviewReceipt) bulkPreviewManagementResponse {
+	if result == nil {
+		return bulkPreviewManagementResponse{
+			OK:      false,
+			Code:    string(noteops.CodeInternal),
+			Action:  action,
+			Message: "Bulk preview failed.",
+		}
+	}
+	return bulkPreviewManagementResponse{
+		OK:        true,
+		Action:    action,
+		Message:   bulkPreviewManagementMessage(action, result),
+		Changed:   result.Changed,
+		Unchanged: result.Unchanged,
+		Failed:    len(result.Failures),
+		PreviewID: receipt.ID,
+		ExpiresAt: receipt.ExpiresAt.UTC().Format(time.RFC3339),
+		Results:   bulkPreviewManagementItems(result),
+		Failures:  result.Failures,
+	}
+}
+
+func bulkPreviewManagementItems(result *noteops.BulkPreviewResult) []bulkPreviewManagementItem {
+	items := make([]bulkPreviewManagementItem, 0, len(result.Results))
+	for _, item := range result.Results {
+		source := bulkManagementPathForResolution(item.Source)
+		relPath := item.Source.RelPath
+		path := source.Path
+
+		var destination *bulkManagementPath
+		if item.Destination.RelPath != "" {
+			dest := bulkManagementPathForResolution(item.Destination)
+			destination = &dest
+			relPath = dest.RelPath
+			path = dest.Path
+		}
+
+		items = append(items, bulkPreviewManagementItem{
+			Key:         item.Key,
+			Path:        path,
+			RelPath:     relPath,
+			Source:      source,
+			Destination: destination,
+			Changed:     item.Changed,
+			Move:        item.Move,
+			Frontmatter: item.Frontmatter,
+			Affected:    bulkManagementAffectedPaths(item.Affected),
+		})
+	}
+	return items
+}
+
+func bulkManagementAffectedPaths(paths []noteops.BulkAffectedPath) []bulkManagementAffectedPath {
+	out := make([]bulkManagementAffectedPath, 0, len(paths))
+	for _, p := range paths {
+		resolved := bulkManagementPathForResolution(p.Path)
+		out = append(out, bulkManagementAffectedPath{
+			Role:    p.Role,
+			Key:     resolved.Key,
+			Path:    resolved.Path,
+			RelPath: resolved.RelPath,
+			Exists:  p.Exists,
+		})
+	}
+	return out
+}
+
+func bulkManagementPathForResolution(resolved noteops.PathResolution) bulkManagementPath {
+	key := managementRouteKeyForRelPath(resolved.RelPath)
+	return bulkManagementPath{
+		Key:     key,
+		Path:    mustManagementNotePath(resolved.RelPath),
+		RelPath: resolved.RelPath,
+	}
+}
+
+func bulkPreviewManagementMessage(action string, result *noteops.BulkPreviewResult) string {
+	changed := result.Changed
+	failures := len(result.Failures)
+	var message string
+	switch action {
+	case "trash":
+		message = fmt.Sprintf("Preview: %s would be moved to Trash.", noteCountLabel(changed))
+	case "move":
+		message = fmt.Sprintf("Preview: %s would be moved.", noteCountLabel(changed))
+	case "frontmatter_set":
+		if changed == 0 {
+			message = "Preview: frontmatter would be unchanged on selected notes."
+		} else {
+			message = fmt.Sprintf("Preview: frontmatter would be updated on %s.", noteCountLabel(changed))
+		}
+	case "frontmatter_unset":
+		if changed == 0 {
+			message = "Preview: frontmatter would be unchanged on selected notes."
+		} else {
+			message = fmt.Sprintf("Preview: frontmatter would be unset on %s.", noteCountLabel(changed))
+		}
+	default:
+		message = fmt.Sprintf("Preview: %s would be updated.", noteCountLabel(changed))
+	}
+	if failures > 0 {
+		message += fmt.Sprintf(" %d failed.", failures)
+	}
+	return message
 }
 
 func bulkManagementMessage(action string, result *noteops.BulkResult) string {

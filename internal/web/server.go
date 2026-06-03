@@ -39,6 +39,7 @@ type Server struct {
 	vault        *vault.Vault
 	templates    *template.Template
 	state        *vaultState
+	previewStore *bulkPreviewStore
 	markdown     *markdownRenderer
 	handler      http.Handler
 	openBrowser  func(url string) error
@@ -136,6 +137,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		vault:        v,
 		templates:    tpl,
 		state:        state,
+		previewStore: newBulkPreviewStore(bulkPreviewTTL),
 		markdown:     markdown,
 		openBrowser:  opts.OpenBrowser,
 		notifyListen: opts.NotifyListening,
@@ -165,6 +167,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/notes/move", srv.handleNoteMove)
 	mux.HandleFunc("/api/notes/frontmatter/set", srv.handleNoteFrontmatterSet)
 	mux.HandleFunc("/api/notes/frontmatter/unset", srv.handleNoteFrontmatterUnset)
+	mux.HandleFunc("/api/notes/bulk/preview", srv.handleNotesBulkPreview)
 	mux.HandleFunc("/api/notes/bulk", srv.handleNotesBulk)
 	mux.HandleFunc("/api/history", srv.handleHistory)
 	mux.HandleFunc("/api/undo", srv.handleUndo)

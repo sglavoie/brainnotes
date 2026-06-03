@@ -15,6 +15,16 @@ import (
 
 const trashTimestampFormat = "20060102T150405Z"
 
+// TrashDestinationPlan captures the deterministic destination chosen for a
+// Trash move so a later apply can reuse the exact previewed path.
+type TrashDestinationPlan struct {
+	SourceRelPath      string    `json:"source_rel_path"`
+	BaseRelPath        string    `json:"base_rel_path"`
+	DestinationRelPath string    `json:"destination_rel_path"`
+	Timestamp          time.Time `json:"timestamp"`
+	CollisionIDs       []string  `json:"collision_ids,omitempty"`
+}
+
 // TrashResult describes a note moved into the vault-local Trash folder.
 type TrashResult struct {
 	Source      PathResolution
@@ -149,43 +159,55 @@ func resolveTrashSource(vaultRoot, sourceRel string) (PathResolution, error) {
 }
 
 func resolveTrashDestination(vaultRoot, baseRel string, cfg trashOptions) (PathResolution, error) {
+	dest, _, err := resolveTrashDestinationPlan(vaultRoot, baseRel, cfg)
+	return dest, err
+}
+
+func resolveTrashDestinationPlan(vaultRoot, baseRel string, cfg trashOptions) (PathResolution, TrashDestinationPlan, error) {
 	baseRel, err := CleanRelPath(baseRel)
 	if err != nil {
-		return PathResolution{}, err
+		return PathResolution{}, TrashDestinationPlan{}, err
 	}
 	now := cfg.now().UTC()
 	if now.IsZero() {
-		return PathResolution{}, Errorf(CodeInternal, "trash timestamp is zero")
+		return PathResolution{}, TrashDestinationPlan{}, Errorf(CodeInternal, "trash timestamp is zero")
+	}
+	plan := TrashDestinationPlan{
+		BaseRelPath:  baseRel,
+		Timestamp:    now,
+		CollisionIDs: []string{},
 	}
 
 	candidateRel := baseRel
 	for attempt := 0; attempt < 16; attempt++ {
 		dest, err := PathForRel(vaultRoot, candidateRel)
 		if err != nil {
-			return PathResolution{}, err
+			return PathResolution{}, TrashDestinationPlan{}, err
 		}
 		if dest.RelPath != candidateRel {
-			return PathResolution{}, Errorf(CodeForbidden, "trash destination must not resolve through a symlink")
+			return PathResolution{}, TrashDestinationPlan{}, Errorf(CodeForbidden, "trash destination must not resolve through a symlink")
 		}
 		exists, err := pathExists(dest.AbsPath)
 		if err != nil {
-			return PathResolution{}, WrapError(CodeConflict, "stat trash destination", err)
+			return PathResolution{}, TrashDestinationPlan{}, WrapError(CodeConflict, "stat trash destination", err)
 		}
 		if !exists {
-			return dest, nil
+			plan.DestinationRelPath = dest.RelPath
+			return dest, plan, nil
 		}
 
 		shortID, err := cfg.shortID()
 		if err != nil {
-			return PathResolution{}, WrapError(CodeInternal, "generate trash collision id", err)
+			return PathResolution{}, TrashDestinationPlan{}, WrapError(CodeInternal, "generate trash collision id", err)
 		}
 		shortID = strings.TrimSpace(shortID)
 		if shortID == "" || strings.ContainsAny(shortID, `/\`) || containsControlRune(shortID) {
-			return PathResolution{}, Errorf(CodeInternal, "invalid trash collision id")
+			return PathResolution{}, TrashDestinationPlan{}, Errorf(CodeInternal, "invalid trash collision id")
 		}
+		plan.CollisionIDs = append(plan.CollisionIDs, shortID)
 		candidateRel = trashCollisionRel(baseRel, now.Format(trashTimestampFormat), shortID)
 	}
-	return PathResolution{}, Errorf(CodeConflict, "could not choose a unique trash destination")
+	return PathResolution{}, TrashDestinationPlan{}, Errorf(CodeConflict, "could not choose a unique trash destination")
 }
 
 func trashCollisionRel(baseRel, timestamp, shortID string) string {

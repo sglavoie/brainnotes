@@ -10,13 +10,15 @@ import (
 type ErrorCode string
 
 const (
-	CodeInvalidRequest ErrorCode = "invalid_request"
-	CodeInvalidKey     ErrorCode = "invalid_key"
-	CodeNotFound       ErrorCode = "not_found"
-	CodeConflict       ErrorCode = "conflict"
-	CodeForbidden      ErrorCode = "forbidden"
-	CodeJournal        ErrorCode = "journal_error"
-	CodeInternal       ErrorCode = "internal_error"
+	CodeInvalidRequest  ErrorCode = "invalid_request"
+	CodeInvalidKey      ErrorCode = "invalid_key"
+	CodeNotFound        ErrorCode = "not_found"
+	CodeConflict        ErrorCode = "conflict"
+	CodePreviewRequired ErrorCode = "preview_required"
+	CodePreviewStale    ErrorCode = "preview_stale"
+	CodeForbidden       ErrorCode = "forbidden"
+	CodeJournal         ErrorCode = "journal_error"
+	CodeInternal        ErrorCode = "internal_error"
 )
 
 // Error carries a stable code for web JSON responses while preserving causes.
@@ -102,7 +104,7 @@ func HTTPStatusForError(err error) int {
 		return http.StatusForbidden
 	case CodeNotFound:
 		return http.StatusNotFound
-	case CodeConflict:
+	case CodeConflict, CodePreviewRequired, CodePreviewStale:
 		return http.StatusConflict
 	case CodeJournal, CodeInternal:
 		return http.StatusInternalServerError

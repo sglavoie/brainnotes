@@ -467,12 +467,15 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
 
 The overview search results can select notes for batch lifecycle work: move to
-Trash, move to a folder, set/list-edit frontmatter, or unset frontmatter. Note
-pages can move the current note to Trash, edit frontmatter in place, create a
-blank note for a broken wikilink target, and open the file in the configured
-editor for body edits. These web actions use the same note-management code as
-the CLI where practical, refresh the served vault state after success, and
-return structured JSON for automation.
+Trash, move to a folder, set/list-edit frontmatter, or unset frontmatter. Bulk
+actions now require an inline preview first: the server returns a one-use
+`preview_id`, counts, destination paths, frontmatter before/after values, move
+rewrite counts, and any failures, then the follow-up apply call must reuse that
+preview receipt before it expires. Note pages can move the current note to
+Trash, edit frontmatter in place, create a blank note for a broken wikilink
+target, and open the file in the configured editor for body edits. These web
+actions use the same note-management code as the CLI where practical, refresh
+the served vault state after success, and return structured JSON for automation.
 
 Trash is a visible vault-root `Trash/` folder. Trashing a note moves the file
 there, chooses a non-conflicting destination name, and leaves `Trash/` ignored by
@@ -514,9 +517,14 @@ resolved address host. `--no-open` forces browser launch off even when
 The default bind is localhost (`127.0.0.1:8729`). This is single-user local
 software; there is no auth layer. All side-effecting web routes use `POST`,
 require a per-process CSRF token (`X-BN-CSRF` header or `token` form field),
-validate note route keys, and reject paths outside the vault. File-changing web
-actions write undo journal entries with `bn web ...` command names; `POST
-/api/undo` restores the latest entry by default or a selected entry ID.
+validate note route keys, and reject paths outside the vault. Overview bulk
+automation must `POST /api/notes/bulk/preview` first, then send the returned
+one-use `preview_id` to `POST /api/notes/bulk`; missing, stale, mismatched, or
+reused previews are rejected with `409`. Preview receipts stay process-local,
+expire after five minutes, and never write journal entries by themselves.
+File-changing web actions write undo journal entries with `bn web ...` command
+names; `POST /api/undo` restores the latest entry by default or a selected
+entry ID.
 
 Editor opens from the note page use the same editor resolution as CLI open
 commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
@@ -934,7 +942,7 @@ bn lint
   `bn web frontmatter unset`, and broken-link stub creation.
 - Snapshot commands `backup` / `restore` are separate from the undo journal and
   do not create journal entries.
-- Read-only commands never journal.
+- Read-only commands, including `bn serve` bulk previews, never journal.
 - Any `--dry-run` invocation never writes journal entries.
 
 Recommended safety workflow:

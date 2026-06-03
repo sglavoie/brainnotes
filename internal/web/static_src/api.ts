@@ -87,6 +87,13 @@ export type BulkNotesRequest = {
   property?: string;
   op?: "=" | "+=" | "-=";
   value?: string;
+  previewID?: string;
+};
+
+export type BulkPreviewRequest = BulkNotesRequest;
+
+export type BulkApplyRequest = BulkNotesRequest & {
+  previewID: string;
 };
 
 export type UndoRequest = {
@@ -143,10 +150,74 @@ export type BulkFailure = {
   message?: string;
 };
 
+export type BulkManagementItem = {
+  key?: string;
+  path?: string;
+  rel_path?: string;
+  changed: boolean;
+};
+
 export type BulkManagementResult = ManagementResult & {
   changed?: number;
   unchanged?: number;
   failed?: number;
+  results?: BulkManagementItem[];
+  failures?: BulkFailure[];
+};
+
+export type BulkManagementPath = {
+  key: string;
+  path: string;
+  rel_path: string;
+};
+
+export type BulkAffectedPath = {
+  role: string;
+  key: string;
+  path: string;
+  rel_path: string;
+  exists: boolean;
+};
+
+export type BulkPreviewValue = {
+  present: boolean;
+  value?: unknown;
+};
+
+export type BulkFrontmatterChange = {
+  key: string;
+  before: BulkPreviewValue;
+  after: BulkPreviewValue;
+  changed: boolean;
+};
+
+export type BulkMovePreview = {
+  rewrite_count: number;
+  rewrite_file_count: number;
+  body_rewrite_count: number;
+  frontmatter_rewrite_count: number;
+};
+
+export type BulkPreviewRow = {
+  key: string;
+  path: string;
+  rel_path: string;
+  source: BulkManagementPath;
+  destination?: BulkManagementPath;
+  changed: boolean;
+  move?: BulkMovePreview;
+  frontmatter: BulkFrontmatterChange[];
+  affected: BulkAffectedPath[];
+};
+
+export type BulkPreviewManagementResult = ManagementResult & {
+  action?: BulkAction;
+  changed?: number;
+  unchanged?: number;
+  failed?: number;
+  preview_id?: string;
+  expires_at?: string;
+  results?: BulkPreviewRow[];
   failures?: BulkFailure[];
 };
 
@@ -188,6 +259,175 @@ const normalizeStringArray = (value: unknown): string[] =>
 const readCount = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const readBoolean = (value: unknown): boolean => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = normalizeParamValue(value).toLowerCase();
+  return normalized === "true" || normalized === "1";
+};
+
+const normalizeBulkAction = (value: unknown): BulkAction | undefined => {
+  switch (normalizeParamValue(value)) {
+    case "trash":
+    case "move":
+    case "frontmatter_set":
+    case "frontmatter_unset":
+      return normalizeParamValue(value) as BulkAction;
+    default:
+      return undefined;
+  }
+};
+
+const normalizeBulkManagementPath = (value: unknown): BulkManagementPath => {
+  const record = asRecord(value) || {};
+  return {
+    key: normalizeParamValue(record.key),
+    path: normalizeParamValue(record.path),
+    rel_path: normalizeParamValue(record.rel_path),
+  };
+};
+
+const normalizeBulkManagementItem = (value: unknown): BulkManagementItem | null => {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  return {
+    key: normalizeParamValue(record.key) || undefined,
+    path: normalizeParamValue(record.path) || undefined,
+    rel_path: normalizeParamValue(record.rel_path) || undefined,
+    changed: readBoolean(record.changed),
+  };
+};
+
+export const normalizeBulkFailures = (value: unknown): BulkFailure[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const key = normalizeParamValue(record.key);
+    const relPath = normalizeParamValue(record.rel_path);
+    const code = normalizeParamValue(record.code);
+    const message = normalizeParamValue(record.message);
+    if (key === "" && relPath === "" && code === "" && message === "") {
+      return [];
+    }
+    return [{
+      key: key || undefined,
+      rel_path: relPath || undefined,
+      code: code || undefined,
+      message: message || undefined,
+    }];
+  });
+};
+
+const normalizeBulkAffectedPaths = (value: unknown): BulkAffectedPath[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    return [{
+      role: normalizeParamValue(record.role),
+      key: normalizeParamValue(record.key),
+      path: normalizeParamValue(record.path),
+      rel_path: normalizeParamValue(record.rel_path),
+      exists: readBoolean(record.exists),
+    }];
+  });
+};
+
+export const normalizeBulkPreviewValue = (value: unknown): BulkPreviewValue => {
+  const record = asRecord(value);
+  if (!record) {
+    return { present: false };
+  }
+  if (!readBoolean(record.present)) {
+    return { present: false };
+  }
+  return {
+    present: true,
+    value: record.value,
+  };
+};
+
+export const normalizeBulkFrontmatterChanges = (value: unknown): BulkFrontmatterChange[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const key = normalizeParamValue(record.key);
+    if (key === "") {
+      return [];
+    }
+    return [{
+      key,
+      before: normalizeBulkPreviewValue(record.before),
+      after: normalizeBulkPreviewValue(record.after),
+      changed: readBoolean(record.changed),
+    }];
+  });
+};
+
+const normalizeBulkMovePreview = (value: unknown): BulkMovePreview | undefined => {
+  const record = asRecord(value);
+  if (!record) {
+    return undefined;
+  }
+  return {
+    rewrite_count: readCount(record.rewrite_count),
+    rewrite_file_count: readCount(record.rewrite_file_count),
+    body_rewrite_count: readCount(record.body_rewrite_count),
+    frontmatter_rewrite_count: readCount(record.frontmatter_rewrite_count),
+  };
+};
+
+export const normalizeExpiryString = (value: unknown): string => {
+  const raw = normalizeParamValue(value);
+  if (raw === "") {
+    return "";
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+};
+
+export const normalizeBulkPreviewRows = (value: unknown): BulkPreviewRow[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const source = normalizeBulkManagementPath(record.source);
+    const destinationRecord = asRecord(record.destination);
+    return [{
+      key: normalizeParamValue(record.key),
+      path: normalizeParamValue(record.path),
+      rel_path: normalizeParamValue(record.rel_path),
+      source,
+      destination: destinationRecord ? normalizeBulkManagementPath(destinationRecord) : undefined,
+      changed: readBoolean(record.changed),
+      move: normalizeBulkMovePreview(record.move),
+      frontmatter: normalizeBulkFrontmatterChanges(record.frontmatter),
+      affected: normalizeBulkAffectedPaths(record.affected),
+    }];
+  });
 };
 
 export const normalizeSearchResults = (payload: unknown): SearchResult[] => {
@@ -363,7 +603,7 @@ export const normalizeBulkNoteKeys = (keys: unknown[]): string[] => {
   return out;
 };
 
-export const buildBulkNotesForm = (request: BulkNotesRequest): URLSearchParams => {
+const buildBulkRequestForm = (request: BulkNotesRequest): URLSearchParams => {
   const body = new URLSearchParams();
   body.set("action", request.action);
   body.set("token", request.token);
@@ -382,8 +622,20 @@ export const buildBulkNotesForm = (request: BulkNotesRequest): URLSearchParams =
   if (request.value !== undefined) {
     body.set("value", request.value);
   }
+  if (request.previewID !== undefined && request.previewID.trim() !== "") {
+    body.set("preview_id", request.previewID.trim());
+  }
   return body;
 };
+
+export const buildBulkNotesForm = (request: BulkNotesRequest): URLSearchParams =>
+  buildBulkRequestForm(request);
+
+export const buildBulkPreviewForm = (request: BulkPreviewRequest): URLSearchParams =>
+  buildBulkRequestForm(request);
+
+export const buildBulkApplyForm = (request: BulkApplyRequest): URLSearchParams =>
+  buildBulkRequestForm(request);
 
 export const buildUndoForm = (request: UndoRequest): URLSearchParams => {
   const body = new URLSearchParams();
@@ -437,16 +689,67 @@ export const normalizeHistoryEntries = (payload: unknown): HistoryEntry[] => {
   });
 };
 
+const normalizeManagementResult = (payload: unknown): ManagementResult => {
+  const record = asRecord(payload) || {};
+  return readBoolean(record.ok)
+    ? {
+        ok: true,
+        message: normalizeParamValue(record.message) || undefined,
+        key: normalizeParamValue(record.key) || undefined,
+        path: normalizeParamValue(record.path) || undefined,
+        rel_path: normalizeParamValue(record.rel_path) || undefined,
+        journal_id: normalizeParamValue(record.journal_id) || undefined,
+      }
+    : {
+        ok: false,
+        code: normalizeParamValue(record.code) || undefined,
+        message: normalizeParamValue(record.message) || undefined,
+      };
+};
+
+export const normalizeBulkManagementResult = (payload: unknown): BulkManagementResult => {
+  const base = normalizeManagementResult(payload);
+  const record = asRecord(payload) || {};
+  return {
+    ...base,
+    changed: readCount(record.changed),
+    unchanged: readCount(record.unchanged),
+    failed: readCount(record.failed),
+    results: Array.isArray(record.results)
+      ? record.results.flatMap((item) => {
+          const normalized = normalizeBulkManagementItem(item);
+          return normalized ? [normalized] : [];
+        })
+      : [],
+    failures: normalizeBulkFailures(record.failures),
+  };
+};
+
+export const normalizeBulkPreviewManagementResult = (
+  payload: unknown
+): BulkPreviewManagementResult => {
+  const base = normalizeManagementResult(payload);
+  const record = asRecord(payload) || {};
+  return {
+    ...base,
+    action: normalizeBulkAction(record.action),
+    changed: readCount(record.changed),
+    unchanged: readCount(record.unchanged),
+    failed: readCount(record.failed),
+    preview_id: normalizeParamValue(record.preview_id) || undefined,
+    expires_at: normalizeExpiryString(record.expires_at) || undefined,
+    results: normalizeBulkPreviewRows(record.results),
+    failures: normalizeBulkFailures(record.failures),
+  };
+};
+
 export const normalizeManagementErrorMessage = (status: number, detail: unknown): string => {
-  const record = asRecord(detail);
-  if (record) {
-    const message = normalizeParamValue(record.message);
-    if (message) {
-      return message;
-    }
+  const result = normalizeManagementResult(detail);
+  if (!result.ok && result.message) {
+    return result.message;
   }
 
-  const message = normalizeParamValue(detail);
+  const message = asRecord(detail) ? "" : normalizeParamValue(detail);
   return message || `Request failed (${status}).`;
 };
 
