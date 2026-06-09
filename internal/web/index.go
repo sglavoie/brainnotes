@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 )
 
@@ -25,8 +26,34 @@ type indexPageData struct {
 	GraphPath         string
 	BrokenPath        string
 	FacetControls     facetControlsData
+	Review            indexReviewPanelData
 	Diagnostics       diagnosticsSummary
 	Recent            []indexRecentNote
+}
+
+type indexReviewPanelData struct {
+	Items       []indexReviewItem
+	Counts      reviewCounts
+	Warnings    []indexReviewWarning
+	HasItems    bool
+	HasWarnings bool
+}
+
+type indexReviewWarning struct {
+	Code    string
+	Message string
+}
+
+type indexReviewItem struct {
+	ID        string
+	Signature string
+	Kind      string
+	KindLabel string
+	Title     string
+	Summary   string
+	Detail    string
+	Count     int
+	Affected  []reviewAffectedNote
 }
 
 type indexRecentNote struct {
@@ -139,4 +166,62 @@ func buildIndexPageData(snapshot vaultSnapshot, root string) (indexPageData, err
 		FacetControls:     overviewFacetControlsData(),
 		Recent:            recentViews,
 	}, nil
+}
+
+func buildIndexReviewPanelData(data diagnosticsData, cfg *config.Config, root string, store *reviewStateStore) indexReviewPanelData {
+	queue := buildReviewQueueFromData(data, cfg, root)
+	warnings := []indexReviewWarning(nil)
+	if store != nil {
+		filtered, err := store.filterQueue(queue)
+		if err == nil {
+			queue = filtered
+		} else {
+			warnings = append(warnings, indexReviewWarning{
+				Code:    reviewStateWarningCode,
+				Message: "Review state could not be loaded; showing all generated review items.",
+			})
+		}
+	}
+
+	items := make([]indexReviewItem, 0, len(queue.Items))
+	for _, item := range queue.Items {
+		items = append(items, indexReviewItem{
+			ID:        item.ID,
+			Signature: item.Signature,
+			Kind:      string(item.Kind),
+			KindLabel: reviewKindLabel(item.Kind),
+			Title:     item.Title,
+			Summary:   item.Summary,
+			Detail:    item.Detail,
+			Count:     item.Count,
+			Affected:  item.Affected,
+		})
+	}
+
+	return indexReviewPanelData{
+		Items:       items,
+		Counts:      queue.Counts,
+		Warnings:    warnings,
+		HasItems:    len(items) > 0,
+		HasWarnings: len(warnings) > 0,
+	}
+}
+
+func reviewKindLabel(kind reviewItemKind) string {
+	switch kind {
+	case reviewKindFrontmatterError:
+		return "Frontmatter"
+	case reviewKindSchemaViolation:
+		return "Schema"
+	case reviewKindBrokenTarget:
+		return "Broken target"
+	case reviewKindDuplicateTitle:
+		return "Duplicate title"
+	case reviewKindOrphanNote:
+		return "Orphan"
+	case reviewKindDeadEndNote:
+		return "Dead end"
+	default:
+		return "Review"
+	}
 }

@@ -40,6 +40,7 @@ type Server struct {
 	templates    *template.Template
 	state        *vaultState
 	previewStore *bulkPreviewStore
+	reviewState  *reviewStateStore
 	markdown     *markdownRenderer
 	handler      http.Handler
 	openBrowser  func(url string) error
@@ -138,6 +139,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		templates:    tpl,
 		state:        state,
 		previewStore: newBulkPreviewStore(bulkPreviewTTL),
+		reviewState:  newReviewStateStore(v.Root),
 		markdown:     markdown,
 		openBrowser:  opts.OpenBrowser,
 		notifyListen: opts.NotifyListening,
@@ -172,6 +174,8 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/history", srv.handleHistory)
 	mux.HandleFunc("/api/undo", srv.handleUndo)
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
+	mux.HandleFunc("/api/review", srv.handleReviewQueue)
+	mux.HandleFunc("/api/review/item", srv.handleReviewItem)
 	mux.HandleFunc("/graph", srv.handleGraph)
 	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
@@ -207,6 +211,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.CSRFToken = s.csrfToken
+	data.Review = buildIndexReviewPanelData(diagnosticsData, s.cfg, s.vault.Root, s.reviewStore())
 	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
 	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)

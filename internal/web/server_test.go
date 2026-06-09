@@ -324,6 +324,79 @@ func TestServer_IndexIncludesOverviewSearchResultsPanel(t *testing.T) {
 	}
 }
 
+func TestServer_IndexIncludesDailyReviewCockpit(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Source]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	required := []string{
+		`data-review-panel`,
+		`data-review-endpoint="/api/review"`,
+		`data-review-item-endpoint="/api/review/item"`,
+		`data-review-csrf="csrf-token"`,
+		`aria-labelledby="review-heading"`,
+		`aria-describedby="review-status"`,
+		`aria-busy="false"`,
+		`id="review-heading"`,
+		`Daily review`,
+		`data-review-status`,
+		`data-review-loading`,
+		`Loading review queue...`,
+		`data-review-error`,
+		`data-review-empty`,
+		`data-review-warnings`,
+		`data-review-count-active`,
+		`data-review-count-done-hidden`,
+		`data-review-count-snoozed-hidden`,
+		`data-review-count-total-generated`,
+		`data-review-list`,
+		`data-review-item`,
+		`data-review-id="review_`,
+		`data-review-kind="broken_target"`,
+		`data-review-signature="`,
+		`Broken target: missing`,
+		`1 unresolved link to missing`,
+		`data-review-action="done"`,
+		`data-review-action="snooze"`,
+		`data-review-snooze="tomorrow"`,
+		`data-review-snooze="week"`,
+	}
+	for _, want := range required {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in daily review cockpit, got %q", want, body)
+		}
+	}
+
+	reviewIdx := strings.Index(body, `data-review-panel`)
+	overviewIdx := strings.Index(body, `data-overview-search-results`)
+	historyIdx := strings.Index(body, `data-history-panel`)
+	metricsIdx := strings.Index(body, `aria-label="Vault statistics"`)
+	diagnosticsIdx := strings.Index(body, `id="diagnostics-heading"`)
+	if reviewIdx < 0 || overviewIdx < 0 || historyIdx < 0 || metricsIdx < 0 || diagnosticsIdx < 0 {
+		t.Fatalf("expected review, overview, history, metrics, and diagnostics sections; got %q", body)
+	}
+	if !(reviewIdx < overviewIdx && overviewIdx < historyIdx && historyIdx < metricsIdx && metricsIdx < diagnosticsIdx) {
+		t.Fatalf(
+			"unexpected home section order: review=%d overview=%d history=%d metrics=%d diagnostics=%d",
+			reviewIdx,
+			overviewIdx,
+			historyIdx,
+			metricsIdx,
+			diagnosticsIdx,
+		)
+	}
+}
+
 func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
 	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Work/Source.md":    []byte("---\ntitle: Source <script>\nstatus: invalid\n---\n[[Missing <target>]]\n"),
@@ -698,6 +771,37 @@ func postUndoRequest(t *testing.T, baseURL, entryID, headerToken, formToken stri
 	return resp
 }
 
+func postReviewItemRequest(t *testing.T, baseURL, id, action, snooze, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if id != "" {
+		form.Set("id", id)
+	}
+	if action != "" {
+		form.Set("action", action)
+	}
+	if snooze != "" {
+		form.Set("snooze", snooze)
+	}
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/review/item", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if headerToken != "" {
+		req.Header.Set(csrfHeaderName, headerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/review/item: %v", err)
+	}
+	return resp
+}
+
 type managementResultPayload struct {
 	OK        bool   `json:"ok"`
 	Message   string `json:"message"`
@@ -709,6 +813,19 @@ type managementResultPayload struct {
 
 type managementErrorPayload struct {
 	OK      bool   `json:"ok"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type reviewPayload struct {
+	OK       bool                   `json:"ok"`
+	Message  string                 `json:"message"`
+	Items    []reviewItem           `json:"items"`
+	Counts   reviewCounts           `json:"counts"`
+	Warnings []reviewWarningPayload `json:"warnings"`
+}
+
+type reviewWarningPayload struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
@@ -856,6 +973,47 @@ func decodeManagementError(t *testing.T, body string) managementErrorPayload {
 		t.Fatalf("decode management error: %v; body=%q", err, body)
 	}
 	return payload
+}
+
+func decodeReviewResult(t *testing.T, body string) reviewPayload {
+	t.Helper()
+	var payload reviewPayload
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode review result: %v; body=%q", err, body)
+	}
+	return payload
+}
+
+func getReviewPayload(t *testing.T, baseURL string) reviewPayload {
+	t.Helper()
+
+	resp, err := http.Get(baseURL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("review status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	return decodeReviewResult(t, body)
+}
+
+func reviewQueueHasKind(queue reviewQueue, kind reviewItemKind) bool {
+	for _, item := range queue.Items {
+		if item.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func reviewQueueHasKindDetail(queue reviewQueue, kind reviewItemKind, detail string) bool {
+	for _, item := range queue.Items {
+		if item.Kind == kind && item.Detail == detail {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeBulkManagementResult(t *testing.T, body string) bulkManagementPayload {
@@ -1510,6 +1668,455 @@ func TestServer_OpenAPI_MissingEditorConfigured(t *testing.T) {
 	readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusPreconditionFailed {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusPreconditionFailed)
+	}
+}
+
+func TestServer_ReviewAPI_GetReturnsQueueAndCounts(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	resp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(contentType, "application/json") {
+		t.Fatalf("content-type = %q, want json", contentType)
+	}
+	payload := decodeReviewResult(t, body)
+	if !payload.OK {
+		t.Fatalf("payload ok = false: %#v", payload)
+	}
+	if payload.Counts.Active != len(payload.Items) || payload.Counts.TotalGenerated < payload.Counts.Active {
+		t.Fatalf("counts = %#v, items=%d", payload.Counts, len(payload.Items))
+	}
+	if len(payload.Warnings) != 0 {
+		t.Fatalf("warnings = %#v, want none", payload.Warnings)
+	}
+	broken := findReviewItem(t, reviewQueue{Items: payload.Items}, reviewKindBrokenTarget, "missing")
+	if broken.ID == "" || broken.Signature == "" {
+		t.Fatalf("broken review item missing identity: %#v", broken)
+	}
+}
+
+func TestServer_ReviewAPI_PostDoneSnoozeAndClearUpdatesCounts(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	initialResp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	initialBody := readResponseBody(t, initialResp)
+	initial := decodeReviewResult(t, initialBody)
+	item := findReviewItem(t, reviewQueue{Items: initial.Items}, reviewKindBrokenTarget, "missing")
+
+	doneResp := postReviewItemRequest(t, ts.URL, item.ID, "done", "", "csrf-token", "")
+	doneBody := readResponseBody(t, doneResp)
+	if doneResp.StatusCode != http.StatusOK {
+		t.Fatalf("done status: got %d, want %d; body=%q", doneResp.StatusCode, http.StatusOK, doneBody)
+	}
+	done := decodeReviewResult(t, doneBody)
+	if _, ok := reviewItemByID(reviewQueue{Items: done.Items}, item.ID); ok {
+		t.Fatalf("done item remained active: %#v", done)
+	}
+	if done.Counts.DoneHidden != 1 || done.Counts.SnoozedHidden != 0 || done.Counts.TotalGenerated != initial.Counts.TotalGenerated {
+		t.Fatalf("done counts = %#v, initial=%#v", done.Counts, initial.Counts)
+	}
+
+	clearResp := postReviewItemRequest(t, ts.URL, item.ID, "clear", "", "csrf-token", "")
+	clearBody := readResponseBody(t, clearResp)
+	if clearResp.StatusCode != http.StatusOK {
+		t.Fatalf("clear status: got %d, want %d; body=%q", clearResp.StatusCode, http.StatusOK, clearBody)
+	}
+	cleared := decodeReviewResult(t, clearBody)
+	if _, ok := reviewItemByID(reviewQueue{Items: cleared.Items}, item.ID); !ok {
+		t.Fatalf("cleared item did not return: %#v", cleared)
+	}
+	if cleared.Counts.DoneHidden != 0 || cleared.Counts.SnoozedHidden != 0 {
+		t.Fatalf("cleared counts = %#v, want no hidden items", cleared.Counts)
+	}
+
+	snoozeResp := postReviewItemRequest(t, ts.URL, item.ID, "snooze", "week", "csrf-token", "")
+	snoozeBody := readResponseBody(t, snoozeResp)
+	if snoozeResp.StatusCode != http.StatusOK {
+		t.Fatalf("snooze status: got %d, want %d; body=%q", snoozeResp.StatusCode, http.StatusOK, snoozeBody)
+	}
+	snoozed := decodeReviewResult(t, snoozeBody)
+	if _, ok := reviewItemByID(reviewQueue{Items: snoozed.Items}, item.ID); ok {
+		t.Fatalf("snoozed item remained active: %#v", snoozed)
+	}
+	if snoozed.Counts.SnoozedHidden != 1 || snoozed.Counts.DoneHidden != 0 {
+		t.Fatalf("snoozed counts = %#v, want one snoozed-hidden item", snoozed.Counts)
+	}
+}
+
+func TestServer_ReviewAPI_CSRFRequired(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	initialResp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	initial := decodeReviewResult(t, readResponseBody(t, initialResp))
+	item := findReviewItem(t, reviewQueue{Items: initial.Items}, reviewKindBrokenTarget, "missing")
+
+	resp := postReviewItemRequest(t, ts.URL, item.ID, "done", "", "", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusForbidden, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "forbidden" {
+		t.Fatalf("payload = %#v, want forbidden error", payload)
+	}
+
+	afterResp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review after forbidden POST: %v", err)
+	}
+	after := decodeReviewResult(t, readResponseBody(t, afterResp))
+	if _, ok := reviewItemByID(reviewQueue{Items: after.Items}, item.ID); !ok || after.Counts.DoneHidden != 0 {
+		t.Fatalf("review state changed without csrf: %#v", after)
+	}
+}
+
+func TestServer_ReviewAPI_InvalidActionsAndSnooze(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	initialResp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	initial := decodeReviewResult(t, readResponseBody(t, initialResp))
+	item := findReviewItem(t, reviewQueue{Items: initial.Items}, reviewKindBrokenTarget, "missing")
+
+	for _, tc := range []struct {
+		name   string
+		action string
+		snooze string
+	}{
+		{name: "bad action", action: "archive"},
+		{name: "bad snooze", action: "snooze", snooze: "month"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := postReviewItemRequest(t, ts.URL, item.ID, tc.action, tc.snooze, "csrf-token", "")
+			body := readResponseBody(t, resp)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusBadRequest, body)
+			}
+			payload := decodeManagementError(t, body)
+			if payload.OK || payload.Code != "invalid_request" {
+				t.Fatalf("payload = %#v, want invalid_request", payload)
+			}
+		})
+	}
+}
+
+func TestServer_ReviewAPI_UnknownAndStaleIDs(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	resp := postReviewItemRequest(t, ts.URL, "review_missing", "done", "", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown status: got %d, want %d; body=%q", resp.StatusCode, http.StatusNotFound, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "not_found" || !strings.Contains(payload.Message, "not found or stale") {
+		t.Fatalf("unknown payload = %#v, want not_found stale message", payload)
+	}
+
+	initialResp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	initial := decodeReviewResult(t, readResponseBody(t, initialResp))
+	item := findReviewItem(t, reviewQueue{Items: initial.Items}, reviewKindBrokenTarget, "missing")
+	writeTestFile(t, root, "Source.md", "---\ntitle: Source\n---\nChanged body with the same issue: [[Missing]]\n")
+
+	staleResp := postReviewItemRequest(t, ts.URL, item.ID, "done", "", "csrf-token", "")
+	staleBody := readResponseBody(t, staleResp)
+	if staleResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("stale status: got %d, want %d; body=%q", staleResp.StatusCode, http.StatusNotFound, staleBody)
+	}
+	stalePayload := decodeManagementError(t, staleBody)
+	if stalePayload.OK || stalePayload.Code != "not_found" || !strings.Contains(stalePayload.Message, "not found or stale") {
+		t.Fatalf("stale payload = %#v, want not_found stale message", stalePayload)
+	}
+}
+
+func TestServer_ReviewAPI_GetStateWarningIsNonFatal(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	statePath := filepath.Join(root, filepath.FromSlash(reviewStateRelPath))
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte("{ not json"), 0o644); err != nil {
+		t.Fatalf("write corrupt review state: %v", err)
+	}
+
+	resp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeReviewResult(t, body)
+	if !payload.OK || len(payload.Items) == 0 {
+		t.Fatalf("payload = %#v, want raw active queue despite warning", payload)
+	}
+	if len(payload.Warnings) != 1 || payload.Warnings[0].Code != reviewStateWarningCode {
+		t.Fatalf("warnings = %#v, want review state warning", payload.Warnings)
+	}
+	findReviewItem(t, reviewQueue{Items: payload.Items}, reviewKindBrokenTarget, "missing")
+}
+
+func TestServer_ReviewAPI_StateWriteFailure(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	initialResp, err := http.Get(ts.URL + "/api/review") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/review: %v", err)
+	}
+	initial := decodeReviewResult(t, readResponseBody(t, initialResp))
+	item := findReviewItem(t, reviewQueue{Items: initial.Items}, reviewKindBrokenTarget, "missing")
+
+	statePath := filepath.Join(root, filepath.FromSlash(reviewStateRelPath))
+	stateDir := filepath.Dir(statePath)
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	if err := os.WriteFile(statePath, []byte(`{"version":1,"items":{}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write review state: %v", err)
+	}
+	if err := os.Chmod(stateDir, 0o555); err != nil {
+		t.Fatalf("chmod state dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(stateDir, 0o755)
+	})
+
+	resp := postReviewItemRequest(t, ts.URL, item.ID, "done", "", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusInternalServerError, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "internal_error" {
+		t.Fatalf("payload = %#v, want internal_error", payload)
+	}
+}
+
+func TestServer_ReviewAPI_RecomputesAfterCreateAndUndoPrunesResolvedDoneState(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Notes/Source.md": []byte("---\ntitle: Source\n---\nSee [[Missing]].\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	initial := getReviewPayload(t, ts.URL)
+	broken := findReviewItem(t, reviewQueue{Items: initial.Items}, reviewKindBrokenTarget, "missing")
+
+	doneResp := postReviewItemRequest(t, ts.URL, broken.ID, "done", "", "csrf-token", "")
+	doneBody := readResponseBody(t, doneResp)
+	if doneResp.StatusCode != http.StatusOK {
+		t.Fatalf("done status: got %d, want %d; body=%q", doneResp.StatusCode, http.StatusOK, doneBody)
+	}
+	done := decodeReviewResult(t, doneBody)
+	if _, ok := reviewItemByID(reviewQueue{Items: done.Items}, broken.ID); ok || done.Counts.DoneHidden != 1 {
+		t.Fatalf("done queue = %#v, want hidden broken target", done)
+	}
+
+	createResp := postCreateRequest(t, ts.URL, "notes/source", "Missing", "csrf-token", "")
+	createBody := readResponseBody(t, createResp)
+	if createResp.StatusCode != http.StatusOK {
+		t.Fatalf("create status: got %d, want %d; body=%q", createResp.StatusCode, http.StatusOK, createBody)
+	}
+
+	afterCreate := getReviewPayload(t, ts.URL)
+	if reviewQueueHasKindDetail(reviewQueue{Items: afterCreate.Items}, reviewKindBrokenTarget, "missing") {
+		t.Fatalf("resolved broken target remained active after create: %#v", afterCreate)
+	}
+	if afterCreate.Counts.DoneHidden != 0 {
+		t.Fatalf("resolved done item was not pruned after create: %#v", afterCreate.Counts)
+	}
+
+	undoResp := postUndoRequest(t, ts.URL, "", "csrf-token", "", false, false)
+	undoBody := readResponseBody(t, undoResp)
+	if undoResp.StatusCode != http.StatusOK {
+		t.Fatalf("undo status: got %d, want %d; body=%q", undoResp.StatusCode, http.StatusOK, undoBody)
+	}
+	undoPayload := decodeUndoResult(t, undoBody)
+	if !undoPayload.OK || !strings.Contains(undoPayload.Message, "Undo restored") {
+		t.Fatalf("undo payload = %#v, want restore success", undoPayload)
+	}
+
+	afterUndo := getReviewPayload(t, ts.URL)
+	restored := findReviewItem(t, reviewQueue{Items: afterUndo.Items}, reviewKindBrokenTarget, "missing")
+	if restored.ID != broken.ID {
+		t.Fatalf("restored item id = %q, want original %q", restored.ID, broken.ID)
+	}
+	if afterUndo.Counts.DoneHidden != 0 {
+		t.Fatalf("undo-restored issue should be active after resolved state prune: %#v", afterUndo.Counts)
+	}
+}
+
+func TestServer_ReviewAPI_RecomputesAfterTrashMoveAndFrontmatterMutations(t *testing.T) {
+	t.Run("trash creates active broken target", func(t *testing.T) {
+		ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+			"Source.md": []byte("---\ntitle: Source\n---\nSee [[Target]].\n"),
+			"Target.md": []byte("---\ntitle: Target\n---\nBack [[Source]].\n"),
+		}, func(cfg *config.Config) {
+			cfg.Ignore = config.DefaultIgnore
+		}, Options{CSRFToken: "csrf-token"})
+
+		initial := getReviewPayload(t, ts.URL)
+		if reviewQueueHasKindDetail(reviewQueue{Items: initial.Items}, reviewKindBrokenTarget, "target") {
+			t.Fatalf("target should resolve before trash: %#v", initial.Items)
+		}
+
+		trashResp := postTrashRequest(t, ts.URL, "target", "csrf-token", "")
+		trashBody := readResponseBody(t, trashResp)
+		if trashResp.StatusCode != http.StatusOK {
+			t.Fatalf("trash status: got %d, want %d; body=%q", trashResp.StatusCode, http.StatusOK, trashBody)
+		}
+
+		afterTrash := getReviewPayload(t, ts.URL)
+		broken := findReviewItem(t, reviewQueue{Items: afterTrash.Items}, reviewKindBrokenTarget, "target")
+		if broken.Count != 1 || len(broken.Affected) != 1 || broken.Affected[0].RelPath != "Source.md" {
+			t.Fatalf("broken target after trash = %#v, want Source.md affected", broken)
+		}
+	})
+
+	t.Run("move rotates duplicate-title identity out of hidden state", func(t *testing.T) {
+		ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+			"A/Twin.md": []byte("---\ntitle: Twin\n---\nA body.\n"),
+			"B/Twin.md": []byte("---\ntitle: Twin\n---\nB body.\n"),
+		}, nil, Options{CSRFToken: "csrf-token"})
+
+		initial := getReviewPayload(t, ts.URL)
+		duplicate := findReviewItem(t, reviewQueue{Items: initial.Items}, reviewKindDuplicateTitle, "twin")
+		doneResp := postReviewItemRequest(t, ts.URL, duplicate.ID, "done", "", "csrf-token", "")
+		doneBody := readResponseBody(t, doneResp)
+		if doneResp.StatusCode != http.StatusOK {
+			t.Fatalf("done status: got %d, want %d; body=%q", doneResp.StatusCode, http.StatusOK, doneBody)
+		}
+
+		moveResp := postMoveRequest(t, ts.URL, "a/twin", "C", "csrf-token", "")
+		moveBody := readResponseBody(t, moveResp)
+		if moveResp.StatusCode != http.StatusOK {
+			t.Fatalf("move status: got %d, want %d; body=%q", moveResp.StatusCode, http.StatusOK, moveBody)
+		}
+
+		afterMove := getReviewPayload(t, ts.URL)
+		movedDuplicate := findReviewItem(t, reviewQueue{Items: afterMove.Items}, reviewKindDuplicateTitle, "twin")
+		if movedDuplicate.ID == duplicate.ID {
+			t.Fatalf("duplicate review id did not rotate after move: before=%#v after=%#v", duplicate, movedDuplicate)
+		}
+		if rels := reviewAffectedRelPaths(movedDuplicate.Affected); !sameStrings(rels, []string{"B/Twin.md", "C/Twin.md"}) {
+			t.Fatalf("duplicate affected rels after move = %#v, want B/Twin.md and C/Twin.md", rels)
+		}
+		if afterMove.Counts.DoneHidden != 0 {
+			t.Fatalf("moved duplicate should not remain hidden by stale done state: %#v", afterMove.Counts)
+		}
+	})
+
+	t.Run("frontmatter set resolves hidden schema violation", func(t *testing.T) {
+		ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+			"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody.\n"),
+		}, func(cfg *config.Config) {
+			cfg.Frontmatter.Schema = map[string]config.PropertySchema{
+				"status": {Type: "string", Allowed: []string{"done"}},
+			}
+		}, Options{CSRFToken: "csrf-token"})
+
+		initial := getReviewPayload(t, ts.URL)
+		violation := findFirstReviewItemByKind(t, reviewQueue{Items: initial.Items}, reviewKindSchemaViolation)
+		doneResp := postReviewItemRequest(t, ts.URL, violation.ID, "done", "", "csrf-token", "")
+		doneBody := readResponseBody(t, doneResp)
+		if doneResp.StatusCode != http.StatusOK {
+			t.Fatalf("done status: got %d, want %d; body=%q", doneResp.StatusCode, http.StatusOK, doneBody)
+		}
+
+		setResp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "csrf-token", "")
+		setBody := readResponseBody(t, setResp)
+		if setResp.StatusCode != http.StatusOK {
+			t.Fatalf("frontmatter set status: got %d, want %d; body=%q", setResp.StatusCode, http.StatusOK, setBody)
+		}
+
+		afterSet := getReviewPayload(t, ts.URL)
+		if reviewQueueHasKind(reviewQueue{Items: afterSet.Items}, reviewKindSchemaViolation) {
+			t.Fatalf("schema violation remained after valid frontmatter set: %#v", afterSet.Items)
+		}
+		if afterSet.Counts.DoneHidden != 0 {
+			t.Fatalf("resolved schema violation should be pruned from hidden state: %#v", afterSet.Counts)
+		}
+	})
+}
+
+func TestServer_ReviewAPI_FrontmatterParseErrorKeepsEditorNavigation(t *testing.T) {
+	var openedPath string
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Broken/Bad.md": []byte("---\n: bad\n---\nBody\n"),
+		"Good.md":       []byte("---\ntitle: Good\n---\n[[Missing]]\n"),
+	}, func(cfg *config.Config) {
+		cfg.Open.Editor = "echo"
+	}, Options{
+		CSRFToken: "csrf-token",
+		StartEditor: func(bin string, argv []string) error {
+			if len(argv) > 0 {
+				openedPath = argv[len(argv)-1]
+			}
+			return nil
+		},
+	})
+
+	payload := getReviewPayload(t, ts.URL)
+	frontmatter := findFirstReviewItemByKind(t, reviewQueue{Items: payload.Items}, reviewKindFrontmatterError)
+	if frontmatter.Detail == "" || frontmatter.Count != 1 || len(frontmatter.Affected) != 1 {
+		t.Fatalf("frontmatter parse item = %#v, want one detailed affected file", frontmatter)
+	}
+	affected := frontmatter.Affected[0]
+	if affected.Title != "Bad" ||
+		affected.RelPath != "Broken/Bad.md" ||
+		affected.Path != "/n/Broken/Bad" ||
+		affected.Folder != "Broken" ||
+		affected.FolderPath != "/?folder=Broken" ||
+		affected.Location != "frontmatter" {
+		t.Fatalf("frontmatter navigation metadata = %#v", affected)
+	}
+
+	key, err := noteKeyFromPath(affected.Path)
+	if err != nil {
+		t.Fatalf("noteKeyFromPath(%q): %v", affected.Path, err)
+	}
+	openResp := postOpenRequest(t, ts.URL, key, "csrf-token", "")
+	openBody := readResponseBody(t, openResp)
+	if openResp.StatusCode != http.StatusNoContent {
+		t.Fatalf("open status: got %d, want %d; body=%q", openResp.StatusCode, http.StatusNoContent, openBody)
+	}
+	wantPath, err := filepath.EvalSymlinks(filepath.Join(root, "Broken", "Bad.md"))
+	if err != nil {
+		t.Fatalf("resolve expected opened path: %v", err)
+	}
+	if openedPath != wantPath {
+		t.Fatalf("opened path = %q, want parse-error note path", openedPath)
 	}
 }
 

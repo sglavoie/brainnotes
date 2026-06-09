@@ -16,6 +16,98 @@
       </div>
       {{template "headerSearch" .}}
     </header>
+
+    <section
+      class="panel review-panel"
+      data-review-panel
+      data-review-endpoint="/api/review"
+      data-review-item-endpoint="/api/review/item"
+      data-review-csrf="{{.CSRFToken}}"
+      aria-labelledby="review-heading"
+      aria-describedby="review-status"
+      aria-busy="false"
+    >
+      <div class="panel-header review-header">
+        <div class="review-heading-copy">
+          <h2 id="review-heading">Daily review</h2>
+          <p class="review-summary">Active vault health items ready for triage.</p>
+        </div>
+        <dl class="review-counts" aria-label="Daily review counts">
+          <div class="review-count">
+            <dt>Active</dt>
+            <dd data-review-count-active>{{.Review.Counts.Active}}</dd>
+          </div>
+          <div class="review-count">
+            <dt>Done</dt>
+            <dd data-review-count-done-hidden>{{.Review.Counts.DoneHidden}}</dd>
+          </div>
+          <div class="review-count">
+            <dt>Snoozed</dt>
+            <dd data-review-count-snoozed-hidden>{{.Review.Counts.SnoozedHidden}}</dd>
+          </div>
+          <div class="review-count">
+            <dt>Total</dt>
+            <dd data-review-count-total-generated>{{.Review.Counts.TotalGenerated}}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <p
+        id="review-status"
+        class="review-status"
+        data-review-status
+        role="status"
+        aria-live="polite"
+      >{{if .Review.HasItems}}{{.Review.Counts.Active}} active review {{if eq .Review.Counts.Active 1}}item{{else}}items{{end}}.{{else}}No active review items.{{end}}</p>
+      <p class="review-status is-loading" data-review-loading role="status" aria-live="polite" hidden>Loading review queue...</p>
+      <p class="review-error" data-review-error role="alert" hidden></p>
+      <p class="review-empty" data-review-empty {{if .Review.HasItems}}hidden{{end}}>No active review items.</p>
+      {{if .Review.HasWarnings}}
+        <ul class="review-warnings" data-review-warnings>
+          {{range .Review.Warnings}}
+            <li data-review-warning data-review-warning-code="{{.Code}}">{{.Message}}</li>
+          {{end}}
+        </ul>
+      {{else}}
+        <ul class="review-warnings" data-review-warnings hidden></ul>
+      {{end}}
+
+      <ul class="review-list" data-review-list {{if not .Review.HasItems}}hidden{{end}}>
+        {{range .Review.Items}}
+          <li
+            class="review-item"
+            data-review-item
+            data-review-id="{{.ID}}"
+            data-review-kind="{{.Kind}}"
+            data-review-signature="{{.Signature}}"
+          >
+            <div class="review-item-main">
+              <p class="review-item-kind">{{.KindLabel}}</p>
+              <h3 class="review-item-title">{{.Title}}</h3>
+              <p class="review-item-summary">{{.Summary}}</p>
+              {{if .Detail}}<p class="review-item-detail">{{.Detail}}</p>{{end}}
+              {{if .Affected}}
+                <ul class="review-affected-list" aria-label="Affected notes">
+                  {{range .Affected}}
+                    <li class="review-affected-note">
+                      {{if .Path}}<a href="{{.Path}}">{{if .Title}}{{.Title}}{{else}}{{.RelPath}}{{end}}</a>{{else}}<span>{{if .Title}}{{.Title}}{{else}}{{.RelPath}}{{end}}</span>{{end}}
+                      {{if .Folder}}<a class="diagnostic-folder" href="{{.FolderPath}}">{{.Folder}}</a>{{end}}
+                      {{if .Location}}<span class="diagnostic-location">{{.Location}}</span>{{end}}
+                    </li>
+                  {{end}}
+                </ul>
+              {{end}}
+            </div>
+            <div class="review-item-actions" data-review-item-actions>
+              <button class="review-action" type="button" data-review-action="done" data-review-action-id="{{.ID}}">Done</button>
+              <button class="review-action" type="button" data-review-action="snooze" data-review-snooze="tomorrow" data-review-action-id="{{.ID}}">Tomorrow</button>
+              <button class="review-action" type="button" data-review-action="snooze" data-review-snooze="week" data-review-action-id="{{.ID}}">Next week</button>
+            </div>
+          </li>
+        {{end}}
+      </ul>
+    </section>
+
     {{template "facetControls" .FacetControls}}
 
     <section

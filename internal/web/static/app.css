@@ -255,6 +255,8 @@ a:focus-visible,
 .overview-bulk-button:focus-visible,
 .overview-bulk-form input:focus-visible,
 .overview-bulk-form select:focus-visible,
+.review-action:focus-visible,
+.review-item-details summary:focus-visible,
 .history-button:focus-visible,
 .filter-form input:focus-visible,
 .filter-form button:focus-visible,
@@ -1014,6 +1016,289 @@ code {
   font-size: 1.65rem;
   font-weight: 700;
   color: #eaf0ff;
+}
+
+.review-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.review-panel[aria-busy="true"] {
+  border-color: #3a4b68;
+}
+
+.review-header {
+  align-items: start;
+}
+
+.review-heading-copy {
+  min-width: 0;
+}
+
+.review-summary {
+  margin: 0.15rem 0 0;
+  color: #9aa5bd;
+  font-size: 0.9rem;
+}
+
+.review-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(4.6rem, 1fr));
+  gap: 0.45rem;
+  min-width: min(26rem, 100%);
+  margin: 0;
+}
+
+.review-count {
+  min-width: 0;
+  border: 1px solid #243044;
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  background: #0d1420;
+}
+
+.review-count dt {
+  color: #9aa5bd;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.review-count dd {
+  margin: 0.08rem 0 0;
+  color: #eaf0ff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.review-status {
+  min-height: 1.2rem;
+  margin: 0;
+  color: #9aa5bd;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.review-status.is-loading {
+  color: #9aa5bd;
+}
+
+.review-status.is-empty {
+  color: #c8d1e3;
+}
+
+.review-status.is-error,
+.review-error {
+  color: #ff9b9b;
+}
+
+.review-status.is-success {
+  color: #7fd57f;
+}
+
+.review-error,
+.review-empty {
+  margin: 0;
+  border: 1px solid #2a3242;
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.65rem;
+  background: #0d1420;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.review-error {
+  border-color: #5a2f3a;
+  background: #21161b;
+}
+
+.review-empty {
+  color: #c8d1e3;
+}
+
+.review-warnings {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-warnings[hidden],
+.review-list[hidden] {
+  display: none;
+}
+
+.review-warnings li {
+  border: 1px solid #654c2d;
+  border-radius: 0.4rem;
+  padding: 0.48rem 0.6rem;
+  color: #ffdca3;
+  background: #211b12;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.review-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  min-width: 0;
+  border: 1px solid #243044;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: #0d1420;
+}
+
+.review-panel[aria-busy="true"] .review-item {
+  border-color: #33445f;
+}
+
+.review-item-main {
+  min-width: 0;
+}
+
+.review-item-kind {
+  display: inline-flex;
+  max-width: 100%;
+  margin: 0 0 0.25rem;
+  border: 1px solid #32425e;
+  border-radius: 0.35rem;
+  padding: 0.08rem 0.42rem;
+  color: #dbe6f8;
+  background: #17243a;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.review-item-title {
+  margin: 0;
+  color: #eaf0ff;
+  font-size: 1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.review-item-summary,
+.review-item-detail {
+  margin: 0.35rem 0 0;
+  color: #c8d1e3;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.review-item-detail {
+  color: #b8c4d9;
+}
+
+.review-item-details {
+  margin-top: 0.45rem;
+}
+
+.review-item-details summary {
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 0.3rem;
+  color: #9bc7ff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.review-affected-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-affected-note {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  color: #c8d1e3;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.review-affected-note > a,
+.review-affected-note > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-item-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(7.2rem, 1fr));
+  gap: 0.45rem;
+  align-self: start;
+  justify-self: end;
+}
+
+.review-action {
+  min-height: 2.15rem;
+  min-width: 0;
+  border: 1px solid #2a3242;
+  border-radius: 0.35rem;
+  padding: 0.34rem 0.55rem;
+  color: #e5e9f0;
+  background: #141a25;
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.review-action:hover {
+  background: #1a2334;
+}
+
+.review-action[data-review-action="done"] {
+  border-color: #31553d;
+  color: #c8f5d0;
+  background: #142118;
+}
+
+.review-action[data-review-action="done"]:hover {
+  background: #1a2c20;
+}
+
+.review-action[data-review-action="snooze"] {
+  border-color: #5f4b27;
+  color: #ffe1a8;
+  background: #211b12;
+}
+
+.review-action[data-review-action="snooze"]:hover {
+  background: #2b2317;
+}
+
+.review-open-editor {
+  min-height: 1.8rem;
+  padding: 0.22rem 0.45rem;
+  font-size: 0.78rem;
+}
+
+.review-action:disabled {
+  opacity: 0.72;
+  cursor: wait;
 }
 
 .diagnostics-panel {
@@ -2051,6 +2336,27 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .review-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-counts {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .review-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-item-actions {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-self: stretch;
+  }
+
   .diagnostic-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2077,6 +2383,40 @@ code {
 
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .review-panel {
+    padding: 0.75rem;
+  }
+
+  .review-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-count {
+    padding: 0.42rem 0.5rem;
+  }
+
+  .review-item {
+    padding: 0.65rem;
+  }
+
+  .review-item-actions {
+    gap: 0.35rem;
+  }
+
+  .review-action {
+    min-height: 2.55rem;
+    padding: 0.32rem 0.38rem;
+    font-size: 0.78rem;
+  }
+
+  .review-affected-note {
+    align-items: stretch;
+  }
+
+  .review-open-editor {
+    flex: 1 1 9rem;
   }
 
   .diagnostic-card-grid {

@@ -54,6 +54,59 @@ export type OpenNoteRequest = {
   token: string;
 };
 
+export type ReviewItemAction = "done" | "snooze" | "clear";
+
+export type ReviewSnooze = "tomorrow" | "week";
+
+export type ReviewItemMutationRequest = {
+  id: string;
+  action: ReviewItemAction;
+  token: string;
+  snooze?: ReviewSnooze;
+};
+
+export type ReviewAffectedNote = {
+  title: string;
+  rel_path: string;
+  path?: string;
+  folder?: string;
+  folder_path?: string;
+  location?: string;
+};
+
+export type ReviewItem = {
+  id: string;
+  signature: string;
+  kind: string;
+  priority: number;
+  title: string;
+  summary: string;
+  detail: string;
+  count: number;
+  affected: ReviewAffectedNote[];
+};
+
+export type ReviewCounts = {
+  active: number;
+  done_hidden: number;
+  snoozed_hidden: number;
+  total_generated: number;
+};
+
+export type ReviewAPIWarning = {
+  code: string;
+  message: string;
+};
+
+export type ReviewAPIResult = {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  items: ReviewItem[];
+  counts: ReviewCounts;
+  warnings: ReviewAPIWarning[];
+};
+
 export type NoteKeyMutationRequest = {
   key: string;
   token: string;
@@ -464,6 +517,115 @@ export const searchResultPath = (result: SearchResult | null | undefined): strin
   return notePathForKey(result.key);
 };
 
+const emptyReviewCounts = (): ReviewCounts => ({
+  active: 0,
+  done_hidden: 0,
+  snoozed_hidden: 0,
+  total_generated: 0,
+});
+
+export const normalizeReviewAffectedNotes = (value: unknown): ReviewAffectedNote[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const affected = {
+      title: normalizeParamValue(record.title),
+      rel_path: normalizeParamValue(record.rel_path),
+      path: normalizeParamValue(record.path) || undefined,
+      folder: normalizeParamValue(record.folder) || undefined,
+      folder_path: normalizeParamValue(record.folder_path) || undefined,
+      location: normalizeParamValue(record.location) || undefined,
+    };
+    if (
+      affected.title === "" &&
+      affected.rel_path === "" &&
+      !affected.path &&
+      !affected.folder &&
+      !affected.folder_path &&
+      !affected.location
+    ) {
+      return [];
+    }
+    return [affected];
+  });
+};
+
+export const normalizeReviewItems = (value: unknown): ReviewItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const id = normalizeParamValue(record.id);
+    if (id === "") {
+      return [];
+    }
+    return [{
+      id,
+      signature: normalizeParamValue(record.signature),
+      kind: normalizeParamValue(record.kind),
+      priority: readCount(record.priority),
+      title: normalizeParamValue(record.title),
+      summary: normalizeParamValue(record.summary),
+      detail: normalizeParamValue(record.detail),
+      count: readCount(record.count),
+      affected: normalizeReviewAffectedNotes(record.affected),
+    }];
+  });
+};
+
+export const normalizeReviewCounts = (value: unknown): ReviewCounts => {
+  const record = asRecord(value);
+  if (!record) {
+    return emptyReviewCounts();
+  }
+  return {
+    active: readCount(record.active),
+    done_hidden: readCount(record.done_hidden),
+    snoozed_hidden: readCount(record.snoozed_hidden),
+    total_generated: readCount(record.total_generated),
+  };
+};
+
+export const normalizeReviewWarnings = (value: unknown): ReviewAPIWarning[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const code = normalizeParamValue(record.code);
+    const message = normalizeParamValue(record.message);
+    if (code === "" && message === "") {
+      return [];
+    }
+    return [{ code, message }];
+  });
+};
+
+export const normalizeReviewAPIResponse = (payload: unknown): ReviewAPIResult => {
+  const base = normalizeManagementResult(payload);
+  const record = asRecord(payload) || {};
+  return {
+    ok: base.ok,
+    code: base.ok ? undefined : base.code,
+    message: base.message,
+    items: normalizeReviewItems(record.items),
+    counts: normalizeReviewCounts(record.counts),
+    warnings: normalizeReviewWarnings(record.warnings),
+  };
+};
+
 export const facetGroups: FacetGroup[] = [
   { key: "tags", label: "Tags", param: "tag", repeat: true },
   { key: "categories", label: "Categories", param: "category", repeat: true },
@@ -654,6 +816,19 @@ export const buildUndoForm = (request: UndoRequest): URLSearchParams => {
 
 export const buildOpenNoteForm = (request: OpenNoteRequest): URLSearchParams =>
   buildNoteKeyMutationForm(request);
+
+export const buildReviewItemForm = (
+  request: ReviewItemMutationRequest
+): URLSearchParams => {
+  const body = new URLSearchParams();
+  body.set("id", request.id);
+  body.set("action", request.action);
+  body.set("token", request.token);
+  if (request.action === "snooze" && request.snooze) {
+    body.set("snooze", request.snooze);
+  }
+  return body;
+};
 
 export const normalizeHistoryEntries = (payload: unknown): HistoryEntry[] => {
   const data = asRecord(payload);

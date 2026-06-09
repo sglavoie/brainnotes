@@ -7,6 +7,7 @@ import { initGraph } from "./graph-controller";
 import { initHistoryPanel } from "./history-panel";
 import { initTrashNoteAction } from "./note-trash";
 import { initOverviewSearchResults } from "./overview-search";
+import { initReviewPanel } from "./review-panel";
 import { initSearch } from "./search";
 
 (function () {
@@ -20,4 +21,5 @@ import { initSearch } from "./search";
   initSearch();
   initOverviewSearchResults();
   initHistoryPanel();
+  initReviewPanel();
 })();

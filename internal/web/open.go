@@ -53,12 +53,30 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	notePath := ""
+	ok := false
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		notePath, err = s.notePathForOpenRouteFallback(key)
+		ok = notePath != ""
+		if err == nil && !ok {
+			http.Error(w, "snapshot error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		notePath, ok, err = s.notePathForOpenKey(snapshot, key)
+	}
+	if err != nil {
+		switch {
+		case errors.Is(err, errOpenPathOutsideVault):
+			http.Error(w, "forbidden note path", http.StatusForbidden)
+		case errors.Is(err, os.ErrNotExist):
+			http.NotFound(w, r)
+		default:
+			http.Error(w, "note path error", http.StatusInternalServerError)
+		}
 		return
 	}
-	notePath, ok := snapshot.graph.PathsByTitle[key]
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -105,6 +123,41 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) notePathForOpenKey(snapshot vaultSnapshot, key string) (string, bool, error) {
+	if snapshot.graph != nil {
+		lookupKey := snapshot.graph.UnresolvedTargetKey(key)
+		if lookupKey == "" {
+			lookupKey = strings.ToLower(strings.TrimSpace(key))
+		}
+		if notePath, ok := snapshot.graph.PathsByTitle[lookupKey]; ok {
+			return notePath, true, nil
+		}
+	}
+
+	notePath, err := s.notePathForOpenRouteFallback(key)
+	if err != nil {
+		return "", false, err
+	}
+	return notePath, notePath != "", nil
+}
+
+func (s *Server) notePathForOpenRouteFallback(key string) (string, error) {
+	key = strings.TrimSpace(key)
+	if key == "" || s == nil || s.vault == nil {
+		return "", nil
+	}
+	rel := filepath.ToSlash(key) + ".md"
+	candidate := filepath.Join(s.vault.Root, filepath.FromSlash(rel))
+	resolvedPath, err := resolveOpenPath(s.vault.Root, candidate)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	return resolvedPath, nil
 }
 
 func csrfTokenMatches(expected, provided string) bool {

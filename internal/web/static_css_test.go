@@ -115,6 +115,62 @@ func TestManagementCSSAccessibilityAndMobileContract(t *testing.T) {
 	}
 }
 
+func TestReviewCockpitCSSAccessibilityAndMobileContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".review-panel[aria-busy=\"true\"]",
+		".review-counts",
+		"grid-template-columns: repeat(4, minmax(4.6rem, 1fr));",
+		".review-status.is-loading",
+		".review-status.is-error",
+		".review-status.is-success",
+		".review-error",
+		".review-empty",
+		".review-warnings[hidden]",
+		".review-list[hidden]",
+		".review-item",
+		"grid-template-columns: minmax(0, 1fr) auto;",
+		".review-item-title",
+		".review-item-details summary",
+		".review-affected-note",
+		"overflow-wrap: anywhere;",
+		".review-item-actions",
+		"grid-template-columns: repeat(3, minmax(7.2rem, 1fr));",
+		".review-action:focus-visible",
+		".review-item-details summary:focus-visible",
+		".review-action[data-review-action=\"done\"]",
+		".review-action[data-review-action=\"snooze\"]",
+		".review-open-editor",
+		".review-action:disabled",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("review cockpit CSS missing %q", want)
+		}
+	}
+
+	narrow := cssBlockAfter(t, css, "@media (max-width: 640px)")
+	for _, want := range []string{
+		".review-panel",
+		"padding: 0.75rem;",
+		".review-counts",
+		"grid-template-columns: repeat(2, minmax(0, 1fr));",
+		".review-item",
+		"padding: 0.65rem;",
+		".review-item-actions",
+		"gap: 0.35rem;",
+		".review-action",
+		"min-height: 2.55rem;",
+		"font-size: 0.78rem;",
+		".review-open-editor",
+		"flex: 1 1 9rem;",
+	} {
+		if !strings.Contains(narrow, want) {
+			t.Fatalf("narrow review cockpit CSS missing %q in block:\n%s", want, narrow)
+		}
+	}
+}
+
 func TestNoteActionsStatusLineDoesNotResizeButtonRow(t *testing.T) {
 	css := readStaticCSS(t)
 

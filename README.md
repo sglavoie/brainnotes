@@ -460,15 +460,33 @@ bn serve [--addr host:port] [--port N] [--no-open]
 
 Starts a local HTTP server for vault browsing and lightweight note management:
 
-- `/` overview with note counts, filtered search results, diagnostics, and primary search
+- `/` Daily review cockpit, note counts, filtered search results, diagnostics, and primary search
 - `/n/<note-key>` rendered note view (body, editable frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
+- `GET /api/review` Daily review queue and `POST /api/review/item` for Done/Snooze/Clear state
+
+The home page starts with Daily review: a health-first queue for frontmatter
+parse errors, schema violations, broken wikilink targets, duplicate titles,
+orphan notes, and dead-end notes. Review items are grouped by issue and affected
+note, sorted by priority, and identified with content-aware hashes over the
+issue kind, issue detail, affected relative paths, locations, and file content.
+Marking an item Done hides that exact issue until its signature changes; Snooze
+hides it until the selected local deadline, either tomorrow or next week; Clear
+removes a saved review-state record so the active issue appears again.
+
+Review state is stored in the served vault at `<vault>/.bnotes/review.json`.
+It is runtime UI state, not note metadata: it does not edit note frontmatter,
+does not write undo journal entries, and is pruned when the underlying issue is
+resolved or changes enough to receive a new signature. `GET /api/review`
+returns active items plus `active`, `done_hidden`, `snoozed_hidden`, and
+`total_generated` counts. `POST /api/review/item` requires CSRF and form fields
+`id`, `action=done|snooze|clear`, plus optional `snooze=tomorrow|week`.
 
 The overview search results can select notes for batch lifecycle work: move to
 Trash, move to a folder, set/list-edit frontmatter, or unset frontmatter. Bulk
-actions now require an inline preview first: the server returns a one-use
+actions require an inline preview first: the server returns a one-use
 `preview_id`, counts, destination paths, frontmatter before/after values, move
 rewrite counts, and any failures, then the follow-up apply call must reuse that
 preview receipt before it expires. Note pages can move the current note to
@@ -523,6 +541,8 @@ automation must `POST /api/notes/bulk/preview` first, then send the returned
 one-use `preview_id` to `POST /api/notes/bulk`; missing, stale, mismatched, or
 reused previews are rejected with `409`. Preview receipts stay process-local,
 expire after five minutes, and never write journal entries by themselves.
+Review item state changes use `POST /api/review/item` with the same CSRF token
+and only write `<vault>/.bnotes/review.json`.
 File-changing web actions write undo journal entries with `bn web ...` command
 names; `POST /api/undo` restores the latest entry by default or a selected
 entry ID.
@@ -944,6 +964,9 @@ bn lint
 - Snapshot commands `backup` / `restore` are separate from the undo journal and
   do not create journal entries.
 - Read-only commands, including `bn serve` bulk previews, never journal.
+- Daily review Done/Snooze/Clear state is stored separately in
+  `<vault>/.bnotes/review.json`; it is not journaled and does not modify note
+  frontmatter.
 - Any `--dry-run` invocation never writes journal entries.
 
 Recommended safety workflow:
