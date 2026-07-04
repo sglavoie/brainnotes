@@ -210,6 +210,50 @@ func (s *StateStore) FilterQueue(queue Queue) (Queue, error) {
 	return queue, nil
 }
 
+// CountScoped classifies the given tasks by their persisted workflow state and
+// returns the resulting Counts (Active/DoneHidden/SnoozedHidden/TotalGenerated).
+// It is read-only: it loads state without persisting and, unlike FilterQueue,
+// never prunes, so callers must run it after FilterQueue has already reconciled
+// and pruned the store over the full queue. Each task is counted as done or
+// snoozed only when a stored record matches its id and signature and is still an
+// active suppression (mirroring FilterQueue); every other task counts as active.
+// Callers pass whatever subset they want counted (e.g. tasks under a folder), so
+// this stays decoupled from how membership is decided.
+func (s *StateStore) CountScoped(tasks []Task) (Counts, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, loaded, err := s.loadLocked()
+	if err != nil {
+		return Counts{}, err
+	}
+
+	now := s.currentTime()
+	active, done, snoozed := 0, 0, 0
+	for _, task := range tasks {
+		if loaded {
+			if record, ok := state.Items[task.ID]; ok && record.Signature == task.Signature && record.isActiveSuppression(now) {
+				switch record.State {
+				case stateDone:
+					done++
+					continue
+				case stateSnoozed:
+					snoozed++
+					continue
+				}
+			}
+		}
+		active++
+	}
+
+	return Counts{
+		Active:         active,
+		DoneHidden:     done,
+		SnoozedHidden:  snoozed,
+		TotalGenerated: active + done + snoozed,
+	}, nil
+}
+
 // load exposes the current state for tests and callers that need to inspect
 // persisted records. The bool reports whether any state (from cockpit.json or a
 // migration) is present.

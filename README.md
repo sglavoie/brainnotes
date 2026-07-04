@@ -595,7 +595,7 @@ Detected rule kinds:
 
 | Kind | What it flags |
 | --- | --- |
-| `parse_error` | frontmatter that does not parse as YAML |
+| `frontmatter_error` | frontmatter that does not parse as YAML |
 | `schema_violation` | frontmatter values that violate `[frontmatter.schema]` |
 | `broken_target` | wikilinks whose target note does not exist |
 | `duplicate_title` | two or more notes sharing the same title |

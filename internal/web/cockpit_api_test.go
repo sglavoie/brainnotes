@@ -306,6 +306,77 @@ func TestServer_FixesAPI_CreateStubPreviewAndApply(t *testing.T) {
 	}
 }
 
+func TestServer_FixesAPI_CreateStubPreviewConflictReturns409(t *testing.T) {
+	// The broken target [[Archive/Nowhere]] resolves to no walked note (Archive
+	// is ignored), but its stub destination Archive/Nowhere.md already exists on
+	// disk. Preview must surface a 409 conflict, not a 200 no-op.
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md":          []byte("---\ntitle: Source\n---\n[[Archive/Nowhere]]\n"),
+		"Archive/Nowhere.md": []byte("---\ntitle: Nowhere\n---\noccupied\n"),
+	}, func(cfg *config.Config) {
+		cfg.Ignore = []string{"Archive"}
+	}, Options{CSRFToken: "csrf-token"})
+
+	task := findCockpitTask(t, getCockpitPayload(t, ts.URL).Queue, cockpit.RuleBrokenTarget, "archive/nowhere")
+
+	previewResp := postFixPreview(t, ts.URL, task.ID, string(cockpit.ActionCreateStub), "csrf-token", "")
+	previewBody := readResponseBody(t, previewResp)
+	if previewResp.StatusCode != http.StatusConflict {
+		t.Fatalf("preview status: got %d, want %d; body=%q", previewResp.StatusCode, http.StatusConflict, previewBody)
+	}
+	if payload := decodeManagementError(t, previewBody); payload.OK || payload.Code != "conflict" {
+		t.Fatalf("preview payload = %#v, want conflict", payload)
+	}
+
+	// The occupied destination must be left untouched.
+	if got := readNoteFile(t, filepath.Join(root, "Archive", "Nowhere.md")); !strings.Contains(got, "occupied") {
+		t.Fatalf("occupied destination clobbered:\n%s", got)
+	}
+}
+
+func TestServer_FixesAPI_CreateStubApplyConflictReturns409(t *testing.T) {
+	// Preview succeeds while the stub destination is free, then the destination
+	// becomes occupied before apply. The apply must surface a 409 conflict rather
+	// than a 200 "made no changes", and must not clobber the occupying file.
+	// Archive is ignored so writing into it after preview does not change the
+	// affected-note hash baked into the previewed task id (keeping the receipt
+	// valid), and the link stays unresolved so the broken-target task persists.
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Archive/Nowhere]]\n"),
+	}, func(cfg *config.Config) {
+		cfg.Ignore = []string{"Archive"}
+	}, Options{CSRFToken: "csrf-token"})
+
+	task := findCockpitTask(t, getCockpitPayload(t, ts.URL).Queue, cockpit.RuleBrokenTarget, "archive/nowhere")
+
+	previewResp := postFixPreview(t, ts.URL, task.ID, string(cockpit.ActionCreateStub), "csrf-token", "")
+	previewBody := readResponseBody(t, previewResp)
+	if previewResp.StatusCode != http.StatusOK {
+		t.Fatalf("preview status: got %d, want 200; body=%q", previewResp.StatusCode, previewBody)
+	}
+	preview := decodeFixPreview(t, previewBody)
+	if !preview.OK || strings.TrimSpace(preview.PreviewID) == "" {
+		t.Fatalf("preview = %#v, want ok + preview id", preview)
+	}
+
+	// The destination is occupied between preview and apply.
+	writeTestFile(t, root, "Archive/Nowhere.md", "---\ntitle: Nowhere\n---\noccupied\n")
+
+	applyResp := postFixApply(t, ts.URL, task.ID, string(cockpit.ActionCreateStub), preview.PreviewID, "csrf-token", "")
+	applyBody := readResponseBody(t, applyResp)
+	if applyResp.StatusCode != http.StatusConflict {
+		t.Fatalf("apply status: got %d, want %d; body=%q", applyResp.StatusCode, http.StatusConflict, applyBody)
+	}
+	if payload := decodeManagementError(t, applyBody); payload.OK || payload.Code != "conflict" {
+		t.Fatalf("apply payload = %#v, want conflict", payload)
+	}
+
+	// The occupying file must be left untouched.
+	if got := readNoteFile(t, filepath.Join(root, "Archive", "Nowhere.md")); !strings.Contains(got, "occupied") {
+		t.Fatalf("occupied destination clobbered:\n%s", got)
+	}
+}
+
 func TestServer_FixesAPI_SchemaRepairPreviewAndApply(t *testing.T) {
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Note.md": []byte("---\nstatus: Active\ntitle: Note\n---\nBody.\n"),

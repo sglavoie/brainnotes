@@ -523,8 +523,7 @@ func (f *Fixer) planCreateStub(plan FixPlan, task Task, data vaultData, byRel ma
 	}
 	preview, err := noteops.PreviewStubFromBrokenTarget(f.vault.Root, sourceRel, rawTarget)
 	if err != nil {
-		plan.Skipped = append(plan.Skipped, FixSkip{Target: rawTarget, Reason: err.Error()})
-		return plan, nil
+		return plan, err
 	}
 	plan.Previews = append(plan.Previews, noteops.NotePreview{
 		RelPath: preview.Destination.RelPath,
@@ -546,8 +545,7 @@ func (f *Fixer) applyCreateStub(out FixOutcome, task Task, data vaultData, byRel
 	result, err := noteops.CreateStubFromBrokenTarget(f.vault.Root, sourceRel, rawTarget,
 		noteops.WithCreateCommand(f.command))
 	if err != nil {
-		out.Skipped = append(out.Skipped, FixSkip{Target: rawTarget, Reason: err.Error()})
-		return out, nil
+		return out, err
 	}
 	out.Created = append(out.Created, result.Destination.RelPath)
 	out.Journal = result.Journal

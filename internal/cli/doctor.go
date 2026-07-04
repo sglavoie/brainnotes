@@ -50,19 +50,22 @@ clean.`,
 				return err
 			}
 
-			queue, err := cockpit.BuildQueue(v, cfg)
+			rawQueue, err := cockpit.BuildQueue(v, cfg)
 			if err != nil {
 				return err
 			}
 
 			store := cockpit.NewStateStore(v.Root)
-			queue, err = store.FilterQueue(queue)
+			queue, err := store.FilterQueue(rawQueue)
 			if err != nil {
 				return err
 			}
 
 			if strings.TrimSpace(folder) != "" {
-				queue = scopeQueueToFolder(queue, folder)
+				queue, err = scopeQueueToFolder(queue, rawQueue, store, folder)
+				if err != nil {
+					return err
+				}
 			}
 
 			if asJSON {
@@ -87,18 +90,39 @@ clean.`,
 // onto tasks that group many notes, so they are intentionally not offered here.
 // Tasks are kept whole (affected lists are not pruned) so signatures and counts
 // stay consistent with the queue the cockpit generated.
-func scopeQueueToFolder(queue cockpit.Queue, folder string) cockpit.Queue {
+//
+// active is the already-filtered queue (done/snoozed tasks removed); raw is the
+// full BuildQueue result including suppressed tasks. All four counts are scoped
+// to the folder: the active list comes from active.Tasks, while DoneHidden,
+// SnoozedHidden, and TotalGenerated are recomputed by classifying the raw tasks
+// under the folder against persisted state via store.CountScoped. The raw queue
+// must not be re-run through FilterQueue — that would delete stored state for
+// out-of-folder tasks (StateStore prunes records absent from the queue it is
+// handed), so the single full-vault FilterQueue in RunE remains the only persist.
+func scopeQueueToFolder(active, raw cockpit.Queue, store *cockpit.StateStore, folder string) (cockpit.Queue, error) {
 	prefix := filepath.ToSlash(strings.Trim(strings.TrimSpace(folder), "/"))
 
-	kept := make([]cockpit.Task, 0, len(queue.Tasks))
-	for _, task := range queue.Tasks {
+	kept := make([]cockpit.Task, 0, len(active.Tasks))
+	for _, task := range active.Tasks {
 		if taskUnderFolder(task, prefix) {
 			kept = append(kept, task)
 		}
 	}
-	queue.Tasks = kept
-	queue.Counts.Active = len(kept)
-	return queue
+
+	scopedRaw := make([]cockpit.Task, 0, len(raw.Tasks))
+	for _, task := range raw.Tasks {
+		if taskUnderFolder(task, prefix) {
+			scopedRaw = append(scopedRaw, task)
+		}
+	}
+	counts, err := store.CountScoped(scopedRaw)
+	if err != nil {
+		return cockpit.Queue{}, err
+	}
+
+	active.Tasks = kept
+	active.Counts = counts
+	return active, nil
 }
 
 // taskUnderFolder reports whether any affected note of the task lives under the

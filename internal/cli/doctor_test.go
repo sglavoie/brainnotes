@@ -148,6 +148,130 @@ func TestDoctor_FolderScope(t *testing.T) {
 	}
 }
 
+// TestDoctor_FolderScopeCountsAllFour verifies that --folder scopes every count
+// (Active, DoneHidden, SnoozedHidden, TotalGenerated) to the folder, so
+// active+done+snoozed==total and no hidden count leaks from out-of-folder tasks.
+// It also guards the persistence trap: scoping must not delete stored done/snoozed
+// state for tasks outside the requested folder.
+func TestDoctor_FolderScopeCountsAllFour(t *testing.T) {
+	root, _ := buildDoctorFixture(t)
+	// Add distinct broken-target sources so each note yields its own broken-target
+	// task with a single affected note: two under Projects/, two at the root.
+	extra := map[string]string{
+		"Projects/P1.md": "---\ntitle: P1\n---\nSee [[GhostP1]].\n",
+		"Projects/P2.md": "---\ntitle: P2\n---\nSee [[GhostP2]].\n",
+		"Root1.md":       "---\ntitle: Root1\n---\nSee [[GhostR1]].\n",
+		"Root2.md":       "---\ntitle: Root2\n---\nSee [[GhostR2]].\n",
+	}
+	for rel, body := range extra {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	// Snapshot the raw queue via the CLI so we learn each task's id + signature.
+	rawOut, err := runCLI(t, "", "doctor", "--json")
+	if err != nil {
+		t.Fatalf("doctor --json: %v", err)
+	}
+	var rawQueue cockpit.Queue
+	if err := json.Unmarshal([]byte(rawOut), &rawQueue); err != nil {
+		t.Fatalf("decode raw queue: %v", err)
+	}
+
+	mustTask := func(title string) cockpit.Task {
+		task, ok := findTaskByTitle(rawQueue.Tasks, title)
+		if !ok {
+			t.Fatalf("expected task %q in raw queue, got %+v", title, rawQueue.Tasks)
+		}
+		return task
+	}
+	inFolderDone := mustTask("Broken target: ghostp1")
+	inFolderSnoozed := mustTask("Broken target: ghostp2")
+	outFolderDone := mustTask("Broken target: ghostr1")
+	outFolderSnoozed := mustTask("Broken target: ghostr2")
+
+	// Mark two Projects tasks and two root tasks so the store holds both in- and
+	// out-of-folder suppressions.
+	store := cockpit.NewStateStore(root)
+	for _, task := range []cockpit.Task{inFolderDone, outFolderDone} {
+		if err := store.MarkDone(task); err != nil {
+			t.Fatalf("MarkDone %q: %v", task.Title, err)
+		}
+	}
+	for _, task := range []cockpit.Task{inFolderSnoozed, outFolderSnoozed} {
+		if err := store.Snooze(task, cockpit.SnoozeTomorrow); err != nil {
+			t.Fatalf("Snooze %q: %v", task.Title, err)
+		}
+	}
+
+	scopedOut, err := runCLI(t, "", "doctor", "--json", "--folder", "Projects")
+	if err != nil {
+		t.Fatalf("doctor --folder: %v", err)
+	}
+	var scoped cockpit.Queue
+	if err := json.Unmarshal([]byte(scopedOut), &scoped); err != nil {
+		t.Fatalf("decode scoped queue: %v", err)
+	}
+
+	// Only the two Projects suppressions count; the two root suppressions do not
+	// leak into the scoped hidden counts.
+	if scoped.Counts.DoneHidden != 1 {
+		t.Errorf("DoneHidden = %d, want 1 (Projects only)", scoped.Counts.DoneHidden)
+	}
+	if scoped.Counts.SnoozedHidden != 1 {
+		t.Errorf("SnoozedHidden = %d, want 1 (Projects only)", scoped.Counts.SnoozedHidden)
+	}
+	if scoped.Counts.Active != len(scoped.Tasks) {
+		t.Errorf("Active = %d, want len(tasks) = %d", scoped.Counts.Active, len(scoped.Tasks))
+	}
+	if got, want := scoped.Counts.TotalGenerated, scoped.Counts.Active+scoped.Counts.DoneHidden+scoped.Counts.SnoozedHidden; got != want {
+		t.Errorf("TotalGenerated = %d, want active+done+snoozed = %d", got, want)
+	}
+	// The suppressed Projects tasks must be gone from the active list.
+	for _, title := range []string{"Broken target: ghostp1", "Broken target: ghostp2"} {
+		if _, ok := findTaskByTitle(scoped.Tasks, title); ok {
+			t.Errorf("suppressed task %q should not appear in scoped active list", title)
+		}
+	}
+	// No out-of-folder task may appear in the scoped active list either.
+	for _, task := range scoped.Tasks {
+		for _, note := range task.Affected {
+			rel := filepath.ToSlash(note.RelPath)
+			if rel != "Projects" && !strings.HasPrefix(rel, "Projects/") {
+				t.Errorf("scoped active task %q touches out-of-folder note %q", task.Title, rel)
+			}
+		}
+	}
+
+	// Regression: scoping must NOT delete the out-of-folder done/snoozed records.
+	statePath := filepath.Join(root, ".bnotes", "cockpit.json")
+	stateData, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read cockpit state: %v", err)
+	}
+	var state struct {
+		Items map[string]struct {
+			State string `json:"state"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(stateData, &state); err != nil {
+		t.Fatalf("decode cockpit state: %v", err)
+	}
+	for _, task := range []cockpit.Task{outFolderDone, outFolderSnoozed} {
+		if _, ok := state.Items[task.ID]; !ok {
+			t.Errorf("scoping deleted out-of-folder stored state for %q (id %s)", task.Title, task.ID)
+		}
+	}
+	if len(state.Items) != 4 {
+		t.Errorf("cockpit state should still hold all 4 suppressions, got %d", len(state.Items))
+	}
+}
+
 func TestDoctor_CleanVault(t *testing.T) {
 	root := t.TempDir()
 	// Two mutually linked, frontmatter-free notes: neither is an orphan or dead

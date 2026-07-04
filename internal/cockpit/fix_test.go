@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func actionKinds(actions []Action) []ActionKind {
@@ -222,6 +224,49 @@ func TestFixerCreateStubForBrokenTarget(t *testing.T) {
 	}
 	if got := readVaultFile(t, v.Root, "Nowhere.md"); !strings.Contains(got, "title: Nowhere") {
 		t.Fatalf("stub note missing title: %q", got)
+	}
+}
+
+func TestFixerCreateStubConflictSurfacesError(t *testing.T) {
+	// A folder-qualified broken target whose destination is occupied on disk by
+	// an ignored (thus unresolvable) note must surface a conflict rather than
+	// swallowing it into a successful no-op skip.
+	root := t.TempDir()
+	cfg := &config.Config{Vault: root, Ignore: []string{"Archive"}}
+	writeFile := func(rel, body string) {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir parent of %s: %v", full, err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", full, err)
+		}
+	}
+	writeFile("Source.md", "---\ntitle: Source\n---\n[[Archive/Nowhere]]\n")
+	writeFile("Archive/Nowhere.md", "---\ntitle: Nowhere\n---\noccupied\n")
+
+	v, err := vault.Open(cfg)
+	if err != nil {
+		t.Fatalf("open vault: %v", err)
+	}
+
+	q, err := BuildQueue(v, cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+	task := findTaskByKind(t, q, RuleBrokenTarget)
+
+	fixer := NewFixer(v, cfg, "bn test fix")
+
+	if _, err := fixer.Plan(task, ActionCreateStub); noteops.CodeOf(err) != noteops.CodeConflict {
+		t.Fatalf("Plan conflict error = %v (code %q), want CodeConflict", err, noteops.CodeOf(err))
+	}
+	if _, err := fixer.Apply(task, ActionCreateStub); noteops.CodeOf(err) != noteops.CodeConflict {
+		t.Fatalf("Apply conflict error = %v (code %q), want CodeConflict", err, noteops.CodeOf(err))
+	}
+	// The occupied destination must be left untouched.
+	if got := readVaultFile(t, v.Root, "Archive/Nowhere.md"); !strings.Contains(got, "occupied") {
+		t.Fatalf("occupied destination clobbered: %q", got)
 	}
 }
 
