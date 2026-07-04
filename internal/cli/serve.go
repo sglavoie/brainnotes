@@ -43,7 +43,10 @@ var runWebBuild = func(ctx context.Context, root string, out io.Writer) error {
 	cmd.Dir = root
 	cmd.Stdout = out
 	cmd.Stderr = out
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf(`local esbuild binary not found and npm run build:web failed; run "npm ci" in %s to install web dependencies: %w`, root, err)
+	}
+	return nil
 }
 
 func localEsbuildBinary(root string) (string, bool) {

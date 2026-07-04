@@ -323,6 +323,35 @@ func TestRunWebBuildPrefersLocalEsbuildBinary(t *testing.T) {
 	}
 }
 
+func TestRunWebBuildExplainsMissingWebDependencies(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildServeWebProject(t)
+	fakeBin := t.TempDir()
+	npmPath := filepath.Join(fakeBin, "npm")
+	script := "#!/bin/sh\nexit 127\n"
+	if err := os.WriteFile(npmPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake npm: %v", err)
+	}
+	t.Setenv("PATH", fakeBin)
+
+	var out bytes.Buffer
+	err := runWebBuild(context.Background(), root, &out)
+	if err == nil {
+		t.Fatal("runWebBuild succeeded, want dependency hint error")
+	}
+	got := err.Error()
+	for _, want := range []string{
+		"local esbuild binary not found",
+		"npm run build:web failed",
+		`run "npm ci"`,
+		root,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error = %q, want substring %q", got, want)
+		}
+	}
+}
+
 func buildServeWebProject(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
