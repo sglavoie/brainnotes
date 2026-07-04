@@ -1,2 +1,2 @@
 --- tags.md
-- tags: [foo, bar]
+frontmatter[tags]: [foo, bar] -> 

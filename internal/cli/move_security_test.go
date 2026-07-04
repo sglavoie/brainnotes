@@ -67,11 +67,11 @@ func TestMoveDryRunWritesNothing(t *testing.T) {
 	if !mapsEqual(before, after) {
 		t.Fatalf("dry-run modified files:\nbefore=%v\nafter=%v", before, after)
 	}
-	if !strings.Contains(out, "move:") {
-		t.Errorf("dry-run output missing move header:\n%s", out)
+	if !strings.Contains(out, "path: Books/Dune.md -> References/Books/Dune.md") {
+		t.Errorf("dry-run output missing canonical path change line:\n%s", out)
 	}
-	if !strings.Contains(out, "Reviews/Dune Review.md:") {
-		t.Errorf("dry-run output missing reviewer file change:\n%s", out)
+	if !strings.Contains(out, "--- Reviews/Dune Review.md") {
+		t.Errorf("dry-run output missing reviewer file block:\n%s", out)
 	}
 	if !strings.Contains(out, "frontmatter[categories]") {
 		t.Errorf("dry-run output missing frontmatter change:\n%s", out)

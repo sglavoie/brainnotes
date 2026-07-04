@@ -73,11 +73,8 @@ func TestRepair_DryRun(t *testing.T) {
 	if !strings.Contains(out, "--- bad_case.md") {
 		t.Errorf("expected bad_case.md in dry-run output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "- status: wip") {
-		t.Errorf("expected removed wip line, got:\n%s", out)
-	}
-	if !strings.Contains(out, "+ status: WIP") {
-		t.Errorf("expected added WIP line, got:\n%s", out)
+	if !strings.Contains(out, "frontmatter[status]: wip -> WIP") {
+		t.Errorf("expected canonicalize change line, got:\n%s", out)
 	}
 	if !strings.Contains(out, "--- dup_tags.md") {
 		t.Errorf("expected dup_tags.md in dry-run output, got:\n%s", out)

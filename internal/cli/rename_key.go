@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -111,10 +112,11 @@ Use --dry-run to preview changes without writing.`,
 				}
 
 				if dry != nil {
-					block := newFileBlock(displayPath(n.Path, v.Root))
-					block.removed(oldK, oldVal)
-					block.added(newK, oldVal)
-					if err := block.flush(dry.Out); err != nil {
+					preview := noteops.NotePreview{RelPath: displayPath(n.Path, v.Root)}
+					preview.Changes = append(preview.Changes,
+						noteops.FrontmatterChange(oldK, true, oldVal, false, nil),
+						noteops.FrontmatterChange(newK, false, nil, true, oldVal))
+					if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
 						return err
 					}
 				} else {

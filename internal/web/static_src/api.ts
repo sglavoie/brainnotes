@@ -54,27 +54,21 @@ export type OpenNoteRequest = {
   token: string;
 };
 
-export type ReviewItemAction = "done" | "snooze" | "clear";
+// Cockpit / Daily Fixes ------------------------------------------------------
 
-export type ReviewSnooze = "tomorrow" | "week";
-
-export type ReviewItemMutationRequest = {
-  id: string;
-  action: ReviewItemAction;
-  token: string;
-  snooze?: ReviewSnooze;
+export type CockpitAction = {
+  kind: string;
+  label: string;
 };
 
-export type ReviewAffectedNote = {
+export type CockpitAffectedNote = {
   title: string;
   rel_path: string;
-  path?: string;
   folder?: string;
-  folder_path?: string;
   location?: string;
 };
 
-export type ReviewItem = {
+export type CockpitTask = {
   id: string;
   signature: string;
   kind: string;
@@ -83,28 +77,98 @@ export type ReviewItem = {
   summary: string;
   detail: string;
   count: number;
-  affected: ReviewAffectedNote[];
+  affected: CockpitAffectedNote[];
+  actions: CockpitAction[];
+  triage_only: boolean;
 };
 
-export type ReviewCounts = {
+export type CockpitCounts = {
   active: number;
   done_hidden: number;
   snoozed_hidden: number;
   total_generated: number;
 };
 
-export type ReviewAPIWarning = {
-  code: string;
+export type CockpitWarning = {
   message: string;
+  path?: string;
 };
 
-export type ReviewAPIResult = {
+export type CockpitQueueResult = {
   ok: boolean;
   code?: string;
   message?: string;
-  items: ReviewItem[];
-  counts: ReviewCounts;
-  warnings: ReviewAPIWarning[];
+  tasks: CockpitTask[];
+  counts: CockpitCounts;
+  warnings: CockpitWarning[];
+};
+
+export type CockpitItemAction = "mark_done" | "done" | "snooze" | "clear";
+
+export type CockpitSnooze = "tomorrow" | "week";
+
+export type CockpitItemMutationRequest = {
+  id: string;
+  action: CockpitItemAction;
+  token: string;
+  snooze?: CockpitSnooze;
+};
+
+export type FixAction = "schema_repair" | "relink" | "create_stub";
+
+export type FixMutationRequest = {
+  id: string;
+  action: FixAction;
+  token: string;
+  previewID?: string;
+};
+
+export type NotePreviewText = {
+  present: boolean;
+  text: string;
+};
+
+export type NotePreviewChange = {
+  kind: string;
+  key?: string;
+  line?: number;
+  old: NotePreviewText;
+  new: NotePreviewText;
+};
+
+export type NotePreview = {
+  rel_path: string;
+  changes: NotePreviewChange[];
+};
+
+export type FixSkip = {
+  rel_path?: string;
+  target?: string;
+  reason: string;
+};
+
+export type FixPreviewResult = {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  action: string;
+  task_id: string;
+  previews: NotePreview[];
+  skipped: FixSkip[];
+  preview_id: string;
+  expires_at: string;
+};
+
+export type FixApplyResult = {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  action: string;
+  task_id: string;
+  changed: string[];
+  created: string[];
+  skipped: FixSkip[];
+  journal_id?: string;
 };
 
 export type NoteKeyMutationRequest = {
@@ -517,14 +581,44 @@ export const searchResultPath = (result: SearchResult | null | undefined): strin
   return notePathForKey(result.key);
 };
 
-const emptyReviewCounts = (): ReviewCounts => ({
+const emptyCockpitCounts = (): CockpitCounts => ({
   active: 0,
   done_hidden: 0,
   snoozed_hidden: 0,
   total_generated: 0,
 });
 
-export const normalizeReviewAffectedNotes = (value: unknown): ReviewAffectedNote[] => {
+export const normalizeCockpitCounts = (value: unknown): CockpitCounts => {
+  const record = asRecord(value);
+  if (!record) {
+    return emptyCockpitCounts();
+  }
+  return {
+    active: readCount(record.active),
+    done_hidden: readCount(record.done_hidden),
+    snoozed_hidden: readCount(record.snoozed_hidden),
+    total_generated: readCount(record.total_generated),
+  };
+};
+
+export const normalizeCockpitActions = (value: unknown): CockpitAction[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const kind = normalizeParamValue(record.kind);
+    if (kind === "") {
+      return [];
+    }
+    return [{ kind, label: normalizeParamValue(record.label) || kind }];
+  });
+};
+
+export const normalizeCockpitAffectedNotes = (value: unknown): CockpitAffectedNote[] => {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -536,17 +630,13 @@ export const normalizeReviewAffectedNotes = (value: unknown): ReviewAffectedNote
     const affected = {
       title: normalizeParamValue(record.title),
       rel_path: normalizeParamValue(record.rel_path),
-      path: normalizeParamValue(record.path) || undefined,
       folder: normalizeParamValue(record.folder) || undefined,
-      folder_path: normalizeParamValue(record.folder_path) || undefined,
       location: normalizeParamValue(record.location) || undefined,
     };
     if (
       affected.title === "" &&
       affected.rel_path === "" &&
-      !affected.path &&
       !affected.folder &&
-      !affected.folder_path &&
       !affected.location
     ) {
       return [];
@@ -555,7 +645,7 @@ export const normalizeReviewAffectedNotes = (value: unknown): ReviewAffectedNote
   });
 };
 
-export const normalizeReviewItems = (value: unknown): ReviewItem[] => {
+export const normalizeCockpitTasks = (value: unknown): CockpitTask[] => {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -577,25 +667,14 @@ export const normalizeReviewItems = (value: unknown): ReviewItem[] => {
       summary: normalizeParamValue(record.summary),
       detail: normalizeParamValue(record.detail),
       count: readCount(record.count),
-      affected: normalizeReviewAffectedNotes(record.affected),
+      affected: normalizeCockpitAffectedNotes(record.affected),
+      actions: normalizeCockpitActions(record.actions),
+      triage_only: readBoolean(record.triage_only),
     }];
   });
 };
 
-export const normalizeReviewCounts = (value: unknown): ReviewCounts => {
-  const record = asRecord(value);
-  if (!record) {
-    return emptyReviewCounts();
-  }
-  return {
-    active: readCount(record.active),
-    done_hidden: readCount(record.done_hidden),
-    snoozed_hidden: readCount(record.snoozed_hidden),
-    total_generated: readCount(record.total_generated),
-  };
-};
-
-export const normalizeReviewWarnings = (value: unknown): ReviewAPIWarning[] => {
+export const normalizeCockpitWarnings = (value: unknown): CockpitWarning[] => {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -604,26 +683,160 @@ export const normalizeReviewWarnings = (value: unknown): ReviewAPIWarning[] => {
     if (!record) {
       return [];
     }
-    const code = normalizeParamValue(record.code);
     const message = normalizeParamValue(record.message);
-    if (code === "" && message === "") {
+    const path = normalizeParamValue(record.path);
+    if (message === "" && path === "") {
       return [];
     }
-    return [{ code, message }];
+    return [{ message, path: path || undefined }];
   });
 };
 
-export const normalizeReviewAPIResponse = (payload: unknown): ReviewAPIResult => {
+export const normalizeCockpitQueueResponse = (payload: unknown): CockpitQueueResult => {
   const base = normalizeManagementResult(payload);
   const record = asRecord(payload) || {};
   return {
     ok: base.ok,
     code: base.ok ? undefined : base.code,
     message: base.message,
-    items: normalizeReviewItems(record.items),
-    counts: normalizeReviewCounts(record.counts),
-    warnings: normalizeReviewWarnings(record.warnings),
+    tasks: normalizeCockpitTasks(record.tasks),
+    counts: normalizeCockpitCounts(record.counts),
+    warnings: normalizeCockpitWarnings(record.warnings),
   };
+};
+
+export const normalizeNotePreviewText = (value: unknown): NotePreviewText => {
+  const record = asRecord(value);
+  if (!record) {
+    return { present: false, text: "" };
+  }
+  return {
+    present: readBoolean(record.present),
+    text: normalizeParamValue(record.text),
+  };
+};
+
+export const normalizeNotePreviewChanges = (value: unknown): NotePreviewChange[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const kind = normalizeParamValue(record.kind);
+    if (kind === "") {
+      return [];
+    }
+    return [{
+      kind,
+      key: normalizeParamValue(record.key) || undefined,
+      line: readCount(record.line) || undefined,
+      old: normalizeNotePreviewText(record.old),
+      new: normalizeNotePreviewText(record.new),
+    }];
+  });
+};
+
+export const normalizeNotePreviews = (value: unknown): NotePreview[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    return [{
+      rel_path: normalizeParamValue(record.rel_path),
+      changes: normalizeNotePreviewChanges(record.changes),
+    }];
+  });
+};
+
+export const normalizeFixSkips = (value: unknown): FixSkip[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record) {
+      return [];
+    }
+    const reason = normalizeParamValue(record.reason);
+    const relPath = normalizeParamValue(record.rel_path);
+    const target = normalizeParamValue(record.target);
+    if (reason === "" && relPath === "" && target === "") {
+      return [];
+    }
+    return [{
+      rel_path: relPath || undefined,
+      target: target || undefined,
+      reason,
+    }];
+  });
+};
+
+export const normalizeFixPreviewResponse = (payload: unknown): FixPreviewResult => {
+  const base = normalizeManagementResult(payload);
+  const record = asRecord(payload) || {};
+  return {
+    ok: base.ok,
+    code: base.ok ? undefined : base.code,
+    message: base.message,
+    action: normalizeParamValue(record.action),
+    task_id: normalizeParamValue(record.task_id),
+    previews: normalizeNotePreviews(record.previews),
+    skipped: normalizeFixSkips(record.skipped),
+    preview_id: normalizeParamValue(record.preview_id),
+    expires_at: normalizeExpiryString(record.expires_at),
+  };
+};
+
+export const normalizeFixApplyResponse = (payload: unknown): FixApplyResult => {
+  const base = normalizeManagementResult(payload);
+  const record = asRecord(payload) || {};
+  return {
+    ok: base.ok,
+    code: base.ok ? undefined : base.code,
+    message: base.message,
+    action: normalizeParamValue(record.action),
+    task_id: normalizeParamValue(record.task_id),
+    changed: normalizeStringArray(record.changed),
+    created: normalizeStringArray(record.created),
+    skipped: normalizeFixSkips(record.skipped),
+    journal_id: normalizeParamValue(record.journal_id) || undefined,
+  };
+};
+
+export const buildCockpitItemForm = (
+  request: CockpitItemMutationRequest
+): URLSearchParams => {
+  const body = new URLSearchParams();
+  body.set("id", request.id);
+  body.set("action", request.action);
+  body.set("token", request.token);
+  if (request.action === "snooze" && request.snooze) {
+    body.set("snooze", request.snooze);
+  }
+  return body;
+};
+
+export const buildFixPreviewForm = (request: FixMutationRequest): URLSearchParams => {
+  const body = new URLSearchParams();
+  body.set("id", request.id);
+  body.set("action", request.action);
+  body.set("token", request.token);
+  return body;
+};
+
+export const buildFixApplyForm = (request: FixMutationRequest): URLSearchParams => {
+  const body = buildFixPreviewForm(request);
+  if (request.previewID !== undefined && request.previewID.trim() !== "") {
+    body.set("preview_id", request.previewID.trim());
+  }
+  return body;
 };
 
 export const facetGroups: FacetGroup[] = [
@@ -816,19 +1029,6 @@ export const buildUndoForm = (request: UndoRequest): URLSearchParams => {
 
 export const buildOpenNoteForm = (request: OpenNoteRequest): URLSearchParams =>
   buildNoteKeyMutationForm(request);
-
-export const buildReviewItemForm = (
-  request: ReviewItemMutationRequest
-): URLSearchParams => {
-  const body = new URLSearchParams();
-  body.set("id", request.id);
-  body.set("action", request.action);
-  body.set("token", request.token);
-  if (request.action === "snooze" && request.snooze) {
-    body.set("snooze", request.snooze);
-  }
-  return body;
-};
 
 export const normalizeHistoryEntries = (payload: unknown): HistoryEntry[] => {
   const data = asRecord(payload);

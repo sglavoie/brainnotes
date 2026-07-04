@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -102,9 +103,9 @@ printed as a unified diff block; unchanged files are omitted.`,
 			if dryRun {
 				dry = &DryRun{Out: out}
 			}
-			var journaler *mutationJournal
+			var journaler *noteops.Journal
 			if dry == nil {
-				journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+				journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
 			}
 
 			count := 0
@@ -124,7 +125,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 					}
 				}
 			}
-			if err := journaler.Finalize(); err != nil {
+			if _, err := journaler.Finalize(); err != nil {
 				return err
 			}
 			if dry == nil {
@@ -211,7 +212,7 @@ func queryFlagsNeedGraph(flags query.Flags) bool {
 
 // applyReplace performs the swap on a single note. On dry-run it emits a diff
 // block and skips the write; otherwise the file is rewritten atomically.
-func applyReplace(n *vault.Note, key string, fromVal, toVal any, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
+func applyReplace(n *vault.Note, key string, fromVal, toVal any, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *noteops.Journal) (bool, error) {
 	front, err := n.Front()
 	if err != nil {
 		return false, err
@@ -228,18 +229,14 @@ func applyReplace(n *vault.Note, key string, fromVal, toVal any, fm *config.Fron
 		return false, nil
 	}
 	if dry != nil {
-		block := newFileBlock(displayPath(n.Path, vaultRoot))
-		if beforePresent {
-			block.removed(key, beforeVal)
-		}
 		afterVal, afterOK := front.Get(key)
-		if afterOK {
-			block.added(key, afterVal)
-		}
-		if err := block.flush(dry.Out); err != nil {
+		preview := noteops.NotePreview{RelPath: displayPath(n.Path, vaultRoot)}
+		preview.Changes = append(preview.Changes,
+			noteops.FrontmatterChange(key, beforePresent, beforeVal, afterOK, afterVal))
+		if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
 			return false, err
 		}
-		return !block.empty(), nil
+		return preview.Changed(), nil
 	}
 	if err := journaler.Capture(n.Path); err != nil {
 		return false, err

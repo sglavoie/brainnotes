@@ -59,6 +59,29 @@ lint:
     just web-check
     echo "Lint clean"
 
+# Run the full CI validation envelope (fmt check, vet, tests, web checks, bundle drift)
+ci:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out=$(gofmt -l .)
+    if [ -n "$out" ]; then
+        echo "gofmt issues:"
+        echo "$out"
+        exit 1
+    fi
+    go vet ./...
+    go test ./...
+    npm run typecheck:web
+    npm run test:web
+    npm run build:web
+    drift=$(git status --porcelain -- internal/web/static/app.js)
+    if [ -n "$drift" ]; then
+        echo "generated bundle drift detected in internal/web/static/app.js:"
+        git --no-pager diff -- internal/web/static/app.js
+        exit 1
+    fi
+    echo "CI clean"
+
 # Remove build artifacts
 clean:
     @echo "Cleaning..."

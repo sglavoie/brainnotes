@@ -58,6 +58,15 @@ func DefaultTemplate() string {
 # [new.routes]
 # book = "References/Books"
 # person = "People"
+
+[cockpit]
+# Tuning for the Daily Fix Cockpit (` + "`bn doctor`" + ` and the web cockpit).
+# Rule kinds to hide from the queue entirely.
+# disabled_rules = ["long_tail_value"]
+# Rule kinds to surface first, overriding the built-in ordering.
+# priority = ["broken_target", "schema_violation"]
+# How many of the rarest values per property become long-tail tasks.
+# long_tail_limit = 5
 `
 }
 
@@ -133,6 +142,22 @@ func applyDefaults(cfg *Config) {
 	cfg.Serve.Addr = strings.TrimSpace(cfg.Serve.Addr)
 	if cfg.Serve.Addr == "" {
 		cfg.Serve.Addr = DefaultServeAddr
+	}
+
+	// Cockpit rule lists default to empty (no rules disabled, no priority
+	// override). They are left otherwise untouched so validate can still see
+	// user-supplied entries; membership against known rule kinds is a wiring-time
+	// concern in internal/cockpit, not a config-load concern.
+	if cfg.Cockpit.DisabledRules == nil {
+		cfg.Cockpit.DisabledRules = []string{}
+	}
+	if cfg.Cockpit.Priority == nil {
+		cfg.Cockpit.Priority = []string{}
+	}
+	// A zero long_tail_limit means "unset"; fall back to the documented default.
+	// Negative values are left as-is so validate can reject them.
+	if cfg.Cockpit.LongTailLimit == 0 {
+		cfg.Cockpit.LongTailLimit = DefaultCockpitLongTailLimit
 	}
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)

@@ -26,6 +26,7 @@ type Config struct {
 	Open        OpenConfig        `toml:"open"`
 	Serve       ServeConfig       `toml:"serve"`
 	New         NewConfig         `toml:"new"`
+	Cockpit     CockpitConfig     `toml:"cockpit"`
 
 	// SourcePath is the resolved path of the config file that was loaded.
 	SourcePath string `toml:"-"`
@@ -79,6 +80,22 @@ type NewConfig struct {
 	Routes map[string]string `toml:"routes"`
 }
 
+// CockpitConfig tunes the Daily Fix Cockpit (the read-only hygiene queue served
+// by `bn doctor` and the web cockpit). Rule identifiers in DisabledRules and
+// Priority are the stable RuleKind strings owned by internal/cockpit; they are
+// not validated for membership here so config stays decoupled from that
+// package — unknown names are simply ignored by the cockpit at wiring time.
+type CockpitConfig struct {
+	// DisabledRules lists rule kinds to suppress from the queue entirely.
+	DisabledRules []string `toml:"disabled_rules"`
+	// Priority lists rule kinds in the order they should surface, overriding the
+	// cockpit's built-in ordering for the named kinds.
+	Priority []string `toml:"priority"`
+	// LongTailLimit caps how many of the rarest values per frontmatter property
+	// become long-tail tasks. Defaults to DefaultCockpitLongTailLimit.
+	LongTailLimit int `toml:"long_tail_limit"`
+}
+
 // DefaultIgnore lists the vault-relative paths that are always skipped.
 var DefaultIgnore = []string{".git", ".obsidian", "Attachments", "Archive", "Trash"}
 
@@ -87,6 +104,10 @@ var DefaultIgnore = []string{".git", ".obsidian", "Attachments", "Archive", "Tra
 const DefaultJournalDir = ".bnotes/journal"
 
 const DefaultServeAddr = "127.0.0.1:8729"
+
+// DefaultCockpitLongTailLimit is the default cap on how many of the rarest
+// values per frontmatter property become long-tail cockpit tasks.
+const DefaultCockpitLongTailLimit = 5
 
 const (
 	envVault   = "BNOTES_VAULT"

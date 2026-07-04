@@ -180,11 +180,11 @@ func TestRenameKey_DryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "- kind: article") {
-		t.Fatalf("expected removed line in dry-run, got:\n%s", out)
+	if !strings.Contains(out, "frontmatter[kind]: article ->") {
+		t.Fatalf("expected removed-key line in dry-run, got:\n%s", out)
 	}
-	if !strings.Contains(out, "+ category: article") {
-		t.Fatalf("expected added line in dry-run, got:\n%s", out)
+	if !strings.Contains(out, "frontmatter[category]:  -> article") {
+		t.Fatalf("expected added-key line in dry-run, got:\n%s", out)
 	}
 
 	got := readNote(t, note)
@@ -268,7 +268,7 @@ func TestRenameKey_DryRunSuppressesConfigWarnings(t *testing.T) {
 		t.Errorf("expected no schema warning during dry-run, got:\n%s", out)
 	}
 	// The dry-run diff output should still be present.
-	if !strings.Contains(out, "- kind: article") || !strings.Contains(out, "+ category: article") {
+	if !strings.Contains(out, "frontmatter[kind]: article ->") || !strings.Contains(out, "frontmatter[category]:  -> article") {
 		t.Errorf("expected dry-run diff output, got:\n%s", out)
 	}
 }

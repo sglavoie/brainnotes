@@ -90,9 +90,9 @@ Use --dry-run to preview which properties would be removed without writing.`,
 			if dryRun {
 				dry = &DryRun{Out: out}
 			}
-			var journaler *mutationJournal
+			var journaler *noteops.Journal
 			if dry == nil {
-				journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+				journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
 			}
 			for _, p := range paths {
 				changed, err := applyUnset(p, props, cfg, v.Root, dry, journaler)
@@ -105,7 +105,7 @@ Use --dry-run to preview which properties would be removed without writing.`,
 					}
 				}
 			}
-			if err := journaler.Finalize(); err != nil {
+			if _, err := journaler.Finalize(); err != nil {
 				return err
 			}
 			return nil
@@ -137,7 +137,7 @@ func splitUnsetArgs(args []string, dashAt int) (notes, props []string) {
 //
 // When dry is non-nil, the file is left untouched and a per-file `- key: value`
 // block is emitted for every present property in props.
-func applyUnset(path string, props []string, cfg *config.Config, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
+func applyUnset(path string, props []string, cfg *config.Config, vaultRoot string, dry *DryRun, journaler *noteops.Journal) (bool, error) {
 	if dry == nil {
 		return noteops.ApplyFrontmatterUnset(path, props, &cfg.Frontmatter, journaler)
 	}
@@ -151,11 +151,11 @@ func applyUnset(path string, props []string, cfg *config.Config, vaultRoot strin
 		return false, err
 	}
 	if dry != nil {
-		block := newFileBlock(displayPath(path, vaultRoot))
+		preview := noteops.NotePreview{RelPath: displayPath(path, vaultRoot)}
 		// Deduplicate property names so callers passing the same key twice
-		// (e.g. via shell expansion) do not see the same `- key: value` line
-		// repeated. The non-dry path is naturally idempotent because the
-		// second Unset finds Has=false; the dry preview must match.
+		// (e.g. via shell expansion) do not see the same change line repeated.
+		// The non-dry path is naturally idempotent because the second Unset
+		// finds Has=false; the dry preview must match.
 		seen := make(map[string]struct{}, len(props))
 		for _, p := range props {
 			if _, dup := seen[p]; dup {
@@ -166,12 +166,13 @@ func applyUnset(path string, props []string, cfg *config.Config, vaultRoot strin
 			if !ok {
 				continue
 			}
-			block.removed(p, v)
+			preview.Changes = append(preview.Changes,
+				noteops.FrontmatterChange(p, true, v, false, nil))
 		}
-		if err := block.flush(dry.Out); err != nil {
+		if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
 			return false, err
 		}
-		return !block.empty(), nil
+		return preview.Changed(), nil
 	}
 	changed := false
 	for _, p := range props {

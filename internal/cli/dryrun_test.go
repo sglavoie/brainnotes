@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // assertMtimeUnchanged captures the mtime of every path before fn runs and
@@ -158,10 +157,9 @@ func TestUnsetDryRun_MissingKeyPrintsNothing(t *testing.T) {
 }
 
 // TestUnsetDryRun_DuplicatePropName asserts that passing the same property
-// name twice on the command line produces exactly one `- key: value` line in
-// the dry-run output. Before the fix, the second occurrence emitted a
-// duplicate line that did not match what the non-dry path (idempotent) would
-// have done.
+// name twice on the command line produces exactly one change line in the
+// dry-run output. Before the fix, the second occurrence emitted a duplicate
+// line that did not match what the non-dry path (idempotent) would have done.
 func TestUnsetDryRun_DuplicatePropName(t *testing.T) {
 	root := buildSetFixture(t)
 	notePath := filepath.Join(root, "tags.md")
@@ -170,15 +168,15 @@ func TestUnsetDryRun_DuplicatePropName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if c := strings.Count(out, "- tags:"); c != 1 {
-		t.Fatalf("expected exactly one `- tags:` line, got %d in:\n%s", c, out)
+	if c := strings.Count(out, "frontmatter[tags]:"); c != 1 {
+		t.Fatalf("expected exactly one `frontmatter[tags]:` line, got %d in:\n%s", c, out)
 	}
 }
 
 // TestSetDryRun_WikilinkScalarShowsWrappedValue asserts that the dry-run
 // preview for a wikilink-typed scalar shows the value the Marshal step will
 // actually write (`[[Books]]`), not the raw user input (`Books`). Before the
-// fix, `bn set --dry-run note.md parent=Books` printed `+ parent: Books`
+// fix, `bn set --dry-run note.md parent=Books` printed the raw input
 // while the corresponding apply path would have written `parent: '[[Books]]'`.
 func TestSetDryRun_WikilinkScalarShowsWrappedValue(t *testing.T) {
 	root := buildSetFixture(t)
@@ -188,8 +186,8 @@ func TestSetDryRun_WikilinkScalarShowsWrappedValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "+ parent: [[Books]]") {
-		t.Fatalf("expected `+ parent: [[Books]]` (wrapped form) in dry-run output, got:\n%s", out)
+	if !strings.Contains(out, "frontmatter[parent]:  -> [[Books]]") {
+		t.Fatalf("expected wrapped `[[Books]]` form in dry-run output, got:\n%s", out)
 	}
 }
 
@@ -205,7 +203,7 @@ func TestSetDryRun_WikilinkListShowsWrappedValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "+ categories: [[[Books]], [[Personal]]]") {
+	if !strings.Contains(out, "frontmatter[categories]:  -> [[[Books]], [[Personal]]]") {
 		t.Fatalf("expected wrapped categories in dry-run output, got:\n%s", out)
 	}
 }
@@ -268,83 +266,7 @@ func TestSetDryRun_WholeNumberFloatValueMatchesApplyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "- rating: 3.0") {
-		t.Fatalf("expected `- rating: 3.0` (existing float form) in dry-run output, got:\n%s", out)
-	}
-	if !strings.Contains(out, "+ rating: 5") {
-		t.Fatalf("expected `+ rating: 5` (new int value) in dry-run output, got:\n%s", out)
-	}
-}
-
-// TestFormatDryRunValue_WholeNumberFloat verifies that float64 values with a
-// whole-number value render with a `.0` suffix so the dry-run preview matches
-// what yaml.v3 actually writes (e.g. `rating: 3.0`). Before the fix, `%v`
-// formatting collapsed `3.0` to `3`, producing a dry-run preview that did not
-// match the apply path — `bn set --dry-run rating=3` printed `+ rating: 3`
-// while the corresponding YAML write would store `rating: 3` (int) instead.
-// The dry-run preview must reflect the actual on-disk form.
-func TestFormatDryRunValue_WholeNumberFloat(t *testing.T) {
-	cases := []struct {
-		in   float64
-		want string
-	}{
-		{3.0, "3.0"},
-		{0.0, "0.0"},
-		{-7.0, "-7.0"},
-		{1.5, "1.5"},
-		{3.14, "3.14"},
-		{-2.5, "-2.5"},
-	}
-	for _, c := range cases {
-		got := formatDryRunValue(c.in)
-		if got != c.want {
-			t.Errorf("formatDryRunValue(%v) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
-// TestFormatDryRunValue_TimeZoneAtMidnight verifies that a time.Time at midnight
-// in a non-UTC zone with offset 0 (e.g. time.FixedZone("", 0)) does NOT render
-// as date-only. Only times explicitly in time.UTC should use the short form.
-// Before the fix, formatDryRunValue checked the zone offset (== 0) rather than
-// the location pointer (== time.UTC), so FixedZone("", 0) would incorrectly
-// produce "2026-01-01" instead of the full RFC3339 representation.
-func TestFormatDryRunValue_TimeZoneAtMidnight(t *testing.T) {
-	// A time at midnight UTC should render as date-only.
-	utcMidnight := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	got := formatDryRunValue(utcMidnight)
-	if got != "2026-01-01" {
-		t.Errorf("UTC midnight: got %q, want %q", got, "2026-01-01")
-	}
-
-	// A time at midnight in FixedZone("", 0) should render as RFC3339, not
-	// as date-only. FixedZone has offset 0 but is not time.UTC.
-	fakeUTC := time.FixedZone("", 0)
-	fixedMidnight := time.Date(2026, 1, 1, 0, 0, 0, 0, fakeUTC)
-	got = formatDryRunValue(fixedMidnight)
-	if got == "2026-01-01" {
-		t.Errorf("FixedZone(0) midnight should NOT render as date-only, got %q", got)
-	}
-	// It should be the full RFC3339 form.
-	want := "2026-01-01T00:00:00Z"
-	if got != want {
-		t.Errorf("FixedZone(0) midnight: got %q, want %q", got, want)
-	}
-
-	// A time with a non-zero component should always be RFC3339.
-	withTime := time.Date(2026, 1, 1, 14, 30, 0, 0, time.UTC)
-	got = formatDryRunValue(withTime)
-	want = "2026-01-01T14:30:00Z"
-	if got != want {
-		t.Errorf("with time: got %q, want %q", got, want)
-	}
-}
-
-func TestFormatDryRunValue_PreservesFractionalSeconds(t *testing.T) {
-	ts := time.Date(2026, 1, 1, 14, 30, 0, 123456789, time.UTC)
-	got := formatDryRunValue(ts)
-	want := "2026-01-01T14:30:00.123456789Z"
-	if got != want {
-		t.Fatalf("formatDryRunValue(%v) = %q, want %q", ts, got, want)
+	if !strings.Contains(out, "frontmatter[rating]: 3.0 -> 5") {
+		t.Fatalf("expected `frontmatter[rating]: 3.0 -> 5` (float form -> new int) in dry-run output, got:\n%s", out)
 	}
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -20,12 +21,12 @@ func applyRepairs(n *vault.Note, result schema.RepairResult, fmCfg *config.Front
 	}
 
 	if dry != nil {
-		block := newFileBlock(displayPath(n.Path, vaultRoot))
+		preview := noteops.NotePreview{RelPath: displayPath(n.Path, vaultRoot)}
 		for _, act := range result.Actions {
-			block.removed(act.Property, act.OldValue)
-			block.added(act.Property, act.NewValue)
+			preview.Changes = append(preview.Changes,
+				noteops.FrontmatterChange(act.Property, true, act.OldValue, true, act.NewValue))
 		}
-		return true, block.flush(dry.Out)
+		return true, noteops.RenderNotePreview(dry.Out, preview)
 	}
 
 	for _, act := range result.Actions {

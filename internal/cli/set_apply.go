@@ -17,7 +17,7 @@ import (
 // When dry is non-nil, the mutation is computed in memory, a per-file diff is
 // emitted to dry.Out, and the file is not written. vaultRoot is used to
 // shorten paths in the diff header; pass "" to fall back to the absolute path.
-func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, error) {
+func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *noteops.Journal) (bool, error) {
 	if dry == nil {
 		return noteops.ApplyFrontmatterMutations(path, pairs, fm, journaler)
 	}
@@ -87,7 +87,7 @@ func setPairsNetChanged(front *frontmatter.Map, before map[string]snapshot, pair
 }
 
 func writeSetDryRun(path, vaultRoot string, front *frontmatter.Map, before map[string]snapshot, pairs []setPair, dry *DryRun) (bool, error) {
-	block := newFileBlock(displayPath(path, vaultRoot))
+	preview := noteops.NotePreview{RelPath: displayPath(path, vaultRoot)}
 	for _, key := range orderedKeys(pairs) {
 		snap := before[key]
 		afterVal, afterOK := front.Get(key)
@@ -97,15 +97,11 @@ func writeSetDryRun(path, vaultRoot string, front *frontmatter.Map, before map[s
 		if snap.present && afterOK && dryRunValuesEqual(snap.value, afterVal) {
 			continue
 		}
-		if snap.present {
-			block.removed(key, snap.value)
-		}
-		if afterOK {
-			block.added(key, afterVal)
-		}
+		preview.Changes = append(preview.Changes,
+			noteops.FrontmatterChange(key, snap.present, snap.value, afterOK, afterVal))
 	}
-	if err := block.flush(dry.Out); err != nil {
+	if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
 		return false, err
 	}
-	return !block.empty(), nil
+	return preview.Changed(), nil
 }

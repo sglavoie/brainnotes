@@ -1,3 +1,2 @@
 --- bad_case.md
-- status: wip
-+ status: WIP
+frontmatter[status]: wip -> WIP

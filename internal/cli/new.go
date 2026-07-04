@@ -13,6 +13,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
 )
 
@@ -100,7 +101,7 @@ func NewNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			journaler := newMutationJournal(cfg.Vault, commandInvocation(cmd, args))
+			journaler := noteops.NewJournal(cfg.Vault, commandInvocation(cmd, args))
 
 			if err := os.MkdirAll(dest, 0o755); err != nil {
 				return fmt.Errorf("new: mkdir %q: %w", dest, err)
@@ -111,7 +112,7 @@ func NewNewCmd() *cobra.Command {
 			if err := atomicWriteFile(outPath, []byte(rendered)); err != nil {
 				return err
 			}
-			if err := journaler.Finalize(); err != nil {
+			if _, err := journaler.Finalize(); err != nil {
 				return err
 			}
 

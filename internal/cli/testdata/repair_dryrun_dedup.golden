@@ -1,3 +1,2 @@
 --- dup_tags.md
-- tags: [go, go]
-+ tags: [go]
+frontmatter[tags]: [go, go] -> [go]

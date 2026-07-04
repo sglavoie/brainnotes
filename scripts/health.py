@@ -22,9 +22,7 @@ def main() -> int:
 
     repo_root = Path(__file__).resolve().parent.parent
     commands = [
-        ["just", "lint"],
-        ["go", "test", "./..."],
-        ["go", "build", "./cmd/bn"],
+        ["just", "ci"],
     ]
 
     try:

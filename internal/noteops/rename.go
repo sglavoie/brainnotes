@@ -347,19 +347,15 @@ func ScanFrontmatterRename(file string, front *frontmatter.Map, oldTitle, newTit
 	return scanFrontmatterWithRewrite(file, front, oldTitle, newTitle, wikilinkProps, wikilink.RewriteTitle)
 }
 
+// PrintRenamePlan renders the plan as canonical NotePreview blocks: a
+// `--- <relpath>` header per affected note, the target note carrying a leading
+// `path: <old> -> <new>` line for the file rename, then `body:<line>:` and
+// `frontmatter[<key>]:` change lines. This is the same shared preview contract
+// the frontmatter-only dry-runs emit, so all `bn` previews agree.
 func PrintRenamePlan(out io.Writer, vaultRoot string, plan *RenamePlan) error {
-	relTarget, err := filepath.Rel(vaultRoot, plan.Target)
-	if err != nil {
-		relTarget = plan.Target
-	}
-	relNew, err := filepath.Rel(vaultRoot, plan.NewPath)
-	if err != nil {
-		relNew = plan.NewPath
-	}
-	if _, err := fmt.Fprintf(out, "rename: %s -> %s\n", relTarget, relNew); err != nil {
-		return err
-	}
-	return printChanges(out, vaultRoot, plan.Changes)
+	previews := planPreviews(vaultRoot, plan.Target,
+		relOrAbs(vaultRoot, plan.Target), relOrAbs(vaultRoot, plan.NewPath), plan.Changes)
+	return RenderNotePreviews(out, previews)
 }
 
 func ApplyRenamePlan(vaultRoot string, plan *RenamePlan, fmCfg *config.FrontmatterConfig, out io.Writer) error {

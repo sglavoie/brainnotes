@@ -1,16 +1,16 @@
 package cli
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
-func applyRelink(n *vault.Note, idx *relinkIndex, g *query.Graph, fmCfg *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *mutationJournal) (bool, []relinkResidue, error) {
+func applyRelink(n *vault.Note, idx *relinkIndex, g *query.Graph, fmCfg *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *noteops.Journal) (bool, []relinkResidue, error) {
 	preBroken := query.UnresolvedLinks(n, g)
 	if len(preBroken) == 0 {
 		return false, nil, nil
@@ -60,19 +60,25 @@ func applyRelink(n *vault.Note, idx *relinkIndex, g *query.Graph, fmCfg *config.
 	sortRelinkChanges(changes)
 
 	if dry != nil {
-		block := newFileBlock(relPath)
+		preview := noteops.NotePreview{RelPath: relPath}
 		for _, change := range changes {
-			label := change.frontmatterKey
-			if label == "" {
-				label = "body"
-				if change.line > 0 {
-					label = fmt.Sprintf("body[%d]", change.line)
-				}
+			if change.frontmatterKey != "" {
+				preview.Changes = append(preview.Changes, noteops.PreviewChange{
+					Kind: noteops.PreviewFrontmatter,
+					Key:  change.frontmatterKey,
+					Old:  noteops.PresentText(change.oldRaw),
+					New:  noteops.PresentText(change.newRaw),
+				})
+				continue
 			}
-			block.removed(label, change.oldRaw)
-			block.added(label, change.newRaw)
+			preview.Changes = append(preview.Changes, noteops.PreviewChange{
+				Kind: noteops.PreviewBody,
+				Line: change.line,
+				Old:  noteops.PresentText(change.oldRaw),
+				New:  noteops.PresentText(change.newRaw),
+			})
 		}
-		if err := block.flush(dry.Out); err != nil {
+		if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
 			return false, nil, err
 		}
 	} else {

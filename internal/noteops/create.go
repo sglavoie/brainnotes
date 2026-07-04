@@ -44,6 +44,74 @@ func WithCreateJournalOptions(opts ...journal.RecorderOption) CreateOption {
 	}
 }
 
+// StubPreview is the read-only plan for a stub note that would be created from a
+// broken wikilink target. It resolves and validates the destination without
+// writing anything, so callers (CLI dry-run, web preview, cockpit fix planning)
+// can show exactly what CreateStubFromBrokenTarget would produce.
+type StubPreview struct {
+	Source      PathResolution
+	Destination PathResolution
+	Target      string
+	Title       string
+}
+
+// stubPlan is the resolved, validated destination shared by the preview and the
+// create paths so the two can never diverge.
+type stubPlan struct {
+	source      PathResolution
+	destination PathResolution
+	target      string
+	title       string
+}
+
+// planStubFromBrokenTarget resolves and validates where a stub note for
+// rawTarget would land, without touching the filesystem beyond stat checks. It
+// is the single source of truth for both PreviewStubFromBrokenTarget and
+// CreateStubFromBrokenTarget.
+func planStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string) (stubPlan, error) {
+	source, err := resolveCreateSource(vaultRoot, sourceRel)
+	if err != nil {
+		return stubPlan{}, err
+	}
+	target, err := normalizeBrokenCreateTarget(rawTarget)
+	if err != nil {
+		return stubPlan{}, err
+	}
+	destRel, title, err := createDestinationRel(source.RelPath, target)
+	if err != nil {
+		return stubPlan{}, err
+	}
+	dest, err := PathForRel(vaultRoot, destRel)
+	if err != nil {
+		return stubPlan{}, err
+	}
+	if dest.RelPath != destRel {
+		return stubPlan{}, Errorf(CodeForbidden, "create: destination must not resolve through a symlink")
+	}
+	if exists, err := pathExists(dest.AbsPath); err != nil {
+		return stubPlan{}, WrapError(CodeConflict, "create: stat destination", err)
+	} else if exists {
+		return stubPlan{}, Errorf(CodeConflict, "create: destination %s already exists", dest.RelPath)
+	}
+	return stubPlan{source: source, destination: dest, target: target, title: title}, nil
+}
+
+// PreviewStubFromBrokenTarget resolves the note a stub would create for a broken
+// wikilink target without writing anything. It returns the same conflict and
+// containment errors CreateStubFromBrokenTarget would.
+func PreviewStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string) (*StubPreview, error) {
+	plan, err := planStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget)
+	if err != nil {
+		return nil, err
+	}
+	return &StubPreview{
+		Source:      plan.source,
+		Destination: plan.destination,
+		Target:      plan.target,
+		Title:       plan.title,
+	}, nil
+}
+
 // CreateStubFromBrokenTarget creates a blank markdown note for a broken
 // wikilink target. Folder-qualified targets create in that folder; bare
 // targets create beside the source note.
@@ -55,32 +123,13 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 		}
 	}
 
-	source, err := resolveCreateSource(vaultRoot, sourceRel)
+	plan, err := planStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget)
 	if err != nil {
 		return nil, err
 	}
-	target, err := normalizeBrokenCreateTarget(rawTarget)
-	if err != nil {
-		return nil, err
-	}
-	destRel, title, err := createDestinationRel(source.RelPath, target)
-	if err != nil {
-		return nil, err
-	}
-	dest, err := PathForRel(vaultRoot, destRel)
-	if err != nil {
-		return nil, err
-	}
-	if dest.RelPath != destRel {
-		return nil, Errorf(CodeForbidden, "create: destination must not resolve through a symlink")
-	}
-	if exists, err := pathExists(dest.AbsPath); err != nil {
-		return nil, WrapError(CodeConflict, "create: stat destination", err)
-	} else if exists {
-		return nil, Errorf(CodeConflict, "create: destination %s already exists", dest.RelPath)
-	}
+	dest := plan.destination
 
-	body, err := stubFrontmatterContent(title)
+	body, err := stubFrontmatterContent(plan.title)
 	if err != nil {
 		return nil, err
 	}
@@ -104,10 +153,10 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 	}
 
 	return &CreateResult{
-		Source:      source,
+		Source:      plan.source,
 		Destination: dest,
-		Target:      target,
-		Title:       title,
+		Target:      plan.target,
+		Title:       plan.title,
 		Journal:     entry,
 	}, nil
 }

@@ -118,7 +118,7 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	if opts.dryRun {
 		return noteops.PrintMovePlan(out, v.Root, plan)
 	}
-	journaler := newMutationJournal(v.Root, commandInvocation(cmd, args))
+	journaler := noteops.NewJournal(v.Root, commandInvocation(cmd, args))
 
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return fmt.Errorf("move: mkdir %q: %w", newFolderAbs, err)
@@ -146,7 +146,7 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted after content rewrites; run 'git diff' to inspect partial state")
 		return err
 	}
-	if err := journaler.Finalize(); err != nil {
+	if _, err := journaler.Finalize(); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(out, "moved: %s -> %s\n", plan.Target, plan.NewPath)

@@ -4,53 +4,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 )
 
-type mutationJournal struct {
-	vaultRoot string
-	command   string
-	recorder  *journal.Recorder
-}
-
-func newMutationJournal(vaultRoot, command string) *mutationJournal {
-	return &mutationJournal{
-		vaultRoot: vaultRoot,
-		command:   strings.TrimSpace(command),
-	}
-}
-
-func (m *mutationJournal) Capture(path string) error {
-	if m == nil {
-		return nil
-	}
-	if m.recorder == nil {
-		command := m.command
-		if command == "" {
-			command = "bn"
-		}
-		recorder, err := journal.NewRecorder(
-			m.vaultRoot,
-			journalRootForVault(m.vaultRoot),
-			command,
-		)
-		if err != nil {
-			return err
-		}
-		m.recorder = recorder
-	}
-	return m.recorder.Capture(path)
-}
-
-func (m *mutationJournal) Finalize() error {
-	if m == nil || m.recorder == nil {
-		return nil
-	}
-	_, err := m.recorder.Finalize()
-	return err
-}
-
+// commandInvocation renders the command path plus its positional args as the
+// human-readable command string stored in an undo-journal entry.
 func commandInvocation(cmd *cobra.Command, args []string) string {
 	parts := make([]string, 0, 1+len(args))
 	if cmd != nil {

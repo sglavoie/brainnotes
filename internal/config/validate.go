@@ -30,6 +30,30 @@ func validate(cfg *Config) error {
 	if err := validateRoutes(cfg); err != nil {
 		return err
 	}
+	if err := validateCockpit(cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateCockpit checks the [cockpit] section. Rule identifiers are not checked
+// for membership against the cockpit's rule kinds (config stays decoupled from
+// internal/cockpit), but empty or whitespace-only entries are rejected because
+// they can never name a real rule and would silently do nothing.
+func validateCockpit(cfg *Config) error {
+	for i, rule := range cfg.Cockpit.DisabledRules {
+		if strings.TrimSpace(rule) == "" {
+			return fmt.Errorf("config: cockpit.disabled_rules[%d] must not be empty or whitespace", i)
+		}
+	}
+	for i, rule := range cfg.Cockpit.Priority {
+		if strings.TrimSpace(rule) == "" {
+			return fmt.Errorf("config: cockpit.priority[%d] must not be empty or whitespace", i)
+		}
+	}
+	if cfg.Cockpit.LongTailLimit < 0 {
+		return fmt.Errorf("config: cockpit.long_tail_limit %d must not be negative", cfg.Cockpit.LongTailLimit)
+	}
 	return nil
 }
 

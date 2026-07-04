@@ -1,3 +1,2 @@
 --- Areas/Alpha.md
-- status: wip
-+ status: shipped
+frontmatter[status]: wip -> shipped

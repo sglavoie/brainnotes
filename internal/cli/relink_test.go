@@ -64,17 +64,11 @@ func TestRelink_DryRun(t *testing.T) {
 	if !strings.Contains(out, "--- Notes/Ref.md") {
 		t.Fatalf("expected Notes/Ref.md diff block, got:\n%s", out)
 	}
-	if !strings.Contains(out, "- body[6]: [[Projects\\Roadmap]]") {
-		t.Fatalf("expected body removal line, got:\n%s", out)
+	if !strings.Contains(out, "body:6: [[Projects\\Roadmap]] -> [[Projects/Roadmap]]") {
+		t.Fatalf("expected canonical body change line, got:\n%s", out)
 	}
-	if !strings.Contains(out, "+ body[6]: [[Projects/Roadmap]]") {
-		t.Fatalf("expected body addition line, got:\n%s", out)
-	}
-	if !strings.Contains(out, "- categories: [[Projects\\Roadmap]]") {
-		t.Fatalf("expected frontmatter removal line, got:\n%s", out)
-	}
-	if !strings.Contains(out, "+ categories: [[Projects/Roadmap]]") {
-		t.Fatalf("expected frontmatter addition line, got:\n%s", out)
+	if !strings.Contains(out, "frontmatter[categories]: [[Projects\\Roadmap]] -> [[Projects/Roadmap]]") {
+		t.Fatalf("expected canonical frontmatter change line, got:\n%s", out)
 	}
 
 	if got := readNote(t, ref); got != original {

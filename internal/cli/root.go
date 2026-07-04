@@ -64,6 +64,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewBackupCmd())
 	cmd.AddCommand(NewBacklinksCmd())
 	cmd.AddCommand(NewConfigCmd(func() string { return configPath }))
+	cmd.AddCommand(NewDoctorCmd())
 	cmd.AddCommand(NewFindCmd())
 	cmd.AddCommand(NewGraphCmd())
 	cmd.AddCommand(NewHistoryCmd())

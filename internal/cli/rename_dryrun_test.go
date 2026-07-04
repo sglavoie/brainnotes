@@ -21,11 +21,14 @@ func TestRenameDryRunWritesNothing(t *testing.T) {
 	if !mapsEqual(before, after) {
 		t.Fatalf("dry-run modified files:\nbefore=%v\nafter=%v", before, after)
 	}
-	if !strings.Contains(out, "rename: Dune.md -> Sand Worms.md") {
-		t.Errorf("dry-run output missing rename header:\n%s", out)
+	if !strings.Contains(out, "--- Dune.md") {
+		t.Errorf("dry-run output missing target note block header:\n%s", out)
 	}
-	if !strings.Contains(out, "Reviews/Dune Review.md:") {
-		t.Errorf("dry-run output missing reviewer file change:\n%s", out)
+	if !strings.Contains(out, "path: Dune.md -> Sand Worms.md") {
+		t.Errorf("dry-run output missing canonical path change line:\n%s", out)
+	}
+	if !strings.Contains(out, "--- Reviews/Dune Review.md") {
+		t.Errorf("dry-run output missing reviewer file block:\n%s", out)
 	}
 	if !strings.Contains(out, "frontmatter[categories]") {
 		t.Errorf("dry-run output missing frontmatter change:\n%s", out)
@@ -70,12 +73,12 @@ func TestRenameDryRunMasksCodeBlockReferences(t *testing.T) {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
 
-	for _, want := range []string{"bare.md:", "alias.md:", "heading.md:"} {
+	for _, want := range []string{"--- bare.md", "--- alias.md", "--- heading.md"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in dry-run output:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "codeblock.md:") {
+	if strings.Contains(out, "--- codeblock.md") {
 		t.Errorf("expected codeblock.md to be absent from dry-run output (link is fenced):\n%s", out)
 	}
 

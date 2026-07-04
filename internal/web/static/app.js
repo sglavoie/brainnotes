@@ -295,13 +295,41 @@ var BrainNotesApp = (() => {
     }
     return notePathForKey(result.key);
   };
-  var emptyReviewCounts = () => ({
+  var emptyCockpitCounts = () => ({
     active: 0,
     done_hidden: 0,
     snoozed_hidden: 0,
     total_generated: 0
   });
-  var normalizeReviewAffectedNotes = (value) => {
+  var normalizeCockpitCounts = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return emptyCockpitCounts();
+    }
+    return {
+      active: readCount(record.active),
+      done_hidden: readCount(record.done_hidden),
+      snoozed_hidden: readCount(record.snoozed_hidden),
+      total_generated: readCount(record.total_generated)
+    };
+  };
+  var normalizeCockpitActions = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const kind = normalizeParamValue(record.kind);
+      if (kind === "") {
+        return [];
+      }
+      return [{ kind, label: normalizeParamValue(record.label) || kind }];
+    });
+  };
+  var normalizeCockpitAffectedNotes = (value) => {
     if (!Array.isArray(value)) {
       return [];
     }
@@ -313,18 +341,16 @@ var BrainNotesApp = (() => {
       const affected = {
         title: normalizeParamValue(record.title),
         rel_path: normalizeParamValue(record.rel_path),
-        path: normalizeParamValue(record.path) || void 0,
         folder: normalizeParamValue(record.folder) || void 0,
-        folder_path: normalizeParamValue(record.folder_path) || void 0,
         location: normalizeParamValue(record.location) || void 0
       };
-      if (affected.title === "" && affected.rel_path === "" && !affected.path && !affected.folder && !affected.folder_path && !affected.location) {
+      if (affected.title === "" && affected.rel_path === "" && !affected.folder && !affected.location) {
         return [];
       }
       return [affected];
     });
   };
-  var normalizeReviewItems = (value) => {
+  var normalizeCockpitTasks = (value) => {
     if (!Array.isArray(value)) {
       return [];
     }
@@ -346,23 +372,13 @@ var BrainNotesApp = (() => {
         summary: normalizeParamValue(record.summary),
         detail: normalizeParamValue(record.detail),
         count: readCount(record.count),
-        affected: normalizeReviewAffectedNotes(record.affected)
+        affected: normalizeCockpitAffectedNotes(record.affected),
+        actions: normalizeCockpitActions(record.actions),
+        triage_only: readBoolean(record.triage_only)
       }];
     });
   };
-  var normalizeReviewCounts = (value) => {
-    const record = asRecord(value);
-    if (!record) {
-      return emptyReviewCounts();
-    }
-    return {
-      active: readCount(record.active),
-      done_hidden: readCount(record.done_hidden),
-      snoozed_hidden: readCount(record.snoozed_hidden),
-      total_generated: readCount(record.total_generated)
-    };
-  };
-  var normalizeReviewWarnings = (value) => {
+  var normalizeCockpitWarnings = (value) => {
     if (!Array.isArray(value)) {
       return [];
     }
@@ -371,25 +387,148 @@ var BrainNotesApp = (() => {
       if (!record) {
         return [];
       }
-      const code = normalizeParamValue(record.code);
       const message = normalizeParamValue(record.message);
-      if (code === "" && message === "") {
+      const path = normalizeParamValue(record.path);
+      if (message === "" && path === "") {
         return [];
       }
-      return [{ code, message }];
+      return [{ message, path: path || void 0 }];
     });
   };
-  var normalizeReviewAPIResponse = (payload) => {
+  var normalizeCockpitQueueResponse = (payload) => {
     const base = normalizeManagementResult(payload);
     const record = asRecord(payload) || {};
     return {
       ok: base.ok,
       code: base.ok ? void 0 : base.code,
       message: base.message,
-      items: normalizeReviewItems(record.items),
-      counts: normalizeReviewCounts(record.counts),
-      warnings: normalizeReviewWarnings(record.warnings)
+      tasks: normalizeCockpitTasks(record.tasks),
+      counts: normalizeCockpitCounts(record.counts),
+      warnings: normalizeCockpitWarnings(record.warnings)
     };
+  };
+  var normalizeNotePreviewText = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return { present: false, text: "" };
+    }
+    return {
+      present: readBoolean(record.present),
+      text: normalizeParamValue(record.text)
+    };
+  };
+  var normalizeNotePreviewChanges = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const kind = normalizeParamValue(record.kind);
+      if (kind === "") {
+        return [];
+      }
+      return [{
+        kind,
+        key: normalizeParamValue(record.key) || void 0,
+        line: readCount(record.line) || void 0,
+        old: normalizeNotePreviewText(record.old),
+        new: normalizeNotePreviewText(record.new)
+      }];
+    });
+  };
+  var normalizeNotePreviews = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      return [{
+        rel_path: normalizeParamValue(record.rel_path),
+        changes: normalizeNotePreviewChanges(record.changes)
+      }];
+    });
+  };
+  var normalizeFixSkips = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const reason = normalizeParamValue(record.reason);
+      const relPath = normalizeParamValue(record.rel_path);
+      const target = normalizeParamValue(record.target);
+      if (reason === "" && relPath === "" && target === "") {
+        return [];
+      }
+      return [{
+        rel_path: relPath || void 0,
+        target: target || void 0,
+        reason
+      }];
+    });
+  };
+  var normalizeFixPreviewResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      action: normalizeParamValue(record.action),
+      task_id: normalizeParamValue(record.task_id),
+      previews: normalizeNotePreviews(record.previews),
+      skipped: normalizeFixSkips(record.skipped),
+      preview_id: normalizeParamValue(record.preview_id),
+      expires_at: normalizeExpiryString(record.expires_at)
+    };
+  };
+  var normalizeFixApplyResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      action: normalizeParamValue(record.action),
+      task_id: normalizeParamValue(record.task_id),
+      changed: normalizeStringArray(record.changed),
+      created: normalizeStringArray(record.created),
+      skipped: normalizeFixSkips(record.skipped),
+      journal_id: normalizeParamValue(record.journal_id) || void 0
+    };
+  };
+  var buildCockpitItemForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("id", request.id);
+    body.set("action", request.action);
+    body.set("token", request.token);
+    if (request.action === "snooze" && request.snooze) {
+      body.set("snooze", request.snooze);
+    }
+    return body;
+  };
+  var buildFixPreviewForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("id", request.id);
+    body.set("action", request.action);
+    body.set("token", request.token);
+    return body;
+  };
+  var buildFixApplyForm = (request) => {
+    const body = buildFixPreviewForm(request);
+    if (request.previewID !== void 0 && request.previewID.trim() !== "") {
+      body.set("preview_id", request.previewID.trim());
+    }
+    return body;
   };
   var facetGroups = [
     { key: "tags", label: "Tags", param: "tag", repeat: true },
@@ -555,16 +694,6 @@ var BrainNotesApp = (() => {
     return body;
   };
   var buildOpenNoteForm = (request) => buildNoteKeyMutationForm(request);
-  var buildReviewItemForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("id", request.id);
-    body.set("action", request.action);
-    body.set("token", request.token);
-    if (request.action === "snooze" && request.snooze) {
-      body.set("snooze", request.snooze);
-    }
-    return body;
-  };
   var normalizeHistoryEntries = (payload) => {
     const data = asRecord(payload);
     const rawEntries = data && Array.isArray(data.entries) ? data.entries : [];
@@ -803,6 +932,691 @@ var BrainNotesApp = (() => {
         });
       });
     });
+  };
+
+  // internal/web/static_src/daily-fixes.ts
+  var FIX_ACTIONS = /* @__PURE__ */ new Set(["schema_repair", "relink", "create_stub"]);
+  var readDailyFixesConfig = (root) => ({
+    queueEndpoint: root.getAttribute("data-fixes-endpoint") || "/api/cockpit",
+    itemEndpoint: root.getAttribute("data-fixes-item-endpoint") || "/api/cockpit/item",
+    previewEndpoint: root.getAttribute("data-fixes-preview-endpoint") || "/api/fixes/preview",
+    applyEndpoint: root.getAttribute("data-fixes-apply-endpoint") || "/api/fixes/apply",
+    openEndpoint: root.getAttribute("data-fixes-open-endpoint") || "/api/open",
+    csrfToken: root.getAttribute("data-fixes-csrf") || ""
+  });
+  var fixOpenKeyFromRelPath = (relPath) => {
+    const trimmed = (relPath || "").trim().replace(/\\/g, "/");
+    if (trimmed === "") {
+      return "";
+    }
+    const withoutExt = trimmed.replace(/\.md$/i, "");
+    const segments = [];
+    for (const segment of withoutExt.split("/")) {
+      if (segment === "" || segment === "." || segment === "..") {
+        return "";
+      }
+      segments.push(segment.toLowerCase());
+    }
+    return segments.join("/");
+  };
+  var fixKindLabel = (kind) => {
+    switch (kind) {
+      case "frontmatter_error":
+        return "Frontmatter";
+      case "schema_violation":
+        return "Schema";
+      case "broken_target":
+        return "Broken target";
+      case "duplicate_title":
+        return "Duplicate title";
+      case "orphan_note":
+        return "Orphan";
+      case "dead_end_note":
+        return "Dead end";
+      case "long_tail_value":
+        return "Long-tail value";
+      default:
+        return "Fix";
+    }
+  };
+  var fixTaskLabel = (task) => task.title || task.summary || task.id || "Fix";
+  var affectedNoteLabel = (note) => note.title || note.rel_path || "Affected note";
+  var fixCountsStatusMessage = (counts) => {
+    if (counts.active === 1) {
+      return "1 active fix.";
+    }
+    if (counts.active > 1) {
+      return `${counts.active} active fixes.`;
+    }
+    return "No active fixes.";
+  };
+  var normalizeItemAction = (value) => {
+    switch (value) {
+      case "mark_done":
+      case "done":
+      case "snooze":
+      case "clear":
+        return value;
+      default:
+        return "";
+    }
+  };
+  var normalizeSnooze = (value) => {
+    switch (value) {
+      case "tomorrow":
+      case "week":
+        return value;
+      default:
+        return void 0;
+    }
+  };
+  var normalizeFixAction = (value) => {
+    switch (value) {
+      case "schema_repair":
+      case "relink":
+      case "create_stub":
+        return value;
+      default:
+        return "";
+    }
+  };
+  var itemActionLoadingMessage = (action, snooze) => {
+    if (action === "snooze") {
+      return snooze === "week" ? "Snoozing fix for a week..." : "Snoozing fix until tomorrow...";
+    }
+    if (action === "clear") {
+      return "Clearing fix state...";
+    }
+    return "Marking fix done...";
+  };
+  var buildFixesItemFetchRequest = (endpoint, csrfToken, id, action, snooze) => {
+    const body = buildCockpitItemForm({ id, action, token: csrfToken, snooze });
+    return jsonPostRequest(endpoint, csrfToken, body.toString());
+  };
+  var buildFixesPreviewFetchRequest = (endpoint, csrfToken, id, action) => {
+    const body = buildFixPreviewForm({ id, action, token: csrfToken });
+    return jsonPostRequest(endpoint, csrfToken, body.toString());
+  };
+  var buildFixesApplyFetchRequest = (endpoint, csrfToken, id, action, previewID) => {
+    const body = buildFixApplyForm({ id, action, token: csrfToken, previewID });
+    return jsonPostRequest(endpoint, csrfToken, body.toString());
+  };
+  var jsonPostRequest = (url, csrfToken, body) => ({
+    url,
+    init: {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-BN-CSRF": csrfToken
+      },
+      body
+    }
+  });
+  var previewChangeText = (value) => value.present ? value.text === "" ? "(empty)" : value.text : "(absent)";
+  var previewChangeLine = (change) => {
+    const rendered = `${previewChangeText(change.old)} -> ${previewChangeText(change.new)}`;
+    switch (change.kind) {
+      case "frontmatter":
+        return `frontmatter[${change.key || ""}]: ${rendered}`;
+      case "body":
+        return `body:${change.line || 0}: ${rendered}`;
+      case "path":
+        return `path: ${rendered}`;
+      default:
+        return rendered;
+    }
+  };
+  var initDailyFixes = (deps = {}) => {
+    const root = queryElement(document, "[data-fixes-panel]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const statusEl = queryElement(root, "[data-fixes-status]", HTMLElement);
+    const loadingEl = queryElement(root, "[data-fixes-loading]", HTMLElement);
+    const errorEl = queryElement(root, "[data-fixes-error]", HTMLElement);
+    const emptyEl = queryElement(root, "[data-fixes-empty]", HTMLElement);
+    const warningListEl = queryElement(root, "[data-fixes-warnings]", HTMLElement);
+    const listEl = queryElement(root, "[data-fixes-list]", HTMLElement);
+    if (!statusEl || !listEl) {
+      return;
+    }
+    const countEls = {
+      active: queryElement(root, "[data-fixes-count-active]", HTMLElement),
+      doneHidden: queryElement(root, "[data-fixes-count-done-hidden]", HTMLElement),
+      snoozedHidden: queryElement(root, "[data-fixes-count-snoozed-hidden]", HTMLElement),
+      totalGenerated: queryElement(root, "[data-fixes-count-total-generated]", HTMLElement)
+    };
+    const config = readDailyFixesConfig(root);
+    const fetcher = deps.fetch || fetch;
+    const previews = /* @__PURE__ */ new Map();
+    let busy = false;
+    let ignoreNextMutation = false;
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message, kind);
+    };
+    const setError = (message) => {
+      if (!errorEl) {
+        return;
+      }
+      errorEl.textContent = message;
+      errorEl.hidden = message === "";
+    };
+    const showError = (message) => {
+      setError(message);
+      setStatus(message, "is-error");
+    };
+    const setLoading = (loading) => {
+      if (loadingEl) {
+        loadingEl.hidden = !loading;
+      }
+    };
+    const setBusy = (next) => {
+      busy = next;
+      root.setAttribute("aria-busy", next ? "true" : "false");
+      for (const button of queryAllElements(root, "[data-fixes-button]", HTMLButtonElement)) {
+        button.disabled = next;
+      }
+    };
+    const renderCounts = (counts) => {
+      if (countEls.active) {
+        countEls.active.textContent = String(counts.active);
+      }
+      if (countEls.doneHidden) {
+        countEls.doneHidden.textContent = String(counts.done_hidden);
+      }
+      if (countEls.snoozedHidden) {
+        countEls.snoozedHidden.textContent = String(counts.snoozed_hidden);
+      }
+      if (countEls.totalGenerated) {
+        countEls.totalGenerated.textContent = String(counts.total_generated);
+      }
+    };
+    const renderWarnings = (result) => {
+      if (!warningListEl) {
+        return;
+      }
+      warningListEl.textContent = "";
+      warningListEl.hidden = result.warnings.length === 0;
+      for (const warning of result.warnings) {
+        const item = warningListEl.ownerDocument.createElement("li");
+        item.setAttribute("data-fixes-warning", "");
+        item.textContent = warning.message || "Cockpit warning.";
+        warningListEl.appendChild(item);
+      }
+    };
+    const openButton = (doc, note) => {
+      const key = fixOpenKeyFromRelPath(note.rel_path);
+      if (key === "") {
+        return null;
+      }
+      const button = doc.createElement("button");
+      button.className = "review-action review-open-editor";
+      button.type = "button";
+      button.setAttribute("data-fixes-button", "");
+      button.setAttribute("data-fixes-open-key", key);
+      button.setAttribute("aria-label", `Open ${affectedNoteLabel(note)} in editor`);
+      button.textContent = "Open in editor";
+      return button;
+    };
+    const renderAffectedNote = (doc, list, note) => {
+      const item = doc.createElement("li");
+      item.className = "review-affected-note";
+      const label = affectedNoteLabel(note);
+      const key = fixOpenKeyFromRelPath(note.rel_path);
+      if (key !== "") {
+        const link = doc.createElement("a");
+        link.href = notePathForKey(key);
+        link.textContent = label;
+        item.appendChild(link);
+      } else {
+        const text = doc.createElement("span");
+        text.textContent = label;
+        item.appendChild(text);
+      }
+      if (note.folder) {
+        const folder = doc.createElement("span");
+        folder.className = "diagnostic-folder";
+        folder.textContent = note.folder;
+        item.appendChild(folder);
+      }
+      if (note.location) {
+        const location = doc.createElement("span");
+        location.className = "diagnostic-location";
+        location.textContent = note.location;
+        item.appendChild(location);
+      }
+      const open = openButton(doc, note);
+      if (open) {
+        item.appendChild(open);
+      }
+      list.appendChild(item);
+    };
+    const triageButton = (doc, id, action, label, snooze) => {
+      const button = doc.createElement("button");
+      button.className = "review-action";
+      button.type = "button";
+      button.setAttribute("data-fixes-button", "");
+      button.setAttribute("data-fixes-item-action", action);
+      button.setAttribute("data-fixes-id", id);
+      if (snooze) {
+        button.setAttribute("data-fixes-snooze", snooze);
+      }
+      button.textContent = label;
+      return button;
+    };
+    const fixButton = (doc, id, action, label) => {
+      const button = doc.createElement("button");
+      button.className = "review-action fixes-fix-action";
+      button.type = "button";
+      button.setAttribute("data-fixes-button", "");
+      button.setAttribute("data-fixes-fix-action", action);
+      button.setAttribute("data-fixes-id", id);
+      button.textContent = label;
+      return button;
+    };
+    const renderTask = (task) => {
+      const doc = listEl.ownerDocument;
+      const row = doc.createElement("li");
+      row.className = "review-item fixes-item";
+      row.setAttribute("data-fixes-task", "");
+      row.setAttribute("data-fixes-id", task.id);
+      row.setAttribute("data-fixes-kind", task.kind);
+      row.setAttribute("data-fixes-signature", task.signature);
+      const main = doc.createElement("div");
+      main.className = "review-item-main";
+      const kind = doc.createElement("p");
+      kind.className = "review-item-kind";
+      kind.textContent = fixKindLabel(task.kind);
+      main.appendChild(kind);
+      const title = doc.createElement("h3");
+      title.className = "review-item-title";
+      title.textContent = fixTaskLabel(task);
+      main.appendChild(title);
+      if (task.summary) {
+        const summary = doc.createElement("p");
+        summary.className = "review-item-summary";
+        summary.textContent = task.summary;
+        main.appendChild(summary);
+      }
+      if (task.detail || task.affected.length > 0) {
+        const details = doc.createElement("details");
+        details.className = "review-item-details";
+        const detailsSummary = doc.createElement("summary");
+        detailsSummary.textContent = "View details";
+        details.appendChild(detailsSummary);
+        if (task.detail) {
+          const detail = doc.createElement("p");
+          detail.className = "review-item-detail";
+          detail.textContent = task.detail;
+          details.appendChild(detail);
+        }
+        if (task.affected.length > 0) {
+          const affectedList = doc.createElement("ul");
+          affectedList.className = "review-affected-list";
+          affectedList.setAttribute("aria-label", "Affected notes");
+          for (const affected of task.affected) {
+            renderAffectedNote(doc, affectedList, affected);
+          }
+          details.appendChild(affectedList);
+        }
+        main.appendChild(details);
+      }
+      const actions = doc.createElement("div");
+      actions.className = "review-item-actions";
+      actions.setAttribute("data-fixes-task-actions", "");
+      if (!task.triage_only) {
+        for (const action of task.actions) {
+          if (FIX_ACTIONS.has(action.kind)) {
+            actions.appendChild(fixButton(doc, task.id, action.kind, action.label));
+          }
+        }
+      }
+      actions.appendChild(triageButton(doc, task.id, "mark_done", "Done"));
+      actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze tomorrow", "tomorrow"));
+      actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze next week", "week"));
+      main.appendChild(actions);
+      const preview = doc.createElement("div");
+      preview.className = "fixes-preview";
+      preview.setAttribute("data-fixes-preview", "");
+      preview.hidden = true;
+      main.appendChild(preview);
+      row.appendChild(main);
+      return row;
+    };
+    const renderGroups = (tasks) => {
+      const doc = listEl.ownerDocument;
+      listEl.textContent = "";
+      const order = [];
+      const groups = /* @__PURE__ */ new Map();
+      for (const task of tasks) {
+        const bucket = groups.get(task.kind);
+        if (bucket) {
+          bucket.push(task);
+        } else {
+          order.push(task.kind);
+          groups.set(task.kind, [task]);
+        }
+      }
+      for (const kind of order) {
+        const bucket = groups.get(kind) || [];
+        const group = doc.createElement("li");
+        group.className = "fixes-group";
+        group.setAttribute("data-fixes-group", kind);
+        const heading = doc.createElement("h3");
+        heading.className = "fixes-group-heading";
+        heading.textContent = `${fixKindLabel(kind)} (${bucket.length})`;
+        group.appendChild(heading);
+        const groupList = doc.createElement("ul");
+        groupList.className = "fixes-group-list";
+        for (const task of bucket) {
+          groupList.appendChild(renderTask(task));
+        }
+        group.appendChild(groupList);
+        listEl.appendChild(group);
+      }
+    };
+    const renderResult = (result) => {
+      previews.clear();
+      renderCounts(result.counts);
+      renderWarnings(result);
+      renderGroups(result.tasks);
+      const hasTasks = result.tasks.length > 0;
+      listEl.hidden = !hasTasks;
+      if (emptyEl) {
+        emptyEl.hidden = hasTasks;
+      }
+      setBusy(busy);
+    };
+    const applyQueueResult = (payload, successMessage = "", successKind = "") => {
+      const result = normalizeCockpitQueueResponse(payload);
+      if (!result.ok) {
+        showError(result.message || "Cockpit request failed.");
+        return false;
+      }
+      setError("");
+      renderResult(result);
+      const message = successMessage || fixCountsStatusMessage(result.counts);
+      const kind = successKind || (result.counts.active === 0 ? "is-empty" : "");
+      setStatus(message, kind);
+      return true;
+    };
+    const loadQueue = async (successMessage = "") => {
+      setBusy(true);
+      setLoading(true);
+      setStatus("Loading fixes queue...", "is-loading");
+      try {
+        const resp = await fetcher(config.queueEndpoint, {
+          headers: { Accept: "application/json" }
+        });
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          showError(normalizeManagementErrorMessage(resp.status, payload));
+          return;
+        }
+        applyQueueResult(payload, successMessage, successMessage ? "is-success" : "");
+      } catch {
+        showError("Fixes queue unavailable.");
+      } finally {
+        setLoading(false);
+        setBusy(false);
+      }
+    };
+    const findPreviewEl = (id) => {
+      for (const task of queryAllElements(listEl, "[data-fixes-task]", HTMLElement)) {
+        if (task.getAttribute("data-fixes-id") === id) {
+          return queryElement(task, "[data-fixes-preview]", HTMLElement);
+        }
+      }
+      return null;
+    };
+    const clearPreview = (id) => {
+      previews.delete(id);
+      const el = findPreviewEl(id);
+      if (el) {
+        el.textContent = "";
+        el.hidden = true;
+      }
+    };
+    const renderPreview = (id, action, previews_, message) => {
+      const el = findPreviewEl(id);
+      if (!el) {
+        return;
+      }
+      const doc = el.ownerDocument;
+      el.textContent = "";
+      el.hidden = false;
+      const heading = doc.createElement("p");
+      heading.className = "fixes-preview-message";
+      heading.textContent = message || "Preview ready.";
+      el.appendChild(heading);
+      for (const preview of previews_) {
+        const noteEl = doc.createElement("div");
+        noteEl.className = "fixes-preview-note";
+        const path = doc.createElement("p");
+        path.className = "fixes-preview-path";
+        path.textContent = preview.rel_path;
+        noteEl.appendChild(path);
+        const changeList = doc.createElement("ul");
+        changeList.className = "fixes-preview-changes";
+        for (const change of preview.changes) {
+          const line = doc.createElement("li");
+          line.textContent = previewChangeLine(change);
+          changeList.appendChild(line);
+        }
+        noteEl.appendChild(changeList);
+        el.appendChild(noteEl);
+      }
+      const controls = doc.createElement("div");
+      controls.className = "fixes-preview-actions";
+      const applyBtn = doc.createElement("button");
+      applyBtn.className = "review-action fixes-preview-apply";
+      applyBtn.type = "button";
+      applyBtn.setAttribute("data-fixes-button", "");
+      applyBtn.setAttribute("data-fixes-preview-apply", "");
+      applyBtn.setAttribute("data-fixes-id", id);
+      applyBtn.textContent = "Apply fix";
+      const cancelBtn = doc.createElement("button");
+      cancelBtn.className = "review-action fixes-preview-cancel";
+      cancelBtn.type = "button";
+      cancelBtn.setAttribute("data-fixes-button", "");
+      cancelBtn.setAttribute("data-fixes-preview-cancel", "");
+      cancelBtn.setAttribute("data-fixes-id", id);
+      cancelBtn.textContent = "Cancel";
+      controls.append(applyBtn, cancelBtn);
+      el.appendChild(controls);
+      void action;
+    };
+    const runItemAction = async (button) => {
+      const id = button.getAttribute("data-fixes-id") || "";
+      const action = normalizeItemAction(button.getAttribute("data-fixes-item-action") || "");
+      const snooze = normalizeSnooze(button.getAttribute("data-fixes-snooze") || "");
+      if (!id || !action || !config.csrfToken) {
+        showError("Fix action unavailable.");
+        return;
+      }
+      if (action === "snooze" && !snooze) {
+        showError("Fix snooze unavailable.");
+        return;
+      }
+      setBusy(true);
+      setStatus(itemActionLoadingMessage(action, snooze), "is-loading");
+      try {
+        const request = buildFixesItemFetchRequest(
+          config.itemEndpoint,
+          config.csrfToken,
+          id,
+          action,
+          snooze
+        );
+        const resp = await fetcher(request.url, request.init);
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          showError(normalizeManagementErrorMessage(resp.status, payload));
+          return;
+        }
+        const result = normalizeCockpitQueueResponse(payload);
+        applyQueueResult(payload, result.message || "Fix updated.", "is-success");
+      } catch {
+        showError("Fix action failed.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runPreview = async (button) => {
+      const id = button.getAttribute("data-fixes-id") || "";
+      const action = normalizeFixAction(button.getAttribute("data-fixes-fix-action") || "");
+      if (!id || !action || !config.csrfToken) {
+        showError("Fix preview unavailable.");
+        return;
+      }
+      setBusy(true);
+      setStatus("Previewing fix...", "is-loading");
+      try {
+        const request = buildFixesPreviewFetchRequest(
+          config.previewEndpoint,
+          config.csrfToken,
+          id,
+          action
+        );
+        const resp = await fetcher(request.url, request.init);
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          showError(normalizeManagementErrorMessage(resp.status, payload));
+          return;
+        }
+        const result = normalizeFixPreviewResponse(payload);
+        if (!result.ok || !result.preview_id) {
+          showError(result.message || "Fix preview failed.");
+          return;
+        }
+        previews.set(id, { action, previewID: result.preview_id });
+        renderPreview(id, action, result.previews, result.message || "Preview ready.");
+        setError("");
+        setStatus(result.message || "Preview ready.", "is-success");
+      } catch {
+        showError("Fix preview failed.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runApply = async (button) => {
+      const id = button.getAttribute("data-fixes-id") || "";
+      const state = previews.get(id);
+      if (!id || !state || !config.csrfToken) {
+        showError("Preview the fix before applying it.");
+        return;
+      }
+      setBusy(true);
+      setStatus("Applying fix...", "is-loading");
+      try {
+        const request = buildFixesApplyFetchRequest(
+          config.applyEndpoint,
+          config.csrfToken,
+          id,
+          state.action,
+          state.previewID
+        );
+        const resp = await fetcher(request.url, request.init);
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          clearPreview(id);
+          showError(normalizeManagementErrorMessage(resp.status, payload));
+          await loadQueue();
+          return;
+        }
+        const result = normalizeFixApplyResponse(payload);
+        if (!result.ok) {
+          clearPreview(id);
+          showError(result.message || "Fix apply failed.");
+          await loadQueue();
+          return;
+        }
+        previews.delete(id);
+        ignoreNextMutation = true;
+        window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
+        await loadQueue(result.message || "Fix applied.");
+      } catch {
+        clearPreview(id);
+        showError("Fix apply failed.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runOpen = async (button) => {
+      const key = button.getAttribute("data-fixes-open-key") || "";
+      if (!key || !config.csrfToken) {
+        showError("Open action unavailable.");
+        return;
+      }
+      setBusy(true);
+      setStatus("Opening editor...", "is-loading");
+      try {
+        const body = buildOpenNoteForm({ key, token: config.csrfToken });
+        const request = jsonPostRequest(config.openEndpoint, config.csrfToken, body.toString());
+        const resp = await fetcher(request.url, request.init);
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          showError(normalizeOpenErrorMessage(resp.status, payload));
+          return;
+        }
+        setError("");
+        setStatus("Opened in editor. Refresh after saving changes.", "is-success");
+      } catch {
+        showError("Open failed.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    root.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const fix = target.closest("[data-fixes-fix-action]");
+      if (fix && root.contains(fix)) {
+        void runPreview(fix);
+        return;
+      }
+      const applyBtn = target.closest("[data-fixes-preview-apply]");
+      if (applyBtn && root.contains(applyBtn)) {
+        void runApply(applyBtn);
+        return;
+      }
+      const cancelBtn = target.closest("[data-fixes-preview-cancel]");
+      if (cancelBtn && root.contains(cancelBtn)) {
+        clearPreview(cancelBtn.getAttribute("data-fixes-id") || "");
+        return;
+      }
+      const itemBtn = target.closest("[data-fixes-item-action]");
+      if (itemBtn && root.contains(itemBtn)) {
+        void runItemAction(itemBtn);
+        return;
+      }
+      const openBtn = target.closest("[data-fixes-open-key]");
+      if (openBtn && root.contains(openBtn)) {
+        void runOpen(openBtn);
+      }
+    });
+    window.addEventListener(managementMutationEventName, () => {
+      if (ignoreNextMutation) {
+        ignoreNextMutation = false;
+        return;
+      }
+      void loadQueue("Fixes refreshed.");
+    });
+    void loadQueue();
+  };
+  var readResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
   };
 
   // internal/web/static_src/editor-open.ts
@@ -3456,480 +4270,6 @@ var BrainNotesApp = (() => {
     return `${message} Failures: ${summary.join("; ")}${suffix}.`;
   };
 
-  // internal/web/static_src/review-panel.ts
-  var readReviewPanelConfig = (root) => ({
-    reviewEndpoint: root.getAttribute("data-review-endpoint") || "/api/review",
-    reviewItemEndpoint: root.getAttribute("data-review-item-endpoint") || "/api/review/item",
-    csrfToken: root.getAttribute("data-review-csrf") || ""
-  });
-  var reviewRouteKeyFromPath = (path) => {
-    const cleanPath = path.trim().split(/[?#]/, 1)[0];
-    const prefix = "/n/";
-    if (!cleanPath.startsWith(prefix)) {
-      return "";
-    }
-    const encodedKey = cleanPath.slice(prefix.length);
-    if (encodedKey === "") {
-      return "";
-    }
-    const decodedSegments = [];
-    for (const segment of encodedKey.split("/")) {
-      if (segment === "") {
-        return "";
-      }
-      let decoded = "";
-      try {
-        decoded = decodeURIComponent(segment);
-      } catch {
-        return "";
-      }
-      if (decoded === "" || decoded === "." || decoded === ".." || decoded.includes("/")) {
-        return "";
-      }
-      decodedSegments.push(decoded);
-    }
-    return decodedSegments.join("/");
-  };
-  var buildReviewItemFetchRequest = (endpoint, csrfToken, id, action, snooze) => {
-    const body = buildReviewItemForm({
-      id,
-      action,
-      token: csrfToken,
-      snooze
-    });
-    return {
-      url: endpoint,
-      init: {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-BN-CSRF": csrfToken
-        },
-        body: body.toString()
-      }
-    };
-  };
-  var buildReviewOpenFetchRequest = (key, csrfToken) => {
-    const body = buildOpenNoteForm({ key, token: csrfToken });
-    return {
-      url: "/api/open",
-      init: {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-BN-CSRF": csrfToken
-        },
-        body: body.toString()
-      }
-    };
-  };
-  var reviewCountsStatusMessage = (counts) => {
-    if (counts.active === 1) {
-      return "1 active review item.";
-    }
-    if (counts.active > 1) {
-      return `${counts.active} active review items.`;
-    }
-    return "No active review items.";
-  };
-  var reviewKindLabel = (kind) => {
-    switch (kind) {
-      case "frontmatter_error":
-        return "Frontmatter";
-      case "schema_violation":
-        return "Schema";
-      case "broken_target":
-        return "Broken target";
-      case "duplicate_title":
-        return "Duplicate title";
-      case "orphan_note":
-        return "Orphan";
-      case "dead_end_note":
-        return "Dead end";
-      default:
-        return "Review";
-    }
-  };
-  var reviewItemLabel = (item) => item.title || item.summary || item.id || "Review item";
-  var affectedNoteLabel = (note) => note.title || note.rel_path || note.path || "Affected note";
-  var safeLocalPath = (path) => {
-    const value = (path || "").trim();
-    return value.startsWith("/") ? value : "";
-  };
-  var normalizeReviewAction = (value) => {
-    switch (value) {
-      case "done":
-      case "snooze":
-      case "clear":
-        return value;
-      default:
-        return "";
-    }
-  };
-  var normalizeReviewSnooze = (value) => {
-    switch (value) {
-      case "tomorrow":
-      case "week":
-        return value;
-      default:
-        return void 0;
-    }
-  };
-  var reviewActionLoadingMessage = (action, snooze) => {
-    if (action === "done") {
-      return "Marking review item done...";
-    }
-    if (action === "snooze") {
-      return snooze === "week" ? "Snoozing review item for a week..." : "Snoozing review item until tomorrow...";
-    }
-    return "Updating review item...";
-  };
-  var initReviewPanel = (deps = {}) => {
-    const root = queryElement(document, "[data-review-panel]", HTMLElement);
-    if (!root) {
-      return;
-    }
-    const statusEl = queryElement(root, "[data-review-status]", HTMLElement);
-    const loadingEl = queryElement(root, "[data-review-loading]", HTMLElement);
-    const errorEl = queryElement(root, "[data-review-error]", HTMLElement);
-    const emptyEl = queryElement(root, "[data-review-empty]", HTMLElement);
-    const warningListEl = queryElement(root, "[data-review-warnings]", HTMLElement);
-    const listEl = queryElement(root, "[data-review-list]", HTMLElement);
-    if (!statusEl || !listEl) {
-      return;
-    }
-    const countEls = {
-      active: queryElement(root, "[data-review-count-active]", HTMLElement),
-      doneHidden: queryElement(root, "[data-review-count-done-hidden]", HTMLElement),
-      snoozedHidden: queryElement(root, "[data-review-count-snoozed-hidden]", HTMLElement),
-      totalGenerated: queryElement(root, "[data-review-count-total-generated]", HTMLElement)
-    };
-    const config = readReviewPanelConfig(root);
-    const fetcher = deps.fetch || fetch;
-    let busy = false;
-    const setStatus = (message, kind = "") => {
-      setStatusText(statusEl, message, kind);
-    };
-    const setError = (message) => {
-      if (!errorEl) {
-        return;
-      }
-      errorEl.textContent = message;
-      errorEl.hidden = message === "";
-    };
-    const showError = (message) => {
-      setError(message);
-      setStatus(message, "is-error");
-    };
-    const setLoading = (loading) => {
-      if (loadingEl) {
-        loadingEl.hidden = !loading;
-      }
-    };
-    const setBusy = (next) => {
-      busy = next;
-      root.setAttribute("aria-busy", next ? "true" : "false");
-      for (const button of queryAllElements(
-        root,
-        "[data-review-action], [data-review-open-key]",
-        HTMLButtonElement
-      )) {
-        button.disabled = next;
-      }
-    };
-    const renderCounts = (counts) => {
-      if (countEls.active) {
-        countEls.active.textContent = String(counts.active);
-      }
-      if (countEls.doneHidden) {
-        countEls.doneHidden.textContent = String(counts.done_hidden);
-      }
-      if (countEls.snoozedHidden) {
-        countEls.snoozedHidden.textContent = String(counts.snoozed_hidden);
-      }
-      if (countEls.totalGenerated) {
-        countEls.totalGenerated.textContent = String(counts.total_generated);
-      }
-    };
-    const renderWarnings = (result) => {
-      if (!warningListEl) {
-        return;
-      }
-      warningListEl.textContent = "";
-      warningListEl.hidden = result.warnings.length === 0;
-      for (const warning of result.warnings) {
-        const item = warningListEl.ownerDocument.createElement("li");
-        item.setAttribute("data-review-warning", "");
-        if (warning.code) {
-          item.setAttribute("data-review-warning-code", warning.code);
-        }
-        item.textContent = warning.message || warning.code || "Review warning.";
-        warningListEl.appendChild(item);
-      }
-    };
-    const renderAffectedNote = (doc, list, note) => {
-      const item = doc.createElement("li");
-      item.className = "review-affected-note";
-      const label = affectedNoteLabel(note);
-      const href = safeLocalPath(note.path);
-      if (href) {
-        const link = doc.createElement("a");
-        link.href = href;
-        link.textContent = label;
-        item.appendChild(link);
-      } else {
-        const text = doc.createElement("span");
-        text.textContent = label;
-        item.appendChild(text);
-      }
-      const folderHref = safeLocalPath(note.folder_path);
-      if (note.folder && folderHref) {
-        const folder = doc.createElement("a");
-        folder.className = "diagnostic-folder";
-        folder.href = folderHref;
-        folder.textContent = note.folder;
-        item.appendChild(folder);
-      }
-      if (note.location) {
-        const location = doc.createElement("span");
-        location.className = "diagnostic-location";
-        location.textContent = note.location;
-        item.appendChild(location);
-      }
-      const openKey = reviewRouteKeyFromPath(note.path || "");
-      if (openKey) {
-        const openButton = doc.createElement("button");
-        openButton.className = "review-action review-open-editor";
-        openButton.type = "button";
-        openButton.setAttribute("data-review-open-key", openKey);
-        openButton.setAttribute("aria-label", `Open ${label} in editor`);
-        openButton.textContent = "Open in editor";
-        item.appendChild(openButton);
-      }
-      list.appendChild(item);
-    };
-    const renderReviewItem = (item) => {
-      const doc = listEl.ownerDocument;
-      const row = doc.createElement("li");
-      row.className = "review-item";
-      row.setAttribute("data-review-item", "");
-      row.setAttribute("data-review-id", item.id);
-      row.setAttribute("data-review-kind", item.kind);
-      row.setAttribute("data-review-signature", item.signature);
-      const main = doc.createElement("div");
-      main.className = "review-item-main";
-      const kind = doc.createElement("p");
-      kind.className = "review-item-kind";
-      kind.textContent = reviewKindLabel(item.kind);
-      main.appendChild(kind);
-      const title = doc.createElement("h3");
-      title.className = "review-item-title";
-      title.textContent = reviewItemLabel(item);
-      main.appendChild(title);
-      if (item.summary) {
-        const summary = doc.createElement("p");
-        summary.className = "review-item-summary";
-        summary.textContent = item.summary;
-        main.appendChild(summary);
-      }
-      if (item.detail || item.affected.length > 0) {
-        const details = doc.createElement("details");
-        details.className = "review-item-details";
-        const detailsSummary = doc.createElement("summary");
-        detailsSummary.textContent = "View details";
-        details.appendChild(detailsSummary);
-        if (item.detail) {
-          const detail = doc.createElement("p");
-          detail.className = "review-item-detail";
-          detail.textContent = item.detail;
-          details.appendChild(detail);
-        }
-        if (item.affected.length > 0) {
-          const affectedList = doc.createElement("ul");
-          affectedList.className = "review-affected-list";
-          affectedList.setAttribute("aria-label", "Affected notes");
-          for (const affected of item.affected) {
-            renderAffectedNote(doc, affectedList, affected);
-          }
-          details.appendChild(affectedList);
-        }
-        main.appendChild(details);
-      }
-      const actions = doc.createElement("div");
-      actions.className = "review-item-actions";
-      actions.setAttribute("data-review-item-actions", "");
-      actions.appendChild(renderActionButton(doc, item.id, "done", "Done"));
-      actions.appendChild(renderActionButton(
-        doc,
-        item.id,
-        "snooze",
-        "Snooze tomorrow",
-        "tomorrow"
-      ));
-      actions.appendChild(renderActionButton(
-        doc,
-        item.id,
-        "snooze",
-        "Snooze next week",
-        "week"
-      ));
-      row.append(main, actions);
-      return row;
-    };
-    const renderResult = (result) => {
-      renderCounts(result.counts);
-      renderWarnings(result);
-      listEl.textContent = "";
-      for (const item of result.items) {
-        listEl.appendChild(renderReviewItem(item));
-      }
-      const hasItems = result.items.length > 0;
-      listEl.hidden = !hasItems;
-      if (emptyEl) {
-        emptyEl.hidden = hasItems;
-      }
-      setBusy(busy);
-    };
-    const applyResult = (payload, successMessage = "", successKind = "") => {
-      const result = normalizeReviewAPIResponse(payload);
-      if (!result.ok) {
-        showError(result.message || "Review request failed.");
-        return false;
-      }
-      setError("");
-      renderResult(result);
-      const message = successMessage || reviewCountsStatusMessage(result.counts);
-      const kind = successKind || (result.counts.active === 0 ? "is-empty" : "");
-      setStatus(message, kind);
-      return true;
-    };
-    const loadReview = async (successMessage = "") => {
-      setBusy(true);
-      setLoading(true);
-      setStatus("Loading review queue...", "is-loading");
-      try {
-        const resp = await fetcher(config.reviewEndpoint, {
-          headers: { Accept: "application/json" }
-        });
-        const payload = await readReviewResponsePayload(resp);
-        if (!resp.ok) {
-          showError(normalizeManagementErrorMessage(resp.status, payload));
-          return;
-        }
-        applyResult(payload, successMessage, successMessage ? "is-success" : "");
-      } catch {
-        showError("Review unavailable.");
-      } finally {
-        setLoading(false);
-        setBusy(false);
-      }
-    };
-    const runItemAction = async (button) => {
-      const id = button.getAttribute("data-review-action-id") || "";
-      const action = normalizeReviewAction(button.getAttribute("data-review-action") || "");
-      const snooze = normalizeReviewSnooze(button.getAttribute("data-review-snooze") || "");
-      if (!id || !action || !config.csrfToken) {
-        showError("Review action unavailable.");
-        return;
-      }
-      if (action === "snooze" && !snooze) {
-        showError("Review snooze unavailable.");
-        return;
-      }
-      setBusy(true);
-      setStatus(reviewActionLoadingMessage(action, snooze), "is-loading");
-      try {
-        const request = buildReviewItemFetchRequest(
-          config.reviewItemEndpoint,
-          config.csrfToken,
-          id,
-          action,
-          snooze
-        );
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readReviewResponsePayload(resp);
-        if (!resp.ok) {
-          showError(normalizeManagementErrorMessage(resp.status, payload));
-          return;
-        }
-        const result = normalizeReviewAPIResponse(payload);
-        applyResult(payload, result.message || "Review item updated.", "is-success");
-      } catch {
-        showError("Review action failed.");
-      } finally {
-        setBusy(false);
-      }
-    };
-    const runOpenAction = async (button) => {
-      const key = button.getAttribute("data-review-open-key") || "";
-      if (!key || !config.csrfToken) {
-        showError("Open action unavailable.");
-        return;
-      }
-      setBusy(true);
-      setStatus("Opening editor...", "is-loading");
-      try {
-        const request = buildReviewOpenFetchRequest(key, config.csrfToken);
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readReviewResponsePayload(resp);
-        if (!resp.ok) {
-          showError(normalizeOpenErrorMessage(resp.status, payload));
-          return;
-        }
-        setError("");
-        setStatus("Opened in editor. Refresh after saving changes.", "is-success");
-      } catch {
-        showError("Open failed.");
-      } finally {
-        setBusy(false);
-      }
-    };
-    root.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      const actionButton = target.closest("[data-review-action]");
-      if (actionButton && root.contains(actionButton)) {
-        void runItemAction(actionButton);
-        return;
-      }
-      const openButton = target.closest("[data-review-open-key]");
-      if (openButton && root.contains(openButton)) {
-        void runOpenAction(openButton);
-      }
-    });
-    window.addEventListener(managementMutationEventName, () => {
-      void loadReview("Review refreshed.");
-    });
-    void loadReview();
-  };
-  var renderActionButton = (doc, id, action, label, snooze) => {
-    const button = doc.createElement("button");
-    button.className = "review-action";
-    button.type = "button";
-    button.setAttribute("data-review-action", action);
-    button.setAttribute("data-review-action-id", id);
-    if (snooze) {
-      button.setAttribute("data-review-snooze", snooze);
-    }
-    button.textContent = label;
-    return button;
-  };
-  var readReviewResponsePayload = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
-    }
-  };
-
   // internal/web/static_src/search.ts
   var searchResultTitle = (result) => result.title || result.key || "Untitled";
   var searchResultFolderLabel = (result) => result.folder ? `Folder: ${result.folder}` : "Folder: /";
@@ -4139,6 +4479,6 @@ var BrainNotesApp = (() => {
     initSearch();
     initOverviewSearchResults();
     initHistoryPanel();
-    initReviewPanel();
+    initDailyFixes();
   })();
 })();

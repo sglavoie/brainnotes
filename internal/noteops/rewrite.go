@@ -1,8 +1,6 @@
 package noteops
 
 import (
-	"fmt"
-	"io"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -156,36 +154,80 @@ func rewriteFrontmatterProps(front *frontmatter.Map, oldVal, newVal string, fmCf
 	}
 }
 
-func printChanges(out io.Writer, vaultRoot string, changes []Change) error {
-	sorted := make([]Change, len(changes))
-	copy(sorted, changes)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		if sorted[i].File != sorted[j].File {
-			return sorted[i].File < sorted[j].File
-		}
-		if sorted[i].Kind != sorted[j].Kind {
-			return sorted[i].Kind < sorted[j].Kind
-		}
-		if sorted[i].Line != sorted[j].Line {
-			return sorted[i].Line < sorted[j].Line
-		}
-		return sorted[i].Key < sorted[j].Key
-	})
-	for _, c := range sorted {
-		rel, err := filepath.Rel(vaultRoot, c.File)
-		if err != nil {
-			rel = c.File
-		}
-		switch c.Kind {
-		case ChangeBody:
-			if _, err := fmt.Fprintf(out, "%s:%d: %s -> %s\n", rel, c.Line, c.OldText, c.NewText); err != nil {
-				return err
-			}
-		case ChangeFrontmatter:
-			if _, err := fmt.Fprintf(out, "%s:frontmatter[%s]: %s -> %s\n", rel, c.Key, c.OldText, c.NewText); err != nil {
-				return err
-			}
-		}
+// relOrAbs renders p relative to vaultRoot, falling back to the absolute path
+// when the two share no common base.
+func relOrAbs(vaultRoot, p string) string {
+	rel, err := filepath.Rel(vaultRoot, p)
+	if err != nil {
+		return p
 	}
-	return nil
+	return rel
+}
+
+// planPreviews groups a rename/move plan's line-level changes into canonical
+// NotePreviews, one per affected file. The note at targetFile additionally
+// carries a leading path change (pathOld -> pathNew) describing the file
+// rename/move itself, so the target always appears even when it has no
+// self-references. Files are ordered alphabetically by vault-relative path;
+// within a note the path change comes first, then body changes by line, then
+// frontmatter changes by key — the same deterministic ordering the previous
+// printChanges output used.
+func planPreviews(vaultRoot, targetFile, pathOld, pathNew string, changes []Change) []NotePreview {
+	byFile := make(map[string][]Change)
+	for _, c := range changes {
+		byFile[c.File] = append(byFile[c.File], c)
+	}
+	if _, ok := byFile[targetFile]; !ok {
+		byFile[targetFile] = nil
+	}
+
+	files := make([]string, 0, len(byFile))
+	for f := range byFile {
+		files = append(files, f)
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return relOrAbs(vaultRoot, files[i]) < relOrAbs(vaultRoot, files[j])
+	})
+
+	previews := make([]NotePreview, 0, len(files))
+	for _, f := range files {
+		p := NotePreview{RelPath: relOrAbs(vaultRoot, f)}
+		if f == targetFile {
+			p.Changes = append(p.Changes, PreviewChange{
+				Kind: PreviewPath,
+				Old:  PresentText(pathOld),
+				New:  PresentText(pathNew),
+			})
+		}
+		fchanges := append([]Change(nil), byFile[f]...)
+		sort.SliceStable(fchanges, func(i, j int) bool {
+			if fchanges[i].Kind != fchanges[j].Kind {
+				return fchanges[i].Kind < fchanges[j].Kind
+			}
+			if fchanges[i].Line != fchanges[j].Line {
+				return fchanges[i].Line < fchanges[j].Line
+			}
+			return fchanges[i].Key < fchanges[j].Key
+		})
+		for _, c := range fchanges {
+			switch c.Kind {
+			case ChangeBody:
+				p.Changes = append(p.Changes, PreviewChange{
+					Kind: PreviewBody,
+					Line: c.Line,
+					Old:  PresentText(c.OldText),
+					New:  PresentText(c.NewText),
+				})
+			case ChangeFrontmatter:
+				p.Changes = append(p.Changes, PreviewChange{
+					Kind: PreviewFrontmatter,
+					Key:  c.Key,
+					Old:  PresentText(c.OldText),
+					New:  PresentText(c.NewText),
+				})
+			}
+		}
+		previews = append(previews, p)
+	}
+	return previews
 }

@@ -1,5 +1,6 @@
 import { initBrokenCreateActions } from "./broken-create";
 import { initCopyControls } from "./clipboard";
+import { initDailyFixes } from "./daily-fixes";
 import { initOpenInEditor } from "./editor-open";
 import { initFacets } from "./facets";
 import { initFrontmatterEditing } from "./frontmatter-edit";
@@ -7,7 +8,6 @@ import { initGraph } from "./graph-controller";
 import { initHistoryPanel } from "./history-panel";
 import { initTrashNoteAction } from "./note-trash";
 import { initOverviewSearchResults } from "./overview-search";
-import { initReviewPanel } from "./review-panel";
 import { initSearch } from "./search";
 
 (function () {
@@ -21,5 +21,5 @@ import { initSearch } from "./search";
   initSearch();
   initOverviewSearchResults();
   initHistoryPanel();
-  initReviewPanel();
+  initDailyFixes();
 })();

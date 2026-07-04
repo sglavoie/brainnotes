@@ -1301,6 +1301,99 @@ code {
   cursor: wait;
 }
 
+.fixes-list {
+  gap: 1.1rem;
+}
+
+.fixes-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.fixes-group-heading {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #9db2c9;
+}
+
+.fixes-group-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fixes-fix-action {
+  border-color: #2c5a45;
+  color: #b9f4d5;
+  background: #12271e;
+}
+
+.fixes-fix-action:hover {
+  background: #173325;
+}
+
+.fixes-preview {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #2a2f3a;
+  border-radius: 0.5rem;
+  background: #12161d;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fixes-preview[hidden] {
+  display: none;
+}
+
+.fixes-preview-message {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #cdd8e6;
+}
+
+.fixes-preview-note {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fixes-preview-path {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: #9db2c9;
+}
+
+.fixes-preview-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fixes-preview-changes li {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: #d7e0ee;
+  word-break: break-word;
+}
+
+.fixes-preview-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .diagnostics-panel {
   margin-top: 1rem;
 }

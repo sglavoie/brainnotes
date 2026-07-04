@@ -124,6 +124,40 @@ func TestCreateStubFromBrokenTargetJournalsCreatedFile(t *testing.T) {
 	}
 }
 
+func TestPreviewStubFromBrokenTargetResolvesWithoutWriting(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeCreateTestFile(t, root, "Notes/Source.md", "---\ntitle: Source\n---\n[[Missing Note]]\n")
+
+	preview, err := PreviewStubFromBrokenTarget(root, "Notes/Source.md", "Missing Note")
+	if err != nil {
+		t.Fatalf("PreviewStubFromBrokenTarget: %v", err)
+	}
+	if preview.Destination.RelPath != "Notes/Missing Note.md" {
+		t.Fatalf("destination = %q, want Notes/Missing Note.md", preview.Destination.RelPath)
+	}
+	if preview.Title != "Missing Note" {
+		t.Fatalf("title = %q, want Missing Note", preview.Title)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Notes", "Missing Note.md")); !os.IsNotExist(err) {
+		t.Fatalf("preview wrote a file: err=%v", err)
+	}
+}
+
+func TestPreviewStubFromBrokenTargetReportsCollision(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeCreateTestFile(t, root, "Source.md", "---\ntitle: Source\n---\n[[Missing]]\n")
+	writeCreateTestFile(t, root, "Missing.md", "---\ntitle: Missing\n---\nExisting\n")
+
+	_, err := PreviewStubFromBrokenTarget(root, "Source.md", "Missing")
+	if CodeOf(err) != CodeConflict {
+		t.Fatalf("CodeOf(err) = %q, want %q (%v)", CodeOf(err), CodeConflict, err)
+	}
+}
+
 func writeCreateTestFile(t *testing.T, root, rel, body string) {
 	t.Helper()
 	p := filepath.Join(root, filepath.FromSlash(rel))

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 )
 
@@ -26,34 +26,39 @@ type indexPageData struct {
 	GraphPath         string
 	BrokenPath        string
 	FacetControls     facetControlsData
-	Review            indexReviewPanelData
+	Fixes             indexFixesPanelData
 	Diagnostics       diagnosticsSummary
 	Recent            []indexRecentNote
 }
 
-type indexReviewPanelData struct {
-	Items       []indexReviewItem
-	Counts      reviewCounts
-	Warnings    []indexReviewWarning
-	HasItems    bool
+// indexFixesPanelData is the server-rendered shell for the homepage Daily Fixes
+// panel. It seeds the counts and any queue warnings; the task list itself is
+// hydrated client-side from GET /api/cockpit so the interactive fix affordances
+// (preview/apply) always run against the live queue.
+type indexFixesPanelData struct {
+	Counts      cockpit.Counts
+	Warnings    []indexFixesWarning
+	HasTasks    bool
 	HasWarnings bool
 }
 
-type indexReviewWarning struct {
-	Code    string
+type indexFixesWarning struct {
 	Message string
 }
 
-type indexReviewItem struct {
-	ID        string
-	Signature string
-	Kind      string
-	KindLabel string
-	Title     string
-	Summary   string
-	Detail    string
-	Count     int
-	Affected  []reviewAffectedNote
+// buildIndexFixesPanelData maps a filtered cockpit queue onto the homepage
+// panel shell.
+func buildIndexFixesPanelData(queue cockpit.Queue) indexFixesPanelData {
+	warnings := make([]indexFixesWarning, 0, len(queue.Warnings))
+	for _, w := range queue.Warnings {
+		warnings = append(warnings, indexFixesWarning{Message: w.Message})
+	}
+	return indexFixesPanelData{
+		Counts:      queue.Counts,
+		Warnings:    warnings,
+		HasTasks:    len(queue.Tasks) > 0,
+		HasWarnings: len(warnings) > 0,
+	}
 }
 
 type indexRecentNote struct {
@@ -166,62 +171,4 @@ func buildIndexPageData(snapshot vaultSnapshot, root string) (indexPageData, err
 		FacetControls:     overviewFacetControlsData(),
 		Recent:            recentViews,
 	}, nil
-}
-
-func buildIndexReviewPanelData(data diagnosticsData, cfg *config.Config, root string, store *reviewStateStore) indexReviewPanelData {
-	queue := buildReviewQueueFromData(data, cfg, root)
-	warnings := []indexReviewWarning(nil)
-	if store != nil {
-		filtered, err := store.filterQueue(queue)
-		if err == nil {
-			queue = filtered
-		} else {
-			warnings = append(warnings, indexReviewWarning{
-				Code:    reviewStateWarningCode,
-				Message: "Review state could not be loaded; showing all generated review items.",
-			})
-		}
-	}
-
-	items := make([]indexReviewItem, 0, len(queue.Items))
-	for _, item := range queue.Items {
-		items = append(items, indexReviewItem{
-			ID:        item.ID,
-			Signature: item.Signature,
-			Kind:      string(item.Kind),
-			KindLabel: reviewKindLabel(item.Kind),
-			Title:     item.Title,
-			Summary:   item.Summary,
-			Detail:    item.Detail,
-			Count:     item.Count,
-			Affected:  item.Affected,
-		})
-	}
-
-	return indexReviewPanelData{
-		Items:       items,
-		Counts:      queue.Counts,
-		Warnings:    warnings,
-		HasItems:    len(items) > 0,
-		HasWarnings: len(warnings) > 0,
-	}
-}
-
-func reviewKindLabel(kind reviewItemKind) string {
-	switch kind {
-	case reviewKindFrontmatterError:
-		return "Frontmatter"
-	case reviewKindSchemaViolation:
-		return "Schema"
-	case reviewKindBrokenTarget:
-		return "Broken target"
-	case reviewKindDuplicateTitle:
-		return "Duplicate title"
-	case reviewKindOrphanNote:
-		return "Orphan"
-	case reviewKindDeadEndNote:
-		return "Dead end"
-	default:
-		return "Review"
-	}
 }

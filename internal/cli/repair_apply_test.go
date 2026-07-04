@@ -176,11 +176,8 @@ func TestApplyRepairs_DryRunEmitsDiff(t *testing.T) {
 	if !strings.Contains(out, "--- note.md") {
 		t.Fatalf("expected file header, got %q", out)
 	}
-	if !strings.Contains(out, "- status: wip") {
-		t.Fatalf("expected removed line, got %q", out)
-	}
-	if !strings.Contains(out, "+ status: WIP") {
-		t.Fatalf("expected added line, got %q", out)
+	if !strings.Contains(out, "frontmatter[status]: wip -> WIP") {
+		t.Fatalf("expected canonicalize change line, got %q", out)
 	}
 
 	got := readNote(t, path)
@@ -215,17 +212,11 @@ func TestApplyRepairs_DryRunMultipleActions(t *testing.T) {
 	}
 
 	out := buf.String()
-	if !strings.Contains(out, "- status: wip") {
-		t.Fatalf("missing status removed line, got %q", out)
+	if !strings.Contains(out, "frontmatter[status]: wip -> WIP") {
+		t.Fatalf("missing status change line, got %q", out)
 	}
-	if !strings.Contains(out, "+ status: WIP") {
-		t.Fatalf("missing status added line, got %q", out)
-	}
-	if !strings.Contains(out, "- tags: [go, go]") {
-		t.Fatalf("missing tags removed line, got %q", out)
-	}
-	if !strings.Contains(out, "+ tags: [go]") {
-		t.Fatalf("missing tags added line, got %q", out)
+	if !strings.Contains(out, "frontmatter[tags]: [go, go] -> [go]") {
+		t.Fatalf("missing tags change line, got %q", out)
 	}
 }
 

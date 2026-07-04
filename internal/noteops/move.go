@@ -293,19 +293,14 @@ func ScanFrontmatterMove(file string, front *frontmatter.Map, oldRel, newRel str
 	return scanFrontmatterWithRewrite(file, front, oldRel, newRel, wikilinkProps, wikilink.RewriteMove)
 }
 
+// PrintMovePlan renders the plan as canonical NotePreview blocks, matching
+// PrintRenamePlan: a `--- <relpath>` header per affected note, the moved note
+// carrying a leading `path: <old> -> <new>` line, then `body:<line>:` and
+// `frontmatter[<key>]:` change lines.
 func PrintMovePlan(out io.Writer, vaultRoot string, plan *MovePlan) error {
-	relTarget, err := filepath.Rel(vaultRoot, plan.Target)
-	if err != nil {
-		relTarget = plan.Target
-	}
-	relNew, err := filepath.Rel(vaultRoot, plan.NewPath)
-	if err != nil {
-		relNew = plan.NewPath
-	}
-	if _, err := fmt.Fprintf(out, "move: %s -> %s\n", relTarget, relNew); err != nil {
-		return err
-	}
-	return printChanges(out, vaultRoot, plan.Changes)
+	previews := planPreviews(vaultRoot, plan.Target,
+		relOrAbs(vaultRoot, plan.Target), relOrAbs(vaultRoot, plan.NewPath), plan.Changes)
+	return RenderNotePreviews(out, previews)
 }
 
 func ApplyMovePlan(vaultRoot string, plan *MovePlan, fmCfg *config.FrontmatterConfig, out io.Writer) error {

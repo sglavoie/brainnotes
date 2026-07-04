@@ -102,6 +102,15 @@ addr = "127.0.0.1:8729"
 # Open your browser on startup. Set false for headless use.
 open_browser = true
 
+[cockpit]
+# Tuning for the Daily Fix Cockpit (`bn doctor` and the web cockpit).
+# Rule kinds to hide from the queue entirely.
+disabled_rules = []
+# Rule kinds to surface first, overriding the built-in ordering.
+priority = []
+# How many of the rarest values per property become long-tail tasks.
+long_tail_limit = 5
+
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
 [new.routes]
 book    = "References/Books"
@@ -460,29 +469,42 @@ bn serve [--addr host:port] [--port N] [--no-open]
 
 Starts a local HTTP server for vault browsing and lightweight note management:
 
-- `/` Daily review cockpit, note counts, filtered search results, diagnostics, and primary search
+- `/` Daily Fix Cockpit, note counts, filtered search results, diagnostics, and primary search
 - `/n/<note-key>` rendered note view (body, editable frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
-- `GET /api/review` Daily review queue and `POST /api/review/item` for Done/Snooze/Clear state
+- `GET /api/cockpit` hygiene queue and `POST /api/cockpit/item` for Done/Snooze/Clear triage
+- `POST /api/fixes/preview` then `POST /api/fixes/apply` to preview and apply a single task's fix
 
-The home page starts with Daily review: a health-first queue for frontmatter
-parse errors, schema violations, broken wikilink targets, duplicate titles,
-orphan notes, and dead-end notes. Review items are grouped by issue and affected
-note, sorted by priority, and identified with content-aware hashes over the
-issue kind, issue detail, affected relative paths, locations, and file content.
-Marking an item Done hides that exact issue until its signature changes; Snooze
-hides it until the selected local deadline, either tomorrow or next week; Clear
-removes a saved review-state record so the active issue appears again.
+The home page starts with Daily Fixes: the same hygiene queue as `bn doctor`,
+covering frontmatter parse errors, schema violations, broken wikilink targets,
+duplicate titles, orphan notes, dead-end notes, and long-tail property values.
+Tasks are grouped by issue and affected note, sorted by priority, and identified
+with content-aware hashes over the issue kind, detail, affected relative paths,
+locations, and file content. Marking a task Done hides that exact issue until its
+signature changes; Snooze hides it until the selected local deadline, either
+tomorrow or next week; Clear returns a suppressed task to the active queue.
 
-Review state is stored in the served vault at `<vault>/.bnotes/review.json`.
-It is runtime UI state, not note metadata: it does not edit note frontmatter,
-does not write undo journal entries, and is pruned when the underlying issue is
-resolved or changes enough to receive a new signature. `GET /api/review`
-returns active items plus `active`, `done_hidden`, `snoozed_hidden`, and
-`total_generated` counts. `POST /api/review/item` requires CSRF and form fields
-`id`, `action=done|snooze|clear`, plus optional `snooze=tomorrow|week`.
+Cockpit workflow state is stored in the served vault at
+`<vault>/.bnotes/cockpit.json`, migrated automatically from readable records in
+the legacy `<vault>/.bnotes/review.json` on first load. It is runtime UI state,
+not note metadata: it does not edit note frontmatter, does not write undo
+journal entries, and is pruned when the underlying issue is resolved or changes
+enough to receive a new signature. `GET /api/cockpit` returns active tasks plus
+`active`, `done_hidden`, `snoozed_hidden`, and `total_generated` counts.
+`POST /api/cockpit/item` requires CSRF and form fields `id`,
+`action=mark_done|snooze|clear` (`done` is accepted as an alias for
+`mark_done`), plus optional `snooze=tomorrow|week`.
+
+Fixable tasks advertise a fix action (schema repair, deterministic relink, or
+blank-stub creation for a broken target). Applying a fix is preview-gated:
+`POST /api/fixes/preview` returns the planned per-note changes plus a one-use
+`preview_id`, and `POST /api/fixes/apply` must echo that receipt back before any
+file is touched. A receipt that is missing, expired, replayed, or whose task
+changed on disk since the preview is rejected with `409` so a stale fix never
+lands. Both endpoints require CSRF and the task `id` and `action`; a successful
+apply writes an undo journal entry named `bn cockpit fix`.
 
 The overview search results can select notes for batch lifecycle work: move to
 Trash, move to a folder, set/list-edit frontmatter, or unset frontmatter. Bulk
@@ -541,11 +563,13 @@ automation must `POST /api/notes/bulk/preview` first, then send the returned
 one-use `preview_id` to `POST /api/notes/bulk`; missing, stale, mismatched, or
 reused previews are rejected with `409`. Preview receipts stay process-local,
 expire after five minutes, and never write journal entries by themselves.
-Review item state changes use `POST /api/review/item` with the same CSRF token
-and only write `<vault>/.bnotes/review.json`.
+Cockpit fixes follow the same preview-then-apply contract via
+`POST /api/fixes/preview` and `POST /api/fixes/apply`. Cockpit triage
+(Done/Snooze/Clear) uses `POST /api/cockpit/item` with the same CSRF token and
+only writes `<vault>/.bnotes/cockpit.json`.
 File-changing web actions write undo journal entries with `bn web ...` command
-names; `POST /api/undo` restores the latest entry by default or a selected
-entry ID.
+names (cockpit fixes use `bn cockpit fix`); `POST /api/undo` restores the latest
+entry by default or a selected entry ID.
 
 Editor opens from the note page use the same editor resolution as CLI open
 commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
@@ -555,6 +579,55 @@ manually to see updates.
 Media embeds (`![[image.png]]`) render through `/media/...` only when the file
 exists. Missing media embeds remain plain text (they do not redirect to
 `/broken`).
+
+### `bn doctor` — show the vault hygiene queue (Daily Fix Cockpit)
+
+```sh
+bn doctor [--json] [--folder path]
+```
+
+Reports the current hygiene queue for the vault. It is read-only and never
+modifies files; the exit code is always `0` for a successful scan, and an empty
+queue means the vault is clean. The queue is the CLI face of the same Daily Fix
+Cockpit the web UI serves (`bn serve`), so both surfaces show identical tasks.
+
+Detected rule kinds:
+
+| Kind | What it flags |
+| --- | --- |
+| `parse_error` | frontmatter that does not parse as YAML |
+| `schema_violation` | frontmatter values that violate `[frontmatter.schema]` |
+| `broken_target` | wikilinks whose target note does not exist |
+| `duplicate_title` | two or more notes sharing the same title |
+| `orphan_note` | notes with no inbound links from other notes |
+| `dead_end_note` | notes with no resolved outgoing links |
+| `long_tail_value` | the rarest values of a frontmatter property |
+
+Issues are grouped into tasks by kind and detail, content-addressed over the
+issue and every affected note's path, location, and file content, and sorted by
+priority. Each task lists the fix actions available for it. Tasks you mark done
+or snooze through the cockpit (web UI or the state file) are hidden from the
+default view; the footer reports how many were suppressed.
+
+`--json` emits the full queue — every task, its affected notes, available
+actions, and the active/done/snoozed/total counts — in a stable schema
+identical to the web `GET /api/cockpit` payload. `--folder <path>` keeps only
+tasks that touch at least one note under a vault-relative folder; other `find`
+dimensions do not map onto tasks that group many notes and are intentionally not
+offered.
+
+Workflow state (done/snoozed) lives in `<vault>/.bnotes/cockpit.json`, migrated
+automatically from readable records in the legacy `<vault>/.bnotes/review.json`
+on first load. Tune the queue with the `[cockpit]` config block:
+`disabled_rules` hides rule kinds entirely, `priority` surfaces chosen kinds
+first, and `long_tail_limit` (default `5`) caps how many of the rarest values
+per property become long-tail tasks.
+
+```sh
+bn doctor                                   # human-readable queue
+bn doctor --json                            # machine-readable queue
+bn doctor --folder Projects                 # only tasks touching Projects/
+```
 
 ### `bn repair` — fix safe schema violations in frontmatter
 
@@ -588,8 +661,9 @@ Scope:
 Each file is rewritten atomically, but there is no cross-file transaction: if a
 mid-apply error occurs, prior writes stand — use `git diff` to recover.
 
-`--dry-run` previews changes in the same unified-diff format as `bn set
---dry-run` (`--- path`, then `- key: old` / `+ key: new`) without writing.
+`--dry-run` previews changes in the same shared preview format as `bn set
+--dry-run` (`--- <relpath>`, then `frontmatter[<key>]: <old> -> <new>` lines)
+without writing.
 
 The intended workflow is:
 
@@ -632,8 +706,10 @@ Scope:
   matching notes only.
 - Positional note paths: only those notes. Mutually exclusive with find flags.
 
-`--dry-run` prints unified-diff-style blocks per changed file (`--- path`, then
-`- body[...]` / `+ body[...]` or frontmatter key lines) and skips all writes.
+`--dry-run` prints the shared preview format per changed file (`--- <relpath>`,
+then `body:<line>: <old> -> <new>` for body links and
+`frontmatter[<key>]: <old> -> <new>` for frontmatter links) and skips all
+writes.
 
 Examples:
 
@@ -663,6 +739,11 @@ Atomicity: each affected file is rewritten via temp-file + rename. There is no
 cross-file transaction — if a mid-apply error occurs, prior writes stand. Use
 `git diff` to inspect.
 
+`--dry-run` prints the shared preview format: a `--- <relpath>` header per
+affected note, a leading `path: <old> -> <new>` line on the renamed note, then
+`body:<line>: <old> -> <new>` and `frontmatter[<key>]: <old> -> <new>` change
+lines.
+
 Examples:
 
 ```sh
@@ -683,6 +764,10 @@ prefix are left untouched (Obsidian resolves them by title alone).
 
 `<new-folder>` is vault-relative; `.` or `""` means the vault root.
 Intermediate directories are created with mode `0755`.
+
+`--dry-run` prints the same shared preview format as `bn rename --dry-run`: a
+`--- <relpath>` header per affected note, a leading `path: <old> -> <new>` line
+on the moved note, then `body:<line>:` and `frontmatter[<key>]:` change lines.
 
 Examples:
 
@@ -722,8 +807,9 @@ Each file is rewritten atomically, but there is no cross-file transaction: if
 an error stops the run mid-way, prior writes stand — use `git diff` to
 recover.
 
-`--dry-run` prints the same unified-diff preview as `bn set --dry-run`
-(`--- path`, then `- key: old` / `+ key: new`) and skips all writes.
+`--dry-run` prints the same shared preview as `bn set --dry-run`
+(`--- <relpath>`, then `frontmatter[<key>]: <old> -> <new>` lines) and skips all
+writes.
 
 Examples:
 
@@ -767,12 +853,13 @@ Frontmatter is rewritten with **alphabetically sorted top-level keys**. Each
 file is rewritten atomically, but there is no cross-file transaction: if an
 error stops the run mid-way, prior writes stand — use `git diff` to recover.
 
-`--dry-run` prints a unified-diff preview per affected file and skips all
-writes. Files with no effective change are omitted from the preview, and
-blocks are emitted in stable (sorted) path order. The format is intentionally
-distinct from `rename --dry-run` / `move --dry-run`; the two will likely be
-harmonized in a follow-up release. The same flag is being rolled out to other
-mutating commands.
+`--dry-run` prints the shared preview format and skips all writes: a
+`--- <relpath>` header per changed note, then one `frontmatter[<key>]: <old> ->
+<new>` line per changed property. Files with no effective change are omitted,
+and blocks are emitted in stable (sorted) path order. Every mutating command —
+`set`, `unset`, `replace`, `repair`, `relink`, `rename`, and `move` — now emits
+this same canonical format (the path-moving commands add `path:` and
+`body:<line>:` lines; see `rename`/`move`/`relink` above).
 
 Examples:
 
@@ -809,9 +896,9 @@ are property names. To pass multiple notes, use `--` to separate them from
 the property list.
 
 Removing a missing property is a silent no-op. `--dry-run` previews the
-removal in the same unified-diff format as `bn set --dry-run` (one `- key:
-value` line per present property) without touching disk; missing properties
-remain silent in dry-run mode too.
+removal in the same shared format as `bn set --dry-run` (one
+`frontmatter[<key>]: <old> -> ` line per present property) without touching
+disk; missing properties remain silent in dry-run mode too.
 
 Examples:
 
@@ -960,12 +1047,16 @@ bn lint
 - Journaled commands (apply mode): `new`, `set`, `unset`, `replace`, `rename`,
   `move`, `repair`, `relink`, plus `bn serve` management actions such as
   `bn web trash`, `bn web move`, `bn web frontmatter set`,
-  `bn web frontmatter unset`, and broken-link stub creation.
+  `bn web frontmatter unset`, broken-link stub creation, and cockpit fixes
+  (`bn cockpit fix`). `bn doctor` is read-only and never journals.
 - Snapshot commands `backup` / `restore` are separate from the undo journal and
   do not create journal entries.
-- Read-only commands, including `bn serve` bulk previews, never journal.
-- Daily review Done/Snooze/Clear state is stored separately in
-  `<vault>/.bnotes/review.json`; it is not journaled and does not modify note
+- Read-only commands, including `bn doctor` and `bn serve` bulk/fix previews,
+  never journal. Applying a cockpit fix (`POST /api/fixes/apply`) does journal,
+  under the command name `bn cockpit fix`.
+- Daily Fix Cockpit Done/Snooze/Clear triage state is stored separately in
+  `<vault>/.bnotes/cockpit.json` (migrated from the legacy
+  `<vault>/.bnotes/review.json`); it is not journaled and does not modify note
   frontmatter.
 - Any `--dry-run` invocation never writes journal entries.
 

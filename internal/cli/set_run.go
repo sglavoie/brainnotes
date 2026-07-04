@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -54,9 +55,9 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 	if opts.dryRun {
 		dry = &DryRun{Out: out}
 	}
-	var journaler *mutationJournal
+	var journaler *noteops.Journal
 	if dry == nil {
-		journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+		journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
 	}
 
 	for _, path := range paths {
@@ -70,7 +71,7 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 			}
 		}
 	}
-	if err := journaler.Finalize(); err != nil {
+	if _, err := journaler.Finalize(); err != nil {
 		return err
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -107,9 +108,9 @@ Use --dry-run to preview changes without writing.`,
 			if dryRun {
 				dry = &DryRun{Out: out}
 			}
-			var journaler *mutationJournal
+			var journaler *noteops.Journal
 			if dry == nil {
-				journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+				journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
 			}
 
 			relinked := 0
@@ -129,7 +130,7 @@ Use --dry-run to preview changes without writing.`,
 					fmt.Fprintf(out, "relinked: %s\n", displayPath(n.Path, v.Root))
 				}
 			}
-			if err := journaler.Finalize(); err != nil {
+			if _, err := journaler.Finalize(); err != nil {
 				return err
 			}
 

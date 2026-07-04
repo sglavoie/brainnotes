@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -92,9 +93,9 @@ printed as a unified diff block; unchanged files are omitted.`,
 			if dryRun {
 				dry = &DryRun{Out: out}
 			}
-			var journaler *mutationJournal
+			var journaler *noteops.Journal
 			if dry == nil {
-				journaler = newMutationJournal(v.Root, commandInvocation(cmd, args))
+				journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
 			}
 
 			repaired := 0
@@ -145,7 +146,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 					fmt.Fprintf(out, "repaired: %s\n", displayPath(n.Path, v.Root))
 				}
 			}
-			if err := journaler.Finalize(); err != nil {
+			if _, err := journaler.Finalize(); err != nil {
 				return err
 			}
 
