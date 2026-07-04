@@ -26,6 +26,60 @@ func BuildQueue(v *vault.Vault, cfg *config.Config) (Queue, error) {
 	return buildQueueFromData(data, cfg, v.Root), nil
 }
 
+// LoadedNote pairs an already-parsed note with its vault-relative slash path.
+// Callers that have walked the vault themselves (e.g. the web diagnostics
+// loader) hand these to BuildQueueFromSnapshot to avoid a second walk.
+type LoadedNote struct {
+	Note    *vault.Note
+	RelPath string
+}
+
+// ParseError records a note whose frontmatter could not be parsed, keyed by its
+// vault-relative slash path. These become frontmatter-error tasks.
+type ParseError struct {
+	RelPath string
+	Err     string
+}
+
+// Snapshot is a preloaded vault view: the parsed notes, the link graph built
+// from them, and any frontmatter parse errors. It lets a caller that already
+// loaded the vault reuse that work instead of triggering a second walk. The
+// notes, graph, and parse errors must describe the same load, and RelPath must
+// be the same forward-slash vault-relative path BuildQueue derives, or the
+// generated queue may diverge from BuildQueue's.
+type Snapshot struct {
+	Notes             []LoadedNote
+	Graph             *query.Graph
+	FrontmatterErrors []ParseError
+}
+
+// BuildQueueFromSnapshot assembles the deterministic queue from an
+// already-loaded vault view, avoiding the walk BuildQueue performs. Given a
+// snapshot describing the same load, it produces the identical queue: it feeds
+// the same buildQueueFromData core BuildQueue uses.
+func BuildQueueFromSnapshot(snapshot Snapshot, cfg *config.Config, root string) Queue {
+	loaded := make([]loadedNote, 0, len(snapshot.Notes))
+	notes := make([]*vault.Note, 0, len(snapshot.Notes))
+	for _, item := range snapshot.Notes {
+		loaded = append(loaded, loadedNote{note: item.Note, rel: item.RelPath})
+		notes = append(notes, item.Note)
+	}
+	parseErrors := make([]fileError, 0, len(snapshot.FrontmatterErrors))
+	for _, item := range snapshot.FrontmatterErrors {
+		parseErrors = append(parseErrors, fileError{rel: item.RelPath, err: item.Err})
+	}
+	sort.Slice(parseErrors, func(i, j int) bool {
+		return parseErrors[i].rel < parseErrors[j].rel
+	})
+	data := vaultData{
+		loaded:            loaded,
+		notes:             notes,
+		graph:             snapshot.Graph,
+		frontmatterErrors: parseErrors,
+	}
+	return buildQueueFromData(data, cfg, root)
+}
+
 // buildQueueFromData assembles tasks from an already-loaded vault snapshot. It
 // is the deterministic core shared by BuildQueue and the package tests.
 func buildQueueFromData(data vaultData, cfg *config.Config, root string) Queue {
@@ -41,6 +95,24 @@ func buildQueueFromData(data vaultData, cfg *config.Config, root string) Queue {
 	tasks = append(tasks, issueNoteTasks(data.loaded, data.graph, query.Orphan(data.graph), RuleOrphanNote)...)
 	tasks = append(tasks, issueNoteTasks(data.loaded, data.graph, query.DeadEnd(data.graph), RuleDeadEndNote)...)
 	tasks = append(tasks, longTailValueTasks(data.loaded, cfg.Cockpit.LongTailLimit)...)
+
+	if disabled := disabledRuleSet(cfg); disabled != nil {
+		kept := tasks[:0]
+		for _, task := range tasks {
+			if disabled[task.Kind] {
+				continue
+			}
+			kept = append(kept, task)
+		}
+		tasks = kept
+	}
+	if override := priorityOverride(cfg); override != nil {
+		for i := range tasks {
+			if weight, ok := override[tasks[i].Kind]; ok {
+				tasks[i].Priority = weight
+			}
+		}
+	}
 
 	sortTasks(tasks)
 	return Queue{
@@ -294,6 +366,41 @@ func countSummary(count int, singular, plural string) string {
 		return "1 " + singular
 	}
 	return fmt.Sprintf("%d %s", count, plural)
+}
+
+// disabledRuleSet builds the set of rule kinds that config suppresses from the
+// queue entirely. Each configured string is treated as a RuleKind; unknown
+// names simply match no tasks. Returns nil when nothing is disabled.
+func disabledRuleSet(cfg *config.Config) map[RuleKind]bool {
+	if len(cfg.Cockpit.DisabledRules) == 0 {
+		return nil
+	}
+	set := make(map[RuleKind]bool, len(cfg.Cockpit.DisabledRules))
+	for _, name := range cfg.Cockpit.DisabledRules {
+		set[RuleKind(name)] = true
+	}
+	return set
+}
+
+// priorityOverride maps each rule kind named in config to a weight below every
+// built-in rulePriority weight (which start at 10), preserving the configured
+// order so named kinds surface first. Kinds not named are absent from the map
+// and keep their built-in weight; unknown names get a weight but match no task,
+// so they have no effect. Returns nil when no override is configured.
+func priorityOverride(cfg *config.Config) map[RuleKind]int {
+	if len(cfg.Cockpit.Priority) == 0 {
+		return nil
+	}
+	n := len(cfg.Cockpit.Priority)
+	order := make(map[RuleKind]int, n)
+	for i, name := range cfg.Cockpit.Priority {
+		kind := RuleKind(name)
+		if _, seen := order[kind]; seen {
+			continue
+		}
+		order[kind] = i - n
+	}
+	return order
 }
 
 func sortTasks(tasks []Task) {

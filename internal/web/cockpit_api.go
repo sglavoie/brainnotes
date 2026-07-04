@@ -313,12 +313,54 @@ func (s *Server) cockpitQueueFiltered() (cockpit.Queue, error) {
 	if err != nil {
 		return cockpit.Queue{}, err
 	}
+	return s.filterCockpitQueue(queue), nil
+}
+
+// cockpitQueueFilteredFrom builds the filtered queue from an already-loaded
+// diagnostics snapshot, so a single vault walk feeds both the homepage
+// diagnostics summary and its fixes panel. The result matches
+// cockpitQueueFiltered for the same load; only handleIndex has a snapshot in
+// hand, so the other cockpit endpoints keep walking via cockpitQueueFiltered.
+func (s *Server) cockpitQueueFilteredFrom(data diagnosticsData) cockpit.Queue {
+	snapshot := cockpit.Snapshot{
+		Notes:             cockpitLoadedNotes(data.loaded),
+		Graph:             data.graph,
+		FrontmatterErrors: cockpitParseErrors(data.frontmatterErrors),
+	}
+	queue := cockpit.BuildQueueFromSnapshot(snapshot, s.cfg, s.vault.Root)
+	return s.filterCockpitQueue(queue)
+}
+
+// filterCockpitQueue hides workflow-suppressed tasks, degrading to the
+// unfiltered queue plus a warning when the state file cannot be loaded.
+func (s *Server) filterCockpitQueue(queue cockpit.Queue) cockpit.Queue {
 	filtered, ferr := s.cockpitStore().FilterQueue(queue)
 	if ferr == nil {
-		return filtered, nil
+		return filtered
 	}
 	queue.Warnings = append(queue.Warnings, cockpit.Warning{Message: cockpitStateWarning})
-	return queue, nil
+	return queue
+}
+
+// cockpitLoadedNotes bridges the web diagnostics loaded-note view onto the
+// exported cockpit snapshot type so the cockpit package need not import web's
+// unexported loader types.
+func cockpitLoadedNotes(loaded []diagnosticLoadedNote) []cockpit.LoadedNote {
+	out := make([]cockpit.LoadedNote, 0, len(loaded))
+	for _, item := range loaded {
+		out = append(out, cockpit.LoadedNote{Note: item.note, RelPath: item.rel})
+	}
+	return out
+}
+
+// cockpitParseErrors bridges diagnostics frontmatter parse errors onto the
+// exported cockpit parse-error type.
+func cockpitParseErrors(errs []diagnosticFileError) []cockpit.ParseError {
+	out := make([]cockpit.ParseError, 0, len(errs))
+	for _, item := range errs {
+		out = append(out, cockpit.ParseError{RelPath: item.Path, Err: item.Error})
+	}
+	return out
 }
 
 func (s *Server) cockpitStore() *cockpit.StateStore {

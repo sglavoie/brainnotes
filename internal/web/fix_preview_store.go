@@ -110,10 +110,11 @@ func (s *fixPreviewStore) consume(id string) (fixPreviewRecord, error) {
 	if !ok {
 		return fixPreviewRecord{}, noteops.Errorf(noteops.CodePreviewRequired, "fix preview is missing or expired")
 	}
-	delete(s.records, id)
 	if !now.Before(record.ExpiresAt) {
+		delete(s.records, id)
 		return fixPreviewRecord{}, noteops.Errorf(noteops.CodePreviewRequired, "fix preview is missing or expired")
 	}
+	delete(s.records, id)
 	return record, nil
 }
 

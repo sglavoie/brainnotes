@@ -216,11 +216,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.CSRFToken = s.csrfToken
-	fixesQueue, err := s.cockpitQueueFiltered()
-	if err != nil {
-		http.Error(w, "cockpit error", http.StatusInternalServerError)
-		return
-	}
+	// Reuse the diagnostics load for the cockpit fixes panel instead of walking
+	// the vault a second time via cockpit.BuildQueue.
+	fixesQueue := s.cockpitQueueFilteredFrom(diagnosticsData)
 	data.Fixes = buildIndexFixesPanelData(fixesQueue)
 	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
 	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {

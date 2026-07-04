@@ -17,6 +17,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -387,6 +388,46 @@ func TestServer_IndexIncludesDailyFixesCockpit(t *testing.T) {
 			metricsIdx,
 			diagnosticsIdx,
 		)
+	}
+}
+
+func TestServer_IndexFixesPanelMatchesSharedLoad(t *testing.T) {
+	files := map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Source]]\n"),
+	}
+	ts, root := newHTTPServerForFilesWithOptions(t, files, nil, Options{CSRFToken: "csrf-token"})
+
+	// Build the canonical queue independently via cockpit.BuildQueue (the
+	// separate-walk path handleIndex used to take) and assert the homepage's
+	// server-rendered fixes panel, now fed from the shared diagnostics load,
+	// reports the same active count. A fresh vault has no suppression state, so
+	// the filtered active count equals BuildQueue's.
+	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
+	want, err := cockpit.BuildQueue(v, cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+	if want.Counts.Active == 0 {
+		t.Fatalf("fixture should generate hygiene tasks, got 0 active")
+	}
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	marker := fmt.Sprintf(`<dd data-fixes-count-active>%d</dd>`, want.Counts.Active)
+	if !strings.Contains(body, marker) {
+		t.Fatalf("fixes panel active count from shared load; want %q in %q", marker, body)
+	}
+	total := fmt.Sprintf(`<dd data-fixes-count-total-generated>%d</dd>`, want.Counts.TotalGenerated)
+	if !strings.Contains(body, total) {
+		t.Fatalf("fixes panel total-generated count from shared load; want %q in %q", total, body)
 	}
 }
 

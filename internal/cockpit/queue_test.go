@@ -247,6 +247,106 @@ func TestBuildQueueTableDrivenCounts(t *testing.T) {
 	}
 }
 
+// brokenTripletVault yields a single note whose only link is broken, producing
+// a broken-target, an orphan, and a dead-end task (built-in order 30/50/60).
+func brokenTripletVault(t *testing.T) *vault.Vault {
+	t.Helper()
+	return newTestVault(t, map[string]string{
+		"A.md": "---\n---\n[[Nowhere]]\n",
+	})
+}
+
+func TestBuildQueueDisabledRulesFilter(t *testing.T) {
+	cfg := &config.Config{Cockpit: config.CockpitConfig{
+		DisabledRules: []string{string(RuleOrphanNote)},
+	}}
+
+	got, err := BuildQueue(brokenTripletVault(t), cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+
+	wantKinds := []RuleKind{RuleBrokenTarget, RuleDeadEndNote}
+	if kinds := taskKinds(got.Tasks); !reflect.DeepEqual(kinds, wantKinds) {
+		t.Fatalf("kinds = %#v, want %#v", kinds, wantKinds)
+	}
+	if got.Counts.Active != 2 || got.Counts.TotalGenerated != 2 {
+		t.Fatalf("counts = %#v, want active/total 2 after filter", got.Counts)
+	}
+}
+
+func TestBuildQueuePriorityOverride(t *testing.T) {
+	// Name only dead_end_note: it must surface first, ahead of the unnamed
+	// kinds, whose relative order (broken_target then orphan_note) is unchanged.
+	cfg := &config.Config{Cockpit: config.CockpitConfig{
+		Priority: []string{string(RuleDeadEndNote)},
+	}}
+
+	got, err := BuildQueue(brokenTripletVault(t), cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+
+	wantKinds := []RuleKind{RuleDeadEndNote, RuleBrokenTarget, RuleOrphanNote}
+	if kinds := taskKinds(got.Tasks); !reflect.DeepEqual(kinds, wantKinds) {
+		t.Fatalf("kinds = %#v, want %#v", kinds, wantKinds)
+	}
+}
+
+func TestBuildQueuePriorityOverrideMultipleNamedKeepsListedOrder(t *testing.T) {
+	// Named kinds surface first, in listed order, even when that reverses their
+	// built-in weights.
+	cfg := &config.Config{Cockpit: config.CockpitConfig{
+		Priority: []string{string(RuleDeadEndNote), string(RuleOrphanNote)},
+	}}
+
+	got, err := BuildQueue(brokenTripletVault(t), cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+
+	wantKinds := []RuleKind{RuleDeadEndNote, RuleOrphanNote, RuleBrokenTarget}
+	if kinds := taskKinds(got.Tasks); !reflect.DeepEqual(kinds, wantKinds) {
+		t.Fatalf("kinds = %#v, want %#v", kinds, wantKinds)
+	}
+}
+
+func TestBuildQueueUnknownRuleNamesIgnored(t *testing.T) {
+	baseline, err := BuildQueue(brokenTripletVault(t), &config.Config{})
+	if err != nil {
+		t.Fatalf("BuildQueue baseline: %v", err)
+	}
+
+	cfg := &config.Config{Cockpit: config.CockpitConfig{
+		DisabledRules: []string{"bogus_rule"},
+		Priority:      []string{"also_bogus"},
+	}}
+	got, err := BuildQueue(brokenTripletVault(t), cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue with unknown names: %v", err)
+	}
+
+	if kinds := taskKinds(got.Tasks); !reflect.DeepEqual(kinds, taskKinds(baseline.Tasks)) {
+		t.Fatalf("unknown names changed order: got %#v, baseline %#v", kinds, taskKinds(baseline.Tasks))
+	}
+	if got.Counts != baseline.Counts {
+		t.Fatalf("unknown names changed counts: got %#v, baseline %#v", got.Counts, baseline.Counts)
+	}
+}
+
+func TestBuildQueueEmptyCockpitListsPreserveOrdering(t *testing.T) {
+	// Regression guard: absent lists must leave the built-in ordering intact.
+	got, err := BuildQueue(brokenTripletVault(t), &config.Config{})
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+
+	wantKinds := []RuleKind{RuleBrokenTarget, RuleOrphanNote, RuleDeadEndNote}
+	if kinds := taskKinds(got.Tasks); !reflect.DeepEqual(kinds, wantKinds) {
+		t.Fatalf("kinds = %#v, want %#v", kinds, wantKinds)
+	}
+}
+
 func TestBuildQueueDeterministicAndStableSignatures(t *testing.T) {
 	files := map[string]string{
 		"Work/Source.md":    "---\nstatus: active\ntype: note\n---\n[[Target]] [[Missing]]\n",

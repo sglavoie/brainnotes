@@ -84,7 +84,7 @@ type NewConfig struct {
 // by `bn doctor` and the web cockpit). Rule identifiers in DisabledRules and
 // Priority are the stable RuleKind strings owned by internal/cockpit; they are
 // not validated for membership here so config stays decoupled from that
-// package — unknown names are simply ignored by the cockpit at wiring time.
+// package — unknown names are simply ignored while the cockpit builds the queue.
 type CockpitConfig struct {
 	// DisabledRules lists rule kinds to suppress from the queue entirely.
 	DisabledRules []string `toml:"disabled_rules"`
