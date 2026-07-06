@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -333,7 +334,7 @@ func noteTitle(n *vault.Note) string {
 }
 
 func noteTitleKey(title string) string {
-	return strings.ToLower(title)
+	return strings.ToLower(textnorm.NFC(title))
 }
 
 func linkTitleKey(title string) string {
@@ -341,7 +342,7 @@ func linkTitleKey(title string) string {
 	if title == "" {
 		return ""
 	}
-	return strings.ToLower(title)
+	return strings.ToLower(textnorm.NFC(title))
 }
 
 func linkTargetKey(target string) string {
@@ -351,7 +352,7 @@ func linkTargetKey(target string) string {
 	if target == "" || target == "." {
 		return ""
 	}
-	return strings.ToLower(target)
+	return strings.ToLower(textnorm.NFC(target))
 }
 
 // linkTargetResolveKey normalizes a folder-qualified wikilink target when it is

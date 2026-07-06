@@ -1,6 +1,10 @@
 package wikilink
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+)
 
 // FirstReservedTargetRune returns the first rune in s that cannot appear
 // literally inside a wikilink target because it would terminate or change the
@@ -160,7 +164,7 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 	return Rewrite(text, func(l Link) (string, bool) {
 		linkTitle := l.Title()
 		linkBase, ext := splitMDExt(linkTitle)
-		if !strings.EqualFold(linkBase, oldBase) {
+		if !strings.EqualFold(textnorm.NFC(linkBase), textnorm.NFC(oldBase)) {
 			return "", false
 		}
 		newTarget := targetPrefix(l.Target) + newBase + ext
@@ -194,7 +198,7 @@ func RewriteMove(text, oldPath, newPath string) string {
 			return "", false
 		}
 		targetBase, ext := splitMDExt(l.Target)
-		if !strings.EqualFold(targetBase, oldBase) {
+		if !strings.EqualFold(textnorm.NFC(targetBase), textnorm.NFC(oldBase)) {
 			return "", false
 		}
 		return FormatLink(newBase+ext, l.Heading, l.Alias), true

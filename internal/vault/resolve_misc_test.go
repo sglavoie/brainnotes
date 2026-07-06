@@ -125,6 +125,53 @@ func TestResolveByTitleUnicodeCaseFold(t *testing.T) {
 	}
 }
 
+// ResolveByTitle must match regardless of Unicode normalization form. macOS
+// stores accented filenames as NFD (decomposed), while editors write wikilinks
+// (and users type queries) as NFC (composed). A byte-wise compare fails even
+// though both represent the same title, so both sides are normalized to NFC.
+func TestResolveByTitleUnicodeNFD(t *testing.T) {
+	// nfdName is "Québec.md" with a DECOMPOSED accent (e + U+0301 combining
+	// acute), mirroring how macOS stores accented filenames on disk.
+	const nfdName = "Que\u0301bec.md"
+	// nfcQuery is the COMPOSED form (precomposed é, U+00E9) an editor or user
+	// would type.
+	const nfcQuery = "Qu\u00e9bec"
+	v := newTestVault(t, nil, map[string]string{
+		nfdName: "# quebec\n",
+	})
+	n, err := v.ResolveByTitle(nfcQuery, "")
+	if err != nil {
+		t.Fatalf("ResolveByTitle(%q) against NFD-named note: %v", nfcQuery, err)
+	}
+	if got := filepath.Base(n.Path); got != nfdName {
+		t.Errorf("got %q, want %q", got, nfdName)
+	}
+}
+
+// ResolveByTitle's folder scoping must match regardless of Unicode
+// normalization form too. macOS stores an accented folder name as NFD
+// (decomposed) on disk, while config or a user-supplied argument is typically
+// NFC (composed). A byte-wise folder compare fails even though both represent
+// the same folder, so both sides are normalized to NFC before comparison.
+func TestResolveByTitleUnicodeNFDFolder(t *testing.T) {
+	// nfdFolder is "Québec" with a DECOMPOSED accent (e + U+0301 combining
+	// acute), mirroring how macOS stores accented folder names on disk.
+	const nfdFolder = "Que\u0301bec"
+	// nfcFolder is the COMPOSED form (precomposed é, U+00E9) config or a user
+	// would supply.
+	const nfcFolder = "Qu\u00e9bec"
+	v := newTestVault(t, nil, map[string]string{
+		nfdFolder + "/Alice.md": "# alice\n",
+	})
+	n, err := v.ResolveByTitle("Alice", nfcFolder)
+	if err != nil {
+		t.Fatalf("ResolveByTitle(folder=%q) against NFD-named folder: %v", nfcFolder, err)
+	}
+	if got := filepath.ToSlash(n.Path); !strings.HasSuffix(got, nfdFolder+"/Alice.md") {
+		t.Errorf("got %q, want suffix %q", got, nfdFolder+"/Alice.md")
+	}
+}
+
 // TestResolveByTitleSlashInTitle verifies that a title containing a path
 // separator cannot match (filename stems never contain slashes), and the
 // error message is the regular not-found form.

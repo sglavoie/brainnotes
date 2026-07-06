@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
@@ -15,7 +16,7 @@ func relinkNormalizeTarget(target string) string {
 	if target == "" || target == "." {
 		return ""
 	}
-	return strings.ToLower(target)
+	return strings.ToLower(textnorm.NFC(target))
 }
 
 func relinkNormalizeTitle(title string) string {
@@ -24,7 +25,7 @@ func relinkNormalizeTitle(title string) string {
 	if title == "" {
 		return ""
 	}
-	return strings.ToLower(title)
+	return strings.ToLower(textnorm.NFC(title))
 }
 
 func relinkStripMDExt(s string) string {

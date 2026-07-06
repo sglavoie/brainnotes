@@ -68,6 +68,28 @@ func TestUnresolvedLinks(t *testing.T) {
 		}
 	})
 
+	t.Run("NFC link resolves NFD-named note", func(t *testing.T) {
+		// The note lives on disk under a DECOMPOSED (NFD) filename, as macOS
+		// stores accented names. The link is written in COMPOSED (NFC) form,
+		// as Obsidian writes wikilinks. A byte-wise compare would flag this as
+		// broken; NFC-normalizing both sides makes it resolve.
+		const nfdName = "Que\u0301bec.md" // e + U+0301 combining acute
+		const nfcLink = "Qu\u00e9bec"     // precomposed é (U+00E9)
+		_, notes := newVault(t, map[string]string{
+			"Alpha.md": "---\ntitle: Alpha\n---\nSee [[" + nfcLink + "]].\n",
+			nfdName:    "# quebec\n",
+		})
+		var all []*vault.Note
+		for _, n := range notes {
+			all = append(all, n)
+		}
+		g := BuildGraph(all)
+		broken := UnresolvedLinks(notes["Alpha.md"], g)
+		if len(broken) != 0 {
+			t.Errorf("expected NFC link to resolve NFD-named note, got %d broken: %+v", len(broken), broken)
+		}
+	})
+
 	t.Run("unresolved bare link with line number", func(t *testing.T) {
 		_, notes := newVault(t, map[string]string{
 			"Alpha.md": "---\ntitle: Alpha\n---\nLine one.\nSee [[Missing]].\n",

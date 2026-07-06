@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -275,7 +276,7 @@ func EnsureUniqueRenameDestinationTitle(v *vault.Vault, targetPath, newPath, tit
 func collectDuplicateRenameTitles(v *vault.Vault, targetPath, title string) ([]string, error) {
 	var duplicates []string
 	err := v.Walk(vault.WalkFilter{}, func(n *vault.Note) error {
-		if n.Path == targetPath || !strings.EqualFold(n.Title(), title) {
+		if n.Path == targetPath || !strings.EqualFold(textnorm.NFC(n.Title()), textnorm.NFC(title)) {
 			return nil
 		}
 		rel, err := filepath.Rel(v.Root, n.Path)

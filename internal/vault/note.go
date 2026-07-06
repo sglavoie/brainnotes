@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
 // Note is a handle to a markdown file in the vault. Construction is cheap:
@@ -179,7 +180,7 @@ func (n *Note) Title() string {
 		return ""
 	}
 	base := filepath.Base(n.Path)
-	return strings.TrimSuffix(base, filepath.Ext(base))
+	return textnorm.NFC(strings.TrimSuffix(base, filepath.Ext(base)))
 }
 
 // Folder returns the note's containing folder relative to the given vault

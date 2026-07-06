@@ -96,6 +96,44 @@ func TestRewriteTitle(t *testing.T) {
 	}
 }
 
+// A rename of an accented note must rewrite links to it regardless of Unicode
+// normalization form: the on-disk title (hence the oldTitle passed in) is NFC,
+// while a link typed in the body may be NFD (or the reverse). Both bases are
+// NFC-normalized before comparing so the accented link still matches.
+func TestRewriteTitleUnicodeNormalization(t *testing.T) {
+	t.Parallel()
+	const nfc = "Qu\u00e9bec"  // precomposed é (U+00E9)
+	const nfd = "Que\u0301bec" // e + U+0301 combining acute
+	tests := []struct {
+		name         string
+		in, old, new string
+		want         string
+	}{
+		{
+			name: "NFC link, NFD oldTitle",
+			in:   "see [[" + nfc + "]] here",
+			old:  nfd, new: "Quebec City",
+			want: "see [[Quebec City]] here",
+		},
+		{
+			name: "NFD link, NFC oldTitle",
+			in:   "see [[" + nfd + "]] here",
+			old:  nfc, new: "Quebec City",
+			want: "see [[Quebec City]] here",
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := RewriteTitle(tc.in, tc.old, tc.new)
+			if got != tc.want {
+				t.Fatalf("RewriteTitle\n  got:  %q\n  want: %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRewriteMove(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

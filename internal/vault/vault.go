@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
 // Vault is a handle to a notes directory plus the configuration that controls
@@ -206,7 +207,7 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 	var matches []*Note
 	err := v.Walk(WalkFilter{}, func(n *Note) error {
 		stem := strings.TrimSuffix(filepath.Base(n.Path), filepath.Ext(n.Path))
-		if !strings.EqualFold(stem, title) {
+		if !strings.EqualFold(textnorm.NFC(stem), textnorm.NFC(title)) {
 			return nil
 		}
 		if wantFolder != "" {
@@ -218,7 +219,7 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 			if noteFolder == "." {
 				noteFolder = ""
 			}
-			if !strings.EqualFold(noteFolder, wantFolder) {
+			if !strings.EqualFold(textnorm.NFC(noteFolder), textnorm.NFC(wantFolder)) {
 				return nil
 			}
 		}

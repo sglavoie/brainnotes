@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -159,7 +160,7 @@ func backlinkReferrers(g *query.Graph, target *vault.Note) []string {
 // lookup key for a note.
 func backlinkKey(n *vault.Note) string {
 	stem := strings.TrimSuffix(filepath.Base(n.Path), filepath.Ext(n.Path))
-	return strings.ToLower(stem)
+	return strings.ToLower(textnorm.NFC(stem))
 }
 
 // verboseRow is a single line of verbose-mode output. Frontmatter rows have
