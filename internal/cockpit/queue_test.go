@@ -176,10 +176,16 @@ func TestBuildQueueTableDrivenCounts(t *testing.T) {
 		wantActive int
 	}{
 		{
-			name: "mutual links leave only a long-tail value task",
+			name: "linked cycle leaves only a long-tail value task",
+			// A 4-note cycle: every note has one inbound and one outbound link,
+			// so no orphan/dead-end/broken tasks. status=active is the dominant
+			// head (count 3) and status=someday is a lone rare value (count 1)
+			// that qualifies for consolidation, leaving exactly one task.
 			files: map[string]string{
 				"A.md": "---\nstatus: active\n---\n[[B]]\n",
-				"B.md": "---\nstatus: active\n---\n[[A]]\n",
+				"B.md": "---\nstatus: active\n---\n[[C]]\n",
+				"C.md": "---\nstatus: active\n---\n[[D]]\n",
+				"D.md": "---\nstatus: someday\n---\n[[A]]\n",
 			},
 			cfg:        &config.Config{},
 			wantKinds:  []RuleKind{RuleLongTailValue},
@@ -212,8 +218,15 @@ func TestBuildQueueTableDrivenCounts(t *testing.T) {
 		},
 		{
 			name: "schema violation with orphan, dead end, and long-tail value",
+			// A is an isolated note with the rare status=bogus; B->C->D->B form a
+			// linked cycle carrying the dominant head status=active (count 3), so
+			// bogus (count 1) qualifies as a long-tail value while the cycle nodes
+			// produce no orphan/dead-end tasks.
 			files: map[string]string{
 				"A.md": "---\nstatus: bogus\n---\nx\n",
+				"B.md": "---\nstatus: active\n---\n[[C]]\n",
+				"C.md": "---\nstatus: active\n---\n[[D]]\n",
+				"D.md": "---\nstatus: active\n---\n[[B]]\n",
 			},
 			cfg: &config.Config{Frontmatter: config.FrontmatterConfig{
 				Schema: map[string]config.PropertySchema{

@@ -9,14 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
-
-const diagnosticLongTailLimit = 5
 
 type diagnosticsSummary struct {
 	Cards             []diagnosticCard
@@ -123,7 +122,7 @@ func buildDiagnosticsSummaryFromData(data diagnosticsData, cfg *config.Config) d
 		DuplicateTitles:   diagnosticDuplicateTitles(data.loaded, data.graph),
 		FrontmatterErrors: data.frontmatterErrors,
 		SchemaViolations:  diagnosticSchemaViolations(data.loaded, data.graph, cfg),
-		LongTailValues:    diagnosticLongTailValues(data.loaded),
+		LongTailValues:    diagnosticLongTailValues(data.loaded, cfg),
 	}
 	summary.Cards = diagnosticCards(summary)
 	return summary
@@ -332,7 +331,7 @@ func diagnosticSchemaViolations(notes []diagnosticLoadedNote, graph *query.Graph
 	return out
 }
 
-func diagnosticLongTailValues(notes []diagnosticLoadedNote) []diagnosticLongTailGroup {
+func diagnosticLongTailValues(notes []diagnosticLoadedNote, cfg *config.Config) []diagnosticLongTailGroup {
 	countsByProperty := map[string]map[string]int{}
 	for _, item := range notes {
 		front, err := item.note.Front()
@@ -359,14 +358,24 @@ func diagnosticLongTailValues(notes []diagnosticLoadedNote) []diagnosticLongTail
 	}
 	sort.Strings(properties)
 
+	limit := cfg.Cockpit.LongTailLimit
+	maxCount := cfg.Cockpit.LongTailMaxCount
+	headFactor := cfg.Cockpit.LongTailHeadFactor
+
 	out := make([]diagnosticLongTailGroup, 0, len(properties))
 	for _, property := range properties {
-		values := diagnosticValueCounts(countsByProperty[property])
-		if len(values) > diagnosticLongTailLimit {
-			values = values[len(values)-diagnosticLongTailLimit:]
-		}
-		if len(values) == 0 {
+		counts := countsByProperty[property]
+		// SelectLongTailValues is the single helper shared with the cockpit
+		// queue (internal/cockpit/hygiene.go), so the diagnostics card and the
+		// queue always flag the identical set. It returns count-desc/value-asc;
+		// the card re-sorts ascending below to keep rarest values first.
+		selected := cockpit.SelectLongTailValues(counts, limit, maxCount, headFactor)
+		if len(selected) == 0 {
 			continue
+		}
+		values := make([]diagnosticValueCount, 0, len(selected))
+		for _, value := range selected {
+			values = append(values, diagnosticValueCount{Value: value, Count: counts[value]})
 		}
 		sort.Slice(values, func(i, j int) bool {
 			if values[i].Count != values[j].Count {
@@ -482,23 +491,6 @@ func countDiagnosticValue(value any, counts map[string]int) {
 	default:
 		counts[fmt.Sprintf("%v", typed)]++
 	}
-}
-
-func diagnosticValueCounts(counts map[string]int) []diagnosticValueCount {
-	values := make([]diagnosticValueCount, 0, len(counts))
-	for value, count := range counts {
-		if strings.TrimSpace(value) == "" {
-			continue
-		}
-		values = append(values, diagnosticValueCount{Value: value, Count: count})
-	}
-	sort.Slice(values, func(i, j int) bool {
-		if values[i].Count != values[j].Count {
-			return values[i].Count > values[j].Count
-		}
-		return values[i].Value < values[j].Value
-	})
-	return values
 }
 
 func filterURL(key, value string) string {

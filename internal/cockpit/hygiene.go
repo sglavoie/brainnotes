@@ -12,9 +12,21 @@ import (
 )
 
 // defaultLongTailLimit caps how many of the rarest values per property become
-// long-tail tasks. It mirrors the web diagnostics limit; a later session wires
-// this to the [cockpit] long_tail_limit config key.
+// long-tail tasks. It mirrors the web diagnostics limit and the [cockpit]
+// long_tail_limit config key.
 const defaultLongTailLimit = 5
+
+// defaultLongTailMaxCount / defaultLongTailHeadFactor are the rarity thresholds
+// applied before the rarest-limit cap: a value is flagged only when it is used
+// at most defaultLongTailMaxCount times AND the property has a dominant sibling
+// value used at least defaultLongTailHeadFactor times as often (something to
+// consolidate into). They mirror the [cockpit] long_tail_max_count /
+// long_tail_head_factor config keys and keep the core correct when the helper
+// is handed a bare 0 (as several tests do via &config.Config{}).
+const (
+	defaultLongTailMaxCount   = 2
+	defaultLongTailHeadFactor = 3
+)
 
 // issueNoteTasks builds one triage task per note matching pred (orphan or
 // dead-end). It mirrors the web review queue's per-note issue items so the two
@@ -61,12 +73,18 @@ type longTailKey struct {
 }
 
 // longTailValueTasks builds one triage task per rarely-used frontmatter value.
-// For each property it keeps at most limit of the least-frequent values (the
-// same selection the web diagnostics long-tail card makes) and lists the notes
-// that use each value as the affected set.
-func longTailValueTasks(notes []loadedNote, limit int) []Task {
+// For each property it selects the qualifying rare values via
+// SelectLongTailValues (the same helper the web diagnostics long-tail card
+// uses) and lists the notes that use each value as the affected set.
+func longTailValueTasks(notes []loadedNote, limit, maxCount, headFactor int) []Task {
 	if limit <= 0 {
 		limit = defaultLongTailLimit
+	}
+	if maxCount <= 0 {
+		maxCount = defaultLongTailMaxCount
+	}
+	if headFactor <= 0 {
+		headFactor = defaultLongTailHeadFactor
 	}
 
 	countsByProperty := map[string]map[string]int{}
@@ -106,7 +124,7 @@ func longTailValueTasks(notes []loadedNote, limit int) []Task {
 
 	tasks := make([]Task, 0)
 	for _, property := range properties {
-		for _, value := range selectLongTailValues(countsByProperty[property], limit) {
+		for _, value := range SelectLongTailValues(countsByProperty[property], limit, maxCount, headFactor) {
 			group := notesByValue[longTailKey{property: property, value: value}]
 			affected := make([]AffectedNote, 0, len(group))
 			for _, item := range group {
@@ -125,10 +143,43 @@ func longTailValueTasks(notes []loadedNote, limit int) []Task {
 	return tasks
 }
 
-// selectLongTailValues returns the rarest non-empty values from counts, capped
-// at limit, sorted count-descending then value-ascending. This matches the web
-// diagnostics selection so both views flag the same values.
-func selectLongTailValues(counts map[string]int, limit int) []string {
+// SelectLongTailValues returns the non-empty values from counts worth flagging
+// for consolidation, sorted count-descending then value-ascending and capped at
+// limit (rarest first). A value V qualifies only when it is rare and the
+// property has a dominant sibling to consolidate into:
+//
+//	count(V) <= maxCount                   (V is rare)
+//	AND globalMax >= headFactor * count(V) (a dominant sibling exists)
+//
+// where globalMax is the highest count among the property's values. The second
+// condition automatically excludes the head value itself (for headFactor >= 2)
+// and any property whose values are all equally rare (e.g. unique-per-note
+// fields where globalMax == count(V)). limit/maxCount/headFactor fall back to
+// their package defaults when handed a non-positive value, so the helper stays
+// correct when called with an unconfigured config. Both the cockpit queue and
+// the web diagnostics long-tail card call this helper so the two views can
+// never drift.
+func SelectLongTailValues(counts map[string]int, limit, maxCount, headFactor int) []string {
+	if limit <= 0 {
+		limit = defaultLongTailLimit
+	}
+	if maxCount <= 0 {
+		maxCount = defaultLongTailMaxCount
+	}
+	if headFactor <= 0 {
+		headFactor = defaultLongTailHeadFactor
+	}
+
+	globalMax := 0
+	for value, count := range counts {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		if count > globalMax {
+			globalMax = count
+		}
+	}
+
 	type valueCount struct {
 		value string
 		count int
@@ -139,7 +190,9 @@ func selectLongTailValues(counts map[string]int, limit int) []string {
 		if strings.TrimSpace(value) == "" {
 			continue
 		}
-		values = append(values, valueCount{value: value, count: count})
+		if count <= maxCount && globalMax >= headFactor*count {
+			values = append(values, valueCount{value: value, count: count})
+		}
 	}
 	sort.Slice(values, func(i, j int) bool {
 		if values[i].count != values[j].count {

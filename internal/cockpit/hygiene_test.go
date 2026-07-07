@@ -92,11 +92,14 @@ func TestBuildQueueOrphanAndDeadEndTasks(t *testing.T) {
 }
 
 func TestBuildQueueLongTailValueTasks(t *testing.T) {
-	// type=note appears twice, type=idea once. Both are among the rarest five
-	// values, so both become long-tail triage tasks.
+	// type=note is the dominant head (three notes), type=idea a lone rare value.
+	// Only idea qualifies: it is rare (count 1 <= maxCount 2) and has a dominant
+	// sibling to consolidate into (globalMax 3 >= headFactor 3 * 1). The common
+	// head value type=note is not flagged.
 	v := newTestVault(t, map[string]string{
 		"A.md": "---\ntype: note\n---\n[[B]]\n",
 		"B.md": "---\ntype: note\n---\n[[A]]\n",
+		"D.md": "---\ntype: note\n---\n[[A]]\n",
 		"C.md": "---\ntype: idea\n---\n[[A]]\n",
 	})
 
@@ -119,16 +122,20 @@ func TestBuildQueueLongTailValueTasks(t *testing.T) {
 		t.Fatalf("long-tail affected location = %q, want frontmatter.type", idea.Affected[0].Location)
 	}
 
-	note := findTask(t, got, RuleLongTailValue, "type = note")
-	if note.Count != 2 || !reflect.DeepEqual(affectedRels(note.Affected), []string{"A.md", "B.md"}) {
-		t.Fatalf("long-tail note affected = %#v", note.Affected)
+	// The dominant head value must not be flagged.
+	for _, task := range tasksOfKind(got, RuleLongTailValue) {
+		if task.Detail == "type = note" {
+			t.Fatalf("dominant head value type = note should not be flagged: %#v", task)
+		}
 	}
 }
 
 func TestBuildQueueLongTailHonorsLimit(t *testing.T) {
-	// Six distinct single-use values for one property; only the rarest five
+	// category=zzz is a dominant head (three notes), so the six distinct
+	// single-use values all qualify as rare-with-a-head. Only the rarest five
 	// survive the long-tail cap. With equal counts the tie-breaker is value
-	// ascending, so the first value ("aaa") is dropped.
+	// ascending, so the first value ("aaa") is dropped. The head itself is not
+	// flagged.
 	v := newTestVault(t, map[string]string{
 		"1.md": "---\ncategory: aaa\n---\nx\n",
 		"2.md": "---\ncategory: bbb\n---\nx\n",
@@ -136,6 +143,9 @@ func TestBuildQueueLongTailHonorsLimit(t *testing.T) {
 		"4.md": "---\ncategory: ddd\n---\nx\n",
 		"5.md": "---\ncategory: eee\n---\nx\n",
 		"6.md": "---\ncategory: fff\n---\nx\n",
+		"7.md": "---\ncategory: zzz\n---\nx\n",
+		"8.md": "---\ncategory: zzz\n---\nx\n",
+		"9.md": "---\ncategory: zzz\n---\nx\n",
 	})
 
 	got, err := BuildQueue(v, &config.Config{})
@@ -159,12 +169,45 @@ func TestBuildQueueLongTailHonorsLimit(t *testing.T) {
 	}
 }
 
+func TestBuildQueueLongTailSkipsCommonAndUniformValues(t *testing.T) {
+	// Negative cases for the rarity + dominant-sibling rule:
+	//   - author: every value is unique (all count 1, globalMax == count), so no
+	//     value has a dominant sibling to consolidate into — none flagged.
+	//   - status: active is common (count 3) and done is only slightly rarer
+	//     (count 2); with headFactor 3 the head (3) is not >= 3*2, so even the
+	//     rarer value is not flagged, and the head is never flagged either.
+	v := newTestVault(t, map[string]string{
+		"1.md": "---\nauthor: alice\nstatus: active\n---\nx\n",
+		"2.md": "---\nauthor: bob\nstatus: active\n---\nx\n",
+		"3.md": "---\nauthor: carol\nstatus: active\n---\nx\n",
+		"4.md": "---\nauthor: dave\nstatus: done\n---\nx\n",
+		"5.md": "---\nauthor: erin\nstatus: done\n---\nx\n",
+	})
+
+	got, err := BuildQueue(v, &config.Config{})
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+
+	if tasks := tasksOfKind(got, RuleLongTailValue); len(tasks) != 0 {
+		details := make([]string, len(tasks))
+		for i, task := range tasks {
+			details[i] = task.Detail
+		}
+		t.Fatalf("expected no long-tail tasks, got %#v", details)
+	}
+}
+
 func TestBuildQueueHygieneTasksSortAfterCoreRules(t *testing.T) {
 	// A broken target (priority 30) must sort before orphan (50), dead-end
-	// (60), and long-tail (70) tasks in the assembled queue.
+	// (60), and long-tail (70) tasks in the assembled queue. type=note is the
+	// dominant head (three notes) so the rare type=idea qualifies as a long-tail
+	// value, guaranteeing the queue contains a RuleLongTailValue task.
 	v := newTestVault(t, map[string]string{
 		"Hub.md":  "---\ntype: note\n---\n[[Leaf]] [[Missing]]\n",
-		"Leaf.md": "---\ntype: idea\n---\nNo links.\n",
+		"Leaf.md": "---\ntype: note\n---\nNo links.\n",
+		"More.md": "---\ntype: note\n---\n[[Leaf]]\n",
+		"Solo.md": "---\ntype: idea\n---\nNo links.\n",
 	})
 
 	got, err := BuildQueue(v, &config.Config{})

@@ -94,6 +94,14 @@ type CockpitConfig struct {
 	// LongTailLimit caps how many of the rarest values per frontmatter property
 	// become long-tail tasks. Defaults to DefaultCockpitLongTailLimit.
 	LongTailLimit int `toml:"long_tail_limit"`
+	// LongTailMaxCount is the highest per-value count that still counts as rare;
+	// a value is only eligible when its count is at or below this threshold.
+	// Defaults to DefaultCockpitLongTailMaxCount.
+	LongTailMaxCount int `toml:"long_tail_max_count"`
+	// LongTailHeadFactor requires a dominant sibling value before flagging: a
+	// rare value surfaces only when the property's most common value is at least
+	// this many times as frequent. Defaults to DefaultCockpitLongTailHeadFactor.
+	LongTailHeadFactor int `toml:"long_tail_head_factor"`
 }
 
 // DefaultIgnore lists the vault-relative paths that are always skipped.
@@ -108,6 +116,14 @@ const DefaultServeAddr = "127.0.0.1:8729"
 // DefaultCockpitLongTailLimit is the default cap on how many of the rarest
 // values per frontmatter property become long-tail cockpit tasks.
 const DefaultCockpitLongTailLimit = 5
+
+// DefaultCockpitLongTailMaxCount is the default highest per-value count that
+// still counts as rare for the long-tail rule.
+const DefaultCockpitLongTailMaxCount = 2
+
+// DefaultCockpitLongTailHeadFactor is the default multiple by which a
+// property's dominant value must exceed a rare value before it is flagged.
+const DefaultCockpitLongTailHeadFactor = 3
 
 const (
 	envVault   = "BNOTES_VAULT"

@@ -67,6 +67,10 @@ func DefaultTemplate() string {
 # priority = ["broken_target", "schema_violation"]
 # How many of the rarest values per property become long-tail tasks.
 # long_tail_limit = 5
+# Highest per-value count that still counts as rare for long-tail tasks.
+# long_tail_max_count = 2
+# A rare value is flagged only if the property's dominant value is at least this many times as frequent.
+# long_tail_head_factor = 3
 `
 }
 
@@ -158,6 +162,12 @@ func applyDefaults(cfg *Config) {
 	// Negative values are left as-is so validate can reject them.
 	if cfg.Cockpit.LongTailLimit == 0 {
 		cfg.Cockpit.LongTailLimit = DefaultCockpitLongTailLimit
+	}
+	if cfg.Cockpit.LongTailMaxCount == 0 {
+		cfg.Cockpit.LongTailMaxCount = DefaultCockpitLongTailMaxCount
+	}
+	if cfg.Cockpit.LongTailHeadFactor == 0 {
+		cfg.Cockpit.LongTailHeadFactor = DefaultCockpitLongTailHeadFactor
 	}
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)

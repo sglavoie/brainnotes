@@ -108,8 +108,15 @@ open_browser = true
 disabled_rules = []
 # Rule kinds to surface first, overriding the built-in ordering.
 priority = []
-# How many of the rarest values per property become long-tail tasks.
+# A long-tail task flags a rare frontmatter value only when the property also
+# has a dominant sibling value to consolidate into.
+# How many qualifying values per property become long-tail tasks (rarest first).
 long_tail_limit = 5
+# Highest per-value count that still counts as rare.
+long_tail_max_count = 2
+# A value is only flagged when some sibling value is at least this many times
+# as frequent (the dominant head to merge into).
+long_tail_head_factor = 3
 
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
 [new.routes]
@@ -601,7 +608,7 @@ Detected rule kinds:
 | `duplicate_title` | two or more notes sharing the same title |
 | `orphan_note` | notes with no inbound links from other notes |
 | `dead_end_note` | notes with no resolved outgoing links |
-| `long_tail_value` | the rarest values of a frontmatter property |
+| `long_tail_value` | rare frontmatter values that a dominant sibling value can absorb (e.g. a `status` typo to merge into the common value) |
 
 Issues are grouped into tasks by kind and detail, content-addressed over the
 issue and every affected note's path, location, and file content, and sorted by
@@ -620,8 +627,15 @@ Workflow state (done/snoozed) lives in `<vault>/.bnotes/cockpit.json`, migrated
 automatically from readable records in the legacy `<vault>/.bnotes/review.json`
 on first load. Tune the queue with the `[cockpit]` config block:
 `disabled_rules` hides rule kinds entirely, `priority` surfaces chosen kinds
-first, and `long_tail_limit` (default `5`) caps how many of the rarest values
-per property become long-tail tasks.
+first, and three keys tune `long_tail_value`: a value is flagged only when it is
+rare — its count is at most `long_tail_max_count` (default `2`) — *and* the
+property has a dominant sibling value at least `long_tail_head_factor` (default
+`3`) times as frequent to consolidate into. This keeps genuine typos/variants
+(e.g. `status = Maintenance` when `status = Completed` dominates) while dropping
+both common head values and unique-per-note fields (`email`, `phone`, `url`) that
+have no dominant sibling. Qualifying values are then capped by `long_tail_limit`
+(default `5`, rarest first) so a property with many variants cannot flood the
+queue.
 
 ```sh
 bn doctor                                   # human-readable queue

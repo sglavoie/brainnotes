@@ -440,6 +440,10 @@ func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
 		"Linked/Target.md":  []byte("---\ntitle: Target\nstatus: active\n---\n[[Work/Source]]\n"),
 		"Linked/Source.md":  []byte("---\ntitle: Linked Source\nstatus: active\n---\n[[Work/Source]]\n"),
 		"Linked/Another.md": []byte("---\ntitle: Another\nstatus: active\n---\n[[Archive/Twin]]\n"),
+		// Twin appears 3x so title has a dominant sibling (>= headFactor), which
+		// keeps the rare "Source <script>" title as a qualifying long-tail value
+		// so the diagnostics card renders it (and we can assert it is escaped).
+		"Linked/Twin.md": []byte("---\ntitle: Twin\nstatus: active\n---\n[[Work/Source]]\n"),
 	}, func(cfg *config.Config) {
 		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
 			"status": {Type: "string", Required: true, Allowed: []string{"active"}},

@@ -94,7 +94,7 @@ func buildQueueFromData(data vaultData, cfg *config.Config, root string) Queue {
 	tasks = append(tasks, duplicateTitleTasks(data.loaded, data.graph)...)
 	tasks = append(tasks, issueNoteTasks(data.loaded, data.graph, query.Orphan(data.graph), RuleOrphanNote)...)
 	tasks = append(tasks, issueNoteTasks(data.loaded, data.graph, query.DeadEnd(data.graph), RuleDeadEndNote)...)
-	tasks = append(tasks, longTailValueTasks(data.loaded, cfg.Cockpit.LongTailLimit)...)
+	tasks = append(tasks, longTailValueTasks(data.loaded, cfg.Cockpit.LongTailLimit, cfg.Cockpit.LongTailMaxCount, cfg.Cockpit.LongTailHeadFactor)...)
 
 	if disabled := disabledRuleSet(cfg); disabled != nil {
 		kept := tasks[:0]

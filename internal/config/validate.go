@@ -54,6 +54,12 @@ func validateCockpit(cfg *Config) error {
 	if cfg.Cockpit.LongTailLimit < 0 {
 		return fmt.Errorf("config: cockpit.long_tail_limit %d must not be negative", cfg.Cockpit.LongTailLimit)
 	}
+	if cfg.Cockpit.LongTailMaxCount < 0 {
+		return fmt.Errorf("config: cockpit.long_tail_max_count %d must not be negative", cfg.Cockpit.LongTailMaxCount)
+	}
+	if cfg.Cockpit.LongTailHeadFactor < 0 {
+		return fmt.Errorf("config: cockpit.long_tail_head_factor %d must not be negative", cfg.Cockpit.LongTailHeadFactor)
+	}
 	return nil
 }
 
