@@ -51,6 +51,11 @@ func validateCockpit(cfg *Config) error {
 			return fmt.Errorf("config: cockpit.priority[%d] must not be empty or whitespace", i)
 		}
 	}
+	for i, prop := range cfg.Cockpit.LongTailIgnoreProperties {
+		if strings.TrimSpace(prop) == "" {
+			return fmt.Errorf("config: cockpit.long_tail_ignore_properties[%d] must not be empty or whitespace", i)
+		}
+	}
 	if cfg.Cockpit.LongTailLimit < 0 {
 		return fmt.Errorf("config: cockpit.long_tail_limit %d must not be negative", cfg.Cockpit.LongTailLimit)
 	}

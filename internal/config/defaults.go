@@ -71,6 +71,8 @@ func DefaultTemplate() string {
 # long_tail_max_count = 2
 # A rare value is flagged only if the property's dominant value is at least this many times as frequent.
 # long_tail_head_factor = 3
+# Frontmatter properties the long-tail rule never flags (open-vocabulary / naturally-unique fields).
+# long_tail_ignore_properties = ["created", "tags", "topics", "ingredients"]
 `
 }
 
@@ -157,6 +159,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Cockpit.Priority == nil {
 		cfg.Cockpit.Priority = []string{}
+	}
+	if cfg.Cockpit.LongTailIgnoreProperties == nil {
+		cfg.Cockpit.LongTailIgnoreProperties = []string{}
 	}
 	// A zero long_tail_limit means "unset"; fall back to the documented default.
 	// Negative values are left as-is so validate can reject them.

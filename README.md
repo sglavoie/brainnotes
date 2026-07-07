@@ -117,6 +117,9 @@ long_tail_max_count = 2
 # A value is only flagged when some sibling value is at least this many times
 # as frequent (the dominant head to merge into).
 long_tail_head_factor = 3
+# Frontmatter properties to exclude from the long-tail rule entirely (open
+# vocabularies like tags/topics where a long tail is natural, not a typo).
+long_tail_ignore_properties = []
 
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
 [new.routes]
@@ -635,7 +638,10 @@ property has a dominant sibling value at least `long_tail_head_factor` (default
 both common head values and unique-per-note fields (`email`, `phone`, `url`) that
 have no dominant sibling. Qualifying values are then capped by `long_tail_limit`
 (default `5`, rarest first) so a property with many variants cannot flood the
-queue.
+queue. `long_tail_ignore_properties` (default empty) excludes named properties
+from the rule entirely — set it to open-vocabulary fields (e.g. `tags`,
+`topics`, `created`) where a long tail is expected and never a typo, keeping the
+rule focused on enum-like properties such as `status`, `kind`, and `type`.
 
 ```sh
 bn doctor                                   # human-readable queue

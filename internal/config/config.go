@@ -102,6 +102,11 @@ type CockpitConfig struct {
 	// rare value surfaces only when the property's most common value is at least
 	// this many times as frequent. Defaults to DefaultCockpitLongTailHeadFactor.
 	LongTailHeadFactor int `toml:"long_tail_head_factor"`
+	// LongTailIgnoreProperties lists frontmatter property names the long-tail rule
+	// never flags — open-vocabulary / naturally-unique fields (created, tags,
+	// ingredients, …) where a long tail is expected rather than a typo. Matched
+	// case-sensitively against the frontmatter key.
+	LongTailIgnoreProperties []string `toml:"long_tail_ignore_properties"`
 }
 
 // DefaultIgnore lists the vault-relative paths that are always skipped.

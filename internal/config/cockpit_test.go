@@ -31,6 +31,9 @@ func TestLoad_CockpitDefaults(t *testing.T) {
 	if cfg.Cockpit.Priority == nil || len(cfg.Cockpit.Priority) != 0 {
 		t.Errorf("Cockpit.Priority: got %#v, want empty non-nil slice", cfg.Cockpit.Priority)
 	}
+	if cfg.Cockpit.LongTailIgnoreProperties == nil || len(cfg.Cockpit.LongTailIgnoreProperties) != 0 {
+		t.Errorf("Cockpit.LongTailIgnoreProperties: got %#v, want empty non-nil slice", cfg.Cockpit.LongTailIgnoreProperties)
+	}
 }
 
 func TestLoad_CockpitExplicitValues(t *testing.T) {
@@ -45,6 +48,7 @@ priority = ["broken_target", "schema_violation"]
 long_tail_limit = 3
 long_tail_max_count = 4
 long_tail_head_factor = 6
+long_tail_ignore_properties = ["created", "tags"]
 `)
 
 	cfg, err := Load(vault, cfgPath)
@@ -67,6 +71,10 @@ long_tail_head_factor = 6
 	wantPriority := []string{"broken_target", "schema_violation"}
 	if !equalSlices(cfg.Cockpit.Priority, wantPriority) {
 		t.Errorf("Cockpit.Priority: got %v, want %v", cfg.Cockpit.Priority, wantPriority)
+	}
+	wantIgnore := []string{"created", "tags"}
+	if !equalSlices(cfg.Cockpit.LongTailIgnoreProperties, wantIgnore) {
+		t.Errorf("Cockpit.LongTailIgnoreProperties: got %v, want %v", cfg.Cockpit.LongTailIgnoreProperties, wantIgnore)
 	}
 }
 
@@ -100,6 +108,11 @@ func TestLoad_CockpitValidationRejectsBadValues(t *testing.T) {
 			name:    "empty priority entry",
 			body:    "[cockpit]\npriority = [\"\"]\n",
 			wantSub: "priority[0]",
+		},
+		{
+			name:    "whitespace long_tail_ignore_properties entry",
+			body:    "[cockpit]\nlong_tail_ignore_properties = [\"created\", \"  \"]\n",
+			wantSub: "long_tail_ignore_properties[1]",
 		},
 	}
 

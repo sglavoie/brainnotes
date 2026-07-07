@@ -2,9 +2,11 @@ package web
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
@@ -142,6 +144,57 @@ func TestBuildDiagnosticsSummarySchemaEmptyBehavior(t *testing.T) {
 	}
 	if diagnosticCardsByKey(got.Cards)["schema_violations"].Count != 0 {
 		t.Fatalf("empty schema should have zero schema card count: %#v", got.Cards)
+	}
+}
+
+func TestBuildDiagnosticsSummaryLongTailIgnoresConfiguredProperties(t *testing.T) {
+	// type and kind each have a dominant head (note / essay, three notes) plus a
+	// lone rare value (idea / poem) that qualifies as long-tail. Ignoring "type"
+	// must drop it from the diagnostics card while "kind" still shows, and the
+	// card must select the identical set as the cockpit queue (no drift).
+	v, _, _ := newFilterTestSnapshot(t, map[string]string{
+		"A.md": "---\ntype: note\nkind: essay\n---\n[[B]]\n",
+		"B.md": "---\ntype: note\nkind: essay\n---\n[[A]]\n",
+		"D.md": "---\ntype: note\nkind: essay\n---\n[[A]]\n",
+		"C.md": "---\ntype: idea\nkind: poem\n---\n[[A]]\n",
+	})
+	cfg := &config.Config{}
+	cfg.Cockpit.LongTailIgnoreProperties = []string{"type"}
+
+	got, err := buildDiagnosticsSummary(v, cfg)
+	if err != nil {
+		t.Fatalf("buildDiagnosticsSummary: %v", err)
+	}
+
+	longTail := longTailByProperty(got.LongTailValues)
+	if _, ok := longTail["type"]; ok {
+		t.Fatalf("ignored property type should be absent from the card: %#v", got.LongTailValues)
+	}
+	if values := longTail["kind"]; len(values) != 1 || values[0].Value != "poem" {
+		t.Fatalf("kind long-tail values = %#v, want poem still flagged", values)
+	}
+
+	// The card and the cockpit queue must select the identical set.
+	queue, err := cockpit.BuildQueue(v, cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+	cardDetails := make([]string, 0)
+	for property, values := range longTail {
+		for _, value := range values {
+			cardDetails = append(cardDetails, property+" = "+value.Value)
+		}
+	}
+	queueDetails := make([]string, 0)
+	for _, task := range queue.Tasks {
+		if task.Kind == cockpit.RuleLongTailValue {
+			queueDetails = append(queueDetails, task.Detail)
+		}
+	}
+	sort.Strings(cardDetails)
+	sort.Strings(queueDetails)
+	if !sameStrings(cardDetails, queueDetails) {
+		t.Fatalf("card set %#v != cockpit queue set %#v", cardDetails, queueDetails)
 	}
 }
 

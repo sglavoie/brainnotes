@@ -361,9 +361,16 @@ func diagnosticLongTailValues(notes []diagnosticLoadedNote, cfg *config.Config) 
 	limit := cfg.Cockpit.LongTailLimit
 	maxCount := cfg.Cockpit.LongTailMaxCount
 	headFactor := cfg.Cockpit.LongTailHeadFactor
+	// LongTailIgnoreSet is the same helper the cockpit queue uses to skip
+	// ignored properties (internal/cockpit/hygiene.go), so the diagnostics card
+	// and the queue exclude the identical set and never drift.
+	ignored := cockpit.LongTailIgnoreSet(cfg.Cockpit.LongTailIgnoreProperties)
 
 	out := make([]diagnosticLongTailGroup, 0, len(properties))
 	for _, property := range properties {
+		if ignored[property] {
+			continue
+		}
 		counts := countsByProperty[property]
 		// SelectLongTailValues is the single helper shared with the cockpit
 		// queue (internal/cockpit/hygiene.go), so the diagnostics card and the

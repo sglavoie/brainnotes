@@ -76,7 +76,7 @@ type longTailKey struct {
 // For each property it selects the qualifying rare values via
 // SelectLongTailValues (the same helper the web diagnostics long-tail card
 // uses) and lists the notes that use each value as the affected set.
-func longTailValueTasks(notes []loadedNote, limit, maxCount, headFactor int) []Task {
+func longTailValueTasks(notes []loadedNote, limit, maxCount, headFactor int, ignore []string) []Task {
 	if limit <= 0 {
 		limit = defaultLongTailLimit
 	}
@@ -86,6 +86,7 @@ func longTailValueTasks(notes []loadedNote, limit, maxCount, headFactor int) []T
 	if headFactor <= 0 {
 		headFactor = defaultLongTailHeadFactor
 	}
+	ignored := LongTailIgnoreSet(ignore)
 
 	countsByProperty := map[string]map[string]int{}
 	notesByValue := map[longTailKey][]loadedNote{}
@@ -124,6 +125,9 @@ func longTailValueTasks(notes []loadedNote, limit, maxCount, headFactor int) []T
 
 	tasks := make([]Task, 0)
 	for _, property := range properties {
+		if ignored[property] {
+			continue
+		}
 		for _, value := range SelectLongTailValues(countsByProperty[property], limit, maxCount, headFactor) {
 			group := notesByValue[longTailKey{property: property, value: value}]
 			affected := make([]AffectedNote, 0, len(group))
@@ -209,6 +213,25 @@ func SelectLongTailValues(counts map[string]int, limit, maxCount, headFactor int
 		out[i] = vc.value
 	}
 	return out
+}
+
+// LongTailIgnoreSet builds the lookup set of frontmatter property names the
+// long-tail rule must never flag, from the configured
+// [cockpit] long_tail_ignore_properties list. Entries are trimmed and empty
+// entries skipped; matching is case-sensitive against the frontmatter key.
+// Both the cockpit queue and the web diagnostics long-tail card use this helper
+// so the two views apply the same exclusions and can never drift. Returns a
+// non-nil (possibly empty) set so callers can index it unconditionally.
+func LongTailIgnoreSet(ignore []string) map[string]bool {
+	set := make(map[string]bool, len(ignore))
+	for _, name := range ignore {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		set[trimmed] = true
+	}
+	return set
 }
 
 // longTailValueStrings flattens a frontmatter value into its comparable string

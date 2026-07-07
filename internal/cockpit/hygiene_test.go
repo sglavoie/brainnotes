@@ -198,6 +198,38 @@ func TestBuildQueueLongTailSkipsCommonAndUniformValues(t *testing.T) {
 	}
 }
 
+func TestBuildQueueLongTailIgnoresConfiguredProperties(t *testing.T) {
+	// type and kind each have a dominant head (note / essay, three notes) plus a
+	// lone rare value (idea / poem) that qualifies as long-tail. Ignoring "type"
+	// must drop only its long-tail task; "kind" must still flag as before, so the
+	// ignore list neither over- nor under-skips.
+	v := newTestVault(t, map[string]string{
+		"A.md": "---\ntype: note\nkind: essay\n---\n[[B]]\n",
+		"B.md": "---\ntype: note\nkind: essay\n---\n[[A]]\n",
+		"D.md": "---\ntype: note\nkind: essay\n---\n[[A]]\n",
+		"C.md": "---\ntype: idea\nkind: poem\n---\n[[A]]\n",
+	})
+
+	cfg := &config.Config{}
+	cfg.Cockpit.LongTailIgnoreProperties = []string{"type"}
+
+	got, err := BuildQueue(v, cfg)
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+
+	details := make([]string, 0)
+	for _, task := range tasksOfKind(got, RuleLongTailValue) {
+		details = append(details, task.Detail)
+		if task.Detail == "type = idea" {
+			t.Fatalf("ignored property type should not be flagged: %#v", task)
+		}
+	}
+	if !reflect.DeepEqual(details, []string{"kind = poem"}) {
+		t.Fatalf("long-tail details = %#v, want [kind = poem]", details)
+	}
+}
+
 func TestBuildQueueHygieneTasksSortAfterCoreRules(t *testing.T) {
 	// A broken target (priority 30) must sort before orphan (50), dead-end
 	// (60), and long-tail (70) tasks in the assembled queue. type=note is the
