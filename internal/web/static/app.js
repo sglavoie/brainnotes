@@ -2182,6 +2182,172 @@ var BrainNotesApp = (() => {
     const hue = hashFolder(folder) % 360;
     return `hsl(${hue}, 65%, 60%)`;
   };
+  var DEFAULT_GRAPH_PALETTE = {
+    nodeLabel: "#e5e9f0",
+    labelOutline: "#0b0f16",
+    labelBackground: "#0c1018",
+    edge: "#66718a",
+    neighbor: "#8cb8ff",
+    hovered: "#f3f7ff",
+    selected: "#ffd166",
+    selectedText: "#fff3c2",
+    broken: "#ff9d9d",
+    orphan: "#c7d2e7"
+  };
+  var GRAPH_PALETTE_VARIABLES = {
+    nodeLabel: "--bn-graph-node-label",
+    labelOutline: "--bn-graph-label-outline",
+    labelBackground: "--bn-graph-canvas-bg",
+    edge: "--bn-graph-edge",
+    neighbor: "--bn-graph-neighbor",
+    hovered: "--bn-graph-hovered",
+    selected: "--bn-graph-locked",
+    selectedText: "--bn-graph-selected-text",
+    broken: "--bn-graph-broken",
+    orphan: "--bn-graph-orphan"
+  };
+  var readGraphPalette = (read, fallback = DEFAULT_GRAPH_PALETTE) => {
+    const resolve = (key) => {
+      let raw = "";
+      try {
+        raw = read(GRAPH_PALETTE_VARIABLES[key]);
+      } catch {
+        raw = "";
+      }
+      const value = typeof raw === "string" ? raw.trim() : "";
+      return value || fallback[key];
+    };
+    return {
+      nodeLabel: resolve("nodeLabel"),
+      labelOutline: resolve("labelOutline"),
+      labelBackground: resolve("labelBackground"),
+      edge: resolve("edge"),
+      neighbor: resolve("neighbor"),
+      hovered: resolve("hovered"),
+      selected: resolve("selected"),
+      selectedText: resolve("selectedText"),
+      broken: resolve("broken"),
+      orphan: resolve("orphan")
+    };
+  };
+  var buildGraphStyleRules = (palette = DEFAULT_GRAPH_PALETTE) => [
+    {
+      selector: "node",
+      style: {
+        label: "",
+        "background-color": "data(color)",
+        color: palette.nodeLabel,
+        "font-size": "10px",
+        "font-weight": 600,
+        "text-valign": "bottom",
+        "text-halign": "center",
+        "text-margin-y": 6,
+        "text-wrap": "wrap",
+        "text-overflow-wrap": "anywhere",
+        "text-max-width": 130,
+        "text-outline-width": 1,
+        "text-outline-color": palette.labelOutline,
+        "text-background-color": palette.labelBackground,
+        "text-background-opacity": 0.78,
+        "text-background-padding": 2,
+        "text-background-shape": "roundrectangle",
+        width: "data(size)",
+        height: "data(size)",
+        "border-width": 0,
+        opacity: 1,
+        "z-index": 1
+      }
+    },
+    {
+      selector: "node.is-labeled",
+      style: {
+        label: "data(title)"
+      }
+    },
+    {
+      selector: "node.has-broken",
+      style: {
+        "border-width": 3,
+        "border-color": palette.broken,
+        shape: "diamond"
+      }
+    },
+    {
+      selector: "node.is-orphan",
+      style: {
+        "border-width": 2,
+        "border-style": "dashed",
+        "border-color": palette.orphan
+      }
+    },
+    {
+      selector: "node.is-dead-end",
+      style: {
+        "background-blacken": -0.12
+      }
+    },
+    {
+      selector: "node.is-neighbor",
+      style: {
+        "border-width": 2,
+        "border-color": palette.neighbor,
+        "z-index": 8
+      }
+    },
+    {
+      selector: "node.is-hovered",
+      style: {
+        "border-width": 3,
+        "border-color": palette.hovered,
+        "font-size": "11px",
+        "z-index": 20
+      }
+    },
+    {
+      selector: "node.is-selected",
+      style: {
+        "border-width": 4,
+        "border-color": palette.selected,
+        color: palette.selectedText,
+        "font-size": "11px",
+        "z-index": 30
+      }
+    },
+    {
+      selector: "node.is-dimmed",
+      style: {
+        opacity: 0.22
+      }
+    },
+    {
+      selector: "edge",
+      style: {
+        width: 1.5,
+        "line-color": palette.edge,
+        "target-arrow-color": palette.edge,
+        "target-arrow-shape": "triangle",
+        "curve-style": "bezier",
+        opacity: 0.72,
+        "z-index": 0
+      }
+    },
+    {
+      selector: "edge.is-highlighted-edge",
+      style: {
+        width: 3,
+        "line-color": palette.neighbor,
+        "target-arrow-color": palette.neighbor,
+        opacity: 1,
+        "z-index": 12
+      }
+    },
+    {
+      selector: "edge.is-dimmed",
+      style: {
+        opacity: 0.12
+      }
+    }
+  ];
   var computeFallbackGraphDegrees = (rawNodes, rawEdges) => {
     const degreeSets = /* @__PURE__ */ new Map();
     for (const node of rawNodes) {
@@ -2336,6 +2502,125 @@ var BrainNotesApp = (() => {
       return "the active filters";
     }
     return "";
+  };
+
+  // internal/web/static_src/theme.ts
+  var THEME_STORAGE_KEY = "bn.theme";
+  var THEME_EVENT = "bn:themechange";
+  var DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
+  var isExplicitPreference = (value) => value === "light" || value === "dark";
+  var readStoredPreference = (storage) => {
+    if (!storage) {
+      return "system";
+    }
+    let stored;
+    try {
+      stored = storage.getItem(THEME_STORAGE_KEY);
+    } catch {
+      return "system";
+    }
+    return isExplicitPreference(stored) ? stored : "system";
+  };
+  var resolveEffectiveTheme = (preference, prefersDark) => {
+    if (isExplicitPreference(preference)) {
+      return preference;
+    }
+    return prefersDark ? "dark" : "light";
+  };
+  var applyThemePreference = (root, preference) => {
+    if (isExplicitPreference(preference)) {
+      root.dataset.theme = preference;
+    } else {
+      delete root.dataset.theme;
+    }
+  };
+  var persistThemePreference = (storage, preference) => {
+    if (!storage) {
+      return;
+    }
+    try {
+      if (isExplicitPreference(preference)) {
+        storage.setItem(THEME_STORAGE_KEY, preference);
+      } else {
+        storage.removeItem(THEME_STORAGE_KEY);
+      }
+    } catch {
+    }
+  };
+  var safeLocalStorage = (view) => {
+    if (!view) {
+      return null;
+    }
+    try {
+      return view.localStorage;
+    } catch {
+      return null;
+    }
+  };
+  var initTheme = (options = {}) => {
+    const doc = options.document ?? (typeof document !== "undefined" ? document : null);
+    if (!doc) {
+      return;
+    }
+    const root = doc.documentElement;
+    if (!root) {
+      return;
+    }
+    const view = doc.defaultView;
+    const storage = options.storage !== void 0 ? options.storage : safeLocalStorage(view);
+    const darkQuery = view && typeof view.matchMedia === "function" ? view.matchMedia(DARK_MEDIA_QUERY) : null;
+    const prefersDark = () => Boolean(darkQuery && darkQuery.matches);
+    const controls = queryAllElements(doc, "[data-theme-control]", HTMLElement);
+    const syncControls = (preference) => {
+      controls.forEach((control) => {
+        queryAllElements(control, "[data-theme-option]", HTMLInputElement).forEach(
+          (option) => {
+            option.checked = option.value === preference;
+          }
+        );
+      });
+    };
+    const apply = (preference) => {
+      applyThemePreference(root, preference);
+      syncControls(preference);
+      const detail = {
+        preference,
+        effective: resolveEffectiveTheme(preference, prefersDark())
+      };
+      doc.dispatchEvent(new CustomEvent(THEME_EVENT, { detail }));
+    };
+    apply(readStoredPreference(storage));
+    controls.forEach((control) => {
+      control.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement) || !target.hasAttribute("data-theme-option")) {
+          return;
+        }
+        const preference = isExplicitPreference(target.value) ? target.value : "system";
+        persistThemePreference(storage, preference);
+        apply(preference);
+      });
+    });
+    if (view) {
+      view.addEventListener("storage", (event) => {
+        if (event.key !== null && event.key !== THEME_STORAGE_KEY) {
+          return;
+        }
+        apply(readStoredPreference(storage));
+      });
+    }
+    if (darkQuery) {
+      const onSystemChange = () => {
+        if (readStoredPreference(storage) === "system") {
+          apply("system");
+        }
+      };
+      if (typeof darkQuery.addEventListener === "function") {
+        darkQuery.addEventListener("change", onSystemChange);
+      } else if (typeof darkQuery.addListener === "function") {
+        darkQuery.addListener(onSystemChange);
+      }
+    }
   };
 
   // internal/web/static_src/graph-controller.ts
@@ -2511,124 +2796,27 @@ var BrainNotesApp = (() => {
       deepZoomMinZoom: 1.6,
       deepZoomPriorityLabelLimit: 24
     };
-    const graphStyle = [
-      {
-        selector: "node",
-        style: {
-          label: "",
-          "background-color": "data(color)",
-          color: "#e5e9f0",
-          "font-size": "10px",
-          "font-weight": 600,
-          "text-valign": "bottom",
-          "text-halign": "center",
-          "text-margin-y": 6,
-          "text-wrap": "wrap",
-          "text-overflow-wrap": "anywhere",
-          "text-max-width": 130,
-          "text-outline-width": 1,
-          "text-outline-color": "#0b0f16",
-          "text-background-color": "#0c1018",
-          "text-background-opacity": 0.78,
-          "text-background-padding": 2,
-          "text-background-shape": "roundrectangle",
-          width: "data(size)",
-          height: "data(size)",
-          "border-width": 0,
-          opacity: 1,
-          "z-index": 1
-        }
-      },
-      {
-        selector: "node.is-labeled",
-        style: {
-          label: "data(title)"
-        }
-      },
-      {
-        selector: "node.has-broken",
-        style: {
-          "border-width": 3,
-          "border-color": "#ff9d9d",
-          shape: "diamond"
-        }
-      },
-      {
-        selector: "node.is-orphan",
-        style: {
-          "border-width": 2,
-          "border-style": "dashed",
-          "border-color": "#c7d2e7"
-        }
-      },
-      {
-        selector: "node.is-dead-end",
-        style: {
-          "background-blacken": -0.12
-        }
-      },
-      {
-        selector: "node.is-neighbor",
-        style: {
-          "border-width": 2,
-          "border-color": "#8cb8ff",
-          "z-index": 8
-        }
-      },
-      {
-        selector: "node.is-hovered",
-        style: {
-          "border-width": 3,
-          "border-color": "#f3f7ff",
-          "font-size": "11px",
-          "z-index": 20
-        }
-      },
-      {
-        selector: "node.is-selected",
-        style: {
-          "border-width": 4,
-          "border-color": "#ffd166",
-          color: "#fff3c2",
-          "font-size": "11px",
-          "z-index": 30
-        }
-      },
-      {
-        selector: "node.is-dimmed",
-        style: {
-          opacity: 0.22
-        }
-      },
-      {
-        selector: "edge",
-        style: {
-          width: 1.5,
-          "line-color": "#66718a",
-          "target-arrow-color": "#66718a",
-          "target-arrow-shape": "triangle",
-          "curve-style": "bezier",
-          opacity: 0.72,
-          "z-index": 0
-        }
-      },
-      {
-        selector: "edge.is-highlighted-edge",
-        style: {
-          width: 3,
-          "line-color": "#8cb8ff",
-          "target-arrow-color": "#8cb8ff",
-          opacity: 1,
-          "z-index": 12
-        }
-      },
-      {
-        selector: "edge.is-dimmed",
-        style: {
-          opacity: 0.12
-        }
+    function currentGraphPalette() {
+      if (typeof window === "undefined" || typeof document === "undefined") {
+        return DEFAULT_GRAPH_PALETTE;
       }
-    ];
+      const root = document.documentElement;
+      if (!root || typeof window.getComputedStyle !== "function") {
+        return DEFAULT_GRAPH_PALETTE;
+      }
+      const styles = window.getComputedStyle(root);
+      return readGraphPalette((name) => styles.getPropertyValue(name));
+    }
+    function buildGraphStyle() {
+      return buildGraphStyleRules(currentGraphPalette());
+    }
+    function restyleGraphForTheme() {
+      if (!state.cy) {
+        return;
+      }
+      state.cy.style(buildGraphStyle());
+      applyGraphVisualState();
+    }
     function stopActiveLayout() {
       if (state.activeLayout && typeof state.activeLayout.stop === "function") {
         state.activeLayout.stop();
@@ -2700,7 +2888,7 @@ var BrainNotesApp = (() => {
       state.cy = createCytoscape({
         container: canvas,
         elements: [],
-        style: graphStyle
+        style: buildGraphStyle()
       });
       bindGraphEvents(state.cy);
       return state.cy;
@@ -3191,6 +3379,7 @@ var BrainNotesApp = (() => {
       const query = filterInput instanceof HTMLInputElement ? filterInput.value.trim() : state.currentQuery;
       scheduleLoad(query, 0);
     });
+    document.addEventListener(THEME_EVENT, restyleGraphForTheme);
     bindControls();
     scheduleLoad(initialQuery, 0);
   };
@@ -4484,6 +4673,7 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/main.ts
   (function() {
+    initTheme();
     initFacets();
     initOpenInEditor();
     initTrashNoteAction();

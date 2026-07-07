@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Broken links - bn serve</title>
+    {{template "themeBoot" .}}
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
@@ -14,7 +15,10 @@
           <h1>Broken links</h1>
           <p class="page-subtitle">Unresolved wikilinks and where they appear.</p>
         </div>
-        {{template "headerSearch" .}}
+        <div class="site-header-tools">
+          {{template "themeControl" .}}
+          {{template "headerSearch" .}}
+        </div>
       </header>
 
       <section class="panel">

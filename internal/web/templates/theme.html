@@ -1,0 +1,36 @@
+{{define "themeBoot"}}
+<script>
+  (function () {
+    try {
+      var stored = window.localStorage.getItem("bn.theme");
+      if (stored === "light" || stored === "dark") {
+        document.documentElement.dataset.theme = stored;
+      } else {
+        delete document.documentElement.dataset.theme;
+      }
+    } catch (error) {
+      /* Storage unavailable (private mode); System theme applies. */
+    }
+  })();
+</script>
+{{end}}
+
+{{define "themeControl"}}
+  <fieldset class="theme-control" data-theme-control aria-label="Theme">
+    <legend class="theme-control-legend">Theme</legend>
+    <div class="theme-control-options">
+      <label class="theme-control-option">
+        <input type="radio" name="bn-theme" value="system" data-theme-option checked />
+        <span>System</span>
+      </label>
+      <label class="theme-control-option">
+        <input type="radio" name="bn-theme" value="light" data-theme-option />
+        <span>Light</span>
+      </label>
+      <label class="theme-control-option">
+        <input type="radio" name="bn-theme" value="dark" data-theme-option />
+        <span>Dark</span>
+      </label>
+    </div>
+  </fieldset>
+{{end}}

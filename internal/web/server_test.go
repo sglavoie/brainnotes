@@ -3526,6 +3526,41 @@ func TestServer_PagesIncludeSearchUI(t *testing.T) {
 	assertSearchUI("/broken")
 }
 
+func TestServer_PagesIncludeThemeControl(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	assertThemeUI := func(path string) {
+		t.Helper()
+		resp, err := http.Get(ts.URL + path) // #nosec G107 -- test-only local URL
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		body := readResponseBody(t, resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status for %s: got %d, want %d", path, resp.StatusCode, http.StatusOK)
+		}
+		if !strings.Contains(body, `window.localStorage.getItem("bn.theme")`) {
+			t.Fatalf("missing theme boot script on %s, got %q", path, body)
+		}
+		if !strings.Contains(body, `name="bn-theme"`) {
+			t.Fatalf("missing theme control radio group on %s, got %q", path, body)
+		}
+		for _, value := range []string{"system", "light", "dark"} {
+			needle := `value="` + value + `" data-theme-option`
+			if !strings.Contains(body, needle) {
+				t.Fatalf("missing %q theme option on %s, got %q", value, path, body)
+			}
+		}
+	}
+
+	assertThemeUI("/")
+	assertThemeUI("/n/source")
+	assertThemeUI("/broken")
+	assertThemeUI("/graph")
+}
+
 func TestServer_PagesIncludeFacetControls(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),

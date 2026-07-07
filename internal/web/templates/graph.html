@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{.Title}}</title>
+    {{template "themeBoot" .}}
     <link rel="stylesheet" href="/static/app.css" />
     <script src="/static/cytoscape.min.js" defer></script>
     <script src="/static/app.js" defer></script>
@@ -19,6 +20,7 @@
             <a href="/">Overview</a>
             <a href="/broken">Broken links</a>
           </p>
+          {{template "themeControl" .}}
         </div>
         <section class="graph-controls" aria-label="Graph controls">
           <div class="graph-filter">

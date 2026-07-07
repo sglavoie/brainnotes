@@ -85,7 +85,7 @@ func TestManagementCSSAccessibilityAndMobileContract(t *testing.T) {
 		".trash-note-button:focus-visible",
 		".frontmatter-button:focus-visible",
 		".create-note-button:focus-visible",
-		"outline: 2px solid #5f8fff;",
+		"outline: 2px solid var(--bn-focus);",
 		"white-space: nowrap;",
 		".history-item > .history-button",
 		"justify-self: end;",
@@ -196,25 +196,140 @@ func TestNoteActionsStatusLineDoesNotResizeButtonRow(t *testing.T) {
 	}
 }
 
-func TestScrollbarsUseDarkTheme(t *testing.T) {
+func TestThemeTokenFoundationContract(t *testing.T) {
 	css := readStaticCSS(t)
 
+	// Light is the base palette declared on :root, with color-scheme light.
 	for _, want := range []string{
+		":root {",
+		"color-scheme: light;",
+		"--bn-bg: #f7f9fc;",
+		"--bn-surface: #ffffff;",
+		"--bn-text: #18202f;",
+		"--bn-muted: #5d687a;",
+		"--bn-border: #cfd8e6;",
+		"--bn-link: #2563eb;",
+		"--bn-focus: #2563eb;",
+		"--bn-scrollbar-thumb: #b9c4d6;",
+		"--bn-scrollbar-thumb-hover: #9aa8c0;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("light theme token CSS missing %q", want)
+		}
+	}
+
+	// System follows prefers-color-scheme: the dark media query re-declares the
+	// dark token values, preserving the original dark palette.
+	darkMedia := cssBlockAfter(t, css, "@media (prefers-color-scheme: dark)")
+	for _, want := range []string{
+		":root {",
 		"color-scheme: dark;",
-		"scrollbar-color: #3a465c transparent;",
+		"--bn-bg: #10131a;",
+		"--bn-scrollbar-thumb: #3a465c;",
+		"--bn-scrollbar-thumb-hover: #52617a;",
+		"--bn-focus: #5f8fff;",
+	} {
+		if !strings.Contains(darkMedia, want) {
+			t.Fatalf("system dark theme token CSS missing %q in block:\n%s", want, darkMedia)
+		}
+	}
+
+	// Explicit overrides are browser-local, higher-specificity selectors that
+	// win over both the base palette and the system media query.
+	for _, want := range []string{
+		":root[data-theme=\"light\"] {",
+		":root[data-theme=\"dark\"] {",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("explicit theme selector CSS missing %q", want)
+		}
+	}
+
+	// Shared scrollbar styling and the generic focus outline are tokenized.
+	for _, want := range []string{
+		"scrollbar-color: var(--bn-scrollbar-thumb) transparent;",
 		"scrollbar-width: thin;",
 		"*::-webkit-scrollbar",
 		"width: 0.7rem;",
 		"height: 0.7rem;",
-		"*::-webkit-scrollbar-thumb",
 		"border-radius: 999px;",
-		"background-color: #3a465c;",
+		"background-color: var(--bn-scrollbar-thumb);",
 		"background-clip: content-box;",
-		"*::-webkit-scrollbar-thumb:hover",
-		"background-color: #52617a;",
+		"background-color: var(--bn-scrollbar-thumb-hover);",
+		"outline: 2px solid var(--bn-focus);",
 	} {
 		if !strings.Contains(css, want) {
-			t.Fatalf("dark scrollbar CSS missing %q", want)
+			t.Fatalf("tokenized theme CSS missing %q", want)
+		}
+	}
+
+	// The old hard-coded dark scrollbar literals must be gone.
+	for _, unwanted := range []string{
+		"scrollbar-color: #3a465c transparent;",
+		"background-color: #3a465c;",
+		"background-color: #52617a;",
+	} {
+		if strings.Contains(css, unwanted) {
+			t.Fatalf("theme CSS should no longer contain literal dark scrollbar rule %q", unwanted)
+		}
+	}
+}
+
+func TestComponentCSSTokenizationContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	// Component sections (overview/bulk, history, cockpit, diagnostics, recent
+	// notes, note actions/layout, frontmatter, backlinks, broken links, filter
+	// form, and graph page chrome) reference semantic theme tokens rather than
+	// raw literal colors. Spot-check a distinctive tokenized declaration from
+	// each token family instead of a brittle full-file snapshot.
+	for _, want := range []string{
+		// Surfaces.
+		"background: var(--bn-raised);",
+		"background: var(--bn-sunken);",
+		"background: var(--bn-hover);",
+		// Borders and accents.
+		"border: 1px solid var(--bn-border);",
+		"border-color: var(--bn-border-strong);",
+		"background: var(--bn-accent-subtle-bg);",
+		"border: 1px solid var(--bn-accent-subtle-border);",
+		// Text, links, accent.
+		"color: var(--bn-text);",
+		"color: var(--bn-muted);",
+		"color: var(--bn-text-subtle);",
+		"color: var(--bn-link);",
+		"accent-color: var(--bn-accent);",
+		// Status triples.
+		"color: var(--bn-danger);",
+		"background: var(--bn-danger-bg);",
+		"border-color: var(--bn-danger-border);",
+		"color: var(--bn-warning);",
+		"background: var(--bn-warning-bg);",
+		"color: var(--bn-success);",
+		"background: var(--bn-success-bg);",
+		// Code surface and graph page chrome hooks.
+		"background: var(--bn-code-bg) !important;",
+		"background: var(--bn-graph-canvas-bg);",
+		"border-color: var(--bn-graph-locked);",
+		"box-shadow: inset 3px 0 0 var(--bn-graph-locked);",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("component tokenization CSS missing %q", want)
+		}
+	}
+
+	// Representative component-only literals that were consolidated into tokens
+	// must be gone everywhere. These values are not theme-token declarations, so
+	// their reappearance signals a regression back to hard-coded component colors.
+	for _, unwanted := range []string{
+		"#301b23", // danger hover background
+		"#9db2c9", // muted text
+		"#3a4b68", // hover border
+		"#cfd9ea", // subtle text
+		"#eaf0ff", // strong text
+	} {
+		if strings.Contains(css, unwanted) {
+			t.Fatalf("component CSS should no longer contain consolidated literal %q", unwanted)
 		}
 	}
 }

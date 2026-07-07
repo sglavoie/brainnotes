@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -14,7 +15,10 @@
         <h1>{{ .Title }}</h1>
         <p class="page-subtitle">Local vault browser for search, graph navigation, note management, and diagnostics.</p>
       </div>
-      {{template "headerSearch" .}}
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
     </header>
 
     <section

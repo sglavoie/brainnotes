@@ -92,14 +92,20 @@ func TestMarkdownRenderer_HighlightsRecognizedCodeFence(t *testing.T) {
 		t.Fatalf("render: %v", err)
 	}
 	html := string(out)
-	for _, want := range []string{`<pre tabindex="0"`, `<span`, `style="color:`, `package`, `Println`} {
+	for _, want := range []string{
+		`<pre tabindex="0" class="chroma">`,
+		`<span class="kn">package</span>`,
+		`<span class="nf">Println</span>`,
+		`package`,
+		`Println`,
+	} {
 		if !strings.Contains(html, want) {
-			t.Fatalf("expected highlighted code fence to contain %q, got %q", want, html)
+			t.Fatalf("expected class-highlighted code fence to contain %q, got %q", want, html)
 		}
 	}
-	for _, unwanted := range []string{`<table`, `class="ln"`, `class="lnt"`} {
+	for _, unwanted := range []string{`style="color:`, `<table`, `class="ln"`, `class="lnt"`} {
 		if strings.Contains(html, unwanted) {
-			t.Fatalf("expected highlighted code fence without line numbers, got %q", html)
+			t.Fatalf("expected class-based highlighting without inline styles or line numbers, got %q", html)
 		}
 	}
 }

@@ -9,8 +9,10 @@ import { initHistoryPanel } from "./history-panel";
 import { initTrashNoteAction } from "./note-trash";
 import { initOverviewSearchResults } from "./overview-search";
 import { initSearch } from "./search";
+import { initTheme } from "./theme";
 
 (function () {
+  initTheme();
   initFacets();
   initOpenInEditor();
   initTrashNoteAction();

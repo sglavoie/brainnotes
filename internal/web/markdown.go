@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
@@ -48,6 +49,10 @@ func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
 			highlighting.NewHighlighting(
 				highlighting.WithStyle("nord"),
 				highlighting.WithGuessLanguage(false),
+				// Emit stable Chroma CSS classes instead of inline color
+				// styles so light/dark syntax palettes can be themed from
+				// app.css (scoped .chroma blocks) rather than baked into HTML.
+				highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 			),
 			extension.Linkify,
 			&wikilink.Extender{

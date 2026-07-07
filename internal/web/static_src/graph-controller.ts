@@ -8,19 +8,24 @@ import {
   syncPageQueryParam,
 } from "./filters";
 import {
-  emptyGraphElements,
+  DEFAULT_GRAPH_PALETTE,
   type GraphElements,
   type GraphFocusState,
   type GraphLabelMode,
   type GraphNodeModel,
+  type GraphPalette,
   type GraphViewportSnapshot,
+  buildGraphStyleRules,
+  emptyGraphElements,
   graphNodeModelFromData,
   graphScopeLabel,
   normalizeGraphPayload,
   readDegreeValue,
+  readGraphPalette,
   toCytoscapeElements,
 } from "./graph";
 import { type StatusKind, setStatusText } from "./status";
+import { THEME_EVENT } from "./theme";
 
 type CytoscapeGraphOptions = {
   container: HTMLElement;
@@ -250,124 +255,32 @@ export const initGraph = (): void => {
     deepZoomPriorityLabelLimit: 24,
   };
 
-  const graphStyle = [
-    {
-      selector: "node",
-      style: {
-        label: "",
-        "background-color": "data(color)",
-        color: "#e5e9f0",
-        "font-size": "10px",
-        "font-weight": 600,
-        "text-valign": "bottom",
-        "text-halign": "center",
-        "text-margin-y": 6,
-        "text-wrap": "wrap",
-        "text-overflow-wrap": "anywhere",
-        "text-max-width": 130,
-        "text-outline-width": 1,
-        "text-outline-color": "#0b0f16",
-        "text-background-color": "#0c1018",
-        "text-background-opacity": 0.78,
-        "text-background-padding": 2,
-        "text-background-shape": "roundrectangle",
-        width: "data(size)",
-        height: "data(size)",
-        "border-width": 0,
-        opacity: 1,
-        "z-index": 1,
-      },
-    },
-    {
-      selector: "node.is-labeled",
-      style: {
-        label: "data(title)",
-      },
-    },
-    {
-      selector: "node.has-broken",
-      style: {
-        "border-width": 3,
-        "border-color": "#ff9d9d",
-        shape: "diamond",
-      },
-    },
-    {
-      selector: "node.is-orphan",
-      style: {
-        "border-width": 2,
-        "border-style": "dashed",
-        "border-color": "#c7d2e7",
-      },
-    },
-    {
-      selector: "node.is-dead-end",
-      style: {
-        "background-blacken": -0.12,
-      },
-    },
-    {
-      selector: "node.is-neighbor",
-      style: {
-        "border-width": 2,
-        "border-color": "#8cb8ff",
-        "z-index": 8,
-      },
-    },
-    {
-      selector: "node.is-hovered",
-      style: {
-        "border-width": 3,
-        "border-color": "#f3f7ff",
-        "font-size": "11px",
-        "z-index": 20,
-      },
-    },
-    {
-      selector: "node.is-selected",
-      style: {
-        "border-width": 4,
-        "border-color": "#ffd166",
-        color: "#fff3c2",
-        "font-size": "11px",
-        "z-index": 30,
-      },
-    },
-    {
-      selector: "node.is-dimmed",
-      style: {
-        opacity: 0.22,
-      },
-    },
-    {
-      selector: "edge",
-      style: {
-        width: 1.5,
-        "line-color": "#66718a",
-        "target-arrow-color": "#66718a",
-        "target-arrow-shape": "triangle",
-        "curve-style": "bezier",
-        opacity: 0.72,
-        "z-index": 0,
-      },
-    },
-    {
-      selector: "edge.is-highlighted-edge",
-      style: {
-        width: 3,
-        "line-color": "#8cb8ff",
-        "target-arrow-color": "#8cb8ff",
-        opacity: 1,
-        "z-index": 12,
-      },
-    },
-    {
-      selector: "edge.is-dimmed",
-      style: {
-        opacity: 0.12,
-      },
-    },
-  ] as unknown as cytoscape.StylesheetJson;
+  function currentGraphPalette(): GraphPalette {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return DEFAULT_GRAPH_PALETTE;
+    }
+    const root = document.documentElement;
+    if (!root || typeof window.getComputedStyle !== "function") {
+      return DEFAULT_GRAPH_PALETTE;
+    }
+    const styles = window.getComputedStyle(root);
+    return readGraphPalette((name) => styles.getPropertyValue(name));
+  }
+
+  function buildGraphStyle(): cytoscape.StylesheetJson {
+    return buildGraphStyleRules(currentGraphPalette()) as unknown as cytoscape.StylesheetJson;
+  }
+
+  function restyleGraphForTheme(): void {
+    if (!state.cy) {
+      return;
+    }
+    // Replacing the stylesheet repaints colors only; graph data, selection,
+    // viewport, and layout positions are untouched. Re-toggle visual classes so
+    // label/focus state stays in sync with the freshly applied style.
+    state.cy.style(buildGraphStyle());
+    applyGraphVisualState();
+  }
 
   function stopActiveLayout(): void {
     if (state.activeLayout && typeof state.activeLayout.stop === "function") {
@@ -446,7 +359,7 @@ export const initGraph = (): void => {
     state.cy = createCytoscape({
       container: canvas,
       elements: [],
-      style: graphStyle,
+      style: buildGraphStyle(),
     });
     bindGraphEvents(state.cy);
     return state.cy;
@@ -1024,6 +937,9 @@ export const initGraph = (): void => {
     const query = filterInput instanceof HTMLInputElement ? filterInput.value.trim() : state.currentQuery;
     scheduleLoad(query, 0);
   });
+  // theme.ts dispatches bn:themechange on document (non-bubbling), so listen
+  // there. Restyle in place without reloading graph data.
+  document.addEventListener(THEME_EVENT, restyleGraphForTheme);
 
   bindControls();
   scheduleLoad(initialQuery, 0);

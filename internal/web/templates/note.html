@@ -30,6 +30,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{.Title}} - bn serve</title>
+    {{template "themeBoot" .}}
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
@@ -52,7 +53,10 @@
 
       <header class="site-header">
         <h1>{{.Title}}</h1>
-        {{template "headerSearch" .}}
+        <div class="site-header-tools">
+          {{template "themeControl" .}}
+          {{template "headerSearch" .}}
+        </div>
       </header>
 
       <div class="note-actions">
