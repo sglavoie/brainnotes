@@ -104,6 +104,24 @@ func postCockpitItem(t *testing.T, baseURL, id, action, snooze, headerToken, for
 	return doFormPost(t, baseURL+"/api/cockpit/item", form, headerToken)
 }
 
+func postCockpitItemDaily(t *testing.T, baseURL, id, action, snooze, headerToken, formToken string) *http.Response {
+	t.Helper()
+	form := url.Values{}
+	if id != "" {
+		form.Set("id", id)
+	}
+	if action != "" {
+		form.Set("action", action)
+	}
+	if snooze != "" {
+		form.Set("snooze", snooze)
+	}
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	return doFormPost(t, baseURL+"/api/cockpit/item?view=daily", form, headerToken)
+}
+
 func postFixPreview(t *testing.T, baseURL, id, action, headerToken, formToken string) *http.Response {
 	t.Helper()
 	return doFormPost(t, baseURL+"/api/fixes/preview", fixForm(id, action, "", formToken), headerToken)
@@ -235,6 +253,53 @@ func TestServer_CockpitAPI_DailyViewCapsTasks(t *testing.T) {
 		if task.ID != full.Tasks[i].ID {
 			t.Errorf("daily task %d id = %q, want %q (top of full queue)", i, task.ID, full.Tasks[i].ID)
 		}
+	}
+}
+
+// TestServer_CockpitAPI_ItemDailyViewCapsTasks proves that a daily-aware item
+// mutation (POST /api/cockpit/item?view=daily) keeps the response Tasks capped
+// to cockpit.daily_limit while the counts continue to reflect the full queue,
+// and that the default POST /api/cockpit/item still returns the full filtered
+// queue. This is the regression guard for the Daily Fix Cockpit finding where a
+// Done/Snooze/Clear action could replace the capped daily panel with the full
+// queue until reload.
+func TestServer_CockpitAPI_ItemDailyViewCapsTasks(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"A.md": []byte("---\ntitle: A\n---\n[[GhostA]]\n"),
+		"B.md": []byte("---\ntitle: B\n---\n[[GhostB]]\n"),
+		"C.md": []byte("---\ntitle: C\n---\n[[GhostC]]\n"),
+		"D.md": []byte("---\ntitle: D\n---\n[[GhostD]]\n"),
+	}, func(cfg *config.Config) {
+		cfg.Cockpit.DailyLimit = 2
+	}, Options{CSRFToken: "csrf-token"})
+
+	full := getCockpitPayload(t, ts.URL)
+	if len(full.Tasks) <= 2 {
+		t.Fatalf("expected full queue to exceed the daily limit, got %d tasks", len(full.Tasks))
+	}
+	item := full.Tasks[0]
+
+	// Daily-aware mutation: response stays capped, counts reflect the full queue.
+	dailyBody := readResponseBody(t, postCockpitItemDaily(t, ts.URL, item.ID, "mark_done", "", "csrf-token", ""))
+	daily := decodeCockpitResult(t, dailyBody)
+	if len(daily.Tasks) != 2 {
+		t.Fatalf("daily item response = %d tasks, want 2 (daily_limit cap)", len(daily.Tasks))
+	}
+	if _, ok := cockpitTaskByID(daily.Queue, item.ID); ok {
+		t.Fatalf("done item remained active in daily response: %#v", daily)
+	}
+	if daily.Counts.DoneHidden != 1 {
+		t.Fatalf("daily counts DoneHidden = %d, want 1", daily.Counts.DoneHidden)
+	}
+	if daily.Counts.TotalGenerated != full.Counts.TotalGenerated {
+		t.Fatalf("daily counts TotalGenerated = %d, want %d (full totals)", daily.Counts.TotalGenerated, full.Counts.TotalGenerated)
+	}
+
+	// Default mutation (no view): response returns the full filtered queue.
+	clearBody := readResponseBody(t, postCockpitItem(t, ts.URL, item.ID, "clear", "", "csrf-token", ""))
+	cleared := decodeCockpitResult(t, clearBody)
+	if len(cleared.Tasks) != len(full.Tasks) {
+		t.Fatalf("default item response = %d tasks, want %d (full filtered queue)", len(cleared.Tasks), len(full.Tasks))
 	}
 }
 

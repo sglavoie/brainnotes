@@ -343,7 +343,7 @@ func TestServer_IndexIncludesDailyFixesCockpit(t *testing.T) {
 	required := []string{
 		`data-fixes-panel`,
 		`data-fixes-endpoint="/api/cockpit?view=daily"`,
-		`data-fixes-item-endpoint="/api/cockpit/item"`,
+		`data-fixes-item-endpoint="/api/cockpit/item?view=daily"`,
 		`data-fixes-preview-endpoint="/api/fixes/preview"`,
 		`data-fixes-apply-endpoint="/api/fixes/apply"`,
 		`data-fixes-open-endpoint="/api/open"`,

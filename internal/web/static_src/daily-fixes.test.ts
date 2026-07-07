@@ -125,7 +125,7 @@ const renderPanel = (csrfToken = "csrf-token"): void => {
     <section
       data-fixes-panel
       data-fixes-endpoint="/api/cockpit"
-      data-fixes-item-endpoint="/api/cockpit/item"
+      data-fixes-item-endpoint="/api/cockpit/item?view=daily"
       data-fixes-preview-endpoint="/api/fixes/preview"
       data-fixes-apply-endpoint="/api/fixes/apply"
       data-fixes-open-endpoint="/api/open"
@@ -249,6 +249,10 @@ describe("daily fixes helpers", () => {
     const itemRequest = buildFixesItemFetchRequest("/api/cockpit/item", "csrf", "task_1", "mark_done");
     expect(itemRequest.url).toBe("/api/cockpit/item");
     expect(itemRequest.init.body).toBe("id=task_1&action=mark_done&token=csrf");
+
+    const dailyItemRequest = buildFixesItemFetchRequest("/api/cockpit/item?view=daily", "csrf", "task_1", "mark_done");
+    expect(dailyItemRequest.url).toBe("/api/cockpit/item?view=daily");
+    expect(dailyItemRequest.init.body).toBe("id=task_1&action=mark_done&token=csrf");
 
     const applyRequest = buildFixesApplyFetchRequest("/api/fixes/apply", "csrf", "task_1", "relink", "pv-1");
     expect(applyRequest.init.body).toBe("id=task_1&action=relink&token=csrf&preview_id=pv-1");
@@ -403,7 +407,7 @@ describe("daily fixes panel DOM behavior", () => {
   it("posts triage actions and renders the returned queue", async () => {
     renderPanel();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === "/api/cockpit/item") {
+      if (String(input) === "/api/cockpit/item?view=daily") {
         expect(String(init?.body)).toBe("id=task_orphan&action=snooze&token=csrf-token&snooze=week");
         return jsonResponse({
           ok: true,

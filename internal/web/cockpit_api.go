@@ -202,6 +202,13 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
 		return
 	}
+	// view=daily caps the workflow-filtered response to the daily cockpit slice,
+	// mirroring handleCockpitQueue so the daily panel cannot inflate past
+	// cockpit.daily_limit after a triage action; any other view (including none)
+	// keeps the full filtered queue unchanged.
+	if r.URL.Query().Get("view") == "daily" {
+		queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
+	}
 	writeManagementJSON(w, http.StatusOK, cockpitAPIResponse{OK: true, Message: message, Queue: queue})
 }
 
