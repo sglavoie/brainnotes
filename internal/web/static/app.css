@@ -1183,6 +1183,30 @@ code {
   overflow-wrap: anywhere;
 }
 
+/* Advisory (triage-only) findings are informational: no mechanical fix
+   affordance, so mute the row accent to distinguish them from actionable fixes. */
+.review-item[data-fixes-triage] {
+  border-color: #33405a;
+}
+
+.review-item[data-fixes-triage] .review-item-kind {
+  border-color: #3a4b68;
+  color: #b7c4dc;
+  background: #131c2c;
+}
+
+/* Sensitive content is security-relevant advisory. Emphasize the badge in a
+   warning tone; evidence is redacted server-side and never rendered here. */
+.review-item[data-fixes-kind="sensitive_content"] {
+  border-color: #5a2f3a;
+}
+
+.review-item[data-fixes-kind="sensitive_content"] .review-item-kind {
+  border-color: #7a3a48;
+  color: #ffc7d0;
+  background: #24151b;
+}
+
 .review-item-title {
   margin: 0;
   color: #eaf0ff;

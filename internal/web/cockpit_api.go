@@ -36,6 +36,16 @@ type cockpitAPIResponse struct {
 	cockpit.Queue
 }
 
+// dailyReviewContextResponse is the GET /api/daily-review/context payload. It
+// embeds the deterministic, redacted cockpit.ReviewContext so the JSON schema is
+// identical to `bn doctor --review-context`, and adds the shared ok/message
+// envelope. It is read-only and never invokes any AI command.
+type dailyReviewContextResponse struct {
+	OK      bool   `json:"ok"`
+	Message string `json:"message,omitempty"`
+	cockpit.ReviewContext
+}
+
 // fixPreviewResponse is the POST /api/fixes/preview payload. It embeds the
 // planner's FixPlan (action/task_id/previews/skipped) and adds the one-use
 // receipt the client must echo back to apply.
@@ -73,7 +83,40 @@ func (s *Server) handleCockpitQueue(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
 		return
 	}
+	// view=daily caps the workflow-filtered queue to the daily cockpit slice;
+	// any other view (including none) keeps the full queue unchanged.
+	if r.URL.Query().Get("view") == "daily" {
+		queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
+	}
 	writeManagementJSON(w, http.StatusOK, cockpitAPIResponse{OK: true, Queue: queue})
+}
+
+// handleDailyReviewContext serves the read-only daily-review context: the
+// deterministic, redacted snapshot of the workflow-filtered, daily-limited
+// queue. It is safe to call without side effects — no note is mutated and no AI
+// command is invoked. Session 9 layers the optional agent execution on top of
+// this substrate.
+func (s *Server) handleDailyReviewContext(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/daily-review/context" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
+		return
+	}
+
+	queue, err := s.cockpitQueueFiltered()
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
+		return
+	}
+	// The review context is inherently a daily surface, so it always caps to the
+	// daily slice after workflow-state filtering.
+	queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
+	context := cockpit.BuildReviewContext(queue)
+	writeManagementJSON(w, http.StatusOK, dailyReviewContextResponse{OK: true, ReviewContext: context})
 }
 
 func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {

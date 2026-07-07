@@ -25,12 +25,18 @@ func TestRulePriorityAndTriageOnly(t *testing.T) {
 		triageOnly bool
 	}{
 		{RuleFrontmatterError, 10, true},
+		{RuleSensitiveContent, 15, true},
 		{RuleSchemaViolation, 20, false},
 		{RuleBrokenTarget, 30, false},
 		{RuleDuplicateTitle, 40, true},
+		{RuleMissingReviewDate, 44, true},
+		{RuleStaleStatus, 46, true},
+		{RuleWIPLimit, 48, true},
 		{RuleOrphanNote, 50, true},
 		{RuleDeadEndNote, 60, true},
 		{RuleLongTailValue, 70, true},
+		{RuleHubNeedsSynthesis, 80, true},
+		{RuleAIDailyReview, 90, true},
 		{RuleKind("unknown_rule"), 100, true},
 	}
 	for _, tc := range cases {

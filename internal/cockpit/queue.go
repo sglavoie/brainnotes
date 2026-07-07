@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
@@ -23,7 +24,7 @@ func BuildQueue(v *vault.Vault, cfg *config.Config) (Queue, error) {
 	if err != nil {
 		return Queue{}, err
 	}
-	return buildQueueFromData(data, cfg, v.Root), nil
+	return buildQueueFromData(data, cfg, v.Root, time.Now()), nil
 }
 
 // LoadedNote pairs an already-parsed note with its vault-relative slash path.
@@ -77,24 +78,39 @@ func BuildQueueFromSnapshot(snapshot Snapshot, cfg *config.Config, root string) 
 		graph:             snapshot.Graph,
 		frontmatterErrors: parseErrors,
 	}
-	return buildQueueFromData(data, cfg, root)
+	return buildQueueFromData(data, cfg, root, time.Now())
 }
 
 // buildQueueFromData assembles tasks from an already-loaded vault snapshot. It
-// is the deterministic core shared by BuildQueue and the package tests.
-func buildQueueFromData(data vaultData, cfg *config.Config, root string) Queue {
+// is the deterministic core shared by BuildQueue and the package tests. The now
+// argument is the clock the review-metadata rules (age/staleness, wired up in
+// later sessions) measure against; the public paths pass time.Now() while tests
+// pass a fixed instant for reproducible age computations.
+func buildQueueFromData(data vaultData, cfg *config.Config, root string, now time.Time) Queue {
 	if cfg == nil {
 		cfg = &config.Config{}
 	}
 
 	var tasks []Task
 	tasks = append(tasks, frontmatterErrorTasks(data.frontmatterErrors, root)...)
+	// Sensitive-content advisory scan (session 4): gated off by default via
+	// [cockpit] sensitive_scan; surfaces redacted findings only.
+	tasks = append(tasks, sensitiveContentTasks(data.loaded, cfg)...)
 	tasks = append(tasks, schemaViolationTasks(data.loaded, cfg)...)
 	tasks = append(tasks, brokenTargetTasks(data.loaded, data.graph)...)
 	tasks = append(tasks, duplicateTitleTasks(data.loaded, data.graph)...)
 	tasks = append(tasks, issueNoteTasks(data.loaded, data.graph, query.Orphan(data.graph), RuleOrphanNote)...)
 	tasks = append(tasks, issueNoteTasks(data.loaded, data.graph, query.DeadEnd(data.graph), RuleDeadEndNote)...)
 	tasks = append(tasks, longTailValueTasks(data.loaded, cfg.Cockpit.LongTailLimit, cfg.Cockpit.LongTailMaxCount, cfg.Cockpit.LongTailHeadFactor, cfg.Cockpit.LongTailIgnoreProperties)...)
+	// Status-drift advisory rules (session 3): review-date drift and the
+	// work-in-progress overflow. now is the clock the staleness age measures
+	// against; the public paths pass time.Now() while tests pass a fixed instant.
+	tasks = append(tasks, reviewDriftTasks(data.loaded, cfg, now)...)
+	tasks = append(tasks, wipLimitTasks(data.loaded, cfg)...)
+	// Hub-needs-synthesis advisory rule (session 5): flags hub notes whose
+	// configured synthesis headings are present but empty. Lower priority than
+	// safety and status findings (priority 80).
+	tasks = append(tasks, hubSynthesisTasks(data.loaded, cfg)...)
 
 	if disabled := disabledRuleSet(cfg); disabled != nil {
 		kept := tasks[:0]

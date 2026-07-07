@@ -28,6 +28,24 @@ const (
 	// RuleLongTailValue flags a rarely-used frontmatter property value that may
 	// want consolidating into an existing value.
 	RuleLongTailValue RuleKind = "long_tail_value"
+	// RuleSensitiveContent flags a note whose body appears to contain sensitive
+	// content (secrets, tokens, keys). Advisory-only: matched values are never
+	// exposed unredacted.
+	RuleSensitiveContent RuleKind = "sensitive_content"
+	// RuleMissingReviewDate flags a note whose status expects a review date but
+	// whose configured review-date property is absent.
+	RuleMissingReviewDate RuleKind = "missing_review_date"
+	// RuleStaleStatus flags a note whose status has not changed within the
+	// configured staleness window.
+	RuleStaleStatus RuleKind = "stale_status"
+	// RuleWIPLimit flags that the number of work-in-progress notes exceeds the
+	// configured limit.
+	RuleWIPLimit RuleKind = "wip_limit"
+	// RuleHubNeedsSynthesis flags a hub/MOC note that appears to need synthesis
+	// (for example, an empty synthesis heading).
+	RuleHubNeedsSynthesis RuleKind = "hub_needs_synthesis"
+	// RuleAIDailyReview surfaces the optional AI-assisted daily review prompt.
+	RuleAIDailyReview RuleKind = "ai_daily_review"
 )
 
 // rulePriority orders rule kinds in the queue. Lower sorts first. Unknown kinds
@@ -36,18 +54,32 @@ func rulePriority(kind RuleKind) int {
 	switch kind {
 	case RuleFrontmatterError:
 		return 10
+	case RuleSensitiveContent:
+		// Safety findings surface near the top, just after unparseable notes.
+		return 15
 	case RuleSchemaViolation:
 		return 20
 	case RuleBrokenTarget:
 		return 30
 	case RuleDuplicateTitle:
 		return 40
+	case RuleMissingReviewDate:
+		return 44
+	case RuleStaleStatus:
+		return 46
+	case RuleWIPLimit:
+		return 48
 	case RuleOrphanNote:
 		return 50
 	case RuleDeadEndNote:
 		return 60
 	case RuleLongTailValue:
 		return 70
+	case RuleHubNeedsSynthesis:
+		return 80
+	case RuleAIDailyReview:
+		// AI review tasks sort last so mechanical findings are cleared first.
+		return 90
 	default:
 		return 100
 	}
@@ -57,8 +89,11 @@ func rulePriority(kind RuleKind) int {
 // findings a human must resolve by judgement rather than a mechanical fix that
 // the cockpit could apply. Schema violations and broken targets are the two
 // kinds that can carry an automatic fix (planned in a later session); every
-// other kind (parse errors, duplicate titles, orphans, dead ends, and long-tail
-// values) is triage-only.
+// other kind (parse errors, duplicate titles, orphans, dead ends, long-tail
+// values, and the advisory daily rules — sensitive content, missing review
+// date, stale status, WIP limit, hub-needs-synthesis, and AI daily review) is
+// triage-only. The advisory rules never mutate notes, so they fall through to
+// the triage-only default rather than adding a mechanical fix action.
 func ruleTriageOnly(kind RuleKind) bool {
 	switch kind {
 	case RuleSchemaViolation, RuleBrokenTarget:

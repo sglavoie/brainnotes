@@ -83,6 +83,30 @@ const orphanTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
   ...overrides,
 });
 
+const sensitiveTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
+  id: "task_sensitive",
+  signature: "sig-sensitive",
+  kind: "sensitive_content",
+  priority: 15,
+  title: "Possible sensitive content: Secrets",
+  summary: "Possible secret detected",
+  detail: "Work/Secrets.md",
+  count: 1,
+  affected: [{
+    title: "Secrets",
+    rel_path: "Work/Secrets.md",
+    folder: "Work",
+    location: "line 12: AWS access key ID",
+  }],
+  actions: [
+    { kind: "open", label: "Open note" },
+    { kind: "snooze", label: "Snooze" },
+    { kind: "mark_done", label: "Mark done" },
+  ],
+  triage_only: true,
+  ...overrides,
+});
+
 const queuePayload = (tasks: CockpitTask[], message = ""): unknown => ({
   ok: true,
   message: message || undefined,
@@ -269,6 +293,48 @@ describe("daily fixes panel DOM behavior", () => {
     ).toEqual(["relink", "create_stub"]);
     expect(document.querySelectorAll('[data-fixes-id="task_orphan"] [data-fixes-fix-action]')).toHaveLength(0);
     expect(document.querySelector("[data-fixes-open-key]")?.getAttribute("data-fixes-open-key")).toBe("work/source");
+  });
+
+  it("renders advisory findings with labels, grouping, and no fix buttons", async () => {
+    renderPanel();
+    const advisoryKinds: Array<[string, string]> = [
+      ["sensitive_content", "Sensitive content"],
+      ["missing_review_date", "Missing review date"],
+      ["stale_status", "Stale status"],
+      ["wip_limit", "WIP limit"],
+      ["hub_needs_synthesis", "Hub needs synthesis"],
+      ["ai_daily_review", "AI daily review"],
+    ];
+    const tasks = advisoryKinds.map(([kind], index) =>
+      sensitiveTask({
+        id: `task_${kind}`,
+        signature: `sig-${kind}`,
+        kind,
+        priority: 15 + index,
+      })
+    );
+    const fetchMock = vi.fn(async () => jsonResponse(queuePayload(tasks)));
+
+    initDailyFixes({ fetch: fetchMock as typeof fetch });
+    await waitForExpect(() => {
+      expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(advisoryKinds.length);
+    });
+
+    // Each advisory kind gets its own group with the human-readable label.
+    const headings = Array.from(document.querySelectorAll(".fixes-group-heading")).map(
+      (h) => h.textContent
+    );
+    for (const [, label] of advisoryKinds) {
+      expect(headings).toContain(`${label} (1)`);
+    }
+
+    // Triage-only rows are marked and never advertise a mechanical fix button.
+    expect(document.querySelectorAll("[data-fixes-triage]")).toHaveLength(advisoryKinds.length);
+    expect(document.querySelectorAll("[data-fixes-fix-action]")).toHaveLength(0);
+
+    // Sensitive findings surface only the redacted, server-provided location.
+    expect(document.querySelector('[data-fixes-id="task_sensitive_content"] .diagnostic-location')?.textContent)
+      .toBe("line 12: AWS access key ID");
   });
 
   it("previews and applies a fix, then reloads the queue", async () => {

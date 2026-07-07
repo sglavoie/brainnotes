@@ -65,6 +65,48 @@ func validateCockpit(cfg *Config) error {
 	if cfg.Cockpit.LongTailHeadFactor < 0 {
 		return fmt.Errorf("config: cockpit.long_tail_head_factor %d must not be negative", cfg.Cockpit.LongTailHeadFactor)
 	}
+	for i, s := range cfg.Cockpit.ReviewStatuses {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("config: cockpit.review_statuses[%d] must not be empty or whitespace", i)
+		}
+	}
+	for i, s := range cfg.Cockpit.WIPStatuses {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("config: cockpit.wip_statuses[%d] must not be empty or whitespace", i)
+		}
+	}
+	for i, s := range cfg.Cockpit.HubTypeValues {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("config: cockpit.hub_type_values[%d] must not be empty or whitespace", i)
+		}
+	}
+	for i, s := range cfg.Cockpit.HubEmptyHeadings {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("config: cockpit.hub_empty_headings[%d] must not be empty or whitespace", i)
+		}
+	}
+	for i, s := range cfg.Cockpit.SensitiveIgnorePaths {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("config: cockpit.sensitive_ignore_paths[%d] must not be empty or whitespace", i)
+		}
+	}
+	for i, s := range cfg.Cockpit.SensitiveIgnorePatterns {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("config: cockpit.sensitive_ignore_patterns[%d] must not be empty or whitespace", i)
+		}
+	}
+	if cfg.Cockpit.DailyLimit < 0 {
+		return fmt.Errorf("config: cockpit.daily_limit %d must not be negative", cfg.Cockpit.DailyLimit)
+	}
+	if cfg.Cockpit.MaxWIP < 0 {
+		return fmt.Errorf("config: cockpit.max_wip %d must not be negative", cfg.Cockpit.MaxWIP)
+	}
+	if cfg.Cockpit.StaleStatusDays < 0 {
+		return fmt.Errorf("config: cockpit.stale_status_days %d must not be negative", cfg.Cockpit.StaleStatusDays)
+	}
+	if cfg.Cockpit.AgentTimeoutSeconds < 0 {
+		return fmt.Errorf("config: cockpit.agent_timeout_seconds %d must not be negative", cfg.Cockpit.AgentTimeoutSeconds)
+	}
 	return nil
 }
 

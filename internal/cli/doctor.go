@@ -19,8 +19,10 @@ import (
 // per-task workflow state (done/snoozed) stored under .bnotes/cockpit.json.
 func NewDoctorCmd() *cobra.Command {
 	var (
-		asJSON bool
-		folder string
+		asJSON        bool
+		daily         bool
+		reviewContext bool
+		folder        string
 	)
 
 	cmd := &cobra.Command{
@@ -33,7 +35,11 @@ files.
 
 Tasks marked done or snoozed via the cockpit (web UI or state file) are hidden;
 the footer reports how many were suppressed. Use --json for a stable,
-machine-readable view of every task and its available actions.
+machine-readable view of every task and its available actions. Use --daily to
+cap the surfaced tasks to the daily cockpit view (cockpit.daily_limit); the
+footer still reports the full active/hidden totals. Use --review-context to emit
+a deterministic, redacted JSON snapshot of the daily queue for agent review; it
+implies --daily and never invokes any AI command.
 
 Exit code is always 0 for a successful scan; an empty queue means the vault is
 clean.`,
@@ -68,6 +74,21 @@ clean.`,
 				}
 			}
 
+			// Daily view caps the surfaced tasks last, after workflow-state
+			// filtering and any folder scoping, so done/snoozed tasks never
+			// consume a daily slot. Counts stay intact as the full totals. The
+			// review context is inherently a daily surface, so it caps too.
+			if daily || reviewContext {
+				queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
+			}
+
+			// The review context is a deterministic, redacted, read-only view of
+			// the daily queue built for agent consumption; it never invokes any
+			// AI command. It is always emitted as JSON.
+			if reviewContext {
+				return writeDoctorJSON(cmd.OutOrStdout(), cockpit.BuildReviewContext(queue))
+			}
+
 			if asJSON {
 				return writeDoctorJSON(cmd.OutOrStdout(), queue)
 			}
@@ -77,6 +98,8 @@ clean.`,
 	}
 
 	cmd.Flags().BoolVar(&asJSON, "json", false, "emit the queue as JSON")
+	cmd.Flags().BoolVar(&daily, "daily", false, "limit to the daily cockpit view (at most cockpit.daily_limit tasks)")
+	cmd.Flags().BoolVar(&reviewContext, "review-context", false, "emit the deterministic, redacted daily-review context as JSON (implies --daily; no AI command is run)")
 	cmd.Flags().StringVar(&folder, "folder", "", "only tasks touching a note under this vault-relative folder")
 
 	return cmd
@@ -140,10 +163,13 @@ func taskUnderFolder(task cockpit.Task, prefix string) bool {
 	return false
 }
 
-func writeDoctorJSON(w io.Writer, queue cockpit.Queue) error {
+// writeDoctorJSON emits a stable, indented JSON view. It serves both the full
+// queue (--json) and the redacted review context (--review-context), so it takes
+// any serializable payload rather than only cockpit.Queue.
+func writeDoctorJSON(w io.Writer, payload any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(queue)
+	return enc.Encode(payload)
 }
 
 func writeDoctorHuman(w io.Writer, queue cockpit.Queue) {

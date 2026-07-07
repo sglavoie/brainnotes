@@ -107,6 +107,47 @@ type CockpitConfig struct {
 	// ingredients, …) where a long tail is expected rather than a typo. Matched
 	// case-sensitively against the frontmatter key.
 	LongTailIgnoreProperties []string `toml:"long_tail_ignore_properties"`
+
+	// DailyLimit caps how many tasks the daily cockpit view surfaces at once.
+	// Defaults to DefaultCockpitDailyLimit.
+	DailyLimit int `toml:"daily_limit"`
+	// ReviewDateProperty names the frontmatter property that records when a note
+	// was last reviewed; the missing-review-date rule checks this key. Defaults
+	// to DefaultCockpitReviewDateProperty.
+	ReviewDateProperty string `toml:"review_date_property"`
+	// ReviewStatuses lists status values whose notes are expected to carry a
+	// review date. Empty disables the missing-review-date rule.
+	ReviewStatuses []string `toml:"review_statuses"`
+	// WIPStatuses lists status values counted as work-in-progress for the WIP
+	// limit rule. Empty disables the wip-limit rule.
+	WIPStatuses []string `toml:"wip_statuses"`
+	// MaxWIP is the highest number of work-in-progress notes allowed before the
+	// wip-limit rule flags an overflow. Defaults to DefaultCockpitMaxWIP.
+	MaxWIP int `toml:"max_wip"`
+	// StaleStatusDays is the age in days after which a note's status is treated
+	// as stale by the stale-status rule. Defaults to DefaultCockpitStaleStatusDays.
+	StaleStatusDays int `toml:"stale_status_days"`
+	// HubTypeValues lists frontmatter type values that identify a hub/MOC note
+	// for the hub-needs-synthesis rule. Empty disables that rule.
+	HubTypeValues []string `toml:"hub_type_values"`
+	// HubEmptyHeadings lists heading titles that, when present but empty in a hub
+	// note, mark it as needing synthesis. Empty disables the heading check.
+	HubEmptyHeadings []string `toml:"hub_empty_headings"`
+	// SensitiveScan enables the sensitive-content scanner. Off by default so the
+	// cockpit never inspects note bodies for secrets unless explicitly asked.
+	SensitiveScan bool `toml:"sensitive_scan"`
+	// SensitiveIgnorePaths lists vault-relative path prefixes the sensitive-content
+	// scanner skips entirely.
+	SensitiveIgnorePaths []string `toml:"sensitive_ignore_paths"`
+	// SensitiveIgnorePatterns lists regular-expression patterns whose matches the
+	// sensitive-content scanner treats as allowed (never flagged).
+	SensitiveIgnorePatterns []string `toml:"sensitive_ignore_patterns"`
+	// AgentCommand is the local shell command invoked for the optional AI daily
+	// review. Empty disables AI integration (the default).
+	AgentCommand string `toml:"agent_command"`
+	// AgentTimeoutSeconds bounds how long the AI agent command may run. Defaults
+	// to DefaultCockpitAgentTimeoutSeconds.
+	AgentTimeoutSeconds int `toml:"agent_timeout_seconds"`
 }
 
 // DefaultIgnore lists the vault-relative paths that are always skipped.
@@ -129,6 +170,26 @@ const DefaultCockpitLongTailMaxCount = 2
 // DefaultCockpitLongTailHeadFactor is the default multiple by which a
 // property's dominant value must exceed a rare value before it is flagged.
 const DefaultCockpitLongTailHeadFactor = 3
+
+// DefaultCockpitDailyLimit is the default cap on how many tasks the daily
+// cockpit view surfaces at once.
+const DefaultCockpitDailyLimit = 10
+
+// DefaultCockpitReviewDateProperty is the default frontmatter property the
+// missing-review-date rule inspects for a note's last-reviewed date.
+const DefaultCockpitReviewDateProperty = "reviewed"
+
+// DefaultCockpitMaxWIP is the default number of concurrent work-in-progress
+// notes allowed before the wip-limit rule flags an overflow.
+const DefaultCockpitMaxWIP = 3
+
+// DefaultCockpitStaleStatusDays is the default age in days after which a note's
+// status is treated as stale.
+const DefaultCockpitStaleStatusDays = 30
+
+// DefaultCockpitAgentTimeoutSeconds is the default timeout applied to the
+// optional AI daily-review agent command.
+const DefaultCockpitAgentTimeoutSeconds = 60
 
 const (
 	envVault   = "BNOTES_VAULT"

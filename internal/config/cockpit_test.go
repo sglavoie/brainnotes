@@ -34,6 +34,39 @@ func TestLoad_CockpitDefaults(t *testing.T) {
 	if cfg.Cockpit.LongTailIgnoreProperties == nil || len(cfg.Cockpit.LongTailIgnoreProperties) != 0 {
 		t.Errorf("Cockpit.LongTailIgnoreProperties: got %#v, want empty non-nil slice", cfg.Cockpit.LongTailIgnoreProperties)
 	}
+	if cfg.Cockpit.DailyLimit != DefaultCockpitDailyLimit {
+		t.Errorf("Cockpit.DailyLimit: got %d, want %d", cfg.Cockpit.DailyLimit, DefaultCockpitDailyLimit)
+	}
+	if cfg.Cockpit.ReviewDateProperty != DefaultCockpitReviewDateProperty {
+		t.Errorf("Cockpit.ReviewDateProperty: got %q, want %q", cfg.Cockpit.ReviewDateProperty, DefaultCockpitReviewDateProperty)
+	}
+	if cfg.Cockpit.MaxWIP != DefaultCockpitMaxWIP {
+		t.Errorf("Cockpit.MaxWIP: got %d, want %d", cfg.Cockpit.MaxWIP, DefaultCockpitMaxWIP)
+	}
+	if cfg.Cockpit.StaleStatusDays != DefaultCockpitStaleStatusDays {
+		t.Errorf("Cockpit.StaleStatusDays: got %d, want %d", cfg.Cockpit.StaleStatusDays, DefaultCockpitStaleStatusDays)
+	}
+	if cfg.Cockpit.AgentTimeoutSeconds != DefaultCockpitAgentTimeoutSeconds {
+		t.Errorf("Cockpit.AgentTimeoutSeconds: got %d, want %d", cfg.Cockpit.AgentTimeoutSeconds, DefaultCockpitAgentTimeoutSeconds)
+	}
+	if cfg.Cockpit.SensitiveScan {
+		t.Errorf("Cockpit.SensitiveScan: got true, want false by default")
+	}
+	if cfg.Cockpit.AgentCommand != "" {
+		t.Errorf("Cockpit.AgentCommand: got %q, want empty by default", cfg.Cockpit.AgentCommand)
+	}
+	for name, got := range map[string][]string{
+		"ReviewStatuses":          cfg.Cockpit.ReviewStatuses,
+		"WIPStatuses":             cfg.Cockpit.WIPStatuses,
+		"HubTypeValues":           cfg.Cockpit.HubTypeValues,
+		"HubEmptyHeadings":        cfg.Cockpit.HubEmptyHeadings,
+		"SensitiveIgnorePaths":    cfg.Cockpit.SensitiveIgnorePaths,
+		"SensitiveIgnorePatterns": cfg.Cockpit.SensitiveIgnorePatterns,
+	} {
+		if got == nil || len(got) != 0 {
+			t.Errorf("Cockpit.%s: got %#v, want empty non-nil slice", name, got)
+		}
+	}
 }
 
 func TestLoad_CockpitExplicitValues(t *testing.T) {
@@ -49,6 +82,19 @@ long_tail_limit = 3
 long_tail_max_count = 4
 long_tail_head_factor = 6
 long_tail_ignore_properties = ["created", "tags"]
+daily_limit = 7
+review_date_property = "last_reviewed"
+review_statuses = ["Evergreen", "Reference"]
+wip_statuses = ["WIP"]
+max_wip = 2
+stale_status_days = 45
+hub_type_values = ["moc", "hub"]
+hub_empty_headings = ["## Synthesis"]
+sensitive_scan = true
+sensitive_ignore_paths = ["Templates"]
+sensitive_ignore_patterns = ["EXAMPLE_[A-Z]+"]
+agent_command = "my-agent --daily"
+agent_timeout_seconds = 120
 `)
 
 	cfg, err := Load(vault, cfgPath)
@@ -75,6 +121,45 @@ long_tail_ignore_properties = ["created", "tags"]
 	wantIgnore := []string{"created", "tags"}
 	if !equalSlices(cfg.Cockpit.LongTailIgnoreProperties, wantIgnore) {
 		t.Errorf("Cockpit.LongTailIgnoreProperties: got %v, want %v", cfg.Cockpit.LongTailIgnoreProperties, wantIgnore)
+	}
+	if cfg.Cockpit.DailyLimit != 7 {
+		t.Errorf("Cockpit.DailyLimit: got %d, want 7", cfg.Cockpit.DailyLimit)
+	}
+	if cfg.Cockpit.ReviewDateProperty != "last_reviewed" {
+		t.Errorf("Cockpit.ReviewDateProperty: got %q, want %q", cfg.Cockpit.ReviewDateProperty, "last_reviewed")
+	}
+	if !equalSlices(cfg.Cockpit.ReviewStatuses, []string{"Evergreen", "Reference"}) {
+		t.Errorf("Cockpit.ReviewStatuses: got %v", cfg.Cockpit.ReviewStatuses)
+	}
+	if !equalSlices(cfg.Cockpit.WIPStatuses, []string{"WIP"}) {
+		t.Errorf("Cockpit.WIPStatuses: got %v", cfg.Cockpit.WIPStatuses)
+	}
+	if cfg.Cockpit.MaxWIP != 2 {
+		t.Errorf("Cockpit.MaxWIP: got %d, want 2", cfg.Cockpit.MaxWIP)
+	}
+	if cfg.Cockpit.StaleStatusDays != 45 {
+		t.Errorf("Cockpit.StaleStatusDays: got %d, want 45", cfg.Cockpit.StaleStatusDays)
+	}
+	if !equalSlices(cfg.Cockpit.HubTypeValues, []string{"moc", "hub"}) {
+		t.Errorf("Cockpit.HubTypeValues: got %v", cfg.Cockpit.HubTypeValues)
+	}
+	if !equalSlices(cfg.Cockpit.HubEmptyHeadings, []string{"## Synthesis"}) {
+		t.Errorf("Cockpit.HubEmptyHeadings: got %v", cfg.Cockpit.HubEmptyHeadings)
+	}
+	if !cfg.Cockpit.SensitiveScan {
+		t.Errorf("Cockpit.SensitiveScan: got false, want true")
+	}
+	if !equalSlices(cfg.Cockpit.SensitiveIgnorePaths, []string{"Templates"}) {
+		t.Errorf("Cockpit.SensitiveIgnorePaths: got %v", cfg.Cockpit.SensitiveIgnorePaths)
+	}
+	if !equalSlices(cfg.Cockpit.SensitiveIgnorePatterns, []string{"EXAMPLE_[A-Z]+"}) {
+		t.Errorf("Cockpit.SensitiveIgnorePatterns: got %v", cfg.Cockpit.SensitiveIgnorePatterns)
+	}
+	if cfg.Cockpit.AgentCommand != "my-agent --daily" {
+		t.Errorf("Cockpit.AgentCommand: got %q", cfg.Cockpit.AgentCommand)
+	}
+	if cfg.Cockpit.AgentTimeoutSeconds != 120 {
+		t.Errorf("Cockpit.AgentTimeoutSeconds: got %d, want 120", cfg.Cockpit.AgentTimeoutSeconds)
 	}
 }
 
@@ -114,6 +199,56 @@ func TestLoad_CockpitValidationRejectsBadValues(t *testing.T) {
 			body:    "[cockpit]\nlong_tail_ignore_properties = [\"created\", \"  \"]\n",
 			wantSub: "long_tail_ignore_properties[1]",
 		},
+		{
+			name:    "negative daily_limit",
+			body:    "[cockpit]\ndaily_limit = -1\n",
+			wantSub: "daily_limit",
+		},
+		{
+			name:    "negative max_wip",
+			body:    "[cockpit]\nmax_wip = -1\n",
+			wantSub: "max_wip",
+		},
+		{
+			name:    "negative stale_status_days",
+			body:    "[cockpit]\nstale_status_days = -1\n",
+			wantSub: "stale_status_days",
+		},
+		{
+			name:    "negative agent_timeout_seconds",
+			body:    "[cockpit]\nagent_timeout_seconds = -1\n",
+			wantSub: "agent_timeout_seconds",
+		},
+		{
+			name:    "empty review_statuses entry",
+			body:    "[cockpit]\nreview_statuses = [\"Evergreen\", \"  \"]\n",
+			wantSub: "review_statuses[1]",
+		},
+		{
+			name:    "empty wip_statuses entry",
+			body:    "[cockpit]\nwip_statuses = [\"\"]\n",
+			wantSub: "wip_statuses[0]",
+		},
+		{
+			name:    "empty hub_type_values entry",
+			body:    "[cockpit]\nhub_type_values = [\"  \"]\n",
+			wantSub: "hub_type_values[0]",
+		},
+		{
+			name:    "empty hub_empty_headings entry",
+			body:    "[cockpit]\nhub_empty_headings = [\"## Synthesis\", \"\"]\n",
+			wantSub: "hub_empty_headings[1]",
+		},
+		{
+			name:    "empty sensitive_ignore_paths entry",
+			body:    "[cockpit]\nsensitive_ignore_paths = [\"  \"]\n",
+			wantSub: "sensitive_ignore_paths[0]",
+		},
+		{
+			name:    "empty sensitive_ignore_patterns entry",
+			body:    "[cockpit]\nsensitive_ignore_patterns = [\"\"]\n",
+			wantSub: "sensitive_ignore_patterns[0]",
+		},
 	}
 
 	for _, tc := range cases {
@@ -140,7 +275,12 @@ func TestDefaultTemplate_CockpitSectionParsesToZero(t *testing.T) {
 	if !strings.Contains(tmpl, "[cockpit]") {
 		t.Fatalf("template missing [cockpit] section")
 	}
-	for _, want := range []string{"disabled_rules", "priority", "long_tail_limit", "long_tail_max_count", "long_tail_head_factor"} {
+	for _, want := range []string{
+		"disabled_rules", "priority", "long_tail_limit", "long_tail_max_count", "long_tail_head_factor",
+		"daily_limit", "review_date_property", "review_statuses", "wip_statuses", "max_wip",
+		"stale_status_days", "hub_type_values", "hub_empty_headings", "sensitive_scan",
+		"sensitive_ignore_paths", "sensitive_ignore_patterns", "agent_command", "agent_timeout_seconds",
+	} {
 		if !strings.Contains(tmpl, want) {
 			t.Errorf("template missing cockpit key %q", want)
 		}
@@ -152,5 +292,13 @@ func TestDefaultTemplate_CockpitSectionParsesToZero(t *testing.T) {
 	}
 	if cfg.Cockpit.LongTailLimit != 0 || len(cfg.Cockpit.DisabledRules) != 0 || len(cfg.Cockpit.Priority) != 0 {
 		t.Errorf("template [cockpit] should parse to zero CockpitConfig, got %+v", cfg.Cockpit)
+	}
+	if cfg.Cockpit.DailyLimit != 0 || cfg.Cockpit.MaxWIP != 0 || cfg.Cockpit.StaleStatusDays != 0 ||
+		cfg.Cockpit.AgentTimeoutSeconds != 0 || cfg.Cockpit.SensitiveScan ||
+		cfg.Cockpit.ReviewDateProperty != "" || cfg.Cockpit.AgentCommand != "" ||
+		len(cfg.Cockpit.ReviewStatuses) != 0 || len(cfg.Cockpit.WIPStatuses) != 0 ||
+		len(cfg.Cockpit.HubTypeValues) != 0 || len(cfg.Cockpit.HubEmptyHeadings) != 0 ||
+		len(cfg.Cockpit.SensitiveIgnorePaths) != 0 || len(cfg.Cockpit.SensitiveIgnorePatterns) != 0 {
+		t.Errorf("template [cockpit] daily keys should parse to zero CockpitConfig, got %+v", cfg.Cockpit)
 	}
 }

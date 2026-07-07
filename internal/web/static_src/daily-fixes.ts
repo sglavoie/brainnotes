@@ -90,6 +90,18 @@ export const fixKindLabel = (kind: string): string => {
       return "Dead end";
     case "long_tail_value":
       return "Long-tail value";
+    case "sensitive_content":
+      return "Sensitive content";
+    case "missing_review_date":
+      return "Missing review date";
+    case "stale_status":
+      return "Stale status";
+    case "wip_limit":
+      return "WIP limit";
+    case "hub_needs_synthesis":
+      return "Hub needs synthesis";
+    case "ai_daily_review":
+      return "AI daily review";
     default:
       return "Fix";
   }
@@ -422,6 +434,9 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
     row.setAttribute("data-fixes-id", task.id);
     row.setAttribute("data-fixes-kind", task.kind);
     row.setAttribute("data-fixes-signature", task.signature);
+    if (task.triage_only) {
+      row.setAttribute("data-fixes-triage", "");
+    }
 
     const main = doc.createElement("div");
     main.className = "review-item-main";

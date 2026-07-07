@@ -120,6 +120,37 @@ long_tail_head_factor = 3
 # Frontmatter properties to exclude from the long-tail rule entirely (open
 # vocabularies like tags/topics where a long tail is natural, not a typo).
 long_tail_ignore_properties = []
+# Maximum tasks the daily cockpit view surfaces at once (bn doctor --daily,
+# GET /api/cockpit?view=daily). Counts still report the full totals.
+daily_limit = 10
+# Frontmatter property that records when a note was last reviewed.
+review_date_property = "reviewed"
+# Status values whose notes must carry a review date. Empty disables the rule.
+review_statuses = []
+# Status values counted as work-in-progress. Empty disables the WIP-limit rule.
+wip_statuses = []
+# Maximum concurrent WIP notes before the WIP-limit rule flags overflow.
+max_wip = 3
+# Age in days after which a note's status is treated as stale.
+stale_status_days = 30
+# Frontmatter type/kind values identifying hub/MOC notes. Empty disables the
+# hub-synthesis rule.
+hub_type_values = []
+# Headings that, when present but empty in a hub note, mark it as needing
+# synthesis. Empty disables the hub-synthesis rule.
+hub_empty_headings = []
+# Enable the sensitive-content scanner (off by default). Matched values are
+# never surfaced unredacted — only a line number and detector category.
+sensitive_scan = false
+# Vault-relative path prefixes the sensitive-content scanner skips.
+sensitive_ignore_paths = []
+# Regular-expression patterns whose matches the scanner treats as allowed.
+sensitive_ignore_patterns = []
+# Local command for the optional AI daily review (argv split on whitespace, no
+# shell). Empty disables AI integration.
+agent_command = ""
+# Timeout in seconds for the AI daily-review command.
+agent_timeout_seconds = 60
 
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
 [new.routes]
@@ -484,17 +515,48 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
-- `GET /api/cockpit` hygiene queue and `POST /api/cockpit/item` for Done/Snooze/Clear triage
+- `GET /api/cockpit` hygiene queue (add `?view=daily` for the capped daily view) and `POST /api/cockpit/item` for Done/Snooze/Clear triage
 - `POST /api/fixes/preview` then `POST /api/fixes/apply` to preview and apply a single task's fix
+- `GET /api/daily-review/context` read-only redacted daily-review snapshot and `POST /api/daily-review/agent` optional local AI review
 
 The home page starts with Daily Fixes: the same hygiene queue as `bn doctor`,
 covering frontmatter parse errors, schema violations, broken wikilink targets,
-duplicate titles, orphan notes, dead-end notes, and long-tail property values.
+duplicate titles, orphan notes, dead-end notes, long-tail property values, and —
+when their `[cockpit]` keys are configured — the advisory rules `sensitive_content`,
+`missing_review_date`, `stale_status`, `wip_limit`, and `hub_needs_synthesis`.
 Tasks are grouped by issue and affected note, sorted by priority, and identified
 with content-aware hashes over the issue kind, detail, affected relative paths,
 locations, and file content. Marking a task Done hides that exact issue until its
 signature changes; Snooze hides it until the selected local deadline, either
 tomorrow or next week; Clear returns a suppressed task to the active queue.
+
+The advisory rules are triage-only: they never carry a fix action, so the web UI
+suppresses the fix button for them (driven by each task's `triage_only` flag) and
+they are resolved by editing notes yourself and then marking Done or Snooze.
+`sensitive_content` rows show only a redacted `line N: <detector category>`
+location — the matched secret value is never sent to the browser, the queue JSON,
+or any review surface.
+
+`GET /api/cockpit?view=daily` caps the workflow-filtered queue to the top
+`cockpit.daily_limit` tasks (default `10`) while leaving the counts as the full
+totals, so the daily panel shows the highest-priority findings without losing the
+active/hidden tallies. `GET /api/daily-review/context` returns the same
+deterministic, redacted snapshot as `bn doctor --review-context` — per-kind
+groups and ordered items with server-redacted locations, no file hashes, and no
+raw bodies — so the CLI and web review surfaces cannot drift.
+
+`POST /api/daily-review/agent` is an opt-in, local-only AI review. It runs the
+configured `cockpit.agent_command` as an argv slice split on whitespace only (no
+shell, no quoting or piping), feeds it exactly the redacted daily-review context
+on stdin, and returns the command's stdout verbatim as `{ok, enabled: true,
+output}`. When `agent_command` is empty (the default) the route returns a clean
+disabled response (`{ok: true, enabled: false}`) with HTTP `200`, not an error —
+no AI provider dependency is ever added. The command is killed after
+`cockpit.agent_timeout_seconds` (default `60`); failures and timeouts return
+`internal_error` (HTTP `500`). Because only the redacted context crosses the
+boundary, raw note bodies, file hashes, and unredacted sensitive values never
+reach the agent. The route is CSRF-protected like every other side-effecting web
+action.
 
 Cockpit workflow state is stored in the served vault at
 `<vault>/.bnotes/cockpit.json`, migrated automatically from readable records in
@@ -593,7 +655,7 @@ exists. Missing media embeds remain plain text (they do not redirect to
 ### `bn doctor` — show the vault hygiene queue (Daily Fix Cockpit)
 
 ```sh
-bn doctor [--json] [--folder path]
+bn doctor [--json] [--daily] [--review-context] [--folder path]
 ```
 
 Reports the current hygiene queue for the vault. It is read-only and never
@@ -612,6 +674,19 @@ Detected rule kinds:
 | `orphan_note` | notes with no inbound links from other notes |
 | `dead_end_note` | notes with no resolved outgoing links |
 | `long_tail_value` | rare frontmatter values that a dominant sibling value can absorb (e.g. a `status` typo to merge into the common value) |
+| `sensitive_content` | notes whose body matches a built-in secret detector (AWS/GitHub/Slack/Google keys, JWTs, private-key blocks, secret assignments); off unless `sensitive_scan = true` |
+| `missing_review_date` | notes in a `review_statuses` status that lack the `review_date_property` |
+| `stale_status` | notes whose status has not changed in more than `stale_status_days` days |
+| `wip_limit` | more concurrent `wip_statuses` notes than `max_wip` allows |
+| `hub_needs_synthesis` | hub/MOC notes (by `hub_type_values`) with a `hub_empty_headings` heading present but empty |
+
+The last five kinds are **advisory / triage-only**: they carry no automatic
+fix and are resolved by editing notes yourself, then marking the task done or
+snoozed. Each is disabled by default until you configure its `[cockpit]` keys
+(an empty gating list, or `sensitive_scan = false`, means the rule is off).
+`sensitive_content` never surfaces a matched value — a task shows only the
+line number and detector category, so secrets are never echoed into the queue,
+JSON, or web UI.
 
 Issues are grouped into tasks by kind and detail, content-addressed over the
 issue and every affected note's path, location, and file content, and sorted by
@@ -621,10 +696,16 @@ default view; the footer reports how many were suppressed.
 
 `--json` emits the full queue — every task, its affected notes, available
 actions, and the active/done/snoozed/total counts — in a stable schema
-identical to the web `GET /api/cockpit` payload. `--folder <path>` keeps only
-tasks that touch at least one note under a vault-relative folder; other `find`
-dimensions do not map onto tasks that group many notes and are intentionally not
-offered.
+identical to the web `GET /api/cockpit` payload. `--daily` caps the surfaced
+tasks to the top `cockpit.daily_limit` (default `10`) after workflow-state
+filtering, mirroring the web daily view (`GET /api/cockpit?view=daily`); the
+counts still report the full active/hidden totals, so `active` can exceed the
+number of tasks shown. `--review-context` emits a deterministic, redacted JSON
+snapshot of that daily queue for agent review — it implies `--daily`, omits
+file hashes and raw bodies, keeps only the server-redacted per-note locations,
+and never invokes any AI command. `--folder <path>` keeps only tasks that touch
+at least one note under a vault-relative folder; other `find` dimensions do not
+map onto tasks that group many notes and are intentionally not offered.
 
 Workflow state (done/snoozed) lives in `<vault>/.bnotes/cockpit.json`, migrated
 automatically from readable records in the legacy `<vault>/.bnotes/review.json`
@@ -646,8 +727,20 @@ rule focused on enum-like properties such as `status`, `kind`, and `type`.
 ```sh
 bn doctor                                   # human-readable queue
 bn doctor --json                            # machine-readable queue
+bn doctor --daily                           # top cockpit.daily_limit tasks only
+bn doctor --review-context                  # redacted daily snapshot for review
 bn doctor --folder Projects                 # only tasks touching Projects/
 ```
+
+For a daily review workflow, pipe the redacted context into a local agent:
+
+```sh
+bn doctor --review-context | my-review-agent   # no secrets/bodies leave the vault
+```
+
+The same redacted snapshot backs the web review surface
+(`GET /api/daily-review/context`) and the optional AI route
+(`POST /api/daily-review/agent`); see `bn serve` below.
 
 ### `bn repair` — fix safe schema violations in frontmatter
 

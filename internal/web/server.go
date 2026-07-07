@@ -33,6 +33,11 @@ type Options struct {
 	StaticFiles     fs.FS
 	CSRFToken       string
 	StartEditor     func(bin string, argv []string) error
+	// RunAgent executes the optional AI daily-review command. It receives the
+	// argv slice (already split, no shell) and the redacted review-context JSON
+	// on stdin, and returns the command's stdout. Injected in tests so no real
+	// process is launched; defaults to runAgentCommand.
+	RunAgent func(ctx context.Context, argv []string, stdin []byte) ([]byte, error)
 }
 
 type Server struct {
@@ -49,6 +54,7 @@ type Server struct {
 	notifyListen func(url string)
 	csrfToken    string
 	startEditor  func(bin string, argv []string) error
+	runAgent     func(ctx context.Context, argv []string, stdin []byte) ([]byte, error)
 }
 
 type notePageData struct {
@@ -148,6 +154,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		notifyListen: opts.NotifyListening,
 		csrfToken:    opts.CSRFToken,
 		startEditor:  opts.StartEditor,
+		runAgent:     opts.RunAgent,
 	}
 	if srv.csrfToken == "" {
 		srv.csrfToken, err = generateCSRFToken()
@@ -157,6 +164,9 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	}
 	if srv.startEditor == nil {
 		srv.startEditor = startEditorProcess
+	}
+	if srv.runAgent == nil {
+		srv.runAgent = runAgentCommand
 	}
 
 	mux := http.NewServeMux()
@@ -179,6 +189,8 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
 	mux.HandleFunc("/api/cockpit", srv.handleCockpitQueue)
 	mux.HandleFunc("/api/cockpit/item", srv.handleCockpitItem)
+	mux.HandleFunc("/api/daily-review/context", srv.handleDailyReviewContext)
+	mux.HandleFunc("/api/daily-review/agent", srv.handleDailyReviewAgent)
 	mux.HandleFunc("/api/fixes/preview", srv.handleFixesPreview)
 	mux.HandleFunc("/api/fixes/apply", srv.handleFixesApply)
 	mux.HandleFunc("/graph", srv.handleGraph)
@@ -218,7 +230,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	data.CSRFToken = s.csrfToken
 	// Reuse the diagnostics load for the cockpit fixes panel instead of walking
 	// the vault a second time via cockpit.BuildQueue.
-	fixesQueue := s.cockpitQueueFilteredFrom(diagnosticsData)
+	fixesQueue := cockpit.LimitDaily(s.cockpitQueueFilteredFrom(diagnosticsData), s.cfg.Cockpit.DailyLimit)
 	data.Fixes = buildIndexFixesPanelData(fixesQueue)
 	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
 	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {

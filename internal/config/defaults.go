@@ -73,6 +73,32 @@ func DefaultTemplate() string {
 # long_tail_head_factor = 3
 # Frontmatter properties the long-tail rule never flags (open-vocabulary / naturally-unique fields).
 # long_tail_ignore_properties = ["created", "tags", "topics", "ingredients"]
+# Maximum number of tasks the daily cockpit view surfaces at once.
+# daily_limit = 10
+# Frontmatter property that records when a note was last reviewed.
+# review_date_property = "reviewed"
+# Status values whose notes must carry a review date. Empty disables the rule.
+# review_statuses = ["Evergreen", "Reference"]
+# Status values counted as work-in-progress. Empty disables the WIP-limit rule.
+# wip_statuses = ["WIP", "In progress"]
+# Maximum concurrent work-in-progress notes before the WIP-limit rule flags overflow.
+# max_wip = 3
+# Age in days after which a note's status is treated as stale.
+# stale_status_days = 30
+# Frontmatter type values identifying hub/MOC notes. Empty disables the synthesis rule.
+# hub_type_values = ["moc", "hub"]
+# Headings that, when present but empty in a hub note, mark it as needing synthesis.
+# hub_empty_headings = ["## Synthesis", "## Notes"]
+# Enable the sensitive-content scanner. Off by default; matched values are never exposed unredacted.
+# sensitive_scan = false
+# Vault-relative path prefixes the sensitive-content scanner skips.
+# sensitive_ignore_paths = ["Templates", "Archive"]
+# Regular-expression patterns whose matches the sensitive-content scanner treats as allowed.
+# sensitive_ignore_patterns = ["EXAMPLE_[A-Z]+"]
+# Local command invoked for the optional AI daily review. Empty disables AI integration.
+# agent_command = "my-review-agent"
+# Timeout in seconds for the AI agent command.
+# agent_timeout_seconds = 60
 `
 }
 
@@ -173,6 +199,48 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Cockpit.LongTailHeadFactor == 0 {
 		cfg.Cockpit.LongTailHeadFactor = DefaultCockpitLongTailHeadFactor
+	}
+
+	// New daily-cockpit rule config. Each list defaults to an empty, non-nil
+	// slice so the owning rule stays off until the user opts in, and TOML round
+	// trips cleanly. Scalar review/agent fields are trimmed and defaulted; the
+	// numeric knobs follow the long-tail precedent (zero means "unset" and falls
+	// back to the documented default; negatives survive so validate can reject
+	// them).
+	if cfg.Cockpit.ReviewStatuses == nil {
+		cfg.Cockpit.ReviewStatuses = []string{}
+	}
+	if cfg.Cockpit.WIPStatuses == nil {
+		cfg.Cockpit.WIPStatuses = []string{}
+	}
+	if cfg.Cockpit.HubTypeValues == nil {
+		cfg.Cockpit.HubTypeValues = []string{}
+	}
+	if cfg.Cockpit.HubEmptyHeadings == nil {
+		cfg.Cockpit.HubEmptyHeadings = []string{}
+	}
+	if cfg.Cockpit.SensitiveIgnorePaths == nil {
+		cfg.Cockpit.SensitiveIgnorePaths = []string{}
+	}
+	if cfg.Cockpit.SensitiveIgnorePatterns == nil {
+		cfg.Cockpit.SensitiveIgnorePatterns = []string{}
+	}
+	cfg.Cockpit.ReviewDateProperty = strings.TrimSpace(cfg.Cockpit.ReviewDateProperty)
+	if cfg.Cockpit.ReviewDateProperty == "" {
+		cfg.Cockpit.ReviewDateProperty = DefaultCockpitReviewDateProperty
+	}
+	cfg.Cockpit.AgentCommand = strings.TrimSpace(cfg.Cockpit.AgentCommand)
+	if cfg.Cockpit.DailyLimit == 0 {
+		cfg.Cockpit.DailyLimit = DefaultCockpitDailyLimit
+	}
+	if cfg.Cockpit.MaxWIP == 0 {
+		cfg.Cockpit.MaxWIP = DefaultCockpitMaxWIP
+	}
+	if cfg.Cockpit.StaleStatusDays == 0 {
+		cfg.Cockpit.StaleStatusDays = DefaultCockpitStaleStatusDays
+	}
+	if cfg.Cockpit.AgentTimeoutSeconds == 0 {
+		cfg.Cockpit.AgentTimeoutSeconds = DefaultCockpitAgentTimeoutSeconds
 	}
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)

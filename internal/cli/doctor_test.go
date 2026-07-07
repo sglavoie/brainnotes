@@ -272,6 +272,116 @@ func TestDoctor_FolderScopeCountsAllFour(t *testing.T) {
 	}
 }
 
+// TestDoctor_DailyLimitsTasks proves --daily caps the surfaced tasks to
+// cockpit.daily_limit while the default view returns the full queue. The daily
+// slice is the top of the full queue (no reorder) and the counts still report
+// the full totals so the footer stays accurate.
+func TestDoctor_DailyLimitsTasks(t *testing.T) {
+	root, cfgPath := buildDoctorFixture(t)
+	// Add extra broken-target sources so the full queue clearly exceeds the
+	// daily limit set below.
+	extra := map[string]string{
+		"G1.md": "---\ntitle: G1\n---\nSee [[GhostG1]].\n",
+		"G2.md": "---\ntitle: G2\n---\nSee [[GhostG2]].\n",
+		"G3.md": "---\ntitle: G3\n---\nSee [[GhostG3]].\n",
+	}
+	for rel, body := range extra {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	// Cap the daily view to 2 tasks.
+	cfg := "vault = \"" + root + "\"\n[cockpit]\ndaily_limit = 2\n"
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("rewrite config: %v", err)
+	}
+
+	fullOut, err := runCLI(t, "", "doctor", "--json")
+	if err != nil {
+		t.Fatalf("doctor --json: %v", err)
+	}
+	var full cockpit.Queue
+	if err := json.Unmarshal([]byte(fullOut), &full); err != nil {
+		t.Fatalf("decode full queue: %v", err)
+	}
+	if len(full.Tasks) <= 2 {
+		t.Fatalf("expected full queue to exceed the daily limit, got %d tasks", len(full.Tasks))
+	}
+
+	dailyOut, err := runCLI(t, "", "doctor", "--json", "--daily")
+	if err != nil {
+		t.Fatalf("doctor --json --daily: %v", err)
+	}
+	var daily cockpit.Queue
+	if err := json.Unmarshal([]byte(dailyOut), &daily); err != nil {
+		t.Fatalf("decode daily queue: %v", err)
+	}
+	if len(daily.Tasks) != 2 {
+		t.Fatalf("daily queue = %d tasks, want 2 (daily_limit)", len(daily.Tasks))
+	}
+	if daily.Counts.Active != full.Counts.Active {
+		t.Errorf("daily Active = %d, want full Active %d (counts stay intact)", daily.Counts.Active, full.Counts.Active)
+	}
+	if daily.Counts.TotalGenerated != full.Counts.TotalGenerated {
+		t.Errorf("daily TotalGenerated = %d, want %d", daily.Counts.TotalGenerated, full.Counts.TotalGenerated)
+	}
+	for i, task := range daily.Tasks {
+		if task.ID != full.Tasks[i].ID {
+			t.Errorf("daily task %d id = %q, want %q (top of full queue)", i, task.ID, full.Tasks[i].ID)
+		}
+	}
+}
+
+func TestDoctor_ReviewContext(t *testing.T) {
+	root, cfgPath := buildDoctorFixture(t)
+	// Add extra broken-target sources so the full queue exceeds the daily cap
+	// and we can assert --review-context applies the daily limit.
+	extra := map[string]string{
+		"G1.md": "---\ntitle: G1\n---\nSee [[GhostG1]].\n",
+		"G2.md": "---\ntitle: G2\n---\nSee [[GhostG2]].\n",
+		"G3.md": "---\ntitle: G3\n---\nSee [[GhostG3]].\n",
+	}
+	for rel, body := range extra {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	cfg := "vault = \"" + root + "\"\n[cockpit]\ndaily_limit = 2\n"
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("rewrite config: %v", err)
+	}
+
+	out, err := runCLI(t, "", "doctor", "--review-context")
+	if err != nil {
+		t.Fatalf("doctor --review-context: %v", err)
+	}
+
+	var ctx cockpit.ReviewContext
+	if err := json.Unmarshal([]byte(out), &ctx); err != nil {
+		t.Fatalf("decode review context: %v\noutput:\n%s", err, out)
+	}
+
+	// --review-context implies --daily, so only daily_limit tasks surface while
+	// the counts stay the full active totals.
+	if ctx.TaskCount != 2 {
+		t.Errorf("TaskCount = %d, want 2 (daily_limit)", ctx.TaskCount)
+	}
+	if len(ctx.Items) != 2 {
+		t.Errorf("Items = %d, want 2", len(ctx.Items))
+	}
+	if ctx.Counts.Active <= 2 {
+		t.Errorf("Counts.Active = %d, want the full active total > 2", ctx.Counts.Active)
+	}
+	for _, item := range ctx.Items {
+		if item.Label == "" {
+			t.Errorf("item %q missing a kind label", item.Title)
+		}
+	}
+}
+
 func TestDoctor_CleanVault(t *testing.T) {
 	root := t.TempDir()
 	// Two mutually linked, frontmatter-free notes: neither is an orphan or dead

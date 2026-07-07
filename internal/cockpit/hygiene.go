@@ -1,13 +1,9 @@
 package cockpit
 
 import (
-	"fmt"
 	"sort"
-	"strconv"
 	"strings"
-	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 )
 
@@ -241,8 +237,6 @@ func longTailValueStrings(value any) []string {
 	switch typed := value.(type) {
 	case nil:
 		return nil
-	case string:
-		return []string{typed}
 	case []any:
 		var out []string
 		for _, item := range typed {
@@ -253,17 +247,9 @@ func longTailValueStrings(value any) []string {
 		return append([]string(nil), typed...)
 	case map[string]any:
 		return nil
-	case time.Time:
-		return []string{frontmatter.FormatTimestamp(typed)}
-	case bool:
-		return []string{strconv.FormatBool(typed)}
-	case int:
-		return []string{strconv.Itoa(typed)}
-	case int64:
-		return []string{strconv.FormatInt(typed, 10)}
-	case float64:
-		return []string{strconv.FormatFloat(typed, 'g', -1, 64)}
 	default:
-		return []string{fmt.Sprintf("%v", typed)}
+		// Scalars (string, bool, ints, float, time) stringify the same way the
+		// review-metadata helpers compare them.
+		return []string{scalarString(typed)}
 	}
 }
