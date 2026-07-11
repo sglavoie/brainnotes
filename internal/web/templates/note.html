@@ -31,6 +31,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{.Title}} - bn serve</title>
     {{template "themeBoot" .}}
+    <script>
+      (function () {
+        try {
+          var hidden = window.localStorage.getItem("bn.note-meta-sidebar.visible") === "hidden";
+          if (hidden) {
+            document.documentElement.dataset.noteMetaSidebar = "hidden";
+          }
+          var tocWidth = Number(window.localStorage.getItem("bn.note-toc-sidebar.width"));
+          if (Number.isFinite(tocWidth) && tocWidth >= 192) {
+            document.documentElement.style.setProperty("--bn-note-toc-sidebar-width", tocWidth + "px");
+          }
+        } catch (error) {
+          /* Storage unavailable; the default visible layout applies. */
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
@@ -70,6 +86,10 @@
           <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
         </div>
 
+        <div class="note-action-group">
+          <button type="button" class="note-sidebar-toggle" data-note-sidebar-toggle aria-controls="note-metadata-sidebar" aria-expanded="true">Hide sidebar</button>
+        </div>
+
         {{if .Copy.Wikilink}}
           <div class="note-action-group note-copy-actions" data-copy-controls>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
@@ -81,8 +101,9 @@
         {{end}}
       </div>
 
-      <div class="note-layout{{if .TOC}} note-layout-with-toc{{end}}">
-        <aside class="note-meta-sidebar" aria-label="Note metadata">
+      <div class="note-layout{{if .TOC}} note-layout-with-toc{{end}}" data-note-layout>
+        <aside id="note-metadata-sidebar" class="note-meta-sidebar" aria-label="Note metadata">
+          <div class="note-meta-resize-handle" data-note-meta-resize role="separator" aria-orientation="vertical" aria-label="Resize metadata sidebar" aria-valuemin="216" aria-valuemax="500" aria-valuenow="352" tabindex="0"></div>
           <section class="panel frontmatter-panel" data-frontmatter-panel data-frontmatter-key="{{.Key}}" data-frontmatter-csrf="{{.CSRFToken}}">
             <div class="frontmatter-panel-header">
               <h2>Frontmatter</h2>

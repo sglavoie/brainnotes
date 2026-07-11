@@ -1862,6 +1862,7 @@ code {
 
 .open-editor-button,
 .trash-note-button,
+.note-sidebar-toggle,
 .frontmatter-button,
 .create-note-button,
 .copy-button {
@@ -1877,6 +1878,7 @@ code {
 
 .note-actions .open-editor-button,
 .note-actions .trash-note-button,
+.note-actions .note-sidebar-toggle,
 .note-actions .copy-button {
   order: 1;
 }
@@ -1889,6 +1891,7 @@ code {
 
 .open-editor-button:hover,
 .trash-note-button:hover,
+.note-sidebar-toggle:hover,
 .frontmatter-button:hover,
 .create-note-button:hover,
 .copy-button:hover {
@@ -1901,6 +1904,7 @@ code {
 
 .open-editor-button:disabled,
 .trash-note-button:disabled,
+.note-sidebar-toggle:disabled,
 .frontmatter-button:disabled,
 .create-note-button:disabled,
 .copy-button:disabled {
@@ -1983,6 +1987,10 @@ code {
   min-width: 0;
 }
 
+.note-meta-resize-handle {
+  display: none;
+}
+
 .note-layout .panel {
   min-width: 0;
   margin-top: 0;
@@ -1997,20 +2005,45 @@ code {
 
 @media (min-width: 961px) {
   .note-layout {
-    grid-template-columns: minmax(13.5rem, 31.25rem) minmax(0, 1fr);
+    grid-template-columns:
+      minmax(13.5rem, var(--bn-note-meta-width, 31.25rem))
+      minmax(0, 1fr);
   }
 
   .note-layout-with-toc {
     grid-template-columns:
-      minmax(13.5rem, 1fr)
+      minmax(
+        13.5rem,
+        var(
+          --bn-note-meta-width,
+          min(31.25rem, max(13.5rem, calc((100vw - 48rem - 2rem) / 2)))
+        )
+      )
       minmax(0, 48rem)
       minmax(12rem, 1fr);
   }
 
-  .note-meta-sidebar,
-  .note-toc-sidebar {
+  .note-layout.is-metadata-hidden,
+  :root[data-note-meta-sidebar="hidden"] .note-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .note-layout-with-toc.is-metadata-hidden,
+  :root[data-note-meta-sidebar="hidden"] .note-layout-with-toc {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(
+        12rem,
+        min(
+          var(--bn-note-toc-sidebar-width, 31.25rem),
+          31.25rem,
+          calc(100vw - 13.5rem - 20rem - 2rem)
+        )
+      );
+  }
+
+  .note-meta-sidebar {
     width: 100%;
-    max-width: 31.25rem;
     box-sizing: border-box;
   }
 
@@ -2018,6 +2051,12 @@ code {
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding-right: 0.1rem;
+    scrollbar-gutter: stable;
   }
 
   .note-content {
@@ -2029,9 +2068,26 @@ code {
     grid-column: 3;
     grid-row: 1;
     justify-self: end;
+    width: 100%;
+    max-width: 31.25rem;
+    box-sizing: border-box;
   }
 
-  .note-meta-sidebar,
+  .note-layout.is-metadata-hidden .note-content,
+  :root[data-note-meta-sidebar="hidden"] .note-layout .note-content {
+    grid-column: 1;
+  }
+
+  .note-layout-with-toc.is-metadata-hidden .note-toc-sidebar,
+  :root[data-note-meta-sidebar="hidden"] .note-layout-with-toc .note-toc-sidebar {
+    grid-column: 2;
+  }
+
+  .note-layout.is-metadata-hidden .note-meta-sidebar,
+  :root[data-note-meta-sidebar="hidden"] .note-layout .note-meta-sidebar {
+    display: none;
+  }
+
   .note-toc-sidebar {
     position: sticky;
     top: 1rem;
@@ -2039,6 +2095,41 @@ code {
     overflow-y: auto;
     padding-right: 0.1rem;
     scrollbar-gutter: stable;
+  }
+
+  .note-meta-resize-handle {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    width: 0.9rem;
+    cursor: col-resize;
+    touch-action: none;
+    outline: none;
+  }
+
+  .note-meta-resize-handle::after {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.3rem;
+    bottom: 0.4rem;
+    width: 2px;
+    border-radius: 999px;
+    background: transparent;
+    content: "";
+  }
+
+  .note-meta-resize-handle:hover::after,
+  .note-meta-resize-handle:focus-visible::after {
+    background: var(--bn-focus);
+  }
+
+  :root.is-resizing-note-sidebar,
+  :root.is-resizing-note-sidebar * {
+    cursor: col-resize !important;
+    user-select: none;
   }
 }
 
@@ -2061,6 +2152,11 @@ code {
     overflow-y: visible;
     padding-right: 0;
     scrollbar-gutter: auto;
+  }
+
+  .note-layout.is-metadata-hidden .note-meta-sidebar,
+  :root[data-note-meta-sidebar="hidden"] .note-layout .note-meta-sidebar {
+    display: none;
   }
 }
 

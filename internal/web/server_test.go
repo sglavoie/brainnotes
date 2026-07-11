@@ -1223,8 +1223,10 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 		`data-copy-text="Projects/Source.md"`,
 		`data-copy-text="/n/projects/source"`,
 		`data-copy-text="[Source](/n/projects/source)"`,
-		`<div class="note-layout note-layout-with-toc">`,
-		`<aside class="note-meta-sidebar" aria-label="Note metadata">`,
+		`<button type="button" class="note-sidebar-toggle" data-note-sidebar-toggle aria-controls="note-metadata-sidebar" aria-expanded="true">Hide sidebar</button>`,
+		`<div class="note-layout note-layout-with-toc" data-note-layout>`,
+		`<aside id="note-metadata-sidebar" class="note-meta-sidebar" aria-label="Note metadata">`,
+		`<div class="note-meta-resize-handle" data-note-meta-resize role="separator" aria-orientation="vertical" aria-label="Resize metadata sidebar"`,
 		`<aside class="note-toc-sidebar" aria-label="Table of contents">`,
 		`<div class="note-content">`,
 		`<section class="panel note-toc" aria-labelledby="note-toc-heading">`,
@@ -1254,7 +1256,7 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 	}
 	for _, fragments := range [][]string{
 		{
-			`<aside class="note-meta-sidebar"`,
+			`<aside id="note-metadata-sidebar" class="note-meta-sidebar"`,
 			`<aside class="note-toc-sidebar"`,
 			`<div class="note-content">`,
 		},
