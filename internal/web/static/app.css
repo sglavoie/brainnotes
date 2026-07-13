@@ -3138,6 +3138,58 @@ code {
   color: var(--bn-link);
 }
 
+/* Wide Markdown tables stay readable: the table itself scrolls horizontally
+   instead of overflowing the note column. Goldmark emits a bare <table>, so
+   the scroll container is the table element rather than the .table-wrap helper. */
+.note-body table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Read-only GFM task lists: drop the list marker for checkbox items and keep
+   the disabled checkbox visibly non-interactive. No JavaScript makes these
+   editable. */
+.note-body li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+
+.note-body li > input[type="checkbox"] {
+  margin-right: 0.45rem;
+  cursor: default;
+}
+
+/* Definition lists: clear term/definition hierarchy. */
+.note-body dt {
+  font-weight: 600;
+  color: var(--bn-text);
+}
+
+.note-body dd {
+  margin: 0 0 0.6rem 1.25rem;
+  color: var(--bn-muted);
+}
+
+/* Footnotes: legible references and a navigable, visually separated endnote
+   block. */
+.note-body .footnote-ref {
+  text-decoration: none;
+}
+
+.note-body .footnotes {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--bn-border);
+  padding-top: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--bn-muted);
+}
+
+.note-body .footnote-backref {
+  margin-left: 0.35rem;
+  text-decoration: none;
+}
+
 .frontmatter-anchors a {
   margin-left: 0;
 }

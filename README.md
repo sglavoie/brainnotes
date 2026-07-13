@@ -597,7 +597,14 @@ diagnostics.
 Rendered note pages syntax-highlight fenced code blocks that include a language
 info string, such as `go`, `sh`, or `json`, on the server. Unlabeled fences
 remain plain escaped code blocks. Note bodies also auto-link GFM-style bare URLs
-such as `https://example.com`.
+such as `https://example.com`. Beyond that, rendering supports the GitHub
+Flavored Markdown extensions — tables, `~~strikethrough~~`, and task lists
+(`- [ ]` / `- [x]`, shown as read-only checkboxes since `bn serve` does not edit
+note bodies) — plus footnotes, definition lists, and typographic punctuation
+(straight quotes become curly, `---` becomes an em dash, `--` an en dash, and
+`...` an ellipsis). Wide tables scroll horizontally so they stay readable on
+narrow viewports, and wikilinks resolve inside table cells just as they do in
+body text. Inline and fenced code are left untouched by these transforms.
 
 Local binaries built with `just build` or `just install` remember this checkout
 path. `bn serve` rebuilds web assets there before starting, preferring the local

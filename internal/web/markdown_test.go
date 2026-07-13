@@ -350,6 +350,147 @@ func TestMarkdownRenderer_MediaEmbedsUseMediaRouteWhenFileExists(t *testing.T) {
 	}
 }
 
+func TestMarkdownRenderer_RendersSemanticTableWithResolvedWikilinks(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	notePath := filepath.Join(root, "Project Note.md")
+	if err := os.WriteFile(notePath, []byte("---\ntitle: Project Note\n---\nBody\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	renderer := newTestMarkdownRenderer(t, root)
+
+	source := strings.Join([]string{
+		"| Name | Link |",
+		"| :--- | ---: |",
+		"| Alpha | [[Project Note]] |",
+	}, "\n")
+	out, err := renderer.render(source)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{
+		"<table>",
+		"<thead>",
+		"<th",
+		"<tbody>",
+		"<td",
+		`href="/n/project%20note"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected table HTML to contain %q, got %q", want, html)
+		}
+	}
+}
+
+func TestMarkdownRenderer_RendersStrikethrough(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("~~gone~~ stays")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	if !strings.Contains(html, "<del>gone</del>") {
+		t.Fatalf("expected strikethrough to render as <del>, got %q", html)
+	}
+}
+
+func TestMarkdownRenderer_RendersDisabledTaskListInputs(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("- [x] done\n- [ ] todo\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{
+		`<input checked="" disabled="" type="checkbox">`,
+		`<input disabled="" type="checkbox">`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected task list input %q, got %q", want, html)
+		}
+	}
+}
+
+func TestMarkdownRenderer_RendersFootnotes(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("Text with a note.[^1]\n\n[^1]: The footnote body.\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{
+		`id="fnref:1"`,
+		`href="#fn:1"`,
+		`class="footnotes"`,
+		`id="fn:1"`,
+		"The footnote body.",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected footnote HTML to contain %q, got %q", want, html)
+		}
+	}
+}
+
+func TestMarkdownRenderer_RendersDefinitionList(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("Term\n: Definition of the term.\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{
+		"<dl>",
+		"<dt>Term</dt>",
+		"<dd>Definition of the term.</dd>",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected definition list HTML to contain %q, got %q", want, html)
+		}
+	}
+}
+
+func TestMarkdownRenderer_AppliesTypographerInProseNotCode(t *testing.T) {
+	t.Parallel()
+
+	root := buildWebTestVault(t)
+	renderer := newTestMarkdownRenderer(t, root)
+
+	out, err := renderer.render("She said \"hello\" -- really...\n\n`\"literal\" -- ...`\n\n```\n\"literal\" -- ...\n```\n")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	html := string(out)
+	for _, want := range []string{"&ldquo;", "&rdquo;", "&ndash;", "&hellip;"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected typographic punctuation %q in prose, got %q", want, html)
+		}
+	}
+	if !strings.Contains(html, `<code>&quot;literal&quot; -- ...</code>`) {
+		t.Fatalf("expected inline code to keep literal punctuation, got %q", html)
+	}
+	if !strings.Contains(html, "&quot;literal&quot; -- ...\n</code></pre>") {
+		t.Fatalf("expected fenced code to keep literal punctuation, got %q", html)
+	}
+}
+
 func newTestMarkdownRenderer(t *testing.T, root string) *markdownRenderer {
 	t.Helper()
 

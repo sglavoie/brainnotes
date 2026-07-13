@@ -54,7 +54,15 @@ func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
 				// app.css (scoped .chroma blocks) rather than baked into HTML.
 				highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 			),
-			extension.Linkify,
+			// GFM bundles Linkify (bare URL support), Tables,
+			// Strikethrough, and read-only task lists. Footnote,
+			// DefinitionList, and Typographer round out the semantic
+			// Markdown feature set shared by normal and graph-aware
+			// rendering.
+			extension.GFM,
+			extension.Footnote,
+			extension.DefinitionList,
+			extension.Typographer,
 			&wikilink.Extender{
 				Resolver: resolver,
 			},

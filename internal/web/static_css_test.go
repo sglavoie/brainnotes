@@ -338,6 +338,37 @@ func TestComponentCSSTokenizationContract(t *testing.T) {
 	}
 }
 
+func TestNoteBodyExtendedMarkdownCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		// Wide tables scroll horizontally on the table element itself (Goldmark
+		// emits a bare <table>, not the .table-wrap helper).
+		".note-body table",
+		"display: block;",
+		"max-width: 100%;",
+		"overflow-x: auto;",
+		// Read-only task lists: no marker, non-interactive checkbox cursor.
+		".note-body li:has(> input[type=\"checkbox\"])",
+		"list-style: none;",
+		".note-body li > input[type=\"checkbox\"]",
+		"cursor: default;",
+		// Definition list term/definition hierarchy.
+		".note-body dt",
+		"font-weight: 600;",
+		".note-body dd",
+		// Footnote references and the endnote block.
+		".note-body .footnote-ref",
+		".note-body .footnotes",
+		"border-top: 1px solid var(--bn-border);",
+		".note-body .footnote-backref",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("note-body extended Markdown CSS missing %q", want)
+		}
+	}
+}
+
 func readStaticCSS(t *testing.T) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("static", "app.css"))

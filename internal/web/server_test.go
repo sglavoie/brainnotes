@@ -1135,6 +1135,70 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	}
 }
 
+func TestServer_NoteViewRendersExtendedMarkdown(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte(strings.Join([]string{
+			"---",
+			"title: Source",
+			"---",
+			"| Name | Link |",
+			"| :--- | ---: |",
+			"| Alpha | [[Target]] |",
+			"",
+			"- [x] done",
+			"- [ ] todo",
+			"",
+			"~~gone~~ stays",
+			"",
+			"Term",
+			": Definition of the term.",
+			"",
+			"Text with a note.[^1]",
+			"",
+			"[^1]: The footnote body.",
+			"",
+		}, "\n")),
+		"Target.md": []byte("---\ntitle: Target\n---\nTarget body\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /n/source: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	// Assert the extended Markdown constructs reach the browser as semantic HTML
+	// through the production handleNote -> renderWithGraph path, and that a
+	// wikilink inside a table cell resolves against the snapshot graph.
+	for _, want := range []string{
+		// GFM table as semantic HTML with a resolved wikilink in a cell.
+		"<table>",
+		"<thead>",
+		"<tbody>",
+		`href="/n/target"`,
+		// Read-only (disabled) task-list checkboxes.
+		`<input checked="" disabled="" type="checkbox">`,
+		`<input disabled="" type="checkbox">`,
+		// Strikethrough.
+		"<del>gone</del>",
+		// Definition list.
+		"<dt>Term</dt>",
+		"<dd>Definition of the term.</dd>",
+		// Footnote reference and navigable endnote block.
+		`id="fnref:1"`,
+		`href="#fn:1"`,
+		`class="footnotes"`,
+		`id="fn:1"`,
+		"The footnote body.",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected extended Markdown note HTML to contain %q, got %q", want, body)
+		}
+	}
+}
+
 func TestServer_NoteViewBacklinksPanel(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Alpha.md": []byte("---\ntitle: Alpha\n---\nAlpha body\n"),
