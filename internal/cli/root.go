@@ -36,7 +36,8 @@ func NewRootCmd() *cobra.Command {
 			// Skip config loading for commands that don't need a vault
 			// (completion scripts, help). This keeps `bn completion bash`
 			// usable without a configured vault.
-			if cmd.Name() == "completion" || cmd.Name() == "help" || cmd.Name() == "config" {
+			if cmd.Name() == "completion" || cmd.Name() == "help" || cmd.Name() == "config" ||
+				cmd.Name() == cobra.ShellCompRequestCmd || cmd.Name() == cobra.ShellCompNoDescRequestCmd {
 				return nil
 			}
 			for p := cmd.Parent(); p != nil; p = p.Parent() {
@@ -64,6 +65,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewBackupCmd())
 	cmd.AddCommand(NewBacklinksCmd())
 	cmd.AddCommand(NewConfigCmd(func() string { return configPath }))
+	cmd.AddCommand(NewContextCmd())
 	cmd.AddCommand(NewDoctorCmd())
 	cmd.AddCommand(NewFindCmd())
 	cmd.AddCommand(NewGraphCmd())
@@ -77,6 +79,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewRenameKeyCmd())
 	cmd.AddCommand(NewRepairCmd())
 	cmd.AddCommand(NewRelinkCmd())
+	cmd.AddCommand(NewRelatedCmd())
 	cmd.AddCommand(NewReplaceCmd())
 	cmd.AddCommand(NewRestoreCmd())
 	cmd.AddCommand(NewSchemaCmd())

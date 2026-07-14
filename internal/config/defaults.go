@@ -59,6 +59,18 @@ func DefaultTemplate() string {
 # book = "References/Books"
 # person = "People"
 
+[related]
+# Frontmatter properties whose values contribute to related-note ranking.
+# Set this to [] to disable metadata scoring.
+# metadata_properties = ["categories", "tags", "topics", "type", "parent", "area"]
+
+[agent]
+# Local agent command as an argv array. The executable is launched directly;
+# arguments are never interpreted by a shell. Empty disables agent execution.
+# command = ["my-agent", "--stdin"]
+# Timeout in seconds for local agent execution.
+# timeout_seconds = 60
+
 [cockpit]
 # Tuning for the Daily Fix Cockpit (` + "`bn doctor`" + ` and the web cockpit).
 # Rule kinds to hide from the queue entirely.
@@ -95,9 +107,9 @@ func DefaultTemplate() string {
 # sensitive_ignore_paths = ["Templates", "Archive"]
 # Regular-expression patterns whose matches the sensitive-content scanner treats as allowed.
 # sensitive_ignore_patterns = ["EXAMPLE_[A-Z]+"]
-# Local command invoked for the optional AI daily review. Empty disables AI integration.
+# Legacy daily-review command override. When empty, [agent].command is used.
 # agent_command = "my-review-agent"
-# Timeout in seconds for the AI agent command.
+# Timeout for the legacy override. When agent_command is empty, [agent].timeout_seconds is used.
 # agent_timeout_seconds = 60
 `
 }
@@ -164,6 +176,17 @@ func applyDefaults(cfg *Config) {
 		cfg.New.Routes = map[string]string{}
 	} else {
 		normalizeRoutes(cfg.New.Routes)
+	}
+	if cfg.Related.MetadataProperties == nil {
+		cfg.Related.MetadataProperties = append([]string(nil), DefaultRelatedMetadataProperties...)
+	} else {
+		cfg.Related.MetadataProperties = normalizePropertyList(cfg.Related.MetadataProperties)
+	}
+	if cfg.Agent.Command == nil {
+		cfg.Agent.Command = []string{}
+	}
+	if cfg.Agent.TimeoutSeconds == 0 {
+		cfg.Agent.TimeoutSeconds = DefaultAgentTimeoutSeconds
 	}
 
 	// Trim surrounding whitespace from [open].editor. Without this, a value

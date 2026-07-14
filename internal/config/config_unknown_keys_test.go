@@ -82,6 +82,26 @@ bad_nested = true
 	}
 }
 
+func TestLoad_RejectsUnknownRelatedNestedKey(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[related]
+metadata_properties = ["tags"]
+metadata_property = ["topic"]
+`)
+
+	_, err := Load("", cfgPath)
+	if err == nil {
+		t.Fatal("expected error for unknown related key, got nil")
+	}
+	if !strings.Contains(err.Error(), "related.metadata_property") {
+		t.Fatalf("error should name related.metadata_property, got: %v", err)
+	}
+}
+
 // TestLoad_AcceptsAllKnownKeys verifies that a config file using every valid
 // known key still loads without error, so the unknown-key check does not
 // false-positive on legitimate keys.
@@ -118,6 +138,13 @@ addr = "127.0.0.1:8729"
 open_browser = true
 
 [new]
+
+[related]
+metadata_properties = ["categories", "tags"]
+
+[agent]
+command = ["my-agent", "--stdin"]
+timeout_seconds = 30
 `)
 
 	cfg, err := Load("", cfgPath)

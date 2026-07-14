@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -36,8 +37,8 @@ type Options struct {
 	// RunAgent executes the optional AI daily-review command. It receives the
 	// argv slice (already split, no shell) and the redacted review-context JSON
 	// on stdin, and returns the command's stdout. Injected in tests so no real
-	// process is launched; defaults to runAgentCommand.
-	RunAgent func(ctx context.Context, argv []string, stdin []byte) ([]byte, error)
+	// process is launched; defaults to agent.Run.
+	RunAgent agent.Runner
 }
 
 type Server struct {
@@ -54,7 +55,7 @@ type Server struct {
 	notifyListen func(url string)
 	csrfToken    string
 	startEditor  func(bin string, argv []string) error
-	runAgent     func(ctx context.Context, argv []string, stdin []byte) ([]byte, error)
+	runAgent     agent.Runner
 }
 
 type notePageData struct {
@@ -166,7 +167,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		srv.startEditor = startEditorProcess
 	}
 	if srv.runAgent == nil {
-		srv.runAgent = runAgentCommand
+		srv.runAgent = agent.Run
 	}
 
 	mux := http.NewServeMux()

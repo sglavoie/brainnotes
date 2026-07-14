@@ -45,6 +45,10 @@ bn find --category Books --status "To Read"
 # Pipe to fzf for interactive selection.
 bn find --category Books -i
 
+# Revisit the current note through related notes and an inspectable context packet.
+bn related Notes/Current.md -i
+bn context Notes/Current.md --purpose questions
+
 # Set a property across many notes.
 bn find --tag drafts | bn set - status=done
 ```
@@ -96,6 +100,17 @@ args = ["--preview", "bat --style=plain --color=always {}"]
 # Editor to invoke when opening a note. Falls back to $EDITOR when not set.
 # editor = "nvim"
 
+[related]
+# Frontmatter properties whose values contribute to related-note ranking.
+# Set to [] to disable metadata scoring while keeping text, graph, and recall.
+metadata_properties = ["categories", "tags", "topics", "type", "parent", "area"]
+
+[agent]
+# Optional local research command as a literal argv array. No shell is used.
+# The complete context packet is written to stdin; empty disables execution.
+command = []
+timeout_seconds = 60
+
 [serve]
 # HTTP listen address for `bn serve`.
 addr = "127.0.0.1:8729"
@@ -146,10 +161,10 @@ sensitive_scan = false
 sensitive_ignore_paths = []
 # Regular-expression patterns whose matches the scanner treats as allowed.
 sensitive_ignore_patterns = []
-# Local command for the optional AI daily review (argv split on whitespace, no
-# shell). Empty disables AI integration.
+# Legacy daily-review-only command override (split on whitespace, no shell).
+# When empty, the top-level [agent] command and timeout are used.
 agent_command = ""
-# Timeout in seconds for the AI daily-review command.
+# Timeout for the legacy override.
 agent_timeout_seconds = 60
 
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
@@ -307,6 +322,125 @@ bn backlinks "Crafting Interpreters"
 bn backlinks References/Books/Dune.md
 bn backlinks Dune | xargs bn set status=referenced
 bn backlinks Dune --verbose | awk -F'\t' '{print $1}'
+```
+
+### `bn related` — rank contextual connections
+
+```sh
+bn related <note>
+  [--mode balanced|rediscover|connect]
+  [--limit N]
+  [--paths [--null] | --json]
+  [-i | --interactive [--open]]
+
+bn related feedback <source> <candidate>
+  --state useful|dismissed|later|clear
+  [--until YYYY-MM-DD]
+```
+
+`bn related` builds an in-memory view of the current vault on every invocation;
+there is no persistent index, database, model download, or service. `<note>` may
+be a case-insensitive filename stem, a vault-relative path, or an absolute path.
+Ambiguous stems fail with the candidate paths so a relative path can disambiguate
+them. Paths and tokens are normalized to Unicode NFC for stable cross-platform
+identity.
+
+Ranking combines four explainable signals with fixed v1 weights:
+
+| Signal | Weight | Meaning |
+| --- | ---: | --- |
+| Text | 0.40 | Weighted title, heading, and prose TF-IDF similarity. |
+| Graph | 0.30 | Direct links or shared-neighbor/directed two-hop proximity. |
+| Metadata | 0.20 | Overlap in configured `[related].metadata_properties`, downweighted when common. |
+| Recall | 0.10 | Creation age plus useful/dismissed/snoozed/open-history state. |
+
+`balanced` returns every candidate with a meaningful signal. `rediscover`
+restricts results to direct or directed two-hop notes that are old or have not
+been opened recently. `connect` excludes direct links and favors text- or
+metadata-supported unlinked notes. Stable vault-relative path order breaks
+score ties. Human output includes rank, relationship, path, and up to three
+reasons; `--json` exposes the stable weights, component scores, relationship,
+bridge, and reasons. `--paths` prints absolute paths for pipelines, with NUL
+separation under `--null`.
+
+Interactive mode feeds the already-ranked rows to fzf. A successful selection
+prints its absolute path, records `last_opened_at`, and optionally opens it in
+the configured editor with `--open`. `--open` therefore requires `-i`.
+
+Feedback is directed from source to candidate:
+
+| State | Effect |
+| --- | --- |
+| `useful` | Adds a positive recall signal. |
+| `dismissed` | Excludes the pair until cleared or replaced. |
+| `later --until YYYY-MM-DD` | Excludes the pair until the future local date. |
+| `clear` | Removes rating/snooze state while preserving open history. |
+
+Feedback and successful interactive selections are the only writes in this
+workflow. They are stored atomically in `<vault>/.bnotes/recall.json`, outside
+Markdown and the undo journal. The versioned sidecar contains normalized source
+and candidate paths, hashed pair IDs, ratings/snoozes, and timestamps—never note
+bodies or excerpts. Removed-note and expired-snooze records are ignored by
+queries and pruned on the next explicit state write. Corrupt, invalid,
+unsupported, or symlinked state fails closed and is never silently overwritten.
+
+Examples:
+
+```sh
+bn related "Project Alpha"
+bn related Notes/Current.md --mode connect --json
+bn related Notes/Current.md --paths --null | xargs -0 -n1 printf '%s\n'
+bn related Notes/Current.md -i --open
+bn related feedback Notes/Current.md Notes/Evidence.md --state useful
+bn related feedback Notes/Current.md Notes/Detour.md --state later --until 2026-08-01
+```
+
+### `bn context` — export a bounded research packet
+
+```sh
+bn context <note>
+  [--related N]
+  [--max-bytes N]
+  [--format markdown|json]
+  [--purpose synthesis|contradictions|questions]
+  [--agent]
+```
+
+`bn context` turns the same balanced ranking into deterministic, inspectable
+research input. The packet contains the source note's complete body, configured
+metadata, ranked identities and reasons, and exact bounded Markdown excerpts
+from up to five related notes by default. The manifest names every source span
+and records the final serialized byte count. Markdown and JSON select identical
+notes and excerpts; only their framing and byte counts differ.
+
+The defaults are `--related 5`, `--max-bytes 65536`, `--format markdown`, and
+`--purpose synthesis`. `--related 0` exports only the source. Related excerpts
+are truncated at Unicode rune boundaries, but the source body is never
+truncated: if the complete source and required framing cannot fit, the command
+fails. The command reads recall feedback so dismissed or currently snoozed
+pairs stay out of the packet, but it never updates open history or state.
+
+`--agent` requires Markdown and a non-empty top-level `[agent].command`. `bn`
+launches that argv directly without a shell, writes the byte-identical preview
+packet to stdin, applies `agent.timeout_seconds`, and prints stdout verbatim.
+It does not select a provider, persist the response, create an undo entry, or
+modify Markdown. Preview the packet without `--agent` whenever you want to
+inspect exactly what the command will receive.
+
+Privacy boundary: ordinary `related` and `context` queries stay local and
+read-only. A context packet intentionally includes the complete source body and
+selected related excerpts; an agent command receives exactly those bytes and
+may itself transmit them depending on how that executable is configured. `bn`
+adds no network client or provider dependency. Keep sensitive notes out of the
+packet, lower `--related`, or omit `--agent` when that boundary is inappropriate.
+
+Examples:
+
+```sh
+bn context Notes/Current.md
+bn context Notes/Current.md --related 3 --purpose contradictions
+bn context Notes/Current.md --format json > /tmp/current-context.json
+bn context Notes/Current.md --purpose questions --agent
 ```
 
 ### `bn config` — show or edit the config file
@@ -545,18 +679,17 @@ deterministic, redacted snapshot as `bn doctor --review-context` — per-kind
 groups and ordered items with server-redacted locations, no file hashes, and no
 raw bodies — so the CLI and web review surfaces cannot drift.
 
-`POST /api/daily-review/agent` is an opt-in, local-only AI review. It runs the
-configured `cockpit.agent_command` as an argv slice split on whitespace only (no
-shell, no quoting or piping), feeds it exactly the redacted daily-review context
-on stdin, and returns the command's stdout verbatim as `{ok, enabled: true,
-output}`. When `agent_command` is empty (the default) the route returns a clean
-disabled response (`{ok: true, enabled: false}`) with HTTP `200`, not an error —
-no AI provider dependency is ever added. The command is killed after
-`cockpit.agent_timeout_seconds` (default `60`); failures and timeouts return
-`internal_error` (HTTP `500`). Because only the redacted context crosses the
-boundary, raw note bodies, file hashes, and unredacted sensitive values never
-reach the agent. The route is CSRF-protected like every other side-effecting web
-action.
+`POST /api/daily-review/agent` is an opt-in, local-only AI review. A non-empty
+legacy `cockpit.agent_command` remains the daily-review-only override (split on
+whitespace, no shell); otherwise the route uses the shared top-level
+`[agent].command` argv and timeout. It feeds exactly the redacted daily-review
+context on stdin and returns stdout verbatim as `{ok, enabled: true, output}`.
+When neither command is configured, the route returns a clean disabled response
+(`{ok: true, enabled: false}`) with HTTP `200`, not an error—no AI provider
+dependency is added. Failures and timeouts return `internal_error` (HTTP `500`).
+Because only the redacted daily-review context crosses this boundary, raw note
+bodies, file hashes, and unredacted sensitive values never reach this agent
+route. The route is CSRF-protected like every other side-effecting web action.
 
 Cockpit workflow state is stored in the served vault at
 `<vault>/.bnotes/cockpit.json`, migrated automatically from readable records in
@@ -1102,14 +1235,41 @@ end)
 
 ### VS Code
 
-A `tasks.json` snippet:
+A `.vscode/tasks.json` snippet that can pick a related note, inspect a context
+packet or optional local research brief, and rename the current note:
 
 ```jsonc
 {
-  "label": "bn: rename current",
-  "type": "shell",
-  "command": "bn",
-  "args": ["rename", "${file}", "${input:newTitle}"],
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "bn: related current",
+      "type": "process",
+      "command": "bn",
+      "args": ["related", "${file}", "-i", "--open"],
+      "presentation": { "reveal": "always", "focus": true }
+    },
+    {
+      "label": "bn: context current",
+      "type": "process",
+      "command": "bn",
+      "args": ["context", "${file}", "--purpose", "questions"],
+      "presentation": { "reveal": "always", "focus": false }
+    },
+    {
+      "label": "bn: research brief current",
+      "type": "process",
+      "command": "bn",
+      "args": ["context", "${file}", "--purpose", "questions", "--agent"],
+      "presentation": { "reveal": "always", "focus": false }
+    },
+    {
+      "label": "bn: rename current",
+      "type": "process",
+      "command": "bn",
+      "args": ["rename", "${file}", "${input:newTitle}"]
+    }
+  ],
   "inputs": [{ "id": "newTitle", "type": "promptString", "description": "New title" }]
 }
 ```
@@ -1134,6 +1294,27 @@ bn find --tag projetc | bn set - tags=project
 
 # Mark every note linking to a hub note as 'referenced'.
 bn backlinks "Project Alpha" | bn set - status=referenced
+```
+
+### Contextual research workflow
+
+Move from the note in front of you to explainable candidates, durable feedback,
+an inspectable packet, and an optional local brief:
+
+```sh
+source_note="Notes/Current.md"
+
+# Inspect ranked evidence or choose one in fzf.
+bn related "$source_note" --json
+bn related "$source_note" -i --open
+
+# Teach future rankings about one directed source/candidate pair.
+bn related feedback "$source_note" "Notes/Useful Evidence.md" --state useful
+bn related feedback "$source_note" "Notes/False Lead.md" --state dismissed
+
+# Review exact agent input first; run the configured argv only when ready.
+bn context "$source_note" --purpose contradictions > /tmp/context.md
+bn context "$source_note" --purpose contradictions --agent
 ```
 
 ### Refactoring workflows
@@ -1171,13 +1352,17 @@ bn lint
   (`bn cockpit fix`). `bn doctor` is read-only and never journals.
 - Snapshot commands `backup` / `restore` are separate from the undo journal and
   do not create journal entries.
-- Read-only commands, including `bn doctor` and `bn serve` bulk/fix previews,
-  never journal. Applying a cockpit fix (`POST /api/fixes/apply`) does journal,
-  under the command name `bn cockpit fix`.
+- Read-only commands, including ordinary `bn related`, `bn context`,
+  `bn context --agent`, `bn doctor`, and `bn serve` bulk/fix previews, never
+  journal. Applying a cockpit fix (`POST /api/fixes/apply`) does journal, under
+  the command name `bn cockpit fix`.
 - Daily Fix Cockpit Done/Snooze/Clear triage state is stored separately in
   `<vault>/.bnotes/cockpit.json` (migrated from the legacy
   `<vault>/.bnotes/review.json`); it is not journaled and does not modify note
   frontmatter.
+- Related-note feedback and successful interactive selections are stored
+  separately in `<vault>/.bnotes/recall.json`; they are not journaled and never
+  modify Markdown.
 - Any `--dry-run` invocation never writes journal entries.
 
 Recommended safety workflow:
@@ -1200,7 +1385,27 @@ v1 limits and non-goals:
 
 ## Performance
 
-Measured against a 309-note vault on Darwin/arm64:
+Contextual-recall core benchmarks were measured on 2026-07-13 with an Apple M1
+Max (`darwin/arm64`, Go 1.26.4). Values are the median `ns/op` from five runs;
+portable tests deliberately do not enforce wall-clock thresholds.
+
+```sh
+go test ./internal/recall -run '^$' \
+  -bench 'Benchmark(BuildRankerAndRank|ContextBundle)$' -benchmem -count=5
+```
+
+| Synthetic corpus | Build ranker + balanced query | Build bounded context bundle | Target |
+| ---: | ---: | ---: | ---: |
+| 500 notes | ~3.7 ms | ~6.4 ms | <150 ms |
+| 5,000 notes | ~36.9 ms | ~36.4 ms | <1 s |
+
+These benchmarks start from deterministic in-memory document models: ranking
+includes a fresh lexical/hybrid index build and query, while context generation
+includes its excerpt lexical index, selection, dual-format byte-budget checks,
+and canonical rendering. CLI runs additionally walk and parse the vault on each
+invocation; there is intentionally no persistent index to warm or invalidate.
+
+Existing command measurements against a 309-note vault on Darwin/arm64:
 
 | Operation                                | Time   |
 | ---------------------------------------- | ------ |
@@ -1209,16 +1414,15 @@ Measured against a 309-note vault on Darwin/arm64:
 | `bn rename` (single referrer rewritten)  | ~20 ms |
 | `bn rename --dry-run` (full vault scan)  | ~10 ms |
 
-Typical run: <50 ms.
+Typical non-recall run: <50 ms.
 
 ## Differences from `vault-cli`
 
-`bn` is a deliberate trim of the previous Python `vault-cli`: the core surface
-is the six file-mutating / query commands (`find`, `new`, `rename`, `move`,
-`set`, `unset`), with three thin quick-access shortcuts on top (`open`,
-`backlinks`, `values` + the `tags` alias). The shortcuts compose with the core
-commands rather than introducing new categories of feature — they exist to
-make the next pipeline shorter, not to broaden scope. Omitted commands and the
+`bn` is a deliberate trim of the previous Python `vault-cli`: focused commands
+compose over a plain-Markdown vault instead of recreating a general notes
+platform. Contextual recall follows the same rule—it is an in-memory,
+explainable query plus optional explicit local process execution, not an index,
+provider integration, or automatic content mutation. Omitted commands and the
 reason each was dropped:
 
 | Command                              | Why dropped                                                              |
@@ -1228,10 +1432,10 @@ reason each was dropped:
 | `stats` / `analyze` / `health`       | Reports without an obvious next action.                                  |
 | `archive`                            | Composed from `bn move` + `bn set`.                                      |
 | `bases`                              | Obsidian-specific; ignored.                                              |
-| `ai` / `infer`                       | LLM integration is out of scope for v1.                                  |
+| `ai` / `infer`                       | No implicit/provider AI command; `bn context --agent` runs only an explicitly configured local argv with inspectable stdin. |
 | `batch`                              | Compose pipelines with `find` + `xargs` instead.                         |
 | `export`                             | The vault is already plain Markdown.                                     |
 | `categories` / `links` / `discover`  | Hub-style navigation; the editor's outline + `find --orphan` cover it.   |
 | `attachments`                        | Attachments folder is ignored; binary asset management isn't a fit.      |
-| `timeline` / `recall`                | `git log` is the canonical long-term history source; `bn history` / `bn undo` are scoped to short-term operational safety. |
+| `timeline`                           | `git log` is the canonical long-term history source; recall feedback is ranking state, not content history. |
 | `properties` / `content`             | Subsumed by `bn set` / `bn unset` / `bn find`.                           |

@@ -62,6 +62,19 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	if !equalSlices(cfg.Frontmatter.ListProperties, wantList) {
 		t.Errorf("ListProperties: got %v, want %v", cfg.Frontmatter.ListProperties, wantList)
 	}
+	if !equalSlices(cfg.Related.MetadataProperties, DefaultRelatedMetadataProperties) {
+		t.Errorf(
+			"Related.MetadataProperties: got %v, want %v",
+			cfg.Related.MetadataProperties,
+			DefaultRelatedMetadataProperties,
+		)
+	}
+	if cfg.Agent.Command == nil || len(cfg.Agent.Command) != 0 {
+		t.Errorf("Agent.Command: got %#v, want empty non-nil slice", cfg.Agent.Command)
+	}
+	if cfg.Agent.TimeoutSeconds != DefaultAgentTimeoutSeconds {
+		t.Errorf("Agent.TimeoutSeconds: got %d, want %d", cfg.Agent.TimeoutSeconds, DefaultAgentTimeoutSeconds)
+	}
 	// Defaults merged into Ignore.
 	for _, want := range DefaultIgnore {
 		if !contains(cfg.Ignore, want) {
@@ -102,12 +115,52 @@ func TestDefaultTemplate_ParsesAsEmptyConfig(t *testing.T) {
 func TestDefaultTemplate_Mentions_AllKnownKeys(t *testing.T) {
 	tmpl := DefaultTemplate()
 	for _, want := range []string{
-		"vault", "ignore", "[templates]", "[frontmatter]", "[fzf]", "[serve]", "[new.routes]",
-		"wikilink_properties", "list_properties",
+		"vault", "ignore", "[templates]", "[frontmatter]", "[fzf]", "[serve]", "[new.routes]", "[related]", "[agent]",
+		"wikilink_properties", "list_properties", "metadata_properties", "command", "timeout_seconds",
 	} {
 		if !strings.Contains(tmpl, want) {
 			t.Errorf("template missing %q", want)
 		}
+	}
+}
+
+func TestLoad_RelatedMetadataPropertiesExplicitEmptyDisablesDefaults(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[related]
+metadata_properties = []
+`)
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Related.MetadataProperties == nil {
+		t.Fatal("explicit empty metadata_properties should remain a non-nil empty slice")
+	}
+	if len(cfg.Related.MetadataProperties) != 0 {
+		t.Fatalf("MetadataProperties = %v, want empty", cfg.Related.MetadataProperties)
+	}
+}
+
+func TestLoad_RelatedMetadataPropertiesNormalizeConfiguredValues(t *testing.T) {
+	resetEnv(t)
+	vault := t.TempDir()
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	writeFile(t, cfgPath, `vault = "`+vault+`"
+[related]
+metadata_properties = [" tags ", "topics", "tags", ""]
+`)
+
+	cfg, err := Load("", cfgPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []string{"tags", "topics"}
+	if !equalSlices(cfg.Related.MetadataProperties, want) {
+		t.Fatalf("MetadataProperties = %v, want %v", cfg.Related.MetadataProperties, want)
 	}
 }
 

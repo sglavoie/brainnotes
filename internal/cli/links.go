@@ -58,7 +58,7 @@ func NewLinksCmd() *cobra.Command {
 				target = &vault.Note{Path: selected[0]}
 			} else {
 				var resolveErr error
-				target, resolveErr = resolveBacklinkTarget(v, args[0])
+				target, resolveErr = resolveNoteTarget(v, args[0])
 				if resolveErr != nil {
 					return resolveErr
 				}

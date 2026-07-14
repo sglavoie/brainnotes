@@ -1,12 +1,10 @@
 package web
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -29,8 +27,9 @@ type dailyReviewAgentResponse struct {
 // handleDailyReviewAgent runs the optional, configured AI daily-review command.
 // It POSTs the deterministic, redacted daily-review context to the command on
 // stdin (argv-only invocation, no shell) and returns the command's stdout. When
-// cockpit.agent_command is unset it returns a clean disabled response rather than
-// an error, so the client can offer the feature only when it is available.
+// both the legacy cockpit override and shared agent command are unset it returns
+// a clean disabled response rather than an error, so the client can offer the
+// feature only when it is available.
 func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/daily-review/agent" {
 		http.NotFound(w, r)
@@ -50,10 +49,9 @@ func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// argv is split on whitespace only — never handed to a shell — so no quoting,
-	// globbing, piping, or metacharacter interpretation is possible. An empty
-	// command (the default) means AI integration is disabled.
-	argv := strings.Fields(s.cfg.Cockpit.AgentCommand)
+	// A configured legacy cockpit command takes precedence so existing daily
+	// review setups retain their behavior. Otherwise use the shared argv config.
+	argv, timeoutSeconds := s.dailyReviewAgentConfig()
 	if len(argv) == 0 {
 		writeManagementJSON(w, http.StatusOK, dailyReviewAgentResponse{
 			OK:      true,
@@ -79,7 +77,7 @@ func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	timeout := time.Duration(s.cfg.Cockpit.AgentTimeoutSeconds) * time.Second
+	timeout := time.Duration(timeoutSeconds) * time.Second
 	ctx := r.Context()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -104,21 +102,11 @@ func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// runAgentCommand is the default agent runner: it invokes argv[0] with the
-// remaining elements as arguments (no shell), writes the redacted context JSON to
-// the command's stdin, and returns its stdout. The context carries the configured
-// timeout, so a hung command is killed rather than blocking the request.
-func runAgentCommand(ctx context.Context, argv []string, stdin []byte) ([]byte, error) {
-	if len(argv) == 0 {
-		return nil, errors.New("web: empty agent command")
+func (s *Server) dailyReviewAgentConfig() ([]string, int) {
+	if legacy := strings.TrimSpace(s.cfg.Cockpit.AgentCommand); legacy != "" {
+		// Legacy configuration is intentionally split exactly as before. It is
+		// still passed directly as argv and is never interpreted by a shell.
+		return strings.Fields(legacy), s.cfg.Cockpit.AgentTimeoutSeconds
 	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Stdin = bytes.NewReader(stdin)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
-	return stdout.Bytes(), nil
+	return append([]string(nil), s.cfg.Agent.Command...), s.cfg.Agent.TimeoutSeconds
 }

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -70,7 +69,7 @@ func NewBacklinksCmd() *cobra.Command {
 				target = &vault.Note{Path: selected[0]}
 			} else {
 				var resolveErr error
-				target, resolveErr = resolveBacklinkTarget(v, args[0])
+				target, resolveErr = resolveNoteTarget(v, args[0])
 				if resolveErr != nil {
 					return resolveErr
 				}
@@ -108,34 +107,6 @@ func NewBacklinksCmd() *cobra.Command {
 	f.BoolVar(&verbose, "verbose", false, "show file:line and a snippet for each backlink (long-only; -v is reserved by the root command)")
 
 	return cmd
-}
-
-// resolveBacklinkTarget turns a positional argument into a *vault.Note. It
-// first attempts a case-insensitive title lookup; if no note is titled that
-// way it falls back to treating the arg as a path/glob. An ambiguity error
-// from the title lookup is propagated as-is.
-func resolveBacklinkTarget(v *vault.Vault, arg string) (*vault.Note, error) {
-	n, err := v.ResolveByTitle(arg, "")
-	if err == nil {
-		return n, nil
-	}
-	// Propagate ambiguity errors directly. "no note titled" is the cue to fall
-	// back to path/glob resolution.
-	if !strings.Contains(err.Error(), "no note titled") {
-		return nil, err
-	}
-
-	paths, pathErr := resolveNoteInputs(v.Root, []string{arg}, nil, false)
-	if pathErr != nil {
-		return nil, pathErr
-	}
-	if len(paths) != 1 {
-		return nil, fmt.Errorf("expected exactly one path for %q, got %d", arg, len(paths))
-	}
-	if _, statErr := os.Stat(paths[0]); statErr != nil {
-		return nil, statErr
-	}
-	return &vault.Note{Path: paths[0]}, nil
 }
 
 // backlinkReferrers returns the sorted, deduped, self-filtered list of paths

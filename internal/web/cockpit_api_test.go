@@ -410,8 +410,11 @@ func TestServer_DailyReviewAgent_RunsConfiguredCommand(t *testing.T) {
 		"Notes.md": []byte("---\ntitle: Notes\n---\nkey " + secret + " here\n"),
 		"A.md":     []byte("---\ntitle: A\n---\n[[GhostA]]\n"),
 	}, func(cfg *config.Config) {
+		cfg.Agent.Command = []string{"shared-agent", "--ignored"}
+		cfg.Agent.TimeoutSeconds = 30
 		cfg.Cockpit.SensitiveScan = true
 		cfg.Cockpit.AgentCommand = "review-agent --daily"
+		cfg.Cockpit.AgentTimeoutSeconds = 10
 	}, Options{
 		CSRFToken: "csrf-token",
 		RunAgent: func(_ context.Context, argv []string, stdin []byte) ([]byte, error) {
@@ -446,6 +449,41 @@ func TestServer_DailyReviewAgent_RunsConfiguredCommand(t *testing.T) {
 	}
 	if ctx.TaskCount == 0 {
 		t.Fatalf("agent stdin review context is empty: %#v", ctx)
+	}
+}
+
+func TestServer_DailyReviewAgent_FallsBackToSharedConfig(t *testing.T) {
+	var gotArgv []string
+	var gotDeadline bool
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
+	}, func(cfg *config.Config) {
+		cfg.Agent.Command = []string{"shared-agent", "--daily", "literal argument"}
+		cfg.Agent.TimeoutSeconds = 15
+	}, Options{
+		CSRFToken: "csrf-token",
+		RunAgent: func(ctx context.Context, argv []string, _ []byte) ([]byte, error) {
+			gotArgv = append([]string(nil), argv...)
+			_, gotDeadline = ctx.Deadline()
+			return []byte("shared output"), nil
+		},
+	})
+
+	resp := doFormPost(t, ts.URL+"/api/daily-review/agent", agentForm("csrf-token"), "csrf-token")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want 200; body=%q", resp.StatusCode, body)
+	}
+	payload := decodeAgentResult(t, body)
+	if !payload.OK || !payload.Enabled || payload.Output != "shared output" {
+		t.Fatalf("payload = %#v, want shared agent output", payload)
+	}
+	wantArgv := []string{"shared-agent", "--daily", "literal argument"}
+	if strings.Join(gotArgv, "\x00") != strings.Join(wantArgv, "\x00") {
+		t.Fatalf("argv = %#v, want %#v", gotArgv, wantArgv)
+	}
+	if !gotDeadline {
+		t.Fatal("shared agent timeout did not produce a context deadline")
 	}
 }
 
@@ -547,39 +585,6 @@ func TestServer_DailyReviewAgent_CommandFailureReturns500(t *testing.T) {
 	}
 	if payload := decodeManagementError(t, body); payload.OK || payload.Code != "internal_error" {
 		t.Fatalf("payload = %#v, want internal_error", payload)
-	}
-}
-
-// TestRunAgentCommand_StdinToStdout exercises the default runner: it invokes the
-// argv without a shell, pipes stdin through, and returns stdout. `cat` echoes its
-// stdin, so the returned bytes must equal the payload.
-func TestRunAgentCommand_StdinToStdout(t *testing.T) {
-	payload := []byte(`{"task_count":1}`)
-	out, err := runAgentCommand(context.Background(), []string{"cat"}, payload)
-	if err != nil {
-		t.Fatalf("runAgentCommand: %v", err)
-	}
-	if string(out) != string(payload) {
-		t.Fatalf("stdout = %q, want %q", out, payload)
-	}
-}
-
-// TestRunAgentCommand_Timeout proves the runner honors context cancellation: a
-// command that outlives the deadline is killed and returns an error, with the
-// context reporting DeadlineExceeded so the handler can classify it as a timeout.
-func TestRunAgentCommand_Timeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	start := time.Now()
-	_, err := runAgentCommand(ctx, []string{"sleep", "5"}, nil)
-	if err == nil {
-		t.Fatalf("runAgentCommand: want error from killed command")
-	}
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Fatalf("command was not killed promptly: took %s", elapsed)
-	}
-	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		t.Fatalf("ctx.Err() = %v, want DeadlineExceeded", ctx.Err())
 	}
 }
 

@@ -26,6 +26,8 @@ type Config struct {
 	Open        OpenConfig        `toml:"open"`
 	Serve       ServeConfig       `toml:"serve"`
 	New         NewConfig         `toml:"new"`
+	Related     RelatedConfig     `toml:"related"`
+	Agent       AgentConfig       `toml:"agent"`
 	Cockpit     CockpitConfig     `toml:"cockpit"`
 
 	// SourcePath is the resolved path of the config file that was loaded.
@@ -78,6 +80,21 @@ func (s ServeConfig) BrowserEnabled() bool {
 type NewConfig struct {
 	// Routes maps a template name to a vault-relative folder.
 	Routes map[string]string `toml:"routes"`
+}
+
+// RelatedConfig configures the read-only contextual-recall engine.
+type RelatedConfig struct {
+	// MetadataProperties lists frontmatter properties whose values contribute
+	// to metadata similarity. An explicitly empty list disables that signal.
+	MetadataProperties []string `toml:"metadata_properties"`
+}
+
+// AgentConfig configures explicit local agent execution. Command is an argv
+// array: its first element is the executable and the rest are passed as literal
+// arguments without shell interpretation.
+type AgentConfig struct {
+	Command        []string `toml:"command"`
+	TimeoutSeconds int      `toml:"timeout_seconds"`
 }
 
 // CockpitConfig tunes the Daily Fix Cockpit (the read-only hygiene queue served
@@ -153,6 +170,17 @@ type CockpitConfig struct {
 // DefaultIgnore lists the vault-relative paths that are always skipped.
 var DefaultIgnore = []string{".git", ".obsidian", "Attachments", "Archive", "Trash"}
 
+// DefaultRelatedMetadataProperties are the frontmatter properties considered
+// by contextual-recall metadata scoring when [related] is not configured.
+var DefaultRelatedMetadataProperties = []string{
+	"categories",
+	"tags",
+	"topics",
+	"type",
+	"parent",
+	"area",
+}
+
 // DefaultJournalDir is the vault-relative directory reserved for undo journal
 // entries.
 const DefaultJournalDir = ".bnotes/journal"
@@ -187,9 +215,13 @@ const DefaultCockpitMaxWIP = 3
 // status is treated as stale.
 const DefaultCockpitStaleStatusDays = 30
 
-// DefaultCockpitAgentTimeoutSeconds is the default timeout applied to the
-// optional AI daily-review agent command.
-const DefaultCockpitAgentTimeoutSeconds = 60
+// DefaultAgentTimeoutSeconds is the default timeout applied to shared agent
+// commands.
+const DefaultAgentTimeoutSeconds = 60
+
+// DefaultCockpitAgentTimeoutSeconds preserves the default for the legacy
+// cockpit-specific agent override.
+const DefaultCockpitAgentTimeoutSeconds = DefaultAgentTimeoutSeconds
 
 const (
 	envVault   = "BNOTES_VAULT"

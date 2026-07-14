@@ -1,0 +1,470 @@
+package cli
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+)
+
+const (
+	defaultRelatedLimit = 10
+	maxRelatedLimit     = 100
+)
+
+type relatedOptions struct {
+	modeText    string
+	limit       int
+	paths       bool
+	nullSep     bool
+	asJSON      bool
+	interactive bool
+	openResult  bool
+}
+
+type relatedQuery struct {
+	source    recall.Document
+	documents []recall.Document
+	mode      recall.Mode
+	weights   recall.Weights
+	results   []recall.Result
+}
+
+type relatedSelection struct {
+	absolutePath string
+	relativePath string
+}
+
+// relatedPicker is the fzf invocation used by `related --interactive`.
+// Tests replace it so they never launch an external UI.
+var relatedPicker pickerFunc = RunFZF
+
+// relatedOpenExec is the editor invocation used by `related --open`.
+// Tests replace it so they never replace the test process.
+var relatedOpenExec = func(editorSpec, file string) error {
+	return runEditor(editorSpec, file)
+}
+
+// relatedNow is shared by ranking, state writes, and feedback date parsing.
+// Tests replace it to pin local-calendar and recency behavior.
+var relatedNow = time.Now
+
+// NewRelatedCmd returns the contextual-recall command.
+func NewRelatedCmd() *cobra.Command {
+	options := relatedOptions{
+		modeText: string(recall.ModeBalanced),
+		limit:    defaultRelatedLimit,
+	}
+
+	cmd := &cobra.Command{
+		Use:           "related <note>",
+		Short:         "Rank notes related to a source note",
+		Long:          "Rank notes related to a source note using deterministic text, graph, metadata, and recall signals. The source may be a title, relative path, or absolute path.",
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mode, err := validateRelatedOptions(options)
+			if err != nil {
+				return err
+			}
+
+			cfg := ConfigFromContext(cmd.Context())
+			if cfg == nil {
+				return errors.New("related: no config in context")
+			}
+			v, err := vault.Open(cfg)
+			if err != nil {
+				return err
+			}
+			commandNow := relatedNow()
+			stateStore := recall.NewStateStore(v.Root, recall.WithClock(func() time.Time { return commandNow }))
+			if err := stateStore.Validate(); err != nil {
+				return err
+			}
+
+			queryResult, err := buildRelatedQuery(v, args[0], mode, recall.RankOptions{
+				Now:    func() time.Time { return commandNow },
+				Recall: stateStore,
+			})
+			if err != nil {
+				return err
+			}
+			if len(queryResult.results) > options.limit {
+				queryResult.results = queryResult.results[:options.limit]
+			}
+			if options.interactive {
+				selection, err := selectRelatedPath(v.Root, queryResult.results, cfg.Fzf.Args)
+				if err != nil {
+					return err
+				}
+				if selection.absolutePath == "" {
+					return nil
+				}
+				if err := stateStore.RecordOpened(queryResult.source.Path, selection.relativePath); err != nil {
+					return fmt.Errorf("related: record selected note: %w", err)
+				}
+				if !options.openResult {
+					_, err := fmt.Fprintln(cmd.OutOrStdout(), selection.absolutePath)
+					return err
+				}
+
+				editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
+				if errors.Is(err, editutil.ErrNoEditorConfigured) {
+					return errors.New("related: --open requires [open].editor or $EDITOR")
+				}
+				if err != nil {
+					return fmt.Errorf("related: resolve editor: %w", err)
+				}
+				if err := relatedOpenExec(editorSpec, selection.absolutePath); err != nil {
+					return fmt.Errorf("related: open selected note: %w", err)
+				}
+				return nil
+			}
+
+			out := cmd.OutOrStdout()
+			switch {
+			case options.asJSON:
+				return writeRelatedJSON(out, queryResult)
+			case options.paths:
+				return writeRelatedPaths(out, v.Root, queryResult.results, options.nullSep)
+			default:
+				return writeRelatedHuman(out, queryResult.results)
+			}
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVar(&options.modeText, "mode", options.modeText, "ranking mode: balanced, rediscover, or connect")
+	flags.IntVar(&options.limit, "limit", options.limit, "maximum results to return (1-100)")
+	flags.BoolVar(&options.paths, "paths", false, "print only absolute result paths")
+	flags.BoolVarP(&options.nullSep, "null", "0", false, "with --paths, separate paths with NUL instead of newline")
+	flags.BoolVar(&options.asJSON, "json", false, "emit stable JSON with ranking details")
+	flags.BoolVarP(&options.interactive, "interactive", "i", false, "choose a related note with fzf")
+	flags.BoolVar(&options.openResult, "open", false, "with --interactive, open the selected note in the configured editor")
+	cmd.AddCommand(NewRelatedFeedbackCmd())
+
+	return cmd
+}
+
+func validateRelatedOptions(options relatedOptions) (recall.Mode, error) {
+	if options.openResult && !options.interactive {
+		return "", errors.New("related: --open requires --interactive")
+	}
+	if options.interactive && options.asJSON {
+		return "", errors.New("related: --interactive cannot be used with --json")
+	}
+	if options.interactive && options.paths {
+		return "", errors.New("related: --interactive cannot be used with --paths")
+	}
+	if options.interactive && options.nullSep {
+		return "", errors.New("related: --interactive cannot be used with --null")
+	}
+	if options.asJSON && options.paths {
+		return "", errors.New("related: --json cannot be used with --paths")
+	}
+	if options.asJSON && options.nullSep {
+		return "", errors.New("related: --json cannot be used with --null")
+	}
+	if options.nullSep && !options.paths {
+		return "", errors.New("related: --null requires --paths")
+	}
+	if options.limit < 1 || options.limit > maxRelatedLimit {
+		return "", fmt.Errorf("related: --limit must be between 1 and %d (got %d)", maxRelatedLimit, options.limit)
+	}
+	mode, err := recall.ParseMode(options.modeText)
+	if err != nil {
+		return "", fmt.Errorf(
+			"related: --mode must be balanced, rediscover, or connect (got %q)",
+			options.modeText,
+		)
+	}
+	return mode, nil
+}
+
+func selectRelatedPath(root string, results []recall.Result, extraArgs []string) (relatedSelection, error) {
+	if len(results) == 0 {
+		return relatedSelection{}, nil
+	}
+
+	rows := make([]string, len(results))
+	selectionsByRow := make(map[string]relatedSelection, len(results))
+	for index, result := range results {
+		absolute := filepath.Join(root, filepath.FromSlash(result.Path))
+		if strings.ContainsAny(absolute, "\t\r\n") {
+			return relatedSelection{}, fmt.Errorf("related: cannot select path containing a tab or newline: %q", absolute)
+		}
+
+		relationship := string(result.Relationship)
+		if relationship == "" {
+			relationship = "none"
+		}
+		visible := fmt.Sprintf("%d. [%s] %s", index+1, relationship, cleanRelatedFZFField(result.Path))
+		reasons := relatedFZFReasons(result.Reasons)
+		row := strings.Join([]string{absolute, visible, reasons}, "\t")
+		rows[index] = row
+		selectionsByRow[row] = relatedSelection{absolutePath: absolute, relativePath: result.Path}
+	}
+
+	selected, err := relatedPicker(rows, relatedFZFArgs(extraArgs))
+	if err != nil {
+		return relatedSelection{}, err
+	}
+	if len(selected) == 0 {
+		return relatedSelection{}, nil
+	}
+	if len(selected) != 1 {
+		return relatedSelection{}, fmt.Errorf("related: fzf returned %d selections; expected exactly one", len(selected))
+	}
+	selection, ok := selectionsByRow[selected[0]]
+	if !ok {
+		return relatedSelection{}, errors.New("related: fzf returned an invalid selection; remove output-shaping options from [fzf].args")
+	}
+	return selection, nil
+}
+
+func relatedFZFReasons(reasons []recall.Reason) string {
+	if len(reasons) == 0 {
+		return "no reasons available"
+	}
+	limit := len(reasons)
+	if limit > 3 {
+		limit = 3
+	}
+	parts := make([]string, limit)
+	for index := 0; index < limit; index++ {
+		parts[index] = fmt.Sprintf("%s: %s", reasons[index].Kind, cleanRelatedFZFField(reasons[index].Detail))
+	}
+	return strings.Join(parts, " | ")
+}
+
+func cleanRelatedFZFField(value string) string {
+	return strings.NewReplacer("\t", " ", "\r", " ", "\n", " ").Replace(value)
+}
+
+func relatedFZFArgs(extraArgs []string) []string {
+	hasFlag := func(flag string) bool {
+		for _, arg := range extraArgs {
+			if arg == flag || strings.HasPrefix(arg, flag+"=") {
+				return true
+			}
+		}
+		return false
+	}
+
+	hasWithNth := hasFlag("--with-nth")
+	hasNth := hasFlag("--nth")
+	var injected []string
+	if !hasFlag("--delimiter") {
+		injected = append(injected, "--delimiter", "\t")
+	}
+	if !hasWithNth {
+		injected = append(injected, "--with-nth", "{2}\t{3}")
+	}
+	if !hasNth && !hasWithNth {
+		injected = append(injected, "--nth", "1..")
+	}
+	if !hasFlag("--tabstop") {
+		injected = append(injected, "--tabstop", "1")
+	}
+	if !hasFlag("--no-hscroll") && !hasFlag("--hscroll-off") {
+		injected = append(injected, "--no-hscroll")
+	}
+	if !hasFlag("--preview") {
+		injected = append(injected, "--preview", "cat {1}")
+	}
+	if !hasFlag("--preview-window") {
+		injected = append(injected, "--preview-window", "right:60%")
+	}
+	return append(injected, extraArgs...)
+}
+
+func buildRelatedQuery(
+	v *vault.Vault,
+	sourceArg string,
+	mode recall.Mode,
+	rankOptions recall.RankOptions,
+) (relatedQuery, error) {
+	source, err := resolveNoteTarget(v, sourceArg)
+	if err != nil {
+		return relatedQuery{}, err
+	}
+	notes, err := v.Notes()
+	if err != nil {
+		return relatedQuery{}, err
+	}
+
+	extractOptions := recall.ExtractOptions{
+		MetadataProperties: append([]string(nil), v.Cfg.Related.MetadataProperties...),
+	}
+	documents, err := recall.ExtractCorpus(v.Root, notes, extractOptions)
+	if err != nil {
+		return relatedQuery{}, err
+	}
+	sourceDocument, err := recall.ExtractDocument(v.Root, source, extractOptions)
+	if err != nil {
+		return relatedQuery{}, err
+	}
+
+	graph := query.BuildGraphForRoot(v.Root, notes)
+	ranker, err := recall.BuildRanker(documents, graph, rankOptions)
+	if err != nil {
+		return relatedQuery{}, err
+	}
+	results, err := ranker.Rank(sourceDocument.Path, mode)
+	if err != nil {
+		return relatedQuery{}, err
+	}
+
+	return relatedQuery{
+		source:    sourceDocument,
+		documents: documents,
+		mode:      mode,
+		weights:   ranker.Weights(),
+		results:   results,
+	}, nil
+}
+
+func writeRelatedHuman(w io.Writer, results []recall.Result) error {
+	for index, result := range results {
+		relationship := string(result.Relationship)
+		if relationship == "" {
+			relationship = "none"
+		}
+		if _, err := fmt.Fprintf(w, "%d. [%s] %s\n", index+1, relationship, result.Path); err != nil {
+			return err
+		}
+		for reasonIndex, reason := range result.Reasons {
+			if reasonIndex == 3 {
+				break
+			}
+			if _, err := fmt.Fprintf(w, "   %s: %s\n", reason.Kind, reason.Detail); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func writeRelatedPaths(w io.Writer, root string, results []recall.Result, nullSep bool) error {
+	separator := byte('\n')
+	if nullSep {
+		separator = 0
+	}
+	for _, result := range results {
+		absolute := filepath.Join(root, filepath.FromSlash(result.Path))
+		if _, err := fmt.Fprintf(w, "%s%c", absolute, separator); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type relatedJSONResponse struct {
+	Source         relatedJSONNote     `json:"source"`
+	Mode           recall.Mode         `json:"mode"`
+	RankingVersion int                 `json:"ranking_version"`
+	Weights        relatedJSONWeights  `json:"weights"`
+	Results        []relatedJSONResult `json:"results"`
+}
+
+type relatedJSONNote struct {
+	Path  string `json:"path"`
+	Title string `json:"title"`
+}
+
+type relatedJSONWeights struct {
+	Text     float64 `json:"text"`
+	Graph    float64 `json:"graph"`
+	Metadata float64 `json:"metadata"`
+	Recall   float64 `json:"recall"`
+}
+
+type relatedJSONResult struct {
+	Rank         int                      `json:"rank"`
+	Path         string                   `json:"path"`
+	Title        string                   `json:"title"`
+	Score        float64                  `json:"score"`
+	Relationship recall.RelationshipClass `json:"relationship"`
+	Bridge       *relatedJSONNote         `json:"bridge,omitempty"`
+	Signals      relatedJSONSignals       `json:"signals"`
+	Reasons      []relatedJSONReason      `json:"reasons"`
+}
+
+type relatedJSONSignals struct {
+	Text     float64 `json:"text"`
+	Graph    float64 `json:"graph"`
+	Metadata float64 `json:"metadata"`
+	Recall   float64 `json:"recall"`
+}
+
+type relatedJSONReason struct {
+	Kind         recall.ReasonKind `json:"kind"`
+	Contribution float64           `json:"contribution"`
+	Detail       string            `json:"detail"`
+}
+
+func writeRelatedJSON(w io.Writer, queryResult relatedQuery) error {
+	results := make([]relatedJSONResult, len(queryResult.results))
+	for index, result := range queryResult.results {
+		reasons := make([]relatedJSONReason, len(result.Reasons))
+		for reasonIndex, reason := range result.Reasons {
+			reasons[reasonIndex] = relatedJSONReason{
+				Kind:         reason.Kind,
+				Contribution: reason.Contribution,
+				Detail:       reason.Detail,
+			}
+		}
+
+		jsonResult := relatedJSONResult{
+			Rank:         index + 1,
+			Path:         result.Path,
+			Title:        result.Title,
+			Score:        result.Score,
+			Relationship: result.Relationship,
+			Signals: relatedJSONSignals{
+				Text:     result.Signals.Text,
+				Graph:    result.Signals.Graph,
+				Metadata: result.Signals.Metadata,
+				Recall:   result.Signals.Recall,
+			},
+			Reasons: reasons,
+		}
+		if result.BridgePath != "" || result.BridgeTitle != "" {
+			jsonResult.Bridge = &relatedJSONNote{Path: result.BridgePath, Title: result.BridgeTitle}
+		}
+		results[index] = jsonResult
+	}
+
+	response := relatedJSONResponse{
+		Source: relatedJSONNote{
+			Path:  queryResult.source.Path,
+			Title: queryResult.source.Title,
+		},
+		Mode:           queryResult.mode,
+		RankingVersion: recall.RankingVersion,
+		Weights: relatedJSONWeights{
+			Text:     queryResult.weights.Text,
+			Graph:    queryResult.weights.Graph,
+			Metadata: queryResult.weights.Metadata,
+			Recall:   queryResult.weights.Recall,
+		},
+		Results: results,
+	}
+
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(response)
+}

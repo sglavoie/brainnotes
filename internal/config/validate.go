@@ -30,8 +30,29 @@ func validate(cfg *Config) error {
 	if err := validateRoutes(cfg); err != nil {
 		return err
 	}
+	if err := validateAgent(cfg); err != nil {
+		return err
+	}
 	if err := validateCockpit(cfg); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateAgent(cfg *Config) error {
+	if cfg.Agent.TimeoutSeconds < 0 {
+		return fmt.Errorf("config: agent.timeout_seconds %d must not be negative", cfg.Agent.TimeoutSeconds)
+	}
+	if len(cfg.Agent.Command) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Agent.Command[0]) == "" {
+		return errors.New("config: agent.command[0] must name an executable")
+	}
+	for i, arg := range cfg.Agent.Command {
+		if strings.IndexByte(arg, 0) >= 0 {
+			return fmt.Errorf("config: agent.command[%d] must not contain a NUL byte", i)
+		}
 	}
 	return nil
 }
