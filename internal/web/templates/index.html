@@ -365,6 +365,29 @@
           </section>
         {{end}}
 
+        {{if .Diagnostics.SkippedNotes}}
+          <section class="diagnostic-section" id="diagnostic-skipped-notes" aria-labelledby="diagnostic-skipped-notes-heading">
+            <h3 id="diagnostic-skipped-notes-heading">Skipped notes</h3>
+            <p class="diagnostic-hint">These notes exceeded the fixed 2-second read timeout and are skipped for the rest of this <code>bn serve</code> session; they are excluded from recent notes, the graph, search, and the health counts above. Restart the server to retry them.</p>
+            <div class="table-wrap">
+              <table class="diagnostic-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range .Diagnostics.SkippedNotes}}
+                    <tr>
+                      <th scope="row"><code>{{.Path}}</code></th>
+                    </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{end}}
+
         {{if .Diagnostics.SchemaViolations}}
           <section class="diagnostic-section" id="diagnostic-schema-violations" aria-labelledby="diagnostic-schema-violations-heading">
             <h3 id="diagnostic-schema-violations-heading">Schema violations</h3>

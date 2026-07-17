@@ -61,14 +61,18 @@ type FixOutcome struct {
 	Journal *journal.Entry `json:"-"`
 }
 
-// Fixer plans and applies safe fixes for cockpit tasks against a vault. It
-// reloads the vault for each Plan/Apply call so previews and applies always see
-// current on-disk state; at the documented working size (~300 notes) the reload
-// is cheap and keeps the planners stateless.
+// Fixer plans and applies safe fixes for cockpit tasks against a vault. By
+// default it reloads the vault for each Plan/Apply call so previews and applies
+// always see current on-disk state; at the documented working size (~300 notes)
+// the reload is cheap and keeps the planners stateless. A Fixer built with
+// NewFixerFromSnapshot instead reuses a preloaded view, so a caller that already
+// performed a bounded/resilient load (e.g. bn serve) never triggers a second,
+// unbounded walk that could stall on a quarantined note.
 type Fixer struct {
-	vault   *vault.Vault
-	cfg     *config.Config
-	command string
+	vault    *vault.Vault
+	cfg      *config.Config
+	command  string
+	snapshot *Snapshot
 }
 
 // NewFixer returns a Fixer bound to a vault and its config. command, when set,
@@ -82,6 +86,22 @@ func NewFixer(v *vault.Vault, cfg *config.Config, command string) *Fixer {
 		cfg = &config.Config{}
 	}
 	return &Fixer{vault: v, cfg: cfg, command: command}
+}
+
+// NewFixerFromSnapshot returns a Fixer that plans and applies against an
+// already-loaded vault view instead of walking the vault on each Plan/Apply.
+// Callers that hold a resilient, bounded snapshot (e.g. bn serve, which excludes
+// notes whose read timed out) use this so a stalled note the snapshot already
+// dropped is never re-read during a fix. The snapshot must describe current
+// on-disk state for the notes a fix touches, since the planners diff against it;
+// bn serve refreshes the snapshot immediately before fixing to guarantee this.
+// The fix's actual writes still go through noteops against the live filesystem,
+// so destination-conflict detection is unaffected by the preloaded view.
+func NewFixerFromSnapshot(v *vault.Vault, cfg *config.Config, command string, snapshot Snapshot) *Fixer {
+	f := NewFixer(v, cfg, command)
+	snap := snapshot
+	f.snapshot = &snap
+	return f
 }
 
 // Plan previews the effect of applying action to task without writing anything.
@@ -136,7 +156,7 @@ func (f *Fixer) loadContext(task Task, action ActionKind) (vaultData, map[string
 	if !taskOffersAction(task, action) {
 		return vaultData{}, nil, fmt.Errorf("cockpit: task %s does not offer action %q", task.ID, action)
 	}
-	data, err := loadVaultData(f.vault)
+	data, err := f.loadData()
 	if err != nil {
 		return vaultData{}, nil, err
 	}
@@ -145,6 +165,16 @@ func (f *Fixer) loadContext(task Task, action ActionKind) (vaultData, map[string
 		byRel[item.rel] = item.note
 	}
 	return data, byRel, nil
+}
+
+// loadData returns the vault view the planners diff against: the preloaded
+// snapshot when the Fixer was built with one (avoiding a second, potentially
+// unbounded walk), otherwise a fresh full load.
+func (f *Fixer) loadData() (vaultData, error) {
+	if f.snapshot != nil {
+		return vaultDataFromSnapshot(*f.snapshot), nil
+	}
+	return loadVaultData(f.vault)
 }
 
 // taskOffersAction reports whether task advertises action in its Actions set.

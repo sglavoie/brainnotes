@@ -59,6 +59,14 @@ type Snapshot struct {
 // snapshot describing the same load, it produces the identical queue: it feeds
 // the same buildQueueFromData core BuildQueue uses.
 func BuildQueueFromSnapshot(snapshot Snapshot, cfg *config.Config, root string) Queue {
+	return buildQueueFromData(vaultDataFromSnapshot(snapshot), cfg, root, time.Now())
+}
+
+// vaultDataFromSnapshot adapts the exported Snapshot into the package-internal
+// vaultData a single load produces. Both BuildQueueFromSnapshot and the
+// snapshot-backed Fixer path (loadContext) share it so a caller that already
+// loaded the vault reuses that work instead of triggering a second walk.
+func vaultDataFromSnapshot(snapshot Snapshot) vaultData {
 	loaded := make([]loadedNote, 0, len(snapshot.Notes))
 	notes := make([]*vault.Note, 0, len(snapshot.Notes))
 	for _, item := range snapshot.Notes {
@@ -72,13 +80,12 @@ func BuildQueueFromSnapshot(snapshot Snapshot, cfg *config.Config, root string) 
 	sort.Slice(parseErrors, func(i, j int) bool {
 		return parseErrors[i].rel < parseErrors[j].rel
 	})
-	data := vaultData{
+	return vaultData{
 		loaded:            loaded,
 		notes:             notes,
 		graph:             snapshot.Graph,
 		frontmatterErrors: parseErrors,
 	}
-	return buildQueueFromData(data, cfg, root, time.Now())
 }
 
 // buildQueueFromData assembles tasks from an already-loaded vault snapshot. It

@@ -653,7 +653,21 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `POST /api/fixes/preview` then `POST /api/fixes/apply` to preview and apply a single task's fix
 - `GET /api/daily-review/context` read-only redacted daily-review snapshot and `POST /api/daily-review/agent` optional local AI review
 
-The home page starts with Daily Fixes: the same hygiene queue as `bn doctor`,
+Resilient note loading (server-only): `bn serve` bounds each note read to a
+fixed 2-second timeout so a single stalled file cannot hang a page load. A note
+that exceeds that timeout is quarantined for the rest of the `bn serve` process
+lifetime — it is skipped without a re-read on every later request and excluded
+from recent notes, search, the graph, the cockpit queue, and the health counts.
+Skipped notes surface in their own "Skipped notes" diagnostic card on the home
+page, so the omission is visible rather than silent. Quarantine is in-memory
+only and never touches disk; **restart** the server to clear it and retry a
+previously skipped note. This bound is server-only: `bn doctor` and every other
+CLI command keep their original
+full-vault loading semantics and read every note without a per-note timeout.
+
+The home page starts with Daily Fixes: the same hygiene queue as `bn doctor`
+(over the notes the server successfully loaded — a note quarantined by the
+2-second timeout above is absent from the web queue but still scanned by the CLI),
 covering frontmatter parse errors, schema violations, broken wikilink targets,
 duplicate titles, orphan notes, dead-end notes, long-tail property values, and —
 when their `[cockpit]` keys are configured — the advisory rules `sensitive_content`,
@@ -677,7 +691,10 @@ totals, so the daily panel shows the highest-priority findings without losing th
 active/hidden tallies. `GET /api/daily-review/context` returns the same
 deterministic, redacted snapshot as `bn doctor --review-context` — per-kind
 groups and ordered items with server-redacted locations, no file hashes, and no
-raw bodies — so the CLI and web review surfaces cannot drift.
+raw bodies — so the CLI and web review surfaces cannot drift for the notes the
+server loaded. The one intended difference is coverage, not format: a note
+quarantined by the server-only 2-second load timeout is absent from the web
+snapshot while `bn doctor` still includes it from its full-vault scan.
 
 `POST /api/daily-review/agent` is an opt-in, local-only AI review. A non-empty
 legacy `cockpit.agent_command` remains the daily-review-only override (split on
@@ -801,7 +818,13 @@ bn doctor [--json] [--daily] [--review-context] [--folder path]
 Reports the current hygiene queue for the vault. It is read-only and never
 modifies files; the exit code is always `0` for a successful scan, and an empty
 queue means the vault is clean. The queue is the CLI face of the same Daily Fix
-Cockpit the web UI serves (`bn serve`), so both surfaces show identical tasks.
+Cockpit the web UI serves (`bn serve`), so both surfaces show identical tasks
+for every note both surfaces loaded. `bn doctor` always reads the full vault
+with no per-note timeout; the one intended exception is that `bn serve` bounds
+each note read to a fixed 2-second timeout and quarantines a timed-out note (it
+appears in the server's "Skipped notes" diagnostic and is absent from the web
+queue until you **restart** the server), whereas `bn doctor` still includes that
+note. See `bn serve` above for the full description of this server-only bound.
 
 Detected rule kinds:
 

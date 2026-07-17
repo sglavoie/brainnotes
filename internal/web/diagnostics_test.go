@@ -2,9 +2,12 @@ package web
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -129,6 +132,60 @@ func TestServerIndexToleratesFrontmatterParseErrors(t *testing.T) {
 	}
 }
 
+func TestServerIndexRendersSkippedNotesFromSharedSnapshot(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "Good.md", "---\nstatus: active\n---\n[[Missing]]\n")
+	writeTestFile(t, root, "Bad.md", "---\n: bad\n---\nBody\n")
+	// A path with HTML metacharacters proves the skipped path is rendered safely.
+	writeTestFile(t, root, "Blocked <script>.md", "---\ntitle: Blocked\n---\nBody\n")
+	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	srv, err := NewServer(cfg, v, Options{})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	// Drive one blocked load through the shared snapshot the homepage now uses.
+	blockedPath := filepath.Join(root, "Blocked <script>.md")
+	load, _ := newBlockingLoader(t, blockedPath)
+	srv.state.load = load
+	srv.state.loadTimeout = 50 * time.Millisecond
+
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+
+	// The skipped note gets its own diagnostic section...
+	if !strings.Contains(body, `id="diagnostic-skipped-notes"`) {
+		t.Fatalf("index missing skipped-notes section: %q", body)
+	}
+	// ...with the vault-relative path HTML-escaped, never as raw markup.
+	if !strings.Contains(body, "Blocked &lt;script&gt;.md") {
+		t.Fatalf("skipped path not rendered escaped: %q", body)
+	}
+	if strings.Contains(body, "Blocked <script>.md") {
+		t.Fatalf("skipped path leaked unescaped markup: %q", body)
+	}
+	// A skipped note must never surface as a loaded/recent note link.
+	if strings.Contains(body, `href="/n/blocked`) {
+		t.Fatalf("skipped note leaked into loaded content routes: %q", body)
+	}
+	// Frontmatter parse errors keep their existing, separate treatment.
+	if !strings.Contains(body, `id="diagnostic-frontmatter-errors"`) {
+		t.Fatalf("index dropped frontmatter-error section: %q", body)
+	}
+	if !strings.Contains(body, "Bad.md") {
+		t.Fatalf("frontmatter parse error not rendered: %q", body)
+	}
+}
+
 func TestBuildDiagnosticsSummarySchemaEmptyBehavior(t *testing.T) {
 	v, _, _ := newFilterTestSnapshot(t, map[string]string{
 		"Note.md": "---\nstatus: someday\n---\nBody\n",
@@ -195,6 +252,67 @@ func TestBuildDiagnosticsSummaryLongTailIgnoresConfiguredProperties(t *testing.T
 	sort.Strings(queueDetails)
 	if !sameStrings(cardDetails, queueDetails) {
 		t.Fatalf("card set %#v != cockpit queue set %#v", cardDetails, queueDetails)
+	}
+}
+
+func TestLoadDiagnosticsClassifiesHealthyParseAndTimeout(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "Good.md", "---\nstatus: active\n---\n[[Missing]]\n")
+	writeTestFile(t, root, "Bad.md", "---\n: bad\n---\nBody\n")
+	writeTestFile(t, root, "Blocked.md", "---\ntitle: Blocked\n---\nBody\n")
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	blockedPath := filepath.Join(root, "Blocked.md")
+	load, callCount := newBlockingLoader(t, blockedPath)
+
+	result, err := loadVaultNotes(v, load, 50*time.Millisecond, nil)
+	if err != nil {
+		t.Fatalf("loadVaultNotes: %v", err)
+	}
+
+	if len(result.loaded) != 1 || result.loaded[0].rel != "Good.md" {
+		t.Fatalf("loaded = %#v, want only Good.md", result.loaded)
+	}
+	if len(result.parseErrors) != 1 || result.parseErrors[0].Path != "Bad.md" {
+		t.Fatalf("parseErrors = %#v, want Bad.md", result.parseErrors)
+	}
+	if len(result.skipped) != 1 || result.skipped[0].Path != "Blocked.md" {
+		t.Fatalf("skipped = %#v, want Blocked.md", result.skipped)
+	}
+	if len(result.timedOut) != 1 || result.timedOut[0] != blockedPath {
+		t.Fatalf("timedOut = %#v, want %q", result.timedOut, blockedPath)
+	}
+	if got := callCount(blockedPath); got != 1 {
+		t.Fatalf("blocked loader called %d times, want 1", got)
+	}
+}
+
+func TestLoadDiagnosticsSkipsQuarantinedWithoutRead(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "Good.md", "---\nstatus: active\n---\nBody\n")
+	writeTestFile(t, root, "Blocked.md", "---\ntitle: Blocked\n---\nBody\n")
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	blockedPath := filepath.Join(root, "Blocked.md")
+	load, callCount := newBlockingLoader(t) // nothing blocks; the path is pre-quarantined
+	quarantined := map[string]struct{}{blockedPath: {}}
+
+	result, err := loadVaultNotes(v, load, 50*time.Millisecond, quarantined)
+	if err != nil {
+		t.Fatalf("loadVaultNotes: %v", err)
+	}
+
+	if len(result.loaded) != 1 || result.loaded[0].rel != "Good.md" {
+		t.Fatalf("loaded = %#v, want only Good.md", result.loaded)
+	}
+	if len(result.skipped) != 1 || result.skipped[0].Path != "Blocked.md" {
+		t.Fatalf("skipped = %#v, want Blocked.md", result.skipped)
+	}
+	if len(result.timedOut) != 0 {
+		t.Fatalf("a pre-quarantined skip must not re-report timedOut: %#v", result.timedOut)
+	}
+	if got := callCount(blockedPath); got != 0 {
+		t.Fatalf("quarantined path was read %d times, want 0", got)
 	}
 }
 

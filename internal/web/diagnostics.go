@@ -24,6 +24,7 @@ type diagnosticsSummary struct {
 	DeadEndNotes      []diagnosticNote
 	DuplicateTitles   []diagnosticGroup
 	FrontmatterErrors []diagnosticFileError
+	SkippedNotes      []diagnosticFileError
 	SchemaViolations  []diagnosticGroup
 	LongTailValues    []diagnosticLongTailGroup
 }
@@ -75,6 +76,7 @@ type diagnosticsData struct {
 	notes             []*vault.Note
 	graph             *query.Graph
 	frontmatterErrors []diagnosticFileError
+	skippedNotes      []diagnosticFileError
 }
 
 func buildDiagnosticsSummary(v *vault.Vault, cfg *config.Config) (diagnosticsSummary, error) {
@@ -93,21 +95,49 @@ func buildDiagnosticsSummary(v *vault.Vault, cfg *config.Config) (diagnosticsSum
 }
 
 func loadDiagnosticsData(v *vault.Vault) (diagnosticsData, error) {
-	loaded, frontmatterErrors, err := loadDiagnosticsNotes(v)
+	// Load through the shared bounded loader so the diagnostics walk classifies
+	// timed-out reads the same way the server snapshot does. This call keeps no
+	// persistent quarantine of its own; the shared snapshot owns that.
+	result, err := loadVaultNotes(v, nil, 0, nil)
 	if err != nil {
 		return diagnosticsData{}, err
 	}
-	notes := make([]*vault.Note, 0, len(loaded))
-	for _, item := range loaded {
+	notes := make([]*vault.Note, 0, len(result.loaded))
+	for _, item := range result.loaded {
 		notes = append(notes, item.note)
 	}
 
 	return diagnosticsData{
-		loaded:            loaded,
+		loaded:            result.loaded,
 		notes:             notes,
 		graph:             query.BuildGraphForRoot(v.Root, notes),
-		frontmatterErrors: frontmatterErrors,
+		frontmatterErrors: result.parseErrors,
+		skippedNotes:      result.skipped,
 	}, nil
+}
+
+// diagnosticsDataFromSnapshot adapts the resilient shared snapshot into the
+// diagnosticsData view the homepage diagnostics summary and Daily Fixes panel
+// consume, so a single bounded load feeds index data, health diagnostics, and
+// fixes counts without re-walking the vault. The snapshot already carries the
+// classified frontmatter parse errors and skipped (timed-out) notes; loaded
+// pairs each healthy note with its vault-relative path in the snapshot's walk
+// order.
+func diagnosticsDataFromSnapshot(snapshot vaultSnapshot, root string) diagnosticsData {
+	loaded := make([]diagnosticLoadedNote, 0, len(snapshot.notes))
+	for _, note := range snapshot.notes {
+		if note == nil {
+			continue
+		}
+		loaded = append(loaded, diagnosticLoadedNote{note: note, rel: displayPath(note.Path, root)})
+	}
+	return diagnosticsData{
+		loaded:            loaded,
+		notes:             snapshot.notes,
+		graph:             snapshot.graph,
+		frontmatterErrors: snapshot.parseErrors,
+		skippedNotes:      snapshot.skipped,
+	}
 }
 
 func buildDiagnosticsSummaryFromData(data diagnosticsData, cfg *config.Config) diagnosticsSummary {
@@ -121,37 +151,12 @@ func buildDiagnosticsSummaryFromData(data diagnosticsData, cfg *config.Config) d
 		DeadEndNotes:      diagnosticIssueNotes(data.loaded, data.graph, query.DeadEnd(data.graph)),
 		DuplicateTitles:   diagnosticDuplicateTitles(data.loaded, data.graph),
 		FrontmatterErrors: data.frontmatterErrors,
+		SkippedNotes:      data.skippedNotes,
 		SchemaViolations:  diagnosticSchemaViolations(data.loaded, data.graph, cfg),
 		LongTailValues:    diagnosticLongTailValues(data.loaded, cfg),
 	}
 	summary.Cards = diagnosticCards(summary)
 	return summary
-}
-
-func loadDiagnosticsNotes(v *vault.Vault) ([]diagnosticLoadedNote, []diagnosticFileError, error) {
-	var loaded []diagnosticLoadedNote
-	var parseErrors []diagnosticFileError
-
-	err := v.Walk(vault.WalkFilter{}, func(note *vault.Note) error {
-		rel := displayPath(note.Path, v.Root)
-		if err := note.Load(); err != nil {
-			parseErrors = append(parseErrors, diagnosticFileError{
-				Path:  rel,
-				Error: err.Error(),
-			})
-			return nil
-		}
-		loaded = append(loaded, diagnosticLoadedNote{note: note, rel: rel})
-		return nil
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("diagnostics: walk notes: %w", err)
-	}
-
-	sort.Slice(parseErrors, func(i, j int) bool {
-		return parseErrors[i].Path < parseErrors[j].Path
-	})
-	return loaded, parseErrors, nil
 }
 
 func diagnosticCards(summary diagnosticsSummary) []diagnosticCard {
@@ -176,6 +181,7 @@ func diagnosticCards(summary diagnosticsSummary) []diagnosticCard {
 		{Key: "dead_end", Label: "Dead ends", Count: len(summary.DeadEndNotes), Path: filterURL("dead_end", "1")},
 		{Key: "duplicate_titles", Label: "Duplicate titles", Count: duplicateNoteCount, Path: "#diagnostic-duplicate-titles"},
 		{Key: "frontmatter_errors", Label: "Frontmatter errors", Count: len(summary.FrontmatterErrors), Path: "#diagnostic-frontmatter-errors"},
+		{Key: "skipped", Label: "Skipped notes", Count: len(summary.SkippedNotes), Path: "#diagnostic-skipped-notes"},
 		{Key: "schema_violations", Label: "Schema violations", Count: diagnosticGroupItemCount(summary.SchemaViolations), Path: "#diagnostic-schema-violations"},
 		{Key: "long_tail", Label: "Long-tail values", Count: longTailCount, Path: "#diagnostic-long-tail-values"},
 	}

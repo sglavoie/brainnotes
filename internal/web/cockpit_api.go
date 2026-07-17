@@ -228,7 +228,7 @@ func (s *Server) handleFixesPreview(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, err)
 		return
 	}
-	queue, err := s.cockpitQueue()
+	queue, fixer, err := s.cockpitFixContext()
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
 		return
@@ -239,7 +239,6 @@ func (s *Server) handleFixesPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fixer := cockpit.NewFixer(s.vault, s.cfg, cockpitFixCommand)
 	plan, err := fixer.Plan(task, action)
 	if err != nil {
 		writeManagementError(w, cockpitFixError(err))
@@ -289,11 +288,13 @@ func (s *Server) handleFixesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve the current task by the previewed id. Because a task id embeds the
-	// on-disk hash of every affected note, any change to the underlying files
-	// yields a different id: the previewed task simply vanishes. A valid receipt
-	// whose task is gone means the world moved on since the preview — stale.
-	queue, err := s.cockpitQueue()
+	// Resolve the current task by the previewed id from a freshly refreshed
+	// snapshot. Because a task id embeds the on-disk hash of every affected note,
+	// any change to the underlying files yields a different id: the previewed task
+	// simply vanishes. A valid receipt whose task is gone means the world moved on
+	// since the preview — stale. The Fixer is bound to that same snapshot so the
+	// apply diffs against exactly the load the id was validated against.
+	queue, fixer, err := s.cockpitFixContext()
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
 		return
@@ -308,7 +309,6 @@ func (s *Server) handleFixesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fixer := cockpit.NewFixer(s.vault, s.cfg, cockpitFixCommand)
 	outcome, err := fixer.Apply(task, action)
 	if err != nil {
 		writeManagementError(w, cockpitFixError(err))
@@ -350,35 +350,81 @@ func (s *Server) parseFixRequest(r *http.Request) (string, cockpit.ActionKind, e
 	return id, action, nil
 }
 
-// cockpitQueue builds the raw, unfiltered generated queue.
+// cockpitQueue builds the raw, unfiltered generated queue from a freshly loaded
+// bounded snapshot. The content-addressed fix preview/apply and item triage
+// flows call it, so it forces a refresh (refreshSnapshot) to reflect a
+// concurrent on-disk edit immediately — a task id embeds the hash of every note
+// it touches, and receipt/stale validation depends on that id tracking the
+// current bytes. The refresh is bounded and honors the process-lifetime
+// quarantine, so a stalled note is never re-read; it just replaces the older
+// unbounded cockpit.BuildQueue walk.
 func (s *Server) cockpitQueue() (cockpit.Queue, error) {
-	return cockpit.BuildQueue(s.vault, s.cfg)
-}
-
-// cockpitQueueFiltered builds the generated queue and hides tasks the workflow
-// state suppresses. If the state file cannot be loaded it degrades gracefully:
-// the unfiltered queue is returned with a warning so triage never fails hard.
-func (s *Server) cockpitQueueFiltered() (cockpit.Queue, error) {
-	queue, err := cockpit.BuildQueue(s.vault, s.cfg)
+	snapshot, err := s.state.refreshSnapshot()
 	if err != nil {
 		return cockpit.Queue{}, err
 	}
-	return s.filterCockpitQueue(queue), nil
+	return s.cockpitQueueFrom(diagnosticsDataFromSnapshot(snapshot, s.vault.Root)), nil
 }
 
-// cockpitQueueFilteredFrom builds the filtered queue from an already-loaded
-// diagnostics snapshot, so a single vault walk feeds both the homepage
-// diagnostics summary and its fixes panel. The result matches
-// cockpitQueueFiltered for the same load; only handleIndex has a snapshot in
-// hand, so the other cockpit endpoints keep walking via cockpitQueueFiltered.
-func (s *Server) cockpitQueueFilteredFrom(data diagnosticsData) cockpit.Queue {
-	snapshot := cockpit.Snapshot{
+// cockpitQueueFiltered builds the generated queue from the shared resilient
+// snapshot and hides tasks the workflow state suppresses. It reads the cached
+// currentSnapshot rather than forcing a refresh: the read-only cockpit surfaces
+// (GET /api/cockpit, daily-review context/agent, the item-mutation response)
+// tolerate up-to-one-TTL latency, and reusing the cache means a stalled note is
+// only ever waited on once per server process. If the state file cannot be
+// loaded it degrades gracefully: the unfiltered queue is returned with a
+// warning so triage never fails hard.
+func (s *Server) cockpitQueueFiltered() (cockpit.Queue, error) {
+	snapshot, err := s.state.currentSnapshot()
+	if err != nil {
+		return cockpit.Queue{}, err
+	}
+	return s.cockpitQueueFilteredFrom(diagnosticsDataFromSnapshot(snapshot, s.vault.Root)), nil
+}
+
+// cockpitQueueFrom builds the raw generated queue from an already-loaded
+// diagnostics snapshot, so the shared vault walk feeds the cockpit without a
+// second walk. The snapshot's loaded notes, graph, and parse errors describe
+// one coherent load, exactly as BuildQueueFromSnapshot requires.
+func (s *Server) cockpitQueueFrom(data diagnosticsData) cockpit.Queue {
+	return cockpit.BuildQueueFromSnapshot(cockpitSnapshotFromData(data), s.cfg, s.vault.Root)
+}
+
+// cockpitSnapshotFromData bridges the web diagnostics snapshot onto the exported
+// cockpit.Snapshot the queue builder and snapshot-backed Fixer both consume.
+func cockpitSnapshotFromData(data diagnosticsData) cockpit.Snapshot {
+	return cockpit.Snapshot{
 		Notes:             cockpitLoadedNotes(data.loaded),
 		Graph:             data.graph,
 		FrontmatterErrors: cockpitParseErrors(data.frontmatterErrors),
 	}
-	queue := cockpit.BuildQueueFromSnapshot(snapshot, s.cfg, s.vault.Root)
-	return s.filterCockpitQueue(queue)
+}
+
+// cockpitFixContext forces one fresh bounded load and derives from it both the
+// raw generated queue (for the task lookup plus receipt/stale validation) and a
+// Fixer bound to that same snapshot. Sharing one snapshot keeps the previewed
+// task and the fix that mutates it perfectly consistent, and — crucially — the
+// snapshot-backed Fixer never performs the unbounded full-vault walk NewFixer's
+// default reload would, so a quarantined note stays unread and the fix endpoints
+// remain responsive even while one note read is stalled.
+func (s *Server) cockpitFixContext() (cockpit.Queue, *cockpit.Fixer, error) {
+	snapshot, err := s.state.refreshSnapshot()
+	if err != nil {
+		return cockpit.Queue{}, nil, err
+	}
+	cockpitSnapshot := cockpitSnapshotFromData(diagnosticsDataFromSnapshot(snapshot, s.vault.Root))
+	queue := cockpit.BuildQueueFromSnapshot(cockpitSnapshot, s.cfg, s.vault.Root)
+	fixer := cockpit.NewFixerFromSnapshot(s.vault, s.cfg, cockpitFixCommand, cockpitSnapshot)
+	return queue, fixer, nil
+}
+
+// cockpitQueueFilteredFrom builds the filtered queue from an already-loaded
+// diagnostics snapshot, so a single vault walk feeds both the homepage
+// diagnostics summary and its fixes panel. It shares cockpitQueueFrom with the
+// endpoint helpers so every cockpit surface derives from the same snapshot
+// bridge.
+func (s *Server) cockpitQueueFilteredFrom(data diagnosticsData) cockpit.Queue {
+	return s.filterCockpitQueue(s.cockpitQueueFrom(data))
 }
 
 // filterCockpitQueue hides workflow-suppressed tasks, degrading to the

@@ -493,6 +493,100 @@ func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
 	}
 }
 
+// TestServer_EndToEnd_EndpointsStayResponsiveWithStalledNote is the session-3
+// regression for the resilient loader: with one note read stalled forever, the
+// homepage, facets, search, graph JSON, and the daily cockpit must each return
+// after a single bounded wait and consistently omit the stalled note from every
+// loaded-content surface. A regression to an unbounded full-vault load would
+// hang the first of these requests forever (the loader never unblocks).
+func TestServer_EndToEnd_EndpointsStayResponsiveWithStalledNote(t *testing.T) {
+	ts, root, callCount := newBlockedLoaderServer(t, map[string][]byte{
+		"Source.md":      []byte("---\ntitle: Source\ntags: [healthytag]\n---\n[[Target]] [[Missing]]\n"),
+		"Target.md":      []byte("---\ntitle: Target\ntags: [healthytag]\n---\nNo links.\n"),
+		"StalledNote.md": []byte("---\ntitle: StalledNote\ntags: [stalledtag]\n---\n[[GhostStall]]\n"),
+	}, "StalledNote.md", nil, Options{CSRFToken: "csrf-token"})
+	blockedPath := filepath.Join(root, "StalledNote.md")
+
+	// Each endpoint must complete well within a bound; the stalled read is 50ms
+	// and only happens once, so a generous ceiling still proves boundedness while
+	// a true unbounded-load regression would never return.
+	get := func(path string) string {
+		t.Helper()
+		start := time.Now()
+		resp, err := http.Get(ts.URL + path) // #nosec G107 -- test-only local URL
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		body := readResponseBody(t, resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want 200; body=%q", path, resp.StatusCode, body)
+		}
+		if elapsed := time.Since(start); elapsed > 2*time.Second {
+			t.Fatalf("GET %s took %s, want a bounded response", path, elapsed)
+		}
+		return body
+	}
+
+	// The stalled note must never leak into any loaded-content payload.
+	assertOmitsStalled := func(path, body string) {
+		t.Helper()
+		for _, needle := range []string{"StalledNote", "stalledtag", "GhostStall"} {
+			if strings.Contains(body, needle) {
+				t.Fatalf("GET %s leaked stalled-note content %q: %q", path, needle, body)
+			}
+		}
+	}
+
+	index := get("/")
+	// The homepage surfaces the stalled path only through the skipped-notes
+	// diagnostic; it must never be reachable as a loaded/recent note link.
+	if !strings.Contains(index, `id="diagnostic-skipped-notes"`) {
+		t.Fatalf("homepage missing skipped-notes section: %q", index)
+	}
+	if !strings.Contains(index, "StalledNote.md") {
+		t.Fatalf("homepage skipped-notes section did not list the stalled path: %q", index)
+	}
+	if strings.Contains(index, `href="/n/stallednote`) {
+		t.Fatalf("stalled note leaked into a loaded-content route: %q", index)
+	}
+
+	facets := get("/api/facets")
+	if !strings.Contains(facets, "healthytag") {
+		t.Fatalf("facets dropped healthy content: %q", facets)
+	}
+	assertOmitsStalled("/api/facets", facets)
+
+	search := get("/api/search?tag=healthytag")
+	if !strings.Contains(search, "Source") || !strings.Contains(search, "Target") {
+		t.Fatalf("search dropped healthy notes: %q", search)
+	}
+	assertOmitsStalled("/api/search", search)
+
+	// A tag carried only by the stalled note must resolve to nothing.
+	if stalledSearch := get("/api/search?tag=stalledtag"); strings.TrimSpace(stalledSearch) != "[]" {
+		t.Fatalf("search on the stalled note's tag returned results: %q", stalledSearch)
+	}
+
+	graph := get("/api/graph.json")
+	if !strings.Contains(graph, "Source") {
+		t.Fatalf("graph dropped healthy notes: %q", graph)
+	}
+	assertOmitsStalled("/api/graph.json", graph)
+
+	cockpit := get("/api/cockpit?view=daily")
+	if !strings.Contains(cockpit, "missing") {
+		t.Fatalf("cockpit dropped the healthy broken-target task: %q", cockpit)
+	}
+	assertOmitsStalled("/api/cockpit?view=daily", cockpit)
+
+	// One bounded wait, shared across every endpoint: the stalled note is read
+	// exactly once and quarantined for the rest of the process, so no later
+	// endpoint re-attempts (and re-blocks on) the stalled read.
+	if got := callCount(blockedPath); got != 1 {
+		t.Fatalf("stalled note read %d times across the endpoint sweep, want exactly 1", got)
+	}
+}
+
 func newHTTPServerForFiles(t *testing.T, files map[string][]byte) (*httptest.Server, string) {
 	return newHTTPServerForFilesWithOptions(t, files, nil, Options{})
 }
@@ -521,6 +615,45 @@ func newHTTPServerForFilesWithOptions(
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, root
+}
+
+// newBlockedLoaderServer builds a running test server whose note loader blocks
+// forever on blockedRel (a vault-relative slash path), so that note times out on
+// the first bounded load and is quarantined for the life of the server; every
+// other note loads normally. It injects the loader before the handler goes live
+// (there is no Options hook for it) and shrinks the load timeout so the one
+// bounded wait is a few tens of milliseconds instead of two seconds. It returns
+// the running server, the vault root, and the callCount probe so a test can
+// prove the stalled note is read at most once no matter how many endpoints run.
+func newBlockedLoaderServer(
+	t *testing.T,
+	files map[string][]byte,
+	blockedRel string,
+	configure func(cfg *config.Config),
+	opts Options,
+) (*httptest.Server, string, func(string) int) {
+	t.Helper()
+
+	root := t.TempDir()
+	for rel, data := range files {
+		writeTestFile(t, root, rel, string(data))
+	}
+	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
+	if configure != nil {
+		configure(cfg)
+	}
+	srv, err := NewServer(cfg, v, opts)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	blockedPath := filepath.Join(root, filepath.FromSlash(blockedRel))
+	load, callCount := newBlockingLoader(t, blockedPath)
+	srv.state.load = load
+	srv.state.loadTimeout = 50 * time.Millisecond
+
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	return ts, root, callCount
 }
 
 func writeTestFile(t *testing.T, root, rel, body string) {

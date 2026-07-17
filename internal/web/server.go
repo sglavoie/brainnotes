@@ -217,20 +217,23 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diagnosticsData, err := loadDiagnosticsData(s.vault)
+	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
-		http.Error(w, "diagnostics error", http.StatusInternalServerError)
+		http.Error(w, "snapshot error", http.StatusInternalServerError)
 		return
 	}
-	snapshot := vaultSnapshot{notes: diagnosticsData.notes, graph: diagnosticsData.graph}
 	data, err := buildIndexPageData(snapshot, s.vault.Root)
 	if err != nil {
 		http.Error(w, "index error", http.StatusInternalServerError)
 		return
 	}
 	data.CSRFToken = s.csrfToken
-	// Reuse the diagnostics load for the cockpit fixes panel instead of walking
-	// the vault a second time via cockpit.BuildQueue.
+	// Derive index diagnostics, the Daily Fixes counts, and skipped-note
+	// reporting from the one resilient shared snapshot instead of walking the
+	// vault again via loadDiagnosticsData or cockpit.BuildQueue. Skipped notes
+	// are absent from the snapshot's loaded set, so they never leak into recent
+	// notes, graph data, search/facets, or the health counts below.
+	diagnosticsData := diagnosticsDataFromSnapshot(snapshot, s.vault.Root)
 	fixesQueue := cockpit.LimitDaily(s.cockpitQueueFilteredFrom(diagnosticsData), s.cfg.Cockpit.DailyLimit)
 	data.Fixes = buildIndexFixesPanelData(fixesQueue)
 	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
