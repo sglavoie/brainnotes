@@ -112,6 +112,116 @@ var BrainNotesApp = (() => {
     const normalized = normalizeParamValue(value).toLowerCase();
     return normalized === "true" || normalized === "1";
   };
+  var readRecordValue = (record, keys) => {
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) {
+        return record[key];
+      }
+    }
+    return void 0;
+  };
+  var normalizeBriefActivitySummary = (value) => {
+    const record = asRecord(value) || {};
+    return {
+      WindowDays: readCount(readRecordValue(record, ["WindowDays", "window_days", "windowDays"])),
+      VisitDays: readCount(readRecordValue(record, ["VisitDays", "visit_days", "visitDays"])),
+      OpenCount: readCount(readRecordValue(record, ["OpenCount", "open_count", "openCount"]))
+    };
+  };
+  var normalizeBriefRollingActivity = (value) => {
+    const record = asRecord(value) || {};
+    return {
+      Last7Days: normalizeBriefActivitySummary(
+        readRecordValue(record, ["Last7Days", "last_7_days", "last7Days"])
+      ),
+      Last14Days: normalizeBriefActivitySummary(
+        readRecordValue(record, ["Last14Days", "last_14_days", "last14Days"])
+      )
+    };
+  };
+  var normalizeBriefNoteRef = (value) => {
+    const record = asRecord(value) || {};
+    return {
+      RelPath: normalizeParamValue(readRecordValue(record, ["RelPath", "rel_path", "relPath"])),
+      Title: normalizeParamValue(readRecordValue(record, ["Title", "title"]))
+    };
+  };
+  var normalizeBriefCandidateMetadata = (value) => {
+    const record = asRecord(value) || {};
+    return {
+      Score: Number(readRecordValue(record, ["Score", "score"])) || 0,
+      Relationship: normalizeParamValue(readRecordValue(record, ["Relationship", "relationship"])),
+      Bridge: normalizeParamValue(readRecordValue(record, ["Bridge", "bridge"])),
+      Reasons: normalizeStringArray(readRecordValue(record, ["Reasons", "reasons"]))
+    };
+  };
+  var normalizeBriefCard = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+    const id = normalizeParamValue(readRecordValue(record, ["ID", "id"]));
+    if (id === "") {
+      return null;
+    }
+    const candidate = asRecord(readRecordValue(record, ["Candidate", "candidate"]));
+    return {
+      ID: id,
+      Slot: normalizeParamValue(readRecordValue(record, ["Slot", "slot"])),
+      Source: normalizeBriefNoteRef(readRecordValue(record, ["Source", "source"])),
+      Candidate: candidate ? normalizeBriefNoteRef(candidate) : void 0,
+      Explanation: normalizeParamValue(readRecordValue(record, ["Explanation", "explanation"])),
+      Excerpt: normalizeParamValue(readRecordValue(record, ["Excerpt", "excerpt"])),
+      Metadata: normalizeBriefCandidateMetadata(readRecordValue(record, ["Metadata", "metadata"]))
+    };
+  };
+  var normalizeBriefUnavailable = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return void 0;
+    }
+    const message = normalizeParamValue(readRecordValue(record, ["Message", "message"]));
+    const slot = normalizeParamValue(readRecordValue(record, ["Slot", "slot"]));
+    if (slot === "" && message === "") {
+      return void 0;
+    }
+    return {
+      Slot: slot,
+      Message: message
+    };
+  };
+  var normalizeBriefSlotResults = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const slot = normalizeParamValue(readRecordValue(record, ["Slot", "slot"]));
+      const card = normalizeBriefCard(readRecordValue(record, ["Card", "card"]));
+      const unavailable = normalizeBriefUnavailable(readRecordValue(record, ["Unavailable", "unavailable"]));
+      if (slot === "" && card === null && unavailable === void 0) {
+        return [];
+      }
+      return [{
+        Slot: slot,
+        Card: card || void 0,
+        Unavailable: unavailable
+      }];
+    });
+  };
+  var normalizeBriefDaily = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return void 0;
+    }
+    return {
+      Date: normalizeParamValue(readRecordValue(record, ["Date", "date"])),
+      Slots: normalizeBriefSlotResults(readRecordValue(record, ["Slots", "slots"]))
+    };
+  };
   var normalizeBulkAction = (value) => {
     switch (normalizeParamValue(value)) {
       case "trash":
@@ -505,6 +615,65 @@ var BrainNotesApp = (() => {
       skipped: normalizeFixSkips(record.skipped),
       journal_id: normalizeParamValue(record.journal_id) || void 0
     };
+  };
+  var normalizeBriefViewResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      activity: normalizeBriefRollingActivity(readRecordValue(record, ["activity", "Activity"]))
+    };
+  };
+  var normalizeBriefItemResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      action: normalizeParamValue(readRecordValue(record, ["action", "Action"])),
+      card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
+      slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),
+      daily: normalizeBriefDaily(readRecordValue(record, ["daily", "Daily"])),
+      activity: normalizeBriefRollingActivity(readRecordValue(record, ["activity", "Activity"])),
+      affected: normalizeBriefSlotResults(readRecordValue(record, ["affected", "Affected"]))
+    };
+  };
+  var normalizeBriefInsightResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      enabled: readBoolean(readRecordValue(record, ["enabled", "Enabled"])),
+      card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
+      slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),
+      output: normalizeParamValue(readRecordValue(record, ["output", "Output"])),
+      rendered_html: normalizeParamValue(
+        readRecordValue(record, ["rendered_html", "RenderedHTML", "renderedHtml"])
+      )
+    };
+  };
+  var buildBriefViewForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("token", request.token);
+    return body;
+  };
+  var buildBriefItemForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("card_id", request.cardID);
+    body.set("action", request.action);
+    body.set("token", request.token);
+    return body;
+  };
+  var buildBriefInsightForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("card_id", request.cardID);
+    body.set("token", request.token);
+    return body;
   };
   var buildCockpitItemForm = (request) => {
     const body = new URLSearchParams();
@@ -934,6 +1103,658 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/daily-brief.ts
+  var readDailyBriefConfig = (root) => {
+    const insightValue = (root.getAttribute("data-brief-insight-enabled") || "").toLowerCase();
+    return {
+      viewEndpoint: root.getAttribute("data-brief-view-endpoint") || "/api/brief/view",
+      itemEndpoint: root.getAttribute("data-brief-item-endpoint") || "/api/brief/item",
+      insightEndpoint: root.getAttribute("data-brief-insight-endpoint") || "/api/brief/insight",
+      csrfToken: root.getAttribute("data-brief-csrf") || "",
+      insightEnabled: insightValue === "true" || insightValue === "1"
+    };
+  };
+  var slotOrder = ["continue", "rediscover", "connect"];
+  var statusClasses = ["is-success", "is-error", "is-loading", "is-empty"];
+  var normalizeSlot = (value) => {
+    switch ((value || "").toLowerCase()) {
+      case "continue":
+      case "rediscover":
+      case "connect":
+        return value.toLowerCase();
+      default:
+        return "";
+    }
+  };
+  var slotLabel = (slot) => {
+    switch (slot) {
+      case "continue":
+        return "Continue";
+      case "rediscover":
+        return "Rediscover";
+      case "connect":
+        return "Connect";
+    }
+  };
+  var unavailableTitle = (slot) => {
+    switch (slot) {
+      case "continue":
+        return "No substantive recent note";
+      case "rediscover":
+        return "No rediscover candidate";
+      case "connect":
+        return "No valid connection";
+    }
+  };
+  var relationshipLabel = (relationship) => {
+    switch ((relationship || "").toLowerCase()) {
+      case "inbound":
+        return "Inbound link";
+      case "outbound":
+        return "Outbound link";
+      case "shared-neighbor":
+        return "Shared neighbor";
+      default:
+        return relationship;
+    }
+  };
+  var briefNoteKeyFromRelPath = (relPath) => {
+    const trimmed = (relPath || "").trim().replace(/\\/g, "/");
+    if (trimmed === "") {
+      return "";
+    }
+    const withoutExt = trimmed.replace(/\.md$/i, "");
+    const segments = [];
+    for (const segment of withoutExt.split("/")) {
+      if (segment === "" || segment === "." || segment === "..") {
+        return "";
+      }
+      segments.push(segment.toLowerCase());
+    }
+    return segments.join("/");
+  };
+  var briefNotePathForRelPath = (relPath) => {
+    const key = briefNoteKeyFromRelPath(relPath);
+    return key ? notePathForKey(key) : "";
+  };
+  var jsonPostRequest = (csrfToken, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": csrfToken
+    },
+    body
+  });
+  var readResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+  var insightDisclosureMessage = [
+    "Ask AI sends this card's context to your configured [agent].command.",
+    "BrainNotes does not store the AI output. Continue?"
+  ].join("\n");
+  var initDailyBrief = (deps = {}) => {
+    const root = queryElement(document, "[data-brief-root]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const config = readDailyBriefConfig(root);
+    const fetcher = deps.fetch || fetch;
+    const confirmer = deps.confirm || ((message) => window.confirm(message));
+    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text) => navigator.clipboard.writeText(text) : void 0);
+    const globalStatusEl = queryElement(root, "#brief-global-status", HTMLElement);
+    const visitDaysEl = queryElement(root, "[data-brief-activity-visit-days]", HTMLElement);
+    const openCountEl = queryElement(root, "[data-brief-activity-open-count]", HTMLElement);
+    const slotElementFor = (slot) => queryElement(root, `[data-brief-slot="${slot}"]`, HTMLElement);
+    const slotStatusElementFor = (slot) => queryElement(root, `[data-brief-slot-status="${slot}"]`, HTMLElement);
+    const setGlobalStatus = (message, kind = "") => {
+      setStatusText(globalStatusEl, message || " ", kind, statusClasses);
+    };
+    const setSlotStatus = (slot, message, kind = "") => {
+      setStatusText(slotStatusElementFor(slot), message || " ", kind, statusClasses);
+    };
+    const hasStateUnreadable = () => queryElement(root, "[data-brief-state-unreadable]", HTMLElement) !== null;
+    const hasEditorConfigured = () => queryElement(root, "[data-brief-editor-unconfigured]", HTMLElement) === null;
+    const insightConfigured = () => config.insightEnabled;
+    const markButtonDefaultDisabled = (button) => {
+      button.setAttribute("data-brief-disabled-default", button.disabled ? "true" : "false");
+    };
+    const applyButtonDisabledDefaults = (container) => {
+      for (const button of queryAllElements(container, "[data-brief-action]", HTMLButtonElement)) {
+        markButtonDefaultDisabled(button);
+      }
+    };
+    applyButtonDisabledDefaults(root);
+    const openedCards = /* @__PURE__ */ new Set();
+    const inflightInsight = /* @__PURE__ */ new Map();
+    let insightCounter = 0;
+    let insightDisclosureAccepted = false;
+    const setSlotBusy = (slot, busy) => {
+      const slotEl = slotElementFor(slot);
+      if (!slotEl) {
+        return;
+      }
+      slotEl.setAttribute("aria-busy", busy ? "true" : "false");
+      slotEl.classList.toggle("is-busy", busy);
+      for (const button of queryAllElements(slotEl, "[data-brief-action]", HTMLButtonElement)) {
+        const defaultDisabled = button.getAttribute("data-brief-disabled-default") === "true";
+        button.disabled = busy || defaultDisabled;
+      }
+    };
+    const setSlotsBusy = (slots, busy) => {
+      for (const slot of slots) {
+        setSlotBusy(slot, busy);
+      }
+    };
+    const markCardOpened = (slot, cardID) => {
+      const slotEl = slotElementFor(slot);
+      if (!slotEl) {
+        return;
+      }
+      const openButton = queryElement(
+        slotEl,
+        `[data-brief-action-open][data-brief-card-id="${cardID}"]`,
+        HTMLButtonElement
+      );
+      if (!openButton) {
+        return;
+      }
+      openButton.textContent = "Opened";
+      openButton.classList.add("is-opened");
+    };
+    const updateActivity = (activity) => {
+      if (visitDaysEl) {
+        visitDaysEl.textContent = String(activity.Last7Days.VisitDays);
+      }
+      if (openCountEl) {
+        openCountEl.textContent = String(activity.Last7Days.OpenCount);
+      }
+    };
+    const createActionButton = (doc, slot, cardID, action, label, enabled) => {
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.className = "brief-action-button";
+      button.setAttribute("data-brief-action", action);
+      button.setAttribute(`data-brief-action-${action}`, "");
+      button.setAttribute("data-brief-slot", slot);
+      button.setAttribute("data-brief-card-id", cardID);
+      button.textContent = label;
+      button.disabled = !enabled;
+      button.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
+      return button;
+    };
+    const ensureInsightPanel = (cardEl, slot) => {
+      const existing = queryElement(cardEl, "[data-brief-insight-panel]", HTMLElement);
+      if (existing) {
+        return existing;
+      }
+      const doc = cardEl.ownerDocument;
+      const panel = doc.createElement("section");
+      panel.className = "brief-insight";
+      panel.setAttribute("data-brief-insight-panel", "");
+      panel.hidden = true;
+      const header = doc.createElement("div");
+      header.className = "brief-insight-header";
+      const title = doc.createElement("h5");
+      title.className = "brief-insight-title";
+      title.textContent = "AI insight";
+      header.appendChild(title);
+      const copy = doc.createElement("button");
+      copy.className = "brief-insight-copy";
+      copy.type = "button";
+      copy.hidden = true;
+      copy.disabled = true;
+      copy.textContent = "Copy Markdown";
+      copy.setAttribute("data-brief-insight-copy", "");
+      copy.setAttribute("data-brief-slot", slot);
+      header.appendChild(copy);
+      const body = doc.createElement("div");
+      body.className = "brief-insight-body";
+      body.setAttribute("data-brief-insight-body", "");
+      panel.append(header, body);
+      cardEl.appendChild(panel);
+      return panel;
+    };
+    const renderInsight = (slot, cardID, renderedHTML, output) => {
+      const slotEl = slotElementFor(slot);
+      if (!slotEl) {
+        return;
+      }
+      const cardEl = queryElement(
+        slotEl,
+        `[data-brief-card][data-brief-card-id="${cardID}"]`,
+        HTMLElement
+      );
+      if (!cardEl) {
+        return;
+      }
+      const panel = ensureInsightPanel(cardEl, slot);
+      const body = queryElement(panel, "[data-brief-insight-body]", HTMLElement);
+      const copy = queryElement(panel, "[data-brief-insight-copy]", HTMLButtonElement);
+      if (!body || !copy) {
+        return;
+      }
+      body.innerHTML = renderedHTML;
+      copy.setAttribute("data-brief-copy-output", output);
+      copy.hidden = false;
+      copy.disabled = output.trim() === "";
+      panel.hidden = false;
+    };
+    const buildUnavailableHint = (slot, sourcePath) => {
+      if (hasStateUnreadable()) {
+        return {
+          open: "Open is unavailable until brief state is readable.",
+          another: "Another is unavailable until brief state is readable.",
+          insight: "Ask AI is unavailable until brief state is readable."
+        };
+      }
+      return {
+        open: sourcePath === "" ? "Open is unavailable because this note route could not be resolved." : hasEditorConfigured() ? "" : "Open is disabled until the editor is configured.",
+        another: "",
+        insight: insightConfigured() ? "" : "Ask AI is unavailable until [agent].command is configured."
+      };
+    };
+    const renderCard = (slot, card) => {
+      const doc = root.ownerDocument;
+      const cardEl = doc.createElement("div");
+      cardEl.className = "brief-card";
+      cardEl.setAttribute("data-brief-card", "");
+      cardEl.setAttribute("data-brief-card-id", card.ID);
+      const sourceTitle = card.Source.Title || card.Source.RelPath;
+      const sourcePath = briefNotePathForRelPath(card.Source.RelPath);
+      const heading = doc.createElement("h4");
+      heading.className = "brief-card-title";
+      let headingLink = null;
+      if (slot === "connect" && card.Candidate) {
+        const candidatePath = briefNotePathForRelPath(card.Candidate.RelPath);
+        const candidateTitle = card.Candidate.Title || card.Candidate.RelPath;
+        if (candidatePath) {
+          headingLink = doc.createElement("a");
+          headingLink.textContent = candidateTitle;
+          headingLink.href = candidatePath;
+        } else {
+          heading.textContent = candidateTitle;
+        }
+      } else if (sourcePath) {
+        headingLink = doc.createElement("a");
+        headingLink.textContent = sourceTitle;
+        headingLink.href = sourcePath;
+      } else {
+        heading.textContent = sourceTitle;
+      }
+      if (headingLink) {
+        heading.appendChild(headingLink);
+      }
+      cardEl.appendChild(heading);
+      const path = doc.createElement("p");
+      path.className = "brief-card-path";
+      const pathCode = doc.createElement("code");
+      pathCode.textContent = slot === "connect" && card.Candidate ? card.Candidate.RelPath : card.Source.RelPath;
+      path.appendChild(pathCode);
+      cardEl.appendChild(path);
+      const explanation = doc.createElement("p");
+      explanation.className = "brief-card-explanation";
+      explanation.textContent = card.Explanation;
+      cardEl.appendChild(explanation);
+      const relationship = relationshipLabel(card.Metadata.Relationship);
+      if (slot === "connect" && relationship) {
+        const relationshipEl = doc.createElement("p");
+        relationshipEl.className = "brief-card-meta";
+        relationshipEl.textContent = `Relationship: ${relationship}`;
+        cardEl.appendChild(relationshipEl);
+      }
+      if (slot === "connect" && card.Metadata.Bridge) {
+        const bridgeEl = doc.createElement("p");
+        bridgeEl.className = "brief-card-meta";
+        const bridgeCode = doc.createElement("code");
+        bridgeCode.textContent = card.Metadata.Bridge;
+        bridgeEl.append("Bridge: ", bridgeCode);
+        cardEl.appendChild(bridgeEl);
+      }
+      if (card.Excerpt) {
+        const excerpt = doc.createElement("blockquote");
+        excerpt.className = "brief-card-excerpt";
+        excerpt.textContent = card.Excerpt;
+        cardEl.appendChild(excerpt);
+      }
+      const reasons = card.Metadata.Reasons.filter((reason) => reason.trim() !== "" && reason !== card.Explanation);
+      if (reasons.length > 0) {
+        const list = doc.createElement("ul");
+        list.className = "brief-card-reasons";
+        for (const reason of reasons) {
+          const item = doc.createElement("li");
+          item.textContent = reason;
+          list.appendChild(item);
+        }
+        cardEl.appendChild(list);
+      }
+      const unavailable = buildUnavailableHint(slot, sourcePath);
+      const actionRow = doc.createElement("div");
+      actionRow.className = "brief-card-actions";
+      actionRow.append(
+        createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
+        createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === ""),
+        createActionButton(doc, slot, card.ID, "insight", "Ask AI", unavailable.insight === "")
+      );
+      cardEl.appendChild(actionRow);
+      if (unavailable.open) {
+        const hint = doc.createElement("p");
+        hint.className = "brief-action-hint";
+        hint.textContent = unavailable.open;
+        cardEl.appendChild(hint);
+      }
+      if (unavailable.another) {
+        const hint = doc.createElement("p");
+        hint.className = "brief-action-hint";
+        hint.textContent = unavailable.another;
+        cardEl.appendChild(hint);
+      }
+      if (unavailable.insight) {
+        const hint = doc.createElement("p");
+        hint.className = "brief-action-hint";
+        hint.textContent = unavailable.insight;
+        cardEl.appendChild(hint);
+      }
+      ensureInsightPanel(cardEl, slot);
+      return cardEl;
+    };
+    const replaceSlotContent = (slotResult) => {
+      const slot = normalizeSlot(slotResult.Slot);
+      if (!slot) {
+        return;
+      }
+      const slotEl = slotElementFor(slot);
+      if (!slotEl) {
+        return;
+      }
+      inflightInsight.delete(slot);
+      const header = queryElement(slotEl, ".panel-header", HTMLElement);
+      if (!header) {
+        return;
+      }
+      while (header.nextSibling) {
+        slotEl.removeChild(header.nextSibling);
+      }
+      if (slotResult.Card) {
+        slotEl.appendChild(renderCard(slot, slotResult.Card));
+        if (openedCards.has(slotResult.Card.ID)) {
+          markCardOpened(slot, slotResult.Card.ID);
+        }
+      } else {
+        const unavailableMessage = slotResult.Unavailable?.Message || `${slotLabel(slot)} is unavailable for the current brief.`;
+        const title = unavailableTitle(slot);
+        const h4 = slotEl.ownerDocument.createElement("h4");
+        h4.textContent = title;
+        slotEl.appendChild(h4);
+        const empty = slotEl.ownerDocument.createElement("p");
+        empty.className = "review-empty brief-slot-empty";
+        empty.setAttribute("data-brief-slot-empty", slot);
+        empty.setAttribute("role", "status");
+        empty.textContent = unavailableMessage;
+        slotEl.appendChild(empty);
+      }
+      const status = slotEl.ownerDocument.createElement("p");
+      status.className = "review-status brief-slot-status";
+      status.setAttribute("data-brief-slot-status", slot);
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      status.textContent = " ";
+      slotEl.appendChild(status);
+      applyButtonDisabledDefaults(slotEl);
+    };
+    const applyAnotherPayload = (result, requestedSlot) => {
+      const changed = /* @__PURE__ */ new Set();
+      for (const slotResult of result.affected) {
+        const slot = normalizeSlot(slotResult.Slot);
+        if (!slot) {
+          continue;
+        }
+        replaceSlotContent(slotResult);
+        changed.add(slot);
+      }
+      if (result.daily && result.daily.Slots.length > 0) {
+        const ensureSlot = (slot) => {
+          if (changed.has(slot)) {
+            return;
+          }
+          const match = result.daily?.Slots.find((candidate) => normalizeSlot(candidate.Slot) === slot);
+          if (!match) {
+            return;
+          }
+          replaceSlotContent(match);
+          changed.add(slot);
+        };
+        ensureSlot(requestedSlot);
+        if (requestedSlot === "continue") {
+          ensureSlot("connect");
+        }
+      }
+      return Array.from(changed);
+    };
+    const readButtonSlot = (button) => normalizeSlot(button.getAttribute("data-brief-slot") || "");
+    const readButtonCardID = (button) => button.getAttribute("data-brief-card-id") || "";
+    const runOpen = async (button) => {
+      const slot = readButtonSlot(button);
+      const cardID = readButtonCardID(button);
+      if (!slot || !cardID || !config.csrfToken) {
+        setGlobalStatus("Open action unavailable.", "is-error");
+        return;
+      }
+      setSlotsBusy([slot], true);
+      setSlotStatus(slot, "Opening editor...", "is-loading");
+      try {
+        const body = buildBriefItemForm({ cardID, action: "open", token: config.csrfToken }).toString();
+        const resp = await fetcher(config.itemEndpoint, jsonPostRequest(config.csrfToken, body));
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeBriefItemResponse(payload);
+        if (!result.ok) {
+          setSlotStatus(slot, result.message || "Open failed.", "is-error");
+          return;
+        }
+        updateActivity(result.activity);
+        openedCards.add(cardID);
+        markCardOpened(slot, cardID);
+        setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
+        setGlobalStatus("Brief activity updated.", "is-success");
+      } catch {
+        setSlotStatus(slot, "Open failed.", "is-error");
+      } finally {
+        setSlotsBusy([slot], false);
+      }
+    };
+    const runAnother = async (button) => {
+      const slot = readButtonSlot(button);
+      const cardID = readButtonCardID(button);
+      if (!slot || !cardID || !config.csrfToken) {
+        setGlobalStatus("Another action unavailable.", "is-error");
+        return;
+      }
+      const busySlots = slot === "continue" ? ["continue", "connect"] : [slot];
+      setSlotsBusy(busySlots, true);
+      setSlotStatus(slot, "Finding another card...", "is-loading");
+      try {
+        const body = buildBriefItemForm({ cardID, action: "another", token: config.csrfToken }).toString();
+        const resp = await fetcher(config.itemEndpoint, jsonPostRequest(config.csrfToken, body));
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeBriefItemResponse(payload);
+        if (!result.ok) {
+          setSlotStatus(slot, result.message || "Another failed.", "is-error");
+          return;
+        }
+        updateActivity(result.activity);
+        const changedSlots = applyAnotherPayload(result, slot);
+        const statusMessage = result.message || (slot === "continue" && changedSlots.includes("connect") ? "Updated Continue and Connect." : `Updated ${slotLabel(slot)}.`);
+        setSlotStatus(slot, statusMessage, "is-success");
+        setGlobalStatus(statusMessage, "is-success");
+        const slotEl = slotElementFor(slot);
+        const nextFocus = slotEl && queryElement(slotEl, "[data-brief-action-another]", HTMLButtonElement) || slotEl && queryElement(slotEl, "[data-brief-action]", HTMLButtonElement);
+        nextFocus?.focus({ preventScroll: true });
+      } catch {
+        setSlotStatus(slot, "Another failed.", "is-error");
+      } finally {
+        setSlotsBusy(busySlots, false);
+      }
+    };
+    const runInsight = async (button) => {
+      const slot = readButtonSlot(button);
+      const cardID = readButtonCardID(button);
+      if (!slot || !cardID || !config.csrfToken) {
+        setGlobalStatus("Ask AI is unavailable.", "is-error");
+        return;
+      }
+      if (!insightDisclosureAccepted) {
+        insightDisclosureAccepted = confirmer(insightDisclosureMessage);
+        if (!insightDisclosureAccepted) {
+          setSlotStatus(slot, "Ask AI canceled.", "is-empty");
+          return;
+        }
+      }
+      setSlotsBusy([slot], true);
+      setSlotStatus(slot, "Generating insight...", "is-loading");
+      const requestID = insightCounter + 1;
+      insightCounter = requestID;
+      inflightInsight.set(slot, requestID);
+      try {
+        const body = buildBriefInsightForm({ cardID, token: config.csrfToken }).toString();
+        const resp = await fetcher(
+          config.insightEndpoint,
+          jsonPostRequest(config.csrfToken, body)
+        );
+        const payload = await readResponsePayload(resp);
+        if (inflightInsight.get(slot) !== requestID) {
+          return;
+        }
+        if (!resp.ok) {
+          setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeBriefInsightResponse(payload);
+        if (!result.ok) {
+          setSlotStatus(slot, result.message || "Ask AI failed.", "is-error");
+          return;
+        }
+        if (!result.enabled) {
+          setSlotStatus(slot, result.message || "Ask AI is unavailable.", "is-error");
+          return;
+        }
+        if (result.card_id && result.card_id !== cardID) {
+          setSlotStatus(slot, "Card changed while insight was running. Try again.", "is-error");
+          return;
+        }
+        renderInsight(slot, cardID, result.rendered_html, result.output);
+        setSlotStatus(slot, "Insight ready.", "is-success");
+      } catch {
+        if (inflightInsight.get(slot) === requestID) {
+          setSlotStatus(slot, "Ask AI failed.", "is-error");
+        }
+      } finally {
+        if (inflightInsight.get(slot) === requestID) {
+          inflightInsight.delete(slot);
+          setSlotsBusy([slot], false);
+        }
+      }
+    };
+    const runCopyInsight = async (button) => {
+      const slot = normalizeSlot(button.getAttribute("data-brief-slot") || "");
+      if (!slot) {
+        return;
+      }
+      const payload = button.getAttribute("data-brief-copy-output") || "";
+      if (payload.trim() === "") {
+        setSlotStatus(slot, "Nothing to copy.", "is-error");
+        return;
+      }
+      if (!clipboardWrite) {
+        setSlotStatus(slot, "Clipboard unavailable.", "is-error");
+        return;
+      }
+      button.disabled = true;
+      try {
+        await clipboardWrite(payload);
+        setSlotStatus(slot, "Insight markdown copied.", "is-success");
+      } catch {
+        setSlotStatus(slot, "Copy failed.", "is-error");
+      } finally {
+        button.disabled = false;
+      }
+    };
+    root.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const copy = target.closest("[data-brief-insight-copy]");
+      if (copy && root.contains(copy)) {
+        void runCopyInsight(copy);
+        return;
+      }
+      const open = target.closest("[data-brief-action-open]");
+      if (open && root.contains(open)) {
+        void runOpen(open);
+        return;
+      }
+      const another = target.closest("[data-brief-action-another]");
+      if (another && root.contains(another)) {
+        void runAnother(another);
+        return;
+      }
+      const insight = target.closest("[data-brief-action-insight]");
+      if (insight && root.contains(insight)) {
+        void runInsight(insight);
+      }
+    });
+    const recordView = async () => {
+      if (!config.csrfToken) {
+        return;
+      }
+      try {
+        const body = buildBriefViewForm({ token: config.csrfToken }).toString();
+        const resp = await fetcher(config.viewEndpoint, jsonPostRequest(config.csrfToken, body));
+        const payload = await readResponsePayload(resp);
+        if (!resp.ok) {
+          setGlobalStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeBriefViewResponse(payload);
+        if (!result.ok) {
+          setGlobalStatus(result.message || "Brief activity unavailable.", "is-error");
+          return;
+        }
+        updateActivity(result.activity);
+      } catch {
+        setGlobalStatus("Brief activity unavailable.", "is-error");
+      }
+    };
+    for (const slot of slotOrder) {
+      const slotEl = slotElementFor(slot);
+      if (!slotEl) {
+        continue;
+      }
+      const cardEl = queryElement(slotEl, "[data-brief-card]", HTMLElement);
+      if (!cardEl) {
+        continue;
+      }
+      ensureInsightPanel(cardEl, slot);
+    }
+    void recordView();
+  };
+
   // internal/web/static_src/daily-fixes.ts
   var FIX_ACTIONS = /* @__PURE__ */ new Set(["schema_repair", "relink", "create_stub"]);
   var readDailyFixesConfig = (root) => ({
@@ -1043,17 +1864,17 @@ var BrainNotesApp = (() => {
   };
   var buildFixesItemFetchRequest = (endpoint, csrfToken, id, action, snooze) => {
     const body = buildCockpitItemForm({ id, action, token: csrfToken, snooze });
-    return jsonPostRequest(endpoint, csrfToken, body.toString());
+    return jsonPostRequest2(endpoint, csrfToken, body.toString());
   };
   var buildFixesPreviewFetchRequest = (endpoint, csrfToken, id, action) => {
     const body = buildFixPreviewForm({ id, action, token: csrfToken });
-    return jsonPostRequest(endpoint, csrfToken, body.toString());
+    return jsonPostRequest2(endpoint, csrfToken, body.toString());
   };
   var buildFixesApplyFetchRequest = (endpoint, csrfToken, id, action, previewID) => {
     const body = buildFixApplyForm({ id, action, token: csrfToken, previewID });
-    return jsonPostRequest(endpoint, csrfToken, body.toString());
+    return jsonPostRequest2(endpoint, csrfToken, body.toString());
   };
-  var jsonPostRequest = (url, csrfToken, body) => ({
+  var jsonPostRequest2 = (url, csrfToken, body) => ({
     url,
     init: {
       method: "POST",
@@ -1364,7 +2185,7 @@ var BrainNotesApp = (() => {
         const resp = await fetcher(config.queueEndpoint, {
           headers: { Accept: "application/json" }
         });
-        const payload = await readResponsePayload(resp);
+        const payload = await readResponsePayload2(resp);
         if (!resp.ok) {
           showError(normalizeManagementErrorMessage(resp.status, payload));
           return;
@@ -1465,7 +2286,7 @@ var BrainNotesApp = (() => {
           snooze
         );
         const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload(resp);
+        const payload = await readResponsePayload2(resp);
         if (!resp.ok) {
           showError(normalizeManagementErrorMessage(resp.status, payload));
           return;
@@ -1495,7 +2316,7 @@ var BrainNotesApp = (() => {
           action
         );
         const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload(resp);
+        const payload = await readResponsePayload2(resp);
         if (!resp.ok) {
           showError(normalizeManagementErrorMessage(resp.status, payload));
           return;
@@ -1533,7 +2354,7 @@ var BrainNotesApp = (() => {
           state.previewID
         );
         const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload(resp);
+        const payload = await readResponsePayload2(resp);
         if (!resp.ok) {
           clearPreview(id);
           showError(normalizeManagementErrorMessage(resp.status, payload));
@@ -1568,9 +2389,9 @@ var BrainNotesApp = (() => {
       setStatus("Opening editor...", "is-loading");
       try {
         const body = buildOpenNoteForm({ key, token: config.csrfToken });
-        const request = jsonPostRequest(config.openEndpoint, config.csrfToken, body.toString());
+        const request = jsonPostRequest2(config.openEndpoint, config.csrfToken, body.toString());
         const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload(resp);
+        const payload = await readResponsePayload2(resp);
         if (!resp.ok) {
           showError(normalizeOpenErrorMessage(resp.status, payload));
           return;
@@ -1622,7 +2443,7 @@ var BrainNotesApp = (() => {
     });
     void loadQueue();
   };
-  var readResponsePayload = async (resp) => {
+  var readResponsePayload2 = async (resp) => {
     const contentType = resp.headers?.get("Content-Type") || "";
     try {
       if (contentType.includes("application/json")) {
@@ -4876,6 +5697,7 @@ var BrainNotesApp = (() => {
     initFrontmatterEditing();
     initBrokenCreateActions();
     initCopyControls();
+    initDailyBrief();
     initGraph();
     initSearch();
     initOverviewSearchResults();
