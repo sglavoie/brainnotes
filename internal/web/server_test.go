@@ -235,6 +235,8 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 		`data-brief-action-open`,
 		`data-brief-action-another`,
 		`data-brief-action-insight`,
+		`data-brief-insight-prompt`,
+		`maxlength="2000"`,
 		`Most recently modified substantive note.`,
 		`Longest-unseen eligible note.`,
 	}
@@ -1318,6 +1320,12 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	for _, want := range []string{
 		`<main class="note-main">`,
 		`<div class="note-content">`,
+		`data-note-insight`,
+		`data-note-insight-endpoint="/api/note/insight"`,
+		`data-note-insight-key="source"`,
+		`data-note-insight-enabled="false"`,
+		`data-note-insight-prompt`,
+		`maxlength="2000"`,
 		`<div class="note-body">`,
 		`href="https://www.merakialive.com"`,
 	} {
@@ -1327,6 +1335,11 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	}
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("unsafe raw HTML rendered in note body, got %q", body)
+	}
+	insightIndex := strings.Index(body, `data-note-insight`)
+	bodyIndex := strings.Index(body, `<h2>Body</h2>`)
+	if insightIndex < 0 || bodyIndex < 0 || insightIndex >= bodyIndex {
+		t.Fatalf("Ask AI panel must render above note body: insight=%d body=%d", insightIndex, bodyIndex)
 	}
 
 	missingResp, err := http.Get(ts.URL + "/n/does-not-exist") // #nosec G107 -- test-only local URL

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
@@ -18,6 +19,7 @@ const (
 	briefInsightPurposeContinue   = "brief-continue"
 	briefInsightPurposeRediscover = "brief-rediscover"
 	briefInsightPurposeConnect    = "brief-connect"
+	agentPromptMaxRunes           = 2000
 )
 
 var errBriefInsightMissingCandidate = errors.New("web: connect card is missing its displayed candidate")
@@ -56,6 +58,15 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "brief card id is required"))
 		return
 	}
+	userPrompt := strings.TrimSpace(r.Form.Get("prompt"))
+	if !utf8.ValidString(userPrompt) {
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "AI prompt must be valid UTF-8"))
+		return
+	}
+	if utf8.RuneCountInString(userPrompt) > agentPromptMaxRunes {
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "AI prompt must be %d characters or fewer", agentPromptMaxRunes))
+		return
+	}
 	argv := append([]string(nil), s.cfg.Agent.Command...)
 	if len(argv) == 0 {
 		writeManagementJSON(w, http.StatusOK, briefInsightResponse{
@@ -91,7 +102,7 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	packet, err := s.buildBriefInsightPacket(runtime.selection, resolved.card)
+	packet, err := s.buildBriefInsightPacket(runtime.selection, resolved.card, userPrompt)
 	if err != nil {
 		writeBriefInsightBuildError(w, err)
 		return
@@ -132,7 +143,7 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) buildBriefInsightPacket(selection brief.SelectionCorpus, card brief.Card) ([]byte, error) {
+func (s *Server) buildBriefInsightPacket(selection brief.SelectionCorpus, card brief.Card, userPrompt string) ([]byte, error) {
 	documents := selection.RecallDocuments()
 	if len(documents) == 0 {
 		return nil, errors.New("web: brief insight corpus is empty")
@@ -142,7 +153,7 @@ func (s *Server) buildBriefInsightPacket(selection brief.SelectionCorpus, card b
 		return nil, fmt.Errorf("web: brief insight source %q is unavailable", card.Source.RelPath)
 	}
 
-	purpose, mode, requiredPath, err := briefInsightPrompt(card)
+	purpose, mode, requiredPath, err := briefInsightPrompt(card, userPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -171,17 +182,23 @@ func (s *Server) buildBriefInsightPacket(selection brief.SelectionCorpus, card b
 	return recall.RenderContextMarkdown(bundle)
 }
 
-func briefInsightPrompt(card brief.Card) (recall.ContextPurpose, recall.Mode, string, error) {
+func briefInsightPrompt(card brief.Card, userPrompt string) (recall.ContextPurpose, recall.Mode, string, error) {
+	withUserPrompt := func(instructions string) string {
+		if userPrompt == "" {
+			return instructions
+		}
+		return instructions + "\n\nUser request (prioritize this when it conflicts with the default guidance):\n" + userPrompt
+	}
 	switch card.Slot {
 	case brief.SlotContinue:
 		return recall.ContextPurpose{
 			Name:         briefInsightPurposeContinue,
-			Instructions: "Identify unanswered questions and the next supporting evidence around the source note.",
+			Instructions: withUserPrompt("Identify unanswered questions and the next supporting evidence around the source note."),
 		}, recall.ModeBalanced, "", nil
 	case brief.SlotRediscover:
 		return recall.ContextPurpose{
 			Name:         briefInsightPurposeRediscover,
-			Instructions: "Synthesize why this longer-unseen note may matter now and which related paths are most useful to revisit.",
+			Instructions: withUserPrompt("Synthesize why this longer-unseen note may matter now and which related paths are most useful to revisit."),
 		}, recall.ModeBalanced, "", nil
 	case brief.SlotConnect:
 		if card.Candidate == nil {
@@ -189,11 +206,11 @@ func briefInsightPrompt(card brief.Card) (recall.ContextPurpose, recall.Mode, st
 		}
 		return recall.ContextPurpose{
 			Name: briefInsightPurposeConnect,
-			Instructions: fmt.Sprintf(
+			Instructions: withUserPrompt(fmt.Sprintf(
 				"Compare %q and %q, calling out tensions, missing evidence, and a plausible connection path.",
 				card.Source.Title,
 				card.Candidate.Title,
-			),
+			)),
 		}, recall.ModeConnect, card.Candidate.RelPath, nil
 	default:
 		return recall.ContextPurpose{}, "", "", fmt.Errorf("web: unsupported brief slot %q", card.Slot)

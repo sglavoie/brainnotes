@@ -48,6 +48,7 @@ export const readDailyBriefConfig = (root: HTMLElement): DailyBriefConfig => {
 
 const slotOrder: BriefSlotKind[] = ["continue", "rediscover", "connect"];
 const statusClasses = ["is-success", "is-error", "is-loading", "is-empty"];
+const insightPromptMaxLength = 2000;
 
 const normalizeSlot = (value: string): BriefSlotKind | "" => {
   switch ((value || "").toLowerCase()) {
@@ -141,8 +142,8 @@ const readResponsePayload = async (resp: Response): Promise<unknown> => {
 };
 
 const insightDisclosureMessage = [
-  "Ask AI sends this card's context to your configured [agent].command.",
-  "BrainNotes does not store the AI output. Continue?",
+  "Ask AI sends this card's context and your optional prompt to your configured [agent].command.",
+  "BrainNotes does not store the prompt or AI output. Continue?",
 ].join("\n");
 
 export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
@@ -194,6 +195,9 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
     for (const button of queryAllElements(container, "[data-brief-action]", HTMLButtonElement)) {
       markButtonDefaultDisabled(button);
     }
+    for (const prompt of queryAllElements(container, "[data-brief-insight-prompt]", HTMLTextAreaElement)) {
+      prompt.setAttribute("data-brief-disabled-default", prompt.disabled ? "true" : "false");
+    }
   };
 
   applyButtonDisabledDefaults(root);
@@ -213,6 +217,10 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
     for (const button of queryAllElements(slotEl, "[data-brief-action]", HTMLButtonElement)) {
       const defaultDisabled = button.getAttribute("data-brief-disabled-default") === "true";
       button.disabled = busy || defaultDisabled;
+    }
+    for (const prompt of queryAllElements(slotEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)) {
+      const defaultDisabled = prompt.getAttribute("data-brief-disabled-default") === "true";
+      prompt.disabled = busy || defaultDisabled;
     }
   };
 
@@ -267,6 +275,39 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
     button.disabled = !enabled;
     button.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
     return button;
+  };
+
+  const createInsightPrompt = (
+    doc: Document,
+    slot: BriefSlotKind,
+    cardID: string,
+    enabled: boolean
+  ): HTMLElement => {
+    const field = doc.createElement("div");
+    field.className = "brief-insight-prompt-field";
+    const promptID = `brief-insight-prompt-${slot}-${cardID}`;
+    const label = doc.createElement("label");
+    label.className = "brief-insight-prompt-label";
+    label.htmlFor = promptID;
+    label.textContent = "Ask AI about this note";
+    const controls = doc.createElement("div");
+    controls.className = "brief-insight-prompt-controls";
+    const prompt = doc.createElement("textarea");
+    prompt.id = promptID;
+    prompt.className = "brief-insight-prompt";
+    prompt.rows = 2;
+    prompt.maxLength = insightPromptMaxLength;
+    prompt.placeholder = "Optional: ask a question or specify the output";
+    prompt.disabled = !enabled;
+    prompt.setAttribute("data-brief-insight-prompt", "");
+    prompt.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
+    const button = createActionButton(doc, slot, cardID, "insight", "Ask AI", enabled);
+    controls.append(prompt, button);
+    const hint = doc.createElement("span");
+    hint.className = "brief-insight-prompt-hint";
+    hint.textContent = "Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.";
+    field.append(label, controls, hint);
+    return field;
   };
 
   const ensureInsightPanel = (cardEl: HTMLElement, slot: BriefSlotKind): HTMLElement => {
@@ -448,10 +489,10 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
     actionRow.className = "brief-card-actions";
     actionRow.append(
       createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
-      createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === ""),
-      createActionButton(doc, slot, card.ID, "insight", "Ask AI", unavailable.insight === "")
+      createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === "")
     );
     cardEl.appendChild(actionRow);
+    cardEl.appendChild(createInsightPrompt(doc, slot, card.ID, unavailable.insight === ""));
 
     if (unavailable.open) {
       const hint = doc.createElement("p");
@@ -653,6 +694,10 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
       setGlobalStatus("Ask AI is unavailable.", "is-error");
       return;
     }
+    const cardEl = button.closest<HTMLElement>("[data-brief-card]");
+    const prompt = cardEl
+      ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || ""
+      : "";
     if (!insightDisclosureAccepted) {
       insightDisclosureAccepted = confirmer(insightDisclosureMessage);
       if (!insightDisclosureAccepted) {
@@ -668,7 +713,7 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
     inflightInsight.set(slot, requestID);
 
     try {
-      const body = buildBriefInsightForm({ cardID, token: config.csrfToken }).toString();
+      const body = buildBriefInsightForm({ cardID, prompt, token: config.csrfToken }).toString();
       const resp = await fetcher(
         config.insightEndpoint,
         jsonPostRequest(config.csrfToken, body)
@@ -762,6 +807,22 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
     if (insight && root.contains(insight)) {
       void runInsight(insight);
     }
+  });
+  root.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement) || !target.matches("[data-brief-insight-prompt]")) {
+      return;
+    }
+    const cardEl = target.closest<HTMLElement>("[data-brief-card]");
+    const button = cardEl && queryElement(cardEl, "[data-brief-action-insight]", HTMLButtonElement);
+    if (!button || button.disabled) {
+      return;
+    }
+    event.preventDefault();
+    void runInsight(button);
   });
 
   const recordView = async (): Promise<void> => {

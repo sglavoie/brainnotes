@@ -77,6 +77,8 @@ type notePageData struct {
 	Backlinks          []noteLinkView
 	Outgoing           []noteLinkView
 	Broken             []brokenAffordance
+	InsightConfigured  bool
+	InsightStatusMsg   string
 }
 
 type brokenPageData struct {
@@ -193,6 +195,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/brief/view", srv.handleBriefView)
 	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
 	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)
+	mux.HandleFunc("/api/note/insight", srv.handleNoteInsight)
 	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
 	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)
 	mux.HandleFunc("/api/notes/rename", srv.handleNoteRename)
@@ -377,6 +380,10 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Backlinks:          backlinksForNote(snapshot, note),
 		Outgoing:           outgoingLinksForNote(snapshot.graph, note),
 		Broken:             brokenAffordancesForNote(note, snapshot.graph),
+		InsightConfigured:  len(s.cfg.Agent.Command) > 0,
+	}
+	if !data.InsightConfigured {
+		data.InsightStatusMsg = "Ask AI is unavailable until [agent].command is configured."
 	}
 	if err := s.templates.ExecuteTemplate(w, "note", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)

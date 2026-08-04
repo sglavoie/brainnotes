@@ -273,7 +273,7 @@ func TestServer_BriefInsightAPI_RunsConfiguredAgentAndEscapesHTML(t *testing.T) 
 	}
 
 	cardID := mustBriefCardID(t, now, brief.SlotContinue, "Source.md", "")
-	resp := postBriefInsightRequest(t, ts.URL, string(cardID), "csrf-token", "")
+	resp := postBriefInsightRequestWithPrompt(t, ts.URL, string(cardID), "  Give me three concrete next steps.  ", "csrf-token", "")
 	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
@@ -297,6 +297,9 @@ func TestServer_BriefInsightAPI_RunsConfiguredAgentAndEscapesHTML(t *testing.T) 
 	if !strings.Contains(string(gotStdin), "Source.md") {
 		t.Fatalf("agent stdin did not include context packet source path: %q", gotStdin)
 	}
+	if !strings.Contains(string(gotStdin), "User request (prioritize this when it conflicts with the default guidance):\nGive me three concrete next steps.") {
+		t.Fatalf("agent stdin did not include trimmed user prompt: %q", gotStdin)
+	}
 	if !gotDeadline {
 		t.Fatal("agent timeout did not set a request deadline")
 	}
@@ -307,6 +310,36 @@ func TestServer_BriefInsightAPI_RunsConfiguredAgentAndEscapesHTML(t *testing.T) 
 	stateBody := readNoteFile(t, filepath.Join(root, ".bnotes", "brief.json"))
 	if strings.Contains(stateBody, payload.Output) {
 		t.Fatalf("brief state persisted AI output: %q", stateBody)
+	}
+}
+
+func TestServer_BriefInsightAPI_RejectsOversizedPrompt(t *testing.T) {
+	now := time.Date(2026, 8, 4, 16, 15, 0, 0, time.FixedZone("mdt", -6*60*60))
+	var ran bool
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, func(cfg *config.Config) {
+		cfg.Agent.Command = []string{"brief-agent"}
+	}, Options{
+		CSRFToken: "csrf-token",
+		BriefNow:  func() time.Time { return now },
+		RunAgent: func(context.Context, []string, []byte) ([]byte, error) {
+			ran = true
+			return nil, nil
+		},
+	})
+
+	resp := postBriefInsightRequestWithPrompt(t, ts.URL, "card", strings.Repeat("x", agentPromptMaxRunes+1), "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusBadRequest, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.Code != "invalid_request" || !strings.Contains(payload.Message, "2000 characters or fewer") {
+		t.Fatalf("payload = %#v, want bounded prompt error", payload)
+	}
+	if ran {
+		t.Fatal("agent ran for oversized prompt")
 	}
 }
 
@@ -784,10 +817,18 @@ func postBriefItemRequest(t *testing.T, baseURL, cardID, action, headerToken, fo
 
 func postBriefInsightRequest(t *testing.T, baseURL, cardID, headerToken, formToken string) *http.Response {
 	t.Helper()
+	return postBriefInsightRequestWithPrompt(t, baseURL, cardID, "", headerToken, formToken)
+}
+
+func postBriefInsightRequestWithPrompt(t *testing.T, baseURL, cardID, prompt, headerToken, formToken string) *http.Response {
+	t.Helper()
 
 	form := url.Values{}
 	if cardID != "" {
 		form.Set("card_id", cardID)
+	}
+	if prompt != "" {
+		form.Set("prompt", prompt)
 	}
 	if formToken != "" {
 		form.Set("token", formToken)

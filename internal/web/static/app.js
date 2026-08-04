@@ -657,6 +657,21 @@ var BrainNotesApp = (() => {
       )
     };
   };
+  var normalizeNoteInsightResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      enabled: readBoolean(readRecordValue(record, ["enabled", "Enabled"])),
+      key: normalizeParamValue(readRecordValue(record, ["key", "Key"])),
+      output: normalizeParamValue(readRecordValue(record, ["output", "Output"])),
+      rendered_html: normalizeParamValue(
+        readRecordValue(record, ["rendered_html", "RenderedHTML", "renderedHtml"])
+      )
+    };
+  };
   var buildBriefViewForm = (request) => {
     const body = new URLSearchParams();
     body.set("token", request.token);
@@ -672,6 +687,18 @@ var BrainNotesApp = (() => {
   var buildBriefInsightForm = (request) => {
     const body = new URLSearchParams();
     body.set("card_id", request.cardID);
+    if (request.prompt.trim() !== "") {
+      body.set("prompt", request.prompt.trim());
+    }
+    body.set("token", request.token);
+    return body;
+  };
+  var buildNoteInsightForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("key", request.key);
+    if (request.prompt.trim() !== "") {
+      body.set("prompt", request.prompt.trim());
+    }
     body.set("token", request.token);
     return body;
   };
@@ -1116,6 +1143,7 @@ var BrainNotesApp = (() => {
   };
   var slotOrder = ["continue", "rediscover", "connect"];
   var statusClasses = ["is-success", "is-error", "is-loading", "is-empty"];
+  var insightPromptMaxLength = 2e3;
   var normalizeSlot = (value) => {
     switch ((value || "").toLowerCase()) {
       case "continue":
@@ -1198,8 +1226,8 @@ var BrainNotesApp = (() => {
     }
   };
   var insightDisclosureMessage = [
-    "Ask AI sends this card's context to your configured [agent].command.",
-    "BrainNotes does not store the AI output. Continue?"
+    "Ask AI sends this card's context and your optional prompt to your configured [agent].command.",
+    "BrainNotes does not store the prompt or AI output. Continue?"
   ].join("\n");
   var initDailyBrief = (deps = {}) => {
     const root = queryElement(document, "[data-brief-root]", HTMLElement);
@@ -1231,6 +1259,9 @@ var BrainNotesApp = (() => {
       for (const button of queryAllElements(container, "[data-brief-action]", HTMLButtonElement)) {
         markButtonDefaultDisabled(button);
       }
+      for (const prompt of queryAllElements(container, "[data-brief-insight-prompt]", HTMLTextAreaElement)) {
+        prompt.setAttribute("data-brief-disabled-default", prompt.disabled ? "true" : "false");
+      }
     };
     applyButtonDisabledDefaults(root);
     const openedCards = /* @__PURE__ */ new Set();
@@ -1247,6 +1278,10 @@ var BrainNotesApp = (() => {
       for (const button of queryAllElements(slotEl, "[data-brief-action]", HTMLButtonElement)) {
         const defaultDisabled = button.getAttribute("data-brief-disabled-default") === "true";
         button.disabled = busy || defaultDisabled;
+      }
+      for (const prompt of queryAllElements(slotEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)) {
+        const defaultDisabled = prompt.getAttribute("data-brief-disabled-default") === "true";
+        prompt.disabled = busy || defaultDisabled;
       }
     };
     const setSlotsBusy = (slots, busy) => {
@@ -1290,6 +1325,33 @@ var BrainNotesApp = (() => {
       button.disabled = !enabled;
       button.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
       return button;
+    };
+    const createInsightPrompt = (doc, slot, cardID, enabled) => {
+      const field = doc.createElement("div");
+      field.className = "brief-insight-prompt-field";
+      const promptID = `brief-insight-prompt-${slot}-${cardID}`;
+      const label = doc.createElement("label");
+      label.className = "brief-insight-prompt-label";
+      label.htmlFor = promptID;
+      label.textContent = "Ask AI about this note";
+      const controls = doc.createElement("div");
+      controls.className = "brief-insight-prompt-controls";
+      const prompt = doc.createElement("textarea");
+      prompt.id = promptID;
+      prompt.className = "brief-insight-prompt";
+      prompt.rows = 2;
+      prompt.maxLength = insightPromptMaxLength;
+      prompt.placeholder = "Optional: ask a question or specify the output";
+      prompt.disabled = !enabled;
+      prompt.setAttribute("data-brief-insight-prompt", "");
+      prompt.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
+      const button = createActionButton(doc, slot, cardID, "insight", "Ask AI", enabled);
+      controls.append(prompt, button);
+      const hint = doc.createElement("span");
+      hint.className = "brief-insight-prompt-hint";
+      hint.textContent = "Leave blank for the suggested insight. Press Ctrl/\u2318 + Enter to ask.";
+      field.append(label, controls, hint);
+      return field;
     };
     const ensureInsightPanel = (cardEl, slot) => {
       const existing = queryElement(cardEl, "[data-brief-insight-panel]", HTMLElement);
@@ -1441,10 +1503,10 @@ var BrainNotesApp = (() => {
       actionRow.className = "brief-card-actions";
       actionRow.append(
         createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
-        createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === ""),
-        createActionButton(doc, slot, card.ID, "insight", "Ask AI", unavailable.insight === "")
+        createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === "")
       );
       cardEl.appendChild(actionRow);
+      cardEl.appendChild(createInsightPrompt(doc, slot, card.ID, unavailable.insight === ""));
       if (unavailable.open) {
         const hint = doc.createElement("p");
         hint.className = "brief-action-hint";
@@ -1618,6 +1680,8 @@ var BrainNotesApp = (() => {
         setGlobalStatus("Ask AI is unavailable.", "is-error");
         return;
       }
+      const cardEl = button.closest("[data-brief-card]");
+      const prompt = cardEl ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || "" : "";
       if (!insightDisclosureAccepted) {
         insightDisclosureAccepted = confirmer(insightDisclosureMessage);
         if (!insightDisclosureAccepted) {
@@ -1631,7 +1695,7 @@ var BrainNotesApp = (() => {
       insightCounter = requestID;
       inflightInsight.set(slot, requestID);
       try {
-        const body = buildBriefInsightForm({ cardID, token: config.csrfToken }).toString();
+        const body = buildBriefInsightForm({ cardID, prompt, token: config.csrfToken }).toString();
         const resp = await fetcher(
           config.insightEndpoint,
           jsonPostRequest(config.csrfToken, body)
@@ -1718,6 +1782,22 @@ var BrainNotesApp = (() => {
       if (insight && root.contains(insight)) {
         void runInsight(insight);
       }
+    });
+    root.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || !event.ctrlKey && !event.metaKey) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof HTMLTextAreaElement) || !target.matches("[data-brief-insight-prompt]")) {
+        return;
+      }
+      const cardEl = target.closest("[data-brief-card]");
+      const button = cardEl && queryElement(cardEl, "[data-brief-action-insight]", HTMLButtonElement);
+      if (!button || button.disabled) {
+        return;
+      }
+      event.preventDefault();
+      void runInsight(button);
     });
     const recordView = async () => {
       if (!config.csrfToken) {
@@ -4632,6 +4712,138 @@ var BrainNotesApp = (() => {
     view.addEventListener("resize", () => applyWidth(preferredWidth));
   };
 
+  // internal/web/static_src/note-insight.ts
+  var disclosureMessage = [
+    "Ask AI sends this note, related-note context, and your optional prompt to your configured [agent].command.",
+    "BrainNotes does not store the prompt or AI output. Continue?"
+  ].join("\n");
+  var postRequest = (csrfToken, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": csrfToken
+    },
+    body
+  });
+  var readResponsePayload3 = async (response) => {
+    try {
+      if ((response.headers.get("Content-Type") || "").includes("application/json")) {
+        return await response.json();
+      }
+      return await response.text();
+    } catch {
+      return "";
+    }
+  };
+  var initNoteInsight = (deps = {}) => {
+    const root = queryElement(document, "[data-note-insight]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const endpoint = root.getAttribute("data-note-insight-endpoint") || "/api/note/insight";
+    const key = root.getAttribute("data-note-insight-key") || "";
+    const csrfToken = root.getAttribute("data-note-insight-csrf") || "";
+    const enabled = (root.getAttribute("data-note-insight-enabled") || "").toLowerCase() === "true";
+    const prompt = queryElement(root, "[data-note-insight-prompt]", HTMLTextAreaElement);
+    const submit = queryElement(root, "[data-note-insight-submit]", HTMLButtonElement);
+    const status = queryElement(root, "[data-note-insight-status]", HTMLElement);
+    const result = queryElement(root, "[data-note-insight-result]", HTMLElement);
+    const body = queryElement(root, "[data-note-insight-body]", HTMLElement);
+    const copy = queryElement(root, "[data-note-insight-copy]", HTMLButtonElement);
+    if (!prompt || !submit || !status || !result || !body || !copy) {
+      return;
+    }
+    const fetcher = deps.fetch || fetch;
+    const confirmer = deps.confirm || ((message) => window.confirm(message));
+    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text) => navigator.clipboard.writeText(text) : void 0);
+    let disclosureAccepted = false;
+    let output = "";
+    const setStatus = (message, kind = "") => {
+      setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
+    };
+    const setBusy = (busy) => {
+      root.setAttribute("aria-busy", String(busy));
+      prompt.disabled = busy || !enabled;
+      submit.disabled = busy || !enabled;
+      copy.disabled = busy || output.trim() === "";
+    };
+    const run = async () => {
+      if (!enabled || key === "" || csrfToken === "") {
+        setStatus("Ask AI is unavailable.", "is-error");
+        return;
+      }
+      if (!disclosureAccepted) {
+        disclosureAccepted = confirmer(disclosureMessage);
+        if (!disclosureAccepted) {
+          setStatus("Ask AI canceled.");
+          return;
+        }
+      }
+      setBusy(true);
+      setStatus("Generating response...", "is-loading");
+      try {
+        const requestBody = buildNoteInsightForm({
+          key,
+          prompt: prompt.value,
+          token: csrfToken
+        }).toString();
+        const response = await fetcher(endpoint, postRequest(csrfToken, requestBody));
+        const payload = await readResponsePayload3(response);
+        if (!response.ok) {
+          setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+          return;
+        }
+        const normalized = normalizeNoteInsightResponse(payload);
+        if (!normalized.ok || !normalized.enabled) {
+          setStatus(normalized.message || "Ask AI is unavailable.", "is-error");
+          return;
+        }
+        if (normalized.key && normalized.key !== key) {
+          setStatus("Note changed while the response was running. Try again.", "is-error");
+          return;
+        }
+        output = normalized.output;
+        body.innerHTML = normalized.rendered_html;
+        result.hidden = false;
+        setStatus("Response ready.", "is-success");
+      } catch {
+        setStatus("Ask AI failed.", "is-error");
+      } finally {
+        setBusy(false);
+      }
+    };
+    submit.addEventListener("click", () => {
+      void run();
+    });
+    prompt.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || !event.ctrlKey && !event.metaKey || submit.disabled) {
+        return;
+      }
+      event.preventDefault();
+      void run();
+    });
+    copy.addEventListener("click", async () => {
+      if (output.trim() === "") {
+        setStatus("Nothing to copy.", "is-error");
+        return;
+      }
+      if (!clipboardWrite) {
+        setStatus("Clipboard unavailable.", "is-error");
+        return;
+      }
+      copy.disabled = true;
+      try {
+        await clipboardWrite(output);
+        setStatus("Response markdown copied.", "is-success");
+      } catch {
+        setStatus("Copy failed.", "is-error");
+      } finally {
+        copy.disabled = false;
+      }
+    });
+  };
+
   // internal/web/static_src/note-trash.ts
   var readTrashNoteConfig = (container) => ({
     key: container.getAttribute("data-trash-key") || "",
@@ -5694,6 +5906,7 @@ var BrainNotesApp = (() => {
     initOpenInEditor();
     initTrashNoteAction();
     initNoteLayout();
+    initNoteInsight();
     initFrontmatterEditing();
     initBrokenCreateActions();
     initCopyControls();

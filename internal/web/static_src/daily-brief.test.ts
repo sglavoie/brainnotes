@@ -69,6 +69,7 @@ const briefRootHTML = (): string => `
       <div class="brief-card" data-brief-card data-brief-card-id="continue-1">
         <button type="button" data-brief-action="open" data-brief-action-open data-brief-slot="continue" data-brief-card-id="continue-1">Open</button>
         <button type="button" data-brief-action="another" data-brief-action-another data-brief-slot="continue" data-brief-card-id="continue-1">Another</button>
+        <textarea data-brief-insight-prompt></textarea>
         <button type="button" data-brief-action="insight" data-brief-action-insight data-brief-slot="continue" data-brief-card-id="continue-1">Ask AI</button>
       </div>
       <p data-brief-slot-status="continue"></p>
@@ -79,6 +80,7 @@ const briefRootHTML = (): string => `
       <div class="brief-card" data-brief-card data-brief-card-id="rediscover-1">
         <button type="button" data-brief-action="open" data-brief-action-open data-brief-slot="rediscover" data-brief-card-id="rediscover-1">Open</button>
         <button type="button" data-brief-action="another" data-brief-action-another data-brief-slot="rediscover" data-brief-card-id="rediscover-1">Another</button>
+        <textarea data-brief-insight-prompt></textarea>
         <button type="button" data-brief-action="insight" data-brief-action-insight data-brief-slot="rediscover" data-brief-card-id="rediscover-1">Ask AI</button>
       </div>
       <p data-brief-slot-status="rediscover"></p>
@@ -89,6 +91,7 @@ const briefRootHTML = (): string => `
       <div class="brief-card" data-brief-card data-brief-card-id="connect-1">
         <button type="button" data-brief-action="open" data-brief-action-open data-brief-slot="connect" data-brief-card-id="connect-1">Open</button>
         <button type="button" data-brief-action="another" data-brief-action-another data-brief-slot="connect" data-brief-card-id="connect-1">Another</button>
+        <textarea data-brief-insight-prompt></textarea>
         <button type="button" data-brief-action="insight" data-brief-action-insight data-brief-slot="connect" data-brief-card-id="connect-1">Ask AI</button>
       </div>
       <p data-brief-slot-status="connect"></p>
@@ -162,7 +165,10 @@ describe("brief API normalization", () => {
     expect(
       buildBriefItemForm({ cardID: "card-1", action: "open", token: "csrf" }).toString()
     ).toBe("card_id=card-1&action=open&token=csrf");
-    expect(buildBriefInsightForm({ cardID: "card-1", token: "csrf" }).toString()).toBe(
+    expect(buildBriefInsightForm({ cardID: "card-1", prompt: "  Compare options  ", token: "csrf" }).toString()).toBe(
+      "card_id=card-1&prompt=Compare+options&token=csrf"
+    );
+    expect(buildBriefInsightForm({ cardID: "card-1", prompt: "  ", token: "csrf" }).toString()).toBe(
       "card_id=card-1&token=csrf"
     );
   });
@@ -194,7 +200,7 @@ describe("daily brief controller", () => {
 
   it("opens a card, updates activity, and keeps an Opened presentation", async () => {
     document.body.innerHTML = briefRootHTML();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === "/api/brief/item") {
         return jsonResponse({
           ok: true,
@@ -273,6 +279,7 @@ describe("daily brief controller", () => {
     await waitForExpect(() => {
       expect(document.querySelector('[data-brief-slot="continue"] [data-brief-card-id="continue-2"]')).not.toBeNull();
     });
+    expect(document.querySelector('[data-brief-slot="continue"] [data-brief-insight-prompt]')).not.toBeNull();
     expect(document.querySelector('[data-brief-slot="connect"] [data-brief-card-id="connect-2"]')).not.toBeNull();
     const focused = document.querySelector<HTMLButtonElement>('[data-brief-slot="continue"] [data-brief-action-another]');
     expect(document.activeElement).toBe(focused);
@@ -281,7 +288,7 @@ describe("daily brief controller", () => {
 
   it("requires disclosure for Ask AI and renders server-safe HTML with raw copy", async () => {
     document.body.innerHTML = briefRootHTML();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === "/api/brief/insight") {
         return jsonResponse({
           ok: true,
@@ -309,6 +316,12 @@ describe("daily brief controller", () => {
       writeClipboard: clipboardMock,
     });
 
+    const prompt = document.querySelector<HTMLTextAreaElement>(
+      '[data-brief-slot="continue"] [data-brief-insight-prompt]'
+    );
+    if (prompt) {
+      prompt.value = "List three concrete next steps";
+    }
     document.querySelector<HTMLButtonElement>('[data-brief-slot="continue"] [data-brief-action-insight]')?.click();
     await waitForExpect(() => {
       expect(document.querySelector('[data-brief-slot="continue"] [data-brief-insight-body]')?.innerHTML).toContain("<strong>Summary</strong>");
@@ -316,6 +329,8 @@ describe("daily brief controller", () => {
 
     const insightHTML = document.querySelector('[data-brief-slot="continue"] [data-brief-insight-body]')?.innerHTML || "";
     expect(confirmMock).toHaveBeenCalledTimes(1);
+    const insightCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/brief/insight");
+    expect(String(insightCall?.[1]?.body)).toContain("prompt=List+three+concrete+next+steps");
     expect(insightHTML).toContain("<strong>Summary</strong>");
     expect(insightHTML).not.toContain("<script>");
 

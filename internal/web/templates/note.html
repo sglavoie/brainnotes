@@ -241,6 +241,39 @@
         {{end}}
 
         <div class="note-content">
+          <section
+            class="panel note-insight"
+            data-note-insight
+            data-note-insight-endpoint="/api/note/insight"
+            data-note-insight-key="{{.Key}}"
+            data-note-insight-csrf="{{.CSRFToken}}"
+            data-note-insight-enabled="{{if .InsightConfigured}}true{{else}}false{{end}}"
+          >
+            <h2>Ask AI</h2>
+            <label class="note-insight-label" for="note-insight-prompt">Ask a question or specify the outcome</label>
+            <div class="note-insight-controls">
+              <textarea
+                id="note-insight-prompt"
+                class="note-insight-prompt"
+                rows="2"
+                maxlength="2000"
+                placeholder="Optional: leave blank for a suggested insight"
+                data-note-insight-prompt
+                {{if not .InsightConfigured}}disabled{{end}}
+              ></textarea>
+              <button class="note-insight-button" type="button" data-note-insight-submit {{if not .InsightConfigured}}disabled{{end}}>Ask AI</button>
+            </div>
+            <p class="note-insight-hint">Press Ctrl/⌘ + Enter to ask. Your prompt and the AI output are not stored.</p>
+            <p class="note-insight-status{{if not .InsightConfigured}} is-error{{end}}" data-note-insight-status role="status" aria-live="polite">{{.InsightStatusMsg}}</p>
+            <section class="note-insight-result" data-note-insight-result hidden>
+              <div class="note-insight-result-header">
+                <h3>AI response</h3>
+                <button class="note-insight-copy" type="button" data-note-insight-copy disabled>Copy Markdown</button>
+              </div>
+              <div class="note-body note-insight-body" data-note-insight-body></div>
+            </section>
+          </section>
+
           <section class="panel">
             <h2>Body</h2>
             <div class="note-body">{{.BodyHTML}}</div>

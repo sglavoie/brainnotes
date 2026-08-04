@@ -110,15 +110,30 @@
                 data-brief-slot="{{.Continue.Slot}}"
                 {{if not .Continue.Card.AnotherEnabled}}disabled{{end}}
               >Another</button>
-              <button
-                class="brief-action-button"
-                type="button"
-                data-brief-action-insight
-                data-brief-action="insight"
-                data-brief-card-id="{{.Continue.Card.ID}}"
-                data-brief-slot="{{.Continue.Slot}}"
-                {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
-              >Ask AI</button>
+            </div>
+            <div class="brief-insight-prompt-field">
+              <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Continue.Slot}}-{{.Continue.Card.ID}}">Ask AI about this note</label>
+              <div class="brief-insight-prompt-controls">
+                <textarea
+                  id="brief-insight-prompt-{{.Continue.Slot}}-{{.Continue.Card.ID}}"
+                  class="brief-insight-prompt"
+                  rows="2"
+                  maxlength="2000"
+                  placeholder="Optional: ask a question or specify the output"
+                  data-brief-insight-prompt
+                  {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
+                ></textarea>
+                <button
+                  class="brief-action-button"
+                  type="button"
+                  data-brief-action-insight
+                  data-brief-action="insight"
+                  data-brief-card-id="{{.Continue.Card.ID}}"
+                  data-brief-slot="{{.Continue.Slot}}"
+                  {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
+                >Ask AI</button>
+              </div>
+              <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
             </div>
             {{if .Continue.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Continue.Card.OpenDisabledReason}}</p>{{end}}
             {{if .Continue.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Continue.Card.AnotherDisabledMsg}}</p>{{end}}
@@ -174,15 +189,30 @@
                   data-brief-slot="{{.Rediscover.Slot}}"
                   {{if not .Rediscover.Card.AnotherEnabled}}disabled{{end}}
                 >Another</button>
-                <button
-                  class="brief-action-button"
-                  type="button"
-                  data-brief-action-insight
-                  data-brief-action="insight"
-                  data-brief-card-id="{{.Rediscover.Card.ID}}"
-                  data-brief-slot="{{.Rediscover.Slot}}"
-                  {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
-                >Ask AI</button>
+              </div>
+              <div class="brief-insight-prompt-field">
+                <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Rediscover.Slot}}-{{.Rediscover.Card.ID}}">Ask AI about this note</label>
+                <div class="brief-insight-prompt-controls">
+                  <textarea
+                    id="brief-insight-prompt-{{.Rediscover.Slot}}-{{.Rediscover.Card.ID}}"
+                    class="brief-insight-prompt"
+                    rows="2"
+                    maxlength="2000"
+                    placeholder="Optional: ask a question or specify the output"
+                    data-brief-insight-prompt
+                    {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
+                  ></textarea>
+                  <button
+                    class="brief-action-button"
+                    type="button"
+                    data-brief-action-insight
+                    data-brief-action="insight"
+                    data-brief-card-id="{{.Rediscover.Card.ID}}"
+                    data-brief-slot="{{.Rediscover.Slot}}"
+                    {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
+                  >Ask AI</button>
+                </div>
+                <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
               </div>
               {{if .Rediscover.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Rediscover.Card.OpenDisabledReason}}</p>{{end}}
               {{if .Rediscover.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Rediscover.Card.AnotherDisabledMsg}}</p>{{end}}
@@ -247,15 +277,30 @@
                   data-brief-slot="{{.Connect.Slot}}"
                   {{if not .Connect.Card.AnotherEnabled}}disabled{{end}}
                 >Another</button>
-                <button
-                  class="brief-action-button"
-                  type="button"
-                  data-brief-action-insight
-                  data-brief-action="insight"
-                  data-brief-card-id="{{.Connect.Card.ID}}"
-                  data-brief-slot="{{.Connect.Slot}}"
-                  {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
-                >Ask AI</button>
+              </div>
+              <div class="brief-insight-prompt-field">
+                <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Connect.Slot}}-{{.Connect.Card.ID}}">Ask AI about this note</label>
+                <div class="brief-insight-prompt-controls">
+                  <textarea
+                    id="brief-insight-prompt-{{.Connect.Slot}}-{{.Connect.Card.ID}}"
+                    class="brief-insight-prompt"
+                    rows="2"
+                    maxlength="2000"
+                    placeholder="Optional: ask a question or specify the output"
+                    data-brief-insight-prompt
+                    {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
+                  ></textarea>
+                  <button
+                    class="brief-action-button"
+                    type="button"
+                    data-brief-action-insight
+                    data-brief-action="insight"
+                    data-brief-card-id="{{.Connect.Card.ID}}"
+                    data-brief-slot="{{.Connect.Slot}}"
+                    {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
+                  >Ask AI</button>
+                </div>
+                <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
               </div>
               {{if .Connect.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Connect.Card.OpenDisabledReason}}</p>{{end}}
               {{if .Connect.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Connect.Card.AnotherDisabledMsg}}</p>{{end}}

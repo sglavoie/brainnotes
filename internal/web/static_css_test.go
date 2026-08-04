@@ -73,6 +73,24 @@ func TestNoteLayoutCSSResponsiveContract(t *testing.T) {
 	}
 }
 
+func TestNoteInsightCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+	for _, want := range []string{
+		".note-insight",
+		".note-insight-controls",
+		"grid-template-columns: minmax(300px, 1fr) auto;",
+		".note-insight-prompt",
+		"min-width: 300px;",
+		".note-insight-button:focus-visible",
+		".note-insight-result",
+		".note-insight-copy",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("note insight CSS missing %q", want)
+		}
+	}
+}
+
 func TestManagementCSSAccessibilityAndMobileContract(t *testing.T) {
 	css := readStaticCSS(t)
 
@@ -132,6 +150,9 @@ func TestBriefCSSAccessibilityAndResponsiveContract(t *testing.T) {
 		".brief-card-actions",
 		".brief-action-button",
 		".brief-action-button.is-opened",
+		".brief-insight-prompt-field",
+		".brief-insight-prompt-controls",
+		".brief-insight-prompt",
 		".brief-action-hint",
 		".brief-slot-status",
 		".brief-global-status",

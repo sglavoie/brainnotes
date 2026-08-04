@@ -151,6 +151,23 @@ export type BriefItemRequest = {
 
 export type BriefInsightRequest = {
   cardID: string;
+  prompt: string;
+  token: string;
+};
+
+export type NoteInsightResult = {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  enabled: boolean;
+  key: string;
+  output: string;
+  rendered_html: string;
+};
+
+export type NoteInsightRequest = {
+  key: string;
+  prompt: string;
   token: string;
 };
 
@@ -1073,6 +1090,22 @@ export const normalizeBriefInsightResponse = (payload: unknown): BriefInsightRes
   };
 };
 
+export const normalizeNoteInsightResponse = (payload: unknown): NoteInsightResult => {
+  const base = normalizeManagementResult(payload);
+  const record = asRecord(payload) || {};
+  return {
+    ok: base.ok,
+    code: base.ok ? undefined : base.code,
+    message: base.message,
+    enabled: readBoolean(readRecordValue(record, ["enabled", "Enabled"])),
+    key: normalizeParamValue(readRecordValue(record, ["key", "Key"])),
+    output: normalizeParamValue(readRecordValue(record, ["output", "Output"])),
+    rendered_html: normalizeParamValue(
+      readRecordValue(record, ["rendered_html", "RenderedHTML", "renderedHtml"])
+    ),
+  };
+};
+
 export const buildBriefViewForm = (request: BriefViewRequest): URLSearchParams => {
   const body = new URLSearchParams();
   body.set("token", request.token);
@@ -1090,6 +1123,19 @@ export const buildBriefItemForm = (request: BriefItemRequest): URLSearchParams =
 export const buildBriefInsightForm = (request: BriefInsightRequest): URLSearchParams => {
   const body = new URLSearchParams();
   body.set("card_id", request.cardID);
+  if (request.prompt.trim() !== "") {
+    body.set("prompt", request.prompt.trim());
+  }
+  body.set("token", request.token);
+  return body;
+};
+
+export const buildNoteInsightForm = (request: NoteInsightRequest): URLSearchParams => {
+  const body = new URLSearchParams();
+  body.set("key", request.key);
+  if (request.prompt.trim() !== "") {
+    body.set("prompt", request.prompt.trim());
+  }
   body.set("token", request.token);
   return body;
 };
