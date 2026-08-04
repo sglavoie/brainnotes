@@ -44,8 +44,8 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 	if got.BrokenTargets[0].Items[0].Title != "Source" || got.BrokenTargets[0].Items[0].Location == "" {
 		t.Fatalf("broken target source details missing: %#v", got.BrokenTargets[0].Items)
 	}
-	if got.BrokenTargets[0].Items[0].FolderPath != "/?folder=Work" {
-		t.Fatalf("broken target folder path = %q, want /?folder=Work", got.BrokenTargets[0].Items[0].FolderPath)
+	if got.BrokenTargets[0].Items[0].FolderPath != "/library?folder=Work" {
+		t.Fatalf("broken target folder path = %q, want /library?folder=Work", got.BrokenTargets[0].Items[0].FolderPath)
 	}
 
 	if titles := diagnosticTitles(got.OrphanNotes); !sameStrings(titles, []string{"Island", "Source"}) {
@@ -82,8 +82,10 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 		cards["duplicate_titles"].Count != 2 || cards["schema_violations"].Count != 6 {
 		t.Fatalf("diagnostic card counts = %#v", got.Cards)
 	}
-	if cards["broken"].Path != "/?broken=1" || cards["orphan"].Path != "/?orphan=1" ||
-		cards["dead_end"].Path != "/?dead_end=1" || cards["duplicate_titles"].Path != "#diagnostic-duplicate-titles" {
+	if cards["broken"].Path != "/health#diagnostic-broken-targets" ||
+		cards["orphan"].Path != "/health#diagnostic-orphans" ||
+		cards["dead_end"].Path != "/health#diagnostic-dead-ends" ||
+		cards["duplicate_titles"].Path != "/health#diagnostic-duplicate-titles" {
 		t.Fatalf("diagnostic card filter paths = %#v", got.Cards)
 	}
 }
@@ -127,12 +129,12 @@ func TestServerIndexToleratesFrontmatterParseErrors(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
 	}
-	if !strings.Contains(body, "<h1>bn serve</h1>") {
+	if !strings.Contains(body, "<h1>Daily Brief</h1>") {
 		t.Fatalf("index did not render expected heading: %q", body)
 	}
 }
 
-func TestServerIndexRendersSkippedNotesFromSharedSnapshot(t *testing.T) {
+func TestServerHealthRendersSkippedNotesFromSharedSnapshot(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "Good.md", "---\nstatus: active\n---\n[[Missing]]\n")
 	writeTestFile(t, root, "Bad.md", "---\n: bad\n---\nBody\n")
@@ -153,9 +155,9 @@ func TestServerIndexRendersSkippedNotesFromSharedSnapshot(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	resp, err := http.Get(ts.URL + "/health") // #nosec G107 -- test-only local URL
 	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		t.Fatalf("GET /health: %v", err)
 	}
 	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusOK {

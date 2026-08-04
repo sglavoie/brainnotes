@@ -19,6 +19,35 @@ const csrfHeaderName = "X-BN-CSRF"
 
 var errOpenPathOutsideVault = errors.New("web: open path resolves outside vault")
 
+type openFailureStage string
+
+const (
+	openFailureStat         openFailureStage = "stat"
+	openFailureResolvePath  openFailureStage = "resolve-path"
+	openFailureEditorSpec   openFailureStage = "editor-spec"
+	openFailureEditorTarget openFailureStage = "editor-target"
+	openFailureEditorStart  openFailureStage = "editor-start"
+)
+
+type openFailure struct {
+	stage openFailureStage
+	err   error
+}
+
+func (f *openFailure) Error() string {
+	if f == nil {
+		return "web: open failure"
+	}
+	return fmt.Sprintf("web: %s: %v", f.stage, f.err)
+}
+
+func (f *openFailure) Unwrap() error {
+	if f == nil {
+		return nil
+	}
+	return f.err
+}
+
 func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/api/open" {
 		http.NotFound(w, r)
@@ -81,45 +110,42 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, err := os.Stat(notePath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			http.NotFound(w, r)
+	if err := s.openNotePath(notePath); err != nil {
+		switch failureStage(err) {
+		case openFailureStat:
+			if errors.Is(err, os.ErrNotExist) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, "note stat error", http.StatusInternalServerError)
 			return
-		}
-		http.Error(w, "note stat error", http.StatusInternalServerError)
-		return
-	}
-
-	resolvedPath, err := resolveOpenPath(s.vault.Root, notePath)
-	if err != nil {
-		switch {
-		case errors.Is(err, errOpenPathOutsideVault):
-			http.Error(w, "forbidden note path", http.StatusForbidden)
-		case errors.Is(err, os.ErrNotExist):
-			http.NotFound(w, r)
+		case openFailureResolvePath:
+			switch {
+			case errors.Is(err, errOpenPathOutsideVault):
+				http.Error(w, "forbidden note path", http.StatusForbidden)
+			case errors.Is(err, os.ErrNotExist):
+				http.NotFound(w, r)
+			default:
+				http.Error(w, "note path error", http.StatusInternalServerError)
+			}
+			return
+		case openFailureEditorSpec:
+			if errors.Is(err, editor.ErrNoEditorConfigured) {
+				http.Error(w, "editor not configured", http.StatusPreconditionFailed)
+				return
+			}
+			http.Error(w, "editor spec error", http.StatusInternalServerError)
+			return
+		case openFailureEditorTarget:
+			http.Error(w, "editor resolve error", http.StatusPreconditionFailed)
+			return
+		case openFailureEditorStart:
+			http.Error(w, "editor start error", http.StatusInternalServerError)
+			return
 		default:
-			http.Error(w, "note path error", http.StatusInternalServerError)
-		}
-		return
-	}
-
-	spec, err := editor.Spec(s.cfg.Open.Editor, os.Getenv("EDITOR"))
-	if err != nil {
-		if errors.Is(err, editor.ErrNoEditorConfigured) {
-			http.Error(w, "editor not configured", http.StatusPreconditionFailed)
+			http.Error(w, "editor start error", http.StatusInternalServerError)
 			return
 		}
-		http.Error(w, "editor spec error", http.StatusInternalServerError)
-		return
-	}
-	bin, argv, err := editor.Resolve(spec, resolvedPath, 1)
-	if err != nil {
-		http.Error(w, "editor resolve error", http.StatusPreconditionFailed)
-		return
-	}
-	if err := s.startEditor(bin, argv); err != nil {
-		http.Error(w, "editor start error", http.StatusInternalServerError)
-		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -158,6 +184,36 @@ func (s *Server) notePathForOpenRouteFallback(key string) (string, error) {
 		return "", err
 	}
 	return resolvedPath, nil
+}
+
+func (s *Server) openNotePath(notePath string) error {
+	if _, err := os.Stat(notePath); err != nil {
+		return &openFailure{stage: openFailureStat, err: err}
+	}
+	resolvedPath, err := resolveOpenPath(s.vault.Root, notePath)
+	if err != nil {
+		return &openFailure{stage: openFailureResolvePath, err: err}
+	}
+	spec, err := editor.Spec(s.cfg.Open.Editor, os.Getenv("EDITOR"))
+	if err != nil {
+		return &openFailure{stage: openFailureEditorSpec, err: err}
+	}
+	bin, argv, err := editor.Resolve(spec, resolvedPath, 1)
+	if err != nil {
+		return &openFailure{stage: openFailureEditorTarget, err: err}
+	}
+	if err := s.startEditor(bin, argv); err != nil {
+		return &openFailure{stage: openFailureEditorStart, err: err}
+	}
+	return nil
+}
+
+func failureStage(err error) openFailureStage {
+	var failure *openFailure
+	if errors.As(err, &failure) {
+		return failure.stage
+	}
+	return ""
 }
 
 func csrfTokenMatches(expected, provided string) bool {

@@ -27,6 +27,7 @@ type Config struct {
 	Serve       ServeConfig       `toml:"serve"`
 	New         NewConfig         `toml:"new"`
 	Related     RelatedConfig     `toml:"related"`
+	Brief       BriefConfig       `toml:"brief"`
 	Agent       AgentConfig       `toml:"agent"`
 	Cockpit     CockpitConfig     `toml:"cockpit"`
 
@@ -87,6 +88,16 @@ type RelatedConfig struct {
 	// MetadataProperties lists frontmatter properties whose values contribute
 	// to metadata similarity. An explicitly empty list disables that signal.
 	MetadataProperties []string `toml:"metadata_properties"`
+}
+
+// BriefConfig tunes Daily Brief candidate exclusions.
+type BriefConfig struct {
+	// ExcludeFolders lists vault-relative folder prefixes excluded from brief
+	// recommendations.
+	ExcludeFolders []string `toml:"exclude_folders"`
+	// ExcludeTypes lists normalized frontmatter type values excluded from brief
+	// recommendations.
+	ExcludeTypes []string `toml:"exclude_types"`
 }
 
 // AgentConfig configures explicit local agent execution. Command is an argv

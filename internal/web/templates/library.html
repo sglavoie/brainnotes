@@ -1,0 +1,152 @@
+{{define "library"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>{{ .Title }}</h1>
+        <p class="page-subtitle">Faceted search, bulk note operations, change history, and recent notes.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    {{template "facetControls" .FacetControls}}
+
+    <section
+      class="panel overview-results"
+      data-overview-search-results
+      aria-labelledby="overview-results-heading"
+      aria-describedby="overview-results-status"
+      aria-busy="false"
+    >
+      <div class="panel-header">
+        <h2 id="overview-results-heading">Search results</h2>
+      </div>
+      <p
+        id="overview-results-status"
+        class="overview-results-status is-empty"
+        data-overview-search-status
+        role="status"
+        aria-live="polite"
+      >No query or filters selected.</p>
+      <div
+        class="overview-bulk-actions"
+        data-overview-bulk
+        data-overview-csrf="{{.CSRFToken}}"
+        hidden
+      >
+        <div class="overview-bulk-row">
+          <p class="overview-selected-count" data-overview-selected-count>0 selected</p>
+          <button class="overview-bulk-button overview-bulk-danger" type="button" data-bulk-trash aria-label="Move selected notes to Trash">Trash</button>
+        </div>
+        <div class="overview-bulk-row">
+          <form class="overview-bulk-form" data-bulk-move>
+            <label for="overview-bulk-folder">Move to</label>
+            <input id="overview-bulk-folder" name="folder" type="text" placeholder="Folder">
+            <button class="overview-bulk-button" type="submit">Move</button>
+          </form>
+        </div>
+        <div class="overview-bulk-row">
+          <form class="overview-bulk-form" data-bulk-frontmatter-set>
+            <label for="overview-bulk-set-property">Set</label>
+            <input id="overview-bulk-set-property" name="property" type="text" placeholder="Property">
+            <select name="op" aria-label="Frontmatter operator">
+              <option value="=">=</option>
+              <option value="+=">+=</option>
+              <option value="-=">-=</option>
+            </select>
+            <input name="value" type="text" placeholder="Value" aria-label="Frontmatter value">
+            <button class="overview-bulk-button" type="submit">Apply</button>
+          </form>
+          <form class="overview-bulk-form" data-bulk-frontmatter-unset>
+            <label for="overview-bulk-unset-property">Unset</label>
+            <input id="overview-bulk-unset-property" name="property" type="text" placeholder="Property">
+            <button class="overview-bulk-button" type="submit">Unset</button>
+          </form>
+        </div>
+        <section class="overview-bulk-preview" data-overview-bulk-preview hidden aria-label="Bulk preview">
+          <div class="overview-bulk-preview-header">
+            <div class="overview-bulk-preview-copy">
+              <h3 class="overview-bulk-preview-title" data-overview-bulk-preview-title>Bulk preview</h3>
+              <p class="overview-bulk-preview-message" data-overview-bulk-preview-message></p>
+            </div>
+            <div class="overview-bulk-preview-actions">
+              <button class="overview-bulk-button" type="button" data-overview-bulk-preview-apply>Apply</button>
+              <button class="overview-bulk-button" type="button" data-overview-bulk-preview-clear>Clear</button>
+            </div>
+          </div>
+          <dl class="overview-bulk-preview-counts" data-overview-bulk-preview-counts></dl>
+          <ul class="overview-bulk-preview-results" data-overview-bulk-preview-results></ul>
+          <ul class="overview-bulk-preview-failures" data-overview-bulk-preview-failures></ul>
+        </section>
+        <p class="overview-bulk-status" data-overview-bulk-status role="status" aria-live="polite"></p>
+      </div>
+      <ul class="overview-result-list" data-overview-search-list hidden></ul>
+    </section>
+
+    <section
+      class="panel history-panel"
+      data-history-panel
+      data-history-csrf="{{.CSRFToken}}"
+      aria-labelledby="history-heading"
+      aria-describedby="history-status"
+      aria-busy="false"
+    >
+      <div class="panel-header history-header">
+        <h2 id="history-heading">Recent changes</h2>
+        <div class="history-actions">
+          <button class="history-button" type="button" data-history-refresh>Refresh</button>
+          <button class="history-button history-danger" type="button" data-history-undo-latest disabled>Undo latest change</button>
+        </div>
+      </div>
+      <p
+        id="history-status"
+        class="history-status is-loading"
+        data-history-status
+        role="status"
+        aria-live="polite"
+      >Loading history...</p>
+      <div class="history-conflict" data-history-conflict hidden>
+        <p data-history-conflict-summary></p>
+        <button class="history-button history-danger" type="button" data-history-force disabled>Force undo</button>
+      </div>
+      <ul class="history-list" data-history-list></ul>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Recent notes</h2>
+      </div>
+      {{if .Recent}}
+        <ul class="recent-list">
+          {{range .Recent}}
+            <li class="recent-list-item">
+              <a class="recent-note-title" href="{{.Path}}">{{.Title}}</a>
+              <div class="recent-note-meta">
+                <span>{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
+                <span>{{.Updated}}</span>
+              </div>
+            </li>
+          {{end}}
+        </ul>
+      {{else}}
+        <p>No notes found.</p>
+      {{end}}
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

@@ -576,7 +576,9 @@ a:focus-visible,
 .trash-note-button:focus-visible,
 .frontmatter-button:focus-visible,
 .create-note-button:focus-visible,
-.copy-button:focus-visible {
+.copy-button:focus-visible,
+.brief-action-button:focus-visible,
+.brief-insight-copy:focus-visible {
   outline: 2px solid var(--bn-focus);
   outline-offset: 1px;
 }
@@ -783,6 +785,174 @@ code {
 
 .index-main {
   max-width: 62rem;
+}
+
+.brief-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.brief-intro {
+  margin: 0;
+  color: var(--bn-muted);
+}
+
+.brief-slot {
+  margin-top: 0;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.brief-slot.is-busy {
+  border-color: var(--bn-border-strong);
+  box-shadow: inset 0 0 0 1px var(--bn-border-strong);
+}
+
+.brief-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.brief-card {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.brief-card-title {
+  margin: 0;
+  color: var(--bn-text-strong);
+}
+
+.brief-card-path {
+  margin: 0;
+  color: var(--bn-text-subtle);
+}
+
+.brief-card-path code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.brief-card-explanation,
+.brief-card-meta {
+  margin: 0;
+}
+
+.brief-card-excerpt {
+  margin: 0;
+  border-left: 3px solid var(--bn-border);
+  padding: 0.25rem 0 0.25rem 0.7rem;
+  color: var(--bn-muted);
+  overflow-wrap: anywhere;
+}
+
+.brief-card-reasons {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.brief-card-reasons li {
+  overflow-wrap: anywhere;
+}
+
+.brief-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.brief-action-button,
+.brief-insight-copy {
+  min-height: 2.1rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.38rem 0.72rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.brief-action-button:hover,
+.brief-insight-copy:hover {
+  background: var(--bn-hover);
+}
+
+.brief-action-button:disabled,
+.brief-insight-copy:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.brief-action-button.is-opened {
+  border-color: var(--bn-success);
+  color: var(--bn-success);
+  background: var(--bn-success-bg);
+}
+
+.brief-action-hint {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.brief-slot-status,
+.brief-global-status {
+  margin: 0;
+  min-height: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.brief-slot-empty {
+  margin-top: 0.5rem;
+}
+
+.brief-insight {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.45rem;
+  padding: 0.65rem;
+  background: var(--bn-sunken);
+}
+
+.brief-insight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.brief-insight-title {
+  margin: 0;
+  color: var(--bn-text-strong);
+  font-size: 0.9rem;
+}
+
+.brief-insight-body {
+  margin-top: 0.55rem;
+  overflow-wrap: anywhere;
+}
+
+.brief-insight-body :first-child {
+  margin-top: 0;
+}
+
+.brief-insight-body :last-child {
+  margin-bottom: 0;
+}
+
+.brief-insight-body pre,
+.brief-insight-body code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .metric-grid {
@@ -3784,7 +3954,23 @@ code {
   pointer-events: none;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .brief-slot,
+  .brief-action-button,
+  .brief-insight-copy {
+    transition: none;
+  }
+}
+
 @media (max-width: 960px) {
+  .brief-slot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brief-card-actions {
+    gap: 0.35rem;
+  }
+
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3840,6 +4026,29 @@ code {
 
   .review-panel {
     padding: 0.75rem;
+  }
+
+  .brief-panel {
+    padding: 0.75rem;
+  }
+
+  .brief-card-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brief-action-button,
+  .brief-insight-copy {
+    width: 100%;
+  }
+
+  .brief-insight-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .brief-insight-copy {
+    align-self: flex-start;
   }
 
   .review-counts {

@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +70,28 @@ func TestRunReportsNonZeroExitWithBoundedSanitizedStderr(t *testing.T) {
 	}
 }
 
+func TestSanitizedDiagnosticBoundsAndRemovesControlCharacters(t *testing.T) {
+	if got := SanitizedDiagnostic(nil); got != "" {
+		t.Fatalf("SanitizedDiagnostic(nil) = %q, want empty", got)
+	}
+
+	got := SanitizedDiagnostic(errors.New("unsupported\n\x1b[31m model " + strings.Repeat("x", maxStderrBytes)))
+	if !strings.Contains(got, "unsupported [31m model") {
+		t.Fatalf("diagnostic missing sanitized detail: %q", got)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Fatalf("diagnostic does not mark truncation: %q", got)
+	}
+	if len(got) > maxStderrBytes+4 {
+		t.Fatalf("diagnostic length = %d, want bounded", len(got))
+	}
+	for _, r := range got {
+		if unicode.IsControl(r) {
+			t.Fatalf("diagnostic contains control rune U+%04X: %q", r, got)
+		}
+	}
+}
+
 func TestRunHonorsTimeout(t *testing.T) {
 	t.Setenv("BN_AGENT_HELPER", "1")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -109,7 +134,30 @@ func TestAgentHelperProcess(t *testing.T) {
 		os.Exit(7)
 	case "sleep":
 		time.Sleep(5 * time.Second)
+	case "spawn-child":
+		child := exec.Command(os.Args[0], "-test.run=TestAgentHelperProcess", "--", "hold-pipes")
+		child.Env = os.Environ()
+		child.Stdout = os.Stdout
+		child.Stderr = os.Stderr
+		if err := child.Start(); err != nil {
+			os.Exit(3)
+		}
+		pidPath := os.Getenv("BN_AGENT_CHILD_PID_FILE")
+		if pidPath == "" {
+			os.Exit(4)
+		}
+		if err := os.WriteFile(pidPath, []byte(strconv.Itoa(child.Process.Pid)), 0o600); err != nil {
+			os.Exit(5)
+		}
+		time.Sleep(5 * time.Second)
+	case "hold-pipes":
+		time.Sleep(5 * time.Second)
 	default:
 		os.Exit(2)
 	}
+}
+
+func childPIDPath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), "child.pid")
 }

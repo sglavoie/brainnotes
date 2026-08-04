@@ -26,7 +26,7 @@ func breadcrumbsForNote(root string, note *vault.Note, notePath string) []breadc
 		return nil
 	}
 
-	items := []breadcrumbItem{{Label: "All notes", Path: "/"}}
+	items := []breadcrumbItem{{Label: "All notes", Path: libraryRoutePath}}
 	vaultPath := noteVaultPath(root, note)
 	folder := folderFromSlashPath(vaultPath)
 	if folder != "" {

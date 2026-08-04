@@ -176,14 +176,14 @@ func diagnosticCards(summary diagnosticsSummary) []diagnosticCard {
 	}
 
 	return []diagnosticCard{
-		{Key: "broken", Label: "Broken links", Count: brokenLinkCount, Path: filterURL("broken", "1")},
-		{Key: "orphan", Label: "Orphans", Count: len(summary.OrphanNotes), Path: filterURL("orphan", "1")},
-		{Key: "dead_end", Label: "Dead ends", Count: len(summary.DeadEndNotes), Path: filterURL("dead_end", "1")},
-		{Key: "duplicate_titles", Label: "Duplicate titles", Count: duplicateNoteCount, Path: "#diagnostic-duplicate-titles"},
-		{Key: "frontmatter_errors", Label: "Frontmatter errors", Count: len(summary.FrontmatterErrors), Path: "#diagnostic-frontmatter-errors"},
-		{Key: "skipped", Label: "Skipped notes", Count: len(summary.SkippedNotes), Path: "#diagnostic-skipped-notes"},
-		{Key: "schema_violations", Label: "Schema violations", Count: diagnosticGroupItemCount(summary.SchemaViolations), Path: "#diagnostic-schema-violations"},
-		{Key: "long_tail", Label: "Long-tail values", Count: longTailCount, Path: "#diagnostic-long-tail-values"},
+		{Key: "broken", Label: "Broken links", Count: brokenLinkCount, Path: healthRoutePath + "#diagnostic-broken-targets"},
+		{Key: "orphan", Label: "Orphans", Count: len(summary.OrphanNotes), Path: healthRoutePath + "#diagnostic-orphans"},
+		{Key: "dead_end", Label: "Dead ends", Count: len(summary.DeadEndNotes), Path: healthRoutePath + "#diagnostic-dead-ends"},
+		{Key: "duplicate_titles", Label: "Duplicate titles", Count: duplicateNoteCount, Path: healthRoutePath + "#diagnostic-duplicate-titles"},
+		{Key: "frontmatter_errors", Label: "Frontmatter errors", Count: len(summary.FrontmatterErrors), Path: healthRoutePath + "#diagnostic-frontmatter-errors"},
+		{Key: "skipped", Label: "Skipped notes", Count: len(summary.SkippedNotes), Path: healthRoutePath + "#diagnostic-skipped-notes"},
+		{Key: "schema_violations", Label: "Schema violations", Count: diagnosticGroupItemCount(summary.SchemaViolations), Path: healthRoutePath + "#diagnostic-schema-violations"},
+		{Key: "long_tail", Label: "Long-tail values", Count: longTailCount, Path: healthRoutePath + "#diagnostic-long-tail-values"},
 	}
 }
 
@@ -507,7 +507,7 @@ func countDiagnosticValue(value any, counts map[string]int) {
 }
 
 func filterURL(key, value string) string {
-	return "/?" + url.Values{key: []string{value}}.Encode()
+	return libraryRoutePath + "?" + url.Values{key: []string{value}}.Encode()
 }
 
 func displayPath(absPath, vaultRoot string) string {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -15,6 +16,7 @@ import (
 const (
 	maxStderrBytes    = 4096
 	maxExecErrorBytes = 512
+	commandWaitDelay  = time.Second
 )
 
 // ErrEmptyCommand is returned when a caller attempts to run an empty argv.
@@ -23,6 +25,17 @@ var ErrEmptyCommand = errors.New("agent: empty command")
 // Runner is the injectable boundary used by CLI and web callers. Implementations
 // receive an argv slice, never a shell command string.
 type Runner func(ctx context.Context, argv []string, stdin []byte) ([]byte, error)
+
+// SanitizedDiagnostic returns a bounded, single-line diagnostic safe to expose
+// to a local first-party caller. Runner errors already sanitize child-process
+// stderr; applying the same boundary here also protects callers that inject a
+// custom Runner implementation.
+func SanitizedDiagnostic(err error) string {
+	if err == nil {
+		return ""
+	}
+	return sanitizeDiagnostic([]byte(err.Error()), maxStderrBytes, false)
+}
 
 // Run invokes argv[0] directly with the remaining argv elements, writes stdin to
 // the child, and returns stdout verbatim. Deadlines and cancellation are inherited
@@ -41,6 +54,8 @@ func Run(ctx context.Context, argv []string, stdin []byte) ([]byte, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	configureCommandCancellation(cmd)
+	cmd.WaitDelay = commandWaitDelay
 	cmd.Stdin = bytes.NewReader(stdin)
 	var stdout bytes.Buffer
 	stderr := &boundedBuffer{limit: maxStderrBytes}

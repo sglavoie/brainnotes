@@ -142,6 +142,10 @@ open_browser = true
 [related]
 metadata_properties = ["categories", "tags"]
 
+[brief]
+exclude_folders = ["Archive", "Templates/Drafts"]
+exclude_types = ["journal", "scratch"]
+
 [agent]
 command = ["my-agent", "--stdin"]
 timeout_seconds = 30

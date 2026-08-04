@@ -69,6 +69,12 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 			DefaultRelatedMetadataProperties,
 		)
 	}
+	if cfg.Brief.ExcludeFolders == nil || len(cfg.Brief.ExcludeFolders) != 0 {
+		t.Errorf("Brief.ExcludeFolders: got %#v, want empty non-nil slice", cfg.Brief.ExcludeFolders)
+	}
+	if cfg.Brief.ExcludeTypes == nil || len(cfg.Brief.ExcludeTypes) != 0 {
+		t.Errorf("Brief.ExcludeTypes: got %#v, want empty non-nil slice", cfg.Brief.ExcludeTypes)
+	}
 	if cfg.Agent.Command == nil || len(cfg.Agent.Command) != 0 {
 		t.Errorf("Agent.Command: got %#v, want empty non-nil slice", cfg.Agent.Command)
 	}
@@ -107,6 +113,9 @@ func TestDefaultTemplate_ParsesAsEmptyConfig(t *testing.T) {
 	if len(cfg.New.Routes) != 0 {
 		t.Errorf("New.Routes should be empty, got %v", cfg.New.Routes)
 	}
+	if len(cfg.Brief.ExcludeFolders) != 0 || len(cfg.Brief.ExcludeTypes) != 0 {
+		t.Errorf("Brief should be zero, got %+v", cfg.Brief)
+	}
 	if cfg.Serve.Addr != "" || cfg.Serve.OpenBrowser != nil {
 		t.Errorf("Serve should be zero, got %+v", cfg.Serve)
 	}
@@ -115,8 +124,8 @@ func TestDefaultTemplate_ParsesAsEmptyConfig(t *testing.T) {
 func TestDefaultTemplate_Mentions_AllKnownKeys(t *testing.T) {
 	tmpl := DefaultTemplate()
 	for _, want := range []string{
-		"vault", "ignore", "[templates]", "[frontmatter]", "[fzf]", "[serve]", "[new.routes]", "[related]", "[agent]",
-		"wikilink_properties", "list_properties", "metadata_properties", "command", "timeout_seconds",
+		"vault", "ignore", "[templates]", "[frontmatter]", "[fzf]", "[serve]", "[new.routes]", "[related]", "[brief]", "[agent]",
+		"wikilink_properties", "list_properties", "metadata_properties", "exclude_folders", "exclude_types", "command", "timeout_seconds",
 	} {
 		if !strings.Contains(tmpl, want) {
 			t.Errorf("template missing %q", want)

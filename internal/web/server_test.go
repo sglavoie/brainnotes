@@ -171,7 +171,7 @@ func TestServerServe_IndexHandler(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
 	}
-	if !strings.Contains(string(body), "<h1>bn serve</h1>") {
+	if !strings.Contains(string(body), "<h1>Daily Brief</h1>") {
 		t.Fatalf("expected index heading, got %q", string(body))
 	}
 
@@ -215,9 +215,9 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
-	assertMetric := func(label, want string) {
+	assertHealthMetric := func(label, want string) {
 		t.Helper()
-		re := regexp.MustCompile(`(?s)<h2>` + regexp.QuoteMeta(label) + `</h2>\s*<p class="metric-value">([0-9]+)</p>`)
+		re := regexp.MustCompile(`(?s)<dt><a [^>]*>` + regexp.QuoteMeta(label) + `</a></dt>\s*<dd>([0-9]+)</dd>`)
 		match := re.FindStringSubmatch(body)
 		if len(match) != 2 {
 			t.Fatalf("metric %q missing in body: %q", label, body)
@@ -227,18 +227,97 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 		}
 	}
 
-	assertMetric("Total notes", "3")
-	assertMetric("Broken targets", "1")
-	assertMetric("Orphans", "2")
+	required := []string{
+		`data-brief-root`,
+		`data-brief-view-endpoint="/api/brief/view"`,
+		`data-brief-item-endpoint="/api/brief/item"`,
+		`data-brief-insight-endpoint="/api/brief/insight"`,
+		`data-brief-action-open`,
+		`data-brief-action-another`,
+		`data-brief-action-insight`,
+		`Most recently modified substantive note.`,
+		`Longest-unseen eligible note.`,
+	}
+	for _, want := range required {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in brief homepage, got %q", want, body)
+		}
+	}
+	if strings.Contains(body, `data-fixes-panel`) ||
+		strings.Contains(body, `data-overview-search-results`) ||
+		strings.Contains(body, `data-history-panel`) ||
+		strings.Contains(body, `id="diagnostics-heading"`) {
+		t.Fatalf("homepage leaked maintenance dashboard sections: %q", body)
+	}
+	assertHealthMetric("Broken targets", "1")
+	assertHealthMetric("Orphans", "2")
 
-	newestIdx := strings.Index(body, `href="/n/newest"`)
-	middleIdx := strings.Index(body, `href="/n/middle"`)
-	oldestIdx := strings.Index(body, `href="/n/oldest"`)
+	recentStart := strings.Index(body, "<h2>Recent notes</h2>")
+	if recentStart < 0 {
+		t.Fatalf("recent notes section missing, got %q", body)
+	}
+	recentBody := body[recentStart:]
+	newestIdx := strings.Index(recentBody, `href="/n/newest"`)
+	middleIdx := strings.Index(recentBody, `href="/n/middle"`)
+	oldestIdx := strings.Index(recentBody, `href="/n/oldest"`)
 	if newestIdx < 0 || middleIdx < 0 || oldestIdx < 0 {
-		t.Fatalf("recent note links missing, got %q", body)
+		t.Fatalf("recent note links missing, got %q", recentBody)
 	}
 	if !(newestIdx < middleIdx && middleIdx < oldestIdx) {
 		t.Fatalf("recent notes not sorted by recency; indexes newest=%d middle=%d oldest=%d", newestIdx, middleIdx, oldestIdx)
+	}
+}
+
+func TestServer_IndexRendersDegradedBriefStates(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"SubstantiveMissing.md": []byte("---\ntitle: Substantive Missing\n---\n"),
+		"Bad.md":                []byte("---\n: bad\n---\nBody\n"),
+		".bnotes/brief.json":    []byte("{invalid json"),
+	}, func(cfg *config.Config) {
+		cfg.Open.Editor = ""
+		cfg.Agent.Command = nil
+	}, Options{CSRFToken: "csrf-token"})
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+
+	required := []string{
+		`data-brief-state-unreadable`,
+		`data-brief-partial-state`,
+		`data-brief-editor-unconfigured`,
+		`data-brief-agent-unconfigured`,
+		`data-brief-slot-empty="continue"`,
+		`No substantive recent note`,
+		`data-brief-slot-empty="connect"`,
+		`No valid connection`,
+	}
+	for _, want := range required {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in degraded brief states, got %q", want, body)
+		}
+	}
+}
+
+func TestServer_IndexRendersEmptyVaultState(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{})
+
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	if !strings.Contains(body, `data-brief-empty-vault`) {
+		t.Fatalf("empty-vault state missing on index page: %q", body)
 	}
 }
 
@@ -269,14 +348,14 @@ func TestServer_UsesInjectedStaticFiles(t *testing.T) {
 	}
 }
 
-func TestServer_IndexIncludesOverviewSearchResultsPanel(t *testing.T) {
+func TestServer_LibraryIncludesOverviewSearchResultsPanel(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
 	})
 
-	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	resp, err := http.Get(ts.URL + "/library") // #nosec G107 -- test-only local URL
 	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		t.Fatalf("GET /library: %v", err)
 	}
 	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
@@ -325,15 +404,15 @@ func TestServer_IndexIncludesOverviewSearchResultsPanel(t *testing.T) {
 	}
 }
 
-func TestServer_IndexIncludesDailyFixesCockpit(t *testing.T) {
+func TestServer_HealthIncludesDailyFixesCockpit(t *testing.T) {
 	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
 		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Source]]\n"),
 	}, nil, Options{CSRFToken: "csrf-token"})
 
-	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	resp, err := http.Get(ts.URL + "/health") // #nosec G107 -- test-only local URL
 	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		t.Fatalf("GET /health: %v", err)
 	}
 	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
@@ -372,26 +451,17 @@ func TestServer_IndexIncludesDailyFixesCockpit(t *testing.T) {
 	}
 
 	fixesIdx := strings.Index(body, `data-fixes-panel`)
-	overviewIdx := strings.Index(body, `data-overview-search-results`)
-	historyIdx := strings.Index(body, `data-history-panel`)
 	metricsIdx := strings.Index(body, `aria-label="Vault statistics"`)
 	diagnosticsIdx := strings.Index(body, `id="diagnostics-heading"`)
-	if fixesIdx < 0 || overviewIdx < 0 || historyIdx < 0 || metricsIdx < 0 || diagnosticsIdx < 0 {
-		t.Fatalf("expected fixes, overview, history, metrics, and diagnostics sections; got %q", body)
+	if fixesIdx < 0 || metricsIdx < 0 || diagnosticsIdx < 0 {
+		t.Fatalf("expected fixes, metrics, and diagnostics sections; got %q", body)
 	}
-	if !(fixesIdx < overviewIdx && overviewIdx < historyIdx && historyIdx < metricsIdx && metricsIdx < diagnosticsIdx) {
-		t.Fatalf(
-			"unexpected home section order: fixes=%d overview=%d history=%d metrics=%d diagnostics=%d",
-			fixesIdx,
-			overviewIdx,
-			historyIdx,
-			metricsIdx,
-			diagnosticsIdx,
-		)
+	if !(fixesIdx < metricsIdx && metricsIdx < diagnosticsIdx) {
+		t.Fatalf("unexpected health section order: fixes=%d metrics=%d diagnostics=%d", fixesIdx, metricsIdx, diagnosticsIdx)
 	}
 }
 
-func TestServer_IndexFixesPanelMatchesSharedLoad(t *testing.T) {
+func TestServer_HealthFixesPanelMatchesSharedLoad(t *testing.T) {
 	files := map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),
 		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Source]]\n"),
@@ -412,9 +482,9 @@ func TestServer_IndexFixesPanelMatchesSharedLoad(t *testing.T) {
 		t.Fatalf("fixture should generate hygiene tasks, got 0 active")
 	}
 
-	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	resp, err := http.Get(ts.URL + "/health") // #nosec G107 -- test-only local URL
 	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		t.Fatalf("GET /health: %v", err)
 	}
 	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
@@ -431,7 +501,7 @@ func TestServer_IndexFixesPanelMatchesSharedLoad(t *testing.T) {
 	}
 }
 
-func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
+func TestServer_HealthRendersDiagnosticsDashboard(t *testing.T) {
 	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Work/Source.md":    []byte("---\ntitle: Source <script>\nstatus: invalid\n---\n[[Missing <target>]]\n"),
 		"Work/Twin.md":      []byte("---\ntitle: Twin\nstatus: invalid\n---\nBody\n"),
@@ -451,9 +521,9 @@ func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
 		}
 	}, Options{})
 
-	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	resp, err := http.Get(ts.URL + "/health") // #nosec G107 -- test-only local URL
 	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		t.Fatalf("GET /health: %v", err)
 	}
 	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
@@ -464,10 +534,10 @@ func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
 		`id="diagnostics-heading"`,
 		`Vault health`,
 		`class="diagnostic-card-grid"`,
-		`href="/?broken=1"`,
-		`href="/?orphan=1"`,
-		`href="/?dead_end=1"`,
-		`href="#diagnostic-duplicate-titles"`,
+		`href="/health#diagnostic-broken-targets"`,
+		`href="/health#diagnostic-orphans"`,
+		`href="/health#diagnostic-dead-ends"`,
+		`href="/health#diagnostic-duplicate-titles"`,
 		`Broken targets`,
 		`Orphan notes`,
 		`Dead-end notes`,
@@ -477,7 +547,7 @@ func TestServer_IndexRendersDiagnosticsDashboard(t *testing.T) {
 		`Long-tail values`,
 		`href="/broken?q=missing&#43;%3Ctarget%3E"`,
 		`missing &lt;target&gt;`,
-		`href="/?folder=Work"`,
+		`href="/library?folder=Work"`,
 		`Source &lt;script&gt;`,
 		`Bad &lt;meta&gt;.md`,
 		`status invalid value`,
@@ -538,15 +608,16 @@ func TestServer_EndToEnd_EndpointsStayResponsiveWithStalledNote(t *testing.T) {
 	}
 
 	index := get("/")
-	// The homepage surfaces the stalled path only through the skipped-notes
+	health := get("/health")
+	// The health page surfaces the stalled path only through the skipped-notes
 	// diagnostic; it must never be reachable as a loaded/recent note link.
-	if !strings.Contains(index, `id="diagnostic-skipped-notes"`) {
-		t.Fatalf("homepage missing skipped-notes section: %q", index)
+	if !strings.Contains(health, `id="diagnostic-skipped-notes"`) {
+		t.Fatalf("health page missing skipped-notes section: %q", health)
 	}
-	if !strings.Contains(index, "StalledNote.md") {
-		t.Fatalf("homepage skipped-notes section did not list the stalled path: %q", index)
+	if !strings.Contains(health, "StalledNote.md") {
+		t.Fatalf("health page skipped-notes section did not list the stalled path: %q", health)
 	}
-	if strings.Contains(index, `href="/n/stallednote`) {
+	if strings.Contains(index, `href="/n/stallednote`) || strings.Contains(health, `href="/n/stallednote`) {
 		t.Fatalf("stalled note leaked into a loaded-content route: %q", index)
 	}
 
@@ -1413,7 +1484,7 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 	for _, want := range []string{
 		`<main class="note-main">`,
 		`<nav class="note-breadcrumbs" aria-label="Breadcrumb">`,
-		`href="/?folder=Projects"`,
+		`href="/library?folder=Projects"`,
 		`<span aria-current="page">Source</span>`,
 		`data-copy-controls`,
 		`data-copy-text="[[Projects/Source]]"`,
@@ -3796,7 +3867,7 @@ func TestServer_PagesIncludeFacetControls(t *testing.T) {
 		}
 	}
 
-	assertFacetUI("/", "overview", "search", "Filter notes")
+	assertFacetUI("/library", "overview", "search", "Filter notes")
 	assertFacetUI("/graph", "graph", "graph", "Filter graph facets")
 }
 

@@ -1,5 +1,6 @@
 import { initBrokenCreateActions } from "./broken-create";
 import { initCopyControls } from "./clipboard";
+import { initDailyBrief } from "./daily-brief";
 import { initDailyFixes } from "./daily-fixes";
 import { initOpenInEditor } from "./editor-open";
 import { initFacets } from "./facets";
@@ -21,6 +22,7 @@ import { initTheme } from "./theme";
   initFrontmatterEditing();
   initBrokenCreateActions();
   initCopyControls();
+  initDailyBrief();
   initGraph();
   initSearch();
   initOverviewSearchResults();

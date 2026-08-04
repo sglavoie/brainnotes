@@ -98,12 +98,18 @@ args = ["--preview", "bat --style=plain --color=always {}"]
 
 [open]
 # Editor to invoke when opening a note. Falls back to $EDITOR when not set.
-# editor = "nvim"
+# editor = "code --reuse-window"
 
 [related]
 # Frontmatter properties whose values contribute to related-note ranking.
 # Set to [] to disable metadata scoring while keeping text, graph, and recall.
 metadata_properties = ["categories", "tags", "topics", "type", "parent", "area"]
+
+[brief]
+# Vault-relative folder prefixes excluded from Daily Brief recommendations.
+exclude_folders = []
+# Frontmatter type values excluded from Daily Brief recommendations.
+exclude_types = []
 
 [agent]
 # Optional local research command as a literal argv array. No shell is used.
@@ -644,11 +650,16 @@ bn serve [--addr host:port] [--port N] [--no-open]
 
 Starts a local HTTP server for vault browsing and lightweight note management:
 
-- `/` Daily Fix Cockpit, note counts, filtered search results, diagnostics, and primary search
+- `/` Daily Brief cards (Continue, Rediscover, Connect), rolling seven-day activity, compact health snapshot, recent notes, and primary search
+- `/library` faceted search, bulk note operations, change history, and recent notes
+- `/health` Daily Fixes, vault metrics, and full diagnostics from the shared snapshot
 - `/n/<note-key>` rendered note view (body, editable frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
+- `POST /api/brief/view` idempotent per-day visit recording that refreshes the rolling activity summary
+- `POST /api/brief/item` card actions (`open` and `another`) addressed by server-issued `card_id` only
+- `POST /api/brief/insight` optional local AI insight for one card, returning raw output and separately rendered safe HTML
 - `GET /api/cockpit` hygiene queue (add `?view=daily` for the capped daily view) and `POST /api/cockpit/item` for Done/Snooze/Clear triage
 - `POST /api/fixes/preview` then `POST /api/fixes/apply` to preview and apply a single task's fix
 - `GET /api/daily-review/context` read-only redacted daily-review snapshot and `POST /api/daily-review/agent` optional local AI review
@@ -658,14 +669,39 @@ fixed 2-second timeout so a single stalled file cannot hang a page load. A note
 that exceeds that timeout is quarantined for the rest of the `bn serve` process
 lifetime — it is skipped without a re-read on every later request and excluded
 from recent notes, search, the graph, the cockpit queue, and the health counts.
-Skipped notes surface in their own "Skipped notes" diagnostic card on the home
-page, so the omission is visible rather than silent. Quarantine is in-memory
+Skipped notes surface in Health diagnostics and are summarized on the home page,
+so the omission is visible rather than silent. Quarantine is in-memory
 only and never touches disk; **restart** the server to clear it and retry a
 previously skipped note. This bound is server-only: `bn doctor` and every other
 CLI command keep their original
 full-vault loading semantics and read every note without a per-note timeout.
 
-The home page starts with Daily Fixes: the same hygiene queue as `bn doctor`
+Daily Brief cards stay stable for the local day (including restarts): Continue
+shows the most recently edited substantive note, Rediscover surfaces the
+longest-unseen substantive note, and Connect suggests an unlinked note related
+to Continue using the same `ModeConnect` ranking engine. `Another` on Continue
+atomically replaces Continue and Connect together; `Another` on Rediscover or
+Connect replaces only that slot. A successful `open` records activity only after
+the editor process starts. Card actions are path-safe and keyed by server-issued
+IDs; callers never submit filesystem paths.
+
+Daily Brief runtime state lives in `<vault>/.bnotes/brief.json` and stores only
+local-date selections, content-addressed card IDs, exposure/open timestamps, and
+visit/open activity windows. It never stores note bodies, AI request payloads,
+or AI responses. Reads are fail-closed for corrupt, unsupported, or unsafe
+(e.g. symlinked) state files; successful writes are atomic and sidecar-only, so
+brief state updates never create undo journal entries and never mutate Markdown.
+
+`POST /api/brief/insight` is optional and uses only the top-level `[agent]`
+command/timeout. It sends the selected card's bounded context packet to that
+local command's stdin and returns the raw stdout plus separately rendered safe
+HTML. The output is never persisted to `.bnotes/brief.json`, undo history, or
+Markdown files.
+
+No telemetry, background schedulers, reminders, or analytics pipelines are
+introduced: activity metrics are local-only and computed from the brief sidecar.
+
+The Health page starts with Daily Fixes: the same hygiene queue as `bn doctor`
 (over the notes the server successfully loaded — a note quarantined by the
 2-second timeout above is absent from the web queue but still scanned by the CLI),
 covering frontmatter parse errors, schema violations, broken wikilink targets,
@@ -800,7 +836,7 @@ File-changing web actions write undo journal entries with `bn web ...` command
 names (cockpit fixes use `bn cockpit fix`); `POST /api/undo` restores the latest
 entry by default or a selected entry ID.
 
-Editor opens from the note page use the same editor resolution as CLI open
+Editor opens from note pages and Daily Brief cards use the same editor resolution as CLI open
 commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
 if editing the file outside the web UI changes the body, refresh the page
 manually to see updates.
@@ -808,6 +844,13 @@ manually to see updates.
 Media embeds (`![[image.png]]`) render through `/media/...` only when the file
 exists. Missing media embeds remain plain text (they do not redirect to
 `/broken`).
+
+Two-week Daily Brief dogfood readout (local state only):
+
+1. Count distinct visit days in the last 14 days from `.bnotes/brief.json` `visits`.
+2. Compute average visits per week as `visit_days / 2`.
+3. Compute open-day rate as `days_with_open / visit_days` (where opens come from `opens` and are grouped by local date).
+4. Success threshold: at least 4 visits per week and opens on at least 50% of visited days.
 
 ### `bn doctor` — show the vault hygiene queue (Daily Fix Cockpit)
 

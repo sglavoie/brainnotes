@@ -16,10 +16,7 @@
         <div class="graph-header-copy">
           <h1>Graph</h1>
           <p id="graph-status" role="status">Loading graph...</p>
-          <p class="graph-links">
-            <a href="/">Overview</a>
-            <a href="/broken">Broken links</a>
-          </p>
+          {{template "siteNav" .}}
           {{template "themeControl" .}}
         </div>
         <section class="graph-controls" aria-label="Graph controls">

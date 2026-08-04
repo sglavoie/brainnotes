@@ -33,6 +33,9 @@ func validate(cfg *Config) error {
 	if err := validateAgent(cfg); err != nil {
 		return err
 	}
+	if err := validateBrief(cfg); err != nil {
+		return err
+	}
 	if err := validateCockpit(cfg); err != nil {
 		return err
 	}
@@ -52,6 +55,41 @@ func validateAgent(cfg *Config) error {
 	for i, arg := range cfg.Agent.Command {
 		if strings.IndexByte(arg, 0) >= 0 {
 			return fmt.Errorf("config: agent.command[%d] must not contain a NUL byte", i)
+		}
+	}
+	return nil
+}
+
+func validateBrief(cfg *Config) error {
+	for i, folder := range cfg.Brief.ExcludeFolders {
+		if folder == "" {
+			return fmt.Errorf("config: brief.exclude_folders[%d] must not be empty or whitespace", i)
+		}
+		if containsControlRune(folder) {
+			return fmt.Errorf("config: brief.exclude_folders[%d] contains a control character", i)
+		}
+		if strings.Contains(folder, `\`) {
+			return fmt.Errorf("config: brief.exclude_folders[%d] must use forward slashes", i)
+		}
+		if isAbsolutePathLike(folder) {
+			return fmt.Errorf(
+				"config: brief.exclude_folders[%d]: absolute path %q is not allowed (must be vault-relative)",
+				i,
+				folder,
+			)
+		}
+		cleaned := path.Clean(folder)
+		if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+			return fmt.Errorf("config: brief.exclude_folders[%d]: path %q escapes the vault", i, folder)
+		}
+	}
+
+	for i, value := range cfg.Brief.ExcludeTypes {
+		if value == "" {
+			return fmt.Errorf("config: brief.exclude_types[%d] must not be empty or whitespace", i)
+		}
+		if containsControlRune(value) {
+			return fmt.Errorf("config: brief.exclude_types[%d] contains a control character", i)
 		}
 	}
 	return nil

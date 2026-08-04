@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -34,6 +35,8 @@ type Options struct {
 	StaticFiles     fs.FS
 	CSRFToken       string
 	StartEditor     func(bin string, argv []string) error
+	BriefState      brief.StateStore
+	BriefNow        func() time.Time
 	// RunAgent executes the optional AI daily-review command. It receives the
 	// argv slice (already split, no shell) and the redacted review-context JSON
 	// on stdin, and returns the command's stdout. Injected in tests so no real
@@ -55,6 +58,8 @@ type Server struct {
 	notifyListen func(url string)
 	csrfToken    string
 	startEditor  func(bin string, argv []string) error
+	briefState   brief.StateStore
+	briefNow     func() time.Time
 	runAgent     agent.Runner
 }
 
@@ -166,6 +171,14 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	if srv.startEditor == nil {
 		srv.startEditor = startEditorProcess
 	}
+	srv.briefNow = opts.BriefNow
+	if srv.briefNow == nil {
+		srv.briefNow = time.Now
+	}
+	srv.briefState = opts.BriefState
+	if srv.briefState == nil {
+		srv.briefState = brief.NewFileStateStore(v.Root, brief.WithClock(srv.briefNow))
+	}
 	if srv.runAgent == nil {
 		srv.runAgent = agent.Run
 	}
@@ -177,6 +190,9 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/facets", srv.handleFacets)
 	mux.HandleFunc("/api/search", srv.handleSearch)
 	mux.HandleFunc("/api/open", srv.handleOpen)
+	mux.HandleFunc("/api/brief/view", srv.handleBriefView)
+	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
+	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)
 	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
 	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)
 	mux.HandleFunc("/api/notes/rename", srv.handleNoteRename)
@@ -194,6 +210,8 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/daily-review/agent", srv.handleDailyReviewAgent)
 	mux.HandleFunc("/api/fixes/preview", srv.handleFixesPreview)
 	mux.HandleFunc("/api/fixes/apply", srv.handleFixesApply)
+	mux.HandleFunc(libraryRoutePath, srv.handleLibrary)
+	mux.HandleFunc(healthRoutePath, srv.handleHealth)
 	mux.HandleFunc("/graph", srv.handleGraph)
 	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
@@ -222,22 +240,77 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "snapshot error", http.StatusInternalServerError)
 		return
 	}
-	data, err := buildIndexPageData(snapshot, s.vault.Root)
+	data, err := s.buildRootPageData(snapshot)
 	if err != nil {
 		http.Error(w, "index error", http.StatusInternalServerError)
 		return
 	}
 	data.CSRFToken = s.csrfToken
-	// Derive index diagnostics, the Daily Fixes counts, and skipped-note
-	// reporting from the one resilient shared snapshot instead of walking the
-	// vault again via loadDiagnosticsData or cockpit.BuildQueue. Skipped notes
-	// are absent from the snapshot's loaded set, so they never leak into recent
-	// notes, graph data, search/facets, or the health counts below.
+	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != libraryRoutePath {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	snapshot, err := s.state.currentSnapshot()
+	if err != nil {
+		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		return
+	}
+	data, err := buildLibraryPageData(snapshot, s.vault.Root)
+	if err != nil {
+		http.Error(w, "library error", http.StatusInternalServerError)
+		return
+	}
+	data.CSRFToken = s.csrfToken
+	if err := s.templates.ExecuteTemplate(w, "library", data); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != healthRoutePath {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	snapshot, err := s.state.currentSnapshot()
+	if err != nil {
+		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		return
+	}
+	data, err := buildHealthPageData(snapshot, s.vault.Root)
+	if err != nil {
+		http.Error(w, "health error", http.StatusInternalServerError)
+		return
+	}
+	data.CSRFToken = s.csrfToken
+
+	// Derive diagnostics, Daily Fixes counts, and skipped-note reporting from
+	// the one resilient shared snapshot instead of walking the vault again via
+	// loadDiagnosticsData or cockpit.BuildQueue. Skipped notes are absent from
+	// the snapshot's loaded set, so they never leak into recent notes, graph
+	// data, search/facets, or the health counts below.
 	diagnosticsData := diagnosticsDataFromSnapshot(snapshot, s.vault.Root)
 	fixesQueue := cockpit.LimitDaily(s.cockpitQueueFilteredFrom(diagnosticsData), s.cfg.Cockpit.DailyLimit)
 	data.Fixes = buildIndexFixesPanelData(fixesQueue)
 	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
-	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
+	if err := s.templates.ExecuteTemplate(w, "health", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
 }

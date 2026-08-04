@@ -4,6 +4,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
 // DefaultTemplate returns the commented TOML starter file body written when
@@ -45,7 +47,7 @@ func DefaultTemplate() string {
 [open]
 # Editor binary to invoke when opening a note with 'bn open'.
 # Falls back to $EDITOR when not set.
-# editor = "nvim"
+# editor = "code --reuse-window"
 
 [serve]
 # HTTP listen address for ` + "`bn serve`" + `.
@@ -63,6 +65,12 @@ func DefaultTemplate() string {
 # Frontmatter properties whose values contribute to related-note ranking.
 # Set this to [] to disable metadata scoring.
 # metadata_properties = ["categories", "tags", "topics", "type", "parent", "area"]
+
+[brief]
+# Vault-relative folder prefixes excluded from Daily Brief recommendations.
+# exclude_folders = ["Archive", "Templates/Drafts"]
+# Frontmatter type values excluded from Daily Brief recommendations.
+# exclude_types = ["journal", "scratch"]
 
 [agent]
 # Local agent command as an argv array. The executable is launched directly;
@@ -181,6 +189,16 @@ func applyDefaults(cfg *Config) {
 		cfg.Related.MetadataProperties = append([]string(nil), DefaultRelatedMetadataProperties...)
 	} else {
 		cfg.Related.MetadataProperties = normalizePropertyList(cfg.Related.MetadataProperties)
+	}
+	if cfg.Brief.ExcludeFolders == nil {
+		cfg.Brief.ExcludeFolders = []string{}
+	} else {
+		cfg.Brief.ExcludeFolders = normalizeBriefFolders(cfg.Brief.ExcludeFolders)
+	}
+	if cfg.Brief.ExcludeTypes == nil {
+		cfg.Brief.ExcludeTypes = []string{}
+	} else {
+		cfg.Brief.ExcludeTypes = normalizeBriefTypes(cfg.Brief.ExcludeTypes)
 	}
 	if cfg.Agent.Command == nil {
 		cfg.Agent.Command = []string{}
@@ -336,6 +354,51 @@ func normalizePropertyList(in []string) []string {
 		}
 		seen[k] = struct{}{}
 		out = append(out, k)
+	}
+	return out
+}
+
+func normalizeBriefFolders(in []string) []string {
+	return normalizeBriefList(in, func(value string) string {
+		value = textnorm.NFC(value)
+		value = normalizeSlashSeparators(value)
+		if isAbsolutePathLike(value) {
+			return value
+		}
+		value = strings.Trim(value, "/")
+		if value == "" {
+			return ""
+		}
+		cleaned := path.Clean(value)
+		if cleaned == "." {
+			return ""
+		}
+		return cleaned
+	})
+}
+
+func normalizeBriefTypes(in []string) []string {
+	return normalizeBriefList(in, func(value string) string {
+		return strings.ToLower(textnorm.NFC(value))
+	})
+}
+
+func normalizeBriefList(in []string, normalize func(string) string) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, raw := range in {
+		value := strings.TrimSpace(raw)
+		if normalize != nil {
+			value = normalize(value)
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
 	}
 	return out
 }

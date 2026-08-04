@@ -89,6 +89,8 @@ func TestManagementCSSAccessibilityAndMobileContract(t *testing.T) {
 		".trash-note-button:focus-visible",
 		".frontmatter-button:focus-visible",
 		".create-note-button:focus-visible",
+		".brief-action-button:focus-visible",
+		".brief-insight-copy:focus-visible",
 		"outline: 2px solid var(--bn-focus);",
 		"white-space: nowrap;",
 		".history-item > .history-button",
@@ -115,6 +117,71 @@ func TestManagementCSSAccessibilityAndMobileContract(t *testing.T) {
 	} {
 		if !strings.Contains(narrow, want) {
 			t.Fatalf("narrow management CSS missing %q in block:\n%s", want, narrow)
+		}
+	}
+}
+
+func TestBriefCSSAccessibilityAndResponsiveContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".brief-panel",
+		".brief-slot",
+		".brief-slot.is-busy",
+		".brief-slot-grid",
+		".brief-card-actions",
+		".brief-action-button",
+		".brief-action-button.is-opened",
+		".brief-action-hint",
+		".brief-slot-status",
+		".brief-global-status",
+		".brief-insight",
+		".brief-insight-header",
+		".brief-insight-body",
+		".brief-insight-copy",
+		"overflow-wrap: anywhere;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("brief CSS missing %q", want)
+		}
+	}
+
+	reducedMotion := cssBlockAfter(t, css, "@media (prefers-reduced-motion: reduce)")
+	for _, want := range []string{
+		".brief-slot",
+		".brief-action-button",
+		".brief-insight-copy",
+		"transition: none;",
+	} {
+		if !strings.Contains(reducedMotion, want) {
+			t.Fatalf("reduced-motion brief CSS missing %q in block:\n%s", want, reducedMotion)
+		}
+	}
+
+	for _, want := range []string{
+		"@media (max-width: 960px)",
+		".brief-slot-grid",
+		".brief-card-actions",
+		"gap: 0.35rem;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("max-width 960 brief CSS missing %q", want)
+		}
+	}
+
+	narrow640 := cssBlockAfter(t, css, "@media (max-width: 640px)")
+	for _, want := range []string{
+		".brief-panel",
+		"padding: 0.75rem;",
+		".brief-card-actions",
+		"grid-template-columns: repeat(2, minmax(0, 1fr));",
+		".brief-action-button",
+		".brief-insight-copy",
+		".brief-insight-header",
+		"flex-direction: column;",
+	} {
+		if !strings.Contains(narrow640, want) {
+			t.Fatalf("max-width 640 brief CSS missing %q in block:\n%s", want, narrow640)
 		}
 	}
 }
