@@ -3,25 +3,30 @@ import {
   buildFilteredAPIURL,
   filterChangeEventName,
   hasActiveSharedFilters,
-  notePathForKey,
   readPageQuery,
   syncPageQueryParam,
 } from "./filters";
+import { type GraphDetailsRefs, renderGraphDetails } from "./graph-controller-details";
+import { applyGraphVisualClasses, readLabelMode } from "./graph-controller-labels";
 import {
-  DEFAULT_GRAPH_PALETTE,
+  applyViewport,
+  clampedSpread,
+  currentViewport,
+  layoutOptionsForSpread,
+  seedDeterministicPositions,
+  separateIsolatedNodes,
+  updateSpreadLabel,
+} from "./graph-controller-layout";
+import { buildGraphStyle } from "./graph-controller-style";
+import {
   type GraphElements,
-  type GraphFocusState,
   type GraphLabelMode,
   type GraphNodeModel,
-  type GraphPalette,
   type GraphViewportSnapshot,
-  buildGraphStyleRules,
   emptyGraphElements,
   graphNodeModelFromData,
   graphScopeLabel,
   normalizeGraphPayload,
-  readDegreeValue,
-  readGraphPalette,
   toCytoscapeElements,
 } from "./graph";
 import { type StatusKind, setStatusText } from "./status";
@@ -54,10 +59,6 @@ type GraphLayoutRunOptions = {
   preserveViewport?: boolean;
   resetPositions?: boolean;
 };
-type GraphIssueItem = {
-  className: string;
-  label: string;
-};
 
 export const initGraph = (): void => {
   const dom = {
@@ -80,6 +81,14 @@ export const initGraph = (): void => {
     return;
   }
   const canvas = dom.canvas;
+  const detailsRefs: GraphDetailsRefs = {
+    detailsPanel: dom.detailsPanel,
+    hoverTitle: dom.hoverTitle,
+    hoverFolder: dom.hoverFolder,
+    hoverDegree: dom.hoverDegree,
+    hoverIssues: dom.hoverIssues,
+    openNote: dom.openNote,
+  };
 
   const state: GraphState = {
     cy: null,
@@ -88,7 +97,7 @@ export const initGraph = (): void => {
     currentGraphElements: emptyGraphElements(),
     hoveredNodeID: "",
     selectedNodeID: "",
-    labelMode: readLabelMode(),
+    labelMode: readLabelMode(dom.labelModeInputs),
     lastMeaningfulViewport: null,
     layoutRunID: 0,
   };
@@ -100,175 +109,17 @@ export const initGraph = (): void => {
     setStatusText(dom.status, message, kind, ["is-loading", "is-empty", "is-error"]);
   }
 
-  function setOpenNoteTarget(nodeID: string): void {
-    if (!(dom.openNote instanceof HTMLAnchorElement)) {
-      return;
-    }
-
-    const path = notePathForKey(nodeID);
-    if (!path) {
-      dom.openNote.removeAttribute("href");
-      dom.openNote.classList.add("is-disabled");
-      dom.openNote.setAttribute("aria-disabled", "true");
-      dom.openNote.setAttribute("tabindex", "-1");
-      return;
-    }
-
-    dom.openNote.setAttribute("href", path);
-    dom.openNote.classList.remove("is-disabled");
-    dom.openNote.setAttribute("aria-disabled", "false");
-    dom.openNote.setAttribute("tabindex", "0");
-  }
-
-  function formatDegreeDetails(data: GraphNodeModel | null | undefined): string {
-    if (!data) {
-      return "";
-    }
-    const inDegree = readDegreeValue(data.inDegree, 0);
-    const outDegree = readDegreeValue(data.outDegree, 0);
-    const degree = readDegreeValue(data.degree, inDegree + outDegree);
-    const filteredInDegree = readDegreeValue(data.filteredInDegree, inDegree);
-    const filteredOutDegree = readDegreeValue(data.filteredOutDegree, outDegree);
-    const filteredDegree = readDegreeValue(data.filteredDegree, filteredInDegree + filteredOutDegree);
-    const visibleDetail = `Visible degree: ${filteredDegree} (${filteredInDegree} in, ${filteredOutDegree} out)`;
-    if (filteredDegree === degree && filteredInDegree === inDegree && filteredOutDegree === outDegree) {
-      return visibleDetail;
-    }
-    return `${visibleDetail}. Full graph: ${degree} (${inDegree} in, ${outDegree} out)`;
-  }
-
-  function issueItemsForNode(data: GraphNodeModel | null | undefined): GraphIssueItem[] {
-    if (!data) {
-      return [];
-    }
-    const items: GraphIssueItem[] = [];
-    const brokenCount = readDegreeValue(data.brokenCount, 0);
-    if (data.hasBroken || brokenCount > 0) {
-      items.push({
-        className: "is-broken",
-        label:
-          brokenCount > 0
-            ? brokenCount === 1
-              ? "1 broken link"
-              : `${brokenCount} broken links`
-            : "Broken links",
-      });
-    }
-    if (data.isOrphan) {
-      items.push({
-        className: "is-orphan",
-        label: "Orphan",
-      });
-    }
-    if (data.isDeadEnd) {
-      items.push({
-        className: "is-dead-end",
-        label: "Dead end",
-      });
-    }
-    return items;
-  }
-
-  function renderIssueDetails(model: GraphNodeModel | null | undefined): void {
-    if (!dom.hoverIssues) {
-      return;
-    }
-    dom.hoverIssues.textContent = "";
-    const items = issueItemsForNode(model);
-    dom.hoverIssues.hidden = items.length === 0;
-    for (const item of items) {
-      const issue = document.createElement("li");
-      issue.className = `graph-issue-item ${item.className}`;
-      issue.textContent = item.label;
-      dom.hoverIssues.appendChild(issue);
-    }
-  }
-
   function renderDetailsPanel(fallbackHoveredModel: GraphNodeModel | null = null): void {
     const selectedModel = findNodeModel(state.selectedNodeID);
     const hoveredModel = selectedModel
       ? null
       : findNodeModel(state.hoveredNodeID) || fallbackHoveredModel || null;
-    const model = selectedModel || hoveredModel;
-
-    if (dom.hoverTitle) {
-      dom.hoverTitle.textContent = model ? model.title || model.id : "Hover a node";
-    }
-    if (dom.hoverFolder) {
-      dom.hoverFolder.textContent = model ? `Folder: ${model.folder || "/"}` : "";
-    }
-    if (dom.hoverDegree) {
-      dom.hoverDegree.textContent = model ? formatDegreeDetails(model) : "";
-    }
-    renderIssueDetails(model);
-    if (dom.detailsPanel) {
-      dom.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
-      dom.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
-    }
-    setOpenNoteTarget(selectedModel ? selectedModel.id : "");
-  }
-
-  function readSpread(): number {
-    if (!(dom.spreadInput instanceof HTMLInputElement)) {
-      return 2;
-    }
-    const parsed = Number.parseFloat(dom.spreadInput.value);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      return 2;
-    }
-    return parsed;
-  }
-
-  function clampedSpread(): number {
-    return Math.min(6, Math.max(0.8, readSpread()));
-  }
-
-  function updateSpreadLabel(): void {
-    if (!dom.spreadValue) {
-      return;
-    }
-    const spread = readSpread();
-    dom.spreadValue.textContent = `${spread.toFixed(1)}x`;
-  }
-
-  function readLabelMode(): GraphLabelMode {
-    for (const input of dom.labelModeInputs) {
-      if (input instanceof HTMLInputElement && input.checked) {
-        return input.value === "all" ? "all" : "auto";
-      }
-    }
-    return "auto";
+    renderGraphDetails(detailsRefs, selectedModel, hoveredModel);
   }
 
   function setLabelMode(nextMode: string): void {
     state.labelMode = nextMode === "all" ? "all" : "auto";
     applyGraphVisualState();
-  }
-
-  const labelPolicy = {
-    smallGraphNodeLimit: 24,
-    selectedNeighborLabelLimit: 10,
-    zoomLabelMinZoom: 1.05,
-    zoomVisibleLabelLimit: 22,
-    zoomPriorityLabelLimit: 10,
-    deepZoomMinZoom: 1.6,
-    deepZoomPriorityLabelLimit: 24,
-  };
-
-  function currentGraphPalette(): GraphPalette {
-    if (typeof window === "undefined" || typeof document === "undefined") {
-      return DEFAULT_GRAPH_PALETTE;
-    }
-    const root = document.documentElement;
-    if (!root || typeof window.getComputedStyle !== "function") {
-      return DEFAULT_GRAPH_PALETTE;
-    }
-    const styles = window.getComputedStyle(root);
-    return readGraphPalette((name) => styles.getPropertyValue(name));
-  }
-
-  function buildGraphStyle(): cytoscape.StylesheetJson {
-    return buildGraphStyleRules(currentGraphPalette()) as unknown as cytoscape.StylesheetJson;
   }
 
   function restyleGraphForTheme(): void {
@@ -289,53 +140,6 @@ export const initGraph = (): void => {
     state.activeLayout = null;
   }
 
-  function layoutOptionsForSpread(): cytoscape.CoseLayoutOptions {
-    const spread = clampedSpread();
-    return {
-      name: "cose",
-      animate: false,
-      fit: false,
-      randomize: false,
-      padding: 72,
-      idealEdgeLength: Math.round(70 + 55 * spread),
-      nodeRepulsion: Math.round(7000 * spread * spread),
-      componentSpacing: Math.round(100 + 85 * spread),
-      nodeOverlap: Math.round(12 + 16 * spread),
-      gravity: Math.max(0.05, 0.62 - 0.09 * spread),
-      numIter: Math.round(900 + 120 * spread),
-      initialTemp: Math.round(180 + 45 * spread),
-      coolingFactor: 0.95,
-      minTemp: 1,
-    };
-  }
-
-  function currentViewport(): GraphViewportSnapshot | null {
-    if (!state.cy) {
-      return null;
-    }
-    const pan = state.cy.pan();
-    return {
-      pan: {
-        x: pan.x,
-        y: pan.y,
-      },
-      zoom: state.cy.zoom(),
-    };
-  }
-
-  function applyViewport(viewport: GraphViewportSnapshot | null): void {
-    if (!state.cy || !viewport) {
-      return;
-    }
-    state.cy.viewport({
-      pan: {
-        x: viewport.pan.x,
-        y: viewport.pan.y,
-      },
-      zoom: viewport.zoom,
-    });
-  }
-
   function fitCurrentGraph(): void {
     if (!state.cy || state.cy.nodes().length === 0) {
       return;
@@ -348,7 +152,7 @@ export const initGraph = (): void => {
     if (!state.cy || state.cy.nodes().length === 0) {
       return;
     }
-    state.lastMeaningfulViewport = currentViewport();
+    state.lastMeaningfulViewport = currentViewport(state.cy);
   }
 
   function ensureGraph(): cytoscape.Core {
@@ -491,237 +295,8 @@ export const initGraph = (): void => {
     selectNode(nodeID);
   }
 
-  function cyNodeByID(nodeID: string): cytoscape.NodeSingular | null {
-    if (!state.cy || !nodeID) {
-      return null;
-    }
-    const node = state.cy.getElementById(nodeID);
-    if (!node || node.length === 0 || !node.isNode()) {
-      return null;
-    }
-    return node;
-  }
-
-  function nodeDegree(node: cytoscape.NodeSingular | null): number {
-    if (!node) {
-      return 0;
-    }
-    const filteredDegree = Number(node.data("filteredDegree"));
-    if (Number.isFinite(filteredDegree) && filteredDegree > 0) {
-      return filteredDegree;
-    }
-    const degree = Number(node.data("degree"));
-    return Number.isFinite(degree) && degree > 0 ? degree : 0;
-  }
-
-  function sortedNodesByImportance(nodes: cytoscape.NodeSingular[]): cytoscape.NodeSingular[] {
-    return nodes
-      .slice()
-      .sort((left, right) => nodeDegree(right) - nodeDegree(left) || left.id().localeCompare(right.id()));
-  }
-
-  function connectedNodeIDs(node: cytoscape.NodeSingular | null): Set<string> {
-    const ids = new Set<string>();
-    if (!node) {
-      return ids;
-    }
-    node.connectedEdges().forEach((edge) => {
-      edge.connectedNodes().forEach((connectedNode) => {
-        const id = connectedNode.id();
-        if (id !== node.id()) {
-          ids.add(id);
-        }
-      });
-    });
-    return ids;
-  }
-
-  function visibleNodesForViewport(): cytoscape.NodeSingular[] {
-    if (!state.cy) {
-      return [];
-    }
-    const zoom = state.cy.zoom();
-    const padding = 72 / Math.max(zoom, 0.1);
-    const extent = state.cy.extent();
-    return state.cy
-      .nodes()
-      .filter((node) => {
-        const position = node.position();
-        return (
-          position.x >= extent.x1 - padding &&
-          position.x <= extent.x2 + padding &&
-          position.y >= extent.y1 - padding &&
-          position.y <= extent.y2 + padding
-        );
-      })
-      .toArray() as cytoscape.NodeSingular[];
-  }
-
-  function addZoomLabels(labelIDs: Set<string>): void {
-    if (!state.cy) {
-      return;
-    }
-    const zoom = state.cy.zoom();
-    if (zoom < labelPolicy.zoomLabelMinZoom) {
-      return;
-    }
-
-    const visibleNodes = visibleNodesForViewport();
-    if (visibleNodes.length <= labelPolicy.zoomVisibleLabelLimit) {
-      for (const node of visibleNodes) {
-        labelIDs.add(node.id());
-      }
-      return;
-    }
-
-    const priorityLimit =
-      zoom >= labelPolicy.deepZoomMinZoom
-        ? labelPolicy.deepZoomPriorityLabelLimit
-        : labelPolicy.zoomPriorityLabelLimit;
-    for (const node of sortedNodesByImportance(visibleNodes).slice(0, priorityLimit)) {
-      labelIDs.add(node.id());
-    }
-  }
-
-  function labelIDsForCurrentState(): Set<string> {
-    const labelIDs = new Set<string>();
-    if (!state.cy) {
-      return labelIDs;
-    }
-
-    if (state.labelMode === "all" || state.cy.nodes().length <= labelPolicy.smallGraphNodeLimit) {
-      state.cy.nodes().forEach((node) => {
-        labelIDs.add(node.id());
-      });
-    } else {
-      addZoomLabels(labelIDs);
-    }
-
-    const selectedNode = cyNodeByID(state.selectedNodeID);
-    const hoveredNode = cyNodeByID(state.hoveredNodeID);
-    if (selectedNode) {
-      labelIDs.add(selectedNode.id());
-      const selectedNeighborIDs = connectedNodeIDs(selectedNode);
-      if (selectedNeighborIDs.size <= labelPolicy.selectedNeighborLabelLimit) {
-        for (const id of selectedNeighborIDs) {
-          labelIDs.add(id);
-        }
-      }
-    }
-    if (hoveredNode) {
-      labelIDs.add(hoveredNode.id());
-    }
-
-    return labelIDs;
-  }
-
-  function visualFocusState(): GraphFocusState {
-    const selectedNode = cyNodeByID(state.selectedNodeID);
-    const hoveredNode = cyNodeByID(state.hoveredNodeID);
-    const focusNode = selectedNode || hoveredNode;
-    const neighborIDs = connectedNodeIDs(focusNode);
-    const highlightedEdgeIDs = new Set<string>();
-    if (focusNode) {
-      focusNode.connectedEdges().forEach((edge) => {
-        highlightedEdgeIDs.add(edge.id());
-      });
-    }
-    return {
-      focusNodeID: focusNode ? focusNode.id() : "",
-      selectedID: selectedNode ? selectedNode.id() : "",
-      hoveredID: hoveredNode ? hoveredNode.id() : "",
-      neighborIDs,
-      highlightedEdgeIDs,
-    };
-  }
-
-  function applyGraphVisualState() {
-    if (!state.cy) {
-      return;
-    }
-    const labelIDs = labelIDsForCurrentState();
-    const focus = visualFocusState();
-    const cy = state.cy;
-    cy.batch(() => {
-      cy.nodes().forEach((node) => {
-        const id = node.id();
-        const isSelected = id === focus.selectedID;
-        const isHovered = id === focus.hoveredID;
-        const isNeighbor = focus.neighborIDs.has(id);
-        const isFocusedNode = focus.focusNodeID !== "" && id === focus.focusNodeID;
-        const isDimmed = focus.focusNodeID !== "" && !isFocusedNode && !isHovered && !isNeighbor;
-        node.toggleClass("is-labeled", labelIDs.has(id));
-        node.toggleClass("is-selected", isSelected);
-        node.toggleClass("is-hovered", isHovered);
-        node.toggleClass("is-neighbor", isNeighbor);
-        node.toggleClass("is-dimmed", isDimmed);
-      });
-
-      cy.edges().forEach((edge) => {
-        const isHighlighted = focus.highlightedEdgeIDs.has(edge.id());
-        edge.toggleClass("is-highlighted-edge", isHighlighted);
-        edge.toggleClass("is-dimmed", focus.focusNodeID !== "" && !isHighlighted);
-      });
-    });
-  }
-
-  function seedDeterministicPositions(): void {
-    if (!state.cy) {
-      return;
-    }
-    const nodes = state.cy
-      .nodes()
-      .toArray()
-      .sort((left, right) => left.id().localeCompare(right.id())) as cytoscape.NodeSingular[];
-    const spread = clampedSpread();
-    const radialGap = 52 + 26 * spread;
-    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-
-    nodes.forEach((node, index) => {
-      const radius = radialGap * Math.sqrt(index);
-      const angle = index * goldenAngle;
-      node.position({
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-      });
-    });
-  }
-
-  function separateIsolatedNodes(): void {
-    if (!state.cy) {
-      return;
-    }
-    const isolatedNodes = state.cy
-      .nodes()
-      .filter((node) => node.connectedEdges().length === 0)
-      .toArray()
-      .sort((left, right) => left.id().localeCompare(right.id())) as cytoscape.NodeSingular[];
-    if (isolatedNodes.length === 0) {
-      return;
-    }
-
-    const spread = clampedSpread();
-    const spacing = 58 + 34 * spread;
-    const columns = Math.ceil(Math.sqrt(isolatedNodes.length));
-    const rows = Math.ceil(isolatedNodes.length / columns);
-    const connectedNodes = state.cy.nodes().filter((node) => node.connectedEdges().length > 0);
-    let startX = -((columns - 1) * spacing) / 2;
-    let startY = -((rows - 1) * spacing) / 2;
-
-    if (connectedNodes.length > 0) {
-      const box = connectedNodes.boundingBox();
-      startX = box.x2 + spacing * 1.6;
-      startY = box.y1 + (box.h - (rows - 1) * spacing) / 2;
-    }
-
-    isolatedNodes.forEach((node, index) => {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      node.position({
-        x: startX + column * spacing,
-        y: startY + row * spacing,
-      });
-    });
+  function applyGraphVisualState(): void {
+    applyGraphVisualClasses(state.cy, state.labelMode, state.selectedNodeID, state.hoveredNodeID);
   }
 
   function runLayout(options: GraphLayoutRunOptions = {}): void {
@@ -730,13 +305,13 @@ export const initGraph = (): void => {
     }
     const layoutOptions = options;
     const fitAfterLayout = Boolean(layoutOptions.fitAfterLayout);
-    const preservedViewport = layoutOptions.preserveViewport ? currentViewport() : null;
+    const preservedViewport = layoutOptions.preserveViewport ? currentViewport(state.cy) : null;
     const runID = state.layoutRunID + 1;
     state.layoutRunID = runID;
     stopActiveLayout();
 
     if (layoutOptions.resetPositions) {
-      seedDeterministicPositions();
+      seedDeterministicPositions(state.cy, clampedSpread(dom.spreadInput));
     }
 
     let finalized = false;
@@ -745,11 +320,11 @@ export const initGraph = (): void => {
         return;
       }
       finalized = true;
-      separateIsolatedNodes();
+      separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
       if (fitAfterLayout) {
         fitCurrentGraph();
       } else if (preservedViewport) {
-        applyViewport(preservedViewport);
+        applyViewport(state.cy, preservedViewport);
         rememberMeaningfulViewport();
       } else {
         rememberMeaningfulViewport();
@@ -758,7 +333,7 @@ export const initGraph = (): void => {
       state.activeLayout = null;
     };
 
-    const layout = state.cy.layout(layoutOptionsForSpread());
+    const layout = state.cy.layout(layoutOptionsForSpread(clampedSpread(dom.spreadInput)));
     state.activeLayout = layout;
     if (typeof layout.one === "function") {
       layout.one("layoutstop", finalizeLayout);
@@ -892,10 +467,10 @@ export const initGraph = (): void => {
       });
     }
 
-    updateSpreadLabel();
+    updateSpreadLabel(dom.spreadInput, dom.spreadValue);
     if (dom.spreadInput instanceof HTMLInputElement) {
       dom.spreadInput.addEventListener("input", () => {
-        updateSpreadLabel();
+        updateSpreadLabel(dom.spreadInput, dom.spreadValue);
         runLayout({
           fitAfterLayout: false,
           preserveViewport: true,

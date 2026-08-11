@@ -97,8 +97,7 @@ var BrainNotesApp = (() => {
   };
   var shouldHandleFilterChangeForMode = (event, mode) => !event.detail.mode || event.detail.mode === mode;
 
-  // internal/web/static_src/api.ts
-  var managementMutationEventName = "bn:management:mutated";
+  // internal/web/static_src/api-internal.ts
   var asRecord = (value) => value && typeof value === "object" ? value : null;
   var normalizeStringArray = (value) => Array.isArray(value) ? value.map((item) => normalizeParamValue(item)).filter((item) => item !== "") : [];
   var readCount = (value) => {
@@ -128,6 +127,23 @@ var BrainNotesApp = (() => {
       OpenCount: readCount(readRecordValue(record, ["OpenCount", "open_count", "openCount"]))
     };
   };
+  var normalizeManagementResult = (payload) => {
+    const record = asRecord(payload) || {};
+    return readBoolean(record.ok) ? {
+      ok: true,
+      message: normalizeParamValue(record.message) || void 0,
+      key: normalizeParamValue(record.key) || void 0,
+      path: normalizeParamValue(record.path) || void 0,
+      rel_path: normalizeParamValue(record.rel_path) || void 0,
+      journal_id: normalizeParamValue(record.journal_id) || void 0
+    } : {
+      ok: false,
+      code: normalizeParamValue(record.code) || void 0,
+      message: normalizeParamValue(record.message) || void 0
+    };
+  };
+
+  // internal/web/static_src/api-brief.ts
   var normalizeBriefRollingActivity = (value) => {
     const record = asRecord(value) || {};
     return {
@@ -222,6 +238,70 @@ var BrainNotesApp = (() => {
       Slots: normalizeBriefSlotResults(readRecordValue(record, ["Slots", "slots"]))
     };
   };
+  var normalizeBriefViewResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      activity: normalizeBriefRollingActivity(readRecordValue(record, ["activity", "Activity"]))
+    };
+  };
+  var normalizeBriefItemResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      action: normalizeParamValue(readRecordValue(record, ["action", "Action"])),
+      card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
+      slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),
+      daily: normalizeBriefDaily(readRecordValue(record, ["daily", "Daily"])),
+      activity: normalizeBriefRollingActivity(readRecordValue(record, ["activity", "Activity"])),
+      affected: normalizeBriefSlotResults(readRecordValue(record, ["affected", "Affected"]))
+    };
+  };
+  var normalizeBriefInsightResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      enabled: readBoolean(readRecordValue(record, ["enabled", "Enabled"])),
+      card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
+      slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),
+      output: normalizeParamValue(readRecordValue(record, ["output", "Output"])),
+      rendered_html: normalizeParamValue(
+        readRecordValue(record, ["rendered_html", "RenderedHTML", "renderedHtml"])
+      )
+    };
+  };
+  var buildBriefViewForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("token", request.token);
+    return body;
+  };
+  var buildBriefItemForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("card_id", request.cardID);
+    body.set("action", request.action);
+    body.set("token", request.token);
+    return body;
+  };
+  var buildBriefInsightForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("card_id", request.cardID);
+    if (request.prompt.trim() !== "") {
+      body.set("prompt", request.prompt.trim());
+    }
+    body.set("token", request.token);
+    return body;
+  };
+
+  // internal/web/static_src/api-bulk.ts
   var normalizeBulkAction = (value) => {
     switch (normalizeParamValue(value)) {
       case "trash":
@@ -373,38 +453,81 @@ var BrainNotesApp = (() => {
       }];
     });
   };
-  var normalizeSearchResults = (payload) => {
-    if (!Array.isArray(payload)) {
-      return [];
-    }
-    return payload.flatMap((item) => {
-      const record = asRecord(item);
-      if (!record) {
-        return [];
+  var normalizeBulkNoteKeys = (keys) => {
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const rawKey of keys) {
+      const key = normalizeParamValue(rawKey);
+      if (key === "") {
+        continue;
       }
-      return [
-        {
-          key: normalizeParamValue(record.key),
-          path: normalizeParamValue(record.path),
-          title: normalizeParamValue(record.title),
-          folder: normalizeParamValue(record.folder),
-          matched_fields: normalizeStringArray(record.matched_fields),
-          issues: normalizeStringArray(record.issues),
-          snippet: normalizeParamValue(record.snippet)
-        }
-      ];
-    });
-  };
-  var searchResultPath = (result) => {
-    if (!result) {
-      return "";
+      const folded = key.toLowerCase();
+      if (seen.has(folded)) {
+        continue;
+      }
+      seen.add(folded);
+      out.push(key);
     }
-    const path = typeof result.path === "string" ? result.path.trim() : "";
-    if (path.startsWith("/n/")) {
-      return path;
-    }
-    return notePathForKey(result.key);
+    return out;
   };
+  var buildBulkRequestForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("action", request.action);
+    body.set("token", request.token);
+    for (const key of normalizeBulkNoteKeys(request.keys)) {
+      body.append("keys[]", key);
+    }
+    if (request.folder !== void 0) {
+      body.set("folder", request.folder);
+    }
+    if (request.property !== void 0) {
+      body.set("property", request.property);
+    }
+    if (request.op !== void 0) {
+      body.set("op", request.op);
+    }
+    if (request.value !== void 0) {
+      body.set("value", request.value);
+    }
+    if (request.previewID !== void 0 && request.previewID.trim() !== "") {
+      body.set("preview_id", request.previewID.trim());
+    }
+    return body;
+  };
+  var buildBulkPreviewForm = (request) => buildBulkRequestForm(request);
+  var buildBulkApplyForm = (request) => buildBulkRequestForm(request);
+  var normalizeBulkManagementResult = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ...base,
+      changed: readCount(record.changed),
+      unchanged: readCount(record.unchanged),
+      failed: readCount(record.failed),
+      results: Array.isArray(record.results) ? record.results.flatMap((item) => {
+        const normalized = normalizeBulkManagementItem(item);
+        return normalized ? [normalized] : [];
+      }) : [],
+      failures: normalizeBulkFailures(record.failures)
+    };
+  };
+  var normalizeBulkPreviewManagementResult = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ...base,
+      action: normalizeBulkAction(record.action),
+      changed: readCount(record.changed),
+      unchanged: readCount(record.unchanged),
+      failed: readCount(record.failed),
+      preview_id: normalizeParamValue(record.preview_id) || void 0,
+      expires_at: normalizeExpiryString(record.expires_at) || void 0,
+      results: normalizeBulkPreviewRows(record.results),
+      failures: normalizeBulkFailures(record.failures)
+    };
+  };
+
+  // internal/web/static_src/api-cockpit.ts
   var emptyCockpitCounts = () => ({
     active: 0,
     done_hidden: 0,
@@ -616,92 +739,6 @@ var BrainNotesApp = (() => {
       journal_id: normalizeParamValue(record.journal_id) || void 0
     };
   };
-  var normalizeBriefViewResponse = (payload) => {
-    const base = normalizeManagementResult(payload);
-    const record = asRecord(payload) || {};
-    return {
-      ok: base.ok,
-      code: base.ok ? void 0 : base.code,
-      message: base.message,
-      activity: normalizeBriefRollingActivity(readRecordValue(record, ["activity", "Activity"]))
-    };
-  };
-  var normalizeBriefItemResponse = (payload) => {
-    const base = normalizeManagementResult(payload);
-    const record = asRecord(payload) || {};
-    return {
-      ok: base.ok,
-      code: base.ok ? void 0 : base.code,
-      message: base.message,
-      action: normalizeParamValue(readRecordValue(record, ["action", "Action"])),
-      card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
-      slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),
-      daily: normalizeBriefDaily(readRecordValue(record, ["daily", "Daily"])),
-      activity: normalizeBriefRollingActivity(readRecordValue(record, ["activity", "Activity"])),
-      affected: normalizeBriefSlotResults(readRecordValue(record, ["affected", "Affected"]))
-    };
-  };
-  var normalizeBriefInsightResponse = (payload) => {
-    const base = normalizeManagementResult(payload);
-    const record = asRecord(payload) || {};
-    return {
-      ok: base.ok,
-      code: base.ok ? void 0 : base.code,
-      message: base.message,
-      enabled: readBoolean(readRecordValue(record, ["enabled", "Enabled"])),
-      card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
-      slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),
-      output: normalizeParamValue(readRecordValue(record, ["output", "Output"])),
-      rendered_html: normalizeParamValue(
-        readRecordValue(record, ["rendered_html", "RenderedHTML", "renderedHtml"])
-      )
-    };
-  };
-  var normalizeNoteInsightResponse = (payload) => {
-    const base = normalizeManagementResult(payload);
-    const record = asRecord(payload) || {};
-    return {
-      ok: base.ok,
-      code: base.ok ? void 0 : base.code,
-      message: base.message,
-      enabled: readBoolean(readRecordValue(record, ["enabled", "Enabled"])),
-      key: normalizeParamValue(readRecordValue(record, ["key", "Key"])),
-      output: normalizeParamValue(readRecordValue(record, ["output", "Output"])),
-      rendered_html: normalizeParamValue(
-        readRecordValue(record, ["rendered_html", "RenderedHTML", "renderedHtml"])
-      )
-    };
-  };
-  var buildBriefViewForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("token", request.token);
-    return body;
-  };
-  var buildBriefItemForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("card_id", request.cardID);
-    body.set("action", request.action);
-    body.set("token", request.token);
-    return body;
-  };
-  var buildBriefInsightForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("card_id", request.cardID);
-    if (request.prompt.trim() !== "") {
-      body.set("prompt", request.prompt.trim());
-    }
-    body.set("token", request.token);
-    return body;
-  };
-  var buildNoteInsightForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("key", request.key);
-    if (request.prompt.trim() !== "") {
-      body.set("prompt", request.prompt.trim());
-    }
-    body.set("token", request.token);
-    return body;
-  };
   var buildCockpitItemForm = (request) => {
     const body = new URLSearchParams();
     body.set("id", request.id);
@@ -726,6 +763,8 @@ var BrainNotesApp = (() => {
     }
     return body;
   };
+
+  // internal/web/static_src/api-facets.ts
   var facetGroups = [
     { key: "tags", label: "Tags", param: "tag", repeat: true },
     { key: "categories", label: "Categories", param: "category", repeat: true },
@@ -809,72 +848,8 @@ var BrainNotesApp = (() => {
       return left.label.localeCompare(right.label);
     });
   };
-  var buildNoteKeyMutationForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("key", request.key);
-    body.set("token", request.token);
-    return body;
-  };
-  var buildCreateNoteForm = (request) => {
-    const body = buildNoteKeyMutationForm(request);
-    body.set("target", request.target);
-    return body;
-  };
-  var buildFrontmatterSetForm = (request) => {
-    const body = buildNoteKeyMutationForm(request);
-    body.set("property", request.property);
-    body.set("op", request.op);
-    body.set("value", request.value);
-    return body;
-  };
-  var buildFrontmatterUnsetForm = (request) => {
-    const body = buildNoteKeyMutationForm(request);
-    body.set("property", request.property);
-    return body;
-  };
-  var normalizeBulkNoteKeys = (keys) => {
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const rawKey of keys) {
-      const key = normalizeParamValue(rawKey);
-      if (key === "") {
-        continue;
-      }
-      const folded = key.toLowerCase();
-      if (seen.has(folded)) {
-        continue;
-      }
-      seen.add(folded);
-      out.push(key);
-    }
-    return out;
-  };
-  var buildBulkRequestForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("action", request.action);
-    body.set("token", request.token);
-    for (const key of normalizeBulkNoteKeys(request.keys)) {
-      body.append("keys[]", key);
-    }
-    if (request.folder !== void 0) {
-      body.set("folder", request.folder);
-    }
-    if (request.property !== void 0) {
-      body.set("property", request.property);
-    }
-    if (request.op !== void 0) {
-      body.set("op", request.op);
-    }
-    if (request.value !== void 0) {
-      body.set("value", request.value);
-    }
-    if (request.previewID !== void 0 && request.previewID.trim() !== "") {
-      body.set("preview_id", request.previewID.trim());
-    }
-    return body;
-  };
-  var buildBulkPreviewForm = (request) => buildBulkRequestForm(request);
-  var buildBulkApplyForm = (request) => buildBulkRequestForm(request);
+
+  // internal/web/static_src/api-history.ts
   var buildUndoForm = (request) => {
     const body = new URLSearchParams();
     body.set("token", request.token);
@@ -889,7 +864,6 @@ var BrainNotesApp = (() => {
     }
     return body;
   };
-  var buildOpenNoteForm = (request) => buildNoteKeyMutationForm(request);
   var normalizeHistoryEntries = (payload) => {
     const data = asRecord(payload);
     const rawEntries = data && Array.isArray(data.entries) ? data.entries : [];
@@ -923,51 +897,57 @@ var BrainNotesApp = (() => {
       }];
     });
   };
-  var normalizeManagementResult = (payload) => {
-    const record = asRecord(payload) || {};
-    return readBoolean(record.ok) ? {
-      ok: true,
-      message: normalizeParamValue(record.message) || void 0,
-      key: normalizeParamValue(record.key) || void 0,
-      path: normalizeParamValue(record.path) || void 0,
-      rel_path: normalizeParamValue(record.rel_path) || void 0,
-      journal_id: normalizeParamValue(record.journal_id) || void 0
-    } : {
-      ok: false,
-      code: normalizeParamValue(record.code) || void 0,
-      message: normalizeParamValue(record.message) || void 0
-    };
-  };
-  var normalizeBulkManagementResult = (payload) => {
+
+  // internal/web/static_src/api-notes.ts
+  var managementMutationEventName = "bn:management:mutated";
+  var normalizeNoteInsightResponse = (payload) => {
     const base = normalizeManagementResult(payload);
     const record = asRecord(payload) || {};
     return {
-      ...base,
-      changed: readCount(record.changed),
-      unchanged: readCount(record.unchanged),
-      failed: readCount(record.failed),
-      results: Array.isArray(record.results) ? record.results.flatMap((item) => {
-        const normalized = normalizeBulkManagementItem(item);
-        return normalized ? [normalized] : [];
-      }) : [],
-      failures: normalizeBulkFailures(record.failures)
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      enabled: readBoolean(readRecordValue(record, ["enabled", "Enabled"])),
+      key: normalizeParamValue(readRecordValue(record, ["key", "Key"])),
+      output: normalizeParamValue(readRecordValue(record, ["output", "Output"])),
+      rendered_html: normalizeParamValue(
+        readRecordValue(record, ["rendered_html", "RenderedHTML", "renderedHtml"])
+      )
     };
   };
-  var normalizeBulkPreviewManagementResult = (payload) => {
-    const base = normalizeManagementResult(payload);
-    const record = asRecord(payload) || {};
-    return {
-      ...base,
-      action: normalizeBulkAction(record.action),
-      changed: readCount(record.changed),
-      unchanged: readCount(record.unchanged),
-      failed: readCount(record.failed),
-      preview_id: normalizeParamValue(record.preview_id) || void 0,
-      expires_at: normalizeExpiryString(record.expires_at) || void 0,
-      results: normalizeBulkPreviewRows(record.results),
-      failures: normalizeBulkFailures(record.failures)
-    };
+  var buildNoteInsightForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("key", request.key);
+    if (request.prompt.trim() !== "") {
+      body.set("prompt", request.prompt.trim());
+    }
+    body.set("token", request.token);
+    return body;
   };
+  var buildNoteKeyMutationForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("key", request.key);
+    body.set("token", request.token);
+    return body;
+  };
+  var buildCreateNoteForm = (request) => {
+    const body = buildNoteKeyMutationForm(request);
+    body.set("target", request.target);
+    return body;
+  };
+  var buildFrontmatterSetForm = (request) => {
+    const body = buildNoteKeyMutationForm(request);
+    body.set("property", request.property);
+    body.set("op", request.op);
+    body.set("value", request.value);
+    return body;
+  };
+  var buildFrontmatterUnsetForm = (request) => {
+    const body = buildNoteKeyMutationForm(request);
+    body.set("property", request.property);
+    return body;
+  };
+  var buildOpenNoteForm = (request) => buildNoteKeyMutationForm(request);
   var normalizeManagementErrorMessage = (status, detail) => {
     const result = normalizeManagementResult(detail);
     if (!result.ok && result.message) {
@@ -979,6 +959,40 @@ var BrainNotesApp = (() => {
   var normalizeOpenErrorMessage = (status, detail) => {
     const message = normalizeParamValue(detail);
     return message || `Open failed (${status}).`;
+  };
+
+  // internal/web/static_src/api-search.ts
+  var normalizeSearchResults = (payload) => {
+    if (!Array.isArray(payload)) {
+      return [];
+    }
+    return payload.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      return [
+        {
+          key: normalizeParamValue(record.key),
+          path: normalizeParamValue(record.path),
+          title: normalizeParamValue(record.title),
+          folder: normalizeParamValue(record.folder),
+          matched_fields: normalizeStringArray(record.matched_fields),
+          issues: normalizeStringArray(record.issues),
+          snippet: normalizeParamValue(record.snippet)
+        }
+      ];
+    });
+  };
+  var searchResultPath = (result) => {
+    if (!result) {
+      return "";
+    }
+    const path = typeof result.path === "string" ? result.path.trim() : "";
+    if (path.startsWith("/n/")) {
+      return path;
+    }
+    return notePathForKey(result.key);
   };
 
   // internal/web/static_src/dom.ts
@@ -1130,7 +1144,29 @@ var BrainNotesApp = (() => {
     });
   };
 
-  // internal/web/static_src/daily-brief.ts
+  // internal/web/static_src/daily-brief-http.ts
+  var jsonPostRequest = (csrfToken, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": csrfToken
+    },
+    body
+  });
+  var readResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
+  // internal/web/static_src/daily-brief-model.ts
   var readDailyBriefConfig = (root) => {
     const insightValue = (root.getAttribute("data-brief-insight-enabled") || "").toLowerCase();
     return {
@@ -1205,30 +1241,422 @@ var BrainNotesApp = (() => {
     const key = briefNoteKeyFromRelPath(relPath);
     return key ? notePathForKey(key) : "";
   };
-  var jsonPostRequest = (csrfToken, body) => ({
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-BN-CSRF": csrfToken
-    },
-    body
-  });
-  var readResponsePayload = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
-    }
-  };
   var insightDisclosureMessage = [
     "Ask AI sends this card's context and your optional prompt to your configured [agent].command.",
     "BrainNotes does not store the prompt or AI output. Continue?"
   ].join("\n");
+
+  // internal/web/static_src/daily-brief-render.ts
+  var findSlotElement = (root, slot) => queryElement(root, `[data-brief-slot="${slot}"]`, HTMLElement);
+  var findSlotStatusElement = (root, slot) => queryElement(root, `[data-brief-slot-status="${slot}"]`, HTMLElement);
+  var markButtonDefaultDisabled = (button) => {
+    button.setAttribute("data-brief-disabled-default", button.disabled ? "true" : "false");
+  };
+  var applyButtonDisabledDefaults = (container) => {
+    for (const button of queryAllElements(container, "[data-brief-action]", HTMLButtonElement)) {
+      markButtonDefaultDisabled(button);
+    }
+    for (const prompt of queryAllElements(container, "[data-brief-insight-prompt]", HTMLTextAreaElement)) {
+      prompt.setAttribute("data-brief-disabled-default", prompt.disabled ? "true" : "false");
+    }
+  };
+  var createActionButton = (doc, slot, cardID, action, label, enabled) => {
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.className = "brief-action-button";
+    button.setAttribute("data-brief-action", action);
+    button.setAttribute(`data-brief-action-${action}`, "");
+    button.setAttribute("data-brief-slot", slot);
+    button.setAttribute("data-brief-card-id", cardID);
+    button.textContent = label;
+    button.disabled = !enabled;
+    button.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
+    return button;
+  };
+  var createInsightPrompt = (doc, slot, cardID, enabled) => {
+    const field = doc.createElement("div");
+    field.className = "brief-insight-prompt-field";
+    const promptID = `brief-insight-prompt-${slot}-${cardID}`;
+    const label = doc.createElement("label");
+    label.className = "brief-insight-prompt-label";
+    label.htmlFor = promptID;
+    label.textContent = "Ask AI about this note";
+    const controls = doc.createElement("div");
+    controls.className = "brief-insight-prompt-controls";
+    const prompt = doc.createElement("textarea");
+    prompt.id = promptID;
+    prompt.className = "brief-insight-prompt";
+    prompt.rows = 2;
+    prompt.maxLength = insightPromptMaxLength;
+    prompt.placeholder = "Optional: ask a question or specify the output";
+    prompt.disabled = !enabled;
+    prompt.setAttribute("data-brief-insight-prompt", "");
+    prompt.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
+    const button = createActionButton(doc, slot, cardID, "insight", "Ask AI", enabled);
+    controls.append(prompt, button);
+    const hint = doc.createElement("span");
+    hint.className = "brief-insight-prompt-hint";
+    hint.textContent = "Leave blank for the suggested insight. Press Ctrl/\u2318 + Enter to ask.";
+    field.append(label, controls, hint);
+    return field;
+  };
+  var ensureInsightPanel = (cardEl, slot) => {
+    const existing = queryElement(cardEl, "[data-brief-insight-panel]", HTMLElement);
+    if (existing) {
+      return existing;
+    }
+    const doc = cardEl.ownerDocument;
+    const panel = doc.createElement("section");
+    panel.className = "brief-insight";
+    panel.setAttribute("data-brief-insight-panel", "");
+    panel.hidden = true;
+    const header = doc.createElement("div");
+    header.className = "brief-insight-header";
+    const title = doc.createElement("h5");
+    title.className = "brief-insight-title";
+    title.textContent = "AI insight";
+    header.appendChild(title);
+    const copy = doc.createElement("button");
+    copy.className = "brief-insight-copy";
+    copy.type = "button";
+    copy.hidden = true;
+    copy.disabled = true;
+    copy.textContent = "Copy Markdown";
+    copy.setAttribute("data-brief-insight-copy", "");
+    copy.setAttribute("data-brief-slot", slot);
+    header.appendChild(copy);
+    const body = doc.createElement("div");
+    body.className = "brief-insight-body";
+    body.setAttribute("data-brief-insight-body", "");
+    panel.append(header, body);
+    cardEl.appendChild(panel);
+    return panel;
+  };
+  var renderInsight = (root, slot, cardID, renderedHTML, output) => {
+    const slotEl = findSlotElement(root, slot);
+    if (!slotEl) {
+      return;
+    }
+    const cardEl = queryElement(
+      slotEl,
+      `[data-brief-card][data-brief-card-id="${cardID}"]`,
+      HTMLElement
+    );
+    if (!cardEl) {
+      return;
+    }
+    const panel = ensureInsightPanel(cardEl, slot);
+    const body = queryElement(panel, "[data-brief-insight-body]", HTMLElement);
+    const copy = queryElement(panel, "[data-brief-insight-copy]", HTMLButtonElement);
+    if (!body || !copy) {
+      return;
+    }
+    body.innerHTML = renderedHTML;
+    copy.setAttribute("data-brief-copy-output", output);
+    copy.hidden = false;
+    copy.disabled = output.trim() === "";
+    panel.hidden = false;
+  };
+  var buildUnavailableHint = (availability, sourcePath) => {
+    if (availability.stateUnreadable) {
+      return {
+        open: "Open is unavailable until brief state is readable.",
+        another: "Another is unavailable until brief state is readable.",
+        insight: "Ask AI is unavailable until brief state is readable."
+      };
+    }
+    return {
+      open: sourcePath === "" ? "Open is unavailable because this note route could not be resolved." : availability.editorConfigured ? "" : "Open is disabled until the editor is configured.",
+      another: "",
+      insight: availability.insightConfigured ? "" : "Ask AI is unavailable until [agent].command is configured."
+    };
+  };
+  var renderCard = (doc, availability, slot, card) => {
+    const cardEl = doc.createElement("div");
+    cardEl.className = "brief-card";
+    cardEl.setAttribute("data-brief-card", "");
+    cardEl.setAttribute("data-brief-card-id", card.ID);
+    const sourceTitle = card.Source.Title || card.Source.RelPath;
+    const sourcePath = briefNotePathForRelPath(card.Source.RelPath);
+    const heading = doc.createElement("h4");
+    heading.className = "brief-card-title";
+    let headingLink = null;
+    if (slot === "connect" && card.Candidate) {
+      const candidatePath = briefNotePathForRelPath(card.Candidate.RelPath);
+      const candidateTitle = card.Candidate.Title || card.Candidate.RelPath;
+      if (candidatePath) {
+        headingLink = doc.createElement("a");
+        headingLink.textContent = candidateTitle;
+        headingLink.href = candidatePath;
+      } else {
+        heading.textContent = candidateTitle;
+      }
+    } else if (sourcePath) {
+      headingLink = doc.createElement("a");
+      headingLink.textContent = sourceTitle;
+      headingLink.href = sourcePath;
+    } else {
+      heading.textContent = sourceTitle;
+    }
+    if (headingLink) {
+      heading.appendChild(headingLink);
+    }
+    cardEl.appendChild(heading);
+    const path = doc.createElement("p");
+    path.className = "brief-card-path";
+    const pathCode = doc.createElement("code");
+    pathCode.textContent = slot === "connect" && card.Candidate ? card.Candidate.RelPath : card.Source.RelPath;
+    path.appendChild(pathCode);
+    cardEl.appendChild(path);
+    const explanation = doc.createElement("p");
+    explanation.className = "brief-card-explanation";
+    explanation.textContent = card.Explanation;
+    cardEl.appendChild(explanation);
+    const relationship = relationshipLabel(card.Metadata.Relationship);
+    if (slot === "connect" && relationship) {
+      const relationshipEl = doc.createElement("p");
+      relationshipEl.className = "brief-card-meta";
+      relationshipEl.textContent = `Relationship: ${relationship}`;
+      cardEl.appendChild(relationshipEl);
+    }
+    if (slot === "connect" && card.Metadata.Bridge) {
+      const bridgeEl = doc.createElement("p");
+      bridgeEl.className = "brief-card-meta";
+      const bridgeCode = doc.createElement("code");
+      bridgeCode.textContent = card.Metadata.Bridge;
+      bridgeEl.append("Bridge: ", bridgeCode);
+      cardEl.appendChild(bridgeEl);
+    }
+    if (card.Excerpt) {
+      const excerpt = doc.createElement("blockquote");
+      excerpt.className = "brief-card-excerpt";
+      excerpt.textContent = card.Excerpt;
+      cardEl.appendChild(excerpt);
+    }
+    const reasons = card.Metadata.Reasons.filter((reason) => reason.trim() !== "" && reason !== card.Explanation);
+    if (reasons.length > 0) {
+      const list = doc.createElement("ul");
+      list.className = "brief-card-reasons";
+      for (const reason of reasons) {
+        const item = doc.createElement("li");
+        item.textContent = reason;
+        list.appendChild(item);
+      }
+      cardEl.appendChild(list);
+    }
+    const unavailable = buildUnavailableHint(availability, sourcePath);
+    const actionRow = doc.createElement("div");
+    actionRow.className = "brief-card-actions";
+    actionRow.append(
+      createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
+      createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === "")
+    );
+    cardEl.appendChild(actionRow);
+    cardEl.appendChild(createInsightPrompt(doc, slot, card.ID, unavailable.insight === ""));
+    if (unavailable.open) {
+      const hint = doc.createElement("p");
+      hint.className = "brief-action-hint";
+      hint.textContent = unavailable.open;
+      cardEl.appendChild(hint);
+    }
+    if (unavailable.another) {
+      const hint = doc.createElement("p");
+      hint.className = "brief-action-hint";
+      hint.textContent = unavailable.another;
+      cardEl.appendChild(hint);
+    }
+    if (unavailable.insight) {
+      const hint = doc.createElement("p");
+      hint.className = "brief-action-hint";
+      hint.textContent = unavailable.insight;
+      cardEl.appendChild(hint);
+    }
+    ensureInsightPanel(cardEl, slot);
+    return cardEl;
+  };
+
+  // internal/web/static_src/daily-brief-actions.ts
+  var readButtonSlot = (button) => normalizeSlot(button.getAttribute("data-brief-slot") || "");
+  var readButtonCardID = (button) => button.getAttribute("data-brief-card-id") || "";
+  var runOpen = async (ctx, button) => {
+    const slot = readButtonSlot(button);
+    const cardID = readButtonCardID(button);
+    if (!slot || !cardID || !ctx.config.csrfToken) {
+      ctx.setGlobalStatus("Open action unavailable.", "is-error");
+      return;
+    }
+    ctx.setSlotsBusy([slot], true);
+    ctx.setSlotStatus(slot, "Opening editor...", "is-loading");
+    try {
+      const body = buildBriefItemForm({ cardID, action: "open", token: ctx.config.csrfToken }).toString();
+      const resp = await ctx.fetcher(ctx.config.itemEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
+      const payload = await readResponsePayload(resp);
+      if (!resp.ok) {
+        ctx.setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
+        return;
+      }
+      const result = normalizeBriefItemResponse(payload);
+      if (!result.ok) {
+        ctx.setSlotStatus(slot, result.message || "Open failed.", "is-error");
+        return;
+      }
+      ctx.updateActivity(result.activity);
+      ctx.openedCards.add(cardID);
+      ctx.markCardOpened(slot, cardID);
+      ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
+      ctx.setGlobalStatus("Brief activity updated.", "is-success");
+    } catch {
+      ctx.setSlotStatus(slot, "Open failed.", "is-error");
+    } finally {
+      ctx.setSlotsBusy([slot], false);
+    }
+  };
+  var runAnother = async (ctx, button) => {
+    const slot = readButtonSlot(button);
+    const cardID = readButtonCardID(button);
+    if (!slot || !cardID || !ctx.config.csrfToken) {
+      ctx.setGlobalStatus("Another action unavailable.", "is-error");
+      return;
+    }
+    const busySlots = slot === "continue" ? ["continue", "connect"] : [slot];
+    ctx.setSlotsBusy(busySlots, true);
+    ctx.setSlotStatus(slot, "Finding another card...", "is-loading");
+    try {
+      const body = buildBriefItemForm({ cardID, action: "another", token: ctx.config.csrfToken }).toString();
+      const resp = await ctx.fetcher(ctx.config.itemEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
+      const payload = await readResponsePayload(resp);
+      if (!resp.ok) {
+        ctx.setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
+        return;
+      }
+      const result = normalizeBriefItemResponse(payload);
+      if (!result.ok) {
+        ctx.setSlotStatus(slot, result.message || "Another failed.", "is-error");
+        return;
+      }
+      ctx.updateActivity(result.activity);
+      const changedSlots = ctx.applyAnotherPayload(result, slot);
+      const statusMessage = result.message || (slot === "continue" && changedSlots.includes("connect") ? "Updated Continue and Connect." : `Updated ${slotLabel(slot)}.`);
+      ctx.setSlotStatus(slot, statusMessage, "is-success");
+      ctx.setGlobalStatus(statusMessage, "is-success");
+      const slotEl = findSlotElement(ctx.root, slot);
+      const nextFocus = slotEl && queryElement(slotEl, "[data-brief-action-another]", HTMLButtonElement) || slotEl && queryElement(slotEl, "[data-brief-action]", HTMLButtonElement);
+      nextFocus?.focus({ preventScroll: true });
+    } catch {
+      ctx.setSlotStatus(slot, "Another failed.", "is-error");
+    } finally {
+      ctx.setSlotsBusy(busySlots, false);
+    }
+  };
+  var runInsight = async (ctx, button) => {
+    const slot = readButtonSlot(button);
+    const cardID = readButtonCardID(button);
+    if (!slot || !cardID || !ctx.config.csrfToken) {
+      ctx.setGlobalStatus("Ask AI is unavailable.", "is-error");
+      return;
+    }
+    const cardEl = button.closest("[data-brief-card]");
+    const prompt = cardEl ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || "" : "";
+    if (!ctx.insightDisclosureAccepted) {
+      ctx.insightDisclosureAccepted = ctx.confirmer(insightDisclosureMessage);
+      if (!ctx.insightDisclosureAccepted) {
+        ctx.setSlotStatus(slot, "Ask AI canceled.", "is-empty");
+        return;
+      }
+    }
+    ctx.setSlotsBusy([slot], true);
+    ctx.setSlotStatus(slot, "Generating insight...", "is-loading");
+    const requestID = ctx.insightCounter + 1;
+    ctx.insightCounter = requestID;
+    ctx.inflightInsight.set(slot, requestID);
+    try {
+      const body = buildBriefInsightForm({ cardID, prompt, token: ctx.config.csrfToken }).toString();
+      const resp = await ctx.fetcher(
+        ctx.config.insightEndpoint,
+        jsonPostRequest(ctx.config.csrfToken, body)
+      );
+      const payload = await readResponsePayload(resp);
+      if (ctx.inflightInsight.get(slot) !== requestID) {
+        return;
+      }
+      if (!resp.ok) {
+        ctx.setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
+        return;
+      }
+      const result = normalizeBriefInsightResponse(payload);
+      if (!result.ok) {
+        ctx.setSlotStatus(slot, result.message || "Ask AI failed.", "is-error");
+        return;
+      }
+      if (!result.enabled) {
+        ctx.setSlotStatus(slot, result.message || "Ask AI is unavailable.", "is-error");
+        return;
+      }
+      if (result.card_id && result.card_id !== cardID) {
+        ctx.setSlotStatus(slot, "Card changed while insight was running. Try again.", "is-error");
+        return;
+      }
+      renderInsight(ctx.root, slot, cardID, result.rendered_html, result.output);
+      ctx.setSlotStatus(slot, "Insight ready.", "is-success");
+    } catch {
+      if (ctx.inflightInsight.get(slot) === requestID) {
+        ctx.setSlotStatus(slot, "Ask AI failed.", "is-error");
+      }
+    } finally {
+      if (ctx.inflightInsight.get(slot) === requestID) {
+        ctx.inflightInsight.delete(slot);
+        ctx.setSlotsBusy([slot], false);
+      }
+    }
+  };
+  var runCopyInsight = async (ctx, button) => {
+    const slot = normalizeSlot(button.getAttribute("data-brief-slot") || "");
+    if (!slot) {
+      return;
+    }
+    const payload = button.getAttribute("data-brief-copy-output") || "";
+    if (payload.trim() === "") {
+      ctx.setSlotStatus(slot, "Nothing to copy.", "is-error");
+      return;
+    }
+    if (!ctx.clipboardWrite) {
+      ctx.setSlotStatus(slot, "Clipboard unavailable.", "is-error");
+      return;
+    }
+    button.disabled = true;
+    try {
+      await ctx.clipboardWrite(payload);
+      ctx.setSlotStatus(slot, "Insight markdown copied.", "is-success");
+    } catch {
+      ctx.setSlotStatus(slot, "Copy failed.", "is-error");
+    } finally {
+      button.disabled = false;
+    }
+  };
+  var recordView = async (ctx) => {
+    if (!ctx.config.csrfToken) {
+      return;
+    }
+    try {
+      const body = buildBriefViewForm({ token: ctx.config.csrfToken }).toString();
+      const resp = await ctx.fetcher(ctx.config.viewEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
+      const payload = await readResponsePayload(resp);
+      if (!resp.ok) {
+        ctx.setGlobalStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+        return;
+      }
+      const result = normalizeBriefViewResponse(payload);
+      if (!result.ok) {
+        ctx.setGlobalStatus(result.message || "Brief activity unavailable.", "is-error");
+        return;
+      }
+      ctx.updateActivity(result.activity);
+    } catch {
+      ctx.setGlobalStatus("Brief activity unavailable.", "is-error");
+    }
+  };
+
+  // internal/web/static_src/daily-brief.ts
   var initDailyBrief = (deps = {}) => {
     const root = queryElement(document, "[data-brief-root]", HTMLElement);
     if (!root) {
@@ -1241,33 +1669,21 @@ var BrainNotesApp = (() => {
     const globalStatusEl = queryElement(root, "#brief-global-status", HTMLElement);
     const visitDaysEl = queryElement(root, "[data-brief-activity-visit-days]", HTMLElement);
     const openCountEl = queryElement(root, "[data-brief-activity-open-count]", HTMLElement);
-    const slotElementFor = (slot) => queryElement(root, `[data-brief-slot="${slot}"]`, HTMLElement);
-    const slotStatusElementFor = (slot) => queryElement(root, `[data-brief-slot-status="${slot}"]`, HTMLElement);
+    const slotElementFor = (slot) => findSlotElement(root, slot);
     const setGlobalStatus = (message, kind = "") => {
       setStatusText(globalStatusEl, message || " ", kind, statusClasses);
     };
     const setSlotStatus = (slot, message, kind = "") => {
-      setStatusText(slotStatusElementFor(slot), message || " ", kind, statusClasses);
+      setStatusText(findSlotStatusElement(root, slot), message || " ", kind, statusClasses);
     };
-    const hasStateUnreadable = () => queryElement(root, "[data-brief-state-unreadable]", HTMLElement) !== null;
-    const hasEditorConfigured = () => queryElement(root, "[data-brief-editor-unconfigured]", HTMLElement) === null;
-    const insightConfigured = () => config.insightEnabled;
-    const markButtonDefaultDisabled = (button) => {
-      button.setAttribute("data-brief-disabled-default", button.disabled ? "true" : "false");
-    };
-    const applyButtonDisabledDefaults = (container) => {
-      for (const button of queryAllElements(container, "[data-brief-action]", HTMLButtonElement)) {
-        markButtonDefaultDisabled(button);
-      }
-      for (const prompt of queryAllElements(container, "[data-brief-insight-prompt]", HTMLTextAreaElement)) {
-        prompt.setAttribute("data-brief-disabled-default", prompt.disabled ? "true" : "false");
-      }
-    };
+    const readAvailability = () => ({
+      stateUnreadable: queryElement(root, "[data-brief-state-unreadable]", HTMLElement) !== null,
+      editorConfigured: queryElement(root, "[data-brief-editor-unconfigured]", HTMLElement) === null,
+      insightConfigured: config.insightEnabled
+    });
     applyButtonDisabledDefaults(root);
     const openedCards = /* @__PURE__ */ new Set();
     const inflightInsight = /* @__PURE__ */ new Map();
-    let insightCounter = 0;
-    let insightDisclosureAccepted = false;
     const setSlotBusy = (slot, busy) => {
       const slotEl = slotElementFor(slot);
       if (!slotEl) {
@@ -1294,16 +1710,16 @@ var BrainNotesApp = (() => {
       if (!slotEl) {
         return;
       }
-      const openButton = queryElement(
+      const openButton2 = queryElement(
         slotEl,
         `[data-brief-action-open][data-brief-card-id="${cardID}"]`,
         HTMLButtonElement
       );
-      if (!openButton) {
+      if (!openButton2) {
         return;
       }
-      openButton.textContent = "Opened";
-      openButton.classList.add("is-opened");
+      openButton2.textContent = "Opened";
+      openButton2.classList.add("is-opened");
     };
     const updateActivity = (activity) => {
       if (visitDaysEl) {
@@ -1312,221 +1728,6 @@ var BrainNotesApp = (() => {
       if (openCountEl) {
         openCountEl.textContent = String(activity.Last7Days.OpenCount);
       }
-    };
-    const createActionButton = (doc, slot, cardID, action, label, enabled) => {
-      const button = doc.createElement("button");
-      button.type = "button";
-      button.className = "brief-action-button";
-      button.setAttribute("data-brief-action", action);
-      button.setAttribute(`data-brief-action-${action}`, "");
-      button.setAttribute("data-brief-slot", slot);
-      button.setAttribute("data-brief-card-id", cardID);
-      button.textContent = label;
-      button.disabled = !enabled;
-      button.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
-      return button;
-    };
-    const createInsightPrompt = (doc, slot, cardID, enabled) => {
-      const field = doc.createElement("div");
-      field.className = "brief-insight-prompt-field";
-      const promptID = `brief-insight-prompt-${slot}-${cardID}`;
-      const label = doc.createElement("label");
-      label.className = "brief-insight-prompt-label";
-      label.htmlFor = promptID;
-      label.textContent = "Ask AI about this note";
-      const controls = doc.createElement("div");
-      controls.className = "brief-insight-prompt-controls";
-      const prompt = doc.createElement("textarea");
-      prompt.id = promptID;
-      prompt.className = "brief-insight-prompt";
-      prompt.rows = 2;
-      prompt.maxLength = insightPromptMaxLength;
-      prompt.placeholder = "Optional: ask a question or specify the output";
-      prompt.disabled = !enabled;
-      prompt.setAttribute("data-brief-insight-prompt", "");
-      prompt.setAttribute("data-brief-disabled-default", enabled ? "false" : "true");
-      const button = createActionButton(doc, slot, cardID, "insight", "Ask AI", enabled);
-      controls.append(prompt, button);
-      const hint = doc.createElement("span");
-      hint.className = "brief-insight-prompt-hint";
-      hint.textContent = "Leave blank for the suggested insight. Press Ctrl/\u2318 + Enter to ask.";
-      field.append(label, controls, hint);
-      return field;
-    };
-    const ensureInsightPanel = (cardEl, slot) => {
-      const existing = queryElement(cardEl, "[data-brief-insight-panel]", HTMLElement);
-      if (existing) {
-        return existing;
-      }
-      const doc = cardEl.ownerDocument;
-      const panel = doc.createElement("section");
-      panel.className = "brief-insight";
-      panel.setAttribute("data-brief-insight-panel", "");
-      panel.hidden = true;
-      const header = doc.createElement("div");
-      header.className = "brief-insight-header";
-      const title = doc.createElement("h5");
-      title.className = "brief-insight-title";
-      title.textContent = "AI insight";
-      header.appendChild(title);
-      const copy = doc.createElement("button");
-      copy.className = "brief-insight-copy";
-      copy.type = "button";
-      copy.hidden = true;
-      copy.disabled = true;
-      copy.textContent = "Copy Markdown";
-      copy.setAttribute("data-brief-insight-copy", "");
-      copy.setAttribute("data-brief-slot", slot);
-      header.appendChild(copy);
-      const body = doc.createElement("div");
-      body.className = "brief-insight-body";
-      body.setAttribute("data-brief-insight-body", "");
-      panel.append(header, body);
-      cardEl.appendChild(panel);
-      return panel;
-    };
-    const renderInsight = (slot, cardID, renderedHTML, output) => {
-      const slotEl = slotElementFor(slot);
-      if (!slotEl) {
-        return;
-      }
-      const cardEl = queryElement(
-        slotEl,
-        `[data-brief-card][data-brief-card-id="${cardID}"]`,
-        HTMLElement
-      );
-      if (!cardEl) {
-        return;
-      }
-      const panel = ensureInsightPanel(cardEl, slot);
-      const body = queryElement(panel, "[data-brief-insight-body]", HTMLElement);
-      const copy = queryElement(panel, "[data-brief-insight-copy]", HTMLButtonElement);
-      if (!body || !copy) {
-        return;
-      }
-      body.innerHTML = renderedHTML;
-      copy.setAttribute("data-brief-copy-output", output);
-      copy.hidden = false;
-      copy.disabled = output.trim() === "";
-      panel.hidden = false;
-    };
-    const buildUnavailableHint = (slot, sourcePath) => {
-      if (hasStateUnreadable()) {
-        return {
-          open: "Open is unavailable until brief state is readable.",
-          another: "Another is unavailable until brief state is readable.",
-          insight: "Ask AI is unavailable until brief state is readable."
-        };
-      }
-      return {
-        open: sourcePath === "" ? "Open is unavailable because this note route could not be resolved." : hasEditorConfigured() ? "" : "Open is disabled until the editor is configured.",
-        another: "",
-        insight: insightConfigured() ? "" : "Ask AI is unavailable until [agent].command is configured."
-      };
-    };
-    const renderCard = (slot, card) => {
-      const doc = root.ownerDocument;
-      const cardEl = doc.createElement("div");
-      cardEl.className = "brief-card";
-      cardEl.setAttribute("data-brief-card", "");
-      cardEl.setAttribute("data-brief-card-id", card.ID);
-      const sourceTitle = card.Source.Title || card.Source.RelPath;
-      const sourcePath = briefNotePathForRelPath(card.Source.RelPath);
-      const heading = doc.createElement("h4");
-      heading.className = "brief-card-title";
-      let headingLink = null;
-      if (slot === "connect" && card.Candidate) {
-        const candidatePath = briefNotePathForRelPath(card.Candidate.RelPath);
-        const candidateTitle = card.Candidate.Title || card.Candidate.RelPath;
-        if (candidatePath) {
-          headingLink = doc.createElement("a");
-          headingLink.textContent = candidateTitle;
-          headingLink.href = candidatePath;
-        } else {
-          heading.textContent = candidateTitle;
-        }
-      } else if (sourcePath) {
-        headingLink = doc.createElement("a");
-        headingLink.textContent = sourceTitle;
-        headingLink.href = sourcePath;
-      } else {
-        heading.textContent = sourceTitle;
-      }
-      if (headingLink) {
-        heading.appendChild(headingLink);
-      }
-      cardEl.appendChild(heading);
-      const path = doc.createElement("p");
-      path.className = "brief-card-path";
-      const pathCode = doc.createElement("code");
-      pathCode.textContent = slot === "connect" && card.Candidate ? card.Candidate.RelPath : card.Source.RelPath;
-      path.appendChild(pathCode);
-      cardEl.appendChild(path);
-      const explanation = doc.createElement("p");
-      explanation.className = "brief-card-explanation";
-      explanation.textContent = card.Explanation;
-      cardEl.appendChild(explanation);
-      const relationship = relationshipLabel(card.Metadata.Relationship);
-      if (slot === "connect" && relationship) {
-        const relationshipEl = doc.createElement("p");
-        relationshipEl.className = "brief-card-meta";
-        relationshipEl.textContent = `Relationship: ${relationship}`;
-        cardEl.appendChild(relationshipEl);
-      }
-      if (slot === "connect" && card.Metadata.Bridge) {
-        const bridgeEl = doc.createElement("p");
-        bridgeEl.className = "brief-card-meta";
-        const bridgeCode = doc.createElement("code");
-        bridgeCode.textContent = card.Metadata.Bridge;
-        bridgeEl.append("Bridge: ", bridgeCode);
-        cardEl.appendChild(bridgeEl);
-      }
-      if (card.Excerpt) {
-        const excerpt = doc.createElement("blockquote");
-        excerpt.className = "brief-card-excerpt";
-        excerpt.textContent = card.Excerpt;
-        cardEl.appendChild(excerpt);
-      }
-      const reasons = card.Metadata.Reasons.filter((reason) => reason.trim() !== "" && reason !== card.Explanation);
-      if (reasons.length > 0) {
-        const list = doc.createElement("ul");
-        list.className = "brief-card-reasons";
-        for (const reason of reasons) {
-          const item = doc.createElement("li");
-          item.textContent = reason;
-          list.appendChild(item);
-        }
-        cardEl.appendChild(list);
-      }
-      const unavailable = buildUnavailableHint(slot, sourcePath);
-      const actionRow = doc.createElement("div");
-      actionRow.className = "brief-card-actions";
-      actionRow.append(
-        createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
-        createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === "")
-      );
-      cardEl.appendChild(actionRow);
-      cardEl.appendChild(createInsightPrompt(doc, slot, card.ID, unavailable.insight === ""));
-      if (unavailable.open) {
-        const hint = doc.createElement("p");
-        hint.className = "brief-action-hint";
-        hint.textContent = unavailable.open;
-        cardEl.appendChild(hint);
-      }
-      if (unavailable.another) {
-        const hint = doc.createElement("p");
-        hint.className = "brief-action-hint";
-        hint.textContent = unavailable.another;
-        cardEl.appendChild(hint);
-      }
-      if (unavailable.insight) {
-        const hint = doc.createElement("p");
-        hint.className = "brief-action-hint";
-        hint.textContent = unavailable.insight;
-        cardEl.appendChild(hint);
-      }
-      ensureInsightPanel(cardEl, slot);
-      return cardEl;
     };
     const replaceSlotContent = (slotResult) => {
       const slot = normalizeSlot(slotResult.Slot);
@@ -1546,7 +1747,7 @@ var BrainNotesApp = (() => {
         slotEl.removeChild(header.nextSibling);
       }
       if (slotResult.Card) {
-        slotEl.appendChild(renderCard(slot, slotResult.Card));
+        slotEl.appendChild(renderCard(root.ownerDocument, readAvailability(), slot, slotResult.Card));
         if (openedCards.has(slotResult.Card.ID)) {
           markCardOpened(slot, slotResult.Card.ID);
         }
@@ -1601,162 +1802,22 @@ var BrainNotesApp = (() => {
       }
       return Array.from(changed);
     };
-    const readButtonSlot = (button) => normalizeSlot(button.getAttribute("data-brief-slot") || "");
-    const readButtonCardID = (button) => button.getAttribute("data-brief-card-id") || "";
-    const runOpen = async (button) => {
-      const slot = readButtonSlot(button);
-      const cardID = readButtonCardID(button);
-      if (!slot || !cardID || !config.csrfToken) {
-        setGlobalStatus("Open action unavailable.", "is-error");
-        return;
-      }
-      setSlotsBusy([slot], true);
-      setSlotStatus(slot, "Opening editor...", "is-loading");
-      try {
-        const body = buildBriefItemForm({ cardID, action: "open", token: config.csrfToken }).toString();
-        const resp = await fetcher(config.itemEndpoint, jsonPostRequest(config.csrfToken, body));
-        const payload = await readResponsePayload(resp);
-        if (!resp.ok) {
-          setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = normalizeBriefItemResponse(payload);
-        if (!result.ok) {
-          setSlotStatus(slot, result.message || "Open failed.", "is-error");
-          return;
-        }
-        updateActivity(result.activity);
-        openedCards.add(cardID);
-        markCardOpened(slot, cardID);
-        setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
-        setGlobalStatus("Brief activity updated.", "is-success");
-      } catch {
-        setSlotStatus(slot, "Open failed.", "is-error");
-      } finally {
-        setSlotsBusy([slot], false);
-      }
-    };
-    const runAnother = async (button) => {
-      const slot = readButtonSlot(button);
-      const cardID = readButtonCardID(button);
-      if (!slot || !cardID || !config.csrfToken) {
-        setGlobalStatus("Another action unavailable.", "is-error");
-        return;
-      }
-      const busySlots = slot === "continue" ? ["continue", "connect"] : [slot];
-      setSlotsBusy(busySlots, true);
-      setSlotStatus(slot, "Finding another card...", "is-loading");
-      try {
-        const body = buildBriefItemForm({ cardID, action: "another", token: config.csrfToken }).toString();
-        const resp = await fetcher(config.itemEndpoint, jsonPostRequest(config.csrfToken, body));
-        const payload = await readResponsePayload(resp);
-        if (!resp.ok) {
-          setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = normalizeBriefItemResponse(payload);
-        if (!result.ok) {
-          setSlotStatus(slot, result.message || "Another failed.", "is-error");
-          return;
-        }
-        updateActivity(result.activity);
-        const changedSlots = applyAnotherPayload(result, slot);
-        const statusMessage = result.message || (slot === "continue" && changedSlots.includes("connect") ? "Updated Continue and Connect." : `Updated ${slotLabel(slot)}.`);
-        setSlotStatus(slot, statusMessage, "is-success");
-        setGlobalStatus(statusMessage, "is-success");
-        const slotEl = slotElementFor(slot);
-        const nextFocus = slotEl && queryElement(slotEl, "[data-brief-action-another]", HTMLButtonElement) || slotEl && queryElement(slotEl, "[data-brief-action]", HTMLButtonElement);
-        nextFocus?.focus({ preventScroll: true });
-      } catch {
-        setSlotStatus(slot, "Another failed.", "is-error");
-      } finally {
-        setSlotsBusy(busySlots, false);
-      }
-    };
-    const runInsight = async (button) => {
-      const slot = readButtonSlot(button);
-      const cardID = readButtonCardID(button);
-      if (!slot || !cardID || !config.csrfToken) {
-        setGlobalStatus("Ask AI is unavailable.", "is-error");
-        return;
-      }
-      const cardEl = button.closest("[data-brief-card]");
-      const prompt = cardEl ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || "" : "";
-      if (!insightDisclosureAccepted) {
-        insightDisclosureAccepted = confirmer(insightDisclosureMessage);
-        if (!insightDisclosureAccepted) {
-          setSlotStatus(slot, "Ask AI canceled.", "is-empty");
-          return;
-        }
-      }
-      setSlotsBusy([slot], true);
-      setSlotStatus(slot, "Generating insight...", "is-loading");
-      const requestID = insightCounter + 1;
-      insightCounter = requestID;
-      inflightInsight.set(slot, requestID);
-      try {
-        const body = buildBriefInsightForm({ cardID, prompt, token: config.csrfToken }).toString();
-        const resp = await fetcher(
-          config.insightEndpoint,
-          jsonPostRequest(config.csrfToken, body)
-        );
-        const payload = await readResponsePayload(resp);
-        if (inflightInsight.get(slot) !== requestID) {
-          return;
-        }
-        if (!resp.ok) {
-          setSlotStatus(slot, normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = normalizeBriefInsightResponse(payload);
-        if (!result.ok) {
-          setSlotStatus(slot, result.message || "Ask AI failed.", "is-error");
-          return;
-        }
-        if (!result.enabled) {
-          setSlotStatus(slot, result.message || "Ask AI is unavailable.", "is-error");
-          return;
-        }
-        if (result.card_id && result.card_id !== cardID) {
-          setSlotStatus(slot, "Card changed while insight was running. Try again.", "is-error");
-          return;
-        }
-        renderInsight(slot, cardID, result.rendered_html, result.output);
-        setSlotStatus(slot, "Insight ready.", "is-success");
-      } catch {
-        if (inflightInsight.get(slot) === requestID) {
-          setSlotStatus(slot, "Ask AI failed.", "is-error");
-        }
-      } finally {
-        if (inflightInsight.get(slot) === requestID) {
-          inflightInsight.delete(slot);
-          setSlotsBusy([slot], false);
-        }
-      }
-    };
-    const runCopyInsight = async (button) => {
-      const slot = normalizeSlot(button.getAttribute("data-brief-slot") || "");
-      if (!slot) {
-        return;
-      }
-      const payload = button.getAttribute("data-brief-copy-output") || "";
-      if (payload.trim() === "") {
-        setSlotStatus(slot, "Nothing to copy.", "is-error");
-        return;
-      }
-      if (!clipboardWrite) {
-        setSlotStatus(slot, "Clipboard unavailable.", "is-error");
-        return;
-      }
-      button.disabled = true;
-      try {
-        await clipboardWrite(payload);
-        setSlotStatus(slot, "Insight markdown copied.", "is-success");
-      } catch {
-        setSlotStatus(slot, "Copy failed.", "is-error");
-      } finally {
-        button.disabled = false;
-      }
+    const ctx = {
+      root,
+      config,
+      fetcher,
+      confirmer,
+      clipboardWrite,
+      openedCards,
+      inflightInsight,
+      insightCounter: 0,
+      insightDisclosureAccepted: false,
+      setGlobalStatus,
+      setSlotStatus,
+      setSlotsBusy,
+      updateActivity,
+      markCardOpened,
+      applyAnotherPayload
     };
     root.addEventListener("click", (event) => {
       const target = event.target;
@@ -1765,22 +1826,22 @@ var BrainNotesApp = (() => {
       }
       const copy = target.closest("[data-brief-insight-copy]");
       if (copy && root.contains(copy)) {
-        void runCopyInsight(copy);
+        void runCopyInsight(ctx, copy);
         return;
       }
       const open = target.closest("[data-brief-action-open]");
       if (open && root.contains(open)) {
-        void runOpen(open);
+        void runOpen(ctx, open);
         return;
       }
       const another = target.closest("[data-brief-action-another]");
       if (another && root.contains(another)) {
-        void runAnother(another);
+        void runAnother(ctx, another);
         return;
       }
       const insight = target.closest("[data-brief-action-insight]");
       if (insight && root.contains(insight)) {
-        void runInsight(insight);
+        void runInsight(ctx, insight);
       }
     });
     root.addEventListener("keydown", (event) => {
@@ -1797,30 +1858,8 @@ var BrainNotesApp = (() => {
         return;
       }
       event.preventDefault();
-      void runInsight(button);
+      void runInsight(ctx, button);
     });
-    const recordView = async () => {
-      if (!config.csrfToken) {
-        return;
-      }
-      try {
-        const body = buildBriefViewForm({ token: config.csrfToken }).toString();
-        const resp = await fetcher(config.viewEndpoint, jsonPostRequest(config.csrfToken, body));
-        const payload = await readResponsePayload(resp);
-        if (!resp.ok) {
-          setGlobalStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = normalizeBriefViewResponse(payload);
-        if (!result.ok) {
-          setGlobalStatus(result.message || "Brief activity unavailable.", "is-error");
-          return;
-        }
-        updateActivity(result.activity);
-      } catch {
-        setGlobalStatus("Brief activity unavailable.", "is-error");
-      }
-    };
     for (const slot of slotOrder) {
       const slotEl = slotElementFor(slot);
       if (!slotEl) {
@@ -1832,10 +1871,10 @@ var BrainNotesApp = (() => {
       }
       ensureInsightPanel(cardEl, slot);
     }
-    void recordView();
+    void recordView(ctx);
   };
 
-  // internal/web/static_src/daily-fixes.ts
+  // internal/web/static_src/daily-fixes-model.ts
   var FIX_ACTIONS = /* @__PURE__ */ new Set(["schema_repair", "relink", "create_stub"]);
   var readDailyFixesConfig = (root) => ({
     queueEndpoint: root.getAttribute("data-fixes-endpoint") || "/api/cockpit",
@@ -1942,30 +1981,8 @@ var BrainNotesApp = (() => {
     }
     return "Marking fix done...";
   };
-  var buildFixesItemFetchRequest = (endpoint, csrfToken, id, action, snooze) => {
-    const body = buildCockpitItemForm({ id, action, token: csrfToken, snooze });
-    return jsonPostRequest2(endpoint, csrfToken, body.toString());
-  };
-  var buildFixesPreviewFetchRequest = (endpoint, csrfToken, id, action) => {
-    const body = buildFixPreviewForm({ id, action, token: csrfToken });
-    return jsonPostRequest2(endpoint, csrfToken, body.toString());
-  };
-  var buildFixesApplyFetchRequest = (endpoint, csrfToken, id, action, previewID) => {
-    const body = buildFixApplyForm({ id, action, token: csrfToken, previewID });
-    return jsonPostRequest2(endpoint, csrfToken, body.toString());
-  };
-  var jsonPostRequest2 = (url, csrfToken, body) => ({
-    url,
-    init: {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "X-BN-CSRF": csrfToken
-      },
-      body
-    }
-  });
+
+  // internal/web/static_src/daily-fixes-preview.ts
   var previewChangeText = (value) => value.present ? value.text === "" ? "(empty)" : value.text : "(absent)";
   var previewChangeLine = (change) => {
     const rendered = `${previewChangeText(change.old)} -> ${previewChangeText(change.new)}`;
@@ -1980,6 +1997,311 @@ var BrainNotesApp = (() => {
         return rendered;
     }
   };
+  var findPreviewEl = (listEl, id) => {
+    for (const task of queryAllElements(listEl, "[data-fixes-task]", HTMLElement)) {
+      if (task.getAttribute("data-fixes-id") === id) {
+        return queryElement(task, "[data-fixes-preview]", HTMLElement);
+      }
+    }
+    return null;
+  };
+  var renderPreview = (listEl, id, action, previews_, message) => {
+    const el = findPreviewEl(listEl, id);
+    if (!el) {
+      return;
+    }
+    const doc = el.ownerDocument;
+    el.textContent = "";
+    el.hidden = false;
+    const heading = doc.createElement("p");
+    heading.className = "fixes-preview-message";
+    heading.textContent = message || "Preview ready.";
+    el.appendChild(heading);
+    for (const preview of previews_) {
+      const noteEl = doc.createElement("div");
+      noteEl.className = "fixes-preview-note";
+      const path = doc.createElement("p");
+      path.className = "fixes-preview-path";
+      path.textContent = preview.rel_path;
+      noteEl.appendChild(path);
+      const changeList = doc.createElement("ul");
+      changeList.className = "fixes-preview-changes";
+      for (const change of preview.changes) {
+        const line = doc.createElement("li");
+        line.textContent = previewChangeLine(change);
+        changeList.appendChild(line);
+      }
+      noteEl.appendChild(changeList);
+      el.appendChild(noteEl);
+    }
+    const controls = doc.createElement("div");
+    controls.className = "fixes-preview-actions";
+    const applyBtn = doc.createElement("button");
+    applyBtn.className = "review-action fixes-preview-apply";
+    applyBtn.type = "button";
+    applyBtn.setAttribute("data-fixes-button", "");
+    applyBtn.setAttribute("data-fixes-preview-apply", "");
+    applyBtn.setAttribute("data-fixes-id", id);
+    applyBtn.textContent = "Apply fix";
+    const cancelBtn = doc.createElement("button");
+    cancelBtn.className = "review-action fixes-preview-cancel";
+    cancelBtn.type = "button";
+    cancelBtn.setAttribute("data-fixes-button", "");
+    cancelBtn.setAttribute("data-fixes-preview-cancel", "");
+    cancelBtn.setAttribute("data-fixes-id", id);
+    cancelBtn.textContent = "Cancel";
+    controls.append(applyBtn, cancelBtn);
+    el.appendChild(controls);
+    void action;
+  };
+  var clearPreviewEl = (listEl, id) => {
+    const el = findPreviewEl(listEl, id);
+    if (el) {
+      el.textContent = "";
+      el.hidden = true;
+    }
+  };
+
+  // internal/web/static_src/daily-fixes-requests.ts
+  var jsonPostRequest2 = (url, csrfToken, body) => ({
+    url,
+    init: {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-BN-CSRF": csrfToken
+      },
+      body
+    }
+  });
+  var buildFixesItemFetchRequest = (endpoint, csrfToken, id, action, snooze) => {
+    const body = buildCockpitItemForm({ id, action, token: csrfToken, snooze });
+    return jsonPostRequest2(endpoint, csrfToken, body.toString());
+  };
+  var buildFixesPreviewFetchRequest = (endpoint, csrfToken, id, action) => {
+    const body = buildFixPreviewForm({ id, action, token: csrfToken });
+    return jsonPostRequest2(endpoint, csrfToken, body.toString());
+  };
+  var buildFixesApplyFetchRequest = (endpoint, csrfToken, id, action, previewID) => {
+    const body = buildFixApplyForm({ id, action, token: csrfToken, previewID });
+    return jsonPostRequest2(endpoint, csrfToken, body.toString());
+  };
+  var readResponsePayload2 = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
+  // internal/web/static_src/daily-fixes-render.ts
+  var renderCounts = (countEls, counts) => {
+    if (countEls.active) {
+      countEls.active.textContent = String(counts.active);
+    }
+    if (countEls.doneHidden) {
+      countEls.doneHidden.textContent = String(counts.done_hidden);
+    }
+    if (countEls.snoozedHidden) {
+      countEls.snoozedHidden.textContent = String(counts.snoozed_hidden);
+    }
+    if (countEls.totalGenerated) {
+      countEls.totalGenerated.textContent = String(counts.total_generated);
+    }
+  };
+  var renderWarnings = (warningListEl, result) => {
+    if (!warningListEl) {
+      return;
+    }
+    warningListEl.textContent = "";
+    warningListEl.hidden = result.warnings.length === 0;
+    for (const warning of result.warnings) {
+      const item = warningListEl.ownerDocument.createElement("li");
+      item.setAttribute("data-fixes-warning", "");
+      item.textContent = warning.message || "Cockpit warning.";
+      warningListEl.appendChild(item);
+    }
+  };
+  var openButton = (doc, note) => {
+    const key = fixOpenKeyFromRelPath(note.rel_path);
+    if (key === "") {
+      return null;
+    }
+    const button = doc.createElement("button");
+    button.className = "review-action review-open-editor";
+    button.type = "button";
+    button.setAttribute("data-fixes-button", "");
+    button.setAttribute("data-fixes-open-key", key);
+    button.setAttribute("aria-label", `Open ${affectedNoteLabel(note)} in editor`);
+    button.textContent = "Open in editor";
+    return button;
+  };
+  var renderAffectedNote = (doc, list, note) => {
+    const item = doc.createElement("li");
+    item.className = "review-affected-note";
+    const label = affectedNoteLabel(note);
+    const key = fixOpenKeyFromRelPath(note.rel_path);
+    if (key !== "") {
+      const link = doc.createElement("a");
+      link.href = notePathForKey(key);
+      link.textContent = label;
+      item.appendChild(link);
+    } else {
+      const text = doc.createElement("span");
+      text.textContent = label;
+      item.appendChild(text);
+    }
+    if (note.folder) {
+      const folder = doc.createElement("span");
+      folder.className = "diagnostic-folder";
+      folder.textContent = note.folder;
+      item.appendChild(folder);
+    }
+    if (note.location) {
+      const location = doc.createElement("span");
+      location.className = "diagnostic-location";
+      location.textContent = note.location;
+      item.appendChild(location);
+    }
+    const open = openButton(doc, note);
+    if (open) {
+      item.appendChild(open);
+    }
+    list.appendChild(item);
+  };
+  var triageButton = (doc, id, action, label, snooze) => {
+    const button = doc.createElement("button");
+    button.className = "review-action";
+    button.type = "button";
+    button.setAttribute("data-fixes-button", "");
+    button.setAttribute("data-fixes-item-action", action);
+    button.setAttribute("data-fixes-id", id);
+    if (snooze) {
+      button.setAttribute("data-fixes-snooze", snooze);
+    }
+    button.textContent = label;
+    return button;
+  };
+  var fixButton = (doc, id, action, label) => {
+    const button = doc.createElement("button");
+    button.className = "review-action fixes-fix-action";
+    button.type = "button";
+    button.setAttribute("data-fixes-button", "");
+    button.setAttribute("data-fixes-fix-action", action);
+    button.setAttribute("data-fixes-id", id);
+    button.textContent = label;
+    return button;
+  };
+  var renderTask = (doc, task) => {
+    const row = doc.createElement("li");
+    row.className = "review-item fixes-item";
+    row.setAttribute("data-fixes-task", "");
+    row.setAttribute("data-fixes-id", task.id);
+    row.setAttribute("data-fixes-kind", task.kind);
+    row.setAttribute("data-fixes-signature", task.signature);
+    if (task.triage_only) {
+      row.setAttribute("data-fixes-triage", "");
+    }
+    const main = doc.createElement("div");
+    main.className = "review-item-main";
+    const kind = doc.createElement("p");
+    kind.className = "review-item-kind";
+    kind.textContent = fixKindLabel(task.kind);
+    main.appendChild(kind);
+    const title = doc.createElement("h3");
+    title.className = "review-item-title";
+    title.textContent = fixTaskLabel(task);
+    main.appendChild(title);
+    if (task.summary) {
+      const summary = doc.createElement("p");
+      summary.className = "review-item-summary";
+      summary.textContent = task.summary;
+      main.appendChild(summary);
+    }
+    if (task.detail || task.affected.length > 0) {
+      const details = doc.createElement("details");
+      details.className = "review-item-details";
+      const detailsSummary = doc.createElement("summary");
+      detailsSummary.textContent = "View details";
+      details.appendChild(detailsSummary);
+      if (task.detail) {
+        const detail = doc.createElement("p");
+        detail.className = "review-item-detail";
+        detail.textContent = task.detail;
+        details.appendChild(detail);
+      }
+      if (task.affected.length > 0) {
+        const affectedList = doc.createElement("ul");
+        affectedList.className = "review-affected-list";
+        affectedList.setAttribute("aria-label", "Affected notes");
+        for (const affected of task.affected) {
+          renderAffectedNote(doc, affectedList, affected);
+        }
+        details.appendChild(affectedList);
+      }
+      main.appendChild(details);
+    }
+    const actions = doc.createElement("div");
+    actions.className = "review-item-actions";
+    actions.setAttribute("data-fixes-task-actions", "");
+    if (!task.triage_only) {
+      for (const action of task.actions) {
+        if (FIX_ACTIONS.has(action.kind)) {
+          actions.appendChild(fixButton(doc, task.id, action.kind, action.label));
+        }
+      }
+    }
+    actions.appendChild(triageButton(doc, task.id, "mark_done", "Done"));
+    actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze tomorrow", "tomorrow"));
+    actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze next week", "week"));
+    main.appendChild(actions);
+    const preview = doc.createElement("div");
+    preview.className = "fixes-preview";
+    preview.setAttribute("data-fixes-preview", "");
+    preview.hidden = true;
+    main.appendChild(preview);
+    row.appendChild(main);
+    return row;
+  };
+  var renderGroups = (listEl, tasks) => {
+    const doc = listEl.ownerDocument;
+    listEl.textContent = "";
+    const order = [];
+    const groups = /* @__PURE__ */ new Map();
+    for (const task of tasks) {
+      const bucket = groups.get(task.kind);
+      if (bucket) {
+        bucket.push(task);
+      } else {
+        order.push(task.kind);
+        groups.set(task.kind, [task]);
+      }
+    }
+    for (const kind of order) {
+      const bucket = groups.get(kind) || [];
+      const group = doc.createElement("li");
+      group.className = "fixes-group";
+      group.setAttribute("data-fixes-group", kind);
+      const heading = doc.createElement("h3");
+      heading.className = "fixes-group-heading";
+      heading.textContent = `${fixKindLabel(kind)} (${bucket.length})`;
+      group.appendChild(heading);
+      const groupList = doc.createElement("ul");
+      groupList.className = "fixes-group-list";
+      for (const task of bucket) {
+        groupList.appendChild(renderTask(doc, task));
+      }
+      group.appendChild(groupList);
+      listEl.appendChild(group);
+    }
+  };
+
+  // internal/web/static_src/daily-fixes.ts
   var initDailyFixes = (deps = {}) => {
     const root = queryElement(document, "[data-fixes-panel]", HTMLElement);
     if (!root) {
@@ -2031,212 +2353,11 @@ var BrainNotesApp = (() => {
         button.disabled = next;
       }
     };
-    const renderCounts = (counts) => {
-      if (countEls.active) {
-        countEls.active.textContent = String(counts.active);
-      }
-      if (countEls.doneHidden) {
-        countEls.doneHidden.textContent = String(counts.done_hidden);
-      }
-      if (countEls.snoozedHidden) {
-        countEls.snoozedHidden.textContent = String(counts.snoozed_hidden);
-      }
-      if (countEls.totalGenerated) {
-        countEls.totalGenerated.textContent = String(counts.total_generated);
-      }
-    };
-    const renderWarnings = (result) => {
-      if (!warningListEl) {
-        return;
-      }
-      warningListEl.textContent = "";
-      warningListEl.hidden = result.warnings.length === 0;
-      for (const warning of result.warnings) {
-        const item = warningListEl.ownerDocument.createElement("li");
-        item.setAttribute("data-fixes-warning", "");
-        item.textContent = warning.message || "Cockpit warning.";
-        warningListEl.appendChild(item);
-      }
-    };
-    const openButton = (doc, note) => {
-      const key = fixOpenKeyFromRelPath(note.rel_path);
-      if (key === "") {
-        return null;
-      }
-      const button = doc.createElement("button");
-      button.className = "review-action review-open-editor";
-      button.type = "button";
-      button.setAttribute("data-fixes-button", "");
-      button.setAttribute("data-fixes-open-key", key);
-      button.setAttribute("aria-label", `Open ${affectedNoteLabel(note)} in editor`);
-      button.textContent = "Open in editor";
-      return button;
-    };
-    const renderAffectedNote = (doc, list, note) => {
-      const item = doc.createElement("li");
-      item.className = "review-affected-note";
-      const label = affectedNoteLabel(note);
-      const key = fixOpenKeyFromRelPath(note.rel_path);
-      if (key !== "") {
-        const link = doc.createElement("a");
-        link.href = notePathForKey(key);
-        link.textContent = label;
-        item.appendChild(link);
-      } else {
-        const text = doc.createElement("span");
-        text.textContent = label;
-        item.appendChild(text);
-      }
-      if (note.folder) {
-        const folder = doc.createElement("span");
-        folder.className = "diagnostic-folder";
-        folder.textContent = note.folder;
-        item.appendChild(folder);
-      }
-      if (note.location) {
-        const location = doc.createElement("span");
-        location.className = "diagnostic-location";
-        location.textContent = note.location;
-        item.appendChild(location);
-      }
-      const open = openButton(doc, note);
-      if (open) {
-        item.appendChild(open);
-      }
-      list.appendChild(item);
-    };
-    const triageButton = (doc, id, action, label, snooze) => {
-      const button = doc.createElement("button");
-      button.className = "review-action";
-      button.type = "button";
-      button.setAttribute("data-fixes-button", "");
-      button.setAttribute("data-fixes-item-action", action);
-      button.setAttribute("data-fixes-id", id);
-      if (snooze) {
-        button.setAttribute("data-fixes-snooze", snooze);
-      }
-      button.textContent = label;
-      return button;
-    };
-    const fixButton = (doc, id, action, label) => {
-      const button = doc.createElement("button");
-      button.className = "review-action fixes-fix-action";
-      button.type = "button";
-      button.setAttribute("data-fixes-button", "");
-      button.setAttribute("data-fixes-fix-action", action);
-      button.setAttribute("data-fixes-id", id);
-      button.textContent = label;
-      return button;
-    };
-    const renderTask = (task) => {
-      const doc = listEl.ownerDocument;
-      const row = doc.createElement("li");
-      row.className = "review-item fixes-item";
-      row.setAttribute("data-fixes-task", "");
-      row.setAttribute("data-fixes-id", task.id);
-      row.setAttribute("data-fixes-kind", task.kind);
-      row.setAttribute("data-fixes-signature", task.signature);
-      if (task.triage_only) {
-        row.setAttribute("data-fixes-triage", "");
-      }
-      const main = doc.createElement("div");
-      main.className = "review-item-main";
-      const kind = doc.createElement("p");
-      kind.className = "review-item-kind";
-      kind.textContent = fixKindLabel(task.kind);
-      main.appendChild(kind);
-      const title = doc.createElement("h3");
-      title.className = "review-item-title";
-      title.textContent = fixTaskLabel(task);
-      main.appendChild(title);
-      if (task.summary) {
-        const summary = doc.createElement("p");
-        summary.className = "review-item-summary";
-        summary.textContent = task.summary;
-        main.appendChild(summary);
-      }
-      if (task.detail || task.affected.length > 0) {
-        const details = doc.createElement("details");
-        details.className = "review-item-details";
-        const detailsSummary = doc.createElement("summary");
-        detailsSummary.textContent = "View details";
-        details.appendChild(detailsSummary);
-        if (task.detail) {
-          const detail = doc.createElement("p");
-          detail.className = "review-item-detail";
-          detail.textContent = task.detail;
-          details.appendChild(detail);
-        }
-        if (task.affected.length > 0) {
-          const affectedList = doc.createElement("ul");
-          affectedList.className = "review-affected-list";
-          affectedList.setAttribute("aria-label", "Affected notes");
-          for (const affected of task.affected) {
-            renderAffectedNote(doc, affectedList, affected);
-          }
-          details.appendChild(affectedList);
-        }
-        main.appendChild(details);
-      }
-      const actions = doc.createElement("div");
-      actions.className = "review-item-actions";
-      actions.setAttribute("data-fixes-task-actions", "");
-      if (!task.triage_only) {
-        for (const action of task.actions) {
-          if (FIX_ACTIONS.has(action.kind)) {
-            actions.appendChild(fixButton(doc, task.id, action.kind, action.label));
-          }
-        }
-      }
-      actions.appendChild(triageButton(doc, task.id, "mark_done", "Done"));
-      actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze tomorrow", "tomorrow"));
-      actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze next week", "week"));
-      main.appendChild(actions);
-      const preview = doc.createElement("div");
-      preview.className = "fixes-preview";
-      preview.setAttribute("data-fixes-preview", "");
-      preview.hidden = true;
-      main.appendChild(preview);
-      row.appendChild(main);
-      return row;
-    };
-    const renderGroups = (tasks) => {
-      const doc = listEl.ownerDocument;
-      listEl.textContent = "";
-      const order = [];
-      const groups = /* @__PURE__ */ new Map();
-      for (const task of tasks) {
-        const bucket = groups.get(task.kind);
-        if (bucket) {
-          bucket.push(task);
-        } else {
-          order.push(task.kind);
-          groups.set(task.kind, [task]);
-        }
-      }
-      for (const kind of order) {
-        const bucket = groups.get(kind) || [];
-        const group = doc.createElement("li");
-        group.className = "fixes-group";
-        group.setAttribute("data-fixes-group", kind);
-        const heading = doc.createElement("h3");
-        heading.className = "fixes-group-heading";
-        heading.textContent = `${fixKindLabel(kind)} (${bucket.length})`;
-        group.appendChild(heading);
-        const groupList = doc.createElement("ul");
-        groupList.className = "fixes-group-list";
-        for (const task of bucket) {
-          groupList.appendChild(renderTask(task));
-        }
-        group.appendChild(groupList);
-        listEl.appendChild(group);
-      }
-    };
     const renderResult = (result) => {
       previews.clear();
-      renderCounts(result.counts);
-      renderWarnings(result);
-      renderGroups(result.tasks);
+      renderCounts(countEls, result.counts);
+      renderWarnings(warningListEl, result);
+      renderGroups(listEl, result.tasks);
       const hasTasks = result.tasks.length > 0;
       listEl.hidden = !hasTasks;
       if (emptyEl) {
@@ -2278,70 +2399,9 @@ var BrainNotesApp = (() => {
         setBusy(false);
       }
     };
-    const findPreviewEl = (id) => {
-      for (const task of queryAllElements(listEl, "[data-fixes-task]", HTMLElement)) {
-        if (task.getAttribute("data-fixes-id") === id) {
-          return queryElement(task, "[data-fixes-preview]", HTMLElement);
-        }
-      }
-      return null;
-    };
     const clearPreview = (id) => {
       previews.delete(id);
-      const el = findPreviewEl(id);
-      if (el) {
-        el.textContent = "";
-        el.hidden = true;
-      }
-    };
-    const renderPreview = (id, action, previews_, message) => {
-      const el = findPreviewEl(id);
-      if (!el) {
-        return;
-      }
-      const doc = el.ownerDocument;
-      el.textContent = "";
-      el.hidden = false;
-      const heading = doc.createElement("p");
-      heading.className = "fixes-preview-message";
-      heading.textContent = message || "Preview ready.";
-      el.appendChild(heading);
-      for (const preview of previews_) {
-        const noteEl = doc.createElement("div");
-        noteEl.className = "fixes-preview-note";
-        const path = doc.createElement("p");
-        path.className = "fixes-preview-path";
-        path.textContent = preview.rel_path;
-        noteEl.appendChild(path);
-        const changeList = doc.createElement("ul");
-        changeList.className = "fixes-preview-changes";
-        for (const change of preview.changes) {
-          const line = doc.createElement("li");
-          line.textContent = previewChangeLine(change);
-          changeList.appendChild(line);
-        }
-        noteEl.appendChild(changeList);
-        el.appendChild(noteEl);
-      }
-      const controls = doc.createElement("div");
-      controls.className = "fixes-preview-actions";
-      const applyBtn = doc.createElement("button");
-      applyBtn.className = "review-action fixes-preview-apply";
-      applyBtn.type = "button";
-      applyBtn.setAttribute("data-fixes-button", "");
-      applyBtn.setAttribute("data-fixes-preview-apply", "");
-      applyBtn.setAttribute("data-fixes-id", id);
-      applyBtn.textContent = "Apply fix";
-      const cancelBtn = doc.createElement("button");
-      cancelBtn.className = "review-action fixes-preview-cancel";
-      cancelBtn.type = "button";
-      cancelBtn.setAttribute("data-fixes-button", "");
-      cancelBtn.setAttribute("data-fixes-preview-cancel", "");
-      cancelBtn.setAttribute("data-fixes-id", id);
-      cancelBtn.textContent = "Cancel";
-      controls.append(applyBtn, cancelBtn);
-      el.appendChild(controls);
-      void action;
+      clearPreviewEl(listEl, id);
     };
     const runItemAction = async (button) => {
       const id = button.getAttribute("data-fixes-id") || "";
@@ -2407,7 +2467,7 @@ var BrainNotesApp = (() => {
           return;
         }
         previews.set(id, { action, previewID: result.preview_id });
-        renderPreview(id, action, result.previews, result.message || "Preview ready.");
+        renderPreview(listEl, id, action, result.previews, result.message || "Preview ready.");
         setError("");
         setStatus(result.message || "Preview ready.", "is-success");
       } catch {
@@ -2459,7 +2519,7 @@ var BrainNotesApp = (() => {
         setBusy(false);
       }
     };
-    const runOpen = async (button) => {
+    const runOpen2 = async (button) => {
       const key = button.getAttribute("data-fixes-open-key") || "";
       if (!key || !config.csrfToken) {
         showError("Open action unavailable.");
@@ -2511,7 +2571,7 @@ var BrainNotesApp = (() => {
       }
       const openBtn = target.closest("[data-fixes-open-key]");
       if (openBtn && root.contains(openBtn)) {
-        void runOpen(openBtn);
+        void runOpen2(openBtn);
       }
     });
     window.addEventListener(managementMutationEventName, () => {
@@ -2522,17 +2582,6 @@ var BrainNotesApp = (() => {
       void loadQueue("Fixes refreshed.");
     });
     void loadQueue();
-  };
-  var readResponsePayload2 = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
-    }
   };
 
   // internal/web/static_src/editor-open.ts
@@ -3405,6 +3454,380 @@ var BrainNotesApp = (() => {
     return "";
   };
 
+  // internal/web/static_src/graph-controller-details.ts
+  var formatDegreeDetails = (data) => {
+    if (!data) {
+      return "";
+    }
+    const inDegree = readDegreeValue(data.inDegree, 0);
+    const outDegree = readDegreeValue(data.outDegree, 0);
+    const degree = readDegreeValue(data.degree, inDegree + outDegree);
+    const filteredInDegree = readDegreeValue(data.filteredInDegree, inDegree);
+    const filteredOutDegree = readDegreeValue(data.filteredOutDegree, outDegree);
+    const filteredDegree = readDegreeValue(data.filteredDegree, filteredInDegree + filteredOutDegree);
+    const visibleDetail = `Visible degree: ${filteredDegree} (${filteredInDegree} in, ${filteredOutDegree} out)`;
+    if (filteredDegree === degree && filteredInDegree === inDegree && filteredOutDegree === outDegree) {
+      return visibleDetail;
+    }
+    return `${visibleDetail}. Full graph: ${degree} (${inDegree} in, ${outDegree} out)`;
+  };
+  var issueItemsForNode = (data) => {
+    if (!data) {
+      return [];
+    }
+    const items = [];
+    const brokenCount = readDegreeValue(data.brokenCount, 0);
+    if (data.hasBroken || brokenCount > 0) {
+      items.push({
+        className: "is-broken",
+        label: brokenCount > 0 ? brokenCount === 1 ? "1 broken link" : `${brokenCount} broken links` : "Broken links"
+      });
+    }
+    if (data.isOrphan) {
+      items.push({
+        className: "is-orphan",
+        label: "Orphan"
+      });
+    }
+    if (data.isDeadEnd) {
+      items.push({
+        className: "is-dead-end",
+        label: "Dead end"
+      });
+    }
+    return items;
+  };
+  var renderIssueDetails = (hoverIssues, model) => {
+    if (!hoverIssues) {
+      return;
+    }
+    hoverIssues.textContent = "";
+    const items = issueItemsForNode(model);
+    hoverIssues.hidden = items.length === 0;
+    for (const item of items) {
+      const issue = document.createElement("li");
+      issue.className = `graph-issue-item ${item.className}`;
+      issue.textContent = item.label;
+      hoverIssues.appendChild(issue);
+    }
+  };
+  var setOpenNoteTarget = (openNote, nodeID) => {
+    if (!openNote) {
+      return;
+    }
+    const path = notePathForKey(nodeID);
+    if (!path) {
+      openNote.removeAttribute("href");
+      openNote.classList.add("is-disabled");
+      openNote.setAttribute("aria-disabled", "true");
+      openNote.setAttribute("tabindex", "-1");
+      return;
+    }
+    openNote.setAttribute("href", path);
+    openNote.classList.remove("is-disabled");
+    openNote.setAttribute("aria-disabled", "false");
+    openNote.setAttribute("tabindex", "0");
+  };
+  var renderGraphDetails = (refs, selectedModel, hoveredModel) => {
+    const model = selectedModel || hoveredModel;
+    if (refs.hoverTitle) {
+      refs.hoverTitle.textContent = model ? model.title || model.id : "Hover a node";
+    }
+    if (refs.hoverFolder) {
+      refs.hoverFolder.textContent = model ? `Folder: ${model.folder || "/"}` : "";
+    }
+    if (refs.hoverDegree) {
+      refs.hoverDegree.textContent = model ? formatDegreeDetails(model) : "";
+    }
+    renderIssueDetails(refs.hoverIssues, model);
+    if (refs.detailsPanel) {
+      refs.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
+      refs.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
+    }
+    setOpenNoteTarget(refs.openNote, selectedModel ? selectedModel.id : "");
+  };
+
+  // internal/web/static_src/graph-controller-labels.ts
+  var labelPolicy = {
+    smallGraphNodeLimit: 24,
+    selectedNeighborLabelLimit: 10,
+    zoomLabelMinZoom: 1.05,
+    zoomVisibleLabelLimit: 22,
+    zoomPriorityLabelLimit: 10,
+    deepZoomMinZoom: 1.6,
+    deepZoomPriorityLabelLimit: 24
+  };
+  var readLabelMode = (inputs) => {
+    for (const input of inputs) {
+      if (input.checked) {
+        return input.value === "all" ? "all" : "auto";
+      }
+    }
+    return "auto";
+  };
+  var cyNodeByID = (cy, nodeID) => {
+    if (!cy || !nodeID) {
+      return null;
+    }
+    const node = cy.getElementById(nodeID);
+    if (!node || node.length === 0 || !node.isNode()) {
+      return null;
+    }
+    return node;
+  };
+  var nodeDegree = (node) => {
+    if (!node) {
+      return 0;
+    }
+    const filteredDegree = Number(node.data("filteredDegree"));
+    if (Number.isFinite(filteredDegree) && filteredDegree > 0) {
+      return filteredDegree;
+    }
+    const degree = Number(node.data("degree"));
+    return Number.isFinite(degree) && degree > 0 ? degree : 0;
+  };
+  var sortedNodesByImportance = (nodes) => nodes.slice().sort((left, right) => nodeDegree(right) - nodeDegree(left) || left.id().localeCompare(right.id()));
+  var connectedNodeIDs = (node) => {
+    const ids = /* @__PURE__ */ new Set();
+    if (!node) {
+      return ids;
+    }
+    node.connectedEdges().forEach((edge) => {
+      edge.connectedNodes().forEach((connectedNode) => {
+        const id = connectedNode.id();
+        if (id !== node.id()) {
+          ids.add(id);
+        }
+      });
+    });
+    return ids;
+  };
+  var visibleNodesForViewport = (cy) => {
+    if (!cy) {
+      return [];
+    }
+    const zoom = cy.zoom();
+    const padding = 72 / Math.max(zoom, 0.1);
+    const extent = cy.extent();
+    return cy.nodes().filter((node) => {
+      const position = node.position();
+      return position.x >= extent.x1 - padding && position.x <= extent.x2 + padding && position.y >= extent.y1 - padding && position.y <= extent.y2 + padding;
+    }).toArray();
+  };
+  var addZoomLabels = (cy, labelIDs) => {
+    if (!cy) {
+      return;
+    }
+    const zoom = cy.zoom();
+    if (zoom < labelPolicy.zoomLabelMinZoom) {
+      return;
+    }
+    const visibleNodes = visibleNodesForViewport(cy);
+    if (visibleNodes.length <= labelPolicy.zoomVisibleLabelLimit) {
+      for (const node of visibleNodes) {
+        labelIDs.add(node.id());
+      }
+      return;
+    }
+    const priorityLimit = zoom >= labelPolicy.deepZoomMinZoom ? labelPolicy.deepZoomPriorityLabelLimit : labelPolicy.zoomPriorityLabelLimit;
+    for (const node of sortedNodesByImportance(visibleNodes).slice(0, priorityLimit)) {
+      labelIDs.add(node.id());
+    }
+  };
+  var labelIDsForCurrentState = (cy, labelMode, selectedNodeID, hoveredNodeID) => {
+    const labelIDs = /* @__PURE__ */ new Set();
+    if (!cy) {
+      return labelIDs;
+    }
+    if (labelMode === "all" || cy.nodes().length <= labelPolicy.smallGraphNodeLimit) {
+      cy.nodes().forEach((node) => {
+        labelIDs.add(node.id());
+      });
+    } else {
+      addZoomLabels(cy, labelIDs);
+    }
+    const selectedNode = cyNodeByID(cy, selectedNodeID);
+    const hoveredNode = cyNodeByID(cy, hoveredNodeID);
+    if (selectedNode) {
+      labelIDs.add(selectedNode.id());
+      const selectedNeighborIDs = connectedNodeIDs(selectedNode);
+      if (selectedNeighborIDs.size <= labelPolicy.selectedNeighborLabelLimit) {
+        for (const id of selectedNeighborIDs) {
+          labelIDs.add(id);
+        }
+      }
+    }
+    if (hoveredNode) {
+      labelIDs.add(hoveredNode.id());
+    }
+    return labelIDs;
+  };
+  var visualFocusState = (cy, selectedNodeID, hoveredNodeID) => {
+    const selectedNode = cyNodeByID(cy, selectedNodeID);
+    const hoveredNode = cyNodeByID(cy, hoveredNodeID);
+    const focusNode = selectedNode || hoveredNode;
+    const neighborIDs = connectedNodeIDs(focusNode);
+    const highlightedEdgeIDs = /* @__PURE__ */ new Set();
+    if (focusNode) {
+      focusNode.connectedEdges().forEach((edge) => {
+        highlightedEdgeIDs.add(edge.id());
+      });
+    }
+    return {
+      focusNodeID: focusNode ? focusNode.id() : "",
+      selectedID: selectedNode ? selectedNode.id() : "",
+      hoveredID: hoveredNode ? hoveredNode.id() : "",
+      neighborIDs,
+      highlightedEdgeIDs
+    };
+  };
+  var applyGraphVisualClasses = (cy, labelMode, selectedNodeID, hoveredNodeID) => {
+    if (!cy) {
+      return;
+    }
+    const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID);
+    const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID);
+    cy.batch(() => {
+      cy.nodes().forEach((node) => {
+        const id = node.id();
+        const isSelected = id === focus.selectedID;
+        const isHovered = id === focus.hoveredID;
+        const isNeighbor = focus.neighborIDs.has(id);
+        const isFocusedNode = focus.focusNodeID !== "" && id === focus.focusNodeID;
+        const isDimmed = focus.focusNodeID !== "" && !isFocusedNode && !isHovered && !isNeighbor;
+        node.toggleClass("is-labeled", labelIDs.has(id));
+        node.toggleClass("is-selected", isSelected);
+        node.toggleClass("is-hovered", isHovered);
+        node.toggleClass("is-neighbor", isNeighbor);
+        node.toggleClass("is-dimmed", isDimmed);
+      });
+      cy.edges().forEach((edge) => {
+        const isHighlighted = focus.highlightedEdgeIDs.has(edge.id());
+        edge.toggleClass("is-highlighted-edge", isHighlighted);
+        edge.toggleClass("is-dimmed", focus.focusNodeID !== "" && !isHighlighted);
+      });
+    });
+  };
+
+  // internal/web/static_src/graph-controller-layout.ts
+  var readSpread = (input) => {
+    if (!input) {
+      return 2;
+    }
+    const parsed = Number.parseFloat(input.value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 2;
+    }
+    return parsed;
+  };
+  var clampedSpread = (input) => Math.min(6, Math.max(0.8, readSpread(input)));
+  var updateSpreadLabel = (input, spreadValue) => {
+    if (!spreadValue) {
+      return;
+    }
+    const spread = readSpread(input);
+    spreadValue.textContent = `${spread.toFixed(1)}x`;
+  };
+  var layoutOptionsForSpread = (spread) => ({
+    name: "cose",
+    animate: false,
+    fit: false,
+    randomize: false,
+    padding: 72,
+    idealEdgeLength: Math.round(70 + 55 * spread),
+    nodeRepulsion: Math.round(7e3 * spread * spread),
+    componentSpacing: Math.round(100 + 85 * spread),
+    nodeOverlap: Math.round(12 + 16 * spread),
+    gravity: Math.max(0.05, 0.62 - 0.09 * spread),
+    numIter: Math.round(900 + 120 * spread),
+    initialTemp: Math.round(180 + 45 * spread),
+    coolingFactor: 0.95,
+    minTemp: 1
+  });
+  var seedDeterministicPositions = (cy, spread) => {
+    if (!cy) {
+      return;
+    }
+    const nodes = cy.nodes().toArray().sort((left, right) => left.id().localeCompare(right.id()));
+    const radialGap = 52 + 26 * spread;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    nodes.forEach((node, index) => {
+      const radius = radialGap * Math.sqrt(index);
+      const angle = index * goldenAngle;
+      node.position({
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius
+      });
+    });
+  };
+  var separateIsolatedNodes = (cy, spread) => {
+    if (!cy) {
+      return;
+    }
+    const isolatedNodes = cy.nodes().filter((node) => node.connectedEdges().length === 0).toArray().sort((left, right) => left.id().localeCompare(right.id()));
+    if (isolatedNodes.length === 0) {
+      return;
+    }
+    const spacing = 58 + 34 * spread;
+    const columns = Math.ceil(Math.sqrt(isolatedNodes.length));
+    const rows = Math.ceil(isolatedNodes.length / columns);
+    const connectedNodes = cy.nodes().filter((node) => node.connectedEdges().length > 0);
+    let startX = -((columns - 1) * spacing) / 2;
+    let startY = -((rows - 1) * spacing) / 2;
+    if (connectedNodes.length > 0) {
+      const box = connectedNodes.boundingBox();
+      startX = box.x2 + spacing * 1.6;
+      startY = box.y1 + (box.h - (rows - 1) * spacing) / 2;
+    }
+    isolatedNodes.forEach((node, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      node.position({
+        x: startX + column * spacing,
+        y: startY + row * spacing
+      });
+    });
+  };
+  var currentViewport = (cy) => {
+    if (!cy) {
+      return null;
+    }
+    const pan = cy.pan();
+    return {
+      pan: {
+        x: pan.x,
+        y: pan.y
+      },
+      zoom: cy.zoom()
+    };
+  };
+  var applyViewport = (cy, viewport) => {
+    if (!cy || !viewport) {
+      return;
+    }
+    cy.viewport({
+      pan: {
+        x: viewport.pan.x,
+        y: viewport.pan.y
+      },
+      zoom: viewport.zoom
+    });
+  };
+
+  // internal/web/static_src/graph-controller-style.ts
+  var currentGraphPalette = () => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return DEFAULT_GRAPH_PALETTE;
+    }
+    const root = document.documentElement;
+    if (!root || typeof window.getComputedStyle !== "function") {
+      return DEFAULT_GRAPH_PALETTE;
+    }
+    const styles = window.getComputedStyle(root);
+    return readGraphPalette((name) => styles.getPropertyValue(name));
+  };
+  var buildGraphStyle = () => buildGraphStyleRules(currentGraphPalette());
+
   // internal/web/static_src/theme.ts
   var THEME_STORAGE_KEY = "bn.theme";
   var THEME_EVENT = "bn:themechange";
@@ -3546,6 +3969,14 @@ var BrainNotesApp = (() => {
       return;
     }
     const canvas = dom.canvas;
+    const detailsRefs = {
+      detailsPanel: dom.detailsPanel,
+      hoverTitle: dom.hoverTitle,
+      hoverFolder: dom.hoverFolder,
+      hoverDegree: dom.hoverDegree,
+      hoverIssues: dom.hoverIssues,
+      openNote: dom.openNote
+    };
     const state = {
       cy: null,
       activeLayout: null,
@@ -3553,7 +3984,7 @@ var BrainNotesApp = (() => {
       currentGraphElements: emptyGraphElements(),
       hoveredNodeID: "",
       selectedNodeID: "",
-      labelMode: readLabelMode(),
+      labelMode: readLabelMode(dom.labelModeInputs),
       lastMeaningfulViewport: null,
       layoutRunID: 0
     };
@@ -3563,153 +3994,14 @@ var BrainNotesApp = (() => {
     function setStatus(message, kind = "") {
       setStatusText(dom.status, message, kind, ["is-loading", "is-empty", "is-error"]);
     }
-    function setOpenNoteTarget(nodeID) {
-      if (!(dom.openNote instanceof HTMLAnchorElement)) {
-        return;
-      }
-      const path = notePathForKey(nodeID);
-      if (!path) {
-        dom.openNote.removeAttribute("href");
-        dom.openNote.classList.add("is-disabled");
-        dom.openNote.setAttribute("aria-disabled", "true");
-        dom.openNote.setAttribute("tabindex", "-1");
-        return;
-      }
-      dom.openNote.setAttribute("href", path);
-      dom.openNote.classList.remove("is-disabled");
-      dom.openNote.setAttribute("aria-disabled", "false");
-      dom.openNote.setAttribute("tabindex", "0");
-    }
-    function formatDegreeDetails(data) {
-      if (!data) {
-        return "";
-      }
-      const inDegree = readDegreeValue(data.inDegree, 0);
-      const outDegree = readDegreeValue(data.outDegree, 0);
-      const degree = readDegreeValue(data.degree, inDegree + outDegree);
-      const filteredInDegree = readDegreeValue(data.filteredInDegree, inDegree);
-      const filteredOutDegree = readDegreeValue(data.filteredOutDegree, outDegree);
-      const filteredDegree = readDegreeValue(data.filteredDegree, filteredInDegree + filteredOutDegree);
-      const visibleDetail = `Visible degree: ${filteredDegree} (${filteredInDegree} in, ${filteredOutDegree} out)`;
-      if (filteredDegree === degree && filteredInDegree === inDegree && filteredOutDegree === outDegree) {
-        return visibleDetail;
-      }
-      return `${visibleDetail}. Full graph: ${degree} (${inDegree} in, ${outDegree} out)`;
-    }
-    function issueItemsForNode(data) {
-      if (!data) {
-        return [];
-      }
-      const items = [];
-      const brokenCount = readDegreeValue(data.brokenCount, 0);
-      if (data.hasBroken || brokenCount > 0) {
-        items.push({
-          className: "is-broken",
-          label: brokenCount > 0 ? brokenCount === 1 ? "1 broken link" : `${brokenCount} broken links` : "Broken links"
-        });
-      }
-      if (data.isOrphan) {
-        items.push({
-          className: "is-orphan",
-          label: "Orphan"
-        });
-      }
-      if (data.isDeadEnd) {
-        items.push({
-          className: "is-dead-end",
-          label: "Dead end"
-        });
-      }
-      return items;
-    }
-    function renderIssueDetails(model) {
-      if (!dom.hoverIssues) {
-        return;
-      }
-      dom.hoverIssues.textContent = "";
-      const items = issueItemsForNode(model);
-      dom.hoverIssues.hidden = items.length === 0;
-      for (const item of items) {
-        const issue = document.createElement("li");
-        issue.className = `graph-issue-item ${item.className}`;
-        issue.textContent = item.label;
-        dom.hoverIssues.appendChild(issue);
-      }
-    }
     function renderDetailsPanel(fallbackHoveredModel = null) {
       const selectedModel = findNodeModel(state.selectedNodeID);
       const hoveredModel = selectedModel ? null : findNodeModel(state.hoveredNodeID) || fallbackHoveredModel || null;
-      const model = selectedModel || hoveredModel;
-      if (dom.hoverTitle) {
-        dom.hoverTitle.textContent = model ? model.title || model.id : "Hover a node";
-      }
-      if (dom.hoverFolder) {
-        dom.hoverFolder.textContent = model ? `Folder: ${model.folder || "/"}` : "";
-      }
-      if (dom.hoverDegree) {
-        dom.hoverDegree.textContent = model ? formatDegreeDetails(model) : "";
-      }
-      renderIssueDetails(model);
-      if (dom.detailsPanel) {
-        dom.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
-        dom.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
-      }
-      setOpenNoteTarget(selectedModel ? selectedModel.id : "");
-    }
-    function readSpread() {
-      if (!(dom.spreadInput instanceof HTMLInputElement)) {
-        return 2;
-      }
-      const parsed = Number.parseFloat(dom.spreadInput.value);
-      if (!Number.isFinite(parsed) || parsed <= 0) {
-        return 2;
-      }
-      return parsed;
-    }
-    function clampedSpread() {
-      return Math.min(6, Math.max(0.8, readSpread()));
-    }
-    function updateSpreadLabel() {
-      if (!dom.spreadValue) {
-        return;
-      }
-      const spread = readSpread();
-      dom.spreadValue.textContent = `${spread.toFixed(1)}x`;
-    }
-    function readLabelMode() {
-      for (const input of dom.labelModeInputs) {
-        if (input instanceof HTMLInputElement && input.checked) {
-          return input.value === "all" ? "all" : "auto";
-        }
-      }
-      return "auto";
+      renderGraphDetails(detailsRefs, selectedModel, hoveredModel);
     }
     function setLabelMode(nextMode) {
       state.labelMode = nextMode === "all" ? "all" : "auto";
       applyGraphVisualState();
-    }
-    const labelPolicy = {
-      smallGraphNodeLimit: 24,
-      selectedNeighborLabelLimit: 10,
-      zoomLabelMinZoom: 1.05,
-      zoomVisibleLabelLimit: 22,
-      zoomPriorityLabelLimit: 10,
-      deepZoomMinZoom: 1.6,
-      deepZoomPriorityLabelLimit: 24
-    };
-    function currentGraphPalette() {
-      if (typeof window === "undefined" || typeof document === "undefined") {
-        return DEFAULT_GRAPH_PALETTE;
-      }
-      const root = document.documentElement;
-      if (!root || typeof window.getComputedStyle !== "function") {
-        return DEFAULT_GRAPH_PALETTE;
-      }
-      const styles = window.getComputedStyle(root);
-      return readGraphPalette((name) => styles.getPropertyValue(name));
-    }
-    function buildGraphStyle() {
-      return buildGraphStyleRules(currentGraphPalette());
     }
     function restyleGraphForTheme() {
       if (!state.cy) {
@@ -3724,50 +4016,6 @@ var BrainNotesApp = (() => {
       }
       state.activeLayout = null;
     }
-    function layoutOptionsForSpread() {
-      const spread = clampedSpread();
-      return {
-        name: "cose",
-        animate: false,
-        fit: false,
-        randomize: false,
-        padding: 72,
-        idealEdgeLength: Math.round(70 + 55 * spread),
-        nodeRepulsion: Math.round(7e3 * spread * spread),
-        componentSpacing: Math.round(100 + 85 * spread),
-        nodeOverlap: Math.round(12 + 16 * spread),
-        gravity: Math.max(0.05, 0.62 - 0.09 * spread),
-        numIter: Math.round(900 + 120 * spread),
-        initialTemp: Math.round(180 + 45 * spread),
-        coolingFactor: 0.95,
-        minTemp: 1
-      };
-    }
-    function currentViewport() {
-      if (!state.cy) {
-        return null;
-      }
-      const pan = state.cy.pan();
-      return {
-        pan: {
-          x: pan.x,
-          y: pan.y
-        },
-        zoom: state.cy.zoom()
-      };
-    }
-    function applyViewport(viewport) {
-      if (!state.cy || !viewport) {
-        return;
-      }
-      state.cy.viewport({
-        pan: {
-          x: viewport.pan.x,
-          y: viewport.pan.y
-        },
-        zoom: viewport.zoom
-      });
-    }
     function fitCurrentGraph() {
       if (!state.cy || state.cy.nodes().length === 0) {
         return;
@@ -3779,7 +4027,7 @@ var BrainNotesApp = (() => {
       if (!state.cy || state.cy.nodes().length === 0) {
         return;
       }
-      state.lastMeaningfulViewport = currentViewport();
+      state.lastMeaningfulViewport = currentViewport(state.cy);
     }
     function ensureGraph() {
       if (state.cy) {
@@ -3900,197 +4148,8 @@ var BrainNotesApp = (() => {
       event.preventDefault();
       selectNode(nodeID);
     }
-    function cyNodeByID(nodeID) {
-      if (!state.cy || !nodeID) {
-        return null;
-      }
-      const node = state.cy.getElementById(nodeID);
-      if (!node || node.length === 0 || !node.isNode()) {
-        return null;
-      }
-      return node;
-    }
-    function nodeDegree(node) {
-      if (!node) {
-        return 0;
-      }
-      const filteredDegree = Number(node.data("filteredDegree"));
-      if (Number.isFinite(filteredDegree) && filteredDegree > 0) {
-        return filteredDegree;
-      }
-      const degree = Number(node.data("degree"));
-      return Number.isFinite(degree) && degree > 0 ? degree : 0;
-    }
-    function sortedNodesByImportance(nodes) {
-      return nodes.slice().sort((left, right) => nodeDegree(right) - nodeDegree(left) || left.id().localeCompare(right.id()));
-    }
-    function connectedNodeIDs(node) {
-      const ids = /* @__PURE__ */ new Set();
-      if (!node) {
-        return ids;
-      }
-      node.connectedEdges().forEach((edge) => {
-        edge.connectedNodes().forEach((connectedNode) => {
-          const id = connectedNode.id();
-          if (id !== node.id()) {
-            ids.add(id);
-          }
-        });
-      });
-      return ids;
-    }
-    function visibleNodesForViewport() {
-      if (!state.cy) {
-        return [];
-      }
-      const zoom = state.cy.zoom();
-      const padding = 72 / Math.max(zoom, 0.1);
-      const extent = state.cy.extent();
-      return state.cy.nodes().filter((node) => {
-        const position = node.position();
-        return position.x >= extent.x1 - padding && position.x <= extent.x2 + padding && position.y >= extent.y1 - padding && position.y <= extent.y2 + padding;
-      }).toArray();
-    }
-    function addZoomLabels(labelIDs) {
-      if (!state.cy) {
-        return;
-      }
-      const zoom = state.cy.zoom();
-      if (zoom < labelPolicy.zoomLabelMinZoom) {
-        return;
-      }
-      const visibleNodes = visibleNodesForViewport();
-      if (visibleNodes.length <= labelPolicy.zoomVisibleLabelLimit) {
-        for (const node of visibleNodes) {
-          labelIDs.add(node.id());
-        }
-        return;
-      }
-      const priorityLimit = zoom >= labelPolicy.deepZoomMinZoom ? labelPolicy.deepZoomPriorityLabelLimit : labelPolicy.zoomPriorityLabelLimit;
-      for (const node of sortedNodesByImportance(visibleNodes).slice(0, priorityLimit)) {
-        labelIDs.add(node.id());
-      }
-    }
-    function labelIDsForCurrentState() {
-      const labelIDs = /* @__PURE__ */ new Set();
-      if (!state.cy) {
-        return labelIDs;
-      }
-      if (state.labelMode === "all" || state.cy.nodes().length <= labelPolicy.smallGraphNodeLimit) {
-        state.cy.nodes().forEach((node) => {
-          labelIDs.add(node.id());
-        });
-      } else {
-        addZoomLabels(labelIDs);
-      }
-      const selectedNode = cyNodeByID(state.selectedNodeID);
-      const hoveredNode = cyNodeByID(state.hoveredNodeID);
-      if (selectedNode) {
-        labelIDs.add(selectedNode.id());
-        const selectedNeighborIDs = connectedNodeIDs(selectedNode);
-        if (selectedNeighborIDs.size <= labelPolicy.selectedNeighborLabelLimit) {
-          for (const id of selectedNeighborIDs) {
-            labelIDs.add(id);
-          }
-        }
-      }
-      if (hoveredNode) {
-        labelIDs.add(hoveredNode.id());
-      }
-      return labelIDs;
-    }
-    function visualFocusState() {
-      const selectedNode = cyNodeByID(state.selectedNodeID);
-      const hoveredNode = cyNodeByID(state.hoveredNodeID);
-      const focusNode = selectedNode || hoveredNode;
-      const neighborIDs = connectedNodeIDs(focusNode);
-      const highlightedEdgeIDs = /* @__PURE__ */ new Set();
-      if (focusNode) {
-        focusNode.connectedEdges().forEach((edge) => {
-          highlightedEdgeIDs.add(edge.id());
-        });
-      }
-      return {
-        focusNodeID: focusNode ? focusNode.id() : "",
-        selectedID: selectedNode ? selectedNode.id() : "",
-        hoveredID: hoveredNode ? hoveredNode.id() : "",
-        neighborIDs,
-        highlightedEdgeIDs
-      };
-    }
     function applyGraphVisualState() {
-      if (!state.cy) {
-        return;
-      }
-      const labelIDs = labelIDsForCurrentState();
-      const focus = visualFocusState();
-      const cy = state.cy;
-      cy.batch(() => {
-        cy.nodes().forEach((node) => {
-          const id = node.id();
-          const isSelected = id === focus.selectedID;
-          const isHovered = id === focus.hoveredID;
-          const isNeighbor = focus.neighborIDs.has(id);
-          const isFocusedNode = focus.focusNodeID !== "" && id === focus.focusNodeID;
-          const isDimmed = focus.focusNodeID !== "" && !isFocusedNode && !isHovered && !isNeighbor;
-          node.toggleClass("is-labeled", labelIDs.has(id));
-          node.toggleClass("is-selected", isSelected);
-          node.toggleClass("is-hovered", isHovered);
-          node.toggleClass("is-neighbor", isNeighbor);
-          node.toggleClass("is-dimmed", isDimmed);
-        });
-        cy.edges().forEach((edge) => {
-          const isHighlighted = focus.highlightedEdgeIDs.has(edge.id());
-          edge.toggleClass("is-highlighted-edge", isHighlighted);
-          edge.toggleClass("is-dimmed", focus.focusNodeID !== "" && !isHighlighted);
-        });
-      });
-    }
-    function seedDeterministicPositions() {
-      if (!state.cy) {
-        return;
-      }
-      const nodes = state.cy.nodes().toArray().sort((left, right) => left.id().localeCompare(right.id()));
-      const spread = clampedSpread();
-      const radialGap = 52 + 26 * spread;
-      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-      nodes.forEach((node, index) => {
-        const radius = radialGap * Math.sqrt(index);
-        const angle = index * goldenAngle;
-        node.position({
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius
-        });
-      });
-    }
-    function separateIsolatedNodes() {
-      if (!state.cy) {
-        return;
-      }
-      const isolatedNodes = state.cy.nodes().filter((node) => node.connectedEdges().length === 0).toArray().sort((left, right) => left.id().localeCompare(right.id()));
-      if (isolatedNodes.length === 0) {
-        return;
-      }
-      const spread = clampedSpread();
-      const spacing = 58 + 34 * spread;
-      const columns = Math.ceil(Math.sqrt(isolatedNodes.length));
-      const rows = Math.ceil(isolatedNodes.length / columns);
-      const connectedNodes = state.cy.nodes().filter((node) => node.connectedEdges().length > 0);
-      let startX = -((columns - 1) * spacing) / 2;
-      let startY = -((rows - 1) * spacing) / 2;
-      if (connectedNodes.length > 0) {
-        const box = connectedNodes.boundingBox();
-        startX = box.x2 + spacing * 1.6;
-        startY = box.y1 + (box.h - (rows - 1) * spacing) / 2;
-      }
-      isolatedNodes.forEach((node, index) => {
-        const column = index % columns;
-        const row = Math.floor(index / columns);
-        node.position({
-          x: startX + column * spacing,
-          y: startY + row * spacing
-        });
-      });
+      applyGraphVisualClasses(state.cy, state.labelMode, state.selectedNodeID, state.hoveredNodeID);
     }
     function runLayout(options = {}) {
       if (!state.cy || state.cy.nodes().length === 0) {
@@ -4098,12 +4157,12 @@ var BrainNotesApp = (() => {
       }
       const layoutOptions = options;
       const fitAfterLayout = Boolean(layoutOptions.fitAfterLayout);
-      const preservedViewport = layoutOptions.preserveViewport ? currentViewport() : null;
+      const preservedViewport = layoutOptions.preserveViewport ? currentViewport(state.cy) : null;
       const runID = state.layoutRunID + 1;
       state.layoutRunID = runID;
       stopActiveLayout();
       if (layoutOptions.resetPositions) {
-        seedDeterministicPositions();
+        seedDeterministicPositions(state.cy, clampedSpread(dom.spreadInput));
       }
       let finalized = false;
       const finalizeLayout = () => {
@@ -4111,11 +4170,11 @@ var BrainNotesApp = (() => {
           return;
         }
         finalized = true;
-        separateIsolatedNodes();
+        separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
         if (fitAfterLayout) {
           fitCurrentGraph();
         } else if (preservedViewport) {
-          applyViewport(preservedViewport);
+          applyViewport(state.cy, preservedViewport);
           rememberMeaningfulViewport();
         } else {
           rememberMeaningfulViewport();
@@ -4123,7 +4182,7 @@ var BrainNotesApp = (() => {
         applyGraphVisualState();
         state.activeLayout = null;
       };
-      const layout = state.cy.layout(layoutOptionsForSpread());
+      const layout = state.cy.layout(layoutOptionsForSpread(clampedSpread(dom.spreadInput)));
       state.activeLayout = layout;
       if (typeof layout.one === "function") {
         layout.one("layoutstop", finalizeLayout);
@@ -4239,10 +4298,10 @@ var BrainNotesApp = (() => {
           scheduleLoad(query, 150);
         });
       }
-      updateSpreadLabel();
+      updateSpreadLabel(dom.spreadInput, dom.spreadValue);
       if (dom.spreadInput instanceof HTMLInputElement) {
         dom.spreadInput.addEventListener("input", () => {
-          updateSpreadLabel();
+          updateSpreadLabel(dom.spreadInput, dom.spreadValue);
           runLayout({
             fitAfterLayout: false,
             preserveViewport: true
@@ -4925,7 +4984,51 @@ var BrainNotesApp = (() => {
     }
   };
 
-  // internal/web/static_src/overview-search.ts
+  // internal/web/static_src/overview-search-elements.ts
+  var resolveOverviewSearchElements = () => {
+    const root = queryElement(document, "[data-overview-search-results]", HTMLElement);
+    if (!root) {
+      return null;
+    }
+    const input = getElementByID("search-input", HTMLInputElement);
+    const statusEl = queryElement(root, "[data-overview-search-status]", HTMLElement);
+    const listEl = queryElement(root, "[data-overview-search-list]", HTMLElement);
+    if (!statusEl || !listEl) {
+      return null;
+    }
+    const bulkRoot = queryElement(root, "[data-overview-bulk]", HTMLElement);
+    const previewPanel = bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement) : null;
+    const moveForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement) : null;
+    const setForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement) : null;
+    const unsetForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement) : null;
+    return {
+      root,
+      input,
+      statusEl,
+      listEl,
+      bulkRoot,
+      selectedCountEl: bulkRoot ? queryElement(bulkRoot, "[data-overview-selected-count]", HTMLElement) : null,
+      bulkStatusEl: bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement) : null,
+      previewPanel,
+      previewTitleEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement) : null,
+      previewMessageEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement) : null,
+      previewCountsEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement) : null,
+      previewResultsEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement) : null,
+      previewFailuresEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement) : null,
+      previewApplyButton: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement) : null,
+      previewClearButton: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement) : null,
+      csrfToken: bulkRoot?.getAttribute("data-overview-csrf") || "",
+      trashButton: bulkRoot ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement) : null,
+      moveForm,
+      moveButton: moveForm ? queryElement(moveForm, 'button[type="submit"]', HTMLButtonElement) : null,
+      setForm,
+      setButton: setForm ? queryElement(setForm, 'button[type="submit"]', HTMLButtonElement) : null,
+      unsetForm,
+      unsetButton: unsetForm ? queryElement(unsetForm, 'button[type="submit"]', HTMLButtonElement) : null
+    };
+  };
+
+  // internal/web/static_src/overview-search-model.ts
   var overviewSearchEmptyMessage = (query) => query ? `No notes match "${query}".` : "No notes match the active filters.";
   var bulkApplyFallbackMessage = (action) => {
     switch (action) {
@@ -4954,6 +5057,92 @@ var BrainNotesApp = (() => {
         return "Bulk preview";
     }
   };
+  var bulkActionLabel = (action, phase) => {
+    switch (action) {
+      case "trash":
+        return phase === "preview" ? "Preview Trash" : "Apply Trash";
+      case "move":
+        return phase === "preview" ? "Preview Move" : "Apply Move";
+      case "frontmatter_set":
+        return phase === "preview" ? "Preview Set" : "Apply Set";
+      case "frontmatter_unset":
+        return phase === "preview" ? "Preview Unset" : "Apply Unset";
+      default:
+        return phase === "preview" ? "Preview" : "Apply";
+    }
+  };
+  var normalizeBulkFrontmatterOp = (value) => {
+    if (value === "+=" || value === "-=" || value === "=") {
+      return value;
+    }
+    return void 0;
+  };
+  var normalizeBulkFields = (fields) => {
+    const out = {};
+    if (typeof fields.folder === "string") {
+      out.folder = fields.folder.trim();
+    }
+    if (typeof fields.property === "string") {
+      out.property = fields.property.trim();
+    }
+    if (typeof fields.value === "string") {
+      out.value = fields.value;
+    }
+    const op = normalizeBulkFrontmatterOp(fields.op);
+    if (op) {
+      out.op = op;
+    }
+    return out;
+  };
+  var previewFingerprint = (action, fields, keys) => JSON.stringify({
+    action,
+    keys,
+    ...normalizeBulkFields(fields)
+  });
+  var readMoveFields = (form) => {
+    if (!form) {
+      return {};
+    }
+    const formData = new FormData(form);
+    return {
+      folder: String(formData.get("folder") || "").trim()
+    };
+  };
+  var readSetFields = (form) => {
+    if (!form) {
+      return {};
+    }
+    const formData = new FormData(form);
+    return {
+      property: String(formData.get("property") || "").trim(),
+      op: String(formData.get("op") || "="),
+      value: String(formData.get("value") || "")
+    };
+  };
+  var readUnsetFields = (form) => {
+    if (!form) {
+      return {};
+    }
+    const formData = new FormData(form);
+    return {
+      property: String(formData.get("property") || "").trim()
+    };
+  };
+  var bulkStatusMessage = (result, fallback) => {
+    const message = result && result.ok && result.message ? result.message : fallback;
+    const failures = Array.isArray(result.failures) ? result.failures : [];
+    if (failures.length === 0) {
+      return message;
+    }
+    const summary = failures.slice(0, 3).map((failure) => {
+      const key = failure.key || failure.rel_path || "note";
+      return `${key}: ${failure.message || failure.code || "failed"}`;
+    });
+    const suffix = failures.length > summary.length ? `; ${failures.length - summary.length} more` : "";
+    return `${message} Failures: ${summary.join("; ")}${suffix}.`;
+  };
+
+  // internal/web/static_src/overview-search-render.ts
   var formatPreviewValue = (value) => {
     if (!value.present) {
       return "(absent)";
@@ -5024,6 +5213,103 @@ var BrainNotesApp = (() => {
     item.textContent = `${label}: ${failure.message || failure.code || "failed"}`;
     listEl.appendChild(item);
   };
+  var renderPreviewCounts = (previewCountsEl, result) => {
+    if (!previewCountsEl) {
+      return;
+    }
+    const doc = previewCountsEl.ownerDocument;
+    previewCountsEl.textContent = "";
+    const counts = [
+      ["Changed", result.changed || 0],
+      ["Unchanged", result.unchanged || 0],
+      ["Failed", result.failed || 0]
+    ];
+    for (const [label, value] of counts) {
+      const row = doc.createElement("div");
+      row.className = "overview-bulk-preview-count";
+      const term = doc.createElement("dt");
+      term.textContent = label;
+      const detail = doc.createElement("dd");
+      detail.textContent = String(value);
+      row.append(term, detail);
+      previewCountsEl.appendChild(row);
+    }
+  };
+  var renderPreviewPanel = (els, previewState) => {
+    const {
+      previewPanel,
+      previewTitleEl,
+      previewMessageEl,
+      previewCountsEl,
+      previewResultsEl,
+      previewFailuresEl,
+      previewApplyButton
+    } = els;
+    if (!previewPanel) {
+      return;
+    }
+    if (!previewState) {
+      previewPanel.hidden = true;
+      if (previewCountsEl) {
+        previewCountsEl.textContent = "";
+      }
+      if (previewResultsEl) {
+        previewResultsEl.textContent = "";
+      }
+      if (previewFailuresEl) {
+        previewFailuresEl.textContent = "";
+      }
+      if (previewApplyButton) {
+        previewApplyButton.textContent = "Apply";
+      }
+      return;
+    }
+    previewPanel.hidden = false;
+    if (previewTitleEl) {
+      previewTitleEl.textContent = previewHeading(previewState.action);
+    }
+    if (previewMessageEl) {
+      previewMessageEl.textContent = previewState.result.message || "Preview ready.";
+    }
+    renderPreviewCounts(previewCountsEl, previewState.result);
+    if (previewResultsEl) {
+      previewResultsEl.textContent = "";
+      for (const result of previewState.result.results || []) {
+        renderPreviewResultRow(previewResultsEl, result);
+      }
+    }
+    if (previewFailuresEl) {
+      previewFailuresEl.textContent = "";
+      const failures = previewState.result.failures || [];
+      previewFailuresEl.hidden = failures.length === 0;
+      for (const failure of failures) {
+        renderPreviewFailureItem(previewFailuresEl, failure);
+      }
+    }
+    if (previewApplyButton) {
+      previewApplyButton.textContent = bulkActionLabel(previewState.action, "apply");
+    }
+  };
+  var syncPreviewAttributes = (bulkRoot, previewState) => {
+    if (!bulkRoot) {
+      return;
+    }
+    if (!previewState) {
+      bulkRoot.removeAttribute("data-overview-preview-ready");
+      bulkRoot.removeAttribute("data-overview-preview-action");
+      bulkRoot.removeAttribute("data-overview-preview-id");
+      bulkRoot.removeAttribute("data-overview-preview-expires-at");
+      return;
+    }
+    bulkRoot.setAttribute("data-overview-preview-ready", "true");
+    bulkRoot.setAttribute("data-overview-preview-action", previewState.action);
+    bulkRoot.setAttribute("data-overview-preview-id", previewState.previewID);
+    if (previewState.expiresAt) {
+      bulkRoot.setAttribute("data-overview-preview-expires-at", previewState.expiresAt);
+    } else {
+      bulkRoot.removeAttribute("data-overview-preview-expires-at");
+    }
+  };
   var renderOverviewSearchResult = (listEl, result, options = {}) => {
     const path = searchResultPath(result);
     if (!path) {
@@ -5093,37 +5379,82 @@ var BrainNotesApp = (() => {
     listEl.appendChild(item);
     return true;
   };
+
+  // internal/web/static_src/overview-search-requests.ts
+  var readBulkResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+  var bulkRequestInit = (csrfToken, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": csrfToken
+    },
+    body: body.toString()
+  });
+  var postBulkPreview = async (fetcher, csrfToken, action, keys, fields) => {
+    const body = buildBulkPreviewForm({
+      action,
+      keys,
+      token: csrfToken,
+      folder: fields.folder,
+      property: fields.property,
+      op: normalizeBulkFrontmatterOp(fields.op),
+      value: fields.value
+    });
+    const resp = await fetcher("/api/notes/bulk/preview", bulkRequestInit(csrfToken, body));
+    return { resp, payload: await readBulkResponsePayload(resp) };
+  };
+  var postBulkApply = async (fetcher, csrfToken, action, keys, fields, previewID) => {
+    const body = buildBulkApplyForm({
+      action,
+      keys,
+      token: csrfToken,
+      folder: fields.folder,
+      property: fields.property,
+      op: normalizeBulkFrontmatterOp(fields.op),
+      value: fields.value,
+      previewID
+    });
+    const resp = await fetcher("/api/notes/bulk", bulkRequestInit(csrfToken, body));
+    return { resp, payload: await readBulkResponsePayload(resp) };
+  };
+
+  // internal/web/static_src/overview-search.ts
   var initOverviewSearchResults = (deps = {}) => {
-    const root = queryElement(document, "[data-overview-search-results]", HTMLElement);
-    if (!root) {
+    const els = resolveOverviewSearchElements();
+    if (!els) {
       return;
     }
-    const input = getElementByID("search-input", HTMLInputElement);
-    const statusEl = queryElement(root, "[data-overview-search-status]", HTMLElement);
-    const listEl = queryElement(root, "[data-overview-search-list]", HTMLElement);
-    if (!statusEl || !listEl) {
-      return;
-    }
-    const bulkRoot = queryElement(root, "[data-overview-bulk]", HTMLElement);
-    const selectedCountEl = bulkRoot ? queryElement(bulkRoot, "[data-overview-selected-count]", HTMLElement) : null;
-    const bulkStatusEl = bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement) : null;
-    const previewPanel = bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement) : null;
-    const previewTitleEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement) : null;
-    const previewMessageEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement) : null;
-    const previewCountsEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement) : null;
-    const previewResultsEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement) : null;
-    const previewFailuresEl = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement) : null;
-    const previewApplyButton = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement) : null;
-    const previewClearButton = previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement) : null;
-    const csrfToken = bulkRoot?.getAttribute("data-overview-csrf") || "";
+    const {
+      root,
+      input,
+      statusEl,
+      listEl,
+      bulkRoot,
+      selectedCountEl,
+      bulkStatusEl,
+      previewApplyButton,
+      previewClearButton,
+      csrfToken,
+      trashButton,
+      moveForm,
+      moveButton,
+      setForm,
+      setButton,
+      unsetForm,
+      unsetButton
+    } = els;
     const fetcher = deps.fetch || fetch;
-    const trashButton = bulkRoot ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement) : null;
-    const moveForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement) : null;
-    const moveButton = moveForm ? queryElement(moveForm, 'button[type="submit"]', HTMLButtonElement) : null;
-    const setForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement) : null;
-    const setButton = setForm ? queryElement(setForm, 'button[type="submit"]', HTMLButtonElement) : null;
-    const unsetForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement) : null;
-    const unsetButton = unsetForm ? queryElement(unsetForm, 'button[type="submit"]', HTMLButtonElement) : null;
     const selectedKeys = /* @__PURE__ */ new Map();
     let bulkBusy = false;
     let previewState = null;
@@ -5145,172 +5476,19 @@ var BrainNotesApp = (() => {
       ]);
     };
     const selectedKeyList = () => normalizeBulkNoteKeys(Array.from(selectedKeys.keys()));
-    const readMoveFields = () => {
-      if (!moveForm) {
-        return {};
-      }
-      const formData = new FormData(moveForm);
-      return {
-        folder: String(formData.get("folder") || "").trim()
-      };
-    };
-    const readSetFields = () => {
-      if (!setForm) {
-        return {};
-      }
-      const formData = new FormData(setForm);
-      return {
-        property: String(formData.get("property") || "").trim(),
-        op: String(formData.get("op") || "="),
-        value: String(formData.get("value") || "")
-      };
-    };
-    const readUnsetFields = () => {
-      if (!unsetForm) {
-        return {};
-      }
-      const formData = new FormData(unsetForm);
-      return {
-        property: String(formData.get("property") || "").trim()
-      };
-    };
-    const normalizeBulkFields = (fields) => {
-      const out = {};
-      if (typeof fields.folder === "string") {
-        out.folder = fields.folder.trim();
-      }
-      if (typeof fields.property === "string") {
-        out.property = fields.property.trim();
-      }
-      if (typeof fields.value === "string") {
-        out.value = fields.value;
-      }
-      const op = normalizeBulkFrontmatterOp(fields.op);
-      if (op) {
-        out.op = op;
-      }
-      return out;
-    };
-    const previewFingerprint = (action, fields, keys = selectedKeyList()) => JSON.stringify({
-      action,
-      keys,
-      ...normalizeBulkFields(fields)
-    });
     const previewMatches = (action, fields, keys = selectedKeyList()) => Boolean(
       previewState && previewState.previewID && previewState.fingerprint === previewFingerprint(action, fields, keys)
     );
-    const syncPreviewAttributes = () => {
-      if (!bulkRoot) {
-        return;
-      }
-      if (!previewState) {
-        bulkRoot.removeAttribute("data-overview-preview-ready");
-        bulkRoot.removeAttribute("data-overview-preview-action");
-        bulkRoot.removeAttribute("data-overview-preview-id");
-        bulkRoot.removeAttribute("data-overview-preview-expires-at");
-        return;
-      }
-      bulkRoot.setAttribute("data-overview-preview-ready", "true");
-      bulkRoot.setAttribute("data-overview-preview-action", previewState.action);
-      bulkRoot.setAttribute("data-overview-preview-id", previewState.previewID);
-      if (previewState.expiresAt) {
-        bulkRoot.setAttribute("data-overview-preview-expires-at", previewState.expiresAt);
-      } else {
-        bulkRoot.removeAttribute("data-overview-preview-expires-at");
-      }
-    };
     const readFieldsForAction = (action) => {
       switch (action) {
         case "move":
-          return readMoveFields();
+          return readMoveFields(moveForm);
         case "frontmatter_set":
-          return readSetFields();
+          return readSetFields(setForm);
         case "frontmatter_unset":
-          return readUnsetFields();
+          return readUnsetFields(unsetForm);
         default:
           return {};
-      }
-    };
-    const renderPreviewCounts = (result) => {
-      if (!previewCountsEl) {
-        return;
-      }
-      const doc = previewCountsEl.ownerDocument;
-      previewCountsEl.textContent = "";
-      const counts = [
-        ["Changed", result.changed || 0],
-        ["Unchanged", result.unchanged || 0],
-        ["Failed", result.failed || 0]
-      ];
-      for (const [label, value] of counts) {
-        const row = doc.createElement("div");
-        row.className = "overview-bulk-preview-count";
-        const term = doc.createElement("dt");
-        term.textContent = label;
-        const detail = doc.createElement("dd");
-        detail.textContent = String(value);
-        row.append(term, detail);
-        previewCountsEl.appendChild(row);
-      }
-    };
-    const renderPreviewPanel = () => {
-      if (!previewPanel) {
-        return;
-      }
-      if (!previewState) {
-        previewPanel.hidden = true;
-        if (previewCountsEl) {
-          previewCountsEl.textContent = "";
-        }
-        if (previewResultsEl) {
-          previewResultsEl.textContent = "";
-        }
-        if (previewFailuresEl) {
-          previewFailuresEl.textContent = "";
-        }
-        if (previewApplyButton) {
-          previewApplyButton.textContent = "Apply";
-        }
-        return;
-      }
-      previewPanel.hidden = false;
-      if (previewTitleEl) {
-        previewTitleEl.textContent = previewHeading(previewState.action);
-      }
-      if (previewMessageEl) {
-        previewMessageEl.textContent = previewState.result.message || "Preview ready.";
-      }
-      renderPreviewCounts(previewState.result);
-      if (previewResultsEl) {
-        previewResultsEl.textContent = "";
-        for (const result of previewState.result.results || []) {
-          renderPreviewResultRow(previewResultsEl, result);
-        }
-      }
-      if (previewFailuresEl) {
-        previewFailuresEl.textContent = "";
-        const failures = previewState.result.failures || [];
-        previewFailuresEl.hidden = failures.length === 0;
-        for (const failure of failures) {
-          renderPreviewFailureItem(previewFailuresEl, failure);
-        }
-      }
-      if (previewApplyButton) {
-        previewApplyButton.textContent = bulkActionLabel(previewState.action, "apply");
-      }
-    };
-    const bulkActionLabel = (action, phase) => {
-      switch (action) {
-        case "trash":
-          return phase === "preview" ? "Preview Trash" : "Apply Trash";
-        case "move":
-          return phase === "preview" ? "Preview Move" : "Apply Move";
-        case "frontmatter_set":
-          return phase === "preview" ? "Preview Set" : "Apply Set";
-        case "frontmatter_unset":
-          return phase === "preview" ? "Preview Unset" : "Apply Unset";
-        default:
-          return phase === "preview" ? "Preview" : "Apply";
       }
     };
     const syncActionButton = (button, action, fields) => {
@@ -5336,21 +5514,21 @@ var BrainNotesApp = (() => {
         }
       }
       syncActionButton(trashButton, "trash", {});
-      syncActionButton(moveButton, "move", readMoveFields());
-      syncActionButton(setButton, "frontmatter_set", readSetFields());
-      syncActionButton(unsetButton, "frontmatter_unset", readUnsetFields());
+      syncActionButton(moveButton, "move", readMoveFields(moveForm));
+      syncActionButton(setButton, "frontmatter_set", readSetFields(setForm));
+      syncActionButton(unsetButton, "frontmatter_unset", readUnsetFields(unsetForm));
       if (previewApplyButton) {
         previewApplyButton.disabled = bulkBusy || count === 0 || previewState === null;
       }
       if (previewClearButton) {
         previewClearButton.disabled = bulkBusy || previewState === null;
       }
-      renderPreviewPanel();
+      renderPreviewPanel(els, previewState);
     };
     const clearPreviewState = ({ clearStatus = false } = {}) => {
       const hadPreview = previewState !== null;
       previewState = null;
-      syncPreviewAttributes();
+      syncPreviewAttributes(bulkRoot, previewState);
       updateBulkControls();
       if (clearStatus && hadPreview) {
         setBulkStatus("");
@@ -5359,12 +5537,12 @@ var BrainNotesApp = (() => {
     const setPreviewState = (action, fields, result) => {
       previewState = {
         action,
-        fingerprint: previewFingerprint(action, fields),
+        fingerprint: previewFingerprint(action, fields, selectedKeyList()),
         previewID: result.preview_id || "",
         expiresAt: result.expires_at,
         result
       };
-      syncPreviewAttributes();
+      syncPreviewAttributes(bulkRoot, previewState);
       updateBulkControls();
     };
     const setBulkBusy = (busy) => {
@@ -5501,25 +5679,13 @@ var BrainNotesApp = (() => {
       setBulkBusy(true);
       setBulkStatus("Previewing bulk action...", "is-loading");
       try {
-        const body = buildBulkPreviewForm({
+        const { resp, payload } = await postBulkPreview(
+          fetcher,
+          csrfToken,
           action,
           keys,
-          token: csrfToken,
-          folder: fields.folder,
-          property: fields.property,
-          op: normalizeBulkFrontmatterOp(fields.op),
-          value: fields.value
-        });
-        const resp = await fetcher("/api/notes/bulk/preview", {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-BN-CSRF": csrfToken
-          },
-          body: body.toString()
-        });
-        const payload = await readBulkResponsePayload(resp);
+          fields
+        );
         if (!resp.ok) {
           clearPreviewState();
           setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
@@ -5562,26 +5728,14 @@ var BrainNotesApp = (() => {
       setBulkBusy(true);
       setBulkStatus("Applying bulk action...", "is-loading");
       try {
-        const body = buildBulkApplyForm({
+        const { resp, payload } = await postBulkApply(
+          fetcher,
+          csrfToken,
           action,
           keys,
-          token: csrfToken,
-          folder: fields.folder,
-          property: fields.property,
-          op: normalizeBulkFrontmatterOp(fields.op),
-          value: fields.value,
-          previewID: previewState.previewID
-        });
-        const resp = await fetcher("/api/notes/bulk", {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-BN-CSRF": csrfToken
-          },
-          body: body.toString()
-        });
-        const payload = await readBulkResponsePayload(resp);
+          fields,
+          previewState.previewID
+        );
         if (!resp.ok) {
           clearPreviewState();
           setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
@@ -5620,11 +5774,11 @@ var BrainNotesApp = (() => {
     });
     moveForm?.addEventListener("submit", (event) => {
       event.preventDefault();
-      void runBulkAction("move", readMoveFields(), bulkApplyFallbackMessage("move"));
+      void runBulkAction("move", readMoveFields(moveForm), bulkApplyFallbackMessage("move"));
     });
     setForm?.addEventListener("submit", (event) => {
       event.preventDefault();
-      const fields = readSetFields();
+      const fields = readSetFields(setForm);
       if (!fields.property) {
         setBulkStatus("Property is required.", "is-error");
         return;
@@ -5633,7 +5787,7 @@ var BrainNotesApp = (() => {
     });
     unsetForm?.addEventListener("submit", (event) => {
       event.preventDefault();
-      const fields = readUnsetFields();
+      const fields = readUnsetFields(unsetForm);
       if (!fields.property) {
         setBulkStatus("Property is required.", "is-error");
         return;
@@ -5670,36 +5824,6 @@ var BrainNotesApp = (() => {
     bindPreviewInvalidation(unsetForm);
     updateBulkControls();
     scheduleSearch(0);
-  };
-  var normalizeBulkFrontmatterOp = (value) => {
-    if (value === "+=" || value === "-=" || value === "=") {
-      return value;
-    }
-    return void 0;
-  };
-  var readBulkResponsePayload = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
-    }
-  };
-  var bulkStatusMessage = (result, fallback) => {
-    const message = result && result.ok && result.message ? result.message : fallback;
-    const failures = Array.isArray(result.failures) ? result.failures : [];
-    if (failures.length === 0) {
-      return message;
-    }
-    const summary = failures.slice(0, 3).map((failure) => {
-      const key = failure.key || failure.rel_path || "note";
-      return `${key}: ${failure.message || failure.code || "failed"}`;
-    });
-    const suffix = failures.length > summary.length ? `; ${failures.length - summary.length} more` : "";
-    return `${message} Failures: ${summary.join("; ")}${suffix}.`;
   };
 
   // internal/web/static_src/search.ts

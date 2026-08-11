@@ -1,22 +1,15 @@
 import {
-  buildBulkApplyForm,
-  buildBulkPreviewForm,
   managementMutationEventName,
-  type BulkFrontmatterChange,
   normalizeBulkManagementResult,
   normalizeBulkNoteKeys,
   normalizeBulkPreviewManagementResult,
   normalizeManagementErrorMessage,
   normalizeSearchResults,
-  searchResultPath,
   type BulkAction,
-  type BulkFailure,
   type BulkPreviewManagementResult,
-  type BulkPreviewRow,
-  type BulkPreviewValue,
   type SearchResult,
 } from "./api";
-import { getElementByID, queryAllElements, queryElement } from "./dom";
+import { queryAllElements } from "./dom";
 import {
   buildSearchAPIURL,
   filterChangeEventName,
@@ -26,302 +19,62 @@ import {
   shouldHandleFilterChangeForMode,
   syncPageQueryParam,
 } from "./filters";
+import { resolveOverviewSearchElements } from "./overview-search-elements";
+import {
+  bulkActionLabel,
+  bulkApplyFallbackMessage,
+  bulkStatusMessage,
+  overviewSearchEmptyMessage,
+  previewFingerprint,
+  readMoveFields,
+  readSetFields,
+  readUnsetFields,
+  type BulkActionFields,
+  type BulkPreviewState,
+  type BulkStatusKind,
+  type OverviewSearchDeps,
+} from "./overview-search-model";
+import {
+  renderOverviewSearchResult,
+  renderPreviewPanel,
+  syncPreviewAttributes,
+} from "./overview-search-render";
+import { postBulkApply, postBulkPreview } from "./overview-search-requests";
 import { setStatusText, type StatusKind } from "./status";
 
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-type BulkStatusKind = "" | "is-success" | "is-error" | "is-loading";
-type BulkActionFields = Partial<Record<"folder" | "property" | "op" | "value", string>>;
-type BulkPreviewState = {
-  action: BulkAction;
-  fingerprint: string;
-  previewID: string;
-  expiresAt?: string;
-  result: BulkPreviewManagementResult;
-};
-
-export type OverviewSearchDeps = {
-  fetch?: FetchLike;
-  confirm?: (message: string) => boolean;
-};
-
-export type OverviewSearchResultOptions = {
-  selected?: boolean;
-  onSelectionChange?: (result: SearchResult, selected: boolean) => void;
-};
-
-export const overviewSearchEmptyMessage = (query: string): string =>
-  query ? `No notes match "${query}".` : "No notes match the active filters.";
-
-const bulkApplyFallbackMessage = (action: BulkAction): string => {
-  switch (action) {
-    case "trash":
-      return "Moved selected notes to Trash.";
-    case "move":
-      return "Moved selected notes.";
-    case "frontmatter_set":
-    case "frontmatter_unset":
-      return "Updated selected notes.";
-    default:
-      return "Applied selected notes.";
-  }
-};
-
-const previewHeading = (action: BulkAction): string => {
-  switch (action) {
-    case "trash":
-      return "Trash preview";
-    case "move":
-      return "Move preview";
-    case "frontmatter_set":
-      return "Frontmatter set preview";
-    case "frontmatter_unset":
-      return "Frontmatter unset preview";
-    default:
-      return "Bulk preview";
-  }
-};
-
-const formatPreviewValue = (value: BulkPreviewValue): string => {
-  if (!value.present) {
-    return "(absent)";
-  }
-  if (typeof value.value === "string") {
-    return JSON.stringify(value.value);
-  }
-  if (
-    typeof value.value === "number" ||
-    typeof value.value === "boolean" ||
-    value.value === null
-  ) {
-    return String(value.value);
-  }
-  try {
-    return JSON.stringify(value.value);
-  } catch {
-    return String(value.value);
-  }
-};
-
-const renderPreviewFrontmatterItem = (
-  listEl: HTMLElement,
-  change: BulkFrontmatterChange
-): void => {
-  const doc = listEl.ownerDocument;
-  const item = doc.createElement("li");
-  item.className = "overview-bulk-preview-frontmatter-item";
-  if (!change.changed) {
-    item.classList.add("is-unchanged");
-  }
-  item.textContent = `${change.key}: ${formatPreviewValue(change.before)} -> ${formatPreviewValue(change.after)}`;
-  listEl.appendChild(item);
-};
-
-const renderPreviewResultRow = (listEl: HTMLElement, result: BulkPreviewRow): void => {
-  const doc = listEl.ownerDocument;
-  const item = doc.createElement("li");
-  item.className = "overview-bulk-preview-result";
-  if (!result.changed) {
-    item.classList.add("is-unchanged");
-  }
-
-  const header = doc.createElement("div");
-  header.className = "overview-bulk-preview-result-header";
-
-  const path = doc.createElement("p");
-  path.className = "overview-bulk-preview-path";
-  const sourcePath = result.source.rel_path || result.rel_path || result.key;
-  const destinationPath = result.destination?.rel_path || result.rel_path;
-  path.textContent = destinationPath && destinationPath !== sourcePath
-    ? `${sourcePath} -> ${destinationPath}`
-    : sourcePath;
-  header.appendChild(path);
-
-  const status = doc.createElement("span");
-  status.className = "overview-bulk-preview-result-state";
-  status.textContent = result.changed ? "Will change" : "No change";
-  header.appendChild(status);
-  item.appendChild(header);
-
-  if (result.move) {
-    const move = doc.createElement("p");
-    move.className = "overview-bulk-preview-detail";
-    move.textContent = `${result.move.rewrite_count} rewrites across ${result.move.rewrite_file_count} files (body ${result.move.body_rewrite_count}, frontmatter ${result.move.frontmatter_rewrite_count})`;
-    item.appendChild(move);
-  }
-
-  if (result.frontmatter.length > 0) {
-    const frontmatterList = doc.createElement("ul");
-    frontmatterList.className = "overview-bulk-preview-frontmatter";
-    for (const change of result.frontmatter) {
-      renderPreviewFrontmatterItem(frontmatterList, change);
-    }
-    item.appendChild(frontmatterList);
-  }
-
-  listEl.appendChild(item);
-};
-
-const renderPreviewFailureItem = (listEl: HTMLElement, failure: BulkFailure): void => {
-  const doc = listEl.ownerDocument;
-  const item = doc.createElement("li");
-  item.className = "overview-bulk-preview-failure";
-  const label = failure.rel_path || failure.key || "note";
-  item.textContent = `${label}: ${failure.message || failure.code || "failed"}`;
-  listEl.appendChild(item);
-};
-
-export const renderOverviewSearchResult = (
-  listEl: HTMLElement,
-  result: SearchResult,
-  options: OverviewSearchResultOptions = {}
-): boolean => {
-  const path = searchResultPath(result);
-  if (!path) {
-    return false;
-  }
-
-  const doc = listEl.ownerDocument;
-  const item = doc.createElement("li");
-  item.className = "overview-result-item";
-  if (result.key) {
-    item.setAttribute("data-overview-result-key", result.key);
-  }
-
-  const row = doc.createElement("div");
-  row.className = "overview-result-row";
-
-  if (result.key) {
-    row.classList.add("has-selection");
-    const selectWrap = doc.createElement("label");
-    selectWrap.className = "overview-result-select";
-    const checkbox = doc.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = result.key;
-    checkbox.checked = Boolean(options.selected);
-    checkbox.setAttribute(
-      "aria-label",
-      `Select ${result.title || result.key || "note"}`
-    );
-    checkbox.addEventListener("change", () => {
-      if (options.onSelectionChange) {
-        options.onSelectionChange(result, checkbox.checked);
-      }
-    });
-    selectWrap.appendChild(checkbox);
-    row.appendChild(selectWrap);
-  }
-
-  const link = doc.createElement("a");
-  link.className = "overview-result-link";
-  link.setAttribute("href", path);
-
-  const title = doc.createElement("span");
-  title.className = "overview-result-title";
-  title.textContent = result.title || result.key || "Untitled";
-  link.appendChild(title);
-
-  const meta = doc.createElement("span");
-  meta.className = "overview-result-meta";
-
-  const folder = doc.createElement("span");
-  folder.textContent = result.folder ? `Folder: ${result.folder}` : "Folder: /";
-  meta.appendChild(folder);
-
-  if (result.matched_fields.length > 0) {
-    const fields = doc.createElement("span");
-    fields.className = "overview-result-badge";
-    fields.textContent = `Matched: ${result.matched_fields.join(", ")}`;
-    meta.appendChild(fields);
-  }
-
-  for (const issue of result.issues) {
-    const badge = doc.createElement("span");
-    badge.className = "overview-result-badge is-issue";
-    badge.textContent = issue.replace(/_/g, " ");
-    meta.appendChild(badge);
-  }
-  link.appendChild(meta);
-
-  if (result.snippet) {
-    const snippet = doc.createElement("p");
-    snippet.className = "overview-result-snippet";
-    snippet.innerHTML = result.snippet;
-    link.appendChild(snippet);
-  }
-
-  row.appendChild(link);
-  item.appendChild(row);
-  listEl.appendChild(item);
-  return true;
-};
+export {
+  overviewSearchEmptyMessage,
+  type OverviewSearchDeps,
+  type OverviewSearchResultOptions,
+} from "./overview-search-model";
+export { renderOverviewSearchResult } from "./overview-search-render";
 
 export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void => {
-  const root = queryElement(document, "[data-overview-search-results]", HTMLElement);
-  if (!root) {
+  const els = resolveOverviewSearchElements();
+  if (!els) {
     return;
   }
 
-  const input = getElementByID("search-input", HTMLInputElement);
-  const statusEl = queryElement(root, "[data-overview-search-status]", HTMLElement);
-  const listEl = queryElement(root, "[data-overview-search-list]", HTMLElement);
-  if (!statusEl || !listEl) {
-    return;
-  }
-
-  const bulkRoot = queryElement(root, "[data-overview-bulk]", HTMLElement);
-  const selectedCountEl = bulkRoot
-    ? queryElement(bulkRoot, "[data-overview-selected-count]", HTMLElement)
-    : null;
-  const bulkStatusEl = bulkRoot
-    ? queryElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement)
-    : null;
-  const previewPanel = bulkRoot
-    ? queryElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement)
-    : null;
-  const previewTitleEl = previewPanel
-    ? queryElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement)
-    : null;
-  const previewMessageEl = previewPanel
-    ? queryElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement)
-    : null;
-  const previewCountsEl = previewPanel
-    ? queryElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement)
-    : null;
-  const previewResultsEl = previewPanel
-    ? queryElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement)
-    : null;
-  const previewFailuresEl = previewPanel
-    ? queryElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement)
-    : null;
-  const previewApplyButton = previewPanel
-    ? queryElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement)
-    : null;
-  const previewClearButton = previewPanel
-    ? queryElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement)
-    : null;
-  const csrfToken = bulkRoot?.getAttribute("data-overview-csrf") || "";
+  const {
+    root,
+    input,
+    statusEl,
+    listEl,
+    bulkRoot,
+    selectedCountEl,
+    bulkStatusEl,
+    previewApplyButton,
+    previewClearButton,
+    csrfToken,
+    trashButton,
+    moveForm,
+    moveButton,
+    setForm,
+    setButton,
+    unsetForm,
+    unsetButton,
+  } = els;
   const fetcher = deps.fetch || fetch;
-  const trashButton = bulkRoot
-    ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement)
-    : null;
-  const moveForm = bulkRoot
-    ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement)
-    : null;
-  const moveButton = moveForm
-    ? queryElement(moveForm, "button[type=\"submit\"]", HTMLButtonElement)
-    : null;
-  const setForm = bulkRoot
-    ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement)
-    : null;
-  const setButton = setForm
-    ? queryElement(setForm, "button[type=\"submit\"]", HTMLButtonElement)
-    : null;
-  const unsetForm = bulkRoot
-    ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement)
-    : null;
-  const unsetButton = unsetForm
-    ? queryElement(unsetForm, "button[type=\"submit\"]", HTMLButtonElement)
-    : null;
   const selectedKeys = new Map<string, string>();
   let bulkBusy = false;
   let previewState: BulkPreviewState | null = null;
@@ -351,67 +104,6 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
   const selectedKeyList = (): string[] =>
     normalizeBulkNoteKeys(Array.from(selectedKeys.keys()));
 
-  const readMoveFields = (): BulkActionFields => {
-    if (!moveForm) {
-      return {};
-    }
-    const formData = new FormData(moveForm);
-    return {
-      folder: String(formData.get("folder") || "").trim(),
-    };
-  };
-
-  const readSetFields = (): BulkActionFields => {
-    if (!setForm) {
-      return {};
-    }
-    const formData = new FormData(setForm);
-    return {
-      property: String(formData.get("property") || "").trim(),
-      op: String(formData.get("op") || "="),
-      value: String(formData.get("value") || ""),
-    };
-  };
-
-  const readUnsetFields = (): BulkActionFields => {
-    if (!unsetForm) {
-      return {};
-    }
-    const formData = new FormData(unsetForm);
-    return {
-      property: String(formData.get("property") || "").trim(),
-    };
-  };
-
-  const normalizeBulkFields = (fields: BulkActionFields): BulkActionFields => {
-    const out: BulkActionFields = {};
-    if (typeof fields.folder === "string") {
-      out.folder = fields.folder.trim();
-    }
-    if (typeof fields.property === "string") {
-      out.property = fields.property.trim();
-    }
-    if (typeof fields.value === "string") {
-      out.value = fields.value;
-    }
-    const op = normalizeBulkFrontmatterOp(fields.op);
-    if (op) {
-      out.op = op;
-    }
-    return out;
-  };
-
-  const previewFingerprint = (
-    action: BulkAction,
-    fields: BulkActionFields,
-    keys = selectedKeyList()
-  ): string =>
-    JSON.stringify({
-      action,
-      keys,
-      ...normalizeBulkFields(fields),
-    });
-
   const previewMatches = (
     action: BulkAction,
     fields: BulkActionFields,
@@ -423,129 +115,16 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
       previewState.fingerprint === previewFingerprint(action, fields, keys)
     );
 
-  const syncPreviewAttributes = (): void => {
-    if (!bulkRoot) {
-      return;
-    }
-    if (!previewState) {
-      bulkRoot.removeAttribute("data-overview-preview-ready");
-      bulkRoot.removeAttribute("data-overview-preview-action");
-      bulkRoot.removeAttribute("data-overview-preview-id");
-      bulkRoot.removeAttribute("data-overview-preview-expires-at");
-      return;
-    }
-    bulkRoot.setAttribute("data-overview-preview-ready", "true");
-    bulkRoot.setAttribute("data-overview-preview-action", previewState.action);
-    bulkRoot.setAttribute("data-overview-preview-id", previewState.previewID);
-    if (previewState.expiresAt) {
-      bulkRoot.setAttribute("data-overview-preview-expires-at", previewState.expiresAt);
-    } else {
-      bulkRoot.removeAttribute("data-overview-preview-expires-at");
-    }
-  };
-
   const readFieldsForAction = (action: BulkAction): BulkActionFields => {
     switch (action) {
       case "move":
-        return readMoveFields();
+        return readMoveFields(moveForm);
       case "frontmatter_set":
-        return readSetFields();
+        return readSetFields(setForm);
       case "frontmatter_unset":
-        return readUnsetFields();
+        return readUnsetFields(unsetForm);
       default:
         return {};
-    }
-  };
-
-  const renderPreviewCounts = (result: BulkPreviewManagementResult): void => {
-    if (!previewCountsEl) {
-      return;
-    }
-    const doc = previewCountsEl.ownerDocument;
-    previewCountsEl.textContent = "";
-    const counts: Array<[string, number]> = [
-      ["Changed", result.changed || 0],
-      ["Unchanged", result.unchanged || 0],
-      ["Failed", result.failed || 0],
-    ];
-    for (const [label, value] of counts) {
-      const row = doc.createElement("div");
-      row.className = "overview-bulk-preview-count";
-      const term = doc.createElement("dt");
-      term.textContent = label;
-      const detail = doc.createElement("dd");
-      detail.textContent = String(value);
-      row.append(term, detail);
-      previewCountsEl.appendChild(row);
-    }
-  };
-
-  const renderPreviewPanel = (): void => {
-    if (!previewPanel) {
-      return;
-    }
-    if (!previewState) {
-      previewPanel.hidden = true;
-      if (previewCountsEl) {
-        previewCountsEl.textContent = "";
-      }
-      if (previewResultsEl) {
-        previewResultsEl.textContent = "";
-      }
-      if (previewFailuresEl) {
-        previewFailuresEl.textContent = "";
-      }
-      if (previewApplyButton) {
-        previewApplyButton.textContent = "Apply";
-      }
-      return;
-    }
-
-    previewPanel.hidden = false;
-    if (previewTitleEl) {
-      previewTitleEl.textContent = previewHeading(previewState.action);
-    }
-    if (previewMessageEl) {
-      previewMessageEl.textContent = previewState.result.message || "Preview ready.";
-    }
-    renderPreviewCounts(previewState.result);
-
-    if (previewResultsEl) {
-      previewResultsEl.textContent = "";
-      for (const result of previewState.result.results || []) {
-        renderPreviewResultRow(previewResultsEl, result);
-      }
-    }
-
-    if (previewFailuresEl) {
-      previewFailuresEl.textContent = "";
-      const failures = previewState.result.failures || [];
-      previewFailuresEl.hidden = failures.length === 0;
-      for (const failure of failures) {
-        renderPreviewFailureItem(previewFailuresEl, failure);
-      }
-    }
-
-    if (previewApplyButton) {
-      previewApplyButton.textContent = bulkActionLabel(previewState.action, "apply");
-    }
-  };
-
-  const bulkActionLabel = (
-    action: BulkAction,
-    phase: "preview" | "apply"
-  ): string => {
-    switch (action) {
-      case "trash":
-        return phase === "preview" ? "Preview Trash" : "Apply Trash";
-      case "move":
-        return phase === "preview" ? "Preview Move" : "Apply Move";
-      case "frontmatter_set":
-        return phase === "preview" ? "Preview Set" : "Apply Set";
-      case "frontmatter_unset":
-        return phase === "preview" ? "Preview Unset" : "Apply Unset";
-      default:
-        return phase === "preview" ? "Preview" : "Apply";
     }
   };
 
@@ -581,22 +160,22 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
       }
     }
     syncActionButton(trashButton, "trash", {});
-    syncActionButton(moveButton, "move", readMoveFields());
-    syncActionButton(setButton, "frontmatter_set", readSetFields());
-    syncActionButton(unsetButton, "frontmatter_unset", readUnsetFields());
+    syncActionButton(moveButton, "move", readMoveFields(moveForm));
+    syncActionButton(setButton, "frontmatter_set", readSetFields(setForm));
+    syncActionButton(unsetButton, "frontmatter_unset", readUnsetFields(unsetForm));
     if (previewApplyButton) {
       previewApplyButton.disabled = bulkBusy || count === 0 || previewState === null;
     }
     if (previewClearButton) {
       previewClearButton.disabled = bulkBusy || previewState === null;
     }
-    renderPreviewPanel();
+    renderPreviewPanel(els, previewState);
   };
 
   const clearPreviewState = ({ clearStatus = false }: { clearStatus?: boolean } = {}): void => {
     const hadPreview = previewState !== null;
     previewState = null;
-    syncPreviewAttributes();
+    syncPreviewAttributes(bulkRoot, previewState);
     updateBulkControls();
     if (clearStatus && hadPreview) {
       setBulkStatus("");
@@ -610,12 +189,12 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
   ): void => {
     previewState = {
       action,
-      fingerprint: previewFingerprint(action, fields),
+      fingerprint: previewFingerprint(action, fields, selectedKeyList()),
       previewID: result.preview_id || "",
       expiresAt: result.expires_at,
       result,
     };
-    syncPreviewAttributes();
+    syncPreviewAttributes(bulkRoot, previewState);
     updateBulkControls();
   };
 
@@ -772,25 +351,13 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
     setBulkBusy(true);
     setBulkStatus("Previewing bulk action...", "is-loading");
     try {
-      const body = buildBulkPreviewForm({
+      const { resp, payload } = await postBulkPreview(
+        fetcher,
+        csrfToken,
         action,
         keys,
-        token: csrfToken,
-        folder: fields.folder,
-        property: fields.property,
-        op: normalizeBulkFrontmatterOp(fields.op),
-        value: fields.value,
-      });
-      const resp = await fetcher("/api/notes/bulk/preview", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-BN-CSRF": csrfToken,
-        },
-        body: body.toString(),
-      });
-      const payload = await readBulkResponsePayload(resp);
+        fields
+      );
       if (!resp.ok) {
         clearPreviewState();
         setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
@@ -839,26 +406,14 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
     setBulkBusy(true);
     setBulkStatus("Applying bulk action...", "is-loading");
     try {
-      const body = buildBulkApplyForm({
+      const { resp, payload } = await postBulkApply(
+        fetcher,
+        csrfToken,
         action,
         keys,
-        token: csrfToken,
-        folder: fields.folder,
-        property: fields.property,
-        op: normalizeBulkFrontmatterOp(fields.op),
-        value: fields.value,
-        previewID: previewState.previewID,
-      });
-      const resp = await fetcher("/api/notes/bulk", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-BN-CSRF": csrfToken,
-        },
-        body: body.toString(),
-      });
-      const payload = await readBulkResponsePayload(resp);
+        fields,
+        previewState.previewID
+      );
       if (!resp.ok) {
         clearPreviewState();
         setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
@@ -904,12 +459,12 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
 
   moveForm?.addEventListener("submit", (event) => {
     event.preventDefault();
-    void runBulkAction("move", readMoveFields(), bulkApplyFallbackMessage("move"));
+    void runBulkAction("move", readMoveFields(moveForm), bulkApplyFallbackMessage("move"));
   });
 
   setForm?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const fields = readSetFields();
+    const fields = readSetFields(setForm);
     if (!fields.property) {
       setBulkStatus("Property is required.", "is-error");
       return;
@@ -919,7 +474,7 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
 
   unsetForm?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const fields = readUnsetFields();
+    const fields = readUnsetFields(unsetForm);
     if (!fields.property) {
       setBulkStatus("Property is required.", "is-error");
       return;
@@ -961,48 +516,4 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
 
   updateBulkControls();
   scheduleSearch(0);
-};
-
-const normalizeBulkFrontmatterOp = (
-  value: string | undefined
-): "=" | "+=" | "-=" | undefined => {
-  if (value === "+=" || value === "-=" || value === "=") {
-    return value;
-  }
-  return undefined;
-};
-
-const readBulkResponsePayload = async (resp: Response): Promise<unknown> => {
-  const contentType = resp.headers?.get("Content-Type") || "";
-  try {
-    if (contentType.includes("application/json")) {
-      return await resp.json();
-    }
-    return await resp.text();
-  } catch {
-    return "";
-  }
-};
-
-const bulkStatusMessage = (
-  result: {
-    ok?: boolean;
-    message?: string;
-    failures?: BulkFailure[];
-  },
-  fallback: string
-): string => {
-  const message = result && result.ok && result.message ? result.message : fallback;
-  const failures = Array.isArray(result.failures) ? result.failures : [];
-  if (failures.length === 0) {
-    return message;
-  }
-  const summary = failures.slice(0, 3).map((failure) => {
-    const key = failure.key || failure.rel_path || "note";
-    return `${key}: ${failure.message || failure.code || "failed"}`;
-  });
-  const suffix = failures.length > summary.length
-    ? `; ${failures.length - summary.length} more`
-    : "";
-  return `${message} Failures: ${summary.join("; ")}${suffix}.`;
 };
