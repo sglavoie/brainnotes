@@ -17,8 +17,8 @@ func buildRelinkFixture(t *testing.T) string {
 		"Areas/Atlas.md":      "---\ntitle: Atlas\n---\nArea Atlas body.\n",
 		"Notes/Ref.md": "---\n" +
 			"categories:\n" +
-			"  - \"[[Projects\\\\Roadmap]]\"\n" +
-			"  - \"[[Missing\\\\Atlas]]\"\n" +
+			"  - [[Projects\\Roadmap]]\n" +
+			"  - [[Missing\\Atlas]]\n" +
 			"---\n" +
 			"See [[Projects\\Roadmap]] and [[Missing\\Atlas]].\n" +
 			"```\n" +

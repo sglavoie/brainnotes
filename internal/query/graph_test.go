@@ -101,6 +101,39 @@ func TestBuildGraph_FrontmatterLinks(t *testing.T) {
 	}
 }
 
+func TestBuildGraph_UnquotedFrontmatterLinksAreExplicit(t *testing.T) {
+	root := t.TempDir()
+	pSource := writeNote(t, root, "Source.md", "---\n"+
+		"scalar: [[People]]\n"+
+		"items: [ [[Podcasts]], plain ]\n"+
+		"nested:\n  owner: [[Library/Books.md#Now|Read]]\n"+
+		"plain_category: People\n"+
+		"plain_tags: Podcasts\n"+
+		"broken: [[Missing]]\n"+
+		"---\n[[People]] duplicate body link.\n")
+	pPeople := writeNote(t, root, "People.md", "body\n")
+	pPodcasts := writeNote(t, root, "Podcasts.md", "body\n")
+	pBooks := writeNote(t, root, "Library/Books.md", "body\n")
+
+	notes := []*vault.Note{
+		{Path: pSource},
+		{Path: pPeople},
+		{Path: pPodcasts},
+		{Path: pBooks},
+	}
+	g := BuildGraphForRoot(root, notes)
+	if got := g.ForwardLinks("Source"); !strEq(got, []string{"library/books", "people", "podcasts"}) {
+		t.Fatalf("ForwardLinks(Source) = %v, want explicit frontmatter targets", got)
+	}
+	if got := g.BackLinks("People"); len(got) != 1 || got[0] != pSource {
+		t.Fatalf("BackLinks(People) = %v, want one deduplicated source", got)
+	}
+	broken := UnresolvedLinks(&vault.Note{Path: pSource}, g)
+	if len(broken) != 1 || broken[0].FrontmatterKey != "broken" || broken[0].Link.Target != "Missing" {
+		t.Fatalf("UnresolvedLinks(Source) = %#v, want frontmatter Missing only", broken)
+	}
+}
+
 func TestBuildGraph_MarkdownExtensionWikilinksResolve(t *testing.T) {
 	root := t.TempDir()
 	pA := writeNote(t, root, "A.md", "---\ntitle: A\nrelated: \"[[D.md]]\"\n---\n[[B.md]] [[Sub/C.MD]] [[A.md]]\n")

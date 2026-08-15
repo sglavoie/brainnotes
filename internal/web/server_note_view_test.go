@@ -151,7 +151,7 @@ func TestServer_NoteViewBacklinksPanel(t *testing.T) {
 
 func TestServer_NoteViewFrontmatterWikilinkAnchors(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
-		"Source.md": []byte("---\nmeta: \"See [[Target]] and [[Missing]]\"\nnested:\n  child: \"[[Target#Heading|Alias]]\"\n---\nbody\n"),
+		"Source.md": []byte("---\nmeta: \"See [[Target]] and [[Missing]]\"\nnested:\n  child: [[Target#Heading|Alias]]\n  missing: [[Missing]]\n---\nbody\n"),
 		"Target.md": []byte("---\ntitle: Target\n---\nTarget body\n"),
 	})
 

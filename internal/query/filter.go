@@ -74,20 +74,26 @@ func Tag(v string) Predicate {
 		}
 		if lst, ok := fm.GetList("tags"); ok {
 			for _, item := range lst {
-				if strings.ToLower(stringifyTag(item)) == want {
+				if tagValueMatches(item, want) {
 					return true
 				}
 			}
 			return false
 		}
 		if v, ok := fm.Get("tags"); ok {
-			if s, isStr := v.(string); isStr {
-				return strings.ToLower(s) == want
-			}
-			return strings.ToLower(stringifyTag(v)) == want
+			return tagValueMatches(v, want)
 		}
 		return false
 	}
+}
+
+func tagValueMatches(value any, want string) bool {
+	if s, ok := value.(string); ok {
+		if title, isLink := exactWikilinkTitle(s); isLink {
+			return title == want
+		}
+	}
+	return strings.ToLower(stringifyTag(value)) == want
 }
 
 // stringifyTag renders a non-string frontmatter list element as the text a user

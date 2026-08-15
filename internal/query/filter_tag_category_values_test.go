@@ -21,6 +21,22 @@ func TestCategoryScalarWikilink(t *testing.T) {
 	}
 }
 
+func TestTagMatchesWikilinkTargetTitle(t *testing.T) {
+	_, notes := newVault(t, map[string]string{
+		"unquoted.md": "---\ntags: [[Library/Podcasts.md#Current|Shows]]\n---\nbody\n",
+		"quoted.md":   "---\ntags:\n  - \"[[People#Team|Friends]]\"\n---\nbody\n",
+	})
+	if !Tag("podcasts")(notes["unquoted.md"]) {
+		t.Fatal("Tag(podcasts) should match an unquoted wikilink target title")
+	}
+	if Tag("shows")(notes["unquoted.md"]) {
+		t.Fatal("Tag(shows) should not match a wikilink alias")
+	}
+	if !Tag("people")(notes["quoted.md"]) {
+		t.Fatal("Tag(people) should match a quoted wikilink target title")
+	}
+}
+
 // TestAgeFutureDate documents how the predicate handles a date in the future
 // (e.g. a note dated tomorrow). `time.Since` returns a negative duration for
 // future timestamps, so `>30d` rejects it (a future note is not "older than

@@ -164,6 +164,39 @@ func TestLinks_VerboseFrontmatter(t *testing.T) {
 	}
 }
 
+func TestUnquotedFrontmatterWikilinksAcrossCLIQueries(t *testing.T) {
+	isolateBnEnv(t)
+	root := t.TempDir()
+	files := map[string]string{
+		"Andrew Huberman.md": "---\ncategories:\n  - [[People]]\ntags:\n  - [[Podcasts]]\n---\nNo body links.\n",
+		"People.md":          "People.\n",
+		"Podcasts.md":        "Podcasts.\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+
+	assertQueryPaths := func(args []string, want []string) {
+		t.Helper()
+		stdout, _, err := runLinks(t, root, args...)
+		if err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if got := relSlashLines(t, root, stdout); !equalStrings(got, want) {
+			t.Fatalf("%v returned %v, want %v", args, got, want)
+		}
+	}
+
+	assertQueryPaths([]string{"links", "Andrew Huberman"}, []string{"People.md", "Podcasts.md"})
+	assertQueryPaths([]string{"backlinks", "People"}, []string{"Andrew Huberman.md"})
+	assertQueryPaths([]string{"backlinks", "Podcasts"}, []string{"Andrew Huberman.md"})
+	assertQueryPaths([]string{"find", "--category", "People"}, []string{"Andrew Huberman.md"})
+	assertQueryPaths([]string{"find", "--tag", "Podcasts"}, []string{"Andrew Huberman.md"})
+}
+
 func TestLinks_VerboseIncludesFolderQualifiedLinks(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()

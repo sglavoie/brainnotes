@@ -182,6 +182,15 @@ project = "Projects"
 daily   = "Daily"
 ```
 
+Explicit wikilinks in any frontmatter property participate in the note graph,
+backlinks, broken-link checks, related-note scoring, exports, and web views.
+Both quoted YAML strings (`related: "[[People]]"`) and Obsidian's common
+unquoted form (`related: [[People]]` or `- [[People]]`) are supported. Plain
+metadata such as `categories: People` or `tags: Podcasts` remains metadata and
+does not create a graph edge. `wikilink_properties` controls automatic
+wrapping during writes and repairs; it is not required for discovering or
+rewriting an already-explicit `[[wikilink]]`.
+
 Default ignore entries (always applied): `.git`, `.obsidian`, `Attachments`,
 `Archive`, `Trash`. The configured `[templates].dir` (default `Templates`) is also
 skipped automatically, since template files contain unrendered placeholders

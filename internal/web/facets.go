@@ -138,10 +138,10 @@ func buildFacetsResponse(snapshot vaultSnapshot, root string) (facetsResponse, e
 		properties.addValuesForNote(fm.Keys())
 
 		if raw, ok := fm.Get("tags"); ok {
-			tags.addValuesForNote(flattenFacetValues(raw))
+			tags.addValuesForNote(normalizeLinkedFacetValues(flattenFacetValues(raw)))
 		}
 		if raw, ok := fm.Get("categories"); ok {
-			categories.addValuesForNote(categoryFacetValues(raw))
+			categories.addValuesForNote(linkedFacetValues(raw))
 		}
 		if raw, ok := fm.Get("status"); ok {
 			status.addValuesForNote(flattenFacetValues(raw))
@@ -210,13 +210,13 @@ func flattenFacetValues(value any) []string {
 	return out
 }
 
-func categoryFacetValues(value any) []string {
+func linkedFacetValues(value any) []string {
 	var out []string
 	var walk func(any)
 	walk = func(v any) {
 		switch vv := v.(type) {
 		case string:
-			if value := normalizeCategoryFacetValue(vv); value != "" {
+			if value := normalizeLinkedFacetValue(vv); value != "" {
 				out = append(out, value)
 			}
 		case []any:
@@ -233,7 +233,7 @@ func categoryFacetValues(value any) []string {
 	return out
 }
 
-func normalizeCategoryFacetValue(value string) string {
+func normalizeLinkedFacetValue(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""
@@ -244,6 +244,16 @@ func normalizeCategoryFacetValue(value string) string {
 		return stripMarkdownExt(strings.TrimSpace(links[0].Title()))
 	}
 	return value
+}
+
+func normalizeLinkedFacetValues(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if normalized := normalizeLinkedFacetValue(value); normalized != "" {
+			out = append(out, normalized)
+		}
+	}
+	return out
 }
 
 func folderFacetValues(folder string) []string {

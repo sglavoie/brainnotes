@@ -78,79 +78,110 @@ func diffBodyLines(file, oldBody, newBody string) []Change {
 }
 
 func scanFrontmatterWithRewrite(file string, front *frontmatter.Map, oldVal, newVal string, wikilinkProps []string, rewrite rewriteFunc) []Change {
+	_ = wikilinkProps // Explicit links are discovered independently of write config.
+	return transformFrontmatter(file, front, oldVal, newVal, rewrite, false)
+}
+
+func rewriteFrontmatterProps(front *frontmatter.Map, oldVal, newVal string, fmCfg *config.FrontmatterConfig, rewrite rewriteFunc) {
+	_ = fmCfg // Retained for API compatibility and Save-time wrapping.
+	transformFrontmatter("", front, oldVal, newVal, rewrite, true)
+}
+
+// transformFrontmatter is the shared recursive traversal used by both plan
+// previews and applies. It rewrites only text recognized by the supplied
+// wikilink rewriter, so plain metadata remains untouched even though every
+// top-level property and nested value is visited.
+func transformFrontmatter(file string, front *frontmatter.Map, oldVal, newVal string, rewrite rewriteFunc, apply bool) []Change {
+	if front == nil {
+		return nil
+	}
 	var changes []Change
-	for _, key := range wikilinkProps {
-		v, ok := front.Get(key)
+	for _, key := range front.Keys() {
+		value, ok := front.Get(key)
 		if !ok {
 			continue
 		}
-		switch vv := v.(type) {
-		case string:
-			newV := rewrite(vv, oldVal, newVal)
-			if newV != vv {
-				changes = append(changes, Change{
-					File:    file,
-					Kind:    ChangeFrontmatter,
-					Key:     key,
-					OldText: vv,
-					NewText: newV,
-				})
-			}
-		case []any:
-			for _, item := range vv {
-				s, ok := item.(string)
-				if !ok {
-					continue
-				}
-				ns := rewrite(s, oldVal, newVal)
-				if ns != s {
-					changes = append(changes, Change{
-						File:    file,
-						Kind:    ChangeFrontmatter,
-						Key:     key,
-						OldText: s,
-						NewText: ns,
-					})
-				}
-			}
+		newValue, valueChanges, changed := transformFrontmatterValue(value, oldVal, newVal, rewrite)
+		for _, change := range valueChanges {
+			changes = append(changes, Change{
+				File:    file,
+				Kind:    ChangeFrontmatter,
+				Key:     key,
+				OldText: change.old,
+				NewText: change.new,
+			})
+		}
+		if apply && changed {
+			front.Set(key, newValue)
 		}
 	}
 	return changes
 }
 
-func rewriteFrontmatterProps(front *frontmatter.Map, oldVal, newVal string, fmCfg *config.FrontmatterConfig, rewrite rewriteFunc) {
-	if fmCfg == nil {
-		return
-	}
-	for _, key := range fmCfg.WikilinkProperties {
-		v, ok := front.Get(key)
-		if !ok {
-			continue
+type frontmatterTextChange struct {
+	old string
+	new string
+}
+
+func transformFrontmatterValue(value any, oldVal, newVal string, rewrite rewriteFunc) (any, []frontmatterTextChange, bool) {
+	switch current := value.(type) {
+	case string:
+		next := rewrite(current, oldVal, newVal)
+		if next == current {
+			return value, nil, false
 		}
-		switch vv := v.(type) {
-		case string:
-			ns := rewrite(vv, oldVal, newVal)
-			if ns != vv {
-				front.Set(key, ns)
-			}
-		case []any:
-			changed := false
-			newList := make([]any, len(vv))
-			for i, item := range vv {
-				if s, ok := item.(string); ok {
-					ns := rewrite(s, oldVal, newVal)
-					if ns != s {
-						changed = true
-					}
-					newList[i] = ns
-				} else {
-					newList[i] = item
-				}
-			}
-			if changed {
-				front.Set(key, newList)
+		return next, []frontmatterTextChange{{old: current, new: next}}, true
+	case []any:
+		next := make([]any, len(current))
+		changed := false
+		var changes []frontmatterTextChange
+		for i, item := range current {
+			newItem, itemChanges, itemChanged := transformFrontmatterValue(item, oldVal, newVal, rewrite)
+			next[i] = newItem
+			changed = changed || itemChanged
+			changes = append(changes, itemChanges...)
+		}
+		if !changed {
+			return value, nil, false
+		}
+		return next, changes, true
+	case []string:
+		next := make([]string, len(current))
+		changed := false
+		var changes []frontmatterTextChange
+		for i, item := range current {
+			newItem := rewrite(item, oldVal, newVal)
+			next[i] = newItem
+			if newItem != item {
+				changed = true
+				changes = append(changes, frontmatterTextChange{old: item, new: newItem})
 			}
 		}
+		if !changed {
+			return value, nil, false
+		}
+		return next, changes, true
+	case map[string]any:
+		keys := make([]string, 0, len(current))
+		for key := range current {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		next := make(map[string]any, len(current))
+		changed := false
+		var changes []frontmatterTextChange
+		for _, key := range keys {
+			newItem, itemChanges, itemChanged := transformFrontmatterValue(current[key], oldVal, newVal, rewrite)
+			next[key] = newItem
+			changed = changed || itemChanged
+			changes = append(changes, itemChanges...)
+		}
+		if !changed {
+			return value, nil, false
+		}
+		return next, changes, true
+	default:
+		return value, nil, false
 	}
 }
 

@@ -50,6 +50,26 @@ func TestBuildFacetsResponseFlattensValuesAndDeduplicatesPerNote(t *testing.T) {
 	}
 }
 
+func TestBuildFacetsResponseNormalizesTagWikilinkTargets(t *testing.T) {
+	v, snapshot, _ := newFilterTestSnapshot(t, map[string]string{
+		"A.md": "---\ntags: [[Library/Podcasts.md#Current|Shows]]\n---\nBody\n",
+		"B.md": "---\ntags:\n  - Podcasts\n---\nBody\n",
+	})
+
+	facets, err := buildFacetsResponse(snapshot, v.Root)
+	if err != nil {
+		t.Fatalf("buildFacetsResponse: %v", err)
+	}
+	if got := optionCounts(facets.Tags)["Podcasts"]; got != 2 {
+		t.Fatalf("Podcasts tag count = %d, want 2; tags=%#v", got, facets.Tags)
+	}
+	for _, unwanted := range []string{"[[Library/Podcasts.md#Current|Shows]]", "Shows", "Current"} {
+		if _, ok := optionCounts(facets.Tags)[unwanted]; ok {
+			t.Fatalf("tag facets exposed %q instead of target title: %#v", unwanted, facets.Tags)
+		}
+	}
+}
+
 func TestBuildFacetsResponseFoldersAndIssues(t *testing.T) {
 	v, snapshot, _ := newFilterTestSnapshot(t, map[string]string{
 		"Work/Source.md":     "---\ntitle: Source\n---\n[[Target]] [[Exempt]] [[Missing]]\n",

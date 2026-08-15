@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 	"gopkg.in/yaml.v3"
 )
 
@@ -158,10 +160,10 @@ func parseYAML(data []byte) (Map, error) {
 		return Map{}, fmt.Errorf("top-level must be a mapping")
 	}
 
-	return decodeMappingNode(root, nil, map[string]valueMeta{}, make(map[*yaml.Node]bool))
+	return decodeMappingNode(root, nil, map[string]valueMeta{}, make(map[*yaml.Node]bool), string(data))
 }
 
-func decodeMappingNode(n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool) (Map, error) {
+func decodeMappingNode(n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool, source string) (Map, error) {
 	if visiting[n] {
 		return Map{}, fmt.Errorf("cyclic alias")
 	}
@@ -182,7 +184,7 @@ func decodeMappingNode(n *yaml.Node, path []string, meta map[string]valueMeta, v
 		keyNode := n.Content[i]
 		valNode := n.Content[i+1]
 		if isMergeKeyNode(keyNode) {
-			if err := mergeMappingValue(&m, valNode, path, meta, visiting, explicitKeys); err != nil {
+			if err := mergeMappingValue(&m, valNode, path, meta, visiting, explicitKeys, source); err != nil {
 				return Map{}, fmt.Errorf("merge key: %w", err)
 			}
 			continue
@@ -194,7 +196,7 @@ func decodeMappingNode(n *yaml.Node, path []string, meta map[string]valueMeta, v
 		}
 		childPath := appendMetaPath(path, metaMapPart(key))
 		clearMetaPrefix(meta, childPath)
-		val, err := decodeNodeAt(valNode, childPath, meta, visiting)
+		val, err := decodeNodeAt(valNode, childPath, meta, visiting, source)
 		if err != nil {
 			return Map{}, fmt.Errorf("decode value for %q: %w", key, err)
 		}
@@ -220,16 +222,16 @@ func collectExplicitKeys(n *yaml.Node) (map[string]struct{}, error) {
 	return keys, nil
 }
 
-func mergeMappingValue(dst *Map, n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool, explicitKeys map[string]struct{}) error {
+func mergeMappingValue(dst *Map, n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool, explicitKeys map[string]struct{}, source string) error {
 	switch n.Kind {
 	case yaml.AliasNode:
 		if n.Alias == nil {
 			return fmt.Errorf("dangling alias")
 		}
-		return mergeMappingValue(dst, n.Alias, path, meta, visiting, explicitKeys)
+		return mergeMappingValue(dst, n.Alias, path, meta, visiting, explicitKeys, source)
 	case yaml.MappingNode:
 		srcMeta := map[string]valueMeta{}
-		src, err := decodeMappingNode(n, path, srcMeta, visiting)
+		src, err := decodeMappingNode(n, path, srcMeta, visiting, source)
 		if err != nil {
 			return err
 		}
@@ -237,7 +239,7 @@ func mergeMappingValue(dst *Map, n *yaml.Node, path []string, meta map[string]va
 		return nil
 	case yaml.SequenceNode:
 		for _, item := range n.Content {
-			if err := mergeMappingValue(dst, item, path, meta, visiting, explicitKeys); err != nil {
+			if err := mergeMappingValue(dst, item, path, meta, visiting, explicitKeys, source); err != nil {
 				return err
 			}
 		}
@@ -277,9 +279,9 @@ func isMergeKeyNode(n *yaml.Node) bool {
 	return n != nil && n.Kind == yaml.ScalarNode && n.Tag == "!!merge"
 }
 
-func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool) (any, error) {
+func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta, visiting map[*yaml.Node]bool, source string) (any, error) {
 	if n.Kind == yaml.MappingNode {
-		m, err := decodeMappingNode(n, path, meta, visiting)
+		m, err := decodeMappingNode(n, path, meta, visiting, source)
 		if err != nil {
 			return nil, err
 		}
@@ -303,9 +305,13 @@ func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta, visiti
 		setScalarMeta(path, meta, n)
 		return v, nil
 	case yaml.SequenceNode:
+		if link, ok := explicitFlowWikilink(n, source); ok {
+			clearScalarMeta(path, meta, n)
+			return link, nil
+		}
 		out := make([]any, 0, len(n.Content))
 		for i, c := range n.Content {
-			item, err := decodeNodeAt(c, appendMetaPath(path, metaIndexPart(i)), meta, visiting)
+			item, err := decodeNodeAt(c, appendMetaPath(path, metaIndexPart(i)), meta, visiting, source)
 			if err != nil {
 				return nil, err
 			}
@@ -316,13 +322,81 @@ func decodeNodeAt(n *yaml.Node, path []string, meta map[string]valueMeta, visiti
 		if n.Alias == nil {
 			return nil, fmt.Errorf("dangling alias")
 		}
-		return decodeNodeAt(n.Alias, path, meta, visiting)
+		return decodeNodeAt(n.Alias, path, meta, visiting, source)
 	}
 	var v any
 	if err := n.Decode(&v); err != nil {
 		return nil, err
 	}
 	return v, nil
+}
+
+// explicitFlowWikilink recognizes the compact Obsidian syntax [[Target]] at
+// the source position represented by a YAML flow-sequence node. yaml.v3
+// otherwise decodes that text as nested []any values, losing the fact that it
+// was a wikilink. Looking at the original bytes keeps ordinary YAML such as
+// [ [Target] ], embedded text, and quoted strings on their existing paths.
+func explicitFlowWikilink(n *yaml.Node, source string) (string, bool) {
+	if n == nil || n.Kind != yaml.SequenceNode || n.Style&yaml.FlowStyle == 0 {
+		return "", false
+	}
+	start, ok := yamlNodeSourceOffset(source, n.Line, n.Column)
+	if !ok || start+4 > len(source) || source[start:start+2] != "[[" {
+		return "", false
+	}
+	lineEnd := strings.IndexByte(source[start:], '\n')
+	if lineEnd < 0 {
+		lineEnd = len(source) - start
+	}
+	relEnd := strings.Index(source[start:start+lineEnd], "]]")
+	if relEnd < 0 {
+		return "", false
+	}
+	candidate := source[start : start+relEnd+2]
+	links := wikilink.Parse(candidate)
+	if len(links) != 1 || links[0].Start != 0 || links[0].End != len(candidate) {
+		return "", false
+	}
+	return candidate, true
+}
+
+// yamlNodeSourceOffset converts yaml.v3's one-based line and column to a byte
+// offset. Columns are normally byte-based; the rune fallback keeps matching
+// robust when a YAML implementation reports display columns after Unicode.
+func yamlNodeSourceOffset(source string, line, column int) (int, bool) {
+	if line < 1 || column < 1 {
+		return 0, false
+	}
+	lineStart := 0
+	for current := 1; current < line; current++ {
+		nl := strings.IndexByte(source[lineStart:], '\n')
+		if nl < 0 {
+			return 0, false
+		}
+		lineStart += nl + 1
+	}
+	lineEnd := strings.IndexByte(source[lineStart:], '\n')
+	if lineEnd < 0 {
+		lineEnd = len(source) - lineStart
+	}
+	lineText := source[lineStart : lineStart+lineEnd]
+	byteColumn := column - 1
+	if byteColumn <= len(lineText) {
+		offset := lineStart + byteColumn
+		if offset < len(source) && source[offset] == '[' {
+			return offset, true
+		}
+	}
+	runeColumn := column - 1
+	offset := 0
+	for i := 0; i < runeColumn && offset < len(lineText); i++ {
+		_, size := utf8.DecodeRuneInString(lineText[offset:])
+		offset += size
+	}
+	if offset < len(lineText) && lineText[offset] == '[' {
+		return lineStart + offset, true
+	}
+	return 0, false
 }
 
 func clearScalarMeta(path []string, meta map[string]valueMeta, n *yaml.Node) {
