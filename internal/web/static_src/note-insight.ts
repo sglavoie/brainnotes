@@ -42,6 +42,13 @@ const readResponsePayload = async (response: Response): Promise<unknown> => {
   }
 };
 
+const describeClientError = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim() !== "") {
+    return `Ask AI failed: ${error.message}`;
+  }
+  return "Ask AI failed.";
+};
+
 export const initNoteInsight = (deps: NoteInsightDeps = {}): void => {
   const root = queryElement(document, "[data-note-insight]", HTMLElement);
   if (!root) {
@@ -124,8 +131,8 @@ export const initNoteInsight = (deps: NoteInsightDeps = {}): void => {
       body.innerHTML = normalized.rendered_html;
       result.hidden = false;
       setStatus("Response ready.", "is-success");
-    } catch {
-      setStatus("Ask AI failed.", "is-error");
+    } catch (error) {
+      setStatus(describeClientError(error), "is-error");
     } finally {
       setBusy(false);
     }

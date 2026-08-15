@@ -126,4 +126,20 @@ describe("note insight controller", () => {
     document.querySelector<HTMLButtonElement>("[data-note-insight-submit]")?.click();
     expect(disabledFetch).not.toHaveBeenCalled();
   });
+
+  it("surfaces browser-side failures", async () => {
+    document.body.innerHTML = fixture();
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    initNoteInsight({ fetch: fetchMock as typeof fetch, confirm: () => true });
+
+    document.querySelector<HTMLButtonElement>("[data-note-insight-submit]")?.click();
+
+    await waitForExpect(() => {
+      expect(document.querySelector("[data-note-insight-status]")?.textContent).toBe(
+        "Ask AI failed: Failed to fetch"
+      );
+    });
+  });
 });

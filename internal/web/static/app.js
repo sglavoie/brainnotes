@@ -4795,6 +4795,12 @@ var BrainNotesApp = (() => {
       return "";
     }
   };
+  var describeClientError = (error) => {
+    if (error instanceof Error && error.message.trim() !== "") {
+      return `Ask AI failed: ${error.message}`;
+    }
+    return "Ask AI failed.";
+  };
   var initNoteInsight = (deps = {}) => {
     const root = queryElement(document, "[data-note-insight]", HTMLElement);
     if (!root) {
@@ -4866,8 +4872,8 @@ var BrainNotesApp = (() => {
         body.innerHTML = normalized.rendered_html;
         result.hidden = false;
         setStatus("Response ready.", "is-success");
-      } catch {
-        setStatus("Ask AI failed.", "is-error");
+      } catch (error) {
+        setStatus(describeClientError(error), "is-error");
       } finally {
         setBusy(false);
       }
