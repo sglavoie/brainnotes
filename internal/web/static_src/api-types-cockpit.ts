@@ -47,7 +47,12 @@ export type CockpitQueueResult = {
   warnings: CockpitWarning[];
 };
 
-export type CockpitItemAction = "mark_done" | "done" | "snooze" | "clear";
+export type CockpitItemAction =
+  | "mark_done"
+  | "done"
+  | "snooze"
+  | "clear"
+  | "exempt_dead_end";
 
 export type CockpitSnooze = "tomorrow" | "week";
 

@@ -192,6 +192,10 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
         return;
       }
       const result = normalizeCockpitQueueResponse(payload);
+      if (action === "exempt_dead_end") {
+        ignoreNextMutation = true;
+        window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: payload }));
+      }
       applyQueueResult(payload, result.message || "Fix updated.", "is-success");
     } catch {
       showError("Fix action failed.");

@@ -221,6 +221,13 @@ export const renderTask = (doc: Document, task: CockpitTask): HTMLLIElement => {
       }
     }
   }
+  for (const action of task.actions) {
+    if (action.kind === "exempt_dead_end") {
+      const button = triageButton(doc, task.id, action.kind, action.label);
+      button.classList.add("fixes-immediate-action");
+      actions.appendChild(button);
+    }
+  }
   actions.appendChild(triageButton(doc, task.id, "mark_done", "Done"));
   actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze tomorrow", "tomorrow"));
   actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze next week", "week"));

@@ -13,6 +13,10 @@ import (
 // applied through the web APIs.
 const cockpitFixCommand = "bn cockpit fix"
 
+// cockpitDeadEndExemptionCommand labels the undo-journal entry created by the
+// one-click dead-end exemption action in the Daily Fixes panel.
+const cockpitDeadEndExemptionCommand = "bn serve exempt dead end"
+
 // cockpitStateWarning is surfaced (as a queue warning) when the workflow-state
 // file cannot be loaded, so the client still sees every generated task.
 const cockpitStateWarning = "Cockpit state could not be loaded; showing all generated tasks."
@@ -22,9 +26,10 @@ const cockpitStateWarning = "Cockpit state could not be loaded; showing all gene
 // suppressed task to the active queue). "done" is accepted as an alias for
 // mark_done so callers can reuse the review vocabulary.
 const (
-	cockpitItemActionDone   = "mark_done"
-	cockpitItemActionSnooze = "snooze"
-	cockpitItemActionClear  = "clear"
+	cockpitItemActionDone          = "mark_done"
+	cockpitItemActionSnooze        = "snooze"
+	cockpitItemActionClear         = "clear"
+	cockpitItemActionExemptDeadEnd = "exempt_dead_end"
 )
 
 // cockpitAPIResponse is the GET /api/cockpit and item-mutation payload. It
@@ -192,6 +197,28 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		message = "Cleared task state."
+	case cockpitItemActionExemptDeadEnd:
+		if task.Kind != cockpit.RuleDeadEndNote || len(task.Affected) != 1 {
+			writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "dead-end exemption is unavailable for this task"))
+			return
+		}
+		result, err := noteops.SetFrontmatter(
+			s.vault.Root,
+			task.Affected[0].RelPath,
+			[]noteops.FrontmatterMutation{{Key: "dead_end", Op: noteops.FrontmatterSet, Value: false}},
+			&s.cfg.Frontmatter,
+			noteops.WithFrontmatterCommand(cockpitDeadEndExemptionCommand),
+		)
+		if err != nil {
+			writeManagementError(w, err)
+			return
+		}
+		if !result.Changed {
+			writeManagementError(w, noteops.Errorf(noteops.CodeConflict, "dead-end exemption did not change the note"))
+			return
+		}
+		s.state.invalidate()
+		message = "Marked " + task.Affected[0].Title + " as an intentional dead end."
 	default:
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported cockpit action %q", action))
 		return

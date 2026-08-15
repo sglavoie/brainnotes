@@ -11,15 +11,15 @@ import (
 )
 
 // buildDoctorFixture writes a small vault whose diagnostics are deterministic:
-// Projects/Alpha.md carries a broken [[Ghost]] link (so it is a broken-target
-// source and a dead end) and Beta.md links to Alpha (so Beta is an orphan). It
-// wires BNOTES_CONFIG at cfgPath so callers can rewrite the config if needed.
+// Projects/Alpha.md carries a broken [[Ghost]] link but opts out of dead-end
+// classification; Beta.md links to Alpha (so Beta is an orphan). It wires
+// BNOTES_CONFIG at cfgPath so callers can rewrite the config if needed.
 func buildDoctorFixture(t *testing.T) (root, cfgPath string) {
 	t.Helper()
 	root = t.TempDir()
 
 	files := map[string]string{
-		"Projects/Alpha.md": "---\ntitle: Alpha\n---\nSee [[Ghost]].\n",
+		"Projects/Alpha.md": "---\ntitle: Alpha\ndead_end: false\n---\nSee [[Ghost]].\n",
 		"Beta.md":           "---\ntitle: Beta\n---\nLinks to [[Alpha]].\n",
 	}
 	for rel, body := range files {
@@ -96,6 +96,9 @@ func TestDoctor_JSONReportsBrokenTarget(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected Projects/Alpha.md among affected notes, got %+v", task.Affected)
+	}
+	if _, ok := findTaskByTitle(queue.Tasks, "Dead-end note: Alpha"); ok {
+		t.Errorf("dead_end: false should suppress Alpha's doctor dead-end task")
 	}
 }
 

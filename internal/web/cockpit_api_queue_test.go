@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 )
 
 // --- cockpit queue + item --------------------------------------------------
@@ -198,6 +199,94 @@ func TestServer_CockpitAPI_ItemAcceptsDoneAlias(t *testing.T) {
 	}
 	if decodeCockpitResult(t, body).Counts.DoneHidden != 1 {
 		t.Fatalf("done-alias did not suppress task; body=%q", body)
+	}
+}
+
+func TestServer_CockpitAPI_ItemExemptsDeadEndImmediately(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Terminal.md": []byte("---\ntitle: Terminal\nstatus: complete\n---\nIntentionally terminal.\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	initial := getCockpitPayload(t, ts.URL)
+	task := findCockpitTask(t, initial.Queue, cockpit.RuleDeadEndNote, "Terminal.md")
+	if !task.TriageOnly {
+		t.Fatalf("dead-end task still requires the user's intentional classification: %#v", task)
+	}
+	foundAction := false
+	for _, action := range task.Actions {
+		if action.Kind == cockpit.ActionExemptDeadEnd {
+			foundAction = true
+		}
+	}
+	if !foundAction {
+		t.Fatalf("dead-end task actions = %#v, want %q", task.Actions, cockpit.ActionExemptDeadEnd)
+	}
+
+	resp := postCockpitItem(t, ts.URL, task.ID, string(cockpit.ActionExemptDeadEnd), "", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("exempt status: got %d, want 200; body=%q", resp.StatusCode, body)
+	}
+	result := decodeCockpitResult(t, body)
+	if result.Message != "Marked Terminal as an intentional dead end." {
+		t.Fatalf("message = %q", result.Message)
+	}
+	for _, item := range result.Tasks {
+		if item.Kind == cockpit.RuleDeadEndNote && item.Detail == "Terminal.md" {
+			t.Fatalf("exempt dead-end task remained in refreshed queue: %#v", item)
+		}
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, "Terminal.md"))
+	if err != nil {
+		t.Fatalf("read Terminal.md: %v", err)
+	}
+	doc, err := frontmatter.Parse(data)
+	if err != nil {
+		t.Fatalf("parse Terminal.md: %v", err)
+	}
+	value, ok := doc.Front.Get("dead_end")
+	if !ok || value != false {
+		t.Fatalf("dead_end = %#v, present=%v; want YAML boolean false", value, ok)
+	}
+	if status, ok := doc.Front.GetString("status"); !ok || status != "complete" {
+		t.Fatalf("existing frontmatter was not preserved: status=%q, present=%v", status, ok)
+	}
+	if !strings.Contains(doc.Body, "Intentionally terminal.") {
+		t.Fatalf("body was not preserved: %q", doc.Body)
+	}
+
+	journalRoot := filepath.Join(root, config.DefaultJournalDir)
+	entries, err := os.ReadDir(journalRoot)
+	if err != nil {
+		t.Fatalf("read journal: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("journal entries = %d, want 1", len(entries))
+	}
+	if _, err := os.Stat(filepath.Join(journalRoot, entries[0].Name(), "manifest.json")); err != nil {
+		t.Fatalf("stat journal manifest: %v", err)
+	}
+}
+
+func TestServer_CockpitAPI_ItemRejectsDeadEndExemptionForOtherTask(t *testing.T) {
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\n[[Target]]\n"),
+		"Target.md": []byte("---\ntitle: Target\n---\nBody.\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+
+	orphan := findCockpitTask(t, getCockpitPayload(t, ts.URL).Queue, cockpit.RuleOrphanNote, "Source.md")
+	resp := postCockpitItem(t, ts.URL, orphan.ID, string(cockpit.ActionExemptDeadEnd), "", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusBadRequest, body)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "Source.md"))
+	if err != nil {
+		t.Fatalf("read Source.md: %v", err)
+	}
+	if strings.Contains(string(data), "dead_end:") {
+		t.Fatalf("rejected action mutated Source.md: %q", data)
 	}
 }
 

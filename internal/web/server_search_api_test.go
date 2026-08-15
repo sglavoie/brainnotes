@@ -93,7 +93,7 @@ func TestServer_SearchAPI_FilterOnlyAndCombinedFilters(t *testing.T) {
 
 func TestServer_SearchAPI_IssueMetadata(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
-		"Broken.md": []byte("---\ntitle: Broken\n---\nNeedle [[Missing]]\n"),
+		"Broken.md": []byte("---\ntitle: Broken\ndead_end: false\n---\nNeedle [[Missing]]\n"),
 		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Broken]]\n"),
 	})
 
@@ -107,8 +107,8 @@ func TestServer_SearchAPI_IssueMetadata(t *testing.T) {
 	if !sameStrings(results[0].MatchedFields, []string{"body"}) {
 		t.Fatalf("matched fields: got %#v, want [body]", results[0].MatchedFields)
 	}
-	if !sameStrings(results[0].Issues, []string{"broken", "dead_end"}) {
-		t.Fatalf("issue metadata: got %#v, want [broken dead_end]", results[0].Issues)
+	if !sameStrings(results[0].Issues, []string{"broken"}) {
+		t.Fatalf("issue metadata: got %#v, want [broken] because dead-end is exempt", results[0].Issues)
 	}
 }
 

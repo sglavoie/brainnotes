@@ -335,9 +335,26 @@ func MaxLinks(g *Graph, n int) Predicate {
 	}
 }
 
-// DeadEnd matches notes with zero outgoing links to other notes.
+// DeadEnd matches notes with zero outgoing links to other notes, unless the
+// note explicitly opts out with the YAML boolean `dead_end: false`. Values of
+// any other type, including the string "false", do not exempt a note.
 func DeadEnd(g *Graph) Predicate {
-	return MaxLinks(g, 0)
+	return func(note *vault.Note) bool {
+		if note == nil || g.OutDegreeForNote(note) != 0 {
+			return false
+		}
+
+		fm, err := note.Front()
+		if err != nil {
+			return true
+		}
+		value, ok := fm.Get("dead_end")
+		if !ok {
+			return true
+		}
+		deadEndValue, isBool := value.(bool)
+		return !isBool || deadEndValue
+	}
 }
 
 // Age matches notes whose date at prop satisfies the comparison. op is one of

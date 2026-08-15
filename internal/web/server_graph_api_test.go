@@ -179,7 +179,7 @@ func TestServer_GraphAPIJSON_IssueMetadataAndBrokenFilter(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Broken.md": []byte("---\ntitle: Broken\n---\n[[Missing]]\n"),
 		"Linked.md": []byte("---\ntitle: Linked\n---\n[[Broken]]\n"),
-		"Island.md": []byte("---\ntitle: Island\n---\nNo links\n"),
+		"Island.md": []byte("---\ntitle: Island\ndead_end: false\n---\nNo links\n"),
 	})
 
 	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json")
@@ -194,8 +194,8 @@ func TestServer_GraphAPIJSON_IssueMetadataAndBrokenFilter(t *testing.T) {
 		t.Fatalf("linked metadata: got %#v, want clean orphan with outgoing link", linked)
 	}
 	island := nodes["island"]
-	if island.HasBroken || island.BrokenCount != 0 || !island.IsOrphan || !island.IsDeadEnd {
-		t.Fatalf("island metadata: got %#v, want clean orphan dead-end", island)
+	if island.HasBroken || island.BrokenCount != 0 || !island.IsOrphan || island.IsDeadEnd || island.OutDegree != 0 {
+		t.Fatalf("island metadata: got %#v, want clean orphan with out-degree zero but exempt from dead-end", island)
 	}
 
 	brokenOnly, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?broken=1")

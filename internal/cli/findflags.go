@@ -46,7 +46,7 @@ func (ff *findFlags) register(cmd *cobra.Command) {
 	f.IntVar(&ff.maxBacklinks, "max-backlinks", -1, "maximum inbound links from other notes")
 	f.IntVar(&ff.minLinks, "min-links", -1, "minimum outgoing links to other notes")
 	f.IntVar(&ff.maxLinks, "max-links", -1, "maximum outgoing links to other notes")
-	f.BoolVar(&ff.deadEnd, "dead-end", false, "notes with zero outgoing links")
+	f.BoolVar(&ff.deadEnd, "dead-end", false, "notes with zero outgoing links (except dead_end: false)")
 }
 
 func (ff *findFlags) needsGraph() bool {

@@ -50,12 +50,14 @@ func TestRulePriorityAndTriageOnly(t *testing.T) {
 }
 
 func TestBuildQueueOrphanAndDeadEndTasks(t *testing.T) {
-	// Hub links to Leaf: Hub has no inbound link (orphan) but has an outgoing
-	// link (not dead-end); Leaf has an inbound link (not orphan) but no
-	// outgoing link (dead-end).
+	// Hub links to Leaf and Exempt: Hub has no inbound link (orphan) but has
+	// outgoing links (not dead-end); Leaf has an inbound link (not orphan) but
+	// no outgoing link (dead-end). Exempt also has no outgoing link, but its
+	// boolean dead_end: false frontmatter suppresses only the dead-end task.
 	v := newTestVault(t, map[string]string{
-		"Hub.md":  "---\n---\n[[Leaf]]\n",
-		"Leaf.md": "---\n---\nJust text, no links.\n",
+		"Hub.md":    "---\n---\n[[Leaf]] [[Exempt]]\n",
+		"Leaf.md":   "---\n---\nJust text, no links.\n",
+		"Exempt.md": "---\ndead_end: false\n---\nIntentionally terminal.\n",
 	})
 
 	got, err := BuildQueue(v, &config.Config{})

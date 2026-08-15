@@ -104,8 +104,9 @@ func ruleTriageOnly(kind RuleKind) bool {
 }
 
 // ActionKind identifies a proposed remediation for a task. The triage actions
-// (open/snooze/mark-done) apply to every task; the fix actions are only offered
-// on the rule kinds whose findings a planner can mechanically resolve.
+// (open/snooze/mark-done and the user-chosen dead-end exemption) are handled by
+// callers; fix actions are offered only on rule kinds whose findings a planner
+// can mechanically resolve.
 type ActionKind string
 
 const (
@@ -122,19 +123,23 @@ const (
 	ActionRelink ActionKind = "relink"
 	// ActionCreateStub creates a blank stub note for a broken wikilink target.
 	ActionCreateStub ActionKind = "create_stub"
+	// ActionExemptDeadEnd sets the affected note's reserved dead_end property to
+	// boolean false so intentional terminal notes are not classified as dead ends.
+	ActionExemptDeadEnd ActionKind = "exempt_dead_end"
 )
 
 // Action is a single proposed remediation for a task. Fix actions are backed by
 // the preview/apply planners in fix.go; triage actions are handled by callers
-// (the editor for open, the StateStore for snooze/mark-done).
+// (the editor for open, the StateStore for snooze/mark-done, and the web item
+// endpoint for the user-chosen dead-end exemption).
 type Action struct {
 	Kind  ActionKind `json:"kind"`
 	Label string     `json:"label"`
 }
 
 // actionsForRule returns the ordered action set a task of the given rule kind
-// exposes. Every task can be opened, snoozed, or marked done; fixable kinds add
-// their mechanical fix action(s) between the open and triage affordances.
+// exposes. Every task can be opened, snoozed, or marked done; rule-specific
+// remediation actions appear between the open and common triage affordances.
 func actionsForRule(kind RuleKind) []Action {
 	actions := []Action{{Kind: ActionOpen, Label: "Open note"}}
 	switch kind {
@@ -145,6 +150,8 @@ func actionsForRule(kind RuleKind) []Action {
 			Action{Kind: ActionRelink, Label: "Relink"},
 			Action{Kind: ActionCreateStub, Label: "Create stub note"},
 		)
+	case RuleDeadEndNote:
+		actions = append(actions, Action{Kind: ActionExemptDeadEnd, Label: "Mark as intentional dead end"})
 	}
 	actions = append(actions,
 		Action{Kind: ActionSnooze, Label: "Snooze"},

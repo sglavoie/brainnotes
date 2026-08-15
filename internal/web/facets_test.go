@@ -52,9 +52,10 @@ func TestBuildFacetsResponseFlattensValuesAndDeduplicatesPerNote(t *testing.T) {
 
 func TestBuildFacetsResponseFoldersAndIssues(t *testing.T) {
 	v, snapshot, _ := newFilterTestSnapshot(t, map[string]string{
-		"Work/Source.md":     "---\ntitle: Source\n---\n[[Target]] [[Missing]]\n",
+		"Work/Source.md":     "---\ntitle: Source\n---\n[[Target]] [[Exempt]] [[Missing]]\n",
 		"Work/Sub/Target.md": "---\ntitle: Target\n---\nNo links.\n",
 		"Isolated.md":        "---\ntitle: Isolated\n---\nNo links.\n",
+		"Exempt.md":          "---\ntitle: Exempt\ndead_end: false\n---\nNo links.\n",
 	})
 
 	facets, err := buildFacetsResponse(snapshot, v.Root)
@@ -81,7 +82,7 @@ func TestBuildFacetsResponseFoldersAndIssues(t *testing.T) {
 		t.Fatalf("orphan issue count = %d, want 2; issues=%#v", got, facets.Issues)
 	}
 	if got := issues["dead_end"]; got != 2 {
-		t.Fatalf("dead_end issue count = %d, want 2; issues=%#v", got, facets.Issues)
+		t.Fatalf("dead_end issue count = %d, want 2 (excluding Exempt); issues=%#v", got, facets.Issues)
 	}
 }
 

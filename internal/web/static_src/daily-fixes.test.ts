@@ -83,6 +83,26 @@ const orphanTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
   ...overrides,
 });
 
+const deadEndTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
+  id: "task_dead_end",
+  signature: "sig-dead-end",
+  kind: "dead_end_note",
+  priority: 60,
+  title: "Dead-end note: Terminal",
+  summary: "Terminal has no outgoing links",
+  detail: "Terminal.md",
+  count: 1,
+  affected: [{ title: "Terminal", rel_path: "Terminal.md" }],
+  actions: [
+    { kind: "open", label: "Open note" },
+    { kind: "exempt_dead_end", label: "Mark as intentional dead end" },
+    { kind: "snooze", label: "Snooze" },
+    { kind: "mark_done", label: "Mark done" },
+  ],
+  triage_only: true,
+  ...overrides,
+});
+
 const sensitiveTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
   id: "task_sensitive",
   signature: "sig-sensitive",
@@ -433,6 +453,47 @@ describe("daily fixes panel DOM behavior", () => {
     });
     expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(0);
     expect(document.querySelector("[data-fixes-count-snoozed-hidden]")?.textContent).toBe("2");
+  });
+
+  it("marks a dead-end note as intentional immediately", async () => {
+    renderPanel();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/cockpit/item?view=daily") {
+        expect(String(init?.body)).toBe(
+          "id=task_dead_end&action=exempt_dead_end&token=csrf-token"
+        );
+        return jsonResponse({
+          ok: true,
+          message: "Marked Terminal as an intentional dead end.",
+          tasks: [],
+          counts: { active: 0, done_hidden: 0, snoozed_hidden: 0, total_generated: 0 },
+          warnings: [],
+        });
+      }
+      return jsonResponse(queuePayload([deadEndTask()]));
+    });
+    const mutationListener = vi.fn();
+    window.addEventListener(managementMutationEventName, mutationListener, { once: true });
+
+    initDailyFixes({ fetch: fetchMock as typeof fetch });
+    await waitForExpect(() => {
+      expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(1);
+    });
+
+    const button = document.querySelector<HTMLButtonElement>(
+      '[data-fixes-item-action="exempt_dead_end"]'
+    );
+    expect(button?.textContent).toBe("Mark as intentional dead end");
+    expect(button?.classList.contains("fixes-immediate-action")).toBe(true);
+    button?.click();
+
+    await waitForExpect(() => {
+      expect(document.querySelector("[data-fixes-status]")?.textContent).toBe(
+        "Marked Terminal as an intentional dead end."
+      );
+    });
+    expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(0);
+    expect(mutationListener).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces request errors", async () => {

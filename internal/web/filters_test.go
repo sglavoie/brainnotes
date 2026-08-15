@@ -183,6 +183,7 @@ func TestMatchNoteWithFiltersGraphFilters(t *testing.T) {
 		"Target.md":   "---\ntitle: Target\n---\nNo outgoing links.\n",
 		"Isolated.md": "---\ntitle: Isolated\n---\nNo graph edges.\n",
 		"Broken.md":   "---\ntitle: Broken\n---\n[[Missing]]\n",
+		"Exempt.md":   "---\ntitle: Exempt\ndead_end: false\n---\nNo graph edges.\n",
 	})
 
 	orphanDeadEnd, err := parseNoteFilters(url.Values{
@@ -196,6 +197,13 @@ func TestMatchNoteWithFiltersGraphFilters(t *testing.T) {
 	assertMatch(t, orphanDeadEnd, notes["Isolated.md"], true)
 	assertMatch(t, orphanDeadEnd, notes["Source.md"], false)
 	assertMatch(t, orphanDeadEnd, notes["Target.md"], false)
+	assertMatch(t, orphanDeadEnd, notes["Exempt.md"], false)
+
+	maxLinksZero, err := parseNoteFilters(url.Values{"max_links": {"0"}}, v.Root, snapshot.graph)
+	if err != nil {
+		t.Fatalf("parse max_links filter: %v", err)
+	}
+	assertMatch(t, maxLinksZero, notes["Exempt.md"], true)
 
 	broken, err := parseNoteFilters(url.Values{"broken": {"1"}}, v.Root, snapshot.graph)
 	if err != nil {

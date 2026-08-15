@@ -1948,6 +1948,7 @@ var BrainNotesApp = (() => {
       case "done":
       case "snooze":
       case "clear":
+      case "exempt_dead_end":
         return value;
       default:
         return "";
@@ -1978,6 +1979,9 @@ var BrainNotesApp = (() => {
     }
     if (action === "clear") {
       return "Clearing fix state...";
+    }
+    if (action === "exempt_dead_end") {
+      return "Marking note as an intentional dead end...";
     }
     return "Marking fix done...";
   };
@@ -2256,6 +2260,13 @@ var BrainNotesApp = (() => {
         }
       }
     }
+    for (const action of task.actions) {
+      if (action.kind === "exempt_dead_end") {
+        const button = triageButton(doc, task.id, action.kind, action.label);
+        button.classList.add("fixes-immediate-action");
+        actions.appendChild(button);
+      }
+    }
     actions.appendChild(triageButton(doc, task.id, "mark_done", "Done"));
     actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze tomorrow", "tomorrow"));
     actions.appendChild(triageButton(doc, task.id, "snooze", "Snooze next week", "week"));
@@ -2432,6 +2443,10 @@ var BrainNotesApp = (() => {
           return;
         }
         const result = normalizeCockpitQueueResponse(payload);
+        if (action === "exempt_dead_end") {
+          ignoreNextMutation = true;
+          window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: payload }));
+        }
         applyQueueResult(payload, result.message || "Fix updated.", "is-success");
       } catch {
         showError("Fix action failed.");

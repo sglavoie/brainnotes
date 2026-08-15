@@ -195,6 +195,7 @@ that aren't valid YAML.
 bn find [--tag t]... [--category c]... [--status s] [--type t]
         [--folder rel] [--has key] [--missing key]
         [--created EXPR] [--age EXPR] [--orphan]
+        [--min-links n] [--max-links n] [--dead-end]
         [--broken-links [--show-broken | --list-broken-targets]]
         [-i | --interactive] [-0]
 ```
@@ -204,6 +205,28 @@ Pipe into `fzf` with `-i` for an interactive picker.
 
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.
+
+`--dead-end` selects notes with no resolved outgoing links. To mark an
+intentional terminal note without changing its raw graph degree, set the
+reserved frontmatter property to the YAML boolean `false`:
+
+```yaml
+dead_end: false
+```
+
+Only boolean `false` is an exemption; a missing property, `true`, null, or a
+quoted string such as `"false"` retains normal dead-end classification. The
+exemption affects only dead-end classification, so the note still has
+out-degree zero and still matches `--max-links 0`. Preview the change with:
+
+```sh
+bn set CLAUDE.md dead_end=false --dry-run
+```
+
+In `bn serve`, a dead-end card in Health → Daily Fixes offers **Mark as
+intentional dead end**. The button immediately writes the same boolean property,
+records the change in the undo journal, and removes the finding from dead-end
+surfaces without changing the note's graph degree.
 
 `--broken-links` selects notes containing at least one wikilink whose target
 does not match any note title in the vault. Resolution is title-only
@@ -226,6 +249,7 @@ bn find --tag books                       # all notes tagged 'books'
 bn find --category Books --status WIP
 bn find --has rating --created '>365d'    # stale ratings
 bn find --orphan                          # no inbound wikilinks
+bn find --dead-end                        # no resolved outgoing links, unless exempt
 bn find --broken-links                    # notes with unresolved wikilinks
 bn find --broken-links --show-broken      # per-link detail
 bn find --broken-links --list-broken-targets  # unique missing titles
@@ -878,7 +902,7 @@ Detected rule kinds:
 | `broken_target` | wikilinks whose target note does not exist |
 | `duplicate_title` | two or more notes sharing the same title |
 | `orphan_note` | notes with no inbound links from other notes |
-| `dead_end_note` | notes with no resolved outgoing links |
+| `dead_end_note` | notes with no resolved outgoing links, except notes with boolean `dead_end: false` |
 | `long_tail_value` | rare frontmatter values that a dominant sibling value can absorb (e.g. a `status` typo to merge into the common value) |
 | `sensitive_content` | notes whose body matches a built-in secret detector (AWS/GitHub/Slack/Google keys, JWTs, private-key blocks, secret assignments); off unless `sensitive_scan = true` |
 | `missing_review_date` | notes in a `review_statuses` status that lack the `review_date_property` |

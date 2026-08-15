@@ -117,6 +117,7 @@ export const normalizeItemAction = (value: string): CockpitItemAction | "" => {
     case "done":
     case "snooze":
     case "clear":
+    case "exempt_dead_end":
       return value;
     default:
       return "";
@@ -155,6 +156,9 @@ export const itemActionLoadingMessage = (
   }
   if (action === "clear") {
     return "Clearing fix state...";
+  }
+  if (action === "exempt_dead_end") {
+    return "Marking note as an intentional dead end...";
   }
   return "Marking fix done...";
 };

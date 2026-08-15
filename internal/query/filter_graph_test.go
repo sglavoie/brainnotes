@@ -236,40 +236,56 @@ func TestMaxLinks(t *testing.T) {
 
 func TestDeadEnd(t *testing.T) {
 	_, notes := newVault(t, map[string]string{
-		"Linker.md": "---\n---\n[[Target]]\n",
-		"Target.md": "---\n---\nbody\n",
-		"Island.md": "---\n---\nNo links at all.\n",
+		"Linker.md":      "---\n---\n[[Target]]\n",
+		"Target.md":      "---\n---\nbody\n",
+		"Island.md":      "---\n---\nNo links at all.\n",
+		"True.md":        "---\ndead_end: true\n---\nNo links.\n",
+		"Exempt.md":      "---\ndead_end: false\n---\nNo links.\n",
+		"Null.md":        "---\ndead_end: null\n---\nNo links.\n",
+		"StringFalse.md": "---\ndead_end: \"false\"\n---\nNo links.\n",
+		"Number.md":      "---\ndead_end: 0\n---\nNo links.\n",
 	})
-	all := []*vault.Note{notes["Linker.md"], notes["Target.md"], notes["Island.md"]}
+	all := make([]*vault.Note, 0, len(notes))
+	for _, note := range notes {
+		all = append(all, note)
+	}
 	g := BuildGraph(all)
+	deadEnd := DeadEnd(g)
 
-	if DeadEnd(g)(notes["Linker.md"]) {
+	if deadEnd(notes["Linker.md"]) {
 		t.Errorf("Linker has outgoing links; should not be dead end")
 	}
-	if !DeadEnd(g)(notes["Target.md"]) {
+	if !deadEnd(notes["Target.md"]) {
 		t.Errorf("Target has no outgoing links; should be dead end")
 	}
-	if !DeadEnd(g)(notes["Island.md"]) {
+	if !deadEnd(notes["Island.md"]) {
 		t.Errorf("Island has no outgoing links; should be dead end")
+	}
+	if deadEnd(notes["Exempt.md"]) {
+		t.Errorf("boolean dead_end: false should exempt a note")
+	}
+	for _, name := range []string{"True.md", "Null.md", "StringFalse.md", "Number.md"} {
+		if !deadEnd(notes[name]) {
+			t.Errorf("%s should remain a dead end because only boolean false exempts", name)
+		}
 	}
 }
 
-func TestDeadEnd_EquivalentToMaxLinksZero(t *testing.T) {
+func TestDeadEndExemptionDoesNotChangeRawLinkCount(t *testing.T) {
 	_, notes := newVault(t, map[string]string{
-		"Linker.md": "---\n---\n[[A]] [[B]]\n",
-		"A.md":      "---\n---\nbody\n",
-		"B.md":      "---\n---\n[[A]]\n",
-		"Island.md": "---\n---\nNo links.\n",
+		"Exempt.md": "---\ndead_end: false\n---\nNo links.\n",
 	})
-	all := []*vault.Note{notes["Linker.md"], notes["A.md"], notes["B.md"], notes["Island.md"]}
+	all := []*vault.Note{notes["Exempt.md"]}
 	g := BuildGraph(all)
 
-	deadEnd := DeadEnd(g)
-	maxZero := MaxLinks(g, 0)
-	for name, n := range notes {
-		if deadEnd(n) != maxZero(n) {
-			t.Errorf("%s: DeadEnd=%v MaxLinks(0)=%v — should be identical", name, deadEnd(n), maxZero(n))
-		}
+	if DeadEnd(g)(notes["Exempt.md"]) {
+		t.Error("exempt note should not be classified as a dead end")
+	}
+	if !MaxLinks(g, 0)(notes["Exempt.md"]) {
+		t.Error("exempt note should still match MaxLinks(0)")
+	}
+	if got := g.OutDegreeForNote(notes["Exempt.md"]); got != 0 {
+		t.Errorf("exempt note out-degree = %d, want 0", got)
 	}
 }
 

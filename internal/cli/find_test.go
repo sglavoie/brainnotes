@@ -287,6 +287,7 @@ func buildLinkCountFixture(t *testing.T) string {
 		"B.md":      "---\n---\n[[Hub]] back.\n",
 		"C.md":      "---\n---\n[[Hub]] back.\n",
 		"Island.md": "---\n---\nNo links at all.\n",
+		"Exempt.md": "---\ndead_end: false\n---\nNo links at all.\n",
 	}
 	for rel, body := range files {
 		full := filepath.Join(root, filepath.FromSlash(rel))
@@ -316,6 +317,16 @@ func TestFind_DeadEnd(t *testing.T) {
 	sort.Strings(want)
 	if !equalStrings(got, want) {
 		t.Fatalf("find --dead-end:\n got=%v\nwant=%v", got, want)
+	}
+}
+
+func TestFind_MaxLinksZeroIncludesDeadEndExemption(t *testing.T) {
+	root := buildLinkCountFixture(t)
+	got := runFind(t, root, "find", "--max-links", "0")
+	want := []string{"Exempt.md", "Island.md"}
+	sort.Strings(want)
+	if !equalStrings(got, want) {
+		t.Fatalf("find --max-links 0:\n got=%v\nwant=%v", got, want)
 	}
 }
 

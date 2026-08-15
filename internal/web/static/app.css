@@ -1897,6 +1897,17 @@ code {
   background: var(--bn-success-bg);
 }
 
+.fixes-immediate-action {
+  grid-column: 1 / -1;
+  border-color: var(--bn-success-border);
+  color: var(--bn-success);
+  background: var(--bn-success-bg);
+}
+
+.fixes-immediate-action:hover {
+  background: var(--bn-success-bg);
+}
+
 .fixes-preview {
   margin-top: 0.6rem;
   padding: 0.6rem 0.7rem;

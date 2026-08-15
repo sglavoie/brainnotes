@@ -18,7 +18,7 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 		"Work/Source.md":    "---\ntags: [alpha, alpha, rare-source]\nstatus: active\n---\n[[Target]] [[Missing]]\n",
 		"Work/Target.md":    "---\ntags: [alpha, rare-target]\nstatus: active\n---\nNo links.\n",
 		"Archive/Target.md": "---\ntags: [beta]\nstatus: someday\n---\nNo links.\n",
-		"Island.md":         "---\ntags: [lonely]\nstatus: someday\n---\nNo links.\n",
+		"Island.md":         "---\ntags: [lonely]\nstatus: someday\ndead_end: false\n---\nNo links.\n",
 	})
 	cfg := &config.Config{
 		Frontmatter: config.FrontmatterConfig{
@@ -51,8 +51,8 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 	if titles := diagnosticTitles(got.OrphanNotes); !sameStrings(titles, []string{"Island", "Source"}) {
 		t.Fatalf("orphan notes = %#v, want Island and Source; notes=%#v", titles, got.OrphanNotes)
 	}
-	if titles := diagnosticTitles(got.DeadEndNotes); !sameStrings(titles, []string{"Island", "Target", "Target"}) {
-		t.Fatalf("dead-end notes = %#v, want Island and both Target notes; notes=%#v", titles, got.DeadEndNotes)
+	if titles := diagnosticTitles(got.DeadEndNotes); !sameStrings(titles, []string{"Target", "Target"}) {
+		t.Fatalf("dead-end notes = %#v, want both Target notes and not exempt Island; notes=%#v", titles, got.DeadEndNotes)
 	}
 
 	if len(got.DuplicateTitles) != 1 || got.DuplicateTitles[0].Label != "Target" || got.DuplicateTitles[0].Count != 2 {
@@ -78,7 +78,7 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 	}
 
 	cards := diagnosticCardsByKey(got.Cards)
-	if cards["broken"].Count != 1 || cards["orphan"].Count != 2 || cards["dead_end"].Count != 3 ||
+	if cards["broken"].Count != 1 || cards["orphan"].Count != 2 || cards["dead_end"].Count != 2 ||
 		cards["duplicate_titles"].Count != 2 || cards["schema_violations"].Count != 6 {
 		t.Fatalf("diagnostic card counts = %#v", got.Cards)
 	}
