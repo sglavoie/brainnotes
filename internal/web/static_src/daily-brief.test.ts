@@ -196,6 +196,7 @@ describe("daily brief controller", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/brief/view");
     expect(String(init.body)).toBe("token=csrf-token");
+    expect(fetchMock.mock.contexts.every((context) => context === undefined)).toBe(true);
   });
 
   it("opens a card, updates activity, and keeps an Opened presentation", async () => {
@@ -230,7 +231,58 @@ describe("daily brief controller", () => {
     });
     expect(document.querySelector('[data-brief-slot-status="continue"]')?.textContent).toContain("Opened in editor");
     expect(document.querySelector("[data-brief-activity-open-count]")?.textContent).toBe("2");
+    expect(fetchMock.mock.contexts.every((context) => context === undefined)).toBe(true);
   });
+
+  it.each(["rediscover", "connect"] as const)(
+    "opens the %s card with receiver-neutral fetch",
+    async (slot) => {
+      document.body.innerHTML = briefRootHTML();
+      const fetchMock = vi.fn(
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          if (String(input) === "/api/brief/item") {
+            const form = new URLSearchParams(String(init?.body || ""));
+            return jsonResponse({
+              ok: true,
+              action: "open",
+              card_id: form.get("card_id"),
+              slot,
+              activity: {
+                Last7Days: { WindowDays: 7, VisitDays: 2, OpenCount: 1 },
+                Last14Days: { WindowDays: 14, VisitDays: 2, OpenCount: 1 },
+              },
+            });
+          }
+          return jsonResponse({
+            ok: true,
+            activity: {
+              Last7Days: { WindowDays: 7, VisitDays: 1, OpenCount: 0 },
+              Last14Days: { WindowDays: 14, VisitDays: 1, OpenCount: 0 },
+            },
+          });
+        }
+      );
+
+      initDailyBrief({ fetch: fetchMock as typeof fetch });
+      await waitForExpect(() => {
+        expect(document.querySelector("[data-brief-activity-visit-days]")?.textContent).toBe("1");
+      });
+
+      document.querySelector<HTMLButtonElement>(
+        `[data-brief-slot="${slot}"] [data-brief-action-open]`
+      )?.click();
+
+      await waitForExpect(() => {
+        expect(
+          document.querySelector(`[data-brief-slot="${slot}"] [data-brief-action-open]`)?.textContent
+        ).toBe("Opened");
+      });
+      expect(document.querySelector(`[data-brief-slot-status="${slot}"]`)?.textContent).toContain(
+        "Opened in editor"
+      );
+      expect(fetchMock.mock.contexts.every((context) => context === undefined)).toBe(true);
+    }
+  );
 
   it("replaces continue/connect atomically and restores focus after Another", async () => {
     document.body.innerHTML = briefRootHTML();
@@ -284,6 +336,7 @@ describe("daily brief controller", () => {
     const focused = document.querySelector<HTMLButtonElement>('[data-brief-slot="continue"] [data-brief-action-another]');
     expect(document.activeElement).toBe(focused);
     expect(document.querySelector("#brief-global-status")?.textContent).toContain("Updated Continue and Connect.");
+    expect(fetchMock.mock.contexts.every((context) => context === undefined)).toBe(true);
   });
 
   it("requires disclosure for Ask AI and renders server-safe HTML with raw copy", async () => {
@@ -338,5 +391,6 @@ describe("daily brief controller", () => {
     await waitForExpect(() => {
       expect(clipboardMock).toHaveBeenCalledWith("**Summary**\n<script>alert(1)</script>");
     });
+    expect(fetchMock.mock.contexts.every((context) => context === undefined)).toBe(true);
   });
 });

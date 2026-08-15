@@ -1663,7 +1663,8 @@ var BrainNotesApp = (() => {
       return;
     }
     const config = readDailyBriefConfig(root);
-    const fetcher = deps.fetch || fetch;
+    const request = deps.fetch || fetch;
+    const fetcher = (input, init) => request(input, init);
     const confirmer = deps.confirm || ((message) => window.confirm(message));
     const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text) => navigator.clipboard.writeText(text) : void 0);
     const globalStatusEl = queryElement(root, "#brief-global-status", HTMLElement);

@@ -42,7 +42,11 @@ export const initDailyBrief = (deps: DailyBriefDeps = {}): void => {
   }
 
   const config = readDailyBriefConfig(root);
-  const fetcher = deps.fetch || fetch;
+  const request = deps.fetch || fetch;
+  // Keep the browser's native fetch detached from BriefActionContext. Calling
+  // it as ctx.fetcher(...) must not substitute that context as fetch's receiver.
+  const fetcher = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+    request(input, init);
   const confirmer = deps.confirm || ((message: string) => window.confirm(message));
   const clipboardWrite =
     deps.writeClipboard ||
