@@ -192,7 +192,7 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
         return;
       }
       const result = normalizeCockpitQueueResponse(payload);
-      if (action === "exempt_dead_end") {
+      if (action === "exempt_dead_end" || action === "clean_long_tail") {
         ignoreNextMutation = true;
         window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: payload }));
       }

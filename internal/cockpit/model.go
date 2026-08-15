@@ -104,7 +104,7 @@ func ruleTriageOnly(kind RuleKind) bool {
 }
 
 // ActionKind identifies a proposed remediation for a task. The triage actions
-// (open/snooze/mark-done and the user-chosen dead-end exemption) are handled by
+// (open/snooze/mark-done and user-chosen frontmatter cleanups) are handled by
 // callers; fix actions are offered only on rule kinds whose findings a planner
 // can mechanically resolve.
 type ActionKind string
@@ -126,12 +126,15 @@ const (
 	// ActionExemptDeadEnd sets the affected note's reserved dead_end property to
 	// boolean false so intentional terminal notes are not classified as dead ends.
 	ActionExemptDeadEnd ActionKind = "exempt_dead_end"
+	// ActionCleanLongTail removes the flagged property from every note affected
+	// by a long-tail-value task after the user chooses that cleanup.
+	ActionCleanLongTail ActionKind = "clean_long_tail"
 )
 
 // Action is a single proposed remediation for a task. Fix actions are backed by
 // the preview/apply planners in fix.go; triage actions are handled by callers
 // (the editor for open, the StateStore for snooze/mark-done, and the web item
-// endpoint for the user-chosen dead-end exemption).
+// endpoint for user-chosen frontmatter cleanups).
 type Action struct {
 	Kind  ActionKind `json:"kind"`
 	Label string     `json:"label"`
@@ -152,6 +155,8 @@ func actionsForRule(kind RuleKind) []Action {
 		)
 	case RuleDeadEndNote:
 		actions = append(actions, Action{Kind: ActionExemptDeadEnd, Label: "Mark as intentional dead end"})
+	case RuleLongTailValue:
+		actions = append(actions, Action{Kind: ActionCleanLongTail, Label: "Remove property from affected notes"})
 	}
 	actions = append(actions,
 		Action{Kind: ActionSnooze, Label: "Snooze"},

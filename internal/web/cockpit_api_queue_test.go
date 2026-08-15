@@ -269,17 +269,108 @@ func TestServer_CockpitAPI_ItemExemptsDeadEndImmediately(t *testing.T) {
 	}
 }
 
-func TestServer_CockpitAPI_ItemRejectsDeadEndExemptionForOtherTask(t *testing.T) {
+func TestServer_CockpitAPI_ItemCleansLongTailPropertyAcrossAffectedNotes(t *testing.T) {
+	files := map[string][]byte{}
+	for _, name := range []string{"CommonA", "CommonB", "CommonC", "CommonD"} {
+		files[name+".md"] = []byte("---\nstatus: common\ndead_end: false\n---\nCommon body.\n")
+	}
+	files["RareA.md"] = []byte("---\nstatus: odd\nkeep: alpha\ndead_end: false\n---\nRare A body.\n")
+	files["RareB.md"] = []byte("---\nstatus: odd\nkeep: beta\ndead_end: false\n---\nRare B body.\n")
+	ts, root := newHTTPServerForFilesWithOptions(t, files, func(cfg *config.Config) {
+		cfg.Cockpit.LongTailMaxCount = 2
+		cfg.Cockpit.LongTailHeadFactor = 2
+	}, Options{CSRFToken: "csrf-token"})
+
+	initial := getCockpitPayload(t, ts.URL)
+	task := findCockpitTask(t, initial.Queue, cockpit.RuleLongTailValue, "status = odd")
+	if len(task.Affected) != 2 {
+		t.Fatalf("affected = %#v, want RareA and RareB", task.Affected)
+	}
+	foundAction := false
+	for _, action := range task.Actions {
+		if action.Kind == cockpit.ActionCleanLongTail {
+			foundAction = true
+		}
+	}
+	if !foundAction {
+		t.Fatalf("long-tail task actions = %#v, want %q", task.Actions, cockpit.ActionCleanLongTail)
+	}
+
+	resp := postCockpitItem(t, ts.URL, task.ID, string(cockpit.ActionCleanLongTail), "", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("clean status: got %d, want 200; body=%q", resp.StatusCode, body)
+	}
+	result := decodeCockpitResult(t, body)
+	if result.Message != "Removed property \"status\" from 2 affected notes." {
+		t.Fatalf("message = %q", result.Message)
+	}
+	for _, item := range result.Tasks {
+		if item.Kind == cockpit.RuleLongTailValue && item.Detail == "status = odd" {
+			t.Fatalf("cleaned long-tail task remained in refreshed queue: %#v", item)
+		}
+	}
+
+	for rel, want := range map[string]struct {
+		keep string
+		body string
+	}{
+		"RareA.md": {keep: "alpha", body: "Rare A body."},
+		"RareB.md": {keep: "beta", body: "Rare B body."},
+	} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		doc, err := frontmatter.Parse(data)
+		if err != nil {
+			t.Fatalf("parse %s: %v", rel, err)
+		}
+		if doc.Front.Has("status") {
+			t.Fatalf("%s still has status: %q", rel, data)
+		}
+		if keep, ok := doc.Front.GetString("keep"); !ok || keep != want.keep {
+			t.Fatalf("%s keep=%q, present=%v; want %q", rel, keep, ok, want.keep)
+		}
+		if !strings.Contains(doc.Body, want.body) {
+			t.Fatalf("%s body was not preserved: %q", rel, doc.Body)
+		}
+	}
+	commonData, err := os.ReadFile(filepath.Join(root, "CommonA.md"))
+	if err != nil {
+		t.Fatalf("read CommonA.md: %v", err)
+	}
+	commonDoc, err := frontmatter.Parse(commonData)
+	if err != nil {
+		t.Fatalf("parse CommonA.md: %v", err)
+	}
+	if status, ok := commonDoc.Front.GetString("status"); !ok || status != "common" {
+		t.Fatalf("unaffected common note status=%q, present=%v", status, ok)
+	}
+
+	journalRoot := filepath.Join(root, config.DefaultJournalDir)
+	entries, err := os.ReadDir(journalRoot)
+	if err != nil {
+		t.Fatalf("read journal: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("journal entries = %d, want one batch entry", len(entries))
+	}
+}
+
+func TestServer_CockpitAPI_ItemRejectsRuleSpecificCleanupForOtherTask(t *testing.T) {
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\n[[Target]]\n"),
 		"Target.md": []byte("---\ntitle: Target\n---\nBody.\n"),
 	}, nil, Options{CSRFToken: "csrf-token"})
 
 	orphan := findCockpitTask(t, getCockpitPayload(t, ts.URL).Queue, cockpit.RuleOrphanNote, "Source.md")
-	resp := postCockpitItem(t, ts.URL, orphan.ID, string(cockpit.ActionExemptDeadEnd), "", "csrf-token", "")
-	body := readResponseBody(t, resp)
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusBadRequest, body)
+	for _, action := range []cockpit.ActionKind{cockpit.ActionExemptDeadEnd, cockpit.ActionCleanLongTail} {
+		resp := postCockpitItem(t, ts.URL, orphan.ID, string(action), "", "csrf-token", "")
+		body := readResponseBody(t, resp)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("action %q status: got %d, want %d; body=%q", action, resp.StatusCode, http.StatusBadRequest, body)
+		}
 	}
 	data, err := os.ReadFile(filepath.Join(root, "Source.md"))
 	if err != nil {

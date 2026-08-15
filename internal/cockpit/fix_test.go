@@ -48,6 +48,7 @@ func TestActionsForRuleMetadata(t *testing.T) {
 		{RuleSchemaViolation, []ActionKind{ActionOpen, ActionSchemaRepair, ActionSnooze, ActionMarkDone}},
 		{RuleBrokenTarget, []ActionKind{ActionOpen, ActionRelink, ActionCreateStub, ActionSnooze, ActionMarkDone}},
 		{RuleDeadEndNote, []ActionKind{ActionOpen, ActionExemptDeadEnd, ActionSnooze, ActionMarkDone}},
+		{RuleLongTailValue, []ActionKind{ActionOpen, ActionCleanLongTail, ActionSnooze, ActionMarkDone}},
 		{RuleOrphanNote, []ActionKind{ActionOpen, ActionSnooze, ActionMarkDone}},
 		{RuleFrontmatterError, []ActionKind{ActionOpen, ActionSnooze, ActionMarkDone}},
 	}

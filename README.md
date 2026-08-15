@@ -228,6 +228,10 @@ intentional dead end**. The button immediately writes the same boolean property,
 records the change in the undo journal, and removes the finding from dead-end
 surfaces without changing the note's graph degree.
 
+A **Long-tail value** card similarly offers **Remove property from affected
+notes**. It immediately removes the flagged property from every note grouped in
+that task and records the batch as one undo-journal entry.
+
 `--broken-links` selects notes containing at least one wikilink whose target
 does not match any note title in the vault. Resolution is title-only
 (case-insensitive stem match) — a folder prefix like `[[Folder/Title]]` still

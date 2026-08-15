@@ -103,6 +103,29 @@ const deadEndTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
   ...overrides,
 });
 
+const longTailTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
+  id: "task_long_tail",
+  signature: "sig-long-tail",
+  kind: "long_tail_value",
+  priority: 70,
+  title: "Long-tail value: status = odd",
+  summary: "2 notes use status = odd",
+  detail: "status = odd",
+  count: 2,
+  affected: [
+    { title: "RareA", rel_path: "RareA.md", location: "frontmatter.status" },
+    { title: "RareB", rel_path: "RareB.md", location: "frontmatter.status" },
+  ],
+  actions: [
+    { kind: "open", label: "Open note" },
+    { kind: "clean_long_tail", label: "Remove property from affected notes" },
+    { kind: "snooze", label: "Snooze" },
+    { kind: "mark_done", label: "Mark done" },
+  ],
+  triage_only: true,
+  ...overrides,
+});
+
 const sensitiveTask = (overrides: Partial<CockpitTask> = {}): CockpitTask => ({
   id: "task_sensitive",
   signature: "sig-sensitive",
@@ -494,6 +517,44 @@ describe("daily fixes panel DOM behavior", () => {
     });
     expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(0);
     expect(mutationListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a long-tail property from every affected note immediately", async () => {
+    renderPanel();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/cockpit/item?view=daily") {
+        expect(String(init?.body)).toBe(
+          "id=task_long_tail&action=clean_long_tail&token=csrf-token"
+        );
+        return jsonResponse({
+          ok: true,
+          message: 'Removed property "status" from 2 affected notes.',
+          tasks: [],
+          counts: { active: 0, done_hidden: 0, snoozed_hidden: 0, total_generated: 0 },
+          warnings: [],
+        });
+      }
+      return jsonResponse(queuePayload([longTailTask()]));
+    });
+
+    initDailyFixes({ fetch: fetchMock as typeof fetch });
+    await waitForExpect(() => {
+      expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(1);
+    });
+
+    const button = document.querySelector<HTMLButtonElement>(
+      '[data-fixes-item-action="clean_long_tail"]'
+    );
+    expect(button?.textContent).toBe("Remove property from affected notes");
+    expect(button?.classList.contains("fixes-immediate-action")).toBe(true);
+    button?.click();
+
+    await waitForExpect(() => {
+      expect(document.querySelector("[data-fixes-status]")?.textContent).toBe(
+        'Removed property "status" from 2 affected notes.'
+      );
+    });
+    expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(0);
   });
 
   it("surfaces request errors", async () => {

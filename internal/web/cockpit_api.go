@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -17,6 +18,10 @@ const cockpitFixCommand = "bn cockpit fix"
 // one-click dead-end exemption action in the Daily Fixes panel.
 const cockpitDeadEndExemptionCommand = "bn serve exempt dead end"
 
+// cockpitLongTailCleanupCommand labels the single undo-journal entry covering
+// removal of a flagged long-tail property from every affected note.
+const cockpitLongTailCleanupCommand = "bn serve clean long tail"
+
 // cockpitStateWarning is surfaced (as a queue warning) when the workflow-state
 // file cannot be loaded, so the client still sees every generated task.
 const cockpitStateWarning = "Cockpit state could not be loaded; showing all generated tasks."
@@ -30,6 +35,7 @@ const (
 	cockpitItemActionSnooze        = "snooze"
 	cockpitItemActionClear         = "clear"
 	cockpitItemActionExemptDeadEnd = "exempt_dead_end"
+	cockpitItemActionCleanLongTail = "clean_long_tail"
 )
 
 // cockpitAPIResponse is the GET /api/cockpit and item-mutation payload. It
@@ -170,6 +176,7 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 
 	store := s.cockpitStore()
 	message := ""
+	mutationWarning := ""
 	switch action {
 	case cockpitItemActionDone, "done":
 		if err := store.MarkDone(task); err != nil {
@@ -219,6 +226,45 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 		}
 		s.state.invalidate()
 		message = "Marked " + task.Affected[0].Title + " as an intentional dead end."
+	case cockpitItemActionCleanLongTail:
+		property, ok := cockpitLongTailProperty(task)
+		if !ok {
+			writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "long-tail cleanup is unavailable for this task"))
+			return
+		}
+		sources := make([]noteops.BulkSource, 0, len(task.Affected))
+		seen := make(map[string]bool, len(task.Affected))
+		for _, affected := range task.Affected {
+			relPath := strings.TrimSpace(affected.RelPath)
+			if relPath == "" || seen[relPath] {
+				continue
+			}
+			seen[relPath] = true
+			sources = append(sources, noteops.BulkSource{
+				Key:     managementRouteKeyForRelPath(relPath),
+				RelPath: relPath,
+			})
+		}
+		result, err := noteops.BulkUnsetFrontmatter(
+			s.vault.Root,
+			sources,
+			[]string{property},
+			&s.cfg.Frontmatter,
+			noteops.WithBulkCommand(cockpitLongTailCleanupCommand),
+		)
+		if err != nil {
+			writeManagementError(w, err)
+			return
+		}
+		if result.Changed == 0 {
+			writeManagementError(w, noteops.Errorf(noteops.CodeConflict, "long-tail cleanup did not change any affected note"))
+			return
+		}
+		s.state.invalidate()
+		message = fmt.Sprintf("Removed property %q from %d affected %s.", property, result.Changed, pluralizeNote(result.Changed))
+		if len(result.Failures) > 0 {
+			mutationWarning = fmt.Sprintf("Long-tail cleanup failed for %d affected %s; the successful removals remain undoable as one journal entry.", len(result.Failures), pluralizeNote(len(result.Failures)))
+		}
 	default:
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported cockpit action %q", action))
 		return
@@ -236,7 +282,39 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("view") == "daily" {
 		queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
 	}
+	if mutationWarning != "" {
+		queue.Warnings = append(queue.Warnings, cockpit.Warning{Message: mutationWarning})
+	}
 	writeManagementJSON(w, http.StatusOK, cockpitAPIResponse{OK: true, Message: message, Queue: queue})
+}
+
+func cockpitLongTailProperty(task cockpit.Task) (string, bool) {
+	if task.Kind != cockpit.RuleLongTailValue || len(task.Affected) == 0 {
+		return "", false
+	}
+	property := ""
+	for _, affected := range task.Affected {
+		location := strings.TrimSpace(affected.Location)
+		candidate := strings.TrimSpace(strings.TrimPrefix(location, "frontmatter."))
+		if candidate == "" || candidate == location {
+			return "", false
+		}
+		if property == "" {
+			property = candidate
+			continue
+		}
+		if candidate != property {
+			return "", false
+		}
+	}
+	return property, property != ""
+}
+
+func pluralizeNote(count int) string {
+	if count == 1 {
+		return "note"
+	}
+	return "notes"
 }
 
 func (s *Server) handleFixesPreview(w http.ResponseWriter, r *http.Request) {

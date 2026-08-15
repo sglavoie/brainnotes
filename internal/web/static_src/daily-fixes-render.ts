@@ -10,6 +10,7 @@ import type {
 import {
   affectedNoteLabel,
   FIX_ACTIONS,
+  IMMEDIATE_ITEM_ACTIONS,
   fixKindLabel,
   fixOpenKeyFromRelPath,
   fixTaskLabel,
@@ -222,8 +223,8 @@ export const renderTask = (doc: Document, task: CockpitTask): HTMLLIElement => {
     }
   }
   for (const action of task.actions) {
-    if (action.kind === "exempt_dead_end") {
-      const button = triageButton(doc, task.id, action.kind, action.label);
+    if (IMMEDIATE_ITEM_ACTIONS.has(action.kind)) {
+      const button = triageButton(doc, task.id, action.kind as CockpitItemAction, action.label);
       button.classList.add("fixes-immediate-action");
       actions.appendChild(button);
     }

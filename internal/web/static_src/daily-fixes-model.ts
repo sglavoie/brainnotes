@@ -33,6 +33,7 @@ export type PreviewState = {
 };
 
 export const FIX_ACTIONS = new Set<string>(["schema_repair", "relink", "create_stub"]);
+export const IMMEDIATE_ITEM_ACTIONS = new Set<string>(["exempt_dead_end", "clean_long_tail"]);
 
 export const readDailyFixesConfig = (root: HTMLElement): DailyFixesConfig => ({
   queueEndpoint: root.getAttribute("data-fixes-endpoint") || "/api/cockpit",
@@ -118,6 +119,7 @@ export const normalizeItemAction = (value: string): CockpitItemAction | "" => {
     case "snooze":
     case "clear":
     case "exempt_dead_end":
+    case "clean_long_tail":
       return value;
     default:
       return "";
@@ -159,6 +161,9 @@ export const itemActionLoadingMessage = (
   }
   if (action === "exempt_dead_end") {
     return "Marking note as an intentional dead end...";
+  }
+  if (action === "clean_long_tail") {
+    return "Removing property from affected notes...";
   }
   return "Marking fix done...";
 };

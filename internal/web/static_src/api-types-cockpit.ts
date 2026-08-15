@@ -52,7 +52,8 @@ export type CockpitItemAction =
   | "done"
   | "snooze"
   | "clear"
-  | "exempt_dead_end";
+  | "exempt_dead_end"
+  | "clean_long_tail";
 
 export type CockpitSnooze = "tomorrow" | "week";
 

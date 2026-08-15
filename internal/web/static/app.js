@@ -1876,6 +1876,7 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/daily-fixes-model.ts
   var FIX_ACTIONS = /* @__PURE__ */ new Set(["schema_repair", "relink", "create_stub"]);
+  var IMMEDIATE_ITEM_ACTIONS = /* @__PURE__ */ new Set(["exempt_dead_end", "clean_long_tail"]);
   var readDailyFixesConfig = (root) => ({
     queueEndpoint: root.getAttribute("data-fixes-endpoint") || "/api/cockpit",
     itemEndpoint: root.getAttribute("data-fixes-item-endpoint") || "/api/cockpit/item",
@@ -1949,6 +1950,7 @@ var BrainNotesApp = (() => {
       case "snooze":
       case "clear":
       case "exempt_dead_end":
+      case "clean_long_tail":
         return value;
       default:
         return "";
@@ -1982,6 +1984,9 @@ var BrainNotesApp = (() => {
     }
     if (action === "exempt_dead_end") {
       return "Marking note as an intentional dead end...";
+    }
+    if (action === "clean_long_tail") {
+      return "Removing property from affected notes...";
     }
     return "Marking fix done...";
   };
@@ -2261,7 +2266,7 @@ var BrainNotesApp = (() => {
       }
     }
     for (const action of task.actions) {
-      if (action.kind === "exempt_dead_end") {
+      if (IMMEDIATE_ITEM_ACTIONS.has(action.kind)) {
         const button = triageButton(doc, task.id, action.kind, action.label);
         button.classList.add("fixes-immediate-action");
         actions.appendChild(button);
@@ -2443,7 +2448,7 @@ var BrainNotesApp = (() => {
           return;
         }
         const result = normalizeCockpitQueueResponse(payload);
-        if (action === "exempt_dead_end") {
+        if (action === "exempt_dead_end" || action === "clean_long_tail") {
           ignoreNextMutation = true;
           window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: payload }));
         }
