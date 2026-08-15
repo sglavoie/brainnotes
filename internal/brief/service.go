@@ -143,7 +143,7 @@ func (service *Service) Another(corpus CorpusSnapshot, slot SlotKind) (AnotherRe
 		if err != nil {
 			return AnotherResult{}, err
 		}
-		affected = append(affected, nextContinueResult)
+		affected = append(affected, materializedSlotResult(nextContinueResult, nextContinue, hasContinue))
 		if !hasContinue {
 			updatedUnavailable[SlotContinue] = unavailableFromResult(nextContinueResult, defaultUnavailableMessage(SlotContinue))
 			break
@@ -160,7 +160,7 @@ func (service *Service) Another(corpus CorpusSnapshot, slot SlotKind) (AnotherRe
 		if err != nil {
 			return AnotherResult{}, err
 		}
-		affected = append(affected, nextConnectResult)
+		affected = append(affected, materializedSlotResult(nextConnectResult, nextConnect, hasConnect))
 		if hasConnect {
 			replacements[SlotConnect] = nextConnect
 		} else {
@@ -177,7 +177,7 @@ func (service *Service) Another(corpus CorpusSnapshot, slot SlotKind) (AnotherRe
 		if err != nil {
 			return AnotherResult{}, err
 		}
-		affected = append(affected, nextRediscoverResult)
+		affected = append(affected, materializedSlotResult(nextRediscoverResult, nextRediscover, hasRediscover))
 		if hasRediscover {
 			replacements[SlotRediscover] = nextRediscover
 		} else {
@@ -193,7 +193,7 @@ func (service *Service) Another(corpus CorpusSnapshot, slot SlotKind) (AnotherRe
 		if err != nil {
 			return AnotherResult{}, err
 		}
-		affected = append(affected, nextConnectResult)
+		affected = append(affected, materializedSlotResult(nextConnectResult, nextConnect, hasConnect))
 		if hasConnect {
 			replacements[SlotConnect] = nextConnect
 		} else {
@@ -634,6 +634,13 @@ func materializeSlotCard(date LocalDate, result SlotResult) (Card, bool, error) 
 	card.Slot = result.Slot
 	card.Excerpt = BoundCardExcerpt(card.Excerpt)
 	return card, true, nil
+}
+
+func materializedSlotResult(result SlotResult, card Card, hasCard bool) SlotResult {
+	if !hasCard {
+		return result
+	}
+	return cardSlot(result.Slot, card)
 }
 
 func copyUnavailable(in map[SlotKind]UnavailableSlot) map[SlotKind]UnavailableSlot {

@@ -118,6 +118,58 @@ func TestServer_BriefItemAPI_AnotherFromContinueReturnsContinueAndConnect(t *tes
 	if !slots[brief.SlotContinue] || !slots[brief.SlotConnect] {
 		t.Fatalf("affected slots = %#v, want continue and connect", payload.Affected)
 	}
+	for _, slot := range []brief.SlotKind{brief.SlotContinue, brief.SlotConnect} {
+		affected := mustAffectedCardForSlot(t, payload.Affected, slot)
+		daily := mustDailyCardForSlot(t, payload.Daily, slot)
+		if affected.ID == "" || affected.ID != daily.ID {
+			t.Fatalf("affected %s card ID = %q, want daily card ID %q", slot, affected.ID, daily.ID)
+		}
+	}
+}
+
+func TestServer_BriefItemAPI_AnotherFromRediscoverReturnsMaterializedCard(t *testing.T) {
+	now := time.Date(2026, 8, 4, 12, 30, 0, 0, time.FixedZone("mdt", -6*60*60))
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Recent.md": []byte("---\ntitle: Recent\n---\nRecent note\n"),
+		"OlderA.md": []byte("---\ntitle: Older A\n---\nOlder note A\n"),
+		"OlderB.md": []byte("---\ntitle: Older B\n---\nOlder note B\n"),
+	}, nil, Options{
+		CSRFToken: "csrf-token",
+		BriefNow:  func() time.Time { return now },
+	})
+	modified := map[string]time.Time{
+		"Recent.md": now,
+		"OlderA.md": now.Add(-72 * time.Hour),
+		"OlderB.md": now.Add(-48 * time.Hour),
+	}
+	for relPath, at := range modified {
+		if err := os.Chtimes(filepath.Join(root, relPath), at, at); err != nil {
+			t.Fatalf("chtimes %s: %v", relPath, err)
+		}
+	}
+
+	prime := postBriefItemRequest(t, ts.URL, "deadbeef", "open", "csrf-token", "")
+	_ = readResponseBody(t, prime)
+	if prime.StatusCode != http.StatusNotFound {
+		t.Fatalf("prime status: got %d, want %d", prime.StatusCode, http.StatusNotFound)
+	}
+	selection := mustReadBriefDailySelection(t, root, now)
+	initial := mustSelectionCardForSlot(t, selection, brief.SlotRediscover)
+
+	resp := postBriefItemRequest(t, ts.URL, string(initial.ID), "another", "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeBriefItemResponse(t, body)
+	affected := mustAffectedCardForSlot(t, payload.Affected, brief.SlotRediscover)
+	daily := mustDailyCardForSlot(t, payload.Daily, brief.SlotRediscover)
+	if affected.ID == "" || affected.ID != daily.ID {
+		t.Fatalf("affected rediscover card ID = %q, want daily card ID %q", affected.ID, daily.ID)
+	}
+	if daily.Source.RelPath == initial.Source.RelPath {
+		t.Fatalf("rediscover source did not advance: still %q", daily.Source.RelPath)
+	}
 }
 
 func TestServer_BriefItemAPI_RejectsUnknownCardID(t *testing.T) {

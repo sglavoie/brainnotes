@@ -117,6 +117,7 @@ func TestServiceAnotherContinueRegeneratesConnectAtomically(t *testing.T) {
 	if got, want := len(replaced.Affected), 2; got != want {
 		t.Fatalf("affected slot count = %d, want %d", got, want)
 	}
+	assertAffectedCardsMatchDaily(t, replaced)
 	afterContinue := cardForSlot(t, replaced.Daily.Brief, SlotContinue)
 	afterConnect := cardForSlot(t, replaced.Daily.Brief, SlotConnect)
 	if afterContinue.Source.RelPath == beforeContinue.Source.RelPath {
@@ -142,6 +143,97 @@ func TestServiceAnotherContinueRegeneratesConnectAtomically(t *testing.T) {
 	}
 	if savedBySlot[SlotConnect].Source.RelPath != afterContinue.Source.RelPath {
 		t.Fatalf("saved connect source = %q, want %q", savedBySlot[SlotConnect].Source.RelPath, afterContinue.Source.RelPath)
+	}
+}
+
+func TestServiceAnotherSecondarySlotsReturnMaterializedAffectedCards(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	location := time.FixedZone("brief-test", -6*60*60)
+	now := time.Date(2026, time.August, 22, 12, 0, 0, 0, location)
+
+	writeSelectionNote(t, root, "Continue.md", "# Continue\nalpha beta [[Bridge]]\n", now.Add(-10*time.Minute))
+	writeSelectionNote(t, root, "Bridge.md", "# Bridge\n[[ConnectOne]] [[ConnectTwo]]\n", now.AddDate(0, 0, -1))
+	writeSelectionNote(t, root, "ConnectOne.md", "# Connect One\nalpha beta gamma delta\n", now.AddDate(0, 0, -8))
+	writeSelectionNote(t, root, "ConnectTwo.md", "# Connect Two\nalpha beta gamma\n", now.AddDate(0, 0, -7))
+	writeSelectionNote(t, root, "Rediscover.md", "# Rediscover\nolder note content.\n", now.AddDate(0, 0, -30))
+
+	corpus := loadBriefCorpus(t, root)
+	store := NewFileStateStore(root, WithClock(func() time.Time { return now }))
+	selector, err := NewDeterministicSelector(corpus, DeterministicSelectorOptions{
+		State: store,
+		Now:   func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("NewDeterministicSelector: %v", err)
+	}
+	service, err := NewService(store, selector, WithServiceClock(func() time.Time { return now }))
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	initial, err := service.Daily(corpus.Snapshot)
+	if err != nil {
+		t.Fatalf("Daily initial: %v", err)
+	}
+	initialRediscover := cardForSlot(t, initial.Brief, SlotRediscover)
+	initialConnect := cardForSlot(t, initial.Brief, SlotConnect)
+
+	rediscover, err := service.Another(corpus.Snapshot, SlotRediscover)
+	if err != nil {
+		t.Fatalf("Another rediscover: %v", err)
+	}
+	assertAffectedCardsMatchDaily(t, rediscover)
+	if got := cardForSlot(t, rediscover.Daily.Brief, SlotRediscover); got.Source.RelPath == initialRediscover.Source.RelPath {
+		t.Fatalf("rediscover source did not advance: still %q", got.Source.RelPath)
+	}
+
+	connect, err := service.Another(corpus.Snapshot, SlotConnect)
+	if err != nil {
+		t.Fatalf("Another connect: %v", err)
+	}
+	assertAffectedCardsMatchDaily(t, connect)
+	nextConnect := cardForSlot(t, connect.Daily.Brief, SlotConnect)
+	if nextConnect.Candidate == nil {
+		t.Fatalf("replacement connect card missing candidate: %#v", nextConnect)
+	}
+	if initialConnect.Candidate == nil {
+		t.Fatalf("initial connect card missing candidate: %#v", initialConnect)
+	}
+	if nextConnect.Candidate.RelPath == initialConnect.Candidate.RelPath {
+		t.Fatalf("connect candidate did not advance: still %q", nextConnect.Candidate.RelPath)
+	}
+}
+
+func TestServiceAnotherPreservesUnavailableAffectedResult(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	now := time.Date(2026, time.August, 22, 13, 0, 0, 0, time.UTC)
+	writeSelectionNote(t, root, "Continue.md", "# Continue\nUseful text.\n", now)
+
+	corpus := loadBriefCorpus(t, root)
+	store := NewFileStateStore(root, WithClock(func() time.Time { return now }))
+	service, err := NewService(store, staticSelector{}, WithServiceClock(func() time.Time { return now }))
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	if _, err := service.Daily(corpus.Snapshot); err != nil {
+		t.Fatalf("Daily initial: %v", err)
+	}
+
+	result, err := service.Another(corpus.Snapshot, SlotRediscover)
+	if err != nil {
+		t.Fatalf("Another rediscover: %v", err)
+	}
+	if got, want := len(result.Affected), 1; got != want {
+		t.Fatalf("affected slot count = %d, want %d", got, want)
+	}
+	affected := result.Affected[0]
+	if affected.Card != nil || affected.Unavailable == nil {
+		t.Fatalf("affected unavailable result = %#v", affected)
+	}
+	if got, want := affected.Unavailable.Message, "No rediscover candidate is available."; got != want {
+		t.Fatalf("unavailable message = %q, want %q", got, want)
 	}
 }
 
@@ -392,4 +484,20 @@ func cardForSlot(t *testing.T, brief DailyBrief, slot SlotKind) Card {
 	}
 	t.Fatalf("slot %q missing", slot)
 	return Card{}
+}
+
+func assertAffectedCardsMatchDaily(t *testing.T, result AnotherResult) {
+	t.Helper()
+	for _, affected := range result.Affected {
+		if affected.Card == nil {
+			continue
+		}
+		if affected.Card.ID == "" {
+			t.Fatalf("affected slot %q card ID is empty: %#v", affected.Slot, affected.Card)
+		}
+		dailyCard := cardForSlot(t, result.Daily.Brief, affected.Slot)
+		if !reflect.DeepEqual(*affected.Card, dailyCard) {
+			t.Fatalf("affected slot %q card does not match daily card:\naffected=%#v\ndaily=%#v", affected.Slot, *affected.Card, dailyCard)
+		}
+	}
 }

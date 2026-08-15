@@ -227,6 +227,10 @@ func TestServer_BriefInsightAPI_ConnectPinsDisplayedCandidateFirst(t *testing.T)
 	}
 	replacePayload := decodeBriefItemResponse(t, replaceBody)
 	replacedConnect := mustDailyCardForSlot(t, replacePayload.Daily, brief.SlotConnect)
+	affectedConnect := mustAffectedCardForSlot(t, replacePayload.Affected, brief.SlotConnect)
+	if affectedConnect.ID == "" || affectedConnect.ID != replacedConnect.ID {
+		t.Fatalf("affected connect card ID = %q, want daily card ID %q", affectedConnect.ID, replacedConnect.ID)
+	}
 	if replacedConnect.Candidate == nil {
 		t.Fatalf("replaced connect candidate missing: %#v", replacedConnect)
 	}

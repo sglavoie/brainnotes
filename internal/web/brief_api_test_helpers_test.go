@@ -187,3 +187,14 @@ func mustDailyCardForSlot(t *testing.T, daily brief.DailyBrief, slot brief.SlotK
 	t.Fatalf("daily brief missing card slot %q: %#v", slot, daily)
 	return brief.Card{}
 }
+
+func mustAffectedCardForSlot(t *testing.T, affected []brief.SlotResult, slot brief.SlotKind) brief.Card {
+	t.Helper()
+	for _, result := range affected {
+		if result.Slot == slot && result.Card != nil {
+			return *result.Card
+		}
+	}
+	t.Fatalf("affected results missing card slot %q: %#v", slot, affected)
+	return brief.Card{}
+}
