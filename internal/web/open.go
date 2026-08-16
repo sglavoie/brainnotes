@@ -239,9 +239,29 @@ func startEditorProcess(bin string, argv []string) error {
 	if len(argv) == 0 {
 		return errors.New("web: empty editor argv")
 	}
+	cmd := editorProcessCommand(bin, argv)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	// Editor opens are intentionally asynchronous, but a started child still
+	// needs to be waited on eventually so repeated opens do not leave zombie
+	// processes behind.
+	go func() {
+		_ = cmd.Wait()
+	}()
+	return nil
+}
+
+func editorProcessCommand(bin string, argv []string) *exec.Cmd {
 	cmd := exec.Command(bin, argv[1:]...)
 	cmd.Args = append([]string{argv[0]}, argv[1:]...)
-	return cmd.Start()
+	// Web opens run outside the CLI's exec handoff. Inherit the serving
+	// process's terminal explicitly so terminal editors such as nvim remain
+	// interactive instead of starting invisibly with /dev/null for stdio.
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
 }
 
 func resolveOpenPath(root, path string) (string, error) {
