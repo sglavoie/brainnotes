@@ -198,7 +198,8 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot))))
+	staticHandler := http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot)))
+	mux.Handle("/static/", noCacheStatic(staticHandler))
 	mux.HandleFunc(noteRoutePrefix, srv.handleNote)
 	mux.HandleFunc("/broken", srv.handleBroken)
 	mux.HandleFunc("/api/facets", srv.handleFacets)
@@ -247,6 +248,17 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	srv.handler = mux
 
 	return srv, nil
+}
+
+// noCacheStatic keeps the local web UI in sync with the assets that belong to
+// the running binary or source checkout. The browser otherwise reuses an older
+// app.css URL across rebuilds, which can leave newly rendered markup completely
+// unstyled even though the server is serving the current stylesheet.
+func noCacheStatic(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {

@@ -19,6 +19,7 @@ func TestPropertiesPage_Renders(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 	for _, want := range []string{
+		`href="/static/app.css?v=properties-workbench-2"`,
 		"data-properties-catalog",
 		`data-properties-endpoint="/api/properties"`,
 		`data-properties-detail-endpoint="/api/properties/detail"`,

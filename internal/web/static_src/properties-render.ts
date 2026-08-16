@@ -22,12 +22,15 @@ const appendDefinitionPair = (
   term: string,
   detail: string
 ): void => {
+  const stat = doc.createElement("div");
+  stat.className = "properties-stat";
   const dt = doc.createElement("dt");
   dt.textContent = term;
   const dd = doc.createElement("dd");
   dd.textContent = detail;
-  list.appendChild(dt);
-  list.appendChild(dd);
+  stat.appendChild(dt);
+  stat.appendChild(dd);
+  list.appendChild(stat);
 };
 
 const appendBadge = (

@@ -6385,12 +6385,15 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/properties-render.ts
   var appendDefinitionPair = (doc, list, term, detail) => {
+    const stat = doc.createElement("div");
+    stat.className = "properties-stat";
     const dt = doc.createElement("dt");
     dt.textContent = term;
     const dd = doc.createElement("dd");
     dd.textContent = detail;
-    list.appendChild(dt);
-    list.appendChild(dd);
+    stat.appendChild(dt);
+    stat.appendChild(dd);
+    list.appendChild(stat);
   };
   var appendBadge = (doc, parent, text, className) => {
     const badge = doc.createElement("span");

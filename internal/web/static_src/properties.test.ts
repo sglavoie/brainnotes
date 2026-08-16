@@ -443,6 +443,12 @@ describe("catalog controller", () => {
       "[frontmatter.properties.tags]"
     );
     expect(root.querySelector("[data-properties-totals]")?.textContent).toContain("Violations");
+    const stats = root.querySelectorAll("[data-properties-totals] > .properties-stat");
+    expect(stats).toHaveLength(7);
+    for (const stat of stats) {
+      expect(stat.querySelector(":scope > dt")).not.toBeNull();
+      expect(stat.querySelector(":scope > dd")).not.toBeNull();
+    }
   });
 
   it("renders no inactive mutation controls", async () => {

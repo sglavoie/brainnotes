@@ -110,6 +110,9 @@ func TestServer_UsesInjectedStaticFiles(t *testing.T) {
 	if body != "fresh build" {
 		t.Fatalf("body = %q, want fresh build", body)
 	}
+	if got := resp.Header.Get("Cache-Control"); got != "no-cache" {
+		t.Fatalf("Cache-Control = %q, want no-cache", got)
+	}
 }
 
 // TestServer_EndToEnd_EndpointsStayResponsiveWithStalledNote is the session-3
