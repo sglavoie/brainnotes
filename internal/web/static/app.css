@@ -305,6 +305,38 @@ a:hover {
   text-decoration: underline;
 }
 
+.site-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 1.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.55rem;
+  background: var(--bn-surface);
+  box-sizing: border-box;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.1rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 0.35rem;
+  box-sizing: border-box;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.site-nav a:hover {
+  background: var(--bn-hover);
+  text-decoration: none;
+}
+
 .site-header {
   display: flex;
   align-items: flex-start;

@@ -7,6 +7,27 @@ import (
 	"testing"
 )
 
+func TestSiteNavigationCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".site-nav",
+		"display: flex;",
+		"flex-wrap: wrap;",
+		"gap: 0.3rem;",
+		"margin: 0 0 1.25rem;",
+		".site-nav a",
+		"min-height: 2.1rem;",
+		"padding: 0.25rem 0.7rem;",
+		".site-nav a:hover",
+		"text-decoration: none;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("site navigation CSS missing %q", want)
+		}
+	}
+}
+
 func TestNoteLayoutCSSResponsiveContract(t *testing.T) {
 	css := readStaticCSS(t)
 
