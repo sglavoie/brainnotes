@@ -170,7 +170,7 @@ func frontmatterErrorTasks(errors []fileError, root string) []Task {
 }
 
 func schemaViolationTasks(notes []loadedNote, cfg *config.Config) []Task {
-	if len(cfg.Frontmatter.Schema) == 0 {
+	if len(cfg.Frontmatter.Properties) == 0 {
 		return nil
 	}
 
@@ -180,7 +180,7 @@ func schemaViolationTasks(notes []loadedNote, cfg *config.Config) []Task {
 		if err != nil {
 			continue
 		}
-		for _, violation := range schema.ValidateNote(front, item.rel, cfg.Frontmatter.Schema, cfg.Frontmatter.WikilinkProperties) {
+		for _, violation := range schema.ValidateNote(front, item.rel, cfg.Frontmatter.Properties) {
 			key := schemaGroupKey{Property: violation.Property, Kind: violation.Kind, Detail: violation.Detail}
 			groups[key] = append(groups[key], affectedForNote(item, "frontmatter."+violation.Property))
 		}

@@ -37,9 +37,9 @@ func newTestVault(t *testing.T, files map[string]string) *vault.Vault {
 func schemaConfig() *config.Config {
 	return &config.Config{
 		Frontmatter: config.FrontmatterConfig{
-			Schema: map[string]config.PropertySchema{
-				"status": {Type: "string", Required: true, Allowed: []string{"active", "done"}},
-				"type":   {Type: "string", Required: true},
+			Properties: map[string]config.PropertyDefinition{
+				"status": {Type: config.KindString, Required: true, Allowed: []string{"active", "done"}},
+				"type":   {Type: config.KindString, Required: true},
 			},
 		},
 	}
@@ -229,8 +229,8 @@ func TestBuildQueueTableDrivenCounts(t *testing.T) {
 				"D.md": "---\nstatus: active\n---\n[[B]]\n",
 			},
 			cfg: &config.Config{Frontmatter: config.FrontmatterConfig{
-				Schema: map[string]config.PropertySchema{
-					"status": {Type: "string", Allowed: []string{"active"}},
+				Properties: map[string]config.PropertyDefinition{
+					"status": {Type: config.KindString, Allowed: []string{"active"}},
 				},
 			}},
 			wantKinds: []RuleKind{

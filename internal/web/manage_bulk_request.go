@@ -117,6 +117,7 @@ func canonicalBulkAction(action string) (string, bool) {
 }
 
 func (s *Server) parseBulkActionFields(r *http.Request, req *bulkManagementRequest) error {
+	cfg := s.config()
 	switch req.Action {
 	case "trash":
 		return nil
@@ -141,10 +142,7 @@ func (s *Server) parseBulkActionFields(r *http.Request, req *bulkManagementReque
 			return noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing value")
 		}
 		typeFlag := strings.TrimSpace(r.Form.Get("type"))
-		if typeFlag == "" {
-			typeFlag = frontmatterSchemaTypeFlag(s.cfg.Frontmatter.Schema[property].Type)
-		}
-		mutation, err := noteops.NewFrontmatterMutation(property, op, value, typeFlag, &s.cfg.Frontmatter)
+		mutation, err := noteops.NewFrontmatterMutation(property, op, value, typeFlag, &cfg.Frontmatter)
 		if err != nil {
 			return err
 		}

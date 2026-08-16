@@ -1,4 +1,4 @@
-// Package config loads the bnotes TOML configuration with flag/env/file precedence.
+// Package config loads the vault-local brainnotes.toml configuration.
 package config
 
 import (
@@ -13,8 +13,9 @@ import (
 // Config mirrors the on-disk TOML schema. Zero-value fields are filled in with
 // defaults by Load.
 type Config struct {
-	// Vault is the absolute path to the vault root.
-	Vault string `toml:"vault"`
+	// Vault is the absolute path to the vault root. It is resolved at load
+	// time and never read from or written to the TOML file.
+	Vault string `toml:"-"`
 
 	// Ignore lists additional vault-relative paths to skip during Walk.
 	// Hard-coded defaults are merged in by Load (see DefaultIgnore).
@@ -31,8 +32,24 @@ type Config struct {
 	Agent       AgentConfig       `toml:"agent"`
 	Cockpit     CockpitConfig     `toml:"cockpit"`
 
-	// SourcePath is the resolved path of the config file that was loaded.
+	// SourcePath is the absolute path of the brainnotes.toml that was loaded.
 	SourcePath string `toml:"-"`
+
+	// VaultOrigin records which mechanism resolved the vault root.
+	VaultOrigin VaultOrigin `toml:"-"`
+}
+
+// legacyPropertyKey maps an undecoded TOML key back to the removed split
+// frontmatter model so Load can point at the replacement instead of reporting
+// an anonymous unknown key.
+func legacyPropertyKey(key string) string {
+	switch {
+	case key == "frontmatter.list_properties", key == "frontmatter.wikilink_properties":
+		return key
+	case key == "frontmatter.schema" || strings.HasPrefix(key, "frontmatter.schema."):
+		return "frontmatter.schema"
+	}
+	return ""
 }
 
 // TemplatesConfig configures where templates live and how they are extended.
@@ -42,18 +59,35 @@ type TemplatesConfig struct {
 	DefaultExtension string `toml:"default_extension"`
 }
 
-// PropertySchema defines validation rules for a single frontmatter property.
-type PropertySchema struct {
-	Type     string   `toml:"type"`
-	Required bool     `toml:"required"`
-	Allowed  []string `toml:"allowed"`
+// PropertyKind names the value type of a frontmatter property.
+type PropertyKind string
+
+const (
+	KindString   PropertyKind = "string"
+	KindWikilink PropertyKind = "wikilink"
+	KindDate     PropertyKind = "date"
+	KindDatetime PropertyKind = "datetime"
+	KindInt      PropertyKind = "int"
+	KindFloat    PropertyKind = "float"
+	KindBool     PropertyKind = "bool"
+	KindList     PropertyKind = "list"
+)
+
+// PropertyDefinition is the single, unified definition of one frontmatter
+// property. Items is only meaningful when Type is KindList, where it names the
+// scalar kind every element must have.
+type PropertyDefinition struct {
+	Type     PropertyKind `toml:"type"`
+	Items    PropertyKind `toml:"items"`
+	Required bool         `toml:"required"`
+	Allowed  []string     `toml:"allowed"`
 }
 
-// FrontmatterConfig configures property handling.
+// FrontmatterConfig configures property handling. Properties is the only
+// source of list, wikilink, and validation semantics; there are no implicit
+// runtime defaults.
 type FrontmatterConfig struct {
-	WikilinkProperties []string                  `toml:"wikilink_properties"`
-	ListProperties     []string                  `toml:"list_properties"`
-	Schema             map[string]PropertySchema `toml:"schema"`
+	Properties map[string]PropertyDefinition `toml:"properties"`
 }
 
 // FzfConfig configures the fzf interactive shell-out.
@@ -234,81 +268,88 @@ const DefaultAgentTimeoutSeconds = 60
 // cockpit-specific agent override.
 const DefaultCockpitAgentTimeoutSeconds = DefaultAgentTimeoutSeconds
 
+const envVault = "BNOTES_VAULT"
+
+// FileName is the vault-root configuration file. Its presence is what marks a
+// directory as a vault root.
+const FileName = "brainnotes.toml"
+
+// VaultOrigin identifies which mechanism resolved the vault root.
+type VaultOrigin string
+
 const (
-	envVault   = "BNOTES_VAULT"
-	envConfig  = "BNOTES_CONFIG"
-	envXDG     = "XDG_CONFIG_HOME"
-	configName = "bnotes/config.toml"
+	VaultOriginFlag      VaultOrigin = "--vault flag"
+	VaultOriginEnv       VaultOrigin = "$BNOTES_VAULT"
+	VaultOriginDiscovery VaultOrigin = "upward search"
 )
 
-// Load resolves the configuration following the documented precedence.
-//
-// Vault path precedence: flagVaultPath > $BNOTES_VAULT > config-file `vault` key.
-// Config-file path precedence: flagConfigPath > $BNOTES_CONFIG > $XDG_CONFIG_HOME/bnotes/config.toml > ~/.config/bnotes/config.toml.
-//
-// A missing config file is not an error provided the vault path can be resolved
-// from a flag or environment variable. The returned Config has defaults applied
-// for any unset fields, and the vault path is validated to exist and be a directory.
-//
-// Leading `~` or `~/` in vault and config paths (from flag, environment, or the
-// `vault` key in the config file) is expanded to the user's home directory.
-func Load(flagVaultPath, flagConfigPath string) (*Config, error) {
-	cfg := &Config{}
+// LoadOptions carries every input vault discovery depends on, so precedence is
+// explicit rather than read from ambient process state.
+type LoadOptions struct {
+	// VaultFlag is the --vault value. Whitespace-only counts as unset.
+	VaultFlag string
+	// WorkingDir seeds the upward search for FileName. Empty means os.Getwd.
+	WorkingDir string
+	// Getenv reads environment variables. Nil means os.Getenv.
+	Getenv func(string) string
+}
 
-	configPath, explicit, err := resolveConfigPath(flagConfigPath)
+// Load resolves the vault root, then loads <vault>/brainnotes.toml from it.
+//
+// Vault precedence: --vault > $BNOTES_VAULT > the nearest ancestor of the
+// working directory that contains brainnotes.toml. An explicit --vault or
+// $BNOTES_VAULT must name an existing directory that contains brainnotes.toml;
+// `bn init` creates that file.
+//
+// Leading `~` or `~/` in an explicit vault path is expanded to the user's home
+// directory. The returned Config has defaults applied for any unset fields.
+func Load(opts LoadOptions) (*Config, error) {
+	root, origin, err := resolveVaultRoot(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	if configPath != "" {
-		info, statErr := os.Stat(configPath)
-		switch {
-		case statErr == nil && info.IsDir():
-			return nil, fmt.Errorf("config: %s is a directory, expected a TOML file", configPath)
-		case statErr == nil:
-			meta, decErr := toml.DecodeFile(configPath, cfg)
-			if decErr != nil {
-				return nil, fmt.Errorf("config: parse %s: %w", configPath, decErr)
+	source, err := os.ReadFile(filepath.Join(root, FileName))
+	if err != nil {
+		return nil, fmt.Errorf("config: read %s: %w", filepath.Join(root, FileName), err)
+	}
+	return Decode(root, origin, source)
+}
+
+// Decode parses one brainnotes.toml body for a known vault root, applying the
+// same defaults and validation as Load. Reload paths use it so a config
+// rebuilt from bytes is byte-for-byte equivalent to one read from disk.
+func Decode(root string, origin VaultOrigin, source []byte) (*Config, error) {
+	cfg := &Config{
+		Vault:       root,
+		SourcePath:  filepath.Join(root, FileName),
+		VaultOrigin: origin,
+	}
+
+	meta, err := toml.Decode(string(source), cfg)
+	if err != nil {
+		return nil, fmt.Errorf("config: parse %s: %w", cfg.SourcePath, err)
+	}
+	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
+		keys := make([]string, len(undecoded))
+		for i, k := range undecoded {
+			keys[i] = k.String()
+			if keys[i] == "vault" {
+				return nil, fmt.Errorf(
+					"config: %s: the `vault` key was removed; the vault root is the directory holding %s",
+					cfg.SourcePath, FileName)
 			}
-			if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-				keys := make([]string, len(undecoded))
-				for i, k := range undecoded {
-					keys[i] = k.String()
-				}
-				return nil, fmt.Errorf("config: %s: unknown keys: %s", configPath, strings.Join(keys, ", "))
+			if legacy := legacyPropertyKey(keys[i]); legacy != "" {
+				return nil, fmt.Errorf(
+					"config: %s: `%s` was replaced by unified [frontmatter.properties.<name>] definitions with type/items/required/allowed",
+					cfg.SourcePath, legacy)
 			}
-			cfg.SourcePath = configPath
-		case !os.IsNotExist(statErr):
-			return nil, fmt.Errorf("config: stat %s: %w", configPath, statErr)
-		case explicit:
-			return nil, fmt.Errorf("config: file %s does not exist", configPath)
 		}
+		return nil, fmt.Errorf("config: %s: unknown keys: %s", cfg.SourcePath, strings.Join(keys, ", "))
 	}
 
 	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
 		return nil, err
-	}
-
-	if v := strings.TrimSpace(flagVaultPath); v != "" {
-		cfg.Vault = v
-	} else if v := strings.TrimSpace(os.Getenv(envVault)); v != "" {
-		cfg.Vault = v
-	}
-
-	cfg.Vault = strings.TrimSpace(cfg.Vault)
-
-	if expanded, expErr := expandUser(cfg.Vault); expErr != nil {
-		return nil, fmt.Errorf("config: vault path %q: %w", cfg.Vault, expErr)
-	} else {
-		cfg.Vault = expanded
-	}
-
-	if cfg.Vault != "" {
-		abs, absErr := filepath.Abs(cfg.Vault)
-		if absErr != nil {
-			return nil, fmt.Errorf("config: resolve vault path %q: %w", cfg.Vault, absErr)
-		}
-		cfg.Vault = abs
 	}
 
 	applyDefaults(cfg)

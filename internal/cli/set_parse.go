@@ -50,8 +50,8 @@ func splitPairOp(p string) (key, op, val string, ok bool) {
 }
 
 // parsePairs converts raw pair strings into typed setPair entries, applying
-// list splitting for keys configured in list_properties and wikilink wrapping
-// for keys configured in wikilink_properties (for '+=' and '-=').
+// list splitting for keys defined as lists and wikilink wrapping for keys
+// defined as wikilinks in [frontmatter.properties].
 func parsePairs(pairs []string, typeFlag string, cfg *config.Config) ([]setPair, error) {
 	return noteops.ParseFrontmatterMutations(pairs, typeFlag, cfg)
 }

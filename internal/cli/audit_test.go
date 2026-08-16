@@ -19,15 +19,7 @@ func TestRename_PreservesSourceExtension(t *testing.T) {
 	if err := os.WriteFile(src, []byte("---\ntitle: Alpha\n---\nBody.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "")
 
 	if _, err := runCLI(t, "", "rename", src, "Beta"); err != nil {
 		t.Fatalf("rename: %v", err)

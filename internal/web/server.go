@@ -45,22 +45,28 @@ type Options struct {
 }
 
 type Server struct {
-	cfg          *config.Config
-	vault        *vault.Vault
-	templates    *template.Template
-	state        *vaultState
-	previewStore *bulkPreviewStore
-	fixPreviews  *fixPreviewStore
-	cockpitState *cockpit.StateStore
-	markdown     *markdownRenderer
-	handler      http.Handler
-	openBrowser  func(url string) error
-	notifyListen func(url string)
-	csrfToken    string
-	startEditor  func(bin string, argv []string) error
-	briefState   brief.StateStore
-	briefNow     func() time.Time
-	runAgent     agent.Runner
+	configState      *configManager
+	vault            *vault.Vault
+	templates        *template.Template
+	state            *vaultState
+	previewStore     *bulkPreviewStore
+	fixPreviews      *fixPreviewStore
+	propertyPreviews *propertyPreviewStore
+	cockpitState     *cockpit.StateStore
+	markdown         *markdownRenderer
+	handler          http.Handler
+	openBrowser      func(url string) error
+	notifyListen     func(url string)
+	csrfToken        string
+	startEditor      func(bin string, argv []string) error
+	briefState       brief.StateStore
+	briefNow         func() time.Time
+	runAgent         agent.Runner
+	// beforePropertyCommit runs immediately before a property transaction
+	// commits. It exists so tests can land an external edit inside the window
+	// the configuration pin protects, which cannot be provoked reliably
+	// otherwise; it is nil in production.
+	beforePropertyCommit func()
 }
 
 type notePageData struct {
@@ -149,20 +155,26 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		}
 	}
 
+	configState, err := newConfigManager(cfg, v)
+	if err != nil {
+		return nil, err
+	}
+
 	srv := &Server{
-		cfg:          cfg,
-		vault:        v,
-		templates:    tpl,
-		state:        state,
-		previewStore: newBulkPreviewStore(bulkPreviewTTL),
-		fixPreviews:  newFixPreviewStore(fixPreviewTTL),
-		cockpitState: cockpit.NewStateStore(v.Root),
-		markdown:     markdown,
-		openBrowser:  opts.OpenBrowser,
-		notifyListen: opts.NotifyListening,
-		csrfToken:    opts.CSRFToken,
-		startEditor:  opts.StartEditor,
-		runAgent:     opts.RunAgent,
+		configState:      configState,
+		vault:            v,
+		templates:        tpl,
+		state:            state,
+		previewStore:     newBulkPreviewStore(bulkPreviewTTL),
+		fixPreviews:      newFixPreviewStore(fixPreviewTTL),
+		propertyPreviews: newPropertyPreviewStore(propertyPreviewTTL),
+		cockpitState:     cockpit.NewStateStore(v.Root),
+		markdown:         markdown,
+		openBrowser:      opts.OpenBrowser,
+		notifyListen:     opts.NotifyListening,
+		csrfToken:        opts.CSRFToken,
+		startEditor:      opts.StartEditor,
+		runAgent:         opts.RunAgent,
 	}
 	if srv.csrfToken == "" {
 		srv.csrfToken, err = generateCSRFToken()
@@ -213,8 +225,18 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/daily-review/agent", srv.handleDailyReviewAgent)
 	mux.HandleFunc("/api/fixes/preview", srv.handleFixesPreview)
 	mux.HandleFunc("/api/fixes/apply", srv.handleFixesApply)
+	mux.HandleFunc(propertiesAPIRoutePath, srv.handleProperties)
+	mux.HandleFunc(propertiesDetailAPIRoutePath, srv.handlePropertyDetail)
+	mux.HandleFunc(propertyValueAPIRoutePath, srv.handlePropertyValue)
+	mux.HandleFunc(propertyPreviewAPIRoutePath, srv.handlePropertiesPreview)
+	mux.HandleFunc(propertyApplyAPIRoutePath, srv.handlePropertiesApply)
+	mux.HandleFunc(propertySchemaPreviewAPIRoutePath, srv.handlePropertySchemaPreview)
+	mux.HandleFunc(propertySchemaApplyAPIRoutePath, srv.handlePropertySchemaApply)
+	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
+	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
 	mux.HandleFunc(libraryRoutePath, srv.handleLibrary)
 	mux.HandleFunc(healthRoutePath, srv.handleHealth)
+	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
 	mux.HandleFunc("/graph", srv.handleGraph)
 	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
@@ -282,6 +304,7 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != healthRoutePath {
 		http.NotFound(w, r)
 		return
@@ -310,15 +333,16 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	// the snapshot's loaded set, so they never leak into recent notes, graph
 	// data, search/facets, or the health counts below.
 	diagnosticsData := diagnosticsDataFromSnapshot(snapshot, s.vault.Root)
-	fixesQueue := cockpit.LimitDaily(s.cockpitQueueFilteredFrom(diagnosticsData), s.cfg.Cockpit.DailyLimit)
+	fixesQueue := cockpit.LimitDaily(s.cockpitQueueFilteredFrom(diagnosticsData), cfg.Cockpit.DailyLimit)
 	data.Fixes = buildIndexFixesPanelData(fixesQueue)
-	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, s.cfg)
+	data.Diagnostics = buildDiagnosticsSummaryFromData(diagnosticsData, cfg)
 	if err := s.templates.ExecuteTemplate(w, "health", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
 }
 
 func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -375,12 +399,12 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Breadcrumbs:        breadcrumbsForNote(s.vault.Root, note, notePath),
 		TOC:                tableOfContentsForMarkdown(body, notePath),
 		Copy:               copyPayloadsForNote(s.vault.Root, note, notePath),
-		Frontmatter:        renderFrontmatterEntries(front, snapshot.graph, &s.cfg.Frontmatter),
-		FrontmatterChoices: frontmatterPropertyChoices(&s.cfg.Frontmatter),
+		Frontmatter:        renderFrontmatterEntries(front, snapshot.graph, &cfg.Frontmatter),
+		FrontmatterChoices: frontmatterPropertyChoices(&cfg.Frontmatter),
 		Backlinks:          backlinksForNote(snapshot, note),
 		Outgoing:           outgoingLinksForNote(snapshot.graph, note),
 		Broken:             brokenAffordancesForNote(note, snapshot.graph),
-		InsightConfigured:  len(s.cfg.Agent.Command) > 0,
+		InsightConfigured:  len(cfg.Agent.Command) > 0,
 	}
 	if !data.InsightConfigured {
 		data.InsightStatusMsg = "Ask AI is unavailable until [agent].command is configured."
@@ -589,19 +613,23 @@ func (s *Server) Handler() http.Handler {
 	return s.handler
 }
 
+// Run binds the listener and optionally opens a browser. Both settings are
+// read once here: a later reload of brainnotes.toml reports them through
+// ConfigStatus.RestartRequired rather than rebinding a live listener.
 func (s *Server) Run(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("web: context is required")
 	}
-	ln, err := net.Listen("tcp", s.cfg.Serve.Addr)
+	cfg := s.config()
+	ln, err := net.Listen("tcp", cfg.Serve.Addr)
 	if err != nil {
-		return fmt.Errorf("web: listen %s: %w", s.cfg.Serve.Addr, err)
+		return fmt.Errorf("web: listen %s: %w", cfg.Serve.Addr, err)
 	}
 	baseURL := "http://" + ln.Addr().String()
 	if s.notifyListen != nil {
 		s.notifyListen(baseURL)
 	}
-	if s.cfg.Serve.BrowserEnabled() {
+	if cfg.Serve.BrowserEnabled() {
 		go func() {
 			_ = s.openBrowser(baseURL)
 		}()

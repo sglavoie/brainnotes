@@ -172,9 +172,10 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 	if s == nil {
 		return rootPageData{}, errorsf("nil server")
 	}
-	if s.cfg == nil || s.vault == nil {
+	if s.vault == nil {
 		return rootPageData{}, errorsf("nil server dependencies")
 	}
+	cfg := s.config()
 
 	summary, err := buildOverviewPageSummary(snapshot, s.vault.Root)
 	if err != nil {
@@ -190,8 +191,8 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 	}
 
 	stateUnreadable, stateUnreadableMsg := stateUnreadableWarningMessage(daily.Warnings)
-	editorConfigured, editorStatusMsg := editorAvailability(s.cfg.Open.Editor, os.Getenv("EDITOR"))
-	insightConfigured := len(s.cfg.Agent.Command) > 0
+	editorConfigured, editorStatusMsg := editorAvailability(cfg.Open.Editor, os.Getenv("EDITOR"))
+	insightConfigured := len(cfg.Agent.Command) > 0
 	insightStatusMsg := ""
 	if !insightConfigured {
 		insightStatusMsg = "AI insight is not configured. Set [agent].command to enable Ask AI."

@@ -29,6 +29,7 @@ func newLinksFixture(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -142,6 +143,7 @@ func TestLinks_VerboseBasic(t *testing.T) {
 func TestLinks_VerboseFrontmatter(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Source.md": "---\ntitle: Source\ncategory: \"[[Target]]\"\n---\nBody without links.\n",
 		"Target.md": "---\ntitle: Target\n---\nThe target note.\n",
@@ -167,6 +169,7 @@ func TestLinks_VerboseFrontmatter(t *testing.T) {
 func TestUnquotedFrontmatterWikilinksAcrossCLIQueries(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Andrew Huberman.md": "---\ncategories:\n  - [[People]]\ntags:\n  - [[Podcasts]]\n---\nNo body links.\n",
 		"People.md":          "People.\n",
@@ -200,6 +203,7 @@ func TestUnquotedFrontmatterWikilinksAcrossCLIQueries(t *testing.T) {
 func TestLinks_VerboseIncludesFolderQualifiedLinks(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Source.md":        "See [[Folder/Target|folder alias]].\n",
 		"Folder/Target.md": "Target body.\n",

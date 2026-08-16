@@ -1,7 +1,6 @@
 package config
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -11,16 +10,8 @@ import (
 // BurntSushi/toml decoder silently ignored unknown keys, making typos in
 // config files invisible.
 func TestLoad_RejectsUnknownTopLevelKey(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-typo_key = "oops"
+	_, err := loadTOML(t, `typo_key = "oops"
 `)
-
-	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for unknown top-level key, got nil")
 	}
@@ -32,21 +23,30 @@ typo_key = "oops"
 	}
 }
 
+// TestLoad_RejectsLeftoverVaultKey verifies that a config file carried over
+// from the external-config era, which still sets the removed `vault` key, gets
+// a dedicated migration error rather than a generic unknown-key message.
+func TestLoad_RejectsLeftoverVaultKey(t *testing.T) {
+	_, err := loadTOML(t, `vault = "/x"
+`)
+	if err == nil {
+		t.Fatal("expected error for leftover vault key, got nil")
+	}
+	if !strings.Contains(err.Error(), "the `vault` key was removed") {
+		t.Fatalf("error should explain that the vault key was removed, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), FileName) {
+		t.Fatalf("error should point at %s, got: %v", FileName, err)
+	}
+}
+
 // TestLoad_RejectsUnknownNestedKey verifies that an unknown key nested inside
 // a known section (e.g. [fzf]) is also rejected.
 func TestLoad_RejectsUnknownNestedKey(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-[fzf]
+	_, err := loadTOML(t, `[fzf]
 args = ["--height=40%"]
 bad_nested = true
 `)
-
-	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for unknown nested key, got nil")
 	}
@@ -59,18 +59,10 @@ bad_nested = true
 }
 
 func TestLoad_RejectsUnknownServeNestedKey(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-[serve]
+	_, err := loadTOML(t, `[serve]
 addr = "127.0.0.1:8729"
 bad_nested = true
 `)
-
-	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for unknown nested key, got nil")
 	}
@@ -83,17 +75,10 @@ bad_nested = true
 }
 
 func TestLoad_RejectsUnknownRelatedNestedKey(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-[related]
+	_, err := loadTOML(t, `[related]
 metadata_properties = ["tags"]
 metadata_property = ["topic"]
 `)
-
-	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for unknown related key, got nil")
 	}
@@ -106,23 +91,20 @@ metadata_property = ["topic"]
 // known key still loads without error, so the unknown-key check does not
 // false-positive on legitimate keys.
 func TestLoad_AcceptsAllKnownKeys(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-ignore = [".git"]
+	root := newVault(t, `ignore = [".git"]
 
 [templates]
 dir = "Templates"
 default_extension = ".md"
 
-[frontmatter]
-wikilink_properties = ["author"]
-list_properties = ["tags"]
+[frontmatter.properties.author]
+type = "wikilink"
 
-[frontmatter.schema.status]
+[frontmatter.properties.tags]
+type  = "list"
+items = "string"
+
+[frontmatter.properties.status]
 type = "string"
 required = true
 allowed = ["WIP", "Done"]
@@ -151,11 +133,11 @@ command = ["my-agent", "--stdin"]
 timeout_seconds = 30
 `)
 
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadVault(t, root)
 	if err != nil {
 		t.Fatalf("Load: unexpected error with all-known keys: %v", err)
 	}
-	if cfg.Vault != vault {
-		t.Fatalf("vault mismatch: got %q, want %q", cfg.Vault, vault)
+	if cfg.Vault != root {
+		t.Fatalf("vault mismatch: got %q, want %q", cfg.Vault, root)
 	}
 }

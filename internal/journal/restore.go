@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // RestoreOptions controls undo behavior.
@@ -165,13 +167,21 @@ func Restore(vaultRoot, journalRoot, entryID string, opts RestoreOptions) (*Rest
 	}
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i].record.Path < targets[j].record.Path })
+	txn, err := vault.NewFileTxn(vaultAbs)
+	if err != nil {
+		return nil, fmt.Errorf("journal: restore %s: %w", entry.ID, err)
+	}
 	for _, target := range targets {
+		expect := vault.ExpectMissing()
+		if target.actual.Kind == KindFile {
+			expect = vault.ExpectHash(target.actual.SHA256)
+		}
 		switch target.record.Before.Kind {
 		case KindMissing:
 			if target.actual.Kind == KindDirectory || target.actual.Kind == KindOther {
 				return nil, fmt.Errorf("journal: restore %q: cannot remove %s", target.record.Path, target.actual.Label())
 			}
-			if err := os.Remove(target.abs); err != nil && !os.IsNotExist(err) {
+			if err := txn.Remove(target.abs, expect); err != nil {
 				return nil, fmt.Errorf("journal: restore %q: %w", target.record.Path, err)
 			}
 		case KindFile:
@@ -190,12 +200,19 @@ func Restore(vaultRoot, journalRoot, entryID string, opts RestoreOptions) (*Rest
 			if target.actual.Kind == KindDirectory || target.actual.Kind == KindOther {
 				return nil, fmt.Errorf("journal: restore %q: cannot overwrite %s", target.record.Path, target.actual.Label())
 			}
-			if err := writeAtomic(target.abs, data, os.FileMode(target.record.Before.Mode)); err != nil {
+			if err := txn.Write(target.abs, data, os.FileMode(target.record.Before.Mode), expect); err != nil {
 				return nil, fmt.Errorf("journal: restore %q: %w", target.record.Path, err)
 			}
 		default:
 			return nil, fmt.Errorf("journal: restore %q: unsupported before state %q", target.record.Path, target.record.Before.Kind)
 		}
+	}
+	// Restore shares the vault's compensating transaction: every snapshot is
+	// staged and every precondition re-checked before the first file moves, and
+	// a failure mid-commit rolls the already-restored paths back instead of
+	// leaving the entry half-applied.
+	if err := txn.Commit(nil); err != nil {
+		return nil, fmt.Errorf("journal: restore %s: %w", entry.ID, err)
 	}
 	return plan, nil
 }

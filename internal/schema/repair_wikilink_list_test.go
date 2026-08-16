@@ -3,14 +3,21 @@ package schema
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
+func wikilinkProps(keys ...string) map[string]config.PropertyDefinition {
+	props := make(map[string]config.PropertyDefinition, len(keys))
+	for _, k := range keys {
+		props[k] = config.PropertyDefinition{Type: config.KindWikilink}
+	}
+	return props
+}
+
 func TestPlanRepairs_WikilinkWrap_PartialPrefix(t *testing.T) {
 	front := buildFront("parent", "[[broken")
-	result := PlanRepairs(front, nil, []string{"parent"})
+	result := PlanRepairs(front, wikilinkProps("parent"))
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -25,7 +32,7 @@ func TestPlanRepairs_WikilinkWrap_PartialPrefix(t *testing.T) {
 
 func TestPlanRepairs_WikilinkWrap_PartialSuffix(t *testing.T) {
 	front := buildFront("parent", "broken]]")
-	result := PlanRepairs(front, nil, []string{"parent"})
+	result := PlanRepairs(front, wikilinkProps("parent"))
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -39,12 +46,12 @@ func TestPlanRepairs_WikilinkWrap_PartialSuffix(t *testing.T) {
 }
 
 func TestPlanRepairs_IntAllowedNotAllowed_Skip(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"priority": {Type: "int", Allowed: []string{"1", "2", "3"}},
+	props := map[string]config.PropertyDefinition{
+		"priority": {Type: config.KindInt, Allowed: []string{"1", "2", "3"}},
 	}
 	front := buildFront("priority", 99)
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions, got %+v", result.Actions)
 	}
@@ -57,12 +64,12 @@ func TestPlanRepairs_IntAllowedNotAllowed_Skip(t *testing.T) {
 }
 
 func TestPlanRepairs_IntAllowedInList_NoAction(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"priority": {Type: "int", Allowed: []string{"1", "2", "3"}},
+	props := map[string]config.PropertyDefinition{
+		"priority": {Type: config.KindInt, Allowed: []string{"1", "2", "3"}},
 	}
 	front := buildFront("priority", 2)
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions for valid int, got %+v", result.Actions)
 	}
@@ -72,8 +79,12 @@ func TestPlanRepairs_IntAllowedInList_NoAction(t *testing.T) {
 }
 
 func TestPlanRepairs_WikilinkWrap_PartialInList(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"categories": {Type: config.KindList, Items: config.KindWikilink},
+	}
 	front := buildFront("categories", []any{"[[broken", "good", "also]]"})
-	result := PlanRepairs(front, nil, []string{"categories"})
+
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -85,12 +96,12 @@ func TestPlanRepairs_WikilinkWrap_PartialInList(t *testing.T) {
 }
 
 func TestPlanRepairs_WikilinkAllowed_PartialWrapperNoStaleSkip(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	props := map[string]config.PropertyDefinition{
+		"category": {Type: config.KindWikilink, Allowed: []string{"Work", "Personal"}},
 	}
 	front := buildFront("category", "[[Work")
 
-	result := PlanRepairs(front, sch, []string{"category"})
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Fatalf("expected no stale skips after wrapper repair, got %+v", result.Skips)
 	}
@@ -107,12 +118,12 @@ func TestPlanRepairs_WikilinkAllowed_PartialWrapperNoStaleSkip(t *testing.T) {
 }
 
 func TestPlanRepairs_WikilinkAllowed_PartialListCanonicalizesWithoutStaleSkip(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"categories": {Type: "list", Allowed: []string{"Work", "Personal", "Done"}},
+	props := map[string]config.PropertyDefinition{
+		"categories": {Type: config.KindList, Items: config.KindWikilink, Allowed: []string{"Work", "Personal", "Done"}},
 	}
 	front := buildFront("categories", []any{"[[work", "Personal]]", "Done"})
 
-	result := PlanRepairs(front, sch, []string{"categories"})
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Fatalf("expected no stale skips after wrapper repair, got %+v", result.Skips)
 	}
@@ -130,12 +141,12 @@ func TestPlanRepairs_WikilinkAllowed_PartialListCanonicalizesWithoutStaleSkip(t 
 }
 
 func TestPlanRepairs_WikilinkAllowed_BareCanonicalizeThenWrap(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	props := map[string]config.PropertyDefinition{
+		"category": {Type: config.KindWikilink, Allowed: []string{"Work", "Personal"}},
 	}
 	front := buildFront("category", "work")
 
-	result := PlanRepairs(front, sch, []string{"category"})
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Fatalf("expected no skips, got %+v", result.Skips)
 	}
@@ -162,24 +173,24 @@ func TestPlanRepairs_WikilinkWrap_ComplexBracketedScalarUnchanged(t *testing.T) 
 		t.Run(value, func(t *testing.T) {
 			front := buildFront("parent", value)
 
-			result := PlanRepairs(front, nil, []string{"parent"})
+			result := PlanRepairs(front, wikilinkProps("parent"))
 			if len(result.Actions) != 0 {
 				t.Fatalf("expected no unsafe wrap action, got %+v", result.Actions)
 			}
 			if len(result.Skips) != 0 {
-				t.Fatalf("expected no skips without schema, got %+v", result.Skips)
+				t.Fatalf("expected no skips without allowed values, got %+v", result.Skips)
 			}
 		})
 	}
 }
 
 func TestPlanRepairs_WikilinkAllowed_ComplexBracketedValueSkippedWithoutMangle(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"category": {Type: "string", Allowed: []string{"Books", "Papers"}},
+	props := map[string]config.PropertyDefinition{
+		"category": {Type: config.KindWikilink, Allowed: []string{"Books", "Papers"}},
 	}
 	front := buildFront("category", "[[Books]] extra")
 
-	result := PlanRepairs(front, sch, []string{"category"})
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Fatalf("expected no unsafe action, got %+v", result.Actions)
 	}
@@ -194,86 +205,96 @@ func TestPlanRepairs_WikilinkAllowed_ComplexBracketedValueSkippedWithoutMangle(t
 	}
 }
 
-func TestPlanRepairs_Canonicalize_ListNonStringItem(t *testing.T) {
-	// A list containing non-string items should flag those items as
-	// unfixable during canonicalization, not silently skip them.
-	sch := map[string]config.PropertySchema{
-		"tags": {Type: "list", Allowed: []string{"Go", "CLI"}},
+func TestPlanRepairs_ListItemCoercedToDeclaredKindBeforeCanonicalize(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Allowed: []string{"Go", "CLI"}},
 	}
 	front := buildFront("tags", []any{42, "go"})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 
-	// The "go" -> "Go" canonicalization should produce an action.
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
-	if result.Actions[0].Kind != "canonicalize" {
-		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "canonicalize")
+	if result.Actions[0].Kind != "type_coerce,canonicalize" {
+		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "type_coerce,canonicalize")
 	}
-	wantNew := []any{42, "Go"}
+	wantNew := []any{"42", "Go"}
 	if !reflect.DeepEqual(result.Actions[0].NewValue, wantNew) {
 		t.Errorf("new value = %v, want %v", result.Actions[0].NewValue, wantNew)
 	}
 
-	// The non-string item 42 should be reported as unfixable.
 	if len(result.Skips) != 1 {
-		t.Fatalf("expected 1 skip for non-string item, got %d: %+v", len(result.Skips), result.Skips)
+		t.Fatalf("expected 1 skip for the disallowed item, got %d: %+v", len(result.Skips), result.Skips)
 	}
 	if result.Skips[0].Kind != "value_not_allowed" {
 		t.Errorf("skip kind = %q, want %q", result.Skips[0].Kind, "value_not_allowed")
 	}
 }
 
-func TestPlanRepairs_Canonicalize_ListAllowedScalarItems_DoNotProduceSkips(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"tags": {Type: "list", Allowed: []string{"42", "Go"}},
+func TestPlanRepairs_ListItemCoercionMatchingAllowed_NoSkips(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Allowed: []string{"42", "Go"}},
 	}
 	front := buildFront("tags", []any{42, "go"})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
-	if result.Actions[0].Kind != "canonicalize" {
-		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "canonicalize")
+	if result.Actions[0].Kind != "type_coerce,canonicalize" {
+		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "type_coerce,canonicalize")
 	}
-	wantNew := []any{42, "Go"}
+	wantNew := []any{"42", "Go"}
 	if !reflect.DeepEqual(result.Actions[0].NewValue, wantNew) {
 		t.Errorf("new value = %v, want %v", result.Actions[0].NewValue, wantNew)
 	}
 	if len(result.Skips) != 0 {
-		t.Fatalf("expected no skips for already-allowed scalar list items, got %+v", result.Skips)
+		t.Fatalf("expected no skips, got %+v", result.Skips)
 	}
 }
 
-func TestPlanRepairs_Canonicalize_ListWholeNumberFloatAllowed_NoSkip(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"ratings": {Type: "list", Allowed: []string{"3.0", "2024-01-01"}},
+func TestPlanRepairs_ListOfFloatsKeepsFloats(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"ratings": {Type: config.KindList, Items: config.KindFloat, Allowed: []string{"3.0", "4.5"}},
 	}
-	front := buildFront("ratings", []any{
-		3.0,
-		time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-	})
+	front := buildFront("ratings", []any{3.0, 4.5})
 
-	result := PlanRepairs(front, sch, nil)
-
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Fatalf("expected no actions, got %+v", result.Actions)
 	}
 	if len(result.Skips) != 0 {
-		t.Fatalf("expected no skips for scalar items matching allowed values, got %+v", result.Skips)
+		t.Fatalf("expected no skips, got %+v", result.Skips)
+	}
+}
+
+func TestPlanRepairs_ListItemUnsupportedYAMLIsUnconvertible(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString},
+	}
+	front := buildFront("tags", []any{"go", map[string]any{"nested": true}})
+
+	result := PlanRepairs(front, props)
+	if len(result.Actions) != 0 {
+		t.Fatalf("expected no actions, got %+v", result.Actions)
+	}
+	if len(result.Skips) != 1 {
+		t.Fatalf("expected 1 skip, got %d: %+v", len(result.Skips), result.Skips)
+	}
+	if result.Skips[0].Kind != "type_unconvertible" {
+		t.Errorf("skip kind = %q, want %q", result.Skips[0].Kind, "type_unconvertible")
 	}
 }
 
 func TestPlanRepairs_Canonicalize_DeduplicatesRepeatedInvalidListSkips(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"tags": {Type: "list", Allowed: []string{"Go"}},
+	props := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Allowed: []string{"Go"}},
 	}
 	front := buildFront("tags", []any{"bad", "bad", "go"})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -296,17 +317,18 @@ func TestPlanRepairs_Canonicalize_DeduplicatesRepeatedInvalidListSkips(t *testin
 }
 
 func TestPlanRepairs_Canonicalize_ListAllNonString(t *testing.T) {
-	// A list of only non-string items should flag all as unfixable
-	// without producing a canonicalize action (nothing changed).
-	sch := map[string]config.PropertySchema{
-		"tags": {Type: "list", Allowed: []string{"Go", "CLI"}},
+	props := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Allowed: []string{"Go", "CLI"}},
 	}
 	front := buildFront("tags", []any{42, true})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 
-	if len(result.Actions) != 0 {
-		t.Errorf("expected no actions, got %+v", result.Actions)
+	if len(result.Actions) != 1 {
+		t.Fatalf("expected 1 type_coerce action, got %d: %+v", len(result.Actions), result.Actions)
+	}
+	if result.Actions[0].Kind != "type_coerce" {
+		t.Errorf("kind = %q, want %q", result.Actions[0].Kind, "type_coerce")
 	}
 	if len(result.Skips) != 2 {
 		t.Fatalf("expected 2 skips, got %d: %+v", len(result.Skips), result.Skips)

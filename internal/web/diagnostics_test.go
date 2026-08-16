@@ -22,9 +22,9 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 	})
 	cfg := &config.Config{
 		Frontmatter: config.FrontmatterConfig{
-			Schema: map[string]config.PropertySchema{
-				"status": {Type: "string", Required: true, Allowed: []string{"active", "done"}},
-				"type":   {Type: "string", Required: true},
+			Properties: map[string]config.PropertyDefinition{
+				"status": {Type: config.KindString, Required: true, Allowed: []string{"active", "done"}},
+				"type":   {Type: config.KindString, Required: true},
 			},
 		},
 	}
@@ -192,7 +192,7 @@ func TestBuildDiagnosticsSummarySchemaEmptyBehavior(t *testing.T) {
 	v, _, _ := newFilterTestSnapshot(t, map[string]string{
 		"Note.md": "---\nstatus: someday\n---\nBody\n",
 	})
-	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{Schema: map[string]config.PropertySchema{}}}
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{Properties: map[string]config.PropertyDefinition{}}}
 
 	got, err := buildDiagnosticsSummary(v, cfg)
 	if err != nil {

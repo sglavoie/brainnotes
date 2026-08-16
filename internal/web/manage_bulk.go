@@ -130,31 +130,51 @@ func (s *Server) resolveBulkSources(keys []string) ([]noteops.BulkSource, []note
 	return sources, failures, nil
 }
 
+// isFrontmatterBulkAction reports whether an action's outcome depends on the
+// property definitions in brainnotes.toml.
+func isFrontmatterBulkAction(action string) bool {
+	return action == "frontmatter_set" || action == "frontmatter_unset"
+}
+
 func (s *Server) runBulkAction(req bulkManagementRequest, opts ...noteops.BulkOption) (*noteops.BulkResult, error) {
+	if isFrontmatterBulkAction(req.Action) {
+		if err := s.ensureConfigWritable(); err != nil {
+			return nil, err
+		}
+	}
+	cfg, _, pin := s.pinnedConfig()
 	switch req.Action {
 	case "trash":
 		return noteops.BulkTrashNotes(s.vault.Root, req.Sources, opts...)
 	case "move":
-		return noteops.BulkMoveNotes(s.vault, s.cfg, req.Sources, req.MoveFolder, opts...)
+		return noteops.BulkMoveNotes(s.vault, cfg, req.Sources, req.MoveFolder, opts...)
 	case "frontmatter_set":
-		return noteops.BulkSetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterMutations, &s.cfg.Frontmatter, opts...)
+		return noteops.BulkSetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterMutations, &cfg.Frontmatter,
+			append(opts, bulkConfigPinOptions(pin)...)...)
 	case "frontmatter_unset":
-		return noteops.BulkUnsetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterUnsetProperties, &s.cfg.Frontmatter, opts...)
+		return noteops.BulkUnsetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterUnsetProperties, &cfg.Frontmatter,
+			append(opts, bulkConfigPinOptions(pin)...)...)
 	default:
 		return nil, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: unsupported action %q", req.Action)
 	}
 }
 
 func (s *Server) runBulkPreview(req bulkManagementRequest, opts ...noteops.BulkOption) (*noteops.BulkPreviewResult, error) {
+	if isFrontmatterBulkAction(req.Action) {
+		if err := s.ensureConfigWritable(); err != nil {
+			return nil, err
+		}
+	}
+	cfg := s.config()
 	switch req.Action {
 	case "trash":
 		return noteops.BulkPreviewTrashNotes(s.vault.Root, req.Sources, opts...)
 	case "move":
-		return noteops.BulkPreviewMoveNotes(s.vault, s.cfg, req.Sources, req.MoveFolder, opts...)
+		return noteops.BulkPreviewMoveNotes(s.vault, cfg, req.Sources, req.MoveFolder, opts...)
 	case "frontmatter_set":
-		return noteops.BulkPreviewSetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterMutations, &s.cfg.Frontmatter)
+		return noteops.BulkPreviewSetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterMutations, &cfg.Frontmatter)
 	case "frontmatter_unset":
-		return noteops.BulkPreviewUnsetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterUnsetProperties, &s.cfg.Frontmatter)
+		return noteops.BulkPreviewUnsetFrontmatter(s.vault.Root, req.Sources, req.FrontmatterUnsetProperties, &cfg.Frontmatter)
 	default:
 		return nil, noteops.Errorf(noteops.CodeInvalidRequest, "bulk: unsupported action %q", req.Action)
 	}

@@ -19,36 +19,61 @@ type Violation struct {
 	NotePath string
 }
 
-func ValidType(schemaType string) bool {
-	switch schemaType {
-	case "string", "list", "date", "int", "bool", "float":
-		return true
+// CheckScalar reports whether value matches kind. dateOnly says whether a
+// time.Time value was written as a date-only YAML scalar; it is only consulted
+// for the date kind.
+func CheckScalar(value any, kind config.PropertyKind, dateOnly bool) bool {
+	switch kind {
+	case config.KindString, config.KindWikilink:
+		_, ok := value.(string)
+		return ok
+	case config.KindDate:
+		_, ok := value.(time.Time)
+		return ok && dateOnly
+	case config.KindDatetime:
+		_, ok := value.(time.Time)
+		return ok
+	case config.KindInt:
+		_, ok := value.(int)
+		return ok
+	case config.KindFloat:
+		_, ok := value.(float64)
+		return ok
+	case config.KindBool:
+		_, ok := value.(bool)
+		return ok
 	}
 	return false
 }
 
-func CheckType(value any, schemaType string) bool {
-	switch schemaType {
-	case "string":
-		_, ok := value.(string)
-		return ok
-	case "list":
-		_, ok := value.([]any)
-		return ok
-	case "date":
-		t, ok := value.(time.Time)
-		return ok && isDateOnlyTime(t)
-	case "int":
-		_, ok := value.(int)
-		return ok
-	case "bool":
-		_, ok := value.(bool)
-		return ok
-	case "float":
-		_, ok := value.(float64)
-		return ok
+// CheckDefinition reports whether the value stored at key satisfies def. When
+// it does not, detail describes the mismatch.
+func CheckDefinition(front *frontmatter.Map, key string, value any, def config.PropertyDefinition) (ok bool, detail string) {
+	if def.IsList() {
+		list, isList := value.([]any)
+		if !isList {
+			return false, fmt.Sprintf("expected %s, got %s", KindLabel(def), propertyTypeName(front, key, value))
+		}
+		for i, item := range list {
+			if CheckScalar(item, def.Items, itemIsDateOnly(item)) {
+				continue
+			}
+			return false, fmt.Sprintf("expected %s, got %s at index %d", KindLabel(def), goTypeName(item), i)
+		}
+		return true, ""
 	}
-	return false
+	if CheckScalar(value, def.Type, isFrontmatterDateOnly(front, key)) {
+		return true, ""
+	}
+	return false, fmt.Sprintf("expected %s, got %s", KindLabel(def), propertyTypeName(front, key, value))
+}
+
+// KindLabel renders a definition's type for diagnostics.
+func KindLabel(def config.PropertyDefinition) string {
+	if def.IsList() {
+		return "list of " + string(def.Items)
+	}
+	return string(def.Type)
 }
 
 func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offending string) {
@@ -80,7 +105,7 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 			if !ok {
 				s = scalarToString(item)
 				if s == "" {
-					return false, fmt.Sprintf("%v", item)
+					return false, unsupportedValueLabel(item)
 				}
 				if !check(s) {
 					return false, s
@@ -101,9 +126,10 @@ func CheckAllowed(value any, allowed []string, isWikilink bool) (ok bool, offend
 		// against the allowed list.
 		s := scalarToString(v)
 		if s == "" {
-			// Unknown type (nil, map, etc.) — cannot match any allowed
-			// value, so reject.
-			return false, fmt.Sprintf("%v", v)
+			// Structured or unsupported YAML (null, map, nested list) has no
+			// canonical scalar spelling, so it can never match an allowed
+			// value and is never stringified into one.
+			return false, unsupportedValueLabel(v)
 		}
 		if !check(s) {
 			return false, s
@@ -131,38 +157,26 @@ func stripWikilink(s string) string {
 	return s
 }
 
-func RuleSummary(rule config.PropertySchema) string {
-	s := "type: " + rule.Type
-	if len(rule.Allowed) > 0 {
-		s += ", allowed: " + strings.Join(rule.Allowed, ", ")
-	}
-	return s
-}
-
-func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]config.PropertySchema, wikilinkProps []string) []Violation {
+func ValidateNote(front *frontmatter.Map, notePath string, props map[string]config.PropertyDefinition) []Violation {
 	if front == nil {
 		return nil
 	}
-	wlSet := make(map[string]struct{}, len(wikilinkProps))
-	for _, p := range wikilinkProps {
-		wlSet[p] = struct{}{}
-	}
 
-	keys := make([]string, 0, len(schema))
-	for k := range schema {
+	keys := make([]string, 0, len(props))
+	for k := range props {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	var violations []Violation
 	for _, key := range keys {
-		rule := schema[key]
+		def := props[key]
 		if !front.Has(key) {
-			if rule.Required {
+			if def.Required {
 				violations = append(violations, Violation{
 					Property: key,
 					Kind:     "missing",
-					Detail:   RuleSummary(rule),
+					Detail:   def.Summary(),
 					NotePath: notePath,
 				})
 			}
@@ -171,38 +185,28 @@ func ValidateNote(front *frontmatter.Map, notePath string, schema map[string]con
 
 		val, _ := front.Get(key)
 
-		if !checkPropertyType(front, key, val, rule.Type) {
+		if ok, detail := CheckDefinition(front, key, val, def); !ok {
 			violations = append(violations, Violation{
 				Property: key,
 				Kind:     "type",
-				Detail:   fmt.Sprintf("expected %s, got %s", rule.Type, propertyTypeName(front, key, val)),
+				Detail:   detail,
 				NotePath: notePath,
 			})
 			continue
 		}
 
-		if len(rule.Allowed) > 0 {
-			_, isWL := wlSet[key]
-			if ok, bad := CheckAllowed(val, rule.Allowed, isWL); !ok {
+		if len(def.Allowed) > 0 {
+			if ok, bad := CheckAllowed(val, def.Allowed, def.IsWikilink()); !ok {
 				violations = append(violations, Violation{
 					Property: key,
 					Kind:     "value",
-					Detail:   fmt.Sprintf("invalid value %q (allowed: %s)", bad, strings.Join(rule.Allowed, ", ")),
+					Detail:   fmt.Sprintf("invalid value %q (allowed: %s)", bad, strings.Join(def.Allowed, ", ")),
 					NotePath: notePath,
 				})
 			}
 		}
 	}
 	return violations
-}
-
-func checkPropertyType(front *frontmatter.Map, key string, value any, schemaType string) bool {
-	if schemaType == "date" {
-		if _, ok := value.(time.Time); ok {
-			return isFrontmatterDateOnly(front, key)
-		}
-	}
-	return CheckType(value, schemaType)
 }
 
 func propertyTypeName(front *frontmatter.Map, key string, value any) string {
@@ -222,6 +226,14 @@ func isFrontmatterDateOnly(front *frontmatter.Map, key string) bool {
 	return false
 }
 
+// itemIsDateOnly applies the midnight-UTC heuristic to a list element. Per-index
+// timestamp metadata is not exposed by frontmatter.Map, so a list of dates is
+// judged by value rather than by original spelling.
+func itemIsDateOnly(item any) bool {
+	t, ok := item.(time.Time)
+	return ok && isDateOnlyTime(t)
+}
+
 func scalarToString(v any) string {
 	switch val := v.(type) {
 	case int:
@@ -237,6 +249,22 @@ func scalarToString(v any) string {
 		return val.Format("2006-01-02")
 	}
 	return ""
+}
+
+// unsupportedValueLabel names a value that has no canonical scalar spelling, so
+// diagnostics can point at it without inventing a string form for it.
+func unsupportedValueLabel(v any) string {
+	switch v.(type) {
+	case nil:
+		return "<null>"
+	case map[string]any:
+		return "<map>"
+	case []any, []string:
+		return "<list>"
+	case time.Time:
+		return "<datetime>"
+	}
+	return "<unsupported " + fmt.Sprintf("%T", v) + ">"
 }
 
 func formatScalarFloat(f float64) string {
@@ -262,8 +290,10 @@ func goTypeName(v any) string {
 	switch val := v.(type) {
 	case string:
 		return "string"
-	case []any:
+	case []any, []string:
 		return "list"
+	case map[string]any:
+		return "map"
 	case time.Time:
 		if !isDateOnlyTime(val) {
 			return "datetime"

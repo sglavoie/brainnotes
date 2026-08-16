@@ -1,6 +1,7 @@
 package noteops
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func TestSetFrontmatterScalarPreservesBodyAndJournals(t *testing.T) {
@@ -57,8 +59,10 @@ func TestSetFrontmatterListAddRemoveAndWikilinkWrapping(t *testing.T) {
 	root := t.TempDir()
 	writeFrontmatterTestFile(t, root, "Source.md", "---\ncategories:\n  - \"[[Books]]\"\ntags:\n  - foo\n---\nBody.\n")
 	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{
-		ListProperties:     []string{"categories", "tags"},
-		WikilinkProperties: []string{"categories"},
+		Properties: map[string]config.PropertyDefinition{
+			"categories": {Type: config.KindList, Items: config.KindWikilink},
+			"tags":       {Type: config.KindList, Items: config.KindString},
+		},
 	}}
 	mutations, err := ParseFrontmatterMutations([]string{"tags+=bar", "tags-=foo", "categories+=People"}, "", cfg)
 	if err != nil {
@@ -140,7 +144,11 @@ func TestSetFrontmatterListMutationRejectsExistingScalar(t *testing.T) {
 
 	root := t.TempDir()
 	writeFrontmatterTestFile(t, root, "Source.md", "---\ntags: lonely\n---\nBody.\n")
-	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{ListProperties: []string{"tags"}}}
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{
+		Properties: map[string]config.PropertyDefinition{
+			"tags": {Type: config.KindList, Items: config.KindString},
+		},
+	}}
 	mutations, err := ParseFrontmatterMutations([]string{"tags+=foo"}, "", cfg)
 	if err != nil {
 		t.Fatalf("ParseFrontmatterMutations: %v", err)
@@ -184,4 +192,203 @@ func frontmatterRecordForPath(t *testing.T, entry journal.Entry, rel string) jou
 	}
 	t.Fatalf("entry missing record for %q: %#v", rel, entry.Files)
 	return journal.FileRecord{}
+}
+
+// TestSetFrontmatterConflictsWhenTheNoteChangesUnderneath proves property
+// writes go through the vault transaction: the note is loaded, then replaced by
+// another writer, so the pinned content hash turns the write into a conflict
+// instead of a silent overwrite of the other writer's bytes.
+func TestSetFrontmatterConflictsWhenTheNoteChangesUnderneath(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeFrontmatterTestFile(t, root, "Source.md", "---\nstatus: draft\n---\nBody.\n")
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{}}
+	mutations, err := ParseFrontmatterMutations([]string{"status=done"}, "", cfg)
+	if err != nil {
+		t.Fatalf("ParseFrontmatterMutations: %v", err)
+	}
+
+	notePath := filepath.Join(root, "Source.md")
+	concurrent := "---\nstatus: someone-else\n---\nBody.\n"
+	_, err = ApplyFrontmatterMutations(root, notePath, mutations, &cfg.Frontmatter, testConcurrentWriter{
+		path: notePath,
+		body: concurrent,
+	})
+	if err == nil {
+		t.Fatal("write should conflict with the concurrent modification")
+	}
+	if CodeOf(err) != CodeConflict {
+		t.Fatalf("error code = %q, want %q (%v)", CodeOf(err), CodeConflict, err)
+	}
+	if got := readFrontmatterTestFile(t, root, "Source.md"); got != concurrent {
+		t.Fatalf("concurrent writer's bytes must survive, got %q", got)
+	}
+}
+
+// testConcurrentWriter replaces the note while the mutation is being journaled,
+// which is the last moment before the transaction re-checks its precondition.
+type testConcurrentWriter struct {
+	path string
+	body string
+}
+
+func (w testConcurrentWriter) Capture(path string) error {
+	return os.WriteFile(w.path, []byte(w.body), 0o644)
+}
+
+func TestUnsetFrontmatterConflictsWhenTheNoteChangesUnderneath(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeFrontmatterTestFile(t, root, "Source.md", "---\nstatus: draft\ntitle: Source\n---\nBody.\n")
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{}}
+
+	notePath := filepath.Join(root, "Source.md")
+	concurrent := "---\nstatus: someone-else\ntitle: Source\n---\nBody.\n"
+	_, err := ApplyFrontmatterUnset(root, notePath, []string{"status"}, &cfg.Frontmatter, testConcurrentWriter{
+		path: notePath,
+		body: concurrent,
+	})
+	if err == nil {
+		t.Fatal("unset should conflict with the concurrent modification")
+	}
+	if CodeOf(err) != CodeConflict {
+		t.Fatalf("error code = %q, want %q (%v)", CodeOf(err), CodeConflict, err)
+	}
+	if got := readFrontmatterTestFile(t, root, "Source.md"); got != concurrent {
+		t.Fatalf("concurrent writer's bytes must survive, got %q", got)
+	}
+}
+
+// TestSetFrontmatterConflictsWhenRequiredConfigChangedBeforeTheWrite proves the
+// pin reaches the transaction: property semantics come from brainnotes.toml, so
+// a write validated against one revision must be refused once another revision
+// has replaced it.
+func TestSetFrontmatterConflictsWhenRequiredConfigChangedBeforeTheWrite(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	note := "---\nstatus: draft\n---\nBody.\n"
+	writeFrontmatterTestFile(t, root, "Source.md", note)
+	writeFrontmatterTestFile(t, root, "brainnotes.toml", "[frontmatter]\n")
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{}}
+	mutations, err := ParseFrontmatterMutations([]string{"status=done"}, "", cfg)
+	if err != nil {
+		t.Fatalf("ParseFrontmatterMutations: %v", err)
+	}
+
+	writeFrontmatterTestFile(t, root, "brainnotes.toml", "[frontmatter]\n[frontmatter.properties.status]\ntype = \"list\"\n")
+
+	_, err = SetFrontmatter(root, "Source.md", mutations, &cfg.Frontmatter,
+		WithFrontmatterRequire(filepath.Join(root, "brainnotes.toml"), vault.ExpectContent([]byte("[frontmatter]\n"))))
+	if err == nil {
+		t.Fatal("write should conflict with the replaced configuration")
+	}
+	if CodeOf(err) != CodeConflict {
+		t.Fatalf("error code = %q, want %q (%v)", CodeOf(err), CodeConflict, err)
+	}
+	if got := readFrontmatterTestFile(t, root, "Source.md"); got != note {
+		t.Fatalf("note must be untouched, got %q", got)
+	}
+}
+
+// The pin also holds at the commit boundary: a configuration replaced after the
+// note was staged still stops the write.
+func TestSetFrontmatterConflictsWhenRequiredConfigChangesDuringCommit(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	note := "---\nstatus: draft\n---\nBody.\n"
+	writeFrontmatterTestFile(t, root, "Source.md", note)
+	writeFrontmatterTestFile(t, root, "brainnotes.toml", "[frontmatter]\n")
+	configPath := filepath.Join(root, "brainnotes.toml")
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{}}
+	mutations, err := ParseFrontmatterMutations([]string{"status=done"}, "", cfg)
+	if err != nil {
+		t.Fatalf("ParseFrontmatterMutations: %v", err)
+	}
+
+	_, err = applyFrontmatterMutations(root, filepath.Join(root, "Source.md"), mutations, &cfg.Frontmatter,
+		testConcurrentWriter{path: configPath, body: "[frontmatter]\nchanged = true\n"},
+		[]fileRequirement{{path: configPath, expect: vault.ExpectContent([]byte("[frontmatter]\n"))}})
+	if err == nil {
+		t.Fatal("write should conflict with the configuration replaced during commit")
+	}
+	if CodeOf(err) != CodeConflict {
+		t.Fatalf("error code = %q, want %q (%v)", CodeOf(err), CodeConflict, err)
+	}
+	if got := readFrontmatterTestFile(t, root, "Source.md"); got != note {
+		t.Fatalf("note must be untouched, got %q", got)
+	}
+}
+
+func TestSetFrontmatterPreservesFileMode(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	writeFrontmatterTestFile(t, root, "Source.md", "---\nstatus: draft\n---\nBody.\n")
+	notePath := filepath.Join(root, "Source.md")
+	if err := os.Chmod(notePath, 0o600); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{}}
+	mutations, err := ParseFrontmatterMutations([]string{"status=done"}, "", cfg)
+	if err != nil {
+		t.Fatalf("ParseFrontmatterMutations: %v", err)
+	}
+	if _, err := SetFrontmatter(root, "Source.md", mutations, &cfg.Frontmatter); err != nil {
+		t.Fatalf("SetFrontmatter: %v", err)
+	}
+	info, err := os.Stat(notePath)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("mode = %v, want 0600", got)
+	}
+	if !strings.Contains(readFrontmatterTestFile(t, root, "Source.md"), "status: done") {
+		t.Fatal("mutation should still be applied")
+	}
+}
+
+// A commit that could not put a displaced note back names the destination and
+// the file holding its content. Replacing that with a generic message would
+// leave the caller with no way to find their note.
+func TestClassifyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) {
+	t.Parallel()
+
+	recovery := &vault.TxnRecoveryError{
+		Path:         "/vault/Source.md",
+		RecoveryPath: "/vault/.txn-custody-123.tmp",
+		Displaced:    true,
+		Err:          &vault.TxnConflictError{Path: "/vault/Source.md", Expected: "missing", Actual: "file"},
+	}
+
+	for name, err := range map[string]error{
+		"placement failure": recovery,
+		"placement failure during rollback": &vault.TxnRollbackError{
+			Path:         "/vault/Source.md",
+			Err:          recovery,
+			Failed:       []string{"/vault/Other.md"},
+			RollbackErrs: []error{errors.New("boom")},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			classified := classifyTxnError("frontmatter: save note", err)
+			if got := CodeOf(classified); got != CodeInternal {
+				t.Fatalf("code = %q, want %q", got, CodeInternal)
+			}
+			message := MessageOf(classified)
+			if !strings.Contains(message, recovery.Path) {
+				t.Fatalf("message must name the destination, got %q", message)
+			}
+			if !strings.Contains(message, recovery.RecoveryPath) {
+				t.Fatalf("message must name the recovery path, got %q", message)
+			}
+			if message == "frontmatter: save note" {
+				t.Fatalf("the generic message must not replace the recovery guidance, got %q", message)
+			}
+		})
+	}
 }

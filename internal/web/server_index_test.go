@@ -371,9 +371,9 @@ func TestServer_HealthRendersDiagnosticsDashboard(t *testing.T) {
 		// so the diagnostics card renders it (and we can assert it is escaped).
 		"Linked/Twin.md": []byte("---\ntitle: Twin\nstatus: active\n---\n[[Work/Source]]\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
-			"status": {Type: "string", Required: true, Allowed: []string{"active"}},
-			"type":   {Type: "string", Required: true},
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"status": {Type: config.KindString, Required: true, Allowed: []string{"active"}},
+			"type":   {Type: config.KindString, Required: true},
 		}
 	}, Options{})
 

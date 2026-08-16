@@ -77,8 +77,7 @@ func diffBodyLines(file, oldBody, newBody string) []Change {
 	return changes
 }
 
-func scanFrontmatterWithRewrite(file string, front *frontmatter.Map, oldVal, newVal string, wikilinkProps []string, rewrite rewriteFunc) []Change {
-	_ = wikilinkProps // Explicit links are discovered independently of write config.
+func scanFrontmatterWithRewrite(file string, front *frontmatter.Map, oldVal, newVal string, rewrite rewriteFunc) []Change {
 	return transformFrontmatter(file, front, oldVal, newVal, rewrite, false)
 }
 

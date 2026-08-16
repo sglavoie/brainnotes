@@ -11,13 +11,13 @@ func TestWriteSchemaHint(t *testing.T) {
 	writeSchemaHint(&buf, "lint", "/home/user/.config/bnotes/config.toml")
 	got := buf.String()
 
-	if !strings.HasPrefix(got, "lint: no schema defined in config.\n") {
+	if !strings.HasPrefix(got, "lint: no frontmatter properties defined in config.\n") {
 		t.Errorf("unexpected prefix: %q", got)
 	}
 	if !strings.Contains(got, "Config: /home/user/.config/bnotes/config.toml") {
 		t.Errorf("expected config path in output, got:\n%s", got)
 	}
-	if !strings.Contains(got, "[frontmatter.schema.status]") {
+	if !strings.Contains(got, "[frontmatter.properties.status]") {
 		t.Errorf("expected example schema block, got:\n%s", got)
 	}
 	if !strings.Contains(got, "bn config edit") {
@@ -30,7 +30,7 @@ func TestWriteSchemaHint_EmptyPath(t *testing.T) {
 	writeSchemaHint(&buf, "repair", "")
 	got := buf.String()
 
-	if !strings.HasPrefix(got, "repair: no schema defined in config.\n") {
+	if !strings.HasPrefix(got, "repair: no frontmatter properties defined in config.\n") {
 		t.Errorf("unexpected prefix: %q", got)
 	}
 	if strings.Contains(got, "Config:") {

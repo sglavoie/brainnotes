@@ -7,239 +7,161 @@ import (
 	"testing"
 )
 
-func TestLoad_FlagBeatsEnvAndFile(t *testing.T) {
-	resetEnv(t)
-	vaultFlag := t.TempDir()
-	vaultEnv := t.TempDir()
-	vaultFile := t.TempDir()
+// envMap builds a Getenv that only knows the supplied variables.
+func envMap(pairs map[string]string) func(string) string {
+	return func(key string) string { return pairs[key] }
+}
 
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vaultFile+"\"\n")
+func mkdirAll(t *testing.T, path string) string {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+	return path
+}
 
-	t.Setenv(envVault, vaultEnv)
+func TestLoad_VaultFlagBeatsEnvAndDiscovery(t *testing.T) {
+	flagVault := newVault(t, "")
+	envVaultRoot := newVault(t, "")
+	discovered := newVault(t, "")
 
-	cfg, err := Load(vaultFlag, cfgPath)
+	cfg, err := Load(LoadOptions{
+		VaultFlag:  flagVault,
+		WorkingDir: discovered,
+		Getenv:     envMap(map[string]string{envVault: envVaultRoot}),
+	})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Vault != vaultFlag {
-		t.Fatalf("vault precedence: got %q, want %q", cfg.Vault, vaultFlag)
+	if cfg.Vault != flagVault {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, flagVault)
+	}
+	if cfg.VaultOrigin != VaultOriginFlag {
+		t.Fatalf("origin: got %q, want %q", cfg.VaultOrigin, VaultOriginFlag)
 	}
 }
 
-func TestLoad_EnvBeatsFile(t *testing.T) {
-	resetEnv(t)
-	vaultEnv := t.TempDir()
-	vaultFile := t.TempDir()
+func TestLoad_EnvBeatsDiscovery(t *testing.T) {
+	envVaultRoot := newVault(t, "")
+	discovered := newVault(t, "")
 
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vaultFile+"\"\n")
-
-	t.Setenv(envVault, vaultEnv)
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := Load(LoadOptions{
+		WorkingDir: discovered,
+		Getenv:     envMap(map[string]string{envVault: envVaultRoot}),
+	})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Vault != vaultEnv {
-		t.Fatalf("env precedence: got %q, want %q", cfg.Vault, vaultEnv)
+	if cfg.Vault != envVaultRoot {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, envVaultRoot)
+	}
+	if cfg.VaultOrigin != VaultOriginEnv {
+		t.Fatalf("origin: got %q, want %q", cfg.VaultOrigin, VaultOriginEnv)
 	}
 }
 
-func TestLoad_FileUsedWhenNoFlagOrEnv(t *testing.T) {
-	resetEnv(t)
-	vaultFile := t.TempDir()
+func TestLoad_DiscoveryWalksUpwardFromWorkingDir(t *testing.T) {
+	root := newVault(t, "")
+	deep := mkdirAll(t, filepath.Join(root, "Projects", "Active", "Notes"))
 
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vaultFile+"\"\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := Load(LoadOptions{WorkingDir: deep, Getenv: isolatedEnv()})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Vault != vaultFile {
-		t.Fatalf("file precedence: got %q, want %q", cfg.Vault, vaultFile)
+	if cfg.Vault != root {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, root)
+	}
+	if cfg.VaultOrigin != VaultOriginDiscovery {
+		t.Fatalf("origin: got %q, want %q", cfg.VaultOrigin, VaultOriginDiscovery)
+	}
+	if cfg.SourcePath != filepath.Join(root, FileName) {
+		t.Fatalf("SourcePath: got %q, want %q", cfg.SourcePath, filepath.Join(root, FileName))
 	}
 }
 
-func TestLoad_MissingConfigOKWhenVaultFlagGiven(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
+func TestLoad_DiscoveryStopsAtNearestMarker(t *testing.T) {
+	// A nested vault shadows its parent: the walk must stop at the first
+	// brainnotes.toml it meets rather than climbing to the outermost one.
+	outer := newVault(t, "")
+	inner := mkdirAll(t, filepath.Join(outer, "Inner"))
+	writeFile(t, filepath.Join(inner, FileName), "")
 
-	// No --config flag, no $BNOTES_CONFIG, default search paths empty (HOME and
-	// XDG point at empty temp dirs).
-	cfg, err := Load(vault, "")
+	cfg, err := Load(LoadOptions{WorkingDir: inner, Getenv: isolatedEnv()})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Vault != vault {
-		t.Fatalf("vault: got %q, want %q", cfg.Vault, vault)
+	if cfg.Vault != inner {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, inner)
 	}
 }
 
-func TestLoad_MissingHomeStillWorksWhenVaultFlagGiven(t *testing.T) {
-	resetEnv(t)
-	os.Unsetenv("HOME")
-	vault := t.TempDir()
+func TestLoad_DiscoveryFailsWithoutMarker(t *testing.T) {
+	start := mkdirAll(t, filepath.Join(t.TempDir(), "no", "vault", "here"))
 
-	cfg, err := Load(vault, "")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Vault != vault {
-		t.Fatalf("vault: got %q, want %q", cfg.Vault, vault)
-	}
-	if cfg.SourcePath != "" {
-		t.Fatalf("SourcePath should be empty when no config file could be resolved, got %q", cfg.SourcePath)
-	}
-}
-
-func TestLoad_ExplicitConfigPathMissingIsError(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	missing := filepath.Join(t.TempDir(), "nope.toml")
-	_, err := Load(vault, missing)
+	_, err := Load(LoadOptions{WorkingDir: start, Getenv: isolatedEnv()})
 	if err == nil {
-		t.Fatalf("expected error for missing --config path")
+		t.Fatal("expected error when no brainnotes.toml exists in any parent")
 	}
-	if !strings.Contains(err.Error(), missing) {
-		t.Fatalf("error should mention missing path; got %v", err)
+	if !strings.Contains(err.Error(), FileName) || !strings.Contains(err.Error(), start) {
+		t.Fatalf("error should name the marker and the starting directory; got %v", err)
+	}
+}
+
+func TestLoad_DiscoveryIgnoresMarkerDirectory(t *testing.T) {
+	// A directory named brainnotes.toml is not a config file, so the walk must
+	// keep climbing instead of adopting that directory as the vault root.
+	root := newVault(t, "")
+	child := mkdirAll(t, filepath.Join(root, "child"))
+	mkdirAll(t, filepath.Join(child, FileName))
+
+	cfg, err := Load(LoadOptions{WorkingDir: child, Getenv: isolatedEnv()})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != root {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, root)
+	}
+}
+
+func TestLoad_WhitespaceFlagFallsThroughToEnv(t *testing.T) {
+	envVaultRoot := newVault(t, "")
+
+	cfg, err := Load(LoadOptions{
+		VaultFlag: "   ",
+		Getenv:    envMap(map[string]string{envVault: envVaultRoot}),
+	})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != envVaultRoot {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, envVaultRoot)
+	}
+}
+
+func TestLoad_WhitespaceEnvFallsThroughToDiscovery(t *testing.T) {
+	root := newVault(t, "")
+
+	cfg, err := Load(LoadOptions{
+		WorkingDir: root,
+		Getenv:     envMap(map[string]string{envVault: "   "}),
+	})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Vault != root {
+		t.Fatalf("vault: got %q, want %q", cfg.Vault, root)
+	}
+	if cfg.VaultOrigin != VaultOriginDiscovery {
+		t.Fatalf("origin: got %q, want %q", cfg.VaultOrigin, VaultOriginDiscovery)
 	}
 }
 
 func TestLoad_InvalidTOMLSurfacesError(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "this is = = not toml\n")
-
-	_, err := Load(vault, cfgPath)
+	_, err := loadTOML(t, "this is = = not toml\n")
 	if err == nil {
-		t.Fatalf("expected error for invalid TOML")
+		t.Fatal("expected error for invalid TOML")
 	}
 	if !strings.Contains(err.Error(), "parse") {
 		t.Fatalf("error should mention parse failure; got %v", err)
-	}
-}
-
-func TestLoad_BNOTES_CONFIGHonored(t *testing.T) {
-	resetEnv(t)
-	vaultFile := t.TempDir()
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "from-env.toml")
-	writeFile(t, cfgPath, "vault = \""+vaultFile+"\"\n")
-
-	t.Setenv(envConfig, cfgPath)
-	cfg, err := Load("", "")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Vault != vaultFile {
-		t.Fatalf("vault from $BNOTES_CONFIG: got %q, want %q", cfg.Vault, vaultFile)
-	}
-}
-
-func TestLoad_BNOTES_CONFIGMissingIsError(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-	missing := filepath.Join(t.TempDir(), "nope.toml")
-	t.Setenv(envConfig, missing)
-
-	if _, err := Load(vault, ""); err == nil {
-		t.Fatalf("expected error for missing $BNOTES_CONFIG path")
-	}
-}
-
-func TestLoad_XDGConfigPath(t *testing.T) {
-	resetEnv(t)
-	vaultFile := t.TempDir()
-
-	xdg := t.TempDir()
-	cfgPath := filepath.Join(xdg, "bnotes", "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vaultFile+"\"\n")
-
-	t.Setenv(envXDG, xdg)
-	cfg, err := Load("", "")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Vault != vaultFile {
-		t.Fatalf("vault from XDG path: got %q, want %q", cfg.Vault, vaultFile)
-	}
-}
-
-func TestLoad_MissingXDGFallsThroughToDefaultConfig(t *testing.T) {
-	resetEnv(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv(envXDG, t.TempDir())
-
-	vaultFile := t.TempDir()
-	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
-	writeFile(t, defaultPath, "vault = \""+vaultFile+"\"\n")
-
-	cfg, err := Load("", "")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Vault != vaultFile {
-		t.Fatalf("Load should fall through to default config when XDG path is missing: got %q, want %q", cfg.Vault, vaultFile)
-	}
-	if cfg.SourcePath != defaultPath {
-		t.Fatalf("SourcePath: got %q, want %q", cfg.SourcePath, defaultPath)
-	}
-}
-
-func TestLoad_XDGDirectoryDoesNotFallThroughToDefaultConfig(t *testing.T) {
-	// An existing XDG config path that is a directory is invalid and should
-	// block resolution rather than silently falling through to ~/.config.
-	resetEnv(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	xdg := t.TempDir()
-	xdgPath := filepath.Join(xdg, "bnotes", "config.toml")
-	if err := os.MkdirAll(xdgPath, 0o755); err != nil {
-		t.Fatalf("mkdir xdg config dir: %v", err)
-	}
-	t.Setenv(envXDG, xdg)
-
-	vaultFile := t.TempDir()
-	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
-	writeFile(t, defaultPath, "vault = \""+vaultFile+"\"\n")
-
-	if _, err := Load("", ""); err == nil {
-		t.Fatal("expected XDG config directory to be rejected")
-	} else if !strings.Contains(err.Error(), xdgPath) || !strings.Contains(err.Error(), "directory") {
-		t.Fatalf("error should mention XDG directory path, got %v", err)
-	}
-}
-
-func TestLoad_DanglingSymlinkXDGAncestorDoesNotFallThroughToDefaultConfig(t *testing.T) {
-	resetEnv(t)
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	xdgLink := filepath.Join(t.TempDir(), "xdg-link")
-	if err := os.Symlink(filepath.Join(t.TempDir(), "missing-xdg-root"), xdgLink); err != nil {
-		t.Skipf("symlink not supported: %v", err)
-	}
-	t.Setenv(envXDG, xdgLink)
-
-	vaultFile := t.TempDir()
-	defaultPath := filepath.Join(home, ".config", "bnotes", "config.toml")
-	writeFile(t, defaultPath, "vault = \""+vaultFile+"\"\n")
-
-	wantPath := filepath.Join(xdgLink, "bnotes", "config.toml")
-	if _, err := Load("", ""); err == nil {
-		t.Fatal("expected dangling XDG ancestor symlink to be rejected")
-	} else if !strings.Contains(err.Error(), wantPath) {
-		t.Fatalf("error should mention dangling XDG candidate path %q, got %v", wantPath, err)
 	}
 }

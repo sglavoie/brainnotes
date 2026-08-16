@@ -8,14 +8,11 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
-// DefaultTemplate returns the commented TOML starter file body written when
-// `bn config edit` is invoked with no existing config file.
+// DefaultTemplate returns the commented TOML starter file body written by
+// `bn init`.
 func DefaultTemplate() string {
 	return `# bnotes configuration file
-# All keys are optional except ` + "`vault`" + `.
-
-# Absolute path to your vault root. Required for most commands.
-# vault = "/Users/you/vault"
+# This file marks its own directory as the vault root. All keys are optional.
 
 # Extra vault-relative paths to skip when walking notes. These are MERGED
 # with the built-in defaults: .git, .obsidian, Attachments, Archive, Trash.
@@ -28,17 +25,41 @@ func DefaultTemplate() string {
 # dir = "Templates"
 # default_extension = ".md"
 
-[frontmatter]
-# Frontmatter property keys whose values are stored as [[wikilinks]].
-# wikilink_properties = ["categories", "org", "parent", "area"]
-# Property keys whose values are comma-separated lists.
-# list_properties = ["categories", "tags", "topics", "org", "type"]
-
-# Property schema for validation with 'bn lint'.
-# [frontmatter.schema.status]
-# type     = "string"        # string, list, date, int, bool, float
+# Every frontmatter property is described by one definition. A definition names
+# a type (string, wikilink, date, datetime, int, float, bool, or list), and a
+# list additionally names the scalar kind of its items. Optional keys are
+# 'required' and 'allowed'. Properties with no definition are left alone.
+#
+# [frontmatter.properties.status]
+# type     = "string"
 # required = true
 # allowed  = ["WIP", "Done", "Archived"]
+
+[frontmatter.properties.categories]
+type  = "list"
+items = "wikilink"
+
+[frontmatter.properties.tags]
+type  = "list"
+items = "string"
+
+[frontmatter.properties.topics]
+type  = "list"
+items = "string"
+
+[frontmatter.properties.org]
+type  = "list"
+items = "wikilink"
+
+[frontmatter.properties.type]
+type  = "list"
+items = "string"
+
+[frontmatter.properties.parent]
+type = "wikilink"
+
+[frontmatter.properties.area]
+type = "wikilink"
 
 [fzf]
 # Additional flags passed to fzf when --interactive is used.
@@ -165,20 +186,10 @@ func applyDefaults(cfg *Config) {
 	if !strings.HasPrefix(cfg.Templates.DefaultExtension, ".") {
 		cfg.Templates.DefaultExtension = "." + cfg.Templates.DefaultExtension
 	}
-	if cfg.Frontmatter.WikilinkProperties == nil {
-		cfg.Frontmatter.WikilinkProperties = []string{"categories", "org", "parent", "area"}
+	if cfg.Frontmatter.Properties == nil {
+		cfg.Frontmatter.Properties = map[string]PropertyDefinition{}
 	} else {
-		cfg.Frontmatter.WikilinkProperties = normalizePropertyList(cfg.Frontmatter.WikilinkProperties)
-	}
-	if cfg.Frontmatter.ListProperties == nil {
-		cfg.Frontmatter.ListProperties = []string{"categories", "tags", "topics", "org", "type"}
-	} else {
-		cfg.Frontmatter.ListProperties = normalizePropertyList(cfg.Frontmatter.ListProperties)
-	}
-	if cfg.Frontmatter.Schema == nil {
-		cfg.Frontmatter.Schema = map[string]PropertySchema{}
-	} else {
-		normalizeSchema(cfg.Frontmatter.Schema)
+		normalizeProperties(cfg.Frontmatter.Properties)
 	}
 	if cfg.New.Routes == nil {
 		cfg.New.Routes = map[string]string{}
@@ -287,11 +298,16 @@ func applyDefaults(cfg *Config) {
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
 }
 
-func normalizeSchema(schema map[string]PropertySchema) {
-	for key, rule := range schema {
-		rule.Type = strings.ToLower(strings.TrimSpace(rule.Type))
-		schema[key] = rule
+func normalizeProperties(props map[string]PropertyDefinition) {
+	for key, def := range props {
+		def.Type = normalizeKind(def.Type)
+		def.Items = normalizeKind(def.Items)
+		props[key] = def
 	}
+}
+
+func normalizeKind(k PropertyKind) PropertyKind {
+	return PropertyKind(strings.ToLower(strings.TrimSpace(string(k))))
 }
 
 func containsControlRune(s string) bool {
@@ -335,9 +351,9 @@ func normalizeSlashSeparators(p string) string {
 }
 
 // normalizePropertyList trims surrounding whitespace, drops empty entries, and
-// deduplicates so a user-provided list_properties / wikilink_properties value
-// matches the exact frontmatter key string used by downstream callers (which
-// compare with string equality, not whitespace-insensitively).
+// deduplicates so a user-provided property-name list matches the exact
+// frontmatter key string used by downstream callers (which compare with string
+// equality, not whitespace-insensitively).
 func normalizePropertyList(in []string) []string {
 	if in == nil {
 		return nil

@@ -35,6 +35,7 @@ type briefInsightResponse struct {
 }
 
 func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/brief/insight" {
 		http.NotFound(w, r)
 		return
@@ -67,7 +68,7 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "AI prompt must be %d characters or fewer", agentPromptMaxRunes))
 		return
 	}
-	argv := append([]string(nil), s.cfg.Agent.Command...)
+	argv := append([]string(nil), cfg.Agent.Command...)
 	if len(argv) == 0 {
 		writeManagementJSON(w, http.StatusOK, briefInsightResponse{
 			OK:      true,
@@ -109,7 +110,7 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if timeout := time.Duration(s.cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
+	if timeout := time.Duration(cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()

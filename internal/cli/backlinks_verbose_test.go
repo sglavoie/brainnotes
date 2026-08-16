@@ -25,6 +25,7 @@ func TestBacklinks_VerboseBasic(t *testing.T) {
 func TestBacklinks_VerboseFrontmatter(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Target.md":    "---\ntitle: Target\n---\nThe target note.\n",
 		"Referrer3.md": "---\ntitle: Referrer3\ncategory: \"[[Target]]\"\n---\nBody without links.\n",
@@ -50,6 +51,7 @@ func TestBacklinks_VerboseFrontmatter(t *testing.T) {
 func TestBacklinks_VerboseMultiOccurrence(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Target.md":   "---\ntitle: Target\n---\nTarget body.\n",
 		"MultiRef.md": "---\ntitle: MultiRef\n---\nFirst [[Target]] here.\nAnd second [[Target]] there.\n",
@@ -78,6 +80,7 @@ func TestBacklinks_VerboseMultiOccurrence(t *testing.T) {
 func TestBacklinks_VerboseTruncation(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	prefix := strings.Repeat("x", 10)
 	suffix := strings.Repeat("y", 300-len(prefix)-len("[[Target]] "))
 	bodyLine := prefix + " [[Target]] " + suffix
@@ -133,6 +136,7 @@ func TestBacklinks_VerboseCodeSpanIgnored(t *testing.T) {
 func TestBacklinks_VerboseOnlyShowsLinksToSelectedDuplicateTarget(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Folder/Target.md": "Folder target.\n",
 		"Other/Target.md":  "Other target.\n",

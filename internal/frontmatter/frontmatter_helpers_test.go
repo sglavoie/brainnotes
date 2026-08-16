@@ -9,8 +9,15 @@ import (
 
 func defaultCfg() *config.FrontmatterConfig {
 	return &config.FrontmatterConfig{
-		WikilinkProperties: []string{"categories", "org", "parent", "area"},
-		ListProperties:     []string{"categories", "tags", "topics", "org", "type"},
+		Properties: map[string]config.PropertyDefinition{
+			"categories": {Type: config.KindList, Items: config.KindWikilink},
+			"org":        {Type: config.KindList, Items: config.KindWikilink},
+			"tags":       {Type: config.KindList, Items: config.KindString},
+			"topics":     {Type: config.KindList, Items: config.KindString},
+			"type":       {Type: config.KindList, Items: config.KindString},
+			"parent":     {Type: config.KindWikilink},
+			"area":       {Type: config.KindWikilink},
+		},
 	}
 }
 

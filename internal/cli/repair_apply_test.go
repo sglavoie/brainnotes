@@ -137,7 +137,11 @@ func TestApplyRepairs_WikilinkWrap(t *testing.T) {
 			{Property: "parent", Kind: "wikilink_wrap", OldValue: "Books", NewValue: "[[Books]]"},
 		},
 	}
-	fmCfg := &config.FrontmatterConfig{WikilinkProperties: []string{"parent"}}
+	fmCfg := &config.FrontmatterConfig{
+		Properties: map[string]config.PropertyDefinition{
+			"parent": {Type: config.KindWikilink},
+		},
+	}
 	changed, err := applyRepairs(n, result, fmCfg, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

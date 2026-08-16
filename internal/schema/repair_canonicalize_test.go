@@ -33,13 +33,13 @@ func TestPlanRepairs_Canonicalize(t *testing.T) {
 		},
 	}
 
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string", Allowed: allowed},
+	sch := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString, Allowed: allowed},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := PlanRepairs(tt.front, sch, nil)
+			result := PlanRepairs(tt.front, sch)
 			if len(result.Skips) != 0 {
 				t.Errorf("unexpected skips: %+v", result.Skips)
 			}
@@ -58,12 +58,12 @@ func TestPlanRepairs_Canonicalize(t *testing.T) {
 }
 
 func TestPlanRepairs_Canonicalize_List(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"tags": {Type: "list", Allowed: []string{"Go", "CLI", "Rust"}},
+	sch := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Allowed: []string{"Go", "CLI", "Rust"}},
 	}
 	front := buildFront("tags", []any{"go", "CLI", "rust"})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, sch)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -81,12 +81,12 @@ func TestPlanRepairs_Canonicalize_List(t *testing.T) {
 }
 
 func TestPlanRepairs_Canonicalize_Skip(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string", Allowed: []string{"WIP", "Done"}},
+	sch := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString, Allowed: []string{"WIP", "Done"}},
 	}
 	front := buildFront("status", "unknown")
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, sch)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions, got %+v", result.Actions)
 	}
@@ -99,12 +99,12 @@ func TestPlanRepairs_Canonicalize_Skip(t *testing.T) {
 }
 
 func TestPlanRepairs_Canonicalize_ListPartialSkip(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"tags": {Type: "list", Allowed: []string{"Go", "CLI"}},
+	sch := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Allowed: []string{"Go", "CLI"}},
 	}
 	front := buildFront("tags", []any{"go", "unknown"})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, sch)
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -125,12 +125,12 @@ func TestPlanRepairs_Canonicalize_ListPartialSkip(t *testing.T) {
 }
 
 func TestPlanRepairs_Canonicalize_Wikilink(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	sch := map[string]config.PropertyDefinition{
+		"category": {Type: config.KindWikilink, Allowed: []string{"Work", "Personal"}},
 	}
 	front := buildFront("category", "[[work]]")
 
-	result := PlanRepairs(front, sch, []string{"category"})
+	result := PlanRepairs(front, sch)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -143,12 +143,12 @@ func TestPlanRepairs_Canonicalize_Wikilink(t *testing.T) {
 }
 
 func TestPlanRepairs_Canonicalize_WikilinkPreservesHeadingAndAlias(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	sch := map[string]config.PropertyDefinition{
+		"category": {Type: config.KindWikilink, Allowed: []string{"Work", "Personal"}},
 	}
 	front := buildFront("category", "[[work#Today|Focus]]")
 
-	result := PlanRepairs(front, sch, []string{"category"})
+	result := PlanRepairs(front, sch)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -164,12 +164,12 @@ func TestPlanRepairs_Canonicalize_WikilinkPreservesHeadingAndAlias(t *testing.T)
 }
 
 func TestPlanRepairs_CanonicalizeThenWrap_BareWikilinkHeadingAndAlias(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"category": {Type: "string", Allowed: []string{"Work", "Personal"}},
+	sch := map[string]config.PropertyDefinition{
+		"category": {Type: config.KindWikilink, Allowed: []string{"Work", "Personal"}},
 	}
 	front := buildFront("category", "work#Today|Focus")
 
-	result := PlanRepairs(front, sch, []string{"category"})
+	result := PlanRepairs(front, sch)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}

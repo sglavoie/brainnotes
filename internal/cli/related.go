@@ -306,7 +306,7 @@ func buildRelatedQuery(
 	}
 
 	extractOptions := recall.ExtractOptions{
-		MetadataProperties: append([]string(nil), v.Cfg.Related.MetadataProperties...),
+		MetadataProperties: append([]string(nil), v.Config().Related.MetadataProperties...),
 	}
 	documents, err := recall.ExtractCorpus(v.Root, notes, extractOptions)
 	if err != nil {

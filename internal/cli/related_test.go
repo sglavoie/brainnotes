@@ -40,6 +40,7 @@ func newRelatedFixture(t *testing.T) string {
 			t.Fatalf("write %s: %v", relative, err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -261,7 +262,7 @@ func TestRelatedInteractiveUsesRankedRowsAndPrintsSelection(t *testing.T) {
 	}
 	response := decodeRelatedJSON(t, jsonOutput)
 
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -335,7 +336,7 @@ func TestRelatedInteractiveUsesRankedRowsAndPrintsSelection(t *testing.T) {
 func TestRelatedInteractiveOpenUsesConfiguredEditor(t *testing.T) {
 	isolateBnEnv(t)
 	root := newRelatedFixture(t)
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -380,7 +381,7 @@ func TestRelatedInteractiveOpenUsesConfiguredEditor(t *testing.T) {
 func TestRelatedInteractivePreservesFZFExitBehavior(t *testing.T) {
 	isolateBnEnv(t)
 	root := newRelatedFixture(t)
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -423,7 +424,7 @@ func TestRelatedInteractivePreservesFZFExitBehavior(t *testing.T) {
 func TestRelatedInteractiveRejectsCorruptedSelection(t *testing.T) {
 	isolateBnEnv(t)
 	root := newRelatedFixture(t)
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -456,7 +457,7 @@ func TestRelatedInteractiveRejectsCorruptedSelection(t *testing.T) {
 func TestRelatedInteractiveReportsEditorErrors(t *testing.T) {
 	isolateBnEnv(t)
 	root := newRelatedFixture(t)
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -493,6 +494,7 @@ func slicesContainSequence(values []string, first, second string) bool {
 func TestRelatedEmptyCandidateSetSucceedsInEveryOutputMode(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	if err := os.WriteFile(filepath.Join(root, "Only.md"), []byte("Only note.\n"), 0o644); err != nil {
 		t.Fatalf("write only note: %v", err)
 	}

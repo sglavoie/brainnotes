@@ -19,7 +19,7 @@ import (
 // shorten paths in the diff header; pass "" to fall back to the absolute path.
 func applySet(path string, pairs []setPair, fm *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *noteops.Journal) (bool, error) {
 	if dry == nil {
-		return noteops.ApplyFrontmatterMutations(path, pairs, fm, journaler)
+		return noteops.ApplyFrontmatterMutations(vaultRoot, path, pairs, fm, journaler)
 	}
 
 	note, front, err := loadSetNote(path)

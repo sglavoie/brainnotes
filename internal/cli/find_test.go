@@ -35,6 +35,7 @@ func buildFixtureVault(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -43,11 +44,7 @@ func buildFixtureVault(t *testing.T) string {
 // sorted lexically.
 func runFind(t *testing.T, vaultRoot string, args ...string) []string {
 	t.Helper()
-	// Isolate config lookup: point XDG_CONFIG_HOME at an empty temp dir so we
-	// never pick up the user's real ~/.config/bnotes/config.toml.
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_CONFIG", "")
-	t.Setenv("BNOTES_VAULT", "")
+	isolateBnEnv(t)
 
 	root := NewRootCmd()
 	out := &bytes.Buffer{}
@@ -125,9 +122,7 @@ func TestFindOrphan(t *testing.T) {
 func TestFindNullSeparator(t *testing.T) {
 	root := buildFixtureVault(t)
 
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_CONFIG", "")
-	t.Setenv("BNOTES_VAULT", "")
+	isolateBnEnv(t)
 
 	cmd := NewRootCmd()
 	buf := &bytes.Buffer{}
@@ -189,6 +184,7 @@ func buildBrokenLinkFixture(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -203,9 +199,7 @@ func TestFind_BrokenLinks(t *testing.T) {
 
 func runFindRaw(t *testing.T, vaultRoot string, args ...string) string {
 	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_CONFIG", "")
-	t.Setenv("BNOTES_VAULT", "")
+	isolateBnEnv(t)
 
 	root := NewRootCmd()
 	out := &bytes.Buffer{}
@@ -234,9 +228,7 @@ func TestFind_BrokenLinks_Targets(t *testing.T) {
 func TestFind_BrokenLinks_ErrorCombinations(t *testing.T) {
 	root := buildBrokenLinkFixture(t)
 
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_CONFIG", "")
-	t.Setenv("BNOTES_VAULT", "")
+	isolateBnEnv(t)
 
 	tests := []struct {
 		name string
@@ -298,6 +290,7 @@ func buildLinkCountFixture(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 

@@ -31,6 +31,7 @@ type dailyReviewAgentResponse struct {
 // a clean disabled response rather than an error, so the client can offer the
 // feature only when it is available.
 func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/daily-review/agent" {
 		http.NotFound(w, r)
 		return
@@ -70,7 +71,7 @@ func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) 
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
 		return
 	}
-	queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
+	queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
 	stdin, err := json.Marshal(cockpit.BuildReviewContext(queue))
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "encode review context", err))
@@ -103,10 +104,11 @@ func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) dailyReviewAgentConfig() ([]string, int) {
-	if legacy := strings.TrimSpace(s.cfg.Cockpit.AgentCommand); legacy != "" {
+	cfg := s.config()
+	if legacy := strings.TrimSpace(cfg.Cockpit.AgentCommand); legacy != "" {
 		// Legacy configuration is intentionally split exactly as before. It is
 		// still passed directly as argv and is never interpreted by a shell.
-		return strings.Fields(legacy), s.cfg.Cockpit.AgentTimeoutSeconds
+		return strings.Fields(legacy), cfg.Cockpit.AgentTimeoutSeconds
 	}
-	return append([]string(nil), s.cfg.Agent.Command...), s.cfg.Agent.TimeoutSeconds
+	return append([]string(nil), cfg.Agent.Command...), cfg.Agent.TimeoutSeconds
 }

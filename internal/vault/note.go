@@ -23,6 +23,10 @@ type Note struct {
 
 	doc    frontmatter.Document
 	loaded bool
+	// sourceHash is the SHA-256 of the bytes Load read. It lets a caller pin a
+	// transaction to the exact revision it parsed, so a concurrent external edit
+	// between Load and commit is rejected instead of silently overwritten.
+	sourceHash string
 }
 
 // Load reads and parses the note from disk. Safe to call repeatedly; only the
@@ -49,12 +53,37 @@ func (n *Note) Load() error {
 		return fmt.Errorf("note: parse %q: %w", n.Path, err)
 	}
 	n.doc = doc
+	n.sourceHash = HashBytes(data)
 	n.loaded = true
 	return nil
 }
 
 // Loaded reports whether the note has been read from disk.
 func (n *Note) Loaded() bool { return n != nil && n.loaded }
+
+// SourceHash returns the hex SHA-256 of the bytes Load read, or "" when the
+// note has not been loaded.
+func (n *Note) SourceHash() string {
+	if n == nil {
+		return ""
+	}
+	return n.sourceHash
+}
+
+// Marshal serializes the note the same way Save would, without writing it.
+func (n *Note) Marshal(fmCfg *config.FrontmatterConfig) ([]byte, error) {
+	if n == nil {
+		return nil, errors.New("vault: nil note")
+	}
+	if !n.loaded {
+		return nil, fmt.Errorf("note: marshal %q: not loaded", n.Path)
+	}
+	data, err := frontmatter.Marshal(n.doc, fmCfg)
+	if err != nil {
+		return nil, fmt.Errorf("note: marshal %q: %w", n.Path, err)
+	}
+	return data, nil
+}
 
 // Save writes the note atomically: it serializes the document, writes to a
 // sibling temp file, fsyncs, and renames over the destination. The caller

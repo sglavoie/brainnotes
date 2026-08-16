@@ -132,7 +132,7 @@ func TestSavePreservesFileMode(t *testing.T) {
 	if err := n.SetBody("changed\n"); err != nil {
 		t.Fatalf("setbody: %v", err)
 	}
-	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+	if err := n.Save(v.Frontmatter()); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 	info, err := os.Stat(notePath)
@@ -172,7 +172,7 @@ func TestSavePreservesZeroMode(t *testing.T) {
 	if err := os.Chmod(notePath, 0o000); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
-	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+	if err := n.Save(v.Frontmatter()); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 

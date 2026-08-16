@@ -40,19 +40,6 @@ func mustManagementNotePath(relPath string) string {
 	return routePath
 }
 
-func frontmatterSchemaTypeFlag(schemaType string) string {
-	switch strings.TrimSpace(schemaType) {
-	case "string":
-		return "raw"
-	case "date", "int", "bool", "float":
-		return schemaType
-	case "list":
-		return "raw"
-	default:
-		return ""
-	}
-}
-
 func managementJournalID(entry *journal.Entry) string {
 	if entry == nil {
 		return ""

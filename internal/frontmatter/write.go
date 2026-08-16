@@ -15,8 +15,8 @@ import (
 )
 
 // Marshal serializes a Document back to bytes. Frontmatter keys are emitted
-// in alphabetical order. Values for keys listed in fmCfg.WikilinkProperties
-// are auto-wrapped as `[[Value]]` when not already wrapped.
+// in alphabetical order. Values for keys whose definition resolves to the
+// wikilink kind are auto-wrapped as `[[Value]]` when not already wrapped.
 //
 // When the Front map is empty, no frontmatter block is emitted and only the
 // body is returned. fmCfg may be nil; in that case no wikilink wrapping is
@@ -82,11 +82,9 @@ func bodyStartsWithDelimiter(body string) bool {
 // marshalMap encodes the map as a sorted YAML mapping, applying wikilink
 // wrapping where appropriate.
 func marshalMap(m Map, fmCfg *config.FrontmatterConfig) ([]byte, error) {
-	wikilinkSet := make(map[string]bool)
+	isWikilink := func(string) bool { return false }
 	if fmCfg != nil {
-		for _, k := range fmCfg.WikilinkProperties {
-			wikilinkSet[k] = true
-		}
+		isWikilink = fmCfg.IsWikilink
 	}
 
 	keys := m.Keys()
@@ -97,7 +95,7 @@ func marshalMap(m Map, fmCfg *config.FrontmatterConfig) ([]byte, error) {
 	root := &yaml.Node{Kind: yaml.MappingNode}
 	for _, k := range sorted {
 		v := m.vals[k]
-		if wikilinkSet[k] {
+		if isWikilink(k) {
 			v = applyWikilinkWrap(v)
 		}
 		keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: k}
@@ -221,20 +219,18 @@ func encodeMapAt(m map[string]any, meta map[string]valueMeta, path []string) (*y
 }
 
 // encodeTime emits a date-only scalar when the time has no time-of-day
-// component and is in UTC, unless the value came from a parsed datetime scalar;
+// component and is in UTC, unless a recorded spelling — from a parsed datetime
+// scalar or from Map.SetTimeSpelling — says the value is a timestamp;
 // otherwise it emits a full RFC3339 timestamp.
 // Sub-second precision is preserved via RFC3339Nano so that timestamps
 // like `2025-12-13T10:30:00.5Z` round-trip without losing fractional
 // seconds.
 func encodeTime(t time.Time, meta valueMeta, hasMeta bool) *yaml.Node {
-	if (!hasMeta || meta.timestampDateOnly) &&
-		t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
-		if t.Location() == time.UTC {
-			return &yaml.Node{
-				Kind:  yaml.ScalarNode,
-				Tag:   "!!timestamp",
-				Value: t.Format("2006-01-02"),
-			}
+	if (!hasMeta || meta.timestampDateOnly) && isMidnightUTC(t) {
+		return &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Tag:   "!!timestamp",
+			Value: t.Format("2006-01-02"),
 		}
 	}
 	return &yaml.Node{

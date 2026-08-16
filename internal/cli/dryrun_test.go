@@ -220,13 +220,7 @@ func TestSetDryRun_WikilinkAlreadyStoredIsNoOp(t *testing.T) {
 	if err := os.WriteFile(notePath, []byte("---\nparent: '[[Books]]'\n---\nBody.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, testPropertyDefinitions)
 
 	var out string
 	assertMtimeUnchanged(t, []string{notePath}, func() {
@@ -252,13 +246,7 @@ func TestSetDryRun_WholeNumberFloatValueMatchesApplyPath(t *testing.T) {
 	if err := os.WriteFile(notePath, []byte("---\nrating: 3.0\n---\nBody.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "")
 
 	// Switching rating from 3.0 to 5 (an int) is a real change. The dry-run
 	// preview must show the existing value as `3.0`, not `3`.

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -9,10 +8,7 @@ import (
 )
 
 func TestLoad_CockpitDefaults(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	cfg, err := Load(vault, "")
+	cfg, err := loadVault(t, newVault(t, ""))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -70,12 +66,7 @@ func TestLoad_CockpitDefaults(t *testing.T) {
 }
 
 func TestLoad_CockpitExplicitValues(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, `[cockpit]
+	cfg, err := loadTOML(t, `[cockpit]
 disabled_rules = ["long_tail_value", "dead_end_note"]
 priority = ["broken_target", "schema_violation"]
 long_tail_limit = 3
@@ -96,8 +87,6 @@ sensitive_ignore_patterns = ["EXAMPLE_[A-Z]+"]
 agent_command = "my-agent --daily"
 agent_timeout_seconds = 120
 `)
-
-	cfg, err := Load(vault, cfgPath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -253,13 +242,7 @@ func TestLoad_CockpitValidationRejectsBadValues(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			resetEnv(t)
-			vault := t.TempDir()
-			dir := t.TempDir()
-			cfgPath := filepath.Join(dir, "config.toml")
-			writeFile(t, cfgPath, tc.body)
-
-			_, err := Load(vault, cfgPath)
+			_, err := loadTOML(t, tc.body)
 			if err == nil {
 				t.Fatalf("Load: got nil error, want error mentioning %q", tc.wantSub)
 			}

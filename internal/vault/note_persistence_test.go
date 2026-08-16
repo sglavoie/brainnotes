@@ -19,7 +19,7 @@ func TestSaveAtomic(t *testing.T) {
 	if err := n.SetBody("changed\n"); err != nil {
 		t.Fatalf("setbody: %v", err)
 	}
-	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+	if err := n.Save(v.Frontmatter()); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 
@@ -59,7 +59,7 @@ func TestSaveRefusesUnloaded(t *testing.T) {
 	if n.Loaded() {
 		t.Fatalf("expected lazy note")
 	}
-	if err := n.Save(&v.Cfg.Frontmatter); err == nil {
+	if err := n.Save(v.Frontmatter()); err == nil {
 		t.Fatalf("expected error saving an unloaded note")
 	}
 }
@@ -81,7 +81,7 @@ func TestSaveCreatesParentDirs(t *testing.T) {
 	// Move the note to a not-yet-existing subdirectory.
 	newPath := filepath.Join(v.Root, "NewDir", "SubDir", "moved.md")
 	n.Path = newPath
-	if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+	if err := n.Save(v.Frontmatter()); err != nil {
 		t.Fatalf("save to new dir: %v", err)
 	}
 	data, err := os.ReadFile(newPath)
@@ -113,7 +113,7 @@ func TestSaveRejectsSymlinkParentEscape(t *testing.T) {
 	outsidePath := filepath.Join(outside, "escape.md")
 	n.Path = filepath.Join(link, "escape.md")
 
-	err = n.Save(&v.Cfg.Frontmatter)
+	err = n.Save(v.Frontmatter())
 	if err == nil {
 		t.Fatal("save through symlinked parent should fail")
 	}
@@ -167,7 +167,7 @@ func TestSaveEmptyPath(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	n.Path = ""
-	if err := n.Save(&v.Cfg.Frontmatter); err == nil {
+	if err := n.Save(v.Frontmatter()); err == nil {
 		t.Fatal("Save with empty Path should return an error")
 	}
 }
@@ -184,7 +184,7 @@ func TestSaveRejectsRelativePath(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	n.Path = filepath.Join("relative", "saved.md")
-	err = n.Save(&v.Cfg.Frontmatter)
+	err = n.Save(v.Frontmatter())
 	if err == nil {
 		t.Fatal("Save with relative Path should return an error")
 	}

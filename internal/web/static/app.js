@@ -961,6 +961,406 @@ var BrainNotesApp = (() => {
     return message || `Open failed (${status}).`;
   };
 
+  // internal/web/static_src/api-properties.ts
+  var PROPERTY_ROW_FILTERS = [
+    "all",
+    "violations",
+    "missing",
+    "unsupported"
+  ];
+  var normalizePropertyRowFilterStatus = (value) => {
+    const normalized = normalizeParamValue(value);
+    return PROPERTY_ROW_FILTERS.includes(normalized) ? normalized : "all";
+  };
+  var normalizePropertyValue = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return { kind: "unsupported", text: "", items: [], supported: false };
+    }
+    const supported = readBoolean(record.supported);
+    const items = Array.isArray(record.items) ? record.items.map((item) => normalizePropertyValue(item)) : [];
+    const value = {
+      kind: normalizeParamValue(record.kind) || "unsupported",
+      text: typeof record.text === "string" ? record.text : normalizeParamValue(record.text),
+      items,
+      supported
+    };
+    if (supported && record.value !== void 0 && record.value !== null) {
+      value.value = record.value;
+    }
+    return value;
+  };
+  var normalizePropertyValueCounts = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      return [{ value: normalizePropertyValue(record.value), notes: readCount(record.notes) }];
+    });
+  };
+  var normalizePropertyIssues = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const kind = normalizeParamValue(record.kind);
+      const detail = normalizeParamValue(record.detail);
+      if (kind === "" && detail === "") {
+        return [];
+      }
+      return [{ kind, detail }];
+    });
+  };
+  var normalizePropertyViolationCounts = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      missing: readCount(record.missing),
+      type: readCount(record.type),
+      value: readCount(record.value)
+    };
+  };
+  var normalizePropertyDefinition = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return void 0;
+    }
+    const type = normalizeParamValue(record.type);
+    if (type === "") {
+      return void 0;
+    }
+    return {
+      type,
+      items: normalizeParamValue(record.items) || void 0,
+      required: readBoolean(record.required),
+      allowed: normalizeStringArray(record.allowed),
+      summary: normalizeParamValue(record.summary)
+    };
+  };
+  var normalizePropertyProposal = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return void 0;
+    }
+    const property = normalizeParamValue(record.property);
+    const type = normalizeParamValue(record.type);
+    if (property === "" || type === "") {
+      return void 0;
+    }
+    return {
+      property,
+      type,
+      items: normalizeParamValue(record.items) || void 0,
+      notes: readCount(record.notes),
+      rationale: normalizeParamValue(record.rationale),
+      toml: typeof record.toml === "string" ? record.toml : ""
+    };
+  };
+  var normalizePropertyProposals = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const proposal = normalizePropertyProposal(item);
+      return proposal ? [proposal] : [];
+    });
+  };
+  var normalizePropertySummary = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      name: normalizeParamValue(record.name),
+      path: normalizeParamValue(record.path),
+      configured: readBoolean(record.configured),
+      definition: normalizePropertyDefinition(record.definition),
+      note_count: readCount(record.note_count),
+      total_notes: readCount(record.total_notes),
+      coverage: readCount(record.coverage),
+      missing_required: readCount(record.missing_required),
+      observed_kinds: normalizeStringArray(record.observed_kinds),
+      distinct_values: readCount(record.distinct_values),
+      violation_notes: readCount(record.violation_notes),
+      violations: readCount(record.violations),
+      violation_counts: normalizePropertyViolationCounts(record.violation_counts),
+      unsupported_values: readCount(record.unsupported_values),
+      unsupported_notes: readCount(record.unsupported_notes),
+      issues: readCount(record.issues),
+      proposal: normalizePropertyProposal(record.proposal)
+    };
+  };
+  var normalizePropertySummaries = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const summary = normalizePropertySummary(item);
+      return summary.name === "" ? [] : [summary];
+    });
+  };
+  var normalizePropertyRows = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const relPath = normalizeParamValue(record.rel_path);
+      if (relPath === "") {
+        return [];
+      }
+      const present = readBoolean(record.present);
+      const row = {
+        rel_path: relPath,
+        title: normalizeParamValue(record.title),
+        folder: normalizeParamValue(record.folder),
+        path: normalizeParamValue(record.path),
+        hash: normalizeParamValue(record.hash),
+        present,
+        issues: normalizePropertyIssues(record.issues),
+        unsupported: readBoolean(record.unsupported)
+      };
+      if (present && record.value !== void 0 && record.value !== null) {
+        row.value = normalizePropertyValue(record.value);
+      }
+      return [row];
+    });
+  };
+  var normalizePropertyPagination = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      limit: readCount(record.limit),
+      offset: readCount(record.offset),
+      total: readCount(record.total),
+      returned: readCount(record.returned),
+      has_more: readBoolean(record.has_more)
+    };
+  };
+  var normalizePropertyRowFilter = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      status: normalizePropertyRowFilterStatus(record.status),
+      value: typeof record.value === "string" && record.value !== "" ? record.value : void 0,
+      q: normalizeParamValue(record.q) || void 0
+    };
+  };
+  var normalizePropertyConfigStatus = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      generation: readCount(record.generation),
+      source_hash: normalizeParamValue(record.source_hash),
+      status: normalizeParamValue(record.status) || "ok",
+      error: normalizeParamValue(record.error) || void 0,
+      restart_required: normalizeStringArray(record.restart_required),
+      writable: readBoolean(record.writable)
+    };
+  };
+  var normalizePropertyTotals = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      properties: readCount(record.properties),
+      configured: readCount(record.configured),
+      unconfigured: readCount(record.unconfigured),
+      notes: readCount(record.notes),
+      violations: readCount(record.violations),
+      violation_notes: readCount(record.violation_notes),
+      missing_required: readCount(record.missing_required),
+      unsupported_values: readCount(record.unsupported_values),
+      proposals: readCount(record.proposals)
+    };
+  };
+  var normalizePropertiesResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      generation: readCount(record.generation),
+      total_notes: readCount(record.total_notes),
+      totals: normalizePropertyTotals(record.totals),
+      properties: normalizePropertySummaries(record.properties),
+      proposals: normalizePropertyProposals(record.proposals),
+      config: normalizePropertyConfigStatus(record.config)
+    };
+  };
+  var normalizePropertyDetailResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      generation: readCount(record.generation),
+      property: normalizePropertySummary(record.property),
+      values: normalizePropertyValueCounts(record.values),
+      rows: normalizePropertyRows(record.rows),
+      pagination: normalizePropertyPagination(record.pagination),
+      filter: normalizePropertyRowFilter(record.filter),
+      config: normalizePropertyConfigStatus(record.config)
+    };
+  };
+  var buildPropertyDetailURL = (endpoint, query) => {
+    const params = new URLSearchParams();
+    params.set("property", query.property);
+    if (query.status && query.status !== "all") {
+      params.set("filter", query.status);
+    }
+    if (query.value !== void 0 && query.value !== "") {
+      params.set("value", query.value);
+    }
+    if (query.q !== void 0 && query.q.trim() !== "") {
+      params.set("q", query.q.trim());
+    }
+    if (query.limit !== void 0 && query.limit > 0) {
+      params.set("limit", String(query.limit));
+    }
+    if (query.offset !== void 0 && query.offset > 0) {
+      params.set("offset", String(query.offset));
+    }
+    return `${endpoint}?${params.toString()}`;
+  };
+
+  // internal/web/static_src/api-properties-mutation.ts
+  var PROPERTY_VALUE_ENDPOINT = "/api/properties/value";
+  var PROPERTY_PREVIEW_ENDPOINT = "/api/properties/preview";
+  var PROPERTY_APPLY_ENDPOINT = "/api/properties/apply";
+  var PROPERTY_SCHEMA_PREVIEW_ENDPOINT = "/api/properties/schema/preview";
+  var PROPERTY_SCHEMA_APPLY_ENDPOINT = "/api/properties/schema/apply";
+  var CONFIG_STATUS_ENDPOINT = "/api/config/status";
+  var PROPERTY_BLOCKER_REPAIR_SKIP = "repair_skip";
+  var normalizePropertyBlockers = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const kind = normalizeParamValue(record.kind);
+      if (kind === "") {
+        return [];
+      }
+      return [{
+        rel_path: normalizeParamValue(record.rel_path),
+        property: normalizeParamValue(record.property),
+        kind,
+        detail: normalizeParamValue(record.detail),
+        fatal: kind !== PROPERTY_BLOCKER_REPAIR_SKIP
+      }];
+    });
+  };
+  var propertyPlanIsBlocked = (blockers) => blockers.some((blocker) => blocker.fatal);
+  var normalizePropertyConfigDiff = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      const kind = normalizeParamValue(record.kind);
+      if (kind === "") {
+        return [];
+      }
+      return [{
+        kind,
+        line: readCount(record.line),
+        text: typeof record.text === "string" ? record.text : ""
+      }];
+    });
+  };
+  var normalizeViolationTotals = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      missing: readCount(record.missing),
+      type: readCount(record.type),
+      value: readCount(record.value),
+      notes: readCount(record.notes)
+    };
+  };
+  var normalizePropertyViolationProjection = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      before: normalizeViolationTotals(record.before),
+      after: normalizeViolationTotals(record.after)
+    };
+  };
+  var normalizePropertyMutationResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      generation: readCount(record.generation),
+      action: normalizeParamValue(record.action),
+      property: normalizeParamValue(record.property),
+      new_name: normalizeParamValue(record.new_name),
+      selected: readCount(record.selected),
+      affected: readCount(record.affected),
+      previews: normalizeNotePreviews(record.previews),
+      blockers: normalizePropertyBlockers(record.blockers),
+      config_diff: normalizePropertyConfigDiff(record.config_diff),
+      projected_violations: normalizePropertyViolationProjection(record.projected_violations),
+      preview_id: normalizeParamValue(record.preview_id),
+      expires_at: normalizeParamValue(record.expires_at),
+      journal_id: normalizeParamValue(record.journal_id),
+      config: normalizePropertyConfigStatus(record.config)
+    };
+  };
+  var buildPropertyRequestInit = (token, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-BN-CSRF": token
+    },
+    body: JSON.stringify(body)
+  });
+  var readReceiptExpiryLabel = (expiresAt, now = /* @__PURE__ */ new Date()) => {
+    if (expiresAt === "") {
+      return "";
+    }
+    const expiry = new Date(expiresAt);
+    if (Number.isNaN(expiry.getTime())) {
+      return "";
+    }
+    const seconds = Math.round((expiry.getTime() - now.getTime()) / 1e3);
+    if (seconds <= 0) {
+      return "This preview has expired. Preview again to apply it.";
+    }
+    if (seconds < 60) {
+      return `This preview expires in ${seconds} ${seconds === 1 ? "second" : "seconds"}.`;
+    }
+    const minutes = Math.round(seconds / 60);
+    return `This preview expires in about ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+  };
+  var propertyViolationDelta = (projection) => {
+    const before = projection.before.missing + projection.before.type + projection.before.value;
+    const after = projection.after.missing + projection.after.type + projection.after.value;
+    if (before === after) {
+      return `${after} ${after === 1 ? "violation" : "violations"} before and after.`;
+    }
+    return `Violations ${before} -> ${after}.`;
+  };
+  var normalizeConfigStatusResponse = (payload) => {
+    const record = asRecord(payload) || {};
+    return {
+      ok: readBoolean(record.ok),
+      ...normalizePropertyConfigStatus(record)
+    };
+  };
+
   // internal/web/static_src/api-search.ts
   var normalizeSearchResults = (payload) => {
     if (!Array.isArray(payload)) {
@@ -5853,6 +6253,2180 @@ var BrainNotesApp = (() => {
     scheduleSearch(0);
   };
 
+  // internal/web/static_src/properties-model.ts
+  var PROPERTY_ROW_LIMIT = 50;
+  var readPropertiesConfig = (root) => ({
+    endpoint: root.getAttribute("data-properties-endpoint") || "/api/properties",
+    detailEndpoint: root.getAttribute("data-properties-detail-endpoint") || "/api/properties/detail"
+  });
+  var readPropertyDetailConfig = (root) => ({
+    property: root.getAttribute("data-property-name") || "",
+    detailEndpoint: root.getAttribute("data-properties-detail-endpoint") || "/api/properties/detail",
+    token: root.getAttribute("data-property-csrf") || "",
+    historyPath: root.getAttribute("data-property-history-path") || "/library"
+  });
+  var emptyDetailFilter = () => ({
+    status: "all",
+    value: "",
+    query: "",
+    offset: 0
+  });
+  var propertyKindLabel = (kind) => {
+    switch (kind) {
+      case "wikilink":
+        return "Wikilink";
+      case "datetime":
+        return "Date and time";
+      case "unsupported":
+        return "Unsupported";
+      case "":
+        return "Unknown";
+      default:
+        return kind.charAt(0).toUpperCase() + kind.slice(1);
+    }
+  };
+  var definitionLabel = (summary) => {
+    if (!summary.configured) {
+      return "Not configured";
+    }
+    if (!summary.definition) {
+      return "Configured";
+    }
+    if (summary.definition.summary !== "") {
+      return summary.definition.summary;
+    }
+    return summary.definition.items ? `type: ${summary.definition.type} of ${summary.definition.items}` : `type: ${summary.definition.type}`;
+  };
+  var coverageLabel = (summary) => {
+    const percent = Math.round(summary.coverage * 100);
+    return `${summary.note_count} of ${summary.total_notes} notes (${percent}%)`;
+  };
+  var issueSummaryLabel = (summary) => {
+    const parts = [];
+    if (summary.violation_counts.missing > 0) {
+      parts.push(`${summary.violation_counts.missing} missing`);
+    }
+    if (summary.violation_counts.type > 0) {
+      parts.push(`${summary.violation_counts.type} wrong type`);
+    }
+    if (summary.violation_counts.value > 0) {
+      parts.push(`${summary.violation_counts.value} disallowed value`);
+    }
+    if (summary.unsupported_values > 0) {
+      parts.push(`${summary.unsupported_values} unsupported`);
+    }
+    return parts.length === 0 ? "No issues" : parts.join(", ");
+  };
+  var issueLabel = (issue) => {
+    const prefix = issue.kind === "missing" ? "Missing" : issue.kind === "type" ? "Wrong type" : issue.kind === "value" ? "Disallowed value" : issue.kind;
+    return issue.detail === "" ? prefix : `${prefix}: ${issue.detail}`;
+  };
+  var valueDisplayText = (value) => {
+    if (!value) {
+      return "";
+    }
+    if (!value.supported) {
+      return value.text;
+    }
+    if (value.items.length > 0) {
+      return value.items.map((item) => item.text).join(", ");
+    }
+    return value.text;
+  };
+  var catalogMatches = (summary, filter) => {
+    if (filter.issuesOnly && summary.issues === 0) {
+      return false;
+    }
+    const needle = filter.query.trim().toLowerCase();
+    if (needle === "") {
+      return true;
+    }
+    return summary.name.toLowerCase().includes(needle);
+  };
+  var filterCatalog = (summaries, filter) => summaries.filter((summary) => catalogMatches(summary, filter));
+  var catalogStatusMessage = (result, shown) => {
+    const { totals } = result;
+    if (totals.properties === 0) {
+      return "No properties found.";
+    }
+    const scope = shown === totals.properties ? `${totals.properties} properties` : `${shown} of ${totals.properties} properties`;
+    const issues = totals.violations + totals.unsupported_values;
+    const detail = issues === 0 ? "no issues" : `${issues} ${issues === 1 ? "issue" : "issues"} across ${totals.violation_notes} notes`;
+    return `${scope} across ${totals.notes} notes, ${detail}.`;
+  };
+  var paginationLabel = (pagination) => {
+    if (pagination.total === 0) {
+      return "No notes match this filter.";
+    }
+    const first = pagination.offset + 1;
+    const last = pagination.offset + pagination.returned;
+    return `Notes ${first}-${last} of ${pagination.total}`;
+  };
+  var detailStatusMessage = (result) => {
+    const { property } = result;
+    const parts = [coverageLabel(property)];
+    if (property.distinct_values > 0) {
+      parts.push(
+        `${property.distinct_values} distinct ${property.distinct_values === 1 ? "value" : "values"}`
+      );
+    }
+    parts.push(issueSummaryLabel(property).toLowerCase());
+    return `${parts.join(", ")}.`;
+  };
+  var configStatusMessage = (config) => {
+    if (config.status === "ok") {
+      return "";
+    }
+    const detail = config.error ?? "";
+    return detail === "" ? "brainnotes.toml is invalid; the last valid configuration is still in use." : `brainnotes.toml is invalid: ${detail}`;
+  };
+  var nextOffset = (pagination) => pagination.offset + Math.max(pagination.returned, 1);
+  var previousOffset = (pagination, limit) => Math.max(pagination.offset - Math.max(limit, 1), 0);
+
+  // internal/web/static_src/properties-render.ts
+  var appendDefinitionPair = (doc, list, term, detail) => {
+    const dt = doc.createElement("dt");
+    dt.textContent = term;
+    const dd = doc.createElement("dd");
+    dd.textContent = detail;
+    list.appendChild(dt);
+    list.appendChild(dd);
+  };
+  var appendBadge = (doc, parent, text, className) => {
+    const badge = doc.createElement("span");
+    badge.className = className;
+    badge.textContent = text;
+    parent.appendChild(badge);
+  };
+  var renderTotals = (list, totals, totalNotes) => {
+    if (!list) {
+      return;
+    }
+    const doc = list.ownerDocument;
+    list.textContent = "";
+    appendDefinitionPair(doc, list, "Properties", String(totals.properties));
+    appendDefinitionPair(doc, list, "Configured", String(totals.configured));
+    appendDefinitionPair(doc, list, "Unconfigured", String(totals.unconfigured));
+    appendDefinitionPair(doc, list, "Notes", String(totalNotes));
+    appendDefinitionPair(doc, list, "Violations", String(totals.violations));
+    appendDefinitionPair(doc, list, "Missing required", String(totals.missing_required));
+    appendDefinitionPair(doc, list, "Unsupported values", String(totals.unsupported_values));
+  };
+  var renderCatalog = (list, summaries) => {
+    const doc = list.ownerDocument;
+    list.textContent = "";
+    for (const summary of summaries) {
+      const item = doc.createElement("li");
+      item.className = "properties-item";
+      item.setAttribute("data-properties-item", "");
+      item.setAttribute("data-properties-name", summary.name);
+      if (summary.issues > 0) {
+        item.setAttribute("data-properties-issues", String(summary.issues));
+      }
+      const header = doc.createElement("div");
+      header.className = "properties-item-header";
+      const link = doc.createElement("a");
+      link.className = "properties-item-name";
+      link.href = summary.path;
+      link.textContent = summary.name;
+      header.appendChild(link);
+      appendBadge(
+        doc,
+        header,
+        summary.configured ? "Configured" : "Unconfigured",
+        summary.configured ? "properties-badge properties-badge-configured" : "properties-badge properties-badge-unconfigured"
+      );
+      if (summary.issues > 0) {
+        appendBadge(
+          doc,
+          header,
+          `${summary.issues} ${summary.issues === 1 ? "issue" : "issues"}`,
+          "properties-badge properties-badge-issues"
+        );
+      }
+      item.appendChild(header);
+      const definition = doc.createElement("p");
+      definition.className = "properties-item-definition";
+      definition.textContent = definitionLabel(summary);
+      item.appendChild(definition);
+      const meta = doc.createElement("p");
+      meta.className = "properties-item-meta";
+      meta.textContent = [
+        coverageLabel(summary),
+        `${summary.distinct_values} distinct`,
+        summary.observed_kinds.map((kind) => propertyKindLabel(kind)).join(", ") || "no values"
+      ].join(" - ");
+      item.appendChild(meta);
+      const issues = doc.createElement("p");
+      issues.className = "properties-item-issues";
+      issues.textContent = issueSummaryLabel(summary);
+      item.appendChild(issues);
+      list.appendChild(item);
+    }
+  };
+  var renderProposals = (section, list, proposals) => {
+    if (!section || !list) {
+      return;
+    }
+    const doc = list.ownerDocument;
+    list.textContent = "";
+    section.hidden = proposals.length === 0;
+    for (const proposal of proposals) {
+      const item = doc.createElement("li");
+      item.className = "properties-proposal-item";
+      item.setAttribute("data-properties-proposal", proposal.property);
+      const title = doc.createElement("h4");
+      title.className = "properties-proposal-title";
+      title.textContent = proposal.items ? `${proposal.property}: list of ${proposal.items}` : `${proposal.property}: ${proposal.type}`;
+      item.appendChild(title);
+      const rationale = doc.createElement("p");
+      rationale.className = "properties-proposal-rationale";
+      rationale.textContent = proposal.rationale;
+      item.appendChild(rationale);
+      const toml = doc.createElement("pre");
+      toml.className = "properties-proposal-toml";
+      toml.textContent = proposal.toml;
+      item.appendChild(toml);
+      list.appendChild(item);
+    }
+  };
+  var renderSummary = (list, summary) => {
+    if (!list) {
+      return;
+    }
+    const doc = list.ownerDocument;
+    list.textContent = "";
+    appendDefinitionPair(doc, list, "Coverage", coverageLabel(summary));
+    appendDefinitionPair(doc, list, "Distinct values", String(summary.distinct_values));
+    appendDefinitionPair(
+      doc,
+      list,
+      "Observed kinds",
+      summary.observed_kinds.map((kind) => propertyKindLabel(kind)).join(", ") || "None"
+    );
+    appendDefinitionPair(doc, list, "Notes with violations", String(summary.violation_notes));
+    appendDefinitionPair(doc, list, "Missing required", String(summary.missing_required));
+    appendDefinitionPair(doc, list, "Unsupported values", String(summary.unsupported_values));
+  };
+  var renderDefinition = (element, summary) => {
+    if (!element) {
+      return;
+    }
+    element.textContent = definitionLabel(summary);
+    element.hidden = false;
+  };
+  var renderProposal = (element, summary) => {
+    if (!element) {
+      return;
+    }
+    const doc = element.ownerDocument;
+    element.textContent = "";
+    const proposal = summary.proposal;
+    element.hidden = !proposal;
+    if (!proposal) {
+      return;
+    }
+    const heading = doc.createElement("h3");
+    heading.textContent = "Inferred definition";
+    element.appendChild(heading);
+    const rationale = doc.createElement("p");
+    rationale.className = "properties-proposal-rationale";
+    rationale.textContent = proposal.rationale;
+    element.appendChild(rationale);
+    const toml = doc.createElement("pre");
+    toml.className = "properties-proposal-toml";
+    toml.textContent = proposal.toml;
+    element.appendChild(toml);
+  };
+  var renderValues = (list, values, activeValue) => {
+    if (!list) {
+      return;
+    }
+    const doc = list.ownerDocument;
+    list.textContent = "";
+    for (const entry of values) {
+      const item = doc.createElement("li");
+      item.className = "properties-value-item";
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.className = "properties-value-button";
+      button.setAttribute("data-property-value", entry.value.text);
+      button.setAttribute("data-property-value-kind", entry.value.kind);
+      if (entry.value.text === activeValue) {
+        button.setAttribute("aria-pressed", "true");
+        button.classList.add("is-active");
+      } else {
+        button.setAttribute("aria-pressed", "false");
+      }
+      if (!entry.value.supported) {
+        button.disabled = true;
+        button.classList.add("is-unsupported");
+        button.title = "This value has no supported spelling and cannot be filtered on.";
+      }
+      const text = doc.createElement("span");
+      text.className = "properties-value-text";
+      text.textContent = entry.value.text;
+      button.appendChild(text);
+      const kind = doc.createElement("span");
+      kind.className = "properties-value-kind";
+      kind.textContent = propertyKindLabel(entry.value.kind);
+      button.appendChild(kind);
+      const count = doc.createElement("span");
+      count.className = "properties-value-count";
+      count.textContent = `${entry.notes} ${entry.notes === 1 ? "note" : "notes"}`;
+      button.appendChild(count);
+      item.appendChild(button);
+      list.appendChild(item);
+    }
+  };
+  var appendRowControls = (doc, item, header, row, options) => {
+    const select = doc.createElement("input");
+    select.type = "checkbox";
+    select.className = "properties-row-select";
+    select.setAttribute("data-property-row-select", row.rel_path);
+    select.setAttribute("aria-label", `Select ${row.title || row.rel_path}`);
+    select.checked = options.selected.has(row.rel_path);
+    header.insertBefore(select, header.firstChild);
+    const actions = doc.createElement("div");
+    actions.className = "properties-row-actions";
+    const editable = !row.unsupported && row.hash !== "";
+    const edit = doc.createElement("button");
+    edit.type = "button";
+    edit.className = "properties-button properties-row-edit";
+    edit.setAttribute("data-property-row-edit", row.rel_path);
+    edit.textContent = "Edit";
+    edit.disabled = !editable || !row.present;
+    actions.appendChild(edit);
+    if (options.listKind) {
+      const add = doc.createElement("button");
+      add.type = "button";
+      add.className = "properties-button properties-row-add";
+      add.setAttribute("data-property-row-add", row.rel_path);
+      add.textContent = "Add item";
+      add.disabled = !editable;
+      actions.appendChild(add);
+    }
+    const remove = doc.createElement("button");
+    remove.type = "button";
+    remove.className = "properties-button properties-row-unset";
+    remove.setAttribute("data-property-row-unset", row.rel_path);
+    remove.textContent = "Remove";
+    remove.disabled = !row.present;
+    actions.appendChild(remove);
+    item.appendChild(actions);
+  };
+  var renderRows = (list, rows, options) => {
+    if (!list) {
+      return;
+    }
+    const doc = list.ownerDocument;
+    list.textContent = "";
+    for (const row of rows) {
+      const item = doc.createElement("li");
+      item.className = "properties-row";
+      item.setAttribute("data-property-row", row.rel_path);
+      if (row.unsupported) {
+        item.setAttribute("data-property-row-unsupported", "");
+      }
+      if (options) {
+        item.tabIndex = -1;
+        if (options.selected.has(row.rel_path)) {
+          item.classList.add("is-selected");
+        }
+      }
+      const header = doc.createElement("div");
+      header.className = "properties-row-header";
+      const link = doc.createElement("a");
+      link.className = "properties-row-title";
+      link.href = row.path;
+      link.textContent = row.title || row.rel_path;
+      header.appendChild(link);
+      if (row.folder !== "") {
+        appendBadge(doc, header, row.folder, "properties-row-folder");
+      }
+      item.appendChild(header);
+      const value = doc.createElement("p");
+      value.className = "properties-row-value";
+      if (!row.present) {
+        value.classList.add("is-missing");
+        value.textContent = "No value";
+      } else if (row.unsupported) {
+        value.classList.add("is-unsupported");
+        value.textContent = valueDisplayText(row.value);
+      } else {
+        value.textContent = valueDisplayText(row.value);
+      }
+      item.appendChild(value);
+      if (row.issues.length > 0) {
+        const issues = doc.createElement("ul");
+        issues.className = "properties-row-issues";
+        for (const issue of row.issues) {
+          const issueItem = doc.createElement("li");
+          issueItem.className = "properties-row-issue";
+          issueItem.setAttribute("data-property-issue", issue.kind);
+          issueItem.textContent = issueLabel(issue);
+          issues.appendChild(issueItem);
+        }
+        item.appendChild(issues);
+      }
+      if (options) {
+        appendRowControls(doc, item, header, row, options);
+      }
+      list.appendChild(item);
+    }
+  };
+  var renderPagination = (element, pagination) => {
+    if (!element) {
+      return;
+    }
+    element.textContent = paginationLabel(pagination);
+  };
+
+  // internal/web/static_src/properties-config-status.ts
+  var CONFIG_STATUS_POLL_MS = 5e3;
+  var configInvalidMessage = (config) => {
+    if (config.status === "ok") {
+      return "";
+    }
+    const detail = config.error || "";
+    const cause = detail === "" ? "brainnotes.toml is invalid." : `brainnotes.toml is invalid: ${detail}`;
+    return `${cause} The last valid configuration is still in use and property writes are refused until it parses.`;
+  };
+  var configRestartMessage = (config) => {
+    const keys = config.restart_required;
+    if (keys.length === 0) {
+      return "";
+    }
+    return `${keys.join(", ")} changed on disk. Restart bn serve to apply ${keys.length === 1 ? "it" : "them"}.`;
+  };
+  var createConfigStatusPoller = (doc, deps) => {
+    const fetcher = deps.fetch || fetch;
+    const intervalMs = deps.intervalMs || CONFIG_STATUS_POLL_MS;
+    let timer = 0;
+    let seenGeneration = -1;
+    let current = null;
+    const poll = async () => {
+      if (doc.visibilityState !== "visible") {
+        return;
+      }
+      try {
+        const resp = await fetcher(CONFIG_STATUS_ENDPOINT, {
+          headers: { Accept: "application/json" }
+        });
+        if (!resp.ok) {
+          return;
+        }
+        const result = normalizeConfigStatusResponse(await resp.json());
+        current = result;
+        deps.onStatus(result);
+        if (seenGeneration >= 0 && result.generation !== seenGeneration) {
+          deps.onGenerationChange?.(result.generation);
+        }
+        seenGeneration = result.generation;
+      } catch {
+      }
+    };
+    const stop = () => {
+      if (timer !== 0) {
+        clearInterval(timer);
+        timer = 0;
+      }
+    };
+    const start = () => {
+      stop();
+      if (doc.visibilityState !== "visible") {
+        return;
+      }
+      timer = setInterval(() => {
+        void poll();
+      }, intervalMs);
+    };
+    doc.addEventListener("visibilitychange", () => {
+      if (doc.visibilityState === "visible") {
+        void poll();
+        start();
+        return;
+      }
+      stop();
+    });
+    return { poll, start, stop, latest: () => current };
+  };
+
+  // internal/web/static_src/properties-value-control.ts
+  var PROPERTY_SCALAR_KINDS = [
+    "string",
+    "wikilink",
+    "date",
+    "datetime",
+    "int",
+    "float",
+    "bool"
+  ];
+  var PROPERTY_KINDS = [
+    ...PROPERTY_SCALAR_KINDS,
+    "list"
+  ];
+  var isPropertyScalarKind = (value) => PROPERTY_SCALAR_KINDS.includes(value);
+  var isPropertyKind = (value) => PROPERTY_KINDS.includes(value);
+  var DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+  var RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+  var INT_PATTERN = /^-?\d+$/;
+  var pad = (value) => String(value).padStart(2, "0");
+  var utcOffsetLabel = (date) => {
+    const minutes = -date.getTimezoneOffset();
+    const sign = minutes < 0 ? "-" : "+";
+    const absolute = Math.abs(minutes);
+    return `${sign}${pad(Math.floor(absolute / 60))}:${pad(absolute % 60)}`;
+  };
+  var datetimeLocalToRFC3339 = (local) => {
+    const trimmed = local.trim();
+    if (trimmed === "" || RFC3339_PATTERN.test(trimmed)) {
+      return trimmed;
+    }
+    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(:\d{2})?$/.exec(trimmed);
+    if (!match) {
+      return trimmed;
+    }
+    const seconds = match[3] || ":00";
+    const parsed = /* @__PURE__ */ new Date(`${match[1]}T${match[2]}${seconds}`);
+    if (Number.isNaN(parsed.getTime())) {
+      return trimmed;
+    }
+    return `${match[1]}T${match[2]}${seconds}${utcOffsetLabel(parsed)}`;
+  };
+  var rfc3339ToDatetimeLocal = (text) => {
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      return "";
+    }
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) {
+      return trimmed;
+    }
+    return [
+      `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
+      `T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`
+    ].join("");
+  };
+  var wikilinkTargetError = (text) => {
+    const target = text.trim();
+    if (target === "") {
+      return "Enter a note title.";
+    }
+    if (target.includes("[") || target.includes("]")) {
+      return "Enter the bare target without [[ ]].";
+    }
+    if (target.includes("#")) {
+      return "A wikilink property cannot carry a heading.";
+    }
+    if (target.includes("|")) {
+      return "A wikilink property cannot carry an alias.";
+    }
+    return "";
+  };
+  var scalarValueError = (kind, text) => {
+    const value = text.trim();
+    switch (kind) {
+      case "string":
+        return value === "" ? "Enter a value." : "";
+      case "wikilink":
+        return wikilinkTargetError(text);
+      case "date":
+        return DATE_PATTERN.test(value) ? "" : "Enter a date as YYYY-MM-DD.";
+      case "datetime":
+        return RFC3339_PATTERN.test(datetimeLocalToRFC3339(value)) ? "" : "Enter a date and time.";
+      case "int":
+        return INT_PATTERN.test(value) ? "" : "Enter a whole number.";
+      case "float":
+        return value !== "" && Number.isFinite(Number(value)) ? "" : "Enter a number.";
+      case "bool":
+        return value === "true" || value === "false" ? "" : "Choose true or false.";
+    }
+  };
+  var inputTypeFor = (kind) => {
+    switch (kind) {
+      case "date":
+        return "date";
+      case "datetime":
+        return "datetime-local";
+      case "int":
+      case "float":
+        return "number";
+      default:
+        return "text";
+    }
+  };
+  var seedText = (kind, text) => kind === "datetime" ? rfc3339ToDatetimeLocal(text) : text;
+  var readText = (kind, raw) => kind === "datetime" ? datetimeLocalToRFC3339(raw) : raw.trim();
+  var createSelect = (doc, options, choices) => {
+    const select = doc.createElement("select");
+    select.className = "properties-control properties-control-select";
+    select.id = options.id;
+    select.setAttribute("aria-label", options.label);
+    select.setAttribute("data-property-control", options.kind);
+    for (const choice of choices) {
+      const option = doc.createElement("option");
+      option.value = choice;
+      option.textContent = choice;
+      select.appendChild(option);
+    }
+    const current = options.text.trim();
+    select.value = choices.includes(current) ? current : choices[0] || "";
+    return select;
+  };
+  var createScalarControl = (doc, options) => {
+    if (options.kind === "bool") {
+      const select = createSelect(doc, options, ["true", "false"]);
+      return {
+        element: select,
+        read: () => select.value,
+        error: () => scalarValueError("bool", select.value),
+        focus: () => select.focus()
+      };
+    }
+    if (options.allowed.length > 0) {
+      const select = createSelect(doc, options, options.allowed);
+      return {
+        element: select,
+        read: () => select.value,
+        error: () => options.allowed.includes(select.value) ? "" : "Choose an allowed value.",
+        focus: () => select.focus()
+      };
+    }
+    const input = doc.createElement("input");
+    input.className = "properties-control properties-control-input";
+    input.type = inputTypeFor(options.kind);
+    input.id = options.id;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("aria-label", options.label);
+    input.setAttribute("data-property-control", options.kind);
+    if (options.kind === "int") {
+      input.step = "1";
+    }
+    if (options.kind === "float") {
+      input.step = "any";
+    }
+    if (options.kind === "datetime") {
+      input.step = "1";
+    }
+    if (options.kind === "wikilink") {
+      input.placeholder = "Note title";
+    }
+    input.value = seedText(options.kind, options.text);
+    return {
+      element: input,
+      read: () => readText(options.kind, input.value),
+      error: () => scalarValueError(options.kind, input.value),
+      focus: () => input.focus()
+    };
+  };
+  var listSeedTexts = (options) => {
+    const items = options.value?.items || [];
+    if (items.length === 0) {
+      return [""];
+    }
+    return items.map((item) => item.text);
+  };
+  var createListControl = (doc, options) => {
+    const wrapper = doc.createElement("div");
+    wrapper.className = "properties-control-list";
+    wrapper.setAttribute("data-property-control", "list");
+    const list = doc.createElement("ul");
+    list.className = "properties-control-list-items";
+    wrapper.appendChild(list);
+    const controls = [];
+    let sequence = 0;
+    const renumber = () => {
+      const rows = Array.from(list.children);
+      rows.forEach((row, index) => {
+        const remove = row.querySelector("[data-property-list-remove]");
+        if (remove instanceof HTMLButtonElement) {
+          remove.setAttribute("aria-label", `Remove item ${index + 1}`);
+          remove.disabled = rows.length <= 1;
+        }
+      });
+    };
+    const addRow = (text, focusIt) => {
+      sequence += 1;
+      const row = doc.createElement("li");
+      row.className = "properties-control-list-item";
+      const control = createScalarControl(doc, {
+        kind: options.items,
+        allowed: options.allowed,
+        text,
+        id: `${options.id}-item-${sequence}`,
+        label: `${options.label} item`
+      });
+      controls.push(control);
+      row.appendChild(control.element);
+      const remove = doc.createElement("button");
+      remove.type = "button";
+      remove.className = "properties-button properties-control-remove";
+      remove.setAttribute("data-property-list-remove", "");
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => {
+        const index = controls.indexOf(control);
+        if (index >= 0) {
+          controls.splice(index, 1);
+        }
+        row.remove();
+        renumber();
+      });
+      row.appendChild(remove);
+      list.appendChild(row);
+      renumber();
+      if (focusIt) {
+        control.focus();
+      }
+    };
+    for (const text of listSeedTexts(options)) {
+      addRow(text, false);
+    }
+    const add = doc.createElement("button");
+    add.type = "button";
+    add.className = "properties-button properties-control-add";
+    add.setAttribute("data-property-list-add", "");
+    add.textContent = "Add item";
+    add.addEventListener("click", () => {
+      addRow("", true);
+    });
+    wrapper.appendChild(add);
+    return {
+      element: wrapper,
+      read: () => ({
+        kind: "list",
+        text: "",
+        items: controls.map((control) => ({
+          kind: options.items,
+          text: control.read()
+        }))
+      }),
+      error: () => {
+        if (controls.length === 0) {
+          return "Add at least one item.";
+        }
+        for (const control of controls) {
+          const message = control.error();
+          if (message !== "") {
+            return message;
+          }
+        }
+        return "";
+      },
+      focus: () => controls[0]?.focus()
+    };
+  };
+  var createValueControl = (doc, options) => {
+    if (options.kind === "list") {
+      return createListControl(doc, options);
+    }
+    const scalar = createScalarControl(doc, {
+      kind: options.kind,
+      allowed: options.allowed,
+      text: options.value?.text || "",
+      id: options.id,
+      label: options.label
+    });
+    return {
+      element: scalar.element,
+      read: () => ({ kind: options.kind, text: scalar.read() }),
+      error: () => scalar.error(),
+      focus: () => scalar.focus()
+    };
+  };
+
+  // internal/web/static_src/properties-schema-editor.ts
+  var parseAllowedValues = (text) => {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const line of text.split("\n")) {
+      const value = line.trim();
+      if (value === "" || seen.has(value)) {
+        continue;
+      }
+      seen.add(value);
+      out.push(value);
+    }
+    return out;
+  };
+  var definitionError = (definition) => {
+    if (definition.type === "list" && !definition.items) {
+      return "Choose the element kind a list holds.";
+    }
+    if (definition.type !== "list" && definition.items) {
+      return "Only a list declares an element kind.";
+    }
+    return "";
+  };
+  var fillKindOptions = (select, kinds, blankLabel) => {
+    select.textContent = "";
+    if (blankLabel !== "") {
+      const blank = select.ownerDocument.createElement("option");
+      blank.value = "";
+      blank.textContent = blankLabel;
+      select.appendChild(blank);
+    }
+    for (const kind of kinds) {
+      const option = select.ownerDocument.createElement("option");
+      option.value = kind;
+      option.textContent = kind;
+      select.appendChild(option);
+    }
+  };
+  var createPropertySchemaEditor = (host) => {
+    const section = queryElement(host.root, "[data-property-schema]", HTMLElement);
+    if (!section) {
+      return null;
+    }
+    const typeEl = queryElement(section, "[data-property-schema-type]", HTMLSelectElement);
+    const itemsEl = queryElement(section, "[data-property-schema-items]", HTMLSelectElement);
+    const requiredEl = queryElement(
+      section,
+      "[data-property-schema-required]",
+      HTMLInputElement
+    );
+    const allowedEl = queryElement(
+      section,
+      "[data-property-schema-allowed]",
+      HTMLTextAreaElement
+    );
+    const saveEl = queryElement(section, "[data-property-schema-save]", HTMLButtonElement);
+    const deleteEl = queryElement(section, "[data-property-schema-delete]", HTMLButtonElement);
+    const adoptEl = queryElement(section, "[data-property-schema-adopt]", HTMLButtonElement);
+    const errorEl = queryElement(section, "[data-property-schema-error]", HTMLElement);
+    if (!typeEl || !itemsEl || !requiredEl || !allowedEl || !saveEl) {
+      return null;
+    }
+    fillKindOptions(typeEl, PROPERTY_KINDS, "");
+    fillKindOptions(itemsEl, PROPERTY_SCALAR_KINDS, "");
+    const itemsRow = itemsEl.closest("[data-property-schema-items-row]");
+    let proposed = null;
+    const showError = (message) => {
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.hidden = message === "";
+      }
+    };
+    const syncItemsVisibility = () => {
+      const isList = typeEl.value === "list";
+      if (itemsRow) {
+        itemsRow.hidden = !isList;
+      }
+      itemsEl.disabled = !isList;
+    };
+    const readDefinition = () => {
+      if (!isPropertyKind(typeEl.value)) {
+        showError("Choose a type.");
+        return null;
+      }
+      const type = typeEl.value;
+      const items = type === "list" && isPropertyScalarKind(itemsEl.value) ? itemsEl.value : void 0;
+      const definition = {
+        type,
+        items,
+        required: requiredEl.checked,
+        allowed: parseAllowedValues(allowedEl.value)
+      };
+      const message = definitionError(definition);
+      if (message !== "") {
+        showError(message);
+        return null;
+      }
+      showError("");
+      return definition;
+    };
+    typeEl.addEventListener("change", syncItemsVisibility);
+    saveEl.addEventListener("click", () => {
+      const definition = readDefinition();
+      if (definition) {
+        host.submit("upsert", definition);
+      }
+    });
+    deleteEl?.addEventListener("click", () => {
+      host.submit("delete");
+    });
+    adoptEl?.addEventListener("click", () => {
+      if (!proposed) {
+        return;
+      }
+      typeEl.value = proposed.type;
+      itemsEl.value = proposed.items || "";
+      requiredEl.checked = false;
+      allowedEl.value = "";
+      syncItemsVisibility();
+      showError("");
+      host.setStatus("Inferred definition loaded. Review it, then save to preview the change.");
+      typeEl.focus();
+    });
+    return {
+      sync: (summary) => {
+        const definition = summary.definition;
+        typeEl.value = definition?.type || "string";
+        itemsEl.value = definition?.items || "";
+        requiredEl.checked = definition?.required || false;
+        allowedEl.value = (definition?.allowed || []).join("\n");
+        syncItemsVisibility();
+        showError("");
+        if (deleteEl) {
+          deleteEl.disabled = !summary.configured;
+        }
+        proposed = summary.proposal ? { type: summary.proposal.type, items: summary.proposal.items } : null;
+        if (adoptEl) {
+          adoptEl.hidden = proposed === null;
+        }
+      }
+    };
+  };
+
+  // internal/web/static_src/properties-preview-dialog.ts
+  var FOCUSABLE_SELECTOR = [
+    "a[href]",
+    "button:not([disabled])",
+    "input:not([disabled])",
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    "[tabindex]:not([tabindex='-1'])"
+  ].join(",");
+  var blockerLabel = (blocker) => {
+    const where = blocker.rel_path || blocker.property;
+    const detail = blocker.detail || blocker.kind;
+    return where === "" ? detail : `${where}: ${detail}`;
+  };
+  var previewSummaryLabel = (result) => {
+    const files = result.previews.length;
+    const noteScope = result.selected === 0 ? "" : `${result.selected} ${result.selected === 1 ? "note" : "notes"} selected, `;
+    const changeScope = `${files} ${files === 1 ? "file" : "files"} would change`;
+    const configScope = result.config_diff.length > 0 ? ", plus brainnotes.toml" : "";
+    return `${noteScope}${changeScope}${configScope}.`;
+  };
+  var appendHeading = (doc, parent, text) => {
+    const heading = doc.createElement("h3");
+    heading.className = "properties-dialog-subheading";
+    heading.textContent = text;
+    parent.appendChild(heading);
+  };
+  var renderBlockers = (doc, parent, blockers, fatal) => {
+    const shown = blockers.filter((blocker) => blocker.fatal === fatal);
+    if (shown.length === 0) {
+      return;
+    }
+    appendHeading(doc, parent, fatal ? "Blocked" : "Warnings");
+    const list = doc.createElement("ul");
+    list.className = fatal ? "properties-dialog-blockers" : "properties-dialog-warnings";
+    list.setAttribute(fatal ? "data-property-preview-blockers" : "data-property-preview-warnings", "");
+    for (const blocker of shown) {
+      const item = doc.createElement("li");
+      item.textContent = blockerLabel(blocker);
+      list.appendChild(item);
+    }
+    parent.appendChild(list);
+  };
+  var renderConfigDiff = (doc, parent, result) => {
+    if (result.config_diff.length === 0) {
+      return;
+    }
+    appendHeading(doc, parent, "brainnotes.toml");
+    const block = doc.createElement("pre");
+    block.className = "properties-dialog-config-diff";
+    block.setAttribute("data-property-preview-config", "");
+    block.textContent = result.config_diff.map((line) => {
+      const marker = line.kind === "add" ? "+" : line.kind === "remove" ? "-" : " ";
+      return `${marker} ${line.text}`;
+    }).join("\n");
+    parent.appendChild(block);
+  };
+  var renderFiles = (doc, parent, result) => {
+    if (result.previews.length === 0) {
+      return;
+    }
+    appendHeading(doc, parent, "Affected notes");
+    const list = doc.createElement("ul");
+    list.className = "properties-dialog-files";
+    list.setAttribute("data-property-preview-files", "");
+    for (const preview of result.previews) {
+      const item = doc.createElement("li");
+      item.className = "properties-dialog-file";
+      const path = doc.createElement("p");
+      path.className = "properties-dialog-file-path";
+      path.textContent = preview.rel_path;
+      item.appendChild(path);
+      const changes = doc.createElement("ul");
+      changes.className = "properties-dialog-changes";
+      for (const change of preview.changes) {
+        const line = doc.createElement("li");
+        line.textContent = previewChangeLine(change);
+        changes.appendChild(line);
+      }
+      item.appendChild(changes);
+      list.appendChild(item);
+    }
+    parent.appendChild(list);
+  };
+  var createPreviewDialog = (doc, host, deps = {}) => {
+    const now = deps.now || (() => /* @__PURE__ */ new Date());
+    const backdrop = doc.createElement("div");
+    backdrop.className = "properties-dialog-backdrop";
+    backdrop.setAttribute("data-property-dialog", "");
+    backdrop.hidden = true;
+    const dialog = doc.createElement("div");
+    dialog.className = "properties-dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "property-dialog-title");
+    dialog.setAttribute("aria-describedby", "property-dialog-summary");
+    backdrop.appendChild(dialog);
+    const title = doc.createElement("h2");
+    title.className = "properties-dialog-title";
+    title.id = "property-dialog-title";
+    dialog.appendChild(title);
+    const summary = doc.createElement("p");
+    summary.className = "properties-dialog-summary";
+    summary.id = "property-dialog-summary";
+    summary.setAttribute("data-property-preview-summary", "");
+    dialog.appendChild(summary);
+    const body = doc.createElement("div");
+    body.className = "properties-dialog-body";
+    dialog.appendChild(body);
+    const expiry = doc.createElement("p");
+    expiry.className = "properties-dialog-expiry";
+    expiry.setAttribute("data-property-preview-expiry", "");
+    dialog.appendChild(expiry);
+    const actions = doc.createElement("div");
+    actions.className = "properties-dialog-actions";
+    const confirm = doc.createElement("button");
+    confirm.type = "button";
+    confirm.className = "properties-button properties-button-primary";
+    confirm.setAttribute("data-property-preview-confirm", "");
+    const cancel = doc.createElement("button");
+    cancel.type = "button";
+    cancel.className = "properties-button";
+    cancel.setAttribute("data-property-preview-cancel", "");
+    cancel.textContent = "Cancel";
+    actions.append(confirm, cancel);
+    dialog.appendChild(actions);
+    host.appendChild(backdrop);
+    let opened = false;
+    let restoreFocus = null;
+    let handlers = null;
+    const close = () => {
+      if (!opened) {
+        return;
+      }
+      opened = false;
+      handlers = null;
+      backdrop.hidden = true;
+      restoreFocus?.focus();
+      restoreFocus = null;
+    };
+    const cancelDialog = () => {
+      const onCancel = handlers?.onCancel;
+      close();
+      onCancel?.();
+    };
+    const trapFocus = (event) => {
+      const focusable = queryAllElements(dialog, FOCUSABLE_SELECTOR, HTMLElement).filter(
+        (element) => !element.hasAttribute("hidden")
+      );
+      if (focusable.length === 0) {
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = doc.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last?.focus();
+        return;
+      }
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    dialog.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelDialog();
+        return;
+      }
+      if (event.key === "Tab") {
+        trapFocus(event);
+      }
+    });
+    backdrop.addEventListener("mousedown", (event) => {
+      if (event.target === backdrop) {
+        cancelDialog();
+      }
+    });
+    cancel.addEventListener("click", () => {
+      cancelDialog();
+    });
+    confirm.addEventListener("click", () => {
+      const onConfirm = handlers?.onConfirm;
+      close();
+      onConfirm?.();
+    });
+    const open = (options) => {
+      handlers = options;
+      const { result } = options;
+      const blocked = propertyPlanIsBlocked(result.blockers);
+      title.textContent = options.title;
+      summary.textContent = options.summary;
+      body.textContent = "";
+      renderBlockers(doc, body, result.blockers, true);
+      renderBlockers(doc, body, result.blockers, false);
+      renderConfigDiff(doc, body, result);
+      renderFiles(doc, body, result);
+      const projection = doc.createElement("p");
+      projection.className = "properties-dialog-projection";
+      projection.setAttribute("data-property-preview-projection", "");
+      projection.textContent = propertyViolationDelta(result.projected_violations);
+      body.appendChild(projection);
+      const expiryLabel = blocked ? "This plan cannot be applied until every blocker is resolved." : readReceiptExpiryLabel(result.expires_at, now());
+      expiry.textContent = expiryLabel;
+      expiry.hidden = expiryLabel === "";
+      confirm.textContent = options.confirmLabel;
+      confirm.disabled = blocked || result.preview_id === "";
+      const active = doc.activeElement;
+      restoreFocus = active instanceof HTMLElement ? active : null;
+      backdrop.hidden = false;
+      opened = true;
+      if (confirm.disabled) {
+        cancel.focus();
+      } else {
+        confirm.focus();
+      }
+    };
+    return {
+      element: backdrop,
+      open,
+      close,
+      isOpen: () => opened
+    };
+  };
+
+  // internal/web/static_src/properties-toast.ts
+  var createUndoToast = (doc, host, deps) => {
+    const element = doc.createElement("div");
+    element.className = "properties-toast";
+    element.setAttribute("data-property-toast", "");
+    element.setAttribute("role", "status");
+    element.setAttribute("aria-live", "polite");
+    element.hidden = true;
+    const message = doc.createElement("p");
+    message.className = "properties-toast-message";
+    message.setAttribute("data-property-toast-message", "");
+    element.appendChild(message);
+    const actions = doc.createElement("div");
+    actions.className = "properties-toast-actions";
+    const undo = doc.createElement("button");
+    undo.type = "button";
+    undo.className = "properties-button properties-toast-undo";
+    undo.setAttribute("data-property-toast-undo", "");
+    undo.textContent = "Undo";
+    actions.appendChild(undo);
+    const history = doc.createElement("a");
+    history.className = "properties-toast-history";
+    history.setAttribute("data-property-toast-history", "");
+    history.textContent = "View in history";
+    actions.appendChild(history);
+    const dismiss = doc.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "properties-button properties-toast-dismiss";
+    dismiss.setAttribute("data-property-toast-dismiss", "");
+    dismiss.textContent = "Dismiss";
+    actions.appendChild(dismiss);
+    element.appendChild(actions);
+    host.appendChild(element);
+    let entryID = "";
+    const hide = () => {
+      entryID = "";
+      element.hidden = true;
+      message.textContent = "";
+    };
+    undo.addEventListener("click", () => {
+      const pending = entryID;
+      if (pending === "") {
+        return;
+      }
+      hide();
+      deps.onUndo(pending);
+    });
+    dismiss.addEventListener("click", hide);
+    return {
+      element,
+      show: (options) => {
+        entryID = options.journalID;
+        message.textContent = options.message;
+        history.href = options.historyHref;
+        undo.hidden = options.journalID === "";
+        element.hidden = false;
+      },
+      hide,
+      journalID: () => entryID
+    };
+  };
+
+  // internal/web/static_src/properties-workbench-model.ts
+  var editKind = (summary) => {
+    const declared = summary.definition?.type || "";
+    if (isPropertyKind(declared)) {
+      return declared;
+    }
+    const observed = summary.observed_kinds.filter((kind) => isPropertyKind(kind));
+    return observed.length === 1 && observed[0] && isPropertyKind(observed[0]) ? observed[0] : "string";
+  };
+  var editItemKind = (summary) => {
+    const declared = summary.definition?.items || "";
+    if (isPropertyScalarKind(declared)) {
+      return declared;
+    }
+    return "string";
+  };
+  var editAllowed = (summary) => summary.definition?.allowed ? [...summary.definition.allowed] : [];
+  var typedValueFrom = (value, kind, items) => {
+    if (!value || !value.supported) {
+      return void 0;
+    }
+    if (kind === "list") {
+      const entries = value.items.length > 0 ? value.items : [value];
+      return {
+        kind: "list",
+        text: "",
+        items: entries.filter((entry) => entry.supported).map((entry) => ({ kind: items, text: entry.text }))
+      };
+    }
+    return { kind, text: value.text };
+  };
+  var actionTitle = (action, property) => {
+    switch (action) {
+      case "set":
+        return `Set ${property}`;
+      case "unset":
+        return `Remove ${property}`;
+      case "replace_value":
+        return `Replace a value of ${property}`;
+      case "rename_property":
+        return `Rename ${property}`;
+      case "repair":
+        return `Repair ${property}`;
+    }
+  };
+  var actionConfirmLabel = (action) => {
+    switch (action) {
+      case "set":
+        return "Apply values";
+      case "unset":
+        return "Remove property";
+      case "replace_value":
+        return "Replace values";
+      case "rename_property":
+        return "Rename property";
+      case "repair":
+        return "Repair notes";
+    }
+  };
+  var selectionLabel = (count) => count === 0 ? "No notes selected." : `${count} ${count === 1 ? "note" : "notes"} selected.`;
+  var mutationSuccessMessage = (result) => {
+    const notes = `${result.affected} ${result.affected === 1 ? "note" : "notes"}`;
+    const config = result.config_diff.length > 0 ? " and brainnotes.toml" : "";
+    return result.affected === 0 && config === "" ? "Nothing changed." : `Updated ${notes}${config}.`;
+  };
+  var undoToastMessage = (result) => `${mutationSuccessMessage(result)} You can undo this change.`;
+
+  // internal/web/static_src/properties-workbench-requests.ts
+  var readPayload = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
+  var postProperty = async (fetcher, endpoint, token, body) => {
+    try {
+      const resp = await fetcher(endpoint, buildPropertyRequestInit(token, body));
+      const payload = await readPayload(resp);
+      if (!resp.ok) {
+        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+      }
+      const result = normalizePropertyMutationResponse(payload);
+      if (!result.ok) {
+        return { ok: false, message: result.message || "The change was refused." };
+      }
+      return { ok: true, result };
+    } catch {
+      return { ok: false, message: "The server did not answer." };
+    }
+  };
+  var previewPropertyMutation = (fetcher, token, body) => postProperty(fetcher, PROPERTY_PREVIEW_ENDPOINT, token, body);
+  var applyPropertyMutation = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_APPLY_ENDPOINT, token, {
+    preview_id: previewID
+  });
+  var savePropertyValue = (fetcher, token, body) => postProperty(fetcher, PROPERTY_VALUE_ENDPOINT, token, body);
+  var previewPropertySchema = (fetcher, token, body) => postProperty(fetcher, PROPERTY_SCHEMA_PREVIEW_ENDPOINT, token, body);
+  var applyPropertySchema = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_SCHEMA_APPLY_ENDPOINT, token, {
+    preview_id: previewID
+  });
+  var undoJournalEntry = async (fetcher, token, entryID) => {
+    try {
+      const resp = await fetcher("/api/undo", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-BN-CSRF": token
+        },
+        body: buildUndoForm({ token, entryID }).toString()
+      });
+      const payload = await readPayload(resp);
+      if (!resp.ok) {
+        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+      }
+      return { ok: true, message: "Change undone." };
+    } catch {
+      return { ok: false, message: "Undo failed." };
+    }
+  };
+
+  // internal/web/static_src/properties-workbench.ts
+  var createPropertyWorkbench = (host, deps = {}) => {
+    const doc = host.root.ownerDocument;
+    const fetcher = deps.fetch || fetch;
+    const now = deps.now || (() => /* @__PURE__ */ new Date());
+    const editorEl = queryElement(host.root, "[data-property-editor]", HTMLElement);
+    const countEl = queryElement(host.root, "[data-property-selection-count]", HTMLElement);
+    const selectAllEl = queryElement(host.root, "[data-property-select-all]", HTMLButtonElement);
+    const clearSelectionEl = queryElement(
+      host.root,
+      "[data-property-clear-selection]",
+      HTMLButtonElement
+    );
+    const searchEl = queryElement(host.root, "[data-property-filter-query]", HTMLInputElement);
+    const dialogHost = queryElement(host.root, "[data-property-dialog-host]", HTMLElement) || host.root;
+    const toastHost = queryElement(host.root, "[data-property-toast-host]", HTMLElement) || host.root;
+    const dialog = createPreviewDialog(doc, dialogHost, { now });
+    const toast = createUndoToast(doc, toastHost, {
+      onUndo: (journalID) => {
+        void runUndo(journalID);
+      }
+    });
+    const selected = /* @__PURE__ */ new Set();
+    let summary = null;
+    let rows = [];
+    let matchValue = null;
+    let openEditor = null;
+    let busy = false;
+    const setStatus = (message, kind = "") => {
+      host.setStatus(message, kind);
+    };
+    const rowElements = () => queryAllElements(host.rowsEl, "[data-property-row]", HTMLElement);
+    const closeEditor = () => {
+      const close = openEditor;
+      openEditor = null;
+      close?.();
+    };
+    const renderSelection = () => {
+      if (countEl) {
+        countEl.textContent = selectionLabel(selected.size);
+      }
+      if (clearSelectionEl) {
+        clearSelectionEl.disabled = selected.size === 0;
+      }
+      for (const element of rowElements()) {
+        const relPath = element.getAttribute("data-property-row") || "";
+        element.classList.toggle("is-selected", selected.has(relPath));
+      }
+      for (const box of queryAllElements(
+        host.rowsEl,
+        "[data-property-row-select]",
+        HTMLInputElement
+      )) {
+        box.checked = selected.has(box.getAttribute("data-property-row-select") || "");
+      }
+      renderActions();
+    };
+    const renderActions = () => {
+      for (const button of queryAllElements(
+        host.root,
+        "[data-property-action]",
+        HTMLButtonElement
+      )) {
+        const action = button.getAttribute("data-property-action") || "";
+        const needsMatch = action === "replace_value";
+        button.disabled = busy || selected.size === 0 || needsMatch && matchValue === null;
+      }
+    };
+    const setBusy = (next) => {
+      busy = next;
+      host.root.setAttribute("aria-busy", next ? "true" : "false");
+      renderActions();
+    };
+    const toggleSelection = (relPath, force) => {
+      const next = force === void 0 ? !selected.has(relPath) : force;
+      if (next) {
+        selected.add(relPath);
+      } else {
+        selected.delete(relPath);
+      }
+      renderSelection();
+    };
+    const focusRow = (index) => {
+      const elements = rowElements();
+      if (elements.length === 0) {
+        return;
+      }
+      const clamped = Math.max(0, Math.min(index, elements.length - 1));
+      elements.forEach((element, position) => {
+        element.tabIndex = position === clamped ? 0 : -1;
+      });
+      elements[clamped]?.focus();
+    };
+    const announce = (outcome) => {
+      if (!outcome.ok) {
+        setStatus(outcome.message, "is-error");
+        return false;
+      }
+      return true;
+    };
+    const finishWrite = async (result) => {
+      setStatus(mutationSuccessMessage(result), "is-success");
+      toast.show({
+        message: undoToastMessage(result),
+        journalID: result.journal_id,
+        historyHref: host.historyHref
+      });
+      doc.defaultView?.dispatchEvent(
+        new CustomEvent(managementMutationEventName, { detail: result })
+      );
+      await host.reload();
+    };
+    const runUndo = async (journalID) => {
+      setBusy(true);
+      setStatus("Undoing change...", "is-loading");
+      try {
+        const outcome = await undoJournalEntry(fetcher, host.token, journalID);
+        setStatus(outcome.message, outcome.ok ? "is-success" : "is-error");
+        if (outcome.ok) {
+          doc.defaultView?.dispatchEvent(new CustomEvent(managementMutationEventName));
+          await host.reload();
+        }
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runApply = async (previewID) => {
+      setBusy(true);
+      setStatus("Applying change...", "is-loading");
+      try {
+        const outcome = await applyPropertyMutation(fetcher, host.token, previewID);
+        if (!announce(outcome)) {
+          return;
+        }
+        selected.clear();
+        renderSelection();
+        await finishWrite(outcome.result);
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runPreview = async (request) => {
+      setBusy(true);
+      setStatus("Previewing change...", "is-loading");
+      try {
+        const outcome = await previewPropertyMutation(fetcher, host.token, request);
+        if (!announce(outcome)) {
+          return;
+        }
+        const { result } = outcome;
+        setStatus(previewSummaryLabel(result));
+        dialog.open({
+          title: actionTitle(request.action, host.property),
+          summary: previewSummaryLabel(result),
+          confirmLabel: actionConfirmLabel(request.action),
+          result,
+          onConfirm: () => {
+            void runApply(result.preview_id);
+          },
+          onCancel: () => {
+            setStatus("Change canceled.");
+          }
+        });
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runSchemaApply = async (previewID) => {
+      setBusy(true);
+      setStatus("Saving the definition...", "is-loading");
+      try {
+        const outcome = await applyPropertySchema(fetcher, host.token, previewID);
+        if (!announce(outcome)) {
+          return;
+        }
+        await finishWrite(outcome.result);
+      } finally {
+        setBusy(false);
+      }
+    };
+    const previewSchema = async (op, definition) => {
+      setBusy(true);
+      setStatus("Previewing the definition...", "is-loading");
+      try {
+        const outcome = await previewPropertySchema(fetcher, host.token, {
+          op,
+          property: host.property,
+          definition
+        });
+        if (!announce(outcome)) {
+          return;
+        }
+        const { result } = outcome;
+        dialog.open({
+          title: op === "upsert" ? `Define ${host.property}` : `Remove the ${host.property} definition`,
+          summary: previewSummaryLabel(result),
+          confirmLabel: op === "upsert" ? "Save definition" : "Remove definition",
+          result,
+          onConfirm: () => {
+            void runSchemaApply(result.preview_id);
+          },
+          onCancel: () => {
+            setStatus("Definition change canceled.");
+          }
+        });
+      } finally {
+        setBusy(false);
+      }
+    };
+    const runImmediate = async (relPath, op, value, hash, displayText) => {
+      setBusy(true);
+      setStatus("Saving...", "is-loading");
+      try {
+        const outcome = await savePropertyValue(fetcher, host.token, {
+          note: relPath,
+          property: host.property,
+          op,
+          expected_hash: hash,
+          value
+        });
+        if (!announce(outcome)) {
+          return;
+        }
+        closeEditor();
+        updateRowText(relPath, displayText);
+        await finishWrite(outcome.result);
+      } finally {
+        setBusy(false);
+      }
+    };
+    const updateRowText = (relPath, text) => {
+      const element = rowElements().find(
+        (row) => row.getAttribute("data-property-row") === relPath
+      );
+      const value = element ? queryElement(element, ".properties-row-value", HTMLElement) : null;
+      if (!value) {
+        return;
+      }
+      value.textContent = text;
+      value.classList.remove("is-missing");
+    };
+    const mountEditor = (parent, title, submitLabel, build) => {
+      closeEditor();
+      const form = doc.createElement("form");
+      form.className = "properties-editor";
+      form.setAttribute("data-property-editor-form", "");
+      const heading = doc.createElement("p");
+      heading.className = "properties-editor-title";
+      heading.textContent = title;
+      form.appendChild(heading);
+      const submit = build(form);
+      const error = doc.createElement("p");
+      error.className = "properties-editor-error";
+      error.setAttribute("data-property-editor-error", "");
+      error.setAttribute("role", "alert");
+      error.hidden = true;
+      form.appendChild(error);
+      const actions = doc.createElement("div");
+      actions.className = "properties-editor-actions";
+      const confirm = doc.createElement("button");
+      confirm.type = "submit";
+      confirm.className = "properties-button properties-button-primary";
+      confirm.setAttribute("data-property-editor-submit", "");
+      confirm.textContent = submitLabel;
+      const cancel = doc.createElement("button");
+      cancel.type = "button";
+      cancel.className = "properties-button";
+      cancel.setAttribute("data-property-editor-cancel", "");
+      cancel.textContent = "Cancel";
+      actions.append(confirm, cancel);
+      form.appendChild(actions);
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const message = submit();
+        error.textContent = message || "";
+        error.hidden = message === null || message === "";
+      });
+      form.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          closeEditor();
+        }
+      });
+      cancel.addEventListener("click", () => {
+        closeEditor();
+      });
+      parent.appendChild(form);
+      openEditor = () => {
+        form.remove();
+      };
+    };
+    const buildValueControl = (form, current, seed) => {
+      const control = createValueControl(doc, {
+        kind: editKind(current),
+        items: editItemKind(current),
+        allowed: editAllowed(current),
+        value: seed,
+        id: `property-editor-${host.property}`,
+        label: `${host.property} value`
+      });
+      form.appendChild(control.element);
+      return control;
+    };
+    const openRowEditor = (relPath, op) => {
+      const current = summary;
+      const row = rows.find((candidate) => candidate.rel_path === relPath);
+      const element = rowElements().find(
+        (candidate) => candidate.getAttribute("data-property-row") === relPath
+      );
+      if (!row || !element || !current) {
+        return;
+      }
+      const itemKind = editItemKind(current);
+      const seed = op === "replace" ? typedValueFrom(row.value, editKind(current), itemKind) : void 0;
+      mountEditor(
+        element,
+        op === "replace" ? `Edit ${host.property}` : `Add to ${host.property}`,
+        "Save",
+        (form) => {
+          const control = op === "replace" ? buildValueControl(form, current, seed) : (() => {
+            const single = createValueControl(doc, {
+              kind: itemKind,
+              items: itemKind,
+              allowed: editAllowed(current),
+              id: `property-editor-item-${host.property}`,
+              label: `${host.property} item`
+            });
+            form.appendChild(single.element);
+            return single;
+          })();
+          control.focus();
+          return () => {
+            const message = control.error();
+            if (message !== "") {
+              return message;
+            }
+            const value = control.read();
+            const text = op === "replace" ? previewTextFor(value) : `${valueDisplayText(row.value)}, ${value.text}`;
+            void runImmediate(relPath, op, value, row.hash, text);
+            return null;
+          };
+        }
+      );
+    };
+    const previewTextFor = (value) => value.kind === "list" ? (value.items || []).map((item) => item.text).join(", ") : value.text;
+    const openActionEditor = (action) => {
+      const current = summary;
+      const notes = [...selected];
+      if (notes.length === 0) {
+        setStatus("Select at least one note first.", "is-error");
+        return;
+      }
+      if (action === "unset" || action === "repair") {
+        void runPreview({ action, property: host.property, notes });
+        return;
+      }
+      if (!editorEl || !current) {
+        return;
+      }
+      mountEditor(editorEl, actionTitle(action, host.property), "Preview", (form) => {
+        if (action === "rename_property") {
+          const input = doc.createElement("input");
+          input.type = "text";
+          input.className = "properties-control properties-control-input";
+          input.id = "property-editor-new-name";
+          input.autocomplete = "off";
+          input.spellcheck = false;
+          input.setAttribute("aria-label", "New property name");
+          input.setAttribute("data-property-new-name", "");
+          input.value = host.property;
+          form.appendChild(input);
+          input.focus();
+          return () => {
+            const newName = input.value.trim();
+            if (newName === "") {
+              return "Enter a new property name.";
+            }
+            if (newName === host.property) {
+              return "Enter a name different from the current one.";
+            }
+            void runPreview({
+              action,
+              property: host.property,
+              new_name: newName,
+              notes
+            });
+            return null;
+          };
+        }
+        const control = buildValueControl(form, current);
+        control.focus();
+        return () => {
+          const message = control.error();
+          if (message !== "") {
+            return message;
+          }
+          const value = control.read();
+          if (action === "replace_value") {
+            if (!matchValue) {
+              return "Choose the value to replace first.";
+            }
+            void runPreview({
+              action,
+              property: host.property,
+              notes,
+              match: { kind: matchValue.kind, text: matchValue.text },
+              value
+            });
+            return null;
+          }
+          void runPreview({ action, property: host.property, notes, value });
+          return null;
+        };
+      });
+    };
+    host.rowsEl.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || !target.hasAttribute("data-property-row-select")) {
+        return;
+      }
+      toggleSelection(target.getAttribute("data-property-row-select") || "", target.checked);
+    });
+    host.rowsEl.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const edit = target.closest("[data-property-row-edit]");
+      if (edit && !edit.disabled) {
+        openRowEditor(edit.getAttribute("data-property-row-edit") || "", "replace");
+        return;
+      }
+      const add = target.closest("[data-property-row-add]");
+      if (add && !add.disabled) {
+        openRowEditor(add.getAttribute("data-property-row-add") || "", "list_add");
+        return;
+      }
+      const unset = target.closest("[data-property-row-unset]");
+      if (unset && !unset.disabled) {
+        void runPreview({
+          action: "unset",
+          property: host.property,
+          notes: [unset.getAttribute("data-property-row-unset") || ""]
+        });
+      }
+    });
+    host.rowsEl.addEventListener("keydown", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const row = target.closest("[data-property-row]");
+      if (!row) {
+        return;
+      }
+      const elements = rowElements();
+      const index = elements.indexOf(row);
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        focusRow(index + 1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        focusRow(index - 1);
+        return;
+      }
+      if (target !== row) {
+        return;
+      }
+      if (event.key === " ") {
+        event.preventDefault();
+        toggleSelection(row.getAttribute("data-property-row") || "");
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        openRowEditor(row.getAttribute("data-property-row") || "", "replace");
+      }
+    });
+    host.root.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const button = target.closest("[data-property-action]");
+      if (!button || button.disabled) {
+        return;
+      }
+      openActionEditor(button.getAttribute("data-property-action"));
+    });
+    selectAllEl?.addEventListener("click", () => {
+      for (const row of rows) {
+        selected.add(row.rel_path);
+      }
+      renderSelection();
+    });
+    clearSelectionEl?.addEventListener("click", () => {
+      selected.clear();
+      renderSelection();
+    });
+    doc.addEventListener("keydown", (event) => {
+      if (dialog.isOpen()) {
+        return;
+      }
+      if (event.key === "/" && searchEl) {
+        const target = event.target;
+        const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+        if (typing) {
+          return;
+        }
+        event.preventDefault();
+        searchEl.focus();
+        searchEl.select();
+        return;
+      }
+      if (event.key === "Escape") {
+        if (openEditor) {
+          closeEditor();
+          return;
+        }
+        if (selected.size > 0) {
+          selected.clear();
+          renderSelection();
+          setStatus("Selection cleared.");
+        }
+      }
+    });
+    return {
+      render: (result) => {
+        summary = result.property;
+        rows = result.rows;
+        const active = result.filter.value || "";
+        const match = result.values.find(
+          (entry) => entry.value.supported && entry.value.text === active
+        );
+        matchValue = match ? { kind: match.value.kind, text: match.value.text } : null;
+        openEditor = null;
+        renderRows(host.rowsEl, result.rows, {
+          selected,
+          listKind: editKind(result.property) === "list"
+        });
+        const first = rowElements()[0];
+        if (first) {
+          first.tabIndex = 0;
+        }
+        renderSelection();
+      },
+      selection: () => [...selected],
+      previewSchema
+    };
+  };
+
+  // internal/web/static_src/properties.ts
+  var readPayload2 = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
+  var initPropertiesCatalog = (deps = {}) => {
+    const root = queryElement(document, "[data-properties-catalog]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const statusEl = queryElement(root, "[data-properties-status]", HTMLElement);
+    const listEl = queryElement(root, "[data-properties-list]", HTMLElement);
+    if (!statusEl || !listEl) {
+      return;
+    }
+    const configEl = queryElement(root, "[data-properties-config]", HTMLElement);
+    const totalsEl = queryElement(root, "[data-properties-totals]", HTMLElement);
+    const proposalsEl = queryElement(root, "[data-properties-proposals]", HTMLElement);
+    const proposalListEl = queryElement(root, "[data-properties-proposal-list]", HTMLElement);
+    const queryEl = queryElement(root, "[data-properties-query]", HTMLInputElement);
+    const issuesOnlyEl = queryElement(root, "[data-properties-issues-only]", HTMLInputElement);
+    const refreshEl = queryElement(root, "[data-properties-refresh]", HTMLButtonElement);
+    const config = readPropertiesConfig(root);
+    const fetcher = deps.fetch || fetch;
+    let latest = null;
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message, kind);
+    };
+    const currentFilter = () => ({
+      query: queryEl?.value || "",
+      issuesOnly: issuesOnlyEl?.checked || false
+    });
+    const applyFilter = () => {
+      if (!latest) {
+        return;
+      }
+      const shown = filterCatalog(latest.properties, currentFilter());
+      renderCatalog(listEl, shown);
+      setStatus(
+        catalogStatusMessage(latest, shown.length),
+        shown.length === 0 ? "is-empty" : ""
+      );
+    };
+    const load = async () => {
+      root.setAttribute("aria-busy", "true");
+      setStatus("Loading properties...", "is-loading");
+      try {
+        const resp = await fetcher(config.endpoint, { headers: { Accept: "application/json" } });
+        const payload = await readPayload2(resp);
+        if (!resp.ok) {
+          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizePropertiesResponse(payload);
+        if (!result.ok) {
+          setStatus(result.message || "Properties unavailable.", "is-error");
+          return;
+        }
+        latest = result;
+        renderTotals(totalsEl, result.totals, result.total_notes);
+        renderProposals(proposalsEl, proposalListEl, result.proposals);
+        if (configEl) {
+          const message = configStatusMessage(result.config);
+          configEl.textContent = message;
+          configEl.hidden = message === "";
+        }
+        applyFilter();
+      } catch {
+        setStatus("Properties unavailable.", "is-error");
+      } finally {
+        root.setAttribute("aria-busy", "false");
+      }
+    };
+    queryEl?.addEventListener("input", applyFilter);
+    issuesOnlyEl?.addEventListener("change", applyFilter);
+    refreshEl?.addEventListener("click", () => {
+      void load();
+    });
+    void load();
+  };
+  var initPropertyDetail = (deps = {}) => {
+    const root = queryElement(document, "[data-property-detail]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const statusEl = queryElement(root, "[data-property-status]", HTMLElement);
+    const rowsEl = queryElement(root, "[data-property-rows]", HTMLElement);
+    if (!statusEl || !rowsEl) {
+      return;
+    }
+    const configEl = queryElement(root, "[data-property-config]", HTMLElement);
+    const definitionEl = queryElement(root, "[data-property-definition]", HTMLElement);
+    const summaryEl = queryElement(root, "[data-property-summary]", HTMLElement);
+    const proposalEl = queryElement(root, "[data-property-proposal]", HTMLElement);
+    const valuesEl = queryElement(root, "[data-property-values]", HTMLElement);
+    const statusFilterEl = queryElement(root, "[data-property-filter-status]", HTMLSelectElement);
+    const queryEl = queryElement(root, "[data-property-filter-query]", HTMLInputElement);
+    const clearValueEl = queryElement(root, "[data-property-filter-clear]", HTMLButtonElement);
+    const activeValueEl = queryElement(root, "[data-property-active-value]", HTMLElement);
+    const paginationEl = queryElement(root, "[data-property-pagination]", HTMLElement);
+    const prevEl = queryElement(root, "[data-property-prev]", HTMLButtonElement);
+    const nextEl = queryElement(root, "[data-property-next]", HTMLButtonElement);
+    const refreshEl = queryElement(root, "[data-property-refresh]", HTMLButtonElement);
+    const config = readPropertyDetailConfig(root);
+    if (config.property === "") {
+      return;
+    }
+    const fetcher = deps.fetch || fetch;
+    const filter = emptyDetailFilter();
+    const invalidEl = queryElement(root, "[data-property-config-invalid]", HTMLElement);
+    const restartEl = queryElement(root, "[data-property-config-restart]", HTMLElement);
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message, kind);
+    };
+    const renderBanners = (status) => {
+      if (invalidEl) {
+        const message = configInvalidMessage(status);
+        invalidEl.textContent = message;
+        invalidEl.hidden = message === "";
+      }
+      if (restartEl) {
+        const message = configRestartMessage(status);
+        restartEl.textContent = message;
+        restartEl.hidden = message === "";
+      }
+    };
+    const workbench = config.token === "" ? null : createPropertyWorkbench(
+      {
+        root,
+        rowsEl,
+        property: config.property,
+        token: config.token,
+        historyHref: config.historyPath,
+        reload: () => load(),
+        setStatus
+      },
+      deps
+    );
+    const schemaEditor = workbench ? createPropertySchemaEditor({
+      root,
+      submit: (op, definition) => {
+        void workbench.previewSchema(op, definition);
+      },
+      setStatus: (message) => {
+        setStatus(message);
+      }
+    }) : null;
+    const renderActiveValue = () => {
+      if (activeValueEl) {
+        activeValueEl.textContent = filter.value === "" ? "" : `Filtered to the value "${filter.value}".`;
+        activeValueEl.hidden = filter.value === "";
+      }
+      if (clearValueEl) {
+        clearValueEl.hidden = filter.value === "";
+      }
+    };
+    const load = async () => {
+      root.setAttribute("aria-busy", "true");
+      setStatus("Loading property...", "is-loading");
+      try {
+        const url = buildPropertyDetailURL(config.detailEndpoint, {
+          property: config.property,
+          status: filter.status,
+          value: filter.value,
+          q: filter.query,
+          limit: PROPERTY_ROW_LIMIT,
+          offset: filter.offset
+        });
+        const resp = await fetcher(url, { headers: { Accept: "application/json" } });
+        const payload = await readPayload2(resp);
+        if (!resp.ok) {
+          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizePropertyDetailResponse(payload);
+        if (!result.ok) {
+          setStatus(result.message || "Property unavailable.", "is-error");
+          return;
+        }
+        renderSummary(summaryEl, result.property);
+        renderDefinition(definitionEl, result.property);
+        renderProposal(proposalEl, result.property);
+        renderValues(valuesEl, result.values, filter.value);
+        if (workbench) {
+          workbench.render(result);
+        } else {
+          renderRows(rowsEl, result.rows);
+        }
+        schemaEditor?.sync(result.property);
+        renderPagination(paginationEl, result.pagination);
+        renderActiveValue();
+        renderBanners(result.config);
+        if (configEl) {
+          const message = configStatusMessage(result.config);
+          configEl.textContent = message;
+          configEl.hidden = message === "";
+        }
+        if (prevEl) {
+          prevEl.disabled = result.pagination.offset === 0;
+        }
+        if (nextEl) {
+          nextEl.disabled = !result.pagination.has_more;
+        }
+        filter.offset = result.pagination.offset;
+        setStatus(
+          detailStatusMessage(result),
+          result.pagination.total === 0 ? "is-empty" : ""
+        );
+        if (nextEl && result.pagination.has_more) {
+          nextEl.setAttribute("data-property-next-offset", String(nextOffset(result.pagination)));
+        }
+        if (prevEl) {
+          prevEl.setAttribute(
+            "data-property-prev-offset",
+            String(previousOffset(result.pagination, result.pagination.limit))
+          );
+        }
+      } catch {
+        setStatus("Property unavailable.", "is-error");
+      } finally {
+        root.setAttribute("aria-busy", "false");
+      }
+    };
+    statusFilterEl?.addEventListener("change", () => {
+      filter.status = normalizePropertyRowFilterStatus(statusFilterEl.value);
+      filter.offset = 0;
+      void load();
+    });
+    queryEl?.addEventListener("change", () => {
+      filter.query = queryEl.value;
+      filter.offset = 0;
+      void load();
+    });
+    clearValueEl?.addEventListener("click", () => {
+      filter.value = "";
+      filter.offset = 0;
+      void load();
+    });
+    refreshEl?.addEventListener("click", () => {
+      void load();
+    });
+    prevEl?.addEventListener("click", () => {
+      filter.offset = Number(prevEl.getAttribute("data-property-prev-offset") || "0");
+      void load();
+    });
+    nextEl?.addEventListener("click", () => {
+      filter.offset = Number(nextEl.getAttribute("data-property-next-offset") || "0");
+      void load();
+    });
+    valuesEl?.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const button = target.closest("[data-property-value]");
+      if (!button || !valuesEl.contains(button) || button.disabled) {
+        return;
+      }
+      const value = button.getAttribute("data-property-value") || "";
+      filter.value = filter.value === value ? "" : value;
+      filter.offset = 0;
+      void load();
+    });
+    void load();
+    if (config.token !== "") {
+      createConfigStatusPoller(document, {
+        fetch: fetcher,
+        onStatus: renderBanners,
+        onGenerationChange: () => {
+          setStatus("brainnotes.toml changed on disk. Reloading...", "is-loading");
+          void load();
+        }
+      }).start();
+    }
+  };
+  var initProperties = (deps = {}) => {
+    initPropertiesCatalog(deps);
+    initPropertyDetail(deps);
+  };
+
   // internal/web/static_src/search.ts
   var searchResultTitle = (result) => result.title || result.key || "Untitled";
   var searchResultFolderLabel = (result) => result.folder ? `Folder: ${result.folder}` : "Folder: /";
@@ -6067,5 +8641,6 @@ var BrainNotesApp = (() => {
     initOverviewSearchResults();
     initHistoryPanel();
     initDailyFixes();
+    initProperties();
   })();
 })();

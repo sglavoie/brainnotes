@@ -25,6 +25,14 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// brainnotes.toml can itself be restored by undo, so history and undo both
+	// re-read it before answering; otherwise the UI would report a configuration
+	// generation that no longer matches disk.
+	if err := s.reloadConfig(); err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "config: reload failed", err))
+		return
+	}
+
 	entries, err := journal.ListEntries(noteops.JournalRoot(s.vault.Root))
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeJournal, "list history", err))
@@ -101,6 +109,10 @@ func (s *Server) handleUndo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.state.invalidate()
+	if err := s.reloadConfig(); err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "config: reload failed", err))
+		return
+	}
 	writeManagementJSON(w, http.StatusOK, undoResponseForPlan(plan))
 }
 

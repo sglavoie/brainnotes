@@ -13,63 +13,63 @@ func TestPlanRepairs_TypeCoerce(t *testing.T) {
 	tests := []struct {
 		name     string
 		front    *frontmatter.Map
-		schema   map[string]config.PropertySchema
+		props    map[string]config.PropertyDefinition
 		wantKind string
 		wantNew  any
 	}{
 		{
 			name:     "string_to_bool",
 			front:    buildFront("draft", "true"),
-			schema:   map[string]config.PropertySchema{"draft": {Type: "bool"}},
+			props:    map[string]config.PropertyDefinition{"draft": {Type: config.KindBool}},
 			wantKind: "type_coerce",
 			wantNew:  true,
 		},
 		{
 			name:     "string_to_int",
 			front:    buildFront("rating", "5"),
-			schema:   map[string]config.PropertySchema{"rating": {Type: "int"}},
+			props:    map[string]config.PropertyDefinition{"rating": {Type: config.KindInt}},
 			wantKind: "type_coerce",
 			wantNew:  5,
 		},
 		{
 			name:     "string_to_float",
 			front:    buildFront("score", "3.14"),
-			schema:   map[string]config.PropertySchema{"score": {Type: "float"}},
+			props:    map[string]config.PropertyDefinition{"score": {Type: config.KindFloat}},
 			wantKind: "type_coerce",
 			wantNew:  3.14,
 		},
 		{
 			name:     "string_to_date",
 			front:    buildFront("created", "2024-01-15"),
-			schema:   map[string]config.PropertySchema{"created": {Type: "date"}},
+			props:    map[string]config.PropertyDefinition{"created": {Type: config.KindDate}},
 			wantKind: "type_coerce",
 			wantNew:  time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:     "string_to_list",
 			front:    buildFront("tags", "solo"),
-			schema:   map[string]config.PropertySchema{"tags": {Type: "list"}},
+			props:    map[string]config.PropertyDefinition{"tags": {Type: config.KindList, Items: config.KindString}},
 			wantKind: "type_coerce",
 			wantNew:  []any{"solo"},
 		},
 		{
 			name:     "float_to_int_lossless",
 			front:    buildFront("count", float64(7)),
-			schema:   map[string]config.PropertySchema{"count": {Type: "int"}},
+			props:    map[string]config.PropertyDefinition{"count": {Type: config.KindInt}},
 			wantKind: "type_coerce",
 			wantNew:  7,
 		},
 		{
 			name:     "int_to_float",
 			front:    buildFront("ratio", 3),
-			schema:   map[string]config.PropertySchema{"ratio": {Type: "float"}},
+			props:    map[string]config.PropertyDefinition{"ratio": {Type: config.KindFloat}},
 			wantKind: "type_coerce",
 			wantNew:  float64(3),
 		},
 		{
 			name:     "bool_to_string",
 			front:    buildFront("status", true),
-			schema:   map[string]config.PropertySchema{"status": {Type: "string"}},
+			props:    map[string]config.PropertyDefinition{"status": {Type: config.KindString}},
 			wantKind: "type_coerce",
 			wantNew:  "true",
 		},
@@ -77,7 +77,7 @@ func TestPlanRepairs_TypeCoerce(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := PlanRepairs(tt.front, tt.schema, nil)
+			result := PlanRepairs(tt.front, tt.props)
 			if len(result.Skips) != 0 {
 				t.Errorf("unexpected skips: %+v", result.Skips)
 			}
@@ -97,55 +97,55 @@ func TestPlanRepairs_TypeCoerce(t *testing.T) {
 
 func TestPlanRepairs_TypeCoerce_Skip(t *testing.T) {
 	tests := []struct {
-		name   string
-		front  *frontmatter.Map
-		schema map[string]config.PropertySchema
+		name  string
+		front *frontmatter.Map
+		props map[string]config.PropertyDefinition
 	}{
 		{
-			name:   "string_maybe_to_bool",
-			front:  buildFront("draft", "maybe"),
-			schema: map[string]config.PropertySchema{"draft": {Type: "bool"}},
+			name:  "string_maybe_to_bool",
+			front: buildFront("draft", "maybe"),
+			props: map[string]config.PropertyDefinition{"draft": {Type: config.KindBool}},
 		},
 		{
-			name:   "string_abc_to_int",
-			front:  buildFront("count", "abc"),
-			schema: map[string]config.PropertySchema{"count": {Type: "int"}},
+			name:  "string_abc_to_int",
+			front: buildFront("count", "abc"),
+			props: map[string]config.PropertyDefinition{"count": {Type: config.KindInt}},
 		},
 		{
-			name:   "string_leading_zero_to_int_lossy",
-			front:  buildFront("count", "007"),
-			schema: map[string]config.PropertySchema{"count": {Type: "int"}},
+			name:  "string_leading_zero_to_int_lossy",
+			front: buildFront("count", "007"),
+			props: map[string]config.PropertyDefinition{"count": {Type: config.KindInt}},
 		},
 		{
-			name:   "float_lossy_to_int",
-			front:  buildFront("count", 3.14),
-			schema: map[string]config.PropertySchema{"count": {Type: "int"}},
+			name:  "float_lossy_to_int",
+			front: buildFront("count", 3.14),
+			props: map[string]config.PropertyDefinition{"count": {Type: config.KindInt}},
 		},
 		{
-			name:   "string_bad_to_date",
-			front:  buildFront("created", "not-a-date"),
-			schema: map[string]config.PropertySchema{"created": {Type: "date"}},
+			name:  "string_bad_to_date",
+			front: buildFront("created", "not-a-date"),
+			props: map[string]config.PropertyDefinition{"created": {Type: config.KindDate}},
 		},
 		{
-			name:   "list_to_string",
-			front:  buildFront("status", []any{"WIP"}),
-			schema: map[string]config.PropertySchema{"status": {Type: "string"}},
+			name:  "list_to_string",
+			front: buildFront("status", []any{"WIP"}),
+			props: map[string]config.PropertyDefinition{"status": {Type: config.KindString}},
 		},
 		{
-			name:   "nil_to_string",
-			front:  buildFront("status", nil),
-			schema: map[string]config.PropertySchema{"status": {Type: "string"}},
+			name:  "nil_to_string",
+			front: buildFront("status", nil),
+			props: map[string]config.PropertyDefinition{"status": {Type: config.KindString}},
 		},
 		{
-			name:   "datetime_to_string_lossy",
-			front:  buildFront("created", time.Date(2024, 1, 15, 9, 45, 30, 0, time.FixedZone("EST", -5*60*60))),
-			schema: map[string]config.PropertySchema{"created": {Type: "string"}},
+			name:  "datetime_to_string_lossy",
+			front: buildFront("created", time.Date(2024, 1, 15, 9, 45, 30, 0, time.FixedZone("EST", -5*60*60))),
+			props: map[string]config.PropertyDefinition{"created": {Type: config.KindString}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := PlanRepairs(tt.front, tt.schema, nil)
+			result := PlanRepairs(tt.front, tt.props)
 			if len(result.Actions) != 0 {
 				t.Errorf("expected no actions, got %+v", result.Actions)
 			}
@@ -161,11 +161,11 @@ func TestPlanRepairs_TypeCoerce_Skip(t *testing.T) {
 
 func TestPlanRepairs_MissingRequired_Skip(t *testing.T) {
 	front := buildFront("other", "value")
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string", Required: true},
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString, Required: true},
 	}
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions, got %+v", result.Actions)
 	}
@@ -187,11 +187,11 @@ func TestPlanRepairs_ParsedUTCMidnightDateTimeRejectedAsDate(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 
-	sch := map[string]config.PropertySchema{
-		"created": {Type: "date"},
+	props := map[string]config.PropertyDefinition{
+		"created": {Type: config.KindDate},
 	}
 
-	result := PlanRepairs(&doc.Front, sch, nil)
+	result := PlanRepairs(&doc.Front, props)
 	if len(result.Actions) != 0 {
 		t.Fatalf("expected no actions, got %+v", result.Actions)
 	}
@@ -212,11 +212,11 @@ func TestPlanRepairs_ParsedDateOnlyAcceptedAsDate(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 
-	sch := map[string]config.PropertySchema{
-		"created": {Type: "date"},
+	props := map[string]config.PropertyDefinition{
+		"created": {Type: config.KindDate},
 	}
 
-	result := PlanRepairs(&doc.Front, sch, nil)
+	result := PlanRepairs(&doc.Front, props)
 	if len(result.Actions) != 0 {
 		t.Fatalf("expected no actions, got %+v", result.Actions)
 	}

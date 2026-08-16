@@ -137,7 +137,7 @@ func isASCIIAlpha(b byte) bool {
 	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
 }
 
-func atomicWriteFile(dest string, data []byte) error {
+func atomicWriteFile(label, dest string, data []byte) error {
 	dir := filepath.Dir(dest)
 	var destMode os.FileMode
 	destExists := false
@@ -145,12 +145,12 @@ func atomicWriteFile(dest string, data []byte) error {
 		destMode = info.Mode().Perm()
 		destExists = true
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("new: stat %q: %w", dest, err)
+		return fmt.Errorf("%s: stat %q: %w", label, dest, err)
 	}
 
 	tmp, err := os.CreateTemp(dir, ".new-*.tmp")
 	if err != nil {
-		return fmt.Errorf("new: tempfile in %q: %w", dir, err)
+		return fmt.Errorf("%s: tempfile in %q: %w", label, dir, err)
 	}
 	tmpPath := tmp.Name()
 	cleanup := func() { _ = os.Remove(tmpPath) }
@@ -158,16 +158,16 @@ func atomicWriteFile(dest string, data []byte) error {
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		cleanup()
-		return fmt.Errorf("new: write %q: %w", tmpPath, err)
+		return fmt.Errorf("%s: write %q: %w", label, tmpPath, err)
 	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		cleanup()
-		return fmt.Errorf("new: fsync %q: %w", tmpPath, err)
+		return fmt.Errorf("%s: fsync %q: %w", label, tmpPath, err)
 	}
 	if err := tmp.Close(); err != nil {
 		cleanup()
-		return fmt.Errorf("new: close %q: %w", tmpPath, err)
+		return fmt.Errorf("%s: close %q: %w", label, tmpPath, err)
 	}
 	wantMode := destMode
 	if !destExists {
@@ -175,11 +175,11 @@ func atomicWriteFile(dest string, data []byte) error {
 	}
 	if err := os.Chmod(tmpPath, wantMode); err != nil {
 		cleanup()
-		return fmt.Errorf("new: chmod %q: %w", tmpPath, err)
+		return fmt.Errorf("%s: chmod %q: %w", label, tmpPath, err)
 	}
 	if err := os.Rename(tmpPath, dest); err != nil {
 		cleanup()
-		return fmt.Errorf("new: rename %q -> %q: %w", tmpPath, dest, err)
+		return fmt.Errorf("%s: rename %q -> %q: %w", label, tmpPath, dest, err)
 	}
 	return nil
 }

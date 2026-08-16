@@ -27,29 +27,20 @@ func TestEndToEndScenario_RepairWorkflow(t *testing.T) {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := `vault = "` + root + `"
-
-[frontmatter.schema.status]
+	useVaultRoot(t, root, `[frontmatter.properties.status]
 type     = "string"
 required = true
 allowed  = ["WIP", "Done", "Archived"]
 
-[frontmatter.schema.tags]
+[frontmatter.properties.tags]
 type     = "list"
+items    = "string"
 required = true
 
-[frontmatter.schema.created]
+[frontmatter.properties.created]
 type     = "date"
 required = true
-`
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+`)
 
 	_, lintErr := runCLI(t, "", "lint")
 	if lintErr == nil {

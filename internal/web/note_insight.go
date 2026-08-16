@@ -27,6 +27,7 @@ type noteInsightResponse struct {
 }
 
 func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/note/insight" {
 		http.NotFound(w, r)
 		return
@@ -60,7 +61,7 @@ func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	argv := append([]string(nil), s.cfg.Agent.Command...)
+	argv := append([]string(nil), cfg.Agent.Command...)
 	if len(argv) == 0 {
 		writeManagementJSON(w, http.StatusOK, noteInsightResponse{
 			OK:      true,
@@ -87,7 +88,7 @@ func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if timeout := time.Duration(s.cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
+	if timeout := time.Duration(cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
@@ -121,8 +122,9 @@ func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) buildNoteInsightPacket(snapshot vaultSnapshot, sourceNote *vault.Note, userPrompt string) ([]byte, error) {
+	cfg := s.config()
 	documents, err := recall.ExtractCorpus(s.vault.Root, snapshot.notes, recall.ExtractOptions{
-		MetadataProperties: append([]string(nil), s.cfg.Related.MetadataProperties...),
+		MetadataProperties: append([]string(nil), cfg.Related.MetadataProperties...),
 	})
 	if err != nil {
 		return nil, err

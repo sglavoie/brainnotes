@@ -293,7 +293,7 @@ func diagnosticDuplicateTitles(notes []diagnosticLoadedNote, graph *query.Graph)
 }
 
 func diagnosticSchemaViolations(notes []diagnosticLoadedNote, graph *query.Graph, cfg *config.Config) []diagnosticGroup {
-	if len(cfg.Frontmatter.Schema) == 0 {
+	if len(cfg.Frontmatter.Properties) == 0 {
 		return nil
 	}
 
@@ -303,7 +303,7 @@ func diagnosticSchemaViolations(notes []diagnosticLoadedNote, graph *query.Graph
 		if err != nil {
 			continue
 		}
-		violations := schema.ValidateNote(front, item.rel, cfg.Frontmatter.Schema, cfg.Frontmatter.WikilinkProperties)
+		violations := schema.ValidateNote(front, item.rel, cfg.Frontmatter.Properties)
 		for _, violation := range violations {
 			key := groupKey{Property: violation.Property, Kind: violation.Kind, Detail: violation.Detail}
 			groups[key] = append(groups[key], diagnosticNoteForIssue(item, graph, ""))

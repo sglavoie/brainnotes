@@ -94,13 +94,7 @@ func TestSetRemove_WikilinkPropertyWraps(t *testing.T) {
 	if err := os.WriteFile(notePath, []byte("---\ncategories:\n  - \"[[Books]]\"\n  - \"[[Personal]]\"\n---\nBody.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, testPropertyDefinitions)
 
 	if _, err := runCLI(t, "", "set", notePath, "categories-=Books"); err != nil {
 		t.Fatalf("execute: %v", err)

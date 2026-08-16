@@ -21,9 +21,8 @@ func Execute() error {
 // NewRootCmd builds the root cobra command with persistent flags wired up.
 func NewRootCmd() *cobra.Command {
 	var (
-		vaultPath  string
-		configPath string
-		verbose    bool
+		vaultPath string
+		verbose   bool
 	)
 
 	cmd := &cobra.Command{
@@ -34,18 +33,18 @@ func NewRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Skip config loading for commands that don't need a vault
-			// (completion scripts, help). This keeps `bn completion bash`
-			// usable without a configured vault.
-			if cmd.Name() == "completion" || cmd.Name() == "help" || cmd.Name() == "config" ||
+			// (completion scripts, help) and for `init`, which creates the
+			// vault-root config file that loading would require.
+			if cmd.Name() == "completion" || cmd.Name() == "help" || cmd.Name() == "init" ||
 				cmd.Name() == cobra.ShellCompRequestCmd || cmd.Name() == cobra.ShellCompNoDescRequestCmd {
 				return nil
 			}
 			for p := cmd.Parent(); p != nil; p = p.Parent() {
-				if p.Name() == "completion" || p.Name() == "config" {
+				if p.Name() == "completion" {
 					return nil
 				}
 			}
-			cfg, err := config.Load(vaultPath, configPath)
+			cfg, err := config.Load(config.LoadOptions{VaultFlag: vaultPath})
 			if err != nil {
 				return err
 			}
@@ -58,18 +57,18 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
-	cmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "path to vault root (overrides BNOTES_VAULT and config)")
-	cmd.PersistentFlags().StringVar(&configPath, "config", "", "path to config file (overrides BNOTES_CONFIG and default search)")
+	cmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "path to vault root (overrides BNOTES_VAULT and the upward search)")
 	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
 	cmd.AddCommand(NewBackupCmd())
 	cmd.AddCommand(NewBacklinksCmd())
-	cmd.AddCommand(NewConfigCmd(func() string { return configPath }))
+	cmd.AddCommand(NewConfigCmd())
 	cmd.AddCommand(NewContextCmd())
 	cmd.AddCommand(NewDoctorCmd())
 	cmd.AddCommand(NewFindCmd())
 	cmd.AddCommand(NewGraphCmd())
 	cmd.AddCommand(NewHistoryCmd())
+	cmd.AddCommand(NewInitCmd())
 	cmd.AddCommand(NewLintCmd())
 	cmd.AddCommand(NewLinksCmd())
 	cmd.AddCommand(NewMoveCmd())

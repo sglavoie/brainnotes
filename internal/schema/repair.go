@@ -36,50 +36,46 @@ type wikilinkRepairParts struct {
 	full    bool
 }
 
-// PlanRepairs inspects a note's frontmatter against the schema and config,
-// returning safe mechanical fixes and reasons for skipped issues. Each
-// property produces at most one action (combining all applicable fix
+// PlanRepairs inspects a note's frontmatter against the configured property
+// definitions, returning safe mechanical fixes and reasons for skipped issues.
+// Each property produces at most one action (combining all applicable fix
 // categories) and zero or more skips.
 //
 // Fix categories applied in order per property:
-//  1. type_coerce — convert to schema type when lossless
+//  1. type_coerce — convert to the defined kind when lossless
 //  2. canonicalize — case-insensitive match to an allowed value
 //  3. wikilink_wrap — wrap bare strings in [[ ]] for wikilink properties
 //  4. list_dedup — remove duplicate list entries
-func PlanRepairs(front *frontmatter.Map, sch map[string]config.PropertySchema, wikilinkProps []string) RepairResult {
+func PlanRepairs(front *frontmatter.Map, props map[string]config.PropertyDefinition) RepairResult {
 	var result RepairResult
 	if front == nil {
 		return result
 	}
-	wlSet := make(map[string]bool, len(wikilinkProps))
-	for _, p := range wikilinkProps {
-		wlSet[p] = true
-	}
 
 	processed := make(map[string]bool)
 
-	schemaKeys := make([]string, 0, len(sch))
-	for k := range sch {
-		schemaKeys = append(schemaKeys, k)
+	definedKeys := make([]string, 0, len(props))
+	for k := range props {
+		definedKeys = append(definedKeys, k)
 	}
-	sort.Strings(schemaKeys)
+	sort.Strings(definedKeys)
 
-	for _, key := range schemaKeys {
-		rule := sch[key]
+	for _, key := range definedKeys {
+		def := props[key]
 		processed[key] = true
 
 		if !front.Has(key) {
-			if rule.Required {
+			if def.Required {
 				result.Skips = append(result.Skips, RepairSkip{
 					Property: key,
 					Kind:     "missing_required",
-					Detail:   "required property is missing; no default available (" + RuleSummary(rule) + ")",
+					Detail:   "required property is missing; no default available (" + def.Summary() + ")",
 				})
 			}
 			continue
 		}
 
-		planProperty(&result, front, key, &rule, wlSet[key])
+		planProperty(&result, front, key, &def)
 	}
 
 	frontKeys := front.Keys()
@@ -88,21 +84,22 @@ func PlanRepairs(front *frontmatter.Map, sch map[string]config.PropertySchema, w
 		if processed[key] {
 			continue
 		}
-		planProperty(&result, front, key, nil, wlSet[key])
+		planProperty(&result, front, key, nil)
 	}
 
 	return result
 }
 
-func planProperty(result *RepairResult, front *frontmatter.Map, key string, rule *config.PropertySchema, isWikilink bool) {
+func planProperty(result *RepairResult, front *frontmatter.Map, key string, def *config.PropertyDefinition) {
 	val, _ := front.Get(key)
 	working := val
 	var kinds []string
 	skipRest := false
+	isWikilink := def != nil && def.IsWikilink()
 
-	if rule != nil {
-		if !checkPropertyType(front, key, working, rule.Type) {
-			coerced, ok := TryCoerce(working, rule.Type)
+	if def != nil {
+		if ok, _ := CheckDefinition(front, key, working, *def); !ok {
+			coerced, ok := TryCoerce(working, *def)
 			if ok {
 				working = coerced
 				kinds = append(kinds, "type_coerce")
@@ -110,14 +107,14 @@ func planProperty(result *RepairResult, front *frontmatter.Map, key string, rule
 				result.Skips = append(result.Skips, RepairSkip{
 					Property: key,
 					Kind:     "type_unconvertible",
-					Detail:   fmt.Sprintf("cannot safely convert %s to %s", propertyTypeName(front, key, working), rule.Type),
+					Detail:   fmt.Sprintf("cannot safely convert %s to %s", propertyTypeName(front, key, working), KindLabel(*def)),
 				})
 				skipRest = true
 			}
 		}
 
-		if !skipRest && len(rule.Allowed) > 0 {
-			canonized, unfixable := canonicalizeAll(working, rule.Allowed, isWikilink)
+		if !skipRest && len(def.Allowed) > 0 {
+			canonized, unfixable := canonicalizeAll(working, def.Allowed, isWikilink)
 			if !reflect.DeepEqual(working, canonized) {
 				working = canonized
 				kinds = append(kinds, "canonicalize")

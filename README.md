@@ -36,7 +36,10 @@ launched from another directory.
 ## Quick start
 
 ```sh
-# Point bn at your vault (or set BNOTES_VAULT / config).
+# Mark a directory as a vault root (writes brainnotes.toml there).
+bn init /path/to/vault
+
+# Run from inside the vault, or point bn at it explicitly.
 export BNOTES_VAULT=/path/to/vault
 
 # Find every book note that's still 'To Read'.
@@ -55,28 +58,54 @@ bn find --tag drafts | bn set - status=done
 
 ## Configuration
 
-The config file is searched, in order:
+Configuration lives in a single `brainnotes.toml` at the root of the vault, and
+that file is what marks the directory as a vault root. Run `bn init` to create
+it. There is no external or user-level config file.
 
-1. `--config <path>` flag
-2. `BNOTES_CONFIG` environment variable
-3. `$XDG_CONFIG_HOME/bnotes/config.toml`
-4. `~/.config/bnotes/config.toml`
-
-Run `bn config` to see which file is active; `bn config edit` to open it (a
-starter template is created on first run).
-
-Vault path resolution, in order:
+Vault root resolution, in order:
 
 1. `--vault <path>` flag
 2. `BNOTES_VAULT` environment variable
-3. The `vault` key in the config file
+3. An upward search from the current directory for the nearest `brainnotes.toml`
+
+All three require the directory to actually contain `brainnotes.toml`. Run
+`bn config` to see the resolved vault root, the config path, and which of the
+three resolved it; `bn config edit` opens that file in `$EDITOR`.
+
+### Migrating from an external configuration file
+
+Earlier versions read configuration from outside the vault. That model is gone,
+with no fallback and no automatic migration. If you used it, migrate by hand:
+
+| Removed | Replacement |
+| --- | --- |
+| `--config <path>` flag | `--vault <path>`, pointing at the directory that holds `brainnotes.toml` |
+| `BNOTES_CONFIG` environment variable | `BNOTES_VAULT`, set to the vault root |
+| XDG / home discovery (`~/.config/bnotes/config.toml`) | `brainnotes.toml` at the vault root |
+| `vault = "..."` key inside the config file | The location of `brainnotes.toml` itself; the key is no longer read |
+
+Migration steps:
+
+1. Run `bn init <vault>` to write a commented starter `brainnotes.toml` at the
+   vault root. It refuses to overwrite an existing file, so this is safe to run
+   against a vault you are unsure about.
+2. Copy your old settings into it, dropping the `vault` key.
+3. Rewrite each frontmatter property under `[frontmatter.properties.<key>]`
+   using the unified `type` / `items` / `required` / `allowed` schema below.
+   There are no implicit defaults: a property gets list semantics, wikilink
+   wrapping, or validation only when it is declared.
+4. Delete the old external file and unset `BNOTES_CONFIG`.
+5. Run `bn config` to confirm the resolved vault root and config path, then
+   `bn lint` to see which notes the declarations now flag.
+
+One vault, one file: `brainnotes.toml` lives at the vault root, is meant to be
+committed, and is the marker that makes the directory a vault.
 
 ### Schema
 
-```toml
-# Required.
-vault = "/path/to/vault"
+Every key is optional.
 
+```toml
 # Extra vault-relative paths to skip during Walk; merged with hard-coded
 # defaults: .git, .obsidian, Attachments, Archive, Trash. The configured
 # [templates].dir is also skipped automatically.
@@ -86,11 +115,46 @@ ignore = []
 dir = "Templates"                          # relative to vault
 default_extension = ".md"
 
-[frontmatter]
-# Properties whose string values are wrapped in [[wikilinks]] on write.
-wikilink_properties = ["categories", "org", "parent", "area"]
-# Properties that `bn set k=a,b,c` splits into a YAML list.
-list_properties = ["categories", "tags", "topics", "org", "type"]
+# Every frontmatter property is declared once, under its own section. There
+# are no implicit defaults: a property has list semantics, wikilink wrapping,
+# and validation only if it is declared here.
+#
+#   type      one of string, wikilink, date, datetime, int, float, bool, list
+#   items     required when type = "list"; the kind of every element
+#             (any type except "list" — lists do not nest)
+#   required  when true, `bn lint` reports the property as missing
+#   allowed   optional strict allow-list of values
+#
+# [frontmatter.properties.status]
+# type     = "string"
+# required = true
+# allowed  = ["WIP", "Done", "Archived"]
+
+[frontmatter.properties.categories]
+type  = "list"
+items = "wikilink"
+
+[frontmatter.properties.tags]
+type  = "list"
+items = "string"
+
+[frontmatter.properties.topics]
+type  = "list"
+items = "string"
+
+[frontmatter.properties.org]
+type  = "list"
+items = "wikilink"
+
+[frontmatter.properties.type]
+type  = "list"
+items = "string"
+
+[frontmatter.properties.parent]
+type = "wikilink"
+
+[frontmatter.properties.area]
+type = "wikilink"
 
 [fzf]
 # Args appended to the fzf invocation when `-i` is passed.
@@ -187,9 +251,9 @@ backlinks, broken-link checks, related-note scoring, exports, and web views.
 Both quoted YAML strings (`related: "[[People]]"`) and Obsidian's common
 unquoted form (`related: [[People]]` or `- [[People]]`) are supported. Plain
 metadata such as `categories: People` or `tags: Podcasts` remains metadata and
-does not create a graph edge. `wikilink_properties` controls automatic
-wrapping during writes and repairs; it is not required for discovering or
-rewriting an already-explicit `[[wikilink]]`.
+does not create a graph edge. A `wikilink`-typed property definition controls
+automatic wrapping during writes and repairs; it is not required for
+discovering or rewriting an already-explicit `[[wikilink]]`.
 
 Default ignore entries (always applied): `.git`, `.obsidian`, `Attachments`,
 `Archive`, `Trash`. The configured `[templates].dir` (default `Templates`) is also
@@ -486,34 +550,40 @@ bn context Notes/Current.md --format json > /tmp/current-context.json
 bn context Notes/Current.md --purpose questions --agent
 ```
 
-### `bn config` — show or edit the config file
+### `bn init` — mark a directory as a vault root
+
+```sh
+bn init [path]
+```
+
+Writes a commented starter `brainnotes.toml` into `path` (the current directory
+when omitted). The directory must already exist. `bn init` refuses to overwrite
+an existing `brainnotes.toml` and refuses to write through a symlink, so it is
+safe to run against a vault you are not sure about.
+
+### `bn config` — show or edit the vault configuration
 
 ```sh
 bn config
 bn config edit
 ```
 
-`bn config` prints the active config path and the resolution chain so you can
-see which file `bn` will load and what else was inspected. Each row shows
-`not set` when the underlying input is empty; otherwise the path is shown with
-`[active]` (the first non-empty entry) and `[exists]` / `[missing]`.
+`bn config` prints the resolved vault root, the `brainnotes.toml` that was
+loaded, and which of `--vault` / `$BNOTES_VAULT` / the upward search resolved
+it. `bn config edit` opens that same file in `$EDITOR`.
 
-`bn config edit` opens the active config in `$EDITOR`. If no file exists at
-the resolved path, a commented starter template is written there first
-(parent directories are created as needed), so first-time setup is a single
-command.
+`bn serve` can edit one part of that file from the browser: the
+`[frontmatter.properties.<key>]` blocks, through the property workbench. Every
+other setting is edited here, in the file. A definition saved from the browser
+is written to the same `brainnotes.toml`, so keep it committed.
 
 Example:
 
 ```text
 $ bn config
-Active config: /Users/you/.config/bnotes/config.toml (default, exists)
-
-Resolution order (highest to lowest precedence):
-  1. --config flag        not set
-  2. $BNOTES_CONFIG       not set
-  3. $XDG_CONFIG_HOME     not set
-  4. default path         /Users/you/.config/bnotes/config.toml  [active] [exists]
+Vault:       /Users/you/vault
+Config:      /Users/you/vault/brainnotes.toml
+Resolved by: upward search
 ```
 
 ### `bn backup` — create a vault snapshot archive
@@ -690,6 +760,7 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `/` Daily Brief cards (Continue, Rediscover, Connect), rolling seven-day activity, compact health snapshot, recent notes, and primary search
 - `/library` faceted search, bulk note operations, change history, and recent notes
 - `/health` Daily Fixes, vault metrics, and full diagnostics from the shared snapshot
+- `/properties` property catalog and `/properties/<key>` the interactive property workbench
 - `/n/<note-key>` rendered note view (body, editable frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
@@ -700,6 +771,10 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `GET /api/cockpit` hygiene queue (add `?view=daily` for the capped daily view) and `POST /api/cockpit/item` for Done/Snooze/Clear triage
 - `POST /api/fixes/preview` then `POST /api/fixes/apply` to preview and apply a single task's fix
 - `GET /api/daily-review/context` read-only redacted daily-review snapshot and `POST /api/daily-review/agent` optional local AI review
+- `GET /api/properties` property catalog statistics and `GET /api/properties/detail?property=...` per-property values and note rows
+- `POST /api/properties/value` immediate single-note edit, `POST /api/properties/preview` then `POST /api/properties/apply` for every other note change
+- `POST /api/properties/schema/preview` then `POST /api/properties/schema/apply` for property definitions in `brainnotes.toml`
+- `GET /api/config/status` current configuration generation, validity, and whether property writes are allowed
 
 Resilient note loading (server-only): `bn serve` bounds each note read to a
 fixed 2-second timeout so a single stalled file cannot hang a page load. A note
@@ -801,6 +876,89 @@ changed on disk since the preview is rejected with `409` so a stale fix never
 lands. Both endpoints require CSRF and the task `id` and `action`; a successful
 apply writes an undo journal entry named `bn cockpit fix`.
 
+The Properties pages are an interactive workbench over every property your notes
+actually store plus every property declared in `[frontmatter.properties]`. The
+catalog sorts properties so the ones needing attention come first and reports
+configured status, coverage, distinct logical values, observed value kinds, and
+violation counts (missing required, wrong type, disallowed value) alongside
+values YAML cannot safely represent as frontmatter text. A logical value counts
+at most once per note, so a list that repeats an item does not inflate the
+statistics. `/properties/<key>` drills into one property with its distinct
+values, a filterable note list (all, violations, missing required, unsupported),
+a free-text title/path search, and a value filter. Note rows are paginated at 50
+per page by default with a hard maximum of 200.
+
+Editing a value uses a control that matches the declared kind: a text field for
+`string`, a wikilink field that adds the `[[ ]]` wrapping for you, native date
+and datetime pickers, numeric fields for `int` and `float`, a checkbox for
+`bool`, and a row of removable chips plus an add field for `list`. An
+undeclared property is edited as text. Every control validates before it will
+submit, so a malformed date or a value outside `allowed` is refused in the
+browser rather than at the server.
+
+The note list is keyboard operable end to end: `/` focuses the search box, the
+arrow keys move the focused row, space toggles that row's selection, enter opens
+the inline editor or confirms the focused action, and escape cancels the editor
+or closes the preview dialog. Focus returns to the row you started from after a
+dialog closes.
+
+Saving follows a hybrid model. A single-note replacement of one value, and
+adding one item to one note's list, save immediately: the row updates in place
+and an undo toast appears. Everything riskier is preview-gated — removing a list
+item, unsetting a property, any change touching more than one note, a bulk
+replacement of a value across notes, renaming a property, applying schema
+repairs, and every property-definition edit. Those go through
+`POST /api/properties/preview`, which returns the affected files, per-note
+before/after values, the `brainnotes.toml` diff for a definition change,
+projected violation totals, blockers, warnings, and a one-use `preview_id` with
+its `expires_at`. The preview dialog shows all of it and requires an explicit
+confirmation; `POST /api/properties/apply` refuses to write unless it receives
+that receipt. A receipt is single-use, expires after five minutes, and is
+invalidated when `brainnotes.toml` changes underneath it, so a stale plan can
+never land. Fatal blockers (unparseable frontmatter, a missing note, a rename
+that would collide with an existing key, a configuration conflict) suppress the
+receipt entirely, which means there is nothing to confirm and no apply is
+possible until the blocker is resolved. A skipped repair is reported as an
+advisory warning instead and does not block the rest.
+
+After a successful apply the edited rows update immediately, the property
+summary and violation counts refetch without a page reload, and an undo toast
+links to the history panel at the bottom of the page. That panel lists recent
+property and configuration changes with their journal entry IDs, so you can undo
+a specific one rather than only the latest. If a note changed on disk between
+reading the page and saving, the write is refused with `409` and nothing is
+touched — refresh and retry.
+
+Property definitions are editable from the same page. The definition editor sets
+`type`, `items` for a list, `required`, and the `allowed` list, previews the
+exact `brainnotes.toml` diff plus how many notes would newly violate the
+definition, and only then writes. Definition changes never rewrite notes: adding
+`allowed = [...]` reveals violations, and fixing them is a separate, separately
+confirmed repair. For an unconfigured property whose observed values unanimously
+support one kind, the pages propose an inferred `[frontmatter.properties.<key>]`
+block, which you can review and adopt into the editor with one click before
+saving it. Inference is deliberately conservative: it never guesses `required`
+or `allowed`, and it stays silent when the data mixes kinds, mixes scalars with
+lists, or contains a value it cannot classify.
+
+While the page is visible it polls `GET /api/config/status` every five seconds
+and stops polling when the tab is hidden. If `brainnotes.toml` was edited
+externally and reloaded cleanly, the page reloads its data and tells you why. If
+the file is now invalid, a banner reports the parse error and property writes are
+refused until it is fixed. If a change needs a server restart to take effect, a
+restart-required banner says so. Status changes are announced to screen readers,
+as are save results and errors.
+
+An unsupported value (a YAML null, mapping, or nested list) is shown by label
+only — never as text a write could reproduce — cannot be used as a value filter,
+and cannot be edited from the browser. Fix those in the file directly.
+
+Version one deliberately excludes: spreadsheet-style grid editing of many
+properties at once, advanced value transforms (regular expressions, split/join,
+case rules), saved or reusable edit recipes, browser editing of settings other
+than property definitions or of raw TOML, and any redesign of the note-body
+editor — bodies still open in your configured editor.
+
 The overview search results can select notes for batch lifecycle work: move to
 Trash, move to a folder, set/list-edit frontmatter, or unset frontmatter. Bulk
 actions require an inline preview first: the server returns a one-use
@@ -866,12 +1024,21 @@ one-use `preview_id` to `POST /api/notes/bulk`; missing, stale, mismatched, or
 reused previews are rejected with `409`. Preview receipts stay process-local,
 expire after five minutes, and never write journal entries by themselves.
 Cockpit fixes follow the same preview-then-apply contract via
-`POST /api/fixes/preview` and `POST /api/fixes/apply`. Cockpit triage
+`POST /api/fixes/preview` and `POST /api/fixes/apply`, and property changes
+follow it via `POST /api/properties/preview` and `POST /api/properties/apply`
+(definitions use `POST /api/properties/schema/preview` and
+`POST /api/properties/schema/apply`). Property receipts are additionally
+invalidated when `brainnotes.toml` changes, so an apply planned against an older
+configuration is refused rather than reinterpreted. `POST /api/properties/value`
+is the one exception to preview-gating: it accepts only a single-note value
+replacement or list addition, and it requires the note's current hash, so a note
+edited since the page loaded is rejected with `409`. Cockpit triage
 (Done/Snooze/Clear) uses `POST /api/cockpit/item` with the same CSRF token and
 only writes `<vault>/.bnotes/cockpit.json`.
 File-changing web actions write undo journal entries with `bn web ...` command
-names (cockpit fixes use `bn cockpit fix`); `POST /api/undo` restores the latest
-entry by default or a selected entry ID.
+names (cockpit fixes use `bn cockpit fix`, property changes use
+`bn serve property ...`); `POST /api/undo` restores the latest entry by default
+or a selected entry ID.
 
 Editor opens from note pages and Daily Brief cards use the same editor resolution as CLI open
 commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
@@ -911,7 +1078,7 @@ Detected rule kinds:
 | Kind | What it flags |
 | --- | --- |
 | `frontmatter_error` | frontmatter that does not parse as YAML |
-| `schema_violation` | frontmatter values that violate `[frontmatter.schema]` |
+| `schema_violation` | frontmatter values that violate `[frontmatter.properties]` |
 | `broken_target` | wikilinks whose target note does not exist |
 | `duplicate_title` | two or more notes sharing the same title |
 | `orphan_note` | notes with no inbound links from other notes |
@@ -991,8 +1158,9 @@ The same redacted snapshot backs the web review surface
 bn repair [notes...] [find flags] [--property key] [--dry-run]
 ```
 
-Inspects frontmatter against the property schema defined in `config.toml` and
-applies safe, deterministic fixes. Fix categories:
+Inspects frontmatter against the property definitions in
+`[frontmatter.properties]` and applies safe, deterministic fixes. Fix
+categories:
 
 | Category | What it does |
 | --- | --- |
@@ -1012,7 +1180,7 @@ Scope:
   the filter.
 - Positional notes: only those notes. Mutually exclusive with find flags.
 
-`--property` restricts repair to a single schema property.
+`--property` restricts repair to a single declared property.
 
 Each file is rewritten atomically, but there is no cross-file transaction: if a
 mid-apply error occurs, prior writes stand — use `git diff` to recover.
@@ -1154,8 +1322,8 @@ Scope:
   (passing both is an error).
 
 Type coercion of `<from>`/`<to>` matches `bn set` (`true`/`false` → bool,
-integer → int, `YYYY-MM-DD` → date, else string). Properties listed in
-`wikilink_properties` have both ends wrapped in `[[ ]]` before comparison so
+integer → int, `YYYY-MM-DD` → date, else string). Wikilink-typed properties
+have both ends wrapped in `[[ ]]` before comparison so
 `bn replace categories Books Films` rewrites a stored `[[Books]]` to
 `[[Films]]`.
 
@@ -1194,14 +1362,14 @@ Operators:
   present (the file is not rewritten, so mtime is unchanged).
 - `key-=value` — remove a value from a list property; no-op if absent.
 
-`+=` and `-=` require the key to be in `[frontmatter].list_properties`; using
-them on any other key is an error. Values are comma-split for list properties
+`+=` and `-=` require the key to be declared with `type = "list"` in
+`[frontmatter.properties]`; using them on any other key is an error. Values are comma-split for list properties
 the same way `=` does (`tags+=foo,bar` adds two entries). Operators can be
 mixed in one invocation and apply left-to-right.
 
 Type coercion is automatic: `true`/`false` → bool, integer → int, `YYYY-MM-DD`
-→ date, else string. Use `--type` to force. Properties listed in
-`wikilink_properties` are wrapped in `[[ ]]` on write; for `+=`/`-=` the
+→ date, else string. Use `--type` to force. Wikilink-typed properties are
+wrapped in `[[ ]]` on write; for `+=`/`-=` the
 wrapping happens before the comparison so `tags+=Books` matches an existing
 `[[Books]]` entry.
 
@@ -1453,6 +1621,12 @@ bn lint
   `bn web trash`, `bn web move`, `bn web frontmatter set`,
   `bn web frontmatter unset`, broken-link stub creation, and cockpit fixes
   (`bn cockpit fix`). `bn doctor` is read-only and never journals.
+- Property workbench writes journal under their own command names:
+  `bn serve property set`, `bn serve property unset`,
+  `bn serve property replace value`, `bn serve property list add`,
+  `bn serve property rename`, `bn serve property repair`,
+  `bn serve property schema upsert`, and `bn serve property schema delete`. The
+  two schema entries restore `brainnotes.toml` rather than notes.
 - Snapshot commands `backup` / `restore` are separate from the undo journal and
   do not create journal entries.
 - Read-only commands, including ordinary `bn related`, `bn context`,

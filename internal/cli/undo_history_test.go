@@ -257,11 +257,10 @@ func TestUndoConflictListsAllPathsAndForceHint(t *testing.T) {
 	}
 }
 
-func TestUndoPartialApplyErrorIncludesRecoveryGuidance(t *testing.T) {
+func TestUndoUnreadableSnapshotAbortsBeforeAnyWrite(t *testing.T) {
 	root := buildSetFixture(t)
 	pathA := filepath.Join(root, "a.md")
 	pathB := filepath.Join(root, "b.md")
-	beforeA := readNote(t, pathA)
 	entry := makeJournalEntryForPaths(
 		t,
 		root,
@@ -295,8 +294,11 @@ func TestUndoPartialApplyErrorIncludesRecoveryGuidance(t *testing.T) {
 		t.Fatalf("partial failure error missing recovery guidance: %v", err)
 	}
 
-	if got := readNote(t, pathA); got != beforeA {
-		t.Fatalf("first path should have been restored before failure:\n--- got ---\n%s--- want ---\n%s", got, beforeA)
+	// Snapshots are read while the transaction is built, so an unreadable one
+	// aborts before the first file moves: no path is restored, not even the one
+	// sorted ahead of the failing path.
+	if got := readNote(t, pathA); got != "after-a\n" {
+		t.Fatalf("no path should have been restored, got %q for a.md", got)
 	}
 	if got := readNote(t, pathB); got != "after-b\n" {
 		t.Fatalf("failing path should keep post-mutation content, got %q", got)

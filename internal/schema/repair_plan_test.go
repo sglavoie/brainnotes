@@ -10,11 +10,11 @@ import (
 
 func TestPlanRepairs_OptionalAbsent_NoAction(t *testing.T) {
 	front := buildFront("other", "value")
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string", Required: false},
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString, Required: false},
 	}
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions, got %+v", result.Actions)
 	}
@@ -25,12 +25,12 @@ func TestPlanRepairs_OptionalAbsent_NoAction(t *testing.T) {
 
 func TestPlanRepairs_AlreadyValid_NoAction(t *testing.T) {
 	front := buildFront("status", "WIP", "tags", []any{"go", "cli"})
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string", Allowed: []string{"WIP", "Done"}},
-		"tags":   {Type: "list"},
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString, Allowed: []string{"WIP", "Done"}},
+		"tags":   {Type: config.KindList, Items: config.KindString},
 	}
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions for valid note, got %+v", result.Actions)
 	}
@@ -41,7 +41,7 @@ func TestPlanRepairs_AlreadyValid_NoAction(t *testing.T) {
 
 func TestPlanRepairs_EmptyFrontmatter(t *testing.T) {
 	front := &frontmatter.Map{}
-	result := PlanRepairs(front, nil, nil)
+	result := PlanRepairs(front, nil)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions, got %+v", result.Actions)
 	}
@@ -50,23 +50,23 @@ func TestPlanRepairs_EmptyFrontmatter(t *testing.T) {
 	}
 }
 
-func TestPlanRepairs_NoSchema_NoWikilink(t *testing.T) {
+func TestPlanRepairs_NoDefinitions_NoAction(t *testing.T) {
 	front := buildFront("status", "wip", "count", 42)
-	result := PlanRepairs(front, nil, nil)
+	result := PlanRepairs(front, nil)
 	if len(result.Actions) != 0 {
-		t.Errorf("expected no actions without schema or wikilink config, got %+v", result.Actions)
+		t.Errorf("expected no actions without property definitions, got %+v", result.Actions)
 	}
 }
 
 // --- Combined repair categories ---
 
 func TestPlanRepairs_CanonicalizeThenDedup(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"tags": {Type: "list", Allowed: []string{"Go", "CLI"}},
+	props := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Allowed: []string{"Go", "CLI"}},
 	}
 	front := buildFront("tags", []any{"go", "Go", "cli"})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -84,9 +84,12 @@ func TestPlanRepairs_CanonicalizeThenDedup(t *testing.T) {
 }
 
 func TestPlanRepairs_WikilinkWrapThenDedup(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"categories": {Type: config.KindList, Items: config.KindWikilink},
+	}
 	front := buildFront("categories", []any{"Books", "[[Books]]", "Papers"})
 
-	result := PlanRepairs(front, nil, []string{"categories"})
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -104,12 +107,12 @@ func TestPlanRepairs_WikilinkWrapThenDedup(t *testing.T) {
 }
 
 func TestPlanRepairs_TypeCoerceThenCanonicalizeString(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"draft": {Type: "string", Allowed: []string{"True", "False"}},
+	props := map[string]config.PropertyDefinition{
+		"draft": {Type: config.KindString, Allowed: []string{"True", "False"}},
 	}
 	front := buildFront("draft", true)
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -126,12 +129,12 @@ func TestPlanRepairs_TypeCoerceThenCanonicalizeString(t *testing.T) {
 }
 
 func TestPlanRepairs_TypeCoerceWholeNumberFloatToString(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"rating": {Type: "string", Allowed: []string{"3.0", "4.0"}},
+	props := map[string]config.PropertyDefinition{
+		"rating": {Type: config.KindString, Allowed: []string{"3.0", "4.0"}},
 	}
 	front := buildFront("rating", 3.0)
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -148,12 +151,12 @@ func TestPlanRepairs_TypeCoerceWholeNumberFloatToString(t *testing.T) {
 }
 
 func TestPlanRepairs_TypeCoercePlusValueSkip(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string", Allowed: []string{"WIP", "Done"}},
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString, Allowed: []string{"WIP", "Done"}},
 	}
 	front := buildFront("status", 42)
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action (type_coerce), got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -174,10 +177,10 @@ func TestPlanRepairs_TypeCoercePlusValueSkip(t *testing.T) {
 // --- Multiple properties ---
 
 func TestPlanRepairs_MultipleProperties(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"created": {Type: "date"},
-		"status":  {Type: "string", Required: true, Allowed: []string{"WIP", "Done"}},
-		"tags":    {Type: "list"},
+	props := map[string]config.PropertyDefinition{
+		"created": {Type: config.KindDate},
+		"status":  {Type: config.KindString, Required: true, Allowed: []string{"WIP", "Done"}},
+		"tags":    {Type: config.KindList, Items: config.KindString},
 	}
 	front := buildFront(
 		"status", "wip",
@@ -185,7 +188,7 @@ func TestPlanRepairs_MultipleProperties(t *testing.T) {
 		"tags", []any{"go", "go", "cli"},
 	)
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -208,13 +211,14 @@ func TestPlanRepairs_MultipleProperties(t *testing.T) {
 	}
 }
 
-func TestPlanRepairs_NonSchemaPropertyGetsStructuralRepair(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string"},
+func TestPlanRepairs_WikilinkDefinitionWrapsBareString(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString},
+		"parent": {Type: config.KindWikilink},
 	}
 	front := buildFront("status", "ok", "parent", "Books")
 
-	result := PlanRepairs(front, sch, []string{"parent"})
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 action, got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -226,17 +230,26 @@ func TestPlanRepairs_NonSchemaPropertyGetsStructuralRepair(t *testing.T) {
 	}
 }
 
+func TestPlanRepairs_UndefinedPropertyNeverWikilinkWrapped(t *testing.T) {
+	front := buildFront("parent", "Books")
+
+	result := PlanRepairs(front, nil)
+	if len(result.Actions) != 0 {
+		t.Errorf("expected undefined property to be left alone, got %+v", result.Actions)
+	}
+}
+
 // --- Deterministic ordering ---
 
-func TestPlanRepairs_SchemaKeysAreSorted(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"z_prop": {Type: "string"},
-		"a_prop": {Type: "string"},
-		"m_prop": {Type: "string"},
+func TestPlanRepairs_DefinedKeysAreSorted(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"z_prop": {Type: config.KindString},
+		"a_prop": {Type: config.KindString},
+		"m_prop": {Type: config.KindString},
 	}
 	front := buildFront("z_prop", 1, "a_prop", 2, "m_prop", 3)
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 3 {
 		t.Fatalf("expected 3 actions, got %d", len(result.Actions))
 	}
@@ -251,14 +264,14 @@ func TestPlanRepairs_SchemaKeysAreSorted(t *testing.T) {
 	}
 }
 
-func TestPlanRepairs_NonSchemaKeysAreSorted(t *testing.T) {
+func TestPlanRepairs_UndefinedKeysAreSorted(t *testing.T) {
 	front := buildFront(
 		"z_prop", []any{"z", "z"},
-		"a_prop", "Bare",
+		"a_prop", []any{"a", "a"},
 		"m_prop", []any{"m", "m"},
 	)
 
-	result := PlanRepairs(front, nil, []string{"a_prop"})
+	result := PlanRepairs(front, nil)
 	if len(result.Actions) != 3 {
 		t.Fatalf("expected 3 actions, got %d: %+v", len(result.Actions), result.Actions)
 	}
@@ -275,9 +288,9 @@ func TestPlanRepairs_NonSchemaKeysAreSorted(t *testing.T) {
 
 // --- Edge cases ---
 
-func TestPlanRepairs_NilSchemaMap(t *testing.T) {
+func TestPlanRepairs_NilPropertyMap(t *testing.T) {
 	front := buildFront("tags", []any{"a", "a"})
-	result := PlanRepairs(front, nil, nil)
+	result := PlanRepairs(front, nil)
 	if len(result.Actions) != 1 {
 		t.Fatalf("expected 1 list_dedup action, got %d", len(result.Actions))
 	}
@@ -287,12 +300,12 @@ func TestPlanRepairs_NilSchemaMap(t *testing.T) {
 }
 
 func TestPlanRepairs_TypeUnconvertible_SkipsAllowedCheck(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "bool", Allowed: []string{"WIP"}},
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindBool, Allowed: []string{"WIP"}},
 	}
 	front := buildFront("status", "maybe")
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions, got %+v", result.Actions)
 	}
@@ -305,12 +318,12 @@ func TestPlanRepairs_TypeUnconvertible_SkipsAllowedCheck(t *testing.T) {
 }
 
 func TestPlanRepairs_TypeUnconvertible_SuppressesListDedup(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string"},
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString},
 	}
 	front := buildFront("status", []any{"WIP", "WIP"})
 
-	result := PlanRepairs(front, sch, nil)
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Fatalf("expected no actions after type_unconvertible, got %+v", result.Actions)
 	}
@@ -323,12 +336,12 @@ func TestPlanRepairs_TypeUnconvertible_SuppressesListDedup(t *testing.T) {
 }
 
 func TestPlanRepairs_TypeUnconvertible_SuppressesWikilinkWrap(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"parent": {Type: "string"},
+	props := map[string]config.PropertyDefinition{
+		"parent": {Type: config.KindWikilink},
 	}
 	front := buildFront("parent", []any{"Books", "[[Papers]]"})
 
-	result := PlanRepairs(front, sch, []string{"parent"})
+	result := PlanRepairs(front, props)
 	if len(result.Actions) != 0 {
 		t.Fatalf("expected no actions after type_unconvertible, got %+v", result.Actions)
 	}
@@ -340,11 +353,26 @@ func TestPlanRepairs_TypeUnconvertible_SuppressesWikilinkWrap(t *testing.T) {
 	}
 }
 
-func TestPlanRepairs_NilFront(t *testing.T) {
-	sch := map[string]config.PropertySchema{
-		"status": {Type: "string", Required: true},
+func TestPlanRepairs_MissingRequiredSkipUsesDefinitionSummary(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"tags": {Type: config.KindList, Items: config.KindString, Required: true},
 	}
-	result := PlanRepairs(nil, sch, nil)
+
+	result := PlanRepairs(buildFront("other", "x"), props)
+	if len(result.Skips) != 1 {
+		t.Fatalf("expected 1 skip, got %+v", result.Skips)
+	}
+	want := "required property is missing; no default available (type: list of string)"
+	if result.Skips[0].Detail != want {
+		t.Errorf("detail = %q, want %q", result.Skips[0].Detail, want)
+	}
+}
+
+func TestPlanRepairs_NilFront(t *testing.T) {
+	props := map[string]config.PropertyDefinition{
+		"status": {Type: config.KindString, Required: true},
+	}
+	result := PlanRepairs(nil, props)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions for nil front, got %+v", result.Actions)
 	}

@@ -1,10 +1,7 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -49,17 +46,9 @@ func TestVault_ConfigEditorTakesPriority(t *testing.T) {
 	}
 	t.Setenv("EDITOR", "other-editor")
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+vaultRoot+"\"\n[open]\neditor = \"configured-editor\"\n"), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+	markVaultRoot(t, vaultRoot, "[open]\neditor = \"configured-editor\"\n")
 
-	root := NewRootCmd()
-	out := &bytes.Buffer{}
-	root.SetOut(out)
-	root.SetArgs([]string{"--config", cfgPath, "vault"})
-	if err := root.Execute(); err != nil {
+	if _, _, err := runOpen(t, vaultRoot, "vault"); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	if gotEditor != "configured-editor" {

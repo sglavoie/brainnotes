@@ -57,14 +57,7 @@ func TestRenameDryRunMasksCodeBlockReferences(t *testing.T) {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "")
 
 	beforeMtimes := snapshotMtimes(t, root)
 

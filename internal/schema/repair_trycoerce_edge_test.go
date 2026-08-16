@@ -4,6 +4,8 @@ import (
 	"math"
 	"strconv"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
 func TestTryCoerce_FloatOverflowToInt(t *testing.T) {
@@ -11,38 +13,38 @@ func TestTryCoerce_FloatOverflowToInt(t *testing.T) {
 	intLowerInclusive := -intUpperExclusive
 
 	// A float64 value larger than the platform int range should not be coerced to int.
-	_, ok := TryCoerce(intUpperExclusive+2048, "int")
+	_, ok := TryCoerce(intUpperExclusive+2048, scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(>MaxInt, int) should return false")
 	}
 
 	// A float64 value smaller than the platform int range should not be coerced to int.
-	_, ok = TryCoerce(intLowerInclusive-2048, "int")
+	_, ok = TryCoerce(intLowerInclusive-2048, scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(<MinInt, int) should return false")
 	}
 
 	// Two exact powers-of-two beyond the upper bound must be rejected on every platform.
-	_, ok = TryCoerce(intUpperExclusive*4, "int")
+	_, ok = TryCoerce(intUpperExclusive*4, scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(4*upperExclusive, int) should return false")
 	}
 
-	_, ok = TryCoerce(intLowerInclusive*4, "int")
+	_, ok = TryCoerce(intLowerInclusive*4, scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(4*lowerInclusive, int) should return false")
 	}
 
 	// The exclusive upper bound itself must be rejected even though it is an
 	// exactly representable float64.
-	_, ok = TryCoerce(intUpperExclusive, "int")
+	_, ok = TryCoerce(intUpperExclusive, scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(upperExclusive, int) should return false")
 	}
 
 	// The largest float64 strictly less than the exclusive upper bound should still work.
 	prev := math.Nextafter(intUpperExclusive, 0)
-	got, ok := TryCoerce(prev, "int")
+	got, ok := TryCoerce(prev, scalarDef(config.KindInt))
 	if !ok {
 		t.Error("TryCoerce(prev-of-upperExclusive, int) should return true")
 	}
@@ -52,18 +54,18 @@ func TestTryCoerce_FloatOverflowToInt(t *testing.T) {
 }
 
 func TestTryCoerce_FloatNaNToInt(t *testing.T) {
-	_, ok := TryCoerce(math.NaN(), "int")
+	_, ok := TryCoerce(math.NaN(), scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(NaN, int) should return false")
 	}
 }
 
 func TestTryCoerce_FloatInfToInt(t *testing.T) {
-	_, ok := TryCoerce(math.Inf(1), "int")
+	_, ok := TryCoerce(math.Inf(1), scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(+Inf, int) should return false")
 	}
-	_, ok = TryCoerce(math.Inf(-1), "int")
+	_, ok = TryCoerce(math.Inf(-1), scalarDef(config.KindInt))
 	if ok {
 		t.Error("TryCoerce(-Inf, int) should return false")
 	}
@@ -75,7 +77,7 @@ func TestTryCoerce_IntPrecisionLossToFloat(t *testing.T) {
 	}
 
 	exact := int(1 << 53)
-	got, ok := TryCoerce(exact, "float")
+	got, ok := TryCoerce(exact, scalarDef(config.KindFloat))
 	if !ok {
 		t.Fatal("TryCoerce(1<<53, float) should return true")
 	}
@@ -84,7 +86,7 @@ func TestTryCoerce_IntPrecisionLossToFloat(t *testing.T) {
 	}
 
 	exactLargePowerOfTwo := int(1 << 60)
-	got, ok = TryCoerce(exactLargePowerOfTwo, "float")
+	got, ok = TryCoerce(exactLargePowerOfTwo, scalarDef(config.KindFloat))
 	if !ok {
 		t.Fatal("TryCoerce(1<<60, float) should return true")
 	}
@@ -93,7 +95,7 @@ func TestTryCoerce_IntPrecisionLossToFloat(t *testing.T) {
 	}
 
 	inexact := int(1<<53) + 1
-	_, ok = TryCoerce(inexact, "float")
+	_, ok = TryCoerce(inexact, scalarDef(config.KindFloat))
 	if ok {
 		t.Error("TryCoerce((1<<53)+1, float) should return false")
 	}

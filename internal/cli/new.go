@@ -109,7 +109,7 @@ func NewNewCmd() *cobra.Command {
 			if err := journaler.Capture(outPath); err != nil {
 				return err
 			}
-			if err := atomicWriteFile(outPath, []byte(rendered)); err != nil {
+			if err := atomicWriteFile("new", outPath, []byte(rendered)); err != nil {
 				return err
 			}
 			if _, err := journaler.Finalize(); err != nil {

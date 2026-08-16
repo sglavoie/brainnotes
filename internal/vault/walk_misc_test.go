@@ -146,7 +146,7 @@ func TestWalkHandlesNilCfg(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("# a\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	v := &Vault{Root: dir, Cfg: nil}
+	v := &Vault{Root: dir}
 	var count int
 	err := v.Walk(WalkFilter{}, func(n *Note) error {
 		count++

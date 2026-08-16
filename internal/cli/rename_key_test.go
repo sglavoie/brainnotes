@@ -33,24 +33,18 @@ func buildRenameKeyFixture(t *testing.T) string {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := `vault = "` + root + `"
+	useVaultRoot(t, root, `[frontmatter.properties.tags]
+type  = "list"
+items = "string"
 
-[frontmatter]
-list_properties = ["tags", "kind"]
-wikilink_properties = ["categories"]
+[frontmatter.properties.categories]
+type  = "list"
+items = "wikilink"
 
-[frontmatter.schema.kind]
-type = "string"
+[frontmatter.properties.kind]
+type     = "string"
 required = true
-`
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+`)
 	return root
 }
 
@@ -120,7 +114,7 @@ func TestRenameKey_ConflictSkipping(t *testing.T) {
 	if !strings.Contains(out, "WARN") {
 		t.Fatalf("expected WARN for conflict, got: %q", out)
 	}
-	if strings.Contains(out, "list_properties") || strings.Contains(out, "[frontmatter.schema]") {
+	if strings.Contains(out, "[frontmatter.properties]") {
 		t.Fatalf("expected no config warnings when no files were renamed, got:\n%s", out)
 	}
 
@@ -144,7 +138,7 @@ func TestRenameKey_NoOpSuppressesConfigWarnings(t *testing.T) {
 	if !strings.Contains(out, "renamed kind -> category in 0 file(s)") {
 		t.Fatalf("expected zero-change summary, got: %q", out)
 	}
-	if strings.Contains(out, "list_properties") || strings.Contains(out, "[frontmatter.schema]") {
+	if strings.Contains(out, "[frontmatter.properties]") {
 		t.Fatalf("expected no config warnings when nothing changed, got:\n%s", out)
 	}
 }
@@ -225,11 +219,8 @@ func TestRenameKey_ConfigWarnings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "list_properties") {
-		t.Fatalf("expected list_properties warning, got:\n%s", out)
-	}
-	if !strings.Contains(out, "[frontmatter.schema]") {
-		t.Fatalf("expected schema warning, got:\n%s", out)
+	if !strings.Contains(out, "[frontmatter.properties]") {
+		t.Fatalf("expected property-definition warning, got:\n%s", out)
 	}
 }
 
@@ -248,9 +239,9 @@ func TestRenameKey_MutualExclusion(t *testing.T) {
 }
 
 // TestRenameKey_DryRunSuppressesConfigWarnings verifies that --dry-run does not
-// emit config-update warnings (list_properties, wikilink_properties, schema).
-// These warnings are actionable only when files were actually rewritten; during
-// dry-run they are misleading because no rename has been applied.
+// emit the config-update warning for a renamed property definition. The warning
+// is actionable only when files were actually rewritten; during dry-run it is
+// misleading because no rename has been applied.
 func TestRenameKey_DryRunSuppressesConfigWarnings(t *testing.T) {
 	root := buildRenameKeyFixture(t)
 	note := filepath.Join(root, "alpha.md")
@@ -259,13 +250,10 @@ func TestRenameKey_DryRunSuppressesConfigWarnings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	// The fixture's config has `kind` in list_properties and in schema.
-	// Without the fix, these warnings would appear in the dry-run output.
-	if strings.Contains(out, "list_properties") {
-		t.Errorf("expected no list_properties warning during dry-run, got:\n%s", out)
-	}
-	if strings.Contains(out, "[frontmatter.schema]") {
-		t.Errorf("expected no schema warning during dry-run, got:\n%s", out)
+	// The fixture's config defines `kind`, so without the fix this warning
+	// would appear in the dry-run output.
+	if strings.Contains(out, "[frontmatter.properties]") {
+		t.Errorf("expected no property-definition warning during dry-run, got:\n%s", out)
 	}
 	// The dry-run diff output should still be present.
 	if !strings.Contains(out, "frontmatter[kind]: article ->") || !strings.Contains(out, "frontmatter[category]:  -> article") {

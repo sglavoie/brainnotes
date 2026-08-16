@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// buildSetFixture writes a small vault and a config that the `set`/`unset`
-// commands can pick up via BNOTES_CONFIG.
+// buildSetFixture writes a small vault and marks it as a vault root so the
+// `set`/`unset` commands can pick it up.
 func buildSetFixture(t *testing.T) (vaultRoot string) {
 	t.Helper()
 	root := t.TempDir()
@@ -31,15 +31,7 @@ func buildSetFixture(t *testing.T) (vaultRoot string) {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, testPropertyDefinitions)
 	return root
 }
 

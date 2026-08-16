@@ -28,6 +28,7 @@ func buildSearchVault(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -90,6 +91,7 @@ func buildTaggedVault(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -109,6 +111,7 @@ func buildFolderVault(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -129,6 +132,7 @@ func buildOrphanVault(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -145,6 +149,7 @@ func buildVaultFromFiles(t *testing.T, files map[string]string) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 

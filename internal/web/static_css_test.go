@@ -457,6 +457,107 @@ func TestNoteBodyExtendedMarkdownCSSContract(t *testing.T) {
 	}
 }
 
+func TestPropertiesWorkbenchCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".properties-panel[aria-busy=\"true\"]",
+		".properties-button:focus-visible",
+		".properties-button:disabled",
+		".properties-status.is-empty",
+		".properties-status.is-error",
+		".properties-config",
+		".properties-totals",
+		".properties-filters",
+		".properties-filter-input:focus-visible",
+		".properties-filter-select:focus-visible",
+		".properties-item-header",
+		".properties-badge-configured",
+		".properties-badge-unconfigured",
+		".properties-badge-issues",
+		".properties-proposal-toml",
+		".properties-value-button:focus-visible",
+		".properties-value-button.is-active",
+		".properties-value-button.is-unsupported",
+		".properties-row-value.is-missing",
+		".properties-row-value.is-unsupported",
+		".properties-row-issue",
+		".properties-pagination-status",
+		"outline: 2px solid var(--bn-focus);",
+		"overflow-wrap: anywhere;",
+		// Configuration health banners.
+		".properties-banner-invalid",
+		".properties-banner-restart",
+		// Definition editor.
+		".properties-schema-fields",
+		".properties-schema-toggle",
+		".properties-schema-error",
+		".properties-schema-actions",
+		// Typed value controls.
+		".properties-control:focus-visible",
+		".properties-control-input",
+		".properties-control-textarea",
+		".properties-control-list-items",
+		".properties-control-list-item",
+		// Selection toolbar and keyboard affordances.
+		".properties-keyboard-hint",
+		".properties-selection-count",
+		".properties-selection-actions",
+		".properties-row.is-selected",
+		".properties-row:focus-visible",
+		".properties-row-select",
+		".properties-row-actions",
+		// Inline editor.
+		".properties-editor-title",
+		".properties-editor-error",
+		".properties-editor-actions",
+		".properties-button-primary",
+		// Preview dialog.
+		".properties-dialog-backdrop",
+		".properties-dialog-backdrop[hidden]",
+		".properties-dialog-blockers",
+		".properties-dialog-warnings",
+		".properties-dialog-file-path",
+		".properties-dialog-config-diff",
+		".properties-dialog-projection",
+		".properties-dialog-expiry",
+		".properties-dialog-actions",
+		// Undo toast.
+		".properties-toast[hidden]",
+		".properties-toast-message",
+		".properties-toast-actions",
+		".properties-toast-history",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("properties workbench CSS missing %q", want)
+		}
+	}
+
+	narrow := cssBlockAfter(t, css, "@media (max-width: 640px)")
+	for _, want := range []string{
+		".properties-panel",
+		"padding: 0.75rem;",
+		".properties-totals",
+		"grid-template-columns: repeat(2, minmax(0, 1fr));",
+		".properties-filters",
+		"flex-direction: column;",
+		".properties-value-list",
+		"grid-template-columns: minmax(0, 1fr);",
+		".properties-pagination",
+		".properties-selection",
+		".properties-selection-actions",
+		".properties-schema-fields",
+		".properties-control-list-item",
+		".properties-row-actions",
+		".properties-dialog",
+		".properties-toast",
+	} {
+		if !strings.Contains(narrow, want) {
+			t.Fatalf("narrow properties workbench CSS missing %q in block:\n%s", want, narrow)
+		}
+	}
+}
+
 func readStaticCSS(t *testing.T) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("static", "app.css"))

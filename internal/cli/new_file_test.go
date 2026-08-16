@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
 func TestNewRefusesOverwrite(t *testing.T) {
@@ -71,10 +73,7 @@ func TestNewEdit_EditorArgsSupported(t *testing.T) {
 
 func TestNewEdit_UsesOnlyEnvEditor(t *testing.T) {
 	root := buildNewFixture(t)
-	cfgPath := os.Getenv("BNOTES_CONFIG")
-	if cfgPath == "" {
-		t.Fatal("expected BNOTES_CONFIG to be set by fixture")
-	}
+	cfgPath := filepath.Join(root, config.FileName)
 	cfg, err := os.ReadFile(cfgPath)
 	if err != nil {
 		t.Fatalf("read config: %v", err)

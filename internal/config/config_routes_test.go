@@ -1,7 +1,6 @@
 package config
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -10,14 +9,7 @@ func TestLoad_NewRoutesNormalizeValues(t *testing.T) {
 	// Route values are consumed by bn new via exact map lookup and filepath.Join.
 	// Normalize the stored value so whitespace, dot segments, trailing slashes,
 	// and backslashes don't leak into destination construction.
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = ' ./References\\Books/ '\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "[new.routes]\nbook = ' ./References\\Books/ '\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -30,14 +22,7 @@ func TestLoad_NewRoutesNormalizeValues(t *testing.T) {
 func TestLoad_NewRoutesDropsWhitespaceOnlyValues(t *testing.T) {
 	// A whitespace-only route value should behave as unset, not as a folder
 	// literally named with spaces.
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = '   '\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "[new.routes]\nbook = '   '\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -47,14 +32,7 @@ func TestLoad_NewRoutesDropsWhitespaceOnlyValues(t *testing.T) {
 }
 
 func TestLoad_NewRoutesRejectCaseFoldCollisions(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = 'Books'\nBOOK = 'References/Books'\n")
-
-	_, err := Load("", cfgPath)
+	_, err := loadTOML(t, "[new.routes]\nbook = 'Books'\nBOOK = 'References/Books'\n")
 	if err == nil {
 		t.Fatal("expected error for case-fold-colliding route keys")
 	}

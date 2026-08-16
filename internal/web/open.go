@@ -187,6 +187,7 @@ func (s *Server) notePathForOpenRouteFallback(key string) (string, error) {
 }
 
 func (s *Server) openNotePath(notePath string) error {
+	cfg := s.config()
 	if _, err := os.Stat(notePath); err != nil {
 		return &openFailure{stage: openFailureStat, err: err}
 	}
@@ -194,7 +195,7 @@ func (s *Server) openNotePath(notePath string) error {
 	if err != nil {
 		return &openFailure{stage: openFailureResolvePath, err: err}
 	}
-	spec, err := editor.Spec(s.cfg.Open.Editor, os.Getenv("EDITOR"))
+	spec, err := editor.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
 	if err != nil {
 		return &openFailure{stage: openFailureEditorSpec, err: err}
 	}

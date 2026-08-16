@@ -30,8 +30,8 @@ func NewLintCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint",
 		Short: "Report schema violations in frontmatter across the vault",
-		Long: `Lint checks every note (or a scoped subset) against the property schema
-defined in config.toml and reports violations without modifying files.
+		Long: `Lint checks every note (or a scoped subset) against the property definitions
+in [frontmatter.properties] and reports violations without modifying files.
 
 Exit code 0 means clean; exit code 1 means violations were found.`,
 		Args:          cobra.NoArgs,
@@ -47,18 +47,18 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 				return err
 			}
 
-			if len(cfg.Frontmatter.Schema) == 0 {
+			if len(cfg.Frontmatter.Properties) == 0 {
 				writeSchemaHint(cmd.ErrOrStderr(), "lint", cfg.SourcePath)
 				return nil
 			}
 
-			schemaToUse := cfg.Frontmatter.Schema
+			propsToUse := cfg.Frontmatter.Properties
 			if property != "" {
-				rule, ok := cfg.Frontmatter.Schema[property]
+				def, ok := cfg.Frontmatter.Definition(property)
 				if !ok {
-					return fmt.Errorf("lint: property %q not in schema", property)
+					return fmt.Errorf("lint: property %q not defined in [frontmatter.properties]", property)
 				}
-				schemaToUse = map[string]config.PropertySchema{property: rule}
+				propsToUse = map[string]config.PropertyDefinition{property: def}
 			}
 
 			notes, err := v.Notes()
@@ -85,7 +85,7 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 				if err != nil {
 					return err
 				}
-				vs := schema.ValidateNote(front, displayPath(n.Path, v.Root), schemaToUse, cfg.Frontmatter.WikilinkProperties)
+				vs := schema.ValidateNote(front, displayPath(n.Path, v.Root), propsToUse)
 				allViolations = append(allViolations, vs...)
 			}
 

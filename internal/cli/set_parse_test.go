@@ -90,7 +90,7 @@ func TestSetOp_RejectsNonListKey(t *testing.T) {
 		t.Fatal("expected error for += on non-list key")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "status") || !strings.Contains(msg, "list_properties") {
+	if !strings.Contains(msg, "status") || !strings.Contains(msg, "[frontmatter.properties]") {
 		t.Fatalf("error should mention key and config knob, got: %v", err)
 	}
 }
@@ -113,13 +113,7 @@ func TestSetOp_RejectsOnExistingScalar(t *testing.T) {
 	if err := os.WriteFile(notePath, []byte("---\ntags: lonely\n---\nBody.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, testPropertyDefinitions)
 
 	_, err := runCLI(t, "", "set", notePath, "tags+=foo")
 	if err == nil {

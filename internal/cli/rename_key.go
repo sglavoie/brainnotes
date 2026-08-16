@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -138,14 +137,8 @@ Use --dry-run to preview changes without writing.`,
 				// actually rewritten; suppress during --dry-run and no-op
 				// runs to avoid confusing users.
 				if count > 0 {
-					if slices.Contains(cfg.Frontmatter.ListProperties, oldK) {
-						fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter].list_properties; update your config.toml to use %q\n", oldK, newK)
-					}
-					if slices.Contains(cfg.Frontmatter.WikilinkProperties, oldK) {
-						fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter].wikilink_properties; update your config.toml to use %q\n", oldK, newK)
-					}
-					if _, inSchema := cfg.Frontmatter.Schema[oldK]; inSchema {
-						fmt.Fprintf(stderr, "WARN: key %q is in [frontmatter.schema]; update your config.toml to use %q\n", oldK, newK)
+					if _, defined := cfg.Frontmatter.Definition(oldK); defined {
+						fmt.Fprintf(stderr, "WARN: key %q is defined in [frontmatter.properties]; update your brainnotes.toml to use %q\n", oldK, newK)
 					}
 				}
 			}

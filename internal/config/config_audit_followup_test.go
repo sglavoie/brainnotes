@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,14 +10,7 @@ import (
 // in a route value is stripped so `bn new` does not write to a folder named
 // "  Books  ".
 func TestLoad_NewRoutesValueTrimsWhitespace(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = \"  Books  \"\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "[new.routes]\nbook = \"  Books  \"\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -32,14 +24,7 @@ func TestLoad_NewRoutesValueTrimsWhitespace(t *testing.T) {
 // the consumer's `Routes[name] != ""` gate falls through to the default
 // folder rather than joining a whitespace-only segment.
 func TestLoad_NewRoutesWhitespaceOnlyValueDropped(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\nbook = \"   \"\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "[new.routes]\nbook = \"   \"\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -52,14 +37,7 @@ func TestLoad_NewRoutesWhitespaceOnlyValueDropped(t *testing.T) {
 // name is rejected — it cannot match any real template name and silently
 // swallows the user's intent.
 func TestLoad_NewRoutesEmptyRouteNameRejected(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\n[new.routes]\n\"\" = \"Books\"\n")
-
-	_, err := Load("", cfgPath)
+	_, err := loadTOML(t, "[new.routes]\n\"\" = \"Books\"\n")
 	if err == nil {
 		t.Fatal("expected error for empty route name")
 	}
@@ -68,22 +46,14 @@ func TestLoad_NewRoutesEmptyRouteNameRejected(t *testing.T) {
 	}
 }
 
-// TestLoad_SchemaAllowedEmptyEntryRejected verifies that an empty string
+// TestLoad_PropertyAllowedEmptyEntryRejected verifies that an empty string
 // inside the `allowed` list is rejected — it would let an empty
 // frontmatter value silently pass the constraint at lint time.
-func TestLoad_SchemaAllowedEmptyEntryRejected(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-[frontmatter.schema.status]
+func TestLoad_PropertyAllowedEmptyEntryRejected(t *testing.T) {
+	_, err := loadTOML(t, `[frontmatter.properties.status]
 type = "string"
 allowed = ["WIP", "", "Done"]
 `)
-
-	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for empty entry in allowed")
 	}
@@ -92,21 +62,13 @@ allowed = ["WIP", "", "Done"]
 	}
 }
 
-// TestLoad_SchemaAllowedWhitespaceEntryRejected verifies that a
+// TestLoad_PropertyAllowedWhitespaceEntryRejected verifies that a
 // whitespace-only entry in `allowed` is rejected for the same reason.
-func TestLoad_SchemaAllowedWhitespaceEntryRejected(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-[frontmatter.schema.status]
+func TestLoad_PropertyAllowedWhitespaceEntryRejected(t *testing.T) {
+	_, err := loadTOML(t, `[frontmatter.properties.status]
 type = "string"
 allowed = ["WIP", "   ", "Done"]
 `)
-
-	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for whitespace entry in allowed")
 	}
@@ -117,15 +79,8 @@ allowed = ["WIP", "   ", "Done"]
 // guards against a future loader swap silently overwriting the user's
 // intent.
 func TestLoad_DuplicateTOMLKeysIsError(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\nvault = \"/other\"\n")
-
-	if _, err := Load("", cfgPath); err == nil {
-		t.Fatalf("expected error for duplicate vault key")
+	if _, err := loadTOML(t, "ignore = [\"Drafts\"]\nignore = [\"Other\"]\n"); err == nil {
+		t.Fatalf("expected error for duplicate ignore key")
 	}
 }
 
@@ -135,8 +90,9 @@ func TestLoad_TildeOnlyVaultExpands(t *testing.T) {
 	resetEnv(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	writeFile(t, filepath.Join(home, FileName), "")
 
-	cfg, err := Load("~", "")
+	cfg, err := Load(LoadOptions{VaultFlag: "~", Getenv: func(string) string { return "" }})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -150,17 +106,14 @@ func TestLoad_TildeOnlyVaultExpands(t *testing.T) {
 // (relative to the working directory). The Vault field is consumed by
 // downstream packages that assume an absolute path.
 func TestLoad_RelativeVaultPathFlagAbsolutized(t *testing.T) {
-	resetEnv(t)
-	// Create a real directory and change into its parent so a relative
+	// Create a real vault root and change into its parent so a relative
 	// "child" reference works.
 	parent := t.TempDir()
 	child := filepath.Join(parent, "child")
-	if err := os.MkdirAll(child, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
+	writeFile(t, filepath.Join(child, FileName), "")
 	t.Chdir(parent)
 
-	cfg, err := Load("child", "")
+	cfg, err := Load(LoadOptions{VaultFlag: "child", Getenv: isolatedEnv()})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -172,25 +125,5 @@ func TestLoad_RelativeVaultPathFlagAbsolutized(t *testing.T) {
 	wantAbs, _ := filepath.Abs(child)
 	if cfg.Vault != wantAbs {
 		t.Errorf("vault path: got %q, want %q", cfg.Vault, wantAbs)
-	}
-}
-
-// TestCandidates_FlagInactiveWhenWhitespaceOnly verifies that a
-// whitespace-only --config flag does not produce an active candidate;
-// downstream sources must still be consulted.
-func TestCandidates_FlagInactiveWhenWhitespaceOnly(t *testing.T) {
-	resetEnv(t)
-	envPath := filepath.Join(t.TempDir(), "env.toml")
-	t.Setenv(envConfig, envPath)
-
-	cands, err := Candidates("   ")
-	if err != nil {
-		t.Fatalf("Candidates: %v", err)
-	}
-	if cands[0].Active || cands[0].Path != "" {
-		t.Errorf("whitespace flag should produce empty/inactive entry: %+v", cands[0])
-	}
-	if !cands[1].Active || cands[1].Path != envPath {
-		t.Errorf("env should be active when flag is whitespace: %+v", cands[1])
 	}
 }

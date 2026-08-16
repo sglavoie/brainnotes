@@ -116,6 +116,7 @@ func TestBacklinks_NullSeparator(t *testing.T) {
 func TestBacklinks_SelfReferenceExcluded(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Self.md":  "---\ntitle: Self\n---\nI link to [[Self]] for fun.\n",
 		"Other.md": "---\ntitle: Other\n---\nAlso [[Self]] here.\n",

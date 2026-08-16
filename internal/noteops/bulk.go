@@ -54,6 +54,7 @@ type bulkOptions struct {
 	shortID        func() (string, error)
 	trashPlans     map[string]TrashDestinationPlan
 	journalOptions []journal.RecorderOption
+	requires       []fileRequirement
 }
 
 // BulkOption customizes bulk operations.
@@ -120,6 +121,19 @@ func WithBulkTrashDestinationPlans(plans []TrashDestinationPlan) BulkOption {
 			plan.CollisionIDs = append([]string(nil), plan.CollisionIDs...)
 			o.trashPlans[sourceRel] = plan
 		}
+	}
+}
+
+// WithBulkRequire pins a file every note write depends on but never changes.
+// Each note's transaction verifies it at the commit boundary, so a dependency
+// that changes partway through a bulk action stops the remaining writes instead
+// of applying them under declarations nobody validated.
+func WithBulkRequire(path string, expect vault.FileExpectation) BulkOption {
+	return func(o *bulkOptions) {
+		if strings.TrimSpace(path) == "" {
+			return
+		}
+		o.requires = append(o.requires, fileRequirement{path: path, expect: expect})
 	}
 }
 
@@ -280,7 +294,7 @@ func BulkSetFrontmatter(vaultRoot string, sources []BulkSource, mutations []Fron
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
 		}
-		changed, err := ApplyFrontmatterMutations(source.AbsPath, mutations, fm, j)
+		changed, err := applyFrontmatterMutations(vaultRoot, source.AbsPath, mutations, fm, j, options.requires)
 		if err != nil {
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
@@ -325,7 +339,7 @@ func BulkUnsetFrontmatter(vaultRoot string, sources []BulkSource, props []string
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
 		}
-		changed, err := ApplyFrontmatterUnset(source.AbsPath, props, fm, j)
+		changed, err := applyFrontmatterUnset(vaultRoot, source.AbsPath, props, fm, j, options.requires)
 		if err != nil {
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue

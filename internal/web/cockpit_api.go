@@ -79,6 +79,7 @@ type fixApplyResponse struct {
 }
 
 func (s *Server) handleCockpitQueue(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/cockpit" {
 		http.NotFound(w, r)
 		return
@@ -97,7 +98,7 @@ func (s *Server) handleCockpitQueue(w http.ResponseWriter, r *http.Request) {
 	// view=daily caps the workflow-filtered queue to the daily cockpit slice;
 	// any other view (including none) keeps the full queue unchanged.
 	if r.URL.Query().Get("view") == "daily" {
-		queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
+		queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
 	}
 	writeManagementJSON(w, http.StatusOK, cockpitAPIResponse{OK: true, Queue: queue})
 }
@@ -108,6 +109,7 @@ func (s *Server) handleCockpitQueue(w http.ResponseWriter, r *http.Request) {
 // command is invoked. Session 9 layers the optional agent execution on top of
 // this substrate.
 func (s *Server) handleDailyReviewContext(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/daily-review/context" {
 		http.NotFound(w, r)
 		return
@@ -125,12 +127,13 @@ func (s *Server) handleDailyReviewContext(w http.ResponseWriter, r *http.Request
 	}
 	// The review context is inherently a daily surface, so it always caps to the
 	// daily slice after workflow-state filtering.
-	queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
+	queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
 	context := cockpit.BuildReviewContext(queue)
 	writeManagementJSON(w, http.StatusOK, dailyReviewContextResponse{OK: true, ReviewContext: context})
 }
 
 func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/cockpit/item" {
 		http.NotFound(w, r)
 		return
@@ -213,7 +216,7 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 			s.vault.Root,
 			task.Affected[0].RelPath,
 			[]noteops.FrontmatterMutation{{Key: "dead_end", Op: noteops.FrontmatterSet, Value: false}},
-			&s.cfg.Frontmatter,
+			&cfg.Frontmatter,
 			noteops.WithFrontmatterCommand(cockpitDeadEndExemptionCommand),
 		)
 		if err != nil {
@@ -249,7 +252,7 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 			s.vault.Root,
 			sources,
 			[]string{property},
-			&s.cfg.Frontmatter,
+			&cfg.Frontmatter,
 			noteops.WithBulkCommand(cockpitLongTailCleanupCommand),
 		)
 		if err != nil {
@@ -280,7 +283,7 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 	// cockpit.daily_limit after a triage action; any other view (including none)
 	// keeps the full filtered queue unchanged.
 	if r.URL.Query().Get("view") == "daily" {
-		queue = cockpit.LimitDaily(queue, s.cfg.Cockpit.DailyLimit)
+		queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
 	}
 	if mutationWarning != "" {
 		queue.Warnings = append(queue.Warnings, cockpit.Warning{Message: mutationWarning})
@@ -492,7 +495,8 @@ func (s *Server) cockpitQueueFiltered() (cockpit.Queue, error) {
 // second walk. The snapshot's loaded notes, graph, and parse errors describe
 // one coherent load, exactly as BuildQueueFromSnapshot requires.
 func (s *Server) cockpitQueueFrom(data diagnosticsData) cockpit.Queue {
-	return cockpit.BuildQueueFromSnapshot(cockpitSnapshotFromData(data), s.cfg, s.vault.Root)
+	cfg := s.config()
+	return cockpit.BuildQueueFromSnapshot(cockpitSnapshotFromData(data), cfg, s.vault.Root)
 }
 
 // cockpitSnapshotFromData bridges the web diagnostics snapshot onto the exported
@@ -513,13 +517,14 @@ func cockpitSnapshotFromData(data diagnosticsData) cockpit.Snapshot {
 // default reload would, so a quarantined note stays unread and the fix endpoints
 // remain responsive even while one note read is stalled.
 func (s *Server) cockpitFixContext() (cockpit.Queue, *cockpit.Fixer, error) {
+	cfg := s.config()
 	snapshot, err := s.state.refreshSnapshot()
 	if err != nil {
 		return cockpit.Queue{}, nil, err
 	}
 	cockpitSnapshot := cockpitSnapshotFromData(diagnosticsDataFromSnapshot(snapshot, s.vault.Root))
-	queue := cockpit.BuildQueueFromSnapshot(cockpitSnapshot, s.cfg, s.vault.Root)
-	fixer := cockpit.NewFixerFromSnapshot(s.vault, s.cfg, cockpitFixCommand, cockpitSnapshot)
+	queue := cockpit.BuildQueueFromSnapshot(cockpitSnapshot, cfg, s.vault.Root)
+	fixer := cockpit.NewFixerFromSnapshot(s.vault, cfg, cockpitFixCommand, cockpitSnapshot)
 	return queue, fixer, nil
 }
 

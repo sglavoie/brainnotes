@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -261,10 +262,10 @@ func renderFrontmatterEntry(key string, value any, index int, graph *query.Graph
 	if fmCfg == nil {
 		return entry
 	}
-	entry.IsList = stringInSlice(fmCfg.ListProperties, key)
-	if rule, ok := fmCfg.Schema[key]; ok {
-		entry.Type = rule.Type
-		entry.Allowed = append([]string(nil), rule.Allowed...)
+	entry.IsList = fmCfg.IsList(key)
+	if def, ok := fmCfg.Definition(key); ok {
+		entry.Type = schema.KindLabel(def)
+		entry.Allowed = append([]string(nil), def.Allowed...)
 	}
 	return entry
 }
@@ -273,29 +274,7 @@ func frontmatterPropertyChoices(fmCfg *config.FrontmatterConfig) []string {
 	if fmCfg == nil {
 		return nil
 	}
-	seen := map[string]struct{}{}
-	add := func(key string) {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			return
-		}
-		seen[key] = struct{}{}
-	}
-	for key := range fmCfg.Schema {
-		add(key)
-	}
-	for _, key := range fmCfg.ListProperties {
-		add(key)
-	}
-	for _, key := range fmCfg.WikilinkProperties {
-		add(key)
-	}
-	out := make([]string, 0, len(seen))
-	for key := range seen {
-		out = append(out, key)
-	}
-	sort.Strings(out)
-	return out
+	return fmCfg.PropertyNames()
 }
 
 func frontmatterInputID(key string, index int) string {

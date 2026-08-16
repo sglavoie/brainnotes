@@ -1,20 +1,12 @@
 package config
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestLoad_IgnoreMergesUserAndDefaults(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"Drafts\", \".git\"]\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "ignore = [\"Drafts\", \".git\"]\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -33,14 +25,7 @@ func TestLoad_IgnoreMergesUserAndDefaults(t *testing.T) {
 }
 
 func TestLoad_TrashIsDefaultIgnoredAndDeduped(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"./Trash\", \"Drafts\"]\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "ignore = [\"./Trash\", \"Drafts\"]\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -62,14 +47,7 @@ func TestLoad_IgnoreNormalizesRepeatedDotSlashPrefix(t *testing.T) {
 	// "././Archive" should collapse to "Archive" and dedup with the default.
 	// Before the fix, normalizeIgnore only stripped a single "./" prefix,
 	// leaving "././Archive" as "./Archive" which did not dedup with "Archive".
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"././Archive\", \"./././Drafts\"]\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "ignore = [\"././Archive\", \"./././Drafts\"]\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -89,14 +67,7 @@ func TestLoad_IgnoreNormalizesRepeatedDotSlashPrefix(t *testing.T) {
 
 func TestLoad_IgnoreNormalizesInteriorDotSegments(t *testing.T) {
 	// "sub/./dir" should clean to "sub/dir" via path.Clean.
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = [\"sub/./dir\", \"sub/dir\"]\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "ignore = [\"sub/./dir\", \"sub/dir\"]\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -114,14 +85,7 @@ func TestLoad_IgnoreNormalizesInteriorDotSegments(t *testing.T) {
 func TestLoad_IgnoreNormalizesBackslashes(t *testing.T) {
 	// Backslashes in config should be treated as path separators, so a Windows
 	// style ignore entry still matches slash-separated Walk paths on Unix.
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = ['.\\Archive', 'Drafts\\Old']\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "ignore = ['.\\Archive', 'Drafts\\Old']\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -144,16 +108,9 @@ func TestLoad_IgnoreNormalizesBackslashes(t *testing.T) {
 }
 
 func TestLoad_IgnoreDropsAbsoluteEntries(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
 	for _, raw := range []string{"/abs/Archive", `/rooted`, `C:\Vault\Archive`, "D:/Vault/Drafts"} {
 		t.Run(raw, func(t *testing.T) {
-			dir := t.TempDir()
-			cfgPath := filepath.Join(dir, "config.toml")
-			writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = ['"+raw+"', 'Drafts']\n")
-
-			cfg, err := Load("", cfgPath)
+			cfg, err := loadTOML(t, "ignore = ['"+raw+"', 'Drafts']\n")
 			if err != nil {
 				t.Fatalf("Load (%q): %v", raw, err)
 			}
@@ -170,14 +127,7 @@ func TestLoad_IgnoreDropsAbsoluteEntries(t *testing.T) {
 }
 
 func TestLoad_IgnoreDropsParentTraversal(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.toml")
-	writeFile(t, cfgPath, "vault = \""+vault+"\"\nignore = ['../Archive', '..\\\\Drafts', 'Notes']\n")
-
-	cfg, err := Load("", cfgPath)
+	cfg, err := loadTOML(t, "ignore = ['../Archive', '..\\\\Drafts', 'Notes']\n")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

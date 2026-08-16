@@ -177,10 +177,11 @@ func openTargetRelPathForCard(card brief.Card) string {
 }
 
 func (s *Server) newBriefRuntime(snapshot vaultSnapshot) (briefRuntime, error) {
+	cfg := s.config()
 	selection, err := brief.BuildSelectionCorpus(s.vault.Root, snapshot.notes, snapshot.graph, brief.SelectionCorpusOptions{
-		MetadataProperties: append([]string(nil), s.cfg.Related.MetadataProperties...),
-		ExcludeFolders:     append([]string(nil), s.cfg.Brief.ExcludeFolders...),
-		ExcludeTypes:       append([]string(nil), s.cfg.Brief.ExcludeTypes...),
+		MetadataProperties: append([]string(nil), cfg.Related.MetadataProperties...),
+		ExcludeFolders:     append([]string(nil), cfg.Brief.ExcludeFolders...),
+		ExcludeTypes:       append([]string(nil), cfg.Brief.ExcludeTypes...),
 	})
 	if err != nil {
 		return briefRuntime{}, err

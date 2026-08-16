@@ -168,17 +168,30 @@ func TestCheckAllowed_NilValue(t *testing.T) {
 	if ok {
 		t.Error("expected failure when value is nil")
 	}
-	if bad != "<nil>" {
-		t.Errorf("offending = %q, want %q", bad, "<nil>")
+	if bad != "<null>" {
+		t.Errorf("offending = %q, want %q", bad, "<null>")
 	}
 }
 
 func TestCheckAllowed_MapValue(t *testing.T) {
 	allowed := []string{"a", "b"}
 
-	ok, _ := CheckAllowed(map[string]any{"x": 1}, allowed, false)
+	ok, bad := CheckAllowed(map[string]any{"x": 1}, allowed, false)
 	if ok {
 		t.Error("expected failure when value is a map")
+	}
+	if bad != "<map>" {
+		t.Errorf("offending = %q, want %q", bad, "<map>")
+	}
+}
+
+func TestCheckAllowed_NestedListItemNeverStringified(t *testing.T) {
+	ok, bad := CheckAllowed([]any{[]any{"a"}}, []string{"a"}, false)
+	if ok {
+		t.Error("expected failure for nested list item")
+	}
+	if bad != "<list>" {
+		t.Errorf("offending = %q, want %q", bad, "<list>")
 	}
 }
 
@@ -245,7 +258,7 @@ func TestCheckAllowed_ListNilItem(t *testing.T) {
 	if ok {
 		t.Error("expected failure for nil list item")
 	}
-	if bad != "<nil>" {
-		t.Errorf("offending = %q, want %q", bad, "<nil>")
+	if bad != "<null>" {
+		t.Errorf("offending = %q, want %q", bad, "<null>")
 	}
 }

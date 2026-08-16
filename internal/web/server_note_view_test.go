@@ -392,11 +392,10 @@ func TestServer_NoteViewIncludesFrontmatterEditControls(t *testing.T) {
 	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Source.md": []byte("---\nparent: \"[[Other]]\"\nstatus: active\ntags:\n  - alpha\n---\nBody\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.ListProperties = []string{"tags"}
-		cfg.Frontmatter.WikilinkProperties = []string{"parent"}
-		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
-			"status": {Type: "string", Allowed: []string{"active", "done"}},
-			"tags":   {Type: "list", Allowed: []string{"alpha", "beta"}},
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"parent": {Type: config.KindWikilink},
+			"status": {Type: config.KindString, Allowed: []string{"active", "done"}},
+			"tags":   {Type: config.KindList, Items: config.KindString, Allowed: []string{"alpha", "beta"}},
 		}
 	}, Options{
 		CSRFToken: "csrf-test-token",

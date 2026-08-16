@@ -37,6 +37,7 @@ func newBacklinkFixture(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 

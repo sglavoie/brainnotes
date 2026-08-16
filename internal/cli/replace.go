@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -83,7 +82,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 				return errors.New("replace: cannot combine positional notes with find filter flags")
 			}
 
-			isWikilink := slices.Contains(cfg.Frontmatter.WikilinkProperties, key)
+			isWikilink := cfg.Frontmatter.IsWikilink(key)
 			fromVal, err := coerceReplaceValue(fromRaw, isWikilink)
 			if err != nil {
 				return fmt.Errorf("replace: invalid <from>: %w", err)

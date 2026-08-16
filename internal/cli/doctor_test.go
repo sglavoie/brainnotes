@@ -12,8 +12,8 @@ import (
 
 // buildDoctorFixture writes a small vault whose diagnostics are deterministic:
 // Projects/Alpha.md carries a broken [[Ghost]] link but opts out of dead-end
-// classification; Beta.md links to Alpha (so Beta is an orphan). It wires
-// BNOTES_CONFIG at cfgPath so callers can rewrite the config if needed.
+// classification; Beta.md links to Alpha (so Beta is an orphan). It returns the
+// vault-root config path so callers can rewrite the config if needed.
 func buildDoctorFixture(t *testing.T) (root, cfgPath string) {
 	t.Helper()
 	root = t.TempDir()
@@ -32,15 +32,7 @@ func buildDoctorFixture(t *testing.T) (root, cfgPath string) {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath = filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	cfgPath = useVaultRoot(t, root, "")
 	return root, cfgPath
 }
 
@@ -296,7 +288,7 @@ func TestDoctor_DailyLimitsTasks(t *testing.T) {
 	}
 
 	// Cap the daily view to 2 tasks.
-	cfg := "vault = \"" + root + "\"\n[cockpit]\ndaily_limit = 2\n"
+	cfg := "[cockpit]\ndaily_limit = 2\n"
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		t.Fatalf("rewrite config: %v", err)
 	}
@@ -352,7 +344,7 @@ func TestDoctor_ReviewContext(t *testing.T) {
 			t.Fatalf("write: %v", err)
 		}
 	}
-	cfg := "vault = \"" + root + "\"\n[cockpit]\ndaily_limit = 2\n"
+	cfg := "[cockpit]\ndaily_limit = 2\n"
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		t.Fatalf("rewrite config: %v", err)
 	}
@@ -399,14 +391,7 @@ func TestDoctor_CleanVault(t *testing.T) {
 			t.Fatalf("write: %v", err)
 		}
 	}
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "")
 
 	out, err := runCLI(t, "", "doctor")
 	if err != nil {

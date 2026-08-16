@@ -37,7 +37,7 @@ func TestSaveWritesNewFileMode(t *testing.T) {
 			}
 			newPath := filepath.Join(v.Root, "brand-new.md")
 			n.Path = newPath
-			if err := n.Save(&v.Cfg.Frontmatter); err != nil {
+			if err := n.Save(v.Frontmatter()); err != nil {
 				t.Fatalf("save: %v", err)
 			}
 			info, err := os.Stat(newPath)

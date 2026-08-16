@@ -52,6 +52,7 @@ func TestBacklinks_FzfAbort(t *testing.T) {
 func TestBacklinks_FzfEmptyVault(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 
 	orig := notePicker
 	t.Cleanup(func() { notePicker = orig })

@@ -1,9 +1,6 @@
 package schema
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 func canonicalizeString(s string, allowed []string) (string, bool) {
 	lower := strings.ToLower(s)
@@ -47,7 +44,7 @@ func canonicalizeAll(val any, allowed []string, isWikilink bool) (any, []string)
 			if !ok {
 				scalar := scalarToString(item)
 				if scalar == "" {
-					unfixable = appendUniqueString(unfixable, fmt.Sprintf("%v", item))
+					unfixable = appendUniqueString(unfixable, unsupportedValueLabel(item))
 					continue
 				}
 				if isAllowedValue(scalar, allowed) {

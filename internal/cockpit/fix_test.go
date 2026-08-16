@@ -8,7 +8,10 @@ import (
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -61,8 +64,8 @@ func TestActionsForRuleMetadata(t *testing.T) {
 
 func TestFixerSchemaRepairPreviewAndApply(t *testing.T) {
 	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{
-		Schema: map[string]config.PropertySchema{
-			"status": {Type: "string", Allowed: []string{"active", "done"}},
+		Properties: map[string]config.PropertyDefinition{
+			"status": {Type: config.KindString, Allowed: []string{"active", "done"}},
 		},
 	}}
 	v := newTestVault(t, map[string]string{
@@ -105,6 +108,78 @@ func TestFixerSchemaRepairPreviewAndApply(t *testing.T) {
 	}
 	if got := readVaultFile(t, v.Root, "Note.md"); !strings.Contains(got, "status: active") || strings.Contains(got, "Active") {
 		t.Fatalf("apply did not canonicalize status: %q", got)
+	}
+}
+
+func TestCockpitRepairPreservesMidnightDatetimeSpelling(t *testing.T) {
+	definitions := map[string]config.PropertyDefinition{
+		"published": {Type: config.KindDatetime},
+		"timeline":  {Type: config.KindList, Items: config.KindDatetime},
+		"reviewed":  {Type: config.KindDate},
+	}
+	cfg := &config.Config{Frontmatter: config.FrontmatterConfig{Properties: definitions}}
+	v := newTestVault(t, map[string]string{
+		"Note.md": "---\n" +
+			"published: '2026-03-01T00:00:00Z'\n" +
+			"reviewed: '2026-03-05'\n" +
+			"timeline:\n" +
+			"  - '2026-03-02T00:00:00Z'\n" +
+			"  - '2026-03-02T00:00:00Z'\n" +
+			"---\nBody.\n",
+	})
+
+	for repaired := 0; repaired < len(definitions); repaired++ {
+		queue, err := BuildQueue(v, cfg)
+		if err != nil {
+			t.Fatalf("BuildQueue: %v", err)
+		}
+		var task *Task
+		for index := range queue.Tasks {
+			if queue.Tasks[index].Kind == RuleSchemaViolation {
+				task = &queue.Tasks[index]
+				break
+			}
+		}
+		if task == nil {
+			t.Fatalf("only %d schema repairs were offered", repaired)
+		}
+		if _, err := NewFixer(v, cfg, "bn test fix").Apply(*task, ActionSchemaRepair); err != nil {
+			t.Fatalf("apply schema repair: %v", err)
+		}
+	}
+
+	data, err := os.ReadFile(filepath.Join(v.Root, "Note.md"))
+	if err != nil {
+		t.Fatalf("read repaired note: %v", err)
+	}
+	doc, err := frontmatter.Parse(data)
+	if err != nil {
+		t.Fatalf("reparse repaired note: %v", err)
+	}
+	published, _ := properties.ClassifyProperty(&doc.Front, "published")
+	if published.Kind != config.KindDatetime {
+		t.Fatalf("published kind = %q, want datetime", published.Kind)
+	}
+	timeline, _ := properties.ClassifyProperty(&doc.Front, "timeline")
+	if len(timeline.Items) != 1 || timeline.Items[0].Kind != config.KindDatetime {
+		t.Fatalf("timeline = %#v, want one datetime", timeline)
+	}
+	reviewed, _ := properties.ClassifyProperty(&doc.Front, "reviewed")
+	if reviewed.Kind != config.KindDate {
+		t.Fatalf("reviewed kind = %q, want date", reviewed.Kind)
+	}
+	if violations := schema.ValidateNote(&doc.Front, "Note.md", definitions); len(violations) != 0 {
+		t.Fatalf("violations after repair = %#v", violations)
+	}
+	got := string(data)
+	for _, want := range []string{
+		"published: 2026-03-01T00:00:00Z",
+		"- 2026-03-02T00:00:00Z",
+		"reviewed: 2026-03-05\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("repaired note missing %q:\n%s", want, got)
+		}
 	}
 }
 

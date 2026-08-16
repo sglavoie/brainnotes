@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
@@ -19,12 +20,17 @@ import (
 
 // Vault is a handle to a notes directory plus the configuration that controls
 // walking and frontmatter behavior.
+//
+// The configuration is held as an immutable snapshot behind a lock rather than
+// as a shared mutable pointer: a live `bn serve` reloads brainnotes.toml while
+// requests are in flight, and handing every reader the same mutable struct
+// would be a data race the moment a reload lands.
 type Vault struct {
 	// Root is the absolute path to the vault root directory.
 	Root string
-	// Cfg is the configuration used for walking and note operations. Never nil
-	// once Open has returned successfully.
-	Cfg *config.Config
+
+	mu  sync.RWMutex
+	cfg *config.Config
 }
 
 // Open validates that cfg.Vault is an existing directory and returns a Vault
@@ -62,7 +68,40 @@ func Open(cfg *config.Config) (*Vault, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("vault: %q is not a directory", abs)
 	}
-	return &Vault{Root: abs, Cfg: cfg}, nil
+	return &Vault{Root: abs, cfg: cfg.Clone()}, nil
+}
+
+// Config returns the current configuration snapshot. The returned value is
+// shared and must be treated as read-only; use its Clone method to mutate.
+func (v *Vault) Config() *config.Config {
+	if v == nil {
+		return nil
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.cfg
+}
+
+// Frontmatter returns the frontmatter section of the current snapshot, or an
+// empty section when the vault has no configuration.
+func (v *Vault) Frontmatter() *config.FrontmatterConfig {
+	cfg := v.Config()
+	if cfg == nil {
+		return &config.FrontmatterConfig{}
+	}
+	return &cfg.Frontmatter
+}
+
+// SetConfig publishes a new configuration snapshot. It stores a deep clone so
+// later mutations by the caller cannot reach readers of the published value.
+func (v *Vault) SetConfig(cfg *config.Config) {
+	if v == nil {
+		return
+	}
+	clone := cfg.Clone()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.cfg = clone
 }
 
 // WalkFilter is reserved for future per-walk filtering. The zero value walks
@@ -91,10 +130,11 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 	if fn == nil {
 		return errors.New("vault: nil walk callback")
 	}
-	ignore := ignoreSet(v.Cfg)
+	cfg := v.Config()
+	ignore := ignoreSet(cfg)
 	templatesDir := ""
-	if v.Cfg != nil {
-		templatesDir = cleanSlashRel(v.Cfg.Templates.Dir)
+	if cfg != nil {
+		templatesDir = cleanSlashRel(cfg.Templates.Dir)
 		if relEscapesRoot(templatesDir) {
 			templatesDir = ""
 		}

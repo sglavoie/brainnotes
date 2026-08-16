@@ -30,15 +30,7 @@ func buildNewFixtureWithRoutes(t *testing.T, routeLines string) string {
 		t.Fatalf("write template: %v", err)
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n\n[new.routes]\n" + routeLines
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "[new.routes]\n"+routeLines)
 	return root
 }
 

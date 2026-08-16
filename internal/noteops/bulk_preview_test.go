@@ -190,7 +190,9 @@ func TestBulkPreviewMoveNotesReadOnlyReportsDestinationAndRewriteCounts(t *testi
 	cfg := &config.Config{
 		Vault: root,
 		Frontmatter: config.FrontmatterConfig{
-			WikilinkProperties: []string{"parent"},
+			Properties: map[string]config.PropertyDefinition{
+				"parent": {Type: config.KindWikilink},
+			},
 		},
 	}
 	v, err := vault.Open(cfg)

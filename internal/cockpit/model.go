@@ -15,7 +15,7 @@ type RuleKind string
 const (
 	// RuleFrontmatterError flags a note whose YAML frontmatter fails to parse.
 	RuleFrontmatterError RuleKind = "frontmatter_error"
-	// RuleSchemaViolation flags notes that break a configured property schema.
+	// RuleSchemaViolation flags notes that break a configured property definition.
 	RuleSchemaViolation RuleKind = "schema_violation"
 	// RuleBrokenTarget flags a wikilink target that resolves to no note.
 	RuleBrokenTarget RuleKind = "broken_target"

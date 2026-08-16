@@ -567,7 +567,9 @@ func TestServer_BulkPreviewAPI_MoveReportsRewriteCountsAndPartialFailures(t *tes
 		"Ref.md":          []byte("---\ntitle: Ref\n---\nSee [[Inbox/Source]].\n"),
 		"Meta.md":         []byte("---\nparent: \"[[Inbox/Source]]\"\n---\nBody.\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.WikilinkProperties = []string{"parent"}
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"parent": {Type: config.KindWikilink},
+		}
 	}, Options{
 		CSRFToken: "csrf-token",
 	})

@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -11,20 +10,10 @@ import (
 )
 
 func validate(cfg *Config) error {
-	if cfg.Vault == "" {
-		return errors.New("config: vault path is not set (use --vault, BNOTES_VAULT, or 'vault' in config.toml)")
-	}
-	info, err := os.Stat(cfg.Vault)
-	if err != nil {
-		return fmt.Errorf("config: vault path %q: %w", cfg.Vault, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("config: vault path %q is not a directory", cfg.Vault)
-	}
 	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
 		return err
 	}
-	if err := validateSchema(cfg); err != nil {
+	if err := validateProperties(cfg); err != nil {
 		return err
 	}
 	if err := validateRoutes(cfg); err != nil {
@@ -232,37 +221,39 @@ func isASCIIAlpha(b byte) bool {
 	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
 }
 
-var validSchemaTypes = map[string]bool{
-	"string": true,
-	"list":   true,
-	"date":   true,
-	"int":    true,
-	"bool":   true,
-	"float":  true,
-}
-
-func validateSchema(cfg *Config) error {
-	for name, rule := range cfg.Frontmatter.Schema {
+func validateProperties(cfg *Config) error {
+	for _, name := range cfg.Frontmatter.PropertyNames() {
+		def := cfg.Frontmatter.Properties[name]
 		trimmedName := strings.TrimSpace(name)
 		if trimmedName == "" {
-			return fmt.Errorf("config: schema: property name must not be empty or whitespace")
+			return fmt.Errorf("config: frontmatter.properties: property name must not be empty or whitespace")
 		}
 		if trimmedName != name {
-			return fmt.Errorf("config: schema: property %q: name must not have surrounding whitespace", name)
+			return fmt.Errorf("config: frontmatter.properties: property %q: name must not have surrounding whitespace", name)
 		}
-		if rule.Type == "" {
-			return fmt.Errorf("config: schema: property %q: type is required", name)
+		if def.Type == "" {
+			return fmt.Errorf("config: frontmatter.properties: property %q: type is required", name)
 		}
-		if !validSchemaTypes[rule.Type] {
-			return fmt.Errorf("config: schema: property %q: unknown type %q", name, rule.Type)
+		if !ValidPropertyKind(def.Type) {
+			return fmt.Errorf("config: frontmatter.properties: property %q: unknown type %q", name, def.Type)
+		}
+		if def.IsList() {
+			if def.Items == "" {
+				return fmt.Errorf("config: frontmatter.properties: property %q: list type requires items", name)
+			}
+			if !ValidScalarKind(def.Items) {
+				return fmt.Errorf("config: frontmatter.properties: property %q: unknown items kind %q", name, def.Items)
+			}
+		} else if def.Items != "" {
+			return fmt.Errorf("config: frontmatter.properties: property %q: items is only valid when type = \"list\"", name)
 		}
 		// Reject empty / whitespace-only entries inside `allowed` — they
 		// would silently let an empty (or pure-whitespace) value pass the
 		// allowed-values check at lint time, defeating the intent of the
 		// constraint.
-		for i, v := range rule.Allowed {
+		for i, v := range def.Allowed {
 			if strings.TrimSpace(v) == "" {
-				return fmt.Errorf("config: schema: property %q: allowed[%d] must not be empty or whitespace", name, i)
+				return fmt.Errorf("config: frontmatter.properties: property %q: allowed[%d] must not be empty or whitespace", name, i)
 			}
 		}
 	}

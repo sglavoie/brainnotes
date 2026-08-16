@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,9 +38,17 @@ type FrontmatterResult struct {
 	Changed bool
 }
 
+// fileRequirement is a file a write depends on but never changes, such as the
+// configuration whose declarations decided the value's shape.
+type fileRequirement struct {
+	path   string
+	expect vault.FileExpectation
+}
+
 type frontmatterOptions struct {
 	command        string
 	journalOptions []journal.RecorderOption
+	requires       []fileRequirement
 }
 
 // FrontmatterOption customizes SetFrontmatter and UnsetFrontmatter.
@@ -51,6 +58,19 @@ type FrontmatterOption func(*frontmatterOptions)
 func WithFrontmatterCommand(command string) FrontmatterOption {
 	return func(o *frontmatterOptions) {
 		o.command = strings.TrimSpace(command)
+	}
+}
+
+// WithFrontmatterRequire pins a file the mutation depends on but never writes.
+// The transaction verifies it at the commit boundary, so a write validated
+// against one revision of that file is refused if another revision has replaced
+// it by the time the note is saved.
+func WithFrontmatterRequire(path string, expect vault.FileExpectation) FrontmatterOption {
+	return func(o *frontmatterOptions) {
+		if strings.TrimSpace(path) == "" {
+			return
+		}
+		o.requires = append(o.requires, fileRequirement{path: path, expect: expect})
 	}
 }
 
@@ -112,9 +132,10 @@ func NewFrontmatterMutation(key, opStr, rawVal, typeFlag string, fm *config.Fron
 		fm = &config.FrontmatterConfig{}
 	}
 
-	isList := slices.Contains(fm.ListProperties, key)
-	isWikilink := slices.Contains(fm.WikilinkProperties, key)
-	effectiveType := effectiveSetType(typeFlag, isWikilink)
+	def, defined := fm.Definition(key)
+	isList := defined && def.IsList()
+	isWikilink := defined && def.IsWikilink()
+	effectiveType := effectiveSetType(typeFlag, def, defined)
 
 	switch opStr {
 	case "=":
@@ -139,9 +160,26 @@ func SplitFrontmatterPairOp(p string) (key, op, val string, ok bool) {
 	return "", "", "", false
 }
 
-func effectiveSetType(typeFlag string, isWikilink bool) string {
-	if isWikilink && (typeFlag == "" || typeFlag == "auto") {
+// effectiveSetType lets a configured property definition drive coercion when
+// the caller did not force a type, so `bn set` and the web APIs store the kind
+// the property is declared to hold instead of re-guessing from the literal.
+func effectiveSetType(typeFlag string, def config.PropertyDefinition, defined bool) string {
+	if !defined || (typeFlag != "" && typeFlag != "auto") {
+		return typeFlag
+	}
+	switch def.ScalarKind() {
+	case config.KindString, config.KindWikilink:
 		return "raw"
+	case config.KindDate:
+		return "date"
+	case config.KindDatetime:
+		return "datetime"
+	case config.KindInt:
+		return "int"
+	case config.KindFloat:
+		return "float"
+	case config.KindBool:
+		return "bool"
 	}
 	return typeFlag
 }
@@ -164,7 +202,7 @@ func parseSetAssignment(key, rawVal, typeFlag string, isList bool) (FrontmatterM
 
 func parseSetListMutation(key, opStr, rawVal, typeFlag string, isList, isWikilink bool) (FrontmatterMutation, error) {
 	if !isList {
-		return FrontmatterMutation{}, Errorf(CodeInvalidRequest, "set: operator %q requires %q to be in [frontmatter].list_properties", opStr, key)
+		return FrontmatterMutation{}, Errorf(CodeInvalidRequest, "set: operator %q requires %q to be defined as type = \"list\" in [frontmatter.properties]", opStr, key)
 	}
 	if strings.TrimSpace(rawVal) == "" {
 		return FrontmatterMutation{}, Errorf(CodeInvalidRequest, "set: empty value for %q on key %q", opStr, key)
@@ -215,6 +253,12 @@ func CoerceFrontmatterValue(s, typeFlag string) (any, error) {
 			return nil, WrapError(CodeInvalidRequest, fmt.Sprintf("set: invalid date %q", s), err)
 		}
 		return t, nil
+	case "datetime":
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return nil, WrapError(CodeInvalidRequest, fmt.Sprintf("set: invalid datetime %q", s), err)
+		}
+		return t, nil
 	case "int":
 		n, err := strconv.Atoi(s)
 		if err != nil {
@@ -239,7 +283,7 @@ func CoerceFrontmatterValue(s, typeFlag string) (any, error) {
 		return s, nil
 	case "", "auto":
 	default:
-		return nil, Errorf(CodeInvalidRequest, "set: unknown --type %q (want date|int|bool|float|raw)", typeFlag)
+		return nil, Errorf(CodeInvalidRequest, "set: unknown --type %q (want date|datetime|int|bool|float|raw)", typeFlag)
 	}
 
 	switch strings.ToLower(s) {
@@ -274,7 +318,7 @@ var (
 
 // WikilinkNormalizedFrontmatterValue wraps string values for wikilink-typed keys.
 func WikilinkNormalizedFrontmatterValue(v any, key string, fm *config.FrontmatterConfig) any {
-	if fm == nil || !slices.Contains(fm.WikilinkProperties, key) {
+	if fm == nil || !fm.IsWikilink(key) {
 		return v
 	}
 
@@ -326,7 +370,7 @@ func SetFrontmatter(vaultRoot, sourceRel string, mutations []FrontmatterMutation
 		return nil, err
 	}
 	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
-	changed, err := ApplyFrontmatterMutations(source.AbsPath, mutations, fm, j)
+	changed, err := applyFrontmatterMutations(vaultRoot, source.AbsPath, mutations, fm, j, options.requires)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +399,7 @@ func UnsetFrontmatter(vaultRoot, sourceRel string, props []string, fm *config.Fr
 		return nil, err
 	}
 	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
-	changed, err := ApplyFrontmatterUnset(source.AbsPath, props, fm, j)
+	changed, err := applyFrontmatterUnset(vaultRoot, source.AbsPath, props, fm, j, options.requires)
 	if err != nil {
 		return nil, err
 	}
@@ -386,8 +430,14 @@ func resolveFrontmatterSource(vaultRoot, sourceRel string) (PathResolution, erro
 }
 
 // ApplyFrontmatterMutations mutates an already-resolved note path and saves it
-// only when the final frontmatter state differs from the initial state.
-func ApplyFrontmatterMutations(path string, mutations []FrontmatterMutation, fm *config.FrontmatterConfig, journaler captureJournal) (bool, error) {
+// only when the final frontmatter state differs from the initial state. The
+// write goes through an in-vault transaction, so it is rejected if the file
+// changed on disk since it was parsed.
+func ApplyFrontmatterMutations(vaultRoot, path string, mutations []FrontmatterMutation, fm *config.FrontmatterConfig, journaler captureJournal) (bool, error) {
+	return applyFrontmatterMutations(vaultRoot, path, mutations, fm, journaler, nil)
+}
+
+func applyFrontmatterMutations(vaultRoot, path string, mutations []FrontmatterMutation, fm *config.FrontmatterConfig, journaler captureJournal, requires []fileRequirement) (bool, error) {
 	note, front, err := loadFrontmatterNote(path)
 	if err != nil {
 		return false, err
@@ -401,15 +451,65 @@ func ApplyFrontmatterMutations(path string, mutations []FrontmatterMutation, fm 
 	if !frontmatterMutationsNetChanged(front, before, mutations) {
 		return false, nil
 	}
-	if journaler != nil {
-		if err := journaler.Capture(path); err != nil {
-			return false, err
-		}
-	}
-	if err := note.Save(fm); err != nil {
-		return false, WrapError(CodeInternal, "frontmatter: save note", err)
+	if err := commitNoteWrite(vaultRoot, note, fm, journaler, requires); err != nil {
+		return false, err
 	}
 	return true, nil
+}
+
+// commitNoteWrite serializes the mutated note and commits it through an in-vault
+// transaction: the precondition pins the exact revision that was parsed, every
+// requirement pins a file the write depended on, the journal captures the
+// pre-state once, and a failed commit is rolled back.
+func commitNoteWrite(vaultRoot string, note *vault.Note, fm *config.FrontmatterConfig, journaler captureJournal, requires []fileRequirement) error {
+	data, err := note.Marshal(fm)
+	if err != nil {
+		return WrapError(CodeInternal, "frontmatter: marshal note", err)
+	}
+	txn, err := vault.NewFileTxn(vaultRoot)
+	if err != nil {
+		return WrapError(CodeInternal, "frontmatter: open transaction", err)
+	}
+	if err := txn.Write(note.Path, data, 0, vault.ExpectHash(note.SourceHash())); err != nil {
+		return classifyTxnError("frontmatter: plan write", err)
+	}
+	for _, requirement := range requires {
+		if err := txn.Require(requirement.path, requirement.expect); err != nil {
+			return classifyTxnError("frontmatter: pin dependency", err)
+		}
+	}
+	var txnJournal vault.TxnJournal
+	if journaler != nil {
+		txnJournal = journaler
+	}
+	if err := txn.Commit(txnJournal); err != nil {
+		return classifyTxnError("frontmatter: save note", err)
+	}
+	return nil
+}
+
+// classifyTxnError maps transaction failures onto the stable operation codes the
+// web APIs answer with. A precondition mismatch is a conflict the caller can
+// retry; a failed rollback is an internal error whose message already carries
+// recovery guidance.
+//
+// A transaction that left displaced content in a recovery file is checked
+// first: it also unwraps to a conflict, and answering "retry" would hide the
+// one message telling the caller where their note went.
+func classifyTxnError(message string, err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case vault.IsTxnRecoveryNeeded(err):
+		return WrapError(CodeInternal, err.Error(), err)
+	case vault.IsTxnConflict(err):
+		return WrapError(CodeConflict, MessageOf(err), err)
+	case vault.IsTxnRollbackFailure(err):
+		return WrapError(CodeInternal, err.Error(), err)
+	default:
+		return WrapError(CodeInternal, message, err)
+	}
 }
 
 // ApplyFrontmatterMutationsToMap applies mutations to a frontmatter map in order.
@@ -475,7 +575,11 @@ func applyFrontmatterListMutation(front *frontmatter.Map, key string, value any,
 }
 
 // ApplyFrontmatterUnset removes keys from an already-resolved note path.
-func ApplyFrontmatterUnset(path string, props []string, fm *config.FrontmatterConfig, journaler captureJournal) (bool, error) {
+func ApplyFrontmatterUnset(vaultRoot, path string, props []string, fm *config.FrontmatterConfig, journaler captureJournal) (bool, error) {
+	return applyFrontmatterUnset(vaultRoot, path, props, fm, journaler, nil)
+}
+
+func applyFrontmatterUnset(vaultRoot, path string, props []string, fm *config.FrontmatterConfig, journaler captureJournal, requires []fileRequirement) (bool, error) {
 	if len(props) == 0 {
 		return false, Errorf(CodeInvalidRequest, "unset: at least one property name is required")
 	}
@@ -500,13 +604,8 @@ func ApplyFrontmatterUnset(path string, props []string, fm *config.FrontmatterCo
 	if !changed {
 		return false, nil
 	}
-	if journaler != nil {
-		if err := journaler.Capture(path); err != nil {
-			return false, err
-		}
-	}
-	if err := note.Save(fm); err != nil {
-		return false, WrapError(CodeInternal, "frontmatter: save note", err)
+	if err := commitNoteWrite(vaultRoot, note, fm, journaler, requires); err != nil {
+		return false, err
 	}
 	return true, nil
 }

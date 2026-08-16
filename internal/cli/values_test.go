@@ -32,6 +32,7 @@ func buildValuesFixture(t *testing.T) string {
 			t.Fatalf("write %s: %v", rel, err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
@@ -181,6 +182,7 @@ func TestValues_FzfAbort(t *testing.T) {
 func TestValues_FzfNoProperties(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	full := filepath.Join(root, "Empty.md")
 	if err := os.WriteFile(full, []byte("No frontmatter here.\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -318,6 +320,7 @@ func TestValues_CategoryFiles(t *testing.T) {
 func TestValues_FilesDedup(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	body := "---\ntags:\n  - dup\n  - dup\n---\nBody.\n"
 	if err := os.WriteFile(filepath.Join(root, "Duped.md"), []byte(body), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
@@ -355,6 +358,7 @@ func TestValues_FilesMissingProperty(t *testing.T) {
 func TestValues_MapElementSkippedWithoutVerbose(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	files := map[string]string{
 		"Mixed.md": "---\ntags:\n  - real\n  - {nested: oops}\n---\nBody.\n",
 	}

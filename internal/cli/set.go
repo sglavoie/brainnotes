@@ -22,13 +22,16 @@ Operators:
   key+=value   Append to a list property (no-op if value already present).
   key-=value   Remove a value from a list property (no-op if absent).
 
-'+=' and '-=' require the key to be in [frontmatter].list_properties. Values
-are comma-split for list properties exactly as with '='. Mixing operators in
-one invocation is allowed and applied left-to-right.
+'+=' and '-=' require the key to be defined with type = "list" in
+[frontmatter.properties]. Values are comma-split for list properties exactly
+as with '='. Mixing operators in one invocation is allowed and applied
+left-to-right.
 
-Type coercion (auto): true/false -> bool, integer -> int, YYYY-MM-DD -> date,
-else string. Use --type to force date|int|bool|raw. Wikilink-typed properties
-are auto-wrapped before mutation.
+A configured property is stored as the kind its definition declares. For
+properties with no definition, coercion is automatic: true/false -> bool,
+integer -> int, YYYY-MM-DD -> date, else string. Use --type to force
+date|datetime|int|bool|float|raw. Wikilink-typed properties are auto-wrapped
+before mutation.
 
 Each file is rewritten atomically, but there is no cross-file transaction: if
 an error stops the run mid-way, prior writes stand. Use 'git diff' to recover.

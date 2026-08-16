@@ -58,13 +58,14 @@ func snapshotRecallMarkdown(t *testing.T, root string) map[string]string {
 func TestRecallWorkflowEndToEnd(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	writeRecallIntegrationFiles(t, root, map[string]string{
 		"Source.md": "---\ncreated: 2020-01-02\ntags: [retrieval, systems]\ntopics: [context]\n---\n# Contextual recall\n\nContextual retrieval combines graph and semantic signals. [[Direct]]\n",
 		"Direct.md": "---\ncreated: 2021-02-03\ntags: [retrieval, systems]\ntopics: [context]\n---\n# Direct evidence\n\nGraph retrieval connects semantic context and source evidence. [[Bridge]]\n",
 		"Bridge.md": "---\ncreated: 2019-03-04\ntags: [retrieval]\ntopics: [context]\n---\n# Bridge evidence\n\nA bridge joins contextual graph retrieval with research notes.\n",
 		"Other.md":  "---\ntags: [cooking]\n---\n# Other\n\nWhisk eggs and fold in herbs.\n",
 	})
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -221,6 +222,7 @@ func TestRecallWorkflowEndToEnd(t *testing.T) {
 func TestRecallCLIHardeningInputAndCorpusEdges(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	const nfdName = "Cafe\u0301.md"
 	const sourceBody = "# Café\r\n\r\nUnicode contextual retrieval without a created date. [[Peer]]\r\n"
 	writeRecallIntegrationFiles(t, root, map[string]string{
@@ -231,7 +233,7 @@ func TestRecallCLIHardeningInputAndCorpusEdges(t *testing.T) {
 		"Archive/Bad.md":   "---\nmalformed: [\n---\nignored default folder body\n",
 		"Skipped/Bad.md":   "---\nmalformed: [\n---\nignored configured folder body\n",
 	})
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -291,12 +293,13 @@ func TestRecallCLIHardeningInputAndCorpusEdges(t *testing.T) {
 func TestRecallCLIHardeningRemovedCorruptAndEmptyState(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	writeRecallIntegrationFiles(t, root, map[string]string{
 		"Source.md":   "Recall source links [[Removed]] and [[Survivor]].\n",
 		"Removed.md":  "Recall candidate that will be removed.\n",
 		"Survivor.md": "Recall candidate that remains.\n",
 	})
-	cfg, err := config.Load(root, "")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: root})
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -355,7 +358,8 @@ func TestRecallCLIHardeningRemovedCorruptAndEmptyState(t *testing.T) {
 	}
 
 	emptyRoot := t.TempDir()
-	emptyCfg, err := config.Load(emptyRoot, "")
+	markVaultRoot(t, emptyRoot, "")
+	emptyCfg, err := config.Load(config.LoadOptions{VaultFlag: emptyRoot})
 	if err != nil {
 		t.Fatalf("load empty-vault config: %v", err)
 	}

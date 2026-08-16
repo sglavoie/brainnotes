@@ -117,6 +117,7 @@ func (s *Server) handleNoteCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNoteRename(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/notes/rename" {
 		http.NotFound(w, r)
 		return
@@ -145,7 +146,7 @@ func (s *Server) handleNoteRename(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "rename: missing new title"))
 		return
 	}
-	result, err := noteops.RenameNote(s.vault, s.cfg, source.RelPath, newTitle)
+	result, err := noteops.RenameNote(s.vault, cfg, source.RelPath, newTitle)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -168,6 +169,7 @@ func (s *Server) handleNoteRename(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNoteMove(w http.ResponseWriter, r *http.Request) {
+	cfg := s.config()
 	if r.URL.Path != "/api/notes/move" {
 		http.NotFound(w, r)
 		return
@@ -196,7 +198,7 @@ func (s *Server) handleNoteMove(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "move: missing new folder"))
 		return
 	}
-	result, err := noteops.MoveNote(s.vault, s.cfg, source.RelPath, newFolder)
+	result, err := noteops.MoveNote(s.vault, cfg, source.RelPath, newFolder)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -236,6 +238,11 @@ func (s *Server) handleNoteFrontmatterSet(w http.ResponseWriter, r *http.Request
 		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
 		return
 	}
+	if err := s.ensureConfigWritable(); err != nil {
+		writeManagementError(w, err)
+		return
+	}
+	cfg, _, pin := s.pinnedConfig()
 
 	source, err := s.resolveManagementSource(r)
 	if err != nil {
@@ -257,16 +264,14 @@ func (s *Server) handleNoteFrontmatterSet(w http.ResponseWriter, r *http.Request
 		return
 	}
 	typeFlag := strings.TrimSpace(r.Form.Get("type"))
-	if typeFlag == "" {
-		typeFlag = frontmatterSchemaTypeFlag(s.cfg.Frontmatter.Schema[property].Type)
-	}
 
-	mutation, err := noteops.NewFrontmatterMutation(property, op, value, typeFlag, &s.cfg.Frontmatter)
+	mutation, err := noteops.NewFrontmatterMutation(property, op, value, typeFlag, &cfg.Frontmatter)
 	if err != nil {
 		writeManagementError(w, err)
 		return
 	}
-	result, err := noteops.SetFrontmatter(s.vault.Root, source.RelPath, []noteops.FrontmatterMutation{mutation}, &s.cfg.Frontmatter)
+	result, err := noteops.SetFrontmatter(s.vault.Root, source.RelPath, []noteops.FrontmatterMutation{mutation}, &cfg.Frontmatter,
+		frontmatterConfigPinOptions(pin)...)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -306,6 +311,11 @@ func (s *Server) handleNoteFrontmatterUnset(w http.ResponseWriter, r *http.Reque
 		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
 		return
 	}
+	if err := s.ensureConfigWritable(); err != nil {
+		writeManagementError(w, err)
+		return
+	}
+	cfg, _, pin := s.pinnedConfig()
 
 	source, err := s.resolveManagementSource(r)
 	if err != nil {
@@ -317,7 +327,8 @@ func (s *Server) handleNoteFrontmatterUnset(w http.ResponseWriter, r *http.Reque
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing property"))
 		return
 	}
-	result, err := noteops.UnsetFrontmatter(s.vault.Root, source.RelPath, []string{property}, &s.cfg.Frontmatter)
+	result, err := noteops.UnsetFrontmatter(s.vault.Root, source.RelPath, []string{property}, &cfg.Frontmatter,
+		frontmatterConfigPinOptions(pin)...)
 	if err != nil {
 		writeManagementError(w, err)
 		return

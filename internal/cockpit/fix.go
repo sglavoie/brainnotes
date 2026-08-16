@@ -257,7 +257,7 @@ func (f *Fixer) applySchemaRepair(out FixOutcome, task Task, byRel map[string]*v
 			return FixOutcome{}, err
 		}
 		for _, act := range actions {
-			front.Set(act.Property, act.NewValue)
+			schema.ApplyRepairAction(front, act, f.cfg.Frontmatter.Properties)
 		}
 		if err := note.Save(&f.cfg.Frontmatter); err != nil {
 			return FixOutcome{}, err
@@ -280,15 +280,15 @@ func (f *Fixer) planNoteRepairs(note *vault.Note, property string) ([]schema.Rep
 	if err != nil {
 		return nil, nil, err
 	}
-	sch := f.cfg.Frontmatter.Schema
+	props := f.cfg.Frontmatter.Properties
 	if property != "" {
-		rule, ok := sch[property]
+		def, ok := props[property]
 		if !ok {
 			return nil, nil, nil
 		}
-		sch = map[string]config.PropertySchema{property: rule}
+		props = map[string]config.PropertyDefinition{property: def}
 	}
-	result := schema.PlanRepairs(front, sch, f.cfg.Frontmatter.WikilinkProperties)
+	result := schema.PlanRepairs(front, props)
 
 	rel := relPath(note.Path, f.vault.Root)
 	var skips []FixSkip

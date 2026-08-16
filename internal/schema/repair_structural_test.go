@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 )
 
@@ -27,7 +28,10 @@ func TestPlanRepairs_WikilinkWrap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := PlanRepairs(tt.front, nil, []string{"parent", "categories"})
+			result := PlanRepairs(tt.front, map[string]config.PropertyDefinition{
+				"parent":     {Type: config.KindWikilink},
+				"categories": {Type: config.KindList, Items: config.KindWikilink},
+			})
 			if len(result.Skips) != 0 {
 				t.Errorf("unexpected skips: %+v", result.Skips)
 			}
@@ -47,7 +51,7 @@ func TestPlanRepairs_WikilinkWrap(t *testing.T) {
 
 func TestPlanRepairs_WikilinkWrap_AlreadyWrapped(t *testing.T) {
 	front := buildFront("parent", "[[Books]]")
-	result := PlanRepairs(front, nil, []string{"parent"})
+	result := PlanRepairs(front, wikilinkProps("parent"))
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions for already-wrapped value, got %+v", result.Actions)
 	}
@@ -55,7 +59,7 @@ func TestPlanRepairs_WikilinkWrap_AlreadyWrapped(t *testing.T) {
 
 func TestPlanRepairs_WikilinkWrap_EmptyString(t *testing.T) {
 	front := buildFront("parent", "")
-	result := PlanRepairs(front, nil, []string{"parent"})
+	result := PlanRepairs(front, wikilinkProps("parent"))
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions for empty wikilink value, got %+v", result.Actions)
 	}
@@ -63,7 +67,7 @@ func TestPlanRepairs_WikilinkWrap_EmptyString(t *testing.T) {
 
 func TestPlanRepairs_ListDedup(t *testing.T) {
 	front := buildFront("tags", []any{"go", "cli", "go", "rust", "cli"})
-	result := PlanRepairs(front, nil, nil)
+	result := PlanRepairs(front, nil)
 	if len(result.Skips) != 0 {
 		t.Errorf("unexpected skips: %+v", result.Skips)
 	}
@@ -82,7 +86,7 @@ func TestPlanRepairs_ListDedup(t *testing.T) {
 
 func TestPlanRepairs_ListDedup_NoDuplicates(t *testing.T) {
 	front := buildFront("tags", []any{"go", "cli", "rust"})
-	result := PlanRepairs(front, nil, nil)
+	result := PlanRepairs(front, nil)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions for unique list, got %+v", result.Actions)
 	}
@@ -90,7 +94,7 @@ func TestPlanRepairs_ListDedup_NoDuplicates(t *testing.T) {
 
 func TestPlanRepairs_ListDedup_EmptyList(t *testing.T) {
 	front := buildFront("tags", []any{})
-	result := PlanRepairs(front, nil, nil)
+	result := PlanRepairs(front, nil)
 	if len(result.Actions) != 0 {
 		t.Errorf("expected no actions for empty list, got %+v", result.Actions)
 	}

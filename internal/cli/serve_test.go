@@ -30,7 +30,6 @@ func runServeCmd(t *testing.T, args ...string) (string, string, error) {
 func TestServe_FlagPrecedence(t *testing.T) {
 	isolateBnEnv(t)
 	vaultRoot := buildOpenVault(t)
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 
 	origRun := runServe
 	origBuild := runWebBuild
@@ -53,15 +52,12 @@ func TestServe_FlagPrecedence(t *testing.T) {
 
 	writeCfg := func(t *testing.T, serveBlock string) {
 		t.Helper()
-		body := "vault = \"" + vaultRoot + "\"\n" + serveBlock + "\n"
-		if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
-			t.Fatalf("write config: %v", err)
-		}
+		writeServeTestConfig(t, vaultRoot, serveBlock)
 	}
 
 	t.Run("uses config when flags unset", func(t *testing.T) {
 		writeCfg(t, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
-		if _, _, err := runServeCmd(t, "--config", cfgPath, "serve"); err != nil {
+		if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve"); err != nil {
 			t.Fatalf("execute: %v", err)
 		}
 		if got.Addr != "127.0.0.1:8800" {
@@ -74,7 +70,7 @@ func TestServe_FlagPrecedence(t *testing.T) {
 
 	t.Run("port overlays config host", func(t *testing.T) {
 		writeCfg(t, "[serve]\naddr = \"127.0.0.1:8800\"")
-		if _, _, err := runServeCmd(t, "--config", cfgPath, "serve", "--port", "9911"); err != nil {
+		if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve", "--port", "9911"); err != nil {
 			t.Fatalf("execute: %v", err)
 		}
 		if got.Addr != "127.0.0.1:9911" {
@@ -84,7 +80,7 @@ func TestServe_FlagPrecedence(t *testing.T) {
 
 	t.Run("addr overrides port", func(t *testing.T) {
 		writeCfg(t, "[serve]\naddr = \"127.0.0.1:8800\"")
-		if _, _, err := runServeCmd(t, "--config", cfgPath, "serve", "--port", "9911", "--addr", "0.0.0.0:7000"); err != nil {
+		if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve", "--port", "9911", "--addr", "0.0.0.0:7000"); err != nil {
 			t.Fatalf("execute: %v", err)
 		}
 		if got.Addr != "0.0.0.0:7000" {
@@ -94,7 +90,7 @@ func TestServe_FlagPrecedence(t *testing.T) {
 
 	t.Run("no-open forces browser disabled", func(t *testing.T) {
 		writeCfg(t, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = true")
-		if _, _, err := runServeCmd(t, "--config", cfgPath, "serve", "--no-open"); err != nil {
+		if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve", "--no-open"); err != nil {
 			t.Fatalf("execute: %v", err)
 		}
 		if got.BrowserEnabled() {
@@ -113,7 +109,7 @@ func TestServe_BuildsWebAssetsInSourceCheckout(t *testing.T) {
 	t.Chdir(nested)
 
 	vaultRoot := buildOpenVault(t)
-	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+	writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
 
 	origRun := runServe
 	origBuild := runWebBuild
@@ -152,7 +148,7 @@ func TestServe_BuildsWebAssetsInSourceCheckout(t *testing.T) {
 		return nil
 	}
 
-	if _, _, err := runServeCmd(t, "--config", cfgPath, "serve"); err != nil {
+	if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve"); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	if buildRoot != projectRoot {
@@ -169,7 +165,7 @@ func TestServe_BuildsWebAssetsFromStampedCheckoutOutsideCheckout(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	vaultRoot := buildOpenVault(t)
-	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+	writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
 
 	origRun := runServe
 	origBuild := runWebBuild
@@ -206,7 +202,7 @@ func TestServe_BuildsWebAssetsFromStampedCheckoutOutsideCheckout(t *testing.T) {
 		return nil
 	}
 
-	if _, _, err := runServeCmd(t, "--config", cfgPath, "serve"); err != nil {
+	if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve"); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	if buildRoot != projectRoot {
@@ -219,7 +215,7 @@ func TestServe_SkipsWebBuildOutsideSourceCheckout(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	vaultRoot := buildOpenVault(t)
-	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+	writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
 
 	origRun := runServe
 	origBuild := runWebBuild
@@ -244,7 +240,7 @@ func TestServe_SkipsWebBuildOutsideSourceCheckout(t *testing.T) {
 		return nil
 	}
 
-	if _, _, err := runServeCmd(t, "--config", cfgPath, "serve"); err != nil {
+	if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve"); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	if buildCalled {
@@ -258,7 +254,7 @@ func TestServe_WebBuildFailureStopsBeforeServing(t *testing.T) {
 	t.Chdir(projectRoot)
 
 	vaultRoot := buildOpenVault(t)
-	cfgPath := writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
+	writeServeTestConfig(t, vaultRoot, "[serve]\naddr = \"127.0.0.1:8800\"\nopen_browser = false")
 
 	origRun := runServe
 	origBuild := runWebBuild
@@ -280,7 +276,7 @@ func TestServe_WebBuildFailureStopsBeforeServing(t *testing.T) {
 		return nil
 	}
 
-	_, _, err := runServeCmd(t, "--config", cfgPath, "serve")
+	_, _, err := runServeCmd(t, "--vault", vaultRoot, "serve")
 	if err == nil {
 		t.Fatal("execute succeeded, want build error")
 	}
@@ -371,12 +367,7 @@ func buildServeWebProject(t *testing.T) string {
 	return root
 }
 
-func writeServeTestConfig(t *testing.T, vaultRoot, serveBlock string) string {
+func writeServeTestConfig(t *testing.T, vaultRoot, serveBlock string) {
 	t.Helper()
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	body := "vault = \"" + vaultRoot + "\"\n" + serveBlock + "\n"
-	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	return cfgPath
+	markVaultRoot(t, vaultRoot, serveBlock+"\n")
 }

@@ -27,14 +27,13 @@ func buildGraphFixture(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
 func runGraphRaw(t *testing.T, vaultRoot string, args ...string) string {
 	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_CONFIG", "")
-	t.Setenv("BNOTES_VAULT", "")
+	isolateBnEnv(t)
 
 	root := NewRootCmd()
 	out := &bytes.Buffer{}
@@ -50,9 +49,7 @@ func runGraphRaw(t *testing.T, vaultRoot string, args ...string) string {
 
 func runGraphErr(t *testing.T, vaultRoot string, args ...string) error {
 	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_CONFIG", "")
-	t.Setenv("BNOTES_VAULT", "")
+	isolateBnEnv(t)
 
 	root := NewRootCmd()
 	out := &bytes.Buffer{}
@@ -121,6 +118,7 @@ func TestGraph_InvalidFormat(t *testing.T) {
 
 func TestGraph_CodeOutput(t *testing.T) {
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	alpha := filepath.Join(root, "Alpha.md")
 	beta := filepath.Join(root, "Beta.md")
 	// Frontmatter lines 1-3, body line 1 ("intro") is file line 4, [[Beta]]
@@ -143,6 +141,7 @@ func TestGraph_CodeOutput(t *testing.T) {
 
 func TestGraph_CodeOutput_FrontmatterEdge(t *testing.T) {
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	alpha := filepath.Join(root, "Alpha.md")
 	beta := filepath.Join(root, "Beta.md")
 	if err := os.WriteFile(alpha, []byte("---\ntitle: Alpha\nrelated: \"[[Beta]]\"\n---\nBody.\n"), 0o644); err != nil {
@@ -162,6 +161,7 @@ func TestGraph_CodeOutput_FrontmatterEdge(t *testing.T) {
 
 func TestGraph_CodeOutput_IsolatedNode(t *testing.T) {
 	root := t.TempDir()
+	markVaultRoot(t, root, "")
 	lonely := filepath.Join(root, "Lonely.md")
 	if err := os.WriteFile(lonely, []byte("---\ntitle: Lonely\n---\nNo links.\n"), 0o644); err != nil {
 		t.Fatal(err)

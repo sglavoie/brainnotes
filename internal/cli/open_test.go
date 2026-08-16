@@ -10,7 +10,7 @@ import (
 )
 
 // buildOpenVault writes a tiny vault and returns its root. Reused across
-// `open` tests; isolates the test from the user's real config via env vars.
+// `open` tests.
 func buildOpenVault(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -28,15 +28,15 @@ func buildOpenVault(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
+	markVaultRoot(t, root, "")
 	return root
 }
 
-// isolateBnEnv points config lookup at an empty dir so user config is not picked up.
+// isolateBnEnv clears the vault environment so a vault on the developer's
+// machine cannot leak into a test.
 func isolateBnEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("HOME", t.TempDir())
-	t.Setenv("BNOTES_CONFIG", "")
 	t.Setenv("BNOTES_VAULT", "")
 }
 
@@ -177,6 +177,7 @@ func TestOpen_EditorSeamCalled(t *testing.T) {
 func TestOpen_EmptyVault(t *testing.T) {
 	isolateBnEnv(t)
 	vaultRoot := t.TempDir()
+	markVaultRoot(t, vaultRoot, "")
 
 	origPicker, origExec := openPicker, openExec
 	t.Cleanup(func() { openPicker = origPicker; openExec = origExec })
@@ -243,17 +244,9 @@ func TestOpen_ConfigEditorTakesPriority(t *testing.T) {
 	}
 	t.Setenv("EDITOR", "vim") // env editor should be ignored
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+vaultRoot+"\"\n[open]\neditor = \"nvim\"\n"), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+	markVaultRoot(t, vaultRoot, "[open]\neditor = \"nvim\"\n")
 
-	root := NewRootCmd()
-	out := &bytes.Buffer{}
-	root.SetOut(out)
-	root.SetArgs([]string{"--config", cfgPath, "open"})
-	if err := root.Execute(); err != nil {
+	if _, _, err := runOpen(t, vaultRoot, "open"); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	if gotEditor != "nvim" {

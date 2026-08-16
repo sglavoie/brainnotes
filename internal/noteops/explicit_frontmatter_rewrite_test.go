@@ -21,7 +21,7 @@ func TestRenameTraversesExplicitWikilinksInEveryFrontmatterProperty(t *testing.T
 		t.Fatalf("Parse: %v", err)
 	}
 
-	changes := ScanFrontmatterRename("Source.md", &doc.Front, "Old", "New", []string{"configured_only"})
+	changes := ScanFrontmatterRename("Source.md", &doc.Front, "Old", "New")
 	wantChanges := []Change{
 		{File: "Source.md", Kind: ChangeFrontmatter, Key: "arbitrary", OldText: "[[Old]]", NewText: "[[New]]"},
 		{File: "Source.md", Kind: ChangeFrontmatter, Key: "nested", OldText: "[[Folder/Old.md#Heading|Alias]]", NewText: "[[Folder/New.md#Heading|Alias]]"},
@@ -31,7 +31,11 @@ func TestRenameTraversesExplicitWikilinksInEveryFrontmatterProperty(t *testing.T
 		t.Fatalf("ScanFrontmatterRename changes = %#v, want %#v", changes, wantChanges)
 	}
 
-	RewriteFrontmatterRename(&doc.Front, "Old", "New", &config.FrontmatterConfig{WikilinkProperties: []string{"configured_only"}})
+	RewriteFrontmatterRename(&doc.Front, "Old", "New", &config.FrontmatterConfig{
+		Properties: map[string]config.PropertyDefinition{
+			"configured_only": {Type: config.KindWikilink},
+		},
+	})
 	assertNoteopsFrontmatterValue(t, &doc.Front, "arbitrary", "[[New]]")
 	assertNoteopsFrontmatterValue(t, &doc.Front, "nested", map[string]any{
 		"refs": []any{"[[Folder/New.md#Heading|Alias]]", "before [[New]] after"},
@@ -49,7 +53,7 @@ func TestMovePreviewAndApplyShareRecursiveFrontmatterTraversal(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 
-	changes := ScanFrontmatterMove("Source.md", &doc.Front, "Old/Thing", "New/Thing", nil)
+	changes := ScanFrontmatterMove("Source.md", &doc.Front, "Old/Thing", "New/Thing")
 	RewriteFrontmatterMove(&doc.Front, "Old/Thing", "New/Thing", nil)
 	if len(changes) != 2 {
 		t.Fatalf("ScanFrontmatterMove returned %d changes, want 2: %#v", len(changes), changes)

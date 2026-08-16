@@ -327,7 +327,7 @@ func BuildRenamePlan(v *vault.Vault, targetPath, newPath, oldTitle, newTitle str
 		if err != nil {
 			return err
 		}
-		fmChanges := ScanFrontmatterRename(n.Path, front, oldTitle, newTitle, cfg.Frontmatter.WikilinkProperties)
+		fmChanges := ScanFrontmatterRename(n.Path, front, oldTitle, newTitle)
 		if len(fmChanges) > 0 {
 			plan.Changes = append(plan.Changes, fmChanges...)
 			addFile(n.Path)
@@ -344,8 +344,8 @@ func ScanBodyRename(file, body, oldTitle, newTitle string) []Change {
 	return scanBodyWithRewrite(file, body, oldTitle, newTitle, wikilink.RewriteTitle)
 }
 
-func ScanFrontmatterRename(file string, front *frontmatter.Map, oldTitle, newTitle string, wikilinkProps []string) []Change {
-	return scanFrontmatterWithRewrite(file, front, oldTitle, newTitle, wikilinkProps, wikilink.RewriteTitle)
+func ScanFrontmatterRename(file string, front *frontmatter.Map, oldTitle, newTitle string) []Change {
+	return scanFrontmatterWithRewrite(file, front, oldTitle, newTitle, wikilink.RewriteTitle)
 }
 
 // PrintRenamePlan renders the plan as canonical NotePreview blocks: a

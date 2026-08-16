@@ -139,7 +139,7 @@ func splitUnsetArgs(args []string, dashAt int) (notes, props []string) {
 // block is emitted for every present property in props.
 func applyUnset(path string, props []string, cfg *config.Config, vaultRoot string, dry *DryRun, journaler *noteops.Journal) (bool, error) {
 	if dry == nil {
-		return noteops.ApplyFrontmatterUnset(path, props, &cfg.Frontmatter, journaler)
+		return noteops.ApplyFrontmatterUnset(vaultRoot, path, props, &cfg.Frontmatter, journaler)
 	}
 
 	n := &vault.Note{Path: path}

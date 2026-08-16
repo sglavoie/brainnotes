@@ -29,8 +29,12 @@ func applyRepairs(n *vault.Note, result schema.RepairResult, fmCfg *config.Front
 		return true, noteops.RenderNotePreview(dry.Out, preview)
 	}
 
+	var definitions map[string]config.PropertyDefinition
+	if fmCfg != nil {
+		definitions = fmCfg.Properties
+	}
 	for _, act := range result.Actions {
-		front.Set(act.Property, act.NewValue)
+		schema.ApplyRepairAction(front, act, definitions)
 	}
 	return true, n.Save(fmCfg)
 }

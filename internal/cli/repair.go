@@ -23,8 +23,8 @@ func NewRepairCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "repair [notes...]",
 		Short: "Apply safe mechanical fixes to frontmatter schema violations",
-		Long: `Repair inspects frontmatter against the property schema defined in
-config.toml and applies safe, deterministic fixes. Fixes include:
+		Long: `Repair inspects frontmatter against the property definitions in
+[frontmatter.properties] and applies safe, deterministic fixes. Fixes include:
 
   - type coercion when the stored value converts losslessly (e.g. "true" -> bool)
   - allowed-value canonicalization (e.g. case-only normalization)
@@ -57,18 +57,18 @@ printed as a unified diff block; unchanged files are omitted.`,
 				return err
 			}
 
-			if len(cfg.Frontmatter.Schema) == 0 {
+			if len(cfg.Frontmatter.Properties) == 0 {
 				writeSchemaHint(cmd.ErrOrStderr(), "repair", cfg.SourcePath)
 				return nil
 			}
 
-			schemaToUse := cfg.Frontmatter.Schema
+			propsToUse := cfg.Frontmatter.Properties
 			if property != "" {
-				rule, ok := cfg.Frontmatter.Schema[property]
+				def, ok := cfg.Frontmatter.Definition(property)
 				if !ok {
-					return fmt.Errorf("repair: property %q not in schema", property)
+					return fmt.Errorf("repair: property %q not defined in [frontmatter.properties]", property)
 				}
-				schemaToUse = map[string]config.PropertySchema{property: rule}
+				propsToUse = map[string]config.PropertyDefinition{property: def}
 			}
 
 			anyFlagSet := false
@@ -107,7 +107,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 					return err
 				}
 
-				result := schema.PlanRepairs(front, schemaToUse, cfg.Frontmatter.WikilinkProperties)
+				result := schema.PlanRepairs(front, propsToUse)
 				if property != "" {
 					result = filterRepairResult(result, property)
 				}

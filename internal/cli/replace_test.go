@@ -48,15 +48,7 @@ func buildReplaceFixture(t *testing.T) (vaultRoot string) {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, testPropertyDefinitions)
 	return root
 }
 
@@ -172,14 +164,7 @@ func TestReplace_ScopedByGraphFilter(t *testing.T) {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "")
 
 	out, err := runCLI(t, "", "replace", "status", "wip", "done", "--min-links", "1")
 	if err != nil {
@@ -295,14 +280,7 @@ func TestReplace_WikilinkSkipsAutoCoerce(t *testing.T) {
 	if err := os.WriteFile(notePath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = \""+root+"\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, testPropertyDefinitions)
 
 	if _, err := runCLI(t, "", "replace", "categories", "true", "false", notePath); err != nil {
 		t.Fatalf("execute: %v", err)

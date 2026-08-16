@@ -116,7 +116,9 @@ func TestServer_RenameAPI_RewritesWikilinksJournalsAndInvalidatesState(t *testin
 		"Source.md": []byte("---\ntitle: Source\n---\nSelf [[Source]].\n"),
 		"Ref.md":    []byte("---\ntitle: Ref\ncategories:\n  - \"[[Source]]\"\n---\nSee [[Source]] and [[Source|alias]].\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.WikilinkProperties = []string{"categories"}
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"categories": {Type: config.KindList, Items: config.KindWikilink},
+		}
 	}, Options{
 		CSRFToken: "csrf-token",
 	})
@@ -233,7 +235,9 @@ func TestServer_MoveAPI_RewritesWikilinksJournalsAndInvalidatesState(t *testing.
 		"Books/Source.md": []byte("---\ntitle: Source\n---\nFolder self [[Books/Source]]. Bare [[Source]].\n"),
 		"Ref.md":          []byte("---\ntitle: Ref\ncategories:\n  - \"[[Books/Source]]\"\n---\nSee [[Books/Source]] and bare [[Source]].\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.WikilinkProperties = []string{"categories"}
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"categories": {Type: config.KindList, Items: config.KindWikilink},
+		}
 	}, Options{
 		CSRFToken: "csrf-token",
 	})

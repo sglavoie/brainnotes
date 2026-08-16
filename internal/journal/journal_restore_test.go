@@ -185,3 +185,107 @@ func TestRestoreConflictErrorMessageDeterministic(t *testing.T) {
 		t.Fatalf("error missing conflict details: %q", msg)
 	}
 }
+
+// TestRestoreAbortsBeforeAnyWriteWhenASnapshotIsUnreadable proves restore
+// inherits the vault transaction's staging discipline: every snapshot is read
+// and every precondition re-checked before the first file moves, so one broken
+// snapshot leaves the whole entry unapplied instead of half-applied.
+func TestRestoreAbortsBeforeAnyWriteWhenASnapshotIsUnreadable(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+
+	firstPath := filepath.Join(vaultRoot, "A.md")
+	secondPath := filepath.Join(vaultRoot, "B.md")
+	writeFile(t, firstPath, "a-before\n")
+	writeFile(t, secondPath, "b-before\n")
+
+	rec, err := NewRecorder(
+		vaultRoot,
+		journalRoot,
+		"bn set",
+		WithClock(func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }),
+		WithIDGenerator(func(time.Time) (string, error) { return "entry-atomic", nil }),
+	)
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	for _, p := range []string{firstPath, secondPath} {
+		if err := rec.Capture(p); err != nil {
+			t.Fatalf("capture %q: %v", p, err)
+		}
+	}
+	writeFile(t, firstPath, "a-after\n")
+	writeFile(t, secondPath, "b-after\n")
+	entry, err := rec.Finalize()
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+
+	var secondRecord FileRecord
+	for _, rec := range entry.Files {
+		if strings.HasSuffix(rec.Path, "B.md") {
+			secondRecord = rec
+		}
+	}
+	if strings.TrimSpace(secondRecord.Before.Snapshot) == "" {
+		t.Fatal("B.md should have a snapshot")
+	}
+	snapshot := filepath.Join(journalRoot, entry.ID, filepath.FromSlash(secondRecord.Before.Snapshot))
+	if err := os.Remove(snapshot); err != nil {
+		t.Fatalf("remove snapshot: %v", err)
+	}
+
+	if _, err := Restore(vaultRoot, journalRoot, entry.ID, RestoreOptions{}); err == nil {
+		t.Fatal("restore should fail when a snapshot is unreadable")
+	} else if !strings.Contains(err.Error(), "read snapshot") {
+		t.Fatalf("error should name the snapshot read failure: %v", err)
+	}
+
+	assertFile(t, firstPath, "a-after\n")
+	assertFile(t, secondPath, "b-after\n")
+}
+
+// TestRestoreForceStillDetectsANonRegularDestination shows --force overrides
+// the journaled-state conflict check but not the transaction's own
+// preconditions: it will not clobber something that is not a regular file.
+func TestRestoreForceStillDetectsANonRegularDestination(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+
+	notePath := filepath.Join(vaultRoot, "A.md")
+	writeFile(t, notePath, "a-before\n")
+
+	rec, err := NewRecorder(
+		vaultRoot,
+		journalRoot,
+		"bn set",
+		WithClock(func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }),
+		WithIDGenerator(func(time.Time) (string, error) { return "entry-nonregular", nil }),
+	)
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	if err := rec.Capture(notePath); err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	writeFile(t, notePath, "a-after\n")
+	entry, err := rec.Finalize()
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+
+	if err := os.Remove(notePath); err != nil {
+		t.Fatalf("remove note: %v", err)
+	}
+	if err := os.MkdirAll(notePath, 0o755); err != nil {
+		t.Fatalf("mkdir in place of note: %v", err)
+	}
+
+	if _, err := Restore(vaultRoot, journalRoot, entry.ID, RestoreOptions{Force: true}); err == nil {
+		t.Fatal("restore must refuse to overwrite a directory even with --force")
+	}
+	info, err := os.Stat(notePath)
+	if err != nil || !info.IsDir() {
+		t.Fatalf("directory should survive: info=%v err=%v", info, err)
+	}
+}

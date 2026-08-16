@@ -1,0 +1,248 @@
+{{define "properties"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>Properties</h1>
+        <p class="page-subtitle">Every configured property and every property your notes actually store, sorted so the ones needing attention come first.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    <section
+      class="panel properties-panel"
+      data-properties-catalog
+      data-properties-endpoint="{{ .Endpoint }}"
+      data-properties-detail-endpoint="{{ .DetailEndpoint }}"
+      aria-labelledby="properties-heading"
+      aria-describedby="properties-status"
+      aria-busy="false"
+    >
+      <div class="panel-header">
+        <h2 id="properties-heading">Property catalog</h2>
+        <div class="properties-actions">
+          <button class="properties-button" type="button" data-properties-refresh>Refresh</button>
+        </div>
+      </div>
+      <p
+        id="properties-status"
+        class="properties-status is-loading"
+        data-properties-status
+        role="status"
+        aria-live="polite"
+      >Loading properties...</p>
+      <p class="properties-config" data-properties-config hidden></p>
+      <dl class="properties-totals" data-properties-totals></dl>
+      <div class="properties-filters">
+        <label class="properties-filter-label" for="properties-filter-query">Filter</label>
+        <input
+          id="properties-filter-query"
+          class="properties-filter-input"
+          type="search"
+          placeholder="Property name..."
+          autocomplete="off"
+          spellcheck="false"
+          data-properties-query
+        >
+        <label class="properties-filter-toggle">
+          <input type="checkbox" data-properties-issues-only>
+          <span>Needs attention only</span>
+        </label>
+      </div>
+      <ul class="properties-list" data-properties-list></ul>
+      <section class="properties-proposals" data-properties-proposals hidden aria-labelledby="properties-proposals-heading">
+        <h3 id="properties-proposals-heading">Inferred definitions</h3>
+        <p class="properties-proposals-note">Suggestions only. Copy a block into <code>brainnotes.toml</code> to adopt it.</p>
+        <ul class="properties-proposal-list" data-properties-proposal-list></ul>
+      </section>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}
+
+{{define "propertyDetail"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <nav class="properties-breadcrumbs" aria-label="Breadcrumb">
+          <a href="{{ .PropertiesPath }}">Properties</a>
+        </nav>
+        <h1>{{ .Property }}</h1>
+        <p class="page-subtitle">Distinct values and every note that participates in this property.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    <section
+      class="panel properties-panel"
+      data-property-detail
+      data-property-name="{{ .Property }}"
+      data-property-csrf="{{ .CSRFToken }}"
+      data-property-history-path="#property-history"
+      data-properties-detail-endpoint="{{ .DetailEndpoint }}"
+      aria-labelledby="property-detail-heading"
+      aria-describedby="property-detail-status"
+      aria-busy="false"
+    >
+      <div class="panel-header">
+        <h2 id="property-detail-heading">Overview</h2>
+        <div class="properties-actions">
+          <button class="properties-button" type="button" data-property-refresh>Refresh</button>
+        </div>
+      </div>
+      <p
+        id="property-detail-status"
+        class="properties-status is-loading"
+        data-property-status
+        role="status"
+        aria-live="polite"
+      >Loading property...</p>
+      <p class="properties-config" data-property-config hidden></p>
+      <p class="properties-banner properties-banner-invalid" data-property-config-invalid role="alert" hidden></p>
+      <p class="properties-banner properties-banner-restart" data-property-config-restart role="status" aria-live="polite" hidden></p>
+      <p class="properties-definition" data-property-definition hidden></p>
+      <dl class="properties-totals" data-property-summary></dl>
+      <div class="properties-proposal" data-property-proposal hidden></div>
+
+      <section class="properties-schema" data-property-schema aria-labelledby="property-schema-heading">
+        <h3 id="property-schema-heading">Definition</h3>
+        <p class="properties-schema-note">Stored in <code>brainnotes.toml</code>. Every definition change is previewed before it is written, and a saved definition invalidates any preview you are still holding.</p>
+        <div class="properties-schema-fields">
+          <label class="properties-schema-label" for="property-schema-type">Type</label>
+          <select id="property-schema-type" class="properties-control properties-control-select" data-property-schema-type></select>
+          <div class="properties-schema-items" data-property-schema-items-row hidden>
+            <label class="properties-schema-label" for="property-schema-items">List items</label>
+            <select id="property-schema-items" class="properties-control properties-control-select" data-property-schema-items></select>
+          </div>
+          <label class="properties-schema-toggle">
+            <input type="checkbox" data-property-schema-required>
+            <span>Required</span>
+          </label>
+          <label class="properties-schema-label" for="property-schema-allowed">Allowed values, one per line</label>
+          <textarea id="property-schema-allowed" class="properties-control properties-control-textarea" rows="4" spellcheck="false" data-property-schema-allowed></textarea>
+        </div>
+        <p class="properties-schema-error" data-property-schema-error role="alert" hidden></p>
+        <div class="properties-schema-actions">
+          <button class="properties-button properties-button-primary" type="button" data-property-schema-save>Save definition</button>
+          <button class="properties-button" type="button" data-property-schema-delete disabled>Remove definition</button>
+          <button class="properties-button" type="button" data-property-schema-adopt hidden>Use inferred definition</button>
+        </div>
+      </section>
+
+      <section class="properties-values" aria-labelledby="property-values-heading">
+        <h3 id="property-values-heading">Values</h3>
+        <ul class="properties-value-list" data-property-values></ul>
+      </section>
+
+      <section class="properties-rows" aria-labelledby="property-rows-heading">
+        <h3 id="property-rows-heading">Notes</h3>
+        <div class="properties-filters">
+          <label class="properties-filter-label" for="property-filter-status">Show</label>
+          <select id="property-filter-status" class="properties-filter-select" data-property-filter-status>
+            <option value="all">All notes</option>
+            <option value="violations">Violations</option>
+            <option value="missing">Missing required</option>
+            <option value="unsupported">Unsupported values</option>
+          </select>
+          <label class="properties-filter-label" for="property-filter-query">Search</label>
+          <input
+            id="property-filter-query"
+            class="properties-filter-input"
+            type="search"
+            placeholder="Title or path..."
+            autocomplete="off"
+            spellcheck="false"
+            data-property-filter-query
+          >
+          <button class="properties-button" type="button" data-property-filter-clear hidden>Clear value filter</button>
+        </div>
+        <p class="properties-active-value" data-property-active-value hidden></p>
+        <p class="properties-keyboard-hint">Press <kbd>/</kbd> to search, <kbd>Up</kbd> and <kbd>Down</kbd> to move, <kbd>Space</kbd> to select, <kbd>Enter</kbd> to edit, <kbd>Esc</kbd> to cancel.</p>
+        <div class="properties-selection" role="group" aria-label="Selected notes">
+          <p class="properties-selection-count" data-property-selection-count role="status" aria-live="polite">No notes selected.</p>
+          <div class="properties-selection-actions">
+            <button class="properties-button" type="button" data-property-select-all>Select page</button>
+            <button class="properties-button" type="button" data-property-clear-selection disabled>Clear selection</button>
+            <button class="properties-button" type="button" data-property-action="set" disabled>Set value</button>
+            <button class="properties-button" type="button" data-property-action="replace_value" disabled>Replace value</button>
+            <button class="properties-button" type="button" data-property-action="unset" disabled>Remove property</button>
+            <button class="properties-button" type="button" data-property-action="rename_property" disabled>Rename property</button>
+            <button class="properties-button" type="button" data-property-action="repair" disabled>Repair</button>
+          </div>
+        </div>
+        <div class="properties-editor-host" data-property-editor></div>
+        <ul class="properties-row-list" data-property-rows></ul>
+        <div class="properties-pagination">
+          <button class="properties-button" type="button" data-property-prev disabled>Previous</button>
+          <p class="properties-pagination-status" data-property-pagination role="status" aria-live="polite"></p>
+          <button class="properties-button" type="button" data-property-next disabled>Next</button>
+        </div>
+      </section>
+
+      <div class="properties-dialog-host" data-property-dialog-host></div>
+      <div class="properties-toast-host" data-property-toast-host></div>
+    </section>
+
+    <section
+      class="panel history-panel"
+      id="property-history"
+      data-history-panel
+      data-history-csrf="{{ .CSRFToken }}"
+      aria-labelledby="history-heading"
+      aria-describedby="history-status"
+      aria-busy="false"
+    >
+      <div class="panel-header history-header">
+        <h2 id="history-heading">Recent changes</h2>
+        <div class="history-actions">
+          <button class="history-button" type="button" data-history-refresh>Refresh</button>
+          <button class="history-button history-danger" type="button" data-history-undo-latest disabled>Undo latest change</button>
+        </div>
+      </div>
+      <p
+        id="history-status"
+        class="history-status is-loading"
+        data-history-status
+        role="status"
+        aria-live="polite"
+      >Loading history...</p>
+      <div class="history-conflict" data-history-conflict hidden>
+        <p data-history-conflict-summary></p>
+        <button class="history-button history-danger" type="button" data-history-force disabled>Force undo</button>
+      </div>
+      <ul class="history-list" data-history-list></ul>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

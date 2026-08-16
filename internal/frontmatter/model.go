@@ -49,10 +49,21 @@ func NewMap() Map {
 // and as RFC3339Nano otherwise. This heuristic is the only way to distinguish a
 // YAML date from a full timestamp because yaml.v3 surfaces both as time.Time.
 func FormatTimestamp(t time.Time) string {
-	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 && t.Location() == time.UTC {
+	if isMidnightUTC(t) {
 		return t.Format("2006-01-02")
 	}
 	return t.Format(time.RFC3339Nano)
+}
+
+// isMidnightUTC reports whether t is indistinguishable from a bare YAML date.
+// It is the fallback used wherever no recorded spelling says which of the two a
+// time value was written as.
+func isMidnightUTC(t time.Time) bool {
+	return t.Location() == time.UTC &&
+		t.Hour() == 0 &&
+		t.Minute() == 0 &&
+		t.Second() == 0 &&
+		t.Nanosecond() == 0
 }
 
 // Len reports the number of entries.
@@ -155,11 +166,61 @@ func (m *Map) TimeIsDateOnly(k string) bool {
 			return meta.timestampDateOnly
 		}
 	}
-	return t.Location() == time.UTC &&
-		t.Hour() == 0 &&
-		t.Minute() == 0 &&
-		t.Second() == 0 &&
-		t.Nanosecond() == 0
+	return isMidnightUTC(t)
+}
+
+// ListTimeIsDateOnly reports whether the time-valued element at index of the
+// list stored at k should be treated as a YAML date scalar. It is
+// TimeIsDateOnly for one list element.
+func (m *Map) ListTimeIsDateOnly(k string, index int) bool {
+	t, ok := m.listTime(k, index)
+	if !ok {
+		return false
+	}
+	if m != nil && m.meta != nil {
+		if meta, ok := m.meta[metaPathKey([]string{metaMapPart(k), metaIndexPart(index)})]; ok {
+			return meta.timestampDateOnly
+		}
+	}
+	return isMidnightUTC(t)
+}
+
+// SetTimeSpelling records how the time value stored at k must be serialized: a
+// bare YYYY-MM-DD date when dateOnly is true, an RFC3339 timestamp otherwise.
+// Set cannot infer this, because yaml.v3 surfaces a date and a midnight-UTC
+// timestamp as the same time.Time, so a caller writing a typed datetime must
+// declare it or the value falls back to the date spelling. Calling this for a
+// key that does not hold a time is a no-op.
+func (m *Map) SetTimeSpelling(k string, dateOnly bool) {
+	if _, ok := m.GetTime(k); !ok {
+		return
+	}
+	m.recordTimeSpelling([]string{metaMapPart(k)}, dateOnly)
+}
+
+// SetListTimeSpelling records the serialized spelling of the time value at
+// index of the list stored at k. It is SetTimeSpelling for one list element.
+func (m *Map) SetListTimeSpelling(k string, index int, dateOnly bool) {
+	if _, ok := m.listTime(k, index); !ok {
+		return
+	}
+	m.recordTimeSpelling([]string{metaMapPart(k), metaIndexPart(index)}, dateOnly)
+}
+
+func (m *Map) listTime(k string, index int) (time.Time, bool) {
+	list, ok := m.GetList(k)
+	if !ok || index < 0 || index >= len(list) {
+		return time.Time{}, false
+	}
+	t, ok := list[index].(time.Time)
+	return t, ok
+}
+
+func (m *Map) recordTimeSpelling(path []string, dateOnly bool) {
+	if m.meta == nil {
+		m.meta = map[string]valueMeta{}
+	}
+	m.meta[metaPathKey(path)] = valueMeta{timestampDateOnly: dateOnly}
 }
 
 // GetWikilinkList returns wikilink-typed values at k with `[[...]]` stripped.

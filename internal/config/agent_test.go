@@ -1,7 +1,6 @@
 package config
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -9,15 +8,10 @@ import (
 )
 
 func TestLoadAgentConfigPreservesArgvAndTimeout(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	writeFile(t, cfgPath, `[agent]
+	cfg, err := loadTOML(t, `[agent]
 command = ["my-agent", "--prompt", "literal argument with spaces", ""]
 timeout_seconds = 17
 `)
-
-	cfg, err := Load(vault, cfgPath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -40,10 +34,7 @@ func TestLoadAgentConfigRejectsInvalidValues(t *testing.T) {
 		{name: "negative timeout", body: "[agent]\ntimeout_seconds = -1\n", want: "agent.timeout_seconds"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			resetEnv(t)
-			cfgPath := filepath.Join(t.TempDir(), "config.toml")
-			writeFile(t, cfgPath, test.body)
-			_, err := Load(t.TempDir(), cfgPath)
+			_, err := loadTOML(t, test.body)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Load error = %v, want mention of %q", err, test.want)
 			}

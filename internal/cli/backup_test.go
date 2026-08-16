@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +28,7 @@ func TestBackupCommandCreatesArchiveAndReportsCounts(t *testing.T) {
 	}
 
 	archivePath := filepath.Join(resolveTestPath(t, root), "backups", "backup-20260528T232425.123456789Z.tar.gz")
-	want := "backup: created " + archivePath + " (files=4 bytes=38)\n"
+	want := "backup: created " + archivePath + " (files=5 bytes=38)\n"
 	if out != want {
 		t.Fatalf("backup output = %q, want %q", out, want)
 	}
@@ -68,7 +67,7 @@ func TestBackupCommandReportsSkippedSymlinks(t *testing.T) {
 	}
 
 	archivePath := filepath.Join(resolveTestPath(t, root), "backups", "backup-20260528T232425.123456789Z.tar.gz")
-	want := "backup: created " + archivePath + " (files=1 bytes=5 skipped_symlinks=1)\n"
+	want := "backup: created " + archivePath + " (files=2 bytes=5 skipped_symlinks=1)\n"
 	if out != want {
 		t.Fatalf("backup output = %q, want %q", out, want)
 	}
@@ -225,14 +224,9 @@ func buildBackupFixture(t *testing.T, files map[string]string) string {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	if err := os.WriteFile(cfgPath, []byte("vault = "+strconv.Quote(root)+"\n"), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	// The vault-root marker file lives inside the vault, so it is one extra
+	// (empty) file in every snapshot taken from this fixture.
+	useVaultRoot(t, root, "")
 	return root
 }
 

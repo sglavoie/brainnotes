@@ -40,15 +40,7 @@ func TestNewNormalizesExtensionWithoutLeadingDot(t *testing.T) {
 		t.Fatalf("write template: %v", err)
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n\n[templates]\ndefault_extension = \"md\"\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "[templates]\ndefault_extension = \"md\"\n")
 
 	if _, err := runNew(t, "new", "book", "Dune"); err != nil {
 		t.Fatalf("execute: %v", err)

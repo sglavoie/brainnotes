@@ -131,8 +131,8 @@ func TestServer_FixesAPI_SchemaRepairPreviewAndApply(t *testing.T) {
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Note.md": []byte("---\nstatus: Active\ntitle: Note\n---\nBody.\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
-			"status": {Type: "string", Allowed: []string{"active", "done"}},
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"status": {Type: config.KindString, Allowed: []string{"active", "done"}},
 		}
 	}, Options{CSRFToken: "csrf-token"})
 

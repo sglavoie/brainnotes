@@ -13,7 +13,7 @@ import (
 //   - parent.md — parent: "[[Dune]]"
 //   - other.md — no references
 //
-// It also writes a config and points BNOTES_CONFIG at it.
+// It also marks the vault root and points BNOTES_VAULT at it.
 func buildRenameFixture(t *testing.T) (vaultRoot string) {
 	t.Helper()
 	root := t.TempDir()
@@ -35,14 +35,6 @@ func buildRenameFixture(t *testing.T) (vaultRoot string) {
 		}
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := "vault = \"" + root + "\"\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "")
 	return root
 }

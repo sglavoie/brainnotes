@@ -11,6 +11,7 @@ import { initNoteLayout } from "./note-layout";
 import { initNoteInsight } from "./note-insight";
 import { initTrashNoteAction } from "./note-trash";
 import { initOverviewSearchResults } from "./overview-search";
+import { initProperties } from "./properties";
 import { initSearch } from "./search";
 import { initTheme } from "./theme";
 
@@ -30,4 +31,5 @@ import { initTheme } from "./theme";
   initOverviewSearchResults();
   initHistoryPanel();
   initDailyFixes();
+  initProperties();
 })();

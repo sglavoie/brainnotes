@@ -272,7 +272,7 @@ func BuildMovePlan(v *vault.Vault, targetPath, newPath, oldRel, newRel string, c
 		if err != nil {
 			return err
 		}
-		fmChanges := ScanFrontmatterMove(n.Path, front, oldRel, newRel, cfg.Frontmatter.WikilinkProperties)
+		fmChanges := ScanFrontmatterMove(n.Path, front, oldRel, newRel)
 		if len(fmChanges) > 0 {
 			plan.Changes = append(plan.Changes, fmChanges...)
 			addFile(n.Path)
@@ -289,8 +289,8 @@ func ScanBodyMove(file, body, oldRel, newRel string) []Change {
 	return scanBodyWithRewrite(file, body, oldRel, newRel, wikilink.RewriteMove)
 }
 
-func ScanFrontmatterMove(file string, front *frontmatter.Map, oldRel, newRel string, wikilinkProps []string) []Change {
-	return scanFrontmatterWithRewrite(file, front, oldRel, newRel, wikilinkProps, wikilink.RewriteMove)
+func ScanFrontmatterMove(file string, front *frontmatter.Map, oldRel, newRel string) []Change {
+	return scanFrontmatterWithRewrite(file, front, oldRel, newRel, wikilink.RewriteMove)
 }
 
 // PrintMovePlan renders the plan as canonical NotePreview blocks, matching

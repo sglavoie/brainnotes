@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -13,6 +15,9 @@ type vaultSnapshot struct {
 	notes    []*vault.Note
 	graph    *query.Graph
 	loadedAt time.Time
+	// serial identifies this exact load. It keys derived caches so a rebuilt
+	// snapshot never reuses intelligence computed from the previous notes.
+	serial int64
 
 	// parseErrors and skipped record the diagnostics gathered while loading this
 	// snapshot: frontmatter/YAML parse failures and notes whose read timed out
@@ -31,10 +36,24 @@ type vaultState struct {
 
 	mu       sync.Mutex
 	snapshot vaultSnapshot
+	serial   int64
 	// quarantined holds absolute paths whose reads timed out. It lives on the
 	// state rather than the snapshot so it survives invalidate(); once a path
 	// stalls it is never re-read for the life of the process.
 	quarantined map[string]struct{}
+
+	// propertyIndex caches the property intelligence derived from one snapshot
+	// under one configuration generation, keyed by both so a note reload or a
+	// configuration reload rebuilds it exactly once.
+	propertyIndex    *properties.Index
+	propertyIndexKey propertyIndexKey
+}
+
+// propertyIndexKey pairs the note load a property index was built from with the
+// configuration generation that defined its semantics.
+type propertyIndexKey struct {
+	snapshot   int64
+	generation int64
 }
 
 func newVaultState(v *vault.Vault, ttl time.Duration) (*vaultState, error) {
@@ -81,14 +100,35 @@ func (s *vaultState) currentSnapshot() (vaultSnapshot, error) {
 		notes = append(notes, item.note)
 	}
 
+	s.serial++
 	s.snapshot = vaultSnapshot{
 		notes:       notes,
 		graph:       query.BuildGraphForRoot(s.vault.Root, notes),
 		loadedAt:    now,
+		serial:      s.serial,
 		parseErrors: result.parseErrors,
 		skipped:     result.skipped,
 	}
 	return s.snapshot, nil
+}
+
+// propertyIndexFor returns the property intelligence for snapshot under the
+// given configuration generation, building it at most once per (load,
+// generation) pair. The index is immutable once returned, so concurrent
+// requests share one value.
+func (s *vaultState) propertyIndexFor(snapshot vaultSnapshot, fm *config.FrontmatterConfig, generation int64) *properties.Index {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := propertyIndexKey{snapshot: snapshot.serial, generation: generation}
+	if s.propertyIndex != nil && s.propertyIndexKey == key {
+		return s.propertyIndex
+	}
+
+	index := properties.Build(s.vault.Root, snapshot.notes, fm)
+	s.propertyIndex = index
+	s.propertyIndexKey = key
+	return index
 }
 
 func (s *vaultState) invalidate() {

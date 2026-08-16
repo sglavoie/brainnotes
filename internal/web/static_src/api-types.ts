@@ -5,4 +5,6 @@ export type * from "./api-types-cockpit";
 export type * from "./api-types-facets";
 export type * from "./api-types-history";
 export type * from "./api-types-notes";
+export type * from "./api-types-properties";
+export type * from "./api-types-properties-mutation";
 export type * from "./api-types-search";

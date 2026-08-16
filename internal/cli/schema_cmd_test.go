@@ -13,25 +13,16 @@ func TestSchema_ShowsProperties(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := `vault = "` + root + `"
-
-[frontmatter.schema.status]
+	useVaultRoot(t, root, `[frontmatter.properties.status]
 type     = "string"
 required = true
 allowed  = ["WIP", "Done", "Archived"]
 
-[frontmatter.schema.tags]
+[frontmatter.properties.tags]
 type     = "list"
+items    = "string"
 required = false
-`
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+`)
 
 	out, err := runCLI(t, "", "schema")
 	if err != nil {
@@ -58,22 +49,14 @@ func TestSchema_NoSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfgDir := t.TempDir()
-	cfgPath := filepath.Join(cfgDir, "config.toml")
-	cfg := `vault = "` + root + `"` + "\n"
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("BNOTES_CONFIG", cfgPath)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("BNOTES_VAULT", "")
+	useVaultRoot(t, root, "")
 
 	out, err := runCLI(t, "", "schema")
 	if err != nil {
 		t.Fatalf("expected exit 0, got error: %v", err)
 	}
-	if !strings.Contains(out, "no schema defined") {
-		t.Errorf("expected 'no schema defined' message, got %q", out)
+	if !strings.Contains(out, "no frontmatter properties defined in config") {
+		t.Errorf("expected no-properties message, got %q", out)
 	}
 	if !strings.Contains(out, "bn config edit") {
 		t.Errorf("expected 'bn config edit' hint, got %q", out)

@@ -14,8 +14,8 @@ func TestServer_FrontmatterAPI_SetUnsetJournalsAndInvalidatesState(t *testing.T)
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Source.md": []byte("---\nstatus: draft\ntitle: Source\n---\nBody marker.\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.Schema = map[string]config.PropertySchema{
-			"status": {Type: "string", Allowed: []string{"draft", "done"}},
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"status": {Type: config.KindString, Allowed: []string{"draft", "done"}},
 		}
 	}, Options{
 		CSRFToken: "csrf-token",
@@ -83,8 +83,10 @@ func TestServer_FrontmatterAPI_ListAndWikilinkMutations(t *testing.T) {
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Source.md": []byte("---\nparent: \"[[Old]]\"\ntags:\n  - alpha\n---\nBody marker.\n"),
 	}, func(cfg *config.Config) {
-		cfg.Frontmatter.ListProperties = []string{"tags"}
-		cfg.Frontmatter.WikilinkProperties = []string{"parent"}
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"tags":   {Type: config.KindList, Items: config.KindString},
+			"parent": {Type: config.KindWikilink},
+		}
 	}, Options{
 		CSRFToken: "csrf-token",
 	})

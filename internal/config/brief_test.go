@@ -1,16 +1,12 @@
 package config
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestLoad_BriefDefaults(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	cfg, err := Load(vault, "")
+	cfg, err := loadVault(t, newVault(t, ""))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -23,17 +19,10 @@ func TestLoad_BriefDefaults(t *testing.T) {
 }
 
 func TestLoad_BriefExclusionsNormalizeAndDeduplicate(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-[brief]
+	cfg, err := loadTOML(t, `[brief]
 exclude_folders = [" ./Archive/ ", ".\\Drafts\\", "Archive", "Drafts"]
 exclude_types = [" Journal ", "journal", "Scratch"]
 `)
-
-	cfg, err := Load("", cfgPath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -83,12 +72,7 @@ exclude_folders = ["../Archive"]
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resetEnv(t)
-			vault := t.TempDir()
-			cfgPath := filepath.Join(t.TempDir(), "config.toml")
-			writeFile(t, cfgPath, "vault = \""+vault+"\"\n"+tc.body)
-
-			_, err := Load("", cfgPath)
+			_, err := loadTOML(t, tc.body)
 			if err == nil {
 				t.Fatalf("Load: got nil error, want error mentioning %q", tc.wantSub)
 			}
@@ -121,12 +105,7 @@ exclude_types = ["  "]
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resetEnv(t)
-			vault := t.TempDir()
-			cfgPath := filepath.Join(t.TempDir(), "config.toml")
-			writeFile(t, cfgPath, "vault = \""+vault+"\"\n"+tc.body)
-
-			_, err := Load("", cfgPath)
+			_, err := loadTOML(t, tc.body)
 			if err == nil {
 				t.Fatalf("Load: got nil error, want error mentioning %q", tc.wantSub)
 			}
@@ -138,16 +117,10 @@ exclude_types = ["  "]
 }
 
 func TestLoad_RejectsUnknownBriefNestedKey(t *testing.T) {
-	resetEnv(t)
-	vault := t.TempDir()
-	cfgPath := filepath.Join(t.TempDir(), "config.toml")
-	writeFile(t, cfgPath, `vault = "`+vault+`"
-[brief]
+	_, err := loadTOML(t, `[brief]
 exclude_folders = ["Archive"]
 exclude_folder = ["Typo"]
 `)
-
-	_, err := Load("", cfgPath)
 	if err == nil {
 		t.Fatal("expected error for unknown brief key, got nil")
 	}
