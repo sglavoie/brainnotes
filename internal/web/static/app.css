@@ -4463,6 +4463,24 @@ code {
   overflow-wrap: anywhere;
 }
 
+.properties-config-open {
+  appearance: none;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  color: var(--bn-link);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.properties-config-open:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
 .properties-proposal-title {
   margin: 0;
   color: var(--bn-text-strong);
@@ -4478,6 +4496,13 @@ code {
   background: var(--bn-code-bg);
   font-size: 0.82rem;
   overflow-x: auto;
+}
+
+.properties-proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
 }
 
 .properties-values,

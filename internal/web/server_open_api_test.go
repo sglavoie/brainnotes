@@ -198,3 +198,76 @@ func TestServer_OpenAPI_MissingEditorConfigured(t *testing.T) {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusPreconditionFailed)
 	}
 }
+
+func TestServer_ConfigOpenAPI_UsesConfiguredEditor(t *testing.T) {
+	var (
+		gotArgv []string
+		calls   int
+	)
+	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md":     []byte("---\ntitle: Source\n---\nBody\n"),
+		config.FileName: []byte("[open]\neditor = \"echo --wait\"\n"),
+	}, func(cfg *config.Config) {
+		cfg.Open.Editor = "echo --wait"
+	}, Options{
+		CSRFToken: "csrf-token",
+		StartEditor: func(_ string, argv []string) error {
+			calls++
+			gotArgv = append([]string(nil), argv...)
+			return nil
+		},
+	})
+
+	req, err := http.NewRequest(http.MethodPost, ts.URL+configOpenAPIRoutePath, strings.NewReader("token=csrf-token"))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(csrfHeaderName, "csrf-token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", configOpenAPIRoutePath, err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusNoContent, body)
+	}
+	if calls != 1 {
+		t.Fatalf("start editor calls: got %d, want 1", calls)
+	}
+	wantPath, err := resolveOpenPath(root, filepath.Join(root, config.FileName))
+	if err != nil {
+		t.Fatalf("resolve config path: %v", err)
+	}
+	wantArgv := []string{"echo", "--wait", "+1", wantPath}
+	if strings.Join(gotArgv, "\x00") != strings.Join(wantArgv, "\x00") {
+		t.Fatalf("editor argv = %#v, want %#v", gotArgv, wantArgv)
+	}
+}
+
+func TestServer_ConfigOpenAPI_RequiresCSRF(t *testing.T) {
+	called := false
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	}, func(cfg *config.Config) {
+		cfg.Open.Editor = "echo"
+	}, Options{
+		CSRFToken: "csrf-token",
+		StartEditor: func(_ string, _ []string) error {
+			called = true
+			return nil
+		},
+	})
+
+	resp, err := http.Post(ts.URL+configOpenAPIRoutePath, "application/x-www-form-urlencoded", strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("POST %s: %v", configOpenAPIRoutePath, err)
+	}
+	readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusForbidden)
+	}
+	if called {
+		t.Fatal("start editor should not be called without csrf")
+	}
+}

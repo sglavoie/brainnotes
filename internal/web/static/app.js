@@ -6257,7 +6257,8 @@ var BrainNotesApp = (() => {
   var PROPERTY_ROW_LIMIT = 50;
   var readPropertiesConfig = (root) => ({
     endpoint: root.getAttribute("data-properties-endpoint") || "/api/properties",
-    detailEndpoint: root.getAttribute("data-properties-detail-endpoint") || "/api/properties/detail"
+    detailEndpoint: root.getAttribute("data-properties-detail-endpoint") || "/api/properties/detail",
+    token: root.getAttribute("data-properties-csrf") || ""
   });
   var readPropertyDetailConfig = (root) => ({
     property: root.getAttribute("data-property-name") || "",
@@ -6467,7 +6468,7 @@ var BrainNotesApp = (() => {
       list.appendChild(item);
     }
   };
-  var renderProposals = (section, list, proposals) => {
+  var renderProposals = (section, list, proposals, onAdd) => {
     if (!section || !list) {
       return;
     }
@@ -6490,6 +6491,20 @@ var BrainNotesApp = (() => {
       toml.className = "properties-proposal-toml";
       toml.textContent = proposal.toml;
       item.appendChild(toml);
+      if (onAdd) {
+        const actions = doc.createElement("div");
+        actions.className = "properties-proposal-actions";
+        const add = doc.createElement("button");
+        add.type = "button";
+        add.className = "properties-button properties-button-primary";
+        add.setAttribute("data-properties-proposal-add", proposal.property);
+        add.textContent = "Add to brainnotes.toml";
+        add.addEventListener("click", () => {
+          onAdd(proposal);
+        });
+        actions.appendChild(add);
+        item.appendChild(actions);
+      }
       list.appendChild(item);
     }
   };
@@ -7410,6 +7425,60 @@ var BrainNotesApp = (() => {
     };
   };
 
+  // internal/web/static_src/properties-workbench-requests.ts
+  var readPayload = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
+  var postProperty = async (fetcher, endpoint, token, body) => {
+    try {
+      const resp = await fetcher(endpoint, buildPropertyRequestInit(token, body));
+      const payload = await readPayload(resp);
+      if (!resp.ok) {
+        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+      }
+      const result = normalizePropertyMutationResponse(payload);
+      if (!result.ok) {
+        return { ok: false, message: result.message || "The change was refused." };
+      }
+      return { ok: true, result };
+    } catch {
+      return { ok: false, message: "The server did not answer." };
+    }
+  };
+  var previewPropertyMutation = (fetcher, token, body) => postProperty(fetcher, PROPERTY_PREVIEW_ENDPOINT, token, body);
+  var applyPropertyMutation = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_APPLY_ENDPOINT, token, {
+    preview_id: previewID
+  });
+  var savePropertyValue = (fetcher, token, body) => postProperty(fetcher, PROPERTY_VALUE_ENDPOINT, token, body);
+  var previewPropertySchema = (fetcher, token, body) => postProperty(fetcher, PROPERTY_SCHEMA_PREVIEW_ENDPOINT, token, body);
+  var applyPropertySchema = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_SCHEMA_APPLY_ENDPOINT, token, {
+    preview_id: previewID
+  });
+  var undoJournalEntry = async (fetcher, token, entryID) => {
+    try {
+      const resp = await fetcher("/api/undo", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-BN-CSRF": token
+        },
+        body: buildUndoForm({ token, entryID }).toString()
+      });
+      const payload = await readPayload(resp);
+      if (!resp.ok) {
+        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+      }
+      return { ok: true, message: "Change undone." };
+    } catch {
+      return { ok: false, message: "Undo failed." };
+    }
+  };
+
   // internal/web/static_src/properties-toast.ts
   var createUndoToast = (doc, host, deps) => {
     const element = doc.createElement("div");
@@ -7538,60 +7607,6 @@ var BrainNotesApp = (() => {
     return result.affected === 0 && config === "" ? "Nothing changed." : `Updated ${notes}${config}.`;
   };
   var undoToastMessage = (result) => `${mutationSuccessMessage(result)} You can undo this change.`;
-
-  // internal/web/static_src/properties-workbench-requests.ts
-  var readPayload = async (resp) => {
-    try {
-      return await resp.json();
-    } catch {
-      return null;
-    }
-  };
-  var postProperty = async (fetcher, endpoint, token, body) => {
-    try {
-      const resp = await fetcher(endpoint, buildPropertyRequestInit(token, body));
-      const payload = await readPayload(resp);
-      if (!resp.ok) {
-        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-      }
-      const result = normalizePropertyMutationResponse(payload);
-      if (!result.ok) {
-        return { ok: false, message: result.message || "The change was refused." };
-      }
-      return { ok: true, result };
-    } catch {
-      return { ok: false, message: "The server did not answer." };
-    }
-  };
-  var previewPropertyMutation = (fetcher, token, body) => postProperty(fetcher, PROPERTY_PREVIEW_ENDPOINT, token, body);
-  var applyPropertyMutation = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_APPLY_ENDPOINT, token, {
-    preview_id: previewID
-  });
-  var savePropertyValue = (fetcher, token, body) => postProperty(fetcher, PROPERTY_VALUE_ENDPOINT, token, body);
-  var previewPropertySchema = (fetcher, token, body) => postProperty(fetcher, PROPERTY_SCHEMA_PREVIEW_ENDPOINT, token, body);
-  var applyPropertySchema = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_SCHEMA_APPLY_ENDPOINT, token, {
-    preview_id: previewID
-  });
-  var undoJournalEntry = async (fetcher, token, entryID) => {
-    try {
-      const resp = await fetcher("/api/undo", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-BN-CSRF": token
-        },
-        body: buildUndoForm({ token, entryID }).toString()
-      });
-      const payload = await readPayload(resp);
-      if (!resp.ok) {
-        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-      }
-      return { ok: true, message: "Change undone." };
-    } catch {
-      return { ok: false, message: "Undo failed." };
-    }
-  };
 
   // internal/web/static_src/properties-workbench.ts
   var createPropertyWorkbench = (host, deps = {}) => {
@@ -8155,6 +8170,36 @@ var BrainNotesApp = (() => {
       return null;
     }
   };
+  var buildOpenConfigFetchRequest = (token) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": token
+    },
+    body: new URLSearchParams({ token }).toString()
+  });
+  var inferredDefinition = (proposal) => {
+    if (!isPropertyKind(proposal.type)) {
+      return null;
+    }
+    if (proposal.type === "list") {
+      if (!proposal.items || !isPropertyScalarKind(proposal.items)) {
+        return null;
+      }
+      return {
+        type: proposal.type,
+        items: proposal.items,
+        required: false,
+        allowed: []
+      };
+    }
+    return {
+      type: proposal.type,
+      required: false,
+      allowed: []
+    };
+  };
   var initPropertiesCatalog = (deps = {}) => {
     const root = queryElement(document, "[data-properties-catalog]", HTMLElement);
     if (!root) {
@@ -8169,12 +8214,16 @@ var BrainNotesApp = (() => {
     const totalsEl = queryElement(root, "[data-properties-totals]", HTMLElement);
     const proposalsEl = queryElement(root, "[data-properties-proposals]", HTMLElement);
     const proposalListEl = queryElement(root, "[data-properties-proposal-list]", HTMLElement);
+    const configOpenEl = queryElement(root, "[data-properties-config-open]", HTMLButtonElement);
+    const dialogHost = queryElement(root, "[data-properties-dialog-host]", HTMLElement);
     const queryEl = queryElement(root, "[data-properties-query]", HTMLInputElement);
     const issuesOnlyEl = queryElement(root, "[data-properties-issues-only]", HTMLInputElement);
     const refreshEl = queryElement(root, "[data-properties-refresh]", HTMLButtonElement);
     const config = readPropertiesConfig(root);
     const fetcher = deps.fetch || fetch;
+    const dialog = config.token !== "" && dialogHost ? createPreviewDialog(root.ownerDocument, dialogHost) : null;
     let latest = null;
+    let mutationBusy = false;
     const setStatus = (message, kind = "") => {
       setStatusText(statusEl, message, kind);
     };
@@ -8182,6 +8231,14 @@ var BrainNotesApp = (() => {
       query: queryEl?.value || "",
       issuesOnly: issuesOnlyEl?.checked || false
     });
+    const setMutationBusy = (busy) => {
+      mutationBusy = busy;
+      for (const button of root.querySelectorAll(
+        "[data-properties-proposal-add]"
+      )) {
+        button.disabled = busy;
+      }
+    };
     const applyFilter = () => {
       if (!latest) {
         return;
@@ -8192,6 +8249,60 @@ var BrainNotesApp = (() => {
         catalogStatusMessage(latest, shown.length),
         shown.length === 0 ? "is-empty" : ""
       );
+    };
+    const applyProposal = async (proposal, previewID) => {
+      setMutationBusy(true);
+      setStatus("Adding the inferred definition...", "is-loading");
+      try {
+        const outcome = await applyPropertySchema(fetcher, config.token, previewID);
+        if (!outcome.ok) {
+          setStatus(outcome.message, "is-error");
+          return;
+        }
+        await load();
+        setStatus(`Added ${proposal.property} to brainnotes.toml.`, "is-success");
+      } finally {
+        setMutationBusy(false);
+      }
+    };
+    const addProposal = async (proposal) => {
+      if (mutationBusy) {
+        return;
+      }
+      const definition = inferredDefinition(proposal);
+      if (!dialog || config.token === "" || !definition) {
+        setStatus("This inferred definition cannot be added.", "is-error");
+        return;
+      }
+      setMutationBusy(true);
+      setStatus("Previewing the inferred definition...", "is-loading");
+      try {
+        const outcome = await previewPropertySchema(fetcher, config.token, {
+          op: "upsert",
+          property: proposal.property,
+          definition
+        });
+        if (!outcome.ok) {
+          setStatus(outcome.message, "is-error");
+          return;
+        }
+        const result = outcome.result;
+        setStatus(previewSummaryLabel(result));
+        dialog.open({
+          title: `Add ${proposal.property} to brainnotes.toml`,
+          summary: previewSummaryLabel(result),
+          confirmLabel: "Add definition",
+          result,
+          onConfirm: () => {
+            void applyProposal(proposal, result.preview_id);
+          },
+          onCancel: () => {
+            setStatus("Definition change canceled.");
+          }
+        });
+      } finally {
+        setMutationBusy(false);
+      }
     };
     const load = async () => {
       root.setAttribute("aria-busy", "true");
@@ -8210,7 +8321,9 @@ var BrainNotesApp = (() => {
         }
         latest = result;
         renderTotals(totalsEl, result.totals, result.total_notes);
-        renderProposals(proposalsEl, proposalListEl, result.proposals);
+        renderProposals(proposalsEl, proposalListEl, result.proposals, (proposal) => {
+          void addProposal(proposal);
+        });
         if (configEl) {
           const message = configStatusMessage(result.config);
           configEl.textContent = message;
@@ -8227,6 +8340,26 @@ var BrainNotesApp = (() => {
     issuesOnlyEl?.addEventListener("change", applyFilter);
     refreshEl?.addEventListener("click", () => {
       void load();
+    });
+    configOpenEl?.addEventListener("click", async () => {
+      if (config.token === "") {
+        setStatus("Open action unavailable.", "is-error");
+        return;
+      }
+      configOpenEl.disabled = true;
+      setStatus("Opening brainnotes.toml in the configured editor...", "is-loading");
+      try {
+        const resp = await fetcher("/api/config/open", buildOpenConfigFetchRequest(config.token));
+        if (!resp.ok) {
+          setStatus(normalizeOpenErrorMessage(resp.status, await resp.text()), "is-error");
+          return;
+        }
+        setStatus("Opened brainnotes.toml in the configured editor.", "is-success");
+      } catch {
+        setStatus("Open failed.", "is-error");
+      } finally {
+        configOpenEl.disabled = false;
+      }
     });
     void load();
   };

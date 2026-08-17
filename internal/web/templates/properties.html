@@ -27,6 +27,7 @@
       data-properties-catalog
       data-properties-endpoint="{{ .Endpoint }}"
       data-properties-detail-endpoint="{{ .DetailEndpoint }}"
+      data-properties-csrf="{{ .CSRFToken }}"
       aria-labelledby="properties-heading"
       aria-describedby="properties-status"
       aria-busy="false"
@@ -65,9 +66,10 @@
       <ul class="properties-list" data-properties-list></ul>
       <section class="properties-proposals" data-properties-proposals hidden aria-labelledby="properties-proposals-heading">
         <h3 id="properties-proposals-heading">Inferred definitions</h3>
-        <p class="properties-proposals-note">Suggestions only. Copy a block into <code>brainnotes.toml</code> to adopt it.</p>
+        <p class="properties-proposals-note">Review a suggestion, then add it to <button class="properties-config-open" type="button" data-properties-config-open title="Open brainnotes.toml in the configured editor"><code>brainnotes.toml</code></button>.</p>
         <ul class="properties-proposal-list" data-properties-proposal-list></ul>
       </section>
+      <div class="properties-dialog-host" data-properties-dialog-host></div>
     </section>
   </main>
   <script src="/static/app.js" defer></script>

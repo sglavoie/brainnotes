@@ -23,8 +23,11 @@ func TestPropertiesPage_Renders(t *testing.T) {
 		"data-properties-catalog",
 		`data-properties-endpoint="/api/properties"`,
 		`data-properties-detail-endpoint="/api/properties/detail"`,
+		"data-properties-csrf=",
 		"data-properties-list",
 		"data-properties-proposal-list",
+		"data-properties-config-open",
+		"data-properties-dialog-host",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("catalog page missing %q", want)

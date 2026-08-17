@@ -501,6 +501,8 @@ func TestPropertiesWorkbenchCSSContract(t *testing.T) {
 		".properties-badge-unconfigured",
 		".properties-badge-issues",
 		".properties-proposal-toml",
+		".properties-proposal-actions",
+		".properties-config-open:focus-visible",
 		".properties-value-button:focus-visible",
 		".properties-value-button.is-active",
 		".properties-value-button.is-unsupported",

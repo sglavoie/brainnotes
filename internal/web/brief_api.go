@@ -132,7 +132,7 @@ func (s *Server) handleBriefItem(w http.ResponseWriter, r *http.Request) {
 	case "open":
 		noteRelPath := openTargetRelPathForCard(resolved.card)
 		notePath := filepath.Join(s.vault.Root, filepath.FromSlash(noteRelPath))
-		if err := s.openNotePath(notePath); err != nil {
+		if err := s.openPath(notePath); err != nil {
 			writeBriefOpenError(w, err)
 			return
 		}

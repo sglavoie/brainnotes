@@ -12,12 +12,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 )
 
 const csrfHeaderName = "X-BN-CSRF"
 
 var errOpenPathOutsideVault = errors.New("web: open path resolves outside vault")
+
+const configOpenAPIRoutePath = "/api/config/open"
 
 type openFailureStage string
 
@@ -110,7 +113,7 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := s.openNotePath(notePath); err != nil {
+	if err := s.openPath(notePath); err != nil {
 		switch failureStage(err) {
 		case openFailureStat:
 			if errors.Is(err, os.ErrNotExist) {
@@ -151,6 +154,70 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleConfigOpen opens the active vault-local brainnotes.toml through the
+// same configured-editor resolution used for notes. It is a POST because
+// launching a process is a side effect, and therefore carries the same CSRF
+// protection as every other editor-open action.
+func (s *Server) handleConfigOpen(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != configOpenAPIRoutePath {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid request form", http.StatusBadRequest)
+		return
+	}
+	token := strings.TrimSpace(r.Header.Get(csrfHeaderName))
+	if token == "" {
+		token = strings.TrimSpace(r.Form.Get("token"))
+	}
+	if !csrfTokenMatches(s.csrfToken, token) {
+		http.Error(w, "csrf token required", http.StatusForbidden)
+		return
+	}
+
+	configPath := strings.TrimSpace(s.config().SourcePath)
+	if configPath == "" {
+		// Tests and embedded callers may construct Config directly instead of
+		// loading it. The format still guarantees one vault-root config file.
+		configPath = filepath.Join(s.vault.Root, config.FileName)
+	}
+	if err := s.openPath(configPath); err != nil {
+		switch failureStage(err) {
+		case openFailureStat:
+			if errors.Is(err, os.ErrNotExist) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, "config stat error", http.StatusInternalServerError)
+		case openFailureResolvePath:
+			if errors.Is(err, errOpenPathOutsideVault) {
+				http.Error(w, "forbidden config path", http.StatusForbidden)
+				return
+			}
+			http.Error(w, "config path error", http.StatusInternalServerError)
+		case openFailureEditorSpec:
+			if errors.Is(err, editor.ErrNoEditorConfigured) {
+				http.Error(w, "editor not configured", http.StatusPreconditionFailed)
+				return
+			}
+			http.Error(w, "editor spec error", http.StatusInternalServerError)
+		case openFailureEditorTarget:
+			http.Error(w, "editor resolve error", http.StatusPreconditionFailed)
+		default:
+			http.Error(w, "editor start error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) notePathForOpenKey(snapshot vaultSnapshot, key string) (string, bool, error) {
 	if snapshot.graph != nil {
 		lookupKey := snapshot.graph.UnresolvedTargetKey(key)
@@ -186,12 +253,12 @@ func (s *Server) notePathForOpenRouteFallback(key string) (string, error) {
 	return resolvedPath, nil
 }
 
-func (s *Server) openNotePath(notePath string) error {
+func (s *Server) openPath(path string) error {
 	cfg := s.config()
-	if _, err := os.Stat(notePath); err != nil {
+	if _, err := os.Stat(path); err != nil {
 		return &openFailure{stage: openFailureStat, err: err}
 	}
-	resolvedPath, err := resolveOpenPath(s.vault.Root, notePath)
+	resolvedPath, err := resolveOpenPath(s.vault.Root, path)
 	if err != nil {
 		return &openFailure{stage: openFailureResolvePath, err: err}
 	}

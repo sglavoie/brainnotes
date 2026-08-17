@@ -937,8 +937,12 @@ definition, and only then writes. Definition changes never rewrite notes: adding
 confirmed repair. For an unconfigured property whose observed values unanimously
 support one kind, the pages propose an inferred `[frontmatter.properties.<key>]`
 block, which you can review and adopt into the editor with one click before
-saving it. Inference is deliberately conservative: it never guesses `required`
-or `allowed`, and it stays silent when the data mixes kinds, mixes scalars with
+saving it. The catalog also offers **Add to brainnotes.toml** on every inferred
+block; it previews the exact configuration diff and writes the definition after
+you confirm it. Clicking the `brainnotes.toml` label in that section opens the
+configuration file through `[open].editor`, with `$EDITOR` as the fallback.
+Inference is deliberately conservative: it never guesses `required` or
+`allowed`, and it stays silent when the data mixes kinds, mixes scalars with
 lists, or contains a value it cannot classify.
 
 While the page is visible it polls `GET /api/config/status` every five seconds

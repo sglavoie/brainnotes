@@ -205,6 +205,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/facets", srv.handleFacets)
 	mux.HandleFunc("/api/search", srv.handleSearch)
 	mux.HandleFunc("/api/open", srv.handleOpen)
+	mux.HandleFunc(configOpenAPIRoutePath, srv.handleConfigOpen)
 	mux.HandleFunc("/api/brief/view", srv.handleBriefView)
 	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
 	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)

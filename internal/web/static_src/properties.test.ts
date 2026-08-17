@@ -15,6 +15,8 @@ import {
   coverageLabel,
   detailStatusMessage,
   filterCatalog,
+  buildOpenConfigFetchRequest,
+  inferredDefinition,
   initPropertiesCatalog,
   initPropertyDetail,
   issueLabel,
@@ -177,7 +179,8 @@ const mountCatalog = (): HTMLElement => {
   document.body.innerHTML = `
     <section data-properties-catalog
       data-properties-endpoint="/api/properties"
-      data-properties-detail-endpoint="/api/properties/detail">
+      data-properties-detail-endpoint="/api/properties/detail"
+      data-properties-csrf="csrf-token">
       <p data-properties-status></p>
       <p data-properties-config hidden></p>
       <dl data-properties-totals></dl>
@@ -186,8 +189,10 @@ const mountCatalog = (): HTMLElement => {
       <button type="button" data-properties-refresh>Refresh</button>
       <ul data-properties-list></ul>
       <section data-properties-proposals hidden>
+        <button type="button" data-properties-config-open>brainnotes.toml</button>
         <ul data-properties-proposal-list></ul>
       </section>
+      <div data-properties-dialog-host></div>
     </section>
   `;
   const root = document.querySelector("[data-properties-catalog]");
@@ -251,6 +256,24 @@ describe("property API contracts", () => {
     expect(result.properties[0].definition?.allowed).toEqual(["active", "draft"]);
     expect(result.properties[1].definition).toBeUndefined();
     expect(result.proposals[0].items).toBe("string");
+  });
+
+  it("turns a conservative proposal into a schema definition", () => {
+    expect(inferredDefinition(catalogPayload().proposals[0])).toEqual({
+      type: "list",
+      items: "string",
+      required: false,
+      allowed: [],
+    });
+    expect(
+      inferredDefinition({
+        property: "bad",
+        type: "list",
+        notes: 1,
+        rationale: "",
+        toml: "",
+      })
+    ).toBeNull();
   });
 
   it("normalizes an error envelope", () => {
@@ -451,7 +474,7 @@ describe("catalog controller", () => {
     }
   });
 
-  it("renders no inactive mutation controls", async () => {
+  it("renders an active add control for each inferred definition", async () => {
     const root = mountCatalog();
     initPropertiesCatalog({ fetch: vi.fn().mockResolvedValue(jsonResponse(catalogPayload())) });
 
@@ -460,7 +483,96 @@ describe("catalog controller", () => {
     });
     const list = root.querySelector("[data-properties-list]");
     expect(list?.querySelectorAll("button").length).toBe(0);
+    expect(root.querySelectorAll("[data-properties-proposal-add]")).toHaveLength(1);
     expect(root.querySelectorAll("button[disabled]").length).toBe(0);
+  });
+
+  it("previews and applies an inferred definition", async () => {
+    const root = mountCatalog();
+    const preview = {
+      ok: true,
+      action: "schema_upsert",
+      property: "tags",
+      selected: 0,
+      affected: 0,
+      previews: [],
+      blockers: [],
+      config_diff: [
+        { kind: "add", line: 2, text: "[frontmatter.properties.tags]" },
+      ],
+      projected_violations: {
+        before: { missing: 0, type: 0, value: 0, notes: 0 },
+        after: { missing: 0, type: 0, value: 0, notes: 0 },
+      },
+      preview_id: "preview-1",
+      expires_at: "2099-01-01T00:00:00Z",
+      config: { generation: 3, status: "ok", writable: true },
+    };
+    const applied = {
+      ...preview,
+      preview_id: "",
+      journal_id: "journal-1",
+      generation: 4,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(catalogPayload()))
+      .mockResolvedValueOnce(jsonResponse(preview))
+      .mockResolvedValueOnce(jsonResponse(applied))
+      .mockResolvedValueOnce(jsonResponse(catalogPayload()));
+
+    initPropertiesCatalog({ fetch: fetchMock });
+    await waitForExpect(() => {
+      expect(root.querySelector("[data-properties-proposal-add]")).not.toBeNull();
+    });
+    root.querySelector<HTMLButtonElement>("[data-properties-proposal-add]")?.click();
+
+    await waitForExpect(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(root.querySelector<HTMLElement>("[data-property-dialog]")?.hidden).toBe(false);
+      expect(root.querySelector<HTMLButtonElement>("[data-property-preview-confirm]")?.disabled)
+        .toBe(false);
+    });
+    const previewInit = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/properties/schema/preview");
+    expect(JSON.parse(String(previewInit.body))).toEqual({
+      op: "upsert",
+      property: "tags",
+      definition: { type: "list", items: "string", required: false, allowed: [] },
+    });
+
+    root.querySelector<HTMLButtonElement>("[data-property-preview-confirm]")?.click();
+    await waitForExpect(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/properties/schema/apply");
+    expect(root.querySelector("[data-properties-status]")?.textContent).toBe(
+      "Added tags to brainnotes.toml."
+    );
+  });
+
+  it("opens brainnotes.toml through the configured editor endpoint", async () => {
+    const root = mountCatalog();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(catalogPayload()))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    initPropertiesCatalog({ fetch: fetchMock });
+    await waitForExpect(() => {
+      expect(root.querySelectorAll("[data-properties-item]")).toHaveLength(3);
+    });
+    root.querySelector<HTMLButtonElement>("[data-properties-config-open]")?.click();
+
+    await waitForExpect(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    const init = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/config/open");
+    expect(init).toEqual(buildOpenConfigFetchRequest("csrf-token"));
+    expect(root.querySelector("[data-properties-status]")?.textContent).toBe(
+      "Opened brainnotes.toml in the configured editor."
+    );
   });
 
   it("filters rendered rows without refetching", async () => {

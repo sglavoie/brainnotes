@@ -129,7 +129,8 @@ export const renderCatalog = (list: HTMLElement, summaries: PropertySummary[]): 
 export const renderProposals = (
   section: HTMLElement | null,
   list: HTMLElement | null,
-  proposals: PropertyProposal[]
+  proposals: PropertyProposal[],
+  onAdd?: (proposal: PropertyProposal) => void
 ): void => {
   if (!section || !list) {
     return;
@@ -158,6 +159,21 @@ export const renderProposals = (
     toml.className = "properties-proposal-toml";
     toml.textContent = proposal.toml;
     item.appendChild(toml);
+
+    if (onAdd) {
+      const actions = doc.createElement("div");
+      actions.className = "properties-proposal-actions";
+      const add = doc.createElement("button");
+      add.type = "button";
+      add.className = "properties-button properties-button-primary";
+      add.setAttribute("data-properties-proposal-add", proposal.property);
+      add.textContent = "Add to brainnotes.toml";
+      add.addEventListener("click", () => {
+        onAdd(proposal);
+      });
+      actions.appendChild(add);
+      item.appendChild(actions);
+    }
 
     list.appendChild(item);
   }

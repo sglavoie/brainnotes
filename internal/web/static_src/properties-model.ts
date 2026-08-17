@@ -18,6 +18,7 @@ export type PropertiesDeps = {
 export type PropertiesConfig = {
   endpoint: string;
   detailEndpoint: string;
+  token: string;
 };
 
 export type PropertyDetailConfig = {
@@ -47,6 +48,7 @@ export const readPropertiesConfig = (root: HTMLElement): PropertiesConfig => ({
   endpoint: root.getAttribute("data-properties-endpoint") || "/api/properties",
   detailEndpoint:
     root.getAttribute("data-properties-detail-endpoint") || "/api/properties/detail",
+  token: root.getAttribute("data-properties-csrf") || "",
 });
 
 export const readPropertyDetailConfig = (root: HTMLElement): PropertyDetailConfig => ({
