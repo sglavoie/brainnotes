@@ -214,7 +214,9 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 // captureShouldReplan reports whether err is the plain lost race a re-read can
 // resolve. A conflict reported alongside displaced content or a failed rollback
 // carries recovery instructions and must reach the caller instead of being
-// retried over an inconsistent vault.
+// retried over an inconsistent vault. A lock timeout is excluded for a different
+// reason: the plan is still valid, so re-reading buys nothing, and the commit
+// already waited out its own budget.
 func captureShouldReplan(err error) bool {
 	if vault.IsTxnRecoveryNeeded(err) || vault.IsTxnRollbackFailure(err) {
 		return false

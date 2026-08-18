@@ -496,6 +496,10 @@ func commitNoteWrite(vaultRoot string, note *vault.Note, fm *config.FrontmatterC
 // A transaction that left displaced content in a recovery file is checked
 // first: it also unwraps to a conflict, and answering "retry" would hide the
 // one message telling the caller where their note went.
+//
+// A lock timeout is reported as a conflict too. Nothing changed, so the caller's
+// plan is still valid, but "retry" is the correct advice and conflict is the code
+// callers already retry on.
 func classifyTxnError(message string, err error) error {
 	if err == nil {
 		return nil
@@ -503,7 +507,7 @@ func classifyTxnError(message string, err error) error {
 	switch {
 	case vault.IsTxnRecoveryNeeded(err):
 		return WrapError(CodeInternal, err.Error(), err)
-	case vault.IsTxnConflict(err):
+	case vault.IsTxnLockBusy(err), vault.IsTxnConflict(err):
 		return WrapError(CodeConflict, MessageOf(err), err)
 	case vault.IsTxnRollbackFailure(err):
 		return WrapError(CodeInternal, err.Error(), err)

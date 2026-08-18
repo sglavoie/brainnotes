@@ -10,6 +10,19 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+)
+
+const (
+	// txnLockRelDir holds one lock file per note path. It lives under the existing
+	// hidden .bnotes directory so Walk already skips it.
+	txnLockRelDir = ".bnotes/locks"
+	// txnLockTimeout bounds how long a commit waits for another bn writer. It is
+	// generous relative to a note rewrite so ordinary contention always waits it
+	// out, and short enough that a stale holder cannot hang a command.
+	txnLockTimeout = 5 * time.Second
+	// txnLockPollInterval paces the non-blocking retry loop.
+	txnLockPollInterval = 5 * time.Millisecond
 )
 
 // FileExpectation is the precondition a transaction verifies for one path
@@ -171,6 +184,27 @@ func IsTxnRecoveryNeeded(err error) bool {
 	return errors.As(err, &recovery)
 }
 
+// TxnLockBusyError reports that another writer held a planned path for longer
+// than the transaction was willing to wait. It is not a conflict: nothing was
+// read, staged, or written, and the vault is exactly as it was, so the operation
+// can be retried as-is.
+type TxnLockBusyError struct {
+	Path string
+}
+
+func (e *TxnLockBusyError) Error() string {
+	if e == nil {
+		return "vault: path is locked by another writer"
+	}
+	return fmt.Sprintf("vault: %s is being written by another process; retry", e.Path)
+}
+
+// IsTxnLockBusy reports whether err is a lock wait that timed out.
+func IsTxnLockBusy(err error) bool {
+	var busy *TxnLockBusyError
+	return errors.As(err, &busy)
+}
+
 // TxnJournal captures the pre-commit state of every path a transaction touches.
 // Commit calls Capture once per path after staging succeeds and before any file
 // on disk is replaced, so one action yields one journal entry.
@@ -240,6 +274,10 @@ type FileTxn struct {
 	order    []string
 	requires []txnRequirement
 	hooks    txnHooks
+	locks    []*os.File
+	// lockWait overrides txnLockTimeout when non-zero. Like hooks, it exists so a
+	// test can reach the lock-timeout path without a multi-second wait.
+	lockWait time.Duration
 }
 
 // NewFileTxn creates a transaction rooted at an existing vault directory. Every
@@ -368,6 +406,11 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 	if t == nil || len(t.order) == 0 {
 		return nil
 	}
+	if err := t.lockPaths(); err != nil {
+		t.unlockPaths()
+		return err
+	}
+	defer t.unlockPaths()
 	if err := t.stage(); err != nil {
 		t.cleanupStaged()
 		return err
@@ -395,6 +438,105 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 	}
 	syncParentDirs(t.order)
 	return nil
+}
+
+// lockPaths takes one exclusive lock per planned path and holds it for the whole
+// commit, so two bn writers never run their replacements against one note at the
+// same time.
+//
+// Without it the custody step is observable. Replacing a destination renames it
+// aside first, and during that window the path does not exist: a second
+// transaction planning the same path reads it as missing, plans a create, and
+// wins the vacant path with an exclusive placement. Both writers then hold a
+// legitimate version and the one in custody can only come back through
+// *TxnRecoveryError for a person to merge by hand. Serializing the writers turns
+// that into an ordinary staging conflict — the second transaction sees the first
+// one's committed file and replans — which callers already retry.
+//
+// The locks are taken in t.order, which plan keeps sorted. That shared order is
+// what makes concurrent multi-path transactions deadlock-free, so it must not
+// become an arbitrary map iteration.
+//
+// External writers are unaffected: an editor saving a note takes no lock, which
+// is why custody stays in place to guard against it.
+func (t *FileTxn) lockPaths() error {
+	if !lockingSupported {
+		return nil
+	}
+	// The planned paths were resolved through EvalSymlinks, so the lock names have
+	// to be relative to the same resolved root. Two processes reaching one vault by
+	// different symlinked names then meet on the same lock files.
+	realRoot, err := filepath.EvalSymlinks(t.root)
+	if err != nil {
+		return fmt.Errorf("vault: resolve transaction root %q: %w", t.root, err)
+	}
+	dir := filepath.Join(realRoot, txnLockRelDir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("vault: create lock directory %q: %w", dir, err)
+	}
+	for _, path := range t.order {
+		file, err := t.lockPath(filepath.Join(dir, lockFileName(realRoot, path)), path)
+		if err != nil {
+			return err
+		}
+		t.locks = append(t.locks, file)
+	}
+	return nil
+}
+
+// lockPath blocks until it owns path's lock or the wait budget runs out. A
+// timeout means another writer is still working, not that anything changed, so it
+// is reported as a retryable *TxnLockBusyError.
+func (t *FileTxn) lockPath(name, path string) (*os.File, error) {
+	// A fresh descriptor per acquisition is required: flock locks belong to the
+	// open file description, so a cached descriptor would make a process fail to
+	// contend with itself.
+	file, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("vault: open lock %q: %w", name, err)
+	}
+	wait := txnLockTimeout
+	if t.lockWait > 0 {
+		wait = t.lockWait
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		held, err := tryLockExclusive(file)
+		if err != nil {
+			_ = file.Close()
+			return nil, fmt.Errorf("vault: lock %q: %w", path, err)
+		}
+		if held {
+			return file, nil
+		}
+		if time.Now().After(deadline) {
+			_ = file.Close()
+			return nil, &TxnLockBusyError{Path: path}
+		}
+		time.Sleep(txnLockPollInterval)
+	}
+}
+
+// unlockPaths releases every lock the transaction holds, newest first. Lock files
+// are deliberately left on disk: unlinking one another process holds would let a
+// third process create a new file at the same name and lock nothing.
+func (t *FileTxn) unlockPaths() {
+	for i := len(t.locks) - 1; i >= 0; i-- {
+		file := t.locks[i]
+		_ = unlockFile(file)
+		_ = file.Close()
+	}
+	t.locks = nil
+}
+
+// lockFileName hashes the path so one flat directory can hold a lock for every
+// note without mirroring the vault's folders or hitting name-length limits.
+func lockFileName(root, path string) string {
+	name := path
+	if rel, err := filepath.Rel(root, path); err == nil {
+		name = filepath.ToSlash(rel)
+	}
+	return HashBytes([]byte(name)) + ".lock"
 }
 
 // stage verifies every precondition and writes every replacement to a temp file
