@@ -114,6 +114,10 @@ func buildQueueFromData(data vaultData, cfg *config.Config, root string, now tim
 	// against; the public paths pass time.Now() while tests pass a fixed instant.
 	tasks = append(tasks, reviewDriftTasks(data.loaded, cfg, now)...)
 	tasks = append(tasks, wipLimitTasks(data.loaded, cfg)...)
+	// Capture-backlog advisory rule: fires when the configured capture inbox
+	// holds more captures than [cockpit] max_captures allows. Off unless
+	// max_captures is set.
+	tasks = append(tasks, captureBacklogTasks(data.loaded, cfg)...)
 	// Hub-needs-synthesis advisory rule (session 5): flags hub notes whose
 	// configured synthesis headings are present but empty. Lower priority than
 	// safety and status findings (priority 80).

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -25,10 +26,82 @@ func validate(cfg *Config) error {
 	if err := validateBrief(cfg); err != nil {
 		return err
 	}
+	if err := validateCapture(cfg); err != nil {
+		return err
+	}
 	if err := validateCockpit(cfg); err != nil {
 		return err
 	}
 	return nil
+}
+
+// captureHeadingPattern matches an ATX heading with a non-empty title.
+var captureHeadingPattern = regexp.MustCompile(`^#{1,6}\s+\S`)
+
+// validateCapture runs after applyDefaults, so the inbox path is already
+// normalized and Ignore already carries the merged defaults. An inbox under the
+// templates dir or an ignored path would be written but never walked, so the
+// capture would be invisible to every query that motivates capturing at all.
+func validateCapture(cfg *Config) error {
+	heading := cfg.Capture.Heading
+	if containsControlRune(heading) {
+		return fmt.Errorf("config: capture.heading %q contains a control character", heading)
+	}
+	if !captureHeadingPattern.MatchString(heading) {
+		return fmt.Errorf(
+			"config: capture.heading %q must be an ATX heading followed by a title (for example %q)",
+			heading, DefaultCaptureHeading,
+		)
+	}
+
+	inbox := cfg.Capture.InboxNote
+	if containsControlRune(inbox) {
+		return fmt.Errorf("config: capture.inbox_note %q contains a control character", inbox)
+	}
+	if pathWithinFold(inbox, cfg.Templates.Dir) {
+		return fmt.Errorf(
+			"config: capture.inbox_note %q must not live inside the templates directory %q",
+			inbox, cfg.Templates.Dir,
+		)
+	}
+	for _, ignored := range cfg.Ignore {
+		if pathWithin(inbox, ignored) {
+			return fmt.Errorf("config: capture.inbox_note %q is inside ignored path %q", inbox, ignored)
+		}
+	}
+	return nil
+}
+
+// pathWithin reports whether the slash-separated path p is dir itself or lives
+// under it. Ignore entries are compared exactly, matching Walk's map lookup.
+func pathWithin(p, dir string) bool {
+	if dir == "" {
+		return false
+	}
+	return p == dir || strings.HasPrefix(p, dir+"/")
+}
+
+// pathWithinFold is pathWithin with case-insensitive, per-component comparison.
+// Vault.Walk prunes the templates dir with strings.EqualFold, so an exact
+// comparison here would accept a case-variant inbox that no walk ever visits.
+// Comparing component by component (rather than folding the whole string) keeps
+// the "/" boundaries byte-exact, so nested template dirs match only on a full
+// component prefix.
+func pathWithinFold(p, dir string) bool {
+	if dir == "" {
+		return false
+	}
+	want := strings.Split(dir, "/")
+	got := strings.Split(p, "/")
+	if len(got) < len(want) {
+		return false
+	}
+	for i := range want {
+		if !strings.EqualFold(got[i], want[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func validateAgent(cfg *Config) error {
@@ -151,6 +224,9 @@ func validateCockpit(cfg *Config) error {
 	}
 	if cfg.Cockpit.StaleStatusDays < 0 {
 		return fmt.Errorf("config: cockpit.stale_status_days %d must not be negative", cfg.Cockpit.StaleStatusDays)
+	}
+	if cfg.Cockpit.MaxCaptures < 0 {
+		return fmt.Errorf("config: cockpit.max_captures %d must not be negative", cfg.Cockpit.MaxCaptures)
 	}
 	if cfg.Cockpit.AgentTimeoutSeconds < 0 {
 		return fmt.Errorf("config: cockpit.agent_timeout_seconds %d must not be negative", cfg.Cockpit.AgentTimeoutSeconds)

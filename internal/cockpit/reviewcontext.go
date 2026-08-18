@@ -1,7 +1,7 @@
 package cockpit
 
 // KindLabel returns the short human label for a rule kind. It mirrors the
-// fixKindLabel vocabulary in internal/web/static_src/daily-fixes.ts so the CLI,
+// fixKindLabel vocabulary in internal/web/static_src/daily-fixes-model.ts so the CLI,
 // the web UI, and the daily-review context all name a rule the same way.
 // Unknown kinds fall back to "Fix", matching the TypeScript default.
 func KindLabel(kind RuleKind) string {
@@ -30,6 +30,8 @@ func KindLabel(kind RuleKind) string {
 		return "WIP limit"
 	case RuleHubNeedsSynthesis:
 		return "Hub needs synthesis"
+	case RuleCaptureBacklog:
+		return "Capture backlog"
 	case RuleAIDailyReview:
 		return "AI daily review"
 	default:

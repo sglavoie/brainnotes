@@ -52,6 +52,9 @@ bn find --category Books -i
 bn related Notes/Current.md -i
 bn context Notes/Current.md --purpose questions
 
+# Dump a passing thought into the inbox note without picking a file or a title.
+bn capture "ask [[Bob]] about the migration"
+
 # Set a property across many notes.
 bn find --tag drafts | bn set - status=done
 ```
@@ -175,6 +178,16 @@ exclude_folders = []
 # Frontmatter type values excluded from Daily Brief recommendations.
 exclude_types = []
 
+[capture]
+# Vault-relative note that `bn capture` and the web quick-capture box append to.
+# Created when absent. A missing '.md' extension is added; an absolute path or
+# one escaping the vault falls back to the default. A note inside [templates].dir
+# or an ignored path is a configuration error.
+inbox_note = "Inbox.md"
+# ATX heading captures are appended under, created at the end of the note when
+# absent. One to six '#' characters followed by a title.
+heading = "## Captures"
+
 [agent]
 # Optional local research command as a literal argv array. No shell is used.
 # The complete context packet is written to stdin; empty disables execution.
@@ -218,6 +231,9 @@ wip_statuses = []
 max_wip = 3
 # Age in days after which a note's status is treated as stale.
 stale_status_days = 30
+# Unprocessed captures under [capture].heading before the capture-backlog rule
+# fires. 0 (the default) disables the rule.
+max_captures = 0
 # Frontmatter type/kind values identifying hub/MOC notes. Empty disables the
 # hub-synthesis rule.
 hub_type_values = []
@@ -718,6 +734,78 @@ bn new book "Crafting Interpreters" --var author="Robert Nystrom"
 # → References/Books/Crafting Interpreters.md
 ```
 
+### `bn capture` — append a timestamped line to the inbox note
+
+```sh
+bn capture [text...] [--note rel] [--dry-run]
+```
+
+Appends one line to the configured inbox note (`[capture].inbox_note`, default
+`Inbox.md`) under the configured heading (`[capture].heading`, default
+`## Captures`). Both the note and the heading are created when absent; every
+other byte of the note — frontmatter included — is left untouched, so content
+above *and* below the capture section stays byte-identical.
+
+The line format is fixed and not configurable:
+
+```text
+- YYYY-MM-DD HH:MM <text>
+```
+
+Wikilinks you type pass through verbatim: `bn capture "ask [[Bob]] about the
+migration"` writes a real graph edge. Positional arguments are joined with a
+single space and internal whitespace runs collapse to one space. With no
+positional arguments the text is read from stdin, so `pbpaste | bn capture`
+works. The `-` stdin sentinel used by the note-path commands is deliberately
+*not* accepted here, because capture takes text rather than paths.
+
+`--note <rel>` overrides `[capture].inbox_note` for one invocation (a missing
+`.md` extension is added, and the path must stay inside the vault). `--dry-run`
+renders the canonical preview format and writes nothing:
+
+```text
+--- Inbox.md
+body:4:  -> - 2026-08-17 09:30 buy milk
+```
+
+A successful capture prints the destination, the exact line written, the journal
+entry ID, and the undo caveat:
+
+```sh
+$ bn capture "call the dentist"
+captured to Inbox.md (created)
+- 2026-08-17 09:30 call the dentist
+journal_id: 20260817T093000.000000000Z-1a2b3c4d
+note: undo restores all of Inbox.md; after later edits to it 'bn undo' refuses, and 'bn undo --force' overwrites those edits
+```
+
+**Undo caveat.** Each capture is journaled as a whole-note snapshot of the
+inbox, not as a line-level delta, so a restore replaces the entire inbox note.
+Ordinary `bn undo <id>` is fail-fast: once the note no longer matches the state
+the capture left behind — because you or `bn serve` edited it since — the
+restore aborts with no writes and tells you to re-run with `--force`.
+`bn undo <id> --force` then restores the whole snapshot, overwriting every later
+edit to that note. Undoing the capture that created the inbox deletes the note.
+
+The inbox is the one genuinely hot file in a vault — the CLI, `bn serve`, and
+your open editor can all write it. Capture pins its write to the exact revision
+it planned against and, unlike every other write in `bn`, re-reads and re-plans
+up to three times when it loses that race (safe only because an append is
+commutative). If all three attempts lose, it fails with a conflict error rather
+than guessing; retry once the other writer is done.
+
+`bn serve` exposes the same primitive as the quick-capture box on the home page,
+and `[cockpit].max_captures` turns on the `capture_backlog` advisory rule so a
+piling-up inbox shows up in `bn doctor` and the web Daily Fixes panel.
+
+```sh
+bn capture "call the dentist"
+bn capture "read [[Dune]] after Sapiens"
+pbpaste | bn capture
+bn capture --dry-run "idea worth checking"
+bn capture --note "Scratch.md" "one-off idea"
+```
+
 ### `bn open` — pick a note with fzf and edit it
 
 ```sh
@@ -757,13 +845,14 @@ bn serve [--addr host:port] [--port N] [--no-open]
 
 Starts a local HTTP server for vault browsing and lightweight note management:
 
-- `/` Daily Brief cards (Continue, Rediscover, Connect), rolling seven-day activity, compact health snapshot, recent notes, and primary search
+- `/` quick capture, Daily Brief cards (Continue, Rediscover, Connect), rolling seven-day activity, compact health snapshot, recent notes, and primary search
 - `/library` faceted search, bulk note operations, change history, and recent notes
 - `/health` Daily Fixes, vault metrics, and full diagnostics from the shared snapshot
 - `/properties` property catalog and `/properties/<key>` the interactive property workbench
 - `/n/<note-key>` rendered note view (body, editable frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
+- `POST /api/capture` quick capture into the configured inbox note, echoing the exact line written
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
 - `POST /api/brief/view` idempotent per-day visit recording that refreshes the rolling activity summary
 - `POST /api/brief/item` card actions (`open` and `another`) addressed by server-issued `card_id` only
@@ -787,6 +876,30 @@ only and never touches disk; **restart** the server to clear it and retry a
 previously skipped note. This bound is server-only: `bn doctor` and every other
 CLI command keep their original
 full-vault loading semantics and read every note without a per-note timeout.
+
+The home page opens with a **Quick capture** panel above Today's brief: the
+configured destination (`Inbox.md · ## Captures`), a two-row text box capped at
+2,000 characters, a Capture button, and `Ctrl`/`⌘` + `Enter` as the keyboard
+submit. It writes through the
+same primitive as `bn capture`, so the CLI and the browser produce identical
+lines. The server owns the clock and echoes the exact bullet it wrote back to
+the browser, which renders that string verbatim — there is no client-side
+timestamp to disagree with the file. Successful captures list newest-first below
+the box (session-scoped, capped at five entries, empty again after a reload), and
+each one writes an undo journal entry named `bn web capture` — undoable with
+`bn undo <journal_id>` or from the change-history panel on `/library`, with the
+same whole-note caveat as the CLI. When `[capture].inbox_note` or `[capture].heading` is not
+configured, the panel still renders but is disabled and names the two keys to
+set, so an unconfigured vault does not look like the feature is missing.
+
+`POST /api/capture` is the second — and only other — unpreviewed write in the
+web UI. It qualifies for the same reason `POST /api/properties/value` does, from
+the other direction: one note, strictly additive, so it cannot destroy existing
+bytes, and a confirm step would defeat the point of a quick-capture box. Its
+safety comes from the append transaction being pinned to the revision it planned
+against rather than from a client-echoed note hash — the box never loaded the
+note and has no hash to send. A conflict that survives the primitive's three
+internal replans returns `409`; resubmitting is always safe.
 
 Daily Brief cards stay stable for the local day (including restarts): Continue
 shows the most recently edited substantive note, Rediscover surfaces the
@@ -819,7 +932,8 @@ The Health page starts with Daily Fixes: the same hygiene queue as `bn doctor`
 covering frontmatter parse errors, schema violations, broken wikilink targets,
 duplicate titles, orphan notes, dead-end notes, long-tail property values, and —
 when their `[cockpit]` keys are configured — the advisory rules `sensitive_content`,
-`missing_review_date`, `stale_status`, `wip_limit`, and `hub_needs_synthesis`.
+`missing_review_date`, `stale_status`, `wip_limit`, `hub_needs_synthesis`, and
+`capture_backlog`.
 Tasks are grouped by issue and affected note, sorted by priority, and identified
 with content-aware hashes over the issue kind, detail, affected relative paths,
 locations, and file content. Marking a task Done hides that exact issue until its
@@ -1033,10 +1147,14 @@ follow it via `POST /api/properties/preview` and `POST /api/properties/apply`
 (definitions use `POST /api/properties/schema/preview` and
 `POST /api/properties/schema/apply`). Property receipts are additionally
 invalidated when `brainnotes.toml` changes, so an apply planned against an older
-configuration is refused rather than reinterpreted. `POST /api/properties/value`
-is the one exception to preview-gating: it accepts only a single-note value
-replacement or list addition, and it requires the note's current hash, so a note
-edited since the page loaded is rejected with `409`. Cockpit triage
+configuration is refused rather than reinterpreted. Exactly two routes are
+exempt from preview-gating, both deliberately narrow. `POST /api/properties/value`
+accepts only a single-note value replacement or list addition, and it requires the
+note's current hash, so a note edited since the page loaded is rejected with
+`409`. `POST /api/capture` appends one line to one note and cannot destroy
+existing bytes; it sends no hash (the quick-capture box never loaded the note)
+and is instead pinned to the revision its append was planned against, so a
+competing write is rejected with `409` rather than overwritten. Cockpit triage
 (Done/Snooze/Clear) uses `POST /api/cockpit/item` with the same CSRF token and
 only writes `<vault>/.bnotes/cockpit.json`.
 File-changing web actions write undo journal entries with `bn web ...` command
@@ -1093,14 +1211,19 @@ Detected rule kinds:
 | `stale_status` | notes whose status has not changed in more than `stale_status_days` days |
 | `wip_limit` | more concurrent `wip_statuses` notes than `max_wip` allows |
 | `hub_needs_synthesis` | hub/MOC notes (by `hub_type_values`) with a `hub_empty_headings` heading present but empty |
+| `capture_backlog` | more unprocessed captures under `[capture].heading` in the inbox note than `max_captures` allows; off unless `max_captures` is set |
 
-The last five kinds are **advisory / triage-only**: they carry no automatic
+The last six kinds are **advisory / triage-only**: they carry no automatic
 fix and are resolved by editing notes yourself, then marking the task done or
 snoozed. Each is disabled by default until you configure its `[cockpit]` keys
 (an empty gating list, or `sensitive_scan = false`, means the rule is off).
 `sensitive_content` never surfaces a matched value — a task shows only the
 line number and detector category, so secrets are never echoed into the queue,
-JSON, or web UI.
+JSON, or web UI. `capture_backlog` counts the bullets under `[capture].heading`
+with the same scanner `bn capture` writes through, and its signature includes the
+inbox note's content: the task re-signs on every capture, so a snooze lasts only
+until the next one. That churn is intentional — a backing-up inbox should come
+back — but it does mean Snooze behaves differently here than on the other rules.
 
 Issues are grouped into tasks by kind and detail, content-addressed over the
 issue and every affected note's path, location, and file content, and sorted by
@@ -1620,11 +1743,15 @@ bn lint
 
 `bn` keeps a vault-local operation journal at `<vault>/.bnotes/journal/`.
 
-- Journaled commands (apply mode): `new`, `set`, `unset`, `replace`, `rename`,
-  `move`, `repair`, `relink`, plus `bn serve` management actions such as
+- Journaled commands (apply mode): `new`, `capture`, `set`, `unset`, `replace`,
+  `rename`, `move`, `repair`, `relink`, plus `bn serve` management actions such as
   `bn web trash`, `bn web move`, `bn web frontmatter set`,
-  `bn web frontmatter unset`, broken-link stub creation, and cockpit fixes
-  (`bn cockpit fix`). `bn doctor` is read-only and never journals.
+  `bn web frontmatter unset`, `bn web capture`, broken-link stub creation, and
+  cockpit fixes (`bn cockpit fix`). `bn doctor` is read-only and never journals.
+- A capture entry snapshots the whole inbox note, so a restore replaces every
+  byte of that note. Ordinary `bn undo` refuses once the inbox changed after the
+  capture; `bn undo --force` restores the snapshot and overwrites those later
+  edits.
 - Property workbench writes journal under their own command names:
   `bn serve property set`, `bn serve property unset`,
   `bn serve property replace value`, `bn serve property list add`,

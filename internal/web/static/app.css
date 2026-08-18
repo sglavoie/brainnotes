@@ -950,6 +950,78 @@ code {
   font-size: 0.78rem;
 }
 
+.capture-destination {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+}
+
+.capture-field {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+
+.capture-label {
+  color: var(--bn-text-strong);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.capture-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
+.capture-input {
+  width: 100%;
+  min-height: 3.7rem;
+  resize: vertical;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.capture-input::placeholder {
+  color: var(--bn-text-subtle);
+}
+
+.capture-input:disabled {
+  opacity: 0.7;
+}
+
+.capture-hint {
+  color: var(--bn-text-subtle);
+  font-size: 0.78rem;
+}
+
+.capture-status {
+  margin-top: 0.4rem;
+}
+
+.capture-recent {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.capture-recent-item {
+  color: var(--bn-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
 .brief-action-button,
 .brief-insight-copy {
   min-height: 2.1rem;
@@ -5024,6 +5096,7 @@ code {
   .brief-action-button,
   .brief-insight-prompt,
   .brief-insight-copy,
+  .capture-input,
   .note-insight-prompt {
     transition: none;
   }
@@ -5105,6 +5178,10 @@ code {
   }
 
   .brief-insight-prompt-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .capture-controls {
     grid-template-columns: 1fr;
   }
 

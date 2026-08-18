@@ -89,6 +89,8 @@ export const fixKindLabel = (kind: string): string => {
       return "WIP limit";
     case "hub_needs_synthesis":
       return "Hub needs synthesis";
+    case "capture_backlog":
+      return "Capture backlog";
     case "ai_daily_review":
       return "AI daily review";
     default:

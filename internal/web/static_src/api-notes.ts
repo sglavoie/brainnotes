@@ -6,6 +6,8 @@ import {
   readRecordValue,
 } from "./api-internal";
 import type {
+  CaptureRequest,
+  CaptureResult,
   CreateNoteRequest,
   FrontmatterSetRequest,
   FrontmatterUnsetRequest,
@@ -75,6 +77,27 @@ export const buildFrontmatterUnsetForm = (
   const body = buildNoteKeyMutationForm(request);
   body.set("property", request.property);
   return body;
+};
+
+export const buildCaptureForm = (request: CaptureRequest): URLSearchParams => {
+  const body = new URLSearchParams();
+  body.set("text", request.text);
+  body.set("token", request.token);
+  return body;
+};
+
+// detail carries the exact bullet the server wrote, including its timestamp;
+// the browser never formats one itself because the server owns the clock.
+export const normalizeCaptureResponse = (payload: unknown): CaptureResult => {
+  const base = normalizeManagementResult(payload);
+  const record = asRecord(payload) || {};
+  return {
+    ok: base.ok,
+    code: base.ok ? undefined : base.code,
+    message: base.message || "",
+    detail: normalizeParamValue(readRecordValue(record, ["detail", "Detail"])),
+    rel_path: normalizeParamValue(readRecordValue(record, ["rel_path", "RelPath"])),
+  };
 };
 
 export const buildOpenNoteForm = (request: OpenNoteRequest): URLSearchParams =>

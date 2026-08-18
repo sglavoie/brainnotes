@@ -29,6 +29,7 @@ type Config struct {
 	New         NewConfig         `toml:"new"`
 	Related     RelatedConfig     `toml:"related"`
 	Brief       BriefConfig       `toml:"brief"`
+	Capture     CaptureConfig     `toml:"capture"`
 	Agent       AgentConfig       `toml:"agent"`
 	Cockpit     CockpitConfig     `toml:"cockpit"`
 
@@ -134,6 +135,15 @@ type BriefConfig struct {
 	ExcludeTypes []string `toml:"exclude_types"`
 }
 
+// CaptureConfig configures `bn capture` and the web quick-capture box.
+type CaptureConfig struct {
+	// InboxNote is the vault-relative note captures are appended to.
+	InboxNote string `toml:"inbox_note"`
+	// Heading is the ATX heading captures are appended under. It is created at
+	// the end of the note when absent.
+	Heading string `toml:"heading"`
+}
+
 // AgentConfig configures explicit local agent execution. Command is an argv
 // array: its first element is the executable and the rest are passed as literal
 // arguments without shell interpretation.
@@ -189,6 +199,9 @@ type CockpitConfig struct {
 	// StaleStatusDays is the age in days after which a note's status is treated
 	// as stale by the stale-status rule. Defaults to DefaultCockpitStaleStatusDays.
 	StaleStatusDays int `toml:"stale_status_days"`
+	// MaxCaptures is how many unprocessed captures may sit in the capture inbox
+	// before the capture-backlog rule fires. Zero disables the rule.
+	MaxCaptures int `toml:"max_captures"`
 	// HubTypeValues lists frontmatter type values that identify a hub/MOC note
 	// for the hub-needs-synthesis rule. Empty disables that rule.
 	HubTypeValues []string `toml:"hub_type_values"`

@@ -105,3 +105,107 @@ func TestEndToEndScenario(t *testing.T) {
 	}
 	assertAlphabeticalKeys(t, body)
 }
+
+// TestCaptureUndoScenario exercises capture → history → undo, covering both the
+// bootstrap case (undo deletes the note capture created) and the append case
+// (undo restores the note's prior bytes).
+func TestCaptureUndoScenario(t *testing.T) {
+	root := buildIntegrationFixture(t)
+	fixCaptureClock(t)
+	inbox := filepath.Join(root, "Inbox.md")
+
+	out, err := runCLI(t, "", "capture", "remember this")
+	if err != nil {
+		t.Fatalf("capture: %v\n%s", err, out)
+	}
+	if got := readNote(t, inbox); !strings.Contains(got, "- 2026-08-17 09:30 remember this") {
+		t.Fatalf("bootstrapped inbox missing the capture:\n%s", got)
+	}
+
+	id := latestHistoryEntryID(t)
+	if !strings.Contains(out, "journal_id: "+id) {
+		t.Fatalf("capture output %q does not report journal id %q", out, id)
+	}
+	if _, err := runCLI(t, "", "undo", id); err != nil {
+		t.Fatalf("undo: %v", err)
+	}
+	if _, err := os.Stat(inbox); !os.IsNotExist(err) {
+		t.Fatalf("expected undo to delete the bootstrapped inbox, stat err=%v", err)
+	}
+
+	original := "---\ntitle: Inbox\n---\n## Captures\n- 2026-08-16 08:00 older\n"
+	if err := os.WriteFile(inbox, []byte(original), 0o644); err != nil {
+		t.Fatalf("write inbox: %v", err)
+	}
+	if out, err := runCLI(t, "", "capture", "second thought"); err != nil {
+		t.Fatalf("capture: %v\n%s", err, out)
+	}
+	if got := readNote(t, inbox); got != original+"- 2026-08-17 09:30 second thought\n" {
+		t.Fatalf("append did not land as expected:\n%q", got)
+	}
+	if _, err := runCLI(t, "", "undo", latestHistoryEntryID(t)); err != nil {
+		t.Fatalf("undo: %v", err)
+	}
+	if got := readNote(t, inbox); got != original {
+		t.Fatalf("undo did not restore the note:\n--- want ---\n%s--- got ---\n%s", original, got)
+	}
+}
+
+// TestCaptureUndoConflictRequiresForce pins the guidance printed by `bn capture`:
+// ordinary undo refuses once the inbox changed after the capture, and only
+// --force restores the snapshot over those later edits.
+func TestCaptureUndoConflictRequiresForce(t *testing.T) {
+	root := buildIntegrationFixture(t)
+	fixCaptureClock(t)
+	inbox := filepath.Join(root, "Inbox.md")
+
+	original := "---\ntitle: Inbox\n---\n## Captures\n- 2026-08-16 08:00 older\n"
+	if err := os.WriteFile(inbox, []byte(original), 0o644); err != nil {
+		t.Fatalf("write inbox: %v", err)
+	}
+	if out, err := runCLI(t, "", "capture", "third thought"); err != nil {
+		t.Fatalf("capture: %v\n%s", err, out)
+	}
+	id := latestHistoryEntryID(t)
+
+	edited := original + "- 2026-08-17 09:30 third thought\n\nUnrelated later edit.\n"
+	if err := os.WriteFile(inbox, []byte(edited), 0o644); err != nil {
+		t.Fatalf("edit inbox: %v", err)
+	}
+
+	out, err := runCLI(t, "", "undo", id)
+	if err == nil {
+		t.Fatalf("expected undo to refuse after a later edit:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "--force") {
+		t.Errorf("conflict error does not mention --force: %v", err)
+	}
+	if got := readNote(t, inbox); got != edited {
+		t.Fatalf("refused undo still wrote:\n%q", got)
+	}
+
+	if out, err := runCLI(t, "", "undo", id, "--force"); err != nil {
+		t.Fatalf("undo --force: %v\n%s", err, out)
+	}
+	if got := readNote(t, inbox); got != original {
+		t.Fatalf("--force did not restore the snapshot over the later edit:\n--- want ---\n%s--- got ---\n%s", original, got)
+	}
+}
+
+// latestHistoryEntryID returns the ID column of the newest `bn history` row.
+func latestHistoryEntryID(t *testing.T) string {
+	t.Helper()
+	out, err := runCLI(t, "", "history")
+	if err != nil {
+		t.Fatalf("history: %v\n%s", err, out)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("history has no entries:\n%s", out)
+	}
+	fields := strings.Split(lines[1], "\t")
+	if len(fields) < 3 {
+		t.Fatalf("unexpected history row %q", lines[1])
+	}
+	return fields[1]
+}

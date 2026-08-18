@@ -38,6 +38,19 @@ export type FrontmatterUnsetRequest = NoteKeyMutationRequest & {
   property: string;
 };
 
+export type CaptureRequest = {
+  text: string;
+  token: string;
+};
+
+export type CaptureResult = {
+  ok: boolean;
+  code?: string;
+  message: string;
+  detail: string;
+  rel_path: string;
+};
+
 export type OpenNoteResult =
   | {
       ok: true;

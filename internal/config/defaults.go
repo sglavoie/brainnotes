@@ -8,6 +8,14 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
+// DefaultCaptureInboxNote is the vault-relative note `bn capture` appends to
+// when [capture].inbox_note is unset.
+const DefaultCaptureInboxNote = "Inbox.md"
+
+// DefaultCaptureHeading is the heading captures are appended under when
+// [capture].heading is unset.
+const DefaultCaptureHeading = "## Captures"
+
 // DefaultTemplate returns the commented TOML starter file body written by
 // `bn init`.
 func DefaultTemplate() string {
@@ -93,6 +101,12 @@ type = "wikilink"
 # Frontmatter type values excluded from Daily Brief recommendations.
 # exclude_types = ["journal", "scratch"]
 
+[capture]
+# Note that ` + "`bn capture`" + ` and the web quick-capture box append to (vault-relative).
+# inbox_note = "` + DefaultCaptureInboxNote + `"
+# Heading captures are appended under. Appended to the end of the note if absent.
+# heading = "` + DefaultCaptureHeading + `"
+
 [agent]
 # Local agent command as an argv array. The executable is launched directly;
 # arguments are never interpreted by a shell. Empty disables agent execution.
@@ -126,6 +140,8 @@ type = "wikilink"
 # max_wip = 3
 # Age in days after which a note's status is treated as stale.
 # stale_status_days = 30
+# Unprocessed captures before the capture-backlog rule fires. 0 disables it.
+# max_captures = 20
 # Frontmatter type values identifying hub/MOC notes. Empty disables the synthesis rule.
 # hub_type_values = ["moc", "hub"]
 # Headings that, when present but empty in a hub note, mark it as needing synthesis.
@@ -210,6 +226,11 @@ func applyDefaults(cfg *Config) {
 		cfg.Brief.ExcludeTypes = []string{}
 	} else {
 		cfg.Brief.ExcludeTypes = normalizeBriefTypes(cfg.Brief.ExcludeTypes)
+	}
+	cfg.Capture.InboxNote = normalizeCaptureInbox(cfg.Capture.InboxNote)
+	cfg.Capture.Heading = strings.TrimSpace(cfg.Capture.Heading)
+	if cfg.Capture.Heading == "" {
+		cfg.Capture.Heading = DefaultCaptureHeading
 	}
 	if cfg.Agent.Command == nil {
 		cfg.Agent.Command = []string{}
@@ -317,6 +338,25 @@ func containsControlRune(s string) bool {
 		}
 	}
 	return false
+}
+
+// normalizeCaptureInbox mirrors the templates.dir pipeline: the capture inbox
+// must be a vault-relative note path, so an absolute or upward-escaping value
+// silently falls back to the default rather than writing outside the vault.
+func normalizeCaptureInbox(p string) string {
+	p = strings.TrimSpace(p)
+	p = normalizeSlashSeparators(p)
+	p = strings.TrimRight(p, "/")
+	if p != "" {
+		p = path.Clean(p)
+	}
+	if isAbsolutePathLike(p) || p == ".." || strings.HasPrefix(p, "../") || p == "" || p == "." {
+		return DefaultCaptureInboxNote
+	}
+	if !strings.EqualFold(path.Ext(p), ".md") {
+		p += ".md"
+	}
+	return p
 }
 
 func normalizeRoutes(routes map[string]string) {

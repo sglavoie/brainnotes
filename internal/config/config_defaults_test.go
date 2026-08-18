@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -68,6 +69,12 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	if cfg.Agent.TimeoutSeconds != DefaultAgentTimeoutSeconds {
 		t.Errorf("Agent.TimeoutSeconds: got %d, want %d", cfg.Agent.TimeoutSeconds, DefaultAgentTimeoutSeconds)
 	}
+	if cfg.Capture.InboxNote != DefaultCaptureInboxNote {
+		t.Errorf("Capture.InboxNote: got %q, want %q", cfg.Capture.InboxNote, DefaultCaptureInboxNote)
+	}
+	if cfg.Capture.Heading != DefaultCaptureHeading {
+		t.Errorf("Capture.Heading: got %q, want %q", cfg.Capture.Heading, DefaultCaptureHeading)
+	}
 	// Defaults merged into Ignore.
 	for _, want := range DefaultIgnore {
 		if !contains(cfg.Ignore, want) {
@@ -102,6 +109,138 @@ func TestDefaultTemplate_OnlyActivatesPropertyDefinitions(t *testing.T) {
 	}
 	if cfg.Serve.Addr != "" || cfg.Serve.OpenBrowser != nil {
 		t.Errorf("Serve should be zero, got %+v", cfg.Serve)
+	}
+	if cfg.Capture.InboxNote != "" || cfg.Capture.Heading != "" {
+		t.Errorf("Capture should be zero, got %+v", cfg.Capture)
+	}
+}
+
+func TestLoad_CaptureInboxNoteNormalization(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "trimmed", value: `"  Inbox  "`, want: "Inbox.md"},
+		{name: "md suffix appended", value: `"Notes/Inbox"`, want: "Notes/Inbox.md"},
+		{name: "existing suffix kept", value: `"Notes/Inbox.MD"`, want: "Notes/Inbox.MD"},
+		{name: "backslashes converted", value: `"Notes\\Inbox.md"`, want: "Notes/Inbox.md"},
+		{name: "cleaned", value: `"./Notes//Inbox.md"`, want: "Notes/Inbox.md"},
+		{name: "absolute falls back", value: `"/tmp/Inbox.md"`, want: DefaultCaptureInboxNote},
+		{name: "parent traversal falls back", value: `"../Inbox.md"`, want: DefaultCaptureInboxNote},
+		{name: "empty falls back", value: `"   "`, want: DefaultCaptureInboxNote},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := loadTOML(t, "[capture]\ninbox_note = "+tc.value+"\n")
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.Capture.InboxNote != tc.want {
+				t.Fatalf("Capture.InboxNote = %q, want %q", cfg.Capture.InboxNote, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_CaptureUncommentedTemplateBlockIsKnown(t *testing.T) {
+	cfg, err := loadTOML(t, "[capture]\ninbox_note = \"Inbox.md\"\nheading = \"## Captures\"\n\n[cockpit]\nmax_captures = 20\n")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Capture.InboxNote != "Inbox.md" || cfg.Capture.Heading != "## Captures" {
+		t.Fatalf("Capture = %+v, want the configured values", cfg.Capture)
+	}
+	if cfg.Cockpit.MaxCaptures != 20 {
+		t.Fatalf("Cockpit.MaxCaptures = %d, want 20", cfg.Cockpit.MaxCaptures)
+	}
+}
+
+func TestLoad_CaptureHeadingValidation(t *testing.T) {
+	t.Run("accepts every ATX level", func(t *testing.T) {
+		for _, heading := range []string{"# Captures", "### Captures", "###### Deep"} {
+			cfg, err := loadTOML(t, "[capture]\nheading = "+strconv.Quote(heading)+"\n")
+			if err != nil {
+				t.Fatalf("Load(%q): %v", heading, err)
+			}
+			if cfg.Capture.Heading != heading {
+				t.Fatalf("Capture.Heading = %q, want %q", cfg.Capture.Heading, heading)
+			}
+		}
+	})
+
+	for _, tc := range []struct{ name, heading string }{
+		{name: "no hash", heading: "Captures"},
+		{name: "no title", heading: "##"},
+		{name: "no space", heading: "##Captures"},
+		{name: "too deep", heading: "####### Captures"},
+		{name: "embedded newline", heading: "## Captures\nmore"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := loadTOML(t, "[capture]\nheading = "+strconv.Quote(tc.heading)+"\n")
+			if err == nil {
+				t.Fatalf("Load(%q): got nil error, want a capture.heading error", tc.heading)
+			}
+			if !strings.Contains(err.Error(), "capture.heading") {
+				t.Fatalf("Load error = %v, want mention of capture.heading", err)
+			}
+		})
+	}
+}
+
+func TestLoad_CaptureInboxRejectsUnwalkedLocations(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{name: "templates dir", body: "[capture]\ninbox_note = \"Templates/Inbox.md\"\n"},
+		{name: "custom templates dir", body: "[templates]\ndir = \"Tpl\"\n\n[capture]\ninbox_note = \"Tpl/Inbox.md\"\n"},
+		{name: "templates dir case variant", body: "[capture]\ninbox_note = \"templates/Inbox.md\"\n"},
+		{name: "templates dir itself case variant", body: "[templates]\ndir = \"inbox.md\"\n\n[capture]\ninbox_note = \"Inbox.md\"\n"},
+		{name: "nested templates dir case variant", body: "[templates]\ndir = \"Meta/Tpl\"\n\n[capture]\ninbox_note = \"meta/TPL/Deep/Inbox.md\"\n"},
+		{name: "default ignore", body: "[capture]\ninbox_note = \"Archive/Inbox.md\"\n"},
+		{name: "configured ignore", body: "ignore = [\"Drafts\"]\n\n[capture]\ninbox_note = \"Drafts/Inbox.md\"\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := loadTOML(t, tc.body)
+			if err == nil {
+				t.Fatal("Load: got nil error, want a capture.inbox_note error")
+			}
+			if !strings.Contains(err.Error(), "capture.inbox_note") {
+				t.Fatalf("Load error = %v, want mention of capture.inbox_note", err)
+			}
+		})
+	}
+}
+
+// TestLoad_CaptureInboxAcceptsWalkedLocations pins the other side of the
+// containment check: only the templates dir is folded, because Walk prunes it
+// with EqualFold while it matches ignore entries by exact map lookup.
+func TestLoad_CaptureInboxAcceptsWalkedLocations(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{
+			name: "ignore entry case variant",
+			body: "ignore = [\"Drafts\"]\n\n[capture]\ninbox_note = \"drafts/Inbox.md\"\n",
+			want: "drafts/Inbox.md",
+		},
+		{
+			name: "default ignore entry case variant",
+			body: "[capture]\ninbox_note = \"archive/Inbox.md\"\n",
+			want: "archive/Inbox.md",
+		},
+		{
+			name: "templates dir name prefix only",
+			body: "[capture]\ninbox_note = \"TemplatesDrafts/Inbox.md\"\n",
+			want: "TemplatesDrafts/Inbox.md",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := loadTOML(t, tc.body)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.Capture.InboxNote != tc.want {
+				t.Fatalf("Capture.InboxNote = %q, want %q", cfg.Capture.InboxNote, tc.want)
+			}
+		})
 	}
 }
 
@@ -157,6 +296,7 @@ func TestDefaultTemplate_Mentions_AllKnownKeys(t *testing.T) {
 	tmpl := DefaultTemplate()
 	for _, want := range []string{
 		"ignore", "[templates]", "[frontmatter", "[fzf]", "[serve]", "[new.routes]", "[related]", "[brief]", "[agent]",
+		"[capture]", "inbox_note", "heading", "max_captures",
 		"[frontmatter.properties.tags]", "items", "metadata_properties", "exclude_folders", "exclude_types", "command", "timeout_seconds",
 	} {
 		if !strings.Contains(tmpl, want) {

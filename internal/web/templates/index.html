@@ -23,6 +23,45 @@
     {{template "siteNav" .}}
 
     <section
+      class="panel capture-panel"
+      data-capture-root
+      data-capture-csrf="{{.CSRFToken}}"
+      data-capture-target="{{.CaptureRelPath}}"
+      data-capture-configured="{{if .CaptureConfigured}}true{{else}}false{{end}}"
+      aria-labelledby="capture-heading"
+    >
+      <div class="panel-header">
+        <h2 id="capture-heading">Quick capture</h2>
+        {{if .CaptureConfigured}}
+          <p class="capture-destination"><code>{{.CaptureRelPath}}</code> · <code>{{.CaptureHeading}}</code></p>
+        {{end}}
+      </div>
+      <div class="capture-field">
+        <label class="capture-label" for="capture-input">Capture a thought</label>
+        <div class="capture-controls">
+          <textarea
+            id="capture-input"
+            class="capture-input"
+            rows="2"
+            maxlength="2000"
+            placeholder="A passing thought. Wikilinks pass through untouched."
+            data-capture-input
+            {{if not .CaptureConfigured}}disabled{{end}}
+          ></textarea>
+          <button
+            class="brief-action-button"
+            type="button"
+            data-capture-submit
+            {{if not .CaptureConfigured}}disabled{{end}}
+          >Capture</button>
+        </div>
+        <span class="capture-hint">Press Ctrl/⌘ + Enter to capture.</span>
+      </div>
+      <p class="review-status capture-status" data-capture-status role="status" aria-live="polite"></p>
+      <ul class="capture-recent" data-capture-recent aria-label="Captured in this session"></ul>
+    </section>
+
+    <section
       class="panel brief-panel"
       data-brief-root
       data-brief-date="{{.DateISO}}"

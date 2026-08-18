@@ -1,4 +1,5 @@
 import { initBrokenCreateActions } from "./broken-create";
+import { initCapture } from "./capture";
 import { initCopyControls } from "./clipboard";
 import { initDailyBrief } from "./daily-brief";
 import { initDailyFixes } from "./daily-fixes";
@@ -17,6 +18,7 @@ import { initTheme } from "./theme";
 
 (function () {
   initTheme();
+  initCapture();
   initFacets();
   initOpenInEditor();
   initTrashNoteAction();

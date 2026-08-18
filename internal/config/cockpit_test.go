@@ -45,6 +45,9 @@ func TestLoad_CockpitDefaults(t *testing.T) {
 	if cfg.Cockpit.AgentTimeoutSeconds != DefaultCockpitAgentTimeoutSeconds {
 		t.Errorf("Cockpit.AgentTimeoutSeconds: got %d, want %d", cfg.Cockpit.AgentTimeoutSeconds, DefaultCockpitAgentTimeoutSeconds)
 	}
+	if cfg.Cockpit.MaxCaptures != 0 {
+		t.Errorf("Cockpit.MaxCaptures: got %d, want 0 (capture-backlog rule off by default)", cfg.Cockpit.MaxCaptures)
+	}
 	if cfg.Cockpit.SensitiveScan {
 		t.Errorf("Cockpit.SensitiveScan: got true, want false by default")
 	}
@@ -199,6 +202,11 @@ func TestLoad_CockpitValidationRejectsBadValues(t *testing.T) {
 			wantSub: "max_wip",
 		},
 		{
+			name:    "negative max_captures",
+			body:    "[cockpit]\nmax_captures = -1\n",
+			wantSub: "max_captures",
+		},
+		{
 			name:    "negative stale_status_days",
 			body:    "[cockpit]\nstale_status_days = -1\n",
 			wantSub: "stale_status_days",
@@ -260,7 +268,7 @@ func TestDefaultTemplate_CockpitSectionParsesToZero(t *testing.T) {
 	}
 	for _, want := range []string{
 		"disabled_rules", "priority", "long_tail_limit", "long_tail_max_count", "long_tail_head_factor",
-		"daily_limit", "review_date_property", "review_statuses", "wip_statuses", "max_wip",
+		"daily_limit", "review_date_property", "review_statuses", "wip_statuses", "max_wip", "max_captures",
 		"stale_status_days", "hub_type_values", "hub_empty_headings", "sensitive_scan",
 		"sensitive_ignore_paths", "sensitive_ignore_patterns", "agent_command", "agent_timeout_seconds",
 	} {
@@ -276,7 +284,8 @@ func TestDefaultTemplate_CockpitSectionParsesToZero(t *testing.T) {
 	if cfg.Cockpit.LongTailLimit != 0 || len(cfg.Cockpit.DisabledRules) != 0 || len(cfg.Cockpit.Priority) != 0 {
 		t.Errorf("template [cockpit] should parse to zero CockpitConfig, got %+v", cfg.Cockpit)
 	}
-	if cfg.Cockpit.DailyLimit != 0 || cfg.Cockpit.MaxWIP != 0 || cfg.Cockpit.StaleStatusDays != 0 ||
+	if cfg.Cockpit.DailyLimit != 0 || cfg.Cockpit.MaxWIP != 0 || cfg.Cockpit.MaxCaptures != 0 ||
+		cfg.Cockpit.StaleStatusDays != 0 ||
 		cfg.Cockpit.AgentTimeoutSeconds != 0 || cfg.Cockpit.SensitiveScan ||
 		cfg.Cockpit.ReviewDateProperty != "" || cfg.Cockpit.AgentCommand != "" ||
 		len(cfg.Cockpit.ReviewStatuses) != 0 || len(cfg.Cockpit.WIPStatuses) != 0 ||

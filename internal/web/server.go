@@ -210,6 +210,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
 	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)
 	mux.HandleFunc("/api/note/insight", srv.handleNoteInsight)
+	mux.HandleFunc("/api/capture", srv.handleCapture)
 	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
 	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)
 	mux.HandleFunc("/api/notes/rename", srv.handleNoteRename)
@@ -284,6 +285,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.CSRFToken = s.csrfToken
+	cfg := s.config()
+	data.CaptureRelPath, data.CaptureHeading, data.CaptureConfigured = captureDestination(cfg.Capture.InboxNote, cfg.Capture.Heading)
 	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}

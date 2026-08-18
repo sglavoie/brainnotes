@@ -7,8 +7,8 @@ import (
 
 func TestKindLabelMatchesWebVocabulary(t *testing.T) {
 	// These labels must stay in lockstep with fixKindLabel in
-	// internal/web/static_src/daily-fixes.ts so CLI, web, and review context
-	// name each rule identically.
+	// internal/web/static_src/daily-fixes-model.ts so CLI, web, and review
+	// context name each rule identically.
 	want := map[RuleKind]string{
 		RuleFrontmatterError:  "Frontmatter",
 		RuleSchemaViolation:   "Schema",
@@ -22,6 +22,7 @@ func TestKindLabelMatchesWebVocabulary(t *testing.T) {
 		RuleStaleStatus:       "Stale status",
 		RuleWIPLimit:          "WIP limit",
 		RuleHubNeedsSynthesis: "Hub needs synthesis",
+		RuleCaptureBacklog:    "Capture backlog",
 		RuleAIDailyReview:     "AI daily review",
 	}
 	for kind, label := range want {
@@ -117,6 +118,47 @@ func TestBuildReviewContext(t *testing.T) {
 	}
 	if first.Affected[0].Location != "line 4: AWS access key ID" {
 		t.Errorf("location = %q, want redacted detector string", first.Affected[0].Location)
+	}
+}
+
+func TestBuildReviewContextLabelsCaptureBacklog(t *testing.T) {
+	queue := Queue{
+		Tasks: []Task{{
+			Kind:       RuleCaptureBacklog,
+			Priority:   rulePriority(RuleCaptureBacklog),
+			Title:      "Capture backlog: Inbox",
+			Summary:    "Inbox holds 24 captures under ## Captures, over the limit of 20",
+			Detail:     "capture backlog: Inbox.md",
+			Count:      1,
+			TriageOnly: true,
+			Affected: []AffectedNote{{
+				Title:    "Inbox",
+				RelPath:  "Inbox.md",
+				Location: "heading: ## Captures",
+				FileHash: "cafebabe",
+			}},
+		}},
+		Counts: Counts{Active: 1, TotalGenerated: 1},
+	}
+
+	ctx := BuildReviewContext(queue)
+
+	wantGroups := []ReviewGroup{{Kind: RuleCaptureBacklog, Label: "Capture backlog", Count: 1}}
+	if !reflect.DeepEqual(ctx.Groups, wantGroups) {
+		t.Errorf("Groups = %+v, want %+v", ctx.Groups, wantGroups)
+	}
+	if len(ctx.Items) != 1 {
+		t.Fatalf("Items len = %d, want 1", len(ctx.Items))
+	}
+	item := ctx.Items[0]
+	if item.Label != "Capture backlog" {
+		t.Errorf("item label = %q, want %q", item.Label, "Capture backlog")
+	}
+	if !item.TriageOnly {
+		t.Error("capture backlog is advisory, so the item must stay triage-only")
+	}
+	if item.Affected[0].Location != "heading: ## Captures" {
+		t.Errorf("location = %q, want the configured heading verbatim", item.Affected[0].Location)
 	}
 }
 

@@ -14,6 +14,7 @@ import {
   buildFixesApplyFetchRequest,
   buildFixesItemFetchRequest,
   fixCountsStatusMessage,
+  fixKindLabel,
   fixOpenKeyFromRelPath,
   initDailyFixes,
 } from "./daily-fixes";
@@ -306,6 +307,44 @@ describe("daily fixes helpers", () => {
     expect(fixOpenKeyFromRelPath("Notes\\Deep\\Idea.md")).toBe("notes/deep/idea");
     expect(fixOpenKeyFromRelPath("Bad/../escape.md")).toBe("");
     expect(fixOpenKeyFromRelPath("")).toBe("");
+  });
+
+  it("labels every known rule kind in lockstep with cockpit.KindLabel", () => {
+    // The Go side is TestKindLabelMatchesWebVocabulary in
+    // internal/cockpit/reviewcontext_test.go; both tables must list the same
+    // kinds so a rule never renders as the generic "Fix" in one surface only.
+    expect({
+      frontmatter_error: fixKindLabel("frontmatter_error"),
+      schema_violation: fixKindLabel("schema_violation"),
+      broken_target: fixKindLabel("broken_target"),
+      duplicate_title: fixKindLabel("duplicate_title"),
+      orphan_note: fixKindLabel("orphan_note"),
+      dead_end_note: fixKindLabel("dead_end_note"),
+      long_tail_value: fixKindLabel("long_tail_value"),
+      sensitive_content: fixKindLabel("sensitive_content"),
+      missing_review_date: fixKindLabel("missing_review_date"),
+      stale_status: fixKindLabel("stale_status"),
+      wip_limit: fixKindLabel("wip_limit"),
+      hub_needs_synthesis: fixKindLabel("hub_needs_synthesis"),
+      capture_backlog: fixKindLabel("capture_backlog"),
+      ai_daily_review: fixKindLabel("ai_daily_review"),
+    }).toEqual({
+      frontmatter_error: "Frontmatter",
+      schema_violation: "Schema",
+      broken_target: "Broken target",
+      duplicate_title: "Duplicate title",
+      orphan_note: "Orphan",
+      dead_end_note: "Dead end",
+      long_tail_value: "Long-tail value",
+      sensitive_content: "Sensitive content",
+      missing_review_date: "Missing review date",
+      stale_status: "Stale status",
+      wip_limit: "WIP limit",
+      hub_needs_synthesis: "Hub needs synthesis",
+      capture_backlog: "Capture backlog",
+      ai_daily_review: "AI daily review",
+    });
+    expect(fixKindLabel("nope")).toBe("Fix");
   });
 
   it("summarizes active counts", () => {

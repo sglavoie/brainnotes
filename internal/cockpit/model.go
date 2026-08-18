@@ -41,6 +41,9 @@ const (
 	// RuleWIPLimit flags that the number of work-in-progress notes exceeds the
 	// configured limit.
 	RuleWIPLimit RuleKind = "wip_limit"
+	// RuleCaptureBacklog flags that the capture inbox holds more unprocessed
+	// captures than the configured limit allows.
+	RuleCaptureBacklog RuleKind = "capture_backlog"
 	// RuleHubNeedsSynthesis flags a hub/MOC note that appears to need synthesis
 	// (for example, an empty synthesis heading).
 	RuleHubNeedsSynthesis RuleKind = "hub_needs_synthesis"
@@ -63,6 +66,8 @@ func rulePriority(kind RuleKind) int {
 		return 30
 	case RuleDuplicateTitle:
 		return 40
+	case RuleCaptureBacklog:
+		return 42
 	case RuleMissingReviewDate:
 		return 44
 	case RuleStaleStatus:
@@ -91,8 +96,8 @@ func rulePriority(kind RuleKind) int {
 // kinds that can carry an automatic fix (planned in a later session); every
 // other kind (parse errors, duplicate titles, orphans, dead ends, long-tail
 // values, and the advisory daily rules — sensitive content, missing review
-// date, stale status, WIP limit, hub-needs-synthesis, and AI daily review) is
-// triage-only. The advisory rules never mutate notes, so they fall through to
+// date, stale status, WIP limit, capture backlog, hub-needs-synthesis, and AI
+// daily review) is triage-only. The advisory rules never mutate notes, so they fall through to
 // the triage-only default rather than adding a mechanical fix action.
 func ruleTriageOnly(kind RuleKind) bool {
 	switch kind {

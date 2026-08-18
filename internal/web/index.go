@@ -52,8 +52,14 @@ type rootPageData struct {
 	EditorStatusMsg      string
 	InsightConfigured    bool
 	InsightStatusMsg     string
-	Recent               []indexRecentNote
-	Health               rootCompactHealthData
+	// CaptureConfigured reports only that an inbox note and heading are
+	// configured. The note itself is bootstrapped by the first capture, so the
+	// box renders whether or not the file exists yet.
+	CaptureConfigured bool
+	CaptureRelPath    string
+	CaptureHeading    string
+	Recent            []indexRecentNote
+	Health            rootCompactHealthData
 }
 
 type rootActivityData struct {

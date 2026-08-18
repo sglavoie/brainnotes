@@ -22,13 +22,15 @@ func TestCloneIsDeepAndIndependent(t *testing.T) {
 			ExcludeFolders: []string{"Archive"},
 			ExcludeTypes:   []string{"log"},
 		},
-		Agent: AgentConfig{Command: []string{"echo", "hi"}},
+		Capture: CaptureConfig{InboxNote: "Inbox.md", Heading: "## Captures"},
+		Agent:   AgentConfig{Command: []string{"echo", "hi"}},
 		Cockpit: CockpitConfig{
 			DisabledRules:            []string{"orphan"},
 			Priority:                 []string{"broken_link"},
 			LongTailIgnoreProperties: []string{"created"},
 			ReviewStatuses:           []string{"active"},
 			WIPStatuses:              []string{"doing"},
+			MaxCaptures:              20,
 		},
 	}
 
@@ -51,6 +53,9 @@ func TestCloneIsDeepAndIndependent(t *testing.T) {
 	clone.Cockpit.LongTailIgnoreProperties[0] = "mutated"
 	clone.Cockpit.ReviewStatuses[0] = "mutated"
 	clone.Cockpit.WIPStatuses[0] = "mutated"
+	clone.Capture.InboxNote = "mutated"
+	clone.Capture.Heading = "mutated"
+	clone.Cockpit.MaxCaptures = 99
 	*clone.Serve.OpenBrowser = false
 
 	if original.Ignore[0] != "Archive" {
@@ -83,6 +88,12 @@ func TestCloneIsDeepAndIndependent(t *testing.T) {
 		original.Cockpit.ReviewStatuses[0] != "active" ||
 		original.Cockpit.WIPStatuses[0] != "doing" {
 		t.Fatal("Cockpit slices leaked")
+	}
+	if original.Capture.InboxNote != "Inbox.md" || original.Capture.Heading != "## Captures" {
+		t.Fatal("Capture fields leaked")
+	}
+	if original.Cockpit.MaxCaptures != 20 {
+		t.Fatal("Cockpit.MaxCaptures leaked")
 	}
 	if !*original.Serve.OpenBrowser {
 		t.Fatal("Serve.OpenBrowser pointer leaked")
