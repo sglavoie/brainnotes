@@ -1,8 +1,6 @@
 package noteops
 
 import (
-	"errors"
-	"io/fs"
 	"os"
 	"path"
 	"strings"
@@ -217,16 +215,11 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 // resolve. A conflict reported alongside displaced content or a failed rollback
 // carries recovery instructions and must reach the caller instead of being
 // retried over an inconsistent vault.
-//
-// A vanished file counts too: a transaction stats the destination before it
-// reads it, so a writer that takes the path in between turns the pinned revision
-// into a plain read failure rather than a precondition mismatch. The revision is
-// just as gone either way.
 func captureShouldReplan(err error) bool {
 	if vault.IsTxnRecoveryNeeded(err) || vault.IsTxnRollbackFailure(err) {
 		return false
 	}
-	return vault.IsTxnConflict(err) || errors.Is(err, fs.ErrNotExist)
+	return vault.IsTxnConflict(err)
 }
 
 // captureSource is the state a capture is planned against: the bytes ahead of

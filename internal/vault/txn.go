@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -815,9 +816,22 @@ func currentFileState(path string) (data []byte, mode os.FileMode, exists bool, 
 	}
 	data, readErr := os.ReadFile(path)
 	if readErr != nil {
-		return nil, 0, false, fmt.Errorf("vault: read %q: %w", path, readErr)
+		return nil, 0, false, classifyStateReadError(path, readErr)
 	}
 	return data, info.Mode().Perm(), true, nil
+}
+
+// classifyStateReadError turns the read half of currentFileState into the right
+// kind of failure. The stat said "regular file", so a read that now reports the
+// path missing means another writer took it in between — takeCustody renames the
+// destination aside, leaving exactly that window. That is a precondition
+// mismatch, not an I/O fault, and every caller that retries a conflict must see
+// it as one.
+func classifyStateReadError(path string, err error) error {
+	if errors.Is(err, fs.ErrNotExist) {
+		return &TxnConflictError{Path: path, Expected: "file", Actual: "missing"}
+	}
+	return fmt.Errorf("vault: read %q: %w", path, err)
 }
 
 func nonRegularLabel(info os.FileInfo) string {

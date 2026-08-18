@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -696,6 +697,35 @@ func TestFileTxnConflictsOnNonRegularDestination(t *testing.T) {
 	}
 	if err := txn.Commit(nil); !IsTxnConflict(err) {
 		t.Fatalf("writing over a directory must conflict, got %v", err)
+	}
+}
+
+// TestClassifyStateReadErrorTreatsVanishedFileAsConflict pins the stat-then-read
+// window in currentFileState: another writer's takeCustody renames the
+// destination away, so the read reports the path missing even though the stat
+// saw a regular file. Callers retry a conflict and surface anything else, so the
+// classification is what keeps that lost race retryable.
+func TestClassifyStateReadErrorTreatsVanishedFileAsConflict(t *testing.T) {
+	path := filepath.Join("notes", "Inbox.md")
+
+	vanished := classifyStateReadError(path, &os.PathError{Op: "open", Path: path, Err: syscall.ENOENT})
+	if !IsTxnConflict(vanished) {
+		t.Fatalf("a file that vanished between stat and read must conflict, got %v", vanished)
+	}
+	var conflict *TxnConflictError
+	if !errors.As(vanished, &conflict) {
+		t.Fatalf("errors.As: %v", vanished)
+	}
+	if conflict.Path != path || conflict.Expected != "file" || conflict.Actual != "missing" {
+		t.Fatalf("conflict = %+v, want path=%q expected=file actual=missing", conflict, path)
+	}
+
+	denied := classifyStateReadError(path, &os.PathError{Op: "open", Path: path, Err: syscall.EACCES})
+	if IsTxnConflict(denied) {
+		t.Fatalf("an unreadable file is an I/O fault, not a conflict, got %v", denied)
+	}
+	if !errors.Is(denied, syscall.EACCES) {
+		t.Fatalf("denied must wrap the read failure, got %v", denied)
 	}
 }
 
