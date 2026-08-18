@@ -15,6 +15,7 @@ import (
 	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // execReplace is patched in tests to avoid actually replacing the test process.
@@ -109,8 +110,16 @@ func NewNewCmd() *cobra.Command {
 			if err := journaler.Capture(outPath); err != nil {
 				return err
 			}
-			if err := atomicWriteFile("new", outPath, []byte(rendered)); err != nil {
+			// Locked here rather than inside atomicWriteFile because 'bn init' shares
+			// that helper to write the vault marker, before any vault exists to lock in.
+			release, err := vault.LockPaths(cfg.Vault, outPath)
+			if err != nil {
 				return err
+			}
+			writeErr := atomicWriteFile("new", outPath, []byte(rendered))
+			release()
+			if writeErr != nil {
+				return writeErr
 			}
 			if _, err := journaler.Finalize(); err != nil {
 				return err

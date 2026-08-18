@@ -196,15 +196,8 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, WrapError(CodeInternal, "create trash folder", err)))
 			continue
 		}
-		if exists, err := pathExists(dest.AbsPath); err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, WrapError(CodeConflict, "check trash destination", err)))
-			continue
-		} else if exists {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, Errorf(CodeConflict, "trash destination already exists")))
-			continue
-		}
-		if err := os.Rename(source.AbsPath, dest.AbsPath); err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, WrapError(CodeInternal, "move note to trash", err)))
+		if err := moveToTrash(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
+			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
 		}
 
@@ -425,7 +418,7 @@ func bulkMoveOne(v *vault.Vault, cfg *config.Config, item BulkSource, newFolderR
 	if err := ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
 		return BulkItemResult{}, err
 	}
-	if err := RenameFile(plan.Target, plan.NewPath); err != nil {
+	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
 		return BulkItemResult{}, err
 	}
 	return BulkItemResult{

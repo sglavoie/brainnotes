@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
@@ -141,6 +142,14 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 	if err := j.Capture(dest.AbsPath); err != nil {
 		return nil, err
 	}
+	// Without the lock this exclusive create is exactly the writer that wins the
+	// vacancy a concurrent transaction opens while holding the destination in
+	// custody, stranding that transaction's content in a recovery file.
+	release, err := vault.LockPaths(vaultRoot, dest.AbsPath)
+	if err != nil {
+		return nil, classifyTxnError("create: write stub note", err)
+	}
+	defer release()
 	if err := writeNewFileExclusive(dest.AbsPath, body); err != nil {
 		if os.IsExist(err) {
 			return nil, Errorf(CodeConflict, "create: destination %s already exists", dest.RelPath)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 const trashTimestampFormat = "20060102T150405Z"
@@ -105,13 +106,8 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 	if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
 		return nil, WrapError(CodeInternal, "create trash folder", err)
 	}
-	if exists, err := pathExists(dest.AbsPath); err != nil {
-		return nil, WrapError(CodeConflict, "check trash destination", err)
-	} else if exists {
-		return nil, Errorf(CodeConflict, "trash destination already exists")
-	}
-	if err := os.Rename(source.AbsPath, dest.AbsPath); err != nil {
-		return nil, WrapError(CodeInternal, "move note to trash", err)
+	if err := moveToTrash(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
+		return nil, err
 	}
 
 	entry, err := j.Finalize()
@@ -123,6 +119,29 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 		Destination: dest,
 		Journal:     entry,
 	}, nil
+}
+
+// moveToTrash performs the guarded move shared by TrashNote and BulkTrashNotes.
+// It holds the path lock on both ends across the existence check and the rename,
+// so the check cannot go stale before the rename acts on it and the source
+// vacancy the move opens is never visible to another bn writer. It is a function
+// rather than inline code so the locks release per note instead of accumulating
+// across a bulk batch.
+func moveToTrash(vaultRoot, source, dest string) error {
+	release, err := vault.LockPaths(vaultRoot, source, dest)
+	if err != nil {
+		return classifyTxnError("move note to trash", err)
+	}
+	defer release()
+	if exists, err := pathExists(dest); err != nil {
+		return WrapError(CodeConflict, "check trash destination", err)
+	} else if exists {
+		return Errorf(CodeConflict, "trash destination already exists")
+	}
+	if err := os.Rename(source, dest); err != nil {
+		return WrapError(CodeInternal, "move note to trash", err)
+	}
+	return nil
 }
 
 func defaultTrashOptions() trashOptions {

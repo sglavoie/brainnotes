@@ -201,7 +201,7 @@ func (v *Vault) Walk(_ WalkFilter, fn func(*Note) error) error {
 }
 
 func (v *Vault) note(path string) *Note {
-	return &Note{Path: path, root: v.Root}
+	return NewNote(v.Root, path)
 }
 
 // Notes loads every note in the vault into memory and returns them. Convenient

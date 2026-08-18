@@ -133,10 +133,10 @@ func TestFileTxnLocksSameFileThroughASymlinkedRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("eval real root: %v", err)
 	}
-	want := filepath.Join(realRoot, filepath.FromSlash(txnLockRelDir),
+	want := filepath.Join(realRoot, filepath.FromSlash(pathLockRelDir),
 		lockFileName(realRoot, filepath.Join(realRoot, "a.md")))
 	if _, err := os.Stat(want); err != nil {
-		entries, _ := os.ReadDir(filepath.Join(realRoot, filepath.FromSlash(txnLockRelDir)))
+		entries, _ := os.ReadDir(filepath.Join(realRoot, filepath.FromSlash(pathLockRelDir)))
 		names := make([]string, 0, len(entries))
 		for _, entry := range entries {
 			names = append(names, entry.Name())

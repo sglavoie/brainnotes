@@ -173,7 +173,7 @@ func collectReplaceCandidates(v *vault.Vault, cmd *cobra.Command, noteArgs []str
 		sort.Strings(paths)
 		out := make([]*vault.Note, 0, len(paths))
 		for _, p := range paths {
-			n := &vault.Note{Path: p}
+			n := vault.NewNote(v.Root, p)
 			if err := n.Load(); err != nil {
 				return nil, err
 			}

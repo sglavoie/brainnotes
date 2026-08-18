@@ -146,7 +146,7 @@ func MoveNote(v *vault.Vault, cfg *config.Config, targetPath, newFolderArg strin
 	if err := ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
 		return nil, err
 	}
-	if err := RenameFile(plan.Target, plan.NewPath); err != nil {
+	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
 		return nil, err
 	}
 	entry, err := j.Finalize()
@@ -308,7 +308,7 @@ func ApplyMovePlan(vaultRoot string, plan *MovePlan, fmCfg *config.FrontmatterCo
 		out = io.Discard
 	}
 	for _, file := range plan.FileOrder {
-		if err := RewriteFileMove(file, plan.OldRel, plan.NewRel, fmCfg); err != nil {
+		if err := RewriteFileMove(vaultRoot, file, plan.OldRel, plan.NewRel, fmCfg); err != nil {
 			return fmt.Errorf("move: rewrite %s: %w", file, err)
 		}
 		rel, err := filepath.Rel(vaultRoot, file)
@@ -322,8 +322,8 @@ func ApplyMovePlan(vaultRoot string, plan *MovePlan, fmCfg *config.FrontmatterCo
 	return nil
 }
 
-func RewriteFileMove(path, oldRel, newRel string, fmCfg *config.FrontmatterConfig) error {
-	note := &vault.Note{Path: path}
+func RewriteFileMove(vaultRoot, path, oldRel, newRel string, fmCfg *config.FrontmatterConfig) error {
+	note := vault.NewNote(vaultRoot, path)
 	if err := note.Load(); err != nil {
 		return err
 	}

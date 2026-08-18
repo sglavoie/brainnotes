@@ -192,3 +192,93 @@ func TestSaveRejectsRelativePath(t *testing.T) {
 		t.Errorf("error should mention absolute path requirement: %v", err)
 	}
 }
+
+// TestSaveRejectsAStaleRevision covers the lost-update gap. Save carries no
+// caller-supplied precondition, so without its own check it would happily write a
+// document planned against content another writer has already replaced.
+func TestSaveRejectsAStaleRevision(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nfirst\n",
+	})
+	notePath := filepath.Join(v.Root, "a.md")
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := n.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if err := n.SetBody("mine\n"); err != nil {
+		t.Fatalf("setbody: %v", err)
+	}
+
+	const theirs = "---\ntitle: A\n---\ntheirs\n"
+	if err := os.WriteFile(notePath, []byte(theirs), 0o644); err != nil {
+		t.Fatalf("concurrent write: %v", err)
+	}
+
+	err = n.Save(v.Frontmatter())
+	if !IsTxnConflict(err) {
+		t.Fatalf("save err = %v, want *TxnConflictError", err)
+	}
+	if got := readFileString(t, notePath); got != theirs {
+		t.Fatalf("a.md = %q, want the concurrent write intact", got)
+	}
+}
+
+// TestSaveTwiceOnOneHandleSucceeds guards the hash refresh. Save's precondition
+// pins the revision Load read, so without re-pinning after a write the second
+// Save on the same handle would conflict with the first one's own output.
+func TestSaveTwiceOnOneHandleSucceeds(t *testing.T) {
+	v := newTestVault(t, nil, map[string]string{
+		"a.md": "---\ntitle: A\n---\nfirst\n",
+	})
+	n, err := v.ResolveByTitle("a", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := n.SetBody("second\n"); err != nil {
+		t.Fatalf("setbody: %v", err)
+	}
+	if err := n.Save(v.Frontmatter()); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	if err := n.SetBody("third\n"); err != nil {
+		t.Fatalf("setbody: %v", err)
+	}
+	if err := n.Save(v.Frontmatter()); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+	if got := readFileString(t, filepath.Join(v.Root, "a.md")); !strings.Contains(got, "third") {
+		t.Fatalf("a.md = %q, want the second save applied", got)
+	}
+}
+
+// TestSaveRefusesANoteWithNoRoot keeps the rootless case loud. A Note built as a
+// bare literal has no root, and Save needs one to name a lock file and to check
+// containment — skipping both silently is how the path lock came to be
+// unreachable from every production Save in the first place.
+func TestSaveRefusesANoteWithNoRoot(t *testing.T) {
+	dir := t.TempDir()
+	notePath := filepath.Join(dir, "a.md")
+	if err := os.WriteFile(notePath, []byte("---\ntitle: A\n---\nbody\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	n := &Note{Path: notePath}
+	if err := n.Load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if err := n.SetBody("changed\n"); err != nil {
+		t.Fatalf("setbody: %v", err)
+	}
+	err := n.Save(nil)
+	if err == nil {
+		t.Fatal("Save on a rootless note should return an error")
+	}
+	if !strings.Contains(err.Error(), "no vault root") {
+		t.Errorf("error should name the missing root: %v", err)
+	}
+	if got := readFileString(t, notePath); !strings.Contains(got, "body") {
+		t.Errorf("a.md = %q, want unchanged", got)
+	}
+}

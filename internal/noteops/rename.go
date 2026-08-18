@@ -140,7 +140,7 @@ func RenameNote(v *vault.Vault, cfg *config.Config, targetPath, newTitle string,
 	if err := ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
 		return nil, err
 	}
-	if err := RenameFile(plan.Target, plan.NewPath); err != nil {
+	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
 		return nil, err
 	}
 	entry, err := j.Finalize()
@@ -364,7 +364,7 @@ func ApplyRenamePlan(vaultRoot string, plan *RenamePlan, fmCfg *config.Frontmatt
 		out = io.Discard
 	}
 	for _, file := range plan.FileOrder {
-		if err := RewriteFileRename(file, plan.OldTitle, plan.NewTitle, fmCfg); err != nil {
+		if err := RewriteFileRename(vaultRoot, file, plan.OldTitle, plan.NewTitle, fmCfg); err != nil {
 			return fmt.Errorf("rename: rewrite %s: %w", file, err)
 		}
 		rel, err := filepath.Rel(vaultRoot, file)
@@ -378,8 +378,8 @@ func ApplyRenamePlan(vaultRoot string, plan *RenamePlan, fmCfg *config.Frontmatt
 	return nil
 }
 
-func RewriteFileRename(path, oldTitle, newTitle string, fmCfg *config.FrontmatterConfig) error {
-	n := &vault.Note{Path: path}
+func RewriteFileRename(vaultRoot, path, oldTitle, newTitle string, fmCfg *config.FrontmatterConfig) error {
+	n := vault.NewNote(vaultRoot, path)
 	if err := n.Load(); err != nil {
 		return err
 	}
@@ -405,10 +405,20 @@ func RewriteFrontmatterRename(front *frontmatter.Map, oldTitle, newTitle string,
 	rewriteFrontmatterProps(front, oldTitle, newTitle, fmCfg, wikilink.RewriteTitle)
 }
 
-func RenameFile(target, newPath string) error {
+// RenameFile moves target to newPath, holding the path lock on both ends for the
+// whole move. Both need locking: the case-only pivot below empties target for a
+// moment, and the plain rename can land on a newPath that a concurrent
+// transaction is holding in custody — either vacancy is what strands a writer's
+// content in a recovery file.
+func RenameFile(vaultRoot, target, newPath string) error {
 	if target == newPath {
 		return nil
 	}
+	release, err := vault.LockPaths(vaultRoot, target, newPath)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if strings.EqualFold(target, newPath) && target != newPath {
 		dir := filepath.Dir(target)
 		tmp, err := os.CreateTemp(dir, ".rename-pivot-*")

@@ -27,7 +27,7 @@ func TestApplyRepairs_NoActions(t *testing.T) {
 	path := writeRepairNote(t, dir, "note.md", "---\nstatus: WIP\n---\nBody.\n")
 	original := readNote(t, path)
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	changed, err := applyRepairs(n, schema.RepairResult{}, nil, dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -45,7 +45,7 @@ func TestApplyRepairs_SingleAction(t *testing.T) {
 	dir := t.TempDir()
 	path := writeRepairNote(t, dir, "note.md", "---\nstatus: wip\n---\nBody.\n")
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	result := schema.RepairResult{
 		Actions: []schema.RepairAction{
 			{Property: "status", Kind: "canonicalize", OldValue: "wip", NewValue: "WIP"},
@@ -72,7 +72,7 @@ func TestApplyRepairs_MultipleActions(t *testing.T) {
 	path := writeRepairNote(t, dir, "note.md",
 		"---\ndraft: true\nstatus: wip\ntags:\n  - go\n  - go\n---\nBody.\n")
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	result := schema.RepairResult{
 		Actions: []schema.RepairAction{
 			{Property: "draft", Kind: "type_coerce", OldValue: "true", NewValue: true},
@@ -103,7 +103,7 @@ func TestApplyRepairs_TypeCoerceDate(t *testing.T) {
 	dir := t.TempDir()
 	path := writeRepairNote(t, dir, "note.md", "---\ncreated: \"2024-06-15\"\n---\nBody.\n")
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	result := schema.RepairResult{
 		Actions: []schema.RepairAction{
 			{
@@ -131,7 +131,7 @@ func TestApplyRepairs_WikilinkWrap(t *testing.T) {
 	dir := t.TempDir()
 	path := writeRepairNote(t, dir, "note.md", "---\nparent: Books\n---\nBody.\n")
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	result := schema.RepairResult{
 		Actions: []schema.RepairAction{
 			{Property: "parent", Kind: "wikilink_wrap", OldValue: "Books", NewValue: "[[Books]]"},
@@ -159,7 +159,7 @@ func TestApplyRepairs_DryRunEmitsDiff(t *testing.T) {
 	dir := t.TempDir()
 	path := writeRepairNote(t, dir, "note.md", "---\nstatus: wip\n---\nBody.\n")
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	result := schema.RepairResult{
 		Actions: []schema.RepairAction{
 			{Property: "status", Kind: "canonicalize", OldValue: "wip", NewValue: "WIP"},
@@ -195,7 +195,7 @@ func TestApplyRepairs_DryRunMultipleActions(t *testing.T) {
 	path := writeRepairNote(t, dir, "note.md",
 		"---\nstatus: wip\ntags:\n  - go\n  - go\n---\nBody.\n")
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	result := schema.RepairResult{
 		Actions: []schema.RepairAction{
 			{Property: "status", Kind: "canonicalize", OldValue: "wip", NewValue: "WIP"},
@@ -229,7 +229,7 @@ func TestApplyRepairs_BodyPreserved(t *testing.T) {
 	dir := t.TempDir()
 	path := writeRepairNote(t, dir, "note.md", "---\nstatus: wip\n---\n"+body)
 
-	n := &vault.Note{Path: path}
+	n := vault.NewNote(dir, path)
 	result := schema.RepairResult{
 		Actions: []schema.RepairAction{
 			{Property: "status", Kind: "canonicalize", OldValue: "wip", NewValue: "WIP"},
@@ -265,7 +265,7 @@ func TestApplyRepairs_Deterministic(t *testing.T) {
 	var outputs []string
 	for i := 0; i < 3; i++ {
 		path := writeRepairNote(t, dir, "note.md", content)
-		n := &vault.Note{Path: path}
+		n := vault.NewNote(dir, path)
 		if _, err := applyRepairs(n, result, fmCfg, dir, nil); err != nil {
 			t.Fatalf("run %d: %v", i, err)
 		}

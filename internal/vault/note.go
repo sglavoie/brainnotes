@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,18 @@ type Note struct {
 	// transaction to the exact revision it parsed, so a concurrent external edit
 	// between Load and commit is rejected instead of silently overwritten.
 	sourceHash string
+	// sourcePath is the path sourceHash was read from. Save compares it to Path
+	// because a caller may retarget Path after loading, and the loaded revision
+	// says nothing about a different destination.
+	sourcePath string
+}
+
+// NewNote returns a handle to the absolute path within the vault rooted at root.
+// Save needs the root to name a lock file and to check containment, so a caller
+// that intends to write must build notes here (or through Vault) rather than
+// with a bare Note literal.
+func NewNote(root, path string) *Note {
+	return &Note{Path: path, root: root}
 }
 
 // Load reads and parses the note from disk. Safe to call repeatedly; only the
@@ -54,6 +67,7 @@ func (n *Note) Load() error {
 	}
 	n.doc = doc
 	n.sourceHash = HashBytes(data)
+	n.sourcePath = n.Path
 	n.loaded = true
 	return nil
 }
@@ -102,6 +116,11 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if !filepath.IsAbs(n.Path) {
 		return fmt.Errorf("note: save %q: path must be absolute", n.Path)
 	}
+	// A rootless note can neither name a lock file nor check containment, so saving
+	// one would skip both without saying so. Refuse rather than degrade.
+	if n.root == "" {
+		return fmt.Errorf("note: save %q: note has no vault root (build it with vault.NewNote)", n.Path)
+	}
 	if err := n.ensureSavePathContained(); err != nil {
 		return err
 	}
@@ -109,13 +128,46 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if err != nil {
 		return fmt.Errorf("note: marshal %q: %w", n.Path, err)
 	}
-	return atomicWrite(n.Path, data)
+	// The lock spans the precondition check and the rename, which is what makes the
+	// two one compare-and-swap: no other bn writer can change the file in between,
+	// and this write cannot land in the vacancy a concurrent FileTxn opens while
+	// holding the destination in custody.
+	release, err := LockPaths(n.root, n.Path)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := n.verifySourceUnchanged(); err != nil {
+		return err
+	}
+	if err := atomicWrite(n.Path, data); err != nil {
+		return err
+	}
+	n.sourceHash = HashBytes(data)
+	n.sourcePath = n.Path
+	return nil
+}
+
+// verifySourceUnchanged rejects a write planned against a revision that is no
+// longer on disk, so a concurrent edit between Load and Save is a conflict rather
+// than a lost update. The check only means something for the file Load read: a
+// caller that retargets Path is writing somewhere the loaded revision makes no
+// claim about, so that write keeps the older unconditional behavior.
+func (n *Note) verifySourceUnchanged() error {
+	if n.Path != n.sourcePath {
+		return nil
+	}
+	err := verifyCurrentState(n.Path, ExpectHash(n.sourceHash))
+	// A destination this process cannot read cannot be compared against, and
+	// saving a mode-0000 note is supported, so treat it as unverifiable instead of
+	// refusing the write.
+	if errors.Is(err, fs.ErrPermission) {
+		return nil
+	}
+	return err
 }
 
 func (n *Note) ensureSavePathContained() error {
-	if n.root == "" {
-		return nil
-	}
 	realRoot, err := filepath.EvalSymlinks(n.root)
 	if err != nil {
 		return fmt.Errorf("note: resolve root %q: %w", n.root, err)

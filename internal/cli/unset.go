@@ -150,45 +150,26 @@ func applyUnset(path string, props []string, cfg *config.Config, vaultRoot strin
 	if err != nil {
 		return false, err
 	}
-	if dry != nil {
-		preview := noteops.NotePreview{RelPath: displayPath(path, vaultRoot)}
-		// Deduplicate property names so callers passing the same key twice
-		// (e.g. via shell expansion) do not see the same change line repeated.
-		// The non-dry path is naturally idempotent because the second Unset
-		// finds Has=false; the dry preview must match.
-		seen := make(map[string]struct{}, len(props))
-		for _, p := range props {
-			if _, dup := seen[p]; dup {
-				continue
-			}
-			seen[p] = struct{}{}
-			v, ok := front.Get(p)
-			if !ok {
-				continue
-			}
-			preview.Changes = append(preview.Changes,
-				noteops.FrontmatterChange(p, true, v, false, nil))
-		}
-		if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
-			return false, err
-		}
-		return preview.Changed(), nil
-	}
-	changed := false
+	preview := noteops.NotePreview{RelPath: displayPath(path, vaultRoot)}
+	// Deduplicate property names so callers passing the same key twice
+	// (e.g. via shell expansion) do not see the same change line repeated.
+	// The non-dry path is naturally idempotent because the second Unset
+	// finds Has=false; the dry preview must match.
+	seen := make(map[string]struct{}, len(props))
 	for _, p := range props {
-		if front.Has(p) {
-			front.Unset(p)
-			changed = true
+		if _, dup := seen[p]; dup {
+			continue
 		}
+		seen[p] = struct{}{}
+		v, ok := front.Get(p)
+		if !ok {
+			continue
+		}
+		preview.Changes = append(preview.Changes,
+			noteops.FrontmatterChange(p, true, v, false, nil))
 	}
-	if !changed {
-		return false, nil
-	}
-	if err := journaler.Capture(path); err != nil {
+	if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
 		return false, err
 	}
-	if err := n.Save(&cfg.Frontmatter); err != nil {
-		return false, err
-	}
-	return true, nil
+	return preview.Changed(), nil
 }

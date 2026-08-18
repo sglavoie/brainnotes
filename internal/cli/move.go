@@ -142,7 +142,7 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted; run 'git diff' to inspect partial state")
 		return err
 	}
-	if err := noteops.RenameFile(plan.Target, plan.NewPath); err != nil {
+	if err := noteops.RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted after content rewrites; run 'git diff' to inspect partial state")
 		return err
 	}
