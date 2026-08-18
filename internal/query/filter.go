@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/pins"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -298,6 +299,25 @@ func Orphan(g *Graph) Predicate {
 			}
 		}
 		return true
+	}
+}
+
+// Pinned matches notes the user has pinned, reading the raw `pinned`
+// frontmatter value through pins.Classify. It needs no
+// [frontmatter.properties.pinned] declaration, so it works in any vault, and it
+// matches unranked pins (a hand-written `pinned: true`) as well as ranked ones.
+func Pinned() Predicate {
+	return func(n *vault.Note) bool {
+		if n == nil {
+			return false
+		}
+		fm, err := n.Front()
+		if err != nil {
+			return false
+		}
+		raw, present := fm.Get(pins.PropertyName)
+		_, kind := pins.Classify(raw, present)
+		return kind != pins.NotPinned
 	}
 }
 

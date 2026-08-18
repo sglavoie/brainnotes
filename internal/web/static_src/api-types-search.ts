@@ -6,4 +6,5 @@ export type SearchResult = {
   matched_fields: string[];
   issues: string[];
   snippet: string;
+  pinned: boolean;
 };

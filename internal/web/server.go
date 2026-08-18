@@ -21,6 +21,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -67,6 +68,11 @@ type Server struct {
 	// the configuration pin protects, which cannot be provoked reliably
 	// otherwise; it is nil in production.
 	beforePropertyCommit func()
+	// beforePinnedNotesCommit runs after a pin plan is built and before it is
+	// committed. It exists so tests can hold two requests inside the
+	// validation-to-commit window the pinned-list preconditions protect, which
+	// cannot be provoked reliably otherwise; it is nil in production.
+	beforePinnedNotesCommit func()
 }
 
 type notePageData struct {
@@ -85,6 +91,7 @@ type notePageData struct {
 	Broken             []brokenAffordance
 	InsightConfigured  bool
 	InsightStatusMsg   string
+	Pinned             bool
 }
 
 type brokenPageData struct {
@@ -217,6 +224,9 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/notes/move", srv.handleNoteMove)
 	mux.HandleFunc("/api/notes/frontmatter/set", srv.handleNoteFrontmatterSet)
 	mux.HandleFunc("/api/notes/frontmatter/unset", srv.handleNoteFrontmatterUnset)
+	mux.HandleFunc(notePinSetAPIRoutePath, srv.handleNotePinSet)
+	mux.HandleFunc(notePinRemoveAPIRoutePath, srv.handleNotePinRemove)
+	mux.HandleFunc(notePinReorderAPIRoutePath, srv.handleNotePinReorder)
 	mux.HandleFunc("/api/notes/bulk/preview", srv.handleNotesBulkPreview)
 	mux.HandleFunc("/api/notes/bulk", srv.handleNotesBulk)
 	mux.HandleFunc("/api/history", srv.handleHistory)
@@ -237,6 +247,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc(propertySchemaApplyAPIRoutePath, srv.handlePropertySchemaApply)
 	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
 	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
+	mux.HandleFunc(pinnedRoutePath, srv.handlePinnedPage)
 	mux.HandleFunc(libraryRoutePath, srv.handleLibrary)
 	mux.HandleFunc(healthRoutePath, srv.handleHealth)
 	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
@@ -421,6 +432,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Outgoing:           outgoingLinksForNote(snapshot.graph, note),
 		Broken:             brokenAffordancesForNote(note, snapshot.graph),
 		InsightConfigured:  len(cfg.Agent.Command) > 0,
+		Pinned:             query.Pinned()(note),
 	}
 	if !data.InsightConfigured {
 		data.InsightStatusMsg = "Ask AI is unavailable until [agent].command is configured."

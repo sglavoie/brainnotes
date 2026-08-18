@@ -38,6 +38,7 @@ type rootPageData struct {
 	LibraryPath          string
 	HealthPath           string
 	GraphPath            string
+	PinnedPath           string
 	Activity             rootActivityData
 	Continue             rootBriefSlotView
 	Rediscover           rootBriefSlotView
@@ -59,6 +60,7 @@ type rootPageData struct {
 	CaptureRelPath    string
 	CaptureHeading    string
 	Recent            []indexRecentNote
+	Pinned            []pinnedNoteView
 	Health            rootCompactHealthData
 }
 
@@ -261,6 +263,7 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 		LibraryPath:          libraryRoutePath,
 		HealthPath:           healthRoutePath,
 		GraphPath:            graphRoutePath,
+		PinnedPath:           pinnedRoutePath,
 		Activity: rootActivityData{
 			VisitDays: daily.Activity.Last7Days.VisitDays,
 			OpenCount: daily.Activity.Last7Days.OpenCount,
@@ -279,6 +282,7 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 		InsightConfigured:  insightConfigured,
 		InsightStatusMsg:   insightStatusMsg,
 		Recent:             summary.Recent,
+		Pinned:             buildPinnedNoteViews(snapshot, s.vault.Root, indexPinnedLimit),
 		Health:             health,
 	}, nil
 }

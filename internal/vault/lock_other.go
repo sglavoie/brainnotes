@@ -9,6 +9,10 @@ import "os"
 // FileTxn.lockPaths.
 const lockingSupported = false
 
-func tryLockExclusive(_ *os.File) (bool, error) { return true, nil }
+// openFileLimit reports no budget: no lock descriptor is ever opened here, so
+// nothing a transaction does is bounded by the descriptor limit.
+func openFileLimit() (int, bool) { return 0, false }
+
+func tryLock(_ *os.File, _ bool) (bool, error) { return true, nil }
 
 func unlockFile(_ *os.File) error { return nil }

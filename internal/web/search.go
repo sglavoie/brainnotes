@@ -22,6 +22,7 @@ type searchResult struct {
 	Folder        string   `json:"folder"`
 	Path          string   `json:"path"`
 	Snippet       string   `json:"snippet"`
+	Pinned        bool     `json:"pinned"`
 	MatchedFields []string `json:"matched_fields,omitempty"`
 	Issues        []string `json:"issues,omitempty"`
 }
@@ -55,6 +56,8 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		{name: "dead_end", match: query.DeadEnd(snapshot.graph)},
 		{name: "orphan", match: query.Orphan(snapshot.graph)},
 	}
+
+	pinned := query.Pinned()
 
 	candidates := make([]searchCandidate, 0, len(snapshot.notes))
 	for _, note := range snapshot.notes {
@@ -92,6 +95,7 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 				Folder:        folder,
 				Path:          path,
 				Snippet:       html.EscapeString(makeSearchSnippet(match.Body, match.BodyMatchIndex)),
+				Pinned:        pinned(note),
 				MatchedFields: searchMatchedFields(match, filters.foldedQuery != ""),
 				Issues:        searchIssueFlags(note, issuePredicates),
 			},

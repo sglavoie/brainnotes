@@ -159,6 +159,12 @@ type = "wikilink"
 [frontmatter.properties.area]
 type = "wikilink"
 
+# Ordering key for pinned notes: lower ranks come first, and a drag in the web
+# UI writes the midpoint between two neighbours. Declared here as documentation
+# only — pinning writes this type explicitly, so it works without this block.
+[frontmatter.properties.pinned]
+type = "float"
+
 [fzf]
 # Args appended to the fzf invocation when `-i` is passed.
 args = ["--preview", "bat --style=plain --color=always {}"]
@@ -286,6 +292,7 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
         [--created EXPR] [--age EXPR] [--orphan]
         [--min-links n] [--max-links n] [--dead-end]
         [--broken-links [--show-broken | --list-broken-targets]]
+        [--pinned]
         [-i | --interactive] [-0]
 ```
 
@@ -335,6 +342,13 @@ Two companion flags provide detail views (mutually exclusive, both require
 | `--show-broken` | One line per broken link: `<relpath>:<line>: [[target]]` for body links, `<relpath>:frontmatter[<key>]: [[target]]` for frontmatter links. |
 | `--list-broken-targets` | Unique broken target titles, sorted case-insensitively, one per line. |
 
+`--pinned` selects notes carrying a `pinned` property and prints them in pinned
+order — ascending rank first, then unranked pins, each group tie-broken by path
+— instead of the default path sort. Only an absent key and the YAML boolean
+`false` count as unpinned; a hand-written `pinned: true` or `pinned: "high"` is
+pinned but has no rank, so it sorts after every ranked pin. Ranks are written by
+`bn pin` and reordered in `bn serve`.
+
 Examples:
 
 ```sh
@@ -346,6 +360,7 @@ bn find --dead-end                        # no resolved outgoing links, unless e
 bn find --broken-links                    # notes with unresolved wikilinks
 bn find --broken-links --show-broken      # per-link detail
 bn find --broken-links --list-broken-targets  # unique missing titles
+bn find --pinned                          # pinned notes, in pinned order
 bn find --tag drafts -i                   # interactive fzf pick
 bn find --tag drafts -0 | xargs -0 nvim   # safe for spaces in paths
 ```
@@ -806,6 +821,48 @@ bn capture --dry-run "idea worth checking"
 bn capture --note "Scratch.md" "one-off idea"
 ```
 
+### `bn pin` — keep a note at hand
+
+```sh
+bn pin <note> [--dry-run]
+```
+
+Appends a note to the pinned list by writing a `pinned` float rank into its
+frontmatter: one more than the highest existing rank, so the note lands last.
+The note is named by title (case-insensitive) or by path.
+
+State lives in the note, not in a sidecar, so a pin survives `bn rename` and
+`bn move` for free and is visible and editable in Obsidian. The rank is always
+written as a float, whether or not `brainnotes.toml` declares
+`[frontmatter.properties.pinned]`, so pinning works in any vault.
+
+Pinning an already-pinned note is a no-op that leaves its rank alone — including
+a hand-written `pinned: true`, which is never overwritten with a rank.
+Reordering is web-only (`bn serve` → `/pinned`): dragging writes the midpoint
+between two neighbouring ranks, so one drag rewrites exactly one note.
+
+```sh
+bn pin "Reading List"
+bn pin Projects/Reading\ List.md
+bn pin --dry-run "Reading List"
+```
+
+### `bn unpin` — drop a note from the pinned list
+
+```sh
+bn unpin <note> [--dry-run]
+```
+
+Removes the `pinned` property entirely rather than writing `pinned: false`, so
+`--has pinned` and `--missing pinned` keep agreeing with `--pinned`. Unpinning a
+note that is not pinned is a silent no-op. Both `bn pin` and `bn unpin` are
+journaled, so `bn undo` reverts either.
+
+```sh
+bn unpin "Reading List"
+bn unpin --dry-run "Reading List"
+```
+
 ### `bn open` — pick a note with fzf and edit it
 
 ```sh
@@ -849,10 +906,12 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `/library` faceted search, bulk note operations, change history, and recent notes
 - `/health` Daily Fixes, vault metrics, and full diagnostics from the shared snapshot
 - `/properties` property catalog and `/properties/<key>` the interactive property workbench
+- `/pinned` the full pinned list in your order, with drag or arrow-key reordering
 - `/n/<note-key>` rendered note view (body, editable frontmatter, backlinks/outgoing, broken affordances)
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
 - `POST /api/capture` quick capture into the configured inbox note, echoing the exact line written
+- `POST /api/pins/set`, `POST /api/pins/remove`, and `POST /api/pins/reorder` pin, unpin, and reorder, addressed by note key only
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
 - `POST /api/brief/view` idempotent per-day visit recording that refreshes the rolling activity summary
 - `POST /api/brief/item` card actions (`open` and `another`) addressed by server-issued `card_id` only
@@ -892,14 +951,56 @@ same whole-note caveat as the CLI. When `[capture].inbox_note` or `[capture].hea
 configured, the panel still renders but is disabled and names the two keys to
 set, so an unconfigured vault does not look like the feature is missing.
 
-`POST /api/capture` is the second — and only other — unpreviewed write in the
-web UI. It qualifies for the same reason `POST /api/properties/value` does, from
-the other direction: one note, strictly additive, so it cannot destroy existing
-bytes, and a confirm step would defeat the point of a quick-capture box. Its
+`POST /api/capture` is unpreviewed, like `POST /api/properties/value` and the
+single-note frontmatter routes, but qualifies from the other direction: one
+note, strictly additive, so it cannot destroy existing bytes, and a confirm step
+would defeat the point of a quick-capture box. Its
 safety comes from the append transaction being pinned to the revision it planned
 against rather than from a client-echoed note hash — the box never loaded the
 note and has no hash to send. A conflict that survives the primitive's three
 internal replans returns `409`; resubmitting is always safe.
+
+**Pinned notes.** Four surfaces share one list: a section on `/` showing the
+first seven pins with a link to the rest, the full `/pinned` page, a Pin/Unpin
+toggle on every note page, and the same toggle on `/library` search rows. State
+is the `pinned` frontmatter rank `bn pin` writes, so the CLI, Obsidian, and the
+web UI always see the same list.
+
+Reordering is web-only. Drag a row's handle on `/pinned`, or focus a handle and
+press `Up`/`Down` for the same move from the keyboard. The browser posts note
+keys, never ranks — the server takes the midpoint of the two neighbouring ranks
+as they are on disk, so a stale page cannot write an order it computed against a
+list that has since moved. A move normally rewrites exactly one note; in the
+rare case where the float gap between two ranks is exhausted, the server
+renumbers the whole pinned list in one transaction instead, so that one reorder
+can rewrite more than one note. The pinned list is uncapped and so is that
+renumber: however long the list is, it commits as one action that `bn undo`
+reverts in one step, or it does not commit at all.
+
+The two named neighbours must still sit either side of one gap, and the two ways
+that can fail answer differently. A neighbour key naming a note that is no
+longer in the vault at all returns `404`. A neighbour that still exists but is
+no longer pinned returns `409`, and so does a pair that is still pinned but now
+has another pin between them, or that names a head or tail which is no longer
+the real end of the list. Reload the page in either case. Reordering never runs from
+the CLI.
+
+That gap check is also a commit precondition: a reorder pins the revision of
+every note in the pinned list it validated against, so a gap another writer
+filled in between is refused with `409` instead of interpolated into twice. Two
+reorders that move different notes into the same gap therefore cannot both
+succeed, and the one that is refused leaves no note change and no journal entry
+behind.
+
+`POST /api/pins/set`, `POST /api/pins/remove`, and `POST /api/pins/reorder` are
+the same write class as `POST /api/notes/frontmatter/set`: CSRF-gated,
+single-property, and pinned to the revision they planned against rather than to
+a client-echoed hash. They are unpreviewed for the same reason that route is —
+one property whose whole content is a number this UI owns. Each of them writes
+only the `pinned` property, and each writes a single note — with one deliberate
+exception: the whole-list renormalization above, where a `reorder` that runs out
+of float gap renumbers the whole pinned list through a single transaction,
+because half a renumbering is a scrambled order rather than a partial one.
 
 Daily Brief cards stay stable for the local day (including restarts): Continue
 shows the most recently edited substantive note, Rediscover surfaces the
@@ -1147,11 +1248,17 @@ follow it via `POST /api/properties/preview` and `POST /api/properties/apply`
 (definitions use `POST /api/properties/schema/preview` and
 `POST /api/properties/schema/apply`). Property receipts are additionally
 invalidated when `brainnotes.toml` changes, so an apply planned against an older
-configuration is refused rather than reinterpreted. Exactly two routes are
-exempt from preview-gating, both deliberately narrow. `POST /api/properties/value`
+configuration is refused rather than reinterpreted. Preview-gating covers every
+change that spans notes or properties; the routes exempt from it are all
+single-note and deliberately narrow. `POST /api/properties/value`
 accepts only a single-note value replacement or list addition, and it requires the
 note's current hash, so a note edited since the page loaded is rejected with
-`409`. `POST /api/capture` appends one line to one note and cannot destroy
+`409`. `POST /api/notes/frontmatter/set`, `POST /api/notes/frontmatter/unset`,
+and the three `POST /api/pins/*` routes each write one property and rely on the
+write's own revision precondition rather than a client-echoed hash. All of them
+write a single note except one: a `POST /api/pins/reorder` whose float gap is
+exhausted renumbers the whole pinned list in one transaction.
+`POST /api/capture` appends one line to one note and cannot destroy
 existing bytes; it sends no hash (the quick-capture box never loaded the note)
 and is instead pinned to the revision its append was planned against, so a
 competing write is rejected with `409` rather than overwritten. Cockpit triage

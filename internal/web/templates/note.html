@@ -82,6 +82,11 @@
           <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>
         </div>
 
+        <div class="note-action-group" data-pin-note data-pin-key="{{.Key}}" data-pin-csrf="{{.CSRFToken}}" data-pin-state="{{if .Pinned}}pinned{{else}}unpinned{{end}}">
+          <button type="button" class="pin-button" data-pin-button aria-pressed="{{if .Pinned}}true{{else}}false{{end}}">{{if .Pinned}}Unpin{{else}}Pin{{end}}</button>
+          <p class="pin-note-status" data-pin-status role="status" aria-live="polite"></p>
+        </div>
+
         <div class="note-action-group" data-trash-note data-trash-key="{{.Key}}" data-trash-csrf="{{.CSRFToken}}" data-trash-confirm="Move &quot;{{.Title}}&quot; to Trash?" data-trash-redirect="/">
           <button type="button" class="trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
           <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>

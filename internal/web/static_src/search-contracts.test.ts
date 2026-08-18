@@ -46,6 +46,7 @@ describe("search URL and result contracts", () => {
         matched_fields: [" title ", "", "body"],
         issues: ["dead_end", 3],
         snippet: " <mark>daily</mark> ",
+        pinned: true,
       },
       {
         key: "folder/name with spaces.md",
@@ -62,6 +63,7 @@ describe("search URL and result contracts", () => {
       matched_fields: ["title", "body"],
       issues: ["dead_end", "3"],
       snippet: "<mark>daily</mark>",
+      pinned: true,
     });
     expect(searchResultPath(results[0])).toBe("/n/server/path");
     expect(searchResultPath(results[1])).toBe("/n/folder/name%20with%20spaces.md");

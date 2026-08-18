@@ -69,6 +69,12 @@ type = "wikilink"
 [frontmatter.properties.area]
 type = "wikilink"
 
+# Ordering key for pinned notes: lower ranks come first, and a drag in the web
+# UI writes the midpoint between two neighbours. Declared here as documentation
+# only — pinning writes this type explicitly, so it works without this block.
+[frontmatter.properties.pinned]
+type = "float"
+
 [fzf]
 # Additional flags passed to fzf when --interactive is used.
 # args = ["--height=40%", "--reverse"]

@@ -73,11 +73,17 @@ ci:
     go test ./...
     npm run typecheck:web
     npm run test:web
+    bundle=internal/web/static/app.js
+    if [ ! -f "$bundle" ]; then
+        echo "generated bundle missing: $bundle"
+        exit 1
+    fi
+    before=$(git hash-object "$bundle")
     npm run build:web
-    drift=$(git status --porcelain -- internal/web/static/app.js)
-    if [ -n "$drift" ]; then
-        echo "generated bundle drift detected in internal/web/static/app.js:"
-        git --no-pager diff -- internal/web/static/app.js
+    after=$(git hash-object "$bundle")
+    if [ "$before" != "$after" ]; then
+        echo "generated bundle drift detected in $bundle: the on-disk bundle is not what the current TypeScript source produces"
+        git --no-pager diff -- "$bundle"
         exit 1
     fi
     echo "CI clean"

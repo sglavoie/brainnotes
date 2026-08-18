@@ -5,6 +5,7 @@ export * from "./api-cockpit";
 export * from "./api-facets";
 export * from "./api-history";
 export * from "./api-notes";
+export * from "./api-pins";
 export * from "./api-properties";
 export * from "./api-properties-mutation";
 export * from "./api-search";

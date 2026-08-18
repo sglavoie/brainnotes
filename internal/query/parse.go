@@ -28,6 +28,7 @@ type Flags struct {
 	Created      string
 	Folder       string
 	Orphan       bool
+	Pinned       bool
 	BrokenLinks  bool
 	MinBacklinks int
 	MaxBacklinks int
@@ -123,6 +124,10 @@ func FromFlags(f Flags) (Predicate, error) {
 			return nil, fmt.Errorf("query: %s: %w", spec.flag, err)
 		}
 		ps = append(ps, Age(op, dur, spec.field))
+	}
+
+	if f.Pinned {
+		ps = append(ps, Pinned())
 	}
 
 	folder := strings.TrimSpace(f.Folder)

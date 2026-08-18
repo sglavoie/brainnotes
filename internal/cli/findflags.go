@@ -21,6 +21,7 @@ type findFlags struct {
 	created      string
 	folder       string
 	orphan       bool
+	pinned       bool
 	brokenLinks  bool
 	minBacklinks int
 	maxBacklinks int
@@ -41,6 +42,7 @@ func (ff *findFlags) register(cmd *cobra.Command) {
 	f.StringVar(&ff.created, "created", "", "filter by 'created' property age, e.g. >30d, <7d, =0d")
 	f.StringVar(&ff.folder, "folder", "", "limit to a vault-relative folder (matches descendants)")
 	f.BoolVar(&ff.orphan, "orphan", false, "only notes nothing in the vault links to")
+	f.BoolVar(&ff.pinned, "pinned", false, "only notes pinned via the 'pinned' property")
 	f.BoolVar(&ff.brokenLinks, "broken-links", false, "only notes with unresolved wikilinks")
 	f.IntVar(&ff.minBacklinks, "min-backlinks", -1, "minimum inbound links from other notes")
 	f.IntVar(&ff.maxBacklinks, "max-backlinks", -1, "maximum inbound links from other notes")
@@ -67,6 +69,7 @@ func (ff *findFlags) toQueryFlags(root string, g *query.Graph) query.Flags {
 		Created:      ff.created,
 		Folder:       ff.folder,
 		Orphan:       ff.orphan,
+		Pinned:       ff.pinned,
 		BrokenLinks:  ff.brokenLinks,
 		MinBacklinks: ff.minBacklinks,
 		MaxBacklinks: ff.maxBacklinks,

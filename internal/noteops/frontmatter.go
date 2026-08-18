@@ -31,9 +31,12 @@ type FrontmatterMutation struct {
 	Value any
 }
 
-// FrontmatterResult describes a completed note frontmatter update.
+// FrontmatterResult describes a completed note frontmatter update. Single-note
+// callers read Source; SetFrontmatterAtomic fills Sources with every note it
+// resolved, in request order, and leaves Source zero.
 type FrontmatterResult struct {
 	Source  PathResolution
+	Sources []PathResolution
 	Journal *journal.Entry
 	Changed bool
 }
@@ -49,6 +52,11 @@ type frontmatterOptions struct {
 	command        string
 	journalOptions []journal.RecorderOption
 	requires       []fileRequirement
+	// beforeAtomicCommit runs after SetFrontmatterAtomic has planned every note
+	// and before the transaction stages anything. Only a test sets it: the window
+	// where a pinned hash goes stale is not otherwise reachable from outside the
+	// call, and it is the window the whole-set refusal depends on.
+	beforeAtomicCommit func() error
 }
 
 // FrontmatterOption customizes SetFrontmatter and UnsetFrontmatter.

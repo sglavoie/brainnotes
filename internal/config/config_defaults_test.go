@@ -263,6 +263,7 @@ func TestDefaultTemplate_DefinesStarterProperties(t *testing.T) {
 		"type":       {Type: KindList, Items: KindString},
 		"parent":     {Type: KindWikilink},
 		"area":       {Type: KindWikilink},
+		"pinned":     {Type: KindFloat},
 	}
 	if len(cfg.Frontmatter.Properties) != len(want) {
 		t.Fatalf("Properties = %+v, want %d entries", cfg.Frontmatter.Properties, len(want))

@@ -606,6 +606,8 @@ a:focus-visible,
 .filter-form button:focus-visible,
 .open-editor-button:focus-visible,
 .trash-note-button:focus-visible,
+.pin-button:focus-visible,
+.pinned-drag-handle:focus-visible,
 .frontmatter-button:focus-visible,
 .create-note-button:focus-visible,
 .copy-button:focus-visible,
@@ -1563,9 +1565,14 @@ code {
 
 .overview-result-row.has-selection {
   display: grid;
-  grid-template-columns: 1.65rem minmax(0, 1fr);
+  grid-template-columns: 1.65rem minmax(0, 1fr) auto;
   gap: 0.45rem;
   align-items: start;
+}
+
+.overview-result-pin {
+  margin-top: 0.6rem;
+  justify-self: end;
 }
 
 .overview-result-select {
@@ -2191,6 +2198,109 @@ code {
   white-space: nowrap;
 }
 
+.pinned-hint,
+.pinned-empty,
+.pinned-status {
+  margin: 0 0 0.6rem;
+  color: var(--bn-muted);
+  font-size: 0.88rem;
+}
+
+.pinned-status {
+  margin: 0.6rem 0 0;
+  min-height: 1.2rem;
+}
+
+.pinned-status:empty {
+  display: none;
+}
+
+.pinned-status.is-success {
+  color: var(--bn-success);
+}
+
+.pinned-status.is-error {
+  color: var(--bn-danger);
+}
+
+.pinned-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pinned-list-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  border-top: 1px solid var(--bn-border);
+  padding: 0.5rem 0;
+}
+
+.pinned-list-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* A row being dragged keeps its box so the list does not reflow under the
+   pointer while session 6's pointer handler moves it. */
+.pinned-list-item.is-dragging {
+  background: var(--bn-hover);
+}
+
+.pinned-list-item.is-drop-target {
+  box-shadow: inset 0 2px 0 0 var(--bn-accent);
+}
+
+.pinned-drag-handle {
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  color: var(--bn-muted);
+  background: none;
+  font: inherit;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pinned-drag-handle:hover {
+  border-color: var(--bn-border);
+  background: var(--bn-hover);
+}
+
+.pinned-note-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pinned-note-meta {
+  display: flex;
+  gap: 0.75rem;
+  margin-left: auto;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.pinned-rank {
+  font-variant-numeric: tabular-nums;
+}
+
+.pinned-rank-unranked {
+  color: var(--bn-danger);
+}
+
+.pin-button[aria-pressed="true"] {
+  border-color: var(--bn-accent-subtle-border);
+  color: var(--bn-accent-subtle-text);
+  background: var(--bn-accent-subtle-bg);
+}
+
+.pin-button[aria-pressed="true"]:hover {
+  background: var(--bn-accent-subtle-bg);
+}
+
 .note-actions {
   display: flex;
   align-items: flex-start;
@@ -2209,6 +2319,7 @@ code {
 
 .open-editor-button,
 .trash-note-button,
+.pin-button,
 .note-sidebar-toggle,
 .frontmatter-button,
 .create-note-button,
@@ -2227,6 +2338,7 @@ code {
 
 .note-actions .open-editor-button,
 .note-actions .trash-note-button,
+.note-actions .pin-button,
 .note-actions .note-sidebar-toggle,
 .note-actions .copy-button {
   order: 1;
@@ -2240,6 +2352,7 @@ code {
 
 .open-editor-button:hover,
 .trash-note-button:hover,
+.pin-button:hover,
 .note-sidebar-toggle:hover,
 .frontmatter-button:hover,
 .create-note-button:hover,
@@ -2255,6 +2368,8 @@ code {
 
 .open-editor-button:disabled,
 .trash-note-button:disabled,
+.pin-button:disabled,
+.pinned-drag-handle:disabled,
 .note-sidebar-toggle:disabled,
 .frontmatter-button:disabled,
 .create-note-button:disabled,
@@ -2267,6 +2382,7 @@ code {
 
 .open-editor-status,
 .trash-note-status,
+.pin-note-status,
 .frontmatter-edit-status,
 .create-note-status,
 .copy-status {
@@ -2278,6 +2394,7 @@ code {
 
 .note-actions .open-editor-status,
 .note-actions .trash-note-status,
+.note-actions .pin-note-status,
 .note-actions .copy-status {
   order: 2;
   flex: 0 0 100%;
@@ -2288,12 +2405,14 @@ code {
 
 .note-actions .open-editor-status:empty,
 .note-actions .trash-note-status:empty,
+.note-actions .pin-note-status:empty,
 .note-actions .copy-status:empty {
   display: none;
 }
 
 .open-editor-status.is-success,
 .trash-note-status.is-success,
+.pin-note-status.is-success,
 .frontmatter-edit-status.is-success,
 .create-note-status.is-success,
 .copy-status.is-success {
@@ -2302,6 +2421,7 @@ code {
 
 .open-editor-status.is-error,
 .trash-note-status.is-error,
+.pin-note-status.is-error,
 .frontmatter-edit-status.is-error,
 .create-note-status.is-error,
 .copy-status.is-error {

@@ -383,6 +383,27 @@
 
     <section class="panel">
       <div class="panel-header">
+        <h2>Pinned</h2>
+      </div>
+      {{if .Pinned}}
+        <ol class="pinned-list">
+          {{range .Pinned}}
+            <li class="pinned-list-item" data-pinned-item data-pinned-key="{{.Key}}">
+              <a class="pinned-note-title" href="{{.Path}}">{{.Title}}</a>
+              <span class="pinned-note-meta">
+                <span class="pinned-note-folder">{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
+              </span>
+            </li>
+          {{end}}
+        </ol>
+        <p><a href="{{.PinnedPath}}">See all pinned notes</a></p>
+      {{else}}
+        <p>No pinned notes yet. <a href="{{.PinnedPath}}">Pinned</a> collects the notes you keep at hand.</p>
+      {{end}}
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
         <h2>Recent notes</h2>
       </div>
       {{if .Recent}}

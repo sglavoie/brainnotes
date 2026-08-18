@@ -266,6 +266,9 @@ type FileTxn struct {
 	// lockWait overrides pathLockTimeout when non-zero. Like hooks, it exists so a
 	// test can reach the lock-timeout path without a multi-second wait.
 	lockWait time.Duration
+	// lockEscalation overrides MaxLockedPaths when non-zero, so a test can reach
+	// the escalated vault-wide lock without planning thousands of paths.
+	lockEscalation int
 }
 
 // NewFileTxn creates a transaction rooted at an existing vault directory. Every
@@ -451,10 +454,15 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 // The locks are taken in sorted path order, which is what makes concurrent
 // multi-path transactions deadlock-free.
 //
+// A transaction planning more paths than the descriptor budget allows takes the
+// vault-wide guard exclusively instead, so transaction size is not bounded by
+// how many descriptors the process may hold. The exclusion it provides is
+// strictly stronger; what it costs is that every other bn writer waits.
+//
 // External writers are unaffected: an editor saving a note takes no lock, which
 // is why custody stays in place to guard against it.
 func (t *FileTxn) lockPaths() error {
-	locks, err := acquirePathLocks(t.root, t.lockWait, t.order)
+	locks, err := acquirePathLocks(t.root, t.lockWait, t.lockEscalation, t.order)
 	if err != nil {
 		return err
 	}

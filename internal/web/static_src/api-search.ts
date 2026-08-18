@@ -1,5 +1,5 @@
 import { normalizeParamValue, notePathForKey } from "./filters";
-import { asRecord, normalizeStringArray } from "./api-internal";
+import { asRecord, normalizeStringArray, readBoolean } from "./api-internal";
 import type { SearchResult } from "./api-types";
 
 export const normalizeSearchResults = (payload: unknown): SearchResult[] => {
@@ -20,6 +20,7 @@ export const normalizeSearchResults = (payload: unknown): SearchResult[] => {
         matched_fields: normalizeStringArray(record.matched_fields),
         issues: normalizeStringArray(record.issues),
         snippet: normalizeParamValue(record.snippet),
+        pinned: readBoolean(record.pinned),
       },
     ];
   });

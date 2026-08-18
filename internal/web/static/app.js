@@ -978,6 +978,43 @@ var BrainNotesApp = (() => {
     return message || `Open failed (${status}).`;
   };
 
+  // internal/web/static_src/api-pins.ts
+  var notePinSetPath = "/api/pins/set";
+  var notePinRemovePath = "/api/pins/remove";
+  var notePinReorderPath = "/api/pins/reorder";
+  var buildNotePinReorderForm = (request) => {
+    const body = buildNoteKeyMutationForm(request);
+    body.set("before", request.before);
+    body.set("after", request.after);
+    return body;
+  };
+  var notePinFetchRequest = (url, body, token) => ({
+    url,
+    init: {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-BN-CSRF": token
+      },
+      body: body.toString()
+    }
+  });
+  var buildNotePinSetFetchRequest = (request) => notePinFetchRequest(notePinSetPath, buildNoteKeyMutationForm(request), request.token);
+  var buildNotePinRemoveFetchRequest = (request) => notePinFetchRequest(notePinRemovePath, buildNoteKeyMutationForm(request), request.token);
+  var buildNotePinReorderFetchRequest = (request) => notePinFetchRequest(notePinReorderPath, buildNotePinReorderForm(request), request.token);
+  var readNotePinResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
   // internal/web/static_src/api-properties.ts
   var PROPERTY_ROW_FILTERS = [
     "all",
@@ -1396,7 +1433,8 @@ var BrainNotesApp = (() => {
           folder: normalizeParamValue(record.folder),
           matched_fields: normalizeStringArray(record.matched_fields),
           issues: normalizeStringArray(record.issues),
-          snippet: normalizeParamValue(record.snippet)
+          snippet: normalizeParamValue(record.snippet),
+          pinned: readBoolean(record.pinned)
         }
       ];
     });
@@ -5439,6 +5477,65 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/note-pin.ts
+  var readNotePinConfig = (container) => ({
+    key: container.getAttribute("data-pin-key") || "",
+    csrfToken: container.getAttribute("data-pin-csrf") || "",
+    pinned: container.getAttribute("data-pin-state") === "pinned"
+  });
+  var buildNotePinToggleRequest = (config) => {
+    const request = { key: config.key, token: config.csrfToken };
+    return config.pinned ? buildNotePinRemoveFetchRequest(request) : buildNotePinSetFetchRequest(request);
+  };
+  var initNotePinAction = (deps = {}) => {
+    const container = queryElement(document, "[data-pin-note]", HTMLElement);
+    if (!container) {
+      return;
+    }
+    const button = queryElement(container, "[data-pin-button]", HTMLButtonElement);
+    const statusEl = queryElement(container, "[data-pin-status]", HTMLElement);
+    if (!button || !statusEl) {
+      return;
+    }
+    const config = readNotePinConfig(container);
+    const fetcher = deps.fetch || fetch;
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+    };
+    const applyState = (pinned) => {
+      config.pinned = pinned;
+      container.setAttribute("data-pin-state", pinned ? "pinned" : "unpinned");
+      button.setAttribute("aria-pressed", pinned ? "true" : "false");
+      button.textContent = pinned ? "Unpin" : "Pin";
+    };
+    button.addEventListener("click", async () => {
+      if (!config.key || !config.csrfToken) {
+        setStatus("Pin action unavailable.", "is-error");
+        return;
+      }
+      const pinning = !config.pinned;
+      button.disabled = true;
+      setStatus(pinning ? "Pinning note..." : "Unpinning note...");
+      try {
+        const request = buildNotePinToggleRequest(config);
+        const resp = await fetcher(request.url, request.init);
+        const payload = await readNotePinResponsePayload(resp);
+        if (!resp.ok) {
+          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = payload;
+        applyState(pinning);
+        const fallback = pinning ? "Pinned note." : "Unpinned note.";
+        setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
+      } catch {
+        setStatus(pinning ? "Pin failed." : "Unpin failed.", "is-error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  };
+
   // internal/web/static_src/note-trash.ts
   var readTrashNoteConfig = (container) => ({
     key: container.getAttribute("data-trash-key") || "",
@@ -5846,6 +5943,46 @@ var BrainNotesApp = (() => {
       bulkRoot.removeAttribute("data-overview-preview-expires-at");
     }
   };
+  var overviewCSRFToken = (doc) => queryElement(doc, "[data-overview-csrf]", HTMLElement)?.getAttribute("data-overview-csrf") || "";
+  var renderOverviewResultPinButton = (doc, result) => {
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.className = "pin-button overview-result-pin";
+    button.setAttribute("data-pin-button", "");
+    const applyState = (pinned) => {
+      const label = pinned ? "Unpin" : "Pin";
+      button.setAttribute("aria-pressed", pinned ? "true" : "false");
+      button.textContent = label;
+      button.setAttribute("aria-label", `${label} ${result.title || result.key}`);
+    };
+    applyState(Boolean(result.pinned));
+    button.addEventListener("click", async () => {
+      const pinned = button.getAttribute("aria-pressed") === "true";
+      const token = overviewCSRFToken(doc);
+      if (!token) {
+        button.title = "Pin action unavailable.";
+        return;
+      }
+      button.disabled = true;
+      button.title = "";
+      applyState(!pinned);
+      try {
+        const request = pinned ? buildNotePinRemoveFetchRequest({ key: result.key, token }) : buildNotePinSetFetchRequest({ key: result.key, token });
+        const resp = await fetch(request.url, request.init);
+        if (!resp.ok) {
+          const payload = await readNotePinResponsePayload(resp);
+          button.title = normalizeManagementErrorMessage(resp.status, payload);
+          applyState(pinned);
+        }
+      } catch {
+        button.title = pinned ? "Unpin failed." : "Pin failed.";
+        applyState(pinned);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    return button;
+  };
   var renderOverviewSearchResult = (listEl, result, options = {}) => {
     const path = searchResultPath(result);
     if (!path) {
@@ -5911,6 +6048,9 @@ var BrainNotesApp = (() => {
       link.appendChild(snippet);
     }
     row.appendChild(link);
+    if (result.key) {
+      row.appendChild(renderOverviewResultPinButton(doc, result));
+    }
     item.appendChild(row);
     listEl.appendChild(item);
     return true;
@@ -6360,6 +6500,189 @@ var BrainNotesApp = (() => {
     bindPreviewInvalidation(unsetForm);
     updateBulkControls();
     scheduleSearch(0);
+  };
+
+  // internal/web/static_src/pinned-list.ts
+  var draggingClass = "is-dragging";
+  var dropTargetClass = "is-drop-target";
+  var pinnedItemKey = (item) => narrowElement(item, HTMLElement)?.getAttribute("data-pinned-key") || "";
+  var pinnedNeighborKeys = (item) => ({
+    before: pinnedItemKey(item.previousElementSibling),
+    after: pinnedItemKey(item.nextElementSibling)
+  });
+  var initPinnedList = (deps = {}) => {
+    const root = queryElement(document, "[data-pinned-root]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const list = queryElement(root, "[data-pinned-list]", HTMLElement);
+    const statusEl = queryElement(root, "[data-pinned-status]", HTMLElement);
+    if (!list || !statusEl) {
+      return;
+    }
+    const csrfToken = root.getAttribute("data-pinned-csrf") || "";
+    const fetcher = deps.fetch || fetch;
+    const reload = deps.reload || (() => window.location.reload());
+    const setStatus = (message, kind = "") => {
+      setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+    };
+    const rows = () => queryAllElements(list, "[data-pinned-item]", HTMLElement);
+    const post = async (request, fallback) => {
+      try {
+        const resp = await fetcher(request.url, request.init);
+        const payload = await readNotePinResponsePayload(resp);
+        if (!resp.ok) {
+          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return false;
+        }
+        const result = payload;
+        setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
+        return true;
+      } catch {
+        setStatus("Pin request failed.", "is-error");
+        return false;
+      }
+    };
+    let moveQueue = Promise.resolve();
+    let queuedMoves = 0;
+    let resyncing = false;
+    const sendMove = async (move) => {
+      if (!move.key || !csrfToken) {
+        setStatus("Reorder unavailable.", "is-error");
+        return false;
+      }
+      setStatus("Saving pin order...");
+      return post(
+        buildNotePinReorderFetchRequest({
+          key: move.key,
+          token: csrfToken,
+          before: move.before,
+          after: move.after
+        }),
+        "Reordered pins."
+      );
+    };
+    const enqueueMove = (item, restore) => {
+      queuedMoves += 1;
+      const sequence = queuedMoves;
+      const neighbors = pinnedNeighborKeys(item);
+      const move = {
+        key: pinnedItemKey(item),
+        before: neighbors.before,
+        after: neighbors.after
+      };
+      setStatus("Saving pin order...");
+      moveQueue = moveQueue.then(async () => {
+        if (resyncing) {
+          return;
+        }
+        if (await sendMove(move)) {
+          return;
+        }
+        if (sequence === queuedMoves) {
+          list.insertBefore(item, restore);
+          return;
+        }
+        resyncing = true;
+        reload();
+      });
+    };
+    const moveByKeyboard = (item, direction) => {
+      const restore = item.nextElementSibling;
+      if (direction < 0) {
+        const previous = item.previousElementSibling;
+        if (!previous) {
+          return;
+        }
+        list.insertBefore(item, previous);
+      } else {
+        const next = item.nextElementSibling;
+        if (!next) {
+          return;
+        }
+        list.insertBefore(item, next.nextElementSibling);
+      }
+      enqueueMove(item, restore);
+    };
+    const startDrag = (item, event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      const restore = item.nextElementSibling;
+      item.classList.add(draggingClass);
+      const clearDropTarget = () => {
+        for (const row of rows()) {
+          row.classList.remove(dropTargetClass);
+        }
+      };
+      const onPointerMove = (moveEvent) => {
+        const next = rows().find((row) => {
+          if (row === item) {
+            return false;
+          }
+          const rect = row.getBoundingClientRect();
+          return moveEvent.clientY < rect.top + rect.height / 2;
+        });
+        clearDropTarget();
+        if (next) {
+          next.classList.add(dropTargetClass);
+          list.insertBefore(item, next);
+        } else {
+          list.appendChild(item);
+        }
+      };
+      const finishDrag = () => {
+        item.classList.remove(draggingClass);
+        clearDropTarget();
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", finishDrag);
+        window.removeEventListener("pointercancel", finishDrag);
+        if (item.nextElementSibling === restore) {
+          return;
+        }
+        enqueueMove(item, restore);
+      };
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", finishDrag, { once: true });
+      window.addEventListener("pointercancel", finishDrag, { once: true });
+    };
+    const unpin = async (item, button) => {
+      const key = pinnedItemKey(item);
+      if (!key || !csrfToken) {
+        setStatus("Unpin unavailable.", "is-error");
+        return;
+      }
+      button.disabled = true;
+      setStatus("Unpinning note...");
+      const ok = await post(
+        buildNotePinRemoveFetchRequest({ key, token: csrfToken }),
+        "Unpinned note."
+      );
+      button.disabled = false;
+      if (ok) {
+        reload();
+      }
+    };
+    for (const item of rows()) {
+      const handle = queryElement(item, "[data-pinned-handle]", HTMLButtonElement);
+      if (handle) {
+        handle.addEventListener("pointerdown", (event) => startDrag(item, event));
+        handle.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+            return;
+          }
+          event.preventDefault();
+          moveByKeyboard(item, event.key === "ArrowUp" ? -1 : 1);
+        });
+      }
+      const pinButton = queryElement(item, "[data-pin-button]", HTMLButtonElement);
+      if (pinButton) {
+        pinButton.addEventListener("click", () => {
+          void unpin(item, pinButton);
+        });
+      }
+    }
   };
 
   // internal/web/static_src/properties-model.ts
@@ -8875,7 +9198,9 @@ var BrainNotesApp = (() => {
     initCapture();
     initFacets();
     initOpenInEditor();
+    initNotePinAction();
     initTrashNoteAction();
+    initPinnedList();
     initNoteLayout();
     initNoteInsight();
     initFrontmatterEditing();

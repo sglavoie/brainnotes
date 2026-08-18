@@ -1,0 +1,74 @@
+{{define "pinned"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>Pinned</h1>
+        <p class="page-subtitle">The notes you chose to keep at hand, in the order you put them.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    <section
+      class="panel pinned-panel"
+      data-pinned-root
+      data-pinned-csrf="{{ .CSRFToken }}"
+      aria-labelledby="pinned-heading"
+      aria-describedby="pinned-status"
+    >
+      <div class="panel-header">
+        <h2 id="pinned-heading">Pinned notes</h2>
+      </div>
+      {{if .Pinned}}
+        <p class="pinned-hint">Drag a handle to reorder, or focus one and press Up or Down.</p>
+        <ol class="pinned-list" data-pinned-list>
+          {{range .Pinned}}
+            <li class="pinned-list-item" data-pinned-item data-pinned-key="{{.Key}}">
+              <button
+                type="button"
+                class="pinned-drag-handle"
+                data-pinned-handle
+                aria-label="Reorder {{.Title}}"
+                title="Drag to reorder, or press Up or Down"
+              ><span aria-hidden="true">⠿</span></button>
+              <a class="pinned-note-title" href="{{.Path}}">{{.Title}}</a>
+              <span class="pinned-note-meta">
+                <span class="pinned-note-folder">{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
+                {{if .Unranked}}
+                  <span class="pinned-rank pinned-rank-unranked" title="No numeric rank yet; sorts last until reordered">unranked</span>
+                {{else}}
+                  <span class="pinned-rank">{{.Rank}}</span>
+                {{end}}
+              </span>
+              <button
+                type="button"
+                class="pin-button"
+                data-pin-button
+                aria-pressed="true"
+              >Unpin</button>
+            </li>
+          {{end}}
+        </ol>
+      {{else}}
+        <p class="pinned-empty">No pinned notes yet. Pin one from a note page or a <a href="{{ .LibraryPath }}">Library</a> search result.</p>
+      {{end}}
+      <p id="pinned-status" class="pinned-status" data-pinned-status role="status" aria-live="polite"></p>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

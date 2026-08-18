@@ -1,5 +1,9 @@
 import {
   type BulkFrontmatterChange,
+  buildNotePinRemoveFetchRequest,
+  buildNotePinSetFetchRequest,
+  normalizeManagementErrorMessage,
+  readNotePinResponsePayload,
   searchResultPath,
   type BulkFailure,
   type BulkPreviewManagementResult,
@@ -7,6 +11,7 @@ import {
   type BulkPreviewValue,
   type SearchResult,
 } from "./api";
+import { queryElement } from "./dom";
 import {
   bulkActionLabel,
   previewHeading,
@@ -228,6 +233,62 @@ export const syncPreviewAttributes = (
   }
 };
 
+// The token is read at click time rather than captured at render time because
+// the bulk panel that carries it is rendered by the page, not by this module.
+const overviewCSRFToken = (doc: Document): string =>
+  queryElement(doc, "[data-overview-csrf]", HTMLElement)?.getAttribute("data-overview-csrf") || "";
+
+// A Library row is a plain <li>, so a real button is valid here — unlike the
+// search typeahead, whose whole row is a button[role=option].
+export const renderOverviewResultPinButton = (
+  doc: Document,
+  result: SearchResult
+): HTMLButtonElement => {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = "pin-button overview-result-pin";
+  button.setAttribute("data-pin-button", "");
+
+  const applyState = (pinned: boolean): void => {
+    const label = pinned ? "Unpin" : "Pin";
+    button.setAttribute("aria-pressed", pinned ? "true" : "false");
+    button.textContent = label;
+    button.setAttribute("aria-label", `${label} ${result.title || result.key}`);
+  };
+  applyState(Boolean(result.pinned));
+
+  button.addEventListener("click", async () => {
+    const pinned = button.getAttribute("aria-pressed") === "true";
+    const token = overviewCSRFToken(doc);
+    if (!token) {
+      button.title = "Pin action unavailable.";
+      return;
+    }
+
+    button.disabled = true;
+    button.title = "";
+    applyState(!pinned);
+    try {
+      const request = pinned
+        ? buildNotePinRemoveFetchRequest({ key: result.key, token })
+        : buildNotePinSetFetchRequest({ key: result.key, token });
+      const resp = await fetch(request.url, request.init);
+      if (!resp.ok) {
+        const payload = await readNotePinResponsePayload(resp);
+        button.title = normalizeManagementErrorMessage(resp.status, payload);
+        applyState(pinned);
+      }
+    } catch {
+      button.title = pinned ? "Unpin failed." : "Pin failed.";
+      applyState(pinned);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  return button;
+};
+
 export const renderOverviewSearchResult = (
   listEl: HTMLElement,
   result: SearchResult,
@@ -308,6 +369,9 @@ export const renderOverviewSearchResult = (
   }
 
   row.appendChild(link);
+  if (result.key) {
+    row.appendChild(renderOverviewResultPinButton(doc, result));
+  }
   item.appendChild(row);
   listEl.appendChild(item);
   return true;

@@ -11,6 +11,20 @@ import {
 import { renderSearchResultOption } from "./search";
 import { searchResult, setURL } from "./search-test-helpers";
 
+const waitForExpect = async (assertion: () => void): Promise<void> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+  throw lastError;
+};
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -75,6 +89,71 @@ describe("search result rendering", () => {
     );
     expect(overviewSearchEmptyMessage("")).toBe("No notes match the active filters.");
     expect(overviewSearchEmptyMessage("zettel")).toBe('No notes match "zettel".');
+  });
+
+  it("renders a pin toggle on Library rows outside the result link", async () => {
+    document.body.innerHTML = `
+      <div data-overview-bulk data-overview-csrf="csrf-token"></div>
+      <ul data-overview-search-list></ul>
+    `;
+    const list = document.querySelector<HTMLElement>("[data-overview-search-list]")!;
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true, message: "Pinned note." }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderOverviewSearchResult(list, searchResult());
+    const button = list.querySelector<HTMLButtonElement>(".pin-button");
+
+    expect(button?.closest("a")).toBeNull();
+    expect(button?.getAttribute("aria-pressed")).toBe("false");
+    expect(button?.textContent).toBe("Pin");
+    expect(button?.getAttribute("aria-label")).toBe("Pin Note Title");
+
+    button?.click();
+    expect(button?.getAttribute("aria-pressed")).toBe("true");
+
+    await waitForExpect(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/pins/set");
+    expect(String(init.body)).toBe("key=folder%2Fnote.md&token=csrf-token");
+  });
+
+  it("renders a pinned Library row as pressed and reverts a refused unpin", async () => {
+    document.body.innerHTML = `
+      <div data-overview-bulk data-overview-csrf="csrf-token"></div>
+      <ul data-overview-search-list></ul>
+    `;
+    const list = document.querySelector<HTMLElement>("[data-overview-search-list]")!;
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: false, code: "conflict", message: "note moved" }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderOverviewSearchResult(list, searchResult({ pinned: true }));
+    const button = list.querySelector<HTMLButtonElement>(".pin-button");
+    expect(button?.getAttribute("aria-pressed")).toBe("true");
+    expect(button?.textContent).toBe("Unpin");
+
+    button?.click();
+    expect(button?.getAttribute("aria-pressed")).toBe("false");
+
+    await waitForExpect(() => {
+      expect(button?.getAttribute("aria-pressed")).toBe("true");
+    });
+    const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/pins/remove");
+    expect(button?.title).toBe("note moved");
   });
 
   const renderOverviewBulkFixture = (): void => {

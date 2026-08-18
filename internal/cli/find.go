@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/pins"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -80,6 +81,9 @@ func NewFindCmd() *cobra.Command {
 			sort.Slice(matched, func(i, j int) bool {
 				return matched[i].Path < matched[j].Path
 			})
+			if ff.pinned {
+				matched = pinnedOrder(v.Root, matched)
+			}
 
 			out := cmd.OutOrStdout()
 
@@ -124,6 +128,37 @@ func NewFindCmd() *cobra.Command {
 	f.BoolVar(&listBrokenTargets, "list-broken-targets", false, "list unique broken targets (requires --broken-links)")
 
 	return cmd
+}
+
+// pinnedOrder re-sorts matched notes into the canonical pinned order (ascending
+// rank, then unranked, path-tiebroken) instead of the default path sort. Any
+// note pins.List does not place keeps its path-sorted position at the end,
+// which cannot happen while --pinned is the only caller.
+func pinnedOrder(root string, matched []*vault.Note) []*vault.Note {
+	byRel := make(map[string]*vault.Note, len(matched))
+	for _, n := range matched {
+		rel, err := filepath.Rel(root, n.Path)
+		if err != nil {
+			continue
+		}
+		byRel[filepath.ToSlash(rel)] = n
+	}
+	ordered := make([]*vault.Note, 0, len(matched))
+	placed := make(map[*vault.Note]bool, len(matched))
+	for _, e := range pins.List(root, matched) {
+		n, ok := byRel[e.RelPath]
+		if !ok || placed[n] {
+			continue
+		}
+		placed[n] = true
+		ordered = append(ordered, n)
+	}
+	for _, n := range matched {
+		if !placed[n] {
+			ordered = append(ordered, n)
+		}
+	}
+	return ordered
 }
 
 type brokenRecord struct {

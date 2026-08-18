@@ -8,6 +8,7 @@ export const searchResult = (overrides: Partial<SearchResult> = {}): SearchResul
   matched_fields: ["title"],
   issues: [],
   snippet: "Snippet text",
+  pinned: false,
   ...overrides,
 });
 
