@@ -947,6 +947,23 @@ var BrainNotesApp = (() => {
     body.set("property", request.property);
     return body;
   };
+  var buildCaptureForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("text", request.text);
+    body.set("token", request.token);
+    return body;
+  };
+  var normalizeCaptureResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message || "",
+      detail: normalizeParamValue(readRecordValue(record, ["detail", "Detail"])),
+      rel_path: normalizeParamValue(readRecordValue(record, ["rel_path", "RelPath"]))
+    };
+  };
   var buildOpenNoteForm = (request) => buildNoteKeyMutationForm(request);
   var normalizeManagementErrorMessage = (status, detail) => {
     const result = normalizeManagementResult(detail);
@@ -1496,6 +1513,118 @@ var BrainNotesApp = (() => {
     }
   };
 
+  // internal/web/static_src/daily-brief-http.ts
+  var jsonPostRequest = (csrfToken, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": csrfToken
+    },
+    body
+  });
+  var readResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
+  // internal/web/static_src/capture.ts
+  var captureEndpoint = "/api/capture";
+  var recentLimit = 5;
+  var unconfiguredMessage = "Quick capture is not configured. Set capture.inbox_note and capture.heading in brainnotes.toml.";
+  var initCapture = (deps = {}) => {
+    const root = queryElement(document, "[data-capture-root]", HTMLElement);
+    if (!root) {
+      return;
+    }
+    const input = queryElement(root, "[data-capture-input]", HTMLTextAreaElement);
+    const submit = queryElement(root, "[data-capture-submit]", HTMLButtonElement);
+    const status = queryElement(root, "[data-capture-status]", HTMLElement);
+    const recent = queryElement(root, "[data-capture-recent]", HTMLElement);
+    if (!input || !submit || !status || !recent) {
+      return;
+    }
+    const csrfToken = root.getAttribute("data-capture-csrf") || "";
+    const target = root.getAttribute("data-capture-target") || "";
+    const configured = (root.getAttribute("data-capture-configured") || "").toLowerCase() === "true";
+    const setStatus = (message, kind = "") => {
+      setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
+    };
+    if (!configured) {
+      input.disabled = true;
+      submit.disabled = true;
+      setStatus(unconfiguredMessage, "is-error");
+      return;
+    }
+    const fetcher = deps.fetch || fetch;
+    const prependRecent = (line) => {
+      const item = document.createElement("li");
+      item.className = "capture-recent-item";
+      item.textContent = line;
+      recent.prepend(item);
+      while (recent.children.length > recentLimit) {
+        recent.lastElementChild?.remove();
+      }
+    };
+    const run = async () => {
+      const text = input.value;
+      if (text.trim() === "") {
+        setStatus("Type something to capture.", "is-error");
+        return;
+      }
+      if (csrfToken === "") {
+        setStatus("Quick capture is unavailable.", "is-error");
+        return;
+      }
+      input.disabled = true;
+      submit.disabled = true;
+      setStatus("Capturing...", "is-loading");
+      try {
+        const body = buildCaptureForm({ text, token: csrfToken }).toString();
+        const response = await fetcher(captureEndpoint, jsonPostRequest(csrfToken, body));
+        const payload = await readResponsePayload(response);
+        if (!response.ok) {
+          setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeCaptureResponse(payload);
+        if (!result.ok) {
+          setStatus(result.message || "Capture failed.", "is-error");
+          return;
+        }
+        input.value = "";
+        if (result.detail) {
+          prependRecent(result.detail);
+        }
+        setStatus(result.message || `Captured to ${target}.`, "is-success");
+        window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
+      } catch {
+        setStatus("Capture failed.", "is-error");
+      } finally {
+        input.disabled = false;
+        submit.disabled = false;
+        input.focus();
+      }
+    };
+    submit.addEventListener("click", () => {
+      void run();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || !event.ctrlKey && !event.metaKey || submit.disabled) {
+        return;
+      }
+      event.preventDefault();
+      void run();
+    });
+  };
+
   // internal/web/static_src/clipboard.ts
   var readCopyPayload = (button) => ({
     text: button.getAttribute("data-copy-text") || "",
@@ -1542,28 +1671,6 @@ var BrainNotesApp = (() => {
         });
       });
     });
-  };
-
-  // internal/web/static_src/daily-brief-http.ts
-  var jsonPostRequest = (csrfToken, body) => ({
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-BN-CSRF": csrfToken
-    },
-    body
-  });
-  var readResponsePayload = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
-    }
   };
 
   // internal/web/static_src/daily-brief-model.ts
@@ -2327,6 +2434,8 @@ var BrainNotesApp = (() => {
         return "WIP limit";
       case "hub_needs_synthesis":
         return "Hub needs synthesis";
+      case "capture_backlog":
+        return "Capture backlog";
       case "ai_daily_review":
         return "AI daily review";
       default:
@@ -8763,6 +8872,7 @@ var BrainNotesApp = (() => {
   // internal/web/static_src/main.ts
   (function() {
     initTheme();
+    initCapture();
     initFacets();
     initOpenInEditor();
     initTrashNoteAction();
