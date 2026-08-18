@@ -98,7 +98,7 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 
 	assertHealthMetric := func(label, want string) {
 		t.Helper()
-		re := regexp.MustCompile(`(?s)<dt><a [^>]*>` + regexp.QuoteMeta(label) + `</a></dt>\s*<dd>([0-9]+)</dd>`)
+		re := regexp.MustCompile(`(?s)<span class="diagnostic-card-label">` + regexp.QuoteMeta(label) + `</span>\s*<span class="metric-value">([0-9]+)</span>`)
 		match := re.FindStringSubmatch(body)
 		if len(match) != 2 {
 			t.Fatalf("metric %q missing in body: %q", label, body)

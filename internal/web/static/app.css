@@ -2006,6 +2006,10 @@ code {
   margin-top: 0.35rem;
 }
 
+.health-snapshot-grid {
+  margin: 0.75rem 0 1rem;
+}
+
 .diagnostic-card {
   display: block;
   color: inherit;

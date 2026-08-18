@@ -321,24 +321,24 @@
         <h2>Health snapshot</h2>
       </div>
       <p>{{if gt .Health.TotalIssueCount 0}}{{.Health.TotalIssueCount}} issues need attention.{{else}}No known issues in the current snapshot.{{end}} <a href="{{.HealthPath}}">Open Health</a></p>
-      <dl>
-        <div>
-          <dt><a href="{{.HealthPath}}#diagnostic-broken-targets">Broken targets</a></dt>
-          <dd>{{.Health.BrokenTargetCount}}</dd>
-        </div>
-        <div>
-          <dt><a href="{{.HealthPath}}#diagnostic-orphans">Orphans</a></dt>
-          <dd>{{.Health.OrphanCount}}</dd>
-        </div>
-        <div>
-          <dt><a href="{{.HealthPath}}#diagnostic-frontmatter-errors">Frontmatter errors</a></dt>
-          <dd>{{.Health.ParseErrorCount}}</dd>
-        </div>
-        <div>
-          <dt><a href="{{.HealthPath}}#diagnostic-skipped-notes">Skipped notes</a></dt>
-          <dd>{{.Health.SkippedNoteCount}}</dd>
-        </div>
-      </dl>
+      <div class="diagnostic-card-grid health-snapshot-grid" aria-label="Health snapshot metrics">
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-broken-targets">
+          <span class="diagnostic-card-label">Broken targets</span>
+          <span class="metric-value">{{.Health.BrokenTargetCount}}</span>
+        </a>
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-orphans">
+          <span class="diagnostic-card-label">Orphans</span>
+          <span class="metric-value">{{.Health.OrphanCount}}</span>
+        </a>
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-frontmatter-errors">
+          <span class="diagnostic-card-label">Frontmatter errors</span>
+          <span class="metric-value">{{.Health.ParseErrorCount}}</span>
+        </a>
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-skipped-notes">
+          <span class="diagnostic-card-label">Skipped notes</span>
+          <span class="metric-value">{{.Health.SkippedNoteCount}}</span>
+        </a>
+      </div>
       <p><a href="{{.LibraryPath}}">Library workflows</a> · <a href="{{.GraphPath}}">Graph view</a></p>
     </section>
 
