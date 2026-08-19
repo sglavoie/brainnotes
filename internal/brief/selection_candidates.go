@@ -264,7 +264,10 @@ func metadataValuesByProperty(values []recall.MetadataValue) map[string][]string
 	return out
 }
 
-func excerptForDocument(document recall.Document) string {
+// RepresentativeExcerpt returns the first non-empty prose, heading, or table
+// block in that order, falling back to the title. The result is bounded to the
+// Daily Brief card excerpt limit without splitting Unicode code points.
+func RepresentativeExcerpt(document recall.Document) string {
 	pick := func(kind recall.BlockKind) string {
 		for _, block := range document.Blocks {
 			if block.Kind != kind {

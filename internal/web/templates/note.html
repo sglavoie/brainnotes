@@ -284,6 +284,18 @@
             <div class="note-body">{{.BodyHTML}}</div>
           </section>
 
+          <section
+            class="panel related-notes"
+            data-related-notes
+            data-related-source-key="{{.Key}}"
+            data-related-endpoint="/api/related"
+            data-related-item-endpoint="/api/related/item"
+            data-related-csrf="{{.CSRFToken}}"
+          >
+            <h2>Related Notes</h2>
+            <p data-related-status role="status" aria-live="polite">Related notes will load here.</p>
+          </section>
+
           {{if .Broken}}
             <section class="panel">
               <h2>Broken links</h2>

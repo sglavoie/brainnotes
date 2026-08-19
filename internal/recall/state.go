@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,14 @@ const (
 	FeedbackLater     FeedbackState = "later"
 	FeedbackClear     FeedbackState = "clear"
 )
+
+// ActiveFeedback is one active explicit disposition for a candidate note.
+// Until is set only when State is FeedbackLater.
+type ActiveFeedback struct {
+	CandidateRelPath string
+	State            FeedbackState
+	Until            time.Time
+}
 
 // Valid reports whether state is accepted by SetFeedback.
 func (state FeedbackState) Valid() bool {
@@ -108,6 +117,63 @@ func (store *StateStore) Validate() error {
 	defer store.mu.Unlock()
 	_, _, err := store.loadLocked()
 	return err
+}
+
+// ActiveFeedbackForSource returns the active explicit feedback recorded for a
+// source note, ordered by candidate path. Missing notes, expired snoozes, and
+// open-history-only records are omitted without changing persisted state.
+func (store *StateStore) ActiveFeedbackForSource(sourcePath string) ([]ActiveFeedback, error) {
+	if store == nil {
+		return nil, errors.New("recall: nil state store")
+	}
+	sourcePath, err := normalizeRecallPath(sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("recall: source path: %w", err)
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	state, _, err := store.loadLocked()
+	if err != nil {
+		return nil, err
+	}
+	paths, err := store.notePathsLocked(false)
+	if err != nil {
+		return nil, err
+	}
+	if !containsRecallPath(paths, sourcePath) {
+		return nil, nil
+	}
+
+	now := store.currentTime()
+	feedback := make([]ActiveFeedback, 0)
+	for _, record := range state.Records {
+		if record.SourceRelPath != sourcePath || !containsRecallPath(paths, record.CandidateRelPath) {
+			continue
+		}
+		entry := ActiveFeedback{CandidateRelPath: record.CandidateRelPath}
+		switch record.Rating {
+		case string(FeedbackUseful):
+			entry.State = FeedbackUseful
+		case string(FeedbackDismissed):
+			entry.State = FeedbackDismissed
+		default:
+			if record.SnoozedUntil == nil || !record.SnoozedUntil.After(now) {
+				continue
+			}
+			entry.State = FeedbackLater
+			entry.Until = *record.SnoozedUntil
+		}
+		feedback = append(feedback, entry)
+	}
+	sort.Slice(feedback, func(i, j int) bool {
+		return feedback[i].CandidateRelPath < feedback[j].CandidateRelPath
+	})
+	if len(feedback) == 0 {
+		return nil, nil
+	}
+	return feedback, nil
 }
 
 // Signal implements RecallSignalSource. Missing notes and expired snoozes are

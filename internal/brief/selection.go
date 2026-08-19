@@ -183,7 +183,7 @@ func BuildSelectionCorpus(
 		}
 		notesOut = append(notesOut, note)
 		selectedDocuments = append(selectedDocuments, document)
-		excerpts[document.Path] = excerptForDocument(document)
+		excerpts[document.Path] = RepresentativeExcerpt(document)
 	}
 	sort.SliceStable(notesOut, func(i, j int) bool {
 		return notesOut[i].Ref.RelPath < notesOut[j].Ref.RelPath

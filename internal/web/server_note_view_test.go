@@ -35,6 +35,10 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 		`data-note-insight-endpoint="/api/note/insight"`,
 		`data-note-insight-key="source"`,
 		`data-note-insight-enabled="false"`,
+		`data-related-notes`,
+		`data-related-source-key="source"`,
+		`data-related-endpoint="/api/related"`,
+		`data-related-item-endpoint="/api/related/item"`,
 		`data-note-insight-prompt`,
 		`maxlength="2000"`,
 		`<div class="note-body">`,
@@ -255,6 +259,7 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 		{
 			`<div class="note-content">`,
 			`<h2>Body</h2>`,
+			`<h2>Related Notes</h2>`,
 			`<h2>Broken links</h2>`,
 		},
 	} {
@@ -324,6 +329,37 @@ func TestServer_NoteViewIncludesOpenEditorControls(t *testing.T) {
 	}
 	if !strings.Contains(body, `data-open-csrf="csrf-test-token"`) {
 		t.Fatalf("missing csrf token data attribute, got %q", body)
+	}
+}
+
+func TestServer_NoteViewRelatedMountEscapesDataAttributes(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Folder/Source.md": []byte("---\ntitle: Source\n---\nBody [[Missing]]\n"),
+	}, nil, Options{CSRFToken: `csrf-"<&`})
+
+	resp, err := http.Get(ts.URL + "/n/folder/source") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET note: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	for _, want := range []string{
+		`data-related-source-key="folder/source"`,
+		`data-related-endpoint="/api/related"`,
+		`data-related-item-endpoint="/api/related/item"`,
+		`data-related-csrf="csrf-&#34;&lt;&amp;"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("related mount missing escaped fragment %q: %s", want, body)
+		}
+	}
+	bodyIndex := strings.Index(body, `<h2>Body</h2>`)
+	relatedIndex := strings.Index(body, `<h2>Related Notes</h2>`)
+	brokenIndex := strings.Index(body, `<h2>Broken links</h2>`)
+	if bodyIndex < 0 || relatedIndex <= bodyIndex || brokenIndex <= relatedIndex {
+		t.Fatalf("mount order body/related/broken = %d/%d/%d", bodyIndex, relatedIndex, brokenIndex)
 	}
 }
 
