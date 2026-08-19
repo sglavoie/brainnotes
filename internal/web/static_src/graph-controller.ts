@@ -19,6 +19,12 @@ import {
 } from "./graph-controller-layout";
 import { buildGraphStyle } from "./graph-controller-style";
 import {
+  type CytoscapeFactory,
+  type GraphLayoutRunOptions,
+  type GraphSelectionOptions,
+  type GraphState,
+} from "./graph-controller-types";
+import {
   type GraphElements,
   type GraphLabelMode,
   type GraphNodeModel,
@@ -31,34 +37,6 @@ import {
 } from "./graph";
 import { type StatusKind, setStatusText } from "./status";
 import { THEME_EVENT } from "./theme";
-
-type CytoscapeGraphOptions = {
-  container: HTMLElement;
-  elements: cytoscape.ElementDefinition[];
-  style: cytoscape.StylesheetJson;
-};
-
-type CytoscapeFactory = (options: CytoscapeGraphOptions) => cytoscape.Core;
-
-type GraphState = {
-  cy: cytoscape.Core | null;
-  activeLayout: cytoscape.Layouts | null;
-  currentQuery: string;
-  currentGraphElements: GraphElements;
-  hoveredNodeID: string;
-  selectedNodeID: string;
-  labelMode: GraphLabelMode;
-  lastMeaningfulViewport: GraphViewportSnapshot | null;
-  layoutRunID: number;
-};
-type GraphSelectionOptions = {
-  fromCytoscape?: boolean;
-};
-type GraphLayoutRunOptions = {
-  fitAfterLayout?: boolean;
-  preserveViewport?: boolean;
-  resetPositions?: boolean;
-};
 
 export const initGraph = (): void => {
   const dom = {

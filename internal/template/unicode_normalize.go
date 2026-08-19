@@ -1,5 +1,7 @@
 package template
 
+//go:generate python3 generate_unicode_tables.py
+
 import (
 	"sort"
 	"strings"

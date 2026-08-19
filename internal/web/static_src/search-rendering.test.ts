@@ -9,6 +9,10 @@ import {
   renderOverviewSearchResult,
 } from "./overview-search";
 import { renderSearchResultOption } from "./search";
+import {
+  renderOverviewBulkFixture,
+  selectOverviewResult,
+} from "./search-rendering.test-helpers";
 import { searchResult, setURL } from "./search-test-helpers";
 
 const waitForExpect = async (assertion: () => void): Promise<void> => {
@@ -156,55 +160,6 @@ describe("search result rendering", () => {
     expect(button?.title).toBe("note moved");
   });
 
-  const renderOverviewBulkFixture = (): void => {
-    document.body.innerHTML = `
-      <input id="search-input" />
-      <section data-overview-search-results aria-busy="false">
-        <p data-overview-search-status></p>
-        <div data-overview-bulk data-overview-csrf="csrf-token" hidden>
-          <p data-overview-selected-count></p>
-          <button type="button" data-bulk-trash>Trash</button>
-          <form data-bulk-move>
-            <input name="folder" type="text" />
-            <button type="submit">Move</button>
-          </form>
-          <form data-bulk-frontmatter-set>
-            <input name="property" type="text" />
-            <select name="op">
-              <option value="=">=</option>
-              <option value="+=">+=</option>
-              <option value="-=">-=</option>
-            </select>
-            <input name="value" type="text" />
-            <button type="submit">Apply</button>
-          </form>
-          <form data-bulk-frontmatter-unset>
-            <input name="property" type="text" />
-            <button type="submit">Unset</button>
-          </form>
-          <section data-overview-bulk-preview hidden>
-            <h3 data-overview-bulk-preview-title>Bulk preview</h3>
-            <p data-overview-bulk-preview-message></p>
-            <button type="button" data-overview-bulk-preview-apply>Apply</button>
-            <button type="button" data-overview-bulk-preview-clear>Clear</button>
-            <dl data-overview-bulk-preview-counts></dl>
-            <ul data-overview-bulk-preview-results></ul>
-            <ul data-overview-bulk-preview-failures></ul>
-          </section>
-          <p data-overview-bulk-status></p>
-        </div>
-        <ul data-overview-search-list hidden></ul>
-      </section>
-    `;
-  };
-
-  const selectOverviewResult = (): HTMLInputElement => {
-    const checkbox = document.querySelector<HTMLInputElement>(".overview-result-select input");
-    expect(checkbox).not.toBeNull();
-    checkbox!.checked = true;
-    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
-    return checkbox!;
-  };
 
   it("renders trash preview details and applies from the preview panel", async () => {
     vi.useFakeTimers();
@@ -472,119 +427,4 @@ describe("search result rendering", () => {
     expect(moveButton?.textContent).toBe("Apply Move");
   });
 
-  it("clears preview state when search filters refresh", async () => {
-    vi.useFakeTimers();
-    setURL("/?q=source");
-    renderOverviewBulkFixture();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input) === "/api/notes/bulk/preview") {
-        return new Response(JSON.stringify({
-          ok: true,
-          action: "trash",
-          message: "Preview: 1 note would be moved to Trash.",
-          changed: 1,
-          preview_id: "preview-trash-refresh",
-          expires_at: "2026-06-02T16:34:56Z",
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify([searchResult({
-        key: "source",
-        path: "/n/source",
-        title: "Source",
-      })]), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    initOverviewSearchResults({ fetch: fetchMock });
-    await vi.runAllTimersAsync();
-    selectOverviewResult();
-
-    const trashButton = document.querySelector<HTMLButtonElement>("[data-bulk-trash]");
-    const bulkRoot = document.querySelector<HTMLElement>("[data-overview-bulk]");
-    trashButton?.click();
-    await vi.runAllTimersAsync();
-
-    expect(trashButton?.textContent).toBe("Apply Trash");
-    setURL("/?q=source&tag=work");
-    dispatchFiltersChange(window, {
-      mode: "search",
-      params: new URLSearchParams("tag=work"),
-    });
-    await vi.runAllTimersAsync();
-
-    expect(trashButton?.textContent).toBe("Preview Trash");
-    expect(bulkRoot?.hasAttribute("data-overview-preview-id")).toBe(false);
-
-    trashButton?.click();
-    await vi.runAllTimersAsync();
-
-    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk/preview")).toHaveLength(2);
-    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk")).toHaveLength(0);
-  });
-
-  it("clears stale preview ids after an apply conflict", async () => {
-    vi.useFakeTimers();
-    setURL("/?q=source");
-    renderOverviewBulkFixture();
-    let applyCalls = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input) === "/api/notes/bulk/preview") {
-        return new Response(JSON.stringify({
-          ok: true,
-          action: "trash",
-          message: "Preview: 1 note would be moved to Trash.",
-          changed: 1,
-          preview_id: "preview-trash-stale",
-          expires_at: "2026-06-02T16:34:56Z",
-        }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (String(input) === "/api/notes/bulk") {
-        applyCalls += 1;
-        return new Response(JSON.stringify({
-          ok: false,
-          code: "preview_stale",
-          message: "bulk preview is stale",
-        }), {
-          status: 409,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify([searchResult({
-        key: "source",
-        path: "/n/source",
-        title: "Source",
-      })]), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    initOverviewSearchResults({ fetch: fetchMock });
-    await vi.runAllTimersAsync();
-    selectOverviewResult();
-
-    const trashButton = document.querySelector<HTMLButtonElement>("[data-bulk-trash]");
-    trashButton?.click();
-    await vi.runAllTimersAsync();
-    expect(trashButton?.textContent).toBe("Apply Trash");
-
-    trashButton?.click();
-    await vi.runAllTimersAsync();
-
-    expect(applyCalls).toBe(1);
-    expect(document.querySelector("[data-overview-bulk-status]")?.textContent).toBe("bulk preview is stale");
-    expect(trashButton?.textContent).toBe("Preview Trash");
-
-    trashButton?.click();
-    await vi.runAllTimersAsync();
-    expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk/preview")).toHaveLength(2);
-  });
 });

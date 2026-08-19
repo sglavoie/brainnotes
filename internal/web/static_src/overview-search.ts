@@ -14,14 +14,12 @@ import {
   buildSearchAPIURL,
   filterChangeEventName,
   hasActiveSharedFilters,
-  normalizeParamValue,
   readPageQuery,
   shouldHandleFilterChangeForMode,
   syncPageQueryParam,
 } from "./filters";
 import { resolveOverviewSearchElements } from "./overview-search-elements";
 import {
-  bulkActionLabel,
   bulkApplyFallbackMessage,
   bulkStatusMessage,
   overviewSearchEmptyMessage,
@@ -34,6 +32,12 @@ import {
   type BulkStatusKind,
   type OverviewSearchDeps,
 } from "./overview-search-model";
+import {
+  overviewSearchQuery,
+  selectedOverviewKeys,
+  setOverviewBusy,
+  syncOverviewActionButton,
+} from "./overview-search-controller";
 import {
   renderOverviewSearchResult,
   renderPreviewPanel,
@@ -82,13 +86,6 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
   let ignoreNextManagementMutationClear = false;
   let requestToken = 0;
 
-  const currentQuery = (): string =>
-    input instanceof HTMLInputElement ? normalizeParamValue(input.value) : readPageQuery();
-
-  const setBusy = (busy: boolean): void => {
-    root.setAttribute("aria-busy", busy ? "true" : "false");
-  };
-
   const setStatus = (message: string, kind: StatusKind = ""): void => {
     setStatusText(statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
   };
@@ -101,13 +98,10 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
     ]);
   };
 
-  const selectedKeyList = (): string[] =>
-    normalizeBulkNoteKeys(Array.from(selectedKeys.keys()));
-
   const previewMatches = (
     action: BulkAction,
     fields: BulkActionFields,
-    keys = selectedKeyList()
+    keys = selectedOverviewKeys(selectedKeys)
   ): boolean =>
     Boolean(
       previewState &&
@@ -128,19 +122,6 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
     }
   };
 
-  const syncActionButton = (
-    button: HTMLButtonElement | null,
-    action: BulkAction,
-    fields: BulkActionFields
-  ): void => {
-    if (!button) {
-      return;
-    }
-    const phase = previewMatches(action, fields) ? "apply" : "preview";
-    button.textContent = bulkActionLabel(action, phase);
-    button.setAttribute("data-bulk-phase", phase);
-  };
-
   const updateBulkControls = (): void => {
     if (!bulkRoot) {
       return;
@@ -159,10 +140,10 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
         control.disabled = bulkBusy || count === 0;
       }
     }
-    syncActionButton(trashButton, "trash", {});
-    syncActionButton(moveButton, "move", readMoveFields(moveForm));
-    syncActionButton(setButton, "frontmatter_set", readSetFields(setForm));
-    syncActionButton(unsetButton, "frontmatter_unset", readUnsetFields(unsetForm));
+    syncOverviewActionButton(trashButton, "trash", previewMatches("trash", {}));
+    syncOverviewActionButton(moveButton, "move", previewMatches("move", readMoveFields(moveForm)));
+    syncOverviewActionButton(setButton, "frontmatter_set", previewMatches("frontmatter_set", readSetFields(setForm)));
+    syncOverviewActionButton(unsetButton, "frontmatter_unset", previewMatches("frontmatter_unset", readUnsetFields(unsetForm)));
     if (previewApplyButton) {
       previewApplyButton.disabled = bulkBusy || count === 0 || previewState === null;
     }
@@ -189,7 +170,7 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
   ): void => {
     previewState = {
       action,
-      fingerprint: previewFingerprint(action, fields, selectedKeyList()),
+      fingerprint: previewFingerprint(action, fields, selectedOverviewKeys(selectedKeys)),
       previewID: result.preview_id || "",
       expiresAt: result.expires_at,
       result,
@@ -271,20 +252,20 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
   };
 
   const scheduleSearch = (delay: number): void => {
-    const query = currentQuery();
+    const query = overviewSearchQuery(input);
     window.clearTimeout(debounceToken);
     syncPageQueryParam(query);
     clearPreviewState({ clearStatus: true });
 
     if (query === "" && !hasActiveSharedFilters()) {
       requestToken += 1;
-      setBusy(false);
+      setOverviewBusy(root, false);
       clearResults("No query or filters selected.", "is-empty");
       return;
     }
 
     const localToken = ++requestToken;
-    setBusy(true);
+    setOverviewBusy(root, true);
     setStatus("Loading matching notes...", "is-loading");
     debounceToken = window.setTimeout(async () => {
       try {
@@ -305,7 +286,7 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
         }
       } finally {
         if (localToken === requestToken) {
-          setBusy(false);
+          setOverviewBusy(root, false);
         }
       }
     }, delay);
@@ -338,7 +319,7 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
     fields: BulkActionFields,
     fallbackMessage: string
   ): Promise<void> => {
-    const keys = selectedKeyList();
+    const keys = selectedOverviewKeys(selectedKeys);
     if (!bulkRoot || csrfToken.trim() === "") {
       setBulkStatus("Bulk action unavailable.", "is-error");
       return;
@@ -388,7 +369,7 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
     fields: BulkActionFields,
     fallbackMessage: string
   ): Promise<void> => {
-    const keys = selectedKeyList();
+    const keys = selectedOverviewKeys(selectedKeys);
     if (!bulkRoot || csrfToken.trim() === "") {
       setBulkStatus("Bulk action unavailable.", "is-error");
       return;

@@ -1,9 +1,6 @@
 import {
-  managementMutationEventName,
   type PropertyDetailResult,
   type PropertyMutationAction,
-  type PropertyMutationRequest,
-  type PropertyMutationResult,
   type PropertyRow,
   type PropertySchemaDefinitionInput,
   type PropertySchemaOp,
@@ -12,31 +9,21 @@ import {
 } from "./api";
 import { queryAllElements, queryElement } from "./dom";
 import type { FetchLike } from "./properties-model";
-import { createPreviewDialog, previewSummaryLabel } from "./properties-preview-dialog";
+import { createPreviewDialog } from "./properties-preview-dialog";
 import { valueDisplayText } from "./properties-model";
 import { renderRows } from "./properties-render";
 import { createUndoToast } from "./properties-toast";
 import { createValueControl, type ValueControl } from "./properties-value-control";
 import {
-  actionConfirmLabel,
   actionTitle,
   editAllowed,
   editItemKind,
   editKind,
-  mutationSuccessMessage,
   selectionLabel,
   typedValueFrom,
-  undoToastMessage,
 } from "./properties-workbench-model";
-import {
-  applyPropertyMutation,
-  applyPropertySchema,
-  previewPropertyMutation,
-  previewPropertySchema,
-  savePropertyValue,
-  undoJournalEntry,
-  type MutationOutcome,
-} from "./properties-workbench-requests";
+import { createWorkbenchEditor } from "./properties-workbench-editor";
+import { createWorkbenchMutations } from "./properties-workbench-mutations";
 import type { StatusKind } from "./status";
 
 export type WorkbenchDeps = {
@@ -89,17 +76,18 @@ export const createPropertyWorkbench = (
     queryElement(host.root, "[data-property-toast-host]", HTMLElement) || host.root;
 
   const dialog = createPreviewDialog(doc, dialogHost, { now });
+  let runUndo = async (_journalID: string): Promise<void> => {};
   const toast = createUndoToast(doc, toastHost, {
     onUndo: (journalID) => {
       void runUndo(journalID);
     },
   });
+  const editor = createWorkbenchEditor(doc);
 
   const selected = new Set<string>();
   let summary: PropertySummary | null = null;
   let rows: PropertyRow[] = [];
   let matchValue: { kind: string; text: string } | null = null;
-  let openEditor: (() => void) | null = null;
   let busy = false;
 
   const setStatus = (message: string, kind: StatusKind = ""): void => {
@@ -108,12 +96,6 @@ export const createPropertyWorkbench = (
 
   const rowElements = (): HTMLElement[] =>
     queryAllElements(host.rowsEl, "[data-property-row]", HTMLElement);
-
-  const closeEditor = (): void => {
-    const close = openEditor;
-    openEditor = null;
-    close?.();
-  };
 
   const renderSelection = (): void => {
     if (countEl) {
@@ -177,166 +159,6 @@ export const createPropertyWorkbench = (
     elements[clamped]?.focus();
   };
 
-  const announce = (outcome: MutationOutcome): outcome is { ok: true; result: PropertyMutationResult } => {
-    if (!outcome.ok) {
-      setStatus(outcome.message, "is-error");
-      return false;
-    }
-    return true;
-  };
-
-  const finishWrite = async (result: PropertyMutationResult): Promise<void> => {
-    setStatus(mutationSuccessMessage(result), "is-success");
-    toast.show({
-      message: undoToastMessage(result),
-      journalID: result.journal_id,
-      historyHref: host.historyHref,
-    });
-    doc.defaultView?.dispatchEvent(
-      new CustomEvent(managementMutationEventName, { detail: result })
-    );
-    await host.reload();
-  };
-
-  const runUndo = async (journalID: string): Promise<void> => {
-    setBusy(true);
-    setStatus("Undoing change...", "is-loading");
-    try {
-      const outcome = await undoJournalEntry(fetcher, host.token, journalID);
-      setStatus(outcome.message, outcome.ok ? "is-success" : "is-error");
-      if (outcome.ok) {
-        doc.defaultView?.dispatchEvent(new CustomEvent(managementMutationEventName));
-        await host.reload();
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const runApply = async (previewID: string): Promise<void> => {
-    setBusy(true);
-    setStatus("Applying change...", "is-loading");
-    try {
-      const outcome = await applyPropertyMutation(fetcher, host.token, previewID);
-      if (!announce(outcome)) {
-        return;
-      }
-      selected.clear();
-      renderSelection();
-      await finishWrite(outcome.result);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const runPreview = async (request: PropertyMutationRequest): Promise<void> => {
-    setBusy(true);
-    setStatus("Previewing change...", "is-loading");
-    try {
-      const outcome = await previewPropertyMutation(fetcher, host.token, request);
-      if (!announce(outcome)) {
-        return;
-      }
-      const { result } = outcome;
-      setStatus(previewSummaryLabel(result));
-      dialog.open({
-        title: actionTitle(request.action, host.property),
-        summary: previewSummaryLabel(result),
-        confirmLabel: actionConfirmLabel(request.action),
-        result,
-        onConfirm: () => {
-          void runApply(result.preview_id);
-        },
-        onCancel: () => {
-          setStatus("Change canceled.");
-        },
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const runSchemaApply = async (previewID: string): Promise<void> => {
-    setBusy(true);
-    setStatus("Saving the definition...", "is-loading");
-    try {
-      const outcome = await applyPropertySchema(fetcher, host.token, previewID);
-      if (!announce(outcome)) {
-        return;
-      }
-      await finishWrite(outcome.result);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // previewSchema previews one definition change. A definition change bumps the
-  // configuration generation, so any receipt held for a note change is dropped
-  // by the server and the workbench must be previewed again.
-  const previewSchema = async (
-    op: PropertySchemaOp,
-    definition?: PropertySchemaDefinitionInput
-  ): Promise<void> => {
-    setBusy(true);
-    setStatus("Previewing the definition...", "is-loading");
-    try {
-      const outcome = await previewPropertySchema(fetcher, host.token, {
-        op,
-        property: host.property,
-        definition,
-      });
-      if (!announce(outcome)) {
-        return;
-      }
-      const { result } = outcome;
-      dialog.open({
-        title:
-          op === "upsert"
-            ? `Define ${host.property}`
-            : `Remove the ${host.property} definition`,
-        summary: previewSummaryLabel(result),
-        confirmLabel: op === "upsert" ? "Save definition" : "Remove definition",
-        result,
-        onConfirm: () => {
-          void runSchemaApply(result.preview_id);
-        },
-        onCancel: () => {
-          setStatus("Definition change canceled.");
-        },
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const runImmediate = async (
-    relPath: string,
-    op: "replace" | "list_add",
-    value: PropertyTypedValue,
-    hash: string,
-    displayText: string
-  ): Promise<void> => {
-    setBusy(true);
-    setStatus("Saving...", "is-loading");
-    try {
-      const outcome = await savePropertyValue(fetcher, host.token, {
-        note: relPath,
-        property: host.property,
-        op,
-        expected_hash: hash,
-        value,
-      });
-      if (!announce(outcome)) {
-        return;
-      }
-      closeEditor();
-      updateRowText(relPath, displayText);
-      await finishWrite(outcome.result);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   // updateRowText repaints the edited row from what was just written, so the
   // value on screen is correct before the refetch that restates the totals.
   const updateRowText = (relPath: string, text: string): void => {
@@ -351,68 +173,26 @@ export const createPropertyWorkbench = (
     value.classList.remove("is-missing");
   };
 
-  const mountEditor = (
-    parent: HTMLElement,
-    title: string,
-    submitLabel: string,
-    build: (form: HTMLFormElement) => () => string | null
-  ): void => {
-    closeEditor();
-    const form = doc.createElement("form");
-    form.className = "properties-editor";
-    form.setAttribute("data-property-editor-form", "");
-
-    const heading = doc.createElement("p");
-    heading.className = "properties-editor-title";
-    heading.textContent = title;
-    form.appendChild(heading);
-
-    const submit = build(form);
-
-    const error = doc.createElement("p");
-    error.className = "properties-editor-error";
-    error.setAttribute("data-property-editor-error", "");
-    error.setAttribute("role", "alert");
-    error.hidden = true;
-    form.appendChild(error);
-
-    const actions = doc.createElement("div");
-    actions.className = "properties-editor-actions";
-    const confirm = doc.createElement("button");
-    confirm.type = "submit";
-    confirm.className = "properties-button properties-button-primary";
-    confirm.setAttribute("data-property-editor-submit", "");
-    confirm.textContent = submitLabel;
-    const cancel = doc.createElement("button");
-    cancel.type = "button";
-    cancel.className = "properties-button";
-    cancel.setAttribute("data-property-editor-cancel", "");
-    cancel.textContent = "Cancel";
-    actions.append(confirm, cancel);
-    form.appendChild(actions);
-
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const message = submit();
-      error.textContent = message || "";
-      error.hidden = message === null || message === "";
-    });
-    form.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeEditor();
-      }
-    });
-    cancel.addEventListener("click", () => {
-      closeEditor();
-    });
-
-    parent.appendChild(form);
-    openEditor = () => {
-      form.remove();
-    };
-  };
+  const mutations = createWorkbenchMutations({
+    clearSelection: () => {
+      selected.clear();
+      renderSelection();
+    },
+    closeEditor: editor.close,
+    dialog,
+    doc,
+    fetcher,
+    historyHref: host.historyHref,
+    property: host.property,
+    reload: host.reload,
+    setBusy,
+    setStatus,
+    toast,
+    token: host.token,
+    updateRowText,
+  });
+  const { previewSchema, runImmediate, runPreview } = mutations;
+  runUndo = mutations.runUndo;
 
   const buildValueControl = (
     form: HTMLFormElement,
@@ -444,7 +224,7 @@ export const createPropertyWorkbench = (
     const seed =
       op === "replace" ? typedValueFrom(row.value, editKind(current), itemKind) : undefined;
 
-    mountEditor(
+    editor.mount(
       element,
       op === "replace" ? `Edit ${host.property}` : `Add to ${host.property}`,
       "Save",
@@ -502,7 +282,7 @@ export const createPropertyWorkbench = (
       return;
     }
 
-    mountEditor(editorEl, actionTitle(action, host.property), "Preview", (form) => {
+    editor.mount(editorEl, actionTitle(action, host.property), "Preview", (form) => {
       if (action === "rename_property") {
         const input = doc.createElement("input");
         input.type = "text";
@@ -670,8 +450,8 @@ export const createPropertyWorkbench = (
       return;
     }
     if (event.key === "Escape") {
-      if (openEditor) {
-        closeEditor();
+      if (editor.isOpen()) {
+        editor.close();
         return;
       }
       if (selected.size > 0) {
@@ -692,7 +472,7 @@ export const createPropertyWorkbench = (
       );
       matchValue = match ? { kind: match.value.kind, text: match.value.text } : null;
 
-      openEditor = null;
+      editor.reset();
       renderRows(host.rowsEl, result.rows, {
         selected,
         listKind: editKind(result.property) === "list",
