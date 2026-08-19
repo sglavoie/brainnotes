@@ -3,15 +3,14 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func TestServer_PinsAPI_ReorderRenormalizesAListPastTheOldWriteCap(t *testing.T) {
-	assertReorderRenormalizesWholeList(t, 300)
+	assertReorderRenormalizesWholeList(t, 300, 0)
 }
 
 // TestServer_PinsAPI_ReorderRenormalizesBeyondLockedPathCeiling runs the same
@@ -20,12 +19,13 @@ func TestServer_PinsAPI_ReorderRenormalizesAListPastTheOldWriteCap(t *testing.T)
 // boundary rendered and dragged in the browser and could never persist the order
 // it showed.
 func TestServer_PinsAPI_ReorderRenormalizesBeyondLockedPathCeiling(t *testing.T) {
-	assertReorderRenormalizesWholeList(t, vault.MaxLockedPaths()+8)
+	const lockEscalation = 4
+	assertReorderRenormalizesWholeList(t, lockEscalation+8, lockEscalation)
 }
 
 // assertReorderRenormalizesWholeList pins every note to one rank, so no float
 // fits between any two neighbours and a single drag renumbers the whole list.
-func assertReorderRenormalizesWholeList(t *testing.T, count int) {
+func assertReorderRenormalizesWholeList(t *testing.T, count, lockEscalation int) {
 	t.Helper()
 
 	files := make(map[string][]byte, count)
@@ -35,7 +35,8 @@ func assertReorderRenormalizesWholeList(t *testing.T, count int) {
 		rels = append(rels, rel)
 		files[rel] = []byte(fmt.Sprintf("---\npinned: 1.0\ntitle: P%05d\n---\nBody %d.\n", i, i))
 	}
-	ts, root := newHTTPServerForFilesWithOptions(t, files, nil, Options{CSRFToken: "csrf-token"})
+	ts, srv, root := newPinnedNotesServer(t, files)
+	srv.pinnedNotesLockEscalation = lockEscalation
 
 	last := rels[count-1]
 	resp := postPinRequest(t, ts.URL, notePinReorderAPIRoutePath, map[string]string{
@@ -67,4 +68,21 @@ func assertReorderRenormalizesWholeList(t *testing.T, count int) {
 	if n := countJournalEntries(t, root); n != 1 {
 		t.Fatalf("journal entries = %d, want 1 undoable action", n)
 	}
+	if lockEscalation > 0 {
+		locks, err := os.ReadDir(filepath.Join(root, ".bnotes", "locks"))
+		if err != nil {
+			t.Fatalf("read transaction locks: %v", err)
+		}
+		if len(locks) != 1 || locks[0].Name() != "vault.lock" {
+			t.Fatalf("transaction locks = %v, want only escalated vault.lock", lockEntryNames(locks))
+		}
+	}
+}
+
+func lockEntryNames(entries []os.DirEntry) []string {
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	return names
 }

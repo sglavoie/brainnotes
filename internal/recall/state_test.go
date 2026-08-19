@@ -58,6 +58,48 @@ func TestStateStoreReadIsLazyAndNonMutating(t *testing.T) {
 	}
 }
 
+func TestStateStoreWithNotePathsUsesSnapshotForReadsAndFilesystemForWrites(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeStateRecallNote(t, root, "Source.md")
+	writeStateRecallNote(t, root, "Candidate.md")
+	writeStateRecallNote(t, root, "OutsideSource.md")
+	writeStateRecallNote(t, root, "OutsideCandidate.md")
+	if err := NewStateStore(root).SetFeedback("OutsideSource.md", "OutsideCandidate.md", FeedbackUseful, time.Time{}); err != nil {
+		t.Fatalf("seed outside-snapshot feedback: %v", err)
+	}
+
+	store := NewStateStore(root, WithNotePaths([]string{"Candidate.md", "Source.md"}))
+
+	if err := store.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	signal, err := store.Signal("OutsideSource.md", "OutsideCandidate.md")
+	if err != nil || signal != (RecallSignal{}) {
+		t.Fatalf("outside-snapshot read signal = %#v, err=%v; want zero", signal, err)
+	}
+	if err := store.SetFeedback("Source.md", "Candidate.md", FeedbackUseful, time.Time{}); err != nil {
+		t.Fatalf("SetFeedback through provided paths: %v", err)
+	}
+	signal, err = store.Signal("OutsideSource.md", "OutsideCandidate.md")
+	if err != nil || signal != (RecallSignal{}) {
+		t.Fatalf("outside-snapshot read signal after write = %#v, err=%v; want zero", signal, err)
+	}
+
+	signal, err = NewStateStore(root).Signal("OutsideSource.md", "OutsideCandidate.md")
+	if err != nil || !signal.Useful {
+		t.Fatalf("outside-snapshot signal after write = %#v, err=%v; want preserved useful feedback", signal, err)
+	}
+}
+
+func TestStateStoreWithNotePathsRejectsInvalidSnapshot(t *testing.T) {
+	t.Parallel()
+	store := NewStateStore(t.TempDir(), WithNotePaths([]string{"../escape.md"}))
+	if err := store.Validate(); err == nil || !strings.Contains(err.Error(), "note path snapshot") {
+		t.Fatalf("Validate error = %v, want invalid note-path snapshot", err)
+	}
+}
+
 func TestStateStorePersistsFeedbackAndOpenedSignals(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -122,7 +164,7 @@ func TestStateStorePersistsFeedbackAndOpenedSignals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read .bnotes: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "recall.json" {
+	if len(entries) != 2 || entries[0].Name() != "locks" || !entries[0].IsDir() || entries[1].Name() != "recall.json" {
 		t.Fatalf("state directory contains leftover atomic-write files: %v", entries)
 	}
 }
@@ -377,8 +419,11 @@ func TestStateStoreValidatesFeedbackDeadlinesAndSafePaths(t *testing.T) {
 			}
 		})
 	}
-	if _, err := os.Stat(filepath.Join(root, ".bnotes")); !os.IsNotExist(err) {
-		t.Fatalf("invalid writes created .bnotes: %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".bnotes", "recall.json")); !os.IsNotExist(err) {
+		t.Fatalf("invalid writes created recall.json: %v", err)
+	}
+	if info, err := os.Stat(filepath.Join(root, ".bnotes", "locks")); err != nil || !info.IsDir() {
+		t.Fatalf("invalid write did not use the recall path lock: info=%v err=%v", info, err)
 	}
 
 	composedID, err := PairID("Source.md", "Caf\u00e9.md")

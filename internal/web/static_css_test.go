@@ -226,6 +226,69 @@ func TestBriefCSSAccessibilityAndResponsiveContract(t *testing.T) {
 	}
 }
 
+func TestRelatedNotesCSSAccessibilityAndResponsiveContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".related-notes",
+		"color: var(--bn-muted);",
+		"background: var(--bn-sunken);",
+		"background: var(--bn-raised);",
+		"border-color: var(--bn-accent-subtle-border);",
+		".related-tab-list",
+		"grid-template-columns: repeat(3, minmax(0, 1fr));",
+		".related-tab[aria-selected=\"true\"]",
+		".related-tab:focus-visible",
+		".related-show-more:focus-visible",
+		".related-card-action:focus-visible",
+		".related-feedback-drawer > summary:focus-visible",
+		".related-card:focus-visible",
+		"outline: 2px solid var(--bn-focus);",
+		".related-mode-panel[hidden]",
+		".related-results",
+		"grid-template-columns: repeat(2, minmax(0, 1fr));",
+		".related-card",
+		".related-card-excerpt",
+		".related-card-reasons",
+		".related-card-actions",
+		".related-card-action[aria-pressed=\"true\"]",
+		".related-later-options",
+		".related-feedback-drawer",
+		".related-feedback-row[aria-busy=\"true\"]",
+		".related-status.is-warning",
+		"overflow-wrap: anywhere;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("related notes CSS missing %q", want)
+		}
+	}
+
+	reducedMotion := cssBlockAfter(t, css, "@media (prefers-reduced-motion: reduce)")
+	for _, want := range []string{
+		".related-tab",
+		".related-show-more",
+		".related-card-action",
+		".related-feedback-drawer > summary",
+		"transition: none;",
+	} {
+		if !strings.Contains(reducedMotion, want) {
+			t.Fatalf("reduced-motion related notes CSS missing %q in block:\n%s", want, reducedMotion)
+		}
+	}
+
+	narrow := cssBlockAfter(t, css, "@media (max-width: 640px)")
+	for _, want := range []string{
+		".related-tab-list",
+		".related-results",
+		".related-feedback-row",
+		"grid-template-columns: minmax(0, 1fr);",
+	} {
+		if !strings.Contains(narrow, want) {
+			t.Fatalf("narrow related notes CSS missing %q in block:\n%s", want, narrow)
+		}
+	}
+}
+
 func TestReviewCockpitCSSAccessibilityAndMobileContract(t *testing.T) {
 	css := readStaticCSS(t)
 

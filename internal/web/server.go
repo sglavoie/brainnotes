@@ -65,6 +65,10 @@ type Server struct {
 	// validation-to-commit window the pinned-list preconditions protect, which
 	// cannot be provoked reliably otherwise; it is nil in production.
 	beforePinnedNotesCommit func()
+	// pinnedNotesLockEscalation lowers the atomic transaction threshold for the
+	// pins escalation regression. Only tests set it; zero preserves the
+	// production threshold derived by vault.MaxLockedPaths.
+	pinnedNotesLockEscalation int
 }
 
 type notePageData struct {
@@ -209,6 +213,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
 	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)
 	mux.HandleFunc(relatedAPIRoutePath, srv.handleRelated)
+	mux.HandleFunc(relatedItemAPIRoutePath, srv.handleRelatedItem)
 	mux.HandleFunc("/api/note/insight", srv.handleNoteInsight)
 	mux.HandleFunc("/api/capture", srv.handleCapture)
 	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)

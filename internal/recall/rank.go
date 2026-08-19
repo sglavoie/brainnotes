@@ -145,7 +145,7 @@ func (function RecallSignalFunc) Signal(sourcePath, candidatePath string) (Recal
 }
 
 // RankOptions supplies the ranking clock and optional read-only recall state.
-// Now is called once while the ranker is built, producing a stable snapshot.
+// Now is called once while the options are bound, producing a stable snapshot.
 type RankOptions struct {
 	Now    func() time.Time
 	Recall RecallSignalSource
@@ -226,18 +226,11 @@ func BuildRanker(documents []Document, graph *query.Graph, options RankOptions) 
 		return documents[i].Path < documents[j].Path
 	})
 
-	now := time.Now().UTC()
-	if options.Now != nil {
-		now = options.Now().UTC()
-	}
-
 	ranker := &Ranker{
 		documents: make(map[string]rankDocument, len(documents)),
 		paths:     make([]string, 0, len(documents)),
 		lexical:   lexical,
 		metadata:  buildMetadataIndex(documents),
-		now:       now,
-		recall:    options.Recall,
 	}
 	for _, document := range documents {
 		ranker.documents[document.Path] = rankDocument{
@@ -248,7 +241,23 @@ func BuildRanker(documents []Document, graph *query.Graph, options RankOptions) 
 		ranker.paths = append(ranker.paths, document.Path)
 	}
 	ranker.graph = buildGraphIndex(graph, documents)
-	return ranker, nil
+	return ranker.WithOptions(options), nil
+}
+
+// WithOptions returns an immutable request-scoped view over the ranker's
+// prebuilt lexical, metadata, and graph indexes. The indexes are shared and
+// never mutated; only the stable clock and recall signal source are rebound.
+func (ranker *Ranker) WithOptions(options RankOptions) *Ranker {
+	if ranker == nil {
+		return nil
+	}
+	bound := *ranker
+	bound.now = time.Now().UTC()
+	if options.Now != nil {
+		bound.now = options.Now().UTC()
+	}
+	bound.recall = options.Recall
+	return &bound
 }
 
 // Weights returns the fixed weights used by the ranker.

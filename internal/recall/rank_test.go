@@ -110,6 +110,39 @@ func TestRankerGoldenSignalsAndModes(t *testing.T) {
 	}
 }
 
+func TestRankerWithOptionsSharesIndexesWithoutMutatingBase(t *testing.T) {
+	t.Parallel()
+	documents := []Document{
+		rankDocumentFixture("Source.md", "Source", "shared words"),
+		rankDocumentFixture("Candidate.md", "Candidate", "shared words"),
+	}
+	base, err := BuildRanker(documents, nil, RankOptions{})
+	if err != nil {
+		t.Fatalf("BuildRanker: %v", err)
+	}
+	now := time.Date(2026, time.August, 19, 12, 0, 0, 0, time.UTC)
+	bound := base.WithOptions(RankOptions{
+		Now: func() time.Time { return now },
+		Recall: RecallSignalFunc(func(sourcePath, candidatePath string) (RecallSignal, error) {
+			return RecallSignal{Useful: true}, nil
+		}),
+	})
+
+	if bound == base || bound.lexical != base.lexical {
+		t.Fatalf("WithOptions must copy the request view while sharing static indexes")
+	}
+	if base.recall != nil || !bound.now.Equal(now) {
+		t.Fatalf("binding mutated base or lost clock: base recall=%#v bound now=%s", base.recall, bound.now)
+	}
+	results, err := bound.Rank("Source.md", ModeBalanced)
+	if err != nil {
+		t.Fatalf("Rank: %v", err)
+	}
+	if len(results) != 1 || results[0].Signals.Recall != UsefulRecallBoost {
+		t.Fatalf("bound results = %#v, want useful recall reason", results)
+	}
+}
+
 func TestRankerGraphOverlapIncreasesScoreAndChoosesStableBridge(t *testing.T) {
 	t.Parallel()
 

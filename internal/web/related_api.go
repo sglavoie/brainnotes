@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,28 @@ type relatedResponse struct {
 	Feedback   []relatedFeedbackResponse `json:"feedback"`
 }
 
+type relatedItemResponse struct {
+	OK        bool                 `json:"ok"`
+	Action    string               `json:"action"`
+	Source    relatedNoteIdentity  `json:"source"`
+	Candidate relatedNoteIdentity  `json:"candidate"`
+	State     recall.FeedbackState `json:"state,omitempty"`
+	Until     string               `json:"until,omitempty"`
+	Opened    bool                 `json:"opened,omitempty"`
+	Recorded  *bool                `json:"recorded,omitempty"`
+	Warning   string               `json:"warning,omitempty"`
+}
+
+type relatedItemRequest struct {
+	action        string
+	requestNow    time.Time
+	sourcePath    string
+	candidatePath string
+	source        relatedNoteIdentity
+	candidate     relatedNoteIdentity
+	stateStore    *recall.StateStore
+}
+
 type relatedResponseBuilder struct {
 	snapshot  vaultSnapshot
 	documents map[string]recall.Document
@@ -84,6 +107,11 @@ func (s *Server) handleRelated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.reloadConfig(); err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "reload related configuration", err))
+		return
+	}
+	cfg, status := s.configState.publication()
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "load related snapshot", err))
@@ -95,36 +123,33 @@ func (s *Server) handleRelated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	corpus, err := s.state.relatedCorpusFor(snapshot, cfg.Related.MetadataProperties, status.Generation)
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build related corpus", err))
+		return
+	}
 	requestNow := s.briefNow()
-	stateStore := recall.NewStateStore(s.vault.Root, recall.WithClock(func() time.Time { return requestNow }))
+	stateStore := recall.NewStateStore(
+		s.vault.Root,
+		recall.WithClock(func() time.Time { return requestNow }),
+		recall.WithNotePaths(corpus.notePaths),
+	)
 	if err := stateStore.Validate(); err != nil {
 		writeRelatedStateError(w, err)
 		return
 	}
 
-	cfg := s.config()
-	documents, err := recall.ExtractCorpus(s.vault.Root, snapshot.notes, recall.ExtractOptions{
-		MetadataProperties: append([]string(nil), cfg.Related.MetadataProperties...),
-	})
-	if err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "extract related corpus", err))
-		return
-	}
 	sourcePath := noteVaultPath(s.vault.Root, sourceNote)
-	sourceDocument, ok := documentByPath(documents, sourcePath)
+	sourceDocument, ok := documentByPath(corpus.documents, sourcePath)
 	if !ok {
 		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "related source note not found or stale"))
 		return
 	}
 
-	ranker, err := recall.BuildRanker(documents, snapshot.graph, recall.RankOptions{
+	ranker := corpus.ranker.WithOptions(recall.RankOptions{
 		Now:    func() time.Time { return requestNow },
 		Recall: stateStore,
 	})
-	if err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build related ranking", err))
-		return
-	}
 	results, err := ranker.Rank(sourceDocument.Path, mode)
 	if err != nil {
 		// After mode and source validation, Rank can fail only while reading the
@@ -138,7 +163,7 @@ func (s *Server) handleRelated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	builder := newRelatedResponseBuilder(s.vault.Root, snapshot, documents)
+	builder := newRelatedResponseBuilder(s.vault.Root, snapshot, corpus.documents)
 	sourceIdentity, err := builder.identity(sourceDocument.Path)
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "map related source", err))
@@ -167,6 +192,172 @@ func (s *Server) handleRelated(w http.ResponseWriter, r *http.Request) {
 		Results:    resultResponse,
 		Feedback:   feedbackResponse,
 	})
+}
+
+func (s *Server) handleRelatedItem(w http.ResponseWriter, r *http.Request) {
+	request, ok := s.relatedItemRequest(w, r)
+	if !ok {
+		return
+	}
+
+	response := relatedItemResponse{
+		OK:        true,
+		Action:    request.action,
+		Source:    request.source,
+		Candidate: request.candidate,
+	}
+	switch request.action {
+	case "view":
+		if err := request.stateStore.RecordOpened(request.sourcePath, request.candidatePath); err != nil {
+			writeRelatedStateMutationError(w, err)
+			return
+		}
+		response.Recorded = boolPointer(true)
+	case "open_editor":
+		candidatePath := filepath.Join(s.vault.Root, filepath.FromSlash(request.candidatePath))
+		if err := s.openPath(candidatePath); err != nil {
+			writeBriefOpenError(w, err)
+			return
+		}
+		response.Opened = true
+		if err := request.stateStore.RecordOpened(request.sourcePath, request.candidatePath); err != nil {
+			response.Recorded = boolPointer(false)
+			response.Warning = "Editor opened, but recall history could not be recorded."
+			writeManagementJSON(w, http.StatusOK, response)
+			return
+		}
+		response.Recorded = boolPointer(true)
+	case "useful", "dismissed", "clear":
+		feedback := recall.FeedbackState(request.action)
+		if err := request.stateStore.SetFeedback(request.sourcePath, request.candidatePath, feedback, time.Time{}); err != nil {
+			writeRelatedStateMutationError(w, err)
+			return
+		}
+		response.State = feedback
+	case "later":
+		until, err := relatedLaterDeadline(r.Form.Get("until"), request.requestNow)
+		if err != nil {
+			writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid later date", err))
+			return
+		}
+		if err := request.stateStore.SetFeedback(request.sourcePath, request.candidatePath, recall.FeedbackLater, until); err != nil {
+			writeRelatedStateMutationError(w, err)
+			return
+		}
+		response.State = recall.FeedbackLater
+		response.Until = until.Format(time.DateOnly)
+	}
+
+	writeManagementJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) relatedItemRequest(w http.ResponseWriter, r *http.Request) (relatedItemRequest, bool) {
+	if r.URL.Path != relatedItemAPIRoutePath {
+		http.NotFound(w, r)
+		return relatedItemRequest{}, false
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
+		return relatedItemRequest{}, false
+	}
+	if err := r.ParseForm(); err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
+		return relatedItemRequest{}, false
+	}
+	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
+		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+		return relatedItemRequest{}, false
+	}
+
+	action := strings.ToLower(strings.TrimSpace(r.Form.Get("action")))
+	switch action {
+	case "view", "open_editor", "useful", "dismissed", "later", "clear":
+	default:
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported related action %q", action))
+		return relatedItemRequest{}, false
+	}
+	sourceKey := strings.TrimSpace(r.Form.Get("source"))
+	candidateKey := strings.TrimSpace(r.Form.Get("candidate"))
+	if sourceKey == "" || candidateKey == "" {
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "related source and candidate keys are required"))
+		return relatedItemRequest{}, false
+	}
+
+	snapshot, err := s.state.currentSnapshot()
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "load related snapshot", err))
+		return relatedItemRequest{}, false
+	}
+	sourceNote, _, sourceOK := noteForRoute(snapshot, sourceKey)
+	candidateNote, _, candidateOK := noteForRoute(snapshot, candidateKey)
+	if !sourceOK || !candidateOK {
+		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "related source or candidate note not found or stale"))
+		return relatedItemRequest{}, false
+	}
+	sourcePath := noteVaultPath(s.vault.Root, sourceNote)
+	candidatePath := noteVaultPath(s.vault.Root, candidateNote)
+	if sourcePath == "" || candidatePath == "" {
+		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "related source or candidate note not found or stale"))
+		return relatedItemRequest{}, false
+	}
+	if sourcePath == candidatePath {
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "related source and candidate must be different notes"))
+		return relatedItemRequest{}, false
+	}
+
+	requestNow := s.briefNow()
+	stateStore := recall.NewStateStore(
+		s.vault.Root,
+		recall.WithClock(func() time.Time { return requestNow }),
+	)
+	if err := stateStore.Validate(); err != nil {
+		writeRelatedStateError(w, err)
+		return relatedItemRequest{}, false
+	}
+
+	builder := newRelatedResponseBuilder(s.vault.Root, snapshot, nil)
+	builder.documents[sourcePath] = recall.Document{Path: sourcePath, Title: sourceNote.Title()}
+	builder.documents[candidatePath] = recall.Document{Path: candidatePath, Title: candidateNote.Title()}
+	source, err := builder.identity(sourcePath)
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "map related source", err))
+		return relatedItemRequest{}, false
+	}
+	candidate, err := builder.identity(candidatePath)
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "map related candidate", err))
+		return relatedItemRequest{}, false
+	}
+	return relatedItemRequest{
+		action:        action,
+		requestNow:    requestNow,
+		sourcePath:    sourcePath,
+		candidatePath: candidatePath,
+		source:        source,
+		candidate:     candidate,
+		stateStore:    stateStore,
+	}, true
+}
+
+func relatedLaterDeadline(value string, now time.Time) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, fmt.Errorf("until is required")
+	}
+	until, err := time.ParseInLocation(time.DateOnly, value, now.Location())
+	if err != nil || until.Format(time.DateOnly) != value {
+		return time.Time{}, fmt.Errorf("until must be a calendar date in YYYY-MM-DD form")
+	}
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	if !until.After(today) {
+		return time.Time{}, fmt.Errorf("until must be after the server date %s", today.Format(time.DateOnly))
+	}
+	return until, nil
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 func relatedQueryOptions(r *http.Request) (recall.Mode, int, error) {
@@ -293,4 +484,8 @@ func (builder relatedResponseBuilder) results(results []recall.Result, activeByP
 
 func writeRelatedStateError(w http.ResponseWriter, err error) {
 	writeManagementErrorStatus(w, http.StatusConflict, noteops.WrapError(noteops.CodeConflict, "recall state is unreadable", err))
+}
+
+func writeRelatedStateMutationError(w http.ResponseWriter, err error) {
+	writeManagementErrorStatus(w, http.StatusConflict, noteops.WrapError(noteops.CodeConflict, "recall state update failed", err))
 }

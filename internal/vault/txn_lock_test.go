@@ -14,6 +14,40 @@ func requireLocking(t *testing.T) {
 	}
 }
 
+func TestFileTxnLockEscalationOverrideCannotRaiseProductionThreshold(t *testing.T) {
+	maximum := MaxLockedPaths()
+
+	raised := &FileTxn{}
+	raised.SetLockEscalationThresholdForTest(maximum + 1)
+	if raised.lockEscalation != maximum {
+		t.Fatalf("raised lock escalation = %d, want production maximum %d", raised.lockEscalation, maximum)
+	}
+
+	for _, test := range []struct {
+		name      string
+		threshold int
+	}{
+		{name: "zero", threshold: 0},
+		{name: "negative", threshold: -1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			txn := &FileTxn{}
+			txn.SetLockEscalationThresholdForTest(test.threshold)
+			if txn.lockEscalation != 0 {
+				t.Fatalf("lock escalation = %d, want production fallback", txn.lockEscalation)
+			}
+		})
+	}
+
+	if maximum > 1 {
+		lowered := &FileTxn{}
+		lowered.SetLockEscalationThresholdForTest(maximum - 1)
+		if lowered.lockEscalation != maximum-1 {
+			t.Fatalf("lowered lock escalation = %d, want %d", lowered.lockEscalation, maximum-1)
+		}
+	}
+}
+
 // TestFileTxnCommitExcludesASecondWriterOnOnePath pins the mutual exclusion the
 // custody step depends on: while one commit is between taking custody and placing
 // its replacement, no second transaction may reach the same path at all.

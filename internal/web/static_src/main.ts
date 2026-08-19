@@ -15,6 +15,7 @@ import { initTrashNoteAction } from "./note-trash";
 import { initOverviewSearchResults } from "./overview-search";
 import { initPinnedList } from "./pinned-list";
 import { initProperties } from "./properties";
+import { initRelatedNotes } from "./related";
 import { initSearch } from "./search";
 import { initTheme } from "./theme";
 
@@ -32,6 +33,7 @@ import { initTheme } from "./theme";
   initBrokenCreateActions();
   initCopyControls();
   initDailyBrief();
+  initRelatedNotes();
   initGraph();
   initSearch();
   initOverviewSearchResults();

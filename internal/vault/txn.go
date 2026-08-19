@@ -340,6 +340,22 @@ func (t *FileTxn) Paths() []string {
 	return append([]string(nil), t.order...)
 }
 
+// SetLockEscalationThresholdForTest overrides the number of paths FileTxn
+// locks individually before taking the vault-wide guard. Production callers
+// must leave the threshold unset so it continues to derive from
+// MaxLockedPaths; this seam lets cross-package tests cover escalation without
+// creating thousands of files. The override can lower, but never raise, the
+// production-derived threshold.
+func (t *FileTxn) SetLockEscalationThresholdForTest(threshold int) {
+	if t == nil || threshold <= 0 {
+		return
+	}
+	if maximum := MaxLockedPaths(); threshold > maximum {
+		threshold = maximum
+	}
+	t.lockEscalation = threshold
+}
+
 func (t *FileTxn) plan(change *txnChange) error {
 	if t == nil {
 		return errors.New("vault: nil transaction")

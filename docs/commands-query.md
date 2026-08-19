@@ -240,6 +240,13 @@ bodies or excerpts. Removed-note and expired-snooze records are ignored by
 queries and pruned on the next explicit state write. Corrupt, invalid,
 unsupported, or symlinked state fails closed and is never silently overwritten.
 
+The Related Notes explorer on `bn serve` note pages uses this same ranker, mode
+semantics, directed feedback, and sidecar. Its three lazy, independent panels
+show five results at a time up to twenty, but deliberately expose only excerpts,
+relationships, optional bridges, and plain-language reasons—not numeric scores
+or weights. Browser and editor opens share the same directed open history; Clear
+removes only rating/snooze state and preserves that history.
+
 Examples:
 
 ```sh
@@ -298,5 +305,4 @@ bn context Notes/Current.md --related 3 --purpose contradictions
 bn context Notes/Current.md --format json > /tmp/current-context.json
 bn context Notes/Current.md --purpose questions --agent
 ```
-
 

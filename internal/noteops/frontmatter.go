@@ -49,6 +49,10 @@ type frontmatterOptions struct {
 	command        string
 	journalOptions []journal.RecorderOption
 	requires       []fileRequirement
+	// lockEscalation overrides the transaction's production-derived threshold.
+	// Only tests set it so an atomic caller in another package can exercise the
+	// vault-wide lock path with a small fixture.
+	lockEscalation int
 	// beforeAtomicCommit runs after SetFrontmatterAtomic has planned every note
 	// and before the transaction stages anything. Only a test sets it: the window
 	// where a pinned hash goes stale is not otherwise reachable from outside the
@@ -56,7 +60,7 @@ type frontmatterOptions struct {
 	beforeAtomicCommit func() error
 }
 
-// FrontmatterOption customizes SetFrontmatter and UnsetFrontmatter.
+// FrontmatterOption customizes frontmatter mutations.
 type FrontmatterOption func(*frontmatterOptions)
 
 // WithFrontmatterCommand sets the command stored in the undo journal entry.
@@ -83,6 +87,18 @@ func WithFrontmatterRequire(path string, expect vault.FileExpectation) Frontmatt
 func WithFrontmatterJournalOptions(opts ...journal.RecorderOption) FrontmatterOption {
 	return func(o *frontmatterOptions) {
 		o.journalOptions = append(o.journalOptions, opts...)
+	}
+}
+
+// WithFrontmatterLockEscalationForTest overrides the atomic transaction's
+// production-derived lock-escalation threshold. It is intended only for tests
+// that need to cover the vault-wide lock path without creating thousands of
+// note files; non-positive values are ignored.
+func WithFrontmatterLockEscalationForTest(threshold int) FrontmatterOption {
+	return func(o *frontmatterOptions) {
+		if threshold > 0 {
+			o.lockEscalation = threshold
+		}
 	}
 }
 

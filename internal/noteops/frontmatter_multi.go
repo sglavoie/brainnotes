@@ -87,7 +87,7 @@ func SetFrontmatterAtomic(vaultRoot string, writes []NoteFrontmatterWrite, fm *c
 	}
 
 	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
-	if err := commitFrontmatterWrites(vaultRoot, planned, j, options.requires); err != nil {
+	if err := commitFrontmatterWrites(vaultRoot, planned, j, options.requires, options.lockEscalation); err != nil {
 		return nil, err
 	}
 	entry, err := j.Finalize()
@@ -135,11 +135,12 @@ func planFrontmatterWrite(path string, mutations []FrontmatterMutation, fm *conf
 	}, nil
 }
 
-func commitFrontmatterWrites(vaultRoot string, planned []plannedFrontmatterWrite, journaler captureJournal, requires []fileRequirement) error {
+func commitFrontmatterWrites(vaultRoot string, planned []plannedFrontmatterWrite, journaler captureJournal, requires []fileRequirement, lockEscalation int) error {
 	txn, err := vault.NewFileTxn(vaultRoot)
 	if err != nil {
 		return WrapError(CodeInternal, "frontmatter: open transaction", err)
 	}
+	txn.SetLockEscalationThresholdForTest(lockEscalation)
 	for _, write := range planned {
 		if err := txn.Write(write.path, write.data, 0, write.expect); err != nil {
 			return classifyTxnError("frontmatter: plan write", err)

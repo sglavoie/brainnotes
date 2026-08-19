@@ -12,7 +12,35 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
+
+// mutateLocked is the single write boundary for recall.json. The caller holds
+// store.mu; this method adds the process-wide/cross-process vault path lock and
+// keeps it through the fresh read, mutation, and atomic replacement.
+func (store *StateStore) mutateLocked(
+	now time.Time,
+	mutate func(*recallStateFile, map[string]struct{}) error,
+) error {
+	root, err := store.rootPath()
+	if err != nil {
+		return err
+	}
+	release, err := vault.LockPaths(root, recallStateRelPath)
+	if err != nil {
+		return fmt.Errorf("recall: lock state: %w", err)
+	}
+	defer release()
+
+	state, paths, err := store.prepareWriteLocked(now)
+	if err != nil {
+		return err
+	}
+	if err := mutate(&state, paths); err != nil {
+		return err
+	}
+	return store.saveLocked(state)
+}
 
 func (store *StateStore) prepareWriteLocked(now time.Time) (recallStateFile, map[string]struct{}, error) {
 	// Explicit writes always reread the current file. The cached snapshot is a
@@ -200,6 +228,9 @@ func (store *StateStore) saveLocked(state recallStateFile) error {
 }
 
 func (store *StateStore) notePathsLocked(refresh bool) (map[string]struct{}, error) {
+	if store.notePathsErr != nil {
+		return nil, store.notePathsErr
+	}
 	if !refresh && store.notePaths != nil {
 		return store.notePaths, nil
 	}
@@ -244,7 +275,13 @@ func (store *StateStore) notePathsLocked(refresh bool) (map[string]struct{}, err
 	if err != nil {
 		return nil, fmt.Errorf("recall: scan vault notes: %w", err)
 	}
-	store.notePaths = paths
+	// A caller-provided snapshot remains authoritative for read-only queries,
+	// but an explicit write must return the freshly scanned existence set. This
+	// keeps resilient web visibility separate from the pruning domain shared by
+	// every CLI and web mutation.
+	if !store.notePathsFixed {
+		store.notePaths = paths
+	}
 	return paths, nil
 }
 

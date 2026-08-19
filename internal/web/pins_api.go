@@ -225,6 +225,9 @@ func (s *Server) applyPinnedNotesPlan(w http.ResponseWriter, req pinnedNotesRequ
 
 	opts := append(frontmatterConfigPinOptions(req.pin), noteops.WithFrontmatterCommand(command))
 	opts = append(opts, requires...)
+	if s.pinnedNotesLockEscalation > 0 {
+		opts = append(opts, noteops.WithFrontmatterLockEscalationForTest(s.pinnedNotesLockEscalation))
+	}
 	if s.beforePinnedNotesCommit != nil {
 		s.beforePinnedNotesCommit()
 	}

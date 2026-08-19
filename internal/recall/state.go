@@ -67,17 +67,44 @@ func WithClock(now func() time.Time) StateStoreOption {
 	}
 }
 
-// StateStore persists recall feedback for one vault. It loads state lazily and
-// keeps one validated snapshot for the lifetime of the store, which lets a
-// ranker request many pair signals without rereading recall.json per candidate.
+// WithNotePaths supplies the immutable note-path snapshot used by read-only
+// recall queries. It is intended for callers that already loaded the vault and
+// need reads to use that exact resilient snapshot without walking the filesystem
+// again. Explicit writes still rescan the vault so pruning uses current on-disk
+// note existence. Paths are copied and validated when the store is built.
+func WithNotePaths(paths []string) StateStoreOption {
+	paths = append([]string(nil), paths...)
+	return func(store *StateStore) {
+		store.notePathsFixed = true
+		store.notePaths = make(map[string]struct{}, len(paths))
+		for _, value := range paths {
+			normalized, err := normalizeRecallPath(value)
+			if err != nil {
+				store.notePathsErr = fmt.Errorf("recall: note path snapshot: %w", err)
+				store.notePaths = nil
+				return
+			}
+			store.notePaths[normalized] = struct{}{}
+		}
+	}
+}
+
+// StateStore persists recall feedback for one vault. It owns recall.json write
+// serialization: every mutation takes the vault path lock and holds it across
+// the fresh read-modify-write, so stores in this process and other bn processes
+// contend on the same flock. Reads stay lazy and cache one validated snapshot,
+// which lets a ranker request many pair signals without rereading recall.json
+// per candidate.
 type StateStore struct {
 	root string
 	now  func() time.Time
 
-	mu          sync.Mutex
-	state       *recallStateFile
-	stateExists bool
-	notePaths   map[string]struct{}
+	mu             sync.Mutex
+	state          *recallStateFile
+	stateExists    bool
+	notePaths      map[string]struct{}
+	notePathsFixed bool
+	notePathsErr   error
 }
 
 type recallStateFile struct {
@@ -115,6 +142,9 @@ func (store *StateStore) Validate() error {
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	if store.notePathsErr != nil {
+		return store.notePathsErr
+	}
 	_, _, err := store.loadLocked()
 	return err
 }
@@ -253,36 +283,34 @@ func (store *StateStore) SetFeedback(
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	state, paths, err := store.prepareWriteLocked(now)
-	if err != nil {
-		return err
-	}
-	if err := requireRecallPairExists(paths, sourcePath, candidatePath); err != nil {
-		return err
-	}
+	return store.mutateLocked(now, func(state *recallStateFile, paths map[string]struct{}) error {
+		if err := requireRecallPairExists(paths, sourcePath, candidatePath); err != nil {
+			return err
+		}
 
-	record := state.Records[pairID]
-	record.SourceRelPath = sourcePath
-	record.CandidateRelPath = candidatePath
-	switch feedback {
-	case FeedbackUseful, FeedbackDismissed:
-		record.Rating = string(feedback)
-		record.SnoozedUntil = nil
-	case FeedbackLater:
-		record.Rating = ""
-		deadline := until
-		record.SnoozedUntil = &deadline
-	case FeedbackClear:
-		record.Rating = ""
-		record.SnoozedUntil = nil
-	}
-	record.UpdatedAt = now
-	if recallRecordEmpty(record) {
-		delete(state.Records, pairID)
-	} else {
-		state.Records[pairID] = record
-	}
-	return store.saveLocked(state)
+		record := state.Records[pairID]
+		record.SourceRelPath = sourcePath
+		record.CandidateRelPath = candidatePath
+		switch feedback {
+		case FeedbackUseful, FeedbackDismissed:
+			record.Rating = string(feedback)
+			record.SnoozedUntil = nil
+		case FeedbackLater:
+			record.Rating = ""
+			deadline := until
+			record.SnoozedUntil = &deadline
+		case FeedbackClear:
+			record.Rating = ""
+			record.SnoozedUntil = nil
+		}
+		record.UpdatedAt = now
+		if recallRecordEmpty(record) {
+			delete(state.Records, pairID)
+		} else {
+			state.Records[pairID] = record
+		}
+		return nil
+	})
 }
 
 // RecordOpened records that the candidate was selected interactively from the
@@ -300,20 +328,18 @@ func (store *StateStore) RecordOpened(sourcePath, candidatePath string) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	state, paths, err := store.prepareWriteLocked(now)
-	if err != nil {
-		return err
-	}
-	if err := requireRecallPairExists(paths, sourcePath, candidatePath); err != nil {
-		return err
-	}
-	record := state.Records[pairID]
-	record.SourceRelPath = sourcePath
-	record.CandidateRelPath = candidatePath
-	record.LastOpenedAt = &now
-	record.UpdatedAt = now
-	state.Records[pairID] = record
-	return store.saveLocked(state)
+	return store.mutateLocked(now, func(state *recallStateFile, paths map[string]struct{}) error {
+		if err := requireRecallPairExists(paths, sourcePath, candidatePath); err != nil {
+			return err
+		}
+		record := state.Records[pairID]
+		record.SourceRelPath = sourcePath
+		record.CandidateRelPath = candidatePath
+		record.LastOpenedAt = &now
+		record.UpdatedAt = now
+		state.Records[pairID] = record
+		return nil
+	})
 }
 
 // PairID returns the deterministic identifier for a normalized, directed

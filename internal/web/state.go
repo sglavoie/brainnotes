@@ -8,6 +8,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -46,14 +47,27 @@ type vaultState struct {
 	// under one configuration generation, keyed by both so a note reload or a
 	// configuration reload rebuilds it exactly once.
 	propertyIndex    *properties.Index
-	propertyIndexKey propertyIndexKey
+	propertyIndexKey derivedCacheKey
+
+	// relatedCorpus caches immutable recall documents and the static ranking
+	// indexes derived from one snapshot under one configuration generation.
+	relatedCorpus    *relatedCorpus
+	relatedCorpusKey derivedCacheKey
 }
 
-// propertyIndexKey pairs the note load a property index was built from with the
-// configuration generation that defined its semantics.
-type propertyIndexKey struct {
+// derivedCacheKey pairs a note load with the configuration generation that
+// defined a derived cache's semantics.
+type derivedCacheKey struct {
 	snapshot   int64
 	generation int64
+}
+
+// relatedCorpus is immutable after publication. documents, notePaths, and the
+// ranker's static indexes are therefore safe to share across requests.
+type relatedCorpus struct {
+	documents []recall.Document
+	notePaths []string
+	ranker    *recall.Ranker
 }
 
 func newVaultState(v *vault.Vault, ttl time.Duration) (*vaultState, error) {
@@ -120,7 +134,7 @@ func (s *vaultState) propertyIndexFor(snapshot vaultSnapshot, fm *config.Frontma
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := propertyIndexKey{snapshot: snapshot.serial, generation: generation}
+	key := derivedCacheKey{snapshot: snapshot.serial, generation: generation}
 	if s.propertyIndex != nil && s.propertyIndexKey == key {
 		return s.propertyIndex
 	}
@@ -129,6 +143,43 @@ func (s *vaultState) propertyIndexFor(snapshot vaultSnapshot, fm *config.Frontma
 	s.propertyIndex = index
 	s.propertyIndexKey = key
 	return index
+}
+
+// relatedCorpusFor returns the recall corpus and prebuilt static ranking
+// indexes for snapshot under one configuration generation. Request-specific
+// clocks and recall signals are bound later through Ranker.WithOptions.
+func (s *vaultState) relatedCorpusFor(snapshot vaultSnapshot, metadataProperties []string, generation int64) (*relatedCorpus, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := derivedCacheKey{snapshot: snapshot.serial, generation: generation}
+	if s.relatedCorpus != nil && s.relatedCorpusKey == key {
+		return s.relatedCorpus, nil
+	}
+
+	documents, err := recall.ExtractCorpus(s.vault.Root, snapshot.notes, recall.ExtractOptions{
+		MetadataProperties: append([]string(nil), metadataProperties...),
+	})
+	if err != nil {
+		return nil, err
+	}
+	ranker, err := recall.BuildRanker(documents, snapshot.graph, recall.RankOptions{})
+	if err != nil {
+		return nil, err
+	}
+	notePaths := make([]string, len(documents))
+	for index := range documents {
+		notePaths[index] = documents[index].Path
+	}
+
+	corpus := &relatedCorpus{
+		documents: documents,
+		notePaths: notePaths,
+		ranker:    ranker,
+	}
+	s.relatedCorpus = corpus
+	s.relatedCorpusKey = key
+	return corpus, nil
 }
 
 func (s *vaultState) invalidate() {

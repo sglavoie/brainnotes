@@ -1,6 +1,12 @@
-export type StatusKind = "" | "is-success" | "is-error" | "is-loading" | "is-empty";
+export type StatusKind = "" | "is-success" | "is-error" | "is-loading" | "is-empty" | "is-warning";
 
-export const statusClassNames = ["is-success", "is-error", "is-loading", "is-empty"] as const;
+export const statusClassNames = [
+  "is-success",
+  "is-error",
+  "is-loading",
+  "is-empty",
+  "is-warning",
+] as const;
 
 export const setStatusText = (
   element: Element | null | undefined,
