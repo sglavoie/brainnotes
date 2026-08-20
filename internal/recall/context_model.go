@@ -15,8 +15,9 @@ const (
 )
 
 // ContextPurpose names the requested research task and provides the exact
-// deterministic instructions carried in the bundle. Purpose templates are
-// owned by the CLI; the core treats these strings as data.
+// deterministic instructions carried in the bundle. The bundle builders treat
+// these strings as data; StandardPurpose owns the shared definitions callers
+// present as the standard research purposes.
 type ContextPurpose struct {
 	Name         string `json:"name"`
 	Instructions string `json:"instructions"`

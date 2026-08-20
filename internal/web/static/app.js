@@ -1450,11 +1450,263 @@ var BrainNotesApp = (() => {
     return notePathForKey(result.key);
   };
 
+  // internal/web/static_src/daily-brief-http.ts
+  var jsonPostRequest = (csrfToken, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": csrfToken
+    },
+    body
+  });
+  var readResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
+  };
+
+  // internal/web/static_src/api-synthesis.ts
+  var synthesisContextPath = "/api/synthesis/context";
+  var synthesisGeneratePath = "/api/synthesis/generate";
+  var synthesisPreviewPath = "/api/synthesis/preview";
+  var synthesisApplyPath = "/api/synthesis/apply";
+  var SynthesisRequestError = class extends Error {
+    code;
+    constructor(message, code) {
+      super(message);
+      this.name = "SynthesisRequestError";
+      this.code = code;
+    }
+  };
+  var synthesisRequestError = (status, payload) => {
+    const result = normalizeManagementResult(payload);
+    return new SynthesisRequestError(
+      normalizeManagementErrorMessage(status, payload),
+      result.ok ? "" : result.code || ""
+    );
+  };
+  var buildSynthesisContextForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("source", request.source);
+    for (const candidate of request.candidates) {
+      body.append("candidate", candidate);
+    }
+    if (request.purpose !== "") {
+      body.set("purpose", request.purpose);
+    }
+    if (request.prompt !== "") {
+      body.set("prompt", request.prompt);
+    }
+    body.set("token", request.token);
+    return body;
+  };
+  var buildSynthesisContextFetchRequest = (endpoint, request) => ({
+    url: endpoint || synthesisContextPath,
+    init: jsonPostRequest(request.token, buildSynthesisContextForm(request).toString())
+  });
+  var normalizeSynthesisIdentity = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+    const identity = {
+      key: normalizeParamValue(record.key),
+      title: normalizeParamValue(record.title),
+      path: normalizeParamValue(record.path),
+      route: normalizeParamValue(record.route),
+      folder: normalizeParamValue(record.folder)
+    };
+    return identity.key !== "" && identity.path !== "" && identity.route !== "" ? identity : null;
+  };
+  var normalizeSynthesisExcerpt = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+    const path = normalizeParamValue(record.path);
+    return path === "" ? null : {
+      path,
+      start_line: readCount(record.start_line),
+      end_line: readCount(record.end_line)
+    };
+  };
+  var normalizeSynthesisManifest = (value) => {
+    const record = asRecord(value) || {};
+    return {
+      source_path: normalizeParamValue(record.source_path),
+      max_bytes: readCount(record.max_bytes),
+      byte_count: readCount(record.byte_count),
+      notes: Array.isArray(record.notes) ? record.notes.flatMap((note) => {
+        const identity = normalizeSynthesisIdentity(note);
+        return identity ? [identity] : [];
+      }) : [],
+      excerpts: Array.isArray(record.excerpts) ? record.excerpts.flatMap((excerpt) => {
+        const normalized = normalizeSynthesisExcerpt(excerpt);
+        return normalized ? [normalized] : [];
+      }) : []
+    };
+  };
+  var normalizeSynthesisContextResponse = (payload) => {
+    const record = asRecord(payload);
+    if (!record) {
+      return null;
+    }
+    const anchor = normalizeSynthesisIdentity(record.anchor);
+    const contextID = normalizeParamValue(record.context_id);
+    if (!anchor || contextID === "") {
+      return null;
+    }
+    const supporters = Array.isArray(record.supporters) ? record.supporters.flatMap((supporter) => {
+      const identity = normalizeSynthesisIdentity(supporter);
+      return identity ? [identity] : [];
+    }) : [];
+    return {
+      context_id: contextID,
+      expires_at: normalizeParamValue(record.expires_at),
+      vault_id: normalizeParamValue(record.vault_id),
+      agent_enabled: readBoolean(record.agent_enabled),
+      purpose: normalizeParamValue(record.purpose),
+      prompt: typeof record.prompt === "string" ? record.prompt : "",
+      anchor,
+      supporters,
+      manifest: normalizeSynthesisManifest(record.manifest),
+      markdown: typeof record.markdown === "string" ? record.markdown : ""
+    };
+  };
+  var requestSynthesisContext = async (fetcher, endpoint, request) => {
+    const built = buildSynthesisContextFetchRequest(endpoint, request);
+    const response = await fetcher(built.url, built.init);
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      throw synthesisRequestError(response.status, payload);
+    }
+    const normalized = normalizeSynthesisContextResponse(payload);
+    if (!normalized || normalized.anchor.key !== request.source || normalized.supporters.length !== request.candidates.length) {
+      throw new Error("The synthesis context response did not match the request.");
+    }
+    return normalized;
+  };
+  var buildSynthesisGenerateForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("context_id", request.context_id);
+    body.set("token", request.token);
+    return body;
+  };
+  var normalizeSynthesisGenerateResponse = (payload) => {
+    const record = asRecord(payload) || {};
+    return {
+      enabled: readBoolean(record.enabled),
+      message: normalizeParamValue(record.message),
+      context_id: normalizeParamValue(record.context_id),
+      output: typeof record.output === "string" ? record.output : "",
+      rendered_html: typeof record.rendered_html === "string" ? record.rendered_html : ""
+    };
+  };
+  var requestSynthesisGenerate = async (fetcher, endpoint, request) => {
+    const response = await fetcher(
+      endpoint || synthesisGeneratePath,
+      jsonPostRequest(request.token, buildSynthesisGenerateForm(request).toString())
+    );
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      throw synthesisRequestError(response.status, payload);
+    }
+    const normalized = normalizeSynthesisGenerateResponse(payload);
+    if (normalized.enabled && normalized.output === "") {
+      throw new Error("The generation command returned no output.");
+    }
+    return normalized;
+  };
+  var buildSynthesisPreviewForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("context_id", request.context_id);
+    body.set("title", request.title);
+    body.set("folder", request.folder);
+    body.set("draft", request.draft);
+    body.set("token", request.token);
+    return body;
+  };
+  var normalizeSynthesisPreviewResponse = (payload) => {
+    const record = asRecord(payload);
+    if (!record) {
+      return null;
+    }
+    const previewID = normalizeParamValue(record.preview_id);
+    const destination = normalizeParamValue(record.destination);
+    if (previewID === "" || destination === "") {
+      return null;
+    }
+    return {
+      preview_id: previewID,
+      expires_at: normalizeParamValue(record.expires_at),
+      context_id: normalizeParamValue(record.context_id),
+      destination,
+      markdown: typeof record.markdown === "string" ? record.markdown : "",
+      rendered_html: typeof record.rendered_html === "string" ? record.rendered_html : ""
+    };
+  };
+  var requestSynthesisPreview = async (fetcher, endpoint, request) => {
+    const response = await fetcher(
+      endpoint || synthesisPreviewPath,
+      jsonPostRequest(request.token, buildSynthesisPreviewForm(request).toString())
+    );
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      throw synthesisRequestError(response.status, payload);
+    }
+    const normalized = normalizeSynthesisPreviewResponse(payload);
+    if (!normalized) {
+      throw new Error("The synthesis preview response was incomplete.");
+    }
+    return normalized;
+  };
+  var buildSynthesisApplyForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("preview_id", request.preview_id);
+    body.set("token", request.token);
+    return body;
+  };
+  var normalizeSynthesisApplyResponse = (payload) => {
+    const result = normalizeManagementResult(payload);
+    if (!result.ok || !result.path) {
+      return null;
+    }
+    return {
+      message: result.message || "Created note.",
+      key: result.key || "",
+      path: result.path,
+      rel_path: result.rel_path || "",
+      journal_id: result.journal_id || ""
+    };
+  };
+  var requestSynthesisApply = async (fetcher, endpoint, request) => {
+    const response = await fetcher(
+      endpoint || synthesisApplyPath,
+      jsonPostRequest(request.token, buildSynthesisApplyForm(request).toString())
+    );
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      throw synthesisRequestError(response.status, payload);
+    }
+    const normalized = normalizeSynthesisApplyResponse(payload);
+    if (!normalized) {
+      throw new Error("The synthesis apply response did not name the created note.");
+    }
+    return normalized;
+  };
+
   // internal/web/static_src/dom.ts
-  var narrowElement = (element, constructor) => element instanceof constructor ? element : null;
+  var narrowElement = (element2, constructor) => element2 instanceof constructor ? element2 : null;
   var queryElement = (root, selector, constructor) => narrowElement(root.querySelector(selector), constructor);
-  var queryAllElements = (root, selector, constructor) => Array.from(root.querySelectorAll(selector)).flatMap((element) => {
-    const narrowed = narrowElement(element, constructor);
+  var queryAllElements = (root, selector, constructor) => Array.from(root.querySelectorAll(selector)).flatMap((element2) => {
+    const narrowed = narrowElement(element2, constructor);
     return narrowed ? [narrowed] : [];
   });
   var getElementByID = (id, constructor) => narrowElement(document.getElementById(id), constructor);
@@ -1467,14 +1719,14 @@ var BrainNotesApp = (() => {
     "is-empty",
     "is-warning"
   ];
-  var setStatusText = (element, message, kind = "", classNames = statusClassNames) => {
-    if (!element) {
+  var setStatusText = (element2, message, kind = "", classNames = statusClassNames) => {
+    if (!element2) {
       return;
     }
-    element.textContent = message;
-    element.classList.remove(...classNames);
+    element2.textContent = message;
+    element2.classList.remove(...classNames);
     if (kind) {
-      element.classList.add(kind);
+      element2.classList.add(kind);
     }
   };
 
@@ -1546,28 +1798,6 @@ var BrainNotesApp = (() => {
     }
   };
   var readCreateResponsePayload = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
-    }
-  };
-
-  // internal/web/static_src/daily-brief-http.ts
-  var jsonPostRequest = (csrfToken, body) => ({
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-BN-CSRF": csrfToken
-    },
-    body
-  });
-  var readResponsePayload = async (resp) => {
     const contentType = resp.headers?.get("Content-Type") || "";
     try {
       if (contentType.includes("application/json")) {
@@ -6968,35 +7198,35 @@ var BrainNotesApp = (() => {
     appendDefinitionPair(doc, list, "Missing required", String(summary.missing_required));
     appendDefinitionPair(doc, list, "Unsupported values", String(summary.unsupported_values));
   };
-  var renderDefinition = (element, summary) => {
-    if (!element) {
+  var renderDefinition = (element2, summary) => {
+    if (!element2) {
       return;
     }
-    element.textContent = definitionLabel(summary);
-    element.hidden = false;
+    element2.textContent = definitionLabel(summary);
+    element2.hidden = false;
   };
-  var renderProposal = (element, summary) => {
-    if (!element) {
+  var renderProposal = (element2, summary) => {
+    if (!element2) {
       return;
     }
-    const doc = element.ownerDocument;
-    element.textContent = "";
+    const doc = element2.ownerDocument;
+    element2.textContent = "";
     const proposal = summary.proposal;
-    element.hidden = !proposal;
+    element2.hidden = !proposal;
     if (!proposal) {
       return;
     }
     const heading = doc.createElement("h3");
     heading.textContent = "Inferred definition";
-    element.appendChild(heading);
+    element2.appendChild(heading);
     const rationale = doc.createElement("p");
     rationale.className = "properties-proposal-rationale";
     rationale.textContent = proposal.rationale;
-    element.appendChild(rationale);
+    element2.appendChild(rationale);
     const toml = doc.createElement("pre");
     toml.className = "properties-proposal-toml";
     toml.textContent = proposal.toml;
-    element.appendChild(toml);
+    element2.appendChild(toml);
   };
   var renderValues = (list, values, activeValue) => {
     if (!list) {
@@ -7135,11 +7365,11 @@ var BrainNotesApp = (() => {
       list.appendChild(item);
     }
   };
-  var renderPagination = (element, pagination) => {
-    if (!element) {
+  var renderPagination = (element2, pagination) => {
+    if (!element2) {
       return;
     }
-    element.textContent = paginationLabel(pagination);
+    element2.textContent = paginationLabel(pagination);
   };
 
   // internal/web/static_src/properties-preview-dialog.ts
@@ -7289,7 +7519,7 @@ var BrainNotesApp = (() => {
     };
     const trapFocus = (event) => {
       const focusable = queryAllElements(dialog, FOCUSABLE_SELECTOR, HTMLElement).filter(
-        (element) => !element.hasAttribute("hidden")
+        (element2) => !element2.hasAttribute("hidden")
       );
       if (focusable.length === 0) {
         return;
@@ -8125,16 +8355,16 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/properties-toast.ts
   var createUndoToast = (doc, host, deps) => {
-    const element = doc.createElement("div");
-    element.className = "properties-toast";
-    element.setAttribute("data-property-toast", "");
-    element.setAttribute("role", "status");
-    element.setAttribute("aria-live", "polite");
-    element.hidden = true;
+    const element2 = doc.createElement("div");
+    element2.className = "properties-toast";
+    element2.setAttribute("data-property-toast", "");
+    element2.setAttribute("role", "status");
+    element2.setAttribute("aria-live", "polite");
+    element2.hidden = true;
     const message = doc.createElement("p");
     message.className = "properties-toast-message";
     message.setAttribute("data-property-toast-message", "");
-    element.appendChild(message);
+    element2.appendChild(message);
     const actions = doc.createElement("div");
     actions.className = "properties-toast-actions";
     const undo = doc.createElement("button");
@@ -8154,12 +8384,12 @@ var BrainNotesApp = (() => {
     dismiss.setAttribute("data-property-toast-dismiss", "");
     dismiss.textContent = "Dismiss";
     actions.appendChild(dismiss);
-    element.appendChild(actions);
-    host.appendChild(element);
+    element2.appendChild(actions);
+    host.appendChild(element2);
     let entryID = "";
     const hide = () => {
       entryID = "";
-      element.hidden = true;
+      element2.hidden = true;
       message.textContent = "";
     };
     undo.addEventListener("click", () => {
@@ -8172,13 +8402,13 @@ var BrainNotesApp = (() => {
     });
     dismiss.addEventListener("click", hide);
     return {
-      element,
+      element: element2,
       show: (options) => {
         entryID = options.journalID;
         message.textContent = options.message;
         history.href = options.historyHref;
         undo.hidden = options.journalID === "";
-        element.hidden = false;
+        element2.hidden = false;
       },
       hide,
       journalID: () => entryID
@@ -8500,9 +8730,9 @@ var BrainNotesApp = (() => {
       if (clearSelectionEl) {
         clearSelectionEl.disabled = selected.size === 0;
       }
-      for (const element of rowElements()) {
-        const relPath = element.getAttribute("data-property-row") || "";
-        element.classList.toggle("is-selected", selected.has(relPath));
+      for (const element2 of rowElements()) {
+        const relPath = element2.getAttribute("data-property-row") || "";
+        element2.classList.toggle("is-selected", selected.has(relPath));
       }
       for (const box of queryAllElements(
         host.rowsEl,
@@ -8544,16 +8774,16 @@ var BrainNotesApp = (() => {
         return;
       }
       const clamped = Math.max(0, Math.min(index, elements.length - 1));
-      elements.forEach((element, position) => {
-        element.tabIndex = position === clamped ? 0 : -1;
+      elements.forEach((element2, position) => {
+        element2.tabIndex = position === clamped ? 0 : -1;
       });
       elements[clamped]?.focus();
     };
     const updateRowText = (relPath, text) => {
-      const element = rowElements().find(
+      const element2 = rowElements().find(
         (row) => row.getAttribute("data-property-row") === relPath
       );
-      const value = element ? queryElement(element, ".properties-row-value", HTMLElement) : null;
+      const value = element2 ? queryElement(element2, ".properties-row-value", HTMLElement) : null;
       if (!value) {
         return;
       }
@@ -8595,16 +8825,16 @@ var BrainNotesApp = (() => {
     const openRowEditor = (relPath, op) => {
       const current = summary;
       const row = rows.find((candidate) => candidate.rel_path === relPath);
-      const element = rowElements().find(
+      const element2 = rowElements().find(
         (candidate) => candidate.getAttribute("data-property-row") === relPath
       );
-      if (!row || !element || !current) {
+      if (!row || !element2 || !current) {
         return;
       }
       const itemKind = editItemKind(current);
       const seed = op === "replace" ? typedValueFrom(row.value, editKind(current), itemKind) : void 0;
       editor.mount(
-        element,
+        element2,
         op === "replace" ? `Edit ${host.property}` : `Add to ${host.property}`,
         "Save",
         (form) => {
@@ -10171,6 +10401,1995 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/synthesize-model.ts
+  var SYNTHESIS_MAX_SUPPORTERS = 10;
+  var SYNTHESIS_MAX_DRAFT_BYTES = 1 << 20;
+  var attribute = (root, name) => (root.getAttribute(name) || "").trim();
+  var parseMaxSupporters = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return SYNTHESIS_MAX_SUPPORTERS;
+    }
+    const truncated = Math.trunc(parsed);
+    return truncated > 0 ? Math.min(truncated, SYNTHESIS_MAX_SUPPORTERS) : SYNTHESIS_MAX_SUPPORTERS;
+  };
+  var readSynthesisConfig = (root) => {
+    const anchorKey = attribute(root, "data-synthesize-anchor-key");
+    const anchorPath = attribute(root, "data-synthesize-anchor-path");
+    const purposes = attribute(root, "data-synthesize-purposes").split(",").map((purpose) => purpose.trim()).filter((purpose) => purpose !== "");
+    const defaultPurpose = attribute(root, "data-synthesize-default-purpose");
+    return {
+      csrfToken: attribute(root, "data-synthesize-csrf"),
+      vaultID: attribute(root, "data-synthesize-vault"),
+      anchor: {
+        key: anchorKey,
+        title: attribute(root, "data-synthesize-anchor-title") || anchorPath || anchorKey,
+        path: anchorPath,
+        route: attribute(root, "data-synthesize-anchor-route")
+      },
+      defaultFolder: attribute(root, "data-synthesize-default-folder"),
+      defaultPurpose: defaultPurpose || purposes[0] || "synthesis",
+      purposes: purposes.length > 0 ? purposes : [defaultPurpose || "synthesis"],
+      maxSupporters: parseMaxSupporters(attribute(root, "data-synthesize-max-supporters")),
+      agentEnabled: attribute(root, "data-synthesize-agent") === "enabled",
+      contextEndpoint: attribute(root, "data-synthesize-context-endpoint") || "/api/synthesis/context",
+      generateEndpoint: attribute(root, "data-synthesize-generate-endpoint") || "/api/synthesis/generate",
+      previewEndpoint: attribute(root, "data-synthesize-preview-endpoint") || "/api/synthesis/preview",
+      applyEndpoint: attribute(root, "data-synthesize-apply-endpoint") || "/api/synthesis/apply",
+      relatedEndpoint: attribute(root, "data-synthesize-related-endpoint") || "/api/related",
+      searchEndpoint: attribute(root, "data-synthesize-search-endpoint") || "/api/search"
+    };
+  };
+  var createSynthesisModel = (config) => ({
+    sources: [],
+    title: "",
+    folder: config.defaultFolder,
+    purpose: config.defaultPurpose,
+    prompt: "",
+    draft: "",
+    candidate: null,
+    context: null,
+    contextStale: false,
+    preview: null,
+    previewStale: false
+  });
+  var invalidateSynthesisPreview = (model) => {
+    if (model.preview === null) {
+      return;
+    }
+    model.preview = null;
+    model.previewStale = true;
+  };
+  var invalidateSynthesisContext = (model) => {
+    invalidateSynthesisPreview(model);
+    if (model.context === null) {
+      return;
+    }
+    model.context = null;
+    model.contextStale = true;
+  };
+  var synthesisSelectedKeys = (model) => model.sources.map((source) => source.key);
+  var synthesisContextSignature = (model) => JSON.stringify([synthesisSelectedKeys(model), model.purpose, model.prompt]);
+  var synthesisPreviewSignature = (model) => JSON.stringify([
+    model.context === null ? "" : model.context.context_id,
+    model.title.trim(),
+    model.folder.trim(),
+    model.draft
+  ]);
+  var synthesisSourcePosition = (model, key) => {
+    const index = model.sources.findIndex((source) => source.key === key);
+    return index < 0 ? 0 : index + 2;
+  };
+  var formatSynthesisBytes = (bytes) => {
+    if (!Number.isFinite(bytes) || bytes < 0) {
+      return "0 bytes";
+    }
+    const whole = Math.trunc(bytes);
+    if (whole < 1024) {
+      return `${whole} ${whole === 1 ? "byte" : "bytes"}`;
+    }
+    return `${whole} bytes (${(whole / 1024).toFixed(1)} KiB)`;
+  };
+  var synthesisDraftContainsSources = (draft) => {
+    let fenced = false;
+    for (const raw of draft.split("\n")) {
+      const line = raw.replace(/\r$/, "");
+      if (/^\s{0,3}(```+|~~~+)/.test(line)) {
+        fenced = !fenced;
+        continue;
+      }
+      if (fenced) {
+        continue;
+      }
+      const match = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+      if (match && match[1].length === 2 && match[2].trim().normalize("NFC").toLowerCase() === "sources") {
+        return true;
+      }
+    }
+    return false;
+  };
+  var synthesisTitleError = (title) => {
+    const trimmed = title.trim();
+    if (trimmed === "") {
+      return "A note title is required.";
+    }
+    if (trimmed.includes("/")) {
+      return "A note title may not contain '/'.";
+    }
+    if (trimmed.startsWith(".")) {
+      return "A note title may not start with '.'.";
+    }
+    if (/[[\]|#^]/.test(trimmed)) {
+      return "A note title may not contain '[', ']', '|', '#', or '^'.";
+    }
+    return "";
+  };
+  var synthesisDraftError = (draft) => {
+    if (new TextEncoder().encode(draft).length > SYNTHESIS_MAX_DRAFT_BYTES) {
+      return `The draft is larger than the ${SYNTHESIS_MAX_DRAFT_BYTES} byte maximum.`;
+    }
+    if (draft.trim() === "") {
+      return "A draft is required.";
+    }
+    if (synthesisDraftContainsSources(draft)) {
+      return "The draft may not contain a '## Sources' heading; the note adds one from the selected sources.";
+    }
+    return "";
+  };
+  var synthesisFolderError = (folder) => {
+    const trimmed = folder.trim();
+    if (trimmed === "") {
+      return "";
+    }
+    if (trimmed.startsWith("/")) {
+      return "A folder must be vault-relative.";
+    }
+    if (trimmed.split("/").some((segment) => segment === ".." || segment === ".")) {
+      return "A folder may not contain '.' or '..' segments.";
+    }
+    return "";
+  };
+  var synthesisDestinationPath = (model) => {
+    const title = model.title.trim();
+    if (title === "") {
+      return "";
+    }
+    const folder = model.folder.trim().replace(/^\/+|\/+$/g, "");
+    return folder === "" ? `${title}.md` : `${folder}/${title}.md`;
+  };
+  var formatSynthesisExpiry = (value) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return parsed.toLocaleString();
+  };
+  var synthesisPurposeLabel = (purpose) => {
+    switch (purpose) {
+      case "synthesis":
+        return "Synthesis";
+      case "contradictions":
+        return "Contradictions";
+      case "questions":
+        return "Questions";
+      default:
+        return purpose;
+    }
+  };
+
+  // internal/web/static_src/synthesize-render.ts
+  var suggestionID = (kind, mode) => `synthesize-${kind}-${mode}`;
+  var element = (doc, tag, className, attributes = {}) => {
+    const node = doc.createElement(tag);
+    if (className !== "") {
+      node.className = className;
+    }
+    for (const [name, value] of Object.entries(attributes)) {
+      node.setAttribute(name, value);
+    }
+    return node;
+  };
+  var labelled = (doc, id, text, control) => {
+    const wrapper = element(doc, "div", "synthesize-field");
+    const label = element(doc, "label", "synthesize-field-label");
+    label.setAttribute("for", id);
+    label.textContent = text;
+    control.id = id;
+    wrapper.append(label, control);
+    return wrapper;
+  };
+  var labelledWithError = (doc, id, text, control, errorAttribute) => {
+    const wrapper = labelled(doc, id, text, control);
+    const error = element(doc, "p", "synthesize-field-error", { [errorAttribute]: "" });
+    error.id = `${id}-error`;
+    error.hidden = true;
+    control.setAttribute("aria-describedby", error.id);
+    wrapper.appendChild(error);
+    return { wrapper, error };
+  };
+  var buildSourcesSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-sources", {
+      "aria-labelledby": "synthesize-sources-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-sources-heading";
+    heading.textContent = "Sources";
+    const intro = element(doc, "p", "synthesize-section-intro");
+    intro.textContent = "The anchor is always first. Drag a handle or press Up and Down on it to reorder supporting notes.";
+    const list = element(doc, "ol", "synthesize-source-list", {
+      "data-synthesize-source-list": ""
+    });
+    const status = element(doc, "p", "synthesize-selection-status", {
+      "data-synthesize-selection-status": ""
+    });
+    status.tabIndex = -1;
+    section.append(heading, intro, list, status);
+    return { section, list, status };
+  };
+  var buildSuggestionsSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-suggestions", {
+      "aria-labelledby": "synthesize-suggestions-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-suggestions-heading";
+    heading.textContent = "Suggested notes";
+    const tablist = element(doc, "div", "synthesize-tab-list", {
+      role: "tablist",
+      "aria-label": "Suggestion modes"
+    });
+    const status = element(doc, "p", "synthesize-suggestions-status", {
+      "data-synthesize-suggestions-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const panelsContainer = element(doc, "div", "synthesize-suggestion-panels");
+    const tabs = {};
+    const panels = {};
+    const results = {};
+    for (const definition of relatedModeDefinitions) {
+      const active = definition.mode === "balanced";
+      const tab = element(doc, "button", "synthesize-tab", {
+        role: "tab",
+        "aria-controls": suggestionID("panel", definition.mode),
+        "aria-selected": active ? "true" : "false",
+        "data-synthesize-tab": definition.mode
+      });
+      tab.type = "button";
+      tab.id = suggestionID("tab", definition.mode);
+      tab.tabIndex = active ? 0 : -1;
+      tab.textContent = definition.label;
+      tablist.appendChild(tab);
+      const panel = element(doc, "div", "synthesize-suggestion-panel", {
+        role: "tabpanel",
+        "aria-labelledby": suggestionID("tab", definition.mode),
+        "data-synthesize-panel": definition.mode
+      });
+      panel.id = suggestionID("panel", definition.mode);
+      panel.hidden = !active;
+      const description = element(doc, "p", "synthesize-tab-description");
+      description.textContent = definition.description;
+      const list = element(doc, "div", "synthesize-candidates", {
+        "data-synthesize-suggestions": definition.mode
+      });
+      panel.append(description, list);
+      panelsContainer.appendChild(panel);
+      tabs[definition.mode] = tab;
+      panels[definition.mode] = panel;
+      results[definition.mode] = list;
+    }
+    section.append(heading, tablist, status, panelsContainer);
+    return { section, tabs, panels, results, status };
+  };
+  var buildSearchSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-search", {
+      "aria-labelledby": "synthesize-search-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-search-heading";
+    heading.textContent = "Search the vault";
+    const form = element(doc, "form", "synthesize-search-form", {
+      "data-synthesize-search-form": "",
+      role: "search"
+    });
+    const input = element(doc, "input", "synthesize-search-input", {
+      "data-synthesize-search-input": "",
+      type: "search",
+      placeholder: "Find a note to add"
+    });
+    input.name = "q";
+    const submit = element(doc, "button", "synthesize-search-submit");
+    submit.type = "submit";
+    submit.textContent = "Search";
+    form.append(labelled(doc, "synthesize-search-query", "Search notes", input), submit);
+    const status = element(doc, "p", "synthesize-search-status", {
+      "data-synthesize-search-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const results = element(doc, "div", "synthesize-candidates", {
+      "data-synthesize-search-results": ""
+    });
+    section.append(heading, form, status, results);
+    return { section, form, input, results, status };
+  };
+  var buildDraftSection = (doc, config) => {
+    const section = element(doc, "section", "synthesize-section synthesize-draft", {
+      "aria-labelledby": "synthesize-draft-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-draft-heading";
+    heading.textContent = "New note";
+    const title = element(doc, "input", "synthesize-input", {
+      "data-synthesize-title": "",
+      type: "text"
+    });
+    title.name = "title";
+    const folder = element(doc, "input", "synthesize-input", {
+      "data-synthesize-folder": "",
+      type: "text",
+      placeholder: "Vault root"
+    });
+    folder.name = "folder";
+    const purpose = element(doc, "select", "synthesize-input", {
+      "data-synthesize-purpose": ""
+    });
+    purpose.name = "purpose";
+    for (const value of config.purposes) {
+      const option = doc.createElement("option");
+      option.value = value;
+      option.textContent = synthesisPurposeLabel(value);
+      purpose.appendChild(option);
+    }
+    const prompt = element(doc, "textarea", "synthesize-textarea", {
+      "data-synthesize-prompt": "",
+      rows: "3",
+      placeholder: "Optional question or angle for this research packet"
+    });
+    prompt.name = "prompt";
+    const draft = element(doc, "textarea", "synthesize-textarea synthesize-draft-body", {
+      "data-synthesize-draft": "",
+      rows: "12",
+      placeholder: "Write the note that says what these sources add up to"
+    });
+    draft.name = "draft";
+    const titleField = labelledWithError(
+      doc,
+      "synthesize-title",
+      "Title",
+      title,
+      "data-synthesize-title-error"
+    );
+    const folderField = labelledWithError(
+      doc,
+      "synthesize-folder",
+      "Folder",
+      folder,
+      "data-synthesize-folder-error"
+    );
+    const draftField = labelledWithError(
+      doc,
+      "synthesize-draft",
+      "Draft",
+      draft,
+      "data-synthesize-draft-error"
+    );
+    const grid = element(doc, "div", "synthesize-field-grid");
+    grid.append(titleField.wrapper, folderField.wrapper, labelled(doc, "synthesize-purpose", "Purpose", purpose));
+    section.append(
+      heading,
+      grid,
+      labelled(doc, "synthesize-prompt", "Prompt", prompt),
+      draftField.wrapper
+    );
+    return {
+      section,
+      title,
+      titleError: titleField.error,
+      folder,
+      folderError: folderField.error,
+      purpose,
+      prompt,
+      draft,
+      draftError: draftField.error
+    };
+  };
+  var buildGenerateSection = (doc, config) => {
+    const section = element(doc, "section", "synthesize-section synthesize-generate", {
+      "aria-labelledby": "synthesize-generate-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-generate-heading";
+    heading.textContent = "Generated candidate";
+    const intro = element(doc, "p", "synthesize-section-intro");
+    intro.textContent = config.agentEnabled ? "Generation sends the prepared context packet to your configured [agent].command. The candidate is shown here and never replaces your draft on its own." : "Generation is unavailable until [agent].command is configured. Everything else on this page works without an agent.";
+    const actions = element(doc, "div", "synthesize-generate-actions");
+    const generate = element(doc, "button", "synthesize-action", {
+      "data-synthesize-generate": ""
+    });
+    generate.type = "button";
+    generate.textContent = "Generate draft";
+    generate.disabled = true;
+    actions.appendChild(generate);
+    const status = element(doc, "p", "synthesize-generate-status", {
+      "data-synthesize-generate-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const panel = element(doc, "article", "synthesize-candidate-panel", {
+      "data-synthesize-candidate-panel": "",
+      "aria-labelledby": "synthesize-generate-heading"
+    });
+    panel.hidden = true;
+    panel.tabIndex = -1;
+    const rendered = element(doc, "div", "synthesize-candidate-rendered", {
+      "data-synthesize-candidate-rendered": ""
+    });
+    const markdownWrapper = element(doc, "details", "synthesize-candidate-markdown");
+    const markdownSummary = doc.createElement("summary");
+    markdownSummary.textContent = "Candidate Markdown";
+    const markdown = element(doc, "pre", "synthesize-packet-body", {
+      "data-synthesize-candidate-markdown": "",
+      tabindex: "0"
+    });
+    markdownWrapper.append(markdownSummary, markdown);
+    const candidateActions = element(doc, "div", "synthesize-candidate-actions");
+    const replace = element(doc, "button", "synthesize-action", {
+      "data-synthesize-candidate-replace": ""
+    });
+    replace.type = "button";
+    replace.textContent = "Replace draft";
+    const append = element(doc, "button", "synthesize-action", {
+      "data-synthesize-candidate-append": ""
+    });
+    append.type = "button";
+    append.textContent = "Append to draft";
+    const copy = element(doc, "button", "synthesize-action", {
+      "data-synthesize-candidate-copy": ""
+    });
+    copy.type = "button";
+    copy.textContent = "Copy candidate";
+    const dismiss = element(doc, "button", "synthesize-action is-quiet", {
+      "data-synthesize-candidate-dismiss": ""
+    });
+    dismiss.type = "button";
+    dismiss.textContent = "Dismiss candidate";
+    candidateActions.append(replace, append, copy, dismiss);
+    panel.append(rendered, markdownWrapper, candidateActions);
+    section.append(heading, intro, actions, status, panel);
+    return { section, generate, status, panel, rendered, markdown, replace, append, copy, dismiss };
+  };
+  var buildCreateSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-create", {
+      "aria-labelledby": "synthesize-create-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-create-heading";
+    heading.textContent = "Create note";
+    const destination = element(doc, "p", "synthesize-destination", {
+      "data-synthesize-destination": ""
+    });
+    const actions = element(doc, "div", "synthesize-create-actions");
+    const preview = element(doc, "button", "synthesize-action is-primary", {
+      "data-synthesize-preview": ""
+    });
+    preview.type = "button";
+    preview.textContent = "Preview note";
+    const apply = element(doc, "button", "synthesize-action", { "data-synthesize-apply": "" });
+    apply.type = "button";
+    apply.textContent = "Create note";
+    apply.disabled = true;
+    actions.append(preview, apply);
+    const status = element(doc, "p", "synthesize-preview-status", {
+      "data-synthesize-preview-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const panel = element(doc, "div", "synthesize-preview-panel", {
+      "data-synthesize-preview-panel": ""
+    });
+    panel.hidden = true;
+    panel.tabIndex = -1;
+    const previewDestination = element(doc, "p", "synthesize-preview-destination", {
+      "data-synthesize-preview-destination": ""
+    });
+    const expiry = element(doc, "p", "synthesize-preview-expiry", {
+      "data-synthesize-preview-expiry": ""
+    });
+    const rendered = element(doc, "div", "synthesize-preview-rendered", {
+      "data-synthesize-preview-rendered": ""
+    });
+    const markdownWrapper = element(doc, "details", "synthesize-preview-markdown");
+    const markdownSummary = doc.createElement("summary");
+    markdownSummary.textContent = "Note Markdown";
+    const markdown = element(doc, "pre", "synthesize-packet-body", {
+      "data-synthesize-preview-markdown": "",
+      tabindex: "0"
+    });
+    markdownWrapper.append(markdownSummary, markdown);
+    const sourcesHeading = element(doc, "h4", "synthesize-manifest-heading");
+    sourcesHeading.textContent = "Sources";
+    const sources = element(doc, "ol", "synthesize-preview-sources", {
+      "data-synthesize-preview-sources": ""
+    });
+    panel.append(previewDestination, expiry, rendered, markdownWrapper, sourcesHeading, sources);
+    section.append(heading, destination, actions, status, panel);
+    return {
+      section,
+      destination,
+      preview,
+      apply,
+      status,
+      panel,
+      previewDestination,
+      expiry,
+      rendered,
+      markdown,
+      sources
+    };
+  };
+  var buildContextSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-context", {
+      "aria-labelledby": "synthesize-context-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-context-heading";
+    heading.textContent = "Context packet";
+    const actions = element(doc, "div", "synthesize-context-actions");
+    const prepare = element(doc, "button", "synthesize-action is-primary", {
+      "data-synthesize-prepare": ""
+    });
+    prepare.type = "button";
+    prepare.textContent = "Prepare context";
+    const copy = element(doc, "button", "synthesize-action", { "data-synthesize-copy": "" });
+    copy.type = "button";
+    copy.textContent = "Copy context";
+    copy.disabled = true;
+    const discard = element(doc, "button", "synthesize-action is-quiet", {
+      "data-synthesize-discard": ""
+    });
+    discard.type = "button";
+    discard.textContent = "Discard saved work";
+    actions.append(prepare, copy, discard);
+    const status = element(doc, "p", "synthesize-context-status", {
+      "data-synthesize-context-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const summary = element(doc, "p", "synthesize-context-summary", {
+      "data-synthesize-context-summary": ""
+    });
+    const manifest = element(doc, "div", "synthesize-manifest", {
+      "data-synthesize-manifest": ""
+    });
+    const packetWrapper = element(doc, "details", "synthesize-packet");
+    const packetSummary = doc.createElement("summary");
+    packetSummary.textContent = "Packet Markdown";
+    const packet = element(doc, "pre", "synthesize-packet-body", {
+      "data-synthesize-packet": "",
+      tabindex: "0"
+    });
+    packetWrapper.append(packetSummary, packet);
+    section.append(heading, actions, status, summary, manifest, packetWrapper);
+    return { section, prepare, copy, discard, status, summary, manifest, packet };
+  };
+  var createSynthesisView = (mount, config) => {
+    const doc = mount.ownerDocument;
+    const warning = element(doc, "p", "synthesize-warning", {
+      "data-synthesize-warning": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    warning.hidden = true;
+    const sources = buildSourcesSection(doc);
+    const suggestions = buildSuggestionsSection(doc);
+    const search = buildSearchSection(doc);
+    const draft = buildDraftSection(doc, config);
+    const context = buildContextSection(doc);
+    const generate = buildGenerateSection(doc, config);
+    const create = buildCreateSection(doc);
+    const columns = element(doc, "div", "synthesize-columns");
+    const left = element(doc, "div", "synthesize-column");
+    left.append(sources.section, suggestions.section, search.section);
+    const right = element(doc, "div", "synthesize-column");
+    right.append(draft.section, context.section, generate.section, create.section);
+    columns.append(left, right);
+    mount.replaceChildren(warning, columns);
+    return {
+      root: mount,
+      warning,
+      sourceList: sources.list,
+      selectionStatus: sources.status,
+      suggestionTabs: suggestions.tabs,
+      suggestionPanels: suggestions.panels,
+      suggestionResults: suggestions.results,
+      suggestionStatus: suggestions.status,
+      searchForm: search.form,
+      searchInput: search.input,
+      searchResults: search.results,
+      searchStatus: search.status,
+      titleInput: draft.title,
+      titleError: draft.titleError,
+      folderInput: draft.folder,
+      folderError: draft.folderError,
+      purposeSelect: draft.purpose,
+      promptInput: draft.prompt,
+      draftInput: draft.draft,
+      draftError: draft.draftError,
+      prepareButton: context.prepare,
+      copyButton: context.copy,
+      discardButton: context.discard,
+      contextStatus: context.status,
+      contextSummary: context.summary,
+      manifest: context.manifest,
+      packet: context.packet,
+      generateButton: generate.generate,
+      generateStatus: generate.status,
+      candidatePanel: generate.panel,
+      candidateRendered: generate.rendered,
+      candidateMarkdown: generate.markdown,
+      candidateReplaceButton: generate.replace,
+      candidateAppendButton: generate.append,
+      candidateCopyButton: generate.copy,
+      candidateDismissButton: generate.dismiss,
+      destination: create.destination,
+      previewButton: create.preview,
+      applyButton: create.apply,
+      previewStatus: create.status,
+      previewPanel: create.panel,
+      previewDestination: create.previewDestination,
+      previewExpiry: create.expiry,
+      previewRendered: create.rendered,
+      previewMarkdown: create.markdown,
+      previewSources: create.sources
+    };
+  };
+  var selectSynthesisSuggestionMode = (view, activeMode) => {
+    for (const definition of relatedModeDefinitions) {
+      const selected = definition.mode === activeMode;
+      view.suggestionTabs[definition.mode].setAttribute(
+        "aria-selected",
+        selected ? "true" : "false"
+      );
+      view.suggestionTabs[definition.mode].tabIndex = selected ? 0 : -1;
+      view.suggestionPanels[definition.mode].hidden = !selected;
+    }
+  };
+  var sourceRow = (doc, position, total, source, anchor) => {
+    const row = element(doc, "li", "synthesize-source", {
+      "data-synthesize-source": source.key,
+      "data-synthesize-position": String(position)
+    });
+    if (anchor) {
+      row.classList.add("is-anchor");
+      row.setAttribute("data-synthesize-anchor", "");
+    }
+    const badge = element(doc, "span", "synthesize-source-position");
+    badge.textContent = String(position);
+    const body = element(doc, "div", "synthesize-source-body");
+    const link = element(doc, "a", "synthesize-source-title");
+    link.href = source.route;
+    link.textContent = source.title;
+    const path = element(doc, "code", "synthesize-source-path");
+    path.textContent = source.path;
+    body.append(link, path);
+    row.append(badge, body);
+    if (anchor) {
+      const note = element(doc, "span", "synthesize-source-role");
+      note.textContent = "Anchor";
+      row.appendChild(note);
+      return row;
+    }
+    const controls = element(doc, "div", "synthesize-source-controls");
+    const handle = element(doc, "button", "synthesize-source-handle", {
+      "data-synthesize-handle": source.key,
+      "aria-label": `Reorder ${source.title}, position ${position} of ${total}. Press Up or Down to move it.`
+    });
+    handle.type = "button";
+    handle.textContent = "Drag";
+    const remove = element(doc, "button", "synthesize-source-remove", {
+      "data-synthesize-remove": source.key,
+      "aria-label": `Remove ${source.title}`
+    });
+    remove.type = "button";
+    remove.textContent = "Remove";
+    controls.append(handle, remove);
+    row.appendChild(controls);
+    return row;
+  };
+  var renderSynthesisSources = (view, model, config) => {
+    const doc = view.sourceList.ownerDocument;
+    const total = model.sources.length + 1;
+    const rows = [sourceRow(doc, 1, total, config.anchor, true)];
+    model.sources.forEach((source, index) => {
+      rows.push(sourceRow(doc, index + 2, total, source, false));
+    });
+    view.sourceList.replaceChildren(...rows);
+    const remaining = config.maxSupporters - model.sources.length;
+    view.selectionStatus.textContent = remaining > 0 ? `${total} of ${config.maxSupporters + 1} notes selected. ${remaining} more can be added.` : `${total} of ${config.maxSupporters + 1} notes selected. Remove one to add another.`;
+  };
+  var renderSynthesisCandidates = (container, candidates, selectedKeys, anchorKey, detailIsHTML, emptyMessage) => {
+    const doc = container.ownerDocument;
+    const selected = new Set(selectedKeys);
+    const rows = candidates.filter((candidate) => candidate.key !== anchorKey && candidate.key !== "").map((candidate) => {
+      const card = element(doc, "article", "synthesize-candidate", {
+        "data-synthesize-candidate": candidate.key
+      });
+      const heading = element(doc, "h4", "synthesize-candidate-title");
+      const link = element(doc, "a", "");
+      link.href = candidate.route;
+      link.textContent = candidate.title;
+      heading.appendChild(link);
+      const path = element(doc, "p", "synthesize-candidate-path");
+      const pathCode = doc.createElement("code");
+      pathCode.textContent = candidate.path;
+      path.appendChild(pathCode);
+      card.append(heading, path);
+      if (candidate.detail !== "") {
+        const detail = element(doc, "p", "synthesize-candidate-detail");
+        if (detailIsHTML) {
+          detail.innerHTML = candidate.detail;
+        } else {
+          detail.textContent = candidate.detail;
+        }
+        card.appendChild(detail);
+      }
+      const add = element(doc, "button", "synthesize-candidate-add", {
+        "data-synthesize-add": candidate.key
+      });
+      add.type = "button";
+      if (selected.has(candidate.key)) {
+        add.disabled = true;
+        add.textContent = "Selected";
+      } else {
+        add.textContent = "Add source";
+        add.setAttribute("aria-label", `Add ${candidate.title} as a source`);
+      }
+      card.appendChild(add);
+      return card;
+    });
+    if (rows.length === 0) {
+      const empty = element(doc, "p", "synthesize-candidates-empty");
+      empty.textContent = emptyMessage;
+      container.replaceChildren(empty);
+      return;
+    }
+    container.replaceChildren(...rows);
+  };
+  var setSynthesisWarning = (view, message, link) => {
+    view.warning.textContent = message;
+    if (message !== "" && link) {
+      const anchor = element(view.warning.ownerDocument, "a", "synthesize-warning-link", {
+        "data-synthesize-warning-link": "",
+        href: link.href
+      });
+      anchor.textContent = link.label;
+      view.warning.append(" ", anchor);
+    }
+    view.warning.hidden = message === "";
+  };
+  var excerptLabel = (path, start, end) => start === end ? `${path}:${start}` : `${path}:${start}-${end}`;
+  var renderSynthesisContext = (view, model) => {
+    const doc = view.manifest.ownerDocument;
+    view.prepareButton.textContent = model.context === null && !model.contextStale ? "Prepare context" : "Rebuild context";
+    if (model.context === null) {
+      view.copyButton.disabled = true;
+      view.contextSummary.textContent = "";
+      view.manifest.replaceChildren();
+      view.packet.textContent = "";
+      return;
+    }
+    const context = model.context;
+    view.copyButton.disabled = false;
+    view.contextSummary.textContent = `${context.manifest.notes.length} notes, ${formatSynthesisBytes(context.manifest.byte_count)} of a ${formatSynthesisBytes(context.manifest.max_bytes)} budget, purpose ${synthesisPurposeLabel(context.purpose)}.`;
+    const notesHeading = element(doc, "h4", "synthesize-manifest-heading");
+    notesHeading.textContent = "Selected notes";
+    const notes = element(doc, "ol", "synthesize-manifest-notes");
+    for (const note of context.manifest.notes) {
+      const item = doc.createElement("li");
+      const link = doc.createElement("a");
+      link.href = note.route;
+      link.textContent = note.title || note.path;
+      const path = doc.createElement("code");
+      path.textContent = note.path;
+      item.append(link, " ", path);
+      notes.appendChild(item);
+    }
+    const excerptsHeading = element(doc, "h4", "synthesize-manifest-heading");
+    excerptsHeading.textContent = "Excerpt locations";
+    const excerpts = element(doc, "ul", "synthesize-manifest-excerpts");
+    if (context.manifest.excerpts.length === 0) {
+      const item = doc.createElement("li");
+      item.textContent = "None.";
+      excerpts.appendChild(item);
+    } else {
+      for (const excerpt of context.manifest.excerpts) {
+        const item = doc.createElement("li");
+        const code = doc.createElement("code");
+        code.textContent = excerptLabel(excerpt.path, excerpt.start_line, excerpt.end_line);
+        item.appendChild(code);
+        excerpts.appendChild(item);
+      }
+    }
+    view.manifest.replaceChildren(notesHeading, notes, excerptsHeading, excerpts);
+    view.packet.textContent = context.markdown;
+  };
+  var setSynthesisFieldError = (target, message) => {
+    target.textContent = message;
+    target.hidden = message === "";
+  };
+  var renderSynthesisCandidate = (view, model) => {
+    const candidate = model.candidate;
+    if (candidate === null) {
+      view.candidatePanel.hidden = true;
+      view.candidateRendered.replaceChildren();
+      view.candidateMarkdown.textContent = "";
+      return;
+    }
+    view.candidatePanel.hidden = false;
+    view.candidateMarkdown.textContent = candidate.markdown;
+    if (candidate.html !== "") {
+      view.candidateRendered.innerHTML = candidate.html;
+      return;
+    }
+    const doc = view.candidateRendered.ownerDocument;
+    const note = element(doc, "p", "synthesize-candidate-plain");
+    note.textContent = "Restored candidate \u2014 shown as Markdown.";
+    view.candidateRendered.replaceChildren(note);
+  };
+  var renderSynthesisDestination = (view, model) => {
+    const destination = synthesisDestinationPath(model);
+    view.destination.textContent = destination === "" ? "Enter a title to choose where the note is created." : `Creates ${destination}`;
+  };
+  var renderSynthesisPreview = (view, model) => {
+    const preview = model.preview;
+    view.applyButton.disabled = preview === null;
+    if (preview === null) {
+      view.previewPanel.hidden = true;
+      view.previewDestination.textContent = "";
+      view.previewExpiry.textContent = "";
+      view.previewRendered.replaceChildren();
+      view.previewMarkdown.textContent = "";
+      view.previewSources.replaceChildren();
+      return;
+    }
+    const doc = view.previewSources.ownerDocument;
+    view.previewPanel.hidden = false;
+    view.previewDestination.textContent = `Creates ${preview.destination}`;
+    view.previewExpiry.textContent = `This preview can be applied until ${formatSynthesisExpiry(preview.expires_at)}.`;
+    view.previewRendered.innerHTML = preview.rendered_html;
+    view.previewMarkdown.textContent = preview.markdown;
+    const notes = model.context ? model.context.manifest.notes : [];
+    const rows = notes.map((note) => {
+      const item = doc.createElement("li");
+      const link = doc.createElement("a");
+      link.href = note.route;
+      link.textContent = note.title || note.path;
+      const path = doc.createElement("code");
+      path.textContent = note.path;
+      item.append(link, " ", path);
+      return item;
+    });
+    if (rows.length === 0) {
+      const item = doc.createElement("li");
+      item.textContent = "Listed in the note Markdown above.";
+      view.previewSources.replaceChildren(item);
+      return;
+    }
+    view.previewSources.replaceChildren(...rows);
+  };
+
+  // internal/web/static_src/synthesize-requests.ts
+  var SYNTHESIS_SUGGESTION_LIMIT = 8;
+  var requestSynthesisSuggestions = (fetcher, endpoint, source, mode) => requestRelated(fetcher, endpoint, source, mode, SYNTHESIS_SUGGESTION_LIMIT);
+  var resolveSynthesisSource = async (fetcher, endpoint, key) => {
+    try {
+      const response = await requestRelated(fetcher, endpoint, key, "balanced", 1);
+      return {
+        key: response.source.key,
+        title: response.source.title || response.source.path,
+        path: response.source.path,
+        route: response.source.route
+      };
+    } catch {
+      return null;
+    }
+  };
+  var buildSynthesisSearchURL = (endpoint, query) => {
+    const params = new URLSearchParams();
+    params.set("q", query);
+    return `${endpoint}?${params.toString()}`;
+  };
+  var requestSynthesisSearch = async (fetcher, endpoint, query) => {
+    const response = await fetcher(buildSynthesisSearchURL(endpoint, query), {
+      headers: { Accept: "application/json" }
+    });
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      throw new Error(normalizeManagementErrorMessage(response.status, payload));
+    }
+    return normalizeSearchResults(payload);
+  };
+
+  // internal/web/static_src/synthesize-sources.ts
+  var candidateFromRelatedResult = (result) => ({
+    key: result.candidate.key,
+    title: result.candidate.title || result.candidate.path,
+    path: result.candidate.path,
+    route: result.candidate.route,
+    detail: result.excerpt
+  });
+  var candidateFromSearchResult = (result) => {
+    const key = (result.key || "").trim();
+    if (key === "") {
+      return null;
+    }
+    return {
+      key,
+      title: result.title || key,
+      path: key,
+      route: searchResultPath(result),
+      detail: result.snippet
+    };
+  };
+  var addSynthesisSource = (model, config, candidate) => {
+    if (candidate.key === "") {
+      return { ok: false, message: "That note cannot be added as a source." };
+    }
+    if (candidate.key === config.anchor.key) {
+      return { ok: false, message: "The anchor note is already the first source." };
+    }
+    if (model.sources.some((source) => source.key === candidate.key)) {
+      return { ok: false, message: `${candidate.title} is already selected.` };
+    }
+    if (model.sources.length >= config.maxSupporters) {
+      return {
+        ok: false,
+        message: `Only ${config.maxSupporters} supporting notes can be selected. Remove one first.`
+      };
+    }
+    model.sources.push({
+      key: candidate.key,
+      title: candidate.title,
+      path: candidate.path,
+      route: candidate.route
+    });
+    invalidateSynthesisContext(model);
+    return {
+      ok: true,
+      message: `Added ${candidate.title} as source ${model.sources.length + 1} of ${model.sources.length + 1}.`
+    };
+  };
+  var removeSynthesisSource = (model, key) => {
+    const index = model.sources.findIndex((source) => source.key === key);
+    if (index < 0) {
+      return { ok: false, message: "That note is not selected." };
+    }
+    const [removed] = model.sources.splice(index, 1);
+    invalidateSynthesisContext(model);
+    return { ok: true, message: `Removed ${removed.title}.` };
+  };
+  var moveSynthesisSource = (model, key, direction) => {
+    const index = model.sources.findIndex((source) => source.key === key);
+    if (index < 0) {
+      return { ok: false, message: "That note is not selected." };
+    }
+    const target = index + direction;
+    if (target < 0 || target >= model.sources.length) {
+      return { ok: false, message: `${model.sources[index].title} is already at the edge of the order.` };
+    }
+    const moved = model.sources[index];
+    model.sources[index] = model.sources[target];
+    model.sources[target] = moved;
+    invalidateSynthesisContext(model);
+    return {
+      ok: true,
+      message: `Moved ${moved.title} to position ${target + 2} of ${model.sources.length + 1}.`
+    };
+  };
+  var reorderSynthesisSources = (model, keys) => {
+    const byKey = new Map(model.sources.map((source) => [source.key, source]));
+    const ordered = [];
+    for (const key of keys) {
+      const source = byKey.get(key);
+      if (source && !ordered.includes(source)) {
+        ordered.push(source);
+      }
+    }
+    for (const source of model.sources) {
+      if (!ordered.includes(source)) {
+        ordered.push(source);
+      }
+    }
+    const unchanged = ordered.every((source, index) => source === model.sources[index]);
+    if (unchanged) {
+      return { ok: false, message: "" };
+    }
+    model.sources = ordered;
+    invalidateSynthesisContext(model);
+    return { ok: true, message: `Reordered sources: ${ordered.length + 1} in total.` };
+  };
+  var dedupeSynthesisSources = (sources, anchorKey, maxSupporters) => {
+    const seen = /* @__PURE__ */ new Set();
+    const kept = [];
+    for (const source of sources) {
+      if (source.key === "" || source.key === anchorKey || seen.has(source.key)) {
+        continue;
+      }
+      seen.add(source.key);
+      kept.push(source);
+      if (kept.length >= maxSupporters) {
+        break;
+      }
+    }
+    return kept;
+  };
+
+  // internal/web/static_src/synthesize-storage.ts
+  var SYNTHESIS_STORAGE_VERSION = 2;
+  var synthesisStorageKey = (vaultID, anchorKey) => `bn.synthesize.${vaultID}.${anchorKey}`;
+  var safeSynthesisStorage = (view) => {
+    if (!view) {
+      return null;
+    }
+    try {
+      return view.localStorage;
+    } catch {
+      return null;
+    }
+  };
+  var readText2 = (value) => typeof value === "string" ? value : "";
+  var readKeys = (value) => Array.isArray(value) ? value.flatMap((item) => {
+    const key = typeof item === "string" ? item.trim() : "";
+    return key === "" ? [] : [key];
+  }) : [];
+  var synthesisStateFromModel = (model) => ({
+    sources: model.sources.map((source) => source.key),
+    title: model.title,
+    folder: model.folder,
+    purpose: model.purpose,
+    prompt: model.prompt,
+    draft: model.draft,
+    candidate: model.candidate ? model.candidate.markdown : ""
+  });
+  var readSynthesisState = (storage, key) => {
+    if (!storage) {
+      return null;
+    }
+    let raw;
+    try {
+      raw = storage.getItem(key);
+    } catch {
+      return null;
+    }
+    if (!raw) {
+      return null;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const record = asRecord(parsed);
+    if (!record || readCount(record.version) !== SYNTHESIS_STORAGE_VERSION) {
+      return null;
+    }
+    return {
+      sources: readKeys(record.sources),
+      title: readText2(record.title),
+      folder: readText2(record.folder),
+      purpose: readText2(record.purpose),
+      prompt: readText2(record.prompt),
+      draft: readText2(record.draft),
+      candidate: readText2(record.candidate)
+    };
+  };
+  var writeSynthesisState = (storage, key, state) => {
+    if (!storage) {
+      return false;
+    }
+    try {
+      storage.setItem(key, JSON.stringify({ version: SYNTHESIS_STORAGE_VERSION, ...state }));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  var clearSynthesisState = (storage, key) => {
+    if (!storage) {
+      return false;
+    }
+    try {
+      storage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // internal/web/static_src/synthesize.ts
+  var errorMessage2 = (error, fallback) => error instanceof Error && error.message !== "" ? error.message : fallback;
+  var errorCode = (error) => error instanceof SynthesisRequestError ? error.code : "";
+  var modeLabel = (mode) => relatedModeDefinitions.find((definition) => definition.mode === mode)?.label || mode;
+  var SUGGESTIONS_EMPTY = "No suggestions are available in this mode.";
+  var SEARCH_EMPTY = "No notes matched that search.";
+  var CONTEXT_GONE = "The context packet has expired or is no longer valid. Rebuild it, then preview again. Your draft is unchanged.";
+  var CONTEXT_SUPERSEDED = "The sources, purpose, or prompt changed while that packet was building, so it was discarded. Prepare the context again.";
+  var PREVIEW_SUPERSEDED = "The note changed while that preview was building, so it was discarded. Preview again.";
+  var DISCLOSURE = [
+    "Generate sends the prepared context packet to your configured [agent].command.",
+    "The packet contains the anchor note's complete body, exact excerpts from every selected source, and your prompt.",
+    "Your prompt and that packet are retained in server memory until the context expires, is evicted to keep memory bounded, or the server restarts, and are never written to disk.",
+    "The stored packet is sent to the command only after you accept this notice. The generated candidate is not stored on the server and never enters your draft on its own. Continue?"
+  ].join("\n");
+  var DISCARD_CONFIRMATION = "Discard the saved sources, draft, and generated candidate for this note? This cannot be undone.";
+  var SAVED_STATE_STUCK = "This browser refused to delete the saved sources and draft for this note, so they will come back the next time you open the workbench.";
+  var createSynthesisController = (root, mount, deps = {}) => {
+    const config = readSynthesisConfig(root);
+    const model = createSynthesisModel(config);
+    const view = createSynthesisView(mount, config);
+    const fetcher = deps.fetch || ((input, init) => fetch(input, init));
+    const storage = deps.storage === void 0 ? safeSynthesisStorage(root.ownerDocument.defaultView) : deps.storage;
+    const clipboard = deps.clipboard === void 0 ? (typeof navigator !== "undefined" ? navigator.clipboard : void 0) || null : deps.clipboard;
+    const confirmer = deps.confirm || ((message) => window.confirm(message));
+    const redirect = deps.redirect || ((path) => window.location.assign(path));
+    const storageKey = synthesisStorageKey(config.vaultID, config.anchor.key);
+    const statusEl = queryElement(root, "[data-synthesize-status]", HTMLElement);
+    const fallback = queryElement(root, "[data-synthesize-fallback]", HTMLElement);
+    if (fallback) {
+      fallback.hidden = true;
+    }
+    const candidates = /* @__PURE__ */ new Map();
+    const suggestionRequests = {
+      balanced: 0,
+      rediscover: 0,
+      connect: 0
+    };
+    const suggestionEntries = {
+      balanced: null,
+      rediscover: null,
+      connect: null
+    };
+    let searchEntries = null;
+    let activeMode = "balanced";
+    let searchRequest = 0;
+    let storageWarned = false;
+    let disclosureAccepted = false;
+    let generating = false;
+    let previewing = false;
+    let applying = false;
+    let showFieldErrors = false;
+    const buttonByAttribute = (attribute2, value) => {
+      for (const button of view.sourceList.querySelectorAll(`[${attribute2}]`)) {
+        if (button.getAttribute(attribute2) === value) {
+          return button;
+        }
+      }
+      return null;
+    };
+    const announce = (message, kind = "") => {
+      setStatusText(statusEl, message, kind);
+    };
+    const persist = () => {
+      if (writeSynthesisState(storage, storageKey, synthesisStateFromModel(model))) {
+        return;
+      }
+      if (storage === null || storageWarned) {
+        return;
+      }
+      storageWarned = true;
+      setSynthesisWarning(
+        view,
+        "This browser refused to save your work, so leaving the page will lose the current selection and draft."
+      );
+    };
+    const clearSaved = () => clearSynthesisState(storage, storageKey) || storage === null;
+    const rememberCandidates = (entries) => {
+      for (const entry of entries) {
+        candidates.set(entry.key, entry);
+      }
+    };
+    const renderCandidatePanels = () => {
+      const selected = synthesisSelectedKeys(model);
+      for (const definition of relatedModeDefinitions) {
+        const entries = suggestionEntries[definition.mode];
+        if (entries === null) {
+          continue;
+        }
+        renderSynthesisCandidates(
+          view.suggestionResults[definition.mode],
+          entries,
+          selected,
+          config.anchor.key,
+          false,
+          SUGGESTIONS_EMPTY
+        );
+      }
+      if (searchEntries !== null) {
+        renderSynthesisCandidates(
+          view.searchResults,
+          searchEntries,
+          selected,
+          config.anchor.key,
+          true,
+          SEARCH_EMPTY
+        );
+      }
+    };
+    const renderFieldErrors = () => {
+      setSynthesisFieldError(view.titleError, showFieldErrors ? synthesisTitleError(model.title) : "");
+      setSynthesisFieldError(
+        view.folderError,
+        showFieldErrors ? synthesisFolderError(model.folder) : ""
+      );
+      setSynthesisFieldError(view.draftError, showFieldErrors ? synthesisDraftError(model.draft) : "");
+    };
+    const render = () => {
+      renderSynthesisSources(view, model, config);
+      renderSynthesisContext(view, model);
+      renderSynthesisCandidate(view, model);
+      renderSynthesisDestination(view, model);
+      renderSynthesisPreview(view, model);
+      renderFieldErrors();
+      view.copyButton.disabled = model.context === null || !hasWritableClipboard(clipboard);
+      view.candidateCopyButton.disabled = !hasWritableClipboard(clipboard);
+      view.generateButton.disabled = model.context === null || generating;
+      view.previewButton.disabled = previewing || applying;
+      view.applyButton.disabled = model.preview === null || applying;
+    };
+    const focusHandle = (key) => {
+      (buttonByAttribute("data-synthesize-handle", key) || view.selectionStatus).focus({
+        preventScroll: true
+      });
+    };
+    const focusRemoveAt = (index) => {
+      const source = model.sources[index] || model.sources[index - 1];
+      const button = source ? buttonByAttribute("data-synthesize-remove", source.key) : null;
+      (button || view.selectionStatus).focus({ preventScroll: true });
+    };
+    const addSource = (key) => {
+      const candidate = candidates.get(key);
+      if (!candidate) {
+        announce("That note is no longer available to add.", "is-error");
+        return;
+      }
+      const outcome = addSynthesisSource(model, config, candidate);
+      announce(outcome.message, outcome.ok ? "is-success" : "is-error");
+      if (!outcome.ok) {
+        return;
+      }
+      render();
+      renderCandidatePanels();
+      persist();
+    };
+    const removeSource = (key) => {
+      const index = model.sources.findIndex((source) => source.key === key);
+      const outcome = removeSynthesisSource(model, key);
+      announce(outcome.message, outcome.ok ? "is-success" : "is-error");
+      if (!outcome.ok) {
+        return;
+      }
+      render();
+      renderCandidatePanels();
+      persist();
+      focusRemoveAt(index);
+    };
+    const moveSource = (key, direction) => {
+      const outcome = moveSynthesisSource(model, key, direction);
+      announce(outcome.message, outcome.ok ? "is-success" : "is-error");
+      if (!outcome.ok) {
+        return;
+      }
+      render();
+      persist();
+      focusHandle(key);
+    };
+    const applyDragOrder = (key) => {
+      const keys = Array.from(
+        view.sourceList.querySelectorAll("[data-synthesize-source]")
+      ).filter((row) => !row.hasAttribute("data-synthesize-anchor")).map((row) => row.getAttribute("data-synthesize-source") || "");
+      const moved = model.sources.find((source) => source.key === key);
+      const outcome = reorderSynthesisSources(model, keys);
+      render();
+      if (outcome.ok) {
+        persist();
+        announce(
+          `Moved ${moved?.title || key} to position ${synthesisSourcePosition(model, key)} of ${model.sources.length + 1}.`,
+          "is-success"
+        );
+      }
+      focusHandle(key);
+    };
+    const supporterRows = () => Array.from(view.sourceList.querySelectorAll("[data-synthesize-source]")).filter(
+      (row) => !row.hasAttribute("data-synthesize-anchor")
+    );
+    const startDrag = (row, event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      const key = row.getAttribute("data-synthesize-source") || "";
+      const win = view.sourceList.ownerDocument.defaultView;
+      if (!win) {
+        return;
+      }
+      row.classList.add("is-dragging");
+      const onPointerMove = (moveEvent) => {
+        const next = supporterRows().find((other) => {
+          if (other === row) {
+            return false;
+          }
+          const rect = other.getBoundingClientRect();
+          return moveEvent.clientY < rect.top + rect.height / 2;
+        });
+        if (next) {
+          view.sourceList.insertBefore(row, next);
+        } else {
+          view.sourceList.appendChild(row);
+        }
+      };
+      const finishDrag = () => {
+        row.classList.remove("is-dragging");
+        win.removeEventListener("pointermove", onPointerMove);
+        win.removeEventListener("pointerup", finishDrag);
+        win.removeEventListener("pointercancel", finishDrag);
+        applyDragOrder(key);
+      };
+      win.addEventListener("pointermove", onPointerMove);
+      win.addEventListener("pointerup", finishDrag, { once: true });
+      win.addEventListener("pointercancel", finishDrag, { once: true });
+    };
+    const showSuggestionCount = (mode) => {
+      const shown = view.suggestionResults[mode].querySelectorAll("[data-synthesize-candidate]").length;
+      setStatusText(
+        view.suggestionStatus,
+        shown === 0 ? SUGGESTIONS_EMPTY : `${shown} ${shown === 1 ? "suggestion" : "suggestions"} in ${modeLabel(mode)}.`,
+        shown === 0 ? "is-empty" : "is-success"
+      );
+    };
+    const loadSuggestions = async (mode) => {
+      const requestID = suggestionRequests[mode] + 1;
+      suggestionRequests[mode] = requestID;
+      view.suggestionPanels[mode].setAttribute("aria-busy", "true");
+      if (mode === activeMode) {
+        setStatusText(view.suggestionStatus, `Loading ${modeLabel(mode)} suggestions\u2026`, "is-loading");
+      }
+      try {
+        const response = await requestSynthesisSuggestions(
+          fetcher,
+          config.relatedEndpoint,
+          config.anchor.key,
+          mode
+        );
+        if (suggestionRequests[mode] !== requestID) {
+          return;
+        }
+        const entries = response.results.map(candidateFromRelatedResult);
+        rememberCandidates(entries);
+        suggestionEntries[mode] = entries;
+        renderSynthesisCandidates(
+          view.suggestionResults[mode],
+          entries,
+          synthesisSelectedKeys(model),
+          config.anchor.key,
+          false,
+          SUGGESTIONS_EMPTY
+        );
+        if (mode === activeMode) {
+          showSuggestionCount(mode);
+        }
+      } catch (error) {
+        if (suggestionRequests[mode] !== requestID) {
+          return;
+        }
+        if (mode === activeMode) {
+          setStatusText(
+            view.suggestionStatus,
+            errorMessage2(error, "Suggestions could not be loaded."),
+            "is-error"
+          );
+        }
+      } finally {
+        if (suggestionRequests[mode] === requestID) {
+          view.suggestionPanels[mode].setAttribute("aria-busy", "false");
+        }
+      }
+    };
+    const selectMode = (mode) => {
+      activeMode = mode;
+      selectSynthesisSuggestionMode(view, mode);
+      if (suggestionEntries[mode] === null) {
+        return loadSuggestions(mode);
+      }
+      showSuggestionCount(mode);
+      return Promise.resolve();
+    };
+    const runSearch = async (query) => {
+      const trimmed = query.trim();
+      if (trimmed === "") {
+        searchRequest += 1;
+        searchEntries = null;
+        view.searchResults.replaceChildren();
+        setStatusText(view.searchStatus, "Enter a search term to find notes.", "");
+        return;
+      }
+      const requestID = searchRequest + 1;
+      searchRequest = requestID;
+      setStatusText(view.searchStatus, `Searching for ${trimmed}\u2026`, "is-loading");
+      try {
+        const results = await requestSynthesisSearch(fetcher, config.searchEndpoint, trimmed);
+        if (searchRequest !== requestID) {
+          return;
+        }
+        const entries = results.flatMap((result) => {
+          const candidate = candidateFromSearchResult(result);
+          return candidate ? [candidate] : [];
+        });
+        rememberCandidates(entries);
+        searchEntries = entries;
+        renderSynthesisCandidates(
+          view.searchResults,
+          entries,
+          synthesisSelectedKeys(model),
+          config.anchor.key,
+          true,
+          SEARCH_EMPTY
+        );
+        const shown = view.searchResults.querySelectorAll("[data-synthesize-candidate]").length;
+        setStatusText(
+          view.searchStatus,
+          shown === 0 ? SEARCH_EMPTY : `${shown} ${shown === 1 ? "match" : "matches"} for ${trimmed}.`,
+          shown === 0 ? "is-empty" : "is-success"
+        );
+      } catch (error) {
+        if (searchRequest !== requestID) {
+          return;
+        }
+        searchEntries = null;
+        view.searchResults.replaceChildren();
+        setStatusText(view.searchStatus, errorMessage2(error, "Search failed."), "is-error");
+      }
+    };
+    const prepareContext = async () => {
+      if (config.csrfToken === "") {
+        setStatusText(view.contextStatus, "Context preparation is unavailable.", "is-error");
+        return;
+      }
+      view.prepareButton.disabled = true;
+      setStatusText(view.contextStatus, "Building context packet\u2026", "is-loading");
+      const requested = synthesisContextSignature(model);
+      const superseded = () => synthesisContextSignature(model) !== requested;
+      try {
+        const response = await requestSynthesisContext(fetcher, config.contextEndpoint, {
+          source: config.anchor.key,
+          candidates: synthesisSelectedKeys(model),
+          purpose: model.purpose,
+          prompt: model.prompt,
+          token: config.csrfToken
+        });
+        if (superseded()) {
+          setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
+          return;
+        }
+        invalidateSynthesisPreview(model);
+        model.context = response;
+        model.contextStale = false;
+        render();
+        setStatusText(
+          view.contextStatus,
+          `Context ready. It expires at ${response.expires_at || "the server's timeout"}.`,
+          "is-success"
+        );
+      } catch (error) {
+        if (superseded()) {
+          setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
+          return;
+        }
+        invalidateSynthesisContext(model);
+        model.contextStale = true;
+        render();
+        setStatusText(
+          view.contextStatus,
+          errorMessage2(error, "The context packet could not be built."),
+          "is-error"
+        );
+      } finally {
+        view.prepareButton.disabled = false;
+      }
+    };
+    const copyContext = async () => {
+      const context = model.context;
+      if (!context) {
+        setStatusText(view.contextStatus, "Prepare a context packet first.", "is-error");
+        return;
+      }
+      if (!hasWritableClipboard(clipboard)) {
+        setStatusText(
+          view.contextStatus,
+          "Clipboard unavailable. Select the packet Markdown below and copy it manually.",
+          "is-error"
+        );
+        return;
+      }
+      view.copyButton.disabled = true;
+      try {
+        await clipboard.writeText(context.markdown);
+        setStatusText(view.contextStatus, "Context packet copied.", "is-success");
+      } catch {
+        setStatusText(
+          view.contextStatus,
+          "Copy failed. Select the packet Markdown below and copy it manually.",
+          "is-error"
+        );
+      } finally {
+        view.copyButton.disabled = false;
+      }
+    };
+    const forgetContext = (target) => {
+      invalidateSynthesisContext(model);
+      model.contextStale = true;
+      render();
+      setStatusText(target, CONTEXT_GONE, "is-error");
+    };
+    const generate = async () => {
+      if (model.context === null) {
+        setStatusText(view.generateStatus, "Prepare a context packet first.", "is-error");
+        return;
+      }
+      if (generating) {
+        return;
+      }
+      if (config.agentEnabled && !disclosureAccepted) {
+        disclosureAccepted = confirmer(DISCLOSURE);
+        if (!disclosureAccepted) {
+          setStatusText(view.generateStatus, "Generation canceled.", "");
+          return;
+        }
+      }
+      generating = true;
+      view.generateButton.disabled = true;
+      view.candidatePanel.setAttribute("aria-busy", "true");
+      setStatusText(view.generateStatus, "Generating a candidate draft\u2026", "is-loading");
+      try {
+        const response = await requestSynthesisGenerate(fetcher, config.generateEndpoint, {
+          context_id: model.context.context_id,
+          token: config.csrfToken
+        });
+        if (!response.enabled) {
+          setStatusText(
+            view.generateStatus,
+            response.message || "Generation is unavailable until [agent].command is configured.",
+            "is-empty"
+          );
+          return;
+        }
+        model.candidate = { markdown: response.output, html: response.rendered_html };
+        render();
+        persist();
+        setStatusText(
+          view.generateStatus,
+          "Candidate ready. Your draft is unchanged until you replace or append it.",
+          "is-success"
+        );
+        view.candidatePanel.focus({ preventScroll: true });
+      } catch (error) {
+        if (errorCode(error) === "not_found") {
+          forgetContext(view.generateStatus);
+          return;
+        }
+        setStatusText(
+          view.generateStatus,
+          errorMessage2(error, "The generation command failed."),
+          "is-error"
+        );
+      } finally {
+        generating = false;
+        view.candidatePanel.setAttribute("aria-busy", "false");
+        view.generateButton.disabled = model.context === null;
+      }
+    };
+    const useCandidate = (mode) => {
+      const candidate = model.candidate;
+      if (candidate === null) {
+        setStatusText(view.generateStatus, "There is no candidate to use.", "is-error");
+        return;
+      }
+      const existing = model.draft.replace(/\s+$/, "");
+      model.draft = mode === "replace" || existing === "" ? candidate.markdown : `${existing}
+
+${candidate.markdown}`;
+      view.draftInput.value = model.draft;
+      invalidateSynthesisPreview(model);
+      render();
+      persist();
+      setStatusText(
+        view.generateStatus,
+        mode === "replace" ? "Draft replaced with the candidate." : "Candidate appended to the draft.",
+        "is-success"
+      );
+      view.draftInput.focus({ preventScroll: true });
+    };
+    const copyCandidate = async () => {
+      const candidate = model.candidate;
+      if (candidate === null) {
+        setStatusText(view.generateStatus, "There is no candidate to copy.", "is-error");
+        return;
+      }
+      if (!hasWritableClipboard(clipboard)) {
+        setStatusText(
+          view.generateStatus,
+          "Clipboard unavailable. Select the candidate Markdown above and copy it manually.",
+          "is-error"
+        );
+        return;
+      }
+      view.candidateCopyButton.disabled = true;
+      try {
+        await clipboard.writeText(candidate.markdown);
+        setStatusText(view.generateStatus, "Candidate copied.", "is-success");
+      } catch {
+        setStatusText(
+          view.generateStatus,
+          "Copy failed. Select the candidate Markdown above and copy it manually.",
+          "is-error"
+        );
+      } finally {
+        view.candidateCopyButton.disabled = !hasWritableClipboard(clipboard);
+      }
+    };
+    const dismissCandidate = () => {
+      if (model.candidate === null) {
+        return;
+      }
+      model.candidate = null;
+      render();
+      persist();
+      setStatusText(view.generateStatus, "Candidate dismissed. Your draft is unchanged.", "");
+      view.generateButton.focus({ preventScroll: true });
+    };
+    const focusInvalidField = () => {
+      showFieldErrors = true;
+      renderFieldErrors();
+      const fields = [
+        [synthesisTitleError(model.title), view.titleInput],
+        [synthesisFolderError(model.folder), view.folderInput],
+        [synthesisDraftError(model.draft), view.draftInput]
+      ];
+      const invalid = fields.find(([message]) => message !== "");
+      if (!invalid) {
+        return false;
+      }
+      invalid[1].focus({ preventScroll: true });
+      setStatusText(view.previewStatus, invalid[0], "is-error");
+      return true;
+    };
+    const preview = async () => {
+      if (previewing || applying) {
+        return;
+      }
+      if (model.context === null) {
+        setStatusText(
+          view.previewStatus,
+          "Prepare a context packet before previewing the note.",
+          "is-error"
+        );
+        return;
+      }
+      if (focusInvalidField()) {
+        return;
+      }
+      previewing = true;
+      render();
+      view.previewPanel.setAttribute("aria-busy", "true");
+      setStatusText(view.previewStatus, "Building the note preview\u2026", "is-loading");
+      const requested = synthesisPreviewSignature(model);
+      const superseded = () => synthesisPreviewSignature(model) !== requested;
+      try {
+        const response = await requestSynthesisPreview(fetcher, config.previewEndpoint, {
+          context_id: model.context.context_id,
+          title: model.title.trim(),
+          folder: model.folder.trim(),
+          draft: model.draft,
+          token: config.csrfToken
+        });
+        if (superseded()) {
+          setStatusText(view.previewStatus, PREVIEW_SUPERSEDED, "");
+          return;
+        }
+        model.preview = response;
+        model.previewStale = false;
+        render();
+        setStatusText(
+          view.previewStatus,
+          `Preview ready for ${response.destination}. Review it, then create the note.`,
+          "is-success"
+        );
+        view.previewPanel.focus({ preventScroll: true });
+      } catch (error) {
+        if (superseded()) {
+          setStatusText(view.previewStatus, PREVIEW_SUPERSEDED, "");
+          return;
+        }
+        invalidateSynthesisPreview(model);
+        if (errorCode(error) === "not_found") {
+          forgetContext(view.previewStatus);
+          return;
+        }
+        render();
+        setStatusText(
+          view.previewStatus,
+          errorMessage2(error, "The note preview could not be built."),
+          "is-error"
+        );
+      } finally {
+        previewing = false;
+        view.previewPanel.setAttribute("aria-busy", "false");
+        render();
+      }
+    };
+    const apply = async () => {
+      const receipt = model.preview;
+      if (receipt === null) {
+        setStatusText(view.previewStatus, "Preview the note before creating it.", "is-error");
+        return;
+      }
+      if (applying) {
+        return;
+      }
+      applying = true;
+      render();
+      setStatusText(view.previewStatus, `Creating ${receipt.destination}\u2026`, "is-loading");
+      try {
+        const response = await requestSynthesisApply(fetcher, config.applyEndpoint, {
+          preview_id: receipt.preview_id,
+          token: config.csrfToken
+        });
+        const created = response.rel_path || receipt.destination;
+        if (!clearSaved()) {
+          invalidateSynthesisPreview(model);
+          setSynthesisWarning(view, SAVED_STATE_STUCK, {
+            href: response.path,
+            label: `Open ${created}`
+          });
+          setStatusText(
+            view.previewStatus,
+            `Created ${created}. The saved copy of your work could not be deleted, so the note was not opened automatically.`,
+            "is-success"
+          );
+          return;
+        }
+        setStatusText(view.previewStatus, `Created ${created}. Opening the note\u2026`, "is-success");
+        redirect(response.path);
+      } catch (error) {
+        invalidateSynthesisPreview(model);
+        render();
+        setStatusText(
+          view.previewStatus,
+          `${errorMessage2(error, "The note could not be created.")} Preview again to retry; nothing you wrote was lost.`,
+          "is-error"
+        );
+      } finally {
+        applying = false;
+        render();
+      }
+    };
+    const hasMeaningfulWork = () => model.sources.length > 0 || model.title.trim() !== "" || model.prompt.trim() !== "" || model.draft.trim() !== "" || model.candidate !== null;
+    const discard = () => {
+      if (hasMeaningfulWork() && !confirmer(DISCARD_CONFIRMATION)) {
+        announce("Kept the saved selection and draft.", "");
+        return;
+      }
+      model.sources = [];
+      model.title = "";
+      model.folder = config.defaultFolder;
+      model.purpose = config.defaultPurpose;
+      model.prompt = "";
+      model.draft = "";
+      model.candidate = null;
+      model.context = null;
+      model.contextStale = false;
+      model.preview = null;
+      model.previewStale = false;
+      showFieldErrors = false;
+      view.titleInput.value = "";
+      view.folderInput.value = model.folder;
+      view.purposeSelect.value = model.purpose;
+      view.promptInput.value = "";
+      view.draftInput.value = "";
+      const cleared = clearSaved();
+      setSynthesisWarning(view, cleared ? "" : SAVED_STATE_STUCK);
+      render();
+      renderCandidatePanels();
+      setStatusText(view.contextStatus, "", "");
+      setStatusText(view.generateStatus, "", "");
+      setStatusText(view.previewStatus, "", "");
+      announce(
+        cleared ? "Discarded the saved selection and draft." : "Cleared this page, but the saved copy could not be deleted.",
+        cleared ? "is-success" : "is-error"
+      );
+    };
+    const restore = async () => {
+      const stored = readSynthesisState(storage, storageKey);
+      if (!stored) {
+        return;
+      }
+      model.title = stored.title;
+      model.folder = stored.folder;
+      model.purpose = config.purposes.includes(stored.purpose) ? stored.purpose : config.defaultPurpose;
+      model.prompt = stored.prompt;
+      model.draft = stored.draft;
+      model.candidate = stored.candidate === "" ? null : { markdown: stored.candidate, html: "" };
+      view.titleInput.value = model.title;
+      view.folderInput.value = model.folder;
+      view.purposeSelect.value = model.purpose;
+      view.promptInput.value = model.prompt;
+      view.draftInput.value = model.draft;
+      const resolved = [];
+      const missing = [];
+      for (const key of stored.sources) {
+        const source = await resolveSynthesisSource(fetcher, config.relatedEndpoint, key);
+        if (source) {
+          resolved.push(source);
+        } else {
+          missing.push(key);
+        }
+      }
+      model.sources = dedupeSynthesisSources(resolved, config.anchor.key, config.maxSupporters);
+      render();
+      renderCandidatePanels();
+      if (missing.length > 0) {
+        setSynthesisWarning(
+          view,
+          `${missing.length} saved ${missing.length === 1 ? "note is" : "notes are"} no longer in this vault and ${missing.length === 1 ? "was" : "were"} removed from the selection: ${missing.join(", ")}.`
+        );
+      }
+      persist();
+    };
+    view.sourceList.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const remove = target?.closest("[data-synthesize-remove]");
+      if (remove) {
+        removeSource(remove.getAttribute("data-synthesize-remove") || "");
+      }
+    });
+    view.sourceList.addEventListener("keydown", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const handle = target?.closest("[data-synthesize-handle]");
+      if (!handle || event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+        return;
+      }
+      event.preventDefault();
+      moveSource(
+        handle.getAttribute("data-synthesize-handle") || "",
+        event.key === "ArrowUp" ? -1 : 1
+      );
+    });
+    view.sourceList.addEventListener("pointerdown", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const handle = target?.closest("[data-synthesize-handle]");
+      const row = handle?.closest("[data-synthesize-source]");
+      if (!row || row.hasAttribute("data-synthesize-anchor")) {
+        return;
+      }
+      startDrag(row, event);
+    });
+    mount.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const add = target?.closest("[data-synthesize-add]");
+      if (!add || add.disabled) {
+        return;
+      }
+      addSource(add.getAttribute("data-synthesize-add") || "");
+    });
+    for (const definition of relatedModeDefinitions) {
+      const tab = view.suggestionTabs[definition.mode];
+      tab.addEventListener("click", () => {
+        void selectMode(definition.mode);
+      });
+      tab.addEventListener("keydown", (event) => {
+        const index = relatedModeDefinitions.findIndex((item) => item.mode === definition.mode);
+        let target = index;
+        switch (event.key) {
+          case "ArrowLeft":
+            target = (index - 1 + relatedModeDefinitions.length) % relatedModeDefinitions.length;
+            break;
+          case "ArrowRight":
+            target = (index + 1) % relatedModeDefinitions.length;
+            break;
+          default:
+            return;
+        }
+        event.preventDefault();
+        const next = relatedModeDefinitions[target].mode;
+        view.suggestionTabs[next].focus();
+        void selectMode(next);
+      });
+    }
+    view.searchForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void runSearch(view.searchInput.value);
+    });
+    view.titleInput.addEventListener("input", () => {
+      model.title = view.titleInput.value;
+      invalidateSynthesisPreview(model);
+      render();
+      persist();
+    });
+    view.folderInput.addEventListener("input", () => {
+      model.folder = view.folderInput.value;
+      invalidateSynthesisPreview(model);
+      render();
+      persist();
+    });
+    view.draftInput.addEventListener("input", () => {
+      model.draft = view.draftInput.value;
+      invalidateSynthesisPreview(model);
+      render();
+      persist();
+    });
+    view.purposeSelect.addEventListener("change", () => {
+      model.purpose = view.purposeSelect.value;
+      invalidateSynthesisContext(model);
+      render();
+      persist();
+    });
+    view.promptInput.addEventListener("input", () => {
+      model.prompt = view.promptInput.value;
+      invalidateSynthesisContext(model);
+      render();
+      persist();
+    });
+    view.prepareButton.addEventListener("click", () => {
+      void prepareContext();
+    });
+    view.copyButton.addEventListener("click", () => {
+      void copyContext();
+    });
+    view.discardButton.addEventListener("click", () => {
+      discard();
+    });
+    view.generateButton.addEventListener("click", () => {
+      void generate();
+    });
+    view.candidateReplaceButton.addEventListener("click", () => {
+      useCandidate("replace");
+    });
+    view.candidateAppendButton.addEventListener("click", () => {
+      useCandidate("append");
+    });
+    view.candidateCopyButton.addEventListener("click", () => {
+      void copyCandidate();
+    });
+    view.candidateDismissButton.addEventListener("click", () => {
+      dismissCandidate();
+    });
+    view.previewButton.addEventListener("click", () => {
+      void preview();
+    });
+    view.applyButton.addEventListener("click", () => {
+      void apply();
+    });
+    view.folderInput.value = model.folder;
+    view.purposeSelect.value = model.purpose;
+    render();
+    const ready = (async () => {
+      await restore();
+      await selectMode("balanced");
+    })();
+    return { ready };
+  };
+  var initSynthesize = (deps = {}) => {
+    const root = queryElement(document, "[data-synthesize-root]", HTMLElement);
+    if (!root) {
+      return null;
+    }
+    const mount = queryElement(root, "[data-synthesize-workbench]", HTMLElement);
+    if (!mount || root.getAttribute("data-synthesize-anchor-key") === "") {
+      return null;
+    }
+    return createSynthesisController(root, mount, deps);
+  };
+
   // internal/web/static_src/main.ts
   (function() {
     initTheme();
@@ -10193,5 +12412,6 @@ var BrainNotesApp = (() => {
     initHistoryPanel();
     initDailyFixes();
     initProperties();
+    initSynthesize();
   })();
 })();

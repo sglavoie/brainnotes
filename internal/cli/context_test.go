@@ -46,6 +46,15 @@ func runContextWithAgentRunner(
 	return stdout.String(), stderr.String(), err
 }
 
+func standardContextPurpose(t *testing.T, name string) recall.ContextPurpose {
+	t.Helper()
+	purpose, ok := recall.StandardPurpose(name)
+	if !ok {
+		t.Fatalf("standard purpose %q is not defined", name)
+	}
+	return purpose
+}
+
 func decodeContextJSON(t *testing.T, output string) recall.ContextBundle {
 	t.Helper()
 	var bundle recall.ContextBundle
@@ -76,7 +85,7 @@ func TestContextMarkdownIsStableCanonicalReadOnlyOutput(t *testing.T) {
 	for _, wanted := range []string{
 		"# Research Context\n",
 		"- Name: \"synthesis\"",
-		contextPurposes[contextPurposeSynthesis].Instructions,
+		standardContextPurpose(t, recall.PurposeSynthesis).Instructions,
 		"- Source: \"Source.md\"",
 		"<!-- BEGIN SOURCE BODY -->",
 		"Contextual retrieval connects graph signals and semantic notes. [[Direct]]",
@@ -193,8 +202,8 @@ func TestContextJSONAndMarkdownSelectTheSameSourcesAndExcerpts(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", stderr)
 	}
 	bundle := decodeContextJSON(t, jsonOutput)
-	if bundle.Purpose != contextPurposes[contextPurposeQuestions] {
-		t.Errorf("purpose = %+v, want %+v", bundle.Purpose, contextPurposes[contextPurposeQuestions])
+	if bundle.Purpose != standardContextPurpose(t, recall.PurposeQuestions) {
+		t.Errorf("purpose = %+v, want %+v", bundle.Purpose, standardContextPurpose(t, recall.PurposeQuestions))
 	}
 	if bundle.Source.Identity.Path != "Source.md" {
 		t.Fatalf("source path = %q, want Source.md", bundle.Source.Identity.Path)
@@ -247,9 +256,9 @@ func TestContextSupportsExplicitZeroRelatedAndEveryPurpose(t *testing.T) {
 	root := newRelatedFixture(t)
 
 	for _, purposeName := range []string{
-		contextPurposeSynthesis,
-		contextPurposeContradictions,
-		contextPurposeQuestions,
+		recall.PurposeSynthesis,
+		recall.PurposeContradictions,
+		recall.PurposeQuestions,
 	} {
 		t.Run(purposeName, func(t *testing.T) {
 			output, _, err := runContext(
@@ -264,8 +273,8 @@ func TestContextSupportsExplicitZeroRelatedAndEveryPurpose(t *testing.T) {
 				t.Fatalf("context: %v", err)
 			}
 			bundle := decodeContextJSON(t, output)
-			if bundle.Purpose != contextPurposes[purposeName] {
-				t.Errorf("purpose = %+v, want %+v", bundle.Purpose, contextPurposes[purposeName])
+			if bundle.Purpose != standardContextPurpose(t, purposeName) {
+				t.Errorf("purpose = %+v, want %+v", bundle.Purpose, standardContextPurpose(t, purposeName))
 			}
 			if bundle.Related == nil || len(bundle.Related) != 0 {
 				t.Errorf("related = %#v, want non-nil empty slice", bundle.Related)

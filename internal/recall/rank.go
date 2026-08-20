@@ -300,40 +300,103 @@ func (ranker *Ranker) Rank(sourcePath string, mode Mode) ([]Result, error) {
 	return results, nil
 }
 
+// RankSelected scores an explicitly chosen candidate set and returns the
+// results in the caller's order. Selection is authoritative: mode eligibility
+// is not applied, and recall dismissal or an unexpired snooze never removes a
+// candidate. Useful and open history still contributes its ordinary recall
+// score and reason, so scores, relationship data, and reasons are the same
+// balanced ones Rank produces.
+func (ranker *Ranker) RankSelected(sourcePath string, candidatePaths []string) ([]Result, error) {
+	if ranker == nil {
+		return nil, errors.New("recall: rank selected: nil ranker")
+	}
+	if _, ok := ranker.documents[sourcePath]; !ok {
+		return nil, fmt.Errorf("recall: rank selected: source path %q is not indexed", sourcePath)
+	}
+
+	results := make([]Result, 0, len(candidatePaths))
+	seen := make(map[string]struct{}, len(candidatePaths))
+	for index, candidatePath := range candidatePaths {
+		if candidatePath == sourcePath {
+			return nil, fmt.Errorf("recall: rank selected: candidate %d repeats source path %q", index, sourcePath)
+		}
+		if _, exists := seen[candidatePath]; exists {
+			return nil, fmt.Errorf("recall: rank selected: duplicate candidate path %q", candidatePath)
+		}
+		seen[candidatePath] = struct{}{}
+		candidate, ok := ranker.documents[candidatePath]
+		if !ok {
+			return nil, fmt.Errorf("recall: rank selected: candidate path %q is not indexed", candidatePath)
+		}
+
+		match, err := ranker.matchCandidate(sourcePath, candidatePath)
+		if err != nil {
+			return nil, err
+		}
+		match.signal.Dismissed = false
+		match.signal.SnoozedUntil = time.Time{}
+		results = append(results, buildRankResult(candidate, match, evaluateRecall(candidate.createdAt, match.signal, ranker.now)))
+	}
+	return results, nil
+}
+
+type candidateMatch struct {
+	lexical  LexicalMatch
+	metadata metadataMatch
+	graph    graphMatch
+	signal   RecallSignal
+}
+
+func (ranker *Ranker) matchCandidate(sourcePath, candidatePath string) (candidateMatch, error) {
+	lexical, _ := ranker.lexical.Compare(sourcePath, candidatePath)
+	match := candidateMatch{
+		lexical:  lexical,
+		metadata: compareMetadata(ranker.metadata[sourcePath], ranker.metadata[candidatePath]),
+		graph:    ranker.graph.compare(sourcePath, candidatePath),
+	}
+	if ranker.recall == nil {
+		return match, nil
+	}
+	signal, err := ranker.recall.Signal(sourcePath, candidatePath)
+	if err != nil {
+		return candidateMatch{}, fmt.Errorf(
+			"recall: rank %q against %q: load recall signal: %w",
+			sourcePath,
+			candidatePath,
+			err,
+		)
+	}
+	match.signal = signal
+	return match, nil
+}
+
 func (ranker *Ranker) scoreCandidate(sourcePath, candidatePath string, mode Mode) (Result, bool, error) {
 	candidate := ranker.documents[candidatePath]
-	lexical, _ := ranker.lexical.Compare(sourcePath, candidatePath)
-	metadata := compareMetadata(ranker.metadata[sourcePath], ranker.metadata[candidatePath])
-	graph := ranker.graph.compare(sourcePath, candidatePath)
-
-	signal := RecallSignal{}
-	if ranker.recall != nil {
-		var err error
-		signal, err = ranker.recall.Signal(sourcePath, candidatePath)
-		if err != nil {
-			return Result{}, false, fmt.Errorf(
-				"recall: rank %q against %q: load recall signal: %w",
-				sourcePath,
-				candidatePath,
-				err,
-			)
-		}
+	match, err := ranker.matchCandidate(sourcePath, candidatePath)
+	if err != nil {
+		return Result{}, false, err
 	}
-	recall := evaluateRecall(candidate.createdAt, signal, ranker.now)
+	recall := evaluateRecall(candidate.createdAt, match.signal, ranker.now)
 	if recall.suppressed {
 		return Result{}, false, nil
 	}
-
-	scores := SignalScores{
-		Text:     lexical.Score,
-		Graph:    graph.score,
-		Metadata: metadata.score,
-		Recall:   recall.score,
-	}
-	if !candidateEligible(mode, scores, graph.relationship, recall) {
+	if !candidateEligible(mode, matchScores(match, recall), match.graph.relationship, recall) {
 		return Result{}, false, nil
 	}
+	return buildRankResult(candidate, match, recall), true, nil
+}
 
+func matchScores(match candidateMatch, recall recallMatch) SignalScores {
+	return SignalScores{
+		Text:     match.lexical.Score,
+		Graph:    match.graph.score,
+		Metadata: match.metadata.score,
+		Recall:   recall.score,
+	}
+}
+
+func buildRankResult(candidate rankDocument, match candidateMatch, recall recallMatch) Result {
+	scores := matchScores(match, recall)
 	result := Result{
 		Score: scores.Text*TextScoreWeight +
 			scores.Graph*GraphScoreWeight +
@@ -341,15 +404,15 @@ func (ranker *Ranker) scoreCandidate(sourcePath, candidatePath string, mode Mode
 			scores.Recall*RecallScoreWeight,
 		Path:         candidate.path,
 		Title:        candidate.title,
-		Relationship: graph.relationship,
+		Relationship: match.graph.relationship,
 		Signals:      scores,
 	}
-	if graph.relationship == RelationshipTwoHop || graph.relationship == RelationshipSharedNeighbor {
-		result.BridgePath = graph.bridge.path
-		result.BridgeTitle = graph.bridge.title
+	if match.graph.relationship == RelationshipTwoHop || match.graph.relationship == RelationshipSharedNeighbor {
+		result.BridgePath = match.graph.bridge.path
+		result.BridgeTitle = match.graph.bridge.title
 	}
-	result.Reasons = buildReasons(lexical, metadata, graph, recall)
-	return result, true, nil
+	result.Reasons = buildReasons(match.lexical, match.metadata, match.graph, recall)
+	return result
 }
 
 func candidateEligible(

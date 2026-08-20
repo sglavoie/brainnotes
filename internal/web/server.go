@@ -38,28 +38,39 @@ type Options struct {
 }
 
 type Server struct {
-	configState      *configManager
-	vault            *vault.Vault
-	templates        *template.Template
-	state            *vaultState
-	previewStore     *bulkPreviewStore
-	fixPreviews      *fixPreviewStore
-	propertyPreviews *propertyPreviewStore
-	cockpitState     *cockpit.StateStore
-	markdown         *markdownRenderer
-	handler          http.Handler
-	openBrowser      func(url string) error
-	notifyListen     func(url string)
-	csrfToken        string
-	startEditor      func(bin string, argv []string) error
-	briefState       brief.StateStore
-	briefNow         func() time.Time
-	runAgent         agent.Runner
+	configState       *configManager
+	vault             *vault.Vault
+	templates         *template.Template
+	state             *vaultState
+	previewStore      *bulkPreviewStore
+	fixPreviews       *fixPreviewStore
+	propertyPreviews  *propertyPreviewStore
+	synthesisContexts *synthesisContextStore
+	synthesisPreviews *synthesisPreviewStore
+	cockpitState      *cockpit.StateStore
+	markdown          *markdownRenderer
+	handler           http.Handler
+	openBrowser       func(url string) error
+	notifyListen      func(url string)
+	csrfToken         string
+	// vaultID is an opaque, restart-stable identifier for this vault root. The
+	// browser namespaces saved workbench state under it, so it must never carry
+	// the path itself.
+	vaultID     string
+	startEditor func(bin string, argv []string) error
+	briefState  brief.StateStore
+	briefNow    func() time.Time
+	runAgent    agent.Runner
 	// beforePropertyCommit runs immediately before a property transaction
 	// commits. It exists so tests can land an external edit inside the window
 	// the configuration pin protects, which cannot be provoked reliably
 	// otherwise; it is nil in production.
 	beforePropertyCommit func()
+	// beforeSynthesisCommit runs after a redeemed synthesis preview has been
+	// revalidated and before its transaction commits. It exists so tests can
+	// land an external write inside that window, which cannot be provoked
+	// reliably otherwise; it is nil in production.
+	beforeSynthesisCommit func()
 	// beforePinnedNotesCommit runs after a pin plan is built and before it is
 	// committed. It exists so tests can hold two requests inside the
 	// validation-to-commit window the pinned-list preconditions protect, which
@@ -88,6 +99,7 @@ type notePageData struct {
 	InsightConfigured  bool
 	InsightStatusMsg   string
 	Pinned             bool
+	SynthesizePath     string
 }
 
 type brokenPageData struct {
@@ -164,21 +176,26 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	}
 
 	srv := &Server{
-		configState:      configState,
-		vault:            v,
-		templates:        tpl,
-		state:            state,
-		previewStore:     newBulkPreviewStore(bulkPreviewTTL),
-		fixPreviews:      newFixPreviewStore(fixPreviewTTL),
-		propertyPreviews: newPropertyPreviewStore(propertyPreviewTTL),
-		cockpitState:     cockpit.NewStateStore(v.Root),
-		markdown:         markdown,
-		openBrowser:      opts.OpenBrowser,
-		notifyListen:     opts.NotifyListening,
-		csrfToken:        opts.CSRFToken,
-		startEditor:      opts.StartEditor,
-		runAgent:         opts.RunAgent,
+		configState:       configState,
+		vault:             v,
+		templates:         tpl,
+		state:             state,
+		previewStore:      newBulkPreviewStore(bulkPreviewTTL),
+		fixPreviews:       newFixPreviewStore(fixPreviewTTL),
+		propertyPreviews:  newPropertyPreviewStore(propertyPreviewTTL),
+		synthesisContexts: newSynthesisContextStore(synthesisContextTTL),
+		synthesisPreviews: newSynthesisPreviewStore(synthesisPreviewTTL),
+		cockpitState:      cockpit.NewStateStore(v.Root),
+		markdown:          markdown,
+		openBrowser:       opts.OpenBrowser,
+		notifyListen:      opts.NotifyListening,
+		csrfToken:         opts.CSRFToken,
+		vaultID:           synthesisVaultID(v.Root),
+		startEditor:       opts.StartEditor,
+		runAgent:          opts.RunAgent,
 	}
+	srv.synthesisContexts.startSweeper(synthesisSweepInterval)
+	srv.synthesisPreviews.startSweeper(synthesisSweepInterval)
 	if srv.csrfToken == "" {
 		srv.csrfToken, err = generateCSRFToken()
 		if err != nil {
@@ -206,7 +223,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc(noteRoutePrefix, srv.handleNote)
 	mux.HandleFunc("/broken", srv.handleBroken)
 	mux.HandleFunc("/api/facets", srv.handleFacets)
-	mux.HandleFunc("/api/search", srv.handleSearch)
+	mux.HandleFunc(searchAPIRoutePath, srv.handleSearch)
 	mux.HandleFunc("/api/open", srv.handleOpen)
 	mux.HandleFunc(configOpenAPIRoutePath, srv.handleConfigOpen)
 	mux.HandleFunc("/api/brief/view", srv.handleBriefView)
@@ -243,6 +260,11 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	mux.HandleFunc(propertyApplyAPIRoutePath, srv.handlePropertiesApply)
 	mux.HandleFunc(propertySchemaPreviewAPIRoutePath, srv.handlePropertySchemaPreview)
 	mux.HandleFunc(propertySchemaApplyAPIRoutePath, srv.handlePropertySchemaApply)
+	mux.HandleFunc(synthesisContextAPIRoutePath, srv.handleSynthesisContext)
+	mux.HandleFunc(synthesisGenerateAPIRoutePath, srv.handleSynthesisGenerate)
+	mux.HandleFunc(synthesisPreviewAPIRoutePath, srv.handleSynthesisPreview)
+	mux.HandleFunc(synthesisApplyAPIRoutePath, srv.handleSynthesisApply)
+	mux.HandleFunc(synthesizeRoutePath, srv.handleSynthesizePage)
 	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
 	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
 	mux.HandleFunc(pinnedRoutePath, srv.handlePinnedPage)

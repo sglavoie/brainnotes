@@ -22,26 +22,7 @@ const (
 
 	contextFormatMarkdown = "markdown"
 	contextFormatJSON     = "json"
-
-	contextPurposeSynthesis      = "synthesis"
-	contextPurposeContradictions = "contradictions"
-	contextPurposeQuestions      = "questions"
 )
-
-var contextPurposes = map[string]recall.ContextPurpose{
-	contextPurposeSynthesis: {
-		Name:         contextPurposeSynthesis,
-		Instructions: "Synthesize established ideas, tensions, missing evidence, and next questions.",
-	},
-	contextPurposeContradictions: {
-		Name:         contextPurposeContradictions,
-		Instructions: "Identify potentially conflicting claims, uncertainty, and supporting paths.",
-	},
-	contextPurposeQuestions: {
-		Name:         contextPurposeQuestions,
-		Instructions: "Identify unanswered questions and the most useful notes or evidence to pursue.",
-	},
-}
 
 type contextOptions struct {
 	related     int
@@ -68,7 +49,7 @@ func newContextCmd(agentRunner agent.Runner) *cobra.Command {
 		related:     recall.DefaultBundleRelatedLimit,
 		maxBytes:    recall.DefaultBundleMaxBytes,
 		formatText:  contextFormatMarkdown,
-		purposeText: contextPurposeSynthesis,
+		purposeText: recall.PurposeSynthesis,
 	}
 
 	cmd := &cobra.Command{
@@ -165,7 +146,7 @@ func validateContextOptions(options contextOptions) (validatedContextOptions, er
 			options.formatText,
 		)
 	}
-	purpose, ok := contextPurposes[options.purposeText]
+	purpose, ok := recall.StandardPurpose(options.purposeText)
 	if !ok {
 		return validatedContextOptions{}, fmt.Errorf(
 			"context: --purpose must be synthesis, contradictions, or questions (got %q)",

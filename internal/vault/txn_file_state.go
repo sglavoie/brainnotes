@@ -82,6 +82,18 @@ func nonRegularLabel(info os.FileInfo) string {
 	}
 }
 
+// VerifyState reports whether path currently satisfies expect, returning a
+// *TxnConflictError when it does not. It lets a caller revalidate a dependency
+// at plan time so a doomed plan is refused before it is offered to a user;
+// passing the same expectation to FileTxn.Require is still required, because
+// only the transaction rechecks it at the commit boundary.
+//
+// path must already be absolute and vault-contained. No containment check is
+// applied here.
+func VerifyState(path string, expect FileExpectation) error {
+	return verifyCurrentState(path, expect)
+}
+
 func verifyCurrentState(path string, expect FileExpectation) error {
 	data, _, exists, err := currentFileState(path)
 	if err != nil {

@@ -17,6 +17,7 @@ import { initPinnedList } from "./pinned-list";
 import { initProperties } from "./properties";
 import { initRelatedNotes } from "./related";
 import { initSearch } from "./search";
+import { initSynthesize } from "./synthesize";
 import { initTheme } from "./theme";
 
 (function () {
@@ -40,4 +41,5 @@ import { initTheme } from "./theme";
   initHistoryPanel();
   initDailyFixes();
   initProperties();
+  initSynthesize();
 })();

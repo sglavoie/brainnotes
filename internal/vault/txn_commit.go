@@ -112,7 +112,15 @@ func (t *FileTxn) stage() error {
 			if exists {
 				wantMode = mode
 			} else {
-				wantMode, err = defaultNewFileMode(filepath.Dir(path))
+				// The probe creates a real file to read the umask off, so the
+				// parent has to exist first. Staging creates it anyway; doing it
+				// here is what lets a transaction write into a folder the vault
+				// does not have yet.
+				dir := filepath.Dir(path)
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					return fmt.Errorf("vault: mkdir %q: %w", dir, err)
+				}
+				wantMode, err = defaultNewFileMode(dir)
 				if err != nil {
 					return err
 				}

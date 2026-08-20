@@ -70,7 +70,7 @@ type stubPlan struct {
 // is the single source of truth for both PreviewStubFromBrokenTarget and
 // CreateStubFromBrokenTarget.
 func planStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string) (stubPlan, error) {
-	source, err := resolveCreateSource(vaultRoot, sourceRel)
+	source, err := resolveSourceNote(vaultRoot, sourceRel, "create:")
 	if err != nil {
 		return stubPlan{}, err
 	}
@@ -174,7 +174,10 @@ func defaultCreateOptions() createOptions {
 	return createOptions{command: "bn web create"}
 }
 
-func resolveCreateSource(vaultRoot, sourceRel string) (PathResolution, error) {
+// resolveSourceNote resolves a vault-relative note that must already exist as a
+// regular file reachable without traversing a symlink. op prefixes the error
+// messages so each caller keeps its own wording.
+func resolveSourceNote(vaultRoot, sourceRel, op string) (PathResolution, error) {
 	cleanRel, err := CleanRelPath(sourceRel)
 	if err != nil {
 		return PathResolution{}, err
@@ -184,9 +187,9 @@ func resolveCreateSource(vaultRoot, sourceRel string) (PathResolution, error) {
 		return PathResolution{}, err
 	}
 	if source.RelPath != cleanRel {
-		return PathResolution{}, Errorf(CodeForbidden, "create: source path must not resolve through a symlink")
+		return PathResolution{}, Errorf(CodeForbidden, "%s source path must not resolve through a symlink", op)
 	}
-	if err := ensureRegularSource(source.AbsPath, "create:"); err != nil {
+	if err := ensureRegularSource(source.AbsPath, op); err != nil {
 		return PathResolution{}, err
 	}
 	return source, nil
@@ -249,7 +252,7 @@ func createDestinationRel(sourceRel, target string) (string, string, error) {
 	}
 	rawTitle := path.Base(target)
 	title := stripMarkdownExtension(rawTitle)
-	if err := validateCreateTitle(title); err != nil {
+	if err := validateNoteTitle("create:", title); err != nil {
 		return "", "", err
 	}
 
@@ -283,27 +286,30 @@ func stripMarkdownExtension(title string) string {
 	return stem
 }
 
-func validateCreateTitle(title string) error {
+// validateNoteTitle enforces the shared rules for a title that becomes a file
+// name and a wikilink target. op prefixes the error messages so each caller
+// keeps its own wording.
+func validateNoteTitle(op, title string) error {
 	if title == "" {
-		return Errorf(CodeInvalidRequest, "create: empty title")
+		return Errorf(CodeInvalidRequest, "%s empty title", op)
 	}
 	if strings.TrimSpace(title) == "" {
-		return Errorf(CodeInvalidRequest, "create: title may not be whitespace-only")
+		return Errorf(CodeInvalidRequest, "%s title may not be whitespace-only", op)
 	}
 	if title != strings.TrimSpace(title) {
-		return Errorf(CodeInvalidRequest, "create: title may not have leading or trailing whitespace")
+		return Errorf(CodeInvalidRequest, "%s title may not have leading or trailing whitespace", op)
 	}
 	if strings.ContainsRune(title, '/') {
-		return Errorf(CodeInvalidRequest, "create: title may not contain '/'")
+		return Errorf(CodeInvalidRequest, "%s title may not contain '/'", op)
 	}
 	if containsControlRune(title) {
-		return Errorf(CodeInvalidRequest, "create: title contains a control character")
+		return Errorf(CodeInvalidRequest, "%s title contains a control character", op)
 	}
 	if strings.HasPrefix(title, ".") {
-		return Errorf(CodeInvalidRequest, "create: title may not start with '.'")
+		return Errorf(CodeInvalidRequest, "%s title may not start with '.'", op)
 	}
 	if r, ok := wikilink.FirstReservedTargetRune(title); ok {
-		return Errorf(CodeInvalidRequest, "create: title may not contain %q", r)
+		return Errorf(CodeInvalidRequest, "%s title may not contain %q", op, r)
 	}
 	return nil
 }

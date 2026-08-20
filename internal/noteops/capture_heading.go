@@ -175,6 +175,18 @@ func findCaptureAnchor(lines []string, level int, titleKey string) int {
 	return -1
 }
 
+// containsATXHeading reports whether body holds an ATX heading of the given
+// level and title outside fenced code. It shares the capture scanner so a
+// heading a writer would recognize and a heading a validator rejects can never
+// diverge.
+func containsATXHeading(body string, level int, title string) bool {
+	key := captureHeadingKey(title)
+	if key == "" {
+		return false
+	}
+	return findCaptureAnchor(splitCaptureBody(body).lines, level, key) >= 0
+}
+
 // captureSectionEnd returns the index one past the last line of the section
 // anchored at index anchor: the first later non-fenced heading of the same or a
 // lower level, else len(lines). Deeper subheadings stay inside the section.

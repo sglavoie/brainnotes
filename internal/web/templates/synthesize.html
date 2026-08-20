@@ -1,0 +1,97 @@
+{{define "synthesize"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>Synthesize</h1>
+        <p class="page-subtitle">Curate the notes worth reading together, then write one note that says what they add up to.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    <section
+      class="panel synthesize-panel"
+      data-synthesize-root
+      data-synthesize-csrf="{{ .CSRFToken }}"
+      data-synthesize-vault="{{ .VaultID }}"
+      data-synthesize-anchor-key="{{ .AnchorKey }}"
+      data-synthesize-anchor-title="{{ .AnchorTitle }}"
+      data-synthesize-anchor-path="{{ .AnchorRelPath }}"
+      data-synthesize-anchor-route="{{ .AnchorRoute }}"
+      data-synthesize-default-folder="{{ .DefaultFolder }}"
+      data-synthesize-default-purpose="{{ .DefaultPurpose }}"
+      data-synthesize-purposes="{{range $index, $purpose := .Purposes}}{{if $index}},{{end}}{{ $purpose }}{{end}}"
+      data-synthesize-max-supporters="{{ .MaxSupporters }}"
+      data-synthesize-agent="{{if .AgentConfigured}}enabled{{else}}disabled{{end}}"
+      data-synthesize-context-endpoint="{{ .ContextPath }}"
+      data-synthesize-generate-endpoint="{{ .GeneratePath }}"
+      data-synthesize-preview-endpoint="{{ .PreviewPath }}"
+      data-synthesize-apply-endpoint="{{ .ApplyPath }}"
+      data-synthesize-related-endpoint="{{ .RelatedPath }}"
+      data-synthesize-search-endpoint="{{ .SearchPath }}"
+      aria-labelledby="synthesize-heading"
+    >
+      <div class="panel-header">
+        <h2 id="synthesize-heading">Anchor note</h2>
+      </div>
+      <dl class="synthesize-anchor">
+        <div class="synthesize-anchor-row">
+          <dt>Note</dt>
+          <dd><a class="synthesize-anchor-title" href="{{ .AnchorRoute }}">{{ .AnchorTitle }}</a></dd>
+        </div>
+        <div class="synthesize-anchor-row">
+          <dt>Vault path</dt>
+          <dd><code>{{ .AnchorRelPath }}</code></dd>
+        </div>
+        <div class="synthesize-anchor-row">
+          <dt>New note goes in</dt>
+          <dd><code data-synthesize-folder-default>{{if .DefaultFolder}}{{ .DefaultFolder }}{{else}}/{{end}}</code></dd>
+        </div>
+        <div class="synthesize-anchor-row">
+          <dt>Supporting notes</dt>
+          <dd>Up to {{ .MaxSupporters }}, in the order you choose.</dd>
+        </div>
+      </dl>
+
+      <p class="synthesize-purposes">
+        Research purposes available: {{range $index, $purpose := .Purposes}}{{if $index}}, {{end}}<code>{{ $purpose }}</code>{{end}}.
+      </p>
+
+      {{if not .AgentConfigured}}
+        <p class="synthesize-agent-status" data-synthesize-agent-status role="status">{{ .AgentStatusMsg }}</p>
+      {{end}}
+
+      <p class="synthesize-fallback" data-synthesize-fallback>
+        Curating sources, drafting, and creating the note all happen in the browser, so this
+        page needs JavaScript enabled. Without it you can still open the anchor above, or browse
+        the <a href="{{ .LibraryPath }}">Library</a> and write the note by hand.
+      </p>
+      <noscript>
+        <p class="synthesize-fallback">
+          JavaScript is disabled, so the synthesis workbench cannot run. Open the anchor note above,
+          or browse the <a href="{{ .LibraryPath }}">Library</a> and write the note by hand.
+        </p>
+      </noscript>
+
+      <p id="synthesize-status" class="synthesize-status" data-synthesize-status role="status" aria-live="polite"></p>
+
+      <div data-synthesize-workbench></div>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

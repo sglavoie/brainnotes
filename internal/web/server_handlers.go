@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Broken:             brokenAffordancesForNote(note, snapshot.graph),
 		InsightConfigured:  len(cfg.Agent.Command) > 0,
 		Pinned:             query.Pinned()(note),
+		SynthesizePath:     synthesizeRoutePath + "?source=" + url.QueryEscape(normalizedKey),
 	}
 	if !data.InsightConfigured {
 		data.InsightStatusMsg = "Ask AI is unavailable until [agent].command is configured."
@@ -139,8 +141,10 @@ func (s *Server) handleGraph(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+const searchAPIRoutePath = "/api/search"
+
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/search" {
+	if r.URL.Path != searchAPIRoutePath {
 		http.NotFound(w, r)
 		return
 	}

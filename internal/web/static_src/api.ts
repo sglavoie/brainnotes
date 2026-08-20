@@ -9,3 +9,4 @@ export * from "./api-pins";
 export * from "./api-properties";
 export * from "./api-properties-mutation";
 export * from "./api-search";
+export * from "./api-synthesis";
