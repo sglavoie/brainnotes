@@ -10577,7 +10577,7 @@ var BrainNotesApp = (() => {
     }
   };
 
-  // internal/web/static_src/synthesize-render.ts
+  // internal/web/static_src/synthesize-view-elements.ts
   var suggestionID = (kind, mode) => `synthesize-${kind}-${mode}`;
   var element = (doc, tag, className, attributes = {}) => {
     const node = doc.createElement(tag);
@@ -10607,442 +10607,8 @@ var BrainNotesApp = (() => {
     wrapper.appendChild(error);
     return { wrapper, error };
   };
-  var buildSourcesSection = (doc) => {
-    const section = element(doc, "section", "synthesize-section synthesize-sources", {
-      "aria-labelledby": "synthesize-sources-heading"
-    });
-    const heading = element(doc, "h3", "synthesize-section-heading");
-    heading.id = "synthesize-sources-heading";
-    heading.textContent = "Sources";
-    const intro = element(doc, "p", "synthesize-section-intro");
-    intro.textContent = "The anchor is always first. Drag a handle or press Up and Down on it to reorder supporting notes.";
-    const list = element(doc, "ol", "synthesize-source-list", {
-      "data-synthesize-source-list": ""
-    });
-    const status = element(doc, "p", "synthesize-selection-status", {
-      "data-synthesize-selection-status": ""
-    });
-    status.tabIndex = -1;
-    section.append(heading, intro, list, status);
-    return { section, list, status };
-  };
-  var buildSuggestionsSection = (doc) => {
-    const section = element(doc, "section", "synthesize-section synthesize-suggestions", {
-      "aria-labelledby": "synthesize-suggestions-heading"
-    });
-    const heading = element(doc, "h3", "synthesize-section-heading");
-    heading.id = "synthesize-suggestions-heading";
-    heading.textContent = "Suggested notes";
-    const tablist = element(doc, "div", "synthesize-tab-list", {
-      role: "tablist",
-      "aria-label": "Suggestion modes"
-    });
-    const status = element(doc, "p", "synthesize-suggestions-status", {
-      "data-synthesize-suggestions-status": "",
-      role: "status",
-      "aria-live": "polite"
-    });
-    const panelsContainer = element(doc, "div", "synthesize-suggestion-panels");
-    const tabs = {};
-    const panels = {};
-    const results = {};
-    for (const definition of relatedModeDefinitions) {
-      const active = definition.mode === "balanced";
-      const tab = element(doc, "button", "synthesize-tab", {
-        role: "tab",
-        "aria-controls": suggestionID("panel", definition.mode),
-        "aria-selected": active ? "true" : "false",
-        "data-synthesize-tab": definition.mode
-      });
-      tab.type = "button";
-      tab.id = suggestionID("tab", definition.mode);
-      tab.tabIndex = active ? 0 : -1;
-      tab.textContent = definition.label;
-      tablist.appendChild(tab);
-      const panel = element(doc, "div", "synthesize-suggestion-panel", {
-        role: "tabpanel",
-        "aria-labelledby": suggestionID("tab", definition.mode),
-        "data-synthesize-panel": definition.mode
-      });
-      panel.id = suggestionID("panel", definition.mode);
-      panel.hidden = !active;
-      const description = element(doc, "p", "synthesize-tab-description");
-      description.textContent = definition.description;
-      const list = element(doc, "div", "synthesize-candidates", {
-        "data-synthesize-suggestions": definition.mode
-      });
-      panel.append(description, list);
-      panelsContainer.appendChild(panel);
-      tabs[definition.mode] = tab;
-      panels[definition.mode] = panel;
-      results[definition.mode] = list;
-    }
-    section.append(heading, tablist, status, panelsContainer);
-    return { section, tabs, panels, results, status };
-  };
-  var buildSearchSection = (doc) => {
-    const section = element(doc, "section", "synthesize-section synthesize-search", {
-      "aria-labelledby": "synthesize-search-heading"
-    });
-    const heading = element(doc, "h3", "synthesize-section-heading");
-    heading.id = "synthesize-search-heading";
-    heading.textContent = "Search the vault";
-    const form = element(doc, "form", "synthesize-search-form", {
-      "data-synthesize-search-form": "",
-      role: "search"
-    });
-    const input = element(doc, "input", "synthesize-search-input", {
-      "data-synthesize-search-input": "",
-      type: "search",
-      placeholder: "Find a note to add"
-    });
-    input.name = "q";
-    const submit = element(doc, "button", "synthesize-search-submit");
-    submit.type = "submit";
-    submit.textContent = "Search";
-    form.append(labelled(doc, "synthesize-search-query", "Search notes", input), submit);
-    const status = element(doc, "p", "synthesize-search-status", {
-      "data-synthesize-search-status": "",
-      role: "status",
-      "aria-live": "polite"
-    });
-    const results = element(doc, "div", "synthesize-candidates", {
-      "data-synthesize-search-results": ""
-    });
-    section.append(heading, form, status, results);
-    return { section, form, input, results, status };
-  };
-  var buildDraftSection = (doc, config) => {
-    const section = element(doc, "section", "synthesize-section synthesize-draft", {
-      "aria-labelledby": "synthesize-draft-heading"
-    });
-    const heading = element(doc, "h3", "synthesize-section-heading");
-    heading.id = "synthesize-draft-heading";
-    heading.textContent = "New note";
-    const title = element(doc, "input", "synthesize-input", {
-      "data-synthesize-title": "",
-      type: "text"
-    });
-    title.name = "title";
-    const folder = element(doc, "input", "synthesize-input", {
-      "data-synthesize-folder": "",
-      type: "text",
-      placeholder: "Vault root"
-    });
-    folder.name = "folder";
-    const purpose = element(doc, "select", "synthesize-input", {
-      "data-synthesize-purpose": ""
-    });
-    purpose.name = "purpose";
-    for (const value of config.purposes) {
-      const option = doc.createElement("option");
-      option.value = value;
-      option.textContent = synthesisPurposeLabel(value);
-      purpose.appendChild(option);
-    }
-    const prompt = element(doc, "textarea", "synthesize-textarea", {
-      "data-synthesize-prompt": "",
-      rows: "3",
-      placeholder: "Optional question or angle for this research packet"
-    });
-    prompt.name = "prompt";
-    const draft = element(doc, "textarea", "synthesize-textarea synthesize-draft-body", {
-      "data-synthesize-draft": "",
-      rows: "12",
-      placeholder: "Write the note that says what these sources add up to"
-    });
-    draft.name = "draft";
-    const titleField = labelledWithError(
-      doc,
-      "synthesize-title",
-      "Title",
-      title,
-      "data-synthesize-title-error"
-    );
-    const folderField = labelledWithError(
-      doc,
-      "synthesize-folder",
-      "Folder",
-      folder,
-      "data-synthesize-folder-error"
-    );
-    const draftField = labelledWithError(
-      doc,
-      "synthesize-draft",
-      "Draft",
-      draft,
-      "data-synthesize-draft-error"
-    );
-    const grid = element(doc, "div", "synthesize-field-grid");
-    grid.append(titleField.wrapper, folderField.wrapper, labelled(doc, "synthesize-purpose", "Purpose", purpose));
-    section.append(
-      heading,
-      grid,
-      labelled(doc, "synthesize-prompt", "Prompt", prompt),
-      draftField.wrapper
-    );
-    return {
-      section,
-      title,
-      titleError: titleField.error,
-      folder,
-      folderError: folderField.error,
-      purpose,
-      prompt,
-      draft,
-      draftError: draftField.error
-    };
-  };
-  var buildGenerateSection = (doc, config) => {
-    const section = element(doc, "section", "synthesize-section synthesize-generate", {
-      "aria-labelledby": "synthesize-generate-heading"
-    });
-    const heading = element(doc, "h3", "synthesize-section-heading");
-    heading.id = "synthesize-generate-heading";
-    heading.textContent = "Generated candidate";
-    const intro = element(doc, "p", "synthesize-section-intro");
-    intro.textContent = config.agentEnabled ? "Generation sends the prepared context packet to your configured [agent].command. The candidate is shown here and never replaces your draft on its own." : "Generation is unavailable until [agent].command is configured. Everything else on this page works without an agent.";
-    const actions = element(doc, "div", "synthesize-generate-actions");
-    const generate = element(doc, "button", "synthesize-action", {
-      "data-synthesize-generate": ""
-    });
-    generate.type = "button";
-    generate.textContent = "Generate draft";
-    generate.disabled = true;
-    actions.appendChild(generate);
-    const status = element(doc, "p", "synthesize-generate-status", {
-      "data-synthesize-generate-status": "",
-      role: "status",
-      "aria-live": "polite"
-    });
-    const panel = element(doc, "article", "synthesize-candidate-panel", {
-      "data-synthesize-candidate-panel": "",
-      "aria-labelledby": "synthesize-generate-heading"
-    });
-    panel.hidden = true;
-    panel.tabIndex = -1;
-    const rendered = element(doc, "div", "synthesize-candidate-rendered", {
-      "data-synthesize-candidate-rendered": ""
-    });
-    const markdownWrapper = element(doc, "details", "synthesize-candidate-markdown");
-    const markdownSummary = doc.createElement("summary");
-    markdownSummary.textContent = "Candidate Markdown";
-    const markdown = element(doc, "pre", "synthesize-packet-body", {
-      "data-synthesize-candidate-markdown": "",
-      tabindex: "0"
-    });
-    markdownWrapper.append(markdownSummary, markdown);
-    const candidateActions = element(doc, "div", "synthesize-candidate-actions");
-    const replace = element(doc, "button", "synthesize-action", {
-      "data-synthesize-candidate-replace": ""
-    });
-    replace.type = "button";
-    replace.textContent = "Replace draft";
-    const append = element(doc, "button", "synthesize-action", {
-      "data-synthesize-candidate-append": ""
-    });
-    append.type = "button";
-    append.textContent = "Append to draft";
-    const copy = element(doc, "button", "synthesize-action", {
-      "data-synthesize-candidate-copy": ""
-    });
-    copy.type = "button";
-    copy.textContent = "Copy candidate";
-    const dismiss = element(doc, "button", "synthesize-action is-quiet", {
-      "data-synthesize-candidate-dismiss": ""
-    });
-    dismiss.type = "button";
-    dismiss.textContent = "Dismiss candidate";
-    candidateActions.append(replace, append, copy, dismiss);
-    panel.append(rendered, markdownWrapper, candidateActions);
-    section.append(heading, intro, actions, status, panel);
-    return { section, generate, status, panel, rendered, markdown, replace, append, copy, dismiss };
-  };
-  var buildCreateSection = (doc) => {
-    const section = element(doc, "section", "synthesize-section synthesize-create", {
-      "aria-labelledby": "synthesize-create-heading"
-    });
-    const heading = element(doc, "h3", "synthesize-section-heading");
-    heading.id = "synthesize-create-heading";
-    heading.textContent = "Create note";
-    const destination = element(doc, "p", "synthesize-destination", {
-      "data-synthesize-destination": ""
-    });
-    const actions = element(doc, "div", "synthesize-create-actions");
-    const preview = element(doc, "button", "synthesize-action is-primary", {
-      "data-synthesize-preview": ""
-    });
-    preview.type = "button";
-    preview.textContent = "Preview note";
-    const apply = element(doc, "button", "synthesize-action", { "data-synthesize-apply": "" });
-    apply.type = "button";
-    apply.textContent = "Create note";
-    apply.disabled = true;
-    actions.append(preview, apply);
-    const status = element(doc, "p", "synthesize-preview-status", {
-      "data-synthesize-preview-status": "",
-      role: "status",
-      "aria-live": "polite"
-    });
-    const panel = element(doc, "div", "synthesize-preview-panel", {
-      "data-synthesize-preview-panel": ""
-    });
-    panel.hidden = true;
-    panel.tabIndex = -1;
-    const previewDestination = element(doc, "p", "synthesize-preview-destination", {
-      "data-synthesize-preview-destination": ""
-    });
-    const expiry = element(doc, "p", "synthesize-preview-expiry", {
-      "data-synthesize-preview-expiry": ""
-    });
-    const rendered = element(doc, "div", "synthesize-preview-rendered", {
-      "data-synthesize-preview-rendered": ""
-    });
-    const markdownWrapper = element(doc, "details", "synthesize-preview-markdown");
-    const markdownSummary = doc.createElement("summary");
-    markdownSummary.textContent = "Note Markdown";
-    const markdown = element(doc, "pre", "synthesize-packet-body", {
-      "data-synthesize-preview-markdown": "",
-      tabindex: "0"
-    });
-    markdownWrapper.append(markdownSummary, markdown);
-    const sourcesHeading = element(doc, "h4", "synthesize-manifest-heading");
-    sourcesHeading.textContent = "Sources";
-    const sources = element(doc, "ol", "synthesize-preview-sources", {
-      "data-synthesize-preview-sources": ""
-    });
-    panel.append(previewDestination, expiry, rendered, markdownWrapper, sourcesHeading, sources);
-    section.append(heading, destination, actions, status, panel);
-    return {
-      section,
-      destination,
-      preview,
-      apply,
-      status,
-      panel,
-      previewDestination,
-      expiry,
-      rendered,
-      markdown,
-      sources
-    };
-  };
-  var buildContextSection = (doc) => {
-    const section = element(doc, "section", "synthesize-section synthesize-context", {
-      "aria-labelledby": "synthesize-context-heading"
-    });
-    const heading = element(doc, "h3", "synthesize-section-heading");
-    heading.id = "synthesize-context-heading";
-    heading.textContent = "Context packet";
-    const actions = element(doc, "div", "synthesize-context-actions");
-    const prepare = element(doc, "button", "synthesize-action is-primary", {
-      "data-synthesize-prepare": ""
-    });
-    prepare.type = "button";
-    prepare.textContent = "Prepare context";
-    const copy = element(doc, "button", "synthesize-action", { "data-synthesize-copy": "" });
-    copy.type = "button";
-    copy.textContent = "Copy context";
-    copy.disabled = true;
-    const discard = element(doc, "button", "synthesize-action is-quiet", {
-      "data-synthesize-discard": ""
-    });
-    discard.type = "button";
-    discard.textContent = "Discard saved work";
-    actions.append(prepare, copy, discard);
-    const status = element(doc, "p", "synthesize-context-status", {
-      "data-synthesize-context-status": "",
-      role: "status",
-      "aria-live": "polite"
-    });
-    const summary = element(doc, "p", "synthesize-context-summary", {
-      "data-synthesize-context-summary": ""
-    });
-    const manifest = element(doc, "div", "synthesize-manifest", {
-      "data-synthesize-manifest": ""
-    });
-    const packetWrapper = element(doc, "details", "synthesize-packet");
-    const packetSummary = doc.createElement("summary");
-    packetSummary.textContent = "Packet Markdown";
-    const packet = element(doc, "pre", "synthesize-packet-body", {
-      "data-synthesize-packet": "",
-      tabindex: "0"
-    });
-    packetWrapper.append(packetSummary, packet);
-    section.append(heading, actions, status, summary, manifest, packetWrapper);
-    return { section, prepare, copy, discard, status, summary, manifest, packet };
-  };
-  var createSynthesisView = (mount, config) => {
-    const doc = mount.ownerDocument;
-    const warning = element(doc, "p", "synthesize-warning", {
-      "data-synthesize-warning": "",
-      role: "status",
-      "aria-live": "polite"
-    });
-    warning.hidden = true;
-    const sources = buildSourcesSection(doc);
-    const suggestions = buildSuggestionsSection(doc);
-    const search = buildSearchSection(doc);
-    const draft = buildDraftSection(doc, config);
-    const context = buildContextSection(doc);
-    const generate = buildGenerateSection(doc, config);
-    const create = buildCreateSection(doc);
-    const columns = element(doc, "div", "synthesize-columns");
-    const left = element(doc, "div", "synthesize-column");
-    left.append(sources.section, suggestions.section, search.section);
-    const right = element(doc, "div", "synthesize-column");
-    right.append(draft.section, context.section, generate.section, create.section);
-    columns.append(left, right);
-    mount.replaceChildren(warning, columns);
-    return {
-      root: mount,
-      warning,
-      sourceList: sources.list,
-      selectionStatus: sources.status,
-      suggestionTabs: suggestions.tabs,
-      suggestionPanels: suggestions.panels,
-      suggestionResults: suggestions.results,
-      suggestionStatus: suggestions.status,
-      searchForm: search.form,
-      searchInput: search.input,
-      searchResults: search.results,
-      searchStatus: search.status,
-      titleInput: draft.title,
-      titleError: draft.titleError,
-      folderInput: draft.folder,
-      folderError: draft.folderError,
-      purposeSelect: draft.purpose,
-      promptInput: draft.prompt,
-      draftInput: draft.draft,
-      draftError: draft.draftError,
-      prepareButton: context.prepare,
-      copyButton: context.copy,
-      discardButton: context.discard,
-      contextStatus: context.status,
-      contextSummary: context.summary,
-      manifest: context.manifest,
-      packet: context.packet,
-      generateButton: generate.generate,
-      generateStatus: generate.status,
-      candidatePanel: generate.panel,
-      candidateRendered: generate.rendered,
-      candidateMarkdown: generate.markdown,
-      candidateReplaceButton: generate.replace,
-      candidateAppendButton: generate.append,
-      candidateCopyButton: generate.copy,
-      candidateDismissButton: generate.dismiss,
-      destination: create.destination,
-      previewButton: create.preview,
-      applyButton: create.apply,
-      previewStatus: create.status,
-      previewPanel: create.panel,
-      previewDestination: create.previewDestination,
-      previewExpiry: create.expiry,
-      previewRendered: create.rendered,
-      previewMarkdown: create.markdown,
-      previewSources: create.sources
-    };
-  };
+
+  // internal/web/static_src/synthesize-render.ts
   var selectSynthesisSuggestionMode = (view, activeMode) => {
     for (const definition of relatedModeDefinitions) {
       const selected = definition.mode === activeMode;
@@ -11278,6 +10844,864 @@ var BrainNotesApp = (() => {
     view.previewSources.replaceChildren(...rows);
   };
 
+  // internal/web/static_src/synthesize-view-sections.ts
+  var buildSourcesSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-sources", {
+      "aria-labelledby": "synthesize-sources-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-sources-heading";
+    heading.textContent = "Sources";
+    const intro = element(doc, "p", "synthesize-section-intro");
+    intro.textContent = "The anchor is always first. Drag a handle or press Up and Down on it to reorder supporting notes.";
+    const list = element(doc, "ol", "synthesize-source-list", {
+      "data-synthesize-source-list": ""
+    });
+    const status = element(doc, "p", "synthesize-selection-status", {
+      "data-synthesize-selection-status": ""
+    });
+    status.tabIndex = -1;
+    section.append(heading, intro, list, status);
+    return { section, list, status };
+  };
+  var buildSuggestionsSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-suggestions", {
+      "aria-labelledby": "synthesize-suggestions-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-suggestions-heading";
+    heading.textContent = "Suggested notes";
+    const tablist = element(doc, "div", "synthesize-tab-list", {
+      role: "tablist",
+      "aria-label": "Suggestion modes"
+    });
+    const status = element(doc, "p", "synthesize-suggestions-status", {
+      "data-synthesize-suggestions-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const panelsContainer = element(doc, "div", "synthesize-suggestion-panels");
+    const tabs = {};
+    const panels = {};
+    const results = {};
+    for (const definition of relatedModeDefinitions) {
+      const active = definition.mode === "balanced";
+      const tab = element(doc, "button", "synthesize-tab", {
+        role: "tab",
+        "aria-controls": suggestionID("panel", definition.mode),
+        "aria-selected": active ? "true" : "false",
+        "data-synthesize-tab": definition.mode
+      });
+      tab.type = "button";
+      tab.id = suggestionID("tab", definition.mode);
+      tab.tabIndex = active ? 0 : -1;
+      tab.textContent = definition.label;
+      tablist.appendChild(tab);
+      const panel = element(doc, "div", "synthesize-suggestion-panel", {
+        role: "tabpanel",
+        "aria-labelledby": suggestionID("tab", definition.mode),
+        "data-synthesize-panel": definition.mode
+      });
+      panel.id = suggestionID("panel", definition.mode);
+      panel.hidden = !active;
+      const description = element(doc, "p", "synthesize-tab-description");
+      description.textContent = definition.description;
+      const list = element(doc, "div", "synthesize-candidates", {
+        "data-synthesize-suggestions": definition.mode
+      });
+      panel.append(description, list);
+      panelsContainer.appendChild(panel);
+      tabs[definition.mode] = tab;
+      panels[definition.mode] = panel;
+      results[definition.mode] = list;
+    }
+    section.append(heading, tablist, status, panelsContainer);
+    return { section, tabs, panels, results, status };
+  };
+  var buildSearchSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-search", {
+      "aria-labelledby": "synthesize-search-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-search-heading";
+    heading.textContent = "Search the vault";
+    const form = element(doc, "form", "synthesize-search-form", {
+      "data-synthesize-search-form": "",
+      role: "search"
+    });
+    const input = element(doc, "input", "synthesize-search-input", {
+      "data-synthesize-search-input": "",
+      type: "search",
+      placeholder: "Find a note to add"
+    });
+    input.name = "q";
+    const submit = element(doc, "button", "synthesize-search-submit");
+    submit.type = "submit";
+    submit.textContent = "Search";
+    form.append(labelled(doc, "synthesize-search-query", "Search notes", input), submit);
+    const status = element(doc, "p", "synthesize-search-status", {
+      "data-synthesize-search-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const results = element(doc, "div", "synthesize-candidates", {
+      "data-synthesize-search-results": ""
+    });
+    section.append(heading, form, status, results);
+    return { section, form, input, results, status };
+  };
+  var buildDraftSection = (doc, config) => {
+    const section = element(doc, "section", "synthesize-section synthesize-draft", {
+      "aria-labelledby": "synthesize-draft-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-draft-heading";
+    heading.textContent = "New note";
+    const title = element(doc, "input", "synthesize-input", {
+      "data-synthesize-title": "",
+      type: "text"
+    });
+    title.name = "title";
+    const folder = element(doc, "input", "synthesize-input", {
+      "data-synthesize-folder": "",
+      type: "text",
+      placeholder: "Vault root"
+    });
+    folder.name = "folder";
+    const purpose = element(doc, "select", "synthesize-input", {
+      "data-synthesize-purpose": ""
+    });
+    purpose.name = "purpose";
+    for (const value of config.purposes) {
+      const option = doc.createElement("option");
+      option.value = value;
+      option.textContent = synthesisPurposeLabel(value);
+      purpose.appendChild(option);
+    }
+    const prompt = element(doc, "textarea", "synthesize-textarea", {
+      "data-synthesize-prompt": "",
+      rows: "3",
+      placeholder: "Optional question or angle for this research packet"
+    });
+    prompt.name = "prompt";
+    const draft = element(doc, "textarea", "synthesize-textarea synthesize-draft-body", {
+      "data-synthesize-draft": "",
+      rows: "12",
+      placeholder: "Write the note that says what these sources add up to"
+    });
+    draft.name = "draft";
+    const titleField = labelledWithError(
+      doc,
+      "synthesize-title",
+      "Title",
+      title,
+      "data-synthesize-title-error"
+    );
+    const folderField = labelledWithError(
+      doc,
+      "synthesize-folder",
+      "Folder",
+      folder,
+      "data-synthesize-folder-error"
+    );
+    const draftField = labelledWithError(
+      doc,
+      "synthesize-draft",
+      "Draft",
+      draft,
+      "data-synthesize-draft-error"
+    );
+    const grid = element(doc, "div", "synthesize-field-grid");
+    grid.append(titleField.wrapper, folderField.wrapper, labelled(doc, "synthesize-purpose", "Purpose", purpose));
+    section.append(
+      heading,
+      grid,
+      labelled(doc, "synthesize-prompt", "Prompt", prompt),
+      draftField.wrapper
+    );
+    return {
+      section,
+      title,
+      titleError: titleField.error,
+      folder,
+      folderError: folderField.error,
+      purpose,
+      prompt,
+      draft,
+      draftError: draftField.error
+    };
+  };
+
+  // internal/web/static_src/synthesize-view-panels.ts
+  var buildGenerateSection = (doc, config) => {
+    const section = element(doc, "section", "synthesize-section synthesize-generate", {
+      "aria-labelledby": "synthesize-generate-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-generate-heading";
+    heading.textContent = "Generated candidate";
+    const intro = element(doc, "p", "synthesize-section-intro");
+    intro.textContent = config.agentEnabled ? "Generation sends the prepared context packet to your configured [agent].command. The candidate is shown here and never replaces your draft on its own." : "Generation is unavailable until [agent].command is configured. Everything else on this page works without an agent.";
+    const actions = element(doc, "div", "synthesize-generate-actions");
+    const generate = element(doc, "button", "synthesize-action", {
+      "data-synthesize-generate": ""
+    });
+    generate.type = "button";
+    generate.textContent = "Generate draft";
+    generate.disabled = true;
+    actions.appendChild(generate);
+    const status = element(doc, "p", "synthesize-generate-status", {
+      "data-synthesize-generate-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const panel = element(doc, "article", "synthesize-candidate-panel", {
+      "data-synthesize-candidate-panel": "",
+      "aria-labelledby": "synthesize-generate-heading"
+    });
+    panel.hidden = true;
+    panel.tabIndex = -1;
+    const rendered = element(doc, "div", "synthesize-candidate-rendered", {
+      "data-synthesize-candidate-rendered": ""
+    });
+    const markdownWrapper = element(doc, "details", "synthesize-candidate-markdown");
+    const markdownSummary = doc.createElement("summary");
+    markdownSummary.textContent = "Candidate Markdown";
+    const markdown = element(doc, "pre", "synthesize-packet-body", {
+      "data-synthesize-candidate-markdown": "",
+      tabindex: "0"
+    });
+    markdownWrapper.append(markdownSummary, markdown);
+    const candidateActions = element(doc, "div", "synthesize-candidate-actions");
+    const replace = element(doc, "button", "synthesize-action", {
+      "data-synthesize-candidate-replace": ""
+    });
+    replace.type = "button";
+    replace.textContent = "Replace draft";
+    const append = element(doc, "button", "synthesize-action", {
+      "data-synthesize-candidate-append": ""
+    });
+    append.type = "button";
+    append.textContent = "Append to draft";
+    const copy = element(doc, "button", "synthesize-action", {
+      "data-synthesize-candidate-copy": ""
+    });
+    copy.type = "button";
+    copy.textContent = "Copy candidate";
+    const dismiss = element(doc, "button", "synthesize-action is-quiet", {
+      "data-synthesize-candidate-dismiss": ""
+    });
+    dismiss.type = "button";
+    dismiss.textContent = "Dismiss candidate";
+    candidateActions.append(replace, append, copy, dismiss);
+    panel.append(rendered, markdownWrapper, candidateActions);
+    section.append(heading, intro, actions, status, panel);
+    return { section, generate, status, panel, rendered, markdown, replace, append, copy, dismiss };
+  };
+  var buildCreateSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-create", {
+      "aria-labelledby": "synthesize-create-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-create-heading";
+    heading.textContent = "Create note";
+    const destination = element(doc, "p", "synthesize-destination", {
+      "data-synthesize-destination": ""
+    });
+    const actions = element(doc, "div", "synthesize-create-actions");
+    const preview = element(doc, "button", "synthesize-action is-primary", {
+      "data-synthesize-preview": ""
+    });
+    preview.type = "button";
+    preview.textContent = "Preview note";
+    const apply = element(doc, "button", "synthesize-action", { "data-synthesize-apply": "" });
+    apply.type = "button";
+    apply.textContent = "Create note";
+    apply.disabled = true;
+    actions.append(preview, apply);
+    const status = element(doc, "p", "synthesize-preview-status", {
+      "data-synthesize-preview-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const panel = element(doc, "div", "synthesize-preview-panel", {
+      "data-synthesize-preview-panel": ""
+    });
+    panel.hidden = true;
+    panel.tabIndex = -1;
+    const previewDestination = element(doc, "p", "synthesize-preview-destination", {
+      "data-synthesize-preview-destination": ""
+    });
+    const expiry = element(doc, "p", "synthesize-preview-expiry", {
+      "data-synthesize-preview-expiry": ""
+    });
+    const rendered = element(doc, "div", "synthesize-preview-rendered", {
+      "data-synthesize-preview-rendered": ""
+    });
+    const markdownWrapper = element(doc, "details", "synthesize-preview-markdown");
+    const markdownSummary = doc.createElement("summary");
+    markdownSummary.textContent = "Note Markdown";
+    const markdown = element(doc, "pre", "synthesize-packet-body", {
+      "data-synthesize-preview-markdown": "",
+      tabindex: "0"
+    });
+    markdownWrapper.append(markdownSummary, markdown);
+    const sourcesHeading = element(doc, "h4", "synthesize-manifest-heading");
+    sourcesHeading.textContent = "Sources";
+    const sources = element(doc, "ol", "synthesize-preview-sources", {
+      "data-synthesize-preview-sources": ""
+    });
+    panel.append(previewDestination, expiry, rendered, markdownWrapper, sourcesHeading, sources);
+    section.append(heading, destination, actions, status, panel);
+    return {
+      section,
+      destination,
+      preview,
+      apply,
+      status,
+      panel,
+      previewDestination,
+      expiry,
+      rendered,
+      markdown,
+      sources
+    };
+  };
+  var buildContextSection = (doc) => {
+    const section = element(doc, "section", "synthesize-section synthesize-context", {
+      "aria-labelledby": "synthesize-context-heading"
+    });
+    const heading = element(doc, "h3", "synthesize-section-heading");
+    heading.id = "synthesize-context-heading";
+    heading.textContent = "Context packet";
+    const actions = element(doc, "div", "synthesize-context-actions");
+    const prepare = element(doc, "button", "synthesize-action is-primary", {
+      "data-synthesize-prepare": ""
+    });
+    prepare.type = "button";
+    prepare.textContent = "Prepare context";
+    const copy = element(doc, "button", "synthesize-action", { "data-synthesize-copy": "" });
+    copy.type = "button";
+    copy.textContent = "Copy context";
+    copy.disabled = true;
+    const discard = element(doc, "button", "synthesize-action is-quiet", {
+      "data-synthesize-discard": ""
+    });
+    discard.type = "button";
+    discard.textContent = "Discard saved work";
+    actions.append(prepare, copy, discard);
+    const status = element(doc, "p", "synthesize-context-status", {
+      "data-synthesize-context-status": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    const summary = element(doc, "p", "synthesize-context-summary", {
+      "data-synthesize-context-summary": ""
+    });
+    const manifest = element(doc, "div", "synthesize-manifest", {
+      "data-synthesize-manifest": ""
+    });
+    const packetWrapper = element(doc, "details", "synthesize-packet");
+    const packetSummary = doc.createElement("summary");
+    packetSummary.textContent = "Packet Markdown";
+    const packet = element(doc, "pre", "synthesize-packet-body", {
+      "data-synthesize-packet": "",
+      tabindex: "0"
+    });
+    packetWrapper.append(packetSummary, packet);
+    section.append(heading, actions, status, summary, manifest, packetWrapper);
+    return { section, prepare, copy, discard, status, summary, manifest, packet };
+  };
+
+  // internal/web/static_src/synthesize-view.ts
+  var createSynthesisView = (mount, config) => {
+    const doc = mount.ownerDocument;
+    const warning = element(doc, "p", "synthesize-warning", {
+      "data-synthesize-warning": "",
+      role: "status",
+      "aria-live": "polite"
+    });
+    warning.hidden = true;
+    const sources = buildSourcesSection(doc);
+    const suggestions = buildSuggestionsSection(doc);
+    const search = buildSearchSection(doc);
+    const draft = buildDraftSection(doc, config);
+    const context = buildContextSection(doc);
+    const generate = buildGenerateSection(doc, config);
+    const create = buildCreateSection(doc);
+    const columns = element(doc, "div", "synthesize-columns");
+    const left = element(doc, "div", "synthesize-column");
+    left.append(sources.section, suggestions.section, search.section);
+    const right = element(doc, "div", "synthesize-column");
+    right.append(draft.section, context.section, generate.section, create.section);
+    columns.append(left, right);
+    mount.replaceChildren(warning, columns);
+    return {
+      root: mount,
+      warning,
+      sourceList: sources.list,
+      selectionStatus: sources.status,
+      suggestionTabs: suggestions.tabs,
+      suggestionPanels: suggestions.panels,
+      suggestionResults: suggestions.results,
+      suggestionStatus: suggestions.status,
+      searchForm: search.form,
+      searchInput: search.input,
+      searchResults: search.results,
+      searchStatus: search.status,
+      titleInput: draft.title,
+      titleError: draft.titleError,
+      folderInput: draft.folder,
+      folderError: draft.folderError,
+      purposeSelect: draft.purpose,
+      promptInput: draft.prompt,
+      draftInput: draft.draft,
+      draftError: draft.draftError,
+      prepareButton: context.prepare,
+      copyButton: context.copy,
+      discardButton: context.discard,
+      contextStatus: context.status,
+      contextSummary: context.summary,
+      manifest: context.manifest,
+      packet: context.packet,
+      generateButton: generate.generate,
+      generateStatus: generate.status,
+      candidatePanel: generate.panel,
+      candidateRendered: generate.rendered,
+      candidateMarkdown: generate.markdown,
+      candidateReplaceButton: generate.replace,
+      candidateAppendButton: generate.append,
+      candidateCopyButton: generate.copy,
+      candidateDismissButton: generate.dismiss,
+      destination: create.destination,
+      previewButton: create.preview,
+      applyButton: create.apply,
+      previewStatus: create.status,
+      previewPanel: create.panel,
+      previewDestination: create.previewDestination,
+      previewExpiry: create.expiry,
+      previewRendered: create.rendered,
+      previewMarkdown: create.markdown,
+      previewSources: create.sources
+    };
+  };
+
+  // internal/web/static_src/synthesize-storage.ts
+  var SYNTHESIS_STORAGE_VERSION = 2;
+  var synthesisStorageKey = (vaultID, anchorKey) => `bn.synthesize.${vaultID}.${anchorKey}`;
+  var safeSynthesisStorage = (view) => {
+    if (!view) {
+      return null;
+    }
+    try {
+      return view.localStorage;
+    } catch {
+      return null;
+    }
+  };
+  var readText2 = (value) => typeof value === "string" ? value : "";
+  var readKeys = (value) => Array.isArray(value) ? value.flatMap((item) => {
+    const key = typeof item === "string" ? item.trim() : "";
+    return key === "" ? [] : [key];
+  }) : [];
+  var synthesisStateFromModel = (model) => ({
+    sources: model.sources.map((source) => source.key),
+    title: model.title,
+    folder: model.folder,
+    purpose: model.purpose,
+    prompt: model.prompt,
+    draft: model.draft,
+    candidate: model.candidate ? model.candidate.markdown : ""
+  });
+  var readSynthesisState = (storage, key) => {
+    if (!storage) {
+      return null;
+    }
+    let raw;
+    try {
+      raw = storage.getItem(key);
+    } catch {
+      return null;
+    }
+    if (!raw) {
+      return null;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const record = asRecord(parsed);
+    if (!record || readCount(record.version) !== SYNTHESIS_STORAGE_VERSION) {
+      return null;
+    }
+    return {
+      sources: readKeys(record.sources),
+      title: readText2(record.title),
+      folder: readText2(record.folder),
+      purpose: readText2(record.purpose),
+      prompt: readText2(record.prompt),
+      draft: readText2(record.draft),
+      candidate: readText2(record.candidate)
+    };
+  };
+  var writeSynthesisState = (storage, key, state) => {
+    if (!storage) {
+      return false;
+    }
+    try {
+      storage.setItem(key, JSON.stringify({ version: SYNTHESIS_STORAGE_VERSION, ...state }));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  var clearSynthesisState = (storage, key) => {
+    if (!storage) {
+      return false;
+    }
+    try {
+      storage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // internal/web/static_src/synthesize-runtime.ts
+  var errorMessage2 = (error, fallback) => error instanceof Error && error.message !== "" ? error.message : fallback;
+  var errorCode = (error) => error instanceof SynthesisRequestError ? error.code : "";
+  var modeLabel = (mode) => relatedModeDefinitions.find((definition) => definition.mode === mode)?.label || mode;
+  var SUGGESTIONS_EMPTY = "No suggestions are available in this mode.";
+  var SEARCH_EMPTY = "No notes matched that search.";
+  var CONTEXT_GONE = "The context packet has expired or is no longer valid. Rebuild it, then preview again. Your draft is unchanged.";
+  var CONTEXT_SUPERSEDED = "The sources, purpose, or prompt changed while that packet was building, so it was discarded. Prepare the context again.";
+  var PREVIEW_SUPERSEDED = "The note changed while that preview was building, so it was discarded. Preview again.";
+  var DISCLOSURE = [
+    "Generate sends the prepared context packet to your configured [agent].command.",
+    "The packet contains the anchor note's complete body, exact excerpts from every selected source, and your prompt.",
+    "Your prompt and that packet are retained in server memory until the context expires, is evicted to keep memory bounded, or the server restarts, and are never written to disk.",
+    "The stored packet is sent to the command only after you accept this notice. The generated candidate is not stored on the server and never enters your draft on its own. Continue?"
+  ].join("\n");
+  var DISCARD_CONFIRMATION = "Discard the saved sources, draft, and generated candidate for this note? This cannot be undone.";
+  var SAVED_STATE_STUCK = "This browser refused to delete the saved sources and draft for this note, so they will come back the next time you open the workbench.";
+  var createSynthesisRuntime = (root, mount, deps) => {
+    const config = readSynthesisConfig(root);
+    const model = createSynthesisModel(config);
+    const view = createSynthesisView(mount, config);
+    const storage = deps.storage === void 0 ? safeSynthesisStorage(root.ownerDocument.defaultView) : deps.storage;
+    const storageKey = synthesisStorageKey(config.vaultID, config.anchor.key);
+    const statusEl = queryElement(root, "[data-synthesize-status]", HTMLElement);
+    const fallback = queryElement(root, "[data-synthesize-fallback]", HTMLElement);
+    if (fallback) {
+      fallback.hidden = true;
+    }
+    let storageWarned = false;
+    const runtime = {
+      config,
+      model,
+      view,
+      fetcher: deps.fetch || ((input, init) => fetch(input, init)),
+      clipboard: deps.clipboard === void 0 ? (typeof navigator !== "undefined" ? navigator.clipboard : void 0) || null : deps.clipboard,
+      confirmer: deps.confirm || ((message) => window.confirm(message)),
+      redirect: deps.redirect || ((path) => window.location.assign(path)),
+      candidates: /* @__PURE__ */ new Map(),
+      suggestionEntries: { balanced: null, rediscover: null, connect: null },
+      searchEntries: null,
+      generating: false,
+      previewing: false,
+      applying: false,
+      showFieldErrors: false,
+      announce: (message, kind = "") => {
+        setStatusText(statusEl, message, kind);
+      },
+      persist: () => {
+        if (writeSynthesisState(storage, storageKey, synthesisStateFromModel(model))) {
+          return;
+        }
+        if (storage === null || storageWarned) {
+          return;
+        }
+        storageWarned = true;
+        setSynthesisWarning(
+          view,
+          "This browser refused to save your work, so leaving the page will lose the current selection and draft."
+        );
+      },
+      // An absent storage never held anything, so only a refused removeItem leaves
+      // saved work behind for a later visit to restore.
+      clearSaved: () => clearSynthesisState(storage, storageKey) || storage === null,
+      readSaved: () => readSynthesisState(storage, storageKey),
+      rememberCandidates: (entries) => {
+        for (const entry of entries) {
+          runtime.candidates.set(entry.key, entry);
+        }
+      },
+      renderCandidatePanels: () => {
+        const selected = synthesisSelectedKeys(model);
+        for (const definition of relatedModeDefinitions) {
+          const entries = runtime.suggestionEntries[definition.mode];
+          if (entries === null) {
+            continue;
+          }
+          renderSynthesisCandidates(
+            view.suggestionResults[definition.mode],
+            entries,
+            selected,
+            config.anchor.key,
+            false,
+            SUGGESTIONS_EMPTY
+          );
+        }
+        if (runtime.searchEntries !== null) {
+          renderSynthesisCandidates(
+            view.searchResults,
+            runtime.searchEntries,
+            selected,
+            config.anchor.key,
+            true,
+            SEARCH_EMPTY
+          );
+        }
+      },
+      renderFieldErrors: () => {
+        const show = runtime.showFieldErrors;
+        setSynthesisFieldError(view.titleError, show ? synthesisTitleError(model.title) : "");
+        setSynthesisFieldError(view.folderError, show ? synthesisFolderError(model.folder) : "");
+        setSynthesisFieldError(view.draftError, show ? synthesisDraftError(model.draft) : "");
+      },
+      render: () => {
+        renderSynthesisSources(view, model, config);
+        renderSynthesisContext(view, model);
+        renderSynthesisCandidate(view, model);
+        renderSynthesisDestination(view, model);
+        renderSynthesisPreview(view, model);
+        runtime.renderFieldErrors();
+        view.copyButton.disabled = model.context === null || !hasWritableClipboard(runtime.clipboard);
+        view.candidateCopyButton.disabled = !hasWritableClipboard(runtime.clipboard);
+        view.generateButton.disabled = model.context === null || runtime.generating;
+        view.previewButton.disabled = runtime.previewing || runtime.applying;
+        view.applyButton.disabled = model.preview === null || runtime.applying;
+      },
+      // A context that the server no longer recognizes cannot produce a candidate
+      // or a receipt, but it says nothing about the text the user wrote, so only
+      // the server-side artifacts are dropped.
+      forgetContext: (target) => {
+        invalidateSynthesisContext(model);
+        model.contextStale = true;
+        runtime.render();
+        setStatusText(target, CONTEXT_GONE, "is-error");
+      }
+    };
+    return runtime;
+  };
+
+  // internal/web/static_src/synthesize-context-actions.ts
+  var createSynthesisContextActions = (runtime) => {
+    const { config, model, view } = runtime;
+    let disclosureAccepted = false;
+    const prepareContext = async () => {
+      if (config.csrfToken === "") {
+        setStatusText(view.contextStatus, "Context preparation is unavailable.", "is-error");
+        return;
+      }
+      view.prepareButton.disabled = true;
+      setStatusText(view.contextStatus, "Building context packet\u2026", "is-loading");
+      const requested = synthesisContextSignature(model);
+      const superseded = () => synthesisContextSignature(model) !== requested;
+      try {
+        const response = await requestSynthesisContext(runtime.fetcher, config.contextEndpoint, {
+          source: config.anchor.key,
+          candidates: synthesisSelectedKeys(model),
+          purpose: model.purpose,
+          prompt: model.prompt,
+          token: config.csrfToken
+        });
+        if (superseded()) {
+          setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
+          return;
+        }
+        invalidateSynthesisPreview(model);
+        model.context = response;
+        model.contextStale = false;
+        runtime.render();
+        setStatusText(
+          view.contextStatus,
+          `Context ready. It expires at ${response.expires_at || "the server's timeout"}.`,
+          "is-success"
+        );
+      } catch (error) {
+        if (superseded()) {
+          setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
+          return;
+        }
+        invalidateSynthesisContext(model);
+        model.contextStale = true;
+        runtime.render();
+        setStatusText(
+          view.contextStatus,
+          errorMessage2(error, "The context packet could not be built."),
+          "is-error"
+        );
+      } finally {
+        view.prepareButton.disabled = false;
+      }
+    };
+    const copyContext = async () => {
+      const context = model.context;
+      if (!context) {
+        setStatusText(view.contextStatus, "Prepare a context packet first.", "is-error");
+        return;
+      }
+      if (!hasWritableClipboard(runtime.clipboard)) {
+        setStatusText(
+          view.contextStatus,
+          "Clipboard unavailable. Select the packet Markdown below and copy it manually.",
+          "is-error"
+        );
+        return;
+      }
+      view.copyButton.disabled = true;
+      try {
+        await runtime.clipboard.writeText(context.markdown);
+        setStatusText(view.contextStatus, "Context packet copied.", "is-success");
+      } catch {
+        setStatusText(
+          view.contextStatus,
+          "Copy failed. Select the packet Markdown below and copy it manually.",
+          "is-error"
+        );
+      } finally {
+        view.copyButton.disabled = false;
+      }
+    };
+    const generate = async () => {
+      if (model.context === null) {
+        setStatusText(view.generateStatus, "Prepare a context packet first.", "is-error");
+        return;
+      }
+      if (runtime.generating) {
+        return;
+      }
+      if (config.agentEnabled && !disclosureAccepted) {
+        disclosureAccepted = runtime.confirmer(DISCLOSURE);
+        if (!disclosureAccepted) {
+          setStatusText(view.generateStatus, "Generation canceled.", "");
+          return;
+        }
+      }
+      runtime.generating = true;
+      view.generateButton.disabled = true;
+      view.candidatePanel.setAttribute("aria-busy", "true");
+      setStatusText(view.generateStatus, "Generating a candidate draft\u2026", "is-loading");
+      try {
+        const response = await requestSynthesisGenerate(runtime.fetcher, config.generateEndpoint, {
+          context_id: model.context.context_id,
+          token: config.csrfToken
+        });
+        if (!response.enabled) {
+          setStatusText(
+            view.generateStatus,
+            response.message || "Generation is unavailable until [agent].command is configured.",
+            "is-empty"
+          );
+          return;
+        }
+        model.candidate = { markdown: response.output, html: response.rendered_html };
+        runtime.render();
+        runtime.persist();
+        setStatusText(
+          view.generateStatus,
+          "Candidate ready. Your draft is unchanged until you replace or append it.",
+          "is-success"
+        );
+        view.candidatePanel.focus({ preventScroll: true });
+      } catch (error) {
+        if (errorCode(error) === "not_found") {
+          runtime.forgetContext(view.generateStatus);
+          return;
+        }
+        setStatusText(
+          view.generateStatus,
+          errorMessage2(error, "The generation command failed."),
+          "is-error"
+        );
+      } finally {
+        runtime.generating = false;
+        view.candidatePanel.setAttribute("aria-busy", "false");
+        view.generateButton.disabled = model.context === null;
+      }
+    };
+    const useCandidate = (mode) => {
+      const candidate = model.candidate;
+      if (candidate === null) {
+        setStatusText(view.generateStatus, "There is no candidate to use.", "is-error");
+        return;
+      }
+      const existing = model.draft.replace(/\s+$/, "");
+      model.draft = mode === "replace" || existing === "" ? candidate.markdown : `${existing}
+
+${candidate.markdown}`;
+      view.draftInput.value = model.draft;
+      invalidateSynthesisPreview(model);
+      runtime.render();
+      runtime.persist();
+      setStatusText(
+        view.generateStatus,
+        mode === "replace" ? "Draft replaced with the candidate." : "Candidate appended to the draft.",
+        "is-success"
+      );
+      view.draftInput.focus({ preventScroll: true });
+    };
+    const copyCandidate = async () => {
+      const candidate = model.candidate;
+      if (candidate === null) {
+        setStatusText(view.generateStatus, "There is no candidate to copy.", "is-error");
+        return;
+      }
+      if (!hasWritableClipboard(runtime.clipboard)) {
+        setStatusText(
+          view.generateStatus,
+          "Clipboard unavailable. Select the candidate Markdown above and copy it manually.",
+          "is-error"
+        );
+        return;
+      }
+      view.candidateCopyButton.disabled = true;
+      try {
+        await runtime.clipboard.writeText(candidate.markdown);
+        setStatusText(view.generateStatus, "Candidate copied.", "is-success");
+      } catch {
+        setStatusText(
+          view.generateStatus,
+          "Copy failed. Select the candidate Markdown above and copy it manually.",
+          "is-error"
+        );
+      } finally {
+        view.candidateCopyButton.disabled = !hasWritableClipboard(runtime.clipboard);
+      }
+    };
+    const dismissCandidate = () => {
+      if (model.candidate === null) {
+        return;
+      }
+      model.candidate = null;
+      runtime.render();
+      runtime.persist();
+      setStatusText(view.generateStatus, "Candidate dismissed. Your draft is unchanged.", "");
+      view.generateButton.focus({ preventScroll: true });
+    };
+    return {
+      prepareContext,
+      copyContext,
+      generate,
+      useCandidate,
+      copyCandidate,
+      dismissCandidate
+    };
+  };
+
   // internal/web/static_src/synthesize-requests.ts
   var SYNTHESIS_SUGGESTION_LIMIT = 8;
   var requestSynthesisSuggestions = (fetcher, endpoint, source, mode) => requestRelated(fetcher, endpoint, source, mode, SYNTHESIS_SUGGESTION_LIMIT);
@@ -11424,141 +11848,337 @@ var BrainNotesApp = (() => {
     return kept;
   };
 
-  // internal/web/static_src/synthesize-storage.ts
-  var SYNTHESIS_STORAGE_VERSION = 2;
-  var synthesisStorageKey = (vaultID, anchorKey) => `bn.synthesize.${vaultID}.${anchorKey}`;
-  var safeSynthesisStorage = (view) => {
-    if (!view) {
-      return null;
-    }
-    try {
-      return view.localStorage;
-    } catch {
-      return null;
-    }
-  };
-  var readText2 = (value) => typeof value === "string" ? value : "";
-  var readKeys = (value) => Array.isArray(value) ? value.flatMap((item) => {
-    const key = typeof item === "string" ? item.trim() : "";
-    return key === "" ? [] : [key];
-  }) : [];
-  var synthesisStateFromModel = (model) => ({
-    sources: model.sources.map((source) => source.key),
-    title: model.title,
-    folder: model.folder,
-    purpose: model.purpose,
-    prompt: model.prompt,
-    draft: model.draft,
-    candidate: model.candidate ? model.candidate.markdown : ""
-  });
-  var readSynthesisState = (storage, key) => {
-    if (!storage) {
-      return null;
-    }
-    let raw;
-    try {
-      raw = storage.getItem(key);
-    } catch {
-      return null;
-    }
-    if (!raw) {
-      return null;
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return null;
-    }
-    const record = asRecord(parsed);
-    if (!record || readCount(record.version) !== SYNTHESIS_STORAGE_VERSION) {
-      return null;
-    }
-    return {
-      sources: readKeys(record.sources),
-      title: readText2(record.title),
-      folder: readText2(record.folder),
-      purpose: readText2(record.purpose),
-      prompt: readText2(record.prompt),
-      draft: readText2(record.draft),
-      candidate: readText2(record.candidate)
+  // internal/web/static_src/synthesize-create-actions.ts
+  var createSynthesisCreateActions = (runtime) => {
+    const { config, model, view } = runtime;
+    const focusInvalidField = () => {
+      runtime.showFieldErrors = true;
+      runtime.renderFieldErrors();
+      const fields = [
+        [synthesisTitleError(model.title), view.titleInput],
+        [synthesisFolderError(model.folder), view.folderInput],
+        [synthesisDraftError(model.draft), view.draftInput]
+      ];
+      const invalid = fields.find(([message]) => message !== "");
+      if (!invalid) {
+        return false;
+      }
+      invalid[1].focus({ preventScroll: true });
+      setStatusText(view.previewStatus, invalid[0], "is-error");
+      return true;
     };
-  };
-  var writeSynthesisState = (storage, key, state) => {
-    if (!storage) {
-      return false;
-    }
-    try {
-      storage.setItem(key, JSON.stringify({ version: SYNTHESIS_STORAGE_VERSION, ...state }));
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  var clearSynthesisState = (storage, key) => {
-    if (!storage) {
-      return false;
-    }
-    try {
-      storage.removeItem(key);
-      return true;
-    } catch {
-      return false;
-    }
+    const preview = async () => {
+      if (runtime.previewing || runtime.applying) {
+        return;
+      }
+      if (model.context === null) {
+        setStatusText(
+          view.previewStatus,
+          "Prepare a context packet before previewing the note.",
+          "is-error"
+        );
+        return;
+      }
+      if (focusInvalidField()) {
+        return;
+      }
+      runtime.previewing = true;
+      runtime.render();
+      view.previewPanel.setAttribute("aria-busy", "true");
+      setStatusText(view.previewStatus, "Building the note preview\u2026", "is-loading");
+      const requested = synthesisPreviewSignature(model);
+      const superseded = () => synthesisPreviewSignature(model) !== requested;
+      try {
+        const response = await requestSynthesisPreview(runtime.fetcher, config.previewEndpoint, {
+          context_id: model.context.context_id,
+          title: model.title.trim(),
+          folder: model.folder.trim(),
+          draft: model.draft,
+          token: config.csrfToken
+        });
+        if (superseded()) {
+          setStatusText(view.previewStatus, PREVIEW_SUPERSEDED, "");
+          return;
+        }
+        model.preview = response;
+        model.previewStale = false;
+        runtime.render();
+        setStatusText(
+          view.previewStatus,
+          `Preview ready for ${response.destination}. Review it, then create the note.`,
+          "is-success"
+        );
+        view.previewPanel.focus({ preventScroll: true });
+      } catch (error) {
+        if (superseded()) {
+          setStatusText(view.previewStatus, PREVIEW_SUPERSEDED, "");
+          return;
+        }
+        invalidateSynthesisPreview(model);
+        if (errorCode(error) === "not_found") {
+          runtime.forgetContext(view.previewStatus);
+          return;
+        }
+        runtime.render();
+        setStatusText(
+          view.previewStatus,
+          errorMessage2(error, "The note preview could not be built."),
+          "is-error"
+        );
+      } finally {
+        runtime.previewing = false;
+        view.previewPanel.setAttribute("aria-busy", "false");
+        runtime.render();
+      }
+    };
+    const apply = async () => {
+      const receipt = model.preview;
+      if (receipt === null) {
+        setStatusText(view.previewStatus, "Preview the note before creating it.", "is-error");
+        return;
+      }
+      if (runtime.applying) {
+        return;
+      }
+      runtime.applying = true;
+      runtime.render();
+      setStatusText(view.previewStatus, `Creating ${receipt.destination}\u2026`, "is-loading");
+      try {
+        const response = await requestSynthesisApply(runtime.fetcher, config.applyEndpoint, {
+          preview_id: receipt.preview_id,
+          token: config.csrfToken
+        });
+        const created = response.rel_path || receipt.destination;
+        if (!runtime.clearSaved()) {
+          invalidateSynthesisPreview(model);
+          setSynthesisWarning(view, SAVED_STATE_STUCK, {
+            href: response.path,
+            label: `Open ${created}`
+          });
+          setStatusText(
+            view.previewStatus,
+            `Created ${created}. The saved copy of your work could not be deleted, so the note was not opened automatically.`,
+            "is-success"
+          );
+          return;
+        }
+        setStatusText(view.previewStatus, `Created ${created}. Opening the note\u2026`, "is-success");
+        runtime.redirect(response.path);
+      } catch (error) {
+        invalidateSynthesisPreview(model);
+        runtime.render();
+        setStatusText(
+          view.previewStatus,
+          `${errorMessage2(error, "The note could not be created.")} Preview again to retry; nothing you wrote was lost.`,
+          "is-error"
+        );
+      } finally {
+        runtime.applying = false;
+        runtime.render();
+      }
+    };
+    const hasMeaningfulWork = () => model.sources.length > 0 || model.title.trim() !== "" || model.prompt.trim() !== "" || model.draft.trim() !== "" || model.candidate !== null;
+    const discard = () => {
+      if (hasMeaningfulWork() && !runtime.confirmer(DISCARD_CONFIRMATION)) {
+        runtime.announce("Kept the saved selection and draft.", "");
+        return;
+      }
+      model.sources = [];
+      model.title = "";
+      model.folder = config.defaultFolder;
+      model.purpose = config.defaultPurpose;
+      model.prompt = "";
+      model.draft = "";
+      model.candidate = null;
+      model.context = null;
+      model.contextStale = false;
+      model.preview = null;
+      model.previewStale = false;
+      runtime.showFieldErrors = false;
+      view.titleInput.value = "";
+      view.folderInput.value = model.folder;
+      view.purposeSelect.value = model.purpose;
+      view.promptInput.value = "";
+      view.draftInput.value = "";
+      const cleared = runtime.clearSaved();
+      setSynthesisWarning(view, cleared ? "" : SAVED_STATE_STUCK);
+      runtime.render();
+      runtime.renderCandidatePanels();
+      setStatusText(view.contextStatus, "", "");
+      setStatusText(view.generateStatus, "", "");
+      setStatusText(view.previewStatus, "", "");
+      runtime.announce(
+        cleared ? "Discarded the saved selection and draft." : "Cleared this page, but the saved copy could not be deleted.",
+        cleared ? "is-success" : "is-error"
+      );
+    };
+    const restore = async () => {
+      const stored = runtime.readSaved();
+      if (!stored) {
+        return;
+      }
+      model.title = stored.title;
+      model.folder = stored.folder;
+      model.purpose = config.purposes.includes(stored.purpose) ? stored.purpose : config.defaultPurpose;
+      model.prompt = stored.prompt;
+      model.draft = stored.draft;
+      model.candidate = stored.candidate === "" ? null : { markdown: stored.candidate, html: "" };
+      view.titleInput.value = model.title;
+      view.folderInput.value = model.folder;
+      view.purposeSelect.value = model.purpose;
+      view.promptInput.value = model.prompt;
+      view.draftInput.value = model.draft;
+      const resolved = [];
+      const missing = [];
+      for (const key of stored.sources) {
+        const source = await resolveSynthesisSource(runtime.fetcher, config.relatedEndpoint, key);
+        if (source) {
+          resolved.push(source);
+        } else {
+          missing.push(key);
+        }
+      }
+      model.sources = dedupeSynthesisSources(resolved, config.anchor.key, config.maxSupporters);
+      runtime.render();
+      runtime.renderCandidatePanels();
+      if (missing.length > 0) {
+        setSynthesisWarning(
+          view,
+          `${missing.length} saved ${missing.length === 1 ? "note is" : "notes are"} no longer in this vault and ${missing.length === 1 ? "was" : "were"} removed from the selection: ${missing.join(", ")}.`
+        );
+      }
+      runtime.persist();
+    };
+    return { preview, apply, discard, restore };
   };
 
-  // internal/web/static_src/synthesize.ts
-  var errorMessage2 = (error, fallback) => error instanceof Error && error.message !== "" ? error.message : fallback;
-  var errorCode = (error) => error instanceof SynthesisRequestError ? error.code : "";
-  var modeLabel = (mode) => relatedModeDefinitions.find((definition) => definition.mode === mode)?.label || mode;
-  var SUGGESTIONS_EMPTY = "No suggestions are available in this mode.";
-  var SEARCH_EMPTY = "No notes matched that search.";
-  var CONTEXT_GONE = "The context packet has expired or is no longer valid. Rebuild it, then preview again. Your draft is unchanged.";
-  var CONTEXT_SUPERSEDED = "The sources, purpose, or prompt changed while that packet was building, so it was discarded. Prepare the context again.";
-  var PREVIEW_SUPERSEDED = "The note changed while that preview was building, so it was discarded. Preview again.";
-  var DISCLOSURE = [
-    "Generate sends the prepared context packet to your configured [agent].command.",
-    "The packet contains the anchor note's complete body, exact excerpts from every selected source, and your prompt.",
-    "Your prompt and that packet are retained in server memory until the context expires, is evicted to keep memory bounded, or the server restarts, and are never written to disk.",
-    "The stored packet is sent to the command only after you accept this notice. The generated candidate is not stored on the server and never enters your draft on its own. Continue?"
-  ].join("\n");
-  var DISCARD_CONFIRMATION = "Discard the saved sources, draft, and generated candidate for this note? This cannot be undone.";
-  var SAVED_STATE_STUCK = "This browser refused to delete the saved sources and draft for this note, so they will come back the next time you open the workbench.";
-  var createSynthesisController = (root, mount, deps = {}) => {
-    const config = readSynthesisConfig(root);
-    const model = createSynthesisModel(config);
-    const view = createSynthesisView(mount, config);
-    const fetcher = deps.fetch || ((input, init) => fetch(input, init));
-    const storage = deps.storage === void 0 ? safeSynthesisStorage(root.ownerDocument.defaultView) : deps.storage;
-    const clipboard = deps.clipboard === void 0 ? (typeof navigator !== "undefined" ? navigator.clipboard : void 0) || null : deps.clipboard;
-    const confirmer = deps.confirm || ((message) => window.confirm(message));
-    const redirect = deps.redirect || ((path) => window.location.assign(path));
-    const storageKey = synthesisStorageKey(config.vaultID, config.anchor.key);
-    const statusEl = queryElement(root, "[data-synthesize-status]", HTMLElement);
-    const fallback = queryElement(root, "[data-synthesize-fallback]", HTMLElement);
-    if (fallback) {
-      fallback.hidden = true;
-    }
-    const candidates = /* @__PURE__ */ new Map();
+  // internal/web/static_src/synthesize-discovery.ts
+  var createSynthesisDiscoveryActions = (runtime) => {
+    const { config, model, view } = runtime;
     const suggestionRequests = {
       balanced: 0,
       rediscover: 0,
       connect: 0
     };
-    const suggestionEntries = {
-      balanced: null,
-      rediscover: null,
-      connect: null
-    };
-    let searchEntries = null;
     let activeMode = "balanced";
     let searchRequest = 0;
-    let storageWarned = false;
-    let disclosureAccepted = false;
-    let generating = false;
-    let previewing = false;
-    let applying = false;
-    let showFieldErrors = false;
+    const showSuggestionCount = (mode) => {
+      const shown = view.suggestionResults[mode].querySelectorAll("[data-synthesize-candidate]").length;
+      setStatusText(
+        view.suggestionStatus,
+        shown === 0 ? SUGGESTIONS_EMPTY : `${shown} ${shown === 1 ? "suggestion" : "suggestions"} in ${modeLabel(mode)}.`,
+        shown === 0 ? "is-empty" : "is-success"
+      );
+    };
+    const loadSuggestions = async (mode) => {
+      const requestID = suggestionRequests[mode] + 1;
+      suggestionRequests[mode] = requestID;
+      view.suggestionPanels[mode].setAttribute("aria-busy", "true");
+      if (mode === activeMode) {
+        setStatusText(view.suggestionStatus, `Loading ${modeLabel(mode)} suggestions\u2026`, "is-loading");
+      }
+      try {
+        const response = await requestSynthesisSuggestions(
+          runtime.fetcher,
+          config.relatedEndpoint,
+          config.anchor.key,
+          mode
+        );
+        if (suggestionRequests[mode] !== requestID) {
+          return;
+        }
+        const entries = response.results.map(candidateFromRelatedResult);
+        runtime.rememberCandidates(entries);
+        runtime.suggestionEntries[mode] = entries;
+        renderSynthesisCandidates(
+          view.suggestionResults[mode],
+          entries,
+          synthesisSelectedKeys(model),
+          config.anchor.key,
+          false,
+          SUGGESTIONS_EMPTY
+        );
+        if (mode === activeMode) {
+          showSuggestionCount(mode);
+        }
+      } catch (error) {
+        if (suggestionRequests[mode] !== requestID) {
+          return;
+        }
+        if (mode === activeMode) {
+          setStatusText(
+            view.suggestionStatus,
+            errorMessage2(error, "Suggestions could not be loaded."),
+            "is-error"
+          );
+        }
+      } finally {
+        if (suggestionRequests[mode] === requestID) {
+          view.suggestionPanels[mode].setAttribute("aria-busy", "false");
+        }
+      }
+    };
+    const selectMode = (mode) => {
+      activeMode = mode;
+      selectSynthesisSuggestionMode(view, mode);
+      if (runtime.suggestionEntries[mode] === null) {
+        return loadSuggestions(mode);
+      }
+      showSuggestionCount(mode);
+      return Promise.resolve();
+    };
+    const runSearch = async (query) => {
+      const trimmed = query.trim();
+      if (trimmed === "") {
+        searchRequest += 1;
+        runtime.searchEntries = null;
+        view.searchResults.replaceChildren();
+        setStatusText(view.searchStatus, "Enter a search term to find notes.", "");
+        return;
+      }
+      const requestID = searchRequest + 1;
+      searchRequest = requestID;
+      setStatusText(view.searchStatus, `Searching for ${trimmed}\u2026`, "is-loading");
+      try {
+        const results = await requestSynthesisSearch(runtime.fetcher, config.searchEndpoint, trimmed);
+        if (searchRequest !== requestID) {
+          return;
+        }
+        const entries = results.flatMap((result) => {
+          const candidate = candidateFromSearchResult(result);
+          return candidate ? [candidate] : [];
+        });
+        runtime.rememberCandidates(entries);
+        runtime.searchEntries = entries;
+        renderSynthesisCandidates(
+          view.searchResults,
+          entries,
+          synthesisSelectedKeys(model),
+          config.anchor.key,
+          true,
+          SEARCH_EMPTY
+        );
+        const shown = view.searchResults.querySelectorAll("[data-synthesize-candidate]").length;
+        setStatusText(
+          view.searchStatus,
+          shown === 0 ? SEARCH_EMPTY : `${shown} ${shown === 1 ? "match" : "matches"} for ${trimmed}.`,
+          shown === 0 ? "is-empty" : "is-success"
+        );
+      } catch (error) {
+        if (searchRequest !== requestID) {
+          return;
+        }
+        runtime.searchEntries = null;
+        view.searchResults.replaceChildren();
+        setStatusText(view.searchStatus, errorMessage2(error, "Search failed."), "is-error");
+      }
+    };
+    return { selectMode, runSearch };
+  };
+
+  // internal/web/static_src/synthesize-selection.ts
+  var createSynthesisSelectionActions = (runtime) => {
+    const { config, model, view } = runtime;
     const buttonByAttribute = (attribute2, value) => {
       for (const button of view.sourceList.querySelectorAll(`[${attribute2}]`)) {
         if (button.getAttribute(attribute2) === value) {
@@ -11566,76 +12186,6 @@ var BrainNotesApp = (() => {
         }
       }
       return null;
-    };
-    const announce = (message, kind = "") => {
-      setStatusText(statusEl, message, kind);
-    };
-    const persist = () => {
-      if (writeSynthesisState(storage, storageKey, synthesisStateFromModel(model))) {
-        return;
-      }
-      if (storage === null || storageWarned) {
-        return;
-      }
-      storageWarned = true;
-      setSynthesisWarning(
-        view,
-        "This browser refused to save your work, so leaving the page will lose the current selection and draft."
-      );
-    };
-    const clearSaved = () => clearSynthesisState(storage, storageKey) || storage === null;
-    const rememberCandidates = (entries) => {
-      for (const entry of entries) {
-        candidates.set(entry.key, entry);
-      }
-    };
-    const renderCandidatePanels = () => {
-      const selected = synthesisSelectedKeys(model);
-      for (const definition of relatedModeDefinitions) {
-        const entries = suggestionEntries[definition.mode];
-        if (entries === null) {
-          continue;
-        }
-        renderSynthesisCandidates(
-          view.suggestionResults[definition.mode],
-          entries,
-          selected,
-          config.anchor.key,
-          false,
-          SUGGESTIONS_EMPTY
-        );
-      }
-      if (searchEntries !== null) {
-        renderSynthesisCandidates(
-          view.searchResults,
-          searchEntries,
-          selected,
-          config.anchor.key,
-          true,
-          SEARCH_EMPTY
-        );
-      }
-    };
-    const renderFieldErrors = () => {
-      setSynthesisFieldError(view.titleError, showFieldErrors ? synthesisTitleError(model.title) : "");
-      setSynthesisFieldError(
-        view.folderError,
-        showFieldErrors ? synthesisFolderError(model.folder) : ""
-      );
-      setSynthesisFieldError(view.draftError, showFieldErrors ? synthesisDraftError(model.draft) : "");
-    };
-    const render = () => {
-      renderSynthesisSources(view, model, config);
-      renderSynthesisContext(view, model);
-      renderSynthesisCandidate(view, model);
-      renderSynthesisDestination(view, model);
-      renderSynthesisPreview(view, model);
-      renderFieldErrors();
-      view.copyButton.disabled = model.context === null || !hasWritableClipboard(clipboard);
-      view.candidateCopyButton.disabled = !hasWritableClipboard(clipboard);
-      view.generateButton.disabled = model.context === null || generating;
-      view.previewButton.disabled = previewing || applying;
-      view.applyButton.disabled = model.preview === null || applying;
     };
     const focusHandle = (key) => {
       (buttonByAttribute("data-synthesize-handle", key) || view.selectionStatus).focus({
@@ -11648,52 +12198,50 @@ var BrainNotesApp = (() => {
       (button || view.selectionStatus).focus({ preventScroll: true });
     };
     const addSource = (key) => {
-      const candidate = candidates.get(key);
+      const candidate = runtime.candidates.get(key);
       if (!candidate) {
-        announce("That note is no longer available to add.", "is-error");
+        runtime.announce("That note is no longer available to add.", "is-error");
         return;
       }
       const outcome = addSynthesisSource(model, config, candidate);
-      announce(outcome.message, outcome.ok ? "is-success" : "is-error");
+      runtime.announce(outcome.message, outcome.ok ? "is-success" : "is-error");
       if (!outcome.ok) {
         return;
       }
-      render();
-      renderCandidatePanels();
-      persist();
+      runtime.render();
+      runtime.renderCandidatePanels();
+      runtime.persist();
     };
     const removeSource = (key) => {
       const index = model.sources.findIndex((source) => source.key === key);
       const outcome = removeSynthesisSource(model, key);
-      announce(outcome.message, outcome.ok ? "is-success" : "is-error");
+      runtime.announce(outcome.message, outcome.ok ? "is-success" : "is-error");
       if (!outcome.ok) {
         return;
       }
-      render();
-      renderCandidatePanels();
-      persist();
+      runtime.render();
+      runtime.renderCandidatePanels();
+      runtime.persist();
       focusRemoveAt(index);
     };
     const moveSource = (key, direction) => {
       const outcome = moveSynthesisSource(model, key, direction);
-      announce(outcome.message, outcome.ok ? "is-success" : "is-error");
+      runtime.announce(outcome.message, outcome.ok ? "is-success" : "is-error");
       if (!outcome.ok) {
         return;
       }
-      render();
-      persist();
+      runtime.render();
+      runtime.persist();
       focusHandle(key);
     };
     const applyDragOrder = (key) => {
-      const keys = Array.from(
-        view.sourceList.querySelectorAll("[data-synthesize-source]")
-      ).filter((row) => !row.hasAttribute("data-synthesize-anchor")).map((row) => row.getAttribute("data-synthesize-source") || "");
+      const keys = Array.from(view.sourceList.querySelectorAll("[data-synthesize-source]")).filter((row) => !row.hasAttribute("data-synthesize-anchor")).map((row) => row.getAttribute("data-synthesize-source") || "");
       const moved = model.sources.find((source) => source.key === key);
       const outcome = reorderSynthesisSources(model, keys);
-      render();
+      runtime.render();
       if (outcome.ok) {
-        persist();
-        announce(
+        runtime.persist();
+        runtime.announce(
           `Moved ${moved?.title || key} to position ${synthesisSourcePosition(model, key)} of ${model.sources.length + 1}.`,
           "is-success"
         );
@@ -11739,517 +12287,22 @@ var BrainNotesApp = (() => {
       win.addEventListener("pointerup", finishDrag, { once: true });
       win.addEventListener("pointercancel", finishDrag, { once: true });
     };
-    const showSuggestionCount = (mode) => {
-      const shown = view.suggestionResults[mode].querySelectorAll("[data-synthesize-candidate]").length;
-      setStatusText(
-        view.suggestionStatus,
-        shown === 0 ? SUGGESTIONS_EMPTY : `${shown} ${shown === 1 ? "suggestion" : "suggestions"} in ${modeLabel(mode)}.`,
-        shown === 0 ? "is-empty" : "is-success"
-      );
-    };
-    const loadSuggestions = async (mode) => {
-      const requestID = suggestionRequests[mode] + 1;
-      suggestionRequests[mode] = requestID;
-      view.suggestionPanels[mode].setAttribute("aria-busy", "true");
-      if (mode === activeMode) {
-        setStatusText(view.suggestionStatus, `Loading ${modeLabel(mode)} suggestions\u2026`, "is-loading");
-      }
-      try {
-        const response = await requestSynthesisSuggestions(
-          fetcher,
-          config.relatedEndpoint,
-          config.anchor.key,
-          mode
-        );
-        if (suggestionRequests[mode] !== requestID) {
-          return;
-        }
-        const entries = response.results.map(candidateFromRelatedResult);
-        rememberCandidates(entries);
-        suggestionEntries[mode] = entries;
-        renderSynthesisCandidates(
-          view.suggestionResults[mode],
-          entries,
-          synthesisSelectedKeys(model),
-          config.anchor.key,
-          false,
-          SUGGESTIONS_EMPTY
-        );
-        if (mode === activeMode) {
-          showSuggestionCount(mode);
-        }
-      } catch (error) {
-        if (suggestionRequests[mode] !== requestID) {
-          return;
-        }
-        if (mode === activeMode) {
-          setStatusText(
-            view.suggestionStatus,
-            errorMessage2(error, "Suggestions could not be loaded."),
-            "is-error"
-          );
-        }
-      } finally {
-        if (suggestionRequests[mode] === requestID) {
-          view.suggestionPanels[mode].setAttribute("aria-busy", "false");
-        }
-      }
-    };
-    const selectMode = (mode) => {
-      activeMode = mode;
-      selectSynthesisSuggestionMode(view, mode);
-      if (suggestionEntries[mode] === null) {
-        return loadSuggestions(mode);
-      }
-      showSuggestionCount(mode);
-      return Promise.resolve();
-    };
-    const runSearch = async (query) => {
-      const trimmed = query.trim();
-      if (trimmed === "") {
-        searchRequest += 1;
-        searchEntries = null;
-        view.searchResults.replaceChildren();
-        setStatusText(view.searchStatus, "Enter a search term to find notes.", "");
-        return;
-      }
-      const requestID = searchRequest + 1;
-      searchRequest = requestID;
-      setStatusText(view.searchStatus, `Searching for ${trimmed}\u2026`, "is-loading");
-      try {
-        const results = await requestSynthesisSearch(fetcher, config.searchEndpoint, trimmed);
-        if (searchRequest !== requestID) {
-          return;
-        }
-        const entries = results.flatMap((result) => {
-          const candidate = candidateFromSearchResult(result);
-          return candidate ? [candidate] : [];
-        });
-        rememberCandidates(entries);
-        searchEntries = entries;
-        renderSynthesisCandidates(
-          view.searchResults,
-          entries,
-          synthesisSelectedKeys(model),
-          config.anchor.key,
-          true,
-          SEARCH_EMPTY
-        );
-        const shown = view.searchResults.querySelectorAll("[data-synthesize-candidate]").length;
-        setStatusText(
-          view.searchStatus,
-          shown === 0 ? SEARCH_EMPTY : `${shown} ${shown === 1 ? "match" : "matches"} for ${trimmed}.`,
-          shown === 0 ? "is-empty" : "is-success"
-        );
-      } catch (error) {
-        if (searchRequest !== requestID) {
-          return;
-        }
-        searchEntries = null;
-        view.searchResults.replaceChildren();
-        setStatusText(view.searchStatus, errorMessage2(error, "Search failed."), "is-error");
-      }
-    };
-    const prepareContext = async () => {
-      if (config.csrfToken === "") {
-        setStatusText(view.contextStatus, "Context preparation is unavailable.", "is-error");
-        return;
-      }
-      view.prepareButton.disabled = true;
-      setStatusText(view.contextStatus, "Building context packet\u2026", "is-loading");
-      const requested = synthesisContextSignature(model);
-      const superseded = () => synthesisContextSignature(model) !== requested;
-      try {
-        const response = await requestSynthesisContext(fetcher, config.contextEndpoint, {
-          source: config.anchor.key,
-          candidates: synthesisSelectedKeys(model),
-          purpose: model.purpose,
-          prompt: model.prompt,
-          token: config.csrfToken
-        });
-        if (superseded()) {
-          setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
-          return;
-        }
-        invalidateSynthesisPreview(model);
-        model.context = response;
-        model.contextStale = false;
-        render();
-        setStatusText(
-          view.contextStatus,
-          `Context ready. It expires at ${response.expires_at || "the server's timeout"}.`,
-          "is-success"
-        );
-      } catch (error) {
-        if (superseded()) {
-          setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
-          return;
-        }
-        invalidateSynthesisContext(model);
-        model.contextStale = true;
-        render();
-        setStatusText(
-          view.contextStatus,
-          errorMessage2(error, "The context packet could not be built."),
-          "is-error"
-        );
-      } finally {
-        view.prepareButton.disabled = false;
-      }
-    };
-    const copyContext = async () => {
-      const context = model.context;
-      if (!context) {
-        setStatusText(view.contextStatus, "Prepare a context packet first.", "is-error");
-        return;
-      }
-      if (!hasWritableClipboard(clipboard)) {
-        setStatusText(
-          view.contextStatus,
-          "Clipboard unavailable. Select the packet Markdown below and copy it manually.",
-          "is-error"
-        );
-        return;
-      }
-      view.copyButton.disabled = true;
-      try {
-        await clipboard.writeText(context.markdown);
-        setStatusText(view.contextStatus, "Context packet copied.", "is-success");
-      } catch {
-        setStatusText(
-          view.contextStatus,
-          "Copy failed. Select the packet Markdown below and copy it manually.",
-          "is-error"
-        );
-      } finally {
-        view.copyButton.disabled = false;
-      }
-    };
-    const forgetContext = (target) => {
-      invalidateSynthesisContext(model);
-      model.contextStale = true;
-      render();
-      setStatusText(target, CONTEXT_GONE, "is-error");
-    };
-    const generate = async () => {
-      if (model.context === null) {
-        setStatusText(view.generateStatus, "Prepare a context packet first.", "is-error");
-        return;
-      }
-      if (generating) {
-        return;
-      }
-      if (config.agentEnabled && !disclosureAccepted) {
-        disclosureAccepted = confirmer(DISCLOSURE);
-        if (!disclosureAccepted) {
-          setStatusText(view.generateStatus, "Generation canceled.", "");
-          return;
-        }
-      }
-      generating = true;
-      view.generateButton.disabled = true;
-      view.candidatePanel.setAttribute("aria-busy", "true");
-      setStatusText(view.generateStatus, "Generating a candidate draft\u2026", "is-loading");
-      try {
-        const response = await requestSynthesisGenerate(fetcher, config.generateEndpoint, {
-          context_id: model.context.context_id,
-          token: config.csrfToken
-        });
-        if (!response.enabled) {
-          setStatusText(
-            view.generateStatus,
-            response.message || "Generation is unavailable until [agent].command is configured.",
-            "is-empty"
-          );
-          return;
-        }
-        model.candidate = { markdown: response.output, html: response.rendered_html };
-        render();
-        persist();
-        setStatusText(
-          view.generateStatus,
-          "Candidate ready. Your draft is unchanged until you replace or append it.",
-          "is-success"
-        );
-        view.candidatePanel.focus({ preventScroll: true });
-      } catch (error) {
-        if (errorCode(error) === "not_found") {
-          forgetContext(view.generateStatus);
-          return;
-        }
-        setStatusText(
-          view.generateStatus,
-          errorMessage2(error, "The generation command failed."),
-          "is-error"
-        );
-      } finally {
-        generating = false;
-        view.candidatePanel.setAttribute("aria-busy", "false");
-        view.generateButton.disabled = model.context === null;
-      }
-    };
-    const useCandidate = (mode) => {
-      const candidate = model.candidate;
-      if (candidate === null) {
-        setStatusText(view.generateStatus, "There is no candidate to use.", "is-error");
-        return;
-      }
-      const existing = model.draft.replace(/\s+$/, "");
-      model.draft = mode === "replace" || existing === "" ? candidate.markdown : `${existing}
+    return { addSource, removeSource, moveSource, startDrag };
+  };
 
-${candidate.markdown}`;
-      view.draftInput.value = model.draft;
-      invalidateSynthesisPreview(model);
-      render();
-      persist();
-      setStatusText(
-        view.generateStatus,
-        mode === "replace" ? "Draft replaced with the candidate." : "Candidate appended to the draft.",
-        "is-success"
-      );
-      view.draftInput.focus({ preventScroll: true });
-    };
-    const copyCandidate = async () => {
-      const candidate = model.candidate;
-      if (candidate === null) {
-        setStatusText(view.generateStatus, "There is no candidate to copy.", "is-error");
-        return;
-      }
-      if (!hasWritableClipboard(clipboard)) {
-        setStatusText(
-          view.generateStatus,
-          "Clipboard unavailable. Select the candidate Markdown above and copy it manually.",
-          "is-error"
-        );
-        return;
-      }
-      view.candidateCopyButton.disabled = true;
-      try {
-        await clipboard.writeText(candidate.markdown);
-        setStatusText(view.generateStatus, "Candidate copied.", "is-success");
-      } catch {
-        setStatusText(
-          view.generateStatus,
-          "Copy failed. Select the candidate Markdown above and copy it manually.",
-          "is-error"
-        );
-      } finally {
-        view.candidateCopyButton.disabled = !hasWritableClipboard(clipboard);
-      }
-    };
-    const dismissCandidate = () => {
-      if (model.candidate === null) {
-        return;
-      }
-      model.candidate = null;
-      render();
-      persist();
-      setStatusText(view.generateStatus, "Candidate dismissed. Your draft is unchanged.", "");
-      view.generateButton.focus({ preventScroll: true });
-    };
-    const focusInvalidField = () => {
-      showFieldErrors = true;
-      renderFieldErrors();
-      const fields = [
-        [synthesisTitleError(model.title), view.titleInput],
-        [synthesisFolderError(model.folder), view.folderInput],
-        [synthesisDraftError(model.draft), view.draftInput]
-      ];
-      const invalid = fields.find(([message]) => message !== "");
-      if (!invalid) {
-        return false;
-      }
-      invalid[1].focus({ preventScroll: true });
-      setStatusText(view.previewStatus, invalid[0], "is-error");
-      return true;
-    };
-    const preview = async () => {
-      if (previewing || applying) {
-        return;
-      }
-      if (model.context === null) {
-        setStatusText(
-          view.previewStatus,
-          "Prepare a context packet before previewing the note.",
-          "is-error"
-        );
-        return;
-      }
-      if (focusInvalidField()) {
-        return;
-      }
-      previewing = true;
-      render();
-      view.previewPanel.setAttribute("aria-busy", "true");
-      setStatusText(view.previewStatus, "Building the note preview\u2026", "is-loading");
-      const requested = synthesisPreviewSignature(model);
-      const superseded = () => synthesisPreviewSignature(model) !== requested;
-      try {
-        const response = await requestSynthesisPreview(fetcher, config.previewEndpoint, {
-          context_id: model.context.context_id,
-          title: model.title.trim(),
-          folder: model.folder.trim(),
-          draft: model.draft,
-          token: config.csrfToken
-        });
-        if (superseded()) {
-          setStatusText(view.previewStatus, PREVIEW_SUPERSEDED, "");
-          return;
-        }
-        model.preview = response;
-        model.previewStale = false;
-        render();
-        setStatusText(
-          view.previewStatus,
-          `Preview ready for ${response.destination}. Review it, then create the note.`,
-          "is-success"
-        );
-        view.previewPanel.focus({ preventScroll: true });
-      } catch (error) {
-        if (superseded()) {
-          setStatusText(view.previewStatus, PREVIEW_SUPERSEDED, "");
-          return;
-        }
-        invalidateSynthesisPreview(model);
-        if (errorCode(error) === "not_found") {
-          forgetContext(view.previewStatus);
-          return;
-        }
-        render();
-        setStatusText(
-          view.previewStatus,
-          errorMessage2(error, "The note preview could not be built."),
-          "is-error"
-        );
-      } finally {
-        previewing = false;
-        view.previewPanel.setAttribute("aria-busy", "false");
-        render();
-      }
-    };
-    const apply = async () => {
-      const receipt = model.preview;
-      if (receipt === null) {
-        setStatusText(view.previewStatus, "Preview the note before creating it.", "is-error");
-        return;
-      }
-      if (applying) {
-        return;
-      }
-      applying = true;
-      render();
-      setStatusText(view.previewStatus, `Creating ${receipt.destination}\u2026`, "is-loading");
-      try {
-        const response = await requestSynthesisApply(fetcher, config.applyEndpoint, {
-          preview_id: receipt.preview_id,
-          token: config.csrfToken
-        });
-        const created = response.rel_path || receipt.destination;
-        if (!clearSaved()) {
-          invalidateSynthesisPreview(model);
-          setSynthesisWarning(view, SAVED_STATE_STUCK, {
-            href: response.path,
-            label: `Open ${created}`
-          });
-          setStatusText(
-            view.previewStatus,
-            `Created ${created}. The saved copy of your work could not be deleted, so the note was not opened automatically.`,
-            "is-success"
-          );
-          return;
-        }
-        setStatusText(view.previewStatus, `Created ${created}. Opening the note\u2026`, "is-success");
-        redirect(response.path);
-      } catch (error) {
-        invalidateSynthesisPreview(model);
-        render();
-        setStatusText(
-          view.previewStatus,
-          `${errorMessage2(error, "The note could not be created.")} Preview again to retry; nothing you wrote was lost.`,
-          "is-error"
-        );
-      } finally {
-        applying = false;
-        render();
-      }
-    };
-    const hasMeaningfulWork = () => model.sources.length > 0 || model.title.trim() !== "" || model.prompt.trim() !== "" || model.draft.trim() !== "" || model.candidate !== null;
-    const discard = () => {
-      if (hasMeaningfulWork() && !confirmer(DISCARD_CONFIRMATION)) {
-        announce("Kept the saved selection and draft.", "");
-        return;
-      }
-      model.sources = [];
-      model.title = "";
-      model.folder = config.defaultFolder;
-      model.purpose = config.defaultPurpose;
-      model.prompt = "";
-      model.draft = "";
-      model.candidate = null;
-      model.context = null;
-      model.contextStale = false;
-      model.preview = null;
-      model.previewStale = false;
-      showFieldErrors = false;
-      view.titleInput.value = "";
-      view.folderInput.value = model.folder;
-      view.purposeSelect.value = model.purpose;
-      view.promptInput.value = "";
-      view.draftInput.value = "";
-      const cleared = clearSaved();
-      setSynthesisWarning(view, cleared ? "" : SAVED_STATE_STUCK);
-      render();
-      renderCandidatePanels();
-      setStatusText(view.contextStatus, "", "");
-      setStatusText(view.generateStatus, "", "");
-      setStatusText(view.previewStatus, "", "");
-      announce(
-        cleared ? "Discarded the saved selection and draft." : "Cleared this page, but the saved copy could not be deleted.",
-        cleared ? "is-success" : "is-error"
-      );
-    };
-    const restore = async () => {
-      const stored = readSynthesisState(storage, storageKey);
-      if (!stored) {
-        return;
-      }
-      model.title = stored.title;
-      model.folder = stored.folder;
-      model.purpose = config.purposes.includes(stored.purpose) ? stored.purpose : config.defaultPurpose;
-      model.prompt = stored.prompt;
-      model.draft = stored.draft;
-      model.candidate = stored.candidate === "" ? null : { markdown: stored.candidate, html: "" };
-      view.titleInput.value = model.title;
-      view.folderInput.value = model.folder;
-      view.purposeSelect.value = model.purpose;
-      view.promptInput.value = model.prompt;
-      view.draftInput.value = model.draft;
-      const resolved = [];
-      const missing = [];
-      for (const key of stored.sources) {
-        const source = await resolveSynthesisSource(fetcher, config.relatedEndpoint, key);
-        if (source) {
-          resolved.push(source);
-        } else {
-          missing.push(key);
-        }
-      }
-      model.sources = dedupeSynthesisSources(resolved, config.anchor.key, config.maxSupporters);
-      render();
-      renderCandidatePanels();
-      if (missing.length > 0) {
-        setSynthesisWarning(
-          view,
-          `${missing.length} saved ${missing.length === 1 ? "note is" : "notes are"} no longer in this vault and ${missing.length === 1 ? "was" : "were"} removed from the selection: ${missing.join(", ")}.`
-        );
-      }
-      persist();
-    };
+  // internal/web/static_src/synthesize.ts
+  var createSynthesisController = (root, mount, deps = {}) => {
+    const runtime = createSynthesisRuntime(root, mount, deps);
+    const { model, view } = runtime;
+    const selection = createSynthesisSelectionActions(runtime);
+    const discovery = createSynthesisDiscoveryActions(runtime);
+    const context = createSynthesisContextActions(runtime);
+    const create = createSynthesisCreateActions(runtime);
     view.sourceList.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target : null;
       const remove = target?.closest("[data-synthesize-remove]");
       if (remove) {
-        removeSource(remove.getAttribute("data-synthesize-remove") || "");
+        selection.removeSource(remove.getAttribute("data-synthesize-remove") || "");
       }
     });
     view.sourceList.addEventListener("keydown", (event) => {
@@ -12259,7 +12312,7 @@ ${candidate.markdown}`;
         return;
       }
       event.preventDefault();
-      moveSource(
+      selection.moveSource(
         handle.getAttribute("data-synthesize-handle") || "",
         event.key === "ArrowUp" ? -1 : 1
       );
@@ -12271,7 +12324,7 @@ ${candidate.markdown}`;
       if (!row || row.hasAttribute("data-synthesize-anchor")) {
         return;
       }
-      startDrag(row, event);
+      selection.startDrag(row, event);
     });
     mount.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -12279,12 +12332,12 @@ ${candidate.markdown}`;
       if (!add || add.disabled) {
         return;
       }
-      addSource(add.getAttribute("data-synthesize-add") || "");
+      selection.addSource(add.getAttribute("data-synthesize-add") || "");
     });
     for (const definition of relatedModeDefinitions) {
       const tab = view.suggestionTabs[definition.mode];
       tab.addEventListener("click", () => {
-        void selectMode(definition.mode);
+        void discovery.selectMode(definition.mode);
       });
       tab.addEventListener("keydown", (event) => {
         const index = relatedModeDefinitions.findIndex((item) => item.mode === definition.mode);
@@ -12302,79 +12355,79 @@ ${candidate.markdown}`;
         event.preventDefault();
         const next = relatedModeDefinitions[target].mode;
         view.suggestionTabs[next].focus();
-        void selectMode(next);
+        void discovery.selectMode(next);
       });
     }
     view.searchForm.addEventListener("submit", (event) => {
       event.preventDefault();
-      void runSearch(view.searchInput.value);
+      void discovery.runSearch(view.searchInput.value);
     });
     view.titleInput.addEventListener("input", () => {
       model.title = view.titleInput.value;
       invalidateSynthesisPreview(model);
-      render();
-      persist();
+      runtime.render();
+      runtime.persist();
     });
     view.folderInput.addEventListener("input", () => {
       model.folder = view.folderInput.value;
       invalidateSynthesisPreview(model);
-      render();
-      persist();
+      runtime.render();
+      runtime.persist();
     });
     view.draftInput.addEventListener("input", () => {
       model.draft = view.draftInput.value;
       invalidateSynthesisPreview(model);
-      render();
-      persist();
+      runtime.render();
+      runtime.persist();
     });
     view.purposeSelect.addEventListener("change", () => {
       model.purpose = view.purposeSelect.value;
       invalidateSynthesisContext(model);
-      render();
-      persist();
+      runtime.render();
+      runtime.persist();
     });
     view.promptInput.addEventListener("input", () => {
       model.prompt = view.promptInput.value;
       invalidateSynthesisContext(model);
-      render();
-      persist();
+      runtime.render();
+      runtime.persist();
     });
     view.prepareButton.addEventListener("click", () => {
-      void prepareContext();
+      void context.prepareContext();
     });
     view.copyButton.addEventListener("click", () => {
-      void copyContext();
+      void context.copyContext();
     });
     view.discardButton.addEventListener("click", () => {
-      discard();
+      create.discard();
     });
     view.generateButton.addEventListener("click", () => {
-      void generate();
+      void context.generate();
     });
     view.candidateReplaceButton.addEventListener("click", () => {
-      useCandidate("replace");
+      context.useCandidate("replace");
     });
     view.candidateAppendButton.addEventListener("click", () => {
-      useCandidate("append");
+      context.useCandidate("append");
     });
     view.candidateCopyButton.addEventListener("click", () => {
-      void copyCandidate();
+      void context.copyCandidate();
     });
     view.candidateDismissButton.addEventListener("click", () => {
-      dismissCandidate();
+      context.dismissCandidate();
     });
     view.previewButton.addEventListener("click", () => {
-      void preview();
+      void create.preview();
     });
     view.applyButton.addEventListener("click", () => {
-      void apply();
+      void create.apply();
     });
     view.folderInput.value = model.folder;
     view.purposeSelect.value = model.purpose;
-    render();
+    runtime.render();
     const ready = (async () => {
-      await restore();
-      await selectMode("balanced");
+      await create.restore();
+      await discovery.selectMode("balanced");
     })();
     return { ready };
   };

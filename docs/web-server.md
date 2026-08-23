@@ -1,5 +1,10 @@
 # Local web server
 
+Three of the larger web surfaces have their own pages: the
+[Related Notes explorer](web-related-notes.md), the
+[Synthesis workbench](web-synthesis.md), and
+[Health, Daily Fixes, and properties](web-health.md).
+
 ## Command reference
 
 ### `bn serve` — run the local vault browser
@@ -138,335 +143,7 @@ Markdown files.
 No telemetry, background schedulers, reminders, or analytics pipelines are
 introduced: activity metrics are local-only and computed from the brief sidecar.
 
-## Related Notes explorer
-
-Every rendered note page includes a full-width Related Notes explorer after the
-body. Balanced loads five candidates immediately; Rediscover and Connect remain
-lazy until their tabs are activated. **Balanced** is the broad mix from
-`bn related`, **Rediscover** limits the set to older or not-recently-opened graph
-neighbors, and **Connect** favors text- or metadata-supported notes that are not
-already directly linked. Each tab expands independently in groups of five to a
-hard cap of twenty. Cards show the candidate path, a bounded prose-first excerpt,
-relationship, optional bridge, and up to three human reasons. Numeric scores and
-ranking weights are intentionally not sent to or rendered by the browser.
-
-Feedback is directed from the note being viewed to the candidate. **Useful**
-adds a positive ranking signal. **Dismiss** and **Later** suppress that pair in
-all three modes; Later offers tomorrow, next week, or a strict future local date
-derived from the server's date. The Feedback drawer lists every active explicit
-decision for the source, including candidates outside the current result prefix.
-**Clear** removes the rating or snooze but preserves open history, so the pair is
-eligible again without pretending it was never opened. An expired Later decision
-also becomes eligible again on read; expiry does not rewrite the state file.
-
-Candidate title links remain ordinary links and work without JavaScript. With
-JavaScript enabled, navigation attempts to record an open using `sendBeacon`,
-falling back to a keepalive request; tracking failure never blocks navigation.
-**Open in editor** starts the configured editor first and records the open only
-after launch. Its JSON response distinguishes editor launch from recall-history
-recording, including the partial-success case where the editor opened but state
-could not be saved. The explorer itself is progressive enhancement: without
-JavaScript the mount remains harmless and note links/body rendering are
-unchanged, while `bn related` remains the full CLI interface.
-
-Related feedback and open history live only in
-`<vault>/.bnotes/recall.json`. This workflow never changes Markdown and never
-creates an undo-journal entry. A missing sidecar is an empty, non-mutating read.
-Corrupt, invalid, unsupported-version, or symlinked state fails closed and is
-not repaired or overwritten automatically. Ignored and process-quarantined
-notes are filtered through the same resilient snapshot as the rest of the web
-server, so they cannot leak through results, bridges, or the feedback drawer.
-
-The HTTP surface is `GET /api/related?source=<note-key>&mode=<mode>&limit=<1..20>`
-and CSRF-protected `POST /api/related/item`. The POST form accepts note route
-keys—not filesystem paths—and `action=view|open_editor|useful|dismissed|later|clear`;
-Later additionally requires `until=YYYY-MM-DD`. Browser code must treat these
-JSON shapes as a strict score-free contract, preserve each mode's ranked-prefix
-replacement semantics, and rerun queries after a mutation instead of attempting
-to reproduce ranking locally.
-
-Maintainer smoke validation covers a 1440×1000 desktop and a 390×844 narrow
-viewport (inside the 640-pixel breakpoint) with keyboard-only tab activation,
-Show more, Later, drawer Clear, and focus recovery;
-light, dark, and system themes; empty results; unavailable editor and unreadable
-recall-state errors; long titles, Unicode excerpts, missing bridges, and a full
-twenty-result panel. Run the smoke pass against a local `bn serve` instance after
-`npm run build:web`; the automated lifecycle, controller, contract, responsive
-CSS, race, and `just ci` checks remain the release gate of record.
-
-## Synthesis workbench
-
-`/synthesize?source=<note-key>` turns one note and the notes you choose beside it
-into a new note. Every note page carries a **Synthesize** link that opens the
-workbench with that note as the anchor. The route requires exactly one non-blank
-`source`, so a missing, blank, or repeated key is a `400` rather than a silently
-chosen anchor. The page is a server-rendered shell that is inert without
-JavaScript and explains itself rather than rendering dead controls.
-
-The anchor is always first and can be neither removed nor reordered. Supporting
-notes come from the anchor's Related suggestions or from a search box, up to ten,
-and their order is yours: drag a row's handle, or focus it and press `Up`/`Down`.
-The order matters, because it is the order the context packet and the note's
-Sources list use. A supporter you previously dismissed in the Related explorer can
-still be chosen here — an explicit selection is authoritative, and recall
-suppression never drops a note you picked.
-
-**Prepare context** builds the packet. `POST /api/synthesis/context` reloads
-configuration, resolves every key against the current vault, ranks the selection,
-and returns the anchor's complete body plus at least one exact excerpt per
-supporter, together with a manifest and a `context_id`. A supporter with no
-extractable body block is refused by name rather than reduced to a bare title, so
-an empty or unusable note produces an actionable message instead of a silently
-thinner packet. The byte budget grows as far as the mandatory anchor body and one
-excerpt per supporter require, up to a hard 1 MiB ceiling.
-
-A `context_id` lasts one hour and is reusable, so generating twice — or previewing
-after a failed generation — costs nothing and never rebuilds the packet. Changing
-the sources, their order, the purpose, or the free-text prompt discards it and
-asks you to prepare again. Editing the title, folder, or draft does not, because
-those never reach the packet.
-
-Packets and receipts are also bounded in memory. The server keeps at most 32
-context packets and 8 MiB of packet bytes, and at most 32 unredeemed receipts and
-8 MiB of planned note bytes; a new one past either bound drops whichever record is
-closest to expiry, and every record is released on its own within a minute of
-expiring rather than waiting for your next request. An evicted packet is the same
-`404` an expired one is, and an evicted receipt the same `preview_required`, so
-the remedy is unchanged: prepare or preview again, with everything you wrote
-intact.
-
-Those controls stay editable while a request is in flight, so a packet or a
-receipt is accepted only when the inputs it was built from still match what you
-see: a context response is dropped unless the source order, purpose, and prompt
-are unchanged, and a preview response is dropped unless the context, title,
-folder, and draft are. A dropped response leaves everything you wrote intact and
-asks you to prepare or preview again, so a slow request can never re-enable
-Generate or Create for values you have since replaced.
-
-Generation is optional and unavailable unless `[agent].command` is configured;
-without it the button names the key to set and manual drafting is unaffected. The
-first generation of a session shows a disclosure naming the local command and what
-is sent to it. It states that your prompt and that packet are retained in server
-memory until the context expires, is evicted to keep memory bounded, or the server
-restarts and are never written to disk, that the stored packet is sent to the
-command only after you accept, and that the generated candidate is not stored on
-the server.
-`POST /api/synthesis/generate` feeds the stored packet bytes to that command's
-stdin and returns its stdout verbatim beside separately rendered safe HTML. The
-output never lands in your draft: it appears in its own candidate panel with
-Replace, Append, Copy, and Dismiss, so repeated generations and outright failures
-both leave whatever you have written untouched. Freshness is checked immediately
-before and after the command runs — a source note that moved, vanished, or changed
-bytes, and an edited `brainnotes.toml`, are all `409`, while an expired
-`context_id` is `404`, because the remedy there is to rebuild rather than to
-retry.
-
-The destination folder defaults to the anchor's own folder and stays editable.
-**Preview** plans the note without writing it: `POST /api/synthesis/preview`
-returns the destination path, the exact Markdown the file will hold, a rendered
-view of it, the receipt's expiry, and the ordered Sources list. The draft is sent
-exactly as typed — the server normalizes line endings and trims edge blank lines
-itself — and is refused if it is empty, larger than 1 MiB, not valid UTF-8, or
-already contains a `## Sources` heading, since the workbench appends that section
-itself. Each refusal is shown beside the title, folder, or draft it belongs to.
-
-The Sources section is a `## Sources` heading followed by one
-`- [[Folder/Note|Title]]` bullet per note in selection order, anchor first. It is
-generated rather than typed, so it always matches the packet the note was written
-from.
-
-`POST /api/synthesis/apply` accepts nothing but the `preview_id`. Title, folder,
-draft, and sources all come from the stored plan, so no request can substitute
-content you never reviewed, and the bytes written are the ones the preview showed.
-A receipt lasts five minutes and is single-use: it is spent before any file is
-touched, so a replay — including a retry after a failed apply — is refused with
-`preview_required` instead of creating a second note. Any change to the title,
-folder, draft, or selection invalidates the receipt in the browser, and you
-preview again.
-
-Version one creates new notes only. If the destination is taken by the time you
-apply, whether between the preview and the apply or during the commit itself, the
-apply is refused and the existing file is left exactly as it was. The same holds
-for a source note edited after the preview: the plan pins every source revision,
-so it is refused with `409` and neither a note nor a journal entry is created.
-Change the title or folder, or preview again, and retry.
-
-A successful apply writes one undo journal entry named `bn web synthesize`, so a
-synthesis note can be taken back with `bn undo <journal_id>` or from the change
-history panel on `/library`, like any other web write. Building a context and
-generating a candidate are read-only: neither writes Markdown, recall state, nor
-the journal, and neither leaves anything on disk.
-
-Your selection and the text you typed are kept in the browser's local storage,
-namespaced by vault and anchor, so a refresh or an accidental close does not lose
-them. Only note keys and your own text are stored — never note bodies, excerpts,
-the packet, or rendered HTML — and note identities are rehydrated on load, which is
-also how a note that has left the vault is detected and reported. A restored
-candidate is shown as Markdown, because its rendering was never saved. A context
-is never restored: after a refresh you prepare it again. **Discard** clears the
-saved record and the whole selection, and asks for confirmation whenever there is
-meaningful work to lose. A successful apply clears that record too. If the browser
-refuses to delete it, neither says the saved work was cleared: a warning explains
-that it will come back, and the apply stays on the workbench with a link to the
-new note instead of navigating past the warning. A browser without local storage
-or without a writable clipboard loses only those conveniences; creating a note by
-hand still works end to end.
-
-Maintainer smoke validation covers a 1440×1000 desktop and a 390×844 narrow
-viewport with keyboard-only selection, reordering, generation, preview, and apply;
-light and dark themes; a vault with no agent configured; and an agent command that
-fails, times out, or returns unusable output.
-
-The Health page starts with Daily Fixes: the same hygiene queue as `bn doctor`
-(over the notes the server successfully loaded — a note quarantined by the
-2-second timeout above is absent from the web queue but still scanned by the CLI),
-covering frontmatter parse errors, schema violations, broken wikilink targets,
-duplicate titles, orphan notes, dead-end notes, long-tail property values, and —
-when their `[cockpit]` keys are configured — the advisory rules `sensitive_content`,
-`missing_review_date`, `stale_status`, `wip_limit`, `hub_needs_synthesis`, and
-`capture_backlog`.
-Tasks are grouped by issue and affected note, sorted by priority, and identified
-with content-aware hashes over the issue kind, detail, affected relative paths,
-locations, and file content. Marking a task Done hides that exact issue until its
-signature changes; Snooze hides it until the selected local deadline, either
-tomorrow or next week; Clear returns a suppressed task to the active queue.
-
-The advisory rules are triage-only: they never carry a fix action, so the web UI
-suppresses the fix button for them (driven by each task's `triage_only` flag) and
-they are resolved by editing notes yourself and then marking Done or Snooze.
-`sensitive_content` rows show only a redacted `line N: <detector category>`
-location — the matched secret value is never sent to the browser, the queue JSON,
-or any review surface.
-
-`GET /api/cockpit?view=daily` caps the workflow-filtered queue to the top
-`cockpit.daily_limit` tasks (default `10`) while leaving the counts as the full
-totals, so the daily panel shows the highest-priority findings without losing the
-active/hidden tallies. `GET /api/daily-review/context` returns the same
-deterministic, redacted snapshot as `bn doctor --review-context` — per-kind
-groups and ordered items with server-redacted locations, no file hashes, and no
-raw bodies — so the CLI and web review surfaces cannot drift for the notes the
-server loaded. The one intended difference is coverage, not format: a note
-quarantined by the server-only 2-second load timeout is absent from the web
-snapshot while `bn doctor` still includes it from its full-vault scan.
-
-`POST /api/daily-review/agent` is an opt-in, local-only AI review. A non-empty
-legacy `cockpit.agent_command` remains the daily-review-only override (split on
-whitespace, no shell); otherwise the route uses the shared top-level
-`[agent].command` argv and timeout. It feeds exactly the redacted daily-review
-context on stdin and returns stdout verbatim as `{ok, enabled: true, output}`.
-When neither command is configured, the route returns a clean disabled response
-(`{ok: true, enabled: false}`) with HTTP `200`, not an error—no AI provider
-dependency is added. Failures and timeouts return `internal_error` (HTTP `500`).
-Because only the redacted daily-review context crosses this boundary, raw note
-bodies, file hashes, and unredacted sensitive values never reach this agent
-route. The route is CSRF-protected like every other side-effecting web action.
-
-Cockpit workflow state is stored in the served vault at
-`<vault>/.bnotes/cockpit.json`, migrated automatically from readable records in
-the legacy `<vault>/.bnotes/review.json` on first load. It is runtime UI state,
-not note metadata: it does not edit note frontmatter, does not write undo
-journal entries, and is pruned when the underlying issue is resolved or changes
-enough to receive a new signature. `GET /api/cockpit` returns active tasks plus
-`active`, `done_hidden`, `snoozed_hidden`, and `total_generated` counts.
-`POST /api/cockpit/item` requires CSRF and form fields `id`,
-`action=mark_done|snooze|clear` (`done` is accepted as an alias for
-`mark_done`), plus optional `snooze=tomorrow|week`.
-
-Fixable tasks advertise a fix action (schema repair, deterministic relink, or
-blank-stub creation for a broken target). Applying a fix is preview-gated:
-`POST /api/fixes/preview` returns the planned per-note changes plus a one-use
-`preview_id`, and `POST /api/fixes/apply` must echo that receipt back before any
-file is touched. A receipt that is missing, expired, replayed, or whose task
-changed on disk since the preview is rejected with `409` so a stale fix never
-lands. Both endpoints require CSRF and the task `id` and `action`; a successful
-apply writes an undo journal entry named `bn cockpit fix`.
-
-The Properties pages are an interactive workbench over every property your notes
-actually store plus every property declared in `[frontmatter.properties]`. The
-catalog sorts properties so the ones needing attention come first and reports
-configured status, coverage, distinct logical values, observed value kinds, and
-violation counts (missing required, wrong type, disallowed value) alongside
-values YAML cannot safely represent as frontmatter text. A logical value counts
-at most once per note, so a list that repeats an item does not inflate the
-statistics. `/properties/<key>` drills into one property with its distinct
-values, a filterable note list (all, violations, missing required, unsupported),
-a free-text title/path search, and a value filter. Note rows are paginated at 50
-per page by default with a hard maximum of 200.
-
-Editing a value uses a control that matches the declared kind: a text field for
-`string`, a wikilink field that adds the `[[ ]]` wrapping for you, native date
-and datetime pickers, numeric fields for `int` and `float`, a checkbox for
-`bool`, and a row of removable chips plus an add field for `list`. An
-undeclared property is edited as text. Every control validates before it will
-submit, so a malformed date or a value outside `allowed` is refused in the
-browser rather than at the server.
-
-The note list is keyboard operable end to end: `/` focuses the search box, the
-arrow keys move the focused row, space toggles that row's selection, enter opens
-the inline editor or confirms the focused action, and escape cancels the editor
-or closes the preview dialog. Focus returns to the row you started from after a
-dialog closes.
-
-Saving follows a hybrid model. A single-note replacement of one value, and
-adding one item to one note's list, save immediately: the row updates in place
-and an undo toast appears. Everything riskier is preview-gated — removing a list
-item, unsetting a property, any change touching more than one note, a bulk
-replacement of a value across notes, renaming a property, applying schema
-repairs, and every property-definition edit. Those go through
-`POST /api/properties/preview`, which returns the affected files, per-note
-before/after values, the `brainnotes.toml` diff for a definition change,
-projected violation totals, blockers, warnings, and a one-use `preview_id` with
-its `expires_at`. The preview dialog shows all of it and requires an explicit
-confirmation; `POST /api/properties/apply` refuses to write unless it receives
-that receipt. A receipt is single-use, expires after five minutes, and is
-invalidated when `brainnotes.toml` changes underneath it, so a stale plan can
-never land. Fatal blockers (unparseable frontmatter, a missing note, a rename
-that would collide with an existing key, a configuration conflict) suppress the
-receipt entirely, which means there is nothing to confirm and no apply is
-possible until the blocker is resolved. A skipped repair is reported as an
-advisory warning instead and does not block the rest.
-
-After a successful apply the edited rows update immediately, the property
-summary and violation counts refetch without a page reload, and an undo toast
-links to the history panel at the bottom of the page. That panel lists recent
-property and configuration changes with their journal entry IDs, so you can undo
-a specific one rather than only the latest. If a note changed on disk between
-reading the page and saving, the write is refused with `409` and nothing is
-touched — refresh and retry.
-
-Property definitions are editable from the same page. The definition editor sets
-`type`, `items` for a list, `required`, and the `allowed` list, previews the
-exact `brainnotes.toml` diff plus how many notes would newly violate the
-definition, and only then writes. Definition changes never rewrite notes: adding
-`allowed = [...]` reveals violations, and fixing them is a separate, separately
-confirmed repair. For an unconfigured property whose observed values unanimously
-support one kind, the pages propose an inferred `[frontmatter.properties.<key>]`
-block, which you can review and adopt into the editor with one click before
-saving it. The catalog also offers **Add to brainnotes.toml** on every inferred
-block; it previews the exact configuration diff and writes the definition after
-you confirm it. Clicking the `brainnotes.toml` label in that section opens the
-configuration file through `[open].editor`, with `$EDITOR` as the fallback.
-Inference is deliberately conservative: it never guesses `required` or
-`allowed`, and it stays silent when the data mixes kinds, mixes scalars with
-lists, or contains a value it cannot classify.
-
-While the page is visible it polls `GET /api/config/status` every five seconds
-and stops polling when the tab is hidden. If `brainnotes.toml` was edited
-externally and reloaded cleanly, the page reloads its data and tells you why. If
-the file is now invalid, a banner reports the parse error and property writes are
-refused until it is fixed. If a change needs a server restart to take effect, a
-restart-required banner says so. Status changes are announced to screen readers,
-as are save results and errors.
-
-An unsupported value (a YAML null, mapping, or nested list) is shown by label
-only — never as text a write could reproduce — cannot be used as a value filter,
-and cannot be edited from the browser. Fix those in the file directly.
-
-Version one deliberately excludes: spreadsheet-style grid editing of many
-properties at once, advanced value transforms (regular expressions, split/join,
-case rules), saved or reusable edit recipes, browser editing of settings other
-than property definitions or of raw TOML, and any redesign of the note-body
-editor — bodies still open in your configured editor.
+## Note actions, Trash, and rendering
 
 The overview search results can select notes for batch lifecycle work: move to
 Trash, move to a folder, set/list-edit frontmatter, or unset frontmatter. Bulk
@@ -496,12 +173,16 @@ note bodies) — plus footnotes, definition lists, and typographic punctuation
 narrow viewports, and wikilinks resolve inside table cells just as they do in
 body text. Inline and fenced code are left untouched by these transforms.
 
-Local binaries built with `just build` or `just install` remember this checkout
-path. `bn serve` rebuilds web assets there before starting, preferring the local
-native `node_modules/esbuild/bin/esbuild` binary so an already-installed checkout
-does not need to launch `node` or `npm`. If that binary is missing, it falls back
-to `npm run build:web`. Binaries without the local checkout stamp fall back to
-detecting a checkout from the current directory, then to embedded assets.
+Editor opens from note pages and Daily Brief cards use the same editor resolution as CLI open
+commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
+if editing the file outside the web UI changes the body, refresh the page
+manually to see updates.
+
+Media embeds (`![[image.png]]`) render through `/media/...` only when the file
+exists. Missing media embeds remain plain text (they do not redirect to
+`/broken`).
+
+## Filters and the graph view
 
 The overview and graph views share the same URL filter parameters for text,
 tags, category, status, type, folder, property presence, issue filters
@@ -520,9 +201,18 @@ context, and zoomed views, and the All mode is available when every label is
 needed. Click a node to lock its details, highlight its one-hop neighborhood,
 and enable Open note; click empty graph space to clear the selection.
 
+## Options, assets, and security
+
 `--addr` overrides `[serve].addr`. `--port` rewrites only the port on the
 resolved address host. `--no-open` forces browser launch off even when
 `[serve].open_browser = true`.
+
+Local binaries built with `just build` or `just install` remember this checkout
+path. `bn serve` rebuilds web assets there before starting, preferring the local
+native `node_modules/esbuild/bin/esbuild` binary so an already-installed checkout
+does not need to launch `node` or `npm`. If that binary is missing, it falls back
+to `npm run build:web`. Binaries without the local checkout stamp fall back to
+detecting a checkout from the current directory, then to embedded assets.
 
 The default bind is localhost (`127.0.0.1:8729`). This is single-user local
 software; there is no auth layer. All side-effecting web routes use `POST`,
@@ -562,18 +252,17 @@ names (cockpit fixes use `bn cockpit fix`, property changes use
 `bn serve property ...`); `POST /api/undo` restores the latest entry by default
 or a selected entry ID.
 
-Editor opens from note pages and Daily Brief cards use the same editor resolution as CLI open
-commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;
-if editing the file outside the web UI changes the body, refresh the page
-manually to see updates.
+## Daily Brief dogfood readout
 
-Media embeds (`![[image.png]]`) render through `/media/...` only when the file
-exists. Missing media embeds remain plain text (they do not redirect to
-`/broken`).
-
-Two-week Daily Brief dogfood readout (local state only):
+Over two weeks, from local state only:
 
 1. Count distinct visit days in the last 14 days from `.bnotes/brief.json` `visits`.
 2. Compute average visits per week as `visit_days / 2`.
 3. Compute open-day rate as `days_with_open / visit_days` (where opens come from `opens` and are grouped by local date).
 4. Success threshold: at least 4 visits per week and opens on at least 50% of visited days.
+
+## Related documentation
+
+- [Related Notes explorer](web-related-notes.md)
+- [Synthesis workbench](web-synthesis.md)
+- [Health, Daily Fixes, and properties](web-health.md)

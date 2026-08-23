@@ -1,13 +1,16 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -180,4 +183,84 @@ func requireSynthesisError(t *testing.T, status int, body string, wantStatus int
 	if decoded.Code != wantCode {
 		t.Fatalf("code = %q, want %q (body = %s)", decoded.Code, wantCode, body)
 	}
+}
+
+func synthesisAgentConfigTOML(argv string) string {
+	return synthesisTestConfigTOML + "\n[agent]\ncommand = [" + argv + "]\ntimeout_seconds = 30\n"
+}
+
+func supporterKeys(t *testing.T, supporters []synthesisNoteIdentity) []string {
+	t.Helper()
+
+	keys := make([]string, len(supporters))
+	for index := range supporters {
+		keys[index] = supporters[index].Key
+	}
+	return keys
+}
+
+func requireKeyOrder(t *testing.T, got, want []string, label string) {
+	t.Helper()
+
+	if len(got) != len(want) {
+		t.Fatalf("%s = %v, want %v", label, got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("%s = %v, want %v", label, got, want)
+		}
+	}
+}
+
+// newStaleSynthesisServer builds a configured-agent server and one live context,
+// returning everything a staleness case needs to disturb the vault between the
+// build and the run.
+func newStaleSynthesisServer(t *testing.T) (*httptest.Server, string, string, *int) {
+	t.Helper()
+
+	runs := 0
+	ts, _, root := newSynthesisServerWithConfig(
+		t,
+		synthesisAgentConfigTOML(`"synth-agent"`),
+		synthesisTestNotes(),
+		Options{
+			RunAgent: func(context.Context, []string, []byte) ([]byte, error) {
+				runs++
+				return []byte("Draft body.\n"), nil
+			},
+		},
+	)
+	built := buildSynthesisContextRequest(t, ts.URL, defaultSynthesisContextForm())
+	return ts, root, built.ContextID, &runs
+}
+
+// vaultFileSet returns every file under root as "<relpath>:<size>", sorted, so a
+// test can assert the whole vault is untouched.
+func vaultFileSet(t *testing.T, root string) []string {
+	t.Helper()
+
+	var entries []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, filepath.ToSlash(rel)+":"+strconv.FormatInt(info.Size(), 10))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk vault: %v", err)
+	}
+	sort.Strings(entries)
+	return entries
 }
