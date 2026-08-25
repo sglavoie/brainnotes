@@ -1,0 +1,8 @@
+# Recall and context boundaries
+
+Companion to `CLAUDE.md`; read before changing `bn related`, `bn context`, `internal/recall`, or the recall sidecar.
+
+- **Recall read/write boundary**: ordinary `bn related`, every `bn context` form, and `bn context --agent` never write recall state, the undo journal, or Markdown. Only successful `related -i` selection, `related feedback`, and CSRF-protected `POST /api/related/item` actions write `<vault>/.bnotes/recall.json`; that sidecar is runtime state and is not recoverable through `bn undo`. No related workflow writes Markdown or creates an undo-journal entry.
+- **Context privacy boundary**: a context packet intentionally contains the complete source body plus selected exact excerpts. `--agent` receives exactly the inspectable Markdown bytes and prints stdout verbatim; the configured executable may transmit them, but `bn` itself adds no provider or network client. Do not reuse the web daily-review claim that bodies are redacted—the two agent inputs are intentionally different.
+- **Context selection invariant**: Markdown and JSON must select the same related notes and source spans even though JSON escaping can be larger. Budget candidate changes against both serializers, never truncate the source body, and keep all excerpts tied to exact `Document.Blocks` locations.
+- **Recall state recovery**: missing state is a valid empty read and is created lazily; missing-note records and expired snoozes remain untouched by reads and are pruned on the next explicit write. Never auto-repair or overwrite corrupt, unsupported-version, invalid-record, or symlinked state.

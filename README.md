@@ -73,3 +73,4 @@ bn find --tag drafts | bn set - status=done
   - [Maintenance and bulk edits](docs/commands-maintenance.md)
 - [Shell completion and editor integration](docs/integrations.md)
 - [Recipes, safety, performance, and migration notes](docs/workflows.md)
+- Contributors: `docs/internals/` documents the architecture, locking model, web write classes, recall boundaries, and synthesis workbench invariants.
