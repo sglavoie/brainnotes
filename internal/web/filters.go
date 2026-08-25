@@ -36,6 +36,14 @@ func (f noteFilters) hasNonTextFilters() bool {
 		flags.MaxLinks >= 0
 }
 
+// withoutQuery returns a copy with the free-text query cleared. The predicate
+// and flags are built from the structured filters only, so they stay valid.
+func (f noteFilters) withoutQuery() noteFilters {
+	f.Query = ""
+	f.foldedQuery = ""
+	return f
+}
+
 func parseNoteFilters(params url.Values, root string, graph *query.Graph) (noteFilters, error) {
 	flags := query.Flags{
 		Tags:         repeatedParam(params, "tag"),

@@ -141,6 +141,14 @@ export const buildGraphStyleRules = (
     },
   },
   {
+    selector: "node.is-search-match",
+    style: {
+      "border-width": 4,
+      "border-color": palette.hovered,
+      "z-index": 25,
+    },
+  },
+  {
     selector: "node.is-hovered",
     style: {
       "border-width": 3,

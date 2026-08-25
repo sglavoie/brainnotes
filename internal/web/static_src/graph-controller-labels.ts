@@ -1,7 +1,8 @@
-import type { GraphFocusState, GraphLabelMode } from "./graph";
+import type { GraphFocusState, GraphLabelMode, GraphSearchMode } from "./graph";
 
 export const labelPolicy = {
   smallGraphNodeLimit: 24,
+  searchMatchLabelLimit: 30,
   selectedNeighborLabelLimit: 10,
   zoomLabelMinZoom: 1.05,
   zoomVisibleLabelLimit: 22,
@@ -18,6 +19,13 @@ export const readLabelMode = (inputs: readonly HTMLInputElement[]): GraphLabelMo
   }
   return "auto";
 };
+
+export const normalizeSearchMode = (value: unknown): GraphSearchMode =>
+  String(value || "")
+    .trim()
+    .toLowerCase() === "focus"
+    ? "focus"
+    : "filter";
 
 export const cyNodeByID = (
   cy: cytoscape.Core | null,
@@ -119,7 +127,8 @@ export const labelIDsForCurrentState = (
   cy: cytoscape.Core | null,
   labelMode: GraphLabelMode,
   selectedNodeID: string,
-  hoveredNodeID: string
+  hoveredNodeID: string,
+  matchIDs: ReadonlySet<string> = new Set<string>()
 ): Set<string> => {
   const labelIDs = new Set<string>();
   if (!cy) {
@@ -149,13 +158,30 @@ export const labelIDsForCurrentState = (
     labelIDs.add(hoveredNode.id());
   }
 
+  // Matched nodes are what you searched for, so they always get a label — but a
+  // broad query would otherwise carpet the canvas in text, so cap by degree.
+  if (matchIDs.size > 0) {
+    const matchNodes = cy
+      .nodes()
+      .filter((node) => matchIDs.has(node.id()))
+      .toArray() as cytoscape.NodeSingular[];
+    const labeledMatches =
+      matchNodes.length <= labelPolicy.searchMatchLabelLimit
+        ? matchNodes
+        : sortedNodesByImportance(matchNodes).slice(0, labelPolicy.searchMatchLabelLimit);
+    for (const node of labeledMatches) {
+      labelIDs.add(node.id());
+    }
+  }
+
   return labelIDs;
 };
 
 export const visualFocusState = (
   cy: cytoscape.Core | null,
   selectedNodeID: string,
-  hoveredNodeID: string
+  hoveredNodeID: string,
+  matchIDs: ReadonlySet<string> = new Set<string>()
 ): GraphFocusState => {
   const selectedNode = cyNodeByID(cy, selectedNodeID);
   const hoveredNode = cyNodeByID(cy, hoveredNodeID);
@@ -167,12 +193,36 @@ export const visualFocusState = (
       highlightedEdgeIDs.add(edge.id());
     });
   }
+
+  // Search matches are a second, independent focus source. They contribute the
+  // same treatment as a click focus: the match, its 1-hop neighbors, and every
+  // edge touching it stay bright.
+  const resolvedMatchIDs = new Set<string>();
+  const matchNeighborIDs = new Set<string>();
+  if (matchIDs.size > 0) {
+    for (const id of matchIDs) {
+      const matchNode = cyNodeByID(cy, id);
+      if (!matchNode) {
+        continue;
+      }
+      resolvedMatchIDs.add(matchNode.id());
+      for (const neighborID of connectedNodeIDs(matchNode)) {
+        matchNeighborIDs.add(neighborID);
+      }
+      matchNode.connectedEdges().forEach((edge) => {
+        highlightedEdgeIDs.add(edge.id());
+      });
+    }
+  }
+
   return {
     focusNodeID: focusNode ? focusNode.id() : "",
     selectedID: selectedNode ? selectedNode.id() : "",
     hoveredID: hoveredNode ? hoveredNode.id() : "",
     neighborIDs,
     highlightedEdgeIDs,
+    matchIDs: resolvedMatchIDs,
+    matchNeighborIDs,
   };
 };
 
@@ -182,32 +232,45 @@ export const applyGraphVisualClasses = (
   cy: cytoscape.Core | null,
   labelMode: GraphLabelMode,
   selectedNodeID: string,
-  hoveredNodeID: string
+  hoveredNodeID: string,
+  matchIDs: ReadonlySet<string> = new Set<string>()
 ): void => {
   if (!cy) {
     return;
   }
-  const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID);
-  const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID);
+  const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs);
+  const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID, matchIDs);
+  // Click/hover focus and search focus simply union: clicking a node while a
+  // search is active keeps both bright.
+  const hasFocusSource = focus.focusNodeID !== "" || focus.matchIDs.size > 0;
   cy.batch(() => {
     cy.nodes().forEach((node) => {
       const id = node.id();
       const isSelected = id === focus.selectedID;
       const isHovered = id === focus.hoveredID;
       const isNeighbor = focus.neighborIDs.has(id);
+      const isMatch = focus.matchIDs.has(id);
+      const isMatchNeighbor = focus.matchNeighborIDs.has(id);
       const isFocusedNode = focus.focusNodeID !== "" && id === focus.focusNodeID;
-      const isDimmed = focus.focusNodeID !== "" && !isFocusedNode && !isHovered && !isNeighbor;
+      const isDimmed =
+        hasFocusSource &&
+        !isFocusedNode &&
+        !isHovered &&
+        !isNeighbor &&
+        !isMatch &&
+        !isMatchNeighbor;
       node.toggleClass("is-labeled", labelIDs.has(id));
       node.toggleClass("is-selected", isSelected);
       node.toggleClass("is-hovered", isHovered);
       node.toggleClass("is-neighbor", isNeighbor);
+      node.toggleClass("is-search-match", isMatch);
       node.toggleClass("is-dimmed", isDimmed);
     });
 
     cy.edges().forEach((edge) => {
       const isHighlighted = focus.highlightedEdgeIDs.has(edge.id());
       edge.toggleClass("is-highlighted-edge", isHighlighted);
-      edge.toggleClass("is-dimmed", focus.focusNodeID !== "" && !isHighlighted);
+      edge.toggleClass("is-dimmed", hasFocusSource && !isHighlighted);
     });
   });
 };

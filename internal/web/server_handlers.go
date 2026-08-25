@@ -230,7 +230,11 @@ func (s *Server) handleGraphJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := buildGraphResponse(snapshot, s.vault.Root, filters)
+	// q_mode is a display hint, not a filter: unknown or absent values mean
+	// filter mode rather than a bad request.
+	focusQuery := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("q_mode")), "focus")
+
+	payload, err := buildGraphResponse(snapshot, s.vault.Root, filters, focusQuery)
 	if err != nil {
 		http.Error(w, "graph error", http.StatusInternalServerError)
 		return

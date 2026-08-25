@@ -25,7 +25,8 @@ type RawGraphNodeField =
   | "hasBroken"
   | "brokenCount"
   | "isOrphan"
-  | "isDeadEnd";
+  | "isDeadEnd"
+  | "matchesQuery";
 
 type RawGraphEdgeField = "id" | "source" | "target";
 
@@ -63,6 +64,7 @@ export type NormalizedGraphNode = DegreeSummary & {
   brokenCount: number;
   isOrphan: boolean;
   isDeadEnd: boolean;
+  matchesQuery: boolean;
   size?: number;
 };
 
@@ -82,6 +84,8 @@ export type GraphEdgeModel = NormalizedGraphEdge;
 
 export type GraphLabelMode = "auto" | "all";
 
+export type GraphSearchMode = "filter" | "focus";
+
 export type GraphViewportSnapshot = {
   pan: cytoscape.Position;
   zoom: number;
@@ -93,6 +97,8 @@ export type GraphFocusState = {
   hoveredID: string;
   neighborIDs: Set<string>;
   highlightedEdgeIDs: Set<string>;
+  matchIDs: Set<string>;
+  matchNeighborIDs: Set<string>;
 };
 
 const asRecord = (value: unknown): GraphRecord | null =>
@@ -228,6 +234,7 @@ const normalizeGraphNodeData = (
     brokenCount,
     isOrphan: Boolean(nodeData.isOrphan),
     isDeadEnd: Boolean(nodeData.isDeadEnd),
+    matchesQuery: Boolean(nodeData.matchesQuery),
     size: nodeSizeForDegree(filteredDegree),
   };
 };
@@ -307,6 +314,7 @@ export const toCytoscapeElements = (graphElements: GraphElements): cytoscape.Ele
       brokenCount: node.brokenCount,
       isOrphan: node.isOrphan,
       isDeadEnd: node.isDeadEnd,
+      matchesQuery: node.matchesQuery,
       size: node.size,
     },
   })),

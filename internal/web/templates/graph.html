@@ -31,6 +31,19 @@
               spellcheck="false"
             />
           </div>
+          <fieldset class="graph-search-mode" aria-label="Search mode">
+            <legend class="graph-control-label">Search mode</legend>
+            <div class="graph-search-mode-options">
+              <label class="graph-search-mode-option">
+                <input id="graph-search-mode-filter" type="radio" name="graph-search-mode" value="filter" checked />
+                <span>Filter</span>
+              </label>
+              <label class="graph-search-mode-option">
+                <input id="graph-search-mode-focus" type="radio" name="graph-search-mode" value="focus" />
+                <span>Focus</span>
+              </label>
+            </div>
+          </fieldset>
           {{template "facetControls" .FacetControls}}
           <div class="graph-spread">
             <div class="graph-spread-header">
@@ -49,6 +62,9 @@
           </div>
           <div class="graph-action-controls" aria-label="Graph viewport">
             <button id="graph-fit-button" class="graph-control-button" type="button">Fit graph</button>
+            <button id="graph-zoom-matches-button" class="graph-control-button" type="button" disabled>
+              Zoom to matches
+            </button>
             <button id="graph-reset-layout-button" class="graph-control-button" type="button">Reset layout</button>
           </div>
           <fieldset class="graph-label-mode" aria-label="Label mode">

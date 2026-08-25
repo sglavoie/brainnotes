@@ -4007,6 +4007,14 @@ var BrainNotesApp = (() => {
       }
     },
     {
+      selector: "node.is-search-match",
+      style: {
+        "border-width": 4,
+        "border-color": palette.hovered,
+        "z-index": 25
+      }
+    },
+    {
       selector: "node.is-hovered",
       style: {
         "border-width": 3,
@@ -4168,6 +4176,7 @@ var BrainNotesApp = (() => {
       brokenCount,
       isOrphan: Boolean(nodeData.isOrphan),
       isDeadEnd: Boolean(nodeData.isDeadEnd),
+      matchesQuery: Boolean(nodeData.matchesQuery),
       size: nodeSizeForDegree(filteredDegree)
     };
   };
@@ -4236,6 +4245,7 @@ var BrainNotesApp = (() => {
         brokenCount: node.brokenCount,
         isOrphan: node.isOrphan,
         isDeadEnd: node.isDeadEnd,
+        matchesQuery: node.matchesQuery,
         size: node.size
       }
     })),
@@ -4356,6 +4366,7 @@ var BrainNotesApp = (() => {
   // internal/web/static_src/graph-controller-labels.ts
   var labelPolicy = {
     smallGraphNodeLimit: 24,
+    searchMatchLabelLimit: 30,
     selectedNeighborLabelLimit: 10,
     zoomLabelMinZoom: 1.05,
     zoomVisibleLabelLimit: 22,
@@ -4371,6 +4382,7 @@ var BrainNotesApp = (() => {
     }
     return "auto";
   };
+  var normalizeSearchMode = (value) => String(value || "").trim().toLowerCase() === "focus" ? "focus" : "filter";
   var cyNodeByID = (cy, nodeID) => {
     if (!cy || !nodeID) {
       return null;
@@ -4440,7 +4452,7 @@ var BrainNotesApp = (() => {
       labelIDs.add(node.id());
     }
   };
-  var labelIDsForCurrentState = (cy, labelMode, selectedNodeID, hoveredNodeID) => {
+  var labelIDsForCurrentState = (cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs = /* @__PURE__ */ new Set()) => {
     const labelIDs = /* @__PURE__ */ new Set();
     if (!cy) {
       return labelIDs;
@@ -4466,9 +4478,16 @@ var BrainNotesApp = (() => {
     if (hoveredNode) {
       labelIDs.add(hoveredNode.id());
     }
+    if (matchIDs.size > 0) {
+      const matchNodes = cy.nodes().filter((node) => matchIDs.has(node.id())).toArray();
+      const labeledMatches = matchNodes.length <= labelPolicy.searchMatchLabelLimit ? matchNodes : sortedNodesByImportance(matchNodes).slice(0, labelPolicy.searchMatchLabelLimit);
+      for (const node of labeledMatches) {
+        labelIDs.add(node.id());
+      }
+    }
     return labelIDs;
   };
-  var visualFocusState = (cy, selectedNodeID, hoveredNodeID) => {
+  var visualFocusState = (cy, selectedNodeID, hoveredNodeID, matchIDs = /* @__PURE__ */ new Set()) => {
     const selectedNode = cyNodeByID(cy, selectedNodeID);
     const hoveredNode = cyNodeByID(cy, hoveredNodeID);
     const focusNode = selectedNode || hoveredNode;
@@ -4479,38 +4498,61 @@ var BrainNotesApp = (() => {
         highlightedEdgeIDs.add(edge.id());
       });
     }
+    const resolvedMatchIDs = /* @__PURE__ */ new Set();
+    const matchNeighborIDs = /* @__PURE__ */ new Set();
+    if (matchIDs.size > 0) {
+      for (const id of matchIDs) {
+        const matchNode = cyNodeByID(cy, id);
+        if (!matchNode) {
+          continue;
+        }
+        resolvedMatchIDs.add(matchNode.id());
+        for (const neighborID of connectedNodeIDs(matchNode)) {
+          matchNeighborIDs.add(neighborID);
+        }
+        matchNode.connectedEdges().forEach((edge) => {
+          highlightedEdgeIDs.add(edge.id());
+        });
+      }
+    }
     return {
       focusNodeID: focusNode ? focusNode.id() : "",
       selectedID: selectedNode ? selectedNode.id() : "",
       hoveredID: hoveredNode ? hoveredNode.id() : "",
       neighborIDs,
-      highlightedEdgeIDs
+      highlightedEdgeIDs,
+      matchIDs: resolvedMatchIDs,
+      matchNeighborIDs
     };
   };
-  var applyGraphVisualClasses = (cy, labelMode, selectedNodeID, hoveredNodeID) => {
+  var applyGraphVisualClasses = (cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs = /* @__PURE__ */ new Set()) => {
     if (!cy) {
       return;
     }
-    const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID);
-    const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID);
+    const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs);
+    const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID, matchIDs);
+    const hasFocusSource = focus.focusNodeID !== "" || focus.matchIDs.size > 0;
     cy.batch(() => {
       cy.nodes().forEach((node) => {
         const id = node.id();
         const isSelected = id === focus.selectedID;
         const isHovered = id === focus.hoveredID;
         const isNeighbor = focus.neighborIDs.has(id);
+        const isMatch = focus.matchIDs.has(id);
+        const isMatchNeighbor = focus.matchNeighborIDs.has(id);
         const isFocusedNode = focus.focusNodeID !== "" && id === focus.focusNodeID;
-        const isDimmed = focus.focusNodeID !== "" && !isFocusedNode && !isHovered && !isNeighbor;
+        const isDimmed = hasFocusSource && !isFocusedNode && !isHovered && !isNeighbor && !isMatch && !isMatchNeighbor;
         node.toggleClass("is-labeled", labelIDs.has(id));
         node.toggleClass("is-selected", isSelected);
         node.toggleClass("is-hovered", isHovered);
         node.toggleClass("is-neighbor", isNeighbor);
+        node.toggleClass("is-search-match", isMatch);
         node.toggleClass("is-dimmed", isDimmed);
       });
       cy.edges().forEach((edge) => {
         const isHighlighted = focus.highlightedEdgeIDs.has(edge.id());
         edge.toggleClass("is-highlighted-edge", isHighlighted);
-        edge.toggleClass("is-dimmed", focus.focusNodeID !== "" && !isHighlighted);
+        edge.toggleClass("is-dimmed", hasFocusSource && !isHighlighted);
       });
     });
   };
@@ -4754,6 +4796,16 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/graph-controller.ts
+  var readPageSearchMode = () => normalizeSearchMode(new URLSearchParams(window.location.search).get("q_mode"));
+  var syncPageSearchModeParam = (mode) => {
+    const params = new URLSearchParams(window.location.search);
+    if (mode === "focus") {
+      params.set("q_mode", "focus");
+    } else {
+      params.delete("q_mode");
+    }
+    updateBrowserQuery(params);
+  };
   var initGraph = () => {
     const dom = {
       canvas: getElementByID("graph-canvas", HTMLElement),
@@ -4768,8 +4820,10 @@ var BrainNotesApp = (() => {
       spreadInput: getElementByID("graph-spread-input", HTMLInputElement),
       spreadValue: getElementByID("graph-spread-value", HTMLElement),
       fitButton: getElementByID("graph-fit-button", HTMLButtonElement),
+      zoomMatchesButton: getElementByID("graph-zoom-matches-button", HTMLButtonElement),
       resetLayoutButton: getElementByID("graph-reset-layout-button", HTMLButtonElement),
-      labelModeInputs: queryAllElements(document, 'input[name="graph-label-mode"]', HTMLInputElement)
+      labelModeInputs: queryAllElements(document, 'input[name="graph-label-mode"]', HTMLInputElement),
+      searchModeInputs: queryAllElements(document, 'input[name="graph-search-mode"]', HTMLInputElement)
     };
     if (!dom.canvas) {
       return;
@@ -4791,12 +4845,15 @@ var BrainNotesApp = (() => {
       hoveredNodeID: "",
       selectedNodeID: "",
       labelMode: readLabelMode(dom.labelModeInputs),
+      searchMode: readPageSearchMode(),
+      matchIDs: /* @__PURE__ */ new Set(),
       lastMeaningfulViewport: null,
       layoutRunID: 0
     };
     let debounceToken = 0;
     let requestToken = 0;
     let selectionSyncing = false;
+    let currentElementSignature = "";
     function setStatus(message, kind = "") {
       setStatusText(dom.status, message, kind, ["is-loading", "is-empty", "is-error"]);
     }
@@ -4808,6 +4865,14 @@ var BrainNotesApp = (() => {
     function setLabelMode(nextMode) {
       state.labelMode = nextMode === "all" ? "all" : "auto";
       applyGraphVisualState();
+    }
+    function setSearchMode(nextMode) {
+      if (state.searchMode === nextMode) {
+        return;
+      }
+      state.searchMode = nextMode;
+      syncPageSearchModeParam(nextMode);
+      scheduleLoad(state.currentQuery, 0);
     }
     function restyleGraphForTheme() {
       if (!state.cy) {
@@ -4955,7 +5020,29 @@ var BrainNotesApp = (() => {
       selectNode(nodeID);
     }
     function applyGraphVisualState() {
-      applyGraphVisualClasses(state.cy, state.labelMode, state.selectedNodeID, state.hoveredNodeID);
+      applyGraphVisualClasses(
+        state.cy,
+        state.labelMode,
+        state.selectedNodeID,
+        state.hoveredNodeID,
+        state.matchIDs
+      );
+    }
+    function updateZoomMatchesButton() {
+      if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
+        dom.zoomMatchesButton.disabled = state.matchIDs.size === 0;
+      }
+    }
+    function zoomToMatches() {
+      if (!state.cy || state.matchIDs.size === 0) {
+        return;
+      }
+      const matchedNodes = state.cy.nodes().filter((node) => state.matchIDs.has(node.id()));
+      if (matchedNodes.length === 0) {
+        return;
+      }
+      state.cy.fit(matchedNodes, 96);
+      rememberMeaningfulViewport();
     }
     function runLayout(options = {}) {
       if (!state.cy || state.cy.nodes().length === 0) {
@@ -5025,7 +5112,41 @@ var BrainNotesApp = (() => {
       });
     }
     function buildQueryURL(query) {
-      return buildFilteredAPIURL("/api/graph.json", query);
+      const url = buildFilteredAPIURL("/api/graph.json", query);
+      if (state.searchMode !== "focus") {
+        return url;
+      }
+      const parsed = new URL(url, window.location.origin);
+      parsed.searchParams.set("q_mode", "focus");
+      return `${parsed.pathname}${parsed.search}`;
+    }
+    function elementSignature(graphElements) {
+      const nodeIDs = graphElements.nodes.map((node) => node.id).sort();
+      const edgeIDs = graphElements.edges.map((edge) => edge.id).sort();
+      return `${nodeIDs.join("\n")}\0${edgeIDs.join("\n")}`;
+    }
+    function matchIDsFor(graphElements) {
+      const ids = /* @__PURE__ */ new Set();
+      for (const node of graphElements.nodes) {
+        if (node.matchesQuery) {
+          ids.add(node.id);
+        }
+      }
+      return ids;
+    }
+    function refreshMatchHighlighting(graphElements) {
+      const instance = state.cy;
+      if (!instance) {
+        return;
+      }
+      instance.batch(() => {
+        instance.nodes().forEach((node) => {
+          node.data("matchesQuery", state.matchIDs.has(node.id()));
+        });
+      });
+      state.currentGraphElements = graphElements;
+      renderDetailsPanel();
+      applyGraphVisualState();
     }
     async function loadGraph(query, localToken) {
       if (typeof window.cytoscape !== "function") {
@@ -5056,23 +5177,41 @@ var BrainNotesApp = (() => {
       if (localToken !== requestToken) {
         return;
       }
-      state.currentGraphElements = normalizeGraphPayload(payload);
-      applyGraphElements(state.currentGraphElements, true);
+      const graphElements = normalizeGraphPayload(payload);
+      const signature = elementSignature(graphElements);
+      const focusMode = state.searchMode === "focus";
+      state.matchIDs = matchIDsFor(graphElements);
+      if (focusMode && state.cy && signature === currentElementSignature) {
+        refreshMatchHighlighting(graphElements);
+      } else {
+        state.currentGraphElements = graphElements;
+        currentElementSignature = signature;
+        applyGraphElements(graphElements, true);
+      }
+      updateZoomMatchesButton();
       const hasFilters = hasActiveSharedFilters();
       const scopeLabel = graphScopeLabel(query, hasFilters);
-      if (scopeLabel) {
-        if (state.currentGraphElements.nodes.length === 0) {
+      if (focusMode && query) {
+        if (state.matchIDs.size === 0) {
           setStatus(`No notes match ${scopeLabel}.`, "is-empty");
           return;
         }
         setStatus(
-          `Showing ${state.currentGraphElements.nodes.length} nodes and ${state.currentGraphElements.edges.length} edges for ${scopeLabel}.`
+          `Focusing ${state.matchIDs.size} of ${graphElements.nodes.length} nodes matching ${scopeLabel}.`
         );
         return;
       }
-      setStatus(
-        `Loaded ${state.currentGraphElements.nodes.length} nodes and ${state.currentGraphElements.edges.length} edges.`
-      );
+      if (scopeLabel) {
+        if (graphElements.nodes.length === 0) {
+          setStatus(`No notes match ${scopeLabel}.`, "is-empty");
+          return;
+        }
+        setStatus(
+          `Showing ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges for ${scopeLabel}.`
+        );
+        return;
+      }
+      setStatus(`Loaded ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges.`);
     }
     function scheduleLoad(query, delay) {
       window.clearTimeout(debounceToken);
@@ -5103,6 +5242,13 @@ var BrainNotesApp = (() => {
           syncPageQueryParam(query);
           scheduleLoad(query, 150);
         });
+        filterInput2.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") {
+            return;
+          }
+          event.preventDefault();
+          zoomToMatches();
+        });
       }
       updateSpreadLabel(dom.spreadInput, dom.spreadValue);
       if (dom.spreadInput instanceof HTMLInputElement) {
@@ -5117,6 +5263,10 @@ var BrainNotesApp = (() => {
       if (dom.fitButton instanceof HTMLButtonElement) {
         dom.fitButton.addEventListener("click", fitCurrentGraph);
       }
+      if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
+        dom.zoomMatchesButton.addEventListener("click", zoomToMatches);
+      }
+      updateZoomMatchesButton();
       if (dom.resetLayoutButton instanceof HTMLButtonElement) {
         dom.resetLayoutButton.addEventListener("click", () => {
           runLayout({
@@ -5135,11 +5285,26 @@ var BrainNotesApp = (() => {
           }
         });
       }
+      for (const input of dom.searchModeInputs) {
+        if (!(input instanceof HTMLInputElement)) {
+          continue;
+        }
+        input.addEventListener("change", () => {
+          if (input.checked) {
+            setSearchMode(normalizeSearchMode(input.value));
+          }
+        });
+      }
     }
     const initialQuery = readPageQuery();
     const filterInput = dom.filterInput;
     if (filterInput instanceof HTMLInputElement) {
       filterInput.value = initialQuery;
+    }
+    for (const input of dom.searchModeInputs) {
+      if (input instanceof HTMLInputElement) {
+        input.checked = normalizeSearchMode(input.value) === state.searchMode;
+      }
     }
     window.addEventListener(filterChangeEventName, () => {
       const query = filterInput instanceof HTMLInputElement ? filterInput.value.trim() : state.currentQuery;

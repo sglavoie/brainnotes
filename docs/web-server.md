@@ -190,9 +190,21 @@ tags, category, status, type, folder, property presence, issue filters
 ranges. The facet picker is searchable, count-labeled, keyboard usable, and
 writes selected filters into the URL, so filtered views can be shared.
 
-The graph view loads the whole vault by default. Filtering keeps only matching
-notes and links between visible notes, while the status line reports the
-reduced node and edge counts. Nodes with broken links, orphan status, or
+The graph view loads the whole vault by default. The free-text box has two
+Search modes. In **Filter** (the default) the query keeps only matching notes
+and links between visible notes, and the status line reports the reduced node
+and edge counts. In **Focus** the query stops removing anything: the graph keeps
+its shape and instead rings each match and dims everything except the matches
+and their one-hop neighbors, so a term is shown *in* its context rather than cut
+out of it. The mode is carried in the URL as `q_mode=focus` (on the page and as
+`/api/graph.json?q_mode=focus`), so a focused view can be shared and restored.
+Focus mode never moves the viewport while you type — the layout is left exactly
+where it is; press `Enter` in the search box or click **Zoom to matches** to fit
+the view to the matched nodes. Facets keep filtering in both modes, so you can
+scope the graph with a tag and then focus a term within that scope, and a click
+focus unions with the search focus rather than replacing it.
+
+Nodes with broken links, orphan status, or
 dead-end status are styled distinctly and expose those issues in the node
 details panel. Use the Spread slider to rerun the layout from a compact
 overview up to a wider graph. Labels default to Auto: small graphs are fully

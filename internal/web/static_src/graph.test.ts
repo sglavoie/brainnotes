@@ -139,6 +139,24 @@ describe("normalizeGraphPayload", () => {
     });
   });
 
+  it("carries matchesQuery through normalization and Cytoscape data", () => {
+    const graph = normalizeGraphPayload({
+      nodes: [
+        { data: { id: "alpha", title: "Alpha", matchesQuery: true } },
+        { data: { id: "beta", title: "Beta", matchesQuery: false } },
+        { data: { id: "gamma", title: "Gamma" } },
+      ],
+      edges: [],
+    });
+
+    expect(graph.nodes.map((node) => node.matchesQuery)).toEqual([true, false, false]);
+    expect(toCytoscapeElements(graph).map((element) => element.data.matchesQuery)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
   it("returns empty graph elements for malformed top-level payloads", () => {
     expect(normalizeGraphPayload(null)).toEqual(emptyGraphElements());
     expect(normalizeGraphPayload({ nodes: "bad", edges: 42 })).toEqual(emptyGraphElements());
@@ -223,6 +241,10 @@ describe("buildGraphStyleRules", () => {
     expect(ruleFor(rules, "node.is-orphan").style["border-color"]).toBe("#a0a0a0");
     expect(ruleFor(rules, "node.is-neighbor").style["border-color"]).toBe("#505050");
     expect(ruleFor(rules, "node.is-hovered").style["border-color"]).toBe("#606060");
+
+    const searchMatch = ruleFor(rules, "node.is-search-match").style;
+    expect(searchMatch["border-color"]).toBe("#606060");
+    expect(searchMatch["border-width"]).toBe(4);
 
     const selected = ruleFor(rules, "node.is-selected").style;
     expect(selected["border-color"]).toBe("#707070");

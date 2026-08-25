@@ -32,6 +32,7 @@ type graphJSONNodeData struct {
 	BrokenCount       int    `json:"brokenCount"`
 	IsOrphan          bool   `json:"isOrphan"`
 	IsDeadEnd         bool   `json:"isDeadEnd"`
+	MatchesQuery      bool   `json:"matchesQuery"`
 }
 
 type graphJSONEdge struct {
@@ -44,7 +45,12 @@ type graphJSONEdgeData struct {
 	Target string `json:"target"`
 }
 
-func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters) (graphJSON, error) {
+// buildGraphResponse renders the graph payload for the current filters. When
+// focusQuery is true the free-text query stops removing nodes: the included set
+// (and therefore node sizes and edges) is derived from the non-text filters
+// only, and the query is reported per node through MatchesQuery so the client
+// can dim non-matches in place without a relayout.
+func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters, focusQuery bool) (graphJSON, error) {
 	if snapshot.graph == nil {
 		return graphJSON{}, errorsf("nil graph")
 	}
@@ -65,8 +71,13 @@ func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters
 	}
 	degrees := graphNodeDegrees(snapshot)
 
+	inclusionFilters := filters
+	if focusQuery {
+		inclusionFilters = filters.withoutQuery()
+	}
+
 	included := make(map[string]struct{}, len(snapshot.graph.Titles))
-	if filters.foldedQuery == "" && !filters.hasNonTextFilters() {
+	if inclusionFilters.foldedQuery == "" && !inclusionFilters.hasNonTextFilters() {
 		for key := range snapshot.graph.Titles {
 			included[key] = struct{}{}
 		}
@@ -79,12 +90,42 @@ func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters
 			if key == "" {
 				continue
 			}
-			_, matched, err := matchNoteWithFilters(note, filters)
+			_, ok, err := matchNoteWithFilters(note, inclusionFilters)
 			if err != nil {
 				return graphJSON{}, err
 			}
-			if matched {
+			if ok {
 				included[key] = struct{}{}
+			}
+		}
+	}
+
+	matched := make(map[string]struct{}, len(included))
+	if filters.foldedQuery != "" {
+		if !focusQuery {
+			// Filter mode already required the text match for inclusion.
+			for key := range included {
+				matched[key] = struct{}{}
+			}
+		} else {
+			for _, note := range snapshot.notes {
+				if note == nil {
+					continue
+				}
+				key := snapshot.graph.KeyForNote(note)
+				if key == "" {
+					continue
+				}
+				if _, ok := included[key]; !ok {
+					continue
+				}
+				_, ok, err := matchNoteWithFilters(note, filters)
+				if err != nil {
+					return graphJSON{}, err
+				}
+				if ok {
+					matched[key] = struct{}{}
+				}
 			}
 		}
 	}
@@ -120,6 +161,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters
 		}
 		degree := degrees[key]
 		filteredDegree := filteredDegrees[key]
+		_, matchesQuery := matched[key]
 		nodes = append(nodes, graphJSONNode{
 			Data: graphJSONNodeData{
 				ID:                key,
@@ -135,6 +177,7 @@ func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters
 				BrokenCount:       brokenCount,
 				IsOrphan:          isOrphan,
 				IsDeadEnd:         isDeadEnd,
+				MatchesQuery:      matchesQuery,
 			},
 		})
 	}

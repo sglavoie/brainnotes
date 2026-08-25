@@ -167,6 +167,18 @@ func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	if !strings.Contains(body, `id="graph-reset-layout-button"`) {
 		t.Fatalf("missing graph reset layout button on /graph, got %q", body)
 	}
+	if !strings.Contains(body, `id="graph-zoom-matches-button"`) {
+		t.Fatalf("missing graph zoom to matches button on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-search-mode-filter"`) {
+		t.Fatalf("missing graph filter search mode control on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `name="graph-search-mode" value="filter" checked`) {
+		t.Fatalf("missing checked filter search mode on /graph, got %q", body)
+	}
+	if !strings.Contains(body, `id="graph-search-mode-focus"`) {
+		t.Fatalf("missing graph focus search mode control on /graph, got %q", body)
+	}
 	if !strings.Contains(body, `id="graph-label-mode-auto"`) {
 		t.Fatalf("missing graph auto label control on /graph, got %q", body)
 	}

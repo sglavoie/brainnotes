@@ -1,6 +1,7 @@
 import {
   type GraphElements,
   type GraphLabelMode,
+  type GraphSearchMode,
   type GraphViewportSnapshot,
 } from "./graph";
 
@@ -20,6 +21,8 @@ export type GraphState = {
   hoveredNodeID: string;
   selectedNodeID: string;
   labelMode: GraphLabelMode;
+  searchMode: GraphSearchMode;
+  matchIDs: Set<string>;
   lastMeaningfulViewport: GraphViewportSnapshot | null;
   layoutRunID: number;
 };

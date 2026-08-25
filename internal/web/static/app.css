@@ -4386,7 +4386,8 @@ code {
 .graph-controls .facet-controls,
 .graph-spread,
 .graph-action-controls,
-.graph-label-mode {
+.graph-label-mode,
+.graph-search-mode {
   min-width: 0;
 }
 
@@ -4418,6 +4419,7 @@ code {
 #graph-canvas:focus-visible,
 .graph-control-button:focus-visible,
 .graph-label-mode-option input:focus-visible + span,
+.graph-search-mode-option input:focus-visible + span,
 .graph-open-note:focus-visible {
   outline: 2px solid var(--bn-focus);
   outline-offset: 1px;
@@ -4443,9 +4445,13 @@ code {
 }
 
 .graph-action-controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(5.7rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.graph-action-controls .graph-control-button {
+  flex: 1 1 5.7rem;
 }
 
 .graph-control-button {
@@ -4461,21 +4467,29 @@ code {
   cursor: pointer;
 }
 
-.graph-control-button:hover {
+.graph-control-button:hover:not(:disabled) {
   background: var(--bn-hover);
 }
 
-.graph-label-mode {
+.graph-control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.graph-label-mode,
+.graph-search-mode {
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-.graph-label-mode legend {
+.graph-label-mode legend,
+.graph-search-mode legend {
   padding: 0;
 }
 
-.graph-label-mode-options {
+.graph-label-mode-options,
+.graph-search-mode-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(3.5rem, 1fr));
   min-height: 2.15rem;
@@ -4485,18 +4499,21 @@ code {
   background: var(--bn-sunken);
 }
 
-.graph-label-mode-option {
+.graph-label-mode-option,
+.graph-search-mode-option {
   display: flex;
   min-width: 0;
 }
 
-.graph-label-mode-option input {
+.graph-label-mode-option input,
+.graph-search-mode-option input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
 }
 
-.graph-label-mode-option span {
+.graph-label-mode-option span,
+.graph-search-mode-option span {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4507,11 +4524,13 @@ code {
   cursor: pointer;
 }
 
-.graph-label-mode-option + .graph-label-mode-option span {
+.graph-label-mode-option + .graph-label-mode-option span,
+.graph-search-mode-option + .graph-search-mode-option span {
   border-left: 1px solid var(--bn-border);
 }
 
-.graph-label-mode-option input:checked + span {
+.graph-label-mode-option input:checked + span,
+.graph-search-mode-option input:checked + span {
   color: var(--bn-text-strong);
   background: var(--bn-hover);
 }

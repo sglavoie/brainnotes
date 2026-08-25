@@ -275,3 +275,88 @@ func TestServer_GraphAPIJSON_EmptyQueryMatchesDefaultGraph(t *testing.T) {
 		t.Fatalf("empty graph query should match default output")
 	}
 }
+
+func TestServer_GraphAPIJSON_FocusModeKeepsFullGraphAndFlagsMatches(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"NeedleA.md":  []byte("---\ntitle: Needle A\n---\n[[NeedleB]] [[Other]]\n"),
+		"NeedleB.md":  []byte("---\ntitle: Needle B\n---\nBody\n"),
+		"BodyOnly.md": []byte("---\ntitle: Body Only\n---\ncontains nEeDlE token\n"),
+		"Other.md":    []byte("---\ntitle: Other\n---\nBody\n"),
+	})
+
+	unfiltered, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json")
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=NEEDLE&q_mode=focus")
+
+	if !sameStrings(graphNodeIDs(payload), graphNodeIDs(unfiltered)) {
+		t.Fatalf("focus mode node ids: got %#v, want the unfiltered set %#v", graphNodeIDs(payload), graphNodeIDs(unfiltered))
+	}
+	if len(payload.Edges) != len(unfiltered.Edges) {
+		t.Fatalf("focus mode edge count: got %d, want %d", len(payload.Edges), len(unfiltered.Edges))
+	}
+
+	nodes := graphNodeDataByID(payload)
+	for id, want := range map[string]bool{
+		"needlea":  true,
+		"needleb":  true,
+		"bodyonly": true,
+		"other":    false,
+	} {
+		if nodes[id].MatchesQuery != want {
+			t.Fatalf("matchesQuery for %q: got %t, want %t", id, nodes[id].MatchesQuery, want)
+		}
+	}
+}
+
+func TestServer_GraphAPIJSON_FocusModeStillAppliesFacets(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Work/Alpha.md":    []byte("---\ntitle: Alpha\ntags: [keep]\n---\nneedle body\n"),
+		"Work/Beta.md":     []byte("---\ntitle: Beta\ntags: [keep]\n---\nplain body\n"),
+		"Archive/Delta.md": []byte("---\ntitle: Delta\ntags: [drop]\n---\nneedle body\n"),
+	})
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle&q_mode=focus&tag=keep")
+	if !sameStrings(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
+		t.Fatalf("focus mode with facet node ids: got %#v, want work/alpha and work/beta", graphNodeIDs(payload))
+	}
+
+	nodes := graphNodeDataByID(payload)
+	if !nodes["work/alpha"].MatchesQuery {
+		t.Fatalf("expected work/alpha to match the query, got %#v", nodes["work/alpha"])
+	}
+	if nodes["work/beta"].MatchesQuery {
+		t.Fatalf("expected work/beta not to match the query, got %#v", nodes["work/beta"])
+	}
+}
+
+func TestServer_GraphAPIJSON_FilterModeMarksIncludedNodesAsMatches(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"NeedleA.md": []byte("---\ntitle: Needle A\n---\nBody\n"),
+		"Other.md":   []byte("---\ntitle: Other\n---\nBody\n"),
+	})
+
+	withQuery, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle")
+	nodes := graphNodeDataByID(withQuery)
+	if !nodes["needlea"].MatchesQuery {
+		t.Fatalf("filter mode should flag the included node as a match, got %#v", nodes["needlea"])
+	}
+
+	noQuery, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json")
+	for _, node := range noQuery.Nodes {
+		if node.Data.MatchesQuery {
+			t.Fatalf("no query should leave matchesQuery false, got %#v", node.Data)
+		}
+	}
+}
+
+func TestServer_GraphAPIJSON_UnknownQueryModeFallsBackToFilter(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"NeedleA.md": []byte("---\ntitle: Needle A\n---\nBody\n"),
+		"Other.md":   []byte("---\ntitle: Other\n---\nBody\n"),
+	})
+
+	_, rawFilter, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle")
+	_, rawUnknown, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle&q_mode=wat")
+	if rawFilter != rawUnknown {
+		t.Fatalf("unknown q_mode should behave like filter mode")
+	}
+}
