@@ -1,0 +1,4 @@
+NAME          DESCRIPTION                          QUERY                              STATUS
+Active work   What I am actually working on        status:wip and not folder:Archive  ok
+Stale query   Names a field that no longer exists  statuz:wip                         error
+Bad ordering  Relevance with no anchor note        status:done                        error

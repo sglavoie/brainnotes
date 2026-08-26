@@ -4,12 +4,19 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   buildFilteredAPIURL,
+  buildSearchAPIURL,
   copySharedFilterParams,
   dispatchFiltersChange,
   filterChangeEventName,
+  hasActiveFilters,
   hasActiveSharedFilters,
+  queryShapeParamKeys,
+  readExprParam,
+  sharedFilterParamKeys,
   shouldHandleFilterChangeForMode,
+  syncExprParam,
   syncPageQueryParam,
+  syncQueryShapeParam,
   updateBrowserQuery,
   type FiltersChangeDetail,
   type FiltersChangeEvent,
@@ -87,5 +94,70 @@ describe("shared filter URL state", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0].mode).toBe("graph");
     expect(Array.from(seen[0].params.entries())).toEqual([["tag", "projects"]]);
+  });
+});
+
+describe("query-shape URL parameters", () => {
+  it("keeps expr, sort, and relative_to out of the facet chip vocabulary", () => {
+    for (const key of queryShapeParamKeys) {
+      expect(sharedFilterParamKeys as readonly string[]).not.toContain(key);
+    }
+  });
+
+  it("carries them through copySharedFilterParams and both API URL builders", () => {
+    const source = new URLSearchParams(
+      "tag=work&expr=tag%3Afocus+and+not+folder%3AArchive&sort=-modified&relative_to=Deep+Work&other=drop"
+    );
+    const copied = new URLSearchParams();
+
+    copySharedFilterParams(source, copied);
+
+    expect(Array.from(copied.entries())).toEqual([
+      ["tag", "work"],
+      ["expr", "tag:focus and not folder:Archive"],
+      ["sort", "-modified"],
+      ["relative_to", "Deep Work"],
+    ]);
+
+    setURL("/library?tag=work&expr=tag%3Afocus&sort=-modified&relative_to=Deep+Work");
+    expect(buildFilteredAPIURL("/api/graph.json", "")).toBe(
+      "/api/graph.json?tag=work&expr=tag%3Afocus&sort=-modified&relative_to=Deep+Work"
+    );
+    expect(buildSearchAPIURL("note", true)).toBe(
+      "/api/search?q=note&tag=work&expr=tag%3Afocus&sort=-modified&relative_to=Deep+Work"
+    );
+    // The unfiltered builder is the global nav search, which deliberately
+    // ignores the page it happens to be rendered on.
+    expect(buildSearchAPIURL("note", false)).toBe("/api/search?q=note");
+  });
+
+  it("reads and writes expr on the browser URL without disturbing the rest", () => {
+    setURL("/library?tag=work#top");
+    expect(readExprParam()).toBe("");
+
+    expect(syncExprParam(" tag:focus ")).toBe(true);
+    expect(window.location.search).toBe("?tag=work&expr=tag%3Afocus");
+    expect(window.location.hash).toBe("#top");
+    expect(readExprParam()).toBe("tag:focus");
+
+    expect(syncExprParam("tag:focus")).toBe(false);
+    expect(syncQueryShapeParam("sort", "-modified")).toBe(true);
+    expect(window.location.search).toBe("?tag=work&expr=tag%3Afocus&sort=-modified");
+
+    expect(syncExprParam("")).toBe(true);
+    expect(window.location.search).toBe("?tag=work&sort=-modified");
+  });
+
+  it("counts expr as an active filter but never an ordering", () => {
+    expect(hasActiveFilters(new URLSearchParams("q=only"))).toBe(false);
+    expect(hasActiveFilters(new URLSearchParams("expr=tag%3Afocus"))).toBe(true);
+    expect(hasActiveFilters(new URLSearchParams("expr=+"))).toBe(false);
+    expect(hasActiveFilters(new URLSearchParams("tag=work"))).toBe(true);
+    // An ordering selects nothing, so it must not make an empty search box
+    // fetch the whole vault.
+    expect(hasActiveFilters(new URLSearchParams("sort=-modified&relative_to=Deep+Work"))).toBe(
+      false
+    );
+    expect(hasActiveSharedFilters(new URLSearchParams("expr=tag%3Afocus"))).toBe(false);
   });
 });

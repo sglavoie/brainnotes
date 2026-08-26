@@ -8,5 +8,7 @@ export * from "./api-notes";
 export * from "./api-pins";
 export * from "./api-properties";
 export * from "./api-properties-mutation";
+export * from "./api-query";
 export * from "./api-search";
 export * from "./api-synthesis";
+export * from "./api-views";

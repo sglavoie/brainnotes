@@ -214,6 +214,50 @@ func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	}
 }
 
+// TestServer_GraphPageIncludesQueryBar pins the graph half of the shared
+// expression contract: the same hydration hooks the Library renders, so
+// initQueryBar() finds a bar on this page too, placed above the facet chips
+// because the expression is the outer filter.
+func TestServer_GraphPageIncludesQueryBar(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/graph") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /graph: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status for /graph: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	required := []string{
+		`data-query-bar`,
+		`data-query-bar-input`,
+		`data-query-bar-completions`,
+		`data-query-bar-status`,
+		`data-query-bar-error`,
+		`data-query-bar-clear`,
+		`id="query-bar-input"`,
+		`class="query-bar graph-query-bar"`,
+	}
+	for _, want := range required {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in graph query bar, got %q", want, body)
+		}
+	}
+
+	queryBarAt := strings.Index(body, `data-query-bar`)
+	facetsAt := strings.Index(body, `data-facet-mode="graph"`)
+	if facetsAt < 0 {
+		t.Fatalf("graph facet controls missing from /graph, got %q", body)
+	}
+	if queryBarAt > facetsAt {
+		t.Fatalf("query bar renders below the graph facet controls: query bar at %d, facets at %d", queryBarAt, facetsAt)
+	}
+}
+
 func TestServer_GraphPageIncludesAssets(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Note.md": []byte("---\ntitle: Note\n---\nBody\n"),
@@ -235,5 +279,78 @@ func TestServer_GraphPageIncludesAssets(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="graph-canvas"`) {
 		t.Fatalf("missing graph canvas container, got %q", body)
+	}
+}
+
+// TestServer_PagesIncludeSavedViewsNavContainer pins the client-side rendering
+// decision: siteNav carries one static container on every page that renders it,
+// and initSavedViewsNav fills it from GET /api/views. Nothing is threaded
+// through a page-data struct, so a page that renders the nav needs no field.
+func TestServer_PagesIncludeSavedViewsNavContainer(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	for _, path := range []string{"/", "/library", "/pinned", "/graph", "/health", "/n/source"} {
+		resp, err := http.Get(ts.URL + path) // #nosec G107 -- test-only local URL
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		body := readResponseBody(t, resp)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status for %s: got %d, want %d", path, resp.StatusCode, http.StatusOK)
+		}
+		if !strings.Contains(body, `data-saved-views-nav`) {
+			t.Fatalf("missing saved-views nav container on %s, got %q", path, body)
+		}
+
+		navAt := strings.Index(body, `class="site-nav"`)
+		containerAt := strings.Index(body, `data-saved-views-nav`)
+		navEndAt := strings.Index(body[navAt:], "</nav>")
+		if navAt < 0 || navEndAt < 0 || containerAt < navAt || containerAt > navAt+navEndAt {
+			t.Fatalf("saved-views container is not inside the primary nav on %s, got %q", path, body)
+		}
+	}
+}
+
+// TestServer_LibraryIncludesSaveAsViewControl pins that the write half lives on
+// the Library, where the CSRF token is already rendered: the nav strip itself is
+// read-only and takes no token.
+func TestServer_LibraryIncludesSaveAsViewControl(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/library") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /library: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status for /library: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	for _, want := range []string{
+		`data-saved-views-save`,
+		`data-saved-views-csrf=`,
+		`data-saved-views-open`,
+		`Save as view`,
+		`data-saved-views-form`,
+		`data-saved-views-name`,
+		`data-saved-views-description`,
+		`data-saved-views-confirm`,
+		`data-saved-views-cancel`,
+		`data-saved-views-diff`,
+		`data-saved-views-status`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in the library saved-views control, got %q", want, body)
+		}
+	}
+
+	controlAt := strings.Index(body, `data-saved-views-save`)
+	headerEndAt := strings.Index(body, "</header>")
+	if headerEndAt < 0 || controlAt > headerEndAt {
+		t.Fatalf("save-as-view control renders outside the library header: control at %d, header ends at %d", controlAt, headerEndAt)
 	}
 }

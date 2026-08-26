@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -66,21 +65,13 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 				return err
 			}
 
-			var g *query.Graph
-			if ff.needsGraph() {
-				g = query.BuildGraphForRoot(v.Root, notes)
-			}
-			flags := ff.toQueryFlags(v.Root, g)
-			pred, err := query.FromFlags(flags)
+			sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, notes, nil)
 			if err != nil {
 				return err
 			}
 
 			var allViolations []schema.Violation
-			for _, n := range notes {
-				if !pred(n) {
-					continue
-				}
+			for _, n := range sel.notes {
 				front, err := n.Front()
 				if err != nil {
 					return err

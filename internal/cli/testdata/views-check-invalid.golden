@@ -1,0 +1,10 @@
+<vault>/brainnotes.toml: view "Stale query"
+query: unknown field "statuz"
+  statuz:wip
+  ^^^^^^
+  did you mean: status
+
+<vault>/brainnotes.toml: view "Bad ordering"
+view "Bad ordering": sort "relevance" requires relative_to
+
+bn: views check: 2 of 3 saved views failed to compile

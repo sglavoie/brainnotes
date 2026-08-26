@@ -42,6 +42,41 @@ func NewNote(root, path string) *Note {
 	return &Note{Path: path, root: root}
 }
 
+// NewNoteFromSource returns a note that is already loaded from data, without
+// touching the disk. It is for a caller that already holds the note's bytes — a
+// cache keyed by revision, say — and would otherwise have to read the file again
+// just to get a parsed handle.
+//
+// The resulting note is indistinguishable from one NewNote+Load produced for the
+// same bytes: it carries the same document, the same sourceHash, and the same
+// sourcePath, so Save's compare-and-swap precondition still refers to the exact
+// revision the caller parsed. Handing over bytes that are not what is on disk at
+// path therefore makes the next Save a conflict, which is the honest outcome
+// rather than a lost update.
+//
+// It cannot delegate to Load: Load early-returns on an already-loaded note and
+// would otherwise read the file, which is the I/O this constructor exists to
+// avoid. The four field assignments are duplicated deliberately and pinned by a
+// test that compares both constructions field for field.
+func NewNoteFromSource(root, path string, data []byte) (*Note, error) {
+	if path == "" {
+		return nil, errors.New("note: source: empty path")
+	}
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("note: source %q: path must be absolute", path)
+	}
+	doc, err := frontmatter.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("note: parse %q: %w", path, err)
+	}
+	n := NewNote(root, path)
+	n.doc = doc
+	n.sourceHash = HashBytes(data)
+	n.sourcePath = path
+	n.loaded = true
+	return n, nil
+}
+
 // Load reads and parses the note from disk. Safe to call repeatedly; only the
 // first call performs I/O.
 func (n *Note) Load() error {

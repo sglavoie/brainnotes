@@ -31,11 +31,12 @@ Layered packages, each with a focused responsibility. Commands compose primitive
 
 - `cmd/bn/main.go` — thin entrypoint, delegates to `internal/cli.Execute`.
 - `internal/cli` — Cobra command tree; `root.go` loads config into the command context, `notes.go` centralizes multi-note positional/stdin handling, `target_resolution.go` is the shared NFC-aware single-note resolver.
-- `internal/config` — TOML loader for the vault-local `brainnotes.toml`, which *is* the vault-root marker: resolving the root and locating the config are one operation.
+- `internal/config` — TOML loader for the vault-local `brainnotes.toml`, which *is* the vault-root marker: resolving the root and locating the config are one operation. Saved views are a `[[views]]` array of tables validated **shape-only** — `config` cannot import `queryexpr` without a cycle, so a view whose query rotted still loads and every layer above must render it disabled with its error.
 - `internal/vault` — root path + config; `Walk` skips hidden dirs, configured ignores, and the templates dir (template files hold unrendered placeholders that are not valid YAML and must never be walked). Also owns locking and `FileTxn`.
 - `internal/frontmatter` — parse/rewrite YAML frontmatter. `Map` preserves insertion order on parse, but `Marshal` **always emits keys alphabetically sorted** — intentional and load-bearing for stable diffs.
 - `internal/wikilink` — Obsidian-style `[[Target#Heading|Alias]]` parsing/rewriting. **Code-block aware**: links inside fenced, indented, or inline code are masked out.
-- `internal/query` — composable `Predicate`s over `*vault.Note` for `find`, plus the path-aware wikilink graph reused by recall ranking. `And` with no args matches everything.
+- `internal/query` — composable `Predicate`s over `*vault.Note` for `find`, plus the path-aware wikilink graph reused by recall ranking. `GraphMetrics` adds bounded graph traversal (degree, connected components, hop-bounded BFS) and the six graph predicates lower onto `Reachable`. `And` with no args matches everything.
+- `internal/queryexpr` — the vault query expression language (lexer, AST, parser, `ParseError`). A sibling of `internal/query`, never files inside it: it may import `query`, `config`, `schema`, `frontmatter`, `vault`, `wikilink`, `textnorm` and nothing above them.
 - `internal/recall` — deterministic contextual retrieval, no persistent index; ranking, context bundles, and the `<vault>/.bnotes/recall.json` state store.
 - `internal/agent` — shared argv-only process runner. No shell, provider SDK, persistence, or implicit network behavior.
 - `internal/template` — discovery and rendering for `bn new`; case-insensitive lookup, `.Vars` from repeatable `--var key=value`.
@@ -44,6 +45,7 @@ Layered packages, each with a focused responsibility. Commands compose primitive
 - `internal/noteops` — the shared note-mutation layer used by both CLI commands and the web APIs; `preview.go` defines the canonical `NotePreview` model every `--dry-run` and every web preview renders through.
 - `internal/properties` — the reusable property index behind the web workbench. Deliberately does not depend on `internal/web`.
 - `internal/pins` — the shared pinned-list core; plans assignments only, never writes. It is a **leaf package**: it must not import `internal/noteops`, because `noteops` → `query` → `pins` would close a cycle.
+- `internal/index` — a persistent cache of parsed note bytes in `<vault>/.bnotes/index/`, so a repeated vault load stats each note instead of re-reading and re-parsing it. Another **leaf package**: it may import `vault`, `config`, `frontmatter` and nothing else — it produces `[]*vault.Note` and stops. It walks via `vault.Walk` (never a hand-rolled `filepath.WalkDir`), trusts a cached entry only when size and mtime match *and* the mtime is older than a 2s non-configurable `staleWindow`, and builds a fresh `*vault.Note` per snapshot. It **self-heals silently** on any unusable state file — the deliberate inverse of `internal/recall`'s fail-closed store, because the index holds no user intent — so an index failure is never a request error and a failed disk write is ignored.
 
 ## Implementation notes
 

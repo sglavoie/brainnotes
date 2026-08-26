@@ -22,14 +22,31 @@ func NewFindCmd() *cobra.Command {
 		nullSep           bool
 		showBroken        bool
 		listBrokenTargets bool
+		sortText          string
+		relativeTo        string
 	)
 
 	ff := new(findFlags)
 
 	cmd := &cobra.Command{
-		Use:           "find",
-		Short:         "Find notes by frontmatter criteria",
-		Long:          "Find notes whose frontmatter matches every supplied filter. Prints matching absolute paths, one per line (or NUL-separated with -0). Pipe into fzf with -i for an interactive picker.",
+		Use:   "find",
+		Short: "Find notes by frontmatter criteria",
+		Long: `Find notes whose frontmatter matches every supplied filter. Prints matching
+absolute paths, one per line (or NUL-separated with -0). Pipe into fzf with -i
+for an interactive picker.
+
+-q takes a query expression, which reaches filters the flags cannot spell:
+boolean composition (and / or / not, grouped with parentheses), comparison
+against a declared property (rating>=4, due<today), and the link graph
+(near:[[Deep Work]]<=2, links-to:[[Index]], degree>=5, cluster-size:1). An
+undeclared property is reached through prop:, as in prop:mykey=value.
+
+--view names a saved view. Flags, -q, and --view all AND together, so each one
+narrows the result further.
+
+--sort orders the matches. Results are path-ordered by default; --sort relevance
+ranks them against the note named by --relative-to, most related first, using the
+same signals bn related does. Sorting never changes which notes match.`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -53,6 +70,10 @@ func NewFindCmd() *cobra.Command {
 			if (showBroken || listBrokenTargets) && nullSep {
 				return errors.New("--null cannot be used with --show-broken or --list-broken-targets")
 			}
+			sortSpec, err := validateFindSort(sortText, relativeTo)
+			if err != nil {
+				return err
+			}
 			v, err := vault.Open(cfg)
 			if err != nil {
 				return err
@@ -62,36 +83,35 @@ func NewFindCmd() *cobra.Command {
 				return err
 			}
 
-			var g *query.Graph
-			if ff.needsGraph() {
-				g = query.BuildGraphForRoot(v.Root, notes)
-			}
-			flags := ff.toQueryFlags(v.Root, g)
-			pred, err := query.FromFlags(flags)
+			sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, notes, nil)
 			if err != nil {
 				return err
 			}
-
-			var matched []*vault.Note
-			for _, n := range notes {
-				if pred(n) {
-					matched = append(matched, n)
+			matched := sel.notes
+			switch {
+			case strings.TrimSpace(sortText) != "":
+				// An explicit --sort wins over the implicit pinned ordering
+				// below, including when it asks for plain path order.
+				matched, err = sortFindResults(findSortInput{
+					vault:   v,
+					matched: matched,
+					notes:   notes,
+					graph:   sel.graph,
+				}, sortSpec)
+				if err != nil {
+					return err
 				}
-			}
-			sort.Slice(matched, func(i, j int) bool {
-				return matched[i].Path < matched[j].Path
-			})
-			if ff.pinned {
+			case ff.pinned:
 				matched = pinnedOrder(v.Root, matched)
 			}
 
 			out := cmd.OutOrStdout()
 
 			if showBroken {
-				return printShowBroken(out, matched, flags.Graph, v.Root)
+				return printShowBroken(out, matched, sel.graph, v.Root)
 			}
 			if listBrokenTargets {
-				return printListBrokenTargets(out, matched, flags.Graph)
+				return printListBrokenTargets(out, matched, sel.graph)
 			}
 
 			paths := make([]string, len(matched))
@@ -126,6 +146,8 @@ func NewFindCmd() *cobra.Command {
 	f.BoolVarP(&nullSep, "null", "0", false, "separate paths with NUL instead of newline")
 	f.BoolVar(&showBroken, "show-broken", false, "show each broken link (requires --broken-links)")
 	f.BoolVar(&listBrokenTargets, "list-broken-targets", false, "list unique broken targets (requires --broken-links)")
+	f.StringVar(&sortText, "sort", "", findSortHelp())
+	f.StringVar(&relativeTo, "relative-to", "", "anchor note for --sort relevance (title or path)")
 
 	return cmd
 }

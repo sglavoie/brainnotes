@@ -199,6 +199,17 @@ agent_command = ""
 # Timeout for the legacy override.
 agent_timeout_seconds = 60
 
+# Saved views: named query expressions, run with `bn find --view "<name>"`,
+# from any other find-scoped command, or from the web nav. Repeat the block
+# once per view; the list is ordered and presented in file order. Every key
+# except `name` and `query` is optional.
+[[views]]
+name        = "Active work"
+query       = "status:wip and not folder:Archive"
+sort        = "-modified"
+limit       = 20
+description = "What I am actually working on"
+
 # Routing for `bn new <kind> "Title"`. Folder is vault-relative.
 [new.routes]
 book    = "References/Books"
@@ -221,5 +232,35 @@ Default ignore entries (always applied): `.git`, `.obsidian`, `Attachments`,
 `Archive`, `Trash`. The configured `[templates].dir` (default `Templates`) is also
 skipped automatically, since template files contain unrendered placeholders
 that aren't valid YAML.
+
+### Saved views
+
+A saved view is a named query expression stored as a `[[views]]` block. It is
+an **array of tables**, not a `[views.<name>]` table: the list is ordered, and
+`bn views` and the web nav present views in file order.
+
+| Key | Meaning |
+| --- | --- |
+| `name` | Required. How `--view` and `bn views` address the view, matched case-insensitively and unique under that folding. Unicode letters and digits plus space, `.`, `_`, and `-`, never leading or trailing. |
+| `query` | Required. The query expression, in the syntax `bn find -q` takes. |
+| `sort` | Optional ordering in the spelling `--sort` accepts (`modified`, `-modified`, `title:desc`, …). |
+| `relative_to` | Optional anchor note for a `relevance` sort. It is its own key because a sort spec's text form does not carry it. |
+| `limit` | Optional result cap. `0` (the default) means no cap. |
+| `description` | Optional one-line summary shown by `bn views` and the web nav. |
+
+Validation at load time is deliberately **shape-only** — a name, a non-empty
+query, a non-negative limit — and never checks that the query still means
+something. `internal/config` is the bottom of the package layering and cannot
+import the query language to parse it without closing an import cycle. The
+consequence is intentional: a view whose query rotted (a property it names was
+renamed, a field was removed) still loads, so one stale view can never make the
+vault unopenable. Instead it is reported everywhere as a **disabled entry
+carrying its error** — a `STATUS` of `error` in `bn views`, a failure in
+`bn views check`, a disabled item in the web nav. Run
+[`bn views check`](commands-query.md#bn-views--inspect-saved-views) to see why.
+
+`bn init` does not write a starter `[[views]]` block; add one by hand, or save
+the current query from the Library page of `bn serve`, which patches this file
+for you after showing the exact diff.
 
 

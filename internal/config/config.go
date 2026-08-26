@@ -33,6 +33,10 @@ type Config struct {
 	Agent       AgentConfig       `toml:"agent"`
 	Cockpit     CockpitConfig     `toml:"cockpit"`
 
+	// Views holds the saved queries declared by the [[views]] array of tables,
+	// in file order.
+	Views []SavedView `toml:"views"`
+
 	// SourcePath is the absolute path of the brainnotes.toml that was loaded.
 	SourcePath string `toml:"-"`
 

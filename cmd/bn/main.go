@@ -4,7 +4,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -34,7 +33,7 @@ func run(stderr io.Writer) int {
 	if errors.Is(err, cli.ErrFZFInterrupted) {
 		return 130
 	}
-	_, _ = fmt.Fprintln(stderr, "bn:", err)
+	cli.RenderError(stderr, err)
 	return exitCode(err)
 }
 

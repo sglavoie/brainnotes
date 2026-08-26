@@ -160,9 +160,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filters, err := parseNoteFilters(r.URL.Query(), s.vault.Root, snapshot.graph)
+	cfg := s.config()
+	filters, err := parseNoteFilters(r.URL.Query(), s.vault.Root, snapshot.graph, &cfg.Frontmatter)
 	if err != nil {
-		http.Error(w, "bad search filters", http.StatusBadRequest)
+		writeFilterError(w, err)
 		return
 	}
 
@@ -224,9 +225,10 @@ func (s *Server) handleGraphJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filters, err := parseNoteFilters(r.URL.Query(), s.vault.Root, snapshot.graph)
+	cfg := s.config()
+	filters, err := parseNoteFilters(r.URL.Query(), s.vault.Root, snapshot.graph, &cfg.Frontmatter)
 	if err != nil {
-		http.Error(w, "bad graph filters", http.StatusBadRequest)
+		writeFilterError(w, err)
 		return
 	}
 

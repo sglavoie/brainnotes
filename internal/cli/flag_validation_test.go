@@ -126,6 +126,47 @@ func TestUnsetNullRequiresStdinNoteInput(t *testing.T) {
 	}
 }
 
+// TestFindSortRelevanceRequiresRelativeTo pins that the two relevance flags
+// have to agree. Relevance ordering ranks against an anchor note, so asking for
+// it without one has nothing to rank against; supplying an anchor without
+// asking for relevance would silently ignore the flag. Both are rejected before
+// the vault is opened, so neither is a query that quietly returns the wrong
+// order.
+func TestFindSortRelevanceRequiresRelativeTo(t *testing.T) {
+	root := buildQueryFixtureVault(t)
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "relevance without an anchor",
+			args: []string{"find", "--sort", "relevance"},
+			want: "--sort relevance requires --relative-to",
+		},
+		{
+			name: "anchor without relevance",
+			args: []string{"find", "--sort", "modified", "--relative-to", "Hub"},
+			want: "--relative-to requires --sort relevance",
+		},
+		{
+			name: "anchor with the default ordering",
+			args: []string{"find", "--relative-to", "Hub"},
+			want: "--relative-to requires --sort relevance",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := runFindSortError(t, root, tt.args...)
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("find %v: got %v, want an error containing %q", tt.args, err, tt.want)
+			}
+		})
+	}
+}
+
 func TestMutationCommandsExposeGraphFindFlags(t *testing.T) {
 	tests := []struct {
 		name string

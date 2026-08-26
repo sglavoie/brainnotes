@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -12,11 +13,23 @@ import (
 type noteFilters struct {
 	Query       string
 	foldedQuery string
-	flags       query.Flags
-	predicate   query.Predicate
+	// Expr is the trimmed expr= query expression, empty when absent. It is a
+	// structural filter rather than free text: it composes with the facet
+	// chips through exprPredicate instead of replacing them.
+	Expr          string
+	flags         query.Flags
+	predicate     query.Predicate
+	exprPredicate query.Predicate
 }
 
+// hasNonTextFilters reports whether anything other than the free-text query
+// narrows the result set. Expr counts: search.go and graph.go both short-circuit
+// when this is false, so an expression-only request would otherwise return an
+// empty set.
 func (f noteFilters) hasNonTextFilters() bool {
+	if f.Expr != "" {
+		return true
+	}
 	flags := f.flags
 	return hasNonEmptyValue(flags.Tags) ||
 		hasNonEmptyValue(flags.Categories) ||
@@ -38,13 +51,22 @@ func (f noteFilters) hasNonTextFilters() bool {
 
 // withoutQuery returns a copy with the free-text query cleared. The predicate
 // and flags are built from the structured filters only, so they stay valid.
+//
+// Expr is deliberately kept: graph focus mode is defined as "free text stops
+// removing nodes", and an expression is a structural filter rather than free
+// text. In focus mode it therefore still removes nodes while q only dims them.
 func (f noteFilters) withoutQuery() noteFilters {
 	f.Query = ""
 	f.foldedQuery = ""
 	return f
 }
 
-func parseNoteFilters(params url.Values, root string, graph *query.Graph) (noteFilters, error) {
+func parseNoteFilters(
+	params url.Values,
+	root string,
+	graph *query.Graph,
+	frontmatter *config.FrontmatterConfig,
+) (noteFilters, error) {
 	flags := query.Flags{
 		Tags:         repeatedParam(params, "tag"),
 		Categories:   repeatedParam(params, "category"),
@@ -91,12 +113,22 @@ func parseNoteFilters(params url.Values, root string, graph *query.Graph) (noteF
 		return noteFilters{}, errorsf("filters: %w", err)
 	}
 
+	exprText := strings.TrimSpace(params.Get("expr"))
+	var exprPredicate query.Predicate
+	if exprText != "" {
+		if exprPredicate, err = compileFilterExpr(exprText, root, graph, frontmatter); err != nil {
+			return noteFilters{}, err
+		}
+	}
+
 	queryText := params.Get("q")
 	return noteFilters{
-		Query:       queryText,
-		foldedQuery: foldSearchQuery(queryText),
-		flags:       flags,
-		predicate:   predicate,
+		Query:         queryText,
+		foldedQuery:   foldSearchQuery(queryText),
+		Expr:          exprText,
+		flags:         flags,
+		predicate:     predicate,
+		exprPredicate: exprPredicate,
 	}, nil
 }
 
@@ -105,6 +137,11 @@ func matchNoteWithFilters(note *vault.Note, filters noteFilters) (noteTextMatch,
 		return noteTextMatch{}, false, errorsf("nil filter predicate")
 	}
 	if !filters.predicate(note) {
+		return noteTextMatch{}, false, nil
+	}
+	// The expression ANDs with the facet predicate rather than replacing it, so
+	// expr= narrows the chip selection instead of overriding it.
+	if filters.exprPredicate != nil && !filters.exprPredicate(note) {
 		return noteTextMatch{}, false, nil
 	}
 	if filters.foldedQuery == "" {

@@ -1,0 +1,5 @@
+Name:         Active work
+Description:  What I am actually working on
+Query:        status:wip and not folder:Archive
+Sort:         -modified
+Limit:        20

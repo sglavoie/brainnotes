@@ -13,7 +13,7 @@ import { queryAllElements } from "./dom";
 import {
   buildSearchAPIURL,
   filterChangeEventName,
-  hasActiveSharedFilters,
+  hasActiveFilters,
   readPageQuery,
   shouldHandleFilterChangeForMode,
   syncPageQueryParam,
@@ -257,7 +257,7 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
     syncPageQueryParam(query);
     clearPreviewState({ clearStatus: true });
 
-    if (query === "" && !hasActiveSharedFilters()) {
+    if (query === "" && !hasActiveFilters()) {
       requestToken += 1;
       setOverviewBusy(root, false);
       clearResults("No query or filters selected.", "is-empty");

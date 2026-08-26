@@ -24,10 +24,11 @@ bn config edit
 loaded, and which of `--vault` / `$BNOTES_VAULT` / the upward search resolved
 it. `bn config edit` opens that same file in `$EDITOR`.
 
-`bn serve` can edit one part of that file from the browser: the
-`[frontmatter.properties.<key>]` blocks, through the property workbench. Every
-other setting is edited here, in the file. A definition saved from the browser
-is written to the same `brainnotes.toml`, so keep it committed.
+`bn serve` can edit two parts of that file from the browser: the
+`[frontmatter.properties.<key>]` blocks, through the property workbench, and
+the `[[views]]` blocks, through the saved-views control on `/library`. Every
+other setting is edited here, in the file. Anything saved from the browser is
+written to the same `brainnotes.toml`, so keep it committed.
 
 Example:
 
@@ -37,6 +38,84 @@ Vault:       /Users/you/vault
 Config:      /Users/you/vault/brainnotes.toml
 Resolved by: upward search
 ```
+
+### `bn schema` — show the configured frontmatter property schema
+
+```sh
+bn schema
+```
+
+Prints the `[frontmatter.properties]` declarations as a table — one row per
+property with its `TYPE`, its `ITEMS` kind for lists, whether it is `REQUIRED`,
+and its `ALLOWED` values — sorted by property name. It reads the config only
+and never walks the vault.
+
+This is the reference to read next to a `bn lint` or `bn repair` report: those
+commands enforce exactly these declarations, and a property that is not listed
+here has no list semantics, no wikilink wrapping, and no validation. With no
+properties declared at all, `bn schema` prints a hint pointing at the config
+file rather than an empty table.
+
+```text
+$ bn schema
+PROPERTY    TYPE      ITEMS     REQUIRED  ALLOWED
+categories  list      wikilink  no
+status      string              yes       WIP, Done, Archived
+tags        list      string    no
+```
+
+### `bn index` — report on or rebuild the note cache
+
+```sh
+bn index [--status | --rebuild]
+```
+
+`bn` keeps a cache of the note bytes it has already read under
+`<vault>/.bnotes/index/`, so a repeated vault load — `bn serve` refreshing its
+snapshot, most of all — stats each note instead of re-reading and re-parsing it.
+The cache is unconditional and invisible: there is no flag to turn it on or off,
+nothing in `brainnotes.toml` configures it, and it holds nothing that is not
+already in the vault.
+
+That is why the support surface is this small. Any state file `bn` cannot use —
+missing, unreadable, undecodable, written by another version, written for
+another vault, or internally inconsistent — is discarded and rebuilt on the next
+load without asking, so there is no corrupt-cache state to recover from by hand.
+`--rebuild` and `rm -rf .bnotes/index` do the same thing.
+
+`bn index` with no flags prints the same report as `--status`. Neither form
+walks the vault: reporting on the cache is never what builds it, so a vault that
+has never been indexed says so.
+
+```text
+$ bn index
+State file:  .bnotes/index/index.gob
+Status:      not built
+
+$ bn index --rebuild
+Rebuilt the index: 412 notes indexed, 0 unreadable.
+
+$ bn index --status
+State file:  .bnotes/index/index.gob
+Status:      healthy
+Entries:     412
+Size:        1043968 B
+Last write:  2026-08-26T09:14:07Z
+```
+
+A state file that exists but cannot be used reports the failure class and what
+`bn` will do about it, which is nothing you need to act on:
+
+```text
+Status:      unusable (state file could not be decoded); the next load rebuilds it
+```
+
+`--status` and `--rebuild` are mutually exclusive: one asks what the cache is,
+the other replaces it, and combining them would only describe the file the same
+command had just written.
+
+Add `.bnotes/` to `.gitignore` if it is not there already — the cache is derived
+state and is rewritten constantly.
 
 ### `bn backup` — create a vault snapshot archive
 

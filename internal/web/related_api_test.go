@@ -225,8 +225,22 @@ func TestServer_RelatedAPI_ValidationEmptyAndMissingState(t *testing.T) {
 		if payload.Results == nil || payload.Feedback == nil || len(payload.Results) != 0 || len(payload.Feedback) != 0 || payload.HasMore {
 			t.Fatalf("empty payload = %#v", payload)
 		}
-		if _, err := os.Stat(filepath.Join(root, ".bnotes")); !os.IsNotExist(err) {
-			t.Fatalf("read-only query created .bnotes: %v", err)
+		// .bnotes itself is no longer proof of a mutation: every snapshot load
+		// writes the note cache under .bnotes/index, which holds no user intent
+		// and is a supported thing to delete. The claim here is about recall's
+		// state store, so assert on that and on the absence of any *other*
+		// sidecar rather than on the directory as a whole.
+		if _, err := os.Stat(filepath.Join(root, ".bnotes", "recall.json")); !os.IsNotExist(err) {
+			t.Fatalf("read-only query created recall state: %v", err)
+		}
+		sidecars, err := os.ReadDir(filepath.Join(root, ".bnotes"))
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatalf("read .bnotes: %v", err)
+		}
+		for _, entry := range sidecars {
+			if entry.Name() != "index" {
+				t.Fatalf("read-only query created .bnotes/%s", entry.Name())
+			}
 		}
 	})
 

@@ -77,15 +77,11 @@ func newContextCmd(agentRunner agent.Runner) *cobra.Command {
 				return err
 			}
 
-			commandNow := relatedNow()
-			stateStore := recall.NewStateStore(v.Root, recall.WithClock(func() time.Time { return commandNow }))
-			if err := stateStore.Validate(); err != nil {
+			setup, err := newRecallSetup(v.Root, recallNow())
+			if err != nil {
 				return err
 			}
-			payload, err := buildContextPayload(v, args[0], validated, recall.RankOptions{
-				Now:    func() time.Time { return commandNow },
-				Recall: stateStore,
-			})
+			payload, err := buildContextPayload(v, args[0], validated, setup.rankOptions())
 			if err != nil {
 				return err
 			}

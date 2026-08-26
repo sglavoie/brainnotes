@@ -105,6 +105,19 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		})
 	}
 
+	rankSearchCandidates(candidates)
+	candidates = limitSearchCandidates(candidates)
+
+	results := make([]searchResult, 0, len(candidates))
+	for _, candidate := range candidates {
+		results = append(results, candidate.result)
+	}
+	return results, nil
+}
+
+// rankSearchCandidates orders the matches best-first: title matches, then title,
+// folder, and key alphabetically as the deterministic tie-break.
+func rankSearchCandidates(candidates []searchCandidate) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
@@ -119,16 +132,16 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		}
 		return left.result.Key < right.result.Key
 	})
+}
 
+// limitSearchCandidates caps the payload. It must run after
+// rankSearchCandidates: truncating a merely title-sorted list would keep the
+// alphabetically first 50 rather than the 50 best matches.
+func limitSearchCandidates(candidates []searchCandidate) []searchCandidate {
 	if len(candidates) > searchResultLimit {
-		candidates = candidates[:searchResultLimit]
+		return candidates[:searchResultLimit]
 	}
-
-	results := make([]searchResult, 0, len(candidates))
-	for _, candidate := range candidates {
-		results = append(results, candidate.result)
-	}
-	return results, nil
+	return candidates
 }
 
 func searchMatchedFields(match noteTextMatch, hasQuery bool) []string {

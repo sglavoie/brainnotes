@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -179,6 +180,192 @@ func TestVaultState_QuarantinePreservedAcrossInvalidate(t *testing.T) {
 	}
 	if len(refreshed.notes) != 1 || refreshed.notes[0].Title() != "Healthy" {
 		t.Fatalf("refreshed notes = %#v, want only Healthy", refreshed.notes)
+	}
+}
+
+func TestVaultState_SerialHoldsAcrossUnchangedRebuilds(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	notePath := filepath.Join(root, "Note.md")
+	if err := os.WriteFile(notePath, []byte("---\ntitle: Note\n---\nBody v1\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	state, err := newVaultState(v, time.Second)
+	if err != nil {
+		t.Fatalf("newVaultState: %v", err)
+	}
+	now := time.Unix(0, 0)
+	state.now = func() time.Time { return now }
+
+	first, err := state.currentSnapshot()
+	if err != nil {
+		t.Fatalf("first snapshot: %v", err)
+	}
+
+	// N rebuilds over an unchanged vault: the walk reruns once per TTL (loadedAt
+	// advances) but the serial that keys the derived caches must not move.
+	for i := 0; i < 5; i++ {
+		now = now.Add(2 * time.Second)
+		rebuilt, err := state.currentSnapshot()
+		if err != nil {
+			t.Fatalf("rebuild %d: %v", i, err)
+		}
+		if rebuilt.serial != first.serial {
+			t.Fatalf("rebuild %d serial = %d, want %d (unchanged vault must not bump serial)", i, rebuilt.serial, first.serial)
+		}
+		if !rebuilt.loadedAt.Equal(now) {
+			t.Fatalf("rebuild %d loadedAt = %s, want %s (TTL throttle must still refresh)", i, rebuilt.loadedAt, now)
+		}
+	}
+
+	// A single edit bumps the serial exactly once, no matter how many rebuilds
+	// observe it afterwards.
+	if err := os.WriteFile(notePath, []byte("---\ntitle: Note\n---\nBody v2\n"), 0o644); err != nil {
+		t.Fatalf("rewrite note: %v", err)
+	}
+	now = now.Add(2 * time.Second)
+	edited, err := state.currentSnapshot()
+	if err != nil {
+		t.Fatalf("edited snapshot: %v", err)
+	}
+	if edited.serial != first.serial+1 {
+		t.Fatalf("edited serial = %d, want %d", edited.serial, first.serial+1)
+	}
+
+	for i := 0; i < 3; i++ {
+		now = now.Add(2 * time.Second)
+		settled, err := state.currentSnapshot()
+		if err != nil {
+			t.Fatalf("post-edit rebuild %d: %v", i, err)
+		}
+		if settled.serial != edited.serial {
+			t.Fatalf("post-edit rebuild %d serial = %d, want %d (one edit must bump exactly once)", i, settled.serial, edited.serial)
+		}
+	}
+}
+
+func TestVaultState_SerialHoldsAcrossRefreshSnapshot(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	notePath := filepath.Join(root, "Note.md")
+	if err := os.WriteFile(notePath, []byte("---\ntitle: Note\n---\nBody v1\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	state, err := newVaultState(v, time.Hour)
+	if err != nil {
+		t.Fatalf("newVaultState: %v", err)
+	}
+	now := time.Unix(0, 0)
+	state.now = func() time.Time { return now }
+
+	first, err := state.currentSnapshot()
+	if err != nil {
+		t.Fatalf("first snapshot: %v", err)
+	}
+
+	// refreshSnapshot invalidates and re-stats everything; when nothing changed on
+	// disk the content-addressed cockpit flows want the same serial back.
+	for i := 0; i < 3; i++ {
+		refreshed, err := state.refreshSnapshot()
+		if err != nil {
+			t.Fatalf("refreshSnapshot %d: %v", i, err)
+		}
+		if refreshed.serial != first.serial {
+			t.Fatalf("refreshSnapshot %d serial = %d, want %d", i, refreshed.serial, first.serial)
+		}
+	}
+	if _, ok := state.quarantined[notePath]; ok {
+		t.Fatalf("healthy note quarantined: %#v", state.quarantined)
+	}
+
+	if err := os.WriteFile(notePath, []byte("---\ntitle: Note\n---\nBody v2\n"), 0o644); err != nil {
+		t.Fatalf("rewrite note: %v", err)
+	}
+	edited, err := state.refreshSnapshot()
+	if err != nil {
+		t.Fatalf("edited refreshSnapshot: %v", err)
+	}
+	if edited.serial != first.serial+1 {
+		t.Fatalf("edited serial = %d, want %d", edited.serial, first.serial+1)
+	}
+}
+
+func TestVaultState_DerivedCachesSurviveUnchangedRebuilds(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "Note.md"), []byte("---\nstatus: active\n---\nBody\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	state, err := newVaultState(v, time.Second)
+	if err != nil {
+		t.Fatalf("newVaultState: %v", err)
+	}
+	now := time.Unix(0, 0)
+	state.now = func() time.Time { return now }
+
+	fm := &config.FrontmatterConfig{}
+	first, err := state.currentSnapshot()
+	if err != nil {
+		t.Fatalf("first snapshot: %v", err)
+	}
+	firstIndex := state.propertyIndexFor(first, fm, 1)
+	firstCorpus, err := state.relatedCorpusFor(first, nil, 1)
+	if err != nil {
+		t.Fatalf("first corpus: %v", err)
+	}
+
+	now = now.Add(2 * time.Second)
+	rebuilt, err := state.currentSnapshot()
+	if err != nil {
+		t.Fatalf("rebuilt snapshot: %v", err)
+	}
+	if state.propertyIndexFor(rebuilt, fm, 1) != firstIndex {
+		t.Fatalf("property index rebuilt for an unchanged vault")
+	}
+	rebuiltCorpus, err := state.relatedCorpusFor(rebuilt, nil, 1)
+	if err != nil {
+		t.Fatalf("rebuilt corpus: %v", err)
+	}
+	if rebuiltCorpus != firstCorpus {
+		t.Fatalf("related corpus rebuilt for an unchanged vault")
+	}
+}
+
+func TestVaultState_ReloadConfigGenerationStillForcesDerivedRebuild(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "Note.md"), []byte("---\narea: \"[[Home]]\"\n---\nBody\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	_, v := testVaultOpen(t, root, "127.0.0.1:0")
+
+	state, err := newVaultState(v, time.Hour)
+	if err != nil {
+		t.Fatalf("newVaultState: %v", err)
+	}
+
+	snapshot, err := state.currentSnapshot()
+	if err != nil {
+		t.Fatalf("currentSnapshot: %v", err)
+	}
+	first := state.propertyIndexFor(snapshot, &config.FrontmatterConfig{}, 1)
+	// Same snapshot serial, newer configuration generation: the other half of
+	// derivedCacheKey must still force the rebuild.
+	second := state.propertyIndexFor(snapshot, &config.FrontmatterConfig{
+		Properties: map[string]config.PropertyDefinition{"area": {Type: config.KindWikilink}},
+	}, 2)
+	if first == second {
+		t.Fatalf("property index reused across a configuration generation change")
 	}
 }
 

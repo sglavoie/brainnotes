@@ -261,4 +261,41 @@ describe("facet DOM behavior", () => {
     expect(chips?.hidden).toBe(true);
     expect(clearAll?.hidden).toBe(true);
   });
+
+  // The chips rewrite the URL by deleting every shared filter key and writing
+  // the current selection back. The query-shape parameters are deliberately not
+  // in that vocabulary, so toggling a chip — or clearing every chip — must leave
+  // the expression and the ordering exactly where they were.
+  it("preserves expr, sort, and relative_to across a chip edit", async () => {
+    setURL("/search?q=keep&expr=tag%3Afocus&sort=-modified&relative_to=Deep+Work");
+    document.body.innerHTML = `
+      <section data-facet-controls data-facet-mode="search">
+        <input id="search-facet-input" class="facet-input" aria-expanded="false" />
+        <button type="button" data-facet-input-clear hidden>Clear</button>
+        <ul class="facet-options" hidden></ul>
+        <button type="button" data-facet-clear-all hidden>Clear filters</button>
+        <div data-facet-chips hidden></div>
+      </section>
+    `;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ categories: [{ value: "work", count: 2 }] }),
+      }))
+    );
+
+    initFacets();
+
+    await waitForExpect(() => {
+      expect(document.querySelectorAll(".facet-option")).toHaveLength(1);
+    });
+
+    const carried = "expr=tag%3Afocus&sort=-modified&relative_to=Deep+Work";
+    document.querySelector<HTMLButtonElement>(".facet-option")?.click();
+    expect(window.location.search).toBe(`?q=keep&${carried}&category=work`);
+
+    document.querySelector<HTMLButtonElement>("[data-facet-clear-all]")?.click();
+    expect(window.location.search).toBe(`?q=keep&${carried}`);
+  });
 });

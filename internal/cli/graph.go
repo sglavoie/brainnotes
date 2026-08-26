@@ -42,17 +42,14 @@ func NewGraphCmd() *cobra.Command {
 
 			g := query.BuildGraphForRoot(v.Root, notes)
 
-			flags := ff.toQueryFlags(v.Root, g)
-			pred, err := query.FromFlags(flags)
+			sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, notes, g)
 			if err != nil {
 				return err
 			}
 
 			nodeSet := make(map[string]struct{})
-			for _, n := range notes {
-				if pred(n) {
-					nodeSet[g.KeyForNote(n)] = struct{}{}
-				}
+			for _, n := range sel.notes {
+				nodeSet[g.KeyForNote(n)] = struct{}{}
 			}
 
 			out := cmd.OutOrStdout()

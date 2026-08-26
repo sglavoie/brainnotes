@@ -103,6 +103,74 @@ The same redacted snapshot backs the web review surface
 (`GET /api/daily-review/context`) and the optional AI route
 (`POST /api/daily-review/agent`); see `bn serve` below.
 
+### `bn lint` — report schema violations without changing anything
+
+```sh
+bn lint [find flags] [-q EXPR] [--view name] [--property key]
+```
+
+Checks every note — or the subset the find filters select — against the
+property definitions in `[frontmatter.properties]` and prints the violations.
+Nothing is written. Exit code `0` means clean; exit code `1` means violations
+were found, which makes `bn lint` usable directly as a CI or pre-commit gate.
+
+`--property <key>` narrows the check to one declared property; naming a
+property that is not declared is an error rather than a silent pass. With no
+properties declared at all, `bn lint` prints a hint pointing at the config file
+instead of reporting a clean vault. `bn lint` takes no positional note
+arguments: scope it with the find flags, `-q`, or `--view`.
+
+Use [`bn schema`](commands-vault.md#bn-schema--show-the-configured-frontmatter-property-schema)
+to read the declarations a violation refers to, and `bn repair` below to fix
+the mechanically fixable ones.
+
+Examples:
+
+```sh
+bn lint                                   # whole vault
+bn lint --folder References               # one folder
+bn lint --property status                 # one declared property
+bn lint -q 'status:wip'                   # scoped by query expression
+```
+
+### `bn rename-key` — rename a frontmatter key across notes
+
+```sh
+bn rename-key <old-key> <new-key> [notes...] [find flags] [--dry-run]
+```
+
+Renames a frontmatter key in every matching note, preserving the value exactly:
+no type coercion and no wikilink wrapping, since only the key changes. Keys are
+limited to letters, digits, `_`, and `-`, and the two keys must differ.
+
+Notes where `<old-key>` is absent are skipped silently. Notes where
+`<new-key>` already exists are skipped with a `WARN:` line on stderr and
+counted in the summary, so a rename never merges two keys or overwrites the
+destination value.
+
+Scope is the same three-way rule `bn replace` uses: the whole vault with no
+notes and no find flags, the filtered set with find flags, or exactly the
+positional notes — find flags and positional notes are mutually exclusive.
+
+Each file is rewritten atomically, but there is no cross-file transaction: if
+an error stops the run mid-way, prior writes stand — use `git diff` to recover.
+`--dry-run` prints the shared preview (`--- <relpath>`, then the removal of the
+old key and the addition of the new one as `frontmatter[<key>]` lines) and
+writes nothing.
+
+Renaming a key that is declared in `[frontmatter.properties]` prints a `WARN:`
+reminding you that `brainnotes.toml` still names the old key — `bn` does not
+edit your declarations for you.
+
+Examples:
+
+```sh
+bn rename-key area areas --dry-run                # preview vault-wide
+bn rename-key area areas                          # apply
+bn rename-key reviewed last_reviewed --tag project
+bn rename-key kind type Areas/Alpha.md            # explicit notes
+```
+
 ### `bn repair` — fix safe schema violations in frontmatter
 
 ```sh

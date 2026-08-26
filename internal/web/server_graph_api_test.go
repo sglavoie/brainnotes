@@ -360,3 +360,75 @@ func TestServer_GraphAPIJSON_UnknownQueryModeFallsBackToFilter(t *testing.T) {
 		t.Fatalf("unknown q_mode should behave like filter mode")
 	}
 }
+
+func TestServer_GraphAPIJSON_ExprNarrowsTheIncludedSet(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Work/Alpha.md":    []byte("---\ntitle: Alpha\ntags: [keep]\nstatus: wip\n---\n[[Beta]]\n"),
+		"Work/Beta.md":     []byte("---\ntitle: Beta\ntags: [keep]\nstatus: done\n---\nBody\n"),
+		"Archive/Gamma.md": []byte("---\ntitle: Gamma\ntags: [drop]\nstatus: wip\n---\nBody\n"),
+	})
+
+	exprOnly, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?expr="+url.QueryEscape("status:wip"))
+	if !sameStrings(graphNodeIDs(exprOnly), []string{"archive/gamma", "work/alpha"}) {
+		t.Fatalf("expr-only node ids: got %#v, want archive/gamma and work/alpha", graphNodeIDs(exprOnly))
+	}
+
+	withFacet, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?tag=keep&expr="+url.QueryEscape("status:wip"))
+	if !sameStrings(graphNodeIDs(withFacet), []string{"work/alpha"}) {
+		t.Fatalf("expr must compose with the facet chip: got %#v, want work/alpha", graphNodeIDs(withFacet))
+	}
+}
+
+func TestServer_GraphAPIJSON_FocusModeKeepsExprAsAStructuralFilter(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Work/Alpha.md":    []byte("---\ntitle: Alpha\nstatus: wip\n---\nneedle body\n"),
+		"Work/Beta.md":     []byte("---\ntitle: Beta\nstatus: wip\n---\nplain body\n"),
+		"Archive/Gamma.md": []byte("---\ntitle: Gamma\nstatus: done\n---\nneedle body\n"),
+	})
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle&q_mode=focus&expr="+url.QueryEscape("status:wip"))
+	if !sameStrings(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
+		t.Fatalf("focus mode must still drop nodes the expression excludes: got %#v", graphNodeIDs(payload))
+	}
+
+	nodes := graphNodeDataByID(payload)
+	if !nodes["work/alpha"].MatchesQuery {
+		t.Fatalf("expected work/alpha to match the free-text query, got %#v", nodes["work/alpha"])
+	}
+	if nodes["work/beta"].MatchesQuery {
+		t.Fatalf("expected work/beta to be dimmed rather than removed, got %#v", nodes["work/beta"])
+	}
+}
+
+func TestServer_GraphAPIJSON_InvalidExprReturnsStructuredError(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Note.md": []byte("---\ntitle: Note\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/api/graph.json?expr=" + url.QueryEscape("statuz:wip")) // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/graph.json: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+
+	var payload filterErrorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Error.Param != "expr" || payload.Error.Position == nil {
+		t.Fatalf("graph filter error payload: %#v", payload.Error)
+	}
+}
+
+func TestServer_GraphAPIJSON_ExprResolvesGraphFields(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, denseGraphVaultFixture())
+
+	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?expr="+url.QueryEscape("orphan:true"))
+	// Leaf links out to Hub but nothing links back, so it is an orphan too.
+	if !sameStrings(graphNodeIDs(payload), []string{"island", "leaf"}) {
+		t.Fatalf("graph-reading expression: got %#v, want island and leaf", graphNodeIDs(payload))
+	}
+}

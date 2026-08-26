@@ -282,6 +282,22 @@ func (s *Server) reloadConfig() error {
 	return nil
 }
 
+// finishConfigWrite republishes the configuration after a write that touched
+// brainnotes.toml alone. Unlike finishPropertyWrite it does not invalidate the
+// vault snapshot itself: no note changed, so nothing derived from the notes is
+// stale. reloadConfig still drops the snapshot when the file really changed,
+// because it bumps the generation — and [views] is deliberately not excluded
+// from that generation. A view save therefore costs one properties.Build and one
+// recall corpus rebuild, which is the accepted price of a generation that means
+// "the configuration changed" rather than "some parts of it did"; the narrower
+// meaning would be a footgun for every pin that compares it.
+func (s *Server) finishConfigWrite(changed bool) {
+	if !changed {
+		return
+	}
+	_ = s.reloadConfig()
+}
+
 // ensureConfigWritable reloads before a property mutation so the write uses the
 // configuration currently on disk, and refuses the write outright when that
 // file is invalid — property semantics come from it, so applying a mutation

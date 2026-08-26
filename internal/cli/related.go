@@ -8,12 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -56,10 +54,6 @@ var relatedOpenExec = func(editorSpec, file string) error {
 	return runEditor(editorSpec, file)
 }
 
-// relatedNow is shared by ranking, state writes, and feedback date parsing.
-// Tests replace it to pin local-calendar and recency behavior.
-var relatedNow = time.Now
-
 // NewRelatedCmd returns the contextual-recall command.
 func NewRelatedCmd() *cobra.Command {
 	options := relatedOptions{
@@ -88,16 +82,12 @@ func NewRelatedCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			commandNow := relatedNow()
-			stateStore := recall.NewStateStore(v.Root, recall.WithClock(func() time.Time { return commandNow }))
-			if err := stateStore.Validate(); err != nil {
+			setup, err := newRecallSetup(v.Root, recallNow())
+			if err != nil {
 				return err
 			}
 
-			queryResult, err := buildRelatedQuery(v, args[0], mode, recall.RankOptions{
-				Now:    func() time.Time { return commandNow },
-				Recall: stateStore,
-			})
+			queryResult, err := buildRelatedQuery(v, args[0], mode, setup.rankOptions())
 			if err != nil {
 				return err
 			}
@@ -112,7 +102,7 @@ func NewRelatedCmd() *cobra.Command {
 				if selection.absolutePath == "" {
 					return nil
 				}
-				if err := stateStore.RecordOpened(queryResult.source.Path, selection.relativePath); err != nil {
+				if err := setup.store.RecordOpened(queryResult.source.Path, selection.relativePath); err != nil {
 					return fmt.Errorf("related: record selected note: %w", err)
 				}
 				if !options.openResult {
@@ -305,33 +295,28 @@ func buildRelatedQuery(
 		return relatedQuery{}, err
 	}
 
-	extractOptions := recall.ExtractOptions{
-		MetadataProperties: append([]string(nil), v.Config().Related.MetadataProperties...),
-	}
-	documents, err := recall.ExtractCorpus(v.Root, notes, extractOptions)
-	if err != nil {
-		return relatedQuery{}, err
-	}
-	sourceDocument, err := recall.ExtractDocument(v.Root, source, extractOptions)
+	sourceDocument, err := recall.ExtractDocument(v.Root, source, recallExtractOptions(v))
 	if err != nil {
 		return relatedQuery{}, err
 	}
 
-	graph := query.BuildGraphForRoot(v.Root, notes)
-	ranker, err := recall.BuildRanker(documents, graph, rankOptions)
+	corpus, err := buildRecallCorpus(v, notes, nil, rankOptions)
 	if err != nil {
 		return relatedQuery{}, err
 	}
-	results, err := ranker.Rank(sourceDocument.Path, mode)
+	// Rank, not RankSelected: `related` is discovery, so mode eligibility and
+	// dismiss/snooze suppression are exactly what the user asked for. A caller
+	// that has already chosen its notes wants RankSelected instead.
+	results, err := corpus.ranker.Rank(sourceDocument.Path, mode)
 	if err != nil {
 		return relatedQuery{}, err
 	}
 
 	return relatedQuery{
 		source:    sourceDocument,
-		documents: documents,
+		documents: corpus.documents,
 		mode:      mode,
-		weights:   ranker.Weights(),
+		weights:   corpus.ranker.Weights(),
 		results:   results,
 	}, nil
 }

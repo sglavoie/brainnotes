@@ -19,6 +19,8 @@ var BrainNotesApp = (() => {
     "min_links",
     "max_links"
   ];
+  var queryShapeParamKeys = ["expr", "sort", "relative_to"];
+  var queryExprParam = "expr";
   var repeatedFilterParams = /* @__PURE__ */ new Set(["tag", "category"]);
   var normalizeParamValue = (value) => String(value || "").trim();
   var notePathForKey = (key) => {
@@ -39,6 +41,35 @@ var BrainNotesApp = (() => {
       (key) => source.getAll(key).some((value) => normalizeParamValue(value) !== "")
     );
   };
+  var readQueryShapeParam = (key, params) => normalizeParamValue((params || new URLSearchParams(window.location.search)).get(key));
+  var readExprParam = (params) => readQueryShapeParam(queryExprParam, params);
+  var syncQueryShapeParam = (key, value) => {
+    const params = new URLSearchParams(window.location.search);
+    const normalized = normalizeParamValue(value);
+    if (normalizeParamValue(params.get(key)) === normalized) {
+      return false;
+    }
+    if (normalized === "") {
+      params.delete(key);
+    } else {
+      params.set(key, normalized);
+    }
+    updateBrowserQuery(params);
+    return true;
+  };
+  var syncExprParam = (expr) => syncQueryShapeParam(queryExprParam, expr);
+  var hasActiveFilters = (params) => {
+    const source = params || new URLSearchParams(window.location.search);
+    return hasActiveSharedFilters(source) || readExprParam(source) !== "";
+  };
+  var copyQueryShapeParams = (fromParams, toParams) => {
+    for (const key of queryShapeParamKeys) {
+      const normalized = normalizeParamValue(fromParams.get(key));
+      if (normalized !== "") {
+        toParams.set(key, normalized);
+      }
+    }
+  };
   var copySharedFilterParams = (fromParams, toParams) => {
     for (const key of sharedFilterParamKeys) {
       for (const value of fromParams.getAll(key)) {
@@ -48,6 +79,7 @@ var BrainNotesApp = (() => {
         }
       }
     }
+    copyQueryShapeParams(fromParams, toParams);
   };
   var updateBrowserQuery = (params) => {
     if (!window.history || typeof window.history.replaceState !== "function") {
@@ -1415,6 +1447,111 @@ var BrainNotesApp = (() => {
     };
   };
 
+  // internal/web/static_src/api-query.ts
+  var queryValidateAPIPath = "/api/query/validate";
+  var queryCompletionsAPIPath = "/api/query/completions";
+  var readText = (value) => typeof value === "string" ? value : "";
+  var readOffset = (value, limit) => {
+    const parsed = Math.trunc(readCount(value));
+    if (parsed < 0) {
+      return 0;
+    }
+    return parsed > limit ? limit : parsed;
+  };
+  var normalizeValidateError = (value, query) => {
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+    const limit = query.length;
+    const start = readOffset(record.start, limit);
+    const end = readOffset(record.end, limit);
+    return {
+      message: readText(record.message),
+      start,
+      end: end < start ? start : end,
+      line: Math.max(1, Math.trunc(readCount(record.line)) || 1),
+      column: Math.max(1, Math.trunc(readCount(record.column)) || 1),
+      positioned: readBoolean(record.positioned),
+      suggestions: normalizeStringArray(record.suggestions)
+    };
+  };
+  var normalizeQueryValidateResponse = (payload) => {
+    const record = asRecord(payload) || {};
+    const query = readText(record.query);
+    const ok = readBoolean(record.ok);
+    return {
+      ok,
+      query,
+      normalized: readText(record.normalized),
+      fields_used: normalizeStringArray(record.fields_used),
+      needs_graph: readBoolean(record.needs_graph),
+      // A valid query has nothing to point at, so an error object alongside ok
+      // is a payload bug rather than something to render a caret from.
+      error: ok ? null : normalizeValidateError(record.error, query)
+    };
+  };
+  var normalizeCompletionKind = (value) => readText(value) === "value" ? "value" : "field";
+  var normalizeCompletion = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+    const display = readText(record.value);
+    const insert = readText(record.insert) || display;
+    if (display === "" || insert === "") {
+      return null;
+    }
+    return {
+      value: display,
+      insert,
+      kind: readText(record.kind),
+      detail: readText(record.detail),
+      count: readCount(record.count)
+    };
+  };
+  var normalizeReplaceRange = (value, limit) => {
+    const record = asRecord(value) || {};
+    const start = readOffset(record.start, limit);
+    const end = readOffset(record.end, limit);
+    return { start, end: end < start ? start : end };
+  };
+  var normalizeQueryCompletionsResponse = (payload) => {
+    const record = asRecord(payload) || {};
+    const query = readText(record.query);
+    const limit = query.length;
+    const rawCompletions = Array.isArray(record.completions) ? record.completions : [];
+    const completions = [];
+    for (const raw of rawCompletions) {
+      const completion = normalizeCompletion(raw);
+      if (completion) {
+        completions.push(completion);
+      }
+    }
+    return {
+      ok: readBoolean(record.ok),
+      query,
+      kind: normalizeCompletionKind(record.kind),
+      field: readText(record.field),
+      arg: readText(record.arg),
+      prefix: readText(record.prefix),
+      pos: readOffset(record.pos, limit),
+      replace: normalizeReplaceRange(record.replace, limit),
+      completions
+    };
+  };
+  var buildQueryValidateURL = (expr) => {
+    const params = new URLSearchParams();
+    params.set("expr", expr);
+    return `${queryValidateAPIPath}?${params.toString()}`;
+  };
+  var buildQueryCompletionsURL = (expr, pos) => {
+    const params = new URLSearchParams();
+    params.set("expr", expr);
+    params.set("pos", String(Math.max(0, Math.trunc(pos))));
+    return `${queryCompletionsAPIPath}?${params.toString()}`;
+  };
+
   // internal/web/static_src/api-search.ts
   var normalizeSearchResults = (payload) => {
     if (!Array.isArray(payload)) {
@@ -1701,6 +1838,71 @@ var BrainNotesApp = (() => {
     }
     return normalized;
   };
+
+  // internal/web/static_src/api-views.ts
+  var SAVED_VIEWS_ENDPOINT = "/api/views";
+  var SAVED_VIEWS_PREVIEW_ENDPOINT = "/api/views/preview";
+  var SAVED_VIEWS_APPLY_ENDPOINT = "/api/views/apply";
+  var normalizeSavedViewSummary = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return null;
+    }
+    const name = normalizeParamValue(record.name);
+    if (name === "") {
+      return null;
+    }
+    return {
+      name,
+      description: normalizeParamValue(record.description),
+      query: normalizeParamValue(record.query),
+      normalized: normalizeParamValue(record.normalized),
+      sort: normalizeParamValue(record.sort),
+      relative_to: normalizeParamValue(record.relative_to),
+      limit: readCount(record.limit),
+      enabled: readBoolean(record.enabled),
+      detail: typeof record.detail === "string" ? record.detail : "",
+      needs_graph: readBoolean(record.needs_graph)
+    };
+  };
+  var normalizeSavedViewSummaries = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const summary = normalizeSavedViewSummary(item);
+      return summary ? [summary] : [];
+    });
+  };
+  var normalizeSavedViewsResponse = (payload) => {
+    const base = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base.ok,
+      code: base.ok ? void 0 : base.code,
+      message: base.message,
+      generation: readCount(record.generation),
+      action: normalizeParamValue(record.action),
+      name: normalizeParamValue(record.name),
+      new_name: normalizeParamValue(record.new_name),
+      views: normalizeSavedViewSummaries(record.views),
+      created: readBoolean(record.created),
+      config_diff: normalizePropertyConfigDiff(record.config_diff),
+      preview_id: normalizeParamValue(record.preview_id),
+      expires_at: normalizeParamValue(record.expires_at),
+      journal_id: normalizeParamValue(record.journal_id),
+      config: normalizePropertyConfigStatus(record.config)
+    };
+  };
+  var buildSavedViewsRequestInit = (token, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-BN-CSRF": token
+    },
+    body: JSON.stringify(body)
+  });
 
   // internal/web/static_src/dom.ts
   var narrowElement = (element2, constructor) => element2 instanceof constructor ? element2 : null;
@@ -4796,6 +4998,8 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/graph-controller.ts
+  var graphFilterMode = "graph";
+  var graphFilterDebounceMs = 150;
   var readPageSearchMode = () => normalizeSearchMode(new URLSearchParams(window.location.search).get("q_mode"));
   var syncPageSearchModeParam = (mode) => {
     const params = new URLSearchParams(window.location.search);
@@ -4851,6 +5055,7 @@ var BrainNotesApp = (() => {
       layoutRunID: 0
     };
     let debounceToken = 0;
+    let publishToken = 0;
     let requestToken = 0;
     let selectionSyncing = false;
     let currentElementSignature = "";
@@ -4872,7 +5077,7 @@ var BrainNotesApp = (() => {
       }
       state.searchMode = nextMode;
       syncPageSearchModeParam(nextMode);
-      scheduleLoad(state.currentQuery, 0);
+      publishFilterChange(0);
     }
     function restyleGraphForTheme() {
       if (!state.cy) {
@@ -5189,7 +5394,7 @@ var BrainNotesApp = (() => {
         applyGraphElements(graphElements, true);
       }
       updateZoomMatchesButton();
-      const hasFilters = hasActiveSharedFilters();
+      const hasFilters = hasActiveFilters();
       const scopeLabel = graphScopeLabel(query, hasFilters);
       if (focusMode && query) {
         if (state.matchIDs.size === 0) {
@@ -5225,6 +5430,20 @@ var BrainNotesApp = (() => {
         void loadGraph(query, localToken);
       }, delay);
     }
+    function publishFilterChange(delay) {
+      window.clearTimeout(publishToken);
+      const emit = () => {
+        dispatchFiltersChange(window, {
+          mode: graphFilterMode,
+          params: new URLSearchParams(window.location.search)
+        });
+      };
+      if (delay <= 0) {
+        emit();
+        return;
+      }
+      publishToken = window.setTimeout(emit, delay);
+    }
     function bindControls() {
       canvas.addEventListener("keydown", handleGraphKeyDown);
       const openNote = dom.openNote;
@@ -5238,9 +5457,8 @@ var BrainNotesApp = (() => {
       const filterInput2 = dom.filterInput;
       if (filterInput2 instanceof HTMLInputElement) {
         filterInput2.addEventListener("input", () => {
-          const query = filterInput2.value.trim();
-          syncPageQueryParam(query);
-          scheduleLoad(query, 150);
+          syncPageQueryParam(filterInput2.value.trim());
+          publishFilterChange(graphFilterDebounceMs);
         });
         filterInput2.addEventListener("keydown", (event) => {
           if (event.key !== "Enter") {
@@ -5306,7 +5524,10 @@ var BrainNotesApp = (() => {
         input.checked = normalizeSearchMode(input.value) === state.searchMode;
       }
     }
-    window.addEventListener(filterChangeEventName, () => {
+    window.addEventListener(filterChangeEventName, (event) => {
+      if (!shouldHandleFilterChangeForMode(event, graphFilterMode)) {
+        return;
+      }
       const query = filterInput instanceof HTMLInputElement ? filterInput.value.trim() : state.currentQuery;
       scheduleLoad(query, 0);
     });
@@ -6695,7 +6916,7 @@ var BrainNotesApp = (() => {
       window.clearTimeout(debounceToken);
       syncPageQueryParam(query);
       clearPreviewState({ clearStatus: true });
-      if (query === "" && !hasActiveSharedFilters()) {
+      if (query === "" && !hasActiveFilters()) {
         requestToken += 1;
         setOverviewBusy(root, false);
         clearResults("No query or filters selected.", "is-empty");
@@ -7924,7 +8145,7 @@ var BrainNotesApp = (() => {
     }
   };
   var seedText = (kind, text) => kind === "datetime" ? rfc3339ToDatetimeLocal(text) : text;
-  var readText = (kind, raw) => kind === "datetime" ? datetimeLocalToRFC3339(raw) : raw.trim();
+  var readText2 = (kind, raw) => kind === "datetime" ? datetimeLocalToRFC3339(raw) : raw.trim();
   var createSelect = (doc, options, choices) => {
     const select = doc.createElement("select");
     select.className = "properties-control properties-control-select";
@@ -7983,7 +8204,7 @@ var BrainNotesApp = (() => {
     input.value = seedText(options.kind, options.text);
     return {
       element: input,
-      read: () => readText(options.kind, input.value),
+      read: () => readText2(options.kind, input.value),
       error: () => scalarValueError(options.kind, input.value),
       focus: () => input.focus()
     };
@@ -9447,6 +9668,772 @@ var BrainNotesApp = (() => {
     initPropertyDetail(deps);
   };
 
+  // internal/web/static_src/query-bar-completions.ts
+  var tokenBreak = /* @__PURE__ */ new Set([" ", "	", "\n", "(", ")"]);
+  var tokenAtCursor = (text, pos) => {
+    const caret = Math.max(0, Math.min(Math.trunc(pos), text.length));
+    const head = text.slice(0, caret);
+    const quoteCount = countUnescapedQuotes(head);
+    const quoted = quoteCount % 2 === 1;
+    if (quoted) {
+      const start2 = lastUnescapedQuote(head);
+      return { start: start2, end: caret, text: text.slice(start2, caret), quoted: true, wikilink: false };
+    }
+    const openLink = head.lastIndexOf("[[");
+    if (openLink >= 0 && head.indexOf("]]", openLink) < 0) {
+      return {
+        start: openLink,
+        end: caret,
+        text: text.slice(openLink, caret),
+        quoted: false,
+        wikilink: true
+      };
+    }
+    let start = caret;
+    while (start > 0) {
+      if (start >= 2 && text.slice(start - 2, start) === "]]") {
+        const open = text.lastIndexOf("[[", start - 2);
+        if (open >= 0) {
+          start = open;
+          continue;
+        }
+      }
+      if (tokenBreak.has(text.charAt(start - 1))) {
+        break;
+      }
+      start -= 1;
+    }
+    return { start, end: caret, text: text.slice(start, caret), quoted: false, wikilink: false };
+  };
+  var countUnescapedQuotes = (text) => {
+    let count = 0;
+    for (let i = 0; i < text.length; i += 1) {
+      const char = text.charAt(i);
+      if (char === "\\") {
+        i += 1;
+        continue;
+      }
+      if (char === '"') {
+        count += 1;
+      }
+    }
+    return count;
+  };
+  var lastUnescapedQuote = (text) => {
+    let index = -1;
+    for (let i = 0; i < text.length; i += 1) {
+      const char = text.charAt(i);
+      if (char === "\\") {
+        i += 1;
+        continue;
+      }
+      if (char === '"') {
+        index = i;
+      }
+    }
+    return index < 0 ? text.length : index;
+  };
+  var keywords = /* @__PURE__ */ new Set(["and", "or", "not"]);
+  var valueSeparators = [">=", "<=", "!=", "=", ":", ">", "<"];
+  var completionContextAt = (text, pos) => {
+    const token = tokenAtCursor(text, pos);
+    if (token.wikilink) {
+      const head = text.slice(0, token.start);
+      const owner = tokenAtCursor(head, head.length);
+      const separated2 = splitFieldAndValue(owner.text);
+      return {
+        kind: "value",
+        field: separated2 ? separated2.field : "",
+        arg: separated2 ? separated2.arg : "",
+        prefix: token.text.slice(2),
+        replace: { start: token.start, end: token.end },
+        quoted: false,
+        wikilink: true
+      };
+    }
+    if (token.quoted) {
+      const head = text.slice(0, token.start);
+      const owner = tokenAtCursor(head, head.length);
+      const separated2 = splitFieldAndValue(owner.text);
+      return {
+        kind: "value",
+        field: separated2 ? separated2.field : "",
+        arg: separated2 ? separated2.arg : "",
+        prefix: unquote(token.text.slice(1)),
+        replace: { start: token.start, end: token.end },
+        quoted: true,
+        wikilink: false
+      };
+    }
+    const separated = splitFieldAndValue(token.text);
+    if (separated) {
+      return {
+        kind: "value",
+        field: separated.field,
+        arg: separated.arg,
+        prefix: separated.value,
+        replace: { start: token.start + separated.valueOffset, end: token.end },
+        quoted: false,
+        wikilink: false
+      };
+    }
+    return {
+      kind: "field",
+      field: "",
+      arg: "",
+      prefix: keywords.has(token.text.toLowerCase()) ? "" : token.text,
+      replace: { start: token.start, end: token.end },
+      quoted: false,
+      wikilink: false
+    };
+  };
+  var splitFieldAndValue = (token) => {
+    let index = -1;
+    let width = 0;
+    for (const separator of valueSeparators) {
+      const found = token.indexOf(separator);
+      if (found < 0) {
+        continue;
+      }
+      if (index < 0 || found < index || found === index && separator.length > width) {
+        index = found;
+        width = separator.length;
+      }
+    }
+    if (index < 0) {
+      return null;
+    }
+    const field = token.slice(0, index).toLowerCase();
+    const rest = token.slice(index + width);
+    const restOffset = index + width;
+    let argIndex = -1;
+    let argWidth = 0;
+    for (const separator of valueSeparators) {
+      const found = rest.indexOf(separator);
+      if (found < 0) {
+        continue;
+      }
+      if (argIndex < 0 || found < argIndex || found === argIndex && separator.length > argWidth) {
+        argIndex = found;
+        argWidth = separator.length;
+      }
+    }
+    if (argIndex >= 0) {
+      return {
+        field,
+        arg: rest.slice(0, argIndex),
+        value: rest.slice(argIndex + argWidth),
+        valueOffset: restOffset + argIndex + argWidth
+      };
+    }
+    return { field, arg: "", value: rest, valueOffset: restOffset };
+  };
+  var unquote = (text) => text.replace(/\\(["\\])/g, "$1");
+  var foldCompletionValue = (value) => value.trim().toLowerCase().normalize("NFC");
+  var filterCompletions = (completions, prefix) => {
+    const folded = foldCompletionValue(prefix);
+    if (folded === "") {
+      return completions.slice();
+    }
+    const leading = [];
+    const contained = [];
+    for (const completion of completions) {
+      const candidate = foldCompletionValue(completion.value);
+      if (candidate.startsWith(folded)) {
+        leading.push(completion);
+      } else if (candidate.includes(folded)) {
+        contained.push(completion);
+      }
+    }
+    return leading.concat(contained);
+  };
+  var mergeCompletions = (lists, limit = 50) => {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const list of lists) {
+      for (const completion of list) {
+        const key = `${completion.kind}\0${foldCompletionValue(completion.value)}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        out.push(completion);
+        if (out.length >= limit) {
+          return out;
+        }
+      }
+    }
+    return out;
+  };
+  var applyCompletion = (text, replace, insert) => {
+    const start = Math.max(0, Math.min(replace.start, text.length));
+    const end = Math.max(start, Math.min(replace.end, text.length));
+    const next = `${text.slice(0, start)}${insert}${text.slice(end)}`;
+    return { text: next, pos: start + insert.length };
+  };
+  var completionLabel = (completion) => {
+    const detail = completion.detail.trim();
+    const suffix = completion.count > 0 ? ` (${completion.count})` : "";
+    return detail ? `${completion.value}${suffix} \u2014 ${detail}` : `${completion.value}${suffix}`;
+  };
+
+  // internal/web/static_src/query-bar-model.ts
+  var emptyQueryBarValidation = () => ({
+    phase: "empty",
+    query: "",
+    normalized: "",
+    fieldsUsed: [],
+    needsGraph: false,
+    error: null
+  });
+  var isBlankQuery = (text) => text.trim() === "";
+  var reduceQueryBar = (state, event) => {
+    switch (event.type) {
+      case "reset":
+        return emptyQueryBarValidation();
+      case "input": {
+        if (isBlankQuery(event.text)) {
+          return emptyQueryBarValidation();
+        }
+        if (event.text === state.query && state.phase !== "empty") {
+          return state;
+        }
+        return {
+          phase: "typing",
+          query: event.text,
+          normalized: "",
+          fieldsUsed: [],
+          needsGraph: false,
+          error: null
+        };
+      }
+      case "request":
+        if (event.text !== state.query || isBlankQuery(event.text)) {
+          return state;
+        }
+        return { ...state, phase: "checking" };
+      case "response": {
+        if (event.text !== state.query) {
+          return state;
+        }
+        const { response } = event;
+        return {
+          phase: response.ok ? "valid" : "invalid",
+          query: event.text,
+          normalized: response.normalized,
+          fieldsUsed: response.fields_used,
+          needsGraph: response.needs_graph,
+          error: response.ok ? null : response.error
+        };
+      }
+      case "failure":
+        if (event.text !== state.query) {
+          return state;
+        }
+        return { ...state, phase: "unavailable", error: null };
+      default:
+        return state;
+    }
+  };
+  var queryBarStatus = (state) => {
+    switch (state.phase) {
+      case "empty":
+        return { message: "Type an expression to filter the vault.", kind: "" };
+      case "typing":
+      case "checking":
+        return { message: "Checking expression...", kind: "is-loading" };
+      case "valid":
+        return {
+          message: state.needsGraph ? "Expression is valid. Uses the link graph." : "Expression is valid.",
+          kind: "is-success"
+        };
+      case "invalid":
+        return {
+          message: state.error?.message || "Expression is not valid.",
+          kind: "is-error"
+        };
+      case "unavailable":
+        return { message: "Expression check unavailable.", kind: "is-warning" };
+      default:
+        return { message: "", kind: "" };
+    }
+  };
+  var publishableQuery = (state) => state.phase === "valid" ? state.query : null;
+  var errorCaretRow = (query, error) => {
+    if (!error || !error.positioned) {
+      return "";
+    }
+    const start = Math.max(0, Math.min(error.start, query.length));
+    const end = Math.max(start, Math.min(error.end, query.length));
+    const lead = Array.from(query.slice(0, start), (char) => char === "	" ? "	" : " ").join("");
+    return `${lead}${"^".repeat(Math.max(1, end - start))}`;
+  };
+  var shouldRequestCompletions = (text, pos, cause) => {
+    if (cause === "manual") {
+      return true;
+    }
+    if (cause === "focus") {
+      return text === "";
+    }
+    if (pos <= 0 || pos > text.length) {
+      return false;
+    }
+    const previous = text.charAt(pos - 1);
+    return previous.trim() !== "";
+  };
+  var nextActiveIndex = (current, delta, length) => {
+    if (length <= 0) {
+      return -1;
+    }
+    if (current < 0) {
+      return delta >= 0 ? 0 : length - 1;
+    }
+    return ((current + delta) % length + length) % length;
+  };
+  var createDebouncer = (scheduler) => {
+    let handle = null;
+    const cancel = () => {
+      if (handle !== null) {
+        scheduler.cancel(handle);
+        handle = null;
+      }
+    };
+    return {
+      cancel,
+      run: (fn, delay) => {
+        cancel();
+        if (delay <= 0) {
+          fn();
+          return;
+        }
+        handle = scheduler.schedule(() => {
+          handle = null;
+          fn();
+        }, delay);
+      }
+    };
+  };
+  var windowScheduler = (target) => ({
+    schedule: (fn, delay) => target.setTimeout(fn, delay),
+    cancel: (handle) => target.clearTimeout(handle)
+  });
+  var validateDebounceMs = 180;
+  var completionsDebounceMs = 120;
+
+  // internal/web/static_src/query-bar-requests.ts
+  var abortSlot = (slot) => {
+    if (slot.controller) {
+      slot.controller.abort();
+      slot.controller = null;
+    }
+  };
+  var createQueryRequester = (fetcher) => {
+    const validateSlot = { controller: null, token: 0 };
+    const completionsSlot = { controller: null, token: 0 };
+    const request = async (slot, url) => {
+      abortSlot(slot);
+      const token = slot.token += 1;
+      const controller = typeof AbortController === "undefined" ? null : new AbortController();
+      slot.controller = controller;
+      let resp;
+      try {
+        resp = await fetcher(url, {
+          headers: { Accept: "application/json" },
+          ...controller ? { signal: controller.signal } : {}
+        });
+      } catch (error) {
+        if (token !== slot.token) {
+          return null;
+        }
+        throw error;
+      } finally {
+        if (token === slot.token) {
+          slot.controller = null;
+        }
+      }
+      if (token !== slot.token) {
+        return null;
+      }
+      if (!resp.ok) {
+        throw new Error(`query request failed with status ${resp.status}`);
+      }
+      const payload = await resp.json();
+      return token === slot.token ? { payload } : null;
+    };
+    return {
+      validate: async (expr) => {
+        const result = await request(validateSlot, buildQueryValidateURL(expr));
+        return result === null ? null : normalizeQueryValidateResponse(result.payload);
+      },
+      completions: async (expr, pos) => {
+        const result = await request(completionsSlot, buildQueryCompletionsURL(expr, pos));
+        return result === null ? null : normalizeQueryCompletionsResponse(result.payload);
+      },
+      cancel: () => {
+        abortSlot(validateSlot);
+        abortSlot(completionsSlot);
+        validateSlot.token += 1;
+        completionsSlot.token += 1;
+      }
+    };
+  };
+
+  // internal/web/static_src/query-bar-render.ts
+  var completionOptionID = (index) => `query-bar-option-${index}`;
+  var renderQueryBarStatus = (els, state) => {
+    const status = queryBarStatus(state);
+    setStatusText(els.statusEl, status.message, status.kind);
+    els.root.setAttribute("data-query-bar-phase", state.phase);
+    els.input.setAttribute("aria-invalid", state.phase === "invalid" ? "true" : "false");
+  };
+  var renderQueryBarError = (els, state) => {
+    const { errorEl } = els;
+    if (!errorEl) {
+      return;
+    }
+    const error = state.phase === "invalid" ? state.error : null;
+    if (!error) {
+      errorEl.hidden = true;
+      if (els.errorMessageEl) {
+        els.errorMessageEl.textContent = "";
+      }
+      if (els.errorQueryEl) {
+        els.errorQueryEl.textContent = "";
+      }
+      if (els.errorCaretEl) {
+        els.errorCaretEl.textContent = "";
+      }
+      if (els.suggestionsEl) {
+        els.suggestionsEl.hidden = true;
+        els.suggestionsEl.textContent = "";
+      }
+      return;
+    }
+    errorEl.hidden = false;
+    if (els.errorMessageEl) {
+      els.errorMessageEl.textContent = error.positioned ? `Column ${error.column}: ${error.message}` : error.message;
+    }
+    const caret = errorCaretRow(state.query, error);
+    if (els.errorQueryEl) {
+      els.errorQueryEl.textContent = caret === "" ? "" : state.query;
+    }
+    if (els.errorCaretEl) {
+      els.errorCaretEl.textContent = caret;
+    }
+    if (els.suggestionsEl) {
+      const suggestions = error.suggestions;
+      els.suggestionsEl.hidden = suggestions.length === 0;
+      els.suggestionsEl.textContent = suggestions.length === 0 ? "" : `Did you mean: ${suggestions.join(", ")}?`;
+    }
+  };
+  var renderQueryBarCompletions = (els, completions, options) => {
+    const { listEl, input } = els;
+    if (!listEl) {
+      return;
+    }
+    const doc = listEl.ownerDocument;
+    listEl.textContent = "";
+    if (completions.length === 0) {
+      listEl.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      input.removeAttribute("aria-activedescendant");
+      return;
+    }
+    completions.forEach((completion, index) => {
+      const item = doc.createElement("li");
+      item.className = "query-bar-completion";
+      item.id = completionOptionID(index);
+      item.setAttribute("role", "option");
+      item.setAttribute("aria-selected", index === options.activeIndex ? "true" : "false");
+      item.setAttribute("data-query-bar-completion", String(index));
+      if (index === options.activeIndex) {
+        item.classList.add("is-active");
+      }
+      const value = doc.createElement("span");
+      value.className = "query-bar-completion-value";
+      value.textContent = completion.value;
+      item.appendChild(value);
+      if (completion.kind) {
+        const kind = doc.createElement("span");
+        kind.className = "query-bar-completion-kind";
+        kind.textContent = completion.kind;
+        item.appendChild(kind);
+      }
+      const detail = completion.detail.trim();
+      if (detail !== "" || completion.count > 0) {
+        const meta = doc.createElement("span");
+        meta.className = "query-bar-completion-detail";
+        meta.textContent = detail !== "" ? detail : `${completion.count} notes`;
+        item.appendChild(meta);
+      }
+      item.setAttribute("aria-label", completionLabel(completion));
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        options.onChoose(completion, index);
+      });
+      listEl.appendChild(item);
+    });
+    listEl.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    if (options.activeIndex >= 0 && options.activeIndex < completions.length) {
+      input.setAttribute("aria-activedescendant", completionOptionID(options.activeIndex));
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  };
+  var closeQueryBarCompletions = (els) => {
+    renderQueryBarCompletions(els, [], { activeIndex: -1, onChoose: () => {
+    } });
+  };
+
+  // internal/web/static_src/query-bar-controller.ts
+  var resolveQueryBarElements = (doc) => {
+    const root = queryElement(doc, "[data-query-bar]", HTMLElement);
+    if (!root) {
+      return null;
+    }
+    const input = queryElement(root, "[data-query-bar-input]", HTMLInputElement);
+    if (!input) {
+      return null;
+    }
+    const errorEl = queryElement(root, "[data-query-bar-error]", HTMLElement);
+    return {
+      root,
+      input,
+      statusEl: queryElement(root, "[data-query-bar-status]", HTMLElement),
+      errorEl,
+      errorMessageEl: errorEl ? queryElement(errorEl, "[data-query-bar-error-message]", HTMLElement) : null,
+      errorQueryEl: errorEl ? queryElement(errorEl, "[data-query-bar-error-query]", HTMLElement) : null,
+      errorCaretEl: errorEl ? queryElement(errorEl, "[data-query-bar-error-caret]", HTMLElement) : null,
+      suggestionsEl: errorEl ? queryElement(errorEl, "[data-query-bar-error-suggestions]", HTMLElement) : null,
+      listEl: queryElement(root, "[data-query-bar-completions]", HTMLElement),
+      clearButton: queryElement(root, "[data-query-bar-clear]", HTMLButtonElement)
+    };
+  };
+  var initQueryBarController = (els, deps = {}) => {
+    const fetcher = deps.fetch || ((input, init) => fetch(input, init));
+    const scheduler = deps.scheduler || windowScheduler(window);
+    const requester = createQueryRequester(fetcher);
+    const validateDebounce = createDebouncer(scheduler);
+    const completionsDebounce = createDebouncer(scheduler);
+    let validation = emptyQueryBarValidation();
+    let completions = [];
+    let activeIndex = -1;
+    let listOpen = false;
+    let published = readExprParam();
+    const renderList = () => {
+      if (!listOpen) {
+        closeQueryBarCompletions(els);
+        return;
+      }
+      renderQueryBarCompletions(els, completions, {
+        activeIndex,
+        onChoose: (completion) => {
+          acceptCompletion(completion);
+        }
+      });
+    };
+    const closeList = () => {
+      listOpen = false;
+      completions = [];
+      activeIndex = -1;
+      completionsDebounce.cancel();
+      renderList();
+    };
+    const renderAll = () => {
+      renderQueryBarStatus(els, validation);
+      renderQueryBarError(els, validation);
+    };
+    const publish = (expr) => {
+      if (expr === published) {
+        return;
+      }
+      published = expr;
+      syncExprParam(expr);
+      dispatchFiltersChange(window, {
+        mode: "",
+        params: new URLSearchParams(window.location.search)
+      });
+    };
+    const runValidate = (text) => {
+      validation = reduceQueryBar(validation, { type: "request", text });
+      renderAll();
+      void requester.validate(text).then((response) => {
+        if (response === null) {
+          return;
+        }
+        validation = reduceQueryBar(validation, { type: "response", text, response });
+        renderAll();
+        const confirmed = publishableQuery(validation);
+        if (confirmed !== null) {
+          publish(confirmed);
+        }
+      }).catch(() => {
+        validation = reduceQueryBar(validation, { type: "failure", text });
+        renderAll();
+      });
+    };
+    const applyCompletionsResponse = (context, incoming) => {
+      completions = mergeCompletions([
+        filterCompletions(incoming, context.prefix),
+        filterCompletions(completions, context.prefix)
+      ]);
+      activeIndex = completions.length > 0 ? 0 : -1;
+      listOpen = completions.length > 0;
+      renderList();
+    };
+    const runCompletions = (text, pos) => {
+      void requester.completions(text, pos).then((response) => {
+        if (response === null) {
+          return;
+        }
+        const context = completionContextAt(els.input.value, caretPosition());
+        applyCompletionsResponse(context, response.completions);
+      }).catch(() => {
+        closeList();
+      });
+    };
+    const caretPosition = () => {
+      const selection = els.input.selectionStart;
+      return typeof selection === "number" ? selection : els.input.value.length;
+    };
+    const acceptCompletion = (completion) => {
+      const text = els.input.value;
+      const context = completionContextAt(text, caretPosition());
+      const edit = applyCompletion(text, context.replace, completion.insert);
+      els.input.value = edit.text;
+      els.input.setSelectionRange(edit.pos, edit.pos);
+      els.input.focus();
+      closeList();
+      handleTextChange(edit.text, {
+        immediate: true,
+        completionCause: context.kind === "field" ? "manual" : null
+      });
+    };
+    const requestCompletions = (text, cause) => {
+      const pos = caretPosition();
+      if (!shouldRequestCompletions(text, pos, cause)) {
+        closeList();
+        return;
+      }
+      if (listOpen) {
+        const context = completionContextAt(text, pos);
+        completions = filterCompletions(completions, context.prefix);
+        activeIndex = completions.length > 0 ? Math.min(activeIndex, completions.length - 1) : -1;
+        renderList();
+      }
+      completionsDebounce.run(() => {
+        runCompletions(els.input.value, caretPosition());
+      }, cause === "manual" ? 0 : completionsDebounceMs);
+    };
+    const handleTextChange = (text, { immediate = false, completionCause = "input" } = {}) => {
+      validation = reduceQueryBar(validation, { type: "input", text });
+      renderAll();
+      if (isBlankQuery(text)) {
+        validateDebounce.cancel();
+        requester.cancel();
+        publish("");
+        if (completionCause === "focus" || completionCause === "manual") {
+          requestCompletions(text, completionCause);
+        } else {
+          closeList();
+        }
+        return;
+      }
+      validateDebounce.run(() => {
+        runValidate(els.input.value);
+      }, immediate ? 0 : validateDebounceMs);
+      if (completionCause !== null) {
+        requestCompletions(text, completionCause);
+      }
+    };
+    els.input.addEventListener("input", () => {
+      handleTextChange(els.input.value);
+    });
+    els.input.addEventListener("focus", () => {
+      if (els.input.value === "") {
+        requestCompletions("", "focus");
+      }
+    });
+    els.input.addEventListener("blur", () => {
+      closeList();
+    });
+    els.input.addEventListener("keydown", (event) => {
+      if (event.key === " " && event.ctrlKey) {
+        event.preventDefault();
+        requestCompletions(els.input.value, "manual");
+        return;
+      }
+      if (event.key === "Escape") {
+        if (listOpen) {
+          event.preventDefault();
+          closeList();
+        }
+        return;
+      }
+      if (!listOpen || completions.length === 0) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          validateDebounce.run(() => {
+            runValidate(els.input.value);
+          }, 0);
+        }
+        return;
+      }
+      switch (event.key) {
+        case "ArrowDown":
+          event.preventDefault();
+          activeIndex = nextActiveIndex(activeIndex, 1, completions.length);
+          renderList();
+          return;
+        case "ArrowUp":
+          event.preventDefault();
+          activeIndex = nextActiveIndex(activeIndex, -1, completions.length);
+          renderList();
+          return;
+        case "Enter":
+        case "Tab": {
+          const completion = completions[activeIndex];
+          if (!completion) {
+            return;
+          }
+          event.preventDefault();
+          acceptCompletion(completion);
+          return;
+        }
+        default:
+      }
+    });
+    els.clearButton?.addEventListener("click", () => {
+      els.input.value = "";
+      validateDebounce.cancel();
+      requester.cancel();
+      validation = reduceQueryBar(validation, { type: "reset" });
+      renderAll();
+      closeList();
+      publish("");
+      els.input.focus();
+    });
+    const initial = readExprParam();
+    if (initial !== "") {
+      els.input.value = initial;
+      validation = reduceQueryBar(validation, { type: "input", text: initial });
+      renderAll();
+      runValidate(initial);
+      return;
+    }
+    renderAll();
+  };
+
+  // internal/web/static_src/query-bar.ts
+  var initQueryBar = (deps = {}) => {
+    const els = resolveQueryBarElements(document);
+    if (!els) {
+      return;
+    }
+    initQueryBarController(els, deps);
+  };
+
   // internal/web/static_src/related-types.ts
   var normalizeIdentity = (value) => {
     const record = asRecord(value);
@@ -10369,6 +11356,369 @@ var BrainNotesApp = (() => {
     createRelatedController(root, deps);
   };
 
+  // internal/web/static_src/saved-views-model.ts
+  var savedViewsQueryPages = ["/library", "/graph"];
+  var savedViewsNavBasePath = (pathname) => {
+    const normalized = normalizeParamValue(pathname).replace(/\/+$/, "");
+    return savedViewsQueryPages.find((page) => page === normalized) || "/library";
+  };
+  var savedViewParams = (view) => {
+    const params = new URLSearchParams();
+    const values = {
+      expr: normalizeParamValue(view.query),
+      sort: normalizeParamValue(view.sort),
+      relative_to: normalizeParamValue(view.relative_to)
+    };
+    for (const key of queryShapeParamKeys) {
+      if (values[key] !== "") {
+        params.set(key, values[key]);
+      }
+    }
+    return params;
+  };
+  var savedViewHref = (view, basePath) => {
+    const query = savedViewParams(view).toString();
+    return query ? `${basePath}?${query}` : basePath;
+  };
+  var savedViewTitle = (view) => {
+    if (!view.enabled) {
+      return view.detail || `${view.name} no longer compiles.`;
+    }
+    const parts = [view.description, view.normalized || view.query].filter(
+      (part) => normalizeParamValue(part) !== ""
+    );
+    return parts.join(" \u2014 ");
+  };
+  var savedViewInputFromParams = (params, fields) => ({
+    name: normalizeParamValue(fields.name),
+    description: normalizeParamValue(fields.description),
+    query: normalizeParamValue(params.get("expr")),
+    sort: normalizeParamValue(params.get("sort")),
+    relativeTo: normalizeParamValue(params.get("relative_to"))
+  });
+  var savedViewDefinition = (input) => ({
+    query: input.query,
+    sort: input.sort,
+    relative_to: input.relativeTo,
+    limit: 0,
+    description: input.description
+  });
+  var savedViewSaveError = (input) => {
+    if (input.name === "") {
+      return "Name the view before saving it.";
+    }
+    if (input.query === "") {
+      return "Write a query expression before saving it as a view.";
+    }
+    return "";
+  };
+  var savedViewPendingSave = (name, result) => ({
+    name,
+    previewID: result.preview_id,
+    expiresAt: result.expires_at,
+    created: result.created,
+    diff: result.config_diff,
+    result
+  });
+  var savedViewOverwriteMessage = (name) => `"${name}" already exists. Review the diff, then confirm the overwrite.`;
+  var savedViewSavedMessage = (name, created) => created ? `Saved view "${name}".` : `Updated view "${name}".`;
+  var savedViewNoChangeMessage = (name) => `"${name}" is already saved exactly like this.`;
+  var savedViewDiffText = (diff) => diff.map((line) => {
+    const marker = line.kind === "-" || line.kind === "remove" ? "-" : "+";
+    return `${marker} ${line.text}`;
+  }).join("\n");
+
+  // internal/web/static_src/saved-views-requests.ts
+  var readPayload4 = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
+  var finish = async (resp) => {
+    const payload = await readPayload4(resp);
+    if (!resp.ok) {
+      return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+    }
+    const result = normalizeSavedViewsResponse(payload);
+    if (!result.ok) {
+      return { ok: false, message: result.message || "The change was refused." };
+    }
+    return { ok: true, result };
+  };
+  var fetchSavedViews = async (fetcher) => {
+    try {
+      const resp = await fetcher(SAVED_VIEWS_ENDPOINT, {
+        headers: { Accept: "application/json" }
+      });
+      return await finish(resp);
+    } catch {
+      return { ok: false, message: "The server did not answer." };
+    }
+  };
+  var postSavedViews = async (fetcher, endpoint, token, body) => {
+    try {
+      const resp = await fetcher(endpoint, buildSavedViewsRequestInit(token, body));
+      return await finish(resp);
+    } catch {
+      return { ok: false, message: "The server did not answer." };
+    }
+  };
+  var previewSavedView = (fetcher, token, body) => postSavedViews(fetcher, SAVED_VIEWS_PREVIEW_ENDPOINT, token, body);
+  var applySavedView = (fetcher, token, previewID) => postSavedViews(fetcher, SAVED_VIEWS_APPLY_ENDPOINT, token, {
+    preview_id: previewID
+  });
+
+  // internal/web/static_src/saved-views-actions.ts
+  var createSavedViewSaver = (deps) => {
+    const hooks = deps.hooks || {};
+    let pending = null;
+    let busy = false;
+    const setStatus = (message, kind = "") => {
+      hooks.onStatus?.(message, kind);
+    };
+    const setPending = (next) => {
+      pending = next;
+      hooks.onPending?.(next);
+    };
+    const runApply = async (receipt) => {
+      setStatus(`Saving view "${receipt.name}"...`, "is-loading");
+      const outcome = await applySavedView(deps.fetch, deps.token, receipt.previewID);
+      setPending(null);
+      if (!outcome.ok) {
+        setStatus(outcome.message, "is-error");
+        return;
+      }
+      setStatus(savedViewSavedMessage(receipt.name, receipt.created), "is-success");
+      hooks.onSaved?.(outcome.result);
+    };
+    const save = async (input) => {
+      if (busy) {
+        return;
+      }
+      const refusal = savedViewSaveError(input);
+      if (refusal !== "") {
+        setPending(null);
+        setStatus(refusal, "is-error");
+        return;
+      }
+      if (deps.token.trim() === "") {
+        setPending(null);
+        setStatus("Saving views is unavailable.", "is-error");
+        return;
+      }
+      busy = true;
+      setPending(null);
+      setStatus(`Previewing view "${input.name}"...`, "is-loading");
+      try {
+        const outcome = await previewSavedView(deps.fetch, deps.token, {
+          token: deps.token,
+          op: "upsert",
+          name: input.name,
+          view: savedViewDefinition(input)
+        });
+        if (!outcome.ok) {
+          setStatus(outcome.message, "is-error");
+          return;
+        }
+        if (outcome.result.preview_id === "") {
+          setStatus(savedViewNoChangeMessage(input.name), "");
+          return;
+        }
+        const receipt = savedViewPendingSave(input.name, outcome.result);
+        if (receipt.created) {
+          await runApply(receipt);
+          return;
+        }
+        setPending(receipt);
+        setStatus(savedViewOverwriteMessage(input.name), "is-warning");
+      } finally {
+        busy = false;
+      }
+    };
+    const confirm = async () => {
+      if (busy) {
+        return;
+      }
+      const receipt = pending;
+      if (!receipt) {
+        setStatus("Preview the view before saving it.", "is-error");
+        return;
+      }
+      busy = true;
+      try {
+        await runApply(receipt);
+      } finally {
+        busy = false;
+      }
+    };
+    const cancel = () => {
+      if (pending === null) {
+        return;
+      }
+      setPending(null);
+      setStatus("Overwrite cancelled.", "");
+    };
+    return {
+      save,
+      confirm,
+      cancel,
+      pending: () => pending,
+      busy: () => busy
+    };
+  };
+
+  // internal/web/static_src/saved-views-render.ts
+  var renderSavedViewsNav = (container, views, basePath) => {
+    const doc = container.ownerDocument;
+    container.textContent = "";
+    for (const view of views) {
+      if (view.enabled) {
+        const link = doc.createElement("a");
+        link.className = "saved-views-nav-item";
+        link.href = savedViewHref(view, basePath);
+        link.title = savedViewTitle(view);
+        link.textContent = view.name;
+        link.setAttribute("data-saved-view", view.name);
+        container.appendChild(link);
+        continue;
+      }
+      const item = doc.createElement("span");
+      item.className = "saved-views-nav-item is-disabled";
+      item.title = savedViewTitle(view);
+      item.textContent = view.name;
+      item.setAttribute("data-saved-view", view.name);
+      item.setAttribute("data-saved-view-detail", view.detail);
+      item.setAttribute("aria-disabled", "true");
+      container.appendChild(item);
+    }
+    return views.length;
+  };
+  var renderSavedViewDiff = (block, pending) => {
+    if (!block) {
+      return;
+    }
+    if (!pending || pending.diff.length === 0) {
+      block.textContent = "";
+      block.hidden = true;
+      return;
+    }
+    block.textContent = savedViewDiffText(pending.diff);
+    block.hidden = false;
+  };
+
+  // internal/web/static_src/saved-views.ts
+  var initSavedViewsNav = (deps = {}) => {
+    const container = queryElement(document, "[data-saved-views-nav]", HTMLElement);
+    if (!container) {
+      return null;
+    }
+    const fetcher = deps.fetch || ((input, init) => fetch(input, init));
+    const basePath = savedViewsNavBasePath(window.location.pathname);
+    const render = (views) => {
+      renderSavedViewsNav(container, views, basePath);
+    };
+    void fetchSavedViews(fetcher).then((outcome) => {
+      if (outcome.ok) {
+        render(outcome.result.views);
+      }
+    });
+    return { render };
+  };
+  var resolveSaveElements = (doc) => {
+    const root = queryElement(doc, "[data-saved-views-save]", HTMLElement);
+    if (!root) {
+      return null;
+    }
+    const openButton2 = queryElement(root, "[data-saved-views-open]", HTMLButtonElement);
+    const form = queryElement(root, "[data-saved-views-form]", HTMLFormElement);
+    const nameInput = queryElement(root, "[data-saved-views-name]", HTMLInputElement);
+    if (!openButton2 || !form || !nameInput) {
+      return null;
+    }
+    return {
+      root,
+      openButton: openButton2,
+      form,
+      nameInput,
+      descriptionInput: queryElement(root, "[data-saved-views-description]", HTMLInputElement),
+      confirmButton: queryElement(root, "[data-saved-views-confirm]", HTMLButtonElement),
+      cancelButton: queryElement(root, "[data-saved-views-cancel]", HTMLButtonElement),
+      diffEl: queryElement(root, "[data-saved-views-diff]", HTMLElement),
+      statusEl: queryElement(root, "[data-saved-views-status]", HTMLElement),
+      token: root.getAttribute("data-saved-views-csrf") || ""
+    };
+  };
+  var initSavedViewsSave = (deps = {}, nav = null) => {
+    const els = resolveSaveElements(document);
+    if (!els) {
+      return null;
+    }
+    const fetcher = deps.fetch || ((input, init) => fetch(input, init));
+    const setStatus = (message, kind = "") => {
+      setStatusText(els.statusEl, message, kind);
+    };
+    const showPending = (pending) => {
+      renderSavedViewDiff(els.diffEl, pending);
+      if (els.confirmButton) {
+        els.confirmButton.hidden = pending === null;
+      }
+    };
+    const saver = createSavedViewSaver({
+      fetch: fetcher,
+      token: els.token,
+      hooks: {
+        onStatus: setStatus,
+        onPending: showPending,
+        onSaved: (result) => {
+          nav?.render(result.views);
+          els.nameInput.value = "";
+          if (els.descriptionInput) {
+            els.descriptionInput.value = "";
+          }
+        }
+      }
+    });
+    const setOpen = (open) => {
+      els.form.hidden = !open;
+      els.openButton.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        els.nameInput.focus();
+      }
+    };
+    els.openButton.addEventListener("click", () => {
+      const open = Boolean(els.form.hidden);
+      setOpen(open);
+      if (!open) {
+        saver.cancel();
+      }
+    });
+    els.form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void saver.save(
+        savedViewInputFromParams(new URLSearchParams(window.location.search), {
+          name: els.nameInput.value,
+          description: els.descriptionInput ? els.descriptionInput.value : ""
+        })
+      );
+    });
+    els.confirmButton?.addEventListener("click", () => {
+      void saver.confirm();
+    });
+    els.cancelButton?.addEventListener("click", () => {
+      saver.cancel();
+      setOpen(false);
+    });
+    showPending(null);
+    setOpen(false);
+    return saver;
+  };
+  var initSavedViews = (deps = {}) => {
+    const nav = initSavedViewsNav(deps);
+    initSavedViewsSave(deps, nav);
+  };
+
   // internal/web/static_src/search.ts
   var searchResultTitle = (result) => result.title || result.key || "Untitled";
   var searchResultFolderLabel = (result) => result.folder ? `Folder: ${result.folder}` : "Folder: /";
@@ -10453,7 +11803,7 @@ var BrainNotesApp = (() => {
       setExpanded(false);
       setActive(-1);
     };
-    const hasActiveSearchFilters = () => syncSearchURL && hasActiveSharedFilters();
+    const hasActiveSearchFilters = () => syncSearchURL && hasActiveFilters();
     const navigateToResult = (index) => {
       if (index < 0 || index >= results.length) {
         return;
@@ -11464,7 +12814,7 @@ var BrainNotesApp = (() => {
       return null;
     }
   };
-  var readText2 = (value) => typeof value === "string" ? value : "";
+  var readText3 = (value) => typeof value === "string" ? value : "";
   var readKeys = (value) => Array.isArray(value) ? value.flatMap((item) => {
     const key = typeof item === "string" ? item.trim() : "";
     return key === "" ? [] : [key];
@@ -11503,12 +12853,12 @@ var BrainNotesApp = (() => {
     }
     return {
       sources: readKeys(record.sources),
-      title: readText2(record.title),
-      folder: readText2(record.folder),
-      purpose: readText2(record.purpose),
-      prompt: readText2(record.prompt),
-      draft: readText2(record.draft),
-      candidate: readText2(record.candidate)
+      title: readText3(record.title),
+      folder: readText3(record.folder),
+      purpose: readText3(record.purpose),
+      prompt: readText3(record.prompt),
+      draft: readText3(record.draft),
+      candidate: readText3(record.candidate)
     };
   };
   var writeSynthesisState = (storage, key, state) => {
@@ -12626,6 +13976,8 @@ ${candidate.markdown}`;
     initRelatedNotes();
     initGraph();
     initSearch();
+    initQueryBar();
+    initSavedViews();
     initOverviewSearchResults();
     initHistoryPanel();
     initDailyFixes();

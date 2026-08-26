@@ -14,13 +14,15 @@ import (
 
 const propertyPreviewTTL = 5 * time.Minute
 
-// propertyPreviewKind separates the two receipt families so a note receipt can
-// never be redeemed at the schema endpoint or the other way round.
+// propertyPreviewKind separates the receipt families so a note receipt can
+// never be redeemed at the schema endpoint, or a saved-view receipt at either of
+// them.
 type propertyPreviewKind string
 
 const (
 	propertyPreviewNotes  propertyPreviewKind = "notes"
 	propertyPreviewSchema propertyPreviewKind = "schema"
+	propertyPreviewView   propertyPreviewKind = "view"
 )
 
 // propertyPreviewStore holds short-lived, one-use receipts. A receipt carries
@@ -47,6 +49,7 @@ type propertyPreviewRecord struct {
 	Generation int64
 	Mutation   propertyMutationRequest
 	Schema     propertySchemaRequest
+	View       viewMutationRequest
 	Files      []propertyPreviewFileState
 }
 

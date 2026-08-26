@@ -25,6 +25,7 @@ func (c *Config) Clone() *Config {
 	out.Cockpit.HubEmptyHeadings = cloneStrings(c.Cockpit.HubEmptyHeadings)
 	out.Cockpit.SensitiveIgnorePaths = cloneStrings(c.Cockpit.SensitiveIgnorePaths)
 	out.Cockpit.SensitiveIgnorePatterns = cloneStrings(c.Cockpit.SensitiveIgnorePatterns)
+	out.Views = cloneViews(c.Views)
 	if c.Serve.OpenBrowser != nil {
 		enabled := *c.Serve.OpenBrowser
 		out.Serve.OpenBrowser = &enabled
@@ -45,6 +46,17 @@ func cloneProperties(in map[string]PropertyDefinition) map[string]PropertyDefini
 	out := make(map[string]PropertyDefinition, len(in))
 	for key, def := range in {
 		out[key] = def.Clone()
+	}
+	return out
+}
+
+func cloneViews(in []SavedView) []SavedView {
+	if in == nil {
+		return nil
+	}
+	out := make([]SavedView, len(in))
+	for i, view := range in {
+		out[i] = view.Clone()
 	}
 	return out
 }

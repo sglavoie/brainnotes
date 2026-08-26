@@ -3,10 +3,14 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
 )
 
 type ctxKey string
@@ -16,6 +20,26 @@ const configKey ctxKey = "bnotes.config"
 // Execute runs the root command and returns any error from the chosen subcommand.
 func Execute() error {
 	return NewRootCmd().Execute()
+}
+
+// RenderError writes err in the form the terminal should see. Every command in
+// the tree sets SilenceErrors, so this is the single place a bn error is
+// printed, and the single place that decides how one is spelled.
+//
+// A *queryexpr.ParseError is the one error worth more than a line: it carries
+// the query text and the span that failed, so it renders as a caret-annotated
+// block (plus any did-you-mean candidates) instead of the one-line Error form
+// that would drop the position the user needs.
+func RenderError(w io.Writer, err error) {
+	if err == nil {
+		return
+	}
+	var parseErr *queryexpr.ParseError
+	if errors.As(err, &parseErr) {
+		_, _ = fmt.Fprintln(w, parseErr.Render())
+		return
+	}
+	_, _ = fmt.Fprintln(w, "bn:", err)
 }
 
 // NewRootCmd builds the root cobra command with persistent flags wired up.
@@ -69,6 +93,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewFindCmd())
 	cmd.AddCommand(NewGraphCmd())
 	cmd.AddCommand(NewHistoryCmd())
+	cmd.AddCommand(NewIndexCmd())
 	cmd.AddCommand(NewInitCmd())
 	cmd.AddCommand(NewLintCmd())
 	cmd.AddCommand(NewLinksCmd())
@@ -92,6 +117,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewUnpinCmd())
 	cmd.AddCommand(NewUnsetCmd())
 	cmd.AddCommand(NewValuesCmd())
+	cmd.AddCommand(NewViewsCmd())
 	cmd.AddCommand(NewVaultCmd())
 
 	return cmd

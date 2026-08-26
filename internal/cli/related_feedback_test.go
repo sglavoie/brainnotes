@@ -164,9 +164,9 @@ func TestRelatedFeedbackFiltersBoostsClearsAndSnoozes(t *testing.T) {
 	root := newRelatedFixture(t)
 	location := time.FixedZone("related-test", -6*60*60)
 	now := time.Date(2026, time.July, 13, 15, 30, 0, 0, location)
-	originalNow := relatedNow
-	relatedNow = func() time.Time { return now }
-	t.Cleanup(func() { relatedNow = originalNow })
+	originalNow := recallNow
+	recallNow = func() time.Time { return now }
+	t.Cleanup(func() { recallNow = originalNow })
 	statePath := filepath.Join(root, ".bnotes", "recall.json")
 
 	initial, _, err := runRelated(t, root, "related", "Source", "--json")
@@ -243,9 +243,9 @@ func TestRelatedInteractiveSelectionRecordsLastOpened(t *testing.T) {
 	root := newRelatedFixture(t)
 	location := time.FixedZone("related-test", -6*60*60)
 	now := time.Date(2026, time.July, 13, 15, 30, 0, 0, location)
-	originalNow := relatedNow
+	originalNow := recallNow
 	originalPicker := relatedPicker
-	relatedNow = func() time.Time { return now }
+	recallNow = func() time.Time { return now }
 	relatedPicker = func(rows []string, extraArgs []string) ([]string, error) {
 		for _, row := range rows {
 			if strings.Contains(row, " Direct.md\t") {
@@ -255,7 +255,7 @@ func TestRelatedInteractiveSelectionRecordsLastOpened(t *testing.T) {
 		return nil, errors.New("Direct.md picker row not found")
 	}
 	t.Cleanup(func() {
-		relatedNow = originalNow
+		recallNow = originalNow
 		relatedPicker = originalPicker
 	})
 
@@ -280,9 +280,9 @@ func TestRelatedInteractiveSelectionRecordsLastOpened(t *testing.T) {
 func TestRelatedFeedbackValidatesStateAndLocalDateBeforeOpeningVault(t *testing.T) {
 	location := time.FixedZone("related-test", -6*60*60)
 	now := time.Date(2026, time.July, 13, 23, 30, 0, 0, location)
-	originalNow := relatedNow
-	relatedNow = func() time.Time { return now }
-	t.Cleanup(func() { relatedNow = originalNow })
+	originalNow := recallNow
+	recallNow = func() time.Time { return now }
+	t.Cleanup(func() { recallNow = originalNow })
 
 	tests := []struct {
 		name string

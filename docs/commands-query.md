@@ -10,7 +10,8 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
         [--created EXPR] [--age EXPR] [--orphan]
         [--min-links n] [--max-links n] [--dead-end]
         [--broken-links [--show-broken | --list-broken-targets]]
-        [--pinned]
+        [--pinned] [-q EXPR | --query EXPR] [--view name]
+        [--sort KEY] [--relative-to note]
         [-i | --interactive] [-0]
 ```
 
@@ -19,6 +20,84 @@ Pipe into `fzf` with `-i` for an interactive picker.
 
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.
+
+#### Query expressions (`-q`)
+
+`-q` takes a query expression, which reaches filters the flags cannot spell.
+The flags, `-q`, and `--view` all AND together, so each one narrows the result
+further. `--view` names a saved view — a `[[views]]` block in `brainnotes.toml`
+— and contributes that view's query only, never its stored ordering or cap.
+
+| Form | Example | Meaning |
+| --- | --- | --- |
+| Boolean composition | `-q 'tag:books and not folder:Archive'` | `and`, `or`, `not`, grouped with `(` `)`; `not` binds tighter than `and`, which binds tighter than `or`. Juxtaposition means `and`. |
+| Free text | `-q 'activation energy'` | A bare word or quoted phrase searches title and body. |
+| Flag-shaped fields | `-q 'orphan:true'` | Every find flag has a field spelling: `tag`, `category`, `status`, `type`, `has`, `missing`, `age`, `folder`, `orphan`, `pinned`, `broken-links`, `dead-end`, `backlinks`, `links`. |
+| Declared property | `-q 'rating>=4'`, `-q 'due<today'` | Compared according to its declared `[frontmatter.properties]` type. Ordering is legal only for `date`, `datetime`, `int`, and `float`. |
+| Undeclared property | `-q 'prop:mykey=value'` | The `prop:` escape hatch; a bare unknown name is an error with did-you-mean instead. |
+| Link graph | `-q 'near:[[Deep Work]]<=2'` | Also `links-to:`, `linked-from:`, `path-to:`, `degree>=5`, `cluster-size:1`. |
+
+The reserved vocabulary is twenty-one field names. Any other bare name is an
+error with did-you-mean candidates, unless it is a property you declared in
+`[frontmatter.properties]`.
+
+| Field | Selects |
+| --- | --- |
+| `tag` | Notes carrying a tag. |
+| `category` | Notes in a frontmatter category. |
+| `status` | Notes with a status value. |
+| `type` | Notes with a type (or kind) value. |
+| `has` | Notes that store a frontmatter property (`has:rating`). |
+| `missing` | Notes that omit one (`missing:rating`; exactly `not has:rating`). |
+| `folder` | Notes under a vault folder. |
+| `age` | Notes by date: `age>90d`, or another date property as its argument, `age:created<30d`. |
+| `prop` | Any frontmatter key, declared or not: `prop:rating>3`. |
+| `pinned` | Pinned notes, spelled `pinned:true`. |
+| `orphan` | Notes nothing links to, spelled `orphan:true`. |
+| `dead-end` | Notes that link nowhere, spelled `dead-end:true`. |
+| `broken-links` | Notes with an unresolved wikilink, spelled `broken-links:true`. |
+| `backlinks` | Incoming link count: `backlinks>3`. |
+| `links` | Outgoing link count: `links<2`. |
+| `links-to` | Notes linking to a target: `links-to:[[Deep Work]]`. |
+| `linked-from` | Notes a target links to. |
+| `near` | Notes within N hops of a target: `near:[[Hub]]<=2`. |
+| `path-to` | Notes connected to a target at any distance. |
+| `degree` | Distinct linked neighbours, in either direction: `degree>=5`. |
+| `cluster-size` | The size of the note's connected component: `cluster-size:1`. |
+
+The last six read the link graph, so a query naming one costs a graph build;
+the others do not. A bare word is always free text, which is why the
+flag-shaped fields are written `orphan:true` rather than bare `orphan` — typing
+`orphan` alone searches for that word. `!=` negates a comparison, and both `:`
+and `=` mean equality.
+
+Every graph field names a *note*, so its target is resolved before the query
+runs: a target that resolves to nothing is a compile error with did-you-mean
+candidates rather than an empty result set indistinguishable from a correct
+one. Targets may be written as a wikilink (`links-to:[[Deep Work]]`) or as a
+quoted title (`links-to:"Deep Work"`).
+
+A malformed expression is rejected before anything is read, with the offending
+span marked by carets:
+
+```
+$ bn find -q 'status:wip and (rating>3'
+query: unclosed group opened at column 16: expected ")"
+  status:wip and (rating>3
+                          ^
+```
+
+Two quoting rules follow from the lexer: an RFC3339 literal must be quoted
+(`reviewed="2026-05-19T10:30:00Z"`), because its `:` separators would otherwise
+end the word, and so must a negative relative offset (`due>"-7d"`), because a
+leading `-` is negation.
+
+`-q` and `--view` are find filter flags, so like every other one they cannot be
+combined with positional note arguments on `bn search`, `bn replace`,
+`bn repair`, `bn relink`, and `bn rename-key`.
+
+Saved views are defined as `[[views]]` blocks in `brainnotes.toml` (see
+[Configuration](configuration.md)) and inspected with [`bn views`](#bn-views--inspect-saved-views).
 
 `--dead-end` selects notes with no resolved outgoing links. To mark an
 intentional terminal note without changing its raw graph degree, set the
@@ -67,6 +146,41 @@ order — ascending rank first, then unranked pins, each group tie-broken by pat
 pinned but has no rank, so it sorts after every ranked pin. Ranks are written by
 `bn pin` and reordered in `bn serve`.
 
+#### Ordering (`--sort`)
+
+Results are path-ordered by default. `--sort` changes the order and never
+changes which notes match.
+
+| Key | Orders by |
+| --- | --- |
+| `path` | Vault path (the default). |
+| `title` | Note title, case-insensitively. |
+| `modified` | The `last` property. |
+| `created` | The `created` property. |
+| `backlinks` | Inbound links from other notes. |
+| `degree` | Distinct linked neighbours, in either direction. |
+| `pinned` | Pinned order, as `--pinned` prints it. |
+| `relevance` | Relatedness to `--relative-to`, most related first. |
+
+Direction is given either as a sign prefix (`--sort -modified`) or as a suffix
+(`--sort modified:desc`), but not both at once, even when the two agree. A note
+with no value for the key — an undated note under `--sort modified`, an
+unpinned one under `--sort pinned` — sorts last in *both* directions, so
+`--sort -modified` means "newest first" rather than "undated first". Notes that
+tie are ordered by path.
+
+`--sort relevance` requires `--relative-to`, which names the anchor note by
+title or path; `--relative-to` without `--sort relevance` is likewise an error
+rather than a silently ignored flag. Ranking uses the same text, graph,
+metadata, and recall signals as `bn related`, but selection stays
+authoritative: the anchor's own recall feedback reorders the matches and never
+removes one, so a dismissed or snoozed note that the query matched is still
+printed. When the query matched the anchor itself, it is printed first.
+
+`bn find` only ever reads recall state. It records no open history and creates
+no `.bnotes/recall.json`; writes remain limited to `bn related -i`,
+`bn related feedback`, and the web related actions.
+
 Examples:
 
 ```sh
@@ -79,6 +193,8 @@ bn find --broken-links                    # notes with unresolved wikilinks
 bn find --broken-links --show-broken      # per-link detail
 bn find --broken-links --list-broken-targets  # unique missing titles
 bn find --pinned                          # pinned notes, in pinned order
+bn find --status wip --sort -modified     # newest work in progress first
+bn find --tag books --sort relevance --relative-to "Deep Work"
 bn find --tag drafts -i                   # interactive fzf pick
 bn find --tag drafts -0 | xargs -0 nvim   # safe for spaces in paths
 ```
@@ -100,6 +216,68 @@ bn find --broken-links --list-broken-targets | xargs -I{} bn new "{}"
 ```
 
 Re-run `bn find --broken-links` afterward to verify zero residue.
+
+### `bn views` — inspect saved views
+
+```sh
+bn views
+bn views show <name>
+bn views check
+```
+
+A saved view is a named query stored as a `[[views]]` block in
+`brainnotes.toml`, run from any find-scoped command with `--view <name>`. Names
+are matched case-insensitively, and views are listed in file order. `bn views`
+is read-only: it reads the config alone and never walks the vault or builds the
+link graph.
+
+| Subcommand | Output |
+| --- | --- |
+| `bn views` | A `NAME`/`DESCRIPTION`/`QUERY`/`STATUS` table, where `STATUS` is `ok` or `error`. |
+| `bn views show <name>` | One view's name, description, query, ordering, anchor, and cap. The query is re-rendered canonically — the spelling `--view` actually runs — with a `Stored as:` line added when the stored text differs. |
+| `bn views check` | One report per view that no longer compiles, then a non-zero exit. |
+
+`internal/config` cannot validate a saved expression without closing an import
+cycle, so its validation is shape-only and a view whose query rotted — a
+property it names was renamed, say — still loads. Every surface is required to
+render such a view as a **disabled entry carrying its error**, never to drop it
+and never to fail the whole config load, since one stale view must not lock you
+out of the vault. `bn views check` is how you find out why:
+
+```
+$ bn views check
+/path/to/vault/brainnotes.toml: view "Stale query"
+query: unknown field "statuz"
+  statuz:wip
+  ^^^^^^
+  did you mean: status
+
+/path/to/vault/brainnotes.toml: view "Bad ordering"
+view "Bad ordering": sort "relevance" requires relative_to
+
+bn: views check: 2 of 3 saved views failed to compile
+```
+
+Not every disabled view renders carets: a query failure does, while an unusable
+ordering (`sort = "relevance"` with no `relative_to`, or a `relative_to` with a
+non-`relevance` sort) is reported as a one-line message, because there is no
+span in the saved query to point at. A view that names a graph field compiles
+here without a graph, so `check` cannot catch a wikilink target that no longer
+resolves; that error surfaces when the view is actually run.
+
+`--view` contributes a view's **query only**. Its stored `sort`, `relative_to`,
+and `limit` are shown by `bn views show` but are not applied — pass `--sort` and
+`--relative-to` explicitly on `bn find`.
+
+Examples:
+
+```sh
+bn views
+bn views show "Active work"
+bn views check                            # usable as a config health gate
+bn find --view "Active work"
+bn find --view "Active work" --tag urgent # a view ANDs with every other filter
+```
 
 ### `bn search` — search note bodies
 
@@ -178,6 +356,65 @@ bn backlinks "Crafting Interpreters"
 bn backlinks References/Books/Dune.md
 bn backlinks Dune | xargs bn set status=referenced
 bn backlinks Dune --verbose | awk -F'\t' '{print $1}'
+```
+
+### `bn links` — list the notes a target links to
+
+```sh
+bn links [note] [-0] [--verbose]
+```
+
+The outgoing counterpart of `bn backlinks`. `<note>` is either a bare title
+(case-insensitive stem lookup) or a path/glob; with no argument, an fzf picker
+chooses the target interactively. Prints the absolute path of every note the
+target references via a resolved `[[wikilink]]`, one per line, sorted (or
+NUL-separated with `-0`). Only links whose target resolves to a note in the
+vault are listed — unresolved ones are `bn find --broken-links` territory —
+and links inside fenced, indented, or inline code are not counted.
+
+`--verbose` prints one line per occurrence instead, in the same tab-separated
+shape `bn backlinks --verbose` uses: `<path>:<line>\t<snippet>` for body links
+and `<path>:fm:<key>\t<value>` for frontmatter links, frontmatter first. It has
+no `-v` short form (the root `--verbose` claims `-v`) and cannot be combined
+with `-0`.
+
+Examples:
+
+```sh
+bn links "Deep Work"
+bn links Notes/Current.md -0 | xargs -0 -n1 basename
+bn links Notes/Current.md --verbose | awk -F'\t' '{print $1}'
+bn links                                  # pick the target with fzf
+```
+
+### `bn graph` — export the link graph
+
+```sh
+bn graph [--format dot|mermaid|code] [find-flags] [-q EXPR] [--view name]
+```
+
+Exports the vault's wikilink graph, or the subgraph selected by the find
+filters, to stdout. With no filters the whole vault is exported; with filters,
+the selected notes become the node set and only edges between them are drawn,
+so `bn graph --tag project -q 'near:[[Deep Work]]<=2'` exports exactly the
+neighbourhood you can already select with `bn find`.
+
+| `--format` | Output |
+| --- | --- |
+| `dot` (default) | Graphviz DOT, for `dot -Tsvg`. |
+| `mermaid` | A Mermaid flowchart, for a Markdown viewer that renders it. |
+| `code` | One line per edge with absolute `file:line` references, which are cmd-clickable in most editor terminals. |
+
+`bn graph` takes no positional note arguments; scope it with the find flags,
+`-q`, or `--view`. For an interactive view of the same graph, use the `/graph`
+page of `bn serve`.
+
+Examples:
+
+```sh
+bn graph | dot -Tsvg -o vault.svg
+bn graph --format mermaid --folder Projects
+bn graph --format code -q 'orphan:true or dead-end:true'
 ```
 
 ### `bn related` — rank contextual connections

@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -92,6 +93,50 @@ func LockPaths(root string, paths ...string) (func(), error) {
 		return func() {}, err
 	}
 	return locks.release, nil
+}
+
+// TryLockPath takes an exclusive lock on lockPath without waiting, reporting
+// acquired=false when another holder has it. It is the wait-free end of the same
+// primitive LockPaths uses: one attempt, no polling, so a caller whose work is
+// optional — refreshing a cache another process is already refreshing — can skip
+// it instead of stalling for the wait budget.
+//
+// The caller names the lock file itself rather than passing a note path, because
+// not every lock in a vault belongs to the sha256 note-path namespace
+// lockFileName builds under pathLockRelDir. Missing parent directories are
+// created. release is idempotent and safe to defer; it is non-nil even when the
+// lock was not acquired, so `defer release()` needs no nil check.
+//
+// It lives here rather than in the calling package so the flock-not-fcntl
+// invariant stays owned by vault: an fcntl record lock belongs to the process,
+// so two goroutines inside one bn process would not contend and the skip would
+// silently never happen.
+func TryLockPath(lockPath string) (release func(), acquired bool, err error) {
+	noop := func() {}
+	if lockPath == "" {
+		return noop, false, errors.New("vault: try lock: empty lock path")
+	}
+	if dir := filepath.Dir(lockPath); dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return noop, false, fmt.Errorf("vault: create lock directory %q: %w", dir, err)
+		}
+	}
+	// A negative budget puts lockOne's deadline strictly in the past, so its loop
+	// makes exactly one tryLock attempt and reports a miss as *TxnLockBusyError
+	// without ever sleeping. Zero would leave the deadline equal to the instant the
+	// loop starts, and whether that counts as expired depends on the clock's
+	// resolution — a one-poll wait is not what a try-lock promises. Routing through
+	// lockOne keeps descriptor handling identical: a fresh open file description per
+	// acquisition, which is what makes one process contend with itself.
+	file, err := lockOne(lockPath, lockPath, true, -1)
+	if err != nil {
+		if IsTxnLockBusy(err) {
+			return noop, false, nil
+		}
+		return noop, false, err
+	}
+	locks := &pathLocks{files: []*os.File{file}}
+	return locks.release, true, nil
 }
 
 // pathLocks is a set of held exclusive path locks.

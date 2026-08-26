@@ -134,6 +134,17 @@ func stringifyTag(v any) string {
 	}
 }
 
+// StringifyValue renders a frontmatter value as the text a user would type for
+// it. It is exactly the rendering Tag and Status already compare against,
+// exported so a caller comparing an *undeclared* property — one with no
+// [frontmatter.properties] entry to derive a type from — reaches the same
+// answer the flag surface does instead of reimplementing the conversion.
+//
+// nil renders as the empty string and a value with no canonical scalar spelling
+// falls back to fmt's default rendering; neither is expected to match anything a
+// user types.
+func StringifyValue(v any) string { return stringifyTag(v) }
+
 // Category matches notes whose `categories` frontmatter contains v
 // (case-insensitive) as a wikilink target title. Folder prefixes, `.md`
 // suffixes, headings, and aliases are ignored, so `[[Library/Books.md#Now|To
@@ -182,6 +193,29 @@ func exactWikilinkTitle(s string) (string, bool) {
 		return "", false
 	}
 	return linkTitleKey(links[0].Title()), true
+}
+
+// WikilinkTitleKey reports whether s is exactly one wikilink — no surrounding
+// text — and, if so, returns its normalized title key: folder prefix, `.md`
+// suffix, heading, and alias stripped, then NFC-normalized and lowercased. It is
+// the same key BuildGraph uses to resolve links, so a caller comparing a
+// frontmatter value against a note title should fold both through it.
+//
+// A non-link string, or a string containing a link plus anything else, returns
+// ("", false).
+func WikilinkTitleKey(s string) (string, bool) {
+	return exactWikilinkTitle(s)
+}
+
+// LocalDate returns t shifted into loc. When t has no time-of-day component and
+// is in UTC — the convention a YAML date scalar like `2026-05-19` parses to —
+// its calendar date is preserved rather than converted, so the date does not
+// slip a day in a non-UTC local zone.
+//
+// loc is a parameter rather than a fixed time.Local so callers stay consistent
+// with Age, which compares against time.Now().Location().
+func LocalDate(t time.Time, loc *time.Location) time.Time {
+	return localDate(t, loc)
 }
 
 // Status matches notes whose `status` frontmatter equals v (case-insensitive).

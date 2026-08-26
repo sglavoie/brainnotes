@@ -82,7 +82,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 				return errors.New("repair: cannot combine positional notes with find filter flags")
 			}
 
-			candidates, err := collectReplaceCandidates(v, cmd, args, ff.toQueryFlags(v.Root, nil))
+			candidates, err := collectReplaceCandidates(cmd, v, cfg, args, ff)
 			if err != nil {
 				return err
 			}

@@ -1,0 +1,3 @@
+query: unclosed group opened at column 16: expected ")"
+  status:wip and (rating>3
+                          ^

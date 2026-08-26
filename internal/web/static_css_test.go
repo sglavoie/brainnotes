@@ -369,3 +369,38 @@ func TestNoteActionsStatusLineDoesNotResizeButtonRow(t *testing.T) {
 		}
 	}
 }
+
+// TestSavedViewsNavReservesHeightCSSContract pins the anti-flash guarantee: the
+// saved-views strip is filled by a fetch after first paint, so its container has
+// to occupy its final height while it is still empty. The reserved height
+// matches `.site-nav a` so the strip lines up with the anchors beside it.
+func TestSavedViewsNavReservesHeightCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	nav := cssBlockAfter(t, css, ".saved-views-nav {")
+	for _, want := range []string{
+		"display: flex;",
+		"align-items: center;",
+		"flex-wrap: wrap;",
+		"gap: 0.3rem;",
+		"min-height: 2.1rem;",
+		"box-sizing: border-box;",
+	} {
+		if !strings.Contains(nav, want) {
+			t.Fatalf("saved-views nav CSS missing %q in block:\n%s", want, nav)
+		}
+	}
+
+	for _, want := range []string{
+		".saved-views-nav-item",
+		".saved-views-nav-item.is-disabled",
+		".saved-views-save",
+		".saved-views-save-form",
+		".saved-views-save-diff",
+		".saved-views-save-status",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("saved-views CSS missing %q", want)
+		}
+	}
+}

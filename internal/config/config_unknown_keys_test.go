@@ -131,6 +131,19 @@ exclude_types = ["journal", "scratch"]
 [agent]
 command = ["my-agent", "--stdin"]
 timeout_seconds = 30
+
+[[views]]
+name = "Active work"
+query = "status:wip and not folder:Archive"
+sort = "-modified"
+limit = 20
+description = "What I am actually working on"
+
+[[views]]
+name = "Hub neighbourhood"
+query = "near:[[Deep Work]]<=2"
+sort = "relevance"
+relative_to = "Deep Work"
 `)
 
 	cfg, err := loadVault(t, root)
@@ -139,5 +152,8 @@ timeout_seconds = 30
 	}
 	if cfg.Vault != root {
 		t.Fatalf("vault mismatch: got %q, want %q", cfg.Vault, root)
+	}
+	if len(cfg.Views) != 2 {
+		t.Fatalf("[[views]] entries: got %d, want 2", len(cfg.Views))
 	}
 }

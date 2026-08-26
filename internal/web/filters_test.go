@@ -1,13 +1,16 @@
 package web
 
 import (
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -33,7 +36,7 @@ func TestParseNoteFiltersParams(t *testing.T) {
 	params.Set("min_links", "3")
 	params.Set("max_links", "8")
 
-	filters, err := parseNoteFilters(params, "/vault", graph)
+	filters, err := parseNoteFilters(params, "/vault", graph, nil)
 	if err != nil {
 		t.Fatalf("parseNoteFilters: %v", err)
 	}
@@ -66,7 +69,7 @@ func TestParseNoteFiltersParams(t *testing.T) {
 }
 
 func TestParseNoteFiltersCountSentinels(t *testing.T) {
-	filters, err := parseNoteFilters(url.Values{}, "", nil)
+	filters, err := parseNoteFilters(url.Values{}, "", nil, nil)
 	if err != nil {
 		t.Fatalf("parseNoteFilters: %v", err)
 	}
@@ -104,7 +107,7 @@ func TestParseNoteFiltersInvalidParams(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := parseNoteFilters(tc.params, "", query.BuildGraph(nil)); err == nil {
+			if _, err := parseNoteFilters(tc.params, "", query.BuildGraph(nil), nil); err == nil {
 				t.Fatal("expected parse error")
 			}
 		})
@@ -129,7 +132,7 @@ func TestMatchNoteWithFiltersANDSemantics(t *testing.T) {
 	params.Set("has", "status")
 	params.Set("missing", "done")
 
-	filters, err := parseNoteFilters(params, v.Root, snapshot.graph)
+	filters, err := parseNoteFilters(params, v.Root, snapshot.graph, nil)
 	if err != nil {
 		t.Fatalf("parseNoteFilters: %v", err)
 	}
@@ -147,7 +150,7 @@ func TestMatchNoteWithFiltersSupportsFilterOnlyQueries(t *testing.T) {
 	})
 	params := url.Values{"tag": {"foo"}}
 
-	filters, err := parseNoteFilters(params, v.Root, snapshot.graph)
+	filters, err := parseNoteFilters(params, v.Root, snapshot.graph, nil)
 	if err != nil {
 		t.Fatalf("parseNoteFilters: %v", err)
 	}
@@ -170,7 +173,7 @@ func TestParseNoteFiltersGraphRequiredFilters(t *testing.T) {
 		{name: "max links", params: url.Values{"max_links": {"0"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := parseNoteFilters(tc.params, "", nil); err == nil {
+			if _, err := parseNoteFilters(tc.params, "", nil, nil); err == nil {
 				t.Fatal("expected graph-required filter to fail without graph")
 			}
 		})
@@ -189,7 +192,7 @@ func TestMatchNoteWithFiltersGraphFilters(t *testing.T) {
 	orphanDeadEnd, err := parseNoteFilters(url.Values{
 		"orphan":   {"1"},
 		"dead_end": {"1"},
-	}, v.Root, snapshot.graph)
+	}, v.Root, snapshot.graph, nil)
 	if err != nil {
 		t.Fatalf("parse orphan/dead_end filters: %v", err)
 	}
@@ -199,13 +202,13 @@ func TestMatchNoteWithFiltersGraphFilters(t *testing.T) {
 	assertMatch(t, orphanDeadEnd, notes["Target.md"], false)
 	assertMatch(t, orphanDeadEnd, notes["Exempt.md"], false)
 
-	maxLinksZero, err := parseNoteFilters(url.Values{"max_links": {"0"}}, v.Root, snapshot.graph)
+	maxLinksZero, err := parseNoteFilters(url.Values{"max_links": {"0"}}, v.Root, snapshot.graph, nil)
 	if err != nil {
 		t.Fatalf("parse max_links filter: %v", err)
 	}
 	assertMatch(t, maxLinksZero, notes["Exempt.md"], true)
 
-	broken, err := parseNoteFilters(url.Values{"broken": {"1"}}, v.Root, snapshot.graph)
+	broken, err := parseNoteFilters(url.Values{"broken": {"1"}}, v.Root, snapshot.graph, nil)
 	if err != nil {
 		t.Fatalf("parse broken filter: %v", err)
 	}
@@ -272,4 +275,139 @@ func sameStrings(got, want []string) bool {
 		}
 	}
 	return true
+}
+
+func TestParseNoteFiltersExprComposesWithFacets(t *testing.T) {
+	v, snapshot, notes := newFilterTestSnapshot(t, map[string]string{
+		"Work/Both.md":     "---\ntags: [foo]\nstatus: wip\n---\nBody.\n",
+		"Work/TagOnly.md":  "---\ntags: [foo]\nstatus: done\n---\nBody.\n",
+		"Work/ExprOnly.md": "---\ntags: [bar]\nstatus: wip\n---\nBody.\n",
+	})
+
+	params := url.Values{"tag": {"foo"}, "expr": {"status:wip"}}
+	filters, err := parseNoteFilters(params, v.Root, snapshot.graph, nil)
+	if err != nil {
+		t.Fatalf("parseNoteFilters: %v", err)
+	}
+	if filters.Expr != "status:wip" {
+		t.Fatalf("expr text: got %q, want %q", filters.Expr, "status:wip")
+	}
+	if filters.exprPredicate == nil {
+		t.Fatal("expected a compiled expression predicate")
+	}
+
+	assertMatch(t, filters, notes["Work/Both.md"], true)
+	assertMatch(t, filters, notes["Work/TagOnly.md"], false)
+	assertMatch(t, filters, notes["Work/ExprOnly.md"], false)
+}
+
+func TestNoteFiltersExprCountsAsNonTextFilter(t *testing.T) {
+	graph := query.BuildGraph(nil)
+
+	exprOnly, err := parseNoteFilters(url.Values{"expr": {"tag:foo"}}, "/vault", graph, nil)
+	if err != nil {
+		t.Fatalf("parseNoteFilters: %v", err)
+	}
+	if !exprOnly.hasNonTextFilters() {
+		t.Fatal("an expression-only request must report non-text filters, or search and graph early-return an empty set")
+	}
+
+	blank, err := parseNoteFilters(url.Values{"expr": {"   "}}, "/vault", graph, nil)
+	if err != nil {
+		t.Fatalf("parseNoteFilters blank expr: %v", err)
+	}
+	if blank.Expr != "" || blank.exprPredicate != nil || blank.hasNonTextFilters() {
+		t.Fatalf("a blank expression must be treated as absent, got %#v", blank.Expr)
+	}
+}
+
+func TestNoteFiltersWithoutQueryKeepsExpr(t *testing.T) {
+	v, snapshot, notes := newFilterTestSnapshot(t, map[string]string{
+		"Keep.md": "---\nstatus: wip\n---\nNeedle body.\n",
+		"Drop.md": "---\nstatus: done\n---\nNeedle body.\n",
+	})
+
+	filters, err := parseNoteFilters(url.Values{
+		"q":    {"needle"},
+		"expr": {"status:wip"},
+	}, v.Root, snapshot.graph, nil)
+	if err != nil {
+		t.Fatalf("parseNoteFilters: %v", err)
+	}
+
+	focus := filters.withoutQuery()
+	if focus.Expr != "status:wip" || focus.exprPredicate == nil {
+		t.Fatalf("withoutQuery dropped the expression: %#v", focus.Expr)
+	}
+	if focus.foldedQuery != "" {
+		t.Fatalf("withoutQuery kept the free-text query: %q", focus.foldedQuery)
+	}
+	if !focus.hasNonTextFilters() {
+		t.Fatal("expression must still narrow the set in focus mode")
+	}
+
+	assertMatch(t, focus, notes["Keep.md"], true)
+	assertMatch(t, focus, notes["Drop.md"], false)
+}
+
+func TestParseNoteFiltersInvalidExprIsTyped(t *testing.T) {
+	graph := query.BuildGraph(nil)
+
+	_, err := parseNoteFilters(url.Values{"expr": {"statuz:wip"}}, "/vault", graph, nil)
+	if err == nil {
+		t.Fatal("expected an unknown-field error")
+	}
+
+	var exprErr *exprFilterError
+	if !errors.As(err, &exprErr) {
+		t.Fatalf("error type: got %T, want *exprFilterError", err)
+	}
+	if exprErr.Expr != "statuz:wip" {
+		t.Fatalf("expression text: got %q", exprErr.Expr)
+	}
+
+	var parseErr *queryexpr.ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("wrapped error: got %T, want *queryexpr.ParseError", exprErr.Err)
+	}
+
+	payload := buildFilterErrorResponse(err)
+	if payload.Error.Param != "expr" || payload.Error.Query != "statuz:wip" {
+		t.Fatalf("payload identity: %#v", payload.Error)
+	}
+	if payload.Error.Position == nil || payload.Error.Position.Line != 1 || payload.Error.Position.Column != 1 {
+		t.Fatalf("payload position: %#v", payload.Error.Position)
+	}
+	if !sameStrings(payload.Error.Suggestions, []string{"status"}) {
+		t.Fatalf("payload suggestions: got %#v, want [status]", payload.Error.Suggestions)
+	}
+}
+
+func TestBuildFilterErrorResponseNonExprError(t *testing.T) {
+	_, err := parseNoteFilters(url.Values{"min_backlinks": {"many"}}, "", query.BuildGraph(nil), nil)
+	if err == nil {
+		t.Fatal("expected an integer parse error")
+	}
+
+	payload := buildFilterErrorResponse(err)
+	if payload.Error.Param != "" || payload.Error.Position != nil {
+		t.Fatalf("a non-expression filter error carries no caret payload: %#v", payload.Error)
+	}
+	if !strings.Contains(payload.Error.Message, "min_backlinks") {
+		t.Fatalf("message should name the parameter: %q", payload.Error.Message)
+	}
+}
+
+func TestParseErrorPositionMultiLineExpression(t *testing.T) {
+	source := "tag:foo\nand statuz:wip"
+	start := strings.Index(source, "statuz")
+	err := queryexpr.NewParseError(source, queryexpr.Span{Start: start, End: start + len("statuz")}, "unknown field", nil)
+
+	position := parseErrorPosition(err)
+	if position.Line != 2 || position.Column != 5 {
+		t.Fatalf("position: got line=%d column=%d, want line=2 column=5", position.Line, position.Column)
+	}
+	if position.Start != start || position.End != start+len("statuz") {
+		t.Fatalf("span: got %d-%d, want %d-%d", position.Start, position.End, start, start+len("statuz"))
+	}
 }

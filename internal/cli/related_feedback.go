@@ -27,7 +27,7 @@ func NewRelatedFeedbackCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			now := relatedNow()
+			now := recallNow()
 			feedback, until, err := validateRelatedFeedbackOptions(options, now)
 			if err != nil {
 				return err

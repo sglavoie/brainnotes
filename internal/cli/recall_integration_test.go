@@ -74,11 +74,11 @@ func TestRecallWorkflowEndToEnd(t *testing.T) {
 
 	location := time.FixedZone("recall-integration", -6*60*60)
 	now := time.Date(2026, time.July, 13, 15, 30, 0, 0, location)
-	originalNow := relatedNow
+	originalNow := recallNow
 	originalPicker := relatedPicker
-	relatedNow = func() time.Time { return now }
+	recallNow = func() time.Time { return now }
 	t.Cleanup(func() {
-		relatedNow = originalNow
+		recallNow = originalNow
 		relatedPicker = originalPicker
 	})
 

@@ -8,5 +8,7 @@ export type * from "./api-types-notes";
 export type * from "./api-types-pins";
 export type * from "./api-types-properties";
 export type * from "./api-types-properties-mutation";
+export type * from "./api-types-query";
 export type * from "./api-types-search";
 export type * from "./api-types-synthesis";
+export type * from "./api-types-views";

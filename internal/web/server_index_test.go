@@ -260,6 +260,60 @@ func TestServer_LibraryIncludesOverviewSearchResultsPanel(t *testing.T) {
 	}
 }
 
+// TestServer_LibraryIncludesQueryBarAboveFacets pins both halves of the query
+// bar contract: the hydration hooks initQueryBar() resolves, and the ordering —
+// the expression bar reads as the outer filter, so it must render above the
+// facet chips rather than below them.
+func TestServer_LibraryIncludesQueryBarAboveFacets(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/library") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /library: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	required := []string{
+		`data-query-bar`,
+		`data-query-bar-input`,
+		`data-query-bar-completions`,
+		`data-query-bar-status`,
+		`data-query-bar-error`,
+		`data-query-bar-error-message`,
+		`data-query-bar-error-query`,
+		`data-query-bar-error-caret`,
+		`data-query-bar-error-suggestions`,
+		`data-query-bar-clear`,
+		`id="query-bar-input"`,
+		`role="combobox"`,
+		`aria-autocomplete="list"`,
+		`aria-expanded="false"`,
+		`aria-invalid="false"`,
+		`aria-controls="query-bar-completions"`,
+		`id="query-bar-completions"`,
+		`role="listbox"`,
+	}
+	for _, want := range required {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in query bar panel, got %q", want, body)
+		}
+	}
+
+	queryBarAt := strings.Index(body, `data-query-bar`)
+	facetsAt := strings.Index(body, `data-facet-mode="search"`)
+	if facetsAt < 0 {
+		t.Fatalf("facet controls missing from library page, got %q", body)
+	}
+	if queryBarAt > facetsAt {
+		t.Fatalf("query bar renders below the facet controls: query bar at %d, facets at %d", queryBarAt, facetsAt)
+	}
+}
+
 func TestServer_HealthIncludesDailyFixesCockpit(t *testing.T) {
 	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\n[[Missing]]\n"),

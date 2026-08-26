@@ -1,0 +1,51 @@
+{{define "queryBar"}}
+<section class="query-bar {{.}}" data-query-bar data-query-bar-phase="empty" aria-labelledby="query-bar-heading">
+  <div class="panel-header">
+    <h2 id="query-bar-heading">Query expression</h2>
+  </div>
+  <div class="query-bar-row">
+    <label class="query-bar-label" for="query-bar-input">Expression</label>
+    <div class="query-bar-field">
+      <input
+        id="query-bar-input"
+        class="query-bar-input"
+        type="text"
+        name="expr"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        placeholder="tag:focus and not folder:Archive"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-invalid="false"
+        aria-controls="query-bar-completions"
+        aria-describedby="query-bar-status"
+        data-query-bar-input
+      >
+      <ul
+        id="query-bar-completions"
+        class="query-bar-completions"
+        role="listbox"
+        aria-label="Query completions"
+        data-query-bar-completions
+        hidden
+      ></ul>
+    </div>
+    <button class="query-bar-button" type="button" data-query-bar-clear>Clear</button>
+  </div>
+  <div class="query-bar-error" data-query-bar-error hidden>
+    <p class="query-bar-error-message" data-query-bar-error-message></p>
+    <pre class="query-bar-error-strip" aria-hidden="true"><code class="query-bar-error-query" data-query-bar-error-query></code>
+<code class="query-bar-error-caret" data-query-bar-error-caret></code></pre>
+    <p class="query-bar-error-suggestions" data-query-bar-error-suggestions hidden></p>
+  </div>
+  <p
+    id="query-bar-status"
+    class="query-bar-status"
+    data-query-bar-status
+    role="status"
+    aria-live="polite"
+  >Type an expression to filter the vault.</p>
+</section>
+{{end}}

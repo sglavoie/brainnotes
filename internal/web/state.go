@@ -1,16 +1,138 @@
 package web
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/index"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
+
+// noteSource produces the classified note load a snapshot is built from. The
+// two implementations differ only in where the bytes come from — a direct read
+// of every note, or internal/index's cache of the bytes it last read — so
+// everything above this interface, including the fingerprint that gates every
+// derived cache, is computed by the same code either way.
+//
+// It exists so the index can be switched off. A test that injects a noteLoader
+// is asking for the direct path by construction: the index reads bytes itself
+// and has no noteLoader to route a read through, so an index source that
+// accepted one would silently ignore it.
+type noteSource interface {
+	loadNotes(v *vault.Vault, load noteLoader, timeout time.Duration, quarantined map[string]struct{}) (loadedVault, error)
+}
+
+// directNoteSource reads every note on every load. It is loadVaultNotes and
+// nothing else.
+type directNoteSource struct{}
+
+func (directNoteSource) loadNotes(v *vault.Vault, load noteLoader, timeout time.Duration, quarantined map[string]struct{}) (loadedVault, error) {
+	return loadVaultNotes(v, load, timeout, quarantined)
+}
+
+// indexNoteSource serves note bytes from internal/index, so a walk over an idle
+// vault stats each note instead of re-reading and re-parsing it.
+//
+// The two guarantees the direct path holds are preserved rather than
+// reimplemented: the index reads through this source's own reader, which
+// refuses a quarantined path outright and bounds every other read by the same
+// timeout, and the classified result is fingerprinted by fingerprintLoad — the
+// same function, over the same records — so a fingerprint from one source is
+// comparable with one from the other.
+type indexNoteSource struct {
+	ix *index.Index
+
+	// timeout and quarantined are the per-load values the reader closure needs.
+	// They are fields rather than arguments because the reader is bound once, at
+	// index.New; loadNotes is only ever called with vaultState.mu held, so the
+	// assignment cannot race a read.
+	timeout     time.Duration
+	quarantined map[string]struct{}
+}
+
+func newIndexNoteSource(v *vault.Vault) (*indexNoteSource, error) {
+	source := &indexNoteSource{timeout: noteLoadTimeout}
+	ix, err := index.New(v, index.WithReader(source.read))
+	if err != nil {
+		return nil, err
+	}
+	source.ix = ix
+	return source, nil
+}
+
+// read is the reader the index calls for a note whose cached revision it cannot
+// trust. It carries the bounded-read and quarantine rules loadVaultNotes
+// applies, so moving the read into the index does not move it out from under
+// them.
+func (s *indexNoteSource) read(path string) ([]byte, error) {
+	if _, quarantined := s.quarantined[path]; quarantined {
+		return nil, errNoteLoadTimeout
+	}
+	return boundedReadFile(path, s.timeout)
+}
+
+func (s *indexNoteSource) loadNotes(v *vault.Vault, load noteLoader, timeout time.Duration, quarantined map[string]struct{}) (loadedVault, error) {
+	if load != nil || s.ix == nil {
+		return loadVaultNotes(v, load, timeout, quarantined)
+	}
+	if timeout <= 0 {
+		timeout = noteLoadTimeout
+	}
+	s.timeout = timeout
+	s.quarantined = quarantined
+
+	loaded, err := s.ix.Load()
+	if err != nil {
+		return loadedVault{}, fmt.Errorf("web: walk notes: %w", err)
+	}
+
+	var result loadedVault
+	for _, note := range loaded.Notes {
+		rel := displayPath(note.Path, v.Root)
+		// A cached entry is served without a read, so the reader's quarantine
+		// check cannot be the only one: a note quarantined after it was last
+		// cached would otherwise come back as healthy.
+		if _, skip := quarantined[note.Path]; skip {
+			result.skipped = append(result.skipped, diagnosticFileError{
+				Path:  rel,
+				Error: errNoteLoadTimeout.Error(),
+			})
+			continue
+		}
+		result.loaded = append(result.loaded, diagnosticLoadedNote{note: note, rel: rel})
+	}
+	for _, failed := range loaded.Failed {
+		if errors.Is(failed.Err, errNoteLoadTimeout) {
+			result.skipped = append(result.skipped, diagnosticFileError{
+				Path:  failed.RelPath,
+				Error: errNoteLoadTimeout.Error(),
+			})
+			abs := filepath.Join(v.Root, filepath.FromSlash(failed.RelPath))
+			if _, already := quarantined[abs]; !already {
+				result.timedOut = append(result.timedOut, abs)
+			}
+			continue
+		}
+		result.parseErrors = append(result.parseErrors, diagnosticFileError{
+			Path:  failed.RelPath,
+			Error: failed.Err.Error(),
+		})
+	}
+
+	sortDiagnosticFileErrors(result.parseErrors)
+	sortDiagnosticFileErrors(result.skipped)
+	sort.Strings(result.timedOut)
+	result.fingerprint = fingerprintLoad(result)
+	return result, nil
+}
 
 type vaultSnapshot struct {
 	notes    []*vault.Note
@@ -29,15 +151,26 @@ type vaultSnapshot struct {
 }
 
 type vaultState struct {
-	vault       *vault.Vault
-	ttl         time.Duration
-	now         func() time.Time
+	vault *vault.Vault
+	ttl   time.Duration
+	now   func() time.Time
+	// load is nil in production: the note source picks its own read path. A
+	// non-nil loader is a test injecting a blocking or failing read, which also
+	// forces the direct source — see noteSource.
 	load        noteLoader
 	loadTimeout time.Duration
+	// source decides where a snapshot's note bytes come from. It defaults to the
+	// index and degrades to the direct path if the index cannot even be
+	// constructed, because an index failure is never a request error.
+	source noteSource
 
 	mu       sync.Mutex
 	snapshot vaultSnapshot
 	serial   int64
+	// loadFingerprint is the fingerprint of the load that last advanced serial.
+	// A rebuild whose fingerprint matches it observed the same vault, so serial
+	// holds and every derived cache keyed by it survives.
+	loadFingerprint string
 	// quarantined holds absolute paths whose reads timed out. It lives on the
 	// state rather than the snapshot so it survives invalidate(); once a path
 	// stalls it is never re-read for the life of the process.
@@ -78,14 +211,22 @@ func newVaultState(v *vault.Vault, ttl time.Duration) (*vaultState, error) {
 		return nil, fmt.Errorf("web: invalid ttl %s", ttl)
 	}
 
-	return &vaultState{
+	state := &vaultState{
 		vault:       v,
 		ttl:         ttl,
 		now:         time.Now,
-		load:        (*vault.Note).Load,
 		loadTimeout: noteLoadTimeout,
 		quarantined: make(map[string]struct{}),
-	}, nil
+		source:      directNoteSource{},
+	}
+	// index.New performs no I/O, so the only way it fails is a vault this
+	// constructor already rejected. Falling back rather than propagating keeps
+	// the package's rule intact: the index is an optimization, and no index
+	// failure may become a request error.
+	if source, err := newIndexNoteSource(v); err == nil {
+		state.source = source
+	}
+	return state, nil
 }
 
 func (s *vaultState) currentSnapshot() (vaultSnapshot, error) {
@@ -97,7 +238,7 @@ func (s *vaultState) currentSnapshot() (vaultSnapshot, error) {
 		return s.snapshot, nil
 	}
 
-	result, err := loadVaultNotes(s.vault, s.load, s.loadTimeout, s.quarantined)
+	result, err := s.source.loadNotes(s.vault, s.load, s.loadTimeout, s.quarantined)
 	if err != nil {
 		return vaultSnapshot{}, fmt.Errorf("web: load notes: %w", err)
 	}
@@ -114,7 +255,15 @@ func (s *vaultState) currentSnapshot() (vaultSnapshot, error) {
 		notes = append(notes, item.note)
 	}
 
-	s.serial++
+	// serial keys the derived caches, so it advances only when the load actually
+	// observed a different vault. loadedAt refreshes unconditionally: it throttles
+	// the walk itself, which must still run once per TTL to notice an edit. On an
+	// idle vault this means a rebuild costs the walk and nothing more — the
+	// property index and the related corpus live for the life of the process.
+	if result.changedFrom(s.loadFingerprint) {
+		s.serial++
+		s.loadFingerprint = result.fingerprint
+	}
 	s.snapshot = vaultSnapshot{
 		notes:       notes,
 		graph:       query.BuildGraphForRoot(s.vault.Root, notes),

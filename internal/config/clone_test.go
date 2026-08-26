@@ -32,6 +32,10 @@ func TestCloneIsDeepAndIndependent(t *testing.T) {
 			WIPStatuses:              []string{"doing"},
 			MaxCaptures:              20,
 		},
+		Views: []SavedView{
+			{Name: "Active work", Query: "status:wip", Sort: "-modified", Limit: 20},
+			{Name: "Reading", Query: "type:book"},
+		},
 	}
 
 	clone := original.Clone()
@@ -56,6 +60,8 @@ func TestCloneIsDeepAndIndependent(t *testing.T) {
 	clone.Capture.InboxNote = "mutated"
 	clone.Capture.Heading = "mutated"
 	clone.Cockpit.MaxCaptures = 99
+	clone.Views[0].Query = "mutated"
+	clone.Views = append(clone.Views, SavedView{Name: "Added", Query: "tag:x"})
 	*clone.Serve.OpenBrowser = false
 
 	if original.Ignore[0] != "Archive" {
@@ -94,6 +100,9 @@ func TestCloneIsDeepAndIndependent(t *testing.T) {
 	}
 	if original.Cockpit.MaxCaptures != 20 {
 		t.Fatal("Cockpit.MaxCaptures leaked")
+	}
+	if len(original.Views) != 2 || original.Views[0].Query != "status:wip" {
+		t.Fatal("Views leaked")
 	}
 	if !*original.Serve.OpenBrowser {
 		t.Fatal("Serve.OpenBrowser pointer leaked")

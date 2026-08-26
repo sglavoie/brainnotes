@@ -3,7 +3,7 @@ import { getElementByID, queryElement } from "./dom";
 import {
   buildSearchAPIURL,
   filterChangeEventName,
-  hasActiveSharedFilters,
+  hasActiveFilters,
   readPageQuery,
   shouldHandleFilterChangeForMode,
   syncPageQueryParam,
@@ -124,7 +124,7 @@ export const initSearch = (): void => {
     setActive(-1);
   };
 
-  const hasActiveSearchFilters = (): boolean => syncSearchURL && hasActiveSharedFilters();
+  const hasActiveSearchFilters = (): boolean => syncSearchURL && hasActiveFilters();
 
   const navigateToResult = (index: number): void => {
     if (index < 0 || index >= results.length) {

@@ -1,8 +1,11 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -31,6 +34,21 @@ type loadedVault struct {
 	parseErrors []diagnosticFileError
 	skipped     []diagnosticFileError
 	timedOut    []string
+	// fingerprint content-addresses the whole load: every healthy note's path
+	// and source hash plus the classification of every note that could not be
+	// loaded. Equal fingerprints mean two walks observed the same vault, which
+	// is the change signal callers gate cache invalidation on. It is derived
+	// from vault.Note.SourceHash, so it only distinguishes note contents for
+	// loaders that actually read the file — production always uses
+	// (*vault.Note).Load, which sets the hash.
+	fingerprint string
+}
+
+// changedFrom reports whether this load observed a different vault than the one
+// that produced previous, an earlier load's fingerprint. An empty previous means
+// there is no earlier load to compare against, so the answer is yes.
+func (l loadedVault) changedFrom(previous string) bool {
+	return previous == "" || l.fingerprint != previous
 }
 
 // loadVaultNotes walks the vault and loads every note under a per-note time
@@ -86,7 +104,33 @@ func loadVaultNotes(v *vault.Vault, load noteLoader, timeout time.Duration, quar
 	sortDiagnosticFileErrors(result.parseErrors)
 	sortDiagnosticFileErrors(result.skipped)
 	sort.Strings(result.timedOut)
+	result.fingerprint = fingerprintLoad(result)
 	return result, nil
+}
+
+// fingerprintLoad hashes the identity of a load: one record per healthy note
+// (path plus content hash) and one per classified failure (path plus the
+// recorded error). Records are sorted before hashing so the digest depends on
+// what the walk observed rather than on the order it observed it in.
+func fingerprintLoad(result loadedVault) string {
+	records := make([]string, 0, len(result.loaded)+len(result.parseErrors)+len(result.skipped))
+	for _, item := range result.loaded {
+		records = append(records, "note\x00"+item.note.Path+"\x00"+item.note.SourceHash())
+	}
+	for _, e := range result.parseErrors {
+		records = append(records, "parse\x00"+e.Path+"\x00"+e.Error)
+	}
+	for _, e := range result.skipped {
+		records = append(records, "skip\x00"+e.Path+"\x00"+e.Error)
+	}
+	sort.Strings(records)
+
+	digest := sha256.New()
+	for _, record := range records {
+		_, _ = digest.Write([]byte(record))
+		_, _ = digest.Write([]byte{'\n'})
+	}
+	return hex.EncodeToString(digest.Sum(nil))
 }
 
 // boundedLoad runs load(note) in a goroutine and returns errNoteLoadTimeout if
@@ -107,6 +151,34 @@ func boundedLoad(load noteLoader, note *vault.Note, timeout time.Duration) error
 		return err
 	case <-timer.C:
 		return errNoteLoadTimeout
+	}
+}
+
+// boundedReadFile is boundedLoad for a caller that reads bytes rather than
+// loading a *vault.Note — internal/index, reading on the snapshot's behalf. The
+// same buffered-channel shape applies: a read that never unblocks leaks one
+// goroutine instead of stalling an HTTP handler.
+func boundedReadFile(path string, timeout time.Duration) ([]byte, error) {
+	if timeout <= 0 {
+		timeout = noteLoadTimeout
+	}
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	done := make(chan readResult, 1)
+	go func() {
+		data, err := os.ReadFile(path)
+		done <- readResult{data: data, err: err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case result := <-done:
+		return result.data, result.err
+	case <-timer.C:
+		return nil, errNoteLoadTimeout
 	}
 }
 

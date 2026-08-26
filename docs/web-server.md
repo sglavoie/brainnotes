@@ -24,6 +24,8 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `/synthesize?source=<note-key>` the curated synthesis workbench, launched from any note page
 - `/broken` unresolved wikilink diagnostics with one-click blank stub creation
 - `/graph` interactive Cytoscape graph
+- `GET /api/query/validate` compile one query expression and `GET /api/query/completions` field and value candidates at a caret, both read-only
+- `GET /api/views` the saved views, and `POST /api/views/preview` then `POST /api/views/apply` to save, rename, or delete one
 - `POST /api/capture` quick capture into the configured inbox note, echoing the exact line written
 - `POST /api/pins/set`, `POST /api/pins/remove`, and `POST /api/pins/reorder` pin, unpin, and reorder, addressed by note key only
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
@@ -143,6 +145,65 @@ Markdown files.
 No telemetry, background schedulers, reminders, or analytics pipelines are
 introduced: activity metrics are local-only and computed from the brief sidecar.
 
+## The query bar and saved views
+
+`/library` and `/graph` carry the same query bar, which takes the same
+expression language as `bn find -q` — see
+[Query expressions](commands-query.md#query-expressions--q) for the syntax and
+the field reference. There is one execution path behind all three surfaces, so
+an expression means exactly the same thing at the terminal, in the library, and
+as a graph filter.
+
+The bar validates as you type against `GET /api/query/validate`, which returns
+the canonical spelling of a valid expression, the fields it names, and whether
+it needs the link graph. A rejected expression is shown in place with the
+offending span underlined by a caret rather than silently returning nothing.
+`GET /api/query/completions` supplies candidates at the caret: field names with
+a one-line hint, and values sourced per field — tags, categories, statuses,
+types and folders from the facet counts, property names and values from the
+property index, note titles for the graph fields. Accepting a field completion
+chains straight into its value list; `Ctrl` + `Space` asks for completions from
+any position, including an empty bar. Both routes are read-only: `GET` only, no
+CSRF token, no writes.
+
+A confirmed expression is published into the URL as `expr=`, so a query is
+shareable and restorable exactly like the facet chips, and it ANDs with them —
+a chip and an expression that contradict each other return nothing rather than
+one overriding the other. Every offset that crosses the wire on these two
+routes (the error span and column, the caret position, the span a completion
+replaces) is a UTF-16 code-unit index into the query, matching what the browser
+uses, so a caret cannot drift on accented text.
+
+**Saved views.** The views defined as `[[views]]` blocks in `brainnotes.toml`
+(see [Configuration](configuration.md#saved-views)) render as a strip in the
+primary navigation on every page, in file order, populated client-side from
+`GET /api/views`. An enabled view is a plain anchor carrying only `expr`, `sort`,
+and `relative_to`, never the chips currently selected, so following one is
+shareable and middle-clickable like any other nav link; it stays on the current
+page when that page hosts a query bar and lands on `/library` otherwise, so
+following a view from the graph keeps you on the graph. A view whose query no
+longer compiles renders as a disabled item carrying its error instead of
+vanishing, matching `bn views` and `bn views check`. If the listing itself
+fails, the strip is simply empty — the primary navigation never renders an
+error row.
+
+The Library header can save the current query as a view. That is a
+configuration write, so it goes through `POST /api/views/preview` then
+`POST /api/views/apply` with the same one-use receipt every other config change
+uses, and the preview returns the exact `brainnotes.toml` diff. Creating a view
+that does not exist yet auto-chains preview into apply; overwriting an existing
+one stops on the rendered diff until you confirm, because an upsert replaces the
+whole block and drops any comments inside it, while a rename rewrites only the
+`name` line and preserves them. Each apply consumes its receipt, so a retry
+re-previews against the current file. Saves, renames, and deletes write undo
+journal entries named `bn serve view save`, `bn serve view rename`, and
+`bn serve view delete`.
+
+A view's stored `sort` and `relative_to` ride along on its link and reach the
+server, but ordering is not yet applied on the web path: today a view applies
+its filter in the browser and not its ordering. Use `bn find --view <name>
+--sort <key>` when the order matters.
+
 ## Note actions, Trash, and rendering
 
 The overview search results can select notes for batch lifecycle work: move to
@@ -186,9 +247,17 @@ exists. Missing media embeds remain plain text (they do not redirect to
 
 The overview and graph views share the same URL filter parameters for text,
 tags, category, status, type, folder, property presence, issue filters
-(`broken=1`, `orphan=1`, `dead_end=1`), date/age filters, and link-count
-ranges. The facet picker is searchable, count-labeled, keyboard usable, and
-writes selected filters into the URL, so filtered views can be shared.
+(`broken=1`, `orphan=1`, `dead_end=1`), date/age filters, link-count ranges,
+and `expr=`, the query expression the query bar writes. The facet picker is
+searchable, count-labeled, keyboard usable, and writes selected filters into
+the URL, so filtered views can be shared.
+
+Every filter ANDs, `expr=` included, and both `/api/search` and
+`/api/graph.json` accept it with identical semantics. An expression that does
+not compile is a structured `400` naming the parameter, the query, the span,
+and any did-you-mean candidates — not an empty result set. An expression
+naming a graph field (`near:`, `degree`, `cluster-size`, …) works on both
+routes, since the graph is already in hand there.
 
 The graph view loads the whole vault by default. The free-text box has two
 Search modes. In **Filter** (the default) the query keeps only matching notes
@@ -202,7 +271,10 @@ Focus mode never moves the viewport while you type — the layout is left exactl
 where it is; press `Enter` in the search box or click **Zoom to matches** to fit
 the view to the matched nodes. Facets keep filtering in both modes, so you can
 scope the graph with a tag and then focus a term within that scope, and a click
-focus unions with the search focus rather than replacing it.
+focus unions with the search focus rather than replacing it. `expr=` also keeps
+filtering in both modes: in Focus mode the free-text box only dims nodes, while
+a query expression still removes them, so an expression scopes the graph and
+the text then highlights within it.
 
 Nodes with broken links, orphan status, or
 dead-end status are styled distinctly and expose those issues in the node
@@ -238,7 +310,11 @@ Cockpit fixes follow the same preview-then-apply contract via
 `POST /api/fixes/preview` and `POST /api/fixes/apply`, and property changes
 follow it via `POST /api/properties/preview` and `POST /api/properties/apply`
 (definitions use `POST /api/properties/schema/preview` and
-`POST /api/properties/schema/apply`). Synthesis notes follow it via
+`POST /api/properties/schema/apply`). Saved views follow it via
+`POST /api/views/preview` and `POST /api/views/apply`, which write only the
+`[[views]]` section of `brainnotes.toml` and never a note; a receipt is issued
+for one specific change and is refused by the other config endpoint, so a
+schema receipt cannot apply a view or the reverse. Synthesis notes follow it via
 `POST /api/synthesis/preview` and `POST /api/synthesis/apply`, where the receipt
 holds the whole plan and the apply call carries nothing else, so the bytes
 created are always the bytes reviewed. Property receipts are additionally

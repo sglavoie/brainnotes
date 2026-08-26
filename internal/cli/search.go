@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -168,20 +167,11 @@ Examples:
 				if err != nil {
 					return err
 				}
-				var g *query.Graph
-				if ff.needsGraph() {
-					g = query.BuildGraphForRoot(v.Root, allNotes)
-				}
-				flags := ff.toQueryFlags(v.Root, g)
-				pred, err := query.FromFlags(flags)
+				sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, allNotes, nil)
 				if err != nil {
 					return err
 				}
-				for _, n := range allNotes {
-					if pred(n) {
-						notes = append(notes, n)
-					}
-				}
+				notes = sel.notes
 			default:
 				notes, err = v.Notes()
 				if err != nil {

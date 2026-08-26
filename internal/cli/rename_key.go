@@ -72,7 +72,7 @@ Use --dry-run to preview changes without writing.`,
 				return errors.New("rename-key: cannot combine positional notes with find filter flags")
 			}
 
-			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, ff.toQueryFlags(v.Root, nil))
+			candidates, err := collectReplaceCandidates(cmd, v, cfg, noteArgs, ff)
 			if err != nil {
 				return err
 			}

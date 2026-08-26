@@ -1,9 +1,11 @@
 import { getElementByID, queryAllElements, queryElement } from "./dom";
 import {
   buildFilteredAPIURL,
+  dispatchFiltersChange,
   filterChangeEventName,
-  hasActiveSharedFilters,
+  hasActiveFilters,
   readPageQuery,
+  shouldHandleFilterChangeForMode,
   syncPageQueryParam,
   updateBrowserQuery,
 } from "./filters";
@@ -43,6 +45,17 @@ import {
 } from "./graph";
 import { type StatusKind, setStatusText } from "./status";
 import { THEME_EVENT } from "./theme";
+
+/**
+ * The facet mode this page publishes and listens for. It matches
+ * `graphFacetControlsData().Mode` on the server, so the graph's own facet chips
+ * and its own controls speak the same mode; the query bar publishes `mode: ""`,
+ * which reaches every mode.
+ */
+const graphFilterMode = "graph";
+
+/** Debounce for a keystroke in the graph's free-text filter. */
+const graphFilterDebounceMs = 150;
 
 const readPageSearchMode = (): GraphSearchMode =>
   normalizeSearchMode(new URLSearchParams(window.location.search).get("q_mode"));
@@ -103,6 +116,7 @@ export const initGraph = (): void => {
     layoutRunID: 0,
   };
   let debounceToken = 0;
+  let publishToken = 0;
   let requestToken = 0;
   let selectionSyncing = false;
   // Cheap identity of the element set currently mounted in Cytoscape. Equal
@@ -135,7 +149,7 @@ export const initGraph = (): void => {
     syncPageSearchModeParam(nextMode);
     // Toggling changes the included set, so this reload deliberately goes
     // through the normal relayout path.
-    scheduleLoad(state.currentQuery, 0);
+    publishFilterChange(0);
   }
 
   function restyleGraphForTheme(): void {
@@ -507,7 +521,9 @@ export const initGraph = (): void => {
     }
     updateZoomMatchesButton();
 
-    const hasFilters = hasActiveSharedFilters();
+    // The expression counts as an active filter here: a graph narrowed only by
+    // `expr=` would otherwise report an unscoped node count.
+    const hasFilters = hasActiveFilters();
     const scopeLabel = graphScopeLabel(query, hasFilters);
 
     if (focusMode && query) {
@@ -549,6 +565,30 @@ export const initGraph = (): void => {
     }, delay);
   }
 
+  /**
+   * Announces that this page's filter state moved.
+   *
+   * The graph's own controls publish rather than reloading directly, so every
+   * refetch — the free-text filter, the search mode, the facet chips, and the
+   * Library query bar — arrives through the one listener below. The debounce
+   * lives on the publish rather than on the load so a burst of keystrokes emits
+   * one event instead of one per character.
+   */
+  function publishFilterChange(delay: number): void {
+    window.clearTimeout(publishToken);
+    const emit = (): void => {
+      dispatchFiltersChange(window, {
+        mode: graphFilterMode,
+        params: new URLSearchParams(window.location.search),
+      });
+    };
+    if (delay <= 0) {
+      emit();
+      return;
+    }
+    publishToken = window.setTimeout(emit, delay);
+  }
+
   function bindControls(): void {
     canvas.addEventListener("keydown", handleGraphKeyDown);
 
@@ -564,9 +604,8 @@ export const initGraph = (): void => {
     const filterInput = dom.filterInput;
     if (filterInput instanceof HTMLInputElement) {
       filterInput.addEventListener("input", () => {
-        const query = filterInput.value.trim();
-        syncPageQueryParam(query);
-        scheduleLoad(query, 150);
+        syncPageQueryParam(filterInput.value.trim());
+        publishFilterChange(graphFilterDebounceMs);
       });
       filterInput.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") {
@@ -639,7 +678,14 @@ export const initGraph = (): void => {
       input.checked = normalizeSearchMode(input.value) === state.searchMode;
     }
   }
-  window.addEventListener(filterChangeEventName, () => {
+  // The single refetch path. `mode: ""` — what the Library query bar publishes —
+  // passes the gate, so an expression confirmed anywhere on the page reloads the
+  // graph; `buildFilteredAPIURL` reads the URL, so the listener needs to know
+  // nothing about the parameter that changed.
+  window.addEventListener(filterChangeEventName, (event) => {
+    if (!shouldHandleFilterChangeForMode(event, graphFilterMode)) {
+      return;
+    }
     const query = filterInput instanceof HTMLInputElement ? filterInput.value.trim() : state.currentQuery;
     scheduleLoad(query, 0);
   });

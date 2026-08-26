@@ -32,6 +32,90 @@ func validate(cfg *Config) error {
 	if err := validateCockpit(cfg); err != nil {
 		return err
 	}
+	if err := validateViews(cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
+// savedViewNamePattern constrains a view name to something a shell argument,
+// a URL fragment, and a nav label can all carry: letters, digits, spaces, and
+// the three separators, never leading or trailing. Letter and digit classes are
+// Unicode-aware because vault content in this repo routinely is.
+var savedViewNamePattern = regexp.MustCompile(`^[\p{L}\p{N}](?:[\p{L}\p{N} ._-]*[\p{L}\p{N}])?$`)
+
+// validateViews checks the [[views]] entries for shape only.
+//
+// It deliberately does not check that Query parses, that Sort names a real sort
+// key, or that RelativeTo resolves to a note: internal/config sits below
+// internal/queryexpr and cannot import it (see SavedView's documentation). A
+// view whose expression rotted therefore loads without complaint and is
+// surfaced as disabled-with-its-parse-error by the layer above, rather than
+// making the whole vault unloadable.
+func validateViews(cfg *Config) error {
+	for i, view := range cfg.Views {
+		if err := validateSavedView(fmt.Sprintf("views[%d]", i), view); err != nil {
+			return err
+		}
+	}
+	for i := 0; i < len(cfg.Views); i++ {
+		for j := i + 1; j < len(cfg.Views); j++ {
+			if strings.EqualFold(cfg.Views[i].Name, cfg.Views[j].Name) {
+				return fmt.Errorf(
+					"config: views: names %q and %q collide case-insensitively",
+					cfg.Views[i].Name, cfg.Views[j].Name)
+			}
+		}
+	}
+	return nil
+}
+
+// validateSavedView reports whether one view is structurally usable. label
+// names the view in the error — "views[2]" when loading a file, "view" when
+// checking a patch that has no index yet.
+func validateSavedView(label string, view SavedView) error {
+	if err := validateSavedViewName(label, view.Name); err != nil {
+		return err
+	}
+	if strings.TrimSpace(view.Query) == "" {
+		return fmt.Errorf("config: %s (%q): query must not be empty or whitespace", label, view.Name)
+	}
+	if containsControlRune(view.Query) {
+		return fmt.Errorf("config: %s (%q): query contains a control character", label, view.Name)
+	}
+	if containsControlRune(view.Sort) {
+		return fmt.Errorf("config: %s (%q): sort contains a control character", label, view.Name)
+	}
+	if containsControlRune(view.RelativeTo) {
+		return fmt.Errorf("config: %s (%q): relative_to contains a control character", label, view.Name)
+	}
+	if containsControlRune(view.Description) {
+		return fmt.Errorf("config: %s (%q): description contains a control character", label, view.Name)
+	}
+	if view.Limit < 0 {
+		return fmt.Errorf("config: %s (%q): limit %d must not be negative", label, view.Name, view.Limit)
+	}
+	return nil
+}
+
+// validateSavedViewName is split out so a rename patch, which carries a name
+// and nothing else, checks the name by exactly the rule a loaded view is held
+// to rather than by a second copy of it.
+func validateSavedViewName(label, name string) error {
+	if name == "" {
+		return fmt.Errorf("config: %s: name is required", label)
+	}
+	if strings.TrimSpace(name) != name {
+		return fmt.Errorf("config: %s: name %q must not have surrounding whitespace", label, name)
+	}
+	if containsControlRune(name) {
+		return fmt.Errorf("config: %s: name %q contains a control character", label, name)
+	}
+	if !savedViewNamePattern.MatchString(name) {
+		return fmt.Errorf(
+			"config: %s: name %q must be letters, digits, spaces, '.', '_' or '-', starting and ending with a letter or digit",
+			label, name)
+	}
 	return nil
 }
 

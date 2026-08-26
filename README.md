@@ -5,6 +5,11 @@ notes vault. It complements an editor (VS Code, Neovim) by handling the
 operations editors do poorly: frontmatter-aware queries, wikilink-aware file
 operations, and templated note creation.
 
+One query language spans all three surfaces it can be typed into — `bn find -q`,
+the `/library` query bar, and the `/graph` filter — with the same syntax, the
+same semantics, and one execution path, so a saved view means exactly the same
+thing at the terminal and in the browser.
+
 ## Install
 
 ```sh
@@ -45,6 +50,13 @@ export BNOTES_VAULT=/path/to/vault
 # Find every book note that's still 'To Read'.
 bn find --category Books --status "To Read"
 
+# Or say it as one query expression: boolean composition, typed property
+# comparison, and link-graph operators the flags cannot spell.
+bn find -q 'near:[[Deep Work]]<=2 and status:wip and not folder:Archive'
+
+# Save that as a [[views]] block in brainnotes.toml and run it by name.
+bn find --view "Active work" --sort -modified
+
 # Pipe to fzf for interactive selection.
 bn find --category Books -i
 
@@ -64,6 +76,8 @@ bn find --tag drafts | bn set - status=done
 - [Configuration](docs/configuration.md)
 - Command reference:
   - [Query and research](docs/commands-query.md)
+    - [Query expressions (`-q`)](docs/commands-query.md#query-expressions--q) and
+      [saved views (`bn views`)](docs/commands-query.md#bn-views--inspect-saved-views)
   - [Vault administration and recovery](docs/commands-vault.md)
   - [Note creation and navigation](docs/commands-notes.md)
   - [Local web server](docs/web-server.md)

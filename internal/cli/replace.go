@@ -10,7 +10,6 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -21,7 +20,7 @@ var queryFlagNames = []string{
 	"tag", "category", "status", "type", "has", "missing",
 	"age", "created", "folder", "orphan", "broken-links",
 	"min-backlinks", "max-backlinks", "min-links", "max-links",
-	"dead-end",
+	"dead-end", "query", "view",
 }
 
 // NewReplaceCmd returns the `replace` subcommand. Exported for tests.
@@ -92,7 +91,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 				return fmt.Errorf("replace: invalid <to>: %w", err)
 			}
 
-			candidates, err := collectReplaceCandidates(v, cmd, noteArgs, ff.toQueryFlags(v.Root, nil))
+			candidates, err := collectReplaceCandidates(cmd, v, cfg, noteArgs, ff)
 			if err != nil {
 				return err
 			}
@@ -163,8 +162,10 @@ func coerceReplaceValue(raw string, isWikilink bool) (any, error) {
 
 // collectReplaceCandidates returns the notes the replace should iterate over.
 // When noteArgs is non-empty the explicit paths are loaded individually;
-// otherwise the full vault is walked and filtered via FromFlags.
-func collectReplaceCandidates(v *vault.Vault, cmd *cobra.Command, noteArgs []string, flags query.Flags) ([]*vault.Note, error) {
+// otherwise the full vault is walked and filtered through findFlags.selectNotes
+// — the same compiled plan `bn find` runs, so a scoped mutation touches exactly
+// the notes the equivalent `bn find` prints.
+func collectReplaceCandidates(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, noteArgs []string, ff *findFlags) ([]*vault.Note, error) {
 	if len(noteArgs) > 0 {
 		paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), false)
 		if err != nil {
@@ -186,27 +187,11 @@ func collectReplaceCandidates(v *vault.Vault, cmd *cobra.Command, noteArgs []str
 	if err != nil {
 		return nil, err
 	}
-	if queryFlagsNeedGraph(flags) {
-		flags.Graph = query.BuildGraphForRoot(v.Root, notes)
-	}
-	pred, err := query.FromFlags(flags)
+	sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, notes, nil)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*vault.Note, 0, len(notes))
-	for _, n := range notes {
-		if pred(n) {
-			out = append(out, n)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, nil
-}
-
-func queryFlagsNeedGraph(flags query.Flags) bool {
-	return flags.Orphan || flags.BrokenLinks || flags.DeadEnd ||
-		flags.MinBacklinks >= 0 || flags.MaxBacklinks >= 0 ||
-		flags.MinLinks >= 0 || flags.MaxLinks >= 0
+	return sel.notes, nil
 }
 
 // applyReplace performs the swap on a single note. On dry-run it emits a diff

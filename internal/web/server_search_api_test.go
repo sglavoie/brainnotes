@@ -1,8 +1,10 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -183,5 +185,105 @@ func TestServer_SearchAPI_ResultCap(t *testing.T) {
 	}
 	if len(results) != searchResultLimit {
 		t.Fatalf("result count: got %d, want %d", len(results), searchResultLimit)
+	}
+}
+
+func TestServer_SearchAPI_ExprComposesWithFacetsAndStandsAlone(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Work/Alpha.md":    []byte("---\ntitle: Alpha\ntags: [keep]\nstatus: wip\n---\nneedle body\n"),
+		"Work/Beta.md":     []byte("---\ntitle: Beta\ntags: [keep]\nstatus: done\n---\nneedle body\n"),
+		"Archive/Gamma.md": []byte("---\ntitle: Gamma\ntags: [drop]\nstatus: wip\n---\nneedle body\n"),
+	})
+
+	exprOnly, _, exprStatus := fetchSearchJSON(t, ts.URL+"/api/search?expr="+url.QueryEscape("status:wip"))
+	if exprStatus != http.StatusOK {
+		t.Fatalf("expr-only status: got %d, want %d", exprStatus, http.StatusOK)
+	}
+	if len(exprOnly) != 2 {
+		t.Fatalf("an expression-only request must return matches, got %#v", exprOnly)
+	}
+	if exprOnly[0].Title != "Alpha" || exprOnly[1].Title != "Gamma" {
+		t.Fatalf("expr-only results: %#v", exprOnly)
+	}
+
+	withFacet, _, facetStatus := fetchSearchJSON(t, ts.URL+"/api/search?tag=keep&expr="+url.QueryEscape("status:wip"))
+	if facetStatus != http.StatusOK {
+		t.Fatalf("expr+facet status: got %d, want %d", facetStatus, http.StatusOK)
+	}
+	if len(withFacet) != 1 || withFacet[0].Title != "Alpha" {
+		t.Fatalf("expression must compose with the facet chip, got %#v", withFacet)
+	}
+
+	withText, _, textStatus := fetchSearchJSON(t, ts.URL+"/api/search?q=needle&expr="+url.QueryEscape("status:done"))
+	if textStatus != http.StatusOK {
+		t.Fatalf("expr+q status: got %d, want %d", textStatus, http.StatusOK)
+	}
+	if len(withText) != 1 || withText[0].Title != "Beta" {
+		t.Fatalf("expression must compose with the free-text query, got %#v", withText)
+	}
+}
+
+func TestServer_SearchAPI_InvalidExprReturnsStructuredError(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Note.md": []byte("---\ntitle: Note\n---\nBody text.\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/api/search?expr=" + url.QueryEscape("statuz:wip")) // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /api/search: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+		t.Fatalf("content-type: got %q, want application/json...", contentType)
+	}
+
+	var payload filterErrorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Error.Param != "expr" || payload.Error.Query != "statuz:wip" {
+		t.Fatalf("error payload identity: %#v", payload.Error)
+	}
+	if payload.Error.Message == "" {
+		t.Fatalf("error payload message is empty: %#v", payload.Error)
+	}
+	if payload.Error.Position == nil {
+		t.Fatalf("error payload carries no caret position: %#v", payload.Error)
+	}
+	if payload.Error.Position.Line != 1 || payload.Error.Position.Column != 1 {
+		t.Fatalf("error position: %#v", payload.Error.Position)
+	}
+	if payload.Error.Position.End <= payload.Error.Position.Start {
+		t.Fatalf("error span is empty: %#v", payload.Error.Position)
+	}
+	if !sameStrings(payload.Error.Suggestions, []string{"status"}) {
+		t.Fatalf("error suggestions: got %#v, want [status]", payload.Error.Suggestions)
+	}
+}
+
+func TestServer_SearchAPI_ResultCapAppliesAfterRanking(t *testing.T) {
+	files := make(map[string][]byte, 60)
+	for i := 0; i < 60; i++ {
+		// Every note matches in the body; only the last one alphabetically also
+		// matches in the title, so it survives the cap only if the ranking runs
+		// before the truncation.
+		rel := fmt.Sprintf("Note%02d.md", i)
+		files[rel] = []byte("---\ntitle: Note\n---\nNeedle body text\n")
+	}
+	files["ZZTitleNeedle.md"] = []byte("---\ntitle: ZZ Title Needle\n---\nUnrelated body\n")
+	ts, _ := newHTTPServerForFiles(t, files)
+
+	results, _, statusCode := fetchSearchJSON(t, ts.URL+"/api/search?q=needle")
+	if statusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", statusCode, http.StatusOK)
+	}
+	if len(results) != searchResultLimit {
+		t.Fatalf("result count: got %d, want %d", len(results), searchResultLimit)
+	}
+	if results[0].Title != "ZZTitleNeedle" {
+		t.Fatalf("the title match must rank first and survive the cap, got %#v", results[0])
 	}
 }

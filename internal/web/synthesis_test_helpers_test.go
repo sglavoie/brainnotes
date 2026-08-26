@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/index"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -244,14 +245,22 @@ func vaultFileSet(t *testing.T, root string) []string {
 		if err != nil {
 			return err
 		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		// The note cache is a pure function of the vault: it holds no user
+		// intent, `rm -rf .bnotes/index` is a supported repair, and every
+		// snapshot load writes it. Counting it here would make "this endpoint
+		// persisted nothing" mean "nothing was read either", which is not the
+		// claim these tests exist to make.
+		if filepath.ToSlash(rel) == index.RelDir {
+			return fs.SkipDir
+		}
 		if d.IsDir() {
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
 		}
