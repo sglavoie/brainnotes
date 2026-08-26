@@ -85,6 +85,9 @@ func TestNoteLayoutCSSResponsiveContract(t *testing.T) {
 		".note-main",
 		"width: 100%;",
 		"max-width: none;",
+		".note-layout-toolbar",
+		"justify-content: flex-start;",
+		`.note-sidebar-toggle[aria-expanded="false"] .note-sidebar-toggle-panel`,
 	} {
 		if !strings.Contains(css, want) {
 			t.Fatalf("note page width CSS missing %q", want)

@@ -180,7 +180,9 @@ export const initNoteLayout = (options: InitNoteLayoutOptions = {}): void => {
     layout.classList.toggle("is-metadata-hidden", !visible);
     metadata.hidden = !visible;
     toggle.setAttribute("aria-expanded", String(visible));
-    toggle.textContent = visible ? "Hide sidebar" : "Show sidebar";
+    const label = visible ? "Hide sidebar" : "Show sidebar";
+    toggle.setAttribute("aria-label", label);
+    toggle.setAttribute("title", label);
     if (visible) {
       delete doc.documentElement.dataset.noteMetaSidebar;
     } else {

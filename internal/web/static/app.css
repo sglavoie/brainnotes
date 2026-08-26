@@ -123,7 +123,7 @@
   }
 }
 
-:root[data-theme="light"] {
+:root[data-theme='light'] {
   color-scheme: light;
 
   --bn-bg: #f7f9fc;
@@ -182,7 +182,7 @@
   --bn-graph-orphan: #aebbd0;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   color-scheme: dark;
 
   --bn-bg: #10131a;
@@ -243,7 +243,7 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bn-bg);
   color: var(--bn-text);
   line-height: 1.5;
@@ -451,7 +451,7 @@ a:hover {
 
 /* A create's diff is a receipt for a write that already happened, not the
    question an overwrite confirms; the left rule is what tells them apart. */
-.saved-views-save-diff[data-saved-views-diff-role="receipt"] {
+.saved-views-save-diff[data-saved-views-diff-role='receipt'] {
   border-left: 3px solid var(--bn-accent-subtle-border);
 }
 
@@ -580,7 +580,7 @@ a:hover {
 
 .note-breadcrumbs li + li::before {
   color: var(--bn-faint);
-  content: "/";
+  content: '/';
 }
 
 .note-breadcrumbs a,
@@ -588,7 +588,7 @@ a:hover {
   overflow-wrap: anywhere;
 }
 
-.note-breadcrumbs span[aria-current="page"] {
+.note-breadcrumbs span[aria-current='page'] {
   color: var(--bn-text-subtle);
 }
 
@@ -714,7 +714,7 @@ a:hover {
   font-size: 0.9rem;
 }
 
-.query-bar-input[aria-invalid="true"] {
+.query-bar-input[aria-invalid='true'] {
   border-color: var(--bn-danger-border);
 }
 
@@ -777,7 +777,7 @@ a:hover {
   background: var(--bn-hover);
 }
 
-.query-bar-completion[aria-selected="true"] {
+.query-bar-completion[aria-selected='true'] {
   color: var(--bn-text-strong);
   background: var(--bn-accent-subtle-bg);
 }
@@ -1014,7 +1014,7 @@ a:focus-visible,
   background: var(--bn-hover);
 }
 
-.facet-option[aria-selected="true"] {
+.facet-option[aria-selected='true'] {
   color: var(--bn-text-strong);
   background: var(--bn-accent-subtle-bg);
 }
@@ -1136,7 +1136,8 @@ th {
 
 code,
 pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 code {
@@ -1159,7 +1160,9 @@ code {
 
 .brief-slot {
   margin-top: 0;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .brief-slot.is-busy {
@@ -1257,7 +1260,10 @@ code {
   font: inherit;
   font-size: 0.9rem;
   line-height: 1.4;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
 .brief-insight-prompt::placeholder {
@@ -1311,7 +1317,10 @@ code {
   font: inherit;
   font-size: 0.9rem;
   line-height: 1.4;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
 .capture-input::placeholder {
@@ -1357,7 +1366,10 @@ code {
   font: inherit;
   font-size: 0.86rem;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
 .brief-action-button:hover,
@@ -1472,7 +1484,10 @@ code {
   background: var(--bn-raised);
   font: inherit;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
 .related-tab {
@@ -1489,7 +1504,7 @@ code {
   background: var(--bn-hover);
 }
 
-.related-tab[aria-selected="true"] {
+.related-tab[aria-selected='true'] {
   border-color: var(--bn-accent-subtle-border);
   color: var(--bn-accent-subtle-text);
   background: var(--bn-accent-subtle-bg);
@@ -1675,7 +1690,7 @@ code {
   font-weight: 600;
 }
 
-.related-card-action[aria-pressed="true"] {
+.related-card-action[aria-pressed='true'] {
   border-color: var(--bn-accent-subtle-border);
   color: var(--bn-accent-subtle-text);
   background: var(--bn-accent-subtle-bg);
@@ -1731,8 +1746,8 @@ code {
   font: inherit;
 }
 
-.related-card[aria-busy="true"],
-.related-feedback-row[aria-busy="true"] {
+.related-card[aria-busy='true'],
+.related-feedback-row[aria-busy='true'] {
   opacity: 0.72;
 }
 
@@ -1772,7 +1787,7 @@ code {
   margin-top: 1rem;
 }
 
-.overview-results[aria-busy="true"] {
+.overview-results[aria-busy='true'] {
   border-color: var(--bn-border-strong);
 }
 
@@ -2033,7 +2048,7 @@ code {
 }
 
 .overview-bulk-preview-frontmatter-item::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 0;
   top: 0.55rem;
@@ -2056,7 +2071,7 @@ code {
   margin-top: 1rem;
 }
 
-.history-panel[aria-busy="true"] {
+.history-panel[aria-busy='true'] {
   border-color: var(--bn-border-strong);
 }
 
@@ -2316,7 +2331,7 @@ code {
   gap: 0.75rem;
 }
 
-.review-panel[aria-busy="true"] {
+.review-panel[aria-busy='true'] {
   border-color: var(--bn-border-strong);
 }
 
@@ -2453,7 +2468,7 @@ code {
   background: var(--bn-sunken);
 }
 
-.review-panel[aria-busy="true"] .review-item {
+.review-panel[aria-busy='true'] .review-item {
   border-color: var(--bn-border-strong);
 }
 
@@ -2490,11 +2505,11 @@ code {
 
 /* Sensitive content is security-relevant advisory. Emphasize the badge in a
    warning tone; evidence is redacted server-side and never rendered here. */
-.review-item[data-fixes-kind="sensitive_content"] {
+.review-item[data-fixes-kind='sensitive_content'] {
   border-color: var(--bn-danger-border);
 }
 
-.review-item[data-fixes-kind="sensitive_content"] .review-item-kind {
+.review-item[data-fixes-kind='sensitive_content'] .review-item-kind {
   border-color: var(--bn-danger-border);
   color: var(--bn-danger);
   background: var(--bn-danger-bg);
@@ -2587,23 +2602,23 @@ code {
   background: var(--bn-hover);
 }
 
-.review-action[data-review-action="done"] {
+.review-action[data-review-action='done'] {
   border-color: var(--bn-success-border);
   color: var(--bn-success);
   background: var(--bn-success-bg);
 }
 
-.review-action[data-review-action="done"]:hover {
+.review-action[data-review-action='done']:hover {
   background: var(--bn-success-bg);
 }
 
-.review-action[data-review-action="snooze"] {
+.review-action[data-review-action='snooze'] {
   border-color: var(--bn-warning-border);
   color: var(--bn-warning);
   background: var(--bn-warning-bg);
 }
 
-.review-action[data-review-action="snooze"]:hover {
+.review-action[data-review-action='snooze']:hover {
   background: var(--bn-warning-bg);
 }
 
@@ -2939,13 +2954,13 @@ code {
   color: var(--bn-danger);
 }
 
-.pin-button[aria-pressed="true"] {
+.pin-button[aria-pressed='true'] {
   border-color: var(--bn-accent-subtle-border);
   color: var(--bn-accent-subtle-text);
   background: var(--bn-accent-subtle-bg);
 }
 
-.pin-button[aria-pressed="true"]:hover {
+.pin-button[aria-pressed='true']:hover {
   background: var(--bn-accent-subtle-bg);
 }
 
@@ -2987,7 +3002,6 @@ code {
 .note-actions .open-editor-button,
 .note-actions .trash-note-button,
 .note-actions .pin-button,
-.note-actions .note-sidebar-toggle,
 .note-actions .copy-button {
   order: 1;
 }
@@ -3092,6 +3106,28 @@ code {
   overflow-wrap: anywhere;
 }
 
+.note-layout-toolbar {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 0.5rem;
+}
+
+.note-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0.35rem;
+  box-sizing: border-box;
+  line-height: 0;
+  color: var(--bn-text);
+}
+
+.note-sidebar-toggle[aria-expanded='false'] .note-sidebar-toggle-panel {
+  display: none;
+}
+
 .note-layout {
   display: grid;
   gap: 1rem;
@@ -3145,12 +3181,12 @@ code {
   }
 
   .note-layout.is-metadata-hidden,
-  :root[data-note-meta-sidebar="hidden"] .note-layout {
+  :root[data-note-meta-sidebar='hidden'] .note-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .note-layout-with-toc.is-metadata-hidden,
-  :root[data-note-meta-sidebar="hidden"] .note-layout-with-toc {
+  :root[data-note-meta-sidebar='hidden'] .note-layout-with-toc {
     grid-template-columns:
       minmax(0, 1fr)
       minmax(
@@ -3195,17 +3231,19 @@ code {
   }
 
   .note-layout.is-metadata-hidden .note-content,
-  :root[data-note-meta-sidebar="hidden"] .note-layout .note-content {
+  :root[data-note-meta-sidebar='hidden'] .note-layout .note-content {
     grid-column: 1;
   }
 
   .note-layout-with-toc.is-metadata-hidden .note-toc-sidebar,
-  :root[data-note-meta-sidebar="hidden"] .note-layout-with-toc .note-toc-sidebar {
+  :root[data-note-meta-sidebar='hidden']
+    .note-layout-with-toc
+    .note-toc-sidebar {
     grid-column: 2;
   }
 
   .note-layout.is-metadata-hidden .note-meta-sidebar,
-  :root[data-note-meta-sidebar="hidden"] .note-layout .note-meta-sidebar {
+  :root[data-note-meta-sidebar='hidden'] .note-layout .note-meta-sidebar {
     display: none;
   }
 
@@ -3239,7 +3277,7 @@ code {
     width: 2px;
     border-radius: 999px;
     background: transparent;
-    content: "";
+    content: '';
   }
 
   .note-meta-resize-handle:hover::after,
@@ -3276,7 +3314,7 @@ code {
   }
 
   .note-layout.is-metadata-hidden .note-meta-sidebar,
-  :root[data-note-meta-sidebar="hidden"] .note-layout .note-meta-sidebar {
+  :root[data-note-meta-sidebar='hidden'] .note-layout .note-meta-sidebar {
     display: none;
   }
 }
@@ -3356,7 +3394,10 @@ code {
   font: inherit;
   font-size: 0.9rem;
   line-height: 1.4;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
 .note-insight-prompt::placeholder {
@@ -3449,360 +3490,360 @@ code {
    Code-surface background and unclassed text stay on the --bn-code-* tokens. */
 
 .chroma .err,
-:root[data-theme="light"] .chroma .err {
+:root[data-theme='light'] .chroma .err {
   color: #a61717;
   background-color: #e3d2d2;
 }
 
 .chroma .k,
-:root[data-theme="light"] .chroma .k {
+:root[data-theme='light'] .chroma .k {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .kc,
-:root[data-theme="light"] .chroma .kc {
+:root[data-theme='light'] .chroma .kc {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .kd,
-:root[data-theme="light"] .chroma .kd {
+:root[data-theme='light'] .chroma .kd {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .kn,
-:root[data-theme="light"] .chroma .kn {
+:root[data-theme='light'] .chroma .kn {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .kp,
-:root[data-theme="light"] .chroma .kp {
+:root[data-theme='light'] .chroma .kp {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .kr,
-:root[data-theme="light"] .chroma .kr {
+:root[data-theme='light'] .chroma .kr {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .kt,
-:root[data-theme="light"] .chroma .kt {
+:root[data-theme='light'] .chroma .kt {
   color: #445588;
   font-weight: bold;
 }
 
 .chroma .na,
-:root[data-theme="light"] .chroma .na {
+:root[data-theme='light'] .chroma .na {
   color: #008080;
 }
 
 .chroma .nb,
-:root[data-theme="light"] .chroma .nb {
+:root[data-theme='light'] .chroma .nb {
   color: #0086b3;
 }
 
 .chroma .bp,
-:root[data-theme="light"] .chroma .bp {
+:root[data-theme='light'] .chroma .bp {
   color: #999999;
 }
 
 .chroma .nc,
-:root[data-theme="light"] .chroma .nc {
+:root[data-theme='light'] .chroma .nc {
   color: #445588;
   font-weight: bold;
 }
 
 .chroma .no,
-:root[data-theme="light"] .chroma .no {
+:root[data-theme='light'] .chroma .no {
   color: #008080;
 }
 
 .chroma .nd,
-:root[data-theme="light"] .chroma .nd {
+:root[data-theme='light'] .chroma .nd {
   color: #3c5d5d;
   font-weight: bold;
 }
 
 .chroma .ni,
-:root[data-theme="light"] .chroma .ni {
+:root[data-theme='light'] .chroma .ni {
   color: #800080;
 }
 
 .chroma .ne,
-:root[data-theme="light"] .chroma .ne {
+:root[data-theme='light'] .chroma .ne {
   color: #990000;
   font-weight: bold;
 }
 
 .chroma .nf,
-:root[data-theme="light"] .chroma .nf {
+:root[data-theme='light'] .chroma .nf {
   color: #990000;
   font-weight: bold;
 }
 
 .chroma .nl,
-:root[data-theme="light"] .chroma .nl {
+:root[data-theme='light'] .chroma .nl {
   color: #990000;
   font-weight: bold;
 }
 
 .chroma .nn,
-:root[data-theme="light"] .chroma .nn {
+:root[data-theme='light'] .chroma .nn {
   color: #555555;
 }
 
 .chroma .nt,
-:root[data-theme="light"] .chroma .nt {
+:root[data-theme='light'] .chroma .nt {
   color: #000080;
 }
 
 .chroma .nv,
-:root[data-theme="light"] .chroma .nv {
+:root[data-theme='light'] .chroma .nv {
   color: #008080;
 }
 
 .chroma .vc,
-:root[data-theme="light"] .chroma .vc {
+:root[data-theme='light'] .chroma .vc {
   color: #008080;
 }
 
 .chroma .vg,
-:root[data-theme="light"] .chroma .vg {
+:root[data-theme='light'] .chroma .vg {
   color: #008080;
 }
 
 .chroma .vi,
-:root[data-theme="light"] .chroma .vi {
+:root[data-theme='light'] .chroma .vi {
   color: #008080;
 }
 
 .chroma .s,
-:root[data-theme="light"] .chroma .s {
+:root[data-theme='light'] .chroma .s {
   color: #dd1144;
 }
 
 .chroma .sa,
-:root[data-theme="light"] .chroma .sa {
+:root[data-theme='light'] .chroma .sa {
   color: #dd1144;
 }
 
 .chroma .sb,
-:root[data-theme="light"] .chroma .sb {
+:root[data-theme='light'] .chroma .sb {
   color: #dd1144;
 }
 
 .chroma .sc,
-:root[data-theme="light"] .chroma .sc {
+:root[data-theme='light'] .chroma .sc {
   color: #dd1144;
 }
 
 .chroma .dl,
-:root[data-theme="light"] .chroma .dl {
+:root[data-theme='light'] .chroma .dl {
   color: #dd1144;
 }
 
 .chroma .sd,
-:root[data-theme="light"] .chroma .sd {
+:root[data-theme='light'] .chroma .sd {
   color: #dd1144;
 }
 
 .chroma .s2,
-:root[data-theme="light"] .chroma .s2 {
+:root[data-theme='light'] .chroma .s2 {
   color: #dd1144;
 }
 
 .chroma .se,
-:root[data-theme="light"] .chroma .se {
+:root[data-theme='light'] .chroma .se {
   color: #dd1144;
 }
 
 .chroma .sh,
-:root[data-theme="light"] .chroma .sh {
+:root[data-theme='light'] .chroma .sh {
   color: #dd1144;
 }
 
 .chroma .si,
-:root[data-theme="light"] .chroma .si {
+:root[data-theme='light'] .chroma .si {
   color: #dd1144;
 }
 
 .chroma .sx,
-:root[data-theme="light"] .chroma .sx {
+:root[data-theme='light'] .chroma .sx {
   color: #dd1144;
 }
 
 .chroma .sr,
-:root[data-theme="light"] .chroma .sr {
+:root[data-theme='light'] .chroma .sr {
   color: #009926;
 }
 
 .chroma .s1,
-:root[data-theme="light"] .chroma .s1 {
+:root[data-theme='light'] .chroma .s1 {
   color: #dd1144;
 }
 
 .chroma .ss,
-:root[data-theme="light"] .chroma .ss {
+:root[data-theme='light'] .chroma .ss {
   color: #990073;
 }
 
 .chroma .m,
-:root[data-theme="light"] .chroma .m {
+:root[data-theme='light'] .chroma .m {
   color: #009999;
 }
 
 .chroma .mb,
-:root[data-theme="light"] .chroma .mb {
+:root[data-theme='light'] .chroma .mb {
   color: #009999;
 }
 
 .chroma .mf,
-:root[data-theme="light"] .chroma .mf {
+:root[data-theme='light'] .chroma .mf {
   color: #009999;
 }
 
 .chroma .mh,
-:root[data-theme="light"] .chroma .mh {
+:root[data-theme='light'] .chroma .mh {
   color: #009999;
 }
 
 .chroma .mi,
-:root[data-theme="light"] .chroma .mi {
+:root[data-theme='light'] .chroma .mi {
   color: #009999;
 }
 
 .chroma .il,
-:root[data-theme="light"] .chroma .il {
+:root[data-theme='light'] .chroma .il {
   color: #009999;
 }
 
 .chroma .mo,
-:root[data-theme="light"] .chroma .mo {
+:root[data-theme='light'] .chroma .mo {
   color: #009999;
 }
 
 .chroma .o,
-:root[data-theme="light"] .chroma .o {
+:root[data-theme='light'] .chroma .o {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .ow,
-:root[data-theme="light"] .chroma .ow {
+:root[data-theme='light'] .chroma .ow {
   color: #000000;
   font-weight: bold;
 }
 
 .chroma .c,
-:root[data-theme="light"] .chroma .c {
+:root[data-theme='light'] .chroma .c {
   color: #999988;
   font-style: italic;
 }
 
 .chroma .ch,
-:root[data-theme="light"] .chroma .ch {
+:root[data-theme='light'] .chroma .ch {
   color: #999988;
   font-style: italic;
 }
 
 .chroma .cm,
-:root[data-theme="light"] .chroma .cm {
+:root[data-theme='light'] .chroma .cm {
   color: #999988;
   font-style: italic;
 }
 
 .chroma .c1,
-:root[data-theme="light"] .chroma .c1 {
+:root[data-theme='light'] .chroma .c1 {
   color: #999988;
   font-style: italic;
 }
 
 .chroma .cs,
-:root[data-theme="light"] .chroma .cs {
+:root[data-theme='light'] .chroma .cs {
   color: #999999;
   font-weight: bold;
   font-style: italic;
 }
 
 .chroma .cp,
-:root[data-theme="light"] .chroma .cp {
+:root[data-theme='light'] .chroma .cp {
   color: #999999;
   font-weight: bold;
   font-style: italic;
 }
 
 .chroma .cpf,
-:root[data-theme="light"] .chroma .cpf {
+:root[data-theme='light'] .chroma .cpf {
   color: #999999;
   font-weight: bold;
   font-style: italic;
 }
 
 .chroma .gd,
-:root[data-theme="light"] .chroma .gd {
+:root[data-theme='light'] .chroma .gd {
   color: #000000;
   background-color: #ffdddd;
 }
 
 .chroma .ge,
-:root[data-theme="light"] .chroma .ge {
+:root[data-theme='light'] .chroma .ge {
   color: #000000;
   font-style: italic;
 }
 
 .chroma .gr,
-:root[data-theme="light"] .chroma .gr {
+:root[data-theme='light'] .chroma .gr {
   color: #aa0000;
 }
 
 .chroma .gh,
-:root[data-theme="light"] .chroma .gh {
+:root[data-theme='light'] .chroma .gh {
   color: #999999;
 }
 
 .chroma .gi,
-:root[data-theme="light"] .chroma .gi {
+:root[data-theme='light'] .chroma .gi {
   color: #000000;
   background-color: #ddffdd;
 }
 
 .chroma .go,
-:root[data-theme="light"] .chroma .go {
+:root[data-theme='light'] .chroma .go {
   color: #888888;
 }
 
 .chroma .gp,
-:root[data-theme="light"] .chroma .gp {
+:root[data-theme='light'] .chroma .gp {
   color: #555555;
 }
 
 .chroma .gs,
-:root[data-theme="light"] .chroma .gs {
+:root[data-theme='light'] .chroma .gs {
   font-weight: bold;
 }
 
 .chroma .gu,
-:root[data-theme="light"] .chroma .gu {
+:root[data-theme='light'] .chroma .gu {
   color: #aaaaaa;
 }
 
 .chroma .gt,
-:root[data-theme="light"] .chroma .gt {
+:root[data-theme='light'] .chroma .gt {
   color: #aa0000;
 }
 
 .chroma .gl,
-:root[data-theme="light"] .chroma .gl {
+:root[data-theme='light'] .chroma .gl {
   text-decoration: underline;
 }
 
 .chroma .w,
-:root[data-theme="light"] .chroma .w {
+:root[data-theme='light'] .chroma .w {
   color: #bbbbbb;
 }
 
@@ -4060,255 +4101,255 @@ code {
   }
 }
 
-:root[data-theme="dark"] .chroma .err {
+:root[data-theme='dark'] .chroma .err {
   color: #bf616a;
 }
 
-:root[data-theme="dark"] .chroma .k {
+:root[data-theme='dark'] .chroma .k {
   color: #81a1c1;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .kc {
+:root[data-theme='dark'] .chroma .kc {
   color: #81a1c1;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .kd {
+:root[data-theme='dark'] .chroma .kd {
   color: #81a1c1;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .kn {
+:root[data-theme='dark'] .chroma .kn {
   color: #81a1c1;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .kp {
+:root[data-theme='dark'] .chroma .kp {
   color: #81a1c1;
 }
 
-:root[data-theme="dark"] .chroma .kr {
+:root[data-theme='dark'] .chroma .kr {
   color: #81a1c1;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .kt {
+:root[data-theme='dark'] .chroma .kt {
   color: #81a1c1;
 }
 
-:root[data-theme="dark"] .chroma .na {
+:root[data-theme='dark'] .chroma .na {
   color: #8fbcbb;
 }
 
-:root[data-theme="dark"] .chroma .nb {
+:root[data-theme='dark'] .chroma .nb {
   color: #81a1c1;
 }
 
-:root[data-theme="dark"] .chroma .nc {
+:root[data-theme='dark'] .chroma .nc {
   color: #8fbcbb;
 }
 
-:root[data-theme="dark"] .chroma .no {
+:root[data-theme='dark'] .chroma .no {
   color: #8fbcbb;
 }
 
-:root[data-theme="dark"] .chroma .nd {
+:root[data-theme='dark'] .chroma .nd {
   color: #d08770;
 }
 
-:root[data-theme="dark"] .chroma .ni {
+:root[data-theme='dark'] .chroma .ni {
   color: #d08770;
 }
 
-:root[data-theme="dark"] .chroma .ne {
+:root[data-theme='dark'] .chroma .ne {
   color: #bf616a;
 }
 
-:root[data-theme="dark"] .chroma .nf {
+:root[data-theme='dark'] .chroma .nf {
   color: #88c0d0;
 }
 
-:root[data-theme="dark"] .chroma .nl {
+:root[data-theme='dark'] .chroma .nl {
   color: #8fbcbb;
 }
 
-:root[data-theme="dark"] .chroma .nn {
+:root[data-theme='dark'] .chroma .nn {
   color: #8fbcbb;
 }
 
-:root[data-theme="dark"] .chroma .nt {
+:root[data-theme='dark'] .chroma .nt {
   color: #81a1c1;
 }
 
-:root[data-theme="dark"] .chroma .s {
+:root[data-theme='dark'] .chroma .s {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .sa {
+:root[data-theme='dark'] .chroma .sa {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .sb {
+:root[data-theme='dark'] .chroma .sb {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .sc {
+:root[data-theme='dark'] .chroma .sc {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .dl {
+:root[data-theme='dark'] .chroma .dl {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .sd {
+:root[data-theme='dark'] .chroma .sd {
   color: #616e87;
 }
 
-:root[data-theme="dark"] .chroma .s2 {
+:root[data-theme='dark'] .chroma .s2 {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .se {
+:root[data-theme='dark'] .chroma .se {
   color: #ebcb8b;
 }
 
-:root[data-theme="dark"] .chroma .sh {
+:root[data-theme='dark'] .chroma .sh {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .si {
+:root[data-theme='dark'] .chroma .si {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .sx {
+:root[data-theme='dark'] .chroma .sx {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .sr {
+:root[data-theme='dark'] .chroma .sr {
   color: #ebcb8b;
 }
 
-:root[data-theme="dark"] .chroma .s1 {
+:root[data-theme='dark'] .chroma .s1 {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .ss {
+:root[data-theme='dark'] .chroma .ss {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .m {
+:root[data-theme='dark'] .chroma .m {
   color: #b48ead;
 }
 
-:root[data-theme="dark"] .chroma .mb {
+:root[data-theme='dark'] .chroma .mb {
   color: #b48ead;
 }
 
-:root[data-theme="dark"] .chroma .mf {
+:root[data-theme='dark'] .chroma .mf {
   color: #b48ead;
 }
 
-:root[data-theme="dark"] .chroma .mh {
+:root[data-theme='dark'] .chroma .mh {
   color: #b48ead;
 }
 
-:root[data-theme="dark"] .chroma .mi {
+:root[data-theme='dark'] .chroma .mi {
   color: #b48ead;
 }
 
-:root[data-theme="dark"] .chroma .il {
+:root[data-theme='dark'] .chroma .il {
   color: #b48ead;
 }
 
-:root[data-theme="dark"] .chroma .mo {
+:root[data-theme='dark'] .chroma .mo {
   color: #b48ead;
 }
 
-:root[data-theme="dark"] .chroma .o {
+:root[data-theme='dark'] .chroma .o {
   color: #81a1c1;
 }
 
-:root[data-theme="dark"] .chroma .ow {
+:root[data-theme='dark'] .chroma .ow {
   color: #81a1c1;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .p {
+:root[data-theme='dark'] .chroma .p {
   color: #eceff4;
 }
 
-:root[data-theme="dark"] .chroma .c {
+:root[data-theme='dark'] .chroma .c {
   color: #616e87;
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .ch {
+:root[data-theme='dark'] .chroma .ch {
   color: #616e87;
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .cm {
+:root[data-theme='dark'] .chroma .cm {
   color: #616e87;
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .c1 {
+:root[data-theme='dark'] .chroma .c1 {
   color: #616e87;
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .cs {
+:root[data-theme='dark'] .chroma .cs {
   color: #616e87;
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .cp {
+:root[data-theme='dark'] .chroma .cp {
   color: #5e81ac;
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .cpf {
+:root[data-theme='dark'] .chroma .cpf {
   color: #5e81ac;
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .gd {
+:root[data-theme='dark'] .chroma .gd {
   color: #bf616a;
 }
 
-:root[data-theme="dark"] .chroma .ge {
+:root[data-theme='dark'] .chroma .ge {
   font-style: italic;
 }
 
-:root[data-theme="dark"] .chroma .gr {
+:root[data-theme='dark'] .chroma .gr {
   color: #bf616a;
 }
 
-:root[data-theme="dark"] .chroma .gh {
+:root[data-theme='dark'] .chroma .gh {
   color: #88c0d0;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .gi {
+:root[data-theme='dark'] .chroma .gi {
   color: #a3be8c;
 }
 
-:root[data-theme="dark"] .chroma .gp {
+:root[data-theme='dark'] .chroma .gp {
   color: #4c566a;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .gs {
+:root[data-theme='dark'] .chroma .gs {
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .gu {
+:root[data-theme='dark'] .chroma .gu {
   color: #88c0d0;
   font-weight: bold;
 }
 
-:root[data-theme="dark"] .chroma .gt {
+:root[data-theme='dark'] .chroma .gt {
   color: #bf616a;
 }
 
@@ -4341,11 +4382,11 @@ code {
   margin: 0.75rem 0;
 }
 
-.note-body a[href^="/broken?"] {
+.note-body a[href^='/broken?'] {
   color: var(--bn-danger);
 }
 
-.note-body a[href^="/media/"] {
+.note-body a[href^='/media/'] {
   color: var(--bn-link);
 }
 
@@ -4362,11 +4403,11 @@ code {
 /* Read-only GFM task lists: drop the list marker for checkbox items and keep
    the disabled checkbox visibly non-interactive. No JavaScript makes these
    editable. */
-.note-body li:has(> input[type="checkbox"]) {
+.note-body li:has(> input[type='checkbox']) {
   list-style: none;
 }
 
-.note-body li > input[type="checkbox"] {
+.note-body li > input[type='checkbox'] {
   margin-right: 0.45rem;
   cursor: default;
 }
@@ -5026,14 +5067,14 @@ code {
 }
 
 .graph-open-note.is-disabled,
-.graph-open-note[aria-disabled="true"] {
+.graph-open-note[aria-disabled='true'] {
   color: var(--bn-faint);
   background: var(--bn-sunken);
   cursor: default;
   pointer-events: none;
 }
 
-.properties-panel[aria-busy="true"] {
+.properties-panel[aria-busy='true'] {
   border-color: var(--bn-border-strong);
 }
 
@@ -5247,7 +5288,10 @@ code {
   padding: 0.8rem;
   background: var(--bn-surface);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
 }
 
 .properties-item:hover {
@@ -6126,7 +6170,7 @@ code {
   font-weight: 600;
 }
 
-.synthesize-tab[aria-selected="true"] {
+.synthesize-tab[aria-selected='true'] {
   border-color: var(--bn-accent-subtle-border);
   color: var(--bn-accent-subtle-text);
   background: var(--bn-accent-subtle-bg);
