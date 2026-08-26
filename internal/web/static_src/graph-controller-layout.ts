@@ -25,12 +25,56 @@ export const updateSpreadLabel = (
   spreadValue.textContent = `${spread.toFixed(1)}x`;
 };
 
-export const layoutOptionsForSpread = (spread: number): cytoscape.CoseLayoutOptions => ({
+/**
+ * Whether `cytoscape.use(cytoscapeFcose)` has already run in this page. fcose
+ * registration is global to the Cytoscape factory, so this is module state
+ * rather than controller state.
+ */
+let fcoseRegistered = false;
+
+/**
+ * Registers the vendored fcose layout against the global Cytoscape factory.
+ *
+ * Deliberately defensive: the extension script tag can be missing (Session 7's
+ * QA pass removes it on purpose to confirm the cose fallback), and the jsdom
+ * test fake is a bare factory function with no `.use` property. Either case
+ * must no-op silently, leaving `hasFcose()` false, rather than throw.
+ *
+ * Idempotent — repeated calls after a successful registration do nothing.
+ */
+export const registerGraphLayouts = (): void => {
+  if (fcoseRegistered) {
+    return;
+  }
+  const extension = window.cytoscapeFcose;
+  if (!extension) {
+    return;
+  }
+  const factory = window.cytoscape as unknown as { use?: unknown } | undefined;
+  if (!factory || typeof factory.use !== "function") {
+    return;
+  }
+  (factory.use as (ext: unknown) => void)(extension);
+  fcoseRegistered = true;
+};
+
+/** Reports whether fcose registration succeeded, i.e. whether `name: "fcose"` is usable. */
+export const hasFcose = (): boolean => fcoseRegistered;
+
+/**
+ * The fallback layout, used whenever fcose is unavailable.
+ *
+ * `nodeDimensionsIncludeLabels` is set here too: cose supports it and merely
+ * defaults it off, so leaving it unset was what let the fallback pack circles
+ * and collide labels afterwards.
+ */
+export const coseLayoutOptionsForSpread = (spread: number): cytoscape.CoseLayoutOptions => ({
   name: "cose",
   animate: false,
   fit: false,
   randomize: false,
   padding: 72,
+  nodeDimensionsIncludeLabels: true,
   idealEdgeLength: Math.round(70 + 55 * spread),
   nodeRepulsion: Math.round(7000 * spread * spread),
   componentSpacing: Math.round(100 + 85 * spread),
@@ -41,6 +85,41 @@ export const layoutOptionsForSpread = (spread: number): cytoscape.CoseLayoutOpti
   coolingFactor: 0.95,
   minTemp: 1,
 });
+
+/**
+ * The fcose options, spread-scaled from the same formulas the cose fallback
+ * uses so the Spread slider keeps its feel across the whole 0.8-6.0 range.
+ *
+ * `randomize: false` leaves `seedDeterministicPositions` governing the starting
+ * arrangement, which is what keeps a layout run reproducible. fcose's own
+ * option names (`quality`, `packComponents`, `tile`, `nodeSeparation`) are not
+ * in `@types/cytoscape`, so the result goes out through the same
+ * `as unknown as` escape hatch `graph-controller-style.ts` uses for
+ * `StylesheetJson`.
+ */
+const fcoseLayoutOptionsForSpread = (spread: number): cytoscape.LayoutOptions =>
+  ({
+    name: "fcose",
+    quality: "proof",
+    animate: false,
+    fit: false,
+    randomize: false,
+    padding: 72,
+    nodeDimensionsIncludeLabels: true,
+    packComponents: true,
+    tile: true,
+    idealEdgeLength: Math.round(70 + 55 * spread),
+    nodeRepulsion: Math.round(7000 * spread * spread),
+    nodeSeparation: Math.round(75 + 45 * spread),
+    gravity: Math.max(0.05, 0.62 - 0.09 * spread),
+    numIter: Math.round(900 + 120 * spread),
+  }) as unknown as cytoscape.LayoutOptions;
+
+/** The layout the controller actually runs: fcose when registered, cose otherwise. */
+export const layoutOptionsForSpread = (spread: number): cytoscape.LayoutOptions =>
+  hasFcose()
+    ? fcoseLayoutOptionsForSpread(spread)
+    : (coseLayoutOptionsForSpread(spread) as unknown as cytoscape.LayoutOptions);
 
 export const seedDeterministicPositions = (cy: cytoscape.Core | null, spread: number): void => {
   if (!cy) {

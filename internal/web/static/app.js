@@ -4778,12 +4778,30 @@ var BrainNotesApp = (() => {
     const spread = readSpread(input);
     spreadValue.textContent = `${spread.toFixed(1)}x`;
   };
-  var layoutOptionsForSpread = (spread) => ({
+  var fcoseRegistered = false;
+  var registerGraphLayouts = () => {
+    if (fcoseRegistered) {
+      return;
+    }
+    const extension = window.cytoscapeFcose;
+    if (!extension) {
+      return;
+    }
+    const factory = window.cytoscape;
+    if (!factory || typeof factory.use !== "function") {
+      return;
+    }
+    factory.use(extension);
+    fcoseRegistered = true;
+  };
+  var hasFcose = () => fcoseRegistered;
+  var coseLayoutOptionsForSpread = (spread) => ({
     name: "cose",
     animate: false,
     fit: false,
     randomize: false,
     padding: 72,
+    nodeDimensionsIncludeLabels: true,
     idealEdgeLength: Math.round(70 + 55 * spread),
     nodeRepulsion: Math.round(7e3 * spread * spread),
     componentSpacing: Math.round(100 + 85 * spread),
@@ -4794,6 +4812,23 @@ var BrainNotesApp = (() => {
     coolingFactor: 0.95,
     minTemp: 1
   });
+  var fcoseLayoutOptionsForSpread = (spread) => ({
+    name: "fcose",
+    quality: "proof",
+    animate: false,
+    fit: false,
+    randomize: false,
+    padding: 72,
+    nodeDimensionsIncludeLabels: true,
+    packComponents: true,
+    tile: true,
+    idealEdgeLength: Math.round(70 + 55 * spread),
+    nodeRepulsion: Math.round(7e3 * spread * spread),
+    nodeSeparation: Math.round(75 + 45 * spread),
+    gravity: Math.max(0.05, 0.62 - 0.09 * spread),
+    numIter: Math.round(900 + 120 * spread)
+  });
+  var layoutOptionsForSpread = (spread) => hasFcose() ? fcoseLayoutOptionsForSpread(spread) : coseLayoutOptionsForSpread(spread);
   var seedDeterministicPositions = (cy, spread) => {
     if (!cy) {
       return;
@@ -5109,6 +5144,7 @@ var BrainNotesApp = (() => {
       if (state.cy) {
         return state.cy;
       }
+      registerGraphLayouts();
       const createCytoscape = window.cytoscape;
       state.cy = createCytoscape({
         container: canvas,
@@ -5268,7 +5304,9 @@ var BrainNotesApp = (() => {
           return;
         }
         finalized = true;
-        separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
+        if (!hasFcose()) {
+          separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
+        }
         if (fitAfterLayout) {
           fitCurrentGraph();
         } else if (preservedViewport) {

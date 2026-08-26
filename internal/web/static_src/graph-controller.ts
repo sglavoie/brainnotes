@@ -19,7 +19,9 @@ import {
   applyViewport,
   clampedSpread,
   currentViewport,
+  hasFcose,
   layoutOptionsForSpread,
+  registerGraphLayouts,
   seedDeterministicPositions,
   separateIsolatedNodes,
   updateSpreadLabel,
@@ -189,6 +191,7 @@ export const initGraph = (): void => {
     if (state.cy) {
       return state.cy;
     }
+    registerGraphLayouts();
     const createCytoscape = window.cytoscape as CytoscapeFactory;
     state.cy = createCytoscape({
       container: canvas,
@@ -374,7 +377,11 @@ export const initGraph = (): void => {
         return;
       }
       finalized = true;
-      separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
+      // fcose's `tile: true` already parks zero-degree nodes; running both
+      // fights the layout. The helper stays as the cose fallback path.
+      if (!hasFcose()) {
+        separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
+      }
       if (fitAfterLayout) {
         fitCurrentGraph();
       } else if (preservedViewport) {

@@ -283,13 +283,23 @@ func TestPropertiesWorkbenchCSSContract(t *testing.T) {
 	}
 }
 
+// readStaticCSS returns app.css with quoting normalized to double quotes.
+//
+// CSS treats '…' and "…" as the same token, so a contract that pins a selector
+// like [aria-expanded="false"] is asserting the selector, not the quote
+// character the stylesheet happens to use. The stylesheet's convention is
+// single quotes for attribute selectors and font names; normalizing here lets
+// every contract in these files spell its expectations with Go's plain
+// double-quoted strings without becoming a de facto formatting lock. Nothing
+// else is relaxed: a selector, declaration or media query that actually
+// disappears still fails its contract.
 func readStaticCSS(t *testing.T) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join("static", "app.css"))
 	if err != nil {
 		t.Fatalf("read static CSS: %v", err)
 	}
-	return string(body)
+	return strings.ReplaceAll(string(body), "'", `"`)
 }
 
 func cssBlockAfter(t *testing.T, css, marker string) string {

@@ -277,6 +277,32 @@ func TestServer_GraphPageIncludesAssets(t *testing.T) {
 	if !strings.Contains(body, `/static/app.js`) {
 		t.Fatalf("missing app.js asset tag, got %q", body)
 	}
+	for _, asset := range []string{
+		`/static/layout-base.min.js`,
+		`/static/cose-base.min.js`,
+		`/static/cytoscape-fcose.min.js`,
+	} {
+		if !strings.Contains(body, asset) {
+			t.Fatalf("missing %s asset tag, got %q", asset, body)
+		}
+	}
+	// The fcose bundle registers against the global cytoscape and is itself
+	// built on cose-base -> layout-base, so the tag order is load-bearing, not
+	// cosmetic. Pin the whole chain.
+	orderedAssets := []string{
+		`/static/cytoscape.min.js`,
+		`/static/layout-base.min.js`,
+		`/static/cose-base.min.js`,
+		`/static/cytoscape-fcose.min.js`,
+		`/static/app.js`,
+	}
+	for i := 1; i < len(orderedAssets); i++ {
+		before, after := orderedAssets[i-1], orderedAssets[i]
+		beforeAt, afterAt := strings.Index(body, before), strings.Index(body, after)
+		if beforeAt > afterAt {
+			t.Fatalf("graph asset load order: %s at %d must precede %s at %d", before, beforeAt, after, afterAt)
+		}
+	}
 	if !strings.Contains(body, `id="graph-canvas"`) {
 		t.Fatalf("missing graph canvas container, got %q", body)
 	}
