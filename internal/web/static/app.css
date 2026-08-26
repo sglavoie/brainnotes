@@ -60,6 +60,7 @@
   --bn-graph-selected-text: #7a5200;
   --bn-graph-broken: #b4233c;
   --bn-graph-orphan: #aebbd0;
+  --bn-header-control-height: 2.4rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -504,13 +505,16 @@ a:hover {
 
 .theme-control-legend {
   padding: 0;
-  margin-bottom: 0.3rem;
-  font-size: 0.8rem;
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  line-height: 1.3;
   color: var(--bn-muted);
 }
 
 .theme-control-options {
   display: inline-flex;
+  box-sizing: border-box;
+  min-height: var(--bn-header-control-height);
   border: 1px solid var(--bn-border);
   border-radius: 0.4rem;
   overflow: hidden;
@@ -535,9 +539,10 @@ a:hover {
 }
 
 .theme-control-option span {
-  display: inline-block;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  font-size: 0.9rem;
   color: var(--bn-text-subtle);
   cursor: pointer;
 }
@@ -607,13 +612,15 @@ a:hover {
   margin: 0 0 0.3rem;
   color: var(--bn-muted);
   font-size: 0.85rem;
+  line-height: 1.3;
 }
 
 .search-input {
   width: 100%;
+  min-height: var(--bn-header-control-height);
   border: 1px solid var(--bn-border);
   border-radius: 0.4rem;
-  padding: 0.55rem 0.7rem;
+  padding: 0.4rem 0.7rem;
   background: var(--bn-sunken);
   color: var(--bn-text);
   box-sizing: border-box;
@@ -933,6 +940,7 @@ a:focus-visible,
 .frontmatter-button:focus-visible,
 .create-note-button:focus-visible,
 .copy-button:focus-visible,
+.synthesize-launch:focus-visible,
 .brief-action-button:focus-visible,
 .brief-insight-prompt:focus-visible,
 .brief-insight-copy:focus-visible,
@@ -2987,6 +2995,7 @@ code {
 .frontmatter-button,
 .create-note-button,
 .copy-button,
+.synthesize-launch,
 .note-insight-button,
 .note-insight-copy {
   border: 1px solid var(--bn-border);
@@ -3002,8 +3011,15 @@ code {
 .note-actions .open-editor-button,
 .note-actions .trash-note-button,
 .note-actions .pin-button,
-.note-actions .copy-button {
+.note-actions .copy-button,
+.note-actions .synthesize-launch {
   order: 1;
+}
+
+.synthesize-launch {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .trash-note-button {
@@ -3019,6 +3035,7 @@ code {
 .frontmatter-button:hover,
 .create-note-button:hover,
 .copy-button:hover,
+.synthesize-launch:hover,
 .note-insight-button:hover,
 .note-insight-copy:hover {
   background: var(--bn-hover);
@@ -6659,7 +6676,8 @@ code {
   .trash-note-button,
   .frontmatter-button,
   .create-note-button,
-  .copy-button {
+  .copy-button,
+  .synthesize-launch {
     flex: 1 1 11rem;
   }
 
