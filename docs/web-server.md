@@ -213,7 +213,13 @@ filter under the page's own best-match ranking.
 
 The ordering runs on the server, before the response is trimmed, through the
 same `internal/query` ordering `bn find` uses — the CLI and the web cannot order
-a vault differently. A `sort` the server cannot execute, an anchor that does not
+a vault differently. That includes `relevance`, whose scores come from the
+recall corpus but whose ordering is `query.OrderNotesByRelevance`: the anchor
+sorts above everything, an unindexed note has no score and sorts last in both
+directions without being dropped, ties stay in ascending path order in both
+directions, and `-relevance` reverses the scores and nothing else. A view saving
+`sort = "-relevance"` with a `limit` therefore keeps the same top N here as at
+the terminal. A `sort` the server cannot execute, an anchor that does not
 resolve, or a non-integer or negative `limit` is a structured `400`, never a
 silently dropped ordering.
 

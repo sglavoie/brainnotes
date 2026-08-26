@@ -149,6 +149,68 @@ func OrderNotes(notes []*vault.Note, key string, descending bool, in OrderInput)
 	return nil, fmt.Errorf("%w %q", ErrUnsupportedOrder, key)
 }
 
+// OrderNotesByRelevance orders notes by a relevance score the caller computed,
+// most related first. The input slice is never mutated.
+//
+// Scoring stays out of this package — it reads the recall sidecar, which this
+// package deliberately does not — but *ordering* a set of scores does not, and
+// having it here is what stops `bn find --sort relevance` and `/api/search`
+// from owning two definitions of the same order. Both hand this function a
+// score per vault-relative path and the function that renders a note as that
+// path; everything below is then the vocabulary's ordinary ordering rules:
+//
+//   - Higher score sorts first, because relevance ascending means most related
+//     first, exactly as `bn related` prints it. `-relevance` flips that
+//     comparison and nothing else.
+//   - A note with no score sorts last in *both* directions, like an undated
+//     note under `--sort modified`. The anchor is not one of these: a caller
+//     scores it +Inf, so it leads under `relevance` and trails under
+//     `-relevance`. A note the recall corpus never indexed is one, and it keeps
+//     its place at the end rather than disappearing — ordering never changes
+//     which notes come back.
+//   - Notes that tie — equal scores, or two unscored notes — are ordered by
+//     path ascending in both directions, because the tie-break is a stability
+//     device rather than part of the requested ordering.
+//
+// pathOf may return "" for a note it cannot place; that note is unscored.
+func OrderNotesByRelevance(notes []*vault.Note, pathOf func(*vault.Note) string, scores map[string]float64, descending bool) []*vault.Note {
+	out := append([]*vault.Note(nil), notes...)
+	scoreOf := func(n *vault.Note) (float64, bool) {
+		if pathOf == nil {
+			return 0, false
+		}
+		path := pathOf(n)
+		if path == "" {
+			return 0, false
+		}
+		score, ok := scores[path]
+		return score, ok
+	}
+	values := make(map[*vault.Note]float64, len(out))
+	scored := make(map[*vault.Note]bool, len(out))
+	for _, n := range out {
+		if score, ok := scoreOf(n); ok {
+			values[n] = score
+			scored[n] = true
+		}
+	}
+	applyNoteOrder(out, noteOrder{
+		missing: func(n *vault.Note) bool { return !scored[n] },
+		compare: func(a, b *vault.Note) int {
+			switch {
+			// Reversed against the other keys on purpose: ascending
+			// relevance is descending score.
+			case values[a] > values[b]:
+				return -1
+			case values[a] < values[b]:
+				return 1
+			}
+			return 0
+		},
+	}, descending)
+	return out
+}
+
 // noteOrder is one ordering rule: which notes have no value for the key, and
 // how two notes that do have one compare ascending.
 type noteOrder struct {

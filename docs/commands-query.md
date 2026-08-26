@@ -177,7 +177,24 @@ rather than a silently ignored flag. Ranking uses the same text, graph,
 metadata, and recall signals as `bn related`, but selection stays
 authoritative: the anchor's own recall feedback reorders the matches and never
 removes one, so a dismissed or snoozed note that the query matched is still
-printed. When the query matched the anchor itself, it is printed first.
+printed.
+
+`relevance` is most related first, and `-relevance` reverses the *scores* and
+nothing else — it is the same rule the other keys follow. Concretely:
+
+- The anchor scores above everything, being the thing the rest are measured
+  against, so an anchor the query matched leads `relevance` and trails
+  `-relevance`.
+- A note the recall corpus does not index has no score and sorts last in both
+  directions, exactly like an undated note under `--sort modified`. It is never
+  dropped: ordering does not change which notes match.
+- Notes that tie — equal scores, or two unscored notes — stay in ascending path
+  order in both directions, because the tie-break is a stability device rather
+  than part of the requested ordering.
+
+The web `/api/search` executes this definition through the same function, so a
+saved view carrying `sort = "-relevance"` and a `limit` keeps the same top N in
+`bn find --view` and in the browser.
 
 `bn find` only ever reads recall state. It records no open history and creates
 no `.bnotes/recall.json`; writes remain limited to `bn related -i`,

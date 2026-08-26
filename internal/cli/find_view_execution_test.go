@@ -99,6 +99,99 @@ limit = 2
 	}
 }
 
+// buildRelevanceTieVault writes a vault in which two notes are exactly equally
+// related to the anchor.
+//
+// Mike and November carry the same body and the same frontmatter and differ
+// only by name, so nothing the ranker reads — text, metadata, graph, recency —
+// separates them: they tie, and only the path tie-break orders them. Delta is
+// linked from the anchor and so outranks both, which is what puts the tied pair
+// at the *bottom* of a `relevance` ordering and therefore at the top of a
+// `-relevance` one, where a limit can see them.
+func buildRelevanceTieVault(t *testing.T, views string) string {
+	t.Helper()
+	root := t.TempDir()
+
+	files := map[string]string{
+		"Notes/Alpha.md":    "---\nstatus: wip\n---\nAlpha body links to [[Delta]].\n",
+		"Notes/Delta.md":    "---\nstatus: wip\n---\nDelta body.\n",
+		"Notes/Mike.md":     "---\nstatus: wip\n---\nTie body.\n",
+		"Notes/November.md": "---\nstatus: wip\n---\nTie body.\n",
+	}
+	for rel, body := range files {
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	markVaultRoot(t, root, viewExecutionProperties+views)
+	return root
+}
+
+// TestFindViewHonorsDescendingRelevanceAndLimit pins the CLI half of the shared
+// definition of descending relevance, and is the regression for a saved view
+// selecting a different top N at the terminal than in the browser.
+//
+// `-relevance` reverses the score comparison and nothing else: equal-score notes
+// stay in ascending path order in both directions, because the path tie-break is
+// a stability device rather than part of the requested ordering. Reversing the
+// whole ordered slice instead — which is what `bn find` used to do — flips the
+// tied pair, so a view carrying `limit = 2` returned November before Mike here
+// while `/api/search` returned Mike before November from the same stored view.
+//
+// internal/web's TestSearchAppliesSavedViewDescendingRelevanceAndLimit asserts
+// the same paths for the same vault; the two together are the parity claim.
+func TestFindViewHonorsDescendingRelevanceAndLimit(t *testing.T) {
+	root := buildRelevanceTieVault(t, `
+[[views]]
+name = "Least related"
+query = "status:wip"
+sort = "-relevance"
+relative_to = "Alpha"
+limit = 2
+
+[[views]]
+name = "Least related uncapped"
+query = "status:wip"
+sort = "-relevance"
+relative_to = "Alpha"
+
+[[views]]
+name = "Most related"
+query = "status:wip"
+sort = "relevance"
+relative_to = "Alpha"
+`)
+	pinFindClock(t)
+
+	// Most related first: the anchor leads the ordering it is the measure of,
+	// its linked note follows, and the tied pair trails in path order.
+	got := runFindOrdered(t, root, "find", "--view", "Most related")
+	want := []string{"Notes/Alpha.md", "Notes/Delta.md", "Notes/Mike.md", "Notes/November.md"}
+	if !equalStrings(got, want) {
+		t.Fatalf("find --view 'Most related':\n got=%v\nwant=%v", got, want)
+	}
+
+	// Least related first: scores reverse, the tie does not. A whole-slice
+	// reversal would answer November, Mike, Delta, Alpha.
+	got = runFindOrdered(t, root, "find", "--view", "Least related uncapped")
+	want = []string{"Notes/Mike.md", "Notes/November.md", "Notes/Delta.md", "Notes/Alpha.md"}
+	if !equalStrings(got, want) {
+		t.Fatalf("find --view 'Least related uncapped':\n got=%v\nwant=%v", got, want)
+	}
+
+	// The cap is what makes the tie orientation observable as *which* notes come
+	// back rather than only their order.
+	got = runFindOrdered(t, root, "find", "--view", "Least related")
+	want = []string{"Notes/Mike.md", "Notes/November.md"}
+	if !equalStrings(got, want) {
+		t.Fatalf("find --view 'Least related':\n got=%v\nwant=%v", got, want)
+	}
+}
+
 // TestFindViewSortLosesToExplicitFlags pins the precedence rule: --sort and
 // --relative-to on the command line replace a view's ordering wholesale. The cap
 // is not a flag, so it survives an ordering override — overriding how results

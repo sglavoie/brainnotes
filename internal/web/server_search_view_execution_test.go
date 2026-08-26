@@ -133,6 +133,85 @@ func TestSearchAppliesSavedViewRelevanceSortAndLimit(t *testing.T) {
 	}
 }
 
+// relevanceTieFixture is internal/cli's buildRelevanceTieVault, note for note.
+//
+// Mike and November carry the same body and the same frontmatter and differ only
+// by name, so nothing the ranker reads separates them: they tie, and only the
+// path tie-break orders them. Delta is linked from the anchor and outranks both,
+// which puts the tied pair at the bottom of a `relevance` ordering and at the
+// top of a `-relevance` one, where a limit can see them.
+func relevanceTieFixture() map[string][]byte {
+	return map[string][]byte{
+		"Notes/Alpha.md":    []byte("---\nstatus: wip\n---\nAlpha body links to [[Delta]].\n"),
+		"Notes/Delta.md":    []byte("---\nstatus: wip\n---\nDelta body.\n"),
+		"Notes/Mike.md":     []byte("---\nstatus: wip\n---\nTie body.\n"),
+		"Notes/November.md": []byte("---\nstatus: wip\n---\nTie body.\n"),
+	}
+}
+
+// searchVaultPaths renders results as the vault-relative paths `bn find` prints,
+// so a web ordering and a CLI ordering can be compared as the same list of
+// strings. searchResult.Path is a route rather than a path, and a route is
+// lowercased, so it cannot serve as that common spelling itself.
+func searchVaultPaths(results []searchResult) []string {
+	paths := make([]string, 0, len(results))
+	for _, result := range results {
+		rel := result.Title + ".md"
+		if result.Folder != "" {
+			rel = result.Folder + "/" + rel
+		}
+		paths = append(paths, rel)
+	}
+	return paths
+}
+
+// TestSearchAppliesSavedViewDescendingRelevanceAndLimit is the web half of the
+// one definition of descending relevance, and the regression for a saved view
+// selecting a different top N in the browser than at the terminal.
+//
+// `-relevance` reverses the score comparison and nothing else: equal-score notes
+// stay in ascending path order in both directions. The paths asserted here are
+// the paths internal/cli's TestFindViewHonorsDescendingRelevanceAndLimit asserts
+// for the same vault, the same anchor, and the same cap — the two together are
+// the parity claim, so neither may be updated alone.
+func TestSearchAppliesSavedViewDescendingRelevanceAndLimit(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, relevanceTieFixture())
+
+	ascending := url.Values{"status": {"wip"}, "sort": {"relevance"}, "relative_to": {"notes/alpha"}}
+	results, _, status := fetchSearchJSON(t, searchQueryURL(ts.URL, ascending))
+	if status != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", status, http.StatusOK)
+	}
+	want := []string{"Notes/Alpha.md", "Notes/Delta.md", "Notes/Mike.md", "Notes/November.md"}
+	if !sameStrings(searchVaultPaths(results), want) {
+		t.Fatalf("relevance ordering: got %v, want %v", searchVaultPaths(results), want)
+	}
+
+	// Scores reverse, the tie does not. Reversing the whole ordered slice would
+	// answer November before Mike.
+	descending := url.Values{"status": {"wip"}, "sort": {"-relevance"}, "relative_to": {"notes/alpha"}}
+	results, _, status = fetchSearchJSON(t, searchQueryURL(ts.URL, descending))
+	if status != http.StatusOK {
+		t.Fatalf("descending status: got %d, want %d", status, http.StatusOK)
+	}
+	want = []string{"Notes/Mike.md", "Notes/November.md", "Notes/Delta.md", "Notes/Alpha.md"}
+	if !sameStrings(searchVaultPaths(results), want) {
+		t.Fatalf("-relevance ordering: got %v, want %v", searchVaultPaths(results), want)
+	}
+
+	// The cap is what makes the tie orientation observable as *which* notes come
+	// back rather than only their order.
+	descending.Set("limit", "2")
+	capped, _, status := fetchSearchJSON(t, searchQueryURL(ts.URL, descending))
+	if status != http.StatusOK {
+		t.Fatalf("capped status: got %d, want %d", status, http.StatusOK)
+	}
+	want = []string{"Notes/Mike.md", "Notes/November.md"}
+	if !sameStrings(searchVaultPaths(capped), want) {
+		t.Fatalf("capped -relevance ordering: got %v, want %v", searchVaultPaths(capped), want)
+	}
+}
+
 // TestSearchRejectsAnUnrunnableResultShape pins that an ordering the server
 // cannot execute is a rejected request rather than an ordering silently dropped
 // — the same rule queryexpr.ResolveView applies to a stored view and

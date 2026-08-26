@@ -2,7 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"sort"
+	"math"
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
@@ -49,7 +49,7 @@ func sortFindResults(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 // sortByRelevance orders the matched notes by how related they are to
 // spec.RelativeTo, most relevant first.
 //
-// Two things here are load-bearing.
+// Three things here are load-bearing.
 //
 // It ranks with Ranker.RankSelected, never Rank. Selection is authoritative:
 // the notes were chosen by the query, so mode eligibility and recall
@@ -58,12 +58,15 @@ func sortFindResults(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 // come back rather than only their order.
 //
 // The anchor is removed from the candidate set before ranking — RankSelected
-// rejects a candidate that repeats the source — and re-inserted at position 0
-// when the query matched it, so an anchor that satisfies the filter is still
-// reported, and is reported first.
+// rejects a candidate that repeats the source — and scored +Inf instead, so an
+// anchor the query matched is still reported, and leads the `relevance`
+// ordering it is the measure of.
 //
-// The ordering is by rank, so ascending is most-relevant-first: position 1 is
-// the closest note, exactly as in `bn related`. `--sort -relevance` reverses it.
+// The ordering itself is query.OrderNotesByRelevance, which the web search path
+// calls with the same shape of score map. That is the only definition of what
+// `relevance` and `-relevance` mean, tie-break and unscored notes included, so
+// a saved view carrying a direction and a limit cannot select a different top N
+// here than it does in the browser.
 func sortByRelevance(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, error) {
 	anchorNote, err := resolveNoteTarget(in.vault, spec.RelativeTo)
 	if err != nil {
@@ -83,22 +86,27 @@ func sortByRelevance(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 		return nil, err
 	}
 
-	notesByPath := make(map[string]*vault.Note, len(in.matched))
+	indexed := make(map[string]bool, len(corpus.documents))
+	for _, document := range corpus.documents {
+		indexed[document.Path] = true
+	}
+
+	pathByNote := make(map[*vault.Note]string, len(in.matched))
 	candidates := make([]string, 0, len(in.matched))
-	var anchorMatched *vault.Note
+	seen := make(map[string]bool, len(in.matched))
 	for _, n := range in.matched {
 		relPath, ok := recallPath(in.vault.Root, n.Path)
 		if !ok {
 			return nil, fmt.Errorf("find: note %q is outside the vault", n.Path)
 		}
-		if relPath == anchorPath {
-			anchorMatched = n
+		pathByNote[n] = relPath
+		// The anchor is ranked against, not ranked; a note the corpus never
+		// indexed cannot be ranked at all and stays unscored rather than
+		// turning the whole ordering into an error.
+		if relPath == anchorPath || seen[relPath] || !indexed[relPath] {
 			continue
 		}
-		if _, seen := notesByPath[relPath]; seen {
-			continue
-		}
-		notesByPath[relPath] = n
+		seen[relPath] = true
 		candidates = append(candidates, relPath)
 	}
 
@@ -106,31 +114,15 @@ func sortByRelevance(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 	if err != nil {
 		return nil, err
 	}
-	// RankSelected returns results in the caller's order, which is path order.
-	// Ordering by score here mirrors what Rank does, tie-break included, so the
-	// two commands agree on what "more relevant" means.
-	sort.SliceStable(results, func(i, j int) bool {
-		if results[i].Score != results[j].Score {
-			return results[i].Score > results[j].Score
-		}
-		return results[i].Path < results[j].Path
-	})
-
-	ordered := make([]*vault.Note, 0, len(in.matched))
-	if anchorMatched != nil {
-		ordered = append(ordered, anchorMatched)
-	}
+	scores := make(map[string]float64, len(results)+1)
+	scores[anchorPath] = math.Inf(1)
 	for _, result := range results {
-		if n, ok := notesByPath[result.Path]; ok {
-			ordered = append(ordered, n)
-		}
+		scores[result.Path] = result.Score
 	}
-	if spec.Descending {
-		for i, j := 0, len(ordered)-1; i < j; i, j = i+1, j-1 {
-			ordered[i], ordered[j] = ordered[j], ordered[i]
-		}
-	}
-	return ordered, nil
+
+	return query.OrderNotesByRelevance(in.matched, func(n *vault.Note) string {
+		return pathByNote[n]
+	}, scores, spec.Descending), nil
 }
 
 // validateFindSort turns the --sort and --relative-to values into a SortSpec.

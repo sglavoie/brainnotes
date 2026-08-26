@@ -12,6 +12,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -143,11 +144,11 @@ func orderSearchCandidates(candidates []searchCandidate, shape resultShape, in q
 // orderNotesByRelevance ranks notes against the anchor rank was built for, most
 // related first.
 //
-// It mirrors `bn find --sort relevance`: the ranking is by score with a path
-// tie-break, and a note the ranker returned no score for — the anchor is handled
-// by the ranker itself, and a note the corpus does not index has none — keeps
-// its place at the end instead of disappearing. Selection is authoritative:
-// ordering must never change *which* notes come back.
+// It does not define that order: query.OrderNotesByRelevance does, and
+// `bn find --sort relevance` calls the same function with the same shape of
+// score map. This half only turns notes into the vault-relative paths the
+// ranker scores by. Selection stays authoritative — a note the corpus does not
+// index goes unscored and keeps its place at the end rather than disappearing.
 func orderNotesByRelevance(notes []*vault.Note, root string, descending bool, rank searchRelevanceFunc) ([]*vault.Note, error) {
 	if rank == nil {
 		return nil, fmt.Errorf("sort %q: no relevance ranker for this request", queryexpr.SortRelevance)
@@ -157,7 +158,7 @@ func orderNotesByRelevance(notes []*vault.Note, root string, descending bool, ra
 	candidates := make([]string, 0, len(notes))
 	seen := make(map[string]bool, len(notes))
 	for _, note := range notes {
-		relPath := noteVaultPath(root, note)
+		relPath := relevancePath(root, note)
 		if relPath == "" {
 			continue
 		}
@@ -174,22 +175,20 @@ func orderNotesByRelevance(notes []*vault.Note, root string, descending bool, ra
 		return nil, err
 	}
 
-	ordered := append([]*vault.Note(nil), notes...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		left, leftOK := scores[paths[ordered[i]]]
-		right, rightOK := scores[paths[ordered[j]]]
-		if leftOK != rightOK {
-			return leftOK
-		}
-		if leftOK && left != right {
-			if descending {
-				return left < right
-			}
-			return left > right
-		}
-		return ordered[i].Path < ordered[j].Path
-	})
-	return ordered, nil
+	return query.OrderNotesByRelevance(notes, func(note *vault.Note) string {
+		return paths[note]
+	}, scores, descending), nil
+}
+
+// relevancePath renders a note as the key the recall corpus indexes it under.
+//
+// It is noteVaultPath plus the NFC normalization recall.Document applies, which
+// is the same three steps `bn find`'s recallPath takes. Skipping the
+// normalization here would make a decomposed filename unscored in the browser
+// and scored at the terminal — the one place the two surfaces could still
+// disagree about which notes a relevance ordering ranks.
+func relevancePath(root string, note *vault.Note) string {
+	return textnorm.NFC(noteVaultPath(root, note))
 }
 
 // searchRelevanceRanker resolves the anchor a relevance ordering names and
@@ -209,7 +208,7 @@ func (s *Server) searchRelevanceRanker(snapshot vaultSnapshot, anchor string) (s
 	if !ok {
 		return nil, fmt.Errorf("relative_to: no note matches %q", anchor)
 	}
-	anchorPath := noteVaultPath(s.vault.Root, anchorNote)
+	anchorPath := relevancePath(s.vault.Root, anchorNote)
 	if anchorPath == "" {
 		return nil, fmt.Errorf("relative_to: note %q is outside the vault", anchor)
 	}
