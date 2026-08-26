@@ -4162,7 +4162,7 @@ var BrainNotesApp = (() => {
         "text-outline-width": 1,
         "text-outline-color": palette.labelOutline,
         "text-background-color": palette.labelBackground,
-        "text-background-opacity": 0.78,
+        "text-background-opacity": 0.92,
         "text-background-padding": 2,
         "text-background-shape": "roundrectangle",
         width: "data(size)",
@@ -4694,6 +4694,96 @@ var BrainNotesApp = (() => {
       labelIDs.add(node.id());
     }
   };
+  var labelBoxGeometry = {
+    fontSizePX: 10,
+    maxWidthPX: 130,
+    marginYPX: 6,
+    backgroundPaddingPX: 2,
+    lineHeightRatio: 1.3,
+    averageCharWidthRatio: 0.58
+  };
+  var estimateLabelBox = (center, renderedNodeWidth, title, zoom) => {
+    if (!Number.isFinite(center.x) || !Number.isFinite(center.y)) {
+      return null;
+    }
+    const scale = Math.max(Number.isFinite(zoom) ? zoom : 1, 0.01);
+    const nodeWidth = Number.isFinite(renderedNodeWidth) ? Math.max(renderedNodeWidth, 0) : 0;
+    const charWidthPX = labelBoxGeometry.fontSizePX * labelBoxGeometry.averageCharWidthRatio;
+    const textWidthPX = Math.max(title.length, 1) * charWidthPX;
+    const wrappedWidthPX = Math.min(textWidthPX, labelBoxGeometry.maxWidthPX);
+    const lineCount = Math.max(1, Math.ceil(textWidthPX / labelBoxGeometry.maxWidthPX));
+    const lineHeightPX = labelBoxGeometry.fontSizePX * labelBoxGeometry.lineHeightRatio;
+    const width = (wrappedWidthPX + labelBoxGeometry.backgroundPaddingPX * 2) * scale;
+    const height = (lineCount * lineHeightPX + labelBoxGeometry.backgroundPaddingPX * 2) * scale;
+    const top = center.y + nodeWidth / 2 + labelBoxGeometry.marginYPX * scale;
+    return {
+      x1: center.x - width / 2,
+      x2: center.x + width / 2,
+      y1: top,
+      y2: top + height
+    };
+  };
+  var labelBoxesIntersect = (left, right) => left.x1 < right.x2 && right.x1 < left.x2 && left.y1 < right.y2 && right.y1 < left.y2;
+  var labelBoxForNode = (node, zoom) => {
+    const position = node.renderedPosition();
+    if (!position) {
+      return null;
+    }
+    const title = String(node.data("title") ?? "");
+    return estimateLabelBox(
+      { x: Number(position.x), y: Number(position.y) },
+      Number(node.renderedWidth()),
+      title,
+      zoom
+    );
+  };
+  var cullCollidingLabels = (cy, candidateIDs, pinnedIDs) => {
+    const keptIDs = /* @__PURE__ */ new Set();
+    if (!cy) {
+      return keptIDs;
+    }
+    const zoom = cy.zoom();
+    const acceptedBoxes = [];
+    const accept = (node) => {
+      keptIDs.add(node.id());
+      const box = labelBoxForNode(node, zoom);
+      if (box) {
+        acceptedBoxes.push(box);
+      }
+    };
+    for (const id of pinnedIDs) {
+      if (!candidateIDs.has(id)) {
+        continue;
+      }
+      const node = cyNodeByID(cy, id);
+      if (node) {
+        accept(node);
+      }
+    }
+    const remaining = [];
+    for (const id of candidateIDs) {
+      if (keptIDs.has(id)) {
+        continue;
+      }
+      const node = cyNodeByID(cy, id);
+      if (node) {
+        remaining.push(node);
+      }
+    }
+    for (const node of sortedNodesByImportance(remaining)) {
+      const box = labelBoxForNode(node, zoom);
+      if (!box) {
+        keptIDs.add(node.id());
+        continue;
+      }
+      if (acceptedBoxes.some((accepted) => labelBoxesIntersect(accepted, box))) {
+        continue;
+      }
+      acceptedBoxes.push(box);
+      keptIDs.add(node.id());
+    }
+    return keptIDs;
+  };
   var labelIDsForCurrentState = (cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs = /* @__PURE__ */ new Set()) => {
     const labelIDs = /* @__PURE__ */ new Set();
     if (!cy) {
@@ -4773,6 +4863,14 @@ var BrainNotesApp = (() => {
     }
     const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs);
     const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID, matchIDs);
+    const pinnedLabelIDs = /* @__PURE__ */ new Set();
+    if (focus.selectedID) {
+      pinnedLabelIDs.add(focus.selectedID);
+    }
+    if (focus.hoveredID) {
+      pinnedLabelIDs.add(focus.hoveredID);
+    }
+    const visibleLabelIDs = labelMode === "all" ? labelIDs : cullCollidingLabels(cy, labelIDs, pinnedLabelIDs);
     const hasFocusSource = focus.focusNodeID !== "" || focus.matchIDs.size > 0;
     cy.batch(() => {
       cy.nodes().forEach((node) => {
@@ -4784,7 +4882,7 @@ var BrainNotesApp = (() => {
         const isMatchNeighbor = focus.matchNeighborIDs.has(id);
         const isFocusedNode = focus.focusNodeID !== "" && id === focus.focusNodeID;
         const isDimmed = hasFocusSource && !isFocusedNode && !isHovered && !isNeighbor && !isMatch && !isMatchNeighbor;
-        node.toggleClass("is-labeled", labelIDs.has(id));
+        node.toggleClass("is-labeled", visibleLabelIDs.has(id));
         node.toggleClass("is-selected", isSelected);
         node.toggleClass("is-hovered", isHovered);
         node.toggleClass("is-neighbor", isNeighbor);

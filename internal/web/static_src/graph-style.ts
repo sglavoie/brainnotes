@@ -94,7 +94,7 @@ export const buildGraphStyleRules = (
       "text-outline-width": 1,
       "text-outline-color": palette.labelOutline,
       "text-background-color": palette.labelBackground,
-      "text-background-opacity": 0.78,
+      "text-background-opacity": 0.92,
       "text-background-padding": 2,
       "text-background-shape": "roundrectangle",
       width: "data(size)",

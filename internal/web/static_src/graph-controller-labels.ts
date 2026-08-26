@@ -123,6 +123,132 @@ export const addZoomLabels = (cy: cytoscape.Core | null, labelIDs: Set<string>):
   }
 };
 
+// The label-box estimate is derived from the base `node` style rule in
+// graph-style.ts: a 10px font, wrapped at `text-max-width: 130`, drawn below
+// the node (`text-valign: bottom`) offset by `text-margin-y: 6`, with 2px of
+// text background padding around it.
+export const labelBoxGeometry = {
+  fontSizePX: 10,
+  maxWidthPX: 130,
+  marginYPX: 6,
+  backgroundPaddingPX: 2,
+  lineHeightRatio: 1.3,
+  averageCharWidthRatio: 0.58,
+};
+
+export type LabelBox = { x1: number; y1: number; x2: number; y2: number };
+
+// Estimates the screen-space box a node's wrapped label occupies. Pure
+// geometry: it takes the numbers a renderer would hand it, so it is testable
+// without one.
+export const estimateLabelBox = (
+  center: { x: number; y: number },
+  renderedNodeWidth: number,
+  title: string,
+  zoom: number
+): LabelBox | null => {
+  if (!Number.isFinite(center.x) || !Number.isFinite(center.y)) {
+    return null;
+  }
+  const scale = Math.max(Number.isFinite(zoom) ? zoom : 1, 0.01);
+  const nodeWidth = Number.isFinite(renderedNodeWidth) ? Math.max(renderedNodeWidth, 0) : 0;
+  const charWidthPX = labelBoxGeometry.fontSizePX * labelBoxGeometry.averageCharWidthRatio;
+  const textWidthPX = Math.max(title.length, 1) * charWidthPX;
+  const wrappedWidthPX = Math.min(textWidthPX, labelBoxGeometry.maxWidthPX);
+  const lineCount = Math.max(1, Math.ceil(textWidthPX / labelBoxGeometry.maxWidthPX));
+  const lineHeightPX = labelBoxGeometry.fontSizePX * labelBoxGeometry.lineHeightRatio;
+  const width = (wrappedWidthPX + labelBoxGeometry.backgroundPaddingPX * 2) * scale;
+  const height = (lineCount * lineHeightPX + labelBoxGeometry.backgroundPaddingPX * 2) * scale;
+  const top = center.y + nodeWidth / 2 + labelBoxGeometry.marginYPX * scale;
+  return {
+    x1: center.x - width / 2,
+    x2: center.x + width / 2,
+    y1: top,
+    y2: top + height,
+  };
+};
+
+export const labelBoxesIntersect = (left: LabelBox, right: LabelBox): boolean =>
+  left.x1 < right.x2 && right.x1 < left.x2 && left.y1 < right.y2 && right.y1 < left.y2;
+
+const labelBoxForNode = (node: cytoscape.NodeSingular, zoom: number): LabelBox | null => {
+  const position = node.renderedPosition();
+  if (!position) {
+    return null;
+  }
+  const title = String(node.data("title") ?? "");
+  return estimateLabelBox(
+    { x: Number(position.x), y: Number(position.y) },
+    Number(node.renderedWidth()),
+    title,
+    zoom
+  );
+};
+
+// Drops labels whose estimated rendered boxes overlap, so a dense cluster stops
+// stacking text on top of itself. Pinned ids (the explicit selection and hover
+// focus) are seeded first and are never dropped; everything else is walked in
+// `sortedNodesByImportance` order, so the highest-degree label wins a collision
+// and equal-degree ties break deterministically by id.
+export const cullCollidingLabels = (
+  cy: cytoscape.Core | null,
+  candidateIDs: ReadonlySet<string>,
+  pinnedIDs: ReadonlySet<string>
+): Set<string> => {
+  const keptIDs = new Set<string>();
+  if (!cy) {
+    return keptIDs;
+  }
+  const zoom = cy.zoom();
+  const acceptedBoxes: LabelBox[] = [];
+
+  const accept = (node: cytoscape.NodeSingular): void => {
+    keptIDs.add(node.id());
+    const box = labelBoxForNode(node, zoom);
+    if (box) {
+      acceptedBoxes.push(box);
+    }
+  };
+
+  for (const id of pinnedIDs) {
+    if (!candidateIDs.has(id)) {
+      continue;
+    }
+    const node = cyNodeByID(cy, id);
+    if (node) {
+      accept(node);
+    }
+  }
+
+  const remaining: cytoscape.NodeSingular[] = [];
+  for (const id of candidateIDs) {
+    if (keptIDs.has(id)) {
+      continue;
+    }
+    const node = cyNodeByID(cy, id);
+    if (node) {
+      remaining.push(node);
+    }
+  }
+
+  for (const node of sortedNodesByImportance(remaining)) {
+    const box = labelBoxForNode(node, zoom);
+    if (!box) {
+      // No usable geometry to judge against — keep the label rather than
+      // silently hiding it.
+      keptIDs.add(node.id());
+      continue;
+    }
+    if (acceptedBoxes.some((accepted) => labelBoxesIntersect(accepted, box))) {
+      continue;
+    }
+    acceptedBoxes.push(box);
+    keptIDs.add(node.id());
+  }
+
+  return keptIDs;
+};
+
 export const labelIDsForCurrentState = (
   cy: cytoscape.Core | null,
   labelMode: GraphLabelMode,
@@ -240,6 +366,17 @@ export const applyGraphVisualClasses = (
   }
   const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs);
   const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID, matchIDs);
+  // "all" is the explicit show-me-everything-overlap-included escape hatch, so
+  // it bypasses the collision cull entirely.
+  const pinnedLabelIDs = new Set<string>();
+  if (focus.selectedID) {
+    pinnedLabelIDs.add(focus.selectedID);
+  }
+  if (focus.hoveredID) {
+    pinnedLabelIDs.add(focus.hoveredID);
+  }
+  const visibleLabelIDs =
+    labelMode === "all" ? labelIDs : cullCollidingLabels(cy, labelIDs, pinnedLabelIDs);
   // Click/hover focus and search focus simply union: clicking a node while a
   // search is active keeps both bright.
   const hasFocusSource = focus.focusNodeID !== "" || focus.matchIDs.size > 0;
@@ -259,7 +396,7 @@ export const applyGraphVisualClasses = (
         !isNeighbor &&
         !isMatch &&
         !isMatchNeighbor;
-      node.toggleClass("is-labeled", labelIDs.has(id));
+      node.toggleClass("is-labeled", visibleLabelIDs.has(id));
       node.toggleClass("is-selected", isSelected);
       node.toggleClass("is-hovered", isHovered);
       node.toggleClass("is-neighbor", isNeighbor);
