@@ -37,6 +37,11 @@ export type SharedFilterParamKey = (typeof sharedFilterParamKeys)[number];
 /**
  * Parameters that shape a query without being facet chips.
  *
+ * `limit` is one of them: a saved view persists a cap, and a link that dropped
+ * it would open the view showing more rows than the view was saved as. It rides
+ * along here rather than in the chip vocabulary for the same reason `sort` does
+ * — it shapes a result set without selecting one.
+ *
  * They are deliberately **not** in `sharedFilterParamKeys`: that tuple is the
  * chip vocabulary, and `facets.ts` deletes every key in it before writing the
  * current chips back to the URL — an entry here would be erased by the next
@@ -44,7 +49,7 @@ export type SharedFilterParamKey = (typeof sharedFilterParamKeys)[number];
  * URL, and `updateBrowserQuery` preserves them, so a Library or Graph link
  * stays shareable with its expression and ordering intact.
  */
-export const queryShapeParamKeys = ["expr", "sort", "relative_to"] as const;
+export const queryShapeParamKeys = ["expr", "sort", "relative_to", "limit"] as const;
 
 export type QueryShapeParamKey = (typeof queryShapeParamKeys)[number];
 
@@ -120,9 +125,9 @@ export const syncExprParam = (expr: unknown): boolean =>
 /**
  * Reports whether anything other than the free-text query narrows the results.
  *
- * `sort` and `relative_to` are excluded on purpose: they order a result set,
- * they do not select one, so an ordering alone must not make an empty search
- * box fetch the whole vault. `expr` is included because the server treats it as
+ * `sort`, `relative_to`, and `limit` are excluded on purpose: they order and
+ * cap a result set, they do not select one, so an ordering or a cap alone must
+ * not make an empty search box fetch the whole vault. `expr` is included because the server treats it as
  * a structural filter exactly like a chip.
  */
 export const hasActiveFilters = (params?: URLSearchParams): boolean => {

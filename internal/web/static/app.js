@@ -19,7 +19,7 @@ var BrainNotesApp = (() => {
     "min_links",
     "max_links"
   ];
-  var queryShapeParamKeys = ["expr", "sort", "relative_to"];
+  var queryShapeParamKeys = ["expr", "sort", "relative_to", "limit"];
   var queryExprParam = "expr";
   var repeatedFilterParams = /* @__PURE__ */ new Set(["tag", "category"]);
   var normalizeParamValue = (value) => String(value || "").trim();
@@ -11362,12 +11362,20 @@ var BrainNotesApp = (() => {
     const normalized = normalizeParamValue(pathname).replace(/\/+$/, "");
     return savedViewsQueryPages.find((page) => page === normalized) || "/library";
   };
+  var savedViewLimitParam = (limit) => {
+    const value = Number(limit);
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+      return "";
+    }
+    return String(value);
+  };
   var savedViewParams = (view) => {
     const params = new URLSearchParams();
     const values = {
       expr: normalizeParamValue(view.query),
       sort: normalizeParamValue(view.sort),
-      relative_to: normalizeParamValue(view.relative_to)
+      relative_to: normalizeParamValue(view.relative_to),
+      limit: savedViewLimitParam(view.limit)
     };
     for (const key of queryShapeParamKeys) {
       if (values[key] !== "") {
@@ -11394,13 +11402,14 @@ var BrainNotesApp = (() => {
     description: normalizeParamValue(fields.description),
     query: normalizeParamValue(params.get("expr")),
     sort: normalizeParamValue(params.get("sort")),
-    relativeTo: normalizeParamValue(params.get("relative_to"))
+    relativeTo: normalizeParamValue(params.get("relative_to")),
+    limit: Number(savedViewLimitParam(params.get("limit")) || 0)
   });
   var savedViewDefinition = (input) => ({
     query: input.query,
     sort: input.sort,
     relative_to: input.relativeTo,
-    limit: 0,
+    limit: input.limit,
     description: input.description
   });
   var savedViewSaveError = (input) => {

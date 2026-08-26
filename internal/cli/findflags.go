@@ -34,9 +34,19 @@ type findFlags struct {
 	deadEnd      bool
 	query        string
 	view         string
+
+	// command is the command name these flags are registered on, used only to
+	// name the offender when a saved view stores an ordering this command
+	// cannot run.
+	command string
+	// ordersResults records that this command produces an ordering and a cap of
+	// its own, and can therefore execute the ones a saved view stores. It is
+	// true for `bn find` alone; see rejectUnrunnableView.
+	ordersResults bool
 }
 
 func (ff *findFlags) register(cmd *cobra.Command) {
+	ff.command = cmd.Name()
 	f := cmd.Flags()
 	f.StringSliceVar(&ff.tags, "tag", nil, "filter by tag (repeatable; AND semantics)")
 	f.StringSliceVar(&ff.categories, "category", nil, "filter by category target (repeatable; AND semantics)")
@@ -121,12 +131,20 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 		return nil, err
 	}
 
+	var resolved *queryexpr.View
 	viewQuery := ""
 	if name := strings.TrimSpace(ff.view); name != "" {
-		viewQuery, err = resolveViewQuery(cfg, name)
+		view, err := resolveView(cfg, name, env)
 		if err != nil {
 			return nil, err
 		}
+		if !ff.ordersResults {
+			if err := rejectUnrunnableView(ff.command, view); err != nil {
+				return nil, err
+			}
+		}
+		resolved = &view
+		viewQuery = view.Saved.Query
 	}
 
 	operands := []queryexpr.Expr{flagsExpr}
@@ -148,32 +166,80 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 		}
 	}
 
-	return &queryexpr.Plan{Expr: &queryexpr.And{Operands: operands}, Source: source}, nil
+	plan := &queryexpr.Plan{Expr: &queryexpr.And{Operands: operands}, Source: source}
+	// A view's stored ordering and cap ride on the plan so the command that
+	// produces the ordering can read them, and only that command applies them.
+	// Sort is copied only when the view actually stores one: ResolveView turns
+	// an empty sort into the default `path` spec, and copying that would make
+	// every view look like an explicit ordering request and suppress the
+	// implicit --pinned ordering in `bn find`.
+	if resolved != nil && resolved.Plan != nil {
+		if strings.TrimSpace(resolved.Saved.Sort) != "" {
+			plan.Sort = resolved.Plan.Sort
+		}
+		plan.Limit = resolved.Plan.Limit
+	}
+	return plan, nil
 }
 
-// resolveViewQuery maps a --view name onto the expression that view saves.
+// resolveView maps a --view name onto the fully resolved saved view: its
+// expression, its ordering, and its cap.
 //
-// Only the view's query text is returned. A view also persists an ordering and
-// a cap, and those are not applied here: `--sort`/`--relative-to` are `bn find`
-// flags while --view is on every flag-scoped command, so honouring a stored
-// sort has to be a decision made where the ordering is produced, not where the
-// filter is compiled. What --view means today is therefore exactly "AND in this
-// saved expression", which composes with every other filter source without
-// surprising a command that has no ordering to apply.
+// Resolution goes through queryexpr.ResolveView rather than reading
+// SavedView.Query directly, so `--view` sees exactly what `bn views` sees. A
+// view that `bn views` renders disabled — a query that no longer compiles, a
+// sort spec that disagrees with relative_to — is refused here with the same
+// detail rather than being silently run as a query-only filter.
 //
 // The lookup is case-insensitive, matching Config.View and the uniqueness rule
 // the config layer enforces, and an unknown name lists what is available rather
 // than only reporting the miss.
-func resolveViewQuery(cfg *config.Config, name string) (string, error) {
-	view, ok := cfg.View(name)
+func resolveView(cfg *config.Config, name string, env queryexpr.Env) (queryexpr.View, error) {
+	if cfg == nil {
+		return queryexpr.View{}, fmt.Errorf("unknown view %q: no configuration is loaded", name)
+	}
+	saved, ok := cfg.View(name)
 	if !ok {
 		known := cfg.ViewNames()
 		if len(known) == 0 {
-			return "", fmt.Errorf("unknown view %q: no views are defined in %s", name, config.FileName)
+			return queryexpr.View{}, fmt.Errorf("unknown view %q: no views are defined in %s", name, config.FileName)
 		}
-		return "", fmt.Errorf("unknown view %q: defined views are %s", name, strings.Join(known, ", "))
+		return queryexpr.View{}, fmt.Errorf("unknown view %q: defined views are %s", name, strings.Join(known, ", "))
 	}
-	return view.Query, nil
+	view := queryexpr.ResolveView(saved, env)
+	if !view.Enabled() {
+		return queryexpr.View{}, fmt.Errorf("view %q is disabled: %s", view.Name(), view.Detail())
+	}
+	return view, nil
+}
+
+// rejectUnrunnableView refuses a saved view whose stored ordering or cap the
+// calling command cannot execute.
+//
+// This is the one documented policy for view ordering across the CLI: `bn find`
+// is the only flag-scoped command that produces an ordering and a cap, so it is
+// the only one that runs a view carrying them. Every other command — `search`,
+// `graph`, `lint`, and the scoped mutators — refuses such a view instead of
+// running a partial version of it. Silently dropping the fields is what made a
+// view report as enabled while executing as something narrower than it was
+// saved as, and dropping a cap on a *mutating* command is the worst version of
+// that: `bn replace --view top-10` would have rewritten every match.
+func rejectUnrunnableView(command string, view queryexpr.View) error {
+	name := view.Name()
+	if command == "" {
+		command = "this command"
+	}
+	if sort := strings.TrimSpace(view.Saved.Sort); sort != "" {
+		return fmt.Errorf(
+			"view %q stores sort %q, which %s cannot apply; run it with 'bn find --view %s'",
+			name, sort, command, name)
+	}
+	if view.Saved.Limit > 0 {
+		return fmt.Errorf(
+			"view %q stores limit %d, which %s cannot apply; run it with 'bn find --view %s'",
+			name, view.Saved.Limit, command, name)
+	}
+	return nil
 }
 
 // findSelection is the result of one filter run: the matching notes in plan
@@ -211,7 +277,16 @@ func (ff *findFlags) selectNotes(ctx context.Context, cfg *config.Config, root s
 	if env.Graph == nil && ff.needsGraph(plan) {
 		env.Graph = query.BuildGraphForRoot(root, notes)
 	}
-	matched, err := queryexpr.NewMemoryEvaluator(root, notes, env).Evaluate(ctx, plan)
+	// The evaluator honours the default path ordering and refuses every other
+	// key, and it truncates to the plan's Limit. Both belong to the caller here:
+	// the ordering a view can store needs state queryexpr deliberately does not
+	// hold, and a cap applied before that ordering would keep the wrong N. So
+	// selection runs against a filter-only copy, and the plan the caller gets
+	// back still carries the ordering and cap for it to apply.
+	filterPlan := *plan
+	filterPlan.Sort = queryexpr.SortSpec{}
+	filterPlan.Limit = 0
+	matched, err := queryexpr.NewMemoryEvaluator(root, notes, env).Evaluate(ctx, &filterPlan)
 	if err != nil {
 		return findSelection{}, err
 	}

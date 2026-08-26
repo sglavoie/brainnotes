@@ -26,7 +26,9 @@ func NewFindCmd() *cobra.Command {
 		relativeTo        string
 	)
 
-	ff := new(findFlags)
+	// find is the one flag-scoped command that orders and caps its output, so
+	// it is the one command allowed to run a saved view's stored sort and limit.
+	ff := &findFlags{ordersResults: true}
 
 	cmd := &cobra.Command{
 		Use:   "find",
@@ -42,7 +44,11 @@ against a declared property (rating>=4, due<today), and the link graph
 undeclared property is reached through prop:, as in prop:mykey=value.
 
 --view names a saved view. Flags, -q, and --view all AND together, so each one
-narrows the result further.
+narrows the result further. A view that no longer compiles is refused rather
+than run as a partial filter, and a view that stores a sort or a limit runs with
+them: find is the only command that orders and caps results, so every other
+command refuses such a view instead of dropping the fields. An explicit --sort
+or --relative-to replaces the view's ordering.
 
 --sort orders the matches. Results are path-ordered by default; --sort relevance
 ranks them against the note named by --relative-to, most related first, using the
@@ -88,21 +94,37 @@ same signals bn related does. Sorting never changes which notes match.`,
 				return err
 			}
 			matched := sel.notes
+			// `bn find` is the only flag-scoped command that produces an
+			// ordering, so it is the only one that executes the ordering and
+			// cap a saved view stores; every other command refuses such a view
+			// outright. Explicit flags win: --sort or --relative-to on the
+			// command line replaces the view's ordering wholesale rather than
+			// merging with it, so the two halves cannot disagree.
+			spec, ordered := sortSpec, strings.TrimSpace(sortText) != "" || strings.TrimSpace(relativeTo) != ""
+			if !ordered && sel.plan.Sort.Key != "" {
+				spec, ordered = sel.plan.Sort, true
+			}
 			switch {
-			case strings.TrimSpace(sortText) != "":
-				// An explicit --sort wins over the implicit pinned ordering
+			case ordered:
+				// An explicit ordering wins over the implicit pinned ordering
 				// below, including when it asks for plain path order.
 				matched, err = sortFindResults(findSortInput{
 					vault:   v,
 					matched: matched,
 					notes:   notes,
 					graph:   sel.graph,
-				}, sortSpec)
+				}, spec)
 				if err != nil {
 					return err
 				}
 			case ff.pinned:
 				matched = pinnedOrder(v.Root, matched)
+			}
+			// The cap is applied last, over the ordered result, so a view that
+			// saves "the 10 most recently modified" returns those ten rather
+			// than ten arbitrary matches re-sorted.
+			if limit := sel.plan.Limit; limit > 0 && len(matched) > limit {
+				matched = matched[:limit]
 			}
 
 			out := cmd.OutOrStdout()

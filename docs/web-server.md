@@ -178,7 +178,8 @@ uses, so a caret cannot drift on accented text.
 (see [Configuration](configuration.md#saved-views)) render as a strip in the
 primary navigation on every page, in file order, populated client-side from
 `GET /api/views`. An enabled view is a plain anchor carrying only `expr`, `sort`,
-and `relative_to`, never the chips currently selected, so following one is
+`relative_to`, and `limit` — its whole stored query shape and never the chips
+currently selected, so following one is
 shareable and middle-clickable like any other nav link; it stays on the current
 page when that page hosts a query bar and lands on `/library` otherwise, so
 following a view from the graph keeps you on the graph. A view whose query no
@@ -199,10 +200,27 @@ re-previews against the current file. Saves, renames, and deletes write undo
 journal entries named `bn serve view save`, `bn serve view rename`, and
 `bn serve view delete`.
 
-A view's stored `sort` and `relative_to` ride along on its link and reach the
-server, but ordering is not yet applied on the web path: today a view applies
-its filter in the browser and not its ordering. Use `bn find --view <name>
---sort <key>` when the order matters.
+**A view's ordering and cap are executed.** `/api/search` accepts `sort`,
+`relative_to`, and `limit` alongside the filter parameters, so a view opened
+from the strip returns the result set it was saved as rather than the same
+filter under the page's own best-match ranking.
+
+| Parameter | Effect |
+| --- | --- |
+| `sort` | Any `bn find --sort` key, with the same `-key` / `key:desc` direction spellings. Absent, results keep the page's best-match ranking. |
+| `relative_to` | The anchor for `sort=relevance`, resolved like any route note. Required by `relevance` and rejected with any other key, exactly as a saved view and `bn find` are. |
+| `limit` | A positive whole number. Applied *after* the ordering, so it keeps the top N. |
+
+The ordering runs on the server, before the response is trimmed, through the
+same `internal/query` ordering `bn find` uses — the CLI and the web cannot order
+a vault differently. A `sort` the server cannot execute, an anchor that does not
+resolve, or a non-integer or negative `limit` is a structured `400`, never a
+silently dropped ordering.
+
+`limit` can only narrow: the fixed payload cap still applies, so a view saving
+`limit = 500` does not become a way to serialize the whole vault. Neither `sort`
+nor `limit` is a filter — a request carrying one and no actual filter still
+selects nothing rather than returning the vault ordered.
 
 ## Note actions, Trash, and rendering
 

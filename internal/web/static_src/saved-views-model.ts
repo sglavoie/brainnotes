@@ -26,12 +26,30 @@ export const savedViewsNavBasePath = (pathname: unknown): string => {
 };
 
 /**
+ * Renders a stored cap as its URL value. Anything that is not a positive whole
+ * number — 0, a negative, a non-number crossing the wire — is "no cap" and
+ * produces the empty string, which savedViewParams drops.
+ */
+export const savedViewLimitParam = (limit: unknown): string => {
+  const value = Number(limit);
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    return "";
+  }
+  return String(value);
+};
+
+/**
  * The URL parameters one view applies.
  *
  * A view is a complete query shape, so a link carries only its own `expr`,
- * `sort` and `relative_to` and no chips: following a view lands you on exactly
- * what was saved rather than on the view intersected with whatever was already
- * selected.
+ * `sort`, `relative_to` and `limit` and no chips: following a view lands you on
+ * exactly what was saved rather than on the view intersected with whatever was
+ * already selected.
+ *
+ * `limit` is part of that shape. Omitting it was the whole defect this replaces:
+ * a view saved as "the ten most recently modified" opened showing every match,
+ * so the nav reported a view as enabled while running something wider than its
+ * stored definition. A limit of 0 means "no cap" and is left out of the link.
  */
 export const savedViewParams = (view: SavedViewSummary): URLSearchParams => {
   const params = new URLSearchParams();
@@ -39,6 +57,7 @@ export const savedViewParams = (view: SavedViewSummary): URLSearchParams => {
     expr: normalizeParamValue(view.query),
     sort: normalizeParamValue(view.sort),
     relative_to: normalizeParamValue(view.relative_to),
+    limit: savedViewLimitParam(view.limit),
   };
   for (const key of queryShapeParamKeys) {
     if (values[key] !== "") {
@@ -74,12 +93,15 @@ export type SavedViewSaveInput = {
   query: string;
   sort: string;
   relativeTo: string;
+  limit: number;
 };
 
 /**
  * Reads the query shape a save would store from a URL. `expr` is the view's
- * query; `sort` and `relative_to` ride along so a view can carry an ordering
- * even where the page cannot yet produce one.
+ * query; `sort`, `relative_to` and `limit` ride along so a view can carry an
+ * ordering and a cap even where the page cannot yet produce one. Reading the
+ * cap back is what makes a view round-trip: open a view, edit its chips, save
+ * it again, and the cap survives instead of silently resetting to "no cap".
  */
 export const savedViewInputFromParams = (
   params: URLSearchParams,
@@ -90,13 +112,14 @@ export const savedViewInputFromParams = (
   query: normalizeParamValue(params.get("expr")),
   sort: normalizeParamValue(params.get("sort")),
   relativeTo: normalizeParamValue(params.get("relative_to")),
+  limit: Number(savedViewLimitParam(params.get("limit")) || 0),
 });
 
 export const savedViewDefinition = (input: SavedViewSaveInput): SavedViewDefinition => ({
   query: input.query,
   sort: input.sort,
   relative_to: input.relativeTo,
-  limit: 0,
+  limit: input.limit,
   description: input.description,
 });
 

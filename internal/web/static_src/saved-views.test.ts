@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeSavedViewsResponse } from "./api-views";
 import {
+  savedViewDefinition,
   savedViewHref,
+  savedViewLimitParam,
+  savedViewParams,
   savedViewTitle,
   savedViewsNavBasePath,
   savedViewInputFromParams,
@@ -150,7 +153,7 @@ describe("saved views nav", () => {
     expect(focus?.textContent).toBe("Focus");
     expect(focus?.title).toBe("Active focus work — tag:focus and not folder:Archive");
     expect(near?.getAttribute("href")).toBe(
-      "/library?expr=near%3A%5B%5BHub%5D%5D%3C%3D2&sort=relevance&relative_to=areas%2Fhub"
+      "/library?expr=near%3A%5B%5BHub%5D%5D%3C%3D2&sort=relevance&relative_to=areas%2Fhub&limit=20"
     );
   });
 
@@ -251,8 +254,12 @@ describe("saved views model", () => {
     }
     const href = savedViewHref(view, "/library");
     const params = new URLSearchParams(href.slice(href.indexOf("?")));
-    expect(Array.from(params.keys())).toEqual(["expr", "sort", "relative_to"]);
+    expect(Array.from(params.keys())).toEqual(["expr", "sort", "relative_to", "limit"]);
     expect(params.get("expr")).toBe("near:[[Hub]]<=2");
+    // The stored cap is part of the view's definition, so the link carries it:
+    // opening this view must show the 20 results it was saved as, not every
+    // match that happens to satisfy the expression.
+    expect(params.get("limit")).toBe("20");
   });
 
   it("falls back to the stored query when a view has no description", () => {
@@ -275,11 +282,44 @@ describe("saved views model", () => {
       query: "tag:focus",
       sort: "-modified",
       relativeTo: "areas/hub",
+      limit: 0,
     });
   });
 
+  it("round-trips a non-zero saved limit through the URL and back into a definition", () => {
+    const view = normalizeSavedViewsResponse(viewsPayload()).views[1];
+    if (!view) {
+      throw new Error("fixture missing");
+    }
+    const params = savedViewParams(view);
+    const reread = savedViewInputFromParams(params, { name: "Near Hub", description: "" });
+    expect(reread.limit).toBe(20);
+    expect(savedViewDefinition(reread).limit).toBe(20);
+  });
+
+  it("treats a zero, negative, or non-numeric limit as no cap", () => {
+    expect(savedViewLimitParam(0)).toBe("");
+    expect(savedViewLimitParam(-5)).toBe("");
+    expect(savedViewLimitParam(2.5)).toBe("");
+    expect(savedViewLimitParam("nope")).toBe("");
+    expect(savedViewLimitParam(20)).toBe("20");
+    expect(
+      savedViewInputFromParams(new URLSearchParams("?expr=tag%3Afocus&limit=-3"), {
+        name: "N",
+        description: "",
+      }).limit
+    ).toBe(0);
+  });
+
   it("refuses a save with no name and a save with no expression", () => {
-    const base = { name: "Focus", description: "", query: "tag:focus", sort: "", relativeTo: "" };
+    const base = {
+      name: "Focus",
+      description: "",
+      query: "tag:focus",
+      sort: "",
+      relativeTo: "",
+      limit: 0,
+    };
     expect(savedViewSaveError(base)).toBe("");
     expect(savedViewSaveError({ ...base, name: "" })).toContain("Name the view");
     expect(savedViewSaveError({ ...base, query: "" })).toContain("query expression");

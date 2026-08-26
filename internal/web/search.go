@@ -28,7 +28,10 @@ type searchResult struct {
 }
 
 type searchCandidate struct {
-	result      searchResult
+	result searchResult
+	// note is the note this row was built from, kept so an ordering can run
+	// over notes and the rows can be permuted to match.
+	note        *vault.Note
 	titleMatch  bool
 	lowerTitle  string
 	lowerFolder string
@@ -39,7 +42,7 @@ type searchIssuePredicate struct {
 	match query.Predicate
 }
 
-func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilters) ([]searchResult, error) {
+func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilters, shape resultShape, rank searchRelevanceFunc) ([]searchResult, error) {
 	if snapshot.graph == nil {
 		return nil, errorsf("nil graph")
 	}
@@ -89,6 +92,7 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		}
 
 		candidates = append(candidates, searchCandidate{
+			note: note,
 			result: searchResult{
 				Key:           key,
 				Title:         title,
@@ -105,14 +109,35 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		})
 	}
 
+	// Best-match-first is the ranking a *search* wants, so it stays the default.
+	// An explicit ordering — typed into the query bar or carried by a saved
+	// view's sort= — replaces it wholesale rather than tie-breaking against it,
+	// which is what makes `sort=-modified` here mean the same as `bn find --sort
+	// -modified`.
 	rankSearchCandidates(candidates)
-	candidates = limitSearchCandidates(candidates)
+	if shape.ordered() {
+		candidates, err := orderSearchCandidates(candidates, shape, query.OrderInput{
+			Root:  root,
+			Notes: snapshot.notes,
+			Graph: snapshot.graph,
+		}, rank)
+		if err != nil {
+			return nil, err
+		}
+		return searchResults(limitSearchCandidates(candidates, shape)), nil
+	}
+	candidates = limitSearchCandidates(candidates, shape)
 
+	return searchResults(candidates), nil
+}
+
+// searchResults strips the rows out of the candidates, in order.
+func searchResults(candidates []searchCandidate) []searchResult {
 	results := make([]searchResult, 0, len(candidates))
 	for _, candidate := range candidates {
 		results = append(results, candidate.result)
 	}
-	return results, nil
+	return results
 }
 
 // rankSearchCandidates orders the matches best-first: title matches, then title,
@@ -134,12 +159,13 @@ func rankSearchCandidates(candidates []searchCandidate) {
 	})
 }
 
-// limitSearchCandidates caps the payload. It must run after
-// rankSearchCandidates: truncating a merely title-sorted list would keep the
-// alphabetically first 50 rather than the 50 best matches.
-func limitSearchCandidates(candidates []searchCandidate) []searchCandidate {
-	if len(candidates) > searchResultLimit {
-		return candidates[:searchResultLimit]
+// limitSearchCandidates caps the payload. It must run after the ordering:
+// truncating a merely title-sorted list would keep the alphabetically first 50
+// rather than the 50 best matches, and truncating before a view's sort would
+// order 50 arbitrary matches instead of returning the top N the view saved.
+func limitSearchCandidates(candidates []searchCandidate, shape resultShape) []searchCandidate {
+	if limit := shape.effectiveLimit(); len(candidates) > limit {
+		return candidates[:limit]
 	}
 	return candidates
 }

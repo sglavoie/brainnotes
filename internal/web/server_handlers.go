@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
 )
 
 func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +168,20 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := buildSearchResponse(snapshot, s.vault.Root, filters)
+	shape, err := parseResultShape(r.URL.Query())
+	if err != nil {
+		writeFilterError(w, err)
+		return
+	}
+	var rank searchRelevanceFunc
+	if shape.Sort.Key == queryexpr.SortRelevance {
+		if rank, err = s.searchRelevanceRanker(snapshot, shape.Sort.RelativeTo); err != nil {
+			writeFilterError(w, err)
+			return
+		}
+	}
+
+	payload, err := buildSearchResponse(snapshot, s.vault.Root, filters, shape, rank)
 	if err != nil {
 		http.Error(w, "search error", http.StatusInternalServerError)
 		return

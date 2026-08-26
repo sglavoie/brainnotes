@@ -93,6 +93,7 @@ const focusInput = (overrides: Partial<SavedViewSaveInput> = {}): SavedViewSaveI
   query: "tag:focus",
   sort: "-modified",
   relativeTo: "",
+  limit: 0,
   ...overrides,
 });
 

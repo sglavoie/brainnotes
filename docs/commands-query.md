@@ -26,7 +26,9 @@ Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `-q` takes a query expression, which reaches filters the flags cannot spell.
 The flags, `-q`, and `--view` all AND together, so each one narrows the result
 further. `--view` names a saved view — a `[[views]]` block in `brainnotes.toml`
-— and contributes that view's query only, never its stored ordering or cap.
+— and contributes that view's query. On `bn find` it also applies the view's
+stored `sort`, `relative_to`, and `limit`; see
+[Running a saved view](#running-a-saved-view).
 
 | Form | Example | Meaning |
 | --- | --- | --- |
@@ -265,9 +267,36 @@ span in the saved query to point at. A view that names a graph field compiles
 here without a graph, so `check` cannot catch a wikilink target that no longer
 resolves; that error surfaces when the view is actually run.
 
-`--view` contributes a view's **query only**. Its stored `sort`, `relative_to`,
-and `limit` are shown by `bn views show` but are not applied — pass `--sort` and
-`--relative-to` explicitly on `bn find`.
+#### Running a saved view
+
+A view is a complete query shape — query, `sort`, `relative_to`, `limit` — and
+`--view` runs all four. Two rules follow.
+
+**A disabled view is refused, never degraded.** If `bn views` reports a view as
+`error`, `--view` fails with the same detail rather than falling back to the
+query alone; a view that reports as enabled and a view that runs are the same
+view.
+
+**Only `bn find` orders and caps its output.** `bn search`, `bn lint`,
+`bn graph`, `bn replace`, `bn repair`, `bn relink`, and `bn rename-key` accept
+`--view` for its query, but they have nowhere to put an ordering or a cap, so a
+view carrying either is **refused** with a message naming the field and pointing
+at `bn find --view`:
+
+```
+$ bn replace status wip done --view "Recent WIP"
+bn: view "Recent WIP" stores limit 2, which replace cannot apply; run it with 'bn find --view Recent WIP'
+```
+
+Refusing rather than ignoring matters most on the mutators: silently dropping
+the cap on `bn replace --view "Top 10"` would have rewritten every match.
+
+On `bn find`, an explicit `--sort` (or `--relative-to`) replaces the view's
+ordering wholesale — including an explicit `--sort path`, which is a request for
+path order and not an absent flag. The cap has no flag, so it survives an
+ordering override: choosing how results are ordered is not a request for more of
+them. A view storing no `sort` leaves `bn find --pinned`'s implicit pinned
+ordering intact.
 
 Examples:
 
@@ -277,6 +306,7 @@ bn views show "Active work"
 bn views check                            # usable as a config health gate
 bn find --view "Active work"
 bn find --view "Active work" --tag urgent # a view ANDs with every other filter
+bn find --view "Recent WIP" --sort title  # explicit ordering wins; the cap stays
 ```
 
 ### `bn search` — search note bodies
