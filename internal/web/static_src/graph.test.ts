@@ -8,6 +8,7 @@ import {
   emptyGraphElements,
   graphNodeClasses,
   graphScopeLabel,
+  mergeReciprocalGraphEdges,
   normalizeGraphPayload,
   nodeSizeForDegree,
   readGraphPalette,
@@ -47,6 +48,31 @@ describe("computeFallbackGraphDegrees", () => {
     expect(degrees.get("alpha")).toEqual({ inDegree: 1, outDegree: 1, degree: 2 });
     expect(degrees.get("beta")).toEqual({ inDegree: 1, outDegree: 1, degree: 2 });
     expect(degrees.get("gamma")).toEqual({ inDegree: 0, outDegree: 0, degree: 0 });
+  });
+});
+
+describe("mergeReciprocalGraphEdges", () => {
+  it("passes self-edges, blank endpoints, and one-directional edges through as mutual: false", () => {
+    expect(
+      mergeReciprocalGraphEdges([
+        { id: "loop", source: "alpha", target: "alpha", mutual: false },
+        { id: "blank", source: "", target: "beta", mutual: false },
+        { id: "one-way", source: "alpha", target: "beta", mutual: false },
+      ])
+    ).toEqual([
+      { id: "loop", source: "alpha", target: "alpha", mutual: false },
+      { id: "blank", source: "", target: "beta", mutual: false },
+      { id: "one-way", source: "alpha", target: "beta", mutual: false },
+    ]);
+  });
+
+  it("keeps the first-seen edge when both ids tie", () => {
+    expect(
+      mergeReciprocalGraphEdges([
+        { id: "", source: "alpha", target: "beta", mutual: false },
+        { id: "", source: "beta", target: "alpha", mutual: false },
+      ])
+    ).toEqual([{ id: "", source: "alpha", target: "beta", mutual: true }]);
   });
 });
 
@@ -121,11 +147,10 @@ describe("normalizeGraphPayload", () => {
     expect(graphNodeClasses(alpha!)).toBe("has-broken is-orphan");
     expect(graphNodeClasses(gamma!)).toBe("is-dead-end");
     expect(graph.edges).toEqual([
-      { id: "e1", source: "alpha", target: "beta" },
-      { id: "e2", source: "alpha", target: "beta" },
-      { id: "e3", source: "beta", target: "alpha" },
-      { id: "loop", source: "alpha", target: "alpha" },
-      { id: "missing", source: "alpha", target: "missing" },
+      { id: "e1", source: "alpha", target: "beta", mutual: true },
+      { id: "e2", source: "alpha", target: "beta", mutual: false },
+      { id: "loop", source: "alpha", target: "alpha", mutual: false },
+      { id: "missing", source: "alpha", target: "missing", mutual: false },
     ]);
 
     expect(toCytoscapeElements(graph)[0]).toMatchObject({
@@ -154,6 +179,56 @@ describe("normalizeGraphPayload", () => {
       true,
       false,
       false,
+    ]);
+  });
+
+  it("collapses reciprocal pairs onto the lexicographically smaller id", () => {
+    const graph = normalizeGraphPayload({
+      nodes: [{ data: { id: "alpha" } }, { data: { id: "beta" } }, { data: { id: "gamma" } }],
+      edges: [
+        { data: { id: "z-first", source: "alpha", target: "beta" } },
+        { data: { id: "a-second", source: "beta", target: "alpha" } },
+        { data: { id: "one-way", source: "beta", target: "gamma" } },
+      ],
+    });
+
+    expect(graph.edges).toEqual([
+      { id: "a-second", source: "beta", target: "alpha", mutual: true },
+      { id: "one-way", source: "beta", target: "gamma", mutual: false },
+    ]);
+  });
+
+  it("computes fallback degrees before the reciprocal merge halves the edge list", () => {
+    const graph = normalizeGraphPayload({
+      nodes: [{ data: { id: "alpha" } }, { data: { id: "beta" } }],
+      edges: [
+        { data: { id: "e1", source: "alpha", target: "beta" } },
+        { data: { id: "e2", source: "beta", target: "alpha" } },
+      ],
+    });
+
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.nodes.map((node) => node.degree)).toEqual([2, 2]);
+    expect(graph.nodes.map((node) => node.filteredDegree)).toEqual([2, 2]);
+  });
+
+  it("carries mutual through Cytoscape edge data", () => {
+    const graph = normalizeGraphPayload({
+      nodes: [{ data: { id: "alpha" } }, { data: { id: "beta" } }, { data: { id: "gamma" } }],
+      edges: [
+        { data: { id: "e1", source: "alpha", target: "beta" } },
+        { data: { id: "e2", source: "beta", target: "alpha" } },
+        { data: { id: "e3", source: "beta", target: "gamma" } },
+      ],
+    });
+
+    expect(
+      toCytoscapeElements(graph)
+        .filter((element) => element.data.source)
+        .map((element) => ({ id: element.data.id, mutual: element.data.mutual }))
+    ).toEqual([
+      { id: "e1", mutual: true },
+      { id: "e3", mutual: false },
     ]);
   });
 
@@ -254,9 +329,15 @@ describe("buildGraphStyleRules", () => {
     expect(edge["line-color"]).toBe("#404040");
     expect(edge["target-arrow-color"]).toBe("#404040");
 
+    const mutualEdge = ruleFor(rules, "edge[?mutual]").style;
+    expect(mutualEdge["source-arrow-shape"]).toBe("triangle");
+    expect(mutualEdge["source-arrow-color"]).toBe("#404040");
+    expect(mutualEdge["curve-style"]).toBe("straight");
+
     const highlightedEdge = ruleFor(rules, "edge.is-highlighted-edge").style;
     expect(highlightedEdge["line-color"]).toBe("#505050");
     expect(highlightedEdge["target-arrow-color"]).toBe("#505050");
+    expect(highlightedEdge["source-arrow-color"]).toBe("#505050");
   });
 
   it("defaults to the preserved dark palette", () => {

@@ -186,11 +186,20 @@ export const buildGraphStyleRules = (
     },
   },
   {
+    selector: "edge[?mutual]",
+    style: {
+      "source-arrow-shape": "triangle",
+      "source-arrow-color": palette.edge,
+      "curve-style": "straight",
+    },
+  },
+  {
     selector: "edge.is-highlighted-edge",
     style: {
       width: 3,
       "line-color": palette.neighbor,
       "target-arrow-color": palette.neighbor,
+      "source-arrow-color": palette.neighbor,
       opacity: 1,
       "z-index": 12,
     },

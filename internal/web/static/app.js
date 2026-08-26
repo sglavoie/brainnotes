@@ -4254,11 +4254,20 @@ var BrainNotesApp = (() => {
       }
     },
     {
+      selector: "edge[?mutual]",
+      style: {
+        "source-arrow-shape": "triangle",
+        "source-arrow-color": palette.edge,
+        "curve-style": "straight"
+      }
+    },
+    {
       selector: "edge.is-highlighted-edge",
       style: {
         width: 3,
         "line-color": palette.neighbor,
         "target-arrow-color": palette.neighbor,
+        "source-arrow-color": palette.neighbor,
         opacity: 1,
         "z-index": 12
       }
@@ -4350,6 +4359,33 @@ var BrainNotesApp = (() => {
     }
     return degrees;
   };
+  var reciprocalPairKey = (edge) => edge.source < edge.target ? `${edge.source}\0${edge.target}` : `${edge.target}\0${edge.source}`;
+  var mergeReciprocalGraphEdges = (edges) => {
+    const merged = [];
+    const indexByPair = /* @__PURE__ */ new Map();
+    for (const edge of edges) {
+      const next = { ...edge, mutual: false };
+      if (next.source === "" || next.target === "" || next.source === next.target) {
+        merged.push(next);
+        continue;
+      }
+      const pairKey = reciprocalPairKey(next);
+      const existingIndex = indexByPair.get(pairKey);
+      const existing = existingIndex === void 0 ? void 0 : merged[existingIndex];
+      if (existingIndex === void 0 || !existing) {
+        indexByPair.set(pairKey, merged.length);
+        merged.push(next);
+        continue;
+      }
+      if (existing.source === next.source) {
+        merged.push(next);
+        continue;
+      }
+      const survivor = next.id < existing.id ? next : existing;
+      merged[existingIndex] = { ...survivor, mutual: true };
+    }
+    return merged;
+  };
   var normalizeGraphNodeData = (nodeData, fallback, fallbackID = "") => {
     const id = normalizeParamValue(nodeData.id || fallbackID);
     const folder = normalizeParamValue(nodeData.folder || "");
@@ -4406,11 +4442,14 @@ var BrainNotesApp = (() => {
       const id = normalizeParamValue(node.data.id);
       return normalizeGraphNodeData(node.data, fallbackDegrees.get(id) || emptyDegreeSummary());
     });
-    const edges = rawEdges.map((edge) => ({
-      id: normalizeParamValue(edge.data.id),
-      source: normalizeParamValue(edge.data.source),
-      target: normalizeParamValue(edge.data.target)
-    }));
+    const edges = mergeReciprocalGraphEdges(
+      rawEdges.map((edge) => ({
+        id: normalizeParamValue(edge.data.id),
+        source: normalizeParamValue(edge.data.source),
+        target: normalizeParamValue(edge.data.target),
+        mutual: false
+      }))
+    );
     return {
       nodes,
       edges
@@ -4455,7 +4494,8 @@ var BrainNotesApp = (() => {
       data: {
         id: edge.id,
         source: edge.source,
-        target: edge.target
+        target: edge.target,
+        mutual: edge.mutual
       }
     }))
   ];
