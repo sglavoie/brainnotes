@@ -449,6 +449,12 @@ a:hover {
   display: none;
 }
 
+/* A create's diff is a receipt for a write that already happened, not the
+   question an overwrite confirms; the left rule is what tells them apart. */
+.saved-views-save-diff[data-saved-views-diff-role="receipt"] {
+  border-left: 3px solid var(--bn-accent-subtle-border);
+}
+
 .saved-views-save-status {
   margin: 0;
   font-size: 0.8rem;

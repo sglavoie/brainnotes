@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { SavedViewsResult } from "./api-types";
 import { createSavedViewSaver } from "./saved-views-actions";
-import type { SavedViewPendingSave, SavedViewSaveInput } from "./saved-views-model";
+import type {
+  SavedViewCreateReceipt,
+  SavedViewPendingSave,
+  SavedViewSaveInput,
+} from "./saved-views-model";
 import type { StatusKind } from "./status";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -51,6 +55,7 @@ type Harness = {
   calls: Call[];
   statuses: Array<{ message: string; kind: StatusKind }>;
   pendings: Array<SavedViewPendingSave | null>;
+  receipts: Array<SavedViewCreateReceipt | null>;
   saved: SavedViewsResult[];
   saver: ReturnType<typeof createSavedViewSaver>;
 };
@@ -62,6 +67,7 @@ const startSaver = (
   const calls: Call[] = [];
   const statuses: Array<{ message: string; kind: StatusKind }> = [];
   const pendings: Array<SavedViewPendingSave | null> = [];
+  const receipts: Array<SavedViewCreateReceipt | null> = [];
   const saved: SavedViewsResult[] = [];
 
   const fetcher = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -81,10 +87,11 @@ const startSaver = (
     hooks: {
       onStatus: (message, kind) => statuses.push({ message, kind }),
       onPending: (pending) => pendings.push(pending),
+      onReceipt: (receipt) => receipts.push(receipt),
       onSaved: (result) => saved.push(result),
     },
   });
-  return { calls, statuses, pendings, saved, saver };
+  return { calls, statuses, pendings, receipts, saved, saver };
 };
 
 const focusInput = (overrides: Partial<SavedViewSaveInput> = {}): SavedViewSaveInput => ({
@@ -115,9 +122,89 @@ describe("saved view save: create", () => {
     expect(harness.calls[1]?.body).toEqual({ preview_id: "receipt-1" });
     expect(harness.saved).toHaveLength(1);
     expect(harness.saver.pending()).toBeNull();
-    // No receipt is ever reported to the UI: there is nothing to confirm.
+    // Nothing pending is ever reported to the UI: there is nothing to confirm.
     expect(harness.pendings.every((pending) => pending === null)).toBe(true);
     expect(lastStatus(harness)).toEqual({ message: 'Saved view "Focus".', kind: "is-success" });
+  });
+
+  it("shows the create diff as a receipt once the auto-applied write landed", async () => {
+    const harness = startSaver({
+      "/api/views/preview": () => jsonResponse(previewPayload(true)),
+      "/api/views/apply": () => jsonResponse(applyPayload()),
+    });
+
+    await harness.saver.save(focusInput());
+
+    // The diff previewed for a create is published, not discarded: it is the
+    // only chance the user gets to see what the auto-chained write did.
+    const receipt = harness.saver.receipt();
+    expect(receipt).toEqual({
+      name: "Focus",
+      diff: [
+        { kind: "+", line: 12, text: "[[views]]" },
+        { kind: "+", line: 13, text: 'name = "Focus"' },
+      ],
+    });
+    expect(harness.receipts).toEqual([receipt]);
+  });
+
+  it("publishes the create receipt only after the apply succeeded", async () => {
+    const harness = startSaver({
+      "/api/views/preview": () => jsonResponse(previewPayload(true)),
+      "/api/views/apply": () =>
+        jsonResponse({ ok: false, message: "views: brainnotes.toml changed" }, 409),
+    });
+
+    await harness.saver.save(focusInput());
+
+    expect(harness.saver.receipt()).toBeNull();
+    expect(harness.receipts).toEqual([]);
+    expect(lastStatus(harness)?.kind).toBe("is-error");
+  });
+
+  it("issues a non-actionable create receipt that cannot re-apply the consumed preview", async () => {
+    const harness = startSaver({
+      "/api/views/preview": () => jsonResponse(previewPayload(true)),
+      "/api/views/apply": () => jsonResponse(applyPayload()),
+    });
+
+    await harness.saver.save(focusInput());
+
+    // The receipt carries no preview ID at all, so there is no handle to apply
+    // a second time...
+    expect(Object.keys(harness.saver.receipt() || {}).sort()).toEqual(["diff", "name"]);
+    // ...and confirming with only a create receipt in hand issues no write.
+    await harness.saver.confirm();
+
+    expect(harness.calls.map((call) => call.url)).toEqual([
+      "/api/views/preview",
+      "/api/views/apply",
+    ]);
+    expect(harness.saved).toHaveLength(1);
+    expect(lastStatus(harness)).toEqual({
+      message: "Preview the view before saving it.",
+      kind: "is-error",
+    });
+  });
+
+  it("drops the previous create receipt when the next save starts", async () => {
+    const harness = startSaver({
+      "/api/views/preview": () => jsonResponse(previewPayload(true)),
+      "/api/views/apply": () => jsonResponse(applyPayload()),
+    });
+
+    await harness.saver.save(focusInput());
+    expect(harness.saver.receipt()).not.toBeNull();
+
+    await harness.saver.save(focusInput({ name: "Other" }));
+
+    // Cleared as the save starts, then replaced by the new write's own diff —
+    // the block never shows a receipt from a save two writes ago.
+    expect(harness.receipts.map((entry) => entry?.name ?? null)).toEqual([
+      "Focus",
+      null,
+      "Other",
+    ]);
   });
 
   it("previews the stored fields the URL carried", async () => {
@@ -170,6 +257,10 @@ describe("saved view save: overwrite", () => {
     expect(harness.saved).toHaveLength(1);
     expect(harness.saver.pending()).toBeNull();
     expect(lastStatus(harness)).toEqual({ message: 'Updated view "Focus".', kind: "is-success" });
+    // An overwrite already showed its diff as the question it confirmed, so it
+    // publishes no create receipt afterwards.
+    expect(harness.saver.receipt()).toBeNull();
+    expect(harness.receipts).toEqual([]);
   });
 
   it("drops the receipt when the overwrite is cancelled", async () => {

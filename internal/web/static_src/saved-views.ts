@@ -4,10 +4,15 @@ import { createSavedViewSaver, type SavedViewSaver } from "./saved-views-actions
 import {
   savedViewInputFromParams,
   savedViewsNavBasePath,
+  type SavedViewCreateReceipt,
   type SavedViewPendingSave,
   type SavedViewsDeps,
 } from "./saved-views-model";
-import { renderSavedViewDiff, renderSavedViewsNav } from "./saved-views-render";
+import {
+  renderSavedViewDiff,
+  renderSavedViewReceipt,
+  renderSavedViewsNav,
+} from "./saved-views-render";
 import { fetchSavedViews } from "./saved-views-requests";
 import { setStatusText, type StatusKind } from "./status";
 
@@ -116,12 +121,23 @@ export const initSavedViewsSave = (
     }
   };
 
+  // The create receipt reuses the diff block but never the confirm button: the
+  // write already happened and its preview was consumed, so the block is read
+  // only.
+  const showReceipt = (receipt: SavedViewCreateReceipt | null): void => {
+    renderSavedViewReceipt(els.diffEl, receipt);
+    if (els.confirmButton) {
+      els.confirmButton.hidden = true;
+    }
+  };
+
   const saver = createSavedViewSaver({
     fetch: fetcher,
     token: els.token,
     hooks: {
       onStatus: setStatus,
       onPending: showPending,
+      onReceipt: showReceipt,
       onSaved: (result) => {
         nav?.render(result.views);
         els.nameInput.value = "";

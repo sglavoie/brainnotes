@@ -1,8 +1,9 @@
-import type { SavedViewSummary } from "./api-types";
+import type { PropertyConfigDiffLine, SavedViewSummary } from "./api-types";
 import {
   savedViewDiffText,
   savedViewHref,
   savedViewTitle,
+  type SavedViewCreateReceipt,
   type SavedViewPendingSave,
 } from "./saved-views-model";
 
@@ -45,22 +46,57 @@ export const renderSavedViewsNav = (
 };
 
 /**
+ * Fills the shared diff block, tagging *why* it is showing.
+ *
+ * The role attribute is the whole difference between the two callers below:
+ * `confirm` is a question the confirm button answers, `receipt` is a record of
+ * a write that already happened. Nothing about a receipt is clickable, so the
+ * marker is what keeps styling — and a reader of the DOM — from mistaking the
+ * two.
+ */
+const renderDiffBlock = (
+  block: HTMLElement | null,
+  diff: PropertyConfigDiffLine[],
+  role: "confirm" | "receipt"
+): void => {
+  if (!block) {
+    return;
+  }
+  if (diff.length === 0) {
+    block.textContent = "";
+    block.hidden = true;
+    block.removeAttribute("data-saved-views-diff-role");
+    return;
+  }
+  block.textContent = savedViewDiffText(diff);
+  block.hidden = false;
+  block.setAttribute("data-saved-views-diff-role", role);
+};
+
+/**
  * Shows the brainnotes.toml diff an overwrite is about to write, and hides the
- * block again for a create — which never asks for confirmation and so has
- * nothing to show.
+ * block again once nothing is pending confirmation.
  */
 export const renderSavedViewDiff = (
   block: HTMLElement | null,
   pending: SavedViewPendingSave | null
 ): void => {
-  if (!block) {
-    return;
-  }
-  if (!pending || pending.diff.length === 0) {
-    block.textContent = "";
-    block.hidden = true;
-    return;
-  }
-  block.textContent = savedViewDiffText(pending.diff);
-  block.hidden = false;
+  renderDiffBlock(block, pending ? pending.diff : [], "confirm");
+};
+
+/**
+ * Shows the diff a create already wrote, as a receipt.
+ *
+ * This is the post-success half of the saved-views write class: a create
+ * auto-chains preview into apply, so the user never sees the diff as a
+ * question, and would otherwise never see it at all. It renders into the same
+ * block an overwrite confirms in, but the caller keeps the confirm button
+ * hidden and the receipt itself carries no preview ID, so there is nothing here
+ * to act on.
+ */
+export const renderSavedViewReceipt = (
+  block: HTMLElement | null,
+  receipt: SavedViewCreateReceipt | null
+): void => {
+  renderDiffBlock(block, receipt ? receipt.diff : [], "receipt");
 };

@@ -13,7 +13,7 @@ import {
   savedViewInputFromParams,
   savedViewSaveError,
 } from "./saved-views-model";
-import { initSavedViewsNav } from "./saved-views";
+import { initSavedViewsNav, initSavedViewsSave } from "./saved-views";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -214,6 +214,149 @@ describe("saved views nav", () => {
     });
     handle?.render(normalizeSavedViewsResponse(viewsPayload()).views.slice(0, 1));
     expect(navItems(container)).toHaveLength(1);
+  });
+});
+
+const savePayload = (created: boolean, overrides: Record<string, unknown> = {}) => ({
+  ok: true,
+  generation: 4,
+  action: "upsert",
+  name: "Focus",
+  views: viewsPayload().views.slice(0, 1),
+  created,
+  config_diff: created
+    ? [
+        { kind: "+", line: 12, text: "[[views]]" },
+        { kind: "+", line: 13, text: 'name = "Focus"' },
+      ]
+    : [
+        { kind: "-", line: 13, text: 'query = "tag:old"' },
+        { kind: "+", line: 13, text: 'query = "tag:focus"' },
+      ],
+  config: { generation: 4, source_hash: "abc", status: "ok", restart_required: [], writable: true },
+  ...overrides,
+});
+
+const mountSave = (): void => {
+  document.body.innerHTML = `
+    <div class="saved-views-save" data-saved-views-save data-saved-views-csrf="csrf-token">
+      <button type="button" data-saved-views-open aria-expanded="false">Save as view</button>
+      <form data-saved-views-form hidden>
+        <input type="text" data-saved-views-name>
+        <input type="text" data-saved-views-description>
+        <button type="submit">Save</button>
+        <button type="button" data-saved-views-confirm hidden>Confirm overwrite</button>
+        <button type="button" data-saved-views-cancel>Cancel</button>
+        <pre data-saved-views-diff hidden></pre>
+        <p data-saved-views-status role="status"></p>
+      </form>
+    </div>
+  `;
+};
+
+const saveElement = <T extends Element>(selector: string, ctor: new () => T): T => {
+  const found = document.querySelector(selector);
+  if (!(found instanceof ctor)) {
+    throw new Error(`missing ${selector}`);
+  }
+  return found;
+};
+
+const submitSave = async (name: string): Promise<void> => {
+  saveElement("[data-saved-views-name]", HTMLInputElement).value = name;
+  saveElement("[data-saved-views-form]", HTMLFormElement).dispatchEvent(
+    new Event("submit", { cancelable: true, bubbles: true })
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+/**
+ * The two halves of the saved-views write class, seen from the DOM: an
+ * overwrite renders its diff as a question with the confirm button showing,
+ * while a creation renders the same diff as a receipt with nothing to click.
+ */
+describe("saved views save form", () => {
+  it("renders the creation diff as a non-actionable receipt after the auto-applied write", async () => {
+    mountSave();
+    setLocation("/library?expr=tag%3Afocus");
+    const routes: Record<string, () => Response> = {
+      "/api/views/preview": () => jsonResponse(savePayload(true, { preview_id: "receipt-1" })),
+      "/api/views/apply": () => jsonResponse(savePayload(true, { journal_id: "j-1" })),
+    };
+    const saver = initSavedViewsSave({
+      fetch: async (input) => {
+        const route = routes[String(input)];
+        if (!route) {
+          throw new Error(`unexpected request ${String(input)}`);
+        }
+        return route();
+      },
+    });
+
+    await submitSave("Focus");
+
+    const diff = saveElement("[data-saved-views-diff]", HTMLPreElement);
+    expect(diff.hidden).toBe(false);
+    expect(diff.getAttribute("data-saved-views-diff-role")).toBe("receipt");
+    expect(diff.textContent).toBe('+ [[views]]\n+ name = "Focus"');
+    // Nothing on the receipt can re-apply the preview the write consumed.
+    expect(saveElement("[data-saved-views-confirm]", HTMLButtonElement).hidden).toBe(true);
+    expect(saver?.pending()).toBeNull();
+    expect(saveElement("[data-saved-views-status]", HTMLParagraphElement).textContent).toBe(
+      'Saved view "Focus".'
+    );
+  });
+
+  it("renders an overwrite diff as a confirmation instead, and writes only once confirmed", async () => {
+    mountSave();
+    setLocation("/library?expr=tag%3Afocus");
+    const calls: string[] = [];
+    const saver = initSavedViewsSave({
+      fetch: async (input) => {
+        calls.push(String(input));
+        if (String(input) === "/api/views/preview") {
+          return jsonResponse(savePayload(false, { preview_id: "receipt-1" }));
+        }
+        return jsonResponse(savePayload(false, { journal_id: "j-1" }));
+      },
+    });
+
+    await submitSave("Focus");
+
+    const diff = saveElement("[data-saved-views-diff]", HTMLPreElement);
+    expect(diff.getAttribute("data-saved-views-diff-role")).toBe("confirm");
+    expect(saveElement("[data-saved-views-confirm]", HTMLButtonElement).hidden).toBe(false);
+    expect(calls).toEqual(["/api/views/preview"]);
+    expect(saver?.pending()?.previewID).toBe("receipt-1");
+
+    saveElement("[data-saved-views-confirm]", HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toEqual(["/api/views/preview", "/api/views/apply"]);
+    expect(diff.hidden).toBe(true);
+    expect(saveElement("[data-saved-views-confirm]", HTMLButtonElement).hidden).toBe(true);
+  });
+
+  it("clears a creation receipt when the save panel is closed", async () => {
+    mountSave();
+    setLocation("/library?expr=tag%3Afocus");
+    initSavedViewsSave({
+      fetch: async (input) =>
+        jsonResponse(
+          savePayload(true, {
+            preview_id: String(input) === "/api/views/preview" ? "receipt-1" : undefined,
+          })
+        ),
+    });
+
+    await submitSave("Focus");
+    const diff = saveElement("[data-saved-views-diff]", HTMLPreElement);
+    expect(diff.hidden).toBe(false);
+
+    saveElement("[data-saved-views-cancel]", HTMLButtonElement).click();
+
+    expect(diff.hidden).toBe(true);
+    expect(diff.hasAttribute("data-saved-views-diff-role")).toBe(false);
   });
 });
 

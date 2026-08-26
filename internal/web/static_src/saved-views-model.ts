@@ -161,6 +161,28 @@ export const savedViewPendingSave = (
   result,
 });
 
+/**
+ * The record a create leaves behind once its write has landed: the diff that
+ * was already applied, kept so the auto-chained create still *shows* what it
+ * wrote instead of discarding it.
+ *
+ * It deliberately carries no `previewID`. The receipt the server issued was
+ * consumed by the apply that produced this, so there is nothing left to
+ * re-apply, and the type makes that structural rather than a rule the UI has to
+ * remember: nothing downstream can reach a preview ID through it.
+ */
+export type SavedViewCreateReceipt = {
+  name: string;
+  diff: PropertyConfigDiffLine[];
+};
+
+export const savedViewCreateReceipt = (
+  pending: SavedViewPendingSave
+): SavedViewCreateReceipt => ({
+  name: pending.name,
+  diff: pending.diff,
+});
+
 export const savedViewOverwriteMessage = (name: string): string =>
   `"${name}" already exists. Review the diff, then confirm the overwrite.`;
 

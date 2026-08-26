@@ -11429,6 +11429,10 @@ var BrainNotesApp = (() => {
     diff: result.config_diff,
     result
   });
+  var savedViewCreateReceipt = (pending) => ({
+    name: pending.name,
+    diff: pending.diff
+  });
   var savedViewOverwriteMessage = (name) => `"${name}" already exists. Review the diff, then confirm the overwrite.`;
   var savedViewSavedMessage = (name, created) => created ? `Saved view "${name}".` : `Updated view "${name}".`;
   var savedViewNoChangeMessage = (name) => `"${name}" is already saved exactly like this.`;
@@ -11483,6 +11487,7 @@ var BrainNotesApp = (() => {
   var createSavedViewSaver = (deps) => {
     const hooks = deps.hooks || {};
     let pending = null;
+    let receipt = null;
     let busy = false;
     const setStatus = (message, kind = "") => {
       hooks.onStatus?.(message, kind);
@@ -11491,15 +11496,25 @@ var BrainNotesApp = (() => {
       pending = next;
       hooks.onPending?.(next);
     };
-    const runApply = async (receipt) => {
-      setStatus(`Saving view "${receipt.name}"...`, "is-loading");
-      const outcome = await applySavedView(deps.fetch, deps.token, receipt.previewID);
+    const setReceipt = (next) => {
+      if (receipt === null && next === null) {
+        return;
+      }
+      receipt = next;
+      hooks.onReceipt?.(next);
+    };
+    const runApply = async (issued) => {
+      setStatus(`Saving view "${issued.name}"...`, "is-loading");
+      const outcome = await applySavedView(deps.fetch, deps.token, issued.previewID);
       setPending(null);
       if (!outcome.ok) {
         setStatus(outcome.message, "is-error");
         return;
       }
-      setStatus(savedViewSavedMessage(receipt.name, receipt.created), "is-success");
+      setStatus(savedViewSavedMessage(issued.name, issued.created), "is-success");
+      if (issued.created) {
+        setReceipt(savedViewCreateReceipt(issued));
+      }
       hooks.onSaved?.(outcome.result);
     };
     const save = async (input) => {
@@ -11509,16 +11524,19 @@ var BrainNotesApp = (() => {
       const refusal = savedViewSaveError(input);
       if (refusal !== "") {
         setPending(null);
+        setReceipt(null);
         setStatus(refusal, "is-error");
         return;
       }
       if (deps.token.trim() === "") {
         setPending(null);
+        setReceipt(null);
         setStatus("Saving views is unavailable.", "is-error");
         return;
       }
       busy = true;
       setPending(null);
+      setReceipt(null);
       setStatus(`Previewing view "${input.name}"...`, "is-loading");
       try {
         const outcome = await previewSavedView(deps.fetch, deps.token, {
@@ -11535,12 +11553,12 @@ var BrainNotesApp = (() => {
           setStatus(savedViewNoChangeMessage(input.name), "");
           return;
         }
-        const receipt = savedViewPendingSave(input.name, outcome.result);
-        if (receipt.created) {
-          await runApply(receipt);
+        const receipt2 = savedViewPendingSave(input.name, outcome.result);
+        if (receipt2.created) {
+          await runApply(receipt2);
           return;
         }
-        setPending(receipt);
+        setPending(receipt2);
         setStatus(savedViewOverwriteMessage(input.name), "is-warning");
       } finally {
         busy = false;
@@ -11550,19 +11568,20 @@ var BrainNotesApp = (() => {
       if (busy) {
         return;
       }
-      const receipt = pending;
-      if (!receipt) {
+      const issued = pending;
+      if (!issued) {
         setStatus("Preview the view before saving it.", "is-error");
         return;
       }
       busy = true;
       try {
-        await runApply(receipt);
+        await runApply(issued);
       } finally {
         busy = false;
       }
     };
     const cancel = () => {
+      setReceipt(null);
       if (pending === null) {
         return;
       }
@@ -11574,6 +11593,7 @@ var BrainNotesApp = (() => {
       confirm,
       cancel,
       pending: () => pending,
+      receipt: () => receipt,
       busy: () => busy
     };
   };
@@ -11604,17 +11624,25 @@ var BrainNotesApp = (() => {
     }
     return views.length;
   };
-  var renderSavedViewDiff = (block, pending) => {
+  var renderDiffBlock = (block, diff, role) => {
     if (!block) {
       return;
     }
-    if (!pending || pending.diff.length === 0) {
+    if (diff.length === 0) {
       block.textContent = "";
       block.hidden = true;
+      block.removeAttribute("data-saved-views-diff-role");
       return;
     }
-    block.textContent = savedViewDiffText(pending.diff);
+    block.textContent = savedViewDiffText(diff);
     block.hidden = false;
+    block.setAttribute("data-saved-views-diff-role", role);
+  };
+  var renderSavedViewDiff = (block, pending) => {
+    renderDiffBlock(block, pending ? pending.diff : [], "confirm");
+  };
+  var renderSavedViewReceipt = (block, receipt) => {
+    renderDiffBlock(block, receipt ? receipt.diff : [], "receipt");
   };
 
   // internal/web/static_src/saved-views.ts
@@ -11674,12 +11702,19 @@ var BrainNotesApp = (() => {
         els.confirmButton.hidden = pending === null;
       }
     };
+    const showReceipt = (receipt) => {
+      renderSavedViewReceipt(els.diffEl, receipt);
+      if (els.confirmButton) {
+        els.confirmButton.hidden = true;
+      }
+    };
     const saver = createSavedViewSaver({
       fetch: fetcher,
       token: els.token,
       hooks: {
         onStatus: setStatus,
         onPending: showPending,
+        onReceipt: showReceipt,
         onSaved: (result) => {
           nav?.render(result.views);
           els.nameInput.value = "";
