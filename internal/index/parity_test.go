@@ -170,7 +170,7 @@ func relKey(t *testing.T, root string, note *vault.Note) string {
 // unexported in internal/web and this package must not import web. That is
 // precisely why the parity table exists: two copies of a walk are exactly the
 // thing that drifts, so the assertion is on the observable result of both.
-func directLoadNotes(t *testing.T, v *vault.Vault) []*vault.Note {
+func directLoadNotes(t testing.TB, v *vault.Vault) []*vault.Note {
 	t.Helper()
 
 	var notes []*vault.Note

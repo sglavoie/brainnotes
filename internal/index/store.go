@@ -115,7 +115,7 @@ func (ix *Index) read() (map[string]entry, string, error) {
 // validEntry rejects a record that cannot have been written by this package.
 // The hash check is what makes silent bit rot a rebuild rather than a wrong
 // answer, and it is affordable: hashing a whole vault's note bytes is
-// milliseconds next to re-reading and re-parsing them.
+// milliseconds next to re-reading them from disk.
 func validEntry(e entry) error {
 	switch {
 	case e.Rel == "":

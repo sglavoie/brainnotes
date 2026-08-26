@@ -72,7 +72,10 @@ bn index [--status | --rebuild]
 
 `bn` keeps a cache of the note bytes it has already read under
 `<vault>/.bnotes/index/`, so a repeated vault load — `bn serve` refreshing its
-snapshot, most of all — stats each note instead of re-reading and re-parsing it.
+snapshot, most of all — stats each note instead of reading it from disk again.
+Only the read is skipped. A warm load still re-parses each cached note's
+frontmatter, because every snapshot gets its own freshly parsed note rather than
+sharing a mutable one, so the cache saves the file read and not the YAML parse.
 The cache is unconditional and invisible: there is no flag to turn it on or off,
 nothing in `brainnotes.toml` configures it, and it holds nothing that is not
 already in the vault.

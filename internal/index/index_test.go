@@ -52,7 +52,7 @@ func writeNote(t *testing.T, root, rel, contents string) string {
 // backdate pushes every note's mtime into the past so the stale window stops
 // forcing a re-read. Freshly written fixtures are by definition inside the
 // window, so without this no test could ever reach the all-clean path.
-func backdate(t *testing.T, root string, age time.Duration) {
+func backdate(t testing.TB, root string, age time.Duration) {
 	t.Helper()
 
 	when := time.Now().Add(-age)
@@ -70,7 +70,7 @@ func backdate(t *testing.T, root string, age time.Duration) {
 // newTestIndex builds an index whose log output is captured rather than
 // printed, and returns the captured lines. Self-healing is required to be
 // silent to the caller but not invisible, so tests assert on both.
-func newTestIndex(t *testing.T, v *vault.Vault) (*Index, *[]string) {
+func newTestIndex(t testing.TB, v *vault.Vault) (*Index, *[]string) {
 	t.Helper()
 
 	var logs []string
@@ -101,7 +101,7 @@ func relPaths(t *testing.T, root string, notes []*vault.Note) []string {
 	return out
 }
 
-func mustLoad(t *testing.T, ix *Index) Result {
+func mustLoad(t testing.TB, ix *Index) Result {
 	t.Helper()
 
 	result, err := ix.Load()

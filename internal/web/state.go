@@ -39,7 +39,10 @@ func (directNoteSource) loadNotes(v *vault.Vault, load noteLoader, timeout time.
 }
 
 // indexNoteSource serves note bytes from internal/index, so a walk over an idle
-// vault stats each note instead of re-reading and re-parsing it.
+// vault stats each note instead of reading it from disk again. The read is all
+// that is saved: the index parses a fresh note out of the cached bytes on every
+// load, so a snapshot rebuilt from a warm index still pays one frontmatter
+// parse per note.
 //
 // The two guarantees the direct path holds are preserved rather than
 // reimplemented: the index reads through this source's own reader, which

@@ -117,6 +117,13 @@ type Index struct {
 	// readFile reads one note's bytes. It is os.ReadFile unless a caller
 	// replaced it through WithReader.
 	readFile func(path string) ([]byte, error)
+	// parseNote turns one cached revision into a fresh note. It is always
+	// vault.NewNoteFromSource in production; it is a field so the cost test can
+	// count how many parses a load actually performs. That count is the whole
+	// point of the seam: a warm load performs zero reads and one parse per
+	// walked note, and nothing else in the package can observe the second half
+	// of that sentence.
+	parseNote func(root, path string, data []byte) (*vault.Note, error)
 
 	mu sync.Mutex
 	// entries maps a vault-relative slash path to the bytes last read from it.
@@ -133,9 +140,9 @@ type Index struct {
 // entry is one cached file revision. Data is treated as immutable once stored:
 // every snapshot parses a fresh *vault.Note from it rather than sharing a Note
 // across snapshots, because a Note is mutable and the callers above this
-// package treat a returned snapshot as immutable. Re-parsing a few hundred
-// small frontmatters costs single-digit milliseconds; the read it avoids is
-// the actual win.
+// package treat a returned snapshot as immutable. This cache therefore removes
+// the read and never the parse — a warm load still re-parses every cached
+// note's frontmatter — and the read is the whole win.
 type entry struct {
 	Rel     string
 	Size    int64
@@ -154,12 +161,13 @@ func New(v *vault.Vault, opts ...Option) (*Index, error) {
 		return nil, errors.New("index: vault has no root")
 	}
 	ix := &Index{
-		vault:    v,
-		root:     v.Root,
-		dir:      Dir(v.Root),
-		now:      time.Now,
-		logf:     log.Printf,
-		readFile: os.ReadFile,
+		vault:     v,
+		root:      v.Root,
+		dir:       Dir(v.Root),
+		now:       time.Now,
+		logf:      log.Printf,
+		readFile:  os.ReadFile,
+		parseNote: vault.NewNoteFromSource,
 
 		entries: map[string]entry{},
 		cold:    true,
@@ -189,6 +197,10 @@ func Dir(root string) string {
 // size and mtime both match and that mtime is older than staleWindow.
 // Otherwise re-read and re-hash. Entries the walk did not visit are dropped, so
 // a deleted or newly-ignored note leaves the cache with it.
+//
+// Every walked note is then parsed into a fresh *vault.Note, clean entry or
+// not. A warm load costs one stat and one frontmatter parse per note and zero
+// reads; a cold one adds the read. What this cache removes is the read alone.
 //
 // The only error this returns is a walk failure, which is a vault problem
 // rather than an index problem. Everything the index itself can get wrong
@@ -266,10 +278,14 @@ func (ix *Index) Load() (Result, error) {
 		}
 
 		next[rel] = fresh
-		// A fresh Note per snapshot, parsed from the cached bytes. Sharing one
-		// across snapshots would be faster and would put a mutable object
-		// behind an immutable-once-returned contract.
-		parsed, parseErr := vault.NewNoteFromSource(ix.root, note.Path, fresh.Data)
+		// A fresh Note per snapshot, parsed from the cached bytes — including
+		// on a warm load, where the bytes were never re-read. The frontmatter
+		// YAML parse therefore happens on every load of every note and is not
+		// part of what this cache saves; sharing one Note across snapshots
+		// would save it and would put a mutable object behind an
+		// immutable-once-returned contract. BenchmarkWarmIndexLoad and
+		// TestLoadCostsAreOneReadPerMissAndOneParsePerNote measure both halves.
+		parsed, parseErr := ix.parseNote(ix.root, note.Path, fresh.Data)
 		if parseErr != nil {
 			result.Failed = append(result.Failed, FileError{RelPath: rel, Err: parseErr})
 			return nil

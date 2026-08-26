@@ -1,6 +1,16 @@
-// Package index is a persistent cache of parsed note bytes, keyed by the
-// revision they were read at. It exists so a repeated vault load pays a stat
-// per note instead of a read plus a YAML parse per note.
+// Package index is a persistent cache of note bytes, keyed by the revision
+// they were read at. It exists so a repeated vault load pays a stat per note
+// instead of a read per note.
+//
+// # What it does not save
+//
+// The parse. Every Load turns each walked note's bytes into a fresh
+// *vault.Note, cached or not, so a warm load still runs frontmatter.Parse once
+// per note — see the entry type for why sharing a parsed Note across snapshots
+// is not on the table. BenchmarkDirectLoad, BenchmarkColdIndexLoad and
+// BenchmarkWarmIndexLoad time the three paths over a 500-note vault, and
+// TestLoadCostsAreOneReadPerMissAndOneParsePerNote counts the reads and the
+// parses each one performs.
 //
 // # Layering
 //
