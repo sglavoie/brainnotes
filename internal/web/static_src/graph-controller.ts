@@ -17,6 +17,7 @@ import {
 } from "./graph-controller-labels";
 import {
   applyViewport,
+  captureNodePositions,
   clampedSpread,
   currentViewport,
   hasFcose,
@@ -27,6 +28,13 @@ import {
   updateSpreadLabel,
 } from "./graph-controller-layout";
 import { buildGraphStyle } from "./graph-controller-style";
+import {
+  type GraphDisplayOptions,
+  type GraphDisplayStats,
+  buildDisplayGraph,
+  defaultGraphDisplayOptions,
+  folderGroupKey,
+} from "./graph-controller-view";
 import {
   type CytoscapeFactory,
   type GraphLayoutRunOptions,
@@ -72,6 +80,81 @@ const syncPageSearchModeParam = (mode: GraphSearchMode): void => {
   updateBrowserQuery(params);
 };
 
+/** Hop bound of the isolate control, matching `buildDisplayGraph`'s own clamp. */
+const maxIsolateHops = 3;
+
+/** Slider bound of the min-degree control. The pipeline itself has no upper clamp. */
+const maxMinDegree = 10;
+
+/** Folder-path depth bound of the collapse control, matching the pipeline's clamp. */
+const maxCollapseDepth = 3;
+
+const clampSliderInteger = (value: number, min: number, max: number): number =>
+  Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
+
+export const clampIsolateHops = (value: number): number =>
+  clampSliderInteger(value, 1, maxIsolateHops);
+
+export const clampMinDegree = (value: number): number =>
+  clampSliderInteger(value, 0, maxMinDegree);
+
+export const clampCollapseDepth = (value: number): number =>
+  clampSliderInteger(value, 0, maxCollapseDepth);
+
+/** The full display-knob set the URL carries. */
+type GraphDisplayParams = {
+  isolateID: string;
+  hops: number;
+  minDegree: number;
+  collapseDepth: number;
+};
+
+// `g_isolate` / `g_hops` / `g_mindeg` / `g_collapse` are display-only params,
+// read and written exactly like `q_mode` above: never through
+// `publishFilterChange`, and never copied by `buildFilteredAPIURL`, so moving
+// them cannot refetch the graph.
+const readPageDisplayParams = (): GraphDisplayParams => {
+  const params = new URLSearchParams(window.location.search);
+  const readInt = (key: string): number => Number.parseInt(params.get(key) || "", 10);
+  return {
+    isolateID: params.get("g_isolate") || "",
+    hops: clampIsolateHops(readInt("g_hops")),
+    minDegree: clampMinDegree(readInt("g_mindeg")),
+    collapseDepth: clampCollapseDepth(readInt("g_collapse")),
+  };
+};
+
+/**
+ * Writes the whole display-knob set into the URL at once.
+ *
+ * Every knob is omitted at its off value, so a default view keeps a clean,
+ * shareable URL and only the knobs the user actually moved show up in it.
+ */
+const syncPageDisplayParams = (display: GraphDisplayParams): void => {
+  const params = new URLSearchParams(window.location.search);
+  const write = (key: string, value: string, offValue: string): void => {
+    if (value === offValue) {
+      params.delete(key);
+      return;
+    }
+    params.set(key, value);
+  };
+  write("g_isolate", display.isolateID, "");
+  write("g_hops", String(display.hops), "1");
+  write("g_mindeg", String(display.minDegree), "0");
+  write("g_collapse", String(display.collapseDepth), "0");
+  updateBrowserQuery(params);
+};
+
+export const formatIsolateHopsLabel = (hops: number): string =>
+  hops === 1 ? "1 hop" : `${hops} hops`;
+
+export const formatMinDegreeLabel = (minDegree: number): string =>
+  minDegree <= 0 ? "off" : `≥ ${minDegree}`;
+
+export const formatCollapseDepthLabel = (depth: number): string =>
+  depth <= 0 ? "off" : `depth ${depth}`;
+
 export const initGraph = (): void => {
   const dom = {
     canvas: getElementByID("graph-canvas", HTMLElement),
@@ -85,6 +168,14 @@ export const initGraph = (): void => {
     filterInput: getElementByID("graph-filter-input", HTMLInputElement),
     spreadInput: getElementByID("graph-spread-input", HTMLInputElement),
     spreadValue: getElementByID("graph-spread-value", HTMLElement),
+    isolateButton: getElementByID("graph-isolate-button", HTMLButtonElement),
+    isolateClearButton: getElementByID("graph-isolate-clear-button", HTMLButtonElement),
+    hopsInput: getElementByID("graph-hops-input", HTMLInputElement),
+    hopsValue: getElementByID("graph-hops-value", HTMLElement),
+    minDegreeInput: getElementByID("graph-mindegree-input", HTMLInputElement),
+    minDegreeValue: getElementByID("graph-mindegree-value", HTMLElement),
+    collapseInput: getElementByID("graph-collapse-input", HTMLInputElement),
+    collapseValue: getElementByID("graph-collapse-value", HTMLElement),
     fitButton: getElementByID("graph-fit-button", HTMLButtonElement),
     zoomMatchesButton: getElementByID("graph-zoom-matches-button", HTMLButtonElement),
     resetLayoutButton: getElementByID("graph-reset-layout-button", HTMLButtonElement),
@@ -109,6 +200,12 @@ export const initGraph = (): void => {
     activeLayout: null,
     currentQuery: "",
     currentGraphElements: emptyGraphElements(),
+    display: {
+      ...defaultGraphDisplayOptions(),
+      ...readPageDisplayParams(),
+    },
+    displayGraphElements: emptyGraphElements(),
+    expandedFolders: new Set<string>(),
     hoveredNodeID: "",
     selectedNodeID: "",
     labelMode: readLabelMode(dom.labelModeInputs),
@@ -119,15 +216,70 @@ export const initGraph = (): void => {
   };
   let debounceToken = 0;
   let publishToken = 0;
+  // A third debounce token, the same closure-scoped shape as the two above. This
+  // one coalesces a slider drag over the display knobs, which drive a relayout
+  // rather than a fetch.
+  let displayToken = 0;
   let requestToken = 0;
   let selectionSyncing = false;
-  // Cheap identity of the element set currently mounted in Cytoscape. Equal
-  // signatures across a focus-mode reload mean the graph itself did not change,
-  // so we can repaint match highlighting without touching positions.
+  // Equal signatures across a focus-mode reload mean the mounted graph did not
+  // change, so we can repaint match highlighting without touching positions.
+  // Cheap identity of the element set currently mounted in Cytoscape, taken over
+  // the *displayed* elements: the fetched set is unchanged by a display knob, so
+  // comparing it would read an isolate toggle as "nothing changed".
   let currentElementSignature = "";
+  let displayStats: GraphDisplayStats | null = null;
+  // Match ids projected onto the displayed set: an aggregate matches when any of
+  // its members does, so the mounted graph highlights what the source matched.
+  let displayedMatchIDs = new Set<string>();
+  // What the load reported, kept so a display rebuild can re-render the line
+  // without refetching. The reduction sentence is appended to it.
+  let baseStatusMessage = "";
+  let baseStatusKind: StatusKind = "";
+  // A one-off note about the display state itself, e.g. an isolate anchor that
+  // the current query no longer contains.
+  let displayNotice = "";
 
   function setStatus(message: string, kind: StatusKind = ""): void {
-    setStatusText(dom.status, message, kind, ["is-loading", "is-empty", "is-error"]);
+    baseStatusMessage = message;
+    baseStatusKind = kind;
+    renderStatus();
+  }
+
+  /**
+   * The explicit account of what the display pipeline removed.
+   *
+   * Silent thinning is the failure mode this exists to prevent: whenever fewer
+   * nodes are drawn than were fetched, the status line says so and names the
+   * knob responsible.
+   */
+  function displayReductionSentence(): string {
+    if (!displayStats || displayStats.displayedNodeCount >= displayStats.sourceNodeCount) {
+      return "";
+    }
+    const counts = `Showing ${displayStats.displayedNodeCount} of ${displayStats.sourceNodeCount} nodes`;
+    const reasons: string[] = [];
+    if (displayStats.isolated) {
+      const anchor = findSourceNodeModel(state.display.isolateID);
+      const anchorLabel = anchor ? anchor.title || anchor.id : state.display.isolateID;
+      reasons.push(
+        `isolated ${formatIsolateHopsLabel(state.display.hops)} from "${anchorLabel}"`
+      );
+    }
+    if (displayStats.droppedByDegree > 0) {
+      reasons.push(`degree ≥ ${state.display.minDegree}`);
+    }
+    if (displayStats.aggregateCount > 0) {
+      reasons.push(`folders collapsed to depth ${state.display.collapseDepth}`);
+    }
+    return reasons.length === 0 ? `${counts}.` : `${counts} — ${reasons.join(", ")}.`;
+  }
+
+  function renderStatus(): void {
+    const message = [baseStatusMessage, displayReductionSentence(), displayNotice]
+      .filter((part) => part !== "")
+      .join(" ");
+    setStatusText(dom.status, message, baseStatusKind, ["is-loading", "is-empty", "is-error"]);
   }
 
   function renderDetailsPanel(fallbackHoveredModel: GraphNodeModel | null = null): void {
@@ -204,7 +356,15 @@ export const initGraph = (): void => {
 
   function bindGraphEvents(instance: cytoscape.Core): void {
     instance.on("tap", "node", (event: cytoscape.EventObjectNode) => {
-      selectNode(event.target.id());
+      const nodeID = event.target.id();
+      const model = findNodeModel(nodeID);
+      if (model && model.isAggregate) {
+        // A collapsed folder is a drill-down affordance, not a note: tapping it
+        // expands the group back out rather than selecting a synthetic node.
+        toggleFolderExpansion(model.folder);
+        return;
+      }
+      selectNode(nodeID);
     });
 
     instance.on("tap", (event: cytoscape.EventObjectCore) => {
@@ -238,8 +398,20 @@ export const initGraph = (): void => {
     });
   }
 
-  function findNodeModel(nodeID: string): GraphNodeModel | null {
+  function findSourceNodeModel(nodeID: string): GraphNodeModel | null {
     return state.currentGraphElements.nodes.find((node) => node.id === nodeID) || null;
+  }
+
+  // The displayed set comes first: an aggregate has no entry in the fetched
+  // source, and a displayed note carries the recomputed degrees the panel shows.
+  function findNodeModel(nodeID: string): GraphNodeModel | null {
+    if (nodeID === "") {
+      return null;
+    }
+    return (
+      state.displayGraphElements.nodes.find((node) => node.id === nodeID) ||
+      findSourceNodeModel(nodeID)
+    );
   }
 
   function syncCytoscapeSelection(nodeID: string): void {
@@ -264,12 +436,15 @@ export const initGraph = (): void => {
 
   function selectNode(nodeID: string, options: GraphSelectionOptions = {}): void {
     const model = findNodeModel(nodeID);
-    state.selectedNodeID = model ? model.id : "";
+    // An aggregate is never a selection: it stands for a group, and every
+    // selection-driven affordance (Open note, Isolate) means one note.
+    state.selectedNodeID = model && !model.isAggregate ? model.id : "";
     if (!options || !options.fromCytoscape) {
       syncCytoscapeSelection(state.selectedNodeID);
     }
     renderDetailsPanel();
     applyGraphVisualState();
+    updateDisplayControls();
   }
 
   function clearSelectedNode(options: GraphSelectionOptions = {}): void {
@@ -279,6 +454,7 @@ export const initGraph = (): void => {
     }
     renderDetailsPanel();
     applyGraphVisualState();
+    updateDisplayControls();
   }
 
   function setHoveredNode(nodeID: string, fallbackData: unknown): void {
@@ -328,27 +504,79 @@ export const initGraph = (): void => {
     selectNode(nodeID);
   }
 
+  /**
+   * Projects the fetched match ids onto the mounted element set.
+   *
+   * Aggregation is the reason this is not just `state.matchIDs`: a collapsed
+   * folder is a single mounted node whose members carry the matches, so it
+   * highlights when any one of them does.
+   */
+  function computeDisplayedMatchIDs(): Set<string> {
+    const ids = new Set<string>();
+    for (const node of state.displayGraphElements.nodes) {
+      if (node.isAggregate) {
+        if ((node.memberIDs || []).some((memberID) => state.matchIDs.has(memberID))) {
+          ids.add(node.id);
+        }
+        continue;
+      }
+      if (state.matchIDs.has(node.id)) {
+        ids.add(node.id);
+      }
+    }
+    return ids;
+  }
+
   function applyGraphVisualState(): void {
     applyGraphVisualClasses(
       state.cy,
       state.labelMode,
       state.selectedNodeID,
       state.hoveredNodeID,
-      state.matchIDs
+      displayedMatchIDs
     );
   }
 
   function updateZoomMatchesButton(): void {
     if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
-      dom.zoomMatchesButton.disabled = state.matchIDs.size === 0;
+      dom.zoomMatchesButton.disabled = displayedMatchIDs.size === 0;
+    }
+  }
+
+  /** Disabled-state of the display controls, refreshed on every rebuild and selection. */
+  function updateDisplayControls(): void {
+    if (dom.isolateButton instanceof HTMLButtonElement) {
+      dom.isolateButton.disabled =
+        state.selectedNodeID === "" || state.selectedNodeID === state.display.isolateID;
+    }
+    if (dom.isolateClearButton instanceof HTMLButtonElement) {
+      dom.isolateClearButton.disabled = state.display.isolateID === "";
+    }
+    if (dom.hopsInput instanceof HTMLInputElement) {
+      dom.hopsInput.value = String(state.display.hops);
+    }
+    if (dom.hopsValue) {
+      dom.hopsValue.textContent = formatIsolateHopsLabel(state.display.hops);
+    }
+    if (dom.minDegreeInput instanceof HTMLInputElement) {
+      dom.minDegreeInput.value = String(state.display.minDegree);
+    }
+    if (dom.minDegreeValue) {
+      dom.minDegreeValue.textContent = formatMinDegreeLabel(state.display.minDegree);
+    }
+    if (dom.collapseInput instanceof HTMLInputElement) {
+      dom.collapseInput.value = String(state.display.collapseDepth);
+    }
+    if (dom.collapseValue) {
+      dom.collapseValue.textContent = formatCollapseDepthLabel(state.display.collapseDepth);
     }
   }
 
   function zoomToMatches(): void {
-    if (!state.cy || state.matchIDs.size === 0) {
+    if (!state.cy || displayedMatchIDs.size === 0) {
       return;
     }
-    const matchedNodes = state.cy.nodes().filter((node) => state.matchIDs.has(node.id()));
+    const matchedNodes = state.cy.nodes().filter((node) => displayedMatchIDs.has(node.id()));
     if (matchedNodes.length === 0) {
       return;
     }
@@ -405,10 +633,18 @@ export const initGraph = (): void => {
     }
   }
 
-  function applyGraphElements(graphElements: GraphElements, fitAfterLayout: boolean): void {
+  function applyGraphElements(
+    graphElements: GraphElements,
+    layoutOptions: GraphLayoutRunOptions
+  ): void {
     const instance = ensureGraph();
     stopActiveLayout();
     const selectedNodeID = state.selectedNodeID;
+    // Remounting throws every position away. A display-knob rebuild asks for
+    // `resetPositions: false`, which here means "carry the surviving nodes'
+    // positions across", so isolating does not shuffle the neighborhood the user
+    // was already looking at.
+    const rememberedPositions = layoutOptions.resetPositions ? null : captureNodePositions(instance);
 
     selectionSyncing = true;
     try {
@@ -430,10 +666,134 @@ export const initGraph = (): void => {
       return;
     }
 
-    runLayout({
-      fitAfterLayout,
-      resetPositions: true,
+    if (rememberedPositions) {
+      seedDeterministicPositions(instance, clampedSpread(dom.spreadInput), rememberedPositions);
+    }
+    runLayout(layoutOptions);
+  }
+
+  /** The options `buildDisplayGraph` runs with right now, keep-set included. */
+  function currentDisplayOptions(): GraphDisplayOptions {
+    const keepIDs = new Set<string>();
+    if (state.selectedNodeID !== "") {
+      keepIDs.add(state.selectedNodeID);
+    }
+    if (state.display.isolateID !== "") {
+      keepIDs.add(state.display.isolateID);
+    }
+    return {
+      ...state.display,
+      expandedFolders: state.expandedFolders,
+      keepIDs,
+    };
+  }
+
+  /**
+   * Runs the display pipeline over the fetched graph and mounts the result.
+   *
+   * The one place display state becomes pixels: every knob goes through here, and
+   * nothing here refetches.
+   */
+  function rebuildDisplay(
+    layoutOptions: GraphLayoutRunOptions,
+    prebuilt: { elements: GraphElements; stats: GraphDisplayStats } | null = null
+  ): void {
+    const built = prebuilt || buildDisplayGraph(state.currentGraphElements, currentDisplayOptions());
+
+    // A query change can filter the anchor out from under a live isolation. The
+    // pipeline treats that as a no-op, so without this the graph would silently
+    // spring back to full while the URL and the clear button still claimed an
+    // isolated view.
+    if (state.display.isolateID !== "" && !built.stats.isolated) {
+      const droppedAnchor = state.display.isolateID;
+      state.display.isolateID = "";
+      syncPageDisplayParams(state.display);
+      displayNotice = `Isolation cleared: "${droppedAnchor}" is not in the current graph.`;
+    } else {
+      displayNotice = "";
+    }
+
+    state.displayGraphElements = built.elements;
+    displayStats = built.stats;
+    displayedMatchIDs = computeDisplayedMatchIDs();
+    currentElementSignature = elementSignature(built.elements);
+    applyGraphElements(built.elements, layoutOptions);
+    updateZoomMatchesButton();
+    updateDisplayControls();
+    renderStatus();
+  }
+
+  /** A display-knob rebuild: relayout in place, never yanking the viewport. */
+  function rebuildDisplayForControl(): void {
+    rebuildDisplay({
+      fitAfterLayout: false,
+      preserveViewport: true,
+      resetPositions: false,
     });
+  }
+
+  /**
+   * A display-knob rebuild, coalesced across a slider drag.
+   *
+   * Unlike the free-text filter — where the debounce guards a fetch that a
+   * request token then makes safe to lose — a rebuild is a synchronous remount
+   * plus a relayout, so a 0-to-10 min-degree sweep would otherwise queue eleven
+   * of them. Two guards make the drag cost one: this debounce collapses the
+   * burst into a single trailing rebuild, and the in-flight layout belonging to
+   * a slider position the user has already moved past is stopped right away.
+   * `runLayout`'s `layoutRunID` bump is the backstop — it discards a stale
+   * `layoutstop` if the engine fires one after the stop anyway.
+   */
+  function scheduleDisplayRebuild(delay: number): void {
+    window.clearTimeout(displayToken);
+    if (delay <= 0) {
+      rebuildDisplayForControl();
+      return;
+    }
+    stopActiveLayout();
+    displayToken = window.setTimeout(() => {
+      rebuildDisplayForControl();
+    }, delay);
+  }
+
+  /**
+   * Drops expansion keys the freshly fetched graph can no longer produce.
+   *
+   * Expansion is deliberately sticky across a refetch — a keystroke in focus
+   * mode must not re-collapse a folder the user just opened — so the set is
+   * pruned rather than cleared. Without the prune it only ever grows, and a
+   * folder that a narrowing query removed would silently come back
+   * pre-expanded the moment the query widened again. A depth change is the
+   * other trigger, and that one clears outright: the keys are depth-specific.
+   */
+  function pruneExpandedFolders(graphElements: GraphElements): void {
+    if (state.expandedFolders.size === 0) {
+      return;
+    }
+    const live = new Set<string>();
+    for (const node of graphElements.nodes) {
+      const key = folderGroupKey(node.folder, state.display.collapseDepth);
+      if (key !== "") {
+        live.add(key);
+      }
+    }
+    for (const folder of Array.from(state.expandedFolders)) {
+      if (!live.has(folder)) {
+        state.expandedFolders.delete(folder);
+      }
+    }
+  }
+
+  function toggleFolderExpansion(folder: string): void {
+    if (folder === "") {
+      return;
+    }
+    if (state.expandedFolders.has(folder)) {
+      state.expandedFolders.delete(folder);
+    } else {
+      state.expandedFolders.add(folder);
+    }
+    rebuildDisplayForControl();
   }
 
   function buildQueryURL(query: string): string {
@@ -464,17 +824,24 @@ export const initGraph = (): void => {
 
   // Repaints match highlighting on the mounted graph without rebuilding it, so
   // positions, zoom, pan and selection survive a keystroke in focus mode.
-  function refreshMatchHighlighting(graphElements: GraphElements): void {
+  function refreshMatchHighlighting(
+    graphElements: GraphElements,
+    displayElements: GraphElements
+  ): void {
     const instance = state.cy;
     if (!instance) {
       return;
     }
+    state.currentGraphElements = graphElements;
+    state.displayGraphElements = displayElements;
+    // The mounted ids are display ids, so the match set has to be projected
+    // through the aggregation before it can be written onto nodes.
+    displayedMatchIDs = computeDisplayedMatchIDs();
     instance.batch(() => {
       instance.nodes().forEach((node) => {
-        node.data("matchesQuery", state.matchIDs.has(node.id()));
+        node.data("matchesQuery", displayedMatchIDs.has(node.id()));
       });
     });
-    state.currentGraphElements = graphElements;
     renderDetailsPanel();
     applyGraphVisualState();
   }
@@ -513,18 +880,31 @@ export const initGraph = (): void => {
     }
 
     const graphElements = normalizeGraphPayload(payload);
-    const signature = elementSignature(graphElements);
     const focusMode = state.searchMode === "focus";
     state.matchIDs = matchIDsFor(graphElements);
+    // Before anything is built from the new payload, so the signature compared
+    // below and the graph finally mounted run with the same expansion set.
+    pruneExpandedFolders(graphElements);
+    // The comparison is over what the new payload *would* mount, not over the
+    // payload itself: display knobs sit between the two, so only the displayed
+    // signature can answer "is the mounted graph the same graph?".
+    const built = buildDisplayGraph(graphElements, currentDisplayOptions());
+    const signature = elementSignature(built.elements);
 
     if (focusMode && state.cy && signature === currentElementSignature) {
       // Same nodes and edges as the mounted graph: only the match set moved, so
       // repaint highlighting in place instead of relaying out under the cursor.
-      refreshMatchHighlighting(graphElements);
+      refreshMatchHighlighting(graphElements, built.elements);
+      displayStats = built.stats;
     } else {
       state.currentGraphElements = graphElements;
-      currentElementSignature = signature;
-      applyGraphElements(graphElements, true);
+      rebuildDisplay(
+        {
+          fitAfterLayout: true,
+          resetPositions: true,
+        },
+        built
+      );
     }
     updateZoomMatchesButton();
 
@@ -634,6 +1014,84 @@ export const initGraph = (): void => {
       });
     }
 
+    // The display controls deliberately bypass `publishFilterChange`: `g_isolate`
+    // and `g_hops` describe what is drawn from the already-loaded graph, so
+    // moving them must never cost a request.
+    if (dom.isolateButton instanceof HTMLButtonElement) {
+      dom.isolateButton.addEventListener("click", () => {
+        if (state.selectedNodeID === "") {
+          return;
+        }
+        state.display.isolateID = state.selectedNodeID;
+        syncPageDisplayParams(state.display);
+        rebuildDisplayForControl();
+      });
+    }
+
+    if (dom.isolateClearButton instanceof HTMLButtonElement) {
+      dom.isolateClearButton.addEventListener("click", () => {
+        if (state.display.isolateID === "") {
+          return;
+        }
+        state.display.isolateID = "";
+        syncPageDisplayParams(state.display);
+        rebuildDisplayForControl();
+      });
+    }
+
+    if (dom.hopsInput instanceof HTMLInputElement) {
+      const hopsInput = dom.hopsInput;
+      hopsInput.addEventListener("input", () => {
+        const hops = clampIsolateHops(Number.parseInt(hopsInput.value, 10));
+        if (hops === state.display.hops) {
+          return;
+        }
+        state.display.hops = hops;
+        syncPageDisplayParams(state.display);
+        if (state.display.isolateID === "") {
+          // Nothing is isolated, so the hop count changes no element: update the
+          // label and the URL and stop, rather than paying for a relayout.
+          updateDisplayControls();
+          return;
+        }
+        rebuildDisplayForControl();
+      });
+    }
+
+    if (dom.minDegreeInput instanceof HTMLInputElement) {
+      const minDegreeInput = dom.minDegreeInput;
+      minDegreeInput.addEventListener("input", () => {
+        const minDegree = clampMinDegree(Number.parseInt(minDegreeInput.value, 10));
+        if (minDegree === state.display.minDegree) {
+          return;
+        }
+        state.display.minDegree = minDegree;
+        // The URL and the label follow the slider immediately — only the
+        // expensive part, the rebuild, waits for the drag to settle.
+        syncPageDisplayParams(state.display);
+        updateDisplayControls();
+        scheduleDisplayRebuild(graphFilterDebounceMs);
+      });
+    }
+
+    if (dom.collapseInput instanceof HTMLInputElement) {
+      const collapseInput = dom.collapseInput;
+      collapseInput.addEventListener("input", () => {
+        const collapseDepth = clampCollapseDepth(Number.parseInt(collapseInput.value, 10));
+        if (collapseDepth === state.display.collapseDepth) {
+          return;
+        }
+        state.display.collapseDepth = collapseDepth;
+        // Expansion keys are the first `collapseDepth` segments of a folder
+        // path, so they mean something different at every depth. Carrying them
+        // across would expand a group the user never opened.
+        state.expandedFolders.clear();
+        syncPageDisplayParams(state.display);
+        updateDisplayControls();
+        scheduleDisplayRebuild(graphFilterDebounceMs);
+      });
+    }
+
     if (dom.fitButton instanceof HTMLButtonElement) {
       dom.fitButton.addEventListener("click", fitCurrentGraph);
     }
@@ -701,5 +1159,8 @@ export const initGraph = (): void => {
   document.addEventListener(THEME_EVENT, restyleGraphForTheme);
 
   bindControls();
+  // The URL is authoritative for the display knobs at init, so a shared link
+  // reproduces the view before the first payload lands.
+  updateDisplayControls();
   scheduleLoad(initialQuery, 0);
 };

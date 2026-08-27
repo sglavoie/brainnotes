@@ -121,7 +121,35 @@ export const layoutOptionsForSpread = (spread: number): cytoscape.LayoutOptions 
     ? fcoseLayoutOptionsForSpread(spread)
     : (coseLayoutOptionsForSpread(spread) as unknown as cytoscape.LayoutOptions);
 
-export const seedDeterministicPositions = (cy: cytoscape.Core | null, spread: number): void => {
+export type GraphNodePositions = Map<string, { x: number; y: number }>;
+
+/**
+ * Snapshots the mounted node positions by id.
+ *
+ * A display-knob rebuild remounts a different element set, which throws every
+ * position away. Capturing first and handing the map back to
+ * `seedDeterministicPositions` is what lets the surviving nodes stay put while
+ * only the newly introduced ones (a collapse aggregate, say) get seeded.
+ */
+export const captureNodePositions = (cy: cytoscape.Core | null): GraphNodePositions => {
+  const positions: GraphNodePositions = new Map();
+  if (!cy) {
+    return positions;
+  }
+  (cy.nodes().toArray() as cytoscape.NodeSingular[]).forEach((node) => {
+    const position = node.position();
+    if (Number.isFinite(position.x) && Number.isFinite(position.y)) {
+      positions.set(node.id(), { x: position.x, y: position.y });
+    }
+  });
+  return positions;
+};
+
+export const seedDeterministicPositions = (
+  cy: cytoscape.Core | null,
+  spread: number,
+  keep: GraphNodePositions | null = null
+): void => {
   if (!cy) {
     return;
   }
@@ -133,6 +161,11 @@ export const seedDeterministicPositions = (cy: cytoscape.Core | null, spread: nu
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
 
   nodes.forEach((node, index) => {
+    const remembered = keep ? keep.get(node.id()) : undefined;
+    if (remembered) {
+      node.position({ x: remembered.x, y: remembered.y });
+      return;
+    }
     const radius = radialGap * Math.sqrt(index);
     const angle = index * goldenAngle;
     node.position({

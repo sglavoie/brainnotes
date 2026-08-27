@@ -407,3 +407,72 @@ func TestSavedViewsNavReservesHeightCSSContract(t *testing.T) {
 		}
 	}
 }
+
+func TestGraphViewControlsCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".graph-view-controls",
+		".graph-view-actions",
+		".graph-view-controls-header",
+		"#graph-hops-value",
+		".graph-hops-input",
+		".graph-hops-input:focus-visible",
+		"#graph-mindegree-value",
+		".graph-mindegree-input",
+		".graph-mindegree-input:focus-visible",
+		"#graph-collapse-value",
+		".graph-collapse-input",
+		".graph-collapse-input:focus-visible",
+		"accent-color: var(--bn-accent);",
+		"font-variant-numeric: tabular-nums;",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("graph view controls CSS missing %q", want)
+		}
+	}
+
+	// The isolate range shares the one focus outline rule with the other graph
+	// controls, so keyboard focus cannot go invisible on the new input.
+	focusRule := cssBlockAfter(t, css, ".graph-filter-input:focus-visible,")
+	if !strings.Contains(focusRule, "outline: 2px solid var(--bn-focus);") {
+		t.Fatalf("graph focus outline rule missing its outline declaration:\n%s", focusRule)
+	}
+
+	viewControls := cssBlockAfter(t, css, ".graph-view-controls {")
+	for _, want := range []string{
+		"display: flex;",
+		"flex-direction: column;",
+		"gap: 0.4rem;",
+	} {
+		if !strings.Contains(viewControls, want) {
+			t.Fatalf("graph view controls block missing %q in block:\n%s", want, viewControls)
+		}
+	}
+
+	// The block is a cell of the .graph-controls grid, so it has to be re-checked
+	// at the same two breakpoints the grid changes its track count at. The 960px
+	// override is anchored on the two-column track list rather than on the media
+	// query itself, because app.css opens two `max-width: 960px` blocks and only
+	// the later one carries the graph overrides.
+	medium := cssBlockAfter(t, css, "grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.8fr);")
+	for _, want := range []string{
+		".graph-view-controls",
+		"grid-column: 1 / -1;",
+	} {
+		if !strings.Contains(medium, want) {
+			t.Fatalf("medium graph view controls CSS missing %q in block:\n%s", want, medium)
+		}
+	}
+
+	narrow := cssBlockAfter(t, css, "@media (max-width: 640px)")
+	for _, want := range []string{
+		".graph-view-controls",
+		".graph-view-actions",
+		"grid-template-columns: repeat(2, minmax(0, 1fr));",
+	} {
+		if !strings.Contains(narrow, want) {
+			t.Fatalf("narrow graph view controls CSS missing %q in block:\n%s", want, narrow)
+		}
+	}
+}

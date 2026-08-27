@@ -1,3 +1,4 @@
+import { type GraphDisplayOptions } from "./graph-controller-view";
 import {
   type GraphElements,
   type GraphLabelMode,
@@ -17,7 +18,14 @@ export type GraphState = {
   cy: cytoscape.Core | null;
   activeLayout: cytoscape.Layouts | null;
   currentQuery: string;
+  /** The fetched graph, verbatim: the source of truth for details and matches. */
   currentGraphElements: GraphElements;
+  /** The display knobs; `expandedFolders`/`keepIDs` are recomputed per rebuild. */
+  display: GraphDisplayOptions;
+  /** What `buildDisplayGraph` produced from the source — the elements actually mounted. */
+  displayGraphElements: GraphElements;
+  /** Folders the user expanded back out of their collapse aggregate. */
+  expandedFolders: Set<string>;
   hoveredNodeID: string;
   selectedNodeID: string;
   labelMode: GraphLabelMode;

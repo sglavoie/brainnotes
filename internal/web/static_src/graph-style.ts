@@ -110,6 +110,20 @@ export const buildGraphStyleRules = (
       label: "data(title)",
     },
   },
+  // A collapsed folder is a container, not a note: a round-rectangle with a
+  // doubled border reads as "several things in a box" at a glance. Placed
+  // before the state classes on purpose — `is-neighbor`, `is-hovered` and
+  // `is-selected` must still be able to override its border and z-index.
+  {
+    selector: "node[?isAggregate]",
+    style: {
+      shape: "round-rectangle",
+      "border-width": 3,
+      "border-style": "double",
+      "border-color": palette.nodeLabel,
+      "z-index": 5,
+    },
+  },
   {
     selector: "node.has-broken",
     style: {
@@ -165,6 +179,22 @@ export const buildGraphStyleRules = (
       color: palette.selectedText,
       "font-size": "11px",
       "z-index": 30,
+    },
+  },
+  // Hovering an aggregate promises a different action than hovering a note:
+  // tapping expands the folder back out instead of selecting it. So it gets its
+  // own affordance rather than inheriting `node.is-hovered`'s plain ring — it
+  // keeps the doubled container border, brightens rather than outlines, and
+  // sits after the state classes so it wins the equal-specificity tie.
+  {
+    selector: "node[?isAggregate].is-hovered",
+    style: {
+      "border-width": 5,
+      "border-style": "double",
+      "border-color": palette.selected,
+      "background-blacken": 0.18,
+      "font-size": "11px",
+      "z-index": 22,
     },
   },
   {

@@ -325,6 +325,21 @@ describe("buildGraphStyleRules", () => {
     expect(selected["border-color"]).toBe("#707070");
     expect(selected.color).toBe("#808080");
 
+    // A collapsed folder has to read as a container, not as an unusually large
+    // note, and its hover has to promise "expands" rather than "selects".
+    const aggregate = ruleFor(rules, "node[?isAggregate]").style;
+    expect(aggregate.shape).toBe("round-rectangle");
+    expect(aggregate["border-style"]).toBe("double");
+    expect(aggregate["border-color"]).toBe("#101010");
+    expect(Number(aggregate["z-index"])).toBeGreaterThan(Number(ruleFor(rules, "node").style["z-index"]));
+
+    const aggregateHover = ruleFor(rules, "node[?isAggregate].is-hovered").style;
+    expect(aggregateHover["border-style"]).toBe("double");
+    expect(aggregateHover["border-color"]).toBe("#707070");
+    expect(aggregateHover["border-color"]).not.toBe(
+      ruleFor(rules, "node.is-hovered").style["border-color"]
+    );
+
     const edge = ruleFor(rules, "edge").style;
     expect(edge["line-color"]).toBe("#404040");
     expect(edge["target-arrow-color"]).toBe("#404040");
@@ -338,6 +353,19 @@ describe("buildGraphStyleRules", () => {
     expect(highlightedEdge["line-color"]).toBe("#505050");
     expect(highlightedEdge["target-arrow-color"]).toBe("#505050");
     expect(highlightedEdge["source-arrow-color"]).toBe("#505050");
+  });
+
+  // Cytoscape breaks an equal-specificity tie by array order, so where the two
+  // aggregate rules sit is part of their meaning.
+  it("orders the aggregate rules so state classes still win, but the aggregate hover wins over them", () => {
+    const rules = buildGraphStyleRules();
+    const indexOf = (selector: string): number =>
+      rules.findIndex((rule) => rule.selector === selector);
+
+    expect(indexOf("node[?isAggregate]")).toBeGreaterThan(indexOf("node"));
+    expect(indexOf("node[?isAggregate]")).toBeLessThan(indexOf("node.is-selected"));
+    expect(indexOf("node[?isAggregate].is-hovered")).toBeGreaterThan(indexOf("node.is-hovered"));
+    expect(indexOf("node[?isAggregate].is-hovered")).toBeGreaterThan(indexOf("node.is-selected"));
   });
 
   it("defaults to the preserved dark palette", () => {

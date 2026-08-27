@@ -4765,6 +4765,7 @@ code {
 .graph-filter,
 .graph-controls .facet-controls,
 .graph-spread,
+.graph-view-controls,
 .graph-action-controls,
 .graph-label-mode,
 .graph-search-mode {
@@ -4796,6 +4797,9 @@ code {
 
 .graph-filter-input:focus-visible,
 .graph-spread-input:focus-visible,
+.graph-hops-input:focus-visible,
+.graph-mindegree-input:focus-visible,
+.graph-collapse-input:focus-visible,
 #graph-canvas:focus-visible,
 .graph-control-button:focus-visible,
 .graph-label-mode-option input:focus-visible + span,
@@ -4819,6 +4823,41 @@ code {
 }
 
 .graph-spread-input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--bn-accent);
+}
+
+.graph-view-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.graph-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.graph-view-controls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+#graph-hops-value,
+#graph-mindegree-value,
+#graph-collapse-value {
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-hops-input,
+.graph-mindegree-input,
+.graph-collapse-input {
   width: 100%;
   margin: 0;
   accent-color: var(--bn-accent);
@@ -6464,6 +6503,10 @@ code {
     width: 100%;
     grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.8fr);
   }
+
+  .graph-view-controls {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 640px) {
@@ -6753,6 +6796,15 @@ code {
   .graph-controls {
     gap: 0.7rem;
     grid-template-columns: 1fr;
+  }
+
+  .graph-view-controls {
+    gap: 0.5rem;
+  }
+
+  .graph-view-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .graph-main {

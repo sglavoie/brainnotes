@@ -309,6 +309,22 @@ context, and zoomed views, and the All mode is available when every label is
 needed. Click a node to lock its details, highlight its one-hop neighborhood,
 and enable Open note; click empty graph space to clear the selection.
 
+Four display controls thin a dense graph without changing what was loaded.
+**Isolate selection** redraws only the selected note's neighborhood, out to the
+**Hops** slider's 1–3 undirected hops, and **Show whole graph** restores it.
+**Min degree** hides nodes with fewer than *N* links in the current view (the
+selection and the isolate anchor are always kept), applied in a single pass, so
+dropping a hub's leaves can leave the hub itself sitting at zero. **Collapse
+folders** folds each group of notes sharing its first 1–3 folder path segments
+into one aggregate node sized by how many notes it stands for; click an
+aggregate to expand that folder, click it again to fold it back. Reciprocal
+links (`A → B` and `B → A`) draw as a single double-headed line throughout. All
+four knobs are carried in the URL as `g_isolate`, `g_hops`, `g_mindeg`, and
+`g_collapse` — omitted when off — so a drilled-down view is shareable, and none
+of them refetches: they are display-only reductions over the graph already in
+the browser, and the status line names each reduction that is actually removing
+something.
+
 ## Options, assets, and security
 
 `--addr` overrides `[serve].addr`. `--port` rewrites only the port on the

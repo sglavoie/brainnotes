@@ -64,6 +64,55 @@
               value="2.0"
             />
           </div>
+          <div class="graph-view-controls" role="group" aria-label="Graph view">
+            <div class="graph-view-actions">
+              <button id="graph-isolate-button" class="graph-control-button" type="button" disabled>
+                Isolate selection
+              </button>
+              <button id="graph-isolate-clear-button" class="graph-control-button" type="button" disabled>
+                Show whole graph
+              </button>
+            </div>
+            <div class="graph-view-controls-header">
+              <label class="graph-control-label" for="graph-hops-input">Hops</label>
+              <output id="graph-hops-value" for="graph-hops-input">1 hop</output>
+            </div>
+            <input
+              id="graph-hops-input"
+              class="graph-hops-input"
+              type="range"
+              min="1"
+              max="3"
+              step="1"
+              value="1"
+            />
+            <div class="graph-view-controls-header">
+              <label class="graph-control-label" for="graph-mindegree-input">Min degree</label>
+              <output id="graph-mindegree-value" for="graph-mindegree-input">off</output>
+            </div>
+            <input
+              id="graph-mindegree-input"
+              class="graph-mindegree-input"
+              type="range"
+              min="0"
+              max="10"
+              step="1"
+              value="0"
+            />
+            <div class="graph-view-controls-header">
+              <label class="graph-control-label" for="graph-collapse-input">Collapse folders</label>
+              <output id="graph-collapse-value" for="graph-collapse-input">off</output>
+            </div>
+            <input
+              id="graph-collapse-input"
+              class="graph-collapse-input"
+              type="range"
+              min="0"
+              max="3"
+              step="1"
+              value="0"
+            />
+          </div>
           <div class="graph-action-controls" aria-label="Graph viewport">
             <button id="graph-fit-button" class="graph-control-button" type="button">Fit graph</button>
             <button id="graph-zoom-matches-button" class="graph-control-button" type="button" disabled>

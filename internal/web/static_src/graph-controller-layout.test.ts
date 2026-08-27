@@ -139,3 +139,58 @@ describe("spread scaling", () => {
     expectStrictlyDecreasing(seriesFor(build, "gravity"));
   });
 });
+
+/** A node stand-in that records whatever position the seeder writes. */
+const fakeNode = (id: string, position: { x: number; y: number }) => {
+  let current = position;
+  return {
+    id: () => id,
+    position: (next?: { x: number; y: number }) => {
+      if (next) {
+        current = next;
+      }
+      return current;
+    },
+  };
+};
+
+const fakeCyWithNodes = (nodes: ReturnType<typeof fakeNode>[]) => ({
+  nodes: () => ({ toArray: () => nodes }),
+});
+
+describe("position carry-over across a remount", () => {
+  it("captures the mounted positions by id and skips non-finite ones", async () => {
+    const layout = await freshLayoutModule();
+    const cy = fakeCyWithNodes([
+      fakeNode("a", { x: 10, y: -4 }),
+      fakeNode("broken", { x: Number.NaN, y: 3 }),
+    ]);
+
+    const captured = layout.captureNodePositions(cy as unknown as cytoscape.Core);
+
+    expect(captured.get("a")).toEqual({ x: 10, y: -4 });
+    expect(captured.has("broken")).toBe(false);
+  });
+
+  it("keeps a remembered position and seeds only the node that has none", async () => {
+    const layout = await freshLayoutModule();
+    const survivor = fakeNode("a", { x: 0, y: 0 });
+    const arrival = fakeNode("b", { x: 0, y: 0 });
+    const cy = fakeCyWithNodes([survivor, arrival]);
+    const keep = new Map([["a", { x: 123, y: 456 }]]);
+
+    layout.seedDeterministicPositions(cy as unknown as cytoscape.Core, 2, keep);
+
+    expect(survivor.position()).toEqual({ x: 123, y: 456 });
+    expect(arrival.position()).not.toEqual({ x: 123, y: 456 });
+  });
+
+  it("seeds everything deterministically when no positions are carried over", async () => {
+    const layout = await freshLayoutModule();
+    const node = fakeNode("a", { x: 999, y: 999 });
+
+    layout.seedDeterministicPositions(fakeCyWithNodes([node]) as unknown as cytoscape.Core, 2);
+
+    expect(node.position()).toEqual({ x: 0, y: 0 });
+  });
+});

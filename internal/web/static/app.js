@@ -4178,6 +4178,20 @@ var BrainNotesApp = (() => {
         label: "data(title)"
       }
     },
+    // A collapsed folder is a container, not a note: a round-rectangle with a
+    // doubled border reads as "several things in a box" at a glance. Placed
+    // before the state classes on purpose — `is-neighbor`, `is-hovered` and
+    // `is-selected` must still be able to override its border and z-index.
+    {
+      selector: "node[?isAggregate]",
+      style: {
+        shape: "round-rectangle",
+        "border-width": 3,
+        "border-style": "double",
+        "border-color": palette.nodeLabel,
+        "z-index": 5
+      }
+    },
     {
       selector: "node.has-broken",
       style: {
@@ -4233,6 +4247,22 @@ var BrainNotesApp = (() => {
         color: palette.selectedText,
         "font-size": "11px",
         "z-index": 30
+      }
+    },
+    // Hovering an aggregate promises a different action than hovering a note:
+    // tapping expands the folder back out instead of selecting it. So it gets its
+    // own affordance rather than inheriting `node.is-hovered`'s plain ring — it
+    // keeps the doubled container border, brightens rather than outlines, and
+    // sits after the state classes so it wins the equal-specificity tie.
+    {
+      selector: "node[?isAggregate].is-hovered",
+      style: {
+        "border-width": 5,
+        "border-style": "double",
+        "border-color": palette.selected,
+        "background-blacken": 0.18,
+        "font-size": "11px",
+        "z-index": 22
       }
     },
     {
@@ -4323,10 +4353,10 @@ var BrainNotesApp = (() => {
     const hue = hashFolder(folder) % 360;
     return `hsl(${hue}, 65%, 60%)`;
   };
-  var computeFallbackGraphDegrees = (rawNodes, rawEdges) => {
+  var computeNormalizedGraphDegrees = (nodes, edges) => {
     const degreeSets = /* @__PURE__ */ new Map();
-    for (const node of rawNodes) {
-      const id = normalizeParamValue(node.data.id);
+    for (const node of nodes) {
+      const id = node.id;
       if (id === "") {
         continue;
       }
@@ -4335,9 +4365,9 @@ var BrainNotesApp = (() => {
         outTargets: /* @__PURE__ */ new Set()
       });
     }
-    for (const edge of rawEdges) {
-      const source = normalizeParamValue(edge.data.source);
-      const target = normalizeParamValue(edge.data.target);
+    for (const edge of edges) {
+      const source = edge.source;
+      const target = edge.target;
       if (source === "" || target === "" || source === target) {
         continue;
       }
@@ -4359,12 +4389,19 @@ var BrainNotesApp = (() => {
     }
     return degrees;
   };
+  var computeFallbackGraphDegrees = (rawNodes, rawEdges) => computeNormalizedGraphDegrees(
+    rawNodes.map((node) => ({ id: normalizeParamValue(node.data.id) })),
+    rawEdges.map((edge) => ({
+      source: normalizeParamValue(edge.data.source),
+      target: normalizeParamValue(edge.data.target)
+    }))
+  );
   var reciprocalPairKey = (edge) => edge.source < edge.target ? `${edge.source}\0${edge.target}` : `${edge.target}\0${edge.source}`;
   var mergeReciprocalGraphEdges = (edges) => {
     const merged = [];
     const indexByPair = /* @__PURE__ */ new Map();
     for (const edge of edges) {
-      const next = { ...edge, mutual: false };
+      const next = { ...edge, mutual: edge.mutual === true };
       if (next.source === "" || next.target === "" || next.source === next.target) {
         merged.push(next);
         continue;
@@ -4487,7 +4524,9 @@ var BrainNotesApp = (() => {
         isOrphan: node.isOrphan,
         isDeadEnd: node.isDeadEnd,
         matchesQuery: node.matchesQuery,
-        size: node.size
+        size: node.size,
+        isAggregate: Boolean(node.isAggregate),
+        memberIDs: node.memberIDs ? [...node.memberIDs] : []
       }
     })),
     ...graphElements.edges.map((edge) => ({
@@ -4529,8 +4568,12 @@ var BrainNotesApp = (() => {
     }
     return `${visibleDetail}. Full graph: ${degree} (${inDegree} in, ${outDegree} out)`;
   };
+  var formatAggregateDetails = (data) => {
+    const memberCount = data && data.memberIDs ? data.memberIDs.length : 0;
+    return memberCount === 1 ? "Collapsed folder: 1 note" : `Collapsed folder: ${memberCount} notes`;
+  };
   var issueItemsForNode = (data) => {
-    if (!data) {
+    if (!data || data.isAggregate) {
       return [];
     }
     const items = [];
@@ -4569,11 +4612,11 @@ var BrainNotesApp = (() => {
       hoverIssues.appendChild(issue);
     }
   };
-  var setOpenNoteTarget = (openNote, nodeID) => {
+  var setOpenNoteTarget = (openNote, nodeID, isAggregate = false) => {
     if (!openNote) {
       return;
     }
-    const path = notePathForKey(nodeID);
+    const path = isAggregate ? "" : notePathForKey(nodeID);
     if (!path) {
       openNote.removeAttribute("href");
       openNote.classList.add("is-disabled");
@@ -4595,14 +4638,23 @@ var BrainNotesApp = (() => {
       refs.hoverFolder.textContent = model ? `Folder: ${model.folder || "/"}` : "";
     }
     if (refs.hoverDegree) {
-      refs.hoverDegree.textContent = model ? formatDegreeDetails(model) : "";
+      if (!model) {
+        refs.hoverDegree.textContent = "";
+      } else {
+        refs.hoverDegree.textContent = model.isAggregate ? formatAggregateDetails(model) : formatDegreeDetails(model);
+      }
     }
     renderIssueDetails(refs.hoverIssues, model);
     if (refs.detailsPanel) {
       refs.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
       refs.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
+      refs.detailsPanel.classList.toggle("is-aggregate", Boolean(model && model.isAggregate));
     }
-    setOpenNoteTarget(refs.openNote, selectedModel ? selectedModel.id : "");
+    setOpenNoteTarget(
+      refs.openNote,
+      selectedModel ? selectedModel.id : "",
+      Boolean(selectedModel && selectedModel.isAggregate)
+    );
   };
 
   // internal/web/static_src/graph-controller-labels.ts
@@ -4967,7 +5019,20 @@ var BrainNotesApp = (() => {
     numIter: Math.round(900 + 120 * spread)
   });
   var layoutOptionsForSpread = (spread) => hasFcose() ? fcoseLayoutOptionsForSpread(spread) : coseLayoutOptionsForSpread(spread);
-  var seedDeterministicPositions = (cy, spread) => {
+  var captureNodePositions = (cy) => {
+    const positions = /* @__PURE__ */ new Map();
+    if (!cy) {
+      return positions;
+    }
+    cy.nodes().toArray().forEach((node) => {
+      const position = node.position();
+      if (Number.isFinite(position.x) && Number.isFinite(position.y)) {
+        positions.set(node.id(), { x: position.x, y: position.y });
+      }
+    });
+    return positions;
+  };
+  var seedDeterministicPositions = (cy, spread, keep = null) => {
     if (!cy) {
       return;
     }
@@ -4975,6 +5040,11 @@ var BrainNotesApp = (() => {
     const radialGap = 52 + 26 * spread;
     const goldenAngle = Math.PI * (3 - Math.sqrt(5));
     nodes.forEach((node, index) => {
+      const remembered = keep ? keep.get(node.id()) : void 0;
+      if (remembered) {
+        node.position({ x: remembered.x, y: remembered.y });
+        return;
+      }
       const radius = radialGap * Math.sqrt(index);
       const angle = index * goldenAngle;
       node.position({
@@ -5050,6 +5120,241 @@ var BrainNotesApp = (() => {
     return readGraphPalette((name) => styles.getPropertyValue(name));
   };
   var buildGraphStyle = () => buildGraphStyleRules(currentGraphPalette());
+
+  // internal/web/static_src/graph-controller-view.ts
+  var aggregateNodeIDPrefix = "folder:";
+  var aggregateNodeIDForFolder = (folder) => `${aggregateNodeIDPrefix}${folder}`;
+  var defaultGraphDisplayOptions = () => ({
+    isolateID: "",
+    hops: 1,
+    minDegree: 0,
+    collapseDepth: 0,
+    expandedFolders: /* @__PURE__ */ new Set(),
+    keepIDs: /* @__PURE__ */ new Set()
+  });
+  var maxHops = 3;
+  var maxCollapseDepth = 3;
+  var clampInteger = (value, min, max) => {
+    if (!Number.isFinite(value)) {
+      return min;
+    }
+    return Math.min(max, Math.max(min, Math.round(value)));
+  };
+  var folderGroupKey = (folder, depth) => {
+    if (depth <= 0) {
+      return "";
+    }
+    const segments = folder.split("/").filter((segment) => segment !== "");
+    if (segments.length === 0) {
+      return "";
+    }
+    return segments.slice(0, depth).join("/");
+  };
+  var undirectedNeighbors = (edges) => {
+    const neighbors = /* @__PURE__ */ new Map();
+    const push = (from, to) => {
+      const existing = neighbors.get(from);
+      if (existing) {
+        existing.push(to);
+        return;
+      }
+      neighbors.set(from, [to]);
+    };
+    for (const edge of edges) {
+      if (edge.source === "" || edge.target === "" || edge.source === edge.target) {
+        continue;
+      }
+      push(edge.source, edge.target);
+      push(edge.target, edge.source);
+    }
+    return neighbors;
+  };
+  var isolateStage = (elements, isolateID, hops) => {
+    if (isolateID === "" || !elements.nodes.some((node) => node.id === isolateID)) {
+      return { elements, isolated: false };
+    }
+    const neighbors = undirectedNeighbors(elements.edges);
+    const reached = /* @__PURE__ */ new Set([isolateID]);
+    let frontier = [isolateID];
+    for (let hop = 0; hop < hops; hop += 1) {
+      const next = [];
+      for (const id of frontier) {
+        for (const neighbor of neighbors.get(id) || []) {
+          if (reached.has(neighbor)) {
+            continue;
+          }
+          reached.add(neighbor);
+          next.push(neighbor);
+        }
+      }
+      if (next.length === 0) {
+        break;
+      }
+      frontier = next;
+    }
+    const nodes = elements.nodes.filter((node) => reached.has(node.id));
+    const kept = new Set(nodes.map((node) => node.id));
+    const edges = elements.edges.filter((edge) => kept.has(edge.source) && kept.has(edge.target));
+    return { elements: { nodes, edges }, isolated: true };
+  };
+  var minDegreeStage = (elements, minDegree, keepIDs) => {
+    if (minDegree <= 0) {
+      return { elements, droppedByDegree: 0 };
+    }
+    const degrees = computeNormalizedGraphDegrees(elements.nodes, elements.edges);
+    const nodes = elements.nodes.filter((node) => {
+      if (keepIDs.has(node.id)) {
+        return true;
+      }
+      return (degrees.get(node.id)?.degree || 0) >= minDegree;
+    });
+    const kept = new Set(nodes.map((node) => node.id));
+    const edges = elements.edges.filter((edge) => kept.has(edge.source) && kept.has(edge.target));
+    return {
+      elements: { nodes, edges },
+      droppedByDegree: elements.nodes.length - nodes.length
+    };
+  };
+  var aggregateNode = (folder, members) => ({
+    id: aggregateNodeIDForFolder(folder),
+    title: `${folder} (${members.length})`,
+    folder,
+    color: colorForFolder(folder),
+    inDegree: 0,
+    outDegree: 0,
+    degree: 0,
+    filteredInDegree: 0,
+    filteredOutDegree: 0,
+    filteredDegree: 0,
+    hasBroken: false,
+    brokenCount: 0,
+    isOrphan: false,
+    isDeadEnd: false,
+    // Not an issue flag: an aggregate hiding a match must not be dimmed in focus mode.
+    matchesQuery: members.some((member) => member.matchesQuery),
+    isAggregate: true,
+    memberIDs: members.map((member) => member.id)
+  });
+  var collapseStage = (elements, collapseDepth, expandedFolders) => {
+    if (collapseDepth <= 0) {
+      return { elements, aggregateCount: 0 };
+    }
+    const membersByFolder = /* @__PURE__ */ new Map();
+    for (const node of elements.nodes) {
+      const folder = folderGroupKey(node.folder, collapseDepth);
+      if (folder === "" || expandedFolders.has(folder)) {
+        continue;
+      }
+      const existing = membersByFolder.get(folder);
+      if (existing) {
+        existing.push(node);
+        continue;
+      }
+      membersByFolder.set(folder, [node]);
+    }
+    const aggregateByMemberID = /* @__PURE__ */ new Map();
+    for (const [folder, members] of membersByFolder) {
+      if (members.length < 2) {
+        continue;
+      }
+      const aggregate = aggregateNode(folder, members);
+      for (const member of members) {
+        aggregateByMemberID.set(member.id, aggregate);
+      }
+    }
+    if (aggregateByMemberID.size === 0) {
+      return { elements, aggregateCount: 0 };
+    }
+    const nodes = [];
+    const emitted = /* @__PURE__ */ new Set();
+    for (const node of elements.nodes) {
+      const aggregate = aggregateByMemberID.get(node.id);
+      if (!aggregate) {
+        nodes.push(node);
+        continue;
+      }
+      if (emitted.has(aggregate.id)) {
+        continue;
+      }
+      emitted.add(aggregate.id);
+      nodes.push(aggregate);
+    }
+    const remap = (id) => aggregateByMemberID.get(id)?.id || id;
+    const edges = [];
+    const indexByPair = /* @__PURE__ */ new Map();
+    for (const edge of elements.edges) {
+      const source = remap(edge.source);
+      const target = remap(edge.target);
+      if (source === target) {
+        continue;
+      }
+      const pairKey = `${source}\0${target}`;
+      const existingIndex = indexByPair.get(pairKey);
+      if (existingIndex !== void 0) {
+        if (edge.mutual && !edges[existingIndex].mutual) {
+          edges[existingIndex] = { ...edges[existingIndex], mutual: true };
+        }
+        continue;
+      }
+      indexByPair.set(pairKey, edges.length);
+      edges.push({ ...edge, source, target });
+    }
+    return { elements: { nodes, edges }, aggregateCount: emitted.size };
+  };
+  var withRecomputedDegrees = (elements) => {
+    const degrees = computeNormalizedGraphDegrees(elements.nodes, elements.edges);
+    const nodes = elements.nodes.map((node) => {
+      const summary = degrees.get(node.id) || { inDegree: 0, outDegree: 0, degree: 0 };
+      const next = {
+        ...node,
+        filteredInDegree: summary.inDegree,
+        filteredOutDegree: summary.outDegree,
+        filteredDegree: summary.degree,
+        // An aggregate is sized by how many notes it stands for, not by its handful of
+        // surviving inter-folder edges — a 40-note folder must not render smaller than a
+        // 5-link note. Every other node keeps the degree-driven sizing.
+        size: nodeSizeForDegree(
+          node.isAggregate && node.memberIDs ? node.memberIDs.length : summary.degree
+        )
+      };
+      if (next.isAggregate) {
+        next.inDegree = summary.inDegree;
+        next.outDegree = summary.outDegree;
+        next.degree = summary.degree;
+      }
+      return next;
+    });
+    return { nodes, edges: elements.edges };
+  };
+  var buildDisplayGraph = (source, options) => {
+    const hops = clampInteger(options.hops, 1, maxHops);
+    const minDegree = Math.max(0, clampInteger(options.minDegree, 0, Number.MAX_SAFE_INTEGER));
+    const collapseDepth = clampInteger(options.collapseDepth, 0, maxCollapseDepth);
+    const isolate = isolateStage(
+      { nodes: source.nodes, edges: source.edges },
+      options.isolateID,
+      hops
+    );
+    const thinned = minDegreeStage(isolate.elements, minDegree, options.keepIDs);
+    const collapsed = collapseStage(thinned.elements, collapseDepth, options.expandedFolders);
+    const sized = withRecomputedDegrees(collapsed.elements);
+    const elements = {
+      nodes: sized.nodes,
+      // Collapse can turn two one-directional note links into a reciprocal pair between
+      // aggregates, so the Session 2 merge re-runs over the remapped edge set.
+      edges: mergeReciprocalGraphEdges(sized.edges)
+    };
+    return {
+      elements,
+      stats: {
+        sourceNodeCount: source.nodes.length,
+        displayedNodeCount: elements.nodes.length,
+        aggregateCount: collapsed.aggregateCount,
+        droppedByDegree: thinned.droppedByDegree,
+        isolated: isolate.isolated
+      }
+    };
+  };
 
   // internal/web/static_src/theme.ts
   var THEME_STORAGE_KEY = "bn.theme";
@@ -5183,6 +5488,41 @@ var BrainNotesApp = (() => {
     }
     updateBrowserQuery(params);
   };
+  var maxIsolateHops = 3;
+  var maxMinDegree = 10;
+  var maxCollapseDepth2 = 3;
+  var clampSliderInteger = (value, min, max) => Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
+  var clampIsolateHops = (value) => clampSliderInteger(value, 1, maxIsolateHops);
+  var clampMinDegree = (value) => clampSliderInteger(value, 0, maxMinDegree);
+  var clampCollapseDepth = (value) => clampSliderInteger(value, 0, maxCollapseDepth2);
+  var readPageDisplayParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    const readInt = (key) => Number.parseInt(params.get(key) || "", 10);
+    return {
+      isolateID: params.get("g_isolate") || "",
+      hops: clampIsolateHops(readInt("g_hops")),
+      minDegree: clampMinDegree(readInt("g_mindeg")),
+      collapseDepth: clampCollapseDepth(readInt("g_collapse"))
+    };
+  };
+  var syncPageDisplayParams = (display) => {
+    const params = new URLSearchParams(window.location.search);
+    const write = (key, value, offValue) => {
+      if (value === offValue) {
+        params.delete(key);
+        return;
+      }
+      params.set(key, value);
+    };
+    write("g_isolate", display.isolateID, "");
+    write("g_hops", String(display.hops), "1");
+    write("g_mindeg", String(display.minDegree), "0");
+    write("g_collapse", String(display.collapseDepth), "0");
+    updateBrowserQuery(params);
+  };
+  var formatIsolateHopsLabel = (hops) => hops === 1 ? "1 hop" : `${hops} hops`;
+  var formatMinDegreeLabel = (minDegree) => minDegree <= 0 ? "off" : `\u2265 ${minDegree}`;
+  var formatCollapseDepthLabel = (depth) => depth <= 0 ? "off" : `depth ${depth}`;
   var initGraph = () => {
     const dom = {
       canvas: getElementByID("graph-canvas", HTMLElement),
@@ -5196,6 +5536,14 @@ var BrainNotesApp = (() => {
       filterInput: getElementByID("graph-filter-input", HTMLInputElement),
       spreadInput: getElementByID("graph-spread-input", HTMLInputElement),
       spreadValue: getElementByID("graph-spread-value", HTMLElement),
+      isolateButton: getElementByID("graph-isolate-button", HTMLButtonElement),
+      isolateClearButton: getElementByID("graph-isolate-clear-button", HTMLButtonElement),
+      hopsInput: getElementByID("graph-hops-input", HTMLInputElement),
+      hopsValue: getElementByID("graph-hops-value", HTMLElement),
+      minDegreeInput: getElementByID("graph-mindegree-input", HTMLInputElement),
+      minDegreeValue: getElementByID("graph-mindegree-value", HTMLElement),
+      collapseInput: getElementByID("graph-collapse-input", HTMLInputElement),
+      collapseValue: getElementByID("graph-collapse-value", HTMLElement),
       fitButton: getElementByID("graph-fit-button", HTMLButtonElement),
       zoomMatchesButton: getElementByID("graph-zoom-matches-button", HTMLButtonElement),
       resetLayoutButton: getElementByID("graph-reset-layout-button", HTMLButtonElement),
@@ -5219,6 +5567,12 @@ var BrainNotesApp = (() => {
       activeLayout: null,
       currentQuery: "",
       currentGraphElements: emptyGraphElements(),
+      display: {
+        ...defaultGraphDisplayOptions(),
+        ...readPageDisplayParams()
+      },
+      displayGraphElements: emptyGraphElements(),
+      expandedFolders: /* @__PURE__ */ new Set(),
       hoveredNodeID: "",
       selectedNodeID: "",
       labelMode: readLabelMode(dom.labelModeInputs),
@@ -5229,11 +5583,44 @@ var BrainNotesApp = (() => {
     };
     let debounceToken = 0;
     let publishToken = 0;
+    let displayToken = 0;
     let requestToken = 0;
     let selectionSyncing = false;
     let currentElementSignature = "";
+    let displayStats = null;
+    let displayedMatchIDs = /* @__PURE__ */ new Set();
+    let baseStatusMessage = "";
+    let baseStatusKind = "";
+    let displayNotice = "";
     function setStatus(message, kind = "") {
-      setStatusText(dom.status, message, kind, ["is-loading", "is-empty", "is-error"]);
+      baseStatusMessage = message;
+      baseStatusKind = kind;
+      renderStatus();
+    }
+    function displayReductionSentence() {
+      if (!displayStats || displayStats.displayedNodeCount >= displayStats.sourceNodeCount) {
+        return "";
+      }
+      const counts = `Showing ${displayStats.displayedNodeCount} of ${displayStats.sourceNodeCount} nodes`;
+      const reasons = [];
+      if (displayStats.isolated) {
+        const anchor = findSourceNodeModel(state.display.isolateID);
+        const anchorLabel = anchor ? anchor.title || anchor.id : state.display.isolateID;
+        reasons.push(
+          `isolated ${formatIsolateHopsLabel(state.display.hops)} from "${anchorLabel}"`
+        );
+      }
+      if (displayStats.droppedByDegree > 0) {
+        reasons.push(`degree \u2265 ${state.display.minDegree}`);
+      }
+      if (displayStats.aggregateCount > 0) {
+        reasons.push(`folders collapsed to depth ${state.display.collapseDepth}`);
+      }
+      return reasons.length === 0 ? `${counts}.` : `${counts} \u2014 ${reasons.join(", ")}.`;
+    }
+    function renderStatus() {
+      const message = [baseStatusMessage, displayReductionSentence(), displayNotice].filter((part) => part !== "").join(" ");
+      setStatusText(dom.status, message, baseStatusKind, ["is-loading", "is-empty", "is-error"]);
     }
     function renderDetailsPanel(fallbackHoveredModel = null) {
       const selectedModel = findNodeModel(state.selectedNodeID);
@@ -5294,7 +5681,13 @@ var BrainNotesApp = (() => {
     }
     function bindGraphEvents(instance) {
       instance.on("tap", "node", (event) => {
-        selectNode(event.target.id());
+        const nodeID = event.target.id();
+        const model = findNodeModel(nodeID);
+        if (model && model.isAggregate) {
+          toggleFolderExpansion(model.folder);
+          return;
+        }
+        selectNode(nodeID);
       });
       instance.on("tap", (event) => {
         if (event.target === instance) {
@@ -5325,8 +5718,14 @@ var BrainNotesApp = (() => {
         applyGraphVisualState();
       });
     }
-    function findNodeModel(nodeID) {
+    function findSourceNodeModel(nodeID) {
       return state.currentGraphElements.nodes.find((node) => node.id === nodeID) || null;
+    }
+    function findNodeModel(nodeID) {
+      if (nodeID === "") {
+        return null;
+      }
+      return state.displayGraphElements.nodes.find((node) => node.id === nodeID) || findSourceNodeModel(nodeID);
     }
     function syncCytoscapeSelection(nodeID) {
       if (!state.cy || selectionSyncing) {
@@ -5348,12 +5747,13 @@ var BrainNotesApp = (() => {
     }
     function selectNode(nodeID, options = {}) {
       const model = findNodeModel(nodeID);
-      state.selectedNodeID = model ? model.id : "";
+      state.selectedNodeID = model && !model.isAggregate ? model.id : "";
       if (!options || !options.fromCytoscape) {
         syncCytoscapeSelection(state.selectedNodeID);
       }
       renderDetailsPanel();
       applyGraphVisualState();
+      updateDisplayControls();
     }
     function clearSelectedNode(options = {}) {
       state.selectedNodeID = "";
@@ -5362,6 +5762,7 @@ var BrainNotesApp = (() => {
       }
       renderDetailsPanel();
       applyGraphVisualState();
+      updateDisplayControls();
     }
     function setHoveredNode(nodeID, fallbackData) {
       state.hoveredNodeID = nodeID || "";
@@ -5398,25 +5799,66 @@ var BrainNotesApp = (() => {
       event.preventDefault();
       selectNode(nodeID);
     }
+    function computeDisplayedMatchIDs() {
+      const ids = /* @__PURE__ */ new Set();
+      for (const node of state.displayGraphElements.nodes) {
+        if (node.isAggregate) {
+          if ((node.memberIDs || []).some((memberID) => state.matchIDs.has(memberID))) {
+            ids.add(node.id);
+          }
+          continue;
+        }
+        if (state.matchIDs.has(node.id)) {
+          ids.add(node.id);
+        }
+      }
+      return ids;
+    }
     function applyGraphVisualState() {
       applyGraphVisualClasses(
         state.cy,
         state.labelMode,
         state.selectedNodeID,
         state.hoveredNodeID,
-        state.matchIDs
+        displayedMatchIDs
       );
     }
     function updateZoomMatchesButton() {
       if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
-        dom.zoomMatchesButton.disabled = state.matchIDs.size === 0;
+        dom.zoomMatchesButton.disabled = displayedMatchIDs.size === 0;
+      }
+    }
+    function updateDisplayControls() {
+      if (dom.isolateButton instanceof HTMLButtonElement) {
+        dom.isolateButton.disabled = state.selectedNodeID === "" || state.selectedNodeID === state.display.isolateID;
+      }
+      if (dom.isolateClearButton instanceof HTMLButtonElement) {
+        dom.isolateClearButton.disabled = state.display.isolateID === "";
+      }
+      if (dom.hopsInput instanceof HTMLInputElement) {
+        dom.hopsInput.value = String(state.display.hops);
+      }
+      if (dom.hopsValue) {
+        dom.hopsValue.textContent = formatIsolateHopsLabel(state.display.hops);
+      }
+      if (dom.minDegreeInput instanceof HTMLInputElement) {
+        dom.minDegreeInput.value = String(state.display.minDegree);
+      }
+      if (dom.minDegreeValue) {
+        dom.minDegreeValue.textContent = formatMinDegreeLabel(state.display.minDegree);
+      }
+      if (dom.collapseInput instanceof HTMLInputElement) {
+        dom.collapseInput.value = String(state.display.collapseDepth);
+      }
+      if (dom.collapseValue) {
+        dom.collapseValue.textContent = formatCollapseDepthLabel(state.display.collapseDepth);
       }
     }
     function zoomToMatches() {
-      if (!state.cy || state.matchIDs.size === 0) {
+      if (!state.cy || displayedMatchIDs.size === 0) {
         return;
       }
-      const matchedNodes = state.cy.nodes().filter((node) => state.matchIDs.has(node.id()));
+      const matchedNodes = state.cy.nodes().filter((node) => displayedMatchIDs.has(node.id()));
       if (matchedNodes.length === 0) {
         return;
       }
@@ -5466,10 +5908,11 @@ var BrainNotesApp = (() => {
         finalizeLayout();
       }
     }
-    function applyGraphElements(graphElements, fitAfterLayout) {
+    function applyGraphElements(graphElements, layoutOptions) {
       const instance = ensureGraph();
       stopActiveLayout();
       const selectedNodeID = state.selectedNodeID;
+      const rememberedPositions = layoutOptions.resetPositions ? null : captureNodePositions(instance);
       selectionSyncing = true;
       try {
         instance.elements().remove();
@@ -5487,10 +5930,89 @@ var BrainNotesApp = (() => {
         applyGraphVisualState();
         return;
       }
-      runLayout({
-        fitAfterLayout,
-        resetPositions: true
+      if (rememberedPositions) {
+        seedDeterministicPositions(instance, clampedSpread(dom.spreadInput), rememberedPositions);
+      }
+      runLayout(layoutOptions);
+    }
+    function currentDisplayOptions() {
+      const keepIDs = /* @__PURE__ */ new Set();
+      if (state.selectedNodeID !== "") {
+        keepIDs.add(state.selectedNodeID);
+      }
+      if (state.display.isolateID !== "") {
+        keepIDs.add(state.display.isolateID);
+      }
+      return {
+        ...state.display,
+        expandedFolders: state.expandedFolders,
+        keepIDs
+      };
+    }
+    function rebuildDisplay(layoutOptions, prebuilt = null) {
+      const built = prebuilt || buildDisplayGraph(state.currentGraphElements, currentDisplayOptions());
+      if (state.display.isolateID !== "" && !built.stats.isolated) {
+        const droppedAnchor = state.display.isolateID;
+        state.display.isolateID = "";
+        syncPageDisplayParams(state.display);
+        displayNotice = `Isolation cleared: "${droppedAnchor}" is not in the current graph.`;
+      } else {
+        displayNotice = "";
+      }
+      state.displayGraphElements = built.elements;
+      displayStats = built.stats;
+      displayedMatchIDs = computeDisplayedMatchIDs();
+      currentElementSignature = elementSignature(built.elements);
+      applyGraphElements(built.elements, layoutOptions);
+      updateZoomMatchesButton();
+      updateDisplayControls();
+      renderStatus();
+    }
+    function rebuildDisplayForControl() {
+      rebuildDisplay({
+        fitAfterLayout: false,
+        preserveViewport: true,
+        resetPositions: false
       });
+    }
+    function scheduleDisplayRebuild(delay) {
+      window.clearTimeout(displayToken);
+      if (delay <= 0) {
+        rebuildDisplayForControl();
+        return;
+      }
+      stopActiveLayout();
+      displayToken = window.setTimeout(() => {
+        rebuildDisplayForControl();
+      }, delay);
+    }
+    function pruneExpandedFolders(graphElements) {
+      if (state.expandedFolders.size === 0) {
+        return;
+      }
+      const live = /* @__PURE__ */ new Set();
+      for (const node of graphElements.nodes) {
+        const key = folderGroupKey(node.folder, state.display.collapseDepth);
+        if (key !== "") {
+          live.add(key);
+        }
+      }
+      for (const folder of Array.from(state.expandedFolders)) {
+        if (!live.has(folder)) {
+          state.expandedFolders.delete(folder);
+        }
+      }
+    }
+    function toggleFolderExpansion(folder) {
+      if (folder === "") {
+        return;
+      }
+      if (state.expandedFolders.has(folder)) {
+        state.expandedFolders.delete(folder);
+      } else {
+        state.expandedFolders.add(folder);
+      }
+      rebuildDisplayForControl();
     }
     function buildQueryURL(query) {
       const url = buildFilteredAPIURL("/api/graph.json", query);
@@ -5515,17 +6037,19 @@ var BrainNotesApp = (() => {
       }
       return ids;
     }
-    function refreshMatchHighlighting(graphElements) {
+    function refreshMatchHighlighting(graphElements, displayElements) {
       const instance = state.cy;
       if (!instance) {
         return;
       }
+      state.currentGraphElements = graphElements;
+      state.displayGraphElements = displayElements;
+      displayedMatchIDs = computeDisplayedMatchIDs();
       instance.batch(() => {
         instance.nodes().forEach((node) => {
-          node.data("matchesQuery", state.matchIDs.has(node.id()));
+          node.data("matchesQuery", displayedMatchIDs.has(node.id()));
         });
       });
-      state.currentGraphElements = graphElements;
       renderDetailsPanel();
       applyGraphVisualState();
     }
@@ -5559,15 +6083,23 @@ var BrainNotesApp = (() => {
         return;
       }
       const graphElements = normalizeGraphPayload(payload);
-      const signature = elementSignature(graphElements);
       const focusMode = state.searchMode === "focus";
       state.matchIDs = matchIDsFor(graphElements);
+      pruneExpandedFolders(graphElements);
+      const built = buildDisplayGraph(graphElements, currentDisplayOptions());
+      const signature = elementSignature(built.elements);
       if (focusMode && state.cy && signature === currentElementSignature) {
-        refreshMatchHighlighting(graphElements);
+        refreshMatchHighlighting(graphElements, built.elements);
+        displayStats = built.stats;
       } else {
         state.currentGraphElements = graphElements;
-        currentElementSignature = signature;
-        applyGraphElements(graphElements, true);
+        rebuildDisplay(
+          {
+            fitAfterLayout: true,
+            resetPositions: true
+          },
+          built
+        );
       }
       updateZoomMatchesButton();
       const hasFilters = hasActiveFilters();
@@ -5654,6 +6186,69 @@ var BrainNotesApp = (() => {
           });
         });
       }
+      if (dom.isolateButton instanceof HTMLButtonElement) {
+        dom.isolateButton.addEventListener("click", () => {
+          if (state.selectedNodeID === "") {
+            return;
+          }
+          state.display.isolateID = state.selectedNodeID;
+          syncPageDisplayParams(state.display);
+          rebuildDisplayForControl();
+        });
+      }
+      if (dom.isolateClearButton instanceof HTMLButtonElement) {
+        dom.isolateClearButton.addEventListener("click", () => {
+          if (state.display.isolateID === "") {
+            return;
+          }
+          state.display.isolateID = "";
+          syncPageDisplayParams(state.display);
+          rebuildDisplayForControl();
+        });
+      }
+      if (dom.hopsInput instanceof HTMLInputElement) {
+        const hopsInput = dom.hopsInput;
+        hopsInput.addEventListener("input", () => {
+          const hops = clampIsolateHops(Number.parseInt(hopsInput.value, 10));
+          if (hops === state.display.hops) {
+            return;
+          }
+          state.display.hops = hops;
+          syncPageDisplayParams(state.display);
+          if (state.display.isolateID === "") {
+            updateDisplayControls();
+            return;
+          }
+          rebuildDisplayForControl();
+        });
+      }
+      if (dom.minDegreeInput instanceof HTMLInputElement) {
+        const minDegreeInput = dom.minDegreeInput;
+        minDegreeInput.addEventListener("input", () => {
+          const minDegree = clampMinDegree(Number.parseInt(minDegreeInput.value, 10));
+          if (minDegree === state.display.minDegree) {
+            return;
+          }
+          state.display.minDegree = minDegree;
+          syncPageDisplayParams(state.display);
+          updateDisplayControls();
+          scheduleDisplayRebuild(graphFilterDebounceMs);
+        });
+      }
+      if (dom.collapseInput instanceof HTMLInputElement) {
+        const collapseInput = dom.collapseInput;
+        collapseInput.addEventListener("input", () => {
+          const collapseDepth = clampCollapseDepth(Number.parseInt(collapseInput.value, 10));
+          if (collapseDepth === state.display.collapseDepth) {
+            return;
+          }
+          state.display.collapseDepth = collapseDepth;
+          state.expandedFolders.clear();
+          syncPageDisplayParams(state.display);
+          updateDisplayControls();
+          scheduleDisplayRebuild(graphFilterDebounceMs);
+        });
+      }
       if (dom.fitButton instanceof HTMLButtonElement) {
         dom.fitButton.addEventListener("click", fitCurrentGraph);
       }
@@ -5709,6 +6304,7 @@ var BrainNotesApp = (() => {
     });
     document.addEventListener(THEME_EVENT, restyleGraphForTheme);
     bindControls();
+    updateDisplayControls();
     scheduleLoad(initialQuery, 0);
   };
 

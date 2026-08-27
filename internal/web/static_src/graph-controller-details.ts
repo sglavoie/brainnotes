@@ -32,8 +32,21 @@ export const formatDegreeDetails = (data: GraphNodeModel | null | undefined): st
   return `${visibleDetail}. Full graph: ${degree} (${inDegree} in, ${outDegree} out)`;
 };
 
+/**
+ * The degree line for a collapsed folder aggregate: it stands for a group of
+ * notes, so member count is the only honest number to show. Its degree counts
+ * describe synthesized inter-folder edges, which would read as a note's own
+ * link count and mean something else entirely.
+ */
+export const formatAggregateDetails = (data: GraphNodeModel | null | undefined): string => {
+  const memberCount = data && data.memberIDs ? data.memberIDs.length : 0;
+  return memberCount === 1 ? "Collapsed folder: 1 note" : `Collapsed folder: ${memberCount} notes`;
+};
+
 export const issueItemsForNode = (data: GraphNodeModel | null | undefined): GraphIssueItem[] => {
-  if (!data) {
+  if (!data || data.isAggregate) {
+    // An aggregate carries no issue flags of its own; its members' flags are not
+    // summable into one badge, so the list stays empty rather than lying.
     return [];
   }
   const items: GraphIssueItem[] = [];
@@ -82,12 +95,19 @@ export const renderIssueDetails = (
   }
 };
 
-export const setOpenNoteTarget = (openNote: HTMLAnchorElement | null, nodeID: string): void => {
+export const setOpenNoteTarget = (
+  openNote: HTMLAnchorElement | null,
+  nodeID: string,
+  isAggregate = false
+): void => {
   if (!openNote) {
     return;
   }
 
-  const path = notePathForKey(nodeID);
+  // An aggregate is a synthetic folder node with no note behind it. The branch is
+  // driven by the explicit flag rather than by `notePathForKey` failing, because a
+  // real note key may legitimately start with the aggregate id prefix.
+  const path = isAggregate ? "" : notePathForKey(nodeID);
   if (!path) {
     openNote.removeAttribute("href");
     openNote.classList.add("is-disabled");
@@ -119,12 +139,23 @@ export const renderGraphDetails = (
     refs.hoverFolder.textContent = model ? `Folder: ${model.folder || "/"}` : "";
   }
   if (refs.hoverDegree) {
-    refs.hoverDegree.textContent = model ? formatDegreeDetails(model) : "";
+    if (!model) {
+      refs.hoverDegree.textContent = "";
+    } else {
+      refs.hoverDegree.textContent = model.isAggregate
+        ? formatAggregateDetails(model)
+        : formatDegreeDetails(model);
+    }
   }
   renderIssueDetails(refs.hoverIssues, model);
   if (refs.detailsPanel) {
     refs.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
     refs.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
+    refs.detailsPanel.classList.toggle("is-aggregate", Boolean(model && model.isAggregate));
   }
-  setOpenNoteTarget(refs.openNote, selectedModel ? selectedModel.id : "");
+  setOpenNoteTarget(
+    refs.openNote,
+    selectedModel ? selectedModel.id : "",
+    Boolean(selectedModel && selectedModel.isAggregate)
+  );
 };
