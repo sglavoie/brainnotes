@@ -153,6 +153,12 @@ func commitNoteWrite(vaultRoot string, note *vault.Note, fm *config.FrontmatterC
 // A lock timeout is reported as a conflict too. Nothing changed, so the caller's
 // plan is still valid, but "retry" is the correct advice and conflict is the code
 // callers already retry on.
+//
+// A refused or half-finished replacement keeps its own message rather than the
+// generic one. Neither is retryable and neither is the caller's fault: one says
+// this volume cannot be written to safely at all, the other names the file
+// holding content that is nowhere else. Replacing either with "frontmatter: save
+// note" would throw away the only sentence that tells a person what to do.
 func classifyTxnError(message string, err error) error {
 	if err == nil {
 		return nil
@@ -163,6 +169,8 @@ func classifyTxnError(message string, err error) error {
 	case vault.IsTxnLockBusy(err), vault.IsTxnConflict(err):
 		return WrapError(CodeConflict, MessageOf(err), err)
 	case vault.IsTxnRollbackFailure(err):
+		return WrapError(CodeInternal, err.Error(), err)
+	case vault.IsPartialReplacement(err), vault.IsUnsafeReplacement(err):
 		return WrapError(CodeInternal, err.Error(), err)
 	default:
 		return WrapError(CodeInternal, message, err)

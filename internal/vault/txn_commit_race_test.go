@@ -168,11 +168,10 @@ func TestFileTxnCommitPreservesDestinationChangeAfterValidation(t *testing.T) {
 	})
 }
 
-// Replacing a destination moves it into custody before the replacement is
-// placed, so a placement failure leaves the path vacant with its only copy in a
-// temp file. The transaction must put that copy back rather than report an
-// error while the note is missing from the vault.
-func TestFileTxnCommitRecoversAfterPlacementFailure(t *testing.T) {
+// A replacement that fails must fail before it moves anything: the destination
+// keeps its content, its mode, and — the property this whole layer exists for —
+// its name, which never stops resolving for a moment.
+func TestFileTxnCommitLeavesDestinationIntactWhenReplacementIsRefused(t *testing.T) {
 	plan := func(t *testing.T, root string) *FileTxn {
 		t.Helper()
 		txn, err := NewFileTxn(root)
@@ -192,30 +191,30 @@ func TestFileTxnCommitRecoversAfterPlacementFailure(t *testing.T) {
 		"c.md": "old-c\n",
 	}
 
-	t.Run("restores the destination and rolls back earlier changes", func(t *testing.T) {
+	t.Run("keeps the destination and rolls back earlier changes", func(t *testing.T) {
 		root := txnTestRoot(t, files)
 		txn := plan(t, root)
 
-		placeErr := errors.New("link unsupported")
-		txn.hooks.placeReplacement = func(source, path string) error {
+		replaceErr := errors.New("no atomic replacement on this volume")
+		txn.hooks.replaceExisting = func(source, path string) (string, error) {
 			if strings.HasSuffix(path, "c.md") {
-				return placeErr
+				return "", replaceErr
 			}
-			return txn.linkExclusive(source, path)
+			return replaceExisting(source, path)
 		}
 
 		err := txn.Commit(&captureRecorder{})
-		if !errors.Is(err, placeErr) {
-			t.Fatalf("commit should surface the placement failure, got %v", err)
+		if !errors.Is(err, replaceErr) {
+			t.Fatalf("commit should surface the replacement failure, got %v", err)
 		}
 		if IsTxnRecoveryNeeded(err) {
-			t.Fatalf("a recovered placement failure must not ask for manual recovery: %v", err)
+			t.Fatalf("a refused replacement moves nothing, so nothing needs recovery: %v", err)
 		}
 		if IsTxnRollbackFailure(err) {
 			t.Fatalf("rollback succeeded, so the error must not be a rollback failure: %v", err)
 		}
 		if got := readFileString(t, filepath.Join(root, "c.md")); got != "old-c\n" {
-			t.Fatalf("the destination must be put back, got %q", got)
+			t.Fatalf("the destination must be untouched, got %q", got)
 		}
 		info, err := os.Stat(filepath.Join(root, "c.md"))
 		if err != nil {
@@ -235,20 +234,50 @@ func TestFileTxnCommitRecoversAfterPlacementFailure(t *testing.T) {
 		}
 	})
 
-	t.Run("names the destination and recovery file when the put-back is refused", func(t *testing.T) {
+	t.Run("a refusal on an unsupported volume is typed and names the path", func(t *testing.T) {
 		root := txnTestRoot(t, files)
 		txn := plan(t, root)
 
-		// The destination is created by another writer while it is vacant, so
-		// neither the replacement nor the put-back can be placed there.
-		txn.hooks.placeReplacement = func(source, path string) error {
+		txn.hooks.replaceExisting = func(source, path string) (string, error) {
 			if !strings.HasSuffix(path, "c.md") {
-				return txn.linkExclusive(source, path)
+				return replaceExisting(source, path)
 			}
-			if err := os.WriteFile(path, []byte("editor-saved\n"), 0o644); err != nil {
-				return err
+			return "", &UnsafeReplacementError{Path: path, Reason: "the volume could not be proved"}
+		}
+
+		err := txn.Commit(&captureRecorder{})
+		if !IsUnsafeReplacement(err) {
+			t.Fatalf("commit should surface an unsafe-replacement refusal, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "c.md") {
+			t.Fatalf("the refusal must name the destination, got %q", err.Error())
+		}
+		if got := readFileString(t, filepath.Join(root, "c.md")); got != "old-c\n" {
+			t.Fatalf("a refused volume must not change the destination, got %q", got)
+		}
+		if leftovers := stagedTempFiles(t, root); len(leftovers) > 0 {
+			t.Fatalf("transaction temp files left behind: %v", leftovers)
+		}
+	})
+
+	t.Run("names the destination and the displaced copy when the put-back is refused", func(t *testing.T) {
+		root := txnTestRoot(t, files)
+		txn := plan(t, root)
+
+		// The editor saves after the destination check passed, so the exchange
+		// displaces its bytes; the put-back that would return them then fails.
+		txn.hooks.beforeCommit = func(path string) error {
+			if !strings.HasSuffix(path, "c.md") {
+				return nil
 			}
-			return txn.linkExclusive(source, path)
+			return os.WriteFile(path, []byte("editor-saved\n"), 0o644)
+		}
+		restoreErr := errors.New("put-back interrupted")
+		txn.hooks.beforeConflictRestore = func(path string) error {
+			if !strings.HasSuffix(path, "c.md") {
+				return nil
+			}
+			return restoreErr
 		}
 
 		err := txn.Commit(&captureRecorder{})
@@ -259,17 +288,22 @@ func TestFileTxnCommitRecoversAfterPlacementFailure(t *testing.T) {
 		if !IsTxnRecoveryNeeded(err) {
 			t.Fatalf("IsTxnRecoveryNeeded should be true for %v", err)
 		}
+		if !recovery.Foreign {
+			t.Fatalf("the stranded content belongs to another writer: %#v", recovery)
+		}
 		if !strings.HasSuffix(recovery.Path, "c.md") {
 			t.Fatalf("recovery should name c.md, got %q", recovery.Path)
 		}
 		if !strings.Contains(err.Error(), recovery.Path) || !strings.Contains(err.Error(), recovery.RecoveryPath) {
 			t.Fatalf("mixed-state error must name the destination and the recovery path, got %q", err.Error())
 		}
-		if got := readFileString(t, filepath.Join(root, "c.md")); got != "editor-saved\n" {
-			t.Fatalf("the file that took the vacant path must survive, got %q", got)
+		if got := readFileString(t, recovery.RecoveryPath); got != "editor-saved\n" {
+			t.Fatalf("the other writer's version must be preserved, got %q", got)
 		}
-		if got := readFileString(t, recovery.RecoveryPath); got != "old-c\n" {
-			t.Fatalf("the displaced content must be preserved, got %q", got)
+		// Rollback still runs, and it finds c.md holding exactly this
+		// transaction's bytes, so the pre-transaction content goes back.
+		if got := readFileString(t, filepath.Join(root, "c.md")); got != "old-c\n" {
+			t.Fatalf("c.md should be rolled back, got %q", got)
 		}
 		if got := readFileString(t, filepath.Join(root, "a.md")); got != "old-a\n" {
 			t.Fatalf("a.md should be rolled back, got %q", got)
@@ -297,11 +331,11 @@ func TestFileTxnCommitRecoversAfterPlacementFailure(t *testing.T) {
 		}
 
 		placeErr := errors.New("link unsupported")
-		txn.hooks.placeReplacement = func(source, path string) error {
+		txn.hooks.placeNew = func(source, path string) error {
 			if strings.HasSuffix(path, "z.md") {
 				return placeErr
 			}
-			return txn.linkExclusive(source, path)
+			return placeNew(nil, source, path)
 		}
 
 		err = txn.Commit(&captureRecorder{})

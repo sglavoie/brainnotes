@@ -58,12 +58,17 @@ func currentFileState(path string) (data []byte, mode os.FileMode, exists bool, 
 	return data, info.Mode().Perm(), true, nil
 }
 
-// classifyStateReadError turns the read half of currentFileState into the right
-// kind of failure. The stat said "regular file", so a read that now reports the
-// path missing means another writer took it in between — takeCustody renames the
-// destination aside, leaving exactly that window. That is a precondition
-// mismatch, not an I/O fault, and every caller that retries a conflict must see
-// it as one.
+// classifyStateReadError turns a read that follows a successful stat into the
+// right kind of failure. The stat said "regular file", so a read that now
+// reports the path missing means another writer unlinked it in between — a
+// concurrent delete, or the custody rename a delete performs. That is a
+// precondition mismatch, not an I/O fault, and every caller that retries a
+// conflict must see it as one.
+//
+// compareAndSwap reuses it for the displaced copy, where a missing file means
+// something outside this process removed a temp file it does not own; a conflict
+// is the right verdict there too, because the transaction cannot prove what it
+// just replaced and must not keep the replacement.
 func classifyStateReadError(path string, err error) error {
 	if errors.Is(err, fs.ErrNotExist) {
 		return &TxnConflictError{Path: path, Expected: "file", Actual: "missing"}

@@ -157,9 +157,10 @@ func TestFileTxnRollbackPreservesEditAfterCommittedCheck(t *testing.T) {
 	}
 }
 
-// A file that appears while rollback holds the path in custody is not
-// overwritten either: the compensating write is an exclusive create.
-func TestFileTxnRollbackRefusesPathRecreatedDuringCustody(t *testing.T) {
+// A file that appears while rollback is putting a removed path back is not
+// overwritten either: that compensating write expects a vacant destination, so
+// it places exclusively rather than replacing.
+func TestFileTxnRollbackRefusesPathRecreatedDuringPutBack(t *testing.T) {
 	root := txnTestRoot(t, map[string]string{
 		"a.md": "old-a\n",
 		"c.md": "old-c\n",
@@ -207,13 +208,13 @@ func TestFileTxnRollbackRefusesPathRecreatedDuringCustody(t *testing.T) {
 		t.Fatalf("rollback error = %v, want *TxnRecoveryError", failure.RollbackErrs[0])
 	}
 	if !recovery.Displaced || recovery.RecoveryPath == "" {
-		t.Fatalf("recovery = %#v, want displaced named custody", recovery)
+		t.Fatalf("recovery = %#v, want a displaced recovery path", recovery)
 	}
 	if got := readFileString(t, filepath.Join(root, "a.md")); got != "recreated\n" {
 		t.Fatalf("the recreated file must survive rollback, got %q", got)
 	}
 	if got := readFileString(t, recovery.RecoveryPath); got != "old-a\n" {
-		t.Fatalf("the displaced original must survive in recovery custody, got %q", got)
+		t.Fatalf("the removed content must survive at the named recovery path, got %q", got)
 	}
 	leftovers := stagedTempFiles(t, root)
 	if len(leftovers) != 1 || leftovers[0] != filepath.Base(recovery.RecoveryPath) {
@@ -390,10 +391,10 @@ func TestFileTxnConflictsOnNonRegularDestination(t *testing.T) {
 }
 
 // TestClassifyStateReadErrorTreatsVanishedFileAsConflict pins the stat-then-read
-// window in currentFileState: another writer's takeCustody renames the
-// destination away, so the read reports the path missing even though the stat
-// saw a regular file. Callers retry a conflict and surface anything else, so the
-// classification is what keeps that lost race retryable.
+// window in currentFileState: another writer deletes the destination, so the
+// read reports the path missing even though the stat saw a regular file. Callers
+// retry a conflict and surface anything else, so the classification is what
+// keeps that lost race retryable.
 func TestClassifyStateReadErrorTreatsVanishedFileAsConflict(t *testing.T) {
 	path := filepath.Join("notes", "Inbox.md")
 
@@ -432,5 +433,51 @@ func TestFileTxnEmptyCommitIsNoop(t *testing.T) {
 	}
 }
 
-// A write that lands between staging and the rename is still caught: the
-// destination is re-verified immediately before it is replaced.
+// A write that lands between staging and the exchange is still caught — but not
+// by re-reading the destination first, which would have its own gap. The
+// exchange itself hands back the bytes it displaced, so the check is made
+// against the exact version this transaction overwrote. The interloper's save
+// therefore survives at the destination and the transaction is the one that
+// backs out, which is the opposite of what a check-then-write would do.
+func TestFileTxnOverwriteRejectsAWriterThatLandsAfterStaging(t *testing.T) {
+	root := txnTestRoot(t, map[string]string{
+		"a.md": "old-a\n",
+		"c.md": "old-c\n",
+	})
+	txn, err := NewFileTxn(root)
+	if err != nil {
+		t.Fatalf("new txn: %v", err)
+	}
+	if err := txn.Write(filepath.Join(root, "a.md"), []byte("new-a\n"), 0, ExpectContent([]byte("old-a\n"))); err != nil {
+		t.Fatalf("plan a: %v", err)
+	}
+	if err := txn.Write(filepath.Join(root, "c.md"), []byte("new-c\n"), 0, ExpectAnyContent()); err != nil {
+		t.Fatalf("plan c: %v", err)
+	}
+
+	// The editor saves after this transaction staged and verified, in the last
+	// window a check-then-write would have left open.
+	txn.hooks.beforeCommit = func(path string) error {
+		if !strings.HasSuffix(path, "a.md") {
+			return nil
+		}
+		return os.WriteFile(path, []byte("editor-saved\n"), 0o644)
+	}
+
+	err = txn.Commit(&captureRecorder{})
+	if !IsTxnConflict(err) {
+		t.Fatalf("a writer that landed after staging must conflict, got %v", err)
+	}
+	if IsTxnRecoveryNeeded(err) {
+		t.Fatalf("the writer's bytes went back with the same primitive, so nothing needs recovery: %v", err)
+	}
+	if got := readFileString(t, filepath.Join(root, "a.md")); got != "editor-saved\n" {
+		t.Fatalf("the concurrent writer must keep the path, got %q", got)
+	}
+	if got := readFileString(t, filepath.Join(root, "c.md")); got != "old-c\n" {
+		t.Fatalf("the rest of the transaction must not land, got %q", got)
+	}
+	if leftovers := stagedTempFiles(t, root); len(leftovers) > 0 {
+		t.Fatalf("transaction temp files left behind: %v", leftovers)
+	}
+}

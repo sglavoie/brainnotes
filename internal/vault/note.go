@@ -135,9 +135,10 @@ func (n *Note) Marshal(fmCfg *config.FrontmatterConfig) ([]byte, error) {
 }
 
 // Save writes the note atomically: it serializes the document, writes to a
-// sibling temp file, fsyncs, and renames over the destination. The caller
-// passes the frontmatter config so wikilink-typed properties are wrapped
-// consistently; nil is permitted to skip wrapping.
+// sibling temp file, fsyncs, and installs it over the destination through the
+// same path-preserving replacement layer FileTxn uses. The caller passes the
+// frontmatter config so wikilink-typed properties are wrapped consistently; nil
+// is permitted to skip wrapping.
 func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if n == nil {
 		return errors.New("vault: nil note")
@@ -163,19 +164,22 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if err != nil {
 		return fmt.Errorf("note: marshal %q: %w", n.Path, err)
 	}
-	// The lock spans the precondition check and the rename, which is what makes the
-	// two one compare-and-swap: no other bn writer can change the file in between,
-	// and this write cannot land in the vacancy a concurrent FileTxn opens while
-	// holding the destination in custody.
+	// The lock keeps two bn writers off one note for the whole save, so the
+	// precondition check below is not racing another transaction's plan. It is not
+	// what makes the write safe against an editor, which takes no lock: the
+	// replacement itself is a compare-and-swap that judges the bytes it displaces,
+	// and the expectation it judges them against is the same revision this check
+	// used.
 	release, err := LockPaths(n.root, n.Path)
 	if err != nil {
 		return err
 	}
 	defer release()
-	if err := n.verifySourceUnchanged(); err != nil {
+	preimage, err := n.verifySourceUnchanged()
+	if err != nil {
 		return err
 	}
-	if err := atomicWrite(n.Path, data); err != nil {
+	if err := atomicWrite(n.Path, data, preimage); err != nil {
 		return err
 	}
 	n.sourceHash = HashBytes(data)
@@ -188,18 +192,29 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 // than a lost update. The check only means something for the file Load read: a
 // caller that retargets Path is writing somewhere the loaded revision makes no
 // claim about, so that write keeps the older unconditional behavior.
-func (n *Note) verifySourceUnchanged() error {
+//
+// It returns the expectation the replacement itself must hold the destination
+// to, which is the same revision this check used. The check is a plain read, so
+// on its own it would lose a save that lands between it and the replacement; the
+// replacement re-judges the identical expectation against the bytes it actually
+// displaces, which is what closes that window.
+func (n *Note) verifySourceUnchanged() (FileExpectation, error) {
 	if n.Path != n.sourcePath {
-		return nil
+		return ExpectAnyContent(), nil
 	}
-	err := verifyCurrentState(n.Path, ExpectHash(n.sourceHash))
+	expect := ExpectHash(n.sourceHash)
+	err := verifyCurrentState(n.Path, expect)
+	if err == nil {
+		return expect, nil
+	}
 	// A destination this process cannot read cannot be compared against, and
 	// saving a mode-0000 note is supported, so treat it as unverifiable instead of
-	// refusing the write.
+	// refusing the write. The replacement cannot read what it displaces either,
+	// for exactly the same reason, so it is not asked to.
 	if errors.Is(err, fs.ErrPermission) {
-		return nil
+		return ExpectAnyContent(), nil
 	}
-	return err
+	return FileExpectation{}, err
 }
 
 func (n *Note) ensureSavePathContained() error {
@@ -329,16 +344,24 @@ func (n *Note) Folder(root string) (string, error) {
 }
 
 // atomicWrite writes data to dest atomically by writing a sibling temp file,
-// fsyncing it, and renaming over dest. The temp file is removed on any error
-// so it does not linger.
+// fsyncing it, and installing it at dest. A destination that already exists is
+// replaced through the same path-preserving compare-and-swap a FileTxn commit
+// uses, with preimage naming the revision the caller planned this write against;
+// a destination that does not exist yet is created exclusively. The temp file is
+// removed on any error so it does not linger.
+//
+// The replacement never vacates dest, and it never lands if the bytes it
+// displaces are not the ones preimage describes — an editor that saved the note
+// since the caller read it keeps its version and gets a *TxnConflictError back.
 //
 // If dest already exists, its file mode is preserved across the rewrite. Go's
 // os.CreateTemp creates files with mode 0600, so without this step every Save
 // would silently strip group/world read bits from a 0644 note. When dest does
 // not exist (new note), the mode is derived from a sibling probe file created
 // with 0666 so the final note respects the process umask instead of forcing
-// world-readable 0644 permissions.
-func atomicWrite(dest string, data []byte) error {
+// world-readable 0644 permissions. The mode travels on the temp inode, which the
+// exchange moves to dest, so it is applied before the swap rather than after.
+func atomicWrite(dest string, data []byte, preimage FileExpectation) error {
 	dir := filepath.Dir(dest)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("note: mkdir %q: %w", dir, err)
@@ -351,6 +374,12 @@ func atomicWrite(dest string, data []byte) error {
 	var destMode os.FileMode
 	var destExists bool
 	if info, err := os.Stat(dest); err == nil {
+		// An exchange against a directory would succeed and swap the note with
+		// it, where the old plain rename simply failed. Refuse anything that is
+		// not a regular file before the primitive can be that literal.
+		if !info.Mode().IsRegular() {
+			return &TxnConflictError{Path: dest, Expected: "file", Actual: nonRegularLabel(info)}
+		}
 		destMode = info.Mode().Perm()
 		destExists = true
 	} else if !os.IsNotExist(err) {
@@ -392,9 +421,8 @@ func atomicWrite(dest string, data []byte) error {
 		cleanup()
 		return fmt.Errorf("note: chmod %q: %w", tmpPath, err)
 	}
-	if err := os.Rename(tmpPath, dest); err != nil {
-		cleanup()
-		return fmt.Errorf("note: rename %q -> %q: %w", tmpPath, dest, err)
+	if err := installNote(dest, tmpPath, destExists, preimage); err != nil {
+		return err
 	}
 	// fsync the parent directory so the rename is durable across power loss.
 	// POSIX guarantees rename atomicity within a running system, but the
@@ -406,6 +434,44 @@ func atomicWrite(dest string, data []byte) error {
 		_ = dirF.Sync()
 		_ = dirF.Close()
 	}
+	return nil
+}
+
+// installNote moves the staged bytes onto dest and owns the temp name from that
+// point on, including deciding when it may be deleted.
+//
+// A destination that exists is replaced by the compare-and-swap, so it is never
+// absent and never loses a concurrent writer's version. A destination that does
+// not exist is created exclusively; if a file appeared between the stat and the
+// create, the write is retried as a replacement against the same expectation,
+// which is what keeps a caller who asked for an unconditional write getting one
+// without ever opening a hole at the path.
+func installNote(dest, staged string, destExists bool, preimage FileExpectation) error {
+	if !destExists {
+		err := placeNew(nil, staged, dest)
+		if err == nil {
+			return nil
+		}
+		if !IsTxnConflict(err) {
+			// Nothing landed, so the staged bytes are this function's to drop.
+			_ = os.Remove(staged)
+			return err
+		}
+	}
+	outcome, err := compareAndSwap(nil, staged, dest, preimage)
+	if err != nil {
+		if !outcome.sourceConsumed {
+			_ = os.Remove(staged)
+		}
+		// Otherwise the temp name holds content this call did not create — a
+		// concurrent writer's version the error names for recovery — and
+		// deleting it would destroy the thing the error exists to preserve.
+		return err
+	}
+	// The note is on disk under its own name. outcome.cleanup only ever reports a
+	// temp file that could not be unlinked afterwards, which the vault walk
+	// already ignores; failing the save over it would tell the caller a lie about
+	// the note.
 	return nil
 }
 

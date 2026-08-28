@@ -392,3 +392,51 @@ func TestClassifyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) {
 		})
 	}
 }
+
+// A volume whose replacement semantics could not be proved, and a Windows
+// replacement that stopped half-way, both carry the only sentence that tells a
+// person what happened and what to do about it. Neither is a conflict — retrying
+// an unprovable volume just fails again — so both must arrive as an internal
+// error that kept its own message.
+func TestClassifyTxnErrorSurfacesReplacementRefusals(t *testing.T) {
+	t.Parallel()
+
+	for name, testCase := range map[string]struct {
+		err  error
+		must []string
+	}{
+		"a volume that cannot be proved safe": {
+			err: &vault.UnsafeReplacementError{
+				Path:   "/vault/Source.md",
+				Reason: "renameatx_np failed on this volume",
+				Err:    errors.New("operation not supported"),
+			},
+			must: []string{"/vault/Source.md", "operation not supported"},
+		},
+		"a replacement that stopped half-way": {
+			err: &vault.PartialReplacementError{
+				Path:       "/vault/Source.md",
+				Stage:      "ReplaceFileW",
+				BackupPath: "/vault/.txn-backup-123.tmp",
+				Err:        errors.New("sharing violation"),
+			},
+			must: []string{"/vault/Source.md", "/vault/.txn-backup-123.tmp"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			classified := classifyTxnError("frontmatter: save note", testCase.err)
+			if got := CodeOf(classified); got != CodeInternal {
+				t.Fatalf("code = %q, want %q", got, CodeInternal)
+			}
+			message := MessageOf(classified)
+			for _, want := range testCase.must {
+				if !strings.Contains(message, want) {
+					t.Fatalf("message must name %q, got %q", want, message)
+				}
+			}
+			if !errors.Is(classified, testCase.err) {
+				t.Fatalf("the classified error must still unwrap to the cause, got %v", classified)
+			}
+		})
+	}
+}

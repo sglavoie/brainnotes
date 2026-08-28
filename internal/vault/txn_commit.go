@@ -1,7 +1,6 @@
 package vault
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,20 +44,28 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 		}
 	}
 	syncParentDirs(t.order)
-	return nil
+	// Every mutation landed. A temp file that could not be unlinked afterwards
+	// is reported here rather than through the rollback path, because undoing a
+	// committed exchange over a housekeeping failure would be the destructive
+	// answer to the harmless problem.
+	return t.cleanupFailure()
 }
 
 // lockPaths takes one exclusive lock per planned path and holds it for the whole
 // commit, so two bn writers never run their replacements against one note at the
 // same time.
 //
-// Without it the custody step is observable. Replacing a destination renames it
-// aside first, and during that window the path does not exist: a second writer
-// reads it as missing, plans a create, and wins the vacant path. Both writers
-// then hold a legitimate version and the one in custody can only come back
-// through *TxnRecoveryError for a person to merge by hand. Serializing the
-// writers turns that into an ordinary staging conflict — the second one sees the
-// first one's committed file and replans — which callers already retry.
+// Overwrites no longer vacate a destination, so the lock is no longer what keeps
+// a second writer out of a hole in the middle of a replacement. What it still
+// buys is that two bn writers never interleave a plan and a commit on one note:
+// without it both stage against the same bytes, the second one's swap displaces
+// the first one's committed file, and the compare-and-swap turns that into a
+// *TxnConflictError the caller has to replan from. Serializing them makes the
+// second writer see the committed file while it stages instead — an ordinary
+// staging conflict, detected before anything is written.
+//
+// It also still guards the two operations that do vacate a path by design: a
+// delete, and the compensating undo of a create.
 //
 // The locks are taken in sorted path order, which is what makes concurrent
 // multi-path transactions deadlock-free.
@@ -69,7 +76,8 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 // strictly stronger; what it costs is that every other bn writer waits.
 //
 // External writers are unaffected: an editor saving a note takes no lock, which
-// is why custody stays in place to guard against it.
+// is why every mutation still judges the bytes it displaces rather than trusting
+// the lock.
 func (t *FileTxn) lockPaths() error {
 	locks, err := acquirePathLocks(t.root, t.lockWait, t.lockEscalation, t.order)
 	if err != nil {
@@ -154,81 +162,80 @@ func (t *FileTxn) apply(change *txnChange) error {
 	return t.verifyRequirements()
 }
 
-// claim replaces or deletes the destination without a check-then-write window.
-// The validation above is a plain read, so a save landing between it and the
-// mutation would be overwritten by a check that already passed. Claim therefore
-// renames the destination into a custody temp file first: after that rename the
-// path no longer exists, so the bytes it judges are exactly the bytes it
-// discards, and a mismatch — which can only come from a writer that ran after
-// the validation — travels back to the destination untouched.
+// claim performs one planned change against its destination. The three kinds of
+// change are three different primitives rather than one generic one, because
+// only the overwrite has to keep a name occupied throughout:
 //
-// The replacement is then placed with an exclusive create, so a file that
-// appeared while the path was vacant is never clobbered either. A placement
-// that fails leaves the destination vacant with its only copy in custody, so
-// the custody file goes straight back before the failure is reported.
+//   - A create places the staged file exclusively. Nothing is at the path, so
+//     nothing can be evacuated, and refusing an occupied path is what keeps a
+//     file that appeared since staging from being clobbered.
+//   - An overwrite is a path-preserving compare-and-swap. It never calls a
+//     helper that renames the destination away first — that vacancy is the bug
+//     this whole layer exists to remove.
+//   - A delete takes the destination into custody, judges the bytes it took, and
+//     unlinks them. The path ends up absent because that is what was asked for,
+//     so the transient vacancy is the operation rather than a side effect of it.
+//
+// All three judge the bytes they actually displace rather than the bytes an
+// earlier read observed. The validation above is a plain read, so a save landing
+// between it and the mutation would otherwise be lost to a check that already
+// passed; a mismatch here can only come from a writer that ran after that check,
+// and its file always survives.
 func (t *FileTxn) claim(change *txnChange) error {
-	custody := ""
-	if change.priorExists {
-		taken, err := t.takeVerifiedCustody(change.path, ExpectContent(change.priorData))
-		if err != nil {
-			return err
-		}
-		custody = taken
+	switch {
+	case change.remove:
+		return t.claimRemoval(change)
+	case !change.priorExists:
+		return t.claimCreate(change)
+	default:
+		return t.claimOverwrite(change)
 	}
-	if change.remove {
-		change.applied = true
-		if custody == "" {
-			return nil
-		}
-		return os.Remove(custody)
-	}
-	if err := t.place(change.staged, change.path); err != nil {
-		return t.recoverCustody(err, change.path, custody)
-	}
-	change.applied = true
-	if err := os.Remove(change.staged); err != nil {
-		return fmt.Errorf("vault: remove %q: %w", change.staged, err)
+}
+
+// claimCreate installs a staged file at a path that held nothing when the
+// transaction staged it. A failure leaves the path absent and the staged bytes
+// where they were, so there is nothing to put back.
+func (t *FileTxn) claimCreate(change *txnChange) error {
+	if err := placeNew(&t.hooks, change.staged, change.path); err != nil {
+		return err
 	}
 	change.staged = ""
-	if custody == "" {
+	change.applied = true
+	return nil
+}
+
+// claimOverwrite replaces an existing destination through the safe replacement
+// layer, requiring the content it displaces to be exactly what staging read. A
+// refused replacement leaves the destination untouched; a stale preimage leaves
+// the concurrent writer's version in place and reports a conflict. The
+// destination name exists continuously in both outcomes.
+func (t *FileTxn) claimOverwrite(change *txnChange) error {
+	outcome, err := compareAndSwap(&t.hooks, change.staged, change.path, ExpectContent(change.priorData))
+	if outcome.sourceConsumed {
+		change.staged = ""
+	}
+	if outcome.landed {
+		change.applied = true
+	}
+	t.noteCleanupFailure(outcome.cleanup)
+	return err
+}
+
+// claimRemoval deletes a planned path. Custody is what makes the delete a
+// compare-and-swap: after the rename the destination no longer exists, so the
+// bytes it judges are exactly the bytes it discards.
+func (t *FileTxn) claimRemoval(change *txnChange) error {
+	if !change.priorExists {
+		change.applied = true
 		return nil
 	}
-	return os.Remove(custody)
-}
-
-func (t *FileTxn) place(source, path string) error {
-	if t.hooks.placeReplacement != nil {
-		return t.hooks.placeReplacement(source, path)
+	custody, err := takeVerifiedCustody(&t.hooks, change.path, ExpectContent(change.priorData))
+	if err != nil {
+		return err
 	}
-	return t.linkExclusive(source, path)
-}
-
-// recoverCustody undoes a failed replacement placement. The destination is
-// already in custody by then and the replacement never landed, so the path is
-// vacant and the custody file holds the only copy of what was there. Putting
-// that copy back is what keeps a placement failure from stranding the note in a
-// hidden temp file while the caller sees nothing but the underlying error.
-//
-// The put-back is exclusive, so a writer that created the path while it was
-// vacant keeps its file. Both versions then survive and the caller gets a
-// *TxnRecoveryError naming the destination and the file the content is kept in.
-// A put-back that fails for any other reason leaves the destination absent and
-// is reported as such, since telling the caller another writer took the path
-// would send them looking for a file that is not there.
-func (t *FileTxn) recoverCustody(cause error, path, custody string) error {
-	if custody == "" {
-		return cause
-	}
-	err := t.placeExclusive(custody, path)
-	if err == nil {
-		return cause
-	}
-	return &TxnRecoveryError{
-		Path:         path,
-		RecoveryPath: custody,
-		Displaced:    IsTxnConflict(err),
-		Err:          errors.Join(cause, err),
-	}
+	change.applied = true
+	t.noteCleanupFailure(removeSuperseded(change.path, custody))
+	return nil
 }
 
 // verifyRequirements re-checks every read-only precondition. Staging is a long

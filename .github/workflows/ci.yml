@@ -29,3 +29,31 @@ jobs:
 
       - name: Run CI checks
         run: just ci
+
+  # internal/vault replaces an existing note with a native, platform-specific
+  # primitive and refuses to write at all where it cannot prove that primitive on
+  # the target volume. Cross-compiling only proves the code builds; the semantics
+  # it depends on — an exchange that never leaves the destination name absent —
+  # are a property of the kernel and the filesystem under the runner, so the
+  # package's tests have to actually execute on each supported platform.
+  #
+  # The Ubuntu job above stays authoritative for the repository as a whole. This
+  # matrix adds nothing to it on Linux beyond a second run of one package; its
+  # reason to exist is macOS and Windows.
+  vault-native:
+    name: vault (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run internal/vault tests on the native filesystem
+        run: go test -count=1 ./internal/vault/...

@@ -34,10 +34,16 @@ func (t *FileTxn) rollback(failedPath string, cause error, applied []*txnChange)
 //
 // The committed-bytes check cannot be a plain read followed by a write: a save
 // landing between the two would be overwritten by a check that already passed.
-// Rollback therefore takes the destination into custody first and judges the
-// custody file, so the bytes it inspects are the bytes it discards, and puts
-// every replacement in place with an exclusive create, so a file that appeared
-// while the path was in custody is never clobbered either.
+// Each undo therefore mirrors the mutation it compensates, and judges the bytes
+// it actually displaces:
+//
+//   - Undoing an overwrite swaps the prior content back and requires what it
+//     displaces to be this transaction's own bytes. The path stays occupied
+//     throughout, exactly as the forward direction does.
+//   - Undoing a create deletes the path, so custody is the right primitive: the
+//     end state is vacancy.
+//   - Undoing a delete places the prior content exclusively, so a writer that
+//     recreated the path in the meantime keeps its file.
 func (t *FileTxn) restore(change *txnChange) error {
 	if err := t.verifyStillCommitted(change); err != nil {
 		return err
@@ -47,44 +53,61 @@ func (t *FileTxn) restore(change *txnChange) error {
 			return err
 		}
 	}
-	if change.remove {
+	switch {
+	case change.remove:
 		if !change.priorExists {
 			return nil
 		}
-		return t.restorePriorBytes(change)
+		return t.restoreRemoved(change)
+	case !change.priorExists:
+		return t.restoreCreated(change)
+	default:
+		return t.restoreOverwritten(change)
 	}
-
-	custody, err := t.takeVerifiedCustody(change.path, ExpectContent(change.data))
-	if err != nil {
-		return err
-	}
-	if !change.priorExists {
-		return os.Remove(custody)
-	}
-	if err := t.restorePriorBytes(change); err != nil {
-		var recovery *TxnRecoveryError
-		if errors.As(err, &recovery) && recovery.Displaced {
-			// The destination now belongs to another writer. The custody file
-			// contains only this transaction's superseded bytes; the separately
-			// named recovery file contains the pre-transaction content that must
-			// survive for manual recovery.
-			return errors.Join(err, os.Remove(custody))
-		}
-		return errors.Join(err, t.placeExclusive(custody, change.path))
-	}
-	return os.Remove(custody)
 }
 
-// restorePriorBytes puts the staged prior content at a path the transaction has
-// already vacated, refusing to replace anything that occupies it. A failed
-// placement preserves and names the temp copy because it is the durable
-// pre-transaction version needed for manual recovery after Commit returns.
-func (t *FileTxn) restorePriorBytes(change *txnChange) error {
+// restoreOverwritten swaps the pre-transaction content back over a destination
+// this transaction replaced. The compare-and-swap is what refuses a path an
+// external writer has since changed: its bytes come back out of the swap and go
+// straight back in, and rollback reports the path as mixed rather than
+// destroying that edit.
+func (t *FileTxn) restoreOverwritten(change *txnChange) error {
 	staged, err := stageTempFile(change.path, change.priorData, change.priorMode)
 	if err != nil {
 		return err
 	}
-	if err := t.placeExclusive(staged, change.path); err != nil {
+	outcome, err := compareAndSwap(&t.hooks, staged, change.path, ExpectContent(change.data))
+	if err != nil && !outcome.sourceConsumed {
+		// The replacement was refused before it moved anything, so the staged
+		// copy is redundant rather than a recovery artifact.
+		_ = os.Remove(staged)
+	}
+	t.noteCleanupFailure(outcome.cleanup)
+	return err
+}
+
+// restoreCreated removes a path this transaction created. Custody makes the
+// delete a compare-and-swap; a file another writer put there instead is
+// recognized from the bytes custody took and handed straight back.
+func (t *FileTxn) restoreCreated(change *txnChange) error {
+	custody, err := takeVerifiedCustody(&t.hooks, change.path, ExpectContent(change.data))
+	if err != nil {
+		return err
+	}
+	t.noteCleanupFailure(removeSuperseded(change.path, custody))
+	return nil
+}
+
+// restoreRemoved puts the deleted content back at a path the transaction
+// vacated on purpose, refusing to replace anything that occupies it now. A
+// failed placement preserves and names the temp copy because it is the durable
+// pre-transaction version needed for manual recovery after Commit returns.
+func (t *FileTxn) restoreRemoved(change *txnChange) error {
+	staged, err := stageTempFile(change.path, change.priorData, change.priorMode)
+	if err != nil {
+		return err
+	}
+	if err := placeNew(&t.hooks, staged, change.path); err != nil {
 		return &TxnRecoveryError{
 			Path:         change.path,
 			RecoveryPath: staged,
@@ -99,7 +122,12 @@ func (t *FileTxn) restorePriorBytes(change *txnChange) error {
 // exactly what expect describes. A mismatch is an edit that landed after the
 // last validation, so the custody file — which holds that writer's bytes — goes
 // straight back and the path is reported as a conflict.
-func (t *FileTxn) takeVerifiedCustody(path string, expect FileExpectation) (string, error) {
+//
+// Only a mutation whose end state is an absent path may call this: a delete, and
+// the undo of a create. Custody vacates the destination, which is precisely what
+// an overwrite must never do, so replacing a file goes through compareAndSwap
+// instead.
+func takeVerifiedCustody(hooks *txnHooks, path string, expect FileExpectation) (string, error) {
 	custody, err := takeCustody(path)
 	if err != nil {
 		return "", err
@@ -107,10 +135,10 @@ func (t *FileTxn) takeVerifiedCustody(path string, expect FileExpectation) (stri
 	current, err := os.ReadFile(custody)
 	if err != nil {
 		readErr := fmt.Errorf("vault: read %q: %w", custody, err)
-		return "", errors.Join(readErr, t.placeExclusive(custody, path))
+		return "", errors.Join(readErr, placeNew(hooks, custody, path))
 	}
 	if err := verifyExpectation(path, expect, current, true); err != nil {
-		return "", errors.Join(err, t.placeExclusive(custody, path))
+		return "", errors.Join(err, placeNew(hooks, custody, path))
 	}
 	return custody, nil
 }
@@ -118,7 +146,8 @@ func (t *FileTxn) takeVerifiedCustody(path string, expect FileExpectation) (stri
 // takeCustody atomically moves path aside into a sibling temp file. Whatever
 // another writer left there travels with it, so nothing can change the
 // destination between the moment its content is judged and the moment it is
-// discarded — after this rename the destination no longer exists.
+// discarded — after this rename the destination no longer exists, which is why
+// only a deliberate deletion may use it.
 func takeCustody(path string) (string, error) {
 	dir := filepath.Dir(path)
 	tmp, tmpPath, err := openExclusiveTemp(dir, ".txn-custody-", ".tmp", 0o600)
@@ -143,10 +172,10 @@ func takeCustody(path string) (string, error) {
 // already occupies it. The hard link is the create-or-fail primitive the
 // filesystem gives us, so a file that appeared at path survives; the caller
 // decides what happens to source afterwards.
-func (t *FileTxn) linkExclusive(source, path string) error {
+func linkExclusive(hooks *txnHooks, source, path string) error {
 	link := os.Link
-	if t != nil && t.hooks.hardLink != nil {
-		link = t.hooks.hardLink
+	if hooks != nil && hooks.hardLink != nil {
+		link = hooks.hardLink
 	}
 	if err := link(source, path); err != nil {
 		if os.IsExist(err) {
@@ -157,20 +186,29 @@ func (t *FileTxn) linkExclusive(source, path string) error {
 	return nil
 }
 
-// placeExclusive moves source onto path and refuses if anything already exists
-// there, leaving source on disk for recovery instead of dropping its content.
-// Every restoration goes through it: putting a displaced destination back after
-// a failed placement, and replaying prior bytes during rollback.
+// placeNew moves source onto path and refuses if anything already exists there,
+// leaving source on disk for recovery instead of dropping its content. It is the
+// primitive for every mutation whose destination is supposed to be absent:
+// creating a file, putting a deleted one back, and handing custody back to a
+// writer that got there first.
 //
-// Restoration must not depend on the hard link alone. It is the same primitive
+// It is deliberately not the overwrite path. Replacing an existing file goes
+// through the native path-preserving primitive, which refuses outright on a
+// platform that cannot prove it; placement has no such requirement, because a
+// path that holds nothing has no continuity to preserve, so it stays portable.
+//
+// Placement must not depend on the hard link alone. It is the same primitive
 // whose failure creates the situation being restored, so on a filesystem
 // without link support the put-back would fail for exactly the reason the write
 // did and leave the destination absent with its only copy in a temp file. A
 // non-conflict link failure therefore falls back to an atomic no-replace move,
 // which needs no link support and cannot overwrite a writer racing for the
 // vacant destination.
-func (t *FileTxn) placeExclusive(source, path string) error {
-	err := t.linkExclusive(source, path)
+func placeNew(hooks *txnHooks, source, path string) error {
+	if hooks != nil && hooks.placeNew != nil {
+		return hooks.placeNew(source, path)
+	}
+	err := linkExclusive(hooks, source, path)
 	if err == nil {
 		return os.Remove(source)
 	}
@@ -179,8 +217,8 @@ func (t *FileTxn) placeExclusive(source, path string) error {
 		conflict.Actual = "file (content kept at " + source + ")"
 		return conflict
 	}
-	if t != nil && t.hooks.beforeFallbackPlacement != nil {
-		if hookErr := t.hooks.beforeFallbackPlacement(source, path); hookErr != nil {
+	if hooks != nil && hooks.beforeFallbackPlacement != nil {
+		if hookErr := hooks.beforeFallbackPlacement(source, path); hookErr != nil {
 			return errors.Join(err, hookErr)
 		}
 	}

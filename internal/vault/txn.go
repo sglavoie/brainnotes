@@ -123,29 +123,43 @@ func IsTxnRollbackFailure(err error) bool {
 	return errors.As(err, &rollback)
 }
 
-// TxnRecoveryError reports content the transaction displaced and could not put
-// back. Replacing a destination moves it into a temp file first, so a placement
-// failure leaves the path vacant with the only copy of its previous content in
-// that file; the transaction puts the copy back, and this error is what it
-// returns when the put-back does not land. RecoveryPath always names the file
-// that content is preserved in.
+// TxnRecoveryError reports content the transaction moved out of a path and
+// could not put back, so two legitimate versions exist and only a person can
+// decide which one wins. RecoveryPath always names the file that content is
+// preserved in.
+//
+// Overwriting no longer produces this: a replacement is a path-preserving
+// exchange, so a failed overwrite leaves the destination exactly as it was. What
+// remains are the three cases where a path genuinely has to be vacated or
+// re-occupied — undoing a create, undoing a delete, and putting a concurrent
+// writer's bytes back after a compare-and-swap rejected them.
 type TxnRecoveryError struct {
-	// Path is the destination whose previous content could not be put back.
+	// Path is the destination whose content could not be put back.
 	Path string
 	// RecoveryPath is the transaction temp file holding that content.
 	RecoveryPath string
-	// Displaced reports that another writer took the vacant path, so the
-	// destination holds that writer's file and both versions survive. When it is
-	// false the put-back failed for some other reason and the destination is
-	// still absent.
+	// Displaced reports that another writer took the path, so the destination
+	// holds that writer's file and both versions survive. When it is false and
+	// Foreign is false, the put-back failed for some other reason and the
+	// destination is still absent.
 	Displaced bool
-	// Err is the placement failure together with the failed put-back.
+	// Foreign reports that the preserved content belongs to a writer outside
+	// this transaction: a compare-and-swap found the destination had changed
+	// under it, and putting that writer's bytes back failed, so the destination
+	// carries this transaction's bytes instead.
+	Foreign bool
+	// Err is the mutation failure together with the failed put-back.
 	Err error
 }
 
 func (e *TxnRecoveryError) Error() string {
 	if e == nil {
 		return "vault: transaction recovery needed"
+	}
+	if e.Foreign {
+		return fmt.Sprintf(
+			"vault: %s was changed by another writer while this transaction replaced it (%v) and that change could not be put back, so %s now holds this transaction's version; the other version is preserved at %s, merge it back to recover",
+			e.Path, e.Err, e.Path, e.RecoveryPath)
 	}
 	if e.Displaced {
 		return fmt.Sprintf(
@@ -169,6 +183,46 @@ func (e *TxnRecoveryError) Unwrap() error {
 func IsTxnRecoveryNeeded(err error) bool {
 	var recovery *TxnRecoveryError
 	return errors.As(err, &recovery)
+}
+
+// TxnCleanupError reports a temp file that survived a mutation which itself
+// landed. It is deliberately not a mutation failure: the destination holds
+// exactly what the caller asked for, and rolling a committed exchange back
+// because a scratch file could not be unlinked would turn a housekeeping problem
+// into data loss. Callers that treat any error as a failed write should check
+// IsTxnCleanupFailure first; the only action this ever asks for is deleting the
+// named file.
+type TxnCleanupError struct {
+	// Path is the destination whose mutation landed.
+	Path string
+	// LeftoverPath is the transaction temp file that could not be removed. It
+	// holds the destination's superseded content, so it is safe to delete.
+	LeftoverPath string
+	// Err is the removal failure.
+	Err error
+}
+
+func (e *TxnCleanupError) Error() string {
+	if e == nil {
+		return "vault: transaction cleanup failed"
+	}
+	return fmt.Sprintf(
+		"vault: %s was written as requested but its superseded copy could not be removed (%v); delete %s when convenient",
+		e.Path, e.Err, e.LeftoverPath)
+}
+
+func (e *TxnCleanupError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+// IsTxnCleanupFailure reports whether err is a leftover temp file after a
+// mutation that landed. The vault holds the requested content either way.
+func IsTxnCleanupFailure(err error) bool {
+	var cleanup *TxnCleanupError
+	return errors.As(err, &cleanup)
 }
 
 // TxnLockBusyError reports that another writer held a planned path for longer
@@ -206,16 +260,28 @@ type txnHooks struct {
 	beforeCommit            func(path string) error
 	beforeRestore           func(path string) error
 	beforeFallbackPlacement func(source, path string) error
-	// placeReplacement stands in for the exclusive create that puts a staged
-	// replacement at its destination. The filesystem will not fail that call on
-	// demand, so this is how the recovery path after a placement failure stays
+	// placeNew stands in for the exclusive placement that puts a staged file at
+	// a destination that must not already exist. The filesystem will not fail
+	// that call on demand, so this is how the failure paths after it stay
 	// covered by tests.
-	placeReplacement func(source, path string) error
-	// hardLink stands in for os.Link, the primitive replacement placement uses
-	// and restoration falls back from. Failing it reproduces a vault on a
-	// filesystem without link support, which is the failure that has to leave
-	// the destination restored rather than stranded in custody.
+	placeNew func(source, path string) error
+	// hardLink stands in for os.Link, the primitive exclusive placement uses and
+	// falls back from. Failing it reproduces a vault on a filesystem without
+	// link support, which is the failure that has to leave the destination
+	// restored rather than stranded in custody.
 	hardLink func(source, path string) error
+	// replaceExisting stands in for the native path-preserving replacement. The
+	// kernel will not fail a swap on demand, so this is how the refusal that
+	// must leave the destination untouched stays covered by tests.
+	replaceExisting func(source, path string) (string, error)
+	// afterExchange runs between a successful exchange and the compare-and-swap
+	// judgement of the displaced copy. It exists so the restoration path — which
+	// only runs when a writer lands inside a single syscall — is reachable.
+	afterExchange func(destination, displaced string) error
+	// beforeConflictRestore runs after a stale preimage is detected and before
+	// the concurrent writer's bytes are swapped back, so the stranded-version
+	// case stays covered.
+	beforeConflictRestore func(path string) error
 }
 
 // txnRequirement is a read-only precondition: a file whose content decides what
@@ -262,6 +328,10 @@ type FileTxn struct {
 	requires []txnRequirement
 	hooks    txnHooks
 	locks    *pathLocks
+	// cleanupFailures collects temp files that survived mutations which landed.
+	// They are reported after the commit rather than rolled back, because the
+	// vault already holds what the caller asked for.
+	cleanupFailures []error
 	// lockWait overrides pathLockTimeout when non-zero. Like hooks, it exists so a
 	// test can reach the lock-timeout path without a multi-second wait.
 	lockWait time.Duration
