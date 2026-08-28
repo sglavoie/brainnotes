@@ -324,7 +324,13 @@ func (ix *Index) Reset() {
 	// out from under this process, and it is what makes a repeated-corruption
 	// test able to re-observe the same failure class.
 	ix.primed = false
-	_ = os.Remove(filepath.Join(ix.dir, stateFileName))
+	// Even discarding a cache file is a mutation of the vault's storage, so it
+	// goes through the same preflight as every other one. A refusal simply leaves
+	// the stale file alone, which the in-memory reset above has already made
+	// harmless — the same outcome the ignored error below has always produced.
+	if err := vault.GuardMutation(ix.root, ix.dir); err == nil {
+		_ = os.Remove(filepath.Join(ix.dir, stateFileName))
+	}
 }
 
 // clean reports whether a cached entry may be trusted on stat alone: same

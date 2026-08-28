@@ -95,6 +95,12 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 		return nil, err
 	}
 
+	// Ahead of the first Capture, which creates the journal entry directory and
+	// writes a snapshot of the note before anything else runs.
+	if err := guardMutation(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
+		return nil, err
+	}
+
 	j := NewJournal(vaultRoot, cfg.command, cfg.journalOptions...)
 	if err := j.Capture(source.AbsPath); err != nil {
 		return nil, err

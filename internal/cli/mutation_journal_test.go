@@ -343,9 +343,12 @@ func TestRelink_DryRunDoesNotWriteJournalEntry(t *testing.T) {
 
 func loadJournalEntries(t *testing.T, vaultRoot string) []journal.Entry {
 	t.Helper()
-	entries, err := journal.ListEntries(journalRootForVault(vaultRoot))
+	entries, warnings, err := journal.ListEntries(journalRootForVault(vaultRoot))
 	if err != nil {
 		t.Fatalf("list entries: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("journal warnings = %v, want none", warnings)
 	}
 	return entries
 }

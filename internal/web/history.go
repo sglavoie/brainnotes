@@ -33,7 +33,11 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := journal.ListEntries(noteops.JournalRoot(s.vault.Root))
+	// An unreadable journal root is still an error — the history is unknown, and
+	// answering "no entries" would be a lie the UI cannot see through. An
+	// individual unreadable entry is reported alongside the entries that are fine,
+	// so one corrupt manifest costs one undo record instead of the whole panel.
+	entries, warnings, err := journal.ListEntries(noteops.JournalRoot(s.vault.Root))
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeJournal, "list history", err))
 		return
@@ -41,14 +45,20 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	if len(entries) > historyEntryLimit {
 		entries = entries[:historyEntryLimit]
 	}
+	warningCount := len(warnings)
+	if len(warnings) > historyEntryLimit {
+		warnings = warnings[:historyEntryLimit]
+	}
 
 	out := make([]historyEntryResponse, 0, len(entries))
 	for _, entry := range entries {
 		out = append(out, historyEntryForJournalEntry(entry))
 	}
 	writeManagementJSON(w, http.StatusOK, historyResponse{
-		OK:      true,
-		Entries: out,
+		OK:           true,
+		Entries:      out,
+		Warnings:     historyWarningsForJournalWarnings(warnings),
+		WarningCount: warningCount,
 	})
 }
 
@@ -119,6 +129,16 @@ func (s *Server) handleUndo(w http.ResponseWriter, r *http.Request) {
 type historyResponse struct {
 	OK      bool                   `json:"ok"`
 	Entries []historyEntryResponse `json:"entries"`
+	// Warnings names the entries that could not be read, capped like Entries.
+	Warnings []historyWarningResponse `json:"warnings,omitempty"`
+	// WarningCount is the total before that cap, so a client is never told the
+	// damage is smaller than it is.
+	WarningCount int `json:"warning_count,omitempty"`
+}
+
+type historyWarningResponse struct {
+	ID      string `json:"id"`
+	Message string `json:"message"`
 }
 
 type historyEntryResponse struct {
@@ -184,8 +204,23 @@ func historyEntryForJournalEntry(entry journal.Entry) historyEntryResponse {
 	}
 }
 
+func historyWarningsForJournalWarnings(warnings []journal.Warning) []historyWarningResponse {
+	if len(warnings) == 0 {
+		return nil
+	}
+	out := make([]historyWarningResponse, 0, len(warnings))
+	for _, warning := range warnings {
+		out = append(out, historyWarningResponse{ID: warning.ID, Message: warning.Error()})
+	}
+	return out
+}
+
+// latestHistoryEntryID resolves the newest *readable* entry. Undo of a
+// specifically named entry never comes through here, so a request to undo a
+// corrupt entry stays a direct error; only the "undo the last thing" shorthand
+// skips past one.
 func latestHistoryEntryID(journalRoot string) (string, error) {
-	entries, err := journal.ListEntries(journalRoot)
+	entries, _, err := journal.ListEntries(journalRoot)
 	if err != nil {
 		return "", noteops.WrapError(noteops.CodeJournal, "list history", err)
 	}

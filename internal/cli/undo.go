@@ -66,8 +66,16 @@ redo stack or conflict auto-merge; use git for long-term history.`,
 					return errors.New("undo: empty entry id")
 				}
 			} else {
-				id, err := latestJournalEntryID(journalRootForVault(cfg.Vault))
+				id, warnings, err := latestJournalEntryID(journalRootForVault(cfg.Vault))
 				if err != nil {
+					return err
+				}
+				// "Most recent entry" now means "most recent *readable* entry", so
+				// say which entries were passed over. Silently undoing an older
+				// command than the one the user just ran is the failure mode worth
+				// spending two lines of stderr on. A named entry ID never reaches
+				// here: that request stays a direct error.
+				if err := writeHistoryWarnings(cmd.ErrOrStderr(), warnings); err != nil {
 					return err
 				}
 				entryID = id
@@ -102,15 +110,15 @@ redo stack or conflict auto-merge; use git for long-term history.`,
 	return cmd
 }
 
-func latestJournalEntryID(journalRoot string) (string, error) {
-	entries, err := journal.ListEntries(journalRoot)
+func latestJournalEntryID(journalRoot string) (string, []journal.Warning, error) {
+	entries, warnings, err := journal.ListEntries(journalRoot)
 	if err != nil {
-		return "", fmt.Errorf("undo: %w", err)
+		return "", nil, fmt.Errorf("undo: %w", err)
 	}
 	if len(entries) == 0 {
-		return "", errors.New("undo: no journal entries found")
+		return "", warnings, errors.New("undo: no journal entries found")
 	}
-	return entries[0].ID, nil
+	return entries[0].ID, warnings, nil
 }
 
 func printUndoPlan(w io.Writer, plan *journal.RestorePlan) error {

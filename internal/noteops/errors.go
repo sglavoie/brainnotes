@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // ErrorCode is a stable machine-readable operation error class.
@@ -79,6 +81,13 @@ func CodeOf(err error) ErrorCode {
 	var opErr *Error
 	if errors.As(err, &opErr) && opErr.Code != "" {
 		return opErr.Code
+	}
+	// The mutation guard is enforced deep inside vault and journal, below every
+	// call site that classifies its own failures, so a refusal can surface here
+	// unclassified. Recognizing it directly is what keeps "this location may not
+	// be written" a 403 rather than a 500, no matter which layer refused.
+	if vault.IsForbiddenMutation(err) {
+		return CodeForbidden
 	}
 	return CodeInternal
 }

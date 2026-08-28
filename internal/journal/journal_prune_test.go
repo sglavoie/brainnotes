@@ -35,9 +35,12 @@ func TestPruneOldEntries(t *testing.T) {
 	makeTestEntry(t, vaultRoot, journalRoot, "entry-old-2", now.Add(-72*time.Hour))
 	makeTestEntry(t, vaultRoot, journalRoot, "entry-new", now.Add(-4*time.Hour))
 
-	listed, err := ListEntries(journalRoot)
+	listed, warnings, err := ListEntries(journalRoot)
 	if err != nil {
 		t.Fatalf("list entries: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
 	}
 	if len(listed) != 3 {
 		t.Fatalf("len(listed) = %d, want 3", len(listed))

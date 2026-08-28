@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 type briefStateFile struct {
@@ -288,6 +289,11 @@ func (store *FileStateStore) currentTime() time.Time {
 }
 
 func writeBriefStateAtomic(statePath string, data []byte, permissions os.FileMode) error {
+	// Durable state, so the same location policy as a note. Rendering a brief is
+	// a read and stays available; only recording it here is refused.
+	if err := vault.GuardMutation("", statePath); err != nil {
+		return err
+	}
 	directory := filepath.Dir(statePath)
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return fmt.Errorf("brief: mkdir state directory %q: %w", directory, err)

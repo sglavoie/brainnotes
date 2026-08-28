@@ -123,9 +123,12 @@ func postSynthesisApply(baseURL, previewID string) (int, string, error) {
 func synthesisJournalEntries(t *testing.T, root string) []journal.Entry {
 	t.Helper()
 
-	entries, err := journal.ListEntries(noteops.JournalRoot(root))
+	entries, warnings, err := journal.ListEntries(noteops.JournalRoot(root))
 	if err != nil {
 		t.Fatalf("list journal entries: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("journal warnings = %v, want none", warnings)
 	}
 	return entries
 }

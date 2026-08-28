@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 type recorderOptions struct {
@@ -65,6 +67,14 @@ func NewRecorder(vaultRoot, journalRoot, command string, opts ...RecorderOption)
 	journalAbs, err := filepath.Abs(journalRoot)
 	if err != nil {
 		return nil, fmt.Errorf("journal: resolve journal root %q: %w", journalRoot, err)
+	}
+	// The recorder is usually the first thing a mutation creates on disk — a
+	// high-level caller captures pre-change state before it takes any lock — so
+	// the location policy has to be consulted here rather than left to the write
+	// that follows. Otherwise a refused mutation still leaves an entry directory
+	// and its snapshots behind.
+	if err := vault.GuardMutation(vaultAbs, journalAbs); err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(journalAbs, 0o755); err != nil {
 		return nil, fmt.Errorf("journal: mkdir %q: %w", journalAbs, err)

@@ -9,6 +9,13 @@ import (
 // Commit validates and stages every planned change, records one journal entry,
 // then applies the changes in path order. Any failure after the first
 // successful apply triggers a compensating rollback of the applied paths.
+//
+// lockPaths runs first and runs GuardMutation over the root and every planned
+// path, so a transaction on refused storage stops before a lock file, a staged
+// temp file, or a journal entry directory exists. That ordering is load-bearing:
+// stage creates missing folders and writes a temp file beside every
+// destination, and journaling creates the entry directory, all of which are
+// artifacts the guard is supposed to prevent.
 func (t *FileTxn) Commit(journaler TxnJournal) error {
 	if t == nil || len(t.order) == 0 {
 		return nil

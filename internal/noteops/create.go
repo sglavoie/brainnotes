@@ -134,6 +134,11 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 	if err != nil {
 		return nil, err
 	}
+	// Ahead of the folder creation, which is the first thing here that touches
+	// disk and happens before any journaling or locking would consult the policy.
+	if err := guardMutation(vaultRoot, dest.AbsPath); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
 		return nil, WrapError(CodeInternal, "create: create destination folder", err)
 	}

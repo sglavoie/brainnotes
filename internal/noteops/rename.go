@@ -124,6 +124,12 @@ func RenameNote(v *vault.Vault, cfg *config.Config, targetPath, newTitle string,
 	if err != nil {
 		return nil, err
 	}
+	// Ahead of the first Capture. RenameFile takes locks and would be refused
+	// there anyway, but by then the journal entry and every backlink snapshot
+	// would already be on the storage the policy is protecting.
+	if err := guardMutation(v.Root, plan.Target, plan.NewPath); err != nil {
+		return nil, err
+	}
 	j := NewJournal(v.Root, options.command, options.journalOptions...)
 	if err := j.Capture(plan.Target); err != nil {
 		return nil, err

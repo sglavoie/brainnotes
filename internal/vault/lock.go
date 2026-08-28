@@ -116,6 +116,13 @@ func TryLockPath(lockPath string) (release func(), acquired bool, err error) {
 	if lockPath == "" {
 		return noop, false, errors.New("vault: try lock: empty lock path")
 	}
+	// A lock file is an artifact like any other, so the location policy decides
+	// before one can exist. Callers of this entry point treat every failure as
+	// "skip the optional work", which is the right answer here too: a refusal
+	// means the cache this lock guards is simply never written.
+	if err := GuardMutation("", lockPath); err != nil {
+		return noop, false, err
+	}
 	if dir := filepath.Dir(lockPath); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return noop, false, fmt.Errorf("vault: create lock directory %q: %w", dir, err)
@@ -168,6 +175,15 @@ type pathLocks struct {
 // re-resolving a resolved path is a no-op.
 func acquirePathLocks(root string, wait time.Duration, escalateAbove int, paths []string) (*pathLocks, error) {
 	locks := &pathLocks{}
+	// Every bn writer takes its locks before it stages, journals, or renames
+	// anything, so this is the one place that makes the location policy an
+	// invariant instead of a convention: a caller reaching the filesystem
+	// through the lock is guarded whether it knows about the policy or not. It
+	// runs before the escalation shortcut below, because a refusal must not
+	// depend on how many paths the caller happened to plan.
+	if err := GuardMutation(root, paths...); err != nil {
+		return nil, err
+	}
 	if !lockingSupported || len(paths) == 0 {
 		return locks, nil
 	}

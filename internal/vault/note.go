@@ -160,6 +160,12 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if err := n.ensureSavePathContained(); err != nil {
 		return err
 	}
+	// Named explicitly rather than left to LockPaths below, because a save is one
+	// of the surfaces the policy exists for and reading it here is how the
+	// invariant stays visible to anyone changing this function.
+	if err := GuardMutation(n.root, n.Path); err != nil {
+		return err
+	}
 	data, err := frontmatter.Marshal(n.doc, fmCfg)
 	if err != nil {
 		return fmt.Errorf("note: marshal %q: %w", n.Path, err)

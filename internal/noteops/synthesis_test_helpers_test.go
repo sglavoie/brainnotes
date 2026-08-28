@@ -31,9 +31,12 @@ func synthesisRequest(title string) SynthesisRequest {
 
 func assertNoJournalEntries(t *testing.T, root string) {
 	t.Helper()
-	entries, err := journal.ListEntries(JournalRoot(root))
+	entries, warnings, err := journal.ListEntries(JournalRoot(root))
 	if err != nil {
 		t.Fatalf("ListEntries: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("journal warnings = %v, want none", warnings)
 	}
 	if len(entries) != 0 {
 		t.Fatalf("journal entries = %+v, want none", entries)

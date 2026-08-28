@@ -167,6 +167,13 @@ func Restore(vaultRoot, journalRoot, entryID string, opts RestoreOptions) (*Rest
 	}
 
 	sort.Slice(targets, func(i, j int) bool { return targets[i].record.Path < targets[j].record.Path })
+	// Named here rather than left to the transaction's own preflight so an undo
+	// onto refused storage reports the location before it reads a single
+	// snapshot. A dry run never reaches this point, so previewing an undo stays
+	// available on a vault that cannot be written.
+	if err := vault.GuardMutation(vaultAbs, restorePaths(targets)...); err != nil {
+		return nil, err
+	}
 	txn, err := vault.NewFileTxn(vaultAbs)
 	if err != nil {
 		return nil, fmt.Errorf("journal: restore %s: %w", entry.ID, err)
@@ -215,6 +222,14 @@ func Restore(vaultRoot, journalRoot, entryID string, opts RestoreOptions) (*Rest
 		return nil, fmt.Errorf("journal: restore %s: %w", entry.ID, err)
 	}
 	return plan, nil
+}
+
+func restorePaths(targets []restoreTarget) []string {
+	paths := make([]string, 0, len(targets))
+	for _, target := range targets {
+		paths = append(paths, target.abs)
+	}
+	return paths
 }
 
 // IsRestoreConflict reports whether err is a preflight conflict failure.

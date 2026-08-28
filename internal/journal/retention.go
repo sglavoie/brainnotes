@@ -5,6 +5,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // RetentionPolicy controls journal pruning.
@@ -37,7 +39,11 @@ func Prune(journalRoot string, policy RetentionPolicy) ([]string, error) {
 	}
 	now := nowFn().UTC()
 
-	listed, err := listEntries(journalRoot)
+	// Warnings are deliberately dropped here rather than surfaced: pruning is
+	// housekeeping that runs behind a mutation, and an entry it cannot read is an
+	// entry it cannot date, so it is left alone. The listing commands are where a
+	// person is told about it.
+	listed, _, err := listEntries(journalRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +85,12 @@ func Prune(journalRoot string, policy RetentionPolicy) ([]string, error) {
 		dir, err := entryDir(journalRoot, d.id)
 		if err != nil {
 			return nil, fmt.Errorf("journal: prune %q: %w", d.id, err)
+		}
+		// A removal is a mutation like any other, and this one deletes the only
+		// copy of a pre-change snapshot, so it is held to the same location policy
+		// as the write that produced it.
+		if err := vault.GuardMutation("", dir); err != nil {
+			return nil, err
 		}
 		if err := os.RemoveAll(dir); err != nil {
 			return nil, fmt.Errorf("journal: prune %q: %w", d.id, err)

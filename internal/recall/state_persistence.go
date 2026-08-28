@@ -342,6 +342,12 @@ func (store *StateStore) currentTime() time.Time {
 }
 
 func writeRecallStateAtomic(statePath string, data []byte, permissions os.FileMode) error {
+	// The sidecar is durable state a person can lose work through, so it obeys
+	// the same location policy as a note. Reads are untouched: recall still ranks
+	// and returns context under a refused root, it just cannot record there.
+	if err := vault.GuardMutation("", statePath); err != nil {
+		return err
+	}
 	directory := filepath.Dir(statePath)
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return fmt.Errorf("recall: mkdir state directory %q: %w", directory, err)

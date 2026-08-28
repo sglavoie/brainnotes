@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // JournalRoot returns the vault-local undo journal directory.
@@ -21,6 +22,13 @@ func NewRecorder(vaultRoot, command string, opts ...journal.RecorderOption) (*jo
 	}
 	recorder, err := journal.NewRecorder(vaultRoot, JournalRoot(vaultRoot), command, opts...)
 	if err != nil {
+		// The recorder consults the mutation guard before it creates anything, and
+		// that refusal is a policy answer about the vault's location rather than a
+		// journal malfunction. Calling it a journal error would report it as a 500
+		// and bury the one sentence that says what to do about it.
+		if vault.IsForbiddenMutation(err) {
+			return nil, WrapError(CodeForbidden, err.Error(), err)
+		}
 		return nil, WrapError(CodeJournal, "create journal entry", err)
 	}
 	return recorder, nil

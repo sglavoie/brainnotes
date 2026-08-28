@@ -124,6 +124,11 @@ func MoveNote(v *vault.Vault, cfg *config.Config, targetPath, newFolderArg strin
 	if err != nil {
 		return nil, err
 	}
+	// Ahead of the destination folder, which a refused move would otherwise leave
+	// behind empty.
+	if err := guardMutation(v.Root, source.AbsPath, dest.AbsPath, newFolderAbs); err != nil {
+		return nil, err
+	}
 	j := NewJournal(v.Root, options.command, options.journalOptions...)
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return nil, WrapError(CodeInternal, fmt.Sprintf("move: mkdir %q", newFolderAbs), err)

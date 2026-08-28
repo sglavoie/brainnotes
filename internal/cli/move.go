@@ -120,6 +120,11 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	}
 	journaler := noteops.NewJournal(v.Root, commandInvocation(cmd, args))
 
+	// Ahead of the destination folder, which a refused move would otherwise
+	// leave behind empty.
+	if err := vault.GuardMutation(v.Root, plan.Target, plan.NewPath, newFolderAbs); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return fmt.Errorf("move: mkdir %q: %w", newFolderAbs, err)
 	}

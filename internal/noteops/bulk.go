@@ -166,6 +166,13 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 		return nil, Errorf(CodeInvalidRequest, "bulk: no notes selected")
 	}
 
+	// One check for the whole batch, ahead of the journal recorder that would
+	// otherwise create an entry directory before any item is judged. Each item is
+	// then checked again on its own destination below.
+	if err := guardMutation(vaultRoot); err != nil {
+		return nil, err
+	}
+
 	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
 	result := &BulkResult{Action: "trash"}
 	trashCfg := trashOptions{
@@ -181,6 +188,14 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 		}
 		dest, _, err := resolveBulkTrashDestination(vaultRoot, source.RelPath, path.Join("Trash", source.RelPath), trashCfg, options.trashPlans)
 		if err != nil {
+			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
+			continue
+		}
+		// Per item as well as per batch: this item's destination folder is created
+		// below, before the move takes its lock and re-checks, so the batch-level
+		// root check is not on its own enough to keep a folder from appearing under
+		// protected storage nested inside a safe vault.
+		if err := guardMutation(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
 		}
@@ -241,6 +256,11 @@ func BulkMoveNotes(v *vault.Vault, cfg *config.Config, sources []BulkSource, new
 		return nil, err
 	}
 	if err := ValidateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
+		return nil, err
+	}
+	// Ahead of the destination folder, which is created once for the batch and
+	// would otherwise outlive a refused move.
+	if err := guardMutation(v.Root, newFolderAbs); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {

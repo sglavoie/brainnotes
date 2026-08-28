@@ -284,6 +284,10 @@ func classifyPropertyTxnError(message string, err error) error {
 		return nil
 	}
 	switch {
+	case vault.IsForbiddenMutation(err):
+		// A location the policy refuses is not a malfunction, so it is a 403 with
+		// its own message rather than a 500 with a generic one.
+		return noteops.WrapError(noteops.CodeForbidden, err.Error(), err)
 	case vault.IsTxnRecoveryNeeded(err):
 		return noteops.WrapError(noteops.CodeInternal, err.Error(), err)
 	case vault.IsTxnConflict(err):

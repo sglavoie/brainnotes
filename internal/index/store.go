@@ -145,6 +145,15 @@ func validEntry(e entry) error {
 // either way. The index takes no vault.lock, shared or otherwise, so a refresh
 // can never block behind an escalating writer nor make one wait.
 func (ix *Index) persist() {
+	// Checked before the directory, not just before the lock, so a refused vault
+	// never acquires a .bnotes/index/ it will never write into. This is the one
+	// place the refusal is swallowed like every other persist failure: the index
+	// holds no user intent, so a vault that cannot be written to still loads and
+	// queries normally, just always cold.
+	if err := vault.GuardMutation(ix.root, ix.dir); err != nil {
+		ix.warnOnce("state directory may not be written", err)
+		return
+	}
 	if err := os.MkdirAll(ix.dir, 0o755); err != nil {
 		ix.warnOnce("state directory could not be created", err)
 		return

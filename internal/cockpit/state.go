@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 const (
@@ -430,6 +432,12 @@ func snoozeDeadline(now time.Time, option string) (time.Time, error) {
 }
 
 func writeStateAtomic(path string, data []byte, perm os.FileMode) error {
+	// Durable state, so the same location policy as a note. The cockpit queue is
+	// computed from the vault on every load, so it still renders under a refused
+	// root; what it cannot do is remember a snooze or a dismissal there.
+	if err := vault.GuardMutation("", path); err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("cockpit: mkdir state dir %q: %w", dir, err)

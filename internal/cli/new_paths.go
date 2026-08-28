@@ -6,6 +6,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func sameNewRouteDestination(vaultRoot, probePath, a, b string) bool {
@@ -137,7 +139,15 @@ func isASCIIAlpha(b byte) bool {
 	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
 }
 
+// atomicWriteFile writes dest through a temp file in its own directory. It is
+// the write behind both `bn new` and `bn init`, and `bn init` runs before a
+// vault exists, so the location policy is consulted on the destination itself
+// rather than on a vault root there is none of yet. That is also what stops
+// `bn init` from creating a vault somewhere no later command could write to.
 func atomicWriteFile(label, dest string, data []byte) error {
+	if err := vault.GuardMutation("", dest); err != nil {
+		return err
+	}
 	dir := filepath.Dir(dest)
 	var destMode os.FileMode
 	destExists := false

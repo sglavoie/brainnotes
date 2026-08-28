@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 const (
@@ -66,6 +68,12 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 	}
 
 	backupsDir := filepath.Join(root, backupDirName)
+	// A backup writes its archive inside the vault, so it is held to the same
+	// location policy as a note. Refusing here rather than mid-archive is what
+	// keeps a half-written .tar.gz off storage that replicates it.
+	if err := vault.GuardMutation(root, backupsDir); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(backupsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("backup: create backups directory: %w", err)
 	}
@@ -201,6 +209,13 @@ func Restore(vaultRoot, archivePath string, opts RestoreOptions) (*RestoreResult
 
 	resolvedArchivePath, err := resolveArchivePath(root, archivePath)
 	if err != nil {
+		return nil, err
+	}
+
+	// Restore is the most destructive mutation bn has — --wipe empties the vault
+	// before it writes anything back — so it is refused before the archive is
+	// even extracted rather than after the vault has been cleared.
+	if err := vault.GuardMutation(root); err != nil {
 		return nil, err
 	}
 

@@ -159,11 +159,18 @@ func commitNoteWrite(vaultRoot string, note *vault.Note, fm *config.FrontmatterC
 // this volume cannot be written to safely at all, the other names the file
 // holding content that is nowhere else. Replacing either with "frontmatter: save
 // note" would throw away the only sentence that tells a person what to do.
+//
+// A refusal by the mutation guard is checked first and is forbidden rather than
+// internal: nothing failed and nothing is broken — the vault is somewhere writes
+// are not allowed to land. It is the one class here that is a policy answer, so
+// it maps to 403 on the web and keeps its own message on the CLI.
 func classifyTxnError(message string, err error) error {
 	if err == nil {
 		return nil
 	}
 	switch {
+	case vault.IsForbiddenMutation(err):
+		return WrapError(CodeForbidden, err.Error(), err)
 	case vault.IsTxnRecoveryNeeded(err):
 		return WrapError(CodeInternal, err.Error(), err)
 	case vault.IsTxnLockBusy(err), vault.IsTxnConflict(err):

@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -33,15 +34,17 @@ needed.`,
 				return errors.New("history: no config in context")
 			}
 
-			entries, err := journal.ListEntries(journalRootForVault(cfg.Vault))
+			entries, warnings, err := journal.ListEntries(journalRootForVault(cfg.Vault))
 			if err != nil {
 				return fmt.Errorf("history: %w", err)
 			}
 
 			out := cmd.OutOrStdout()
 			if len(entries) == 0 {
-				_, err := fmt.Fprintln(out, "history: no journal entries")
-				return err
+				if _, err := fmt.Fprintln(out, "history: no journal entries"); err != nil {
+					return err
+				}
+				return writeHistoryWarnings(cmd.ErrOrStderr(), warnings)
 			}
 
 			if _, err := fmt.Fprintln(out, "TIMESTAMP\tID\tCOMMAND"); err != nil {
@@ -58,8 +61,24 @@ needed.`,
 					return err
 				}
 			}
-			return nil
+			// Warnings go to stderr, after the entries, so `bn history | head` keeps
+			// producing the tab-separated records it promises even when part of the
+			// journal is damaged. A corrupt entry is worth reporting; it is not worth
+			// contaminating a stream other tools parse.
+			return writeHistoryWarnings(cmd.ErrOrStderr(), warnings)
 		},
 	}
 	return cmd
+}
+
+// writeHistoryWarnings reports the entries that could not be read. Each one
+// names the directory to inspect, because the remedy is to look at (or delete)
+// exactly that entry — the rest of the history is unaffected and still undoable.
+func writeHistoryWarnings(w io.Writer, warnings []journal.Warning) error {
+	for _, warning := range warnings {
+		if _, err := fmt.Fprintf(w, "history: warning: %v\n", warning); err != nil {
+			return err
+		}
+	}
+	return nil
 }
