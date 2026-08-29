@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // testHarness is one temporary vault with a real Git repository and a Manager
@@ -135,6 +137,82 @@ func (h *testHarness) setAutosave(spelling string) {
 	h.t.Helper()
 	h.autosave = autosavePolicy(h.t, spelling)
 	h.mgr = h.open(Options{})
+}
+
+// policyFile is a stand-in for `brainnotes.toml` that holds one line: the
+// autosave spelling. It is a real file inside the vault, so editing it makes the
+// working tree dirty exactly the way a hand edit of the real configuration does,
+// and the source below reads and fingerprints real bytes.
+//
+// It is not TOML on purpose. The production source in cmd/bn-vault-guard is what
+// owns the file format, and reproducing that here would test the wrong seam:
+// what this package's tests are about is what the watcher does with a policy and
+// a hash, not how those two were derived.
+const policyFile = "autosave-policy"
+
+// writePolicyFile sets the on-disk policy the harness source reports.
+func (h *testHarness) writePolicyFile(contents string) {
+	h.t.Helper()
+	h.write(policyFile, contents)
+}
+
+// policySource reads policyFile the way the guard reads brainnotes.toml: hash
+// first, then resolve, with the hash surviving a resolution failure so an
+// invalid version is identified by its bytes.
+func (h *testHarness) policySource() PolicySource {
+	path := filepath.Join(h.root, policyFile)
+	return func() (PolicySnapshot, error) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return PolicySnapshot{}, err
+		}
+		snapshot := PolicySnapshot{Hash: vault.HashBytes(data)}
+		policy, err := config.ParseAutosaveMinInterval(strings.TrimSpace(string(data)))
+		if err != nil {
+			return snapshot, err
+		}
+		snapshot.Policy = policy
+		return snapshot, nil
+	}
+}
+
+// stubPolicySource is the injectable source: a policy the test sets directly,
+// with no file behind it. It is the right tool for a transition whose point is
+// the transition rather than the edit that caused it, and for the cases a real
+// file cannot produce on demand — an unreadable source, or a source that fails
+// the same way twice.
+type stubPolicySource struct {
+	snapshot PolicySnapshot
+	err      error
+	calls    int
+}
+
+func (s *stubPolicySource) source() PolicySource {
+	return func() (PolicySnapshot, error) {
+		s.calls++
+		return s.snapshot, s.err
+	}
+}
+
+// set publishes a valid policy under a fresh fingerprint.
+func (s *stubPolicySource) set(t *testing.T, spelling string) {
+	t.Helper()
+	s.snapshot = PolicySnapshot{Hash: "hash-" + spelling, Policy: autosavePolicy(t, spelling)}
+	s.err = nil
+}
+
+// setInvalid publishes bytes that do not resolve. Two calls with the same hash
+// are the same broken version; two with different hashes are two of them.
+func (s *stubPolicySource) setInvalid(hash, message string) {
+	s.snapshot = PolicySnapshot{Hash: hash}
+	s.err = errors.New(message)
+}
+
+// setUnreadable publishes a source that could not read its bytes at all, so it
+// has no fingerprint to deduplicate on.
+func (s *stubPolicySource) setUnreadable(message string) {
+	s.snapshot = PolicySnapshot{}
+	s.err = errors.New(message)
 }
 
 func (h *testHarness) open(opts Options) *Manager {

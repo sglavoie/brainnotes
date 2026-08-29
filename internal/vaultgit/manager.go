@@ -50,9 +50,10 @@ type Options struct {
 	// yet learned the vault's policy gets the protective answer rather than the
 	// permissive one.
 	//
-	// It is fixed for the life of the Manager. Applying a `brainnotes.toml` edit
-	// without a restart is a later concern; what this field settles is that the
-	// floor is data the engine is told, never a constant it owns.
+	// It is the policy the Manager starts under, not the one it is stuck with:
+	// [Manager.SetAutosavePolicy] adopts a later one, which is how a running guard
+	// applies a `brainnotes.toml` edit without a restart. What this field settles
+	// is that the floor is data the engine is told, never a constant it owns.
 	Autosave config.AutosavePolicy
 }
 
@@ -78,9 +79,12 @@ type Manager struct {
 	remote string
 	who    identity
 	now    func() time.Time
-	// autosave is the resolved external floor. It is normalized once here so that
-	// every read of it is already a usable policy.
-	autosave config.AutosavePolicy
+	// autosave is the resolved external floor. It is normalized on every write so
+	// that every read of it is already a usable policy, and it is guarded because
+	// it is the one field a live vault reassigns: the watcher adopts a new policy
+	// between two operations that both read this.
+	autosaveMu sync.RWMutex
+	autosave   config.AutosavePolicy
 
 	// indexPath is the private index. It is re-seeded from HEAD at the start of
 	// every operation and is never the user's index.
@@ -272,8 +276,60 @@ func (m *Manager) Interrupted() (IntentRecord, bool) {
 // PushStatus reports the remote retry state.
 func (m *Manager) PushStatus() (PushState, bool) { return m.state.LoadPushState() }
 
-// AutosavePolicy reports the external autosave floor this engine is enforcing.
-func (m *Manager) AutosavePolicy() config.AutosavePolicy { return m.autosave }
+// AutosavePolicy reports the external autosave floor this engine is enforcing
+// right now. A caller that has to act on it more than once in a row should read
+// it once and use that value, because a live reload may replace it in between.
+func (m *Manager) AutosavePolicy() config.AutosavePolicy { return m.policy() }
+
+// policy reads the floor under the lock. Every internal use goes through it, so
+// a reload landing mid-operation cannot leave one step of that operation reading
+// the old policy and the next reading the new one from a torn field.
+func (m *Manager) policy() config.AutosavePolicy {
+	m.autosaveMu.RLock()
+	defer m.autosaveMu.RUnlock()
+	return m.autosave
+}
+
+// SetAutosavePolicy adopts a new resolved floor and republishes the schedule it
+// implies, so `watch.json` states the policy the engine is actually enforcing
+// rather than the one it started under.
+//
+// It is the whole of live reload inside this package: the Manager is told what
+// the policy now is and never learns where that came from, which is what keeps
+// TOML parsing out of here. Adopting is unconditional and immediate — the
+// caller is the one that decides a change is safe to publish, because the one
+// transition that is *not* safe to publish immediately (enabled to off, which
+// owes the vault a final snapshot first) is a scheduling decision and this
+// package's scheduler is the watcher.
+//
+// The returned error reports only that the republished record could not be
+// written. The policy is adopted either way: an unwritable state file costs a
+// stale published field, and refusing to enforce the vault's own configuration
+// because a scheduling hint could not be persisted would be the worse answer.
+func (m *Manager) SetAutosavePolicy(policy config.AutosavePolicy) error {
+	resolved := resolveAutosavePolicy(policy)
+	m.autosaveMu.Lock()
+	m.autosave = resolved
+	m.autosaveMu.Unlock()
+	_, err := m.state.RefreshWatchState(resolved)
+	return err
+}
+
+// ResetExternalBurst forgets the open debounce burst without claiming a snapshot
+// was taken, leaving the floor's anchor exactly where it was.
+//
+// It exists for the two policy transitions that must not inherit a burst: the
+// vault stops autosaving, so the burst it was accumulating has nothing left to
+// schedule, and the vault starts again, where a burst opened under the old
+// policy would backdate the new one's readiness deadline to whenever the working
+// tree first went dirty — possibly hours ago, which would snapshot on the very
+// next poll instead of after a quiet period. Keeping LastCommitAt is deliberate:
+// re-enabling does not entitle a vault to an immediate commit, so the previous
+// external snapshot stays the floor's anchor.
+func (m *Manager) ResetExternalBurst() error {
+	_, err := m.state.NoteSettled(m.policy())
+	return err
+}
 
 // WatchStatus reports the persisted external-change schedule without changing
 // it. Like Blocked it takes no lock and never fails, so a status command can
@@ -283,14 +339,14 @@ func (m *Manager) WatchStatus() WatchState { return m.state.LoadWatchState() }
 // NoteExternalChange records that the working tree changed, opening a debounce
 // burst if none is open, and republishes the due time the change implies.
 func (m *Manager) NoteExternalChange() (WatchState, error) {
-	return m.state.NoteChange(m.autosave, m.now())
+	return m.state.NoteChange(m.policy(), m.now())
 }
 
 // NoteExternalSettled closes an open debounce burst whose changes are no longer
 // there to commit, so a burst that resolved itself does not stay due forever.
 // It reports whether there was one to close.
 func (m *Manager) NoteExternalSettled() (closed bool, err error) {
-	return m.state.NoteSettled(m.autosave)
+	return m.state.NoteSettled(m.policy())
 }
 
 // ExternalCommitDue reports whether an open debounce burst has reached both its
@@ -308,8 +364,9 @@ func (m *Manager) NoteExternalSettled() (closed bool, err error) {
 // used anyway: the schedule is computed in memory before it is written, so an
 // unwritable record costs a stale published field and never a wrong answer here.
 func (m *Manager) ExternalCommitDue() bool {
-	state, _ := m.state.RefreshWatchState(m.autosave)
-	return state.DueAt(m.autosave, m.now())
+	policy := m.policy()
+	state, _ := m.state.RefreshWatchState(policy)
+	return state.DueAt(policy, m.now())
 }
 
 // PushDue reports whether a retry is worth attempting now. A vault with no
@@ -703,7 +760,7 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	if result.Committed {
 		// This is the one call that advances the external floor's anchor, because
 		// this is the one entry point that takes an external autosave.
-		if _, err := m.state.NoteCommit(m.autosave, m.now()); err != nil {
+		if _, err := m.state.NoteCommit(m.policy(), m.now()); err != nil {
 			// The debounce clock is a scheduling hint. Losing it costs at most one
 			// redundant scan, so it must not turn a successful commit into a failure.
 			_ = err

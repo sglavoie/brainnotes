@@ -14,6 +14,15 @@
 // because a knob on any of those would be a knob on how much of the vault is
 // recoverable.
 //
+// It is also the one setting this process re-reads while running. The config
+// file is polled before every scan, so `bn config set autosave.min_interval` and
+// a hand edit both apply within one poll and neither needs the LaunchAgent
+// restarted. A version that does not decode is refused and logged once, and the
+// last valid policy stays in force until the file is valid again — the vault is
+// never left without a policy, and a half-typed edit never becomes one. An
+// invalid file at *startup* is still fatal, because there is no last valid
+// policy to fall back on.
+//
 // It is installed by `just install` and run by a LaunchAgent. `bn --help` does
 // not mention it and neither does the user documentation.
 package main
@@ -78,6 +87,10 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 	// The one policy this process carries, and it is the vault's rather than its
 	// own: how long the guard must wait between two autosaves of its own making.
 	// Every other deadline it obeys is still a fixed constant in internal/vaultgit.
+	//
+	// This is the startup value. It stays the enforced one only until the first
+	// poll re-reads the file, which is what makes an edit to `[autosave]` apply
+	// without restarting the guard.
 	mgr, err := vaultgit.Open(ctx, cfg.Vault, vaultgit.Options{Autosave: cfg.AutosavePolicy()})
 	if err != nil {
 		if errors.Is(err, vaultgit.ErrUnmanaged) {
@@ -106,12 +119,48 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 			logEvent(logger, event)
 			notifier.consider(event)
 		},
+		Policy: policySource(cfg),
 	})
 	if err := watcher.Run(ctx); err != nil {
 		fmt.Fprintf(stderr, "bn-vault-guard: %v\n", err)
 		return 1
 	}
 	return 0
+}
+
+// policySource is the guard's half of live reload: it owns the file format so
+// internal/vaultgit does not have to.
+//
+// It re-reads `brainnotes.toml` from the path the startup load resolved rather
+// than re-resolving the vault, because the vault a guard watches is fixed for
+// its lifetime — it holds a single-instance lock inside that vault — and a
+// $BNOTES_VAULT that changed under a running process must not silently move it.
+//
+// The whole file is decoded rather than just its `[autosave]` table, and that is
+// deliberate: it is the same validation `bn` and the server apply, so a version
+// either of those would refuse is one the guard refuses too. What it returns is
+// only the resolved policy, since that is the only part of the configuration
+// this process acts on.
+//
+// The hash is filled in before the decode is attempted, so an invalid version is
+// still identified by its bytes and reported once rather than once per poll.
+func policySource(cfg *config.Config) vaultgit.PolicySource {
+	root, origin, path := cfg.Vault, cfg.VaultOrigin, cfg.SourcePath
+	return func() (vaultgit.PolicySnapshot, error) {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			// No bytes, so no fingerprint. The watcher falls back to the diagnostic
+			// for deduplication, which is stable for as long as this failure is.
+			return vaultgit.PolicySnapshot{}, fmt.Errorf("read %s: %w", config.FileName, err)
+		}
+		snapshot := vaultgit.PolicySnapshot{Hash: vault.HashBytes(source)}
+		loaded, err := config.Decode(root, origin, source)
+		if err != nil {
+			return snapshot, err
+		}
+		snapshot.Policy = loaded.AutosavePolicy()
+		return snapshot, nil
+	}
 }
 
 // logEvent renders one WatchEvent as a structured record.
@@ -139,6 +188,9 @@ func logEvent(logger *slog.Logger, event vaultgit.WatchEvent) {
 	if event.Attempts > 0 {
 		attrs = append(attrs, slog.Int("attempts", event.Attempts))
 	}
+	if event.Policy != "" {
+		attrs = append(attrs, slog.String("autosave_min_interval", event.Policy))
+	}
 	if event.Detail != "" {
 		attrs = append(attrs, slog.String("detail", event.Detail))
 	}
@@ -148,6 +200,11 @@ func logEvent(logger *slog.Logger, event vaultgit.WatchEvent) {
 	case vaultgit.WatchEventBlocked, vaultgit.WatchEventError:
 		level = slog.LevelError
 	case vaultgit.WatchEventPushFailed, vaultgit.WatchEventPushFailing:
+		level = slog.LevelWarn
+	case vaultgit.WatchEventConfigInvalid:
+		// A warning rather than an error: the vault is still fully protected under
+		// the last valid policy, and the thing that needs fixing is a file the user
+		// is in the middle of editing.
 		level = slog.LevelWarn
 	case vaultgit.WatchEventBusy, vaultgit.WatchEventPending:
 		level = slog.LevelDebug
