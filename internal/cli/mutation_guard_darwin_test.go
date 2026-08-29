@@ -49,7 +49,10 @@ func guardedVault(t *testing.T) string {
 			t.Fatalf("write %s: %v", rel, err)
 		}
 	}
-	useVaultRoot(t, root, testPropertyDefinitions)
+	// The autosave floor is assigned rather than left to its default so that
+	// `config unset` is a real mutation here. An unset of an absent key writes
+	// nothing, and a case that writes nothing proves nothing about the guard.
+	useVaultRoot(t, root, testPropertyDefinitions+"\n[autosave]\nmin_interval = \"1m\"\n")
 	markFileProvider(t, root)
 	return root
 }
@@ -100,8 +103,8 @@ func assertForbidden(t *testing.T, out string, err error) {
 }
 
 // One case per representative mutation surface. Each one is a different route to
-// disk — transaction, direct create, rename, folder move, trash — and every one
-// of them has to reach the same preflight.
+// disk — transaction, direct create, rename, folder move, trash, configuration
+// rewrite — and every one of them has to reach the same preflight.
 func TestMutationsRefusedUnderFileProviderRoot(t *testing.T) {
 	cases := []struct {
 		name string
@@ -115,6 +118,10 @@ func TestMutationsRefusedUnderFileProviderRoot(t *testing.T) {
 		{"replace", []string{"replace", "tags", "foo", "bar"}},
 		{"capture", []string{"capture", "a captured line"}},
 		{"pin", []string{"pin", "note.md"}},
+		// The vault's own configuration is vault storage like any other, so
+		// rewriting it is refused on the same terms as rewriting a note.
+		{"config-set", []string{"config", "set", "autosave.min_interval", "2m"}},
+		{"config-unset", []string{"config", "unset", "autosave.min_interval"}},
 	}
 
 	for _, tc := range cases {
@@ -212,6 +219,13 @@ func TestReadOnlyCommandsWorkUnderFileProviderRoot(t *testing.T) {
 		{"config", []string{"config"}},
 		{"set-dry-run", []string{"set", "note.md", "status=done", "--dry-run"}},
 		{"rename-dry-run", []string{"rename", "note.md", "Renamed Note", "--dry-run"}},
+		{"config-get", []string{"config", "get", "autosave.min_interval"}},
+		{"config-set-dry-run", []string{"config", "set", "autosave.min_interval", "2m", "--dry-run"}},
+		{"config-unset-dry-run", []string{"config", "unset", "autosave.min_interval", "--dry-run"}},
+		// 60s names the stored 1m, so this set changes nothing and never becomes
+		// a mutation at all. That is what makes a converged script safe to re-run
+		// against a vault that later moved onto synced storage.
+		{"config-set-no-op", []string{"config", "set", "autosave.min_interval", "60s"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

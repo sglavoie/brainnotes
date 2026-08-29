@@ -140,6 +140,15 @@ func TestNoUnannotatedDirectWrites(t *testing.T) {
 // unannotatedWrites reports the direct-write calls in one file that carry no
 // marker, either on the line above or in the enclosing function's doc comment.
 func unannotatedWrites(path, rel string) ([]directWrite, error) {
+	return directWrites(path, rel, true)
+}
+
+// directWrites reports the direct-write calls in one file. honorMarkers drops
+// the ones a human vouched for, which is what the repository-wide audit wants;
+// passing false asks the harder question of whether a file writes to the
+// filesystem at all, which is the only way to state that a particular surface
+// has no escape hatch rather than an approved one.
+func directWrites(path, rel string, honorMarkers bool) ([]directWrite, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -183,7 +192,7 @@ func unannotatedWrites(path, rel string) ([]directWrite, error) {
 			return true
 		}
 		line := fset.Position(call.Pos()).Line
-		if markedLines[line] || markedLines[line-1] || withinMarkedFunc(line, markedFuncs) {
+		if honorMarkers && (markedLines[line] || markedLines[line-1] || withinMarkedFunc(line, markedFuncs)) {
 			return true
 		}
 		findings = append(findings, directWrite{file: rel, line: line, call: name})
@@ -297,6 +306,51 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+// configMutationFiles are the sources behind `bn config set` and
+// `bn config unset`, the only CLI surface that rewrites the vault's own
+// configuration file.
+var configMutationFiles = []string{
+	"internal/cli/config.go",
+	"internal/cli/config_scriptable.go",
+}
+
+// TestConfigMutationHasNoDirectWriteEscape closes the one door the
+// repository-wide audit deliberately leaves open.
+//
+// TestNoUnannotatedDirectWrites accepts a `//bn:direct-write` marker anywhere
+// outside the persistence packages: it asks for a reason, not for a particular
+// answer. That is the right rule in general and the wrong one here.
+// brainnotes.toml is the file the vault root is defined by and the file a
+// running watcher re-reads, so a "just write it atomically" shortcut in these
+// commands would bypass the expected-hash precondition that turns a concurrent
+// edit into a refusal, the undo entry, and the immediate history commit — all
+// while passing the audit with one line of prose.
+//
+// So this asserts the stronger property: these files call nothing that puts
+// anything on disk. Every byte they change goes through the vault transaction.
+func TestConfigMutationHasNoDirectWriteEscape(t *testing.T) {
+	t.Parallel()
+
+	root := repositoryRoot(t)
+	for _, rel := range configMutationFiles {
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if _, err := os.Stat(path); err != nil {
+			// A rename would otherwise leave this test passing over nothing.
+			t.Errorf("%s does not exist; update configMutationFiles: %v", rel, err)
+			continue
+		}
+		found, err := directWrites(path, rel, false)
+		if err != nil {
+			t.Errorf("parse %s: %v", rel, err)
+			continue
+		}
+		for _, finding := range found {
+			t.Errorf("%s:%d calls %s; the config mutation path must write only through vault.FileTxn",
+				finding.file, finding.line, finding.call)
+		}
+	}
 }
 
 // TestApprovedPackagesExist keeps the allowlist honest. A package that was

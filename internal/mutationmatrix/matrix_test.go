@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/backup"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cli"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/web"
@@ -138,6 +139,44 @@ func mutations() []mutation {
 			},
 		},
 		{
+			name: "cli/config-set",
+			prepare: func(t *testing.T, h *harness) any {
+				// A stored floor is what makes the no-op below reachable: with no
+				// assignment there is nothing for a set to already agree with.
+				if err := runCLI(t, h, "config", "set", autosaveKey, "1m"); err != nil {
+					t.Fatalf("prepare a stored autosave floor: %v", err)
+				}
+				return nil
+			},
+			apply: func(t *testing.T, h *harness, _ any) error {
+				return runCLI(t, h, "config", "set", autosaveKey, "2m")
+			},
+			touches:   []string{config.FileName},
+			journaled: true,
+			noop: func(t *testing.T, h *harness, _ any) error {
+				// 60s is the stored 1m spelled differently, so this is the same
+				// code path with nothing to write.
+				return runCLI(t, h, "config", "set", autosaveKey, "60s")
+			},
+		},
+		{
+			name: "cli/config-unset",
+			prepare: func(t *testing.T, h *harness) any {
+				if err := runCLI(t, h, "config", "set", autosaveKey, "1m"); err != nil {
+					t.Fatalf("prepare a stored autosave floor: %v", err)
+				}
+				return nil
+			},
+			apply: func(t *testing.T, h *harness, _ any) error {
+				return runCLI(t, h, "config", "unset", autosaveKey)
+			},
+			touches:   []string{config.FileName},
+			journaled: true,
+			// The no-op unset — a key that is not assigned — cannot be expressed
+			// here, because this row's prepare is what puts the key there.
+			// TestConfigMutationsWithNothingToDoLeaveNoHistory covers it.
+		},
+		{
 			name: "web/capture",
 			apply: func(t *testing.T, h *harness, _ any) error {
 				return postCapture(t, h, "a captured thought")
@@ -189,6 +228,9 @@ func mutations() []mutation {
 }
 
 var cockpitTask = cockpit.Task{ID: "matrix-task", Signature: "matrix-signature"}
+
+// autosaveKey is the one configuration key `bn config set`/`unset` accept.
+const autosaveKey = "autosave.min_interval"
 
 func statusMutations(t *testing.T, h *harness, value string) []noteops.FrontmatterMutation {
 	t.Helper()
@@ -563,6 +605,81 @@ func TestBackupRestoreWipeKeepsTheHistoryItCommitsInto(t *testing.T) {
 	// be recovered from.
 	if committed, ok := h.show("HEAD~1", delta); !ok || committed != deltaBody {
 		t.Fatalf("the wiped note is not recoverable from the history (present=%v):\n%s", ok, committed)
+	}
+}
+
+// TestConfigMutationsWithNothingToDoLeaveNoHistory covers the two config-command
+// answers the matrix rows cannot express.
+//
+// A row's no-op runs after its prepare, and for `config unset` the prepare is
+// precisely what assigns the key, so "unsetting a key that is not there" has
+// nowhere to live in the table. A dry run has nowhere to live either: it is not
+// a mutation, and the table describes mutations.
+//
+// Both are the same claim, which is the one thing a scriptable config surface
+// has to get right to be safe in a loop: an invocation with nothing to do
+// touches neither the file, nor the undo journal, nor the history — so a script
+// that reasserts the vault's policy on every run does not produce a commit on
+// every run.
+func TestConfigMutationsWithNothingToDoLeaveNoHistory(t *testing.T) {
+	h := newHarness(t, nil)
+	before := h.head()
+	original := h.readFile(config.FileName)
+
+	for _, args := range [][]string{
+		{"config", "unset", autosaveKey},
+		{"config", "set", autosaveKey, "1m", "--dry-run"},
+		{"config", "unset", autosaveKey, "--dry-run"},
+	} {
+		if err := runCLI(t, h, args...); err != nil {
+			t.Fatalf("bn %s: %v", strings.Join(args, " "), err)
+		}
+		if got := h.head(); got != before {
+			t.Fatalf("`bn %s` committed %q", strings.Join(args, " "), h.subject("HEAD"))
+		}
+		if got := h.readFile(config.FileName); got != original {
+			t.Fatalf("`bn %s` rewrote %s:\n%s", strings.Join(args, " "), config.FileName, got)
+		}
+	}
+
+	// Not even the undo journal: nothing was captured, so nothing was recorded.
+	if h.exists(".bnotes") {
+		t.Fatalf(".bnotes exists; a command with nothing to do left artifacts: %v", h.tree())
+	}
+}
+
+// TestConfigSetRecordsTheImmediateCommitUnderItsOwnOperation pins the half of
+// the lifecycle the matrix rows measure only by shape. The rows prove exactly
+// one commit of exactly brainnotes.toml; this proves that commit is the
+// explicit, immediate one these commands are supposed to make, recorded under
+// the fixed operation token rather than under anything derived from the value
+// the user typed.
+func TestConfigSetRecordsTheImmediateCommitUnderItsOwnOperation(t *testing.T) {
+	h := newHarness(t, nil)
+
+	if err := runCLI(t, h, "config", "set", autosaveKey, "90s"); err != nil {
+		t.Fatalf("bn config set: %v", err)
+	}
+	if subject := h.subject("HEAD"); !strings.Contains(subject, "config-set") {
+		t.Fatalf("the commit subject is %q, want it to name the config-set operation", subject)
+	}
+	if got := h.readFile(config.FileName); !strings.Contains(got, `min_interval = "1m30s"`) {
+		t.Fatalf("%s does not hold the canonical value:\n%s", config.FileName, got)
+	}
+
+	if err := runCLI(t, h, "config", "unset", autosaveKey); err != nil {
+		t.Fatalf("bn config unset: %v", err)
+	}
+	if subject := h.subject("HEAD"); !strings.Contains(subject, "config-unset") {
+		t.Fatalf("the commit subject is %q, want it to name the config-unset operation", subject)
+	}
+	// The token is the whole commit subject's vocabulary on purpose: the value
+	// the user passed is note-adjacent user input and belongs in the local undo
+	// journal, not in a message every clone of the vault carries.
+	for _, leaked := range []string{"90s", "1m30s", autosaveKey} {
+		if subject := h.subject("HEAD~1"); strings.Contains(subject, leaked) {
+			t.Fatalf("the commit subject %q leaked %q", subject, leaked)
+		}
 	}
 }
 
