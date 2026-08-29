@@ -35,7 +35,18 @@ func validate(cfg *Config) error {
 	if err := validateViews(cfg); err != nil {
 		return err
 	}
+	if err := validateAutosave(cfg); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validateAutosave holds the stored floor to exactly the rule
+// ParseAutosaveMinInterval enforces, so a config that loads can never resolve
+// to a policy the watcher would refuse.
+func validateAutosave(cfg *Config) error {
+	_, err := ParseAutosaveMinInterval(cfg.Autosave.MinInterval)
+	return err
 }
 
 // savedViewNamePattern constrains a view name to something a shell argument,

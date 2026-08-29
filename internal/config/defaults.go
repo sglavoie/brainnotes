@@ -15,6 +15,12 @@ const DefaultCaptureHeading = "## Captures"
 
 // DefaultTemplate returns the commented TOML starter file body written by
 // `bn init`.
+//
+// [autosave] is deliberately last: it is the one section
+// PatchAutosaveMinInterval may have to create in a file a user has already
+// edited, and appending is the only insertion position that cannot split a
+// section of theirs. Keeping the starter file in that order means a created
+// section lands where this template would have put it.
 func DefaultTemplate() string {
 	return `# bnotes configuration file
 # This file marks its own directory as the vault root. All keys are optional.
@@ -159,6 +165,13 @@ type = "float"
 # agent_command = "my-review-agent"
 # Timeout for the legacy override. When agent_command is empty, [agent].timeout_seconds is used.
 # agent_timeout_seconds = 60
+
+[autosave]
+# Hard floor between two commits made automatically by the external file
+# watcher. A Go duration between "30s" and "24h" inclusive, or "off" to stop the
+# watcher committing on its own. Explicit ` + "`bn`" + ` changes always commit
+# immediately either way. Defaults to "` + DefaultAutosaveMinInterval + `".
+# min_interval = "` + DefaultAutosaveMinInterval + `"
 `
 }
 
@@ -317,6 +330,19 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Cockpit.AgentTimeoutSeconds == 0 {
 		cfg.Cockpit.AgentTimeoutSeconds = DefaultCockpitAgentTimeoutSeconds
+	}
+
+	// An absent autosave floor means DefaultAutosaveMinInterval, and a value the
+	// user spelled some other way ("300s", "5m0s") is stored in its canonical
+	// form so `bn config get`, the watcher's persisted policy, and a re-read of
+	// this file all show one spelling. A value that does not parse is left
+	// untouched for validate to reject with the text the user actually wrote.
+	cfg.Autosave.MinInterval = strings.TrimSpace(cfg.Autosave.MinInterval)
+	if cfg.Autosave.MinInterval == "" {
+		cfg.Autosave.MinInterval = DefaultAutosaveMinInterval
+	}
+	if policy, err := ParseAutosaveMinInterval(cfg.Autosave.MinInterval); err == nil {
+		cfg.Autosave.MinInterval = policy.Canonical
 	}
 
 	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)

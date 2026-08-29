@@ -32,6 +32,7 @@ type Config struct {
 	Capture     CaptureConfig     `toml:"capture"`
 	Agent       AgentConfig       `toml:"agent"`
 	Cockpit     CockpitConfig     `toml:"cockpit"`
+	Autosave    AutosaveConfig    `toml:"autosave"`
 
 	// Views holds the saved queries declared by the [[views]] array of tables,
 	// in file order.
@@ -227,6 +228,19 @@ type CockpitConfig struct {
 	// AgentTimeoutSeconds bounds how long the AI agent command may run. Defaults
 	// to DefaultCockpitAgentTimeoutSeconds.
 	AgentTimeoutSeconds int `toml:"agent_timeout_seconds"`
+}
+
+// AutosaveConfig bounds how often the external file watcher may create its own
+// safety commits. It never affects explicit `bn`, web, or sidecar mutations,
+// which commit immediately whatever this says.
+type AutosaveConfig struct {
+	// MinInterval is the hard floor between two consecutive external autosave
+	// commits: a Go duration between MinAutosaveInterval and MaxAutosaveInterval
+	// inclusive, or AutosaveOff to stop the watcher committing on its own. It is
+	// stored as the human-readable text the file carries (canonicalized by
+	// applyDefaults, so "300s" is read back as "5m"); callers wanting the
+	// resolved disabled/duration pair use Config.AutosavePolicy.
+	MinInterval string `toml:"min_interval"`
 }
 
 // DefaultIgnore lists the vault-relative paths that are always skipped.
