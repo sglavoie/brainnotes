@@ -1,0 +1,31 @@
+# gate: unexplained_deletion_blocks
+# title: a deletion with no journal record blocks immediately and is never committed or pushed
+# recorded: 2026-08-29T02:43:38Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  action: unlink a tracked drill note outside bn, with no journal record
+  blocked_marker_appeared: True
+  seconds_to_block: 4.0
+
+## observe
+
+  marker_kind: unexplained_deletion
+  marker_operation: scan-pending
+  marker_reason: a tracked path is missing from the working tree and no uncommitted BrainNotes journal record proves the deletion was intended
+  marker_path_count: 1
+  marker_recovery_present: True
+  commits_before: 4
+  commits_after: 4
+  origin_ref_moved: False
+  note_still_recoverable_from_HEAD: True
+
+## a later bn write is refused while the block stands
+
+  later_write_exit_status: 1
+  guard_blocked_events: 1
+
+# outcome: pass (2026-08-29T02:43:50Z)

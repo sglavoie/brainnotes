@@ -1,0 +1,40 @@
+# gate: old_vault_trashed_recoverably
+# title: the old File Provider vault copy is out of use, in the Trash, and still recoverable
+# recorded: 2026-08-29T03:38:11Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+# note: the path below is home-relative on purpose. The Trash location is
+#       recorded so the copy can be found again; the vault's contents are not.
+
+## before: nothing is still using the old root
+
+  processes_referencing_the_old_root: 0
+  bn_config_exit_status: 0
+  bn_config_names_the_old_root: False
+  bn_config_names_the_live_vault: True
+  launchagent_names_the_old_root: False
+  launchagent_names_the_live_vault: True
+
+## nothing in the old root is only in the old root
+
+  files_in_the_old_root: 1302
+  files_byte_present_in_the_live_history_or_the_sealed_archive: 1295
+  machinery_files_classified_by_path: 7
+  unaccounted_files: 0
+
+## the sealed archive is verified one last time, then the old root is moved
+
+  approved_old_vault_manifest_sha256_matches_the_migration_record: True
+  old_root_still_in_place: False
+  trash_location: ~/.Trash/brainnotes-old-vault-20260828
+  trash_location_is_a_directory: True
+
+## after: the trashed copy is byte-for-byte what was moved
+
+  files_before_the_move: 1302
+  files_after_the_move: 1302
+  object_names_identical_after_the_move: True
+  sealed_archive_still_present: True
+
+# outcome: pass (2026-08-29T03:40:13Z)

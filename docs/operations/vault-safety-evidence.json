@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "description": "Live acceptance and restore gates for the BrainNotes vault loss-prevention work. Every gate here is a claim; scripts/verify_vault_safety_evidence.py re-derives each one from files, repositories, and processes and never accepts a gate because this file says it passed.",
+  "gates": {
+    "artifacts_contain_no_note_bodies": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:17:51Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/artifacts_contain_no_note_bodies.txt",
+      "evidence_sha256": "cceb48141a56907ffe2802d0b98a1c878eaf9556c502a17e853c5ce10f82745b",
+      "paths_redacted": true
+    },
+    "bn_doctor": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:32:14Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/bn_doctor.txt",
+      "evidence_sha256": "5bfefb7d4f3e82405226ade39d4b96650d0f891ba11da47c0cddb3f5e8a354d0",
+      "paths_redacted": true
+    },
+    "brainnotes_ci": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:44:30Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/brainnotes_ci.txt",
+      "evidence_sha256": "6de848fd0f12ca76acda5a4ac6a9bb3d61ff6563cbd72c570e1e7b28b80d51e6",
+      "paths_redacted": true
+    },
+    "cli_mutation_commits_immediately": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:43:24Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/cli_mutation_commits_immediately.txt",
+      "evidence_sha256": "51a7b6bf0d78bc222a267441333343b1d06324c54886472670a99a069507f349",
+      "paths_redacted": true
+    },
+    "commit_and_marker_failure_blocks_after_restart": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:51:13Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/commit_and_marker_failure_blocks_after_restart.txt",
+      "evidence_sha256": "b7b0c3a4d1a713d7efedd21f245791a9c4cb183d04b866b0fb5fae4512c21595",
+      "paths_redacted": true
+    },
+    "debounce_survives_daemon_restart": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:54:23Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/debounce_survives_daemon_restart.txt",
+      "evidence_sha256": "c660b9df2c791bfed7bcbbd0a8d47d0da77a95b03f97d50d400d97d3be9335ea",
+      "paths_redacted": true
+    },
+    "durable_state_commits_immediately": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:43:26Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/durable_state_commits_immediately.txt",
+      "evidence_sha256": "391f51d2a74412939871b53401149e82402492d21208ad99df1b63d88fe60326",
+      "paths_redacted": true
+    },
+    "external_edit_debounced_quiet_and_max": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:51:20Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/external_edit_debounced_quiet_and_max.txt",
+      "evidence_sha256": "a48b9ebc6ef4840d4baab10119b412ecd738cbd4eedba042ea10735ed73c0ba4",
+      "paths_redacted": true
+    },
+    "fresh_clone_of_content_remote": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:37:51Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/fresh_clone_of_content_remote.txt",
+      "evidence_sha256": "10311cd9f3447cc7b19b98bc311ec5d5ff4e999adffe36d328e68f5bc9da3bd5",
+      "paths_redacted": true
+    },
+    "history_restore_commits_immediately": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:45:24Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/history_restore_commits_immediately.txt",
+      "evidence_sha256": "b03b5439417255b0cce7d90a9cbed893ce81fcb3b7bc5462b5fc4c18a796babe",
+      "paths_redacted": true
+    },
+    "interrupted_delete_recovered_by_watcher": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:45:45Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/interrupted_delete_recovered_by_watcher.txt",
+      "evidence_sha256": "7813a69441f75e6862ae097f5bd9f94a99f00ae87b36a460f4caedb7044a93cd",
+      "paths_redacted": true
+    },
+    "local_commit_failure_blocks_later_writes": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:49:08Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/local_commit_failure_blocks_later_writes.txt",
+      "evidence_sha256": "0c94df13f74a12a17823514805ed1b42da219225de3c9780bfecba10203b888a",
+      "paths_redacted": true
+    },
+    "old_vault_trashed_recoverably": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:38:11Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/old_vault_trashed_recoverably.txt",
+      "evidence_sha256": "45ce2ba03ec07e421826e0d3ed6301d0a0b2d38ebb102bb83e3a3e17de2c92c2",
+      "paths_redacted": true,
+      "trash_location": "~/.Trash/brainnotes-old-vault-20260828",
+      "old_vault_manifest_sha256": "90787662c30c0c9e09394813908eb6e84d006e332d1d43a4dc7d4d7819857928"
+    },
+    "post_retirement_verification": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:41:53Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/post_retirement_verification.txt",
+      "evidence_sha256": "f6934eadd43912b6e27369af7566f9bc3eaa99e62b22a407f1a014b590d515e2",
+      "paths_redacted": true
+    },
+    "remote_outage_recovers_automatically": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:04:03Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/remote_outage_recovers_automatically.txt",
+      "evidence_sha256": "f0d146e40e95ced3bd063f027a562f49815ca14bd74ce842c4abec65cadcaeb1",
+      "paths_redacted": true
+    },
+    "restore_from_github_clone": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:37:12Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/restore_from_github_clone.txt",
+      "evidence_sha256": "ee309f0e401e73ae7612dba9cd4253acdb2bf1fc13224c4b0b187e0c28cce62b",
+      "paths_redacted": true
+    },
+    "restore_from_local_git": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:37:12Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/restore_from_local_git.txt",
+      "evidence_sha256": "116bb4bcd8bee5cfae93eb194ccdb490c5bb61f785d9f833ca7c54d67f1453ae",
+      "paths_redacted": true
+    },
+    "restore_from_sealed_archive": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:37:12Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/restore_from_sealed_archive.txt",
+      "evidence_sha256": "f8e90038c6bf395c625ded0d7446154fcb76ebddff10e8d02532226525965225",
+      "paths_redacted": true
+    },
+    "scripts_complete_suite": {
+      "outcome": true,
+      "checked_at": "2026-08-29T03:25:17Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/scripts_complete_suite.txt",
+      "evidence_sha256": "ac118a29a7eecf33ea9a0f14c02f06df2d355d9f3a88c4032a1a4718d8aa9d5d",
+      "paths_redacted": true
+    },
+    "txn_crash_converges_and_is_idempotent": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:48:11Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/txn_crash_converges_and_is_idempotent.txt",
+      "evidence_sha256": "ca5465c24bad0aef4a8e602fecc466dcdaf2d12a38a1977647227ef14d997b08",
+      "paths_redacted": true
+    },
+    "unexplained_deletion_blocks": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:43:38Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/unexplained_deletion_blocks.txt",
+      "evidence_sha256": "6efc260e336bebb1e67498924089525b2619b58b02f5aa2de3956899ec38637b",
+      "paths_redacted": true
+    },
+    "web_mutation_commits_immediately": {
+      "outcome": true,
+      "checked_at": "2026-08-29T02:43:33Z",
+      "exit_status": 0,
+      "evidence_path": "docs/operations/vault-safety-evidence/web_mutation_commits_immediately.txt",
+      "evidence_sha256": "da31d3c9dbcabc2076962ad9dd4dbb3c3d48d8f10db72ae42f50b9ba1c3a7af6",
+      "paths_redacted": true
+    }
+  }
+}

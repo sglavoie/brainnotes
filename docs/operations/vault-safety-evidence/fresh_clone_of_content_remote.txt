@@ -1,0 +1,23 @@
+# gate: fresh_clone_of_content_remote
+# title: a clean fresh clone of the private content remote succeeds and is complete
+# recorded: 2026-08-29T03:37:51Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  command: git clone <private content remote> into a scratch directory
+  exit_status: 0
+
+## observe
+
+  seconds_waited_for_the_guard_to_publish_the_local_head: 0.0
+  clone_HEAD: 493d031
+  live_HEAD: 493d031
+  clone_is_at_the_live_head: True
+  tracked_paths_in_the_clone: 1286
+  clone_is_clean: True
+  git_fsck_exit_status: 0
+
+# outcome: pass (2026-08-29T03:37:56Z)

@@ -44,11 +44,19 @@ On supervisor instruction the destination was moved to
 every File Provider root — and the session's completion contract was amended to
 match. The archive was re-created and re-verified from scratch at the new path.
 
-> **Known weakness.** The archive now lives on the same physical disk as the live
-> vault, so it is not an independent-media recovery layer. The separate daily copy
-> under `/Volumes/SanDisk/daily/...` is also currently inaccessible. The external
-> archive should be re-made once the SanDisk drive is unlocked, and **before**
-> session 6 retires the old source.
+> **Operator decision, 2026-08-28.** Archive destination and physical medium are
+> **not** retirement prerequisites. The archive is verified by its approved
+> manifest and by a successful restore drill, not by where it lives; no SanDisk
+> volume and no `/Volumes/...` path is required for session 6 to retire the old
+> source. Re-making the archive on independent media remains worth doing for
+> media-failure resilience, but it is a separate improvement and does not gate
+> retirement.
+>
+> What that costs is stated plainly rather than waived: on this disk the archive
+> is not an independent-media layer, so a whole-disk failure takes it out along
+> with the live vault. The layer that survives that case is the content remote,
+> which is off-machine and is itself gate-verified by a fresh clone and a
+> manifest comparison.
 
 ## File Provider exposure
 
@@ -257,6 +265,28 @@ was not renamed, trashed, or deleted. Re-manifested at the end of the session:
 Its final manifest is identical to the archive's `SHA256SUMS`
 (`sha256 90787662c30c0c9e09394813908eb6e84d006e332d1d43a4dc7d4d7819857928`), which is
 the comparison baseline for the session 6 retirement check.
+
+### Post-baseline drift, reconciled 2026-08-28
+
+The old root did not stay frozen after the baseline was sealed, and the
+retirement check had to stop assuming it did. `bn` refuses every write under
+File Provider storage, but an editor does not, so therapy notes written directly
+in `~/Documents/vault` after 2026-08-26 never reached the Git-backed vault.
+Commit `c2a52d7` brought that content forward — four new notes, one pruned
+rewrite whose superseded text remains in history at `d43131e`, and forward edits
+to three existing notes — and removed the `bn new` probe the guard had
+auto-committed.
+
+So the retirement gate does **not** assert that the old root still equals the
+sealed archive; that became false the moment the first post-baseline note was
+written there, and asserting it would have been asserting something untrue. It
+asserts the property that actually protects the content: every file in the old
+root is byte-present either in the live vault's Git object database, at any
+commit, or in the sealed archive. What remains after that is classified by path
+as machinery — the derived note cache, lock files, the old root's own undo
+journal, a `.codegraph/` index, the vault config, and `bn`'s own backup tarballs
+of the same content — and the gate fails if a single file falls outside those
+classes. Measured before the move: 1301 files, 0 unaccounted.
 
 ## Manifest locations
 

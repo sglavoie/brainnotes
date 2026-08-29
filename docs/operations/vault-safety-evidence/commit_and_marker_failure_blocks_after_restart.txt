@@ -1,0 +1,36 @@
+# gate: commit_and_marker_failure_blocks_after_restart
+# title: when the commit and the block marker both fail, the durable pre-operation intent blocks anyway
+# recorded: 2026-08-29T02:51:13Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+# note: the commit is failed by an unwritable object store and the marker
+#       write by a placeholder planted at blocked.json the instant the intent
+#       record lands. That is a race, so the drill retries until it wins and
+#       records the attempt count below.
+
+## act
+
+  attempts_needed_to_hit_the_window: 1
+  action: fail the commit and the blocked.json write in the same operation
+  exit_status: 1
+
+## observe: the marker never landed, the intent did
+
+  blocked_marker_is_still_the_planted_placeholder: True
+  intent_record_present: True
+  intent_phase: planned
+  intent_path_count: 3
+  intent_names_a_commit: False
+  intent_recovery_present: True
+  intent_operation: commit-journal
+
+## the filesystem is healthy again; the manager restarts
+
+  marker_placeholder_removed: True
+  later_write_exit_status: 1
+  refusal_names_an_interrupted_snapshot: True
+  later_write_left_target_untouched: True
+  bytes_of_the_first_write_are_on_disk: True
+
+# outcome: pass (2026-08-29T02:51:15Z)

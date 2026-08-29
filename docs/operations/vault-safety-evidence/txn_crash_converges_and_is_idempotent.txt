@@ -1,0 +1,41 @@
+# gate: txn_crash_converges_and_is_idempotent
+# title: a file transaction terminated after each durable phase converges on reopen and stays idempotent
+# recorded: 2026-08-29T02:48:11Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+# note: txnCrashHook is nil in production builds, so each crash point is
+#       reconstructed as the exact on-disk state that phase leaves behind:
+#       a durable intent record plus the staged replacements it names.
+#       Recovery is documented to derive its decisions from the filesystem
+#       rather than from a phase counter, so the reconstruction is the
+#       whole of what a real kill leaves.
+
+## crash point intent -- record durable, no destination reached yet
+
+  intent_record_present_before_reopen: True
+  reopen_exit_status: 0
+  both_destinations_hold_planned_bytes: True
+  intent_record_cleared: True
+  second_reopen_exit_status: 0
+  still_holds_planned_bytes_after_second_reopen: True
+
+## crash point applied:0 -- first destination reached, second still holding prior bytes
+
+  intent_record_present_before_reopen: True
+  reopen_exit_status: 0
+  both_destinations_hold_planned_bytes: True
+  intent_record_cleared: True
+  second_reopen_exit_status: 0
+  still_holds_planned_bytes_after_second_reopen: True
+
+## crash point synced -- every destination reached, record not yet cleared
+
+  intent_record_present_before_reopen: True
+  reopen_exit_status: 0
+  both_destinations_hold_planned_bytes: True
+  intent_record_cleared: True
+  second_reopen_exit_status: 0
+  still_holds_planned_bytes_after_second_reopen: True
+
+# outcome: pass (2026-08-29T02:48:13Z)

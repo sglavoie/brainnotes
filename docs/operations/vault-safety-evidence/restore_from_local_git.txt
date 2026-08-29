@@ -1,0 +1,22 @@
+# gate: restore_from_local_git
+# title: a fresh restore from the local Git history reproduces the live vault exactly
+# recorded: 2026-08-29T03:37:12Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  method: git clone --no-hardlinks of the live vault into a scratch directory
+  tracked_paths_at_HEAD: 1286
+  tracked_paths_at_baseline: 1277
+  baseline_commit: d43131ec58b4
+  paths_excluded_from_the_archive_comparison: ['.gitignore']
+
+## observe
+
+  live_vault_manifest_sha256: 6142b3656f9419694848412077a18b01cef9458a43a9face39a9d63678c5a9f1
+  local_restore_manifest_sha256: 6142b3656f9419694848412077a18b01cef9458a43a9face39a9d63678c5a9f1
+  identical_to_live_vault: True
+
+# outcome: pass (2026-08-29T03:37:12Z)

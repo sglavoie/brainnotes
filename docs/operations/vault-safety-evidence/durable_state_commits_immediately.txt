@@ -1,0 +1,24 @@
+# gate: durable_state_commits_immediately
+# title: a durable sidecar-state write produces its own local commit of that path only
+# recorded: 2026-08-29T02:43:26Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  command: bn related feedback <drill a> <drill b> --state useful
+  exit_status: 0
+
+## observe
+
+  commits_before: 5
+  commits_after: 6
+  commit: 91c25ba
+  subject: brainnotes: recall-state [state]
+  changed_paths: 1
+  drill_owned_paths: ['.bnotes/recall.json']
+  unrelated_paths_swept_in: 0
+  staged_exactly: .bnotes/recall.json
+
+# outcome: pass (2026-08-29T02:43:27Z)

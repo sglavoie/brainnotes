@@ -259,6 +259,13 @@ func (m *Manager) NoteExternalChange() (WatchState, error) {
 	return m.state.NoteChange(m.now())
 }
 
+// NoteExternalSettled closes an open debounce burst whose changes are no longer
+// there to commit, so a burst that resolved itself does not stay due forever.
+// It reports whether there was one to close.
+func (m *Manager) NoteExternalSettled() (closed bool, err error) {
+	return m.state.NoteSettled()
+}
+
 // ExternalCommitDue reports whether an open debounce burst has reached either
 // its quiet period or its maximum latency.
 func (m *Manager) ExternalCommitDue() bool {
@@ -507,6 +514,70 @@ func (m *Manager) scanPending(ctx context.Context, head, op string) (pendingSet,
 	}
 	set.proofEntries = provers
 	return set, nil
+}
+
+// PendingSummary is the in-scope difference between the working tree and HEAD,
+// reported without changing anything. Like CommitResult it carries paths and
+// never contents, so it is safe to log in full.
+type PendingSummary struct {
+	Added    []string
+	Modified []string
+	Deleted  []string
+}
+
+// Empty reports whether the working tree matches HEAD across the tracked scope.
+func (p PendingSummary) Empty() bool {
+	return len(p.Added) == 0 && len(p.Modified) == 0 && len(p.Deleted) == 0
+}
+
+// Count reports how many tracked paths differ.
+func (p PendingSummary) Count() int {
+	return len(p.Added) + len(p.Modified) + len(p.Deleted)
+}
+
+// ScanPending classifies the working tree and reports what a snapshot would
+// record, without recording it.
+//
+// It is the watcher's poll: a loop that only ever called CommitPending would
+// have no way to tell "nothing changed" from "something changed and the
+// debounce has not elapsed", and one that only ever called Preflight would
+// learn that a snapshot is permitted without learning whether there is anything
+// to snapshot.
+//
+// It is read-only in intent but not in effect, and deliberately so: it runs the
+// same interrupted-snapshot recovery and the same deletion verification the
+// mutation path runs, so an unexplained deletion latches the block marker the
+// moment a poll observes it rather than at the next mutation. That is the whole
+// reason the guard polls at all.
+func (m *Manager) ScanPending(ctx context.Context) (PendingSummary, error) {
+	const op = "scan-pending"
+	release, err := m.acquire(safetyLockName, op)
+	if err != nil {
+		return PendingSummary{}, err
+	}
+	defer release()
+
+	if err := m.checkBlocked(op); err != nil {
+		return PendingSummary{}, err
+	}
+	if err := m.recoverIntentLocked(ctx, op); err != nil {
+		return PendingSummary{}, err
+	}
+	if err := m.checkRepositoryState(op); err != nil {
+		return PendingSummary{}, err
+	}
+	head, _, err := m.headState(ctx, op)
+	if err != nil {
+		return PendingSummary{}, err
+	}
+	if err := m.seedIndex(ctx, head, op); err != nil {
+		return PendingSummary{}, err
+	}
+	set, err := m.scanPending(ctx, head, op)
+	if err != nil {
+		return PendingSummary{}, err
+	}
+	return PendingSummary{Added: set.added, Modified: set.modified, Deleted: set.deleted}, nil
 }
 
 // CommitPending records external changes: everything a person did to the vault

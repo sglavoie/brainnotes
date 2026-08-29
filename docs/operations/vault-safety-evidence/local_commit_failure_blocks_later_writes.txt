@@ -1,0 +1,30 @@
+# gate: local_commit_failure_blocks_later_writes
+# title: a snapshot that fails after the bytes land is reported honestly and refuses the next write
+# recorded: 2026-08-29T02:49:08Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  action: make the Git object store unwritable, then run a bn mutation
+  exit_status: 1
+  error_says_change_is_on_disk: True
+  error_says_writes_are_blocked: True
+
+## observe
+
+  commits_before: 5
+  commits_after: 5
+  bytes_landed_on_disk: True
+  blocked_marker_written: True
+  marker_kind: commit_failed
+  marker_operation: commit-journal
+  marker_path_count: 0
+
+## the next write is refused even though Git is healthy again
+
+  later_write_exit_status: 1
+  later_write_left_target_untouched: True
+
+# outcome: pass (2026-08-29T02:49:10Z)

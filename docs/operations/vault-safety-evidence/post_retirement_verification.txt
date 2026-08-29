@@ -1,0 +1,29 @@
+# gate: post_retirement_verification
+# title: health, push, fresh clone, and the restore manifests all still hold after retirement
+# recorded: 2026-08-29T03:41:53Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## health
+
+  health_command_exit_status: 0
+  health_verdict: OK
+
+## push
+
+  push_exit_status: 0
+  remote_tip_matches_local_head: True
+
+## fresh clone and restore manifests
+
+  fresh_clone_exit_status: 0
+  tracked_paths_at_HEAD: 1286
+  live_vault_manifest_sha256: 6142b3656f9419694848412077a18b01cef9458a43a9face39a9d63678c5a9f1
+  fresh_clone_manifest_sha256: 6142b3656f9419694848412077a18b01cef9458a43a9face39a9d63678c5a9f1
+  identical: True
+  baseline_clone_manifest_sha256: bdd1bc5471c42f5d89a1c72487571047b88ca2d5fcccbca80ccdc9373dc6f70c
+  sealed_archive_manifest_sha256: bdd1bc5471c42f5d89a1c72487571047b88ca2d5fcccbca80ccdc9373dc6f70c
+  identical_at_baseline: True
+
+# outcome: pass (2026-08-29T03:42:37Z)

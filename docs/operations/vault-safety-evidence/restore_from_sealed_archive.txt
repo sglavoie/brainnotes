@@ -1,0 +1,28 @@
+# gate: restore_from_sealed_archive
+# title: the sealed pre-migration archive reproduces the vault's baseline commit exactly
+# recorded: 2026-08-29T03:37:12Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  method: compare the sealed archive against both restores at the baseline commit
+  archive_is_destination_agnostic: True
+  tracked_paths_at_HEAD: 1286
+  tracked_paths_at_baseline: 1277
+  baseline_commit: d43131ec58b4
+  paths_excluded_from_the_archive_comparison: ['.gitignore']
+
+## observe
+
+  baseline_local_restore_manifest_sha256: bdd1bc5471c42f5d89a1c72487571047b88ca2d5fcccbca80ccdc9373dc6f70c
+  baseline_github_restore_manifest_sha256: bdd1bc5471c42f5d89a1c72487571047b88ca2d5fcccbca80ccdc9373dc6f70c
+  sealed_archive_manifest_sha256: bdd1bc5471c42f5d89a1c72487571047b88ca2d5fcccbca80ccdc9373dc6f70c
+  all_three_identical: True
+
+## the archive's own SHA256SUMS still verifies
+
+  shasum_c_exit_status: 0
+
+# outcome: pass (2026-08-29T03:37:13Z)

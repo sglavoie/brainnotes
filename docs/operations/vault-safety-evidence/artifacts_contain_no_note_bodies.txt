@@ -1,0 +1,37 @@
+# gate: artifacts_contain_no_note_bodies
+# title: logs, commit messages, notifications, and markers carry paths and metadata but no note body
+# recorded: 2026-08-29T03:17:51Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  secret_body_written_into_two_drill_notes: True
+  artifact_classes_produced: commit messages, guard log, blocked.json, watch.json, push.json
+  undo journal manifests inspected: 146
+  undo journal snapshot files excluded by design: 731
+
+## observe
+
+  git commit messages -- bytes: 153
+  git commit messages -- contains the note body: False
+  guard structured log -- bytes: 1643
+  guard structured log -- contains the note body: False
+  safety marker blocked.json -- bytes: 944
+  safety marker blocked.json -- contains the note body: False
+  safety marker watch.json -- bytes: 159
+  safety marker watch.json -- contains the note body: False
+  undo journal manifests -- bytes: 399342
+  undo journal manifests -- contains the note body: False
+  reconstructed notification body -- bytes: 102
+  reconstructed notification body -- contains the note body: False
+  reconstructed notification body -- names any path: False
+  blocked.json top-level keys: ['kind', 'observed_at', 'operation', 'paths', 'reason', 'recovery', 'version']
+
+## paths are present, which is the deliberate other half of the contract
+
+  marker records the affected path count: 1
+  marker records paths (drill-owned, listed by count only): True
+
+# outcome: pass (2026-08-29T03:18:46Z)

@@ -1,0 +1,28 @@
+# gate: interrupted_delete_recovered_by_watcher
+# title: a permitted rename interrupted between journal finalization and commit is recovered
+# recorded: 2026-08-29T02:45:45Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  action: reset the branch behind the rename's snapshot, leaving the renamed working tree and the now-uncommitted journal record in place
+  commits_after_reset: 4
+  working_tree_entries_pending: 3
+  old_path_present: False
+  new_path_present: True
+
+## observe: the watcher finishes it rather than blocking
+
+  recovery_commit_landed: True
+  seconds_to_recovery_commit: 32.4
+  blocked_marker_written: False
+  commit: b5f07bd
+  subject: brainnotes: autosave 2026-08-29T02:46:31Z
+  changed_paths: 4
+  drill_owned_paths: ['.bnotes/journal/20260829T024559.507115000Z-21434248/manifest.json', '.bnotes/journal/20260829T024559.507115000Z-21434248/snapshots/5d69310217a8b706fa939eef7e19e851180ff979db84633a5ed4ac67115700d8.snap', 'vault-safety-drill-interrupted-renamed.md', 'vault-safety-drill-interrupted.md']
+  unrelated_paths_swept_in: 0
+  deletion_of_old_path_committed: True
+
+# outcome: pass (2026-08-29T02:46:32Z)

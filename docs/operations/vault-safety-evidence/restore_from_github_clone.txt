@@ -1,0 +1,24 @@
+# gate: restore_from_github_clone
+# title: a fresh clone of the content remote reproduces the live vault exactly
+# recorded: 2026-08-29T03:37:12Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  method: git clone of the private content remote into a scratch directory
+  remote: sglavoie/brainnotes-vault (GitHub)
+  tracked_paths_at_HEAD: 1286
+  tracked_paths_at_baseline: 1277
+  baseline_commit: d43131ec58b4
+  paths_excluded_from_the_archive_comparison: ['.gitignore']
+
+## observe
+
+  live_vault_manifest_sha256: 6142b3656f9419694848412077a18b01cef9458a43a9face39a9d63678c5a9f1
+  github_restore_manifest_sha256: 6142b3656f9419694848412077a18b01cef9458a43a9face39a9d63678c5a9f1
+  identical_to_live_vault: True
+  identical_to_the_local_git_restore: True
+
+# outcome: pass (2026-08-29T03:37:12Z)

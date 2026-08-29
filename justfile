@@ -2,6 +2,16 @@
 
 binary_name := "bn"
 pkg := "./cmd/bn"
+
+# bn-vault-guard is the private companion process the LaunchAgent runs. It is
+# installed alongside `bn` because a vault whose guard is a version behind its
+# CLI is a vault whose safety engine and mutation paths disagree about what the
+# on-disk state means. It is deliberately absent from `just --list`, from
+# `just build`, and from the user documentation: it is not a supported command
+# and has no user-tunable safety policy.
+guard_binary_name := "bn-vault-guard"
+guard_pkg := "./cmd/bn-vault-guard"
+
 source_checkout_root := justfile_directory()
 source_checkout_ldflags := "-X github.com/sglavoie/sglavoie_brainnotes/internal/cli.sourceCheckoutRoot=" + source_checkout_root
 
@@ -20,6 +30,9 @@ install:
     @echo "Installing {{ binary_name }}..."
     go install -ldflags '{{source_checkout_ldflags}}' {{ pkg }}
     @echo "Installed {{ binary_name }}"
+    @echo "Installing {{ guard_binary_name }}..."
+    go install -ldflags '{{source_checkout_ldflags}}' {{ guard_pkg }}
+    @echo "Installed {{ guard_binary_name }}"
 
 # Run the full test suite
 test:

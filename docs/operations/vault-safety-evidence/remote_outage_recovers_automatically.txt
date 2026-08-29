@@ -1,0 +1,27 @@
+# gate: remote_outage_recovers_automatically
+# title: a remote outage never blocks a local mutation and the backlog pushes itself on recovery
+# recorded: 2026-08-29T03:04:03Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act: take the remote away
+
+  local_mutation_exit_status: 0
+  local_commit_landed_during_outage: True
+  bytes_available_during_outage: True
+  external_edit_rounds_during_outage: 4
+  recorded_push_attempts_during_outage: 3
+  guard_push_failed_warnings: 3
+  guard_push_failing_streak_notifications: 1
+  streak_notification_threshold: 3
+  local_commits_kept_being_taken_during_the_outage: 9
+  guard_still_running: True
+
+## observe: restore the remote and wait
+
+  seconds_to_automatic_push_after_recovery: 304.7
+  remote_ref_matches_local_head: True
+  push_retry_state_cleared: True
+
+# outcome: pass (2026-08-29T03:11:56Z)

@@ -1,0 +1,24 @@
+# gate: history_restore_commits_immediately
+# title: bn undo of a journal entry produces its own local commit
+# recorded: 2026-08-29T02:45:24Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  command: bn undo <entry id of the drill mutation>
+  exit_status: 0
+
+## observe
+
+  commits_before: 5
+  commits_after: 6
+  commit: 2c435c7
+  subject: brainnotes: undo [20260829T024537.750106000Z-d5249309]
+  changed_paths: 3
+  drill_owned_paths: ['.bnotes/journal/20260829T024537.750106000Z-d5249309/manifest.json', '.bnotes/journal/20260829T024537.750106000Z-d5249309/snapshots/5efdb2a54679f6a4f8a6387708d7ae8baa3c818c2a813a4895614fc148a17805.snap', 'vault-safety-drill-undo.md']
+  unrelated_paths_swept_in: 0
+  restored_frontmatter_removed: True
+
+# outcome: pass (2026-08-29T02:45:39Z)

@@ -513,6 +513,28 @@ func (s *safetyState) NoteChange(now time.Time) (WatchState, error) {
 	return state, s.writeJSON(watchStateFileName, state)
 }
 
+// NoteSettled closes an open burst that no longer has anything to commit,
+// without claiming a commit happened.
+//
+// It exists for the case where a burst opens and then resolves itself: an
+// editor writes a file and the user undoes it, a sync client touches a
+// timestamp and puts it back. NoteCommit is wrong there because LastCommitAt
+// would name a snapshot that was never taken, and leaving the burst open is
+// worse — DueAt would stay true forever and every poll would rescan and commit
+// nothing.
+// It reports whether there was an open burst to close, so a caller polling an
+// idle vault can stay silent instead of announcing the same non-event forever.
+func (s *safetyState) NoteSettled() (closed bool, err error) {
+	state := s.LoadWatchState()
+	if state.FirstChangeAt.IsZero() && state.LastChangeAt.IsZero() {
+		return false, nil
+	}
+	state.Version = stateVersion
+	state.FirstChangeAt = time.Time{}
+	state.LastChangeAt = time.Time{}
+	return true, s.writeJSON(watchStateFileName, state)
+}
+
 // NoteCommit closes the current burst.
 func (s *safetyState) NoteCommit(now time.Time) (WatchState, error) {
 	now = now.UTC()

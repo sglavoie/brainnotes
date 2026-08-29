@@ -1,0 +1,25 @@
+# gate: cli_mutation_commits_immediately
+# title: a bn CLI note mutation produces its own local commit before it returns
+# recorded: 2026-08-29T02:43:24Z
+# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  command: bn set <drill note> drillstatus=one
+  exit_status: 0
+
+## observe
+
+  commits_before: 4
+  commits_after: 5
+  commit: 87b449f
+  subject: brainnotes: set [20260829T024325.982635000Z-f3147758]
+  changed_paths: 3
+  drill_owned_paths: ['.bnotes/journal/20260829T024325.982635000Z-f3147758/manifest.json', '.bnotes/journal/20260829T024325.982635000Z-f3147758/snapshots/c197ffdfad264ef3ec1d65cae72ae336a93df6c8ce442fce62715f02af2b5966.snap', 'vault-safety-drill-cli.md']
+  unrelated_paths_swept_in: 0
+  working_tree_entries_left_dirty: 0
+  frontmatter_applied: True
+
+# outcome: pass (2026-08-29T02:43:26Z)
