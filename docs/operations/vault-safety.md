@@ -320,6 +320,18 @@ A drill passes when the manifests over the tracked paths of two restores agree
 byte for byte. `scripts/verify_vault_safety_evidence.py` does exactly this,
 computing the manifests itself rather than reading a recorded result.
 
+The same refusal to read a recorded result governs the drills that cannot be
+re-run from this machine. `scripts/vault_safety_scenarios.py` is a versioned
+catalogue naming every gate the record must contain and what each one's retained
+narrative has to show — which observations, in which sections, holding which
+relations to each other. The harness re-derives each verdict from the narrative
+instead of believing the `outcome` beside it, and rejects a recorded exit status
+unless the narrative itself records that number, so rewriting a drill's evidence
+and re-hashing it does not produce a passing run. Changing what a gate has to
+prove means changing the catalogue and bumping `CATALOGUE_VERSION`, which
+invalidates the stored record and asks for the drills again;
+`scripts/test_verify_vault_safety_evidence.py` covers the refusals.
+
 `bn restore --wipe` is safe to use against a vault that has a history: the wipe
 deliberately keeps `.git/` and the root `backups/` directory, because nothing
 could put them back. Every version the wipe discards is still in the content

@@ -16,28 +16,43 @@ table. The record is used only to say *which* gates are supposed to exist and
 What it checks
 --------------
 
-1. Record shape. Every gate carries `outcome: true`, an ISO-8601 `checked_at`,
-   an integer `exit_status: 0`, a repository-relative `evidence_path` under
-   `docs/operations/vault-safety-evidence/`, a 64-hex `evidence_sha256`, and
-   `paths_redacted: true`. Absolute paths and paths that escape the evidence
-   directory are rejected before anything is opened.
+1. Record shape and completeness. The record must carry every gate named by the
+   repository-owned scenario catalogue in `scripts/vault_safety_scenarios.py`
+   and no others, and must have been produced under the catalogue version now
+   in force. Every gate carries an ISO-8601 `checked_at`, a repository-relative
+   `evidence_path` under `docs/operations/vault-safety-evidence/`, a 64-hex
+   `evidence_sha256`, and `paths_redacted: true`. Absolute paths and paths that
+   escape the evidence directory are rejected before anything is opened.
 2. Evidence integrity. Every `evidence_sha256` is recomputed from the retained
    bytes on disk.
-3. Redaction, derived rather than asserted. `paths_redacted: true` is checked by
+3. The scenario each gate is supposed to have exercised. The retained narrative
+   is parsed, and the gate's verdict is re-decided here from its decisive
+   observations, the arithmetic between them, the sections that have to be
+   present, and the drill-owned paths it names. A gate does not pass because it
+   says it passed; it passes because its own evidence still shows what the
+   catalogue says that scenario has to show.
+4. Recorded claims, only where the evidence substantiates them. `outcome` is
+   accepted only against a narrative whose re-derived verdict is a pass;
+   `checked_at` must be the narrative's own timestamp; and `exit_status` is
+   accepted only when the scenario names an observation that carries it, and
+   must equal it. A gate whose narrative records no exit status may not claim
+   one. Values that several gates observed independently — the restore
+   manifests, the tracked path counts, the baseline commit — must agree.
+5. Redaction, derived rather than asserted. `paths_redacted: true` is checked by
    taking the vault's own tracked path set and proving that no note path and no
    note filename appears in any retained evidence file. A gate cannot claim to
    be redacted; it has to be.
-4. Three-way restore identity. Fresh temporary restores are made from the local
+6. Three-way restore identity. Fresh temporary restores are made from the local
    Git repository and from GitHub, and canonical SHA-256 manifests are computed
    over the exact tracked vault paths. At HEAD, the two restores and the live
    working tree must be byte-for-byte identical. At the pre-migration baseline
    commit, the two restores and the sealed archive must be byte-for-byte
    identical.
-5. Live state. The installed health command must report a clean, pushed,
+7. Live state. The installed health command must report a clean, pushed,
    unblocked, supervised vault — and then each of those is checked again here
    directly, from `git status`, from the safety state directory, from
    `git ls-remote`, and from `launchctl`.
-6. Retirement. The old File Provider root must be gone, its recorded Trash
+8. Retirement. The old File Provider root must be gone, its recorded Trash
    location must still exist, and every file in the trashed copy must be
    byte-present either in the live vault's Git object database or in the sealed
    archive — so that retiring it demonstrably lost nothing.
@@ -56,12 +71,15 @@ import re
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
+import vault_safety_scenarios as scenarios
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_DIR_NAME = "docs/operations/vault-safety-evidence"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
 
 # Tracked paths that are repository or BrainNotes machinery rather than note
@@ -71,13 +89,10 @@ HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
 STRUCTURAL_PREFIXES = (".bnotes/",)
 STRUCTURAL_PATHS = frozenset({".gitignore", "brainnotes.toml"})
 
-# `.gitignore` is the one tracked path the sealed archive cannot match. The
-# archive is a copy of the pre-migration source, and the vault `.gitignore` was
-# written *by* the migration to neutralise a global excludesFile that would
-# otherwise have silently dropped `brainnotes.toml` from the history. It is Git
-# plumbing, not vault content, so it is excluded from the manifest scope rather
-# than waived per-run. Anything else appearing here would be a real divergence.
-ARCHIVE_MANIFEST_EXCLUSIONS = frozenset({".gitignore"})
+# The manifest scope the sealed archive is compared over. It lives in the
+# scenario catalogue because the restore gates record it too, so the exclusion
+# this harness applies and the one those drills applied are the same list.
+ARCHIVE_MANIFEST_EXCLUSIONS = scenarios.ARCHIVE_MANIFEST_EXCLUSIONS
 
 # A basename shorter than this is not distinctive enough to be worth scanning
 # for: "ok.md" or "b.md" would collide with ordinary English in an evidence
@@ -240,7 +255,17 @@ def canonical_manifest(root: Path, relpaths: list[str]) -> bytes:
 # --------------------------------------------------------------------------
 
 
-def validate_evidence_path(raw: object, evidence_root: Path) -> Path:
+@dataclass(frozen=True)
+class GateEvidence:
+    """A gate's record, the retained file it names, and that file read back."""
+
+    name: str
+    gate: dict
+    path: Path
+    parsed: scenarios.ParsedEvidence
+
+
+def validate_evidence_path(raw: object, repo_root: Path, evidence_root: Path) -> Path:
     """Resolve a gate's evidence path, refusing anything that leaves the tree.
 
     Three distinct escapes are refused: an absolute path, a traversal through
@@ -258,24 +283,28 @@ def validate_evidence_path(raw: object, evidence_root: Path) -> Path:
         raise CheckFailure(f"evidence_path must not traverse upward: {raw}")
     if not raw.startswith(EVIDENCE_DIR_NAME + "/"):
         raise CheckFailure(f"evidence_path must live under {EVIDENCE_DIR_NAME}/: {raw}")
-    resolved = (REPO_ROOT / raw).resolve()
+    resolved = (repo_root / raw).resolve()
     if not str(resolved).startswith(str(evidence_root.resolve()) + os.sep):
         raise CheckFailure(f"evidence_path resolves outside the evidence directory: {raw}")
     return resolved
 
 
-def validate_gate(name: str, gate: object, evidence_root: Path) -> Path:
+def validate_gate(name: str, gate: object, repo_root: Path, evidence_root: Path) -> GateEvidence:
+    """Shape, integrity, and readability. Deliberately not the gate's verdict.
+
+    Nothing here decides whether the gate passed: `outcome` and `exit_status`
+    are claims, and they are judged in `validate_recorded_claims` against the
+    narrative this function only proves is intact and parseable.
+    """
+    if name not in scenarios.SCENARIOS:
+        raise CheckFailure(
+            f"gate {name}: no scenario of that name exists in the repository-owned catalogue, "
+            "so nothing defines what it is supposed to have shown"
+        )
     if not isinstance(gate, dict):
         raise CheckFailure(f"gate {name} must be an object")
-    if gate.get("outcome") is not True:
-        raise CheckFailure(f"gate {name}: outcome is {gate.get('outcome')!r}, not true")
     if gate.get("paths_redacted") is not True:
         raise CheckFailure(f"gate {name}: paths_redacted is not true")
-    status = gate.get("exit_status")
-    # `True` is an int in Python and would otherwise sail through `== 0` checks
-    # in the other direction; be explicit about the type.
-    if not isinstance(status, int) or isinstance(status, bool) or status != 0:
-        raise CheckFailure(f"gate {name}: exit_status must be the integer 0, got {status!r}")
     checked_at = gate.get("checked_at")
     if not isinstance(checked_at, str):
         raise CheckFailure(f"gate {name}: checked_at must be an ISO-8601 string")
@@ -287,7 +316,7 @@ def validate_gate(name: str, gate: object, evidence_root: Path) -> Path:
     if not isinstance(digest, str) or not HEX64.match(digest):
         raise CheckFailure(f"gate {name}: evidence_sha256 must be 64 lowercase hex characters")
 
-    path = validate_evidence_path(gate.get("evidence_path"), evidence_root)
+    path = validate_evidence_path(gate.get("evidence_path"), repo_root, evidence_root)
     if not path.is_file():
         raise CheckFailure(f"gate {name}: evidence file is missing: {gate.get('evidence_path')}")
     actual = sha256_file(path)
@@ -296,7 +325,56 @@ def validate_gate(name: str, gate: object, evidence_root: Path) -> Path:
             f"gate {name}: evidence file does not hash to its recorded digest "
             f"(recorded {digest}, actual {actual})"
         )
-    return path
+    try:
+        parsed = scenarios.parse_evidence(path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, scenarios.EvidenceFormatError) as exc:
+        raise CheckFailure(f"gate {name}: evidence file cannot be read as a gate record: {exc}")
+    return GateEvidence(name=name, gate=gate, path=path, parsed=parsed)
+
+
+def validate_gates(record: dict, repo_root: Path, evidence_root: Path) -> dict[str, GateEvidence]:
+    """The whole gate set, not merely the gates someone chose to record.
+
+    A missing gate is the cheapest possible way to make this harness pass: drop
+    the one that stopped holding and every remaining record still hashes. The
+    required set is therefore the catalogue's, not the record's.
+    """
+    gates = record["gates"]
+    missing = sorted(scenarios.REQUIRED_GATES - set(gates))
+    if missing:
+        raise CheckFailure(f"the record is missing required gate(s): {', '.join(missing)}")
+    return {name: validate_gate(name, gates[name], repo_root, evidence_root) for name in sorted(gates)}
+
+
+def validate_scenarios(gates: dict[str, GateEvidence]) -> str:
+    """Re-decide every gate from its own narrative."""
+    failures: list[str] = []
+    for name, evidence in sorted(gates.items()):
+        for problem in scenarios.validate_evidence(scenarios.SCENARIOS[name], evidence.parsed):
+            failures.append(f"gate {name}: {problem}")
+    if failures:
+        raise CheckFailure("; ".join(failures))
+    observations = sum(len(found) for e in gates.values() for found in e.parsed.observations.values())
+    return f"{len(gates)} scenario(s) re-derived from {observations} recorded observation(s)"
+
+
+def validate_recorded_claims(gates: dict[str, GateEvidence]) -> str:
+    """Every claim in the record is either substantiated by its evidence or refused."""
+    failures: list[str] = []
+    for name, evidence in sorted(gates.items()):
+        scenario = scenarios.SCENARIOS[name]
+        for problem in scenarios.unsupported_claims(scenario, evidence.gate, evidence.parsed):
+            failures.append(f"gate {name}: {problem}")
+    failures.extend(
+        scenarios.cross_gate_disagreements({n: e.parsed for n, e in gates.items()})
+    )
+    if failures:
+        raise CheckFailure("; ".join(failures))
+    substantiated = sum(1 for name in gates if scenarios.SCENARIOS[name].exit_status_key)
+    return (
+        f"{len(gates)} outcome(s) and {substantiated} exit status(es) substantiated by their "
+        f"own evidence; {len(scenarios.CROSS_GATE_AGREEMENTS)} cross-gate agreement(s) hold"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -310,10 +388,12 @@ class Harness:
         self.live_vault = Path(args.live_vault)
         self.archive = Path(args.sealed_archive)
         self.old_root = Path(args.old_root)
+        self.repo_root = REPO_ROOT
         self.evidence_file = (REPO_ROOT / args.evidence).resolve()
         self.evidence_root = (REPO_ROOT / EVIDENCE_DIR_NAME).resolve()
         self.results: list[tuple[str, bool, str]] = []
         self.record: dict = {}
+        self.gates: dict[str, GateEvidence] = {}
         self.evidence_files: dict[str, Path] = {}
 
     # -- plumbing ---------------------------------------------------------
@@ -344,17 +424,33 @@ class Harness:
                 f"evidence record schema_version must be {SCHEMA_VERSION}, "
                 f"got {record.get('schema_version')!r}"
             )
+        # Tightening a scenario bumps the catalogue, which is what stops an old
+        # record from being accepted against a definition it was never run under.
+        if record.get("scenario_catalogue_version") != scenarios.CATALOGUE_VERSION:
+            raise CheckFailure(
+                "the gates were recorded against scenario catalogue version "
+                f"{record.get('scenario_catalogue_version')!r}, but version "
+                f"{scenarios.CATALOGUE_VERSION} is in force; they have to be run again"
+            )
         gates = record.get("gates")
         if not isinstance(gates, dict) or not gates:
             raise CheckFailure("evidence record must carry a non-empty gates object")
         self.record = record
-        return f"schema version {SCHEMA_VERSION}, {len(gates)} gate(s)"
+        return (
+            f"schema version {SCHEMA_VERSION}, scenario catalogue version "
+            f"{scenarios.CATALOGUE_VERSION}, {len(gates)} gate(s)"
+        )
 
     def verify_gates(self) -> str:
-        gates = self.record["gates"]
-        for name in sorted(gates):
-            self.evidence_files[name] = validate_gate(name, gates[name], self.evidence_root)
-        return f"{len(gates)} gate record(s) validated and re-hashed"
+        self.gates = validate_gates(self.record, self.repo_root, self.evidence_root)
+        self.evidence_files = {name: found.path for name, found in self.gates.items()}
+        return f"{len(self.gates)} gate record(s) validated and re-hashed"
+
+    def verify_scenarios(self) -> str:
+        return validate_scenarios(self.gates)
+
+    def verify_recorded_claims(self) -> str:
+        return validate_recorded_claims(self.gates)
 
     def verify_no_orphan_evidence(self) -> str:
         """Every retained file belongs to a gate.
@@ -734,6 +830,15 @@ class Harness:
             return 1
 
         self.check("gate-records-and-hashes", self.verify_gates)
+        if not self.results[-1][1]:
+            # Everything below reads the retained evidence this check is what
+            # proves is present, intact, and parseable. Without it they would
+            # each pass over an empty set and report a clean run.
+            self.report()
+            return 1
+
+        self.check("scenario-observations-hold", self.verify_scenarios)
+        self.check("recorded-claims-substantiated", self.verify_recorded_claims)
         self.check("no-orphan-evidence", self.verify_no_orphan_evidence)
         self.check("evidence-redaction", self.verify_redaction)
         self.check("restore-manifests-identical", self.verify_restores)
