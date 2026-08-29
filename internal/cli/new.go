@@ -102,13 +102,16 @@ func NewNewCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			journaler := noteops.NewJournal(cfg.Vault, commandInvocation(cmd, args))
-
 			// Ahead of the folder, which is the first artifact here and would
 			// otherwise survive a write the policy goes on to refuse.
-			if err := vault.GuardMutation(cfg.Vault, dest, outPath); err != nil {
+			journaler, err := noteops.BeginOperation(cfg.Vault, "new", commandInvocation(cmd, args),
+				[]string{dest, outPath})
+			if err != nil {
 				return err
 			}
+			// BeginOperation above named this folder as a target, so a refused
+			// note never leaves it behind empty.
+			//bn:direct-write guarded by BeginOperation above
 			if err := os.MkdirAll(dest, 0o755); err != nil {
 				return fmt.Errorf("new: mkdir %q: %w", dest, err)
 			}

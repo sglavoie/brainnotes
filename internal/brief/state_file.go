@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
 )
 
 type briefStateFile struct {
@@ -165,6 +165,10 @@ func cloneCard(card Card) Card {
 
 func (store *FileStateStore) saveLocked(state briefStateFile) error {
 	state.Version = briefStateVersion
+	root, err := store.rootPath()
+	if err != nil {
+		return err
+	}
 	statePath, err := store.statePath()
 	if err != nil {
 		return err
@@ -174,7 +178,7 @@ func (store *FileStateStore) saveLocked(state briefStateFile) error {
 		return fmt.Errorf("brief: encode state: %w", err)
 	}
 	data = append(data, '\n')
-	if err := writeBriefStateAtomic(statePath, data, 0o644); err != nil {
+	if err := writeBriefStateAtomic(root, statePath, data, 0o644); err != nil {
 		return err
 	}
 	snapshot := cloneBriefState(state)
@@ -288,54 +292,10 @@ func (store *FileStateStore) currentTime() time.Time {
 	return store.now()
 }
 
-func writeBriefStateAtomic(statePath string, data []byte, permissions os.FileMode) error {
-	// Durable state, so the same location policy as a note. Rendering a brief is
-	// a read and stays available; only recording it here is refused.
-	if err := vault.GuardMutation("", statePath); err != nil {
-		return err
-	}
-	directory := filepath.Dir(statePath)
-	if err := os.MkdirAll(directory, 0o755); err != nil {
-		return fmt.Errorf("brief: mkdir state directory %q: %w", directory, err)
-	}
-	resolvedDirectory, err := filepath.EvalSymlinks(directory)
-	if err != nil {
-		return fmt.Errorf("brief: resolve state directory %q: %w", directory, err)
-	}
-	if filepath.Clean(resolvedDirectory) != filepath.Clean(directory) {
-		return fmt.Errorf("brief: state directory %q must not resolve through a symlink", directory)
-	}
-
-	temporary, err := os.CreateTemp(directory, ".brief-*")
-	if err != nil {
-		return fmt.Errorf("brief: create state temp in %q: %w", directory, err)
-	}
-	temporaryPath := temporary.Name()
-	cleanup := func() { _ = os.Remove(temporaryPath) }
-	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
-		cleanup()
-		return fmt.Errorf("brief: write state temp %q: %w", temporaryPath, err)
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		cleanup()
-		return fmt.Errorf("brief: sync state temp %q: %w", temporaryPath, err)
-	}
-	if err := temporary.Close(); err != nil {
-		cleanup()
-		return fmt.Errorf("brief: close state temp %q: %w", temporaryPath, err)
-	}
-	if permissions == 0 {
-		permissions = 0o644
-	}
-	if err := os.Chmod(temporaryPath, permissions); err != nil {
-		cleanup()
-		return fmt.Errorf("brief: chmod state temp %q: %w", temporaryPath, err)
-	}
-	if err := os.Rename(temporaryPath, statePath); err != nil {
-		cleanup()
-		return fmt.Errorf("brief: rename state temp %q -> %q: %w", temporaryPath, statePath, err)
-	}
-	return nil
+// writeBriefStateAtomic hands the state file to the shared durable-state writer,
+// which owns the location refusal, the path-continuous replacement, and the
+// exact-path snapshot. Rendering a brief is a read and stays available on a
+// vault that cannot be written; only recording one here is refused.
+func writeBriefStateAtomic(vaultRoot, statePath string, data []byte, permissions os.FileMode) error {
+	return vaultstate.Save(vaultRoot, "brief-state", statePath, data, permissions)
 }

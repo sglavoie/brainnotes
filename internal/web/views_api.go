@@ -244,7 +244,7 @@ func (s *Server) handleViewsApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, viewsCommand(plan.Op), pin)
+	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, "views", viewsCommand(plan.Op), pin)
 	if err != nil {
 		writeManagementError(w, viewsWriteError(err))
 		return

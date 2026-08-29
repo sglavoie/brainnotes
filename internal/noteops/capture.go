@@ -198,7 +198,10 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 	}
 	// A bootstrapping capture journals a file that does not exist yet, so `bn
 	// undo` deletes the note it created.
-	j := NewJournal(vaultRoot, cfg.command, cfg.journalOptions...)
+	j, err := BeginOperation(vaultRoot, "capture", cfg.command, []string{plan.destination.AbsPath}, cfg.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
 	if err := txn.Commit(j); err != nil {
 		return nil, classifyTxnError("capture: append to note", err)
 	}

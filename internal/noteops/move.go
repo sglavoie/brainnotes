@@ -126,10 +126,13 @@ func MoveNote(v *vault.Vault, cfg *config.Config, targetPath, newFolderArg strin
 	}
 	// Ahead of the destination folder, which a refused move would otherwise leave
 	// behind empty.
-	if err := guardMutation(v.Root, source.AbsPath, dest.AbsPath, newFolderAbs); err != nil {
+	j, err := BeginOperation(v.Root, "move", options.command, []string{source.AbsPath, dest.AbsPath, newFolderAbs}, options.journalOptions...)
+	if err != nil {
 		return nil, err
 	}
-	j := NewJournal(v.Root, options.command, options.journalOptions...)
+	// BeginOperation above named this folder as a target, so a refused move never
+	// leaves it behind empty.
+	//bn:direct-write guarded by BeginOperation above
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return nil, WrapError(CodeInternal, fmt.Sprintf("move: mkdir %q", newFolderAbs), err)
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -173,6 +174,18 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	configState, err := newConfigManager(cfg, v)
 	if err != nil {
 		return nil, err
+	}
+
+	// Resolve the vault's Git safety engine once, here, so a vault the engine
+	// cannot open at all is a startup failure rather than a surprise on the first
+	// write an hour into a session. The result is deliberately not stored on the
+	// Server: every mutating route reaches the vault through internal/noteops,
+	// which resolves the same process-shared engine itself, and handing handlers
+	// a second reference would let one of them be wired to a different engine
+	// than the operation it calls. A vault with no content history resolves to a
+	// nil engine and is normal — the server serves it unversioned.
+	if _, err := noteops.SafetyFor(v.Root); err != nil {
+		return nil, fmt.Errorf("web: vault git safety: %w", err)
 	}
 
 	srv := &Server{

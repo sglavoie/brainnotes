@@ -16,6 +16,19 @@ import (
 type RestoreOptions struct {
 	Force  bool
 	DryRun bool
+	// Journal records what the restore is about to change, using the same
+	// transaction hook an ordinary mutation uses.
+	//
+	// An undo is a mutation like any other, and one of the things it can do is
+	// remove a note the original command created. The Git safety engine commits a
+	// deletion only when an uncommitted journal record proves it, so a restore
+	// that journaled nothing would leave an unexplained removal behind and block
+	// the vault over a change bn itself made. Passing a recorder here is what
+	// keeps an undo explainable — and it is what makes an undo undoable in turn.
+	//
+	// nil keeps the old behavior and is correct only for a caller that has no
+	// vault to protect, which in practice means a test.
+	Journal vault.TxnJournal
 }
 
 // RestoreChange is one path-level transition planned by restore.
@@ -218,7 +231,7 @@ func Restore(vaultRoot, journalRoot, entryID string, opts RestoreOptions) (*Rest
 	// staged and every precondition re-checked before the first file moves, and
 	// a failure mid-commit rolls the already-restored paths back instead of
 	// leaving the entry half-applied.
-	if err := txn.Commit(nil); err != nil {
+	if err := txn.Commit(opts.Journal); err != nil {
 		return nil, fmt.Errorf("journal: restore %s: %w", entry.ID, err)
 	}
 	return plan, nil

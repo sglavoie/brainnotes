@@ -127,10 +127,10 @@ func RenameNote(v *vault.Vault, cfg *config.Config, targetPath, newTitle string,
 	// Ahead of the first Capture. RenameFile takes locks and would be refused
 	// there anyway, but by then the journal entry and every backlink snapshot
 	// would already be on the storage the policy is protecting.
-	if err := guardMutation(v.Root, plan.Target, plan.NewPath); err != nil {
+	j, err := BeginOperation(v.Root, "rename", options.command, []string{plan.Target, plan.NewPath}, options.journalOptions...)
+	if err != nil {
 		return nil, err
 	}
-	j := NewJournal(v.Root, options.command, options.journalOptions...)
 	if err := j.Capture(plan.Target); err != nil {
 		return nil, err
 	}
@@ -416,6 +416,11 @@ func RewriteFrontmatterRename(front *frontmatter.Map, oldTitle, newTitle string,
 // moment, and the plain rename can land on a newPath that a concurrent
 // transaction is holding in custody — either vacancy is what strands a writer's
 // content in a recovery file.
+// The rename itself is the operation, so it is performed directly rather than
+// through a replacement primitive; the lock above and the BeginOperation the
+// caller went through are what make it safe.
+//
+//bn:direct-write the rename is the operation, locked on both ends, reached through BeginOperation
 func RenameFile(vaultRoot, target, newPath string) error {
 	if target == newPath {
 		return nil

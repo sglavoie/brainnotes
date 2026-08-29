@@ -169,11 +169,10 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 	// One check for the whole batch, ahead of the journal recorder that would
 	// otherwise create an entry directory before any item is judged. Each item is
 	// then checked again on its own destination below.
-	if err := guardMutation(vaultRoot); err != nil {
+	j, err := BeginOperation(vaultRoot, "bulk-trash", options.command, nil, options.journalOptions...)
+	if err != nil {
 		return nil, err
 	}
-
-	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
 	result := &BulkResult{Action: "trash"}
 	trashCfg := trashOptions{
 		now:     options.now,
@@ -207,6 +206,9 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
 		}
+		// The batch's BeginOperation already refused a forbidden location before
+		// any note in it was touched.
+		//bn:direct-write guarded by the batch's BeginOperation
 		if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, WrapError(CodeInternal, "create trash folder", err)))
 			continue
@@ -260,14 +262,17 @@ func BulkMoveNotes(v *vault.Vault, cfg *config.Config, sources []BulkSource, new
 	}
 	// Ahead of the destination folder, which is created once for the batch and
 	// would otherwise outlive a refused move.
-	if err := guardMutation(v.Root, newFolderAbs); err != nil {
+	j, err := BeginOperation(v.Root, "bulk-move", options.command, []string{newFolderAbs}, options.journalOptions...)
+	if err != nil {
 		return nil, err
 	}
+	// BeginOperation above named this folder as a target, so a refused batch
+	// never reaches it.
+	//bn:direct-write guarded by BeginOperation above
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return nil, WrapError(CodeInternal, fmt.Sprintf("move: mkdir %q", newFolderAbs), err)
 	}
 
-	j := NewJournal(v.Root, options.command, options.journalOptions...)
 	result := &BulkResult{Action: "move"}
 	for _, item := range sources {
 		itemResult, err := bulkMoveOne(v, cfg, item, newFolderRel, newFolderAbs, j, options)
@@ -299,7 +304,10 @@ func BulkSetFrontmatter(vaultRoot string, sources []BulkSource, mutations []Fron
 		return nil, Errorf(CodeInvalidRequest, "bulk: no notes selected")
 	}
 
-	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
+	j, err := BeginOperation(vaultRoot, "bulk-frontmatter-set", options.command, nil, options.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
 	result := &BulkResult{Action: "frontmatter_set"}
 	for _, item := range sources {
 		source, err := resolveFrontmatterSource(vaultRoot, item.RelPath)
@@ -344,7 +352,10 @@ func BulkUnsetFrontmatter(vaultRoot string, sources []BulkSource, props []string
 		return nil, Errorf(CodeInvalidRequest, "bulk: no notes selected")
 	}
 
-	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
+	j, err := BeginOperation(vaultRoot, "bulk-frontmatter-unset", options.command, nil, options.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
 	result := &BulkResult{Action: "frontmatter_unset"}
 	for _, item := range sources {
 		source, err := resolveFrontmatterSource(vaultRoot, item.RelPath)

@@ -103,7 +103,10 @@ printed as a unified diff block; unchanged files are omitted.`,
 			}
 			var journaler *noteops.Journal
 			if dry == nil {
-				journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
+				journaler, err = noteops.BeginOperation(v.Root, "replace", commandInvocation(cmd, args), nil)
+				if err != nil {
+					return err
+				}
 			}
 
 			count := 0

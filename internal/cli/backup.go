@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/backup"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
 // nowForBackup lets tests pin backup archive names.
@@ -100,7 +101,7 @@ also accepted. This command is separate from the undo journal, so inspect with
 				return errors.New("restore: no config in context")
 			}
 
-			result, err := backup.Restore(cfg.Vault, args[0], backup.RestoreOptions{Wipe: wipe})
+			result, err := noteops.RestoreBackup(cfg.Vault, args[0], backup.RestoreOptions{Wipe: wipe})
 			if err != nil {
 				return err
 			}

@@ -185,7 +185,7 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicWrite(n.Path, data, preimage); err != nil {
+	if err := atomicWrite(n.Path, data, preimage, 0); err != nil {
 		return err
 	}
 	n.sourceHash = HashBytes(data)
@@ -367,7 +367,14 @@ func (n *Note) Folder(root string) (string, error) {
 // with 0666 so the final note respects the process umask instead of forcing
 // world-readable 0644 permissions. The mode travels on the temp inode, which the
 // exchange moves to dest, so it is applied before the swap rather than after.
-func atomicWrite(dest string, data []byte, preimage FileExpectation) error {
+// atomicWrite installs data at dest without ever vacating dest's name.
+//
+// newFileMode is the mode to give a destination that does not exist yet. Zero
+// means "probe the directory", which is what a note wants: the mode a file
+// created there would naturally get. A caller that keeps durable state rather
+// than a note passes an explicit mode instead, so its state file does not
+// inherit whatever umask the process happened to be started with.
+func atomicWrite(dest string, data []byte, preimage FileExpectation, newFileMode os.FileMode) error {
 	dir := filepath.Dir(dest)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("note: mkdir %q: %w", dir, err)
@@ -417,10 +424,13 @@ func atomicWrite(dest string, data []byte, preimage FileExpectation) error {
 	// this on the temp path keeps the operation atomic with respect to readers.
 	wantMode := destMode
 	if !destExists {
-		wantMode, err = defaultNewFileMode(dir)
-		if err != nil {
-			cleanup()
-			return err
+		wantMode = newFileMode
+		if wantMode == 0 {
+			wantMode, err = defaultNewFileMode(dir)
+			if err != nil {
+				cleanup()
+				return err
+			}
 		}
 	}
 	if err := os.Chmod(tmpPath, wantMode); err != nil {

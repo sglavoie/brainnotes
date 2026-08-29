@@ -144,6 +144,12 @@ func isASCIIAlpha(b byte) bool {
 // vault exists, so the location policy is consulted on the destination itself
 // rather than on a vault root there is none of yet. That is also what stops
 // `bn init` from creating a vault somewhere no later command could write to.
+// The policy runs on its first line rather than at a caller, because `bn init`
+// shares this helper to write the vault marker and there is no vault yet to
+// route through. The replacement stays path-continuous: dest is only ever
+// renamed onto, never unlinked first.
+//
+//bn:direct-write guarded by the GuardMutation on this function's first line
 func atomicWriteFile(label, dest string, data []byte) error {
 	if err := vault.GuardMutation("", dest); err != nil {
 		return err

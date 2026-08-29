@@ -84,7 +84,7 @@ func (s *Server) handlePropertyValue(w http.ResponseWriter, r *http.Request) {
 	if req.Op == propertyValueOpReplace {
 		command = propertySetCommand
 	}
-	entry, err := s.commitPropertyPlan(plan, command, pin)
+	entry, err := s.commitPropertyPlan(plan, "property-value", command, pin)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -253,7 +253,7 @@ func (s *Server) handlePropertiesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, err := s.commitPropertyPlan(plan, propertyMutationCommand(plan.Action), pin)
+	entry, err := s.commitPropertyPlan(plan, "property-apply", propertyMutationCommand(plan.Action), pin)
 	if err != nil {
 		writeManagementError(w, err)
 		return

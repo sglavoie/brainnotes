@@ -136,14 +136,17 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 	}
 	// Ahead of the folder creation, which is the first thing here that touches
 	// disk and happens before any journaling or locking would consult the policy.
-	if err := guardMutation(vaultRoot, dest.AbsPath); err != nil {
+	j, err := BeginOperation(vaultRoot, "create", cfg.command, []string{dest.AbsPath}, cfg.journalOptions...)
+	if err != nil {
 		return nil, err
 	}
+	// BeginOperation above already refused a forbidden location, so this folder
+	// cannot outlive a refusal.
+	//bn:direct-write guarded by BeginOperation above
 	if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
 		return nil, WrapError(CodeInternal, "create: create destination folder", err)
 	}
 
-	j := NewJournal(vaultRoot, cfg.command, cfg.journalOptions...)
 	if err := j.Capture(dest.AbsPath); err != nil {
 		return nil, err
 	}
@@ -329,6 +332,12 @@ func stubFrontmatterContent(title string) ([]byte, error) {
 	return out, nil
 }
 
+// writeNewFileExclusive creates dest or fails because it already exists. There
+// is nothing to replace, so the path-continuous replacement does not apply here:
+// the exclusivity is the point, and the caller holds the lock that makes it
+// meaningful against another bn writer.
+//
+//bn:direct-write O_EXCL create of a path that must not exist yet, under the caller's lock
 func writeNewFileExclusive(dest string, data []byte) error {
 	file, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
 const undoPartialFailureGuidance = "undo: restore stages every file before applying any and rolls applied files back on failure; if the error reports a failed rollback, inspect 'git diff' to recover"
@@ -81,14 +82,23 @@ redo stack or conflict auto-merge; use git for long-term history.`,
 				entryID = id
 			}
 
-			plan, err := journal.Restore(cfg.Vault, journalRootForVault(cfg.Vault), entryID, journal.RestoreOptions{
-				Force:  force,
-				DryRun: dryRun,
+			plan, err := noteops.Undo(cfg.Vault, entryID, noteops.UndoOptions{
+				Force:   force,
+				DryRun:  dryRun,
+				Command: commandInvocation(cmd, args),
 			})
 			if err != nil {
 				var conflictErr *journal.RestoreConflictError
 				if errors.As(err, &conflictErr) {
 					return fmt.Errorf("undo: %s", renderUndoConflict(conflictErr))
+				}
+				// The partial-failure guidance is about a restore that stopped
+				// partway, and it is the wrong thing to say about a restore that
+				// finished: a snapshot failure means the files are already back to
+				// their earlier state, so telling the user to inspect a rollback
+				// would send them looking for damage that is not there.
+				if noteops.IsSnapshotFailure(err) {
+					return fmt.Errorf("undo: %w", err)
 				}
 				return fmt.Errorf("undo: %w\n%s", err, undoPartialFailureGuidance)
 			}

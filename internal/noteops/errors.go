@@ -20,7 +20,15 @@ const (
 	CodePreviewStale    ErrorCode = "preview_stale"
 	CodeForbidden       ErrorCode = "forbidden"
 	CodeJournal         ErrorCode = "journal_error"
-	CodeInternal        ErrorCode = "internal_error"
+	// CodeSafety means the Git safety engine refused the operation before it
+	// changed anything. Nothing was written.
+	CodeSafety ErrorCode = "safety_error"
+	// CodeSnapshotFailed means the opposite: the mutation completed and its
+	// safety snapshot did not. It is a separate code precisely because the two
+	// cannot share a response — one says "nothing happened", the other says
+	// "it happened and the history does not cover it".
+	CodeSnapshotFailed ErrorCode = "snapshot_failed"
+	CodeInternal       ErrorCode = "internal_error"
 )
 
 // Error carries a stable code for web JSON responses while preserving causes.
@@ -89,6 +97,14 @@ func CodeOf(err error) ErrorCode {
 	if vault.IsForbiddenMutation(err) {
 		return CodeForbidden
 	}
+	// A post-mutation snapshot failure can reach a caller that never classified
+	// it — a CLI path returning the raw error, a handler wrapping a lower layer —
+	// and collapsing it into internal_error would lose the one distinction that
+	// matters: the change is on disk. Recognizing the type directly keeps that
+	// true no matter who forwards it.
+	if IsSnapshotFailure(err) {
+		return CodeSnapshotFailed
+	}
 	return CodeInternal
 }
 
@@ -115,7 +131,12 @@ func HTTPStatusForError(err error) int {
 		return http.StatusNotFound
 	case CodeConflict, CodePreviewRequired, CodePreviewStale:
 		return http.StatusConflict
-	case CodeJournal, CodeInternal:
+	// Both safety classes are 500 and they are deliberately distinguishable only
+	// by the code and the message. A refusal before the write and a snapshot
+	// failure after it are both "the server could not complete this safely", but
+	// a client must be able to tell the caller whether their note changed, and
+	// the code is what carries that.
+	case CodeSafety, CodeSnapshotFailed, CodeJournal, CodeInternal:
 		return http.StatusInternalServerError
 	default:
 		return http.StatusInternalServerError

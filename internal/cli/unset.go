@@ -92,7 +92,10 @@ Use --dry-run to preview which properties would be removed without writing.`,
 			}
 			var journaler *noteops.Journal
 			if dry == nil {
-				journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
+				journaler, err = noteops.BeginOperation(v.Root, "unset", commandInvocation(cmd, args), paths)
+				if err != nil {
+					return err
+				}
 			}
 			for _, p := range paths {
 				changed, err := applyUnset(p, props, cfg, v.Root, dry, journaler)

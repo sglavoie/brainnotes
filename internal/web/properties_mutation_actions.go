@@ -217,9 +217,16 @@ func snapshotParseErrorsByRelPath(root string, snapshot vaultSnapshot) map[strin
 // is pinned to the bytes the plan was computed from, so a concurrent edit is a
 // conflict, and a failure mid-commit rolls the earlier writes back. pin adds the
 // configuration the plan was validated against to that set of preconditions.
-func (s *Server) commitPropertyPlan(plan *propertyPlan, command string, pin configPin) (*journal.Entry, error) {
+func (s *Server) commitPropertyPlan(plan *propertyPlan, operation, command string, pin configPin) (*journal.Entry, error) {
 	if plan == nil || (len(plan.Notes) == 0 && plan.Config == nil) {
 		return nil, nil
+	}
+	// Before the transaction rather than just before its commit: the location and
+	// Git safety refusals both belong ahead of the first artifact, and a property
+	// plan's first artifact is the transaction's staged temp files.
+	entry, err := noteops.BeginOperation(s.vault.Root, operation, command, propertyPlanPaths(plan))
+	if err != nil {
+		return nil, err
 	}
 	txn, err := vault.NewFileTxn(s.vault.Root)
 	if err != nil {
@@ -239,7 +246,6 @@ func (s *Server) commitPropertyPlan(plan *propertyPlan, command string, pin conf
 		return nil, err
 	}
 
-	entry := noteops.NewJournal(s.vault.Root, command)
 	if s.beforePropertyCommit != nil {
 		s.beforePropertyCommit()
 	}
@@ -247,6 +253,19 @@ func (s *Server) commitPropertyPlan(plan *propertyPlan, command string, pin conf
 		return nil, classifyPropertyTxnError("properties: write", err)
 	}
 	return entry.Finalize()
+}
+
+// propertyPlanPaths lists every file a property plan will write, so the
+// operation's preflight names them before anything is staged.
+func propertyPlanPaths(plan *propertyPlan) []string {
+	paths := make([]string, 0, len(plan.Notes)+1)
+	for _, note := range plan.Notes {
+		paths = append(paths, note.AbsPath)
+	}
+	if plan.Config != nil {
+		paths = append(paths, plan.Config.AbsPath)
+	}
+	return paths
 }
 
 // pinPlanConfig ties the transaction to the brainnotes.toml the plan was

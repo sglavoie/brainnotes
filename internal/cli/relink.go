@@ -110,7 +110,10 @@ Use --dry-run to preview changes without writing.`,
 			}
 			var journaler *noteops.Journal
 			if dry == nil {
-				journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
+				journaler, err = noteops.BeginOperation(v.Root, "relink", commandInvocation(cmd, args), nil)
+				if err != nil {
+					return err
+				}
 			}
 
 			relinked := 0

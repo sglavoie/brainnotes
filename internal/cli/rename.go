@@ -104,7 +104,11 @@ Inspect with 'git diff' to recover.`,
 			if dryRun {
 				return noteops.PrintRenamePlan(out, v.Root, plan)
 			}
-			journaler := noteops.NewJournal(v.Root, commandInvocation(cmd, args))
+			journaler, err := noteops.BeginOperation(v.Root, "rename", commandInvocation(cmd, args),
+				[]string{plan.Target, plan.NewPath})
+			if err != nil {
+				return err
+			}
 			if err := journaler.Capture(plan.Target); err != nil {
 				return err
 			}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
 )
 
 // mutateLocked is the single write boundary for recall.json. The caller holds
@@ -209,6 +210,10 @@ func (store *StateStore) saveLocked(state recallStateFile) error {
 	if state.Records == nil {
 		state.Records = map[string]recallStateRecord{}
 	}
+	root, err := store.rootPath()
+	if err != nil {
+		return err
+	}
 	statePath, err := store.statePath()
 	if err != nil {
 		return err
@@ -218,7 +223,7 @@ func (store *StateStore) saveLocked(state recallStateFile) error {
 		return fmt.Errorf("recall: encode state: %w", err)
 	}
 	data = append(data, '\n')
-	if err := writeRecallStateAtomic(statePath, data, 0o644); err != nil {
+	if err := writeRecallStateAtomic(root, statePath, data, 0o644); err != nil {
 		return err
 	}
 	snapshot := cloneRecallState(state)
@@ -341,55 +346,10 @@ func (store *StateStore) currentTime() time.Time {
 	return store.now()
 }
 
-func writeRecallStateAtomic(statePath string, data []byte, permissions os.FileMode) error {
-	// The sidecar is durable state a person can lose work through, so it obeys
-	// the same location policy as a note. Reads are untouched: recall still ranks
-	// and returns context under a refused root, it just cannot record there.
-	if err := vault.GuardMutation("", statePath); err != nil {
-		return err
-	}
-	directory := filepath.Dir(statePath)
-	if err := os.MkdirAll(directory, 0o755); err != nil {
-		return fmt.Errorf("recall: mkdir state directory %q: %w", directory, err)
-	}
-	resolvedDirectory, err := filepath.EvalSymlinks(directory)
-	if err != nil {
-		return fmt.Errorf("recall: resolve state directory %q: %w", directory, err)
-	}
-	if filepath.Clean(resolvedDirectory) != filepath.Clean(directory) {
-		return fmt.Errorf("recall: state directory %q must not resolve through a symlink", directory)
-	}
-
-	temporary, err := os.CreateTemp(directory, ".recall-*")
-	if err != nil {
-		return fmt.Errorf("recall: create state temp in %q: %w", directory, err)
-	}
-	temporaryPath := temporary.Name()
-	cleanup := func() { _ = os.Remove(temporaryPath) }
-	if _, err := temporary.Write(data); err != nil {
-		_ = temporary.Close()
-		cleanup()
-		return fmt.Errorf("recall: write state temp %q: %w", temporaryPath, err)
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		cleanup()
-		return fmt.Errorf("recall: sync state temp %q: %w", temporaryPath, err)
-	}
-	if err := temporary.Close(); err != nil {
-		cleanup()
-		return fmt.Errorf("recall: close state temp %q: %w", temporaryPath, err)
-	}
-	if permissions == 0 {
-		permissions = 0o644
-	}
-	if err := os.Chmod(temporaryPath, permissions); err != nil {
-		cleanup()
-		return fmt.Errorf("recall: chmod state temp %q: %w", temporaryPath, err)
-	}
-	if err := os.Rename(temporaryPath, statePath); err != nil {
-		cleanup()
-		return fmt.Errorf("recall: rename state temp %q -> %q: %w", temporaryPath, statePath, err)
-	}
-	return nil
+// writeRecallStateAtomic hands the sidecar to the shared durable-state writer,
+// which owns the location refusal, the path-continuous replacement, and the
+// exact-path snapshot. Reads are untouched: recall still ranks and returns
+// context under a refused root, it just cannot record there.
+func writeRecallStateAtomic(vaultRoot, statePath string, data []byte, permissions os.FileMode) error {
+	return vaultstate.Save(vaultRoot, "recall-state", statePath, data, permissions)
 }

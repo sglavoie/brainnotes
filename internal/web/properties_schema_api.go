@@ -115,7 +115,7 @@ func (s *Server) handlePropertySchemaApply(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, propertySchemaCommand(plan.Op), pin)
+	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, "property-schema", propertySchemaCommand(plan.Op), pin)
 	if err != nil {
 		writeManagementError(w, err)
 		return

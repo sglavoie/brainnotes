@@ -179,7 +179,10 @@ func ApplySynthesisNote(vaultRoot string, plan *SynthesisPlan, opts ...Synthesis
 		return nil, classifyTxnError("synthesize: plan note", err)
 	}
 
-	j := NewJournal(vaultRoot, cfg.command, cfg.journalOptions...)
+	j, err := BeginOperation(vaultRoot, "synthesize", cfg.command, []string{plan.Destination.AbsPath}, cfg.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
 	if err := txn.Commit(j); err != nil {
 		return nil, classifyTxnError("synthesize: create note", err)
 	}

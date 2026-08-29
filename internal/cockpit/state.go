@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
 )
 
 const (
@@ -349,7 +349,7 @@ func (s *StateStore) saveLocked(state stateFile) error {
 		return fmt.Errorf("cockpit: encode state: %w", err)
 	}
 	data = append(data, '\n')
-	return writeStateAtomic(path, data, 0o644)
+	return writeStateAtomic(s.root, path, data, 0o644)
 }
 
 func newStateFile() stateFile {
@@ -431,49 +431,11 @@ func snoozeDeadline(now time.Time, option string) (time.Time, error) {
 	return time.Date(year, month, day, 0, 0, 0, 0, target.Location()), nil
 }
 
-func writeStateAtomic(path string, data []byte, perm os.FileMode) error {
-	// Durable state, so the same location policy as a note. The cockpit queue is
-	// computed from the vault on every load, so it still renders under a refused
-	// root; what it cannot do is remember a snooze or a dismissal there.
-	if err := vault.GuardMutation("", path); err != nil {
-		return err
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("cockpit: mkdir state dir %q: %w", dir, err)
-	}
-
-	tmp, err := os.CreateTemp(dir, ".cockpit-*")
-	if err != nil {
-		return fmt.Errorf("cockpit: create state temp in %q: %w", dir, err)
-	}
-	tmpPath := tmp.Name()
-	cleanup := func() { _ = os.Remove(tmpPath) }
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return fmt.Errorf("cockpit: write state temp %q: %w", tmpPath, err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return fmt.Errorf("cockpit: sync state temp %q: %w", tmpPath, err)
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return fmt.Errorf("cockpit: close state temp %q: %w", tmpPath, err)
-	}
-	if perm == 0 {
-		perm = 0o644
-	}
-	if err := os.Chmod(tmpPath, perm); err != nil {
-		cleanup()
-		return fmt.Errorf("cockpit: chmod state temp %q: %w", tmpPath, err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		cleanup()
-		return fmt.Errorf("cockpit: rename state temp %q -> %q: %w", tmpPath, path, err)
-	}
-	return nil
+// writeStateAtomic hands the state file to the shared durable-state writer,
+// which owns the location refusal, the path-continuous replacement, and the
+// exact-path snapshot. The cockpit queue is computed from the vault on every
+// load, so it still renders under a refused root; what it cannot do is remember
+// a snooze or a dismissal there.
+func writeStateAtomic(vaultRoot, path string, data []byte, perm os.FileMode) error {
+	return vaultstate.Save(vaultRoot, "cockpit-state", path, data, perm)
 }

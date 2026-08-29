@@ -201,6 +201,13 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 	return result, nil
 }
 
+// Restore extracts an archive over the vault, either overlaid or after wiping.
+//
+// It enforces the storage-location policy itself but knows nothing about the
+// vault's content history, which is deliberate: this package stays a leaf. Every
+// production caller goes through noteops.RestoreBackup instead, which adds the
+// Git safety preflight ahead of the extraction and the snapshot after it. Call
+// this directly only from a test with no vault history to protect.
 func Restore(vaultRoot, archivePath string, opts RestoreOptions) (*RestoreResult, error) {
 	root, err := resolveVaultRoot(vaultRoot)
 	if err != nil {

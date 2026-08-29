@@ -667,6 +667,147 @@ func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation str
 	})
 }
 
+// CommitPaths records exactly the paths a caller names, and nothing else.
+//
+// It is the entry point for durable state that is not a note and has no journal
+// entry behind it: the brief, the cockpit queue, and the recall sidecar. Those
+// files are rewritten wholesale by their owning package under its own lock, so
+// there is no before/after record to verify and none is needed — the caller is
+// reporting a write it has already completed at a path it named.
+//
+// It can only ever add. A path that no longer exists is dropped rather than
+// staged as a removal, because a state file that vanished is exactly the kind of
+// disappearance CommitPending is supposed to stop and refuse, not something this
+// path may quietly ratify. Out-of-scope paths are dropped for the same reason
+// they are dropped everywhere else: the scope policy decides what the engine may
+// add on its own initiative.
+func (m *Manager) CommitPaths(ctx context.Context, operation string, paths []string) (CommitResult, error) {
+	const op = "commit-paths"
+	staged, err := m.relativeExistingPaths(paths)
+	if err != nil {
+		return CommitResult{}, safetyErrorf(KindStaleRequest, op, "%s", err.Error())
+	}
+	if len(staged) == 0 {
+		return CommitResult{}, nil
+	}
+
+	release, err := m.acquire(safetyLockName, op)
+	if err != nil {
+		return CommitResult{}, err
+	}
+	defer release()
+
+	if err := m.checkBlocked(op); err != nil {
+		return CommitResult{}, err
+	}
+	if err := m.recoverIntentLocked(ctx, op); err != nil {
+		return CommitResult{}, err
+	}
+	if err := m.checkRepositoryState(op); err != nil {
+		return CommitResult{}, err
+	}
+
+	message := journalMessage(operation, "state")
+	return m.withCAS(ctx, op, func(string) (*commitPlan, error) {
+		return &commitPlan{add: staged, message: message}, nil
+	})
+}
+
+// relativeExistingPaths reduces caller paths to sorted, deduplicated,
+// vault-relative, in-scope paths that exist in the working tree right now.
+func (m *Manager) relativeExistingPaths(paths []string) ([]string, error) {
+	seen := make(map[string]bool, len(paths))
+	out := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if strings.TrimSpace(p) == "" {
+			continue
+		}
+		abs := p
+		if !filepath.IsAbs(abs) {
+			abs = filepath.Join(m.root, filepath.FromSlash(p))
+		}
+		rel, err := filepath.Rel(m.root, abs)
+		if err != nil {
+			return nil, errors.New("a path could not be expressed relative to the vault root")
+		}
+		slash := filepath.ToSlash(rel)
+		if !InScope(slash) || seen[slash] {
+			continue
+		}
+		info, err := os.Lstat(abs)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		seen[slash] = true
+		out = append(out, slash)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// CommitRestore records a wholesale archive restore.
+//
+// This is the one place where a deletion is committed without an uncommitted
+// journal record proving it, and the exception is deliberate and narrow. A
+// backup restore is a person naming an archive and saying "make the vault look
+// like this"; every removal it performs is authorized by that sentence, and
+// there is no journal entry to authorize it with because a restore replaces the
+// tree rather than editing notes one at a time. Refusing here would leave the
+// vault blocked immediately after the operation a person reaches for precisely
+// when things have already gone wrong.
+//
+// What it does not do is widen the rule for anything else. The authorization is
+// the caller's, it is not persisted, and the next snapshot through any other
+// entry point demands journal proof again exactly as before.
+func (m *Manager) CommitRestore(ctx context.Context, operation string) (CommitResult, error) {
+	const op = "commit-restore"
+	release, err := m.acquire(safetyLockName, op)
+	if err != nil {
+		return CommitResult{}, err
+	}
+	defer release()
+
+	if err := m.checkBlocked(op); err != nil {
+		return CommitResult{}, err
+	}
+	if err := m.recoverIntentLocked(ctx, op); err != nil {
+		return CommitResult{}, err
+	}
+	if err := m.checkRepositoryState(op); err != nil {
+		return CommitResult{}, err
+	}
+
+	message := journalMessage(operation, "restore")
+	return m.withCAS(ctx, op, func(head string) (*commitPlan, error) {
+		entries, err := m.git.status(ctx, m.indexPath)
+		if err != nil {
+			return nil, safetyErrorf(KindRepositoryState, op, "the working tree could not be inspected: %s", agent.SanitizedDiagnostic(err))
+		}
+		changes, err := classifyPending(entries)
+		if err != nil {
+			return nil, m.latch(withOp(err, op))
+		}
+		plan := &commitPlan{message: message}
+		for _, change := range changes {
+			if !inTrackedScope(change) {
+				continue
+			}
+			switch change.kind {
+			case changeAdded, changeModified:
+				plan.add = append(plan.add, change.path)
+			case changeDeleted:
+				plan.remove = append(plan.remove, change.path)
+			}
+		}
+		if len(plan.add) == 0 && len(plan.remove) == 0 {
+			return nil, nil
+		}
+		sort.Strings(plan.add)
+		sort.Strings(plan.remove)
+		return plan, nil
+	})
+}
+
 // matchesWorktree reports whether the working tree currently holds what a
 // journal record says the mutation produced.
 func (m *Manager) matchesWorktree(record journal.FileRecord) (bool, error) {

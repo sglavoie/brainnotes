@@ -97,11 +97,10 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 
 	// Ahead of the first Capture, which creates the journal entry directory and
 	// writes a snapshot of the note before anything else runs.
-	if err := guardMutation(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
+	j, err := BeginOperation(vaultRoot, "trash", cfg.command, []string{source.AbsPath, dest.AbsPath}, cfg.journalOptions...)
+	if err != nil {
 		return nil, err
 	}
-
-	j := NewJournal(vaultRoot, cfg.command, cfg.journalOptions...)
 	if err := j.Capture(source.AbsPath); err != nil {
 		return nil, err
 	}
@@ -109,6 +108,9 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 		return nil, err
 	}
 
+	// BeginOperation above already refused a forbidden location and the journal
+	// already captured both ends.
+	//bn:direct-write guarded by BeginOperation above
 	if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
 		return nil, WrapError(CodeInternal, "create trash folder", err)
 	}
@@ -133,6 +135,8 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 // vacancy the move opens is never visible to another bn writer. It is a function
 // rather than inline code so the locks release per note instead of accumulating
 // across a bulk batch.
+//
+//bn:direct-write the rename is the operation, locked on both ends, reached through BeginOperation
 func moveToTrash(vaultRoot, source, dest string) error {
 	release, err := vault.LockPaths(vaultRoot, source, dest)
 	if err != nil {

@@ -22,7 +22,10 @@ func SetFrontmatter(vaultRoot, sourceRel string, mutations []FrontmatterMutation
 	if err != nil {
 		return nil, err
 	}
-	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
+	j, err := BeginOperation(vaultRoot, "frontmatter-set", options.command, []string{source.AbsPath}, options.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
 	changed, err := applyFrontmatterMutations(vaultRoot, source.AbsPath, mutations, fm, j, options.requires)
 	if err != nil {
 		return nil, err
@@ -51,7 +54,10 @@ func UnsetFrontmatter(vaultRoot, sourceRel string, props []string, fm *config.Fr
 	if err != nil {
 		return nil, err
 	}
-	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
+	j, err := BeginOperation(vaultRoot, "frontmatter-unset", options.command, []string{source.AbsPath}, options.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
 	changed, err := applyFrontmatterUnset(vaultRoot, source.AbsPath, props, fm, j, options.requires)
 	if err != nil {
 		return nil, err

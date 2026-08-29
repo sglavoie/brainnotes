@@ -24,7 +24,10 @@ func TestJournalIsLazyUntilCapture(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	j := NewJournal(root, "bn web noop")
+	j, err := BeginOperation(root, "noop", "bn web noop", nil)
+	if err != nil {
+		t.Fatalf("BeginOperation: %v", err)
+	}
 
 	entry, err := j.Finalize()
 	if err != nil {
@@ -47,12 +50,17 @@ func TestJournalCaptureAndFinalize(t *testing.T) {
 		t.Fatalf("write note: %v", err)
 	}
 	fixed := time.Date(2026, 1, 2, 3, 4, 5, 6, time.UTC)
-	j := NewJournal(
+	j, err := BeginOperation(
 		root,
+		"trash",
 		"bn web trash",
+		[]string{note},
 		journal.WithClock(func() time.Time { return fixed }),
 		journal.WithIDGenerator(func(time.Time) (string, error) { return "entry-1", nil }),
 	)
+	if err != nil {
+		t.Fatalf("BeginOperation: %v", err)
+	}
 
 	if err := j.Capture(note); err != nil {
 		t.Fatalf("Capture: %v", err)

@@ -30,9 +30,9 @@ The scope is selected as follows:
   - One or more find flags (--tag, --folder, ...): notes matching the filter.
   - Positional notes: only those notes (mutually exclusive with find flags).
 
-Atomicity: each file is rewritten via a temp-file + rename. There is no
-transaction across files: if a mid-apply error occurs, prior writes stand.
-Use 'git diff' to inspect or recover.
+Atomicity: each file is rewritten in place, never vacating its own name. There
+is no transaction across files: if a mid-apply error occurs, prior writes stand.
+Every rewritten file is journaled, so 'bn undo' reverts the whole run.
 
 Use --dry-run to preview changes without writing.`,
 		Args:          cobra.MinimumNArgs(2),
@@ -84,6 +84,14 @@ Use --dry-run to preview changes without writing.`,
 				dry = &DryRun{Out: out}
 			}
 
+			var journaler *noteops.Journal
+			if dry == nil {
+				journaler, err = noteops.BeginOperation(v.Root, "rename-key", commandInvocation(cmd, args), nil)
+				if err != nil {
+					return err
+				}
+			}
+
 			count := 0
 			skipped := 0
 			for _, n := range candidates {
@@ -119,6 +127,9 @@ Use --dry-run to preview changes without writing.`,
 						return err
 					}
 				} else {
+					if err := journaler.Capture(n.Path); err != nil {
+						return err
+					}
 					if err := n.Save(&cfg.Frontmatter); err != nil {
 						return err
 					}
@@ -127,6 +138,9 @@ Use --dry-run to preview changes without writing.`,
 			}
 
 			if dry == nil {
+				if _, err := journaler.Finalize(); err != nil {
+					return err
+				}
 				summary := fmt.Sprintf("renamed %s -> %s in %d file(s)", oldK, newK, count)
 				if skipped > 0 {
 					summary += fmt.Sprintf(", %d skipped (conflict)", skipped)

@@ -86,7 +86,10 @@ func SetFrontmatterAtomic(vaultRoot string, writes []NoteFrontmatterWrite, fm *c
 		}
 	}
 
-	j := NewJournal(vaultRoot, options.command, options.journalOptions...)
+	j, err := BeginOperation(vaultRoot, "frontmatter-set", options.command, plannedPaths(planned), options.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
 	if err := commitFrontmatterWrites(vaultRoot, planned, j, options.requires, options.lockEscalation); err != nil {
 		return nil, err
 	}
@@ -107,6 +110,16 @@ type plannedFrontmatterWrite struct {
 	path   string
 	data   []byte
 	expect vault.FileExpectation
+}
+
+// plannedPaths lists the notes an atomic write will touch, so the operation's
+// location and safety preflight can name them before it creates anything.
+func plannedPaths(planned []plannedFrontmatterWrite) []string {
+	paths := make([]string, 0, len(planned))
+	for _, write := range planned {
+		paths = append(paths, write.path)
+	}
+	return paths
 }
 
 // planFrontmatterWrite loads and mutates one note in memory, returning nil when

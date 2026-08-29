@@ -57,7 +57,11 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 	}
 	var journaler *noteops.Journal
 	if dry == nil {
-		journaler = noteops.NewJournal(v.Root, commandInvocation(cmd, args))
+		var err error
+		journaler, err = noteops.BeginOperation(v.Root, "set", commandInvocation(cmd, args), paths)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, path := range paths {

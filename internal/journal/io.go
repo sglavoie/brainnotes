@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func normalizeWithinRoot(root, p string) (abs, relSlash string, err error) {
@@ -163,6 +165,15 @@ func writeAtomic(path string, data []byte, perm os.FileMode) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		cleanup()
 		return fmt.Errorf("rename %q -> %q: %w", tmpPath, path, err)
+	}
+	// The rename is atomic against a concurrent reader the moment it returns, but
+	// the directory entry naming it is not durable until the directory is synced.
+	// That matters here more than anywhere else in this package: a finalized
+	// manifest is the *only* thing that authorizes committing a deletion, so a
+	// manifest that a crash un-names turns an explained removal into an
+	// unexplained one and blocks the vault over a change bn itself made.
+	if err := vault.SyncDir(dir); err != nil {
+		return fmt.Errorf("sync %q: %w", dir, err)
 	}
 	return nil
 }

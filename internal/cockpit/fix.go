@@ -123,7 +123,8 @@ func (f *Fixer) Plan(task Task, action ActionKind) (FixPlan, error) {
 }
 
 // Apply performs the fix described by action against task, journaling every
-// mutation through noteops.NewJournal so the change is undoable. Like Plan, it
+// mutation through noteops.BeginOperation so the change is undoable and
+// snapshotted into the vault's content history. Like Plan, it
 // only accepts the mutating fix actions.
 func (f *Fixer) Apply(task Task, action ActionKind) (FixOutcome, error) {
 	data, byRel, err := f.loadContext(task, action)
@@ -230,7 +231,10 @@ func (f *Fixer) planSchemaRepair(plan FixPlan, task Task, byRel map[string]*vaul
 
 func (f *Fixer) applySchemaRepair(out FixOutcome, task Task, byRel map[string]*vault.Note) (FixOutcome, error) {
 	property := schemaProperty(task)
-	j := noteops.NewJournal(f.vault.Root, f.command)
+	j, err := noteops.BeginOperation(f.vault.Root, "cockpit-schema-repair", f.command, nil)
+	if err != nil {
+		return FixOutcome{}, err
+	}
 	for _, affected := range task.Affected {
 		note, ok := byRel[affected.RelPath]
 		if !ok {
@@ -330,7 +334,10 @@ func (f *Fixer) planRelink(plan FixPlan, task Task, data vaultData, byRel map[st
 
 func (f *Fixer) applyRelink(out FixOutcome, task Task, data vaultData, byRel map[string]*vault.Note) (FixOutcome, error) {
 	idx := newRelinkIndex(data.loaded)
-	j := noteops.NewJournal(f.vault.Root, f.command)
+	j, err := noteops.BeginOperation(f.vault.Root, "cockpit-relink", f.command, nil)
+	if err != nil {
+		return FixOutcome{}, err
+	}
 	for _, affected := range task.Affected {
 		note, ok := byRel[affected.RelPath]
 		if !ok {

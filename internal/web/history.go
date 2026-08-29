@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 const historyEntryLimit = 20
@@ -101,8 +102,9 @@ func (s *Server) handleUndo(w http.ResponseWriter, r *http.Request) {
 		entryID = id
 	}
 
-	plan, err := journal.Restore(s.vault.Root, journalRoot, entryID, journal.RestoreOptions{
-		Force: force,
+	plan, err := noteops.Undo(s.vault.Root, entryID, noteops.UndoOptions{
+		Force:   force,
+		Command: "bn web undo",
 	})
 	if err != nil {
 		var conflictErr *journal.RestoreConflictError
@@ -114,7 +116,11 @@ func (s *Server) handleUndo(w http.ResponseWriter, r *http.Request) {
 			writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "undo entry not found"))
 			return
 		}
-		writeManagementError(w, noteops.WrapError(noteops.CodeJournal, "undo failed", err))
+		// Forwarded rather than reclassified: a location refusal is a 403, a
+		// safety refusal a 500 that says nothing was written, and a snapshot
+		// failure a 500 that says the files are already restored. Wrapping all
+		// three as "undo failed" would erase exactly that distinction.
+		writeManagementError(w, undoRestoreError(err))
 		return
 	}
 
@@ -124,6 +130,16 @@ func (s *Server) handleUndo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeManagementJSON(w, http.StatusOK, undoResponseForPlan(plan))
+}
+
+// undoRestoreError keeps an already-classified failure classified and gives an
+// unclassified one the journal class it used to get.
+func undoRestoreError(err error) error {
+	var opErr *noteops.Error
+	if errors.As(err, &opErr) || noteops.IsSnapshotFailure(err) || vault.IsForbiddenMutation(err) {
+		return err
+	}
+	return noteops.WrapError(noteops.CodeJournal, "undo failed", err)
 }
 
 type historyResponse struct {
