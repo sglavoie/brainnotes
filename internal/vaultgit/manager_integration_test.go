@@ -699,6 +699,157 @@ func TestCommitPathsFailsClosedOnAnUnreadableRequiredPath(t *testing.T) {
 	}
 }
 
+// --- Staging that succeeds without doing anything ----------------------------
+
+// noopStagingShim stands in for a git whose `update-index` exits 0 without
+// touching the index.
+//
+// It is a different failure from failingStageShim and a nastier one. A refusal
+// is reported and can be reacted to; a successful no-op leaves the private index
+// exactly as `read-tree` seeded it — which is to say holding HEAD's entry for
+// every already-tracked path — so a readback that only asks whether the path has
+// an entry is satisfied by the very content the snapshot was supposed to replace.
+// The tree then matches the tip, the engine takes its identical-tree branch, and
+// the caller is handed a success for a change the history does not hold.
+func noopStagingShim(t *testing.T, subcommand string) string {
+	t.Helper()
+	return gitShim(t, `
+if [ "$1" = "update-index" ] && [ "$2" = `+shellQuote(subcommand)+` ]; then
+  cat > /dev/null
+  exit 0
+fi`)
+}
+
+// An exact snapshot of a path already in the history is the case where staging
+// can fail silently: the seeded index already answers for the path, so nothing
+// short of comparing the staged object against the file's current content can
+// tell a recorded modification from an unrecorded one.
+func TestExactSnapshotSuccessfulNoOpAdditionStagingFailsClosed(t *testing.T) {
+	h := newHarness(t)
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-0000 file, so the external half of this test cannot be provoked")
+	}
+	state := filepath.Join(h.root, ".bnotes", "recall.json")
+	h.write(".bnotes/recall.json", "{\"generation\":1}\n")
+	h.commitPending()
+	safe := h.head()
+	if safe == "" {
+		t.Fatal("the fixture never committed the state file")
+	}
+
+	h.advance(time.Minute)
+	h.write(".bnotes/recall.json", "{\"generation\":2}\n")
+
+	broken := h.open(Options{GitExecutable: noopStagingShim(t, "--add")})
+	result, err := broken.CommitPaths(context.Background(), "recall-state", []string{state})
+	if err == nil {
+		t.Fatalf("a snapshot whose staging did nothing reported success: %+v", result)
+	}
+	if KindOf(err) != KindCommitFailed {
+		t.Fatalf("CommitPaths = %v, want a commit failure", err)
+	}
+	if result.Committed {
+		t.Fatalf("a failed snapshot reported a commit: %+v", result)
+	}
+	if !strings.Contains(err.Error(), ".bnotes/recall.json") {
+		t.Fatalf("the failure must name the path the index does not hold: %v", err)
+	}
+	if h.head() != safe {
+		t.Fatal("the branch moved although nothing reached the index")
+	}
+	if got := rawGit(t, h.root, "show", "HEAD:.bnotes/recall.json"); got != `{"generation":1}` {
+		t.Fatalf("history holds %q, want the pre-mutation content", got)
+	}
+
+	record, blocked := h.blockRecord()
+	if !blocked || record.Kind != KindCommitFailed {
+		t.Fatalf("a silently unstaged required path must latch an explained block: %+v", record)
+	}
+	// Fail-closed means the refusal outlives the process that saw it.
+	restarted := h.open(Options{})
+	if err := restarted.Preflight(context.Background()); !IsBlocked(err) {
+		t.Fatalf("Preflight after a silent staging no-op = %v, want a blocked failure", err)
+	}
+
+	// The tightened readback is exact-plan only. An external scan may still leave
+	// out an addition the vault will not hand over, which is the one skip this
+	// engine tolerates and the one a stricter check must not have swallowed.
+	if err := h.mgr.ClearBlock(); err != nil {
+		t.Fatalf("ClearBlock: %v", err)
+	}
+	h.write("Inbox/locked.md", "unreadable\n")
+	locked := filepath.Join(h.root, "Inbox", "locked.md")
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o644) })
+
+	h.advance(time.Minute)
+	external := h.commitPending()
+	if !external.Committed {
+		t.Fatalf("one unreadable note stopped the whole external snapshot: %+v", external)
+	}
+	if len(external.Skipped) != 1 || external.Skipped[0].Path != "Inbox/locked.md" {
+		t.Fatalf("skipped = %+v", external.Skipped)
+	}
+	if got := rawGit(t, h.root, "show", "HEAD:.bnotes/recall.json"); got != `{"generation":2}` {
+		t.Fatalf("the external pass did not record the state file: %q", got)
+	}
+}
+
+// The removal half of the same hole. A restore that only drops files has no
+// additions to change the tree, so a `--force-remove` that quietly did nothing
+// produces a tree identical to the tip — and the engine's identical-tree branch
+// turns that into a nil success naming deletions the history never recorded.
+func TestExactSnapshotSuccessfulNoOpRemovalStagingFailsClosed(t *testing.T) {
+	h := newHarness(t)
+	h.write("Inbox/kept.md", "kept\n")
+	h.write("Inbox/dropped.md", "dropped\n")
+	h.commitPending()
+	safe := h.head()
+	if safe == "" {
+		t.Fatal("the fixture never committed the notes")
+	}
+
+	// A restore made the vault look like an archive that does not hold this note.
+	h.advance(time.Minute)
+	h.remove("Inbox/dropped.md")
+
+	broken := h.open(Options{GitExecutable: noopStagingShim(t, "--force-remove")})
+	result, err := broken.CommitRestore(context.Background(), "restore")
+	if err == nil {
+		t.Fatalf("a snapshot whose removal did nothing reported success: %+v", result)
+	}
+	if KindOf(err) != KindCommitFailed {
+		t.Fatalf("CommitRestore = %v, want a commit failure", err)
+	}
+	if result.Committed {
+		t.Fatalf("a failed snapshot reported a commit: %+v", result)
+	}
+	if !strings.Contains(err.Error(), "Inbox/dropped.md") {
+		t.Fatalf("the failure must name the path still in the index: %v", err)
+	}
+	if h.head() != safe {
+		t.Fatal("the branch moved although the removal never reached the index")
+	}
+	// Nothing was committed, so the note is still recoverable from the tip.
+	if !h.trackedSet()["Inbox/dropped.md"] {
+		t.Fatal("the note left the history on a refused removal")
+	}
+
+	record, blocked := h.blockRecord()
+	if !blocked || record.Kind != KindCommitFailed {
+		t.Fatalf("a silently unstaged removal must latch an explained block: %+v", record)
+	}
+	if !contains(record.Paths, "Inbox/dropped.md") {
+		t.Fatalf("the block record must name the path: %+v", record.Paths)
+	}
+	restarted := h.open(Options{})
+	if err := restarted.Preflight(context.Background()); !IsBlocked(err) {
+		t.Fatalf("Preflight after a silent removal no-op = %v, want a blocked failure", err)
+	}
+}
+
 // --- Preflight ---------------------------------------------------------------
 
 func TestPreflightCleanVault(t *testing.T) {

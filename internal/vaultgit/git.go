@@ -609,6 +609,118 @@ func (g *gitExec) lsFilesStaged(ctx context.Context, indexFile string, paths []s
 	return entries, nil
 }
 
+// hashWorktreeContent reports the blob object name Git would record for each
+// path's current working-tree bytes.
+//
+// It is what makes an index readback mean something. `ls-files --stage` says
+// which object an entry names; only re-hashing the file says whether that object
+// is the content the snapshot was asked to record. Git does the hashing rather
+// than this package, because the object name depends on the repository's own
+// attributes and clean filters — computing it here would be a second, subtly
+// different implementation whose disagreement with Git would read as corruption.
+//
+// The batch form is `--stdin-paths`, which reads newline-separated paths and
+// treats a leading double quote as the start of a C-quoted name. A vault holds
+// note names that break both of those, so any path that does is hashed on its
+// own with `--path=`, where the name is one argv element and nothing parses it.
+func (g *gitExec) hashWorktreeContent(ctx context.Context, paths []string) (map[string]string, error) {
+	out := make(map[string]string, len(paths))
+	batched := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if stdinPathsSafe(path) {
+			batched = append(batched, path)
+			continue
+		}
+		oid, err := g.hashOneWorktreePath(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		out[path] = oid
+	}
+	if len(batched) == 0 {
+		return out, nil
+	}
+	var stdin bytes.Buffer
+	for _, path := range batched {
+		stdin.WriteString(path)
+		stdin.WriteByte('\n')
+	}
+	res, err := g.run(ctx, gitCall{args: []string{"hash-object", "--stdin-paths"}, stdin: stdin.Bytes()})
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimRight(string(res), "\n"), "\n")
+	if len(lines) != len(batched) {
+		return nil, fmt.Errorf("git hash-object: %d object names for %d paths", len(lines), len(batched))
+	}
+	for i, line := range lines {
+		oid := strings.TrimSpace(line)
+		if oid == "" {
+			return nil, errors.New("git hash-object: empty object name")
+		}
+		out[batched[i]] = oid
+	}
+	return out, nil
+}
+
+// stdinPathsSafe reports whether `hash-object --stdin-paths` would read a path
+// back as itself. A newline ends the record, a carriage return may be stripped
+// with it, and a leading double quote makes Git C-unquote the rest of the line.
+func stdinPathsSafe(path string) bool {
+	return !strings.ContainsAny(path, "\n\r") && !strings.HasPrefix(path, `"`)
+}
+
+// hashOneWorktreePath hashes a single path, naming it twice: `--path=` supplies
+// the name the attributes and filters are chosen by, and the operand after `--`
+// is the file to read.
+func (g *gitExec) hashOneWorktreePath(ctx context.Context, path string) (string, error) {
+	out, err := g.run(ctx, gitCall{args: []string{"hash-object", "--path=" + path, "--", path}})
+	if err != nil {
+		return "", err
+	}
+	oid := strings.TrimSpace(string(out))
+	if oid == "" {
+		return "", errors.New("git hash-object: empty object name")
+	}
+	return oid, nil
+}
+
+// hashBlob reports the object name of content that is not read from a file.
+//
+// It exists for symbolic links. Git records one as a blob holding the link
+// target, and `hash-object` on the link path would follow it and hash whatever
+// it points at instead. No filter applies to a symlink blob, so the content is
+// handed over on stdin with no `--path`.
+func (g *gitExec) hashBlob(ctx context.Context, content []byte) (string, error) {
+	out, err := g.run(ctx, gitCall{args: []string{"hash-object", "--stdin"}, stdin: content})
+	if err != nil {
+		return "", err
+	}
+	oid := strings.TrimSpace(string(out))
+	if oid == "" {
+		return "", errors.New("git hash-object: empty object name")
+	}
+	return oid, nil
+}
+
+// configBool reads a boolean from the repository configuration, falling back
+// when the key is unset or unreadable. Local plumbing runs with a null global
+// config, so the answer is the repository's own.
+func (g *gitExec) configBool(ctx context.Context, key string, fallback bool) bool {
+	out, err := g.run(ctx, gitCall{args: []string{"config", "--type=bool", "--get", key}})
+	if err != nil {
+		return fallback
+	}
+	switch strings.TrimSpace(string(out)) {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		return fallback
+	}
+}
+
 // setIndexEntry pins one path in an index to an exact object, independent of
 // what the working tree currently holds. `--cacheinfo` is given in its
 // three-argument form: the newer `<mode>,<oid>,<path>` form splits on commas

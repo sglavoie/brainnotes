@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
@@ -72,6 +73,11 @@ type Manager struct {
 	// indexPath is the private index. It is re-seeded from HEAD at the start of
 	// every operation and is never the user's index.
 	indexPath string
+
+	// execBitOnce guards the one-time read of the repository's core.fileMode,
+	// which decides whether a staged mode may be compared exactly.
+	execBitOnce    sync.Once
+	execBitTrusted bool
 }
 
 // Open prepares the safety engine for a vault.
@@ -1068,11 +1074,13 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 	}
 	if !plan.externalAdditions {
 		// An exact snapshot's promise is that the paths it names are in the tree
-		// it builds, so it reads the index back rather than trusting an exit
-		// status. That is one `ls-files` against a private index the engine wrote
-		// itself, and it is the only check that survives a `git` which reports
-		// success without doing the work.
-		missing, err := m.unstagedAdditions(ctx, staged)
+		// it builds *with the content they hold right now*, so it reads the index
+		// back rather than trusting an exit status. Asking only whether the path
+		// has an entry answers yes for every already-tracked path before anything
+		// is staged, because the index is seeded from HEAD — so the comparison is
+		// against the required object and mode, which is the only check that
+		// survives a `git` reporting success without doing the work.
+		wrong, err := m.misstagedAdditions(ctx, staged)
 		if err != nil {
 			return CommitResult{}, m.latch(&SafetyError{
 				Kind:   KindCommitFailed,
@@ -1081,12 +1089,12 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 				Err:    errors.New(agent.SanitizedDiagnostic(err)),
 			})
 		}
-		if len(missing) > 0 {
+		if len(wrong) > 0 {
 			return CommitResult{}, m.latch(&SafetyError{
 				Kind:   KindCommitFailed,
 				Op:     op,
-				Reason: "a path this snapshot was required to record never reached the index, so nothing was committed",
-				Paths:  missing,
+				Reason: "the private index does not hold the content this snapshot was required to record, so nothing was committed",
+				Paths:  wrong,
 			})
 		}
 	}
@@ -1131,6 +1139,30 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 			Paths:  removals,
 			Err:    errors.New(agent.SanitizedDiagnostic(err)),
 		})
+	}
+	if !plan.externalAdditions && len(removals) > 0 {
+		// The same readback for the removal half of an exact plan, and for the same
+		// reason: the index is seeded from HEAD, so a `--force-remove` that reported
+		// success without dropping the entry leaves the tip's copy in the tree. A
+		// plan that removes without adding then writes a tree identical to HEAD and
+		// returns a nil success naming deletions the history never recorded.
+		remaining, err := m.unremovedDeletions(ctx, removals)
+		if err != nil {
+			return CommitResult{}, m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "the snapshot could not confirm the removals it had staged, so nothing was committed",
+				Err:    errors.New(agent.SanitizedDiagnostic(err)),
+			})
+		}
+		if len(remaining) > 0 {
+			return CommitResult{}, m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "a path this snapshot was required to remove is still in the index, so nothing was committed",
+				Paths:  remaining,
+			})
+		}
 	}
 
 	result := CommitResult{
@@ -1318,8 +1350,24 @@ func (m *Manager) contentUnreadable(rel string) bool {
 	return false
 }
 
-// unstagedAdditions reports which of paths the private index does not hold.
-func (m *Manager) unstagedAdditions(ctx context.Context, paths []string) ([]string, error) {
+// misstagedAdditions reports which of paths the private index does not hold
+// with exactly the object and mode the working tree currently has.
+//
+// Path membership is not the question, and asking it was a hole. The index is
+// seeded from HEAD, so every already-tracked path arrives with an entry of its
+// own before anything is staged: an `update-index --add` that reported success
+// without doing the work left HEAD's entry sitting under the requested path, the
+// readback found it, and the snapshot went on to build a tree identical to the
+// tip and return a nil success with the change absent from the history. Only
+// comparing the entry against the content the snapshot is required to record
+// separates "the index holds this file" from "the index holds this file's old
+// version".
+//
+// A path whose required entry cannot be established at all — it vanished, it is
+// neither a regular file nor a symlink, git would not hash it — is an error
+// rather than a mismatch, because the caller must fail closed either way and the
+// two failures deserve different diagnostics.
+func (m *Manager) misstagedAdditions(ctx context.Context, paths []string) ([]string, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -1327,13 +1375,136 @@ func (m *Manager) unstagedAdditions(ctx context.Context, paths []string) ([]stri
 	if err != nil {
 		return nil, err
 	}
-	var missing []string
+	required, err := m.requiredIndexEntries(ctx, paths)
+	if err != nil {
+		return nil, err
+	}
+	trustExec := m.executableBitTrusted(ctx)
+	var wrong []string
 	for _, path := range paths {
-		if _, ok := entries[path]; !ok {
-			missing = append(missing, path)
+		staged, present := entries[path]
+		want := required[path]
+		if !present || staged.oid != want.oid || !modeRecords(want.mode, staged.mode, trustExec) {
+			wrong = append(wrong, path)
 		}
 	}
-	return missing, nil
+	return wrong, nil
+}
+
+// requiredIndexEntries reports the object and mode the private index must hold
+// for each path if the tree this snapshot builds is to record the working tree.
+func (m *Manager) requiredIndexEntries(ctx context.Context, paths []string) (map[string]treeEntry, error) {
+	required := make(map[string]treeEntry, len(paths))
+	hashable := make([]string, 0, len(paths))
+	for _, path := range paths {
+		abs := filepath.Join(m.root, filepath.FromSlash(path))
+		info, err := os.Lstat(abs)
+		if err != nil {
+			return nil, fmt.Errorf("%s could not be inspected to confirm what the index must hold: %s", path, agent.SanitizedDiagnostic(err))
+		}
+		switch {
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := os.Readlink(abs)
+			if err != nil {
+				return nil, fmt.Errorf("%s could not be read to confirm what the index must hold: %s", path, agent.SanitizedDiagnostic(err))
+			}
+			oid, err := m.git.hashBlob(ctx, []byte(target))
+			if err != nil {
+				return nil, err
+			}
+			required[path] = treeEntry{mode: "120000", oid: oid, path: path}
+		case info.Mode().IsRegular():
+			required[path] = treeEntry{mode: regularIndexMode(info.Mode()), path: path}
+			hashable = append(hashable, path)
+		default:
+			return nil, fmt.Errorf("%s is neither a regular file nor a symbolic link, so what the index must hold for it cannot be established", path)
+		}
+	}
+	if len(hashable) == 0 {
+		return required, nil
+	}
+	oids, err := m.git.hashWorktreeContent(ctx, hashable)
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range hashable {
+		oid, ok := oids[path]
+		if !ok {
+			return nil, fmt.Errorf("%s was not hashed, so what the index must hold for it cannot be established", path)
+		}
+		entry := required[path]
+		entry.oid = oid
+		required[path] = entry
+	}
+	return required, nil
+}
+
+// regularIndexMode is git's own rule for a regular file: any executable bit
+// makes it 100755 and nothing else matters.
+func regularIndexMode(mode os.FileMode) string {
+	if mode.Perm()&0o111 != 0 {
+		return "100755"
+	}
+	return "100644"
+}
+
+// modeRecords reports whether a staged mode records the required one.
+//
+// The two are compared exactly wherever the executable bit means anything. On a
+// repository with `core.fileMode` off — a vault living on a filesystem that does
+// not carry the bit — git deliberately keeps whatever mode the entry already
+// had, so demanding equality there would block the vault over a permission it
+// was never going to record in the first place. The file *type* is still
+// compared, because a regular file staged as a symlink is not a permissions
+// question.
+func modeRecords(required, staged string, trustExec bool) bool {
+	if required == staged {
+		return true
+	}
+	if trustExec {
+		return false
+	}
+	return isRegularIndexMode(required) && isRegularIndexMode(staged)
+}
+
+func isRegularIndexMode(mode string) bool {
+	return mode == "100644" || mode == "100755"
+}
+
+// executableBitTrusted reports the repository's `core.fileMode`, read once.
+//
+// Every caller reaches it holding the safety lock, and the value is a property
+// of the repository rather than of the pass, so one read serves the process.
+func (m *Manager) executableBitTrusted(ctx context.Context) bool {
+	m.execBitOnce.Do(func() {
+		m.execBitTrusted = m.git.configBool(ctx, "core.fileMode", true)
+	})
+	return m.execBitTrusted
+}
+
+// unremovedDeletions reports which of paths the private index still holds after
+// a removal was staged.
+//
+// It is the other half of the readback. A removal that never reached the index
+// leaves the tip's entry in the tree, and for a plan that removes without adding
+// that comes out as a tree identical to HEAD — no commit, no error, and a caller
+// told the deletion was recorded. An unmerged entry surfaces as an error from
+// lsFilesStaged, which is the same refusal by a different route.
+func (m *Manager) unremovedDeletions(ctx context.Context, paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	entries, err := m.git.lsFilesStaged(ctx, m.indexPath, paths)
+	if err != nil {
+		return nil, err
+	}
+	var present []string
+	for _, path := range paths {
+		if _, ok := entries[path]; ok {
+			present = append(present, path)
+		}
+	}
+	return present, nil
 }
 
 // skippedPaths reduces skips to their paths, for a block record.
