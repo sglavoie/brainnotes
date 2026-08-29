@@ -2,6 +2,7 @@ package noteops
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -143,16 +144,31 @@ func (j *Journal) Finalize() (*journal.Entry, error) {
 }
 
 // snapshot records the finalized entry in the vault's content history.
+//
+// The result is examined, not just the error. A snapshot that reports leaving
+// one of the entry's paths out has not recorded this mutation, and calling that
+// a success would tell the caller the history covers a change it does not. The
+// engine already refuses rather than returning such a result, so this is the
+// second half of a two-sided guarantee rather than a live branch — the operation
+// that owes the user the sentence is the one that confirms it is not needed.
 func (j *Journal) snapshot(entry *journal.Entry) error {
 	if j == nil || j.safety == nil || entry == nil {
 		return nil
 	}
-	if _, err := j.safety.CommitJournalEntry(context.Background(), entry.ID, j.operation); err != nil {
+	result, err := j.safety.CommitJournalEntry(context.Background(), entry.ID, j.operation)
+	if err != nil {
 		return &SnapshotError{
 			Operation: j.operation,
 			EntryID:   entry.ID,
 			Blocked:   vaultgitBlocks(err),
 			Err:       err,
+		}
+	}
+	if unrecorded := result.Unrecorded(); len(unrecorded) > 0 {
+		return &SnapshotError{
+			Operation: j.operation,
+			EntryID:   entry.ID,
+			Err:       fmt.Errorf("the snapshot left out %s", strings.Join(unrecorded, ", ")),
 		}
 	}
 	return nil

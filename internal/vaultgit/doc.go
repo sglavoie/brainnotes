@@ -102,4 +102,22 @@
 // which vault-relative paths BrainNotes may *add* to the history. Anything
 // already tracked in HEAD is in scope regardless, so a path can never fall out
 // of the history because a policy narrowed underneath it. See scope.go.
+//
+// # What a snapshot may leave out
+//
+// Exactly one thing, and only on one entry point. [Manager.CommitPending] scans
+// the working tree and offers to record whatever it finds, so an addition it
+// cannot read comes back as a [SkippedPath] rather than a failure: nobody asked
+// for that path in particular, and leaving it out costs the history nothing it
+// held a moment ago.
+//
+// Every other entry point is a caller naming paths — "these exact paths are now
+// the truth" — and those snapshots fail closed instead. Recording some of a
+// named set would answer a question nobody asked and hand the caller a success
+// the history does not back, which is the failure this package exists to
+// prevent. [CommitResult.Unrecorded] is how a caller confirms that for itself.
+//
+// A path the engine can read and Git still refuses to stage is neither case: it
+// is the repository failing, it would hit the rest of the pass too, and it is
+// fatal everywhere, external scan included.
 package vaultgit

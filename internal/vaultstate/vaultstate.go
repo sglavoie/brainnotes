@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
@@ -70,11 +71,22 @@ func Save(vaultRoot, operation, path string, data []byte, perm os.FileMode) erro
 	if safety == nil {
 		return nil
 	}
-	if _, err := safety.CommitPaths(context.Background(), operation, []string{path}); err != nil {
+	result, err := safety.CommitPaths(context.Background(), operation, []string{path})
+	if err != nil {
 		return &vaultgit.SnapshotError{
 			Operation: operation,
 			Blocked:   vaultgit.Blocks(err),
 			Err:       err,
+		}
+	}
+	// This call names one exact path, so a snapshot that reports leaving a path
+	// out has left out the only one there was. The engine refuses that outcome
+	// rather than returning it; confirming it here is what keeps the promise on
+	// this side of the boundary too.
+	if unrecorded := result.Unrecorded(); len(unrecorded) > 0 {
+		return &vaultgit.SnapshotError{
+			Operation: operation,
+			Err:       fmt.Errorf("the snapshot left out %s", strings.Join(unrecorded, ", ")),
 		}
 	}
 	return nil

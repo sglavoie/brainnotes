@@ -2,6 +2,8 @@ package noteops
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/backup"
 )
@@ -44,11 +46,23 @@ func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (*
 	if safety == nil {
 		return result, nil
 	}
-	if _, err := safety.CommitRestore(context.Background(), "backup-restore"); err != nil {
+	snapshot, err := safety.CommitRestore(context.Background(), "backup-restore")
+	if err != nil {
 		return nil, &SnapshotError{
 			Operation: "backup restore",
 			Blocked:   vaultgitBlocks(err),
 			Err:       err,
+		}
+	}
+	// A restore is the operation a person reaches for when things have already
+	// gone wrong, so it is the last one that may report covering content the
+	// history does not hold. The engine refuses an incomplete restore snapshot
+	// outright; confirming it here is what makes that a property of the operation
+	// rather than of the engine's current implementation.
+	if unrecorded := snapshot.Unrecorded(); len(unrecorded) > 0 {
+		return nil, &SnapshotError{
+			Operation: "backup restore",
+			Err:       fmt.Errorf("the snapshot left out %s", strings.Join(unrecorded, ", ")),
 		}
 	}
 	return result, nil

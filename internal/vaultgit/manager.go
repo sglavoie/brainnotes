@@ -304,10 +304,36 @@ type CommitResult struct {
 	// Skipped lists paths the engine could not read and therefore left out. A
 	// skip never removes anything from the history, but it does suppress every
 	// deletion in the same pass — see commitPending.
+	//
+	// Only an external-change snapshot can produce one. An exact snapshot fails
+	// closed instead, so a caller that named its paths is never handed a success
+	// that quietly omits one of them.
 	Skipped []SkippedPath
 	// DeferredDeletions lists proven deletions that were held back because
 	// something else in the same pass was skipped.
 	DeferredDeletions []string
+}
+
+// Unrecorded reports the paths this snapshot was asked to record and did not:
+// everything it skipped, plus every proven deletion it held back behind a skip.
+// It is empty for a complete snapshot, including one that found nothing to do.
+//
+// An exact snapshot can never return a non-empty answer, because the engine
+// refuses rather than reporting an unstaged required path. Exact callers check
+// it anyway, and the redundancy is the point: the guarantee they depend on is
+// that content the history does not hold is never reported as recorded, and a
+// caller that confirms its own result does not have to take that on trust.
+func (r CommitResult) Unrecorded() []string {
+	if len(r.Skipped) == 0 && len(r.DeferredDeletions) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(r.Skipped)+len(r.DeferredDeletions))
+	for _, skip := range r.Skipped {
+		out = append(out, skip.Path)
+	}
+	out = append(out, r.DeferredDeletions...)
+	sort.Strings(out)
+	return out
 }
 
 // SkippedPath is one path a snapshot could not read.
@@ -623,6 +649,10 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 			remove:       set.deleted,
 			proofEntries: set.proofEntries,
 			message:      autosaveMessage(m.now()),
+			// The external scan is the one entry point whose additions are
+			// discovered rather than named, so it is the one that may skip an
+			// addition the engine cannot read.
+			externalAdditions: true,
 		}
 		sort.Strings(plan.add)
 		return plan, nil
@@ -931,6 +961,18 @@ type commitPlan struct {
 	// removals. If a removal is held back, its proof is held back too.
 	proofEntries map[string]bool
 	message      string
+	// externalAdditions marks a plan whose additions were discovered by scanning
+	// the working tree rather than named by a caller. Only such a plan may skip
+	// an addition it cannot read.
+	//
+	// The distinction decides whether an unstaged path is tolerable. Nobody asked
+	// for the external scan's paths in particular — it offers to record whatever
+	// the vault happens to hold — so leaving one out costs nothing the history had
+	// a moment ago. Every other entry point is a caller saying "these exact paths
+	// are now the truth"; silently recording some of them would answer a question
+	// it was not asked, and the caller would report a success the history does
+	// not back. See stageAndCommit.
+	externalAdditions bool
 }
 
 // withCAS builds and lands a commit, rebuilding it from scratch if the branch
@@ -997,7 +1039,57 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 		return CommitResult{}, err
 	}
 
-	staged, skipped := m.stageAdditions(ctx, plan.add)
+	staged, skipped, stageErr := m.stageAdditions(ctx, plan.add)
+	if stageErr != nil {
+		// Staging failed for a path the engine can read perfectly well, which
+		// makes it a failure of the repository rather than of that path. It would
+		// hit everything else in the pass too, so continuing would build a tree
+		// missing content the working tree holds — the exact shape of loss this
+		// package exists to refuse.
+		return CommitResult{}, m.latch(&SafetyError{
+			Kind:   KindCommitFailed,
+			Op:     op,
+			Reason: "the vault's content could not be staged, so nothing was committed",
+			Err:    stageErr,
+		})
+	}
+	if len(skipped) > 0 && !plan.externalAdditions {
+		// The caller named these paths, so leaving one out is not a smaller
+		// snapshot, it is a wrong one. Refusing here is what lets the caller say
+		// "the change is on disk and the history does not cover it" instead of
+		// reporting a success.
+		return CommitResult{}, m.latch(&SafetyError{
+			Kind:   KindCommitFailed,
+			Op:     op,
+			Reason: "a path this snapshot was required to record could not be staged, so nothing was committed",
+			Paths:  skippedPaths(skipped),
+			Err:    skippedError(skipped),
+		})
+	}
+	if !plan.externalAdditions {
+		// An exact snapshot's promise is that the paths it names are in the tree
+		// it builds, so it reads the index back rather than trusting an exit
+		// status. That is one `ls-files` against a private index the engine wrote
+		// itself, and it is the only check that survives a `git` which reports
+		// success without doing the work.
+		missing, err := m.unstagedAdditions(ctx, staged)
+		if err != nil {
+			return CommitResult{}, m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "the snapshot could not confirm what it had staged, so nothing was committed",
+				Err:    errors.New(agent.SanitizedDiagnostic(err)),
+			})
+		}
+		if len(missing) > 0 {
+			return CommitResult{}, m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "a path this snapshot was required to record never reached the index, so nothing was committed",
+				Paths:  missing,
+			})
+		}
+	}
 
 	removals := plan.remove
 	if len(skipped) > 0 && len(removals) > 0 {
@@ -1152,7 +1244,8 @@ func withoutPaths(list, drop []string) []string {
 	return out
 }
 
-// stageAdditions records working-tree content, skipping what it cannot read.
+// stageAdditions records working-tree content, skipping only what the vault
+// itself will not hand over.
 //
 // An unreadable addition is reported rather than fatal, and the distinction is
 // deliberate: recording a file is purely additive, so failing to record one
@@ -1161,25 +1254,106 @@ func withoutPaths(list, drop []string) []string {
 // entire vault because of one of them would trade a real safety net for a
 // theoretical completeness guarantee.
 //
+// That tolerance is bounded by the third return value, which is the repair for
+// the failure mode it used to hide. A path git refused to stage is only a skip
+// when the engine can independently confirm it cannot read the bytes either;
+// anything else means git failed for a reason that has nothing to do with this
+// path — an index it cannot write, an object store that will not take a write —
+// and that reason applies to every other path in the same pass. Turning it into
+// a skip made a repository-wide failure look like an empty vault: nothing
+// staged, no error, no commit, and a caller told the snapshot succeeded.
+//
 // The batch is tried first because it is one process for the whole vault. Only
 // when it fails does the engine fall back to one invocation per path, which is
 // slow but is the only way to learn which path was the problem. Re-staging a
 // path the failed batch already staged is idempotent.
-func (m *Manager) stageAdditions(ctx context.Context, paths []string) (staged []string, skipped []SkippedPath) {
+func (m *Manager) stageAdditions(ctx context.Context, paths []string) (staged []string, skipped []SkippedPath, err error) {
+	if len(paths) == 0 {
+		return nil, nil, nil
+	}
+	if batchErr := m.git.stageAdd(ctx, m.indexPath, paths); batchErr == nil {
+		return paths, nil, nil
+	}
+	for _, path := range paths {
+		stageErr := m.git.stageAdd(ctx, m.indexPath, []string{path})
+		if stageErr == nil {
+			staged = append(staged, path)
+			continue
+		}
+		detail := agent.SanitizedDiagnostic(stageErr)
+		if !m.contentUnreadable(path) {
+			return staged, skipped, fmt.Errorf("%s could not be staged although the vault hands its content over on request: %s", path, detail)
+		}
+		skipped = append(skipped, SkippedPath{Path: path, Reason: detail})
+	}
+	return staged, skipped, nil
+}
+
+// contentUnreadable reports whether the engine, asking on its own account, also
+// cannot read this path's bytes.
+//
+// It is the question that separates the one staging failure this engine may
+// tolerate from every other one, and it is asked by opening the file rather than
+// by reading git's diagnostic. A message is a string a future git is free to
+// reword; whether the vault will hand over the content is the fact the tolerance
+// was justified by in the first place.
+//
+// A path that vanished between the scan and the staging answers yes, which is
+// the right answer for both callers: an external scan offers to record whatever
+// is there and there is nothing there, and an exact snapshot required a path the
+// vault no longer holds and must refuse.
+func (m *Manager) contentUnreadable(rel string) bool {
+	f, err := os.Open(filepath.Join(m.root, filepath.FromSlash(rel)))
+	if err != nil {
+		return true
+	}
+	defer func() { _ = f.Close() }()
+	// Opening a directory succeeds on Unix and fails only on the read, so the
+	// content has to actually be asked for. An empty file answers io.EOF, which
+	// is a file that reads fine and holds nothing.
+	var probe [1]byte
+	if _, err := f.Read(probe[:]); err != nil && !errors.Is(err, io.EOF) {
+		return true
+	}
+	return false
+}
+
+// unstagedAdditions reports which of paths the private index does not hold.
+func (m *Manager) unstagedAdditions(ctx context.Context, paths []string) ([]string, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
-	if err := m.git.stageAdd(ctx, m.indexPath, paths); err == nil {
-		return paths, nil
+	entries, err := m.git.lsFilesStaged(ctx, m.indexPath, paths)
+	if err != nil {
+		return nil, err
 	}
+	var missing []string
 	for _, path := range paths {
-		if err := m.git.stageAdd(ctx, m.indexPath, []string{path}); err != nil {
-			skipped = append(skipped, SkippedPath{Path: path, Reason: agent.SanitizedDiagnostic(err)})
-			continue
+		if _, ok := entries[path]; !ok {
+			missing = append(missing, path)
 		}
-		staged = append(staged, path)
 	}
-	return staged, skipped
+	return missing, nil
+}
+
+// skippedPaths reduces skips to their paths, for a block record.
+func skippedPaths(skipped []SkippedPath) []string {
+	out := make([]string, 0, len(skipped))
+	for _, skip := range skipped {
+		out = append(out, skip.Path)
+	}
+	return out
+}
+
+// skippedError joins the skips into one diagnostic. Every part of it is a vault
+// path or a sanitized single line from git, so it stays as safe to log as the
+// block record it ends up in.
+func skippedError(skipped []SkippedPath) error {
+	errs := make([]error, 0, len(skipped))
+	for _, skip := range skipped {
+		errs = append(errs, fmt.Errorf("%s: %s", skip.Path, skip.Reason))
+	}
+	return errors.Join(errs...)
 }
 
 // refreshUserIndex updates the user's real index for the paths this snapshot

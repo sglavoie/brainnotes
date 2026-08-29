@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -511,6 +512,190 @@ func TestSkippedPathDefersProvenDeletions(t *testing.T) {
 	tracked := h.trackedSet()
 	if tracked["Inbox/old name.md"] || !tracked["Zettel/new name.md"] {
 		t.Fatalf("the rename did not complete; tracked = %v", h.tracked())
+	}
+}
+
+// --- Staging failures --------------------------------------------------------
+
+// failingStageShim stands in for a git whose `update-index --add` refuses. The
+// nth such call is let through, so one test can provoke "every path failed" and
+// another "some paths failed" with the same seam; pass 0 to fail every call.
+//
+// It is the only way to reach this failure from outside. A repository whose
+// index cannot be written is what produced it in the field, and arranging that
+// by hand means making the engine's own state directory unwritable at the exact
+// instant staging runs — which breaks the block marker the assertions need to
+// read afterwards.
+func failingStageShim(t *testing.T, letThrough int) string {
+	t.Helper()
+	counter := filepath.Join(t.TempDir(), "stage-calls")
+	return gitShim(t, `
+if [ "$1" = "update-index" ] && [ "$2" = "--add" ]; then
+  count=$(cat `+shellQuote(counter)+` 2>/dev/null || echo 0)
+  count=$((count + 1))
+  printf '%s' "$count" > `+shellQuote(counter)+`
+  if [ "$count" -ne `+shellQuote(strconv.Itoa(letThrough))+` ]; then
+    cat > /dev/null
+    echo "simulated index write failure" >&2
+    exit 128
+  fi
+fi`)
+}
+
+// A repository that will not stage anything is not an empty vault. Turning every
+// `update-index` failure into a skip made this exact case — an unwritable index,
+// hit on the first call and therefore on every path — look like a snapshot with
+// nothing to record: no commit, no error, and a `bn` command that printed
+// "updated" and exited 0 while the history stayed where it was.
+func TestCommitJournalEntryStagingFailureOfEveryPathLatchesABlock(t *testing.T) {
+	h := newHarness(t)
+	h.write("Inbox/note.md", "one\n")
+	h.commitPending()
+	safe := h.head()
+
+	h.advance(time.Minute)
+	entry := h.record("bn set", []string{"Inbox/note.md"}, func() { h.write("Inbox/note.md", "two\n") })
+
+	broken := h.open(Options{GitExecutable: failingStageShim(t, 0)})
+	result, err := broken.CommitJournalEntry(context.Background(), entry.ID, "set")
+	if err == nil {
+		t.Fatalf("a repository that staged nothing reported success: %+v", result)
+	}
+	if KindOf(err) != KindCommitFailed {
+		t.Fatalf("CommitJournalEntry = %v, want a commit failure", err)
+	}
+	if result.Committed {
+		t.Fatalf("a failed snapshot reported a commit: %+v", result)
+	}
+	if h.head() != safe {
+		t.Fatal("the branch moved although nothing could be staged")
+	}
+	if got := rawGit(t, h.root, "show", "HEAD:Inbox/note.md"); got != "one" {
+		t.Fatalf("history holds %q, want the pre-mutation content", got)
+	}
+
+	record, blocked := h.blockRecord()
+	if !blocked || record.Kind != KindCommitFailed {
+		t.Fatalf("a staging failure must latch an explained block: %+v", record)
+	}
+	// Fail-closed means the refusal outlives the process that saw it.
+	restarted := h.open(Options{})
+	if err := restarted.Preflight(context.Background()); !IsBlocked(err) {
+		t.Fatalf("Preflight after a staging failure = %v, want a blocked failure", err)
+	}
+}
+
+// Staging some of an exact snapshot's paths is worse than staging none: the tree
+// would hold the journal record without the note it describes. Nothing is
+// committed, and the vault is blocked rather than left looking healthy.
+func TestCommitJournalEntryPartialStagingFailureLatchesABlock(t *testing.T) {
+	h := newHarness(t)
+	h.write("Inbox/note.md", "one\n")
+	h.commitPending()
+	safe := h.head()
+
+	h.advance(time.Minute)
+	entry := h.record("bn set", []string{"Inbox/note.md"}, func() { h.write("Inbox/note.md", "two\n") })
+
+	// Call 1 is the whole-plan batch and call 2 is the first path of the per-path
+	// fallback, which is a journal record file: the plan is sorted and `.bnotes/`
+	// sorts before `Inbox/`. So part of the record reaches the index and the note
+	// it describes never does — the one shape a snapshot must never commit.
+	broken := h.open(Options{GitExecutable: failingStageShim(t, 2)})
+	result, err := broken.CommitJournalEntry(context.Background(), entry.ID, "set")
+	if err == nil {
+		t.Fatalf("a partially staged snapshot reported success: %+v", result)
+	}
+	if KindOf(err) != KindCommitFailed {
+		t.Fatalf("CommitJournalEntry = %v, want a commit failure", err)
+	}
+	if !strings.Contains(err.Error(), "could not be staged") {
+		t.Fatalf("the failure must say which path stopped it: %v", err)
+	}
+	if h.head() != safe {
+		t.Fatal("the branch moved on a partially staged snapshot")
+	}
+	tracked := h.trackedSet()
+	for path := range tracked {
+		if strings.HasPrefix(path, ".bnotes/journal/") {
+			t.Fatalf("a journal record was committed without the note it describes: %q", path)
+		}
+	}
+	if got := rawGit(t, h.root, "show", "HEAD:Inbox/note.md"); got != "one" {
+		t.Fatalf("history holds %q, want the pre-mutation content", got)
+	}
+	if _, blocked := h.blockRecord(); !blocked {
+		t.Fatal("a partial staging failure must latch a block")
+	}
+}
+
+// The external-change path is allowed to skip a note it cannot read. It is not
+// allowed to skip a note it can read perfectly well, because a git that refuses
+// one of those is failing for a reason that applies to the whole vault.
+func TestCommitPendingRepositoryWideStagingFailureIsFatal(t *testing.T) {
+	h := newHarness(t)
+	h.write("Inbox/note.md", "one\n")
+	h.commitPending()
+	safe := h.head()
+
+	h.advance(time.Minute)
+	h.write("Inbox/second.md", "two\n")
+
+	broken := h.open(Options{GitExecutable: failingStageShim(t, 0)})
+	result, err := broken.CommitPending(context.Background())
+	if err == nil {
+		t.Fatalf("a repository that staged nothing reported success: %+v", result)
+	}
+	if KindOf(err) != KindCommitFailed {
+		t.Fatalf("CommitPending = %v, want a commit failure", err)
+	}
+	if len(result.Skipped) != 0 {
+		t.Fatalf("a repository-wide failure must not be reported as skipped paths: %+v", result.Skipped)
+	}
+	if h.head() != safe {
+		t.Fatal("the branch moved although nothing could be staged")
+	}
+	if _, blocked := h.blockRecord(); !blocked {
+		t.Fatal("a repository-wide staging failure must latch a block")
+	}
+}
+
+// A caller that names a path is asking for that path. When the vault will not
+// hand its content over, the honest answer is a refusal — not a success that
+// omits it. The same unreadable file is a tolerated skip on the external path,
+// and TestUnreadableNoteIsSkippedNotFatal is what pins that half down.
+func TestCommitPathsFailsClosedOnAnUnreadableRequiredPath(t *testing.T) {
+	h := newHarness(t)
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-0000 file, so this case cannot be provoked")
+	}
+	h.write("Inbox/note.md", "one\n")
+	h.commitPending()
+	safe := h.head()
+
+	state := filepath.Join(h.root, ".bnotes", "recall.json")
+	h.write(".bnotes/recall.json", "{}\n")
+	if err := os.Chmod(state, 0o000); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(state, 0o644) })
+
+	h.advance(time.Minute)
+	result, err := h.mgr.CommitPaths(context.Background(), "recall-state", []string{state})
+	if err == nil {
+		t.Fatalf("an unrecordable named path reported success: %+v", result)
+	}
+	if KindOf(err) != KindCommitFailed {
+		t.Fatalf("CommitPaths = %v, want a commit failure", err)
+	}
+	if !contains(result.Unrecorded(), ".bnotes/recall.json") && !strings.Contains(err.Error(), ".bnotes/recall.json") {
+		t.Fatalf("the failure must name the path it could not record: %v", err)
+	}
+	if h.head() != safe {
+		t.Fatal("the branch moved although the named path was never staged")
+	}
+	if _, blocked := h.blockRecord(); !blocked {
+		t.Fatal("an unrecordable named path must latch a block")
 	}
 }
 
