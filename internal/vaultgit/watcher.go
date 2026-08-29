@@ -18,10 +18,16 @@ import (
 // take a snapshot safely; the watcher knows when to ask for one.
 //
 // It deliberately owns no policy of its own. The debounce deadlines live in the
-// persisted WatchState, the push backoff lives in the persisted PushState, and
+// persisted WatchState, the autosave floor lives in the Manager's resolved
+// config.AutosavePolicy, the push backoff lives in the persisted PushState, and
 // the refusal to commit an unexplained deletion lives in the Manager. What the
 // watcher adds is a loop, a poll interval, and the decision to stop asking once
 // the vault has latched a block — none of which changes what a snapshot means.
+//
+// ExternalCommitDue is the whole of the loop's scheduling knowledge, and that is
+// why the floor could be added without touching this file's logic: a burst that
+// is ready but still inside its floor is simply not due yet, which is the same
+// answer the loop already knew how to act on.
 //
 // That split is why a restart cannot postpone a pending snapshot. The clock
 // this loop reads is on disk, so a guard that dies fifteen seconds into a burst

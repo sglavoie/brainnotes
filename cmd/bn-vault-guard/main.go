@@ -1,13 +1,18 @@
 // Command bn-vault-guard keeps a BrainNotes vault's content history current
 // while nothing is running `bn`.
 //
-// It is a private companion process, not a supported command. It takes no
-// flags, reads no settings of its own, and exposes no safety policy: the vault
-// it watches comes from the same resolution `bn` uses ($BNOTES_VAULT, then an
-// upward search for brainnotes.toml), and every deadline it obeys is a fixed
-// constant in internal/vaultgit. There is nothing here for a user to tune,
-// which is deliberate — a knob on this process would be a knob on how much of
-// their vault is recoverable.
+// It is a private companion process, not a supported command. It takes no flags
+// and defines no policy of its own: the vault it watches comes from the same
+// resolution `bn` uses ($BNOTES_VAULT, then an upward search for
+// brainnotes.toml), and every deadline it obeys is either a fixed constant in
+// internal/vaultgit or the vault's own `[autosave] min_interval`.
+//
+// That one setting is the only thing here a person can tune, and it is
+// deliberately the only one: it says how often the guard may add a commit of its
+// own, not how quickly it reacts to a change. The quiet period, the
+// maximum-latency bound, the poll interval, and the push interval stay fixed,
+// because a knob on any of those would be a knob on how much of the vault is
+// recoverable.
 //
 // It is installed by `just install` and run by a LaunchAgent. `bn --help` does
 // not mention it and neither does the user documentation.
@@ -70,7 +75,10 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	mgr, err := vaultgit.Open(ctx, cfg.Vault, vaultgit.Options{})
+	// The one policy this process carries, and it is the vault's rather than its
+	// own: how long the guard must wait between two autosaves of its own making.
+	// Every other deadline it obeys is still a fixed constant in internal/vaultgit.
+	mgr, err := vaultgit.Open(ctx, cfg.Vault, vaultgit.Options{Autosave: cfg.AutosavePolicy()})
 	if err != nil {
 		if errors.Is(err, vaultgit.ErrUnmanaged) {
 			// A vault with no Git repository is a supported BrainNotes vault; it just

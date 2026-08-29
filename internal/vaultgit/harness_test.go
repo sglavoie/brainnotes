@@ -3,6 +3,7 @@ package vaultgit
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,22 @@ type testHarness struct {
 	root  string
 	clock time.Time
 	mgr   *Manager
+	// autosave is the floor every Manager this harness opens is given unless the
+	// caller names one. It is the smallest legal interval rather than the shipped
+	// default, so that a test about readiness is only about readiness; a test
+	// about the floor sets it explicitly with setAutosave.
+	autosave config.AutosavePolicy
+}
+
+// autosavePolicy resolves a spelling the way `brainnotes.toml` would, so a test
+// names its floor in the same vocabulary a user does.
+func autosavePolicy(t *testing.T, spelling string) config.AutosavePolicy {
+	t.Helper()
+	policy, err := config.ParseAutosaveMinInterval(spelling)
+	if err != nil {
+		t.Fatalf("ParseAutosaveMinInterval(%q): %v", spelling, err)
+	}
+	return policy
 }
 
 // requireGit skips a test on a machine without git rather than failing it. The
@@ -103,18 +120,30 @@ func newHarness(t *testing.T) *testHarness {
 	rawGit(t, root, "config", "user.email", "test@example.invalid")
 
 	h := &testHarness{
-		t:     t,
-		root:  root,
-		clock: time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC),
+		t:        t,
+		root:     root,
+		clock:    time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC),
+		autosave: autosavePolicy(t, config.CanonicalAutosaveDuration(config.MinAutosaveInterval)),
 	}
 	h.mgr = h.open(Options{})
 	return h
+}
+
+// setAutosave adopts a new floor and reopens the harness Manager under it, which
+// is what a guard restarting after a config edit does.
+func (h *testHarness) setAutosave(spelling string) {
+	h.t.Helper()
+	h.autosave = autosavePolicy(h.t, spelling)
+	h.mgr = h.open(Options{})
 }
 
 func (h *testHarness) open(opts Options) *Manager {
 	h.t.Helper()
 	if opts.Now == nil {
 		opts.Now = func() time.Time { return h.clock }
+	}
+	if opts.Autosave == (config.AutosavePolicy{}) {
+		opts.Autosave = h.autosave
 	}
 	m, err := Open(context.Background(), h.root, opts)
 	if err != nil {
@@ -226,6 +255,45 @@ func (h *testHarness) subjects() []string {
 		return nil
 	}
 	return strings.Split(out, "\n")
+}
+
+// watchJSON decodes watch.json into the shape a consumer outside this package
+// sees: top-level keys with JSON values, and an absent key genuinely missing
+// rather than zero. The health script reads it exactly this way.
+func (h *testHarness) watchJSON() map[string]any {
+	h.t.Helper()
+	data, err := os.ReadFile(filepath.Join(h.mgr.StateDir(), watchStateFileName))
+	if err != nil {
+		h.t.Fatalf("read watch.json: %v", err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		h.t.Fatalf("decode watch.json: %v", err)
+	}
+	return fields
+}
+
+// commitTimes reports every commit's committer date, newest first. The engine
+// stamps both dates from its injected clock, so on this harness these are
+// exactly the instants the schedule chose.
+func (h *testHarness) commitTimes() []time.Time {
+	h.t.Helper()
+	if h.head() == "" {
+		return nil
+	}
+	out := rawGit(h.t, h.root, "log", "--format=%cI")
+	if out == "" {
+		return nil
+	}
+	times := make([]time.Time, 0, 8)
+	for _, line := range strings.Split(out, "\n") {
+		at, err := time.Parse(time.RFC3339, strings.TrimSpace(line))
+		if err != nil {
+			h.t.Fatalf("parse commit date %q: %v", line, err)
+		}
+		times = append(times, at.UTC())
+	}
+	return times
 }
 
 func (h *testHarness) blockRecord() (BlockRecord, bool) {

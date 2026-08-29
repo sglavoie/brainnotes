@@ -45,6 +45,15 @@ type Options struct {
 	// Now supplies the clock. Tests replace it to make commit messages and retry
 	// schedules deterministic.
 	Now func() time.Time
+	// Autosave is the vault's resolved external autosave floor. The zero value
+	// means the shipped default rather than "no floor", so a caller that has not
+	// yet learned the vault's policy gets the protective answer rather than the
+	// permissive one.
+	//
+	// It is fixed for the life of the Manager. Applying a `brainnotes.toml` edit
+	// without a restart is a later concern; what this field settles is that the
+	// floor is data the engine is told, never a constant it owns.
+	Autosave config.AutosavePolicy
 }
 
 // Manager is the Git safety engine for one vault.
@@ -69,6 +78,9 @@ type Manager struct {
 	remote string
 	who    identity
 	now    func() time.Time
+	// autosave is the resolved external floor. It is normalized once here so that
+	// every read of it is already a usable policy.
+	autosave config.AutosavePolicy
 
 	// indexPath is the private index. It is re-seeded from HEAD at the start of
 	// every operation and is never the user's index.
@@ -139,7 +151,8 @@ func Open(ctx context.Context, vaultRoot string, opts Options) (*Manager, error)
 			name:  strings.TrimSpace(opts.AuthorName),
 			email: strings.TrimSpace(opts.AuthorEmail),
 		},
-		now: opts.Now,
+		now:      opts.Now,
+		autosave: resolveAutosavePolicy(opts.Autosave),
 	}
 	if m.remote == "" {
 		m.remote = defaultRemote
@@ -259,23 +272,44 @@ func (m *Manager) Interrupted() (IntentRecord, bool) {
 // PushStatus reports the remote retry state.
 func (m *Manager) PushStatus() (PushState, bool) { return m.state.LoadPushState() }
 
+// AutosavePolicy reports the external autosave floor this engine is enforcing.
+func (m *Manager) AutosavePolicy() config.AutosavePolicy { return m.autosave }
+
+// WatchStatus reports the persisted external-change schedule without changing
+// it. Like Blocked it takes no lock and never fails, so a status command can
+// always say when the next external snapshot is expected.
+func (m *Manager) WatchStatus() WatchState { return m.state.LoadWatchState() }
+
 // NoteExternalChange records that the working tree changed, opening a debounce
-// burst if none is open.
+// burst if none is open, and republishes the due time the change implies.
 func (m *Manager) NoteExternalChange() (WatchState, error) {
-	return m.state.NoteChange(m.now())
+	return m.state.NoteChange(m.autosave, m.now())
 }
 
 // NoteExternalSettled closes an open debounce burst whose changes are no longer
 // there to commit, so a burst that resolved itself does not stay due forever.
 // It reports whether there was one to close.
 func (m *Manager) NoteExternalSettled() (closed bool, err error) {
-	return m.state.NoteSettled()
+	return m.state.NoteSettled(m.autosave)
 }
 
-// ExternalCommitDue reports whether an open debounce burst has reached either
-// its quiet period or its maximum latency.
+// ExternalCommitDue reports whether an open debounce burst has reached both its
+// readiness deadline and the floor since the last external autosave.
+//
+// It is read-only in intent but not in effect, in the same way and for the same
+// reason as ScanPending: it republishes the persisted schedule when the record
+// on disk does not already state it. That is what brings a record written before
+// this build, or under a different floor, up to date without a separate
+// migration pass — and what makes the due time a health check reads the same one
+// the watcher is about to act on. The write is conditional, so polling an
+// unchanged vault costs a read.
+//
+// A failed republish is deliberately not surfaced, and the state it returns is
+// used anyway: the schedule is computed in memory before it is written, so an
+// unwritable record costs a stale published field and never a wrong answer here.
 func (m *Manager) ExternalCommitDue() bool {
-	return m.state.LoadWatchState().DueAt(m.now())
+	state, _ := m.state.RefreshWatchState(m.autosave)
+	return state.DueAt(m.autosave, m.now())
 }
 
 // PushDue reports whether a retry is worth attempting now. A vault with no
@@ -667,7 +701,9 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 		return result, err
 	}
 	if result.Committed {
-		if _, err := m.state.NoteCommit(m.now()); err != nil {
+		// This is the one call that advances the external floor's anchor, because
+		// this is the one entry point that takes an external autosave.
+		if _, err := m.state.NoteCommit(m.autosave, m.now()); err != nil {
 			// The debounce clock is a scheduling hint. Losing it costs at most one
 			// redundant scan, so it must not turn a successful commit into a failure.
 			_ = err
