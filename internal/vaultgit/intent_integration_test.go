@@ -395,6 +395,80 @@ func TestIntentRecordIsInvisibleToGit(t *testing.T) {
 	}
 }
 
+// The record carries the procedure for recovering it, and the two phases are
+// recovered by different means. A planned record names no commit, so nothing can
+// ever prove it landed and it will never retire itself: it is adjudicated by
+// hand against the working tree. A committed record names an object that is
+// already in the repository, so there is a reachability question to ask and the
+// engine answers it on its own. Handing a person the wrong one of those texts
+// promises a self-retirement they cannot get, or sends them looking for a commit
+// that was never built.
+func TestIntentRecoveryStepsAreWrittenForThePhase(t *testing.T) {
+	h := newHarness(t)
+	h.write("Inbox/note.md", secretBody)
+	h.commitPending()
+	head := h.head()
+
+	mgr := h.open(Options{})
+	plan := &commitPlan{add: []string{"Inbox/note.md"}, message: "record 1 path"}
+	planned, err := mgr.beginIntent("commit-pending", "refs/heads/main", head, plan)
+	if err != nil {
+		t.Fatalf("beginIntent: %v", err)
+	}
+
+	stored, present, err := mgr.state.LoadIntent()
+	if err != nil || !present {
+		t.Fatalf("LoadIntent after beginIntent = present %v, err %v", present, err)
+	}
+	stepsAre(t, "planned", stored,
+		[]string{"names no commit", "Nothing will retire this record on its own"},
+		[]string{"merge-base", "--ff-only"})
+
+	if err := mgr.promoteIntent("commit-pending", planned, head); err != nil {
+		t.Fatalf("promoteIntent: %v", err)
+	}
+	stored, present, err = mgr.state.LoadIntent()
+	if err != nil || !present {
+		t.Fatalf("LoadIntent after promoteIntent = present %v, err %v", present, err)
+	}
+	if stored.Phase != IntentPhaseCommitted || stored.NewOID != head {
+		t.Fatalf("promoted record = phase %q new_oid %q", stored.Phase, stored.NewOID)
+	}
+	// The promoted record must not still be carrying the planned text: from here
+	// on there is an object to prove reachable, and the planned text says there is
+	// not.
+	stepsAre(t, "committed", stored,
+		[]string{"merge-base --is-ancestor", "retires this record on its own", "--ff-only"},
+		[]string{"names no commit", "Nothing will retire this record on its own"})
+
+	if body := string(h.intentBytes()); strings.Contains(body, strings.TrimSpace(secretBody)) {
+		t.Fatalf("the intent record leaked note content:\n%s", body)
+	}
+	if err := mgr.clearIntent(); err != nil {
+		t.Fatalf("clearIntent: %v", err)
+	}
+}
+
+// stepsAre asserts the stored recovery text says the things this phase's reader
+// needs and none of the things that belong to the other phase.
+func stepsAre(t *testing.T, phase string, record IntentRecord, want, unwanted []string) {
+	t.Helper()
+	steps := strings.Join(record.Recovery, "\n")
+	if steps == "" {
+		t.Fatalf("the %s record carries no recovery steps", phase)
+	}
+	for _, fragment := range want {
+		if !strings.Contains(steps, fragment) {
+			t.Fatalf("the %s recovery steps do not mention %q:\n%s", phase, fragment, steps)
+		}
+	}
+	for _, fragment := range unwanted {
+		if strings.Contains(steps, fragment) {
+			t.Fatalf("the %s recovery steps carry the other phase's %q:\n%s", phase, fragment, steps)
+		}
+	}
+}
+
 // saveIntent writes a record straight to disk, standing in for the durable
 // record a process that died mid-snapshot would have left.
 func saveIntent(t *testing.T, h *testHarness, record IntentRecord) {
@@ -403,7 +477,7 @@ func saveIntent(t *testing.T, h *testHarness, record IntentRecord) {
 		record.ObservedAt = h.clock
 	}
 	if record.Recovery == nil {
-		record.Recovery = intentRecovery(h.mgr.state.path(intentFileName))
+		record.Recovery = intentRecovery(record.Phase, h.mgr.state.path(intentFileName))
 	}
 	if err := h.mgr.state.SaveIntent(record); err != nil {
 		t.Fatalf("SaveIntent: %v", err)

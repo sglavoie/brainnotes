@@ -82,7 +82,7 @@ func (m *Manager) beginIntent(op, ref, head string, plan *commitPlan) (IntentRec
 		Paths:      paths,
 		PathCount:  len(paths),
 		Message:    plan.message,
-		Recovery:   intentRecovery(m.state.path(intentFileName)),
+		Recovery:   intentRecovery(IntentPhasePlanned, m.state.path(intentFileName)),
 	}
 	if err := m.state.SaveIntent(record); err != nil {
 		// Deliberately not a blocking kind. Nothing has been written to the
@@ -105,6 +105,10 @@ func (m *Manager) promoteIntent(op string, record IntentRecord, commit string) e
 	record.Phase = IntentPhaseCommitted
 	record.NewOID = commit
 	record.ObservedAt = m.now()
+	// The stored procedure is rewritten with the phase, not left as the planned
+	// one: from here on there is an object to prove reachable, and the planned
+	// text says there is not.
+	record.Recovery = intentRecovery(IntentPhaseCommitted, m.state.path(intentFileName))
 	if err := m.state.SaveIntent(record); err != nil {
 		return m.latch(&SafetyError{
 			Kind:   KindCommitFailed,
@@ -236,12 +240,32 @@ func refName(ref string) string {
 // intentRecovery is the manual procedure stored in the record. Like every other
 // recovery text in this package it names paths and object identifiers only, so
 // the record stays safe to read aloud, mail, or paste into an issue.
-func intentRecovery(path string) []string {
-	return []string{
+//
+// It is written per phase because the two phases are recovered differently, and
+// telling a person the wrong one wastes the only thing they have: a planned
+// record names no commit, so nothing can ever prove it landed and it will never
+// self-retire, while a committed record names an object that is already in the
+// repository and self-retires the moment that object is reachable. A single text
+// covering both would have to promise the self-retirement to a person holding a
+// record that cannot get it.
+func intentRecovery(phase IntentPhase, path string) []string {
+	steps := []string{
 		"Nothing was pushed, and no file in the vault was deleted by BrainNotes; the working tree still holds every change.",
-		"BrainNotes retires this record on its own if the recorded commit turns out to be in the branch's history.",
-		"If it is still here, run `git -C <vault> status` and `git -C <vault> log --oneline -5` to see what the history actually holds.",
-		"Commit anything the history is missing by hand, or let the next BrainNotes snapshot pick it up after you clear this record.",
-		"Run `bn` block-clearing recovery, or delete " + path + ", to allow mutation snapshots again.",
 	}
+	if phase == IntentPhaseCommitted {
+		steps = append(steps,
+			"This record names a commit that was built before the branch was asked to move, so that commit object is already in the repository.",
+			"Run `git -C <vault> merge-base --is-ancestor <new_oid> HEAD` to settle whether it reached the branch; BrainNotes retires this record on its own once it did.",
+			"If it did not, `git -C <vault> show --stat <new_oid>` shows what it holds and `git -C <vault> merge --ff-only <new_oid>` moves it forward without rewriting anything.",
+		)
+	} else {
+		steps = append(steps,
+			"This record names no commit, which proves the branch was never asked to move: nothing landed, and there is no object to look for.",
+			"Nothing will retire this record on its own, because there is nothing it could prove; it is cleared by hand once you have looked.",
+			"Run `git -C <vault> status` and `git -C <vault> log --oneline -5` to see what the history is still missing.",
+			"Commit anything you recognize by hand, or let the next BrainNotes snapshot pick it up after you clear this record.",
+		)
+	}
+	return append(steps,
+		"Run `bn` block-clearing recovery, or delete "+path+" together with any blocked.json beside it, to allow mutation snapshots again.")
 }
