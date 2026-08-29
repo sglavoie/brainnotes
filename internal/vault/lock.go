@@ -173,7 +173,27 @@ type pathLocks struct {
 // caller passing a raw absolute path and a transaction passing an
 // already-resolved one meet on the same lock file. Resolution is idempotent, so
 // re-resolving a resolved path is a no-op.
+//
+// Every acquisition first finishes any transaction a previous process left
+// prepared but unapplied. This is the "before mutation" half of the recovery
+// protocol, and it belongs here rather than in FileTxn because taking a path lock
+// is what every in-vault writer does before it touches the filesystem — routing
+// recovery through the same chokepoint means a writer cannot skip it by not
+// knowing about it. A recovery failure is returned rather than swallowed, so a
+// vault holding an undecided half-applied transaction refuses further writes.
 func acquirePathLocks(root string, wait time.Duration, escalateAbove int, paths []string) (*pathLocks, error) {
+	// Recovery takes its own locks, so it has to run before this call takes any:
+	// it goes through acquirePathLocksRaw, and nesting the two would deadlock a
+	// writer against itself on a shared path.
+	if err := recoverTxnIntents(root); err != nil {
+		return nil, err
+	}
+	return acquirePathLocksRaw(root, wait, escalateAbove, paths)
+}
+
+// acquirePathLocksRaw is acquirePathLocks without the recovery pass. Only
+// restart recovery itself calls it directly.
+func acquirePathLocksRaw(root string, wait time.Duration, escalateAbove int, paths []string) (*pathLocks, error) {
 	locks := &pathLocks{}
 	// Every bn writer takes its locks before it stages, journals, or renames
 	// anything, so this is the one place that makes the location policy an

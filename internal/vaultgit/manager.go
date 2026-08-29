@@ -84,9 +84,15 @@ type Manager struct {
 // believes they have history and the engine must say plainly that it will not
 // provide it.
 //
-// Open performs no mutation and takes no lock. It does not read the block
-// marker either: a blocked vault still opens, so a caller can report why it is
-// blocked. Preflight is what refuses.
+// Open does not read the block marker: a blocked vault still opens, so a caller
+// can report why it is blocked. Preflight is what refuses.
+//
+// It does read the recovery intent, and takes the safety lock to resolve one if
+// it finds it — the one case where opening mutates anything. The read is a
+// single failed open on a healthy vault, and a vault with an interrupted
+// snapshot is exactly the vault where the next thing to happen should be a
+// recovery pass rather than another operation on top of it. Its verdict is
+// discarded here, for the same reason the block marker is not read.
 func Open(ctx context.Context, vaultRoot string, opts Options) (*Manager, error) {
 	if strings.TrimSpace(vaultRoot) == "" {
 		return nil, errors.New("vaultgit: vault root is required")
@@ -155,6 +161,7 @@ func Open(ctx context.Context, vaultRoot string, opts Options) (*Manager, error)
 	if ref == "" {
 		return nil, safetyErrorf(KindRepositoryState, "open", "the repository HEAD is detached, so there is no branch to record snapshots on")
 	}
+	m.recoverIntentOnOpen(ctx)
 	return m, nil
 }
 
@@ -219,14 +226,29 @@ func (m *Manager) Blocked() (BlockRecord, bool) {
 	return record, blocked
 }
 
-// ClearBlock removes the block marker.
+// ClearBlock removes the block marker and any surviving recovery intent.
 //
 // It is deliberately the only way out of a block and it is deliberately not
 // automatic: a block means the engine saw something it would not classify, and
 // the condition that caused it is still on disk. Clearing without fixing the
 // working tree only means the next preflight re-derives the same verdict, which
 // is the point — the marker reports the refusal, it never causes it.
-func (m *Manager) ClearBlock() error { return m.state.ClearBlock() }
+//
+// The intent record goes with it because it is the same act. A record that
+// recovery could retire on its own is already gone by the time anyone runs this;
+// one that is still here is a refusal only a person can lift, and leaving it
+// behind would make clearing the marker appear to do nothing.
+func (m *Manager) ClearBlock() error {
+	return errors.Join(m.state.ClearBlock(), m.state.ClearIntent())
+}
+
+// Interrupted reports a surviving recovery intent, if any. Like Blocked it takes
+// no lock and never fails, so a status command can explain a refusal that no
+// block marker accounts for.
+func (m *Manager) Interrupted() (IntentRecord, bool) {
+	record, present, _ := m.state.LoadIntent()
+	return record, present
+}
 
 // PushStatus reports the remote retry state.
 func (m *Manager) PushStatus() (PushState, bool) { return m.state.LoadPushState() }
@@ -310,6 +332,13 @@ func (m *Manager) Preflight(ctx context.Context) error {
 // preflightLocked runs the checks that require the safety lock already held.
 func (m *Manager) preflightLocked(ctx context.Context, op string) error {
 	if err := m.checkBlocked(op); err != nil {
+		return err
+	}
+	// Recovery runs before anything reads the repository. An interrupted snapshot
+	// is a fifth refusal condition and it is the only one the working tree does
+	// not show: the paths involved may look perfectly ordinary while the history
+	// is missing them.
+	if err := m.recoverIntentLocked(ctx, op); err != nil {
 		return err
 	}
 	if err := m.checkRepositoryState(op); err != nil {
@@ -503,6 +532,9 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	if err := m.checkBlocked(op); err != nil {
 		return CommitResult{}, err
 	}
+	if err := m.recoverIntentLocked(ctx, op); err != nil {
+		return CommitResult{}, err
+	}
 	if err := m.checkRepositoryState(op); err != nil {
 		return CommitResult{}, err
 	}
@@ -560,6 +592,9 @@ func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation str
 	defer release()
 
 	if err := m.checkBlocked(op); err != nil {
+		return CommitResult{}, err
+	}
+	if err := m.recoverIntentLocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	if err := m.checkRepositoryState(op); err != nil {
@@ -737,7 +772,19 @@ type casConflict struct{ ref string }
 func (c *casConflict) Error() string { return "vaultgit: " + c.ref + " moved during the snapshot" }
 
 // stageAndCommit realizes one plan against the private index.
+//
+// The whole body is bracketed by the recovery intent: it is written and fsynced
+// before the first index write and retired only once the branch has moved and
+// the directory naming its ref is durable. Every failure in between either
+// latches a block marker — which takes the record's place as the durable
+// statement — or leaves the record standing, which is what makes an interrupted
+// snapshot distinguishable from one that never started. See intent.go.
 func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan *commitPlan) (CommitResult, error) {
+	intent, err := m.beginIntent(op, ref, head, plan)
+	if err != nil {
+		return CommitResult{}, err
+	}
+
 	staged, skipped := m.stageAdditions(ctx, plan.add)
 
 	removals := plan.remove
@@ -794,6 +841,10 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 		result.DeferredDeletions = plan.remove
 	}
 	if len(staged) == 0 && len(removals) == 0 {
+		// Nothing to record and so nothing to recover: this pass ends before the
+		// intent does any work, and clearing it keeps a held-back snapshot from
+		// leaving a record that outlives the reason for it.
+		_ = m.clearIntent()
 		return result, nil
 	}
 
@@ -810,6 +861,7 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 	// it would add an empty commit to a history a person has to read.
 	if head != "" {
 		if headTree, err := m.git.revParse(ctx, head+"^{tree}"); err == nil && headTree == tree {
+			_ = m.clearIntent()
 			return result, nil
 		}
 	}
@@ -820,14 +872,29 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 			Kind:   KindCommitFailed,
 			Op:     op,
 			Reason: "the snapshot commit could not be written, so nothing was recorded",
+			OldOID: head,
 			Err:    errors.New(agent.SanitizedDiagnostic(err)),
 		})
+	}
+
+	// The commit object exists but nothing points at it yet. Recording its name
+	// now is what lets a restart after the next line ask the only question that
+	// settles the outcome: is this commit in the branch's history?
+	if err := m.promoteIntent(op, intent, commit); err != nil {
+		return CommitResult{}, err
 	}
 
 	if err := m.git.updateRefCAS(ctx, ref, commit, head); err != nil {
 		// Distinguish "someone else got there first" from "this repository is
 		// broken" by asking where the branch is now. Only the second latches.
 		if current, resolveErr := m.git.revParse(ctx, ref); resolveErr != nil || current != head {
+			// A branch that provably moved to something other than head means this
+			// update never applied, so the attempt is over and withCAS rebuilds from
+			// the new tip with a fresh record. When the branch could not be read at
+			// all, nothing is proven and the record stays.
+			if resolveErr == nil {
+				_ = m.clearIntent()
+			}
 			return CommitResult{}, &casConflict{ref: ref}
 		}
 		return CommitResult{}, m.latch(&SafetyError{
@@ -839,6 +906,18 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 			Err:    errors.New(agent.SanitizedDiagnostic(err)),
 		})
 	}
+
+	// The branch has moved. Git wrote the ref file, but the directory entry that
+	// names it is what makes the move survive power loss, and "the ref landing is
+	// durable" is exactly the condition under which the record may be retired.
+	// Best effort on purpose: the commit has landed either way, and turning a
+	// successful snapshot into a failure over a housekeeping fsync would be the
+	// destructive answer to the harmless problem. A packed ref has no such
+	// directory, and the failed sync is ignored for the same reason.
+	_ = vault.SyncDir(filepath.Dir(filepath.Join(m.gitDir, filepath.FromSlash(ref))))
+	// Durable completion, so the record goes. A record that outlives this call
+	// costs one recovery pass that proves the commit landed and clears it.
+	_ = m.clearIntent()
 
 	result.Committed = true
 	result.Commit = commit
@@ -1046,6 +1125,18 @@ func (m *Manager) latch(err error) error {
 	}
 	if saveErr := m.state.SaveBlock(record); saveErr != nil {
 		safety.Err = errors.Join(safety.Err, saveErr)
+		// The marker did not land, so if a recovery intent is outstanding it is now
+		// the only durable statement that a snapshot was attempted and never proved
+		// to have finished. It stays, and every later Open and Preflight refuses on
+		// it until recovery proves the snapshot landed or a person clears it.
+		return err
+	}
+	// The marker says everything the intent said and more, and unlike the intent
+	// it is a verdict rather than a question, so the record is retired here. A
+	// failure to retire it is harmless: the next recovery pass reads it, cannot
+	// prove it landed, and refuses — which is what the marker already does.
+	if clearErr := m.clearIntent(); clearErr != nil {
+		safety.Err = errors.Join(safety.Err, clearErr)
 	}
 	return err
 }

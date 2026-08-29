@@ -243,6 +243,12 @@ func TestUnexplainedDeletionIsNeverCommittedOrPushed(t *testing.T) {
 			t.Fatalf("the block record leaked note content: %q", step)
 		}
 	}
+	// The refusal happened while the snapshot was being planned, so no intent was
+	// ever written; and a marker that did land takes the record's place in any
+	// case. Either way nothing is left for recovery to adjudicate.
+	if _, present := h.mgr.Interrupted(); present {
+		t.Fatal("a latched refusal left an intent record behind")
+	}
 }
 
 func TestJournalRecordAuthorizesDeletion(t *testing.T) {

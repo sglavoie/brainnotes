@@ -12,7 +12,7 @@
 // or writes the vault's notes: it stages exact paths, builds a tree, writes a
 // commit, and moves one ref.
 //
-// # The five invariants
+// # The six invariants
 //
 //  1. **A deletion is never committed unless something proves it was intended.**
 //     Additions and modifications only ever add content to the history, so they
@@ -59,6 +59,21 @@
 //     holds the full `bn` invocation, including note names and property values,
 //     and must never be used to build a message.
 //
+//  6. **An interrupted snapshot is distinguishable from one that never
+//     started.** Invariant 2 covers failures the engine *observed*; a process
+//     that is killed observes nothing and writes nothing, and the state it
+//     leaves behind would otherwise look exactly like a healthy vault. So every
+//     snapshot writes and fsyncs `intent.json` before its first index write,
+//     rewrites it with the new commit's object name *before* `update-ref` is
+//     attempted, and removes it only after the ref has moved and the directory
+//     naming it is durable. A record found at startup means an operation began
+//     and never finished, and mutations stay refused until recovery proves the
+//     recorded commit is reachable from the branch — or a person clears it with
+//     [Manager.ClearBlock]. Proof is reachability, not equality, so a later
+//     commit by another writer does not un-land the snapshot underneath it.
+//     There is no second way to prove it, which is why an unreadable record
+//     refuses rather than self-heals. See intent.go.
+//
 // # Locking
 //
 // All operational state lives under `<git-dir>/brainnotes-safety/`, which is
@@ -75,6 +90,11 @@
 //     push (a network round trip with no useful bound) from stalling the
 //     immediate mutation path, which is the deadlock the watcher and the
 //     mutation path would otherwise contend for.
+//   - [Open] takes `safety.lock` in exactly one case: a recovery intent is
+//     present and has to be adjudicated. It is a wait-free acquisition like
+//     every other in this package, and a busy lock means the record belongs to
+//     a live operation, so opening leaves it alone. On a healthy vault Open
+//     still takes nothing and mutates nothing.
 //
 // # Scope
 //

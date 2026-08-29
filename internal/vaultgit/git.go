@@ -325,6 +325,33 @@ func (g *gitExec) revParse(ctx context.Context, rev string) (string, error) {
 	return oid, nil
 }
 
+// isAncestor reports whether commit is reachable from tip.
+//
+// This is how the engine proves, after a restart, that an interrupted snapshot
+// actually landed. Reachability rather than equality is the right test: another
+// writer committing on top of the snapshot does not un-land it, and demanding
+// `tip == commit` would turn every such case into a spurious block.
+//
+// `merge-base --is-ancestor` answers through its exit status rather than its
+// output — zero for yes, one for no, anything else (a missing object, a corrupt
+// repository) for a genuine failure. Keeping those three apart is load-bearing:
+// reporting an unreadable answer as "no" merely keeps an intent alive, which is
+// safe, but reporting it as "yes" would retire the only durable record that a
+// snapshot was never proved to have landed.
+func (g *gitExec) isAncestor(ctx context.Context, commit, tip string) (bool, error) {
+	if commit == "" || tip == "" {
+		return false, errors.New("vaultgit: merge-base requires two object names")
+	}
+	if _, err := g.run(ctx, gitCall{args: []string{"merge-base", "--is-ancestor", commit, tip}}); err != nil {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // symbolicHead reports the full ref HEAD points at, or an empty string when
 // HEAD is detached.
 func (g *gitExec) symbolicHead(ctx context.Context) (string, error) {

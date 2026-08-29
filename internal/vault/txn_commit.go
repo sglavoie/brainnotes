@@ -38,8 +38,33 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 		}
 	}
 
+	// Staging fsyncs each temp file but not the directory entry that names it, so
+	// the parents are synced here: the intent written next refers to those files
+	// by path, and a record pointing at a name that did not survive the crash
+	// would describe work nothing can finish.
+	syncParentDirs(t.order)
+	txnCrash(txnCrashStaged)
+
+	// Everything the transaction needs is now durable and nothing observable has
+	// changed yet. The intent is the statement that makes the next few renames
+	// recoverable; a transaction that cannot write one does not start, because an
+	// unrecorded partial application is precisely the state this protocol exists
+	// to remove.
+	intent, err := t.writeIntent()
+	if err != nil {
+		t.cleanupStaged()
+		return err
+	}
+	// Clearing is idempotent. The success path calls it explicitly once every
+	// destination is durable; every failure path falls through to this deferred
+	// call, which is correct because Commit is returning to a caller that has
+	// already been told the outcome — the record only ever needs to outlive a
+	// process that never returns.
+	defer func() { _ = intent.clear() }()
+	txnCrash(txnCrashIntent)
+
 	applied := make([]*txnChange, 0, len(t.order))
-	for _, path := range t.order {
+	for i, path := range t.order {
 		change := t.changes[path]
 		err := t.apply(change)
 		if change.applied {
@@ -49,8 +74,14 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 			t.cleanupStagedAfter(path)
 			return t.rollback(change.path, err, applied)
 		}
+		txnCrash(txnCrashApplied(i))
 	}
 	syncParentDirs(t.order)
+	txnCrash(txnCrashSynced)
+	// Durable completion, so the intent may go. A record that outlives this call
+	// costs nothing but a no-op recovery pass, which is why the failure is not
+	// worth turning a landed commit into an error over.
+	_ = intent.clear()
 	// Every mutation landed. A temp file that could not be unlinked afterwards
 	// is reported here rather than through the rollback path, because undoing a
 	// committed exchange over a housekeeping failure would be the destructive

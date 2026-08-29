@@ -28,6 +28,10 @@ const (
 	pushLockName = "push.lock"
 	// blockedFileName is the persistent fail-closed marker.
 	blockedFileName = "blocked.json"
+	// intentFileName is the pre-operation recovery intent: the durable statement
+	// that a snapshot was about to be taken, written before anything can change
+	// and removed only once the result is durable.
+	intentFileName = "intent.json"
 	// pushStateFileName holds remote retry state.
 	pushStateFileName = "push.json"
 	// watchStateFileName holds the external-change debounce clock.
@@ -43,6 +47,12 @@ const (
 	// A record written by a newer version is treated as unreadable rather than
 	// as absent, which for blocked.json means "still blocked".
 	stateVersion = 1
+
+	// intentPathCap bounds how many paths an intent record lists. The list is
+	// diagnostic — recovery decides from PathCount and the object identifiers, not
+	// from it — so truncating a thousand-file import keeps the record readable
+	// without weakening any decision made from it.
+	intentPathCap = 256
 )
 
 // Debounce policy for external editor changes, fixed by the plan: a change is
@@ -87,6 +97,66 @@ type BlockRecord struct {
 	// OldOID and NewOID name the objects or refs involved, when known.
 	OldOID string `json:"old_oid,omitempty"`
 	NewOID string `json:"new_oid,omitempty"`
+	// Recovery is the manual procedure, one step per line.
+	Recovery []string `json:"recovery,omitempty"`
+}
+
+// IntentPhase names how far a snapshot had progressed when the record was last
+// written. It is diagnostic rather than decisive: recovery proves what happened
+// by asking Git whether NewOID is reachable from the ref, because a phase is a
+// statement about the past and the repository is the present.
+type IntentPhase string
+
+const (
+	// IntentPhasePlanned means the operation had identified its paths and its
+	// starting ref but had not yet produced a commit object.
+	IntentPhasePlanned IntentPhase = "planned"
+	// IntentPhaseCommitted means a commit object exists and the ref update was
+	// about to be attempted. This is the only phase from which recovery can prove
+	// a snapshot landed, because it is the only one that carries a NewOID.
+	IntentPhaseCommitted IntentPhase = "committed"
+)
+
+// IntentRecord is the durable pre-operation intent.
+//
+// It exists to answer one question after a crash: did the snapshot that was
+// being taken actually land? Without it, an interrupted operation is
+// indistinguishable from one that never started — and the difference matters,
+// because the second is fine and the first may mean a change the user made is
+// recorded nowhere. The record is written and fsynced before the first step that
+// could produce a commit, and removed only after the ref update and its
+// containing directory are durable.
+//
+// Like BlockRecord it carries paths and object identifiers but never note
+// contents, for the same reason: it is meant to be readable, mailable, and
+// pasteable into an issue.
+type IntentRecord struct {
+	Version int `json:"version"`
+	// Operation names what the engine was doing, from the same sanitized
+	// vocabulary as BlockRecord.Operation.
+	Operation string `json:"operation"`
+	// ID identifies this attempt, so a block marker and an intent written by the
+	// same operation can be correlated in a log.
+	ID string `json:"id"`
+	// Phase is how far the operation had progressed. See IntentPhase.
+	Phase IntentPhase `json:"phase"`
+	// ObservedAt is when the record was written, in UTC.
+	ObservedAt time.Time `json:"observed_at"`
+	// Ref is the fully qualified ref the snapshot targets.
+	Ref string `json:"ref"`
+	// OldOID is the ref value the operation started from, empty on an unborn
+	// branch. NewOID is the commit the operation built, known only once the phase
+	// is committed.
+	OldOID string `json:"old_oid,omitempty"`
+	NewOID string `json:"new_oid,omitempty"`
+	// Paths are the vault-relative paths involved, truncated at intentPathCap.
+	Paths []string `json:"paths,omitempty"`
+	// PathCount is the untruncated count, so a truncated Paths list never
+	// misrepresents the size of what was in flight.
+	PathCount int `json:"path_count"`
+	// Message is the deterministic commit subject, kept for a person comparing
+	// the record against `git log`. It is generated, never derived from a note.
+	Message string `json:"message,omitempty"`
 	// Recovery is the manual procedure, one step per line.
 	Recovery []string `json:"recovery,omitempty"`
 }
@@ -185,6 +255,16 @@ func (s *safetyState) writeAtomic(name string, data []byte) error {
 		cleanup()
 		return fmt.Errorf("vaultgit: rename %q -> %q: %w", tmpPath, target, err)
 	}
+	// The rename is atomic against a concurrent reader the moment it returns, but
+	// not against power loss until the directory entry itself is durable. Every
+	// file written through here is one whose absence after a crash would be read
+	// as "nothing was wrong": a block marker that vanished re-enables mutations,
+	// and an intent that vanished turns an interrupted snapshot back into one that
+	// looks like it never started. Syncing here is what makes those records mean
+	// what the rest of the package assumes they mean.
+	if err := vault.SyncDir(s.dir); err != nil {
+		return fmt.Errorf("vaultgit: sync state directory: %w", err)
+	}
 	return nil
 }
 
@@ -216,8 +296,19 @@ func (s *safetyState) readJSON(name string, dst any) (found bool, err error) {
 }
 
 func (s *safetyState) remove(name string) error {
-	if err := os.Remove(s.path(name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(s.path(name)); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
 		return fmt.Errorf("vaultgit: remove %s: %w", name, err)
+	}
+	// An unlink is durable only once the directory entry is, and clearing the
+	// intent record is precisely the step the recovery protocol reads as "this
+	// finished". A record that reappears after a crash costs one no-op recovery
+	// pass, which is cheap; the symmetric case for a cleared block marker is not,
+	// so both go through the same sync.
+	if err := vault.SyncDir(s.dir); err != nil {
+		return fmt.Errorf("vaultgit: sync state directory: %w", err)
 	}
 	return nil
 }
@@ -284,6 +375,73 @@ func (s *safetyState) SaveBlock(record BlockRecord) error {
 // engine that could clear its own marker could loop through the same failure
 // forever. It exists for a future `bn` recovery command and for tests.
 func (s *safetyState) ClearBlock() error { return s.remove(blockedFileName) }
+
+// LoadIntent reports the persisted recovery intent.
+//
+// It fails closed in the same shape as LoadBlock, and for a sharper reason. The
+// only way recovery can retire an intent is by proving NewOID is reachable from
+// the ref, so an unreadable record is returned with an *empty* NewOID: there is
+// nothing to prove reachable, the proof cannot succeed, and the operation stays
+// refused until a person looks. Returning "absent" for a file that exists would
+// let a truncated record — a crash mid-write, a full disk — silently retire the
+// one durable statement that a snapshot may have been lost.
+//
+// A record whose version this build does not understand is handled identically:
+// its NewOID may well be meaningful, but this build cannot claim to know what
+// the field means, and guessing is exactly the wrong move here.
+func (s *safetyState) LoadIntent() (record IntentRecord, present bool, err error) {
+	var stored IntentRecord
+	found, decodeErr := s.readJSON(intentFileName, &stored)
+	if !found {
+		return IntentRecord{}, false, nil
+	}
+	if decodeErr != nil {
+		return IntentRecord{
+			Version:    stateVersion,
+			Operation:  "load-intent",
+			Phase:      IntentPhasePlanned,
+			ObservedAt: time.Time{},
+			Recovery:   unreadableIntentRecovery(s.path(intentFileName)),
+		}, true, decodeErr
+	}
+	if stored.Version != stateVersion {
+		return IntentRecord{
+			Version:   stored.Version,
+			Operation: "load-intent",
+			Phase:     IntentPhasePlanned,
+			Recovery:  unreadableIntentRecovery(s.path(intentFileName)),
+		}, true, nil
+	}
+	return stored, true, nil
+}
+
+func unreadableIntentRecovery(path string) []string {
+	return []string{
+		"Inspect " + path + " by hand; it is JSON and holds no note contents.",
+		"Run `git -C <vault> status` and `git -C <vault> log --oneline -5` to see whether the interrupted snapshot landed.",
+		"Commit anything still uncommitted by hand before continuing.",
+		"Delete " + path + " to allow BrainNotes mutation snapshots again.",
+	}
+}
+
+// SaveIntent persists the intent and, through writeAtomic, fsyncs both the
+// record and the directory entry naming it. Unlike SaveBlock, this write's
+// failure is decisive: an operation that cannot record its intent must not
+// proceed, because the state it is about to create would then be unrecoverable
+// by construction.
+func (s *safetyState) SaveIntent(record IntentRecord) error {
+	record.Version = stateVersion
+	record.ObservedAt = record.ObservedAt.UTC()
+	if len(record.Paths) > intentPathCap {
+		record.Paths = record.Paths[:intentPathCap]
+	}
+	return s.writeJSON(intentFileName, record)
+}
+
+// ClearIntent retires the record. It is called only after the outcome is durable
+// or after recovery has proved what happened, never as cleanup for an error
+// whose result is unknown.
+func (s *safetyState) ClearIntent() error { return s.remove(intentFileName) }
 
 // LoadPushState reports remote retry state. An unreadable file is reported as
 // absent, the opposite of the block marker: forgetting a backoff schedule costs

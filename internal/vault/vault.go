@@ -68,6 +68,14 @@ func Open(cfg *config.Config) (*Vault, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("vault: %q is not a directory", abs)
 	}
+	// Finish any transaction a previous process left prepared but unapplied, so a
+	// vault is whole by the time anything reads it. The result is deliberately
+	// ignored: opening a vault is what `bn find` and every other read-only command
+	// do, and a recovery that cannot run is not a reason to refuse them. The write
+	// path fails closed on the same condition — acquirePathLocks runs the same
+	// pass and returns its error — so nothing mutates a vault that is still
+	// undecided.
+	_ = recoverTxnIntents(abs)
 	return &Vault{Root: abs, cfg: cfg.Clone()}, nil
 }
 
