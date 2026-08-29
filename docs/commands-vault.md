@@ -158,10 +158,14 @@ also accepted. Success output is:
 restore: restored <archive-path> (mode=<overlay|wipe> files=<n>)
 ```
 
-With `--wipe`, `bn restore` deletes everything in the vault except the root
-`backups/` directory and its contents before applying the archive. That
-includes `.git/` and any other non-archived extras. `bn backup` / `bn restore`
-are vault-level snapshot commands; they do not create undo journal entries.
+With `--wipe`, `bn restore` deletes everything in the vault before applying the
+archive, except the two directories no archive ever contains: the root
+`backups/` directory and `.git/`. Those are kept because nothing could put them
+back — `backups/` holds your other archives, and `.git/` holds the vault's
+content history, including every version the wipe is about to discard. Every
+other non-archived extra is removed. `bn backup` / `bn restore` are vault-level
+snapshot commands; they do not create undo journal entries, but a successful
+restore is recorded as a single content-history snapshot.
 
 ### `bn history` — list recent undo journal entries
 

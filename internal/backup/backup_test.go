@@ -107,7 +107,11 @@ func TestRestoreOverlayOverwritesAndLeavesUnrelatedFiles(t *testing.T) {
 	assertFileContent(t, filepath.Join(vaultRoot, "Unrelated.md"), "keep me\n")
 }
 
-func TestRestoreWipeRemovesOtherFilesAndPreservesBackups(t *testing.T) {
+// A wipe removes what an archive can put back and nothing else. `backups/` and
+// `.git/` are excluded from every archive, so removing either would destroy the
+// only copy of something — the sibling backups, or the vault's whole content
+// history — with no archive anywhere able to restore it.
+func TestRestoreWipeRemovesOtherFilesAndPreservesBackupsAndGit(t *testing.T) {
 	t.Parallel()
 
 	vaultRoot := t.TempDir()
@@ -144,9 +148,7 @@ func TestRestoreWipeRemovesOtherFilesAndPreservesBackups(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(vaultRoot, "Scratch", "keep.txt")); !os.IsNotExist(err) {
 		t.Fatalf("Scratch/keep.txt should be removed, stat err = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(vaultRoot, ".git")); !os.IsNotExist(err) {
-		t.Fatalf(".git should be removed by wipe, stat err = %v", err)
-	}
+	assertFileContent(t, filepath.Join(vaultRoot, ".git", "config"), "git data\n")
 	if _, err := os.Stat(archivePath); err != nil {
 		t.Fatalf("source archive in backups should remain, stat err = %v", err)
 	}

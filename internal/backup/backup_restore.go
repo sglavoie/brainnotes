@@ -166,6 +166,16 @@ func applyStage(root, stageDir string, entries []archiveEntry) error {
 	return nil
 }
 
+// wipeVault empties the vault of everything a restore is able to put back.
+//
+// What it skips is not a list of conveniences, it is exactly isRootExcluded —
+// the same rule that kept those entries out of the archive in the first place.
+// `backups/` and `.git/` are never archived, so removing either would delete
+// something no archive on disk can restore: the other backups, and the vault's
+// entire content history. A wipe is meant to discard the vault's *content* and
+// replace it with an archive's, and both of those directories are the record of
+// what the content used to be. Keeping the two rules the same function means a
+// change to what is archived cannot silently make a wipe destructive.
 func wipeVault(root string) error {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -173,7 +183,7 @@ func wipeVault(root string) error {
 	}
 
 	for _, entry := range entries {
-		if strings.EqualFold(entry.Name(), backupDirName) {
+		if isRootExcluded(entry.Name()) {
 			continue
 		}
 

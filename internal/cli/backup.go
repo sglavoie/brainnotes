@@ -82,9 +82,11 @@ command fails before writing if the archive is corrupt/unsafe or if an entry
 hits a destination type conflict (for example, a file where a directory is
 required).
 
-With --wipe, restore deletes everything in the vault except the root backups/
-directory and its contents, then applies the archive. That includes .git/ and
-any other non-archived extras.
+With --wipe, restore deletes everything in the vault, then applies the archive.
+The two directories no archive ever contains are kept, because nothing could
+put them back: the root backups/ directory holding your other archives, and
+.git/ holding the vault's content history, including every version the wipe
+discards. Any other non-archived extra is removed.
 
 Relative archive paths are resolved from the vault root; absolute paths are
 also accepted. This command is separate from the undo journal, so inspect with
@@ -117,6 +119,6 @@ also accepted. This command is separate from the undo journal, so inspect with
 		},
 	}
 
-	cmd.Flags().BoolVar(&wipe, "wipe", false, "delete existing vault contents except backups/ before restoring")
+	cmd.Flags().BoolVar(&wipe, "wipe", false, "delete existing vault contents except backups/ and .git/ before restoring")
 	return cmd
 }

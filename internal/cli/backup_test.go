@@ -122,10 +122,15 @@ func TestRestoreCommandAcceptsAbsoluteArchivePath(t *testing.T) {
 	assertBackupFileContent(t, filepath.Join(root, "Folder", "Nested.md"), "nested\n")
 }
 
+// This fixture is deliberately not a Git repository. A vault whose `.git` is
+// real is refused or snapshotted by the safety engine, and what that does to a
+// wipe is proved against an actual repository in internal/mutationmatrix; here
+// the subject is only which entries the command removes, so a hidden directory
+// stands in for the general case.
 func TestRestoreCommandWipePreservesBackupsDirectory(t *testing.T) {
 	root := buildBackupFixture(t, map[string]string{
 		"Daily.md":                "old\n",
-		".git/config":             "git data\n",
+		".stale/leftover.json":    "{}",
 		"Scratch/keep.txt":        "wipe me\n",
 		"backups/existing.tar.gz": "existing-backup\n",
 	})
@@ -153,8 +158,8 @@ func TestRestoreCommandWipePreservesBackupsDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "Scratch", "keep.txt")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("Scratch/keep.txt should be removed, stat err = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".git")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf(".git should be removed by wipe, stat err = %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".stale")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(".stale should be removed by wipe, stat err = %v", err)
 	}
 }
 
