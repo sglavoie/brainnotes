@@ -228,11 +228,36 @@ type WatchState struct {
 	// which is why FirstChangeAt is written as 0001-01-01T00:00:00Z on an idle
 	// vault). It is absent while the policy is off and while no burst is open.
 	NextCommitDueAt *time.Time `json:"next_commit_due_at,omitempty"`
+	// ExternalCommitStartedAt is the durable statement that an external autosave
+	// was attempted at that instant and its outcome is not known to be recorded
+	// here. It is written and fsynced *before* the snapshot can produce a commit
+	// and retired only once LastCommitAt durably names the result, so the window
+	// in which a crash or a failed state write could lose the floor's anchor is
+	// closed by construction: whatever survives that window, one of the two
+	// fields already holds an instant no earlier than the commit's.
+	//
+	// It anchors the floor exactly as LastCommitAt does — see externalAnchor —
+	// which is what makes it fail-closed rather than merely diagnostic. A record
+	// left behind by a crash therefore defers the next external snapshot by one
+	// interval and then expires on its own, because the anchor it states recedes
+	// with the clock like any other.
+	//
+	// Like the two fields above it is written only by the watcher's own paths, so
+	// an explicit `bn`, web, or sidecar commit still neither waits for the floor
+	// nor moves it.
+	ExternalCommitStartedAt *time.Time `json:"external_commit_started_at,omitempty"`
 }
 
 // safetyState owns the state directory.
 type safetyState struct {
 	dir string
+	// failWrite is a test seam: when set, it runs in place of the durable write
+	// of the named state file and its error is returned instead. It exists
+	// because the failure this package has to survive — a state write that fails
+	// in the instant *after* a commit landed — cannot be provoked from outside a
+	// process without also breaking the writes that come before it. It is nil in
+	// production and set only by tests in this package.
+	failWrite func(name string) error
 }
 
 func newSafetyState(gitDir string) *safetyState {
@@ -260,6 +285,11 @@ func (s *safetyState) ensureDir() error {
 // It mirrors internal/journal's writeAtomic: a reader opens either the whole
 // old file or the whole new one, never a torn record.
 func (s *safetyState) writeAtomic(name string, data []byte) error {
+	if s.failWrite != nil {
+		if err := s.failWrite(name); err != nil {
+			return err
+		}
+	}
 	if err := s.ensureDir(); err != nil {
 		return fmt.Errorf("vaultgit: prepare state directory: %w", err)
 	}
@@ -605,6 +635,12 @@ func (s *safetyState) NoteChange(policy config.AutosavePolicy, now time.Time) (W
 // a schedule to be about. LastCommitAt is left exactly where it was: a burst that
 // resolved itself took no snapshot, so it must not move the floor a real one
 // would be measured from.
+//
+// ExternalCommitStartedAt is left alone for the sharper version of the same
+// reason. The state a crash between a landed commit and its anchor write leaves
+// behind is exactly "an in-flight marker and a clean working tree", so this is
+// the first path that runs afterwards; retiring the marker here would drop the
+// only durable evidence of that snapshot and hand the next burst a stale floor.
 func (s *safetyState) NoteSettled(policy config.AutosavePolicy) (closed bool, err error) {
 	state := s.LoadWatchState()
 	if state.FirstChangeAt.IsZero() && state.LastChangeAt.IsZero() {
@@ -619,18 +655,64 @@ func (s *safetyState) NoteSettled(policy config.AutosavePolicy) (closed bool, er
 	return true, err
 }
 
+// BeginExternalCommit records that an external autosave is about to be attempted
+// at now, and anchors the floor there before it can be taken.
+//
+// This is the write-ahead half of the floor's durability contract, and its
+// ordering is the whole of it: it runs before anything the attempt does can
+// produce a commit, so a commit that exists is a commit an anchor no earlier than
+// it already survives. Its failure is decisive for the same reason
+// [safetyState.SaveIntent]'s is — a snapshot whose floor could not be anchored is
+// one that could be taken twice inside the interval the vault configured — and it
+// costs nothing but a deferral, because the burst it refuses stays open and the
+// next poll retries it.
+//
+// It forces the write. The marker is not a derived field, so an unforced publish
+// would skip it whenever the due time it implies happens to match the one already
+// on disk, which is precisely the case where the floor is binding.
+func (s *safetyState) BeginExternalCommit(policy config.AutosavePolicy, now time.Time) (WatchState, error) {
+	now = now.UTC()
+	state := s.LoadWatchState()
+	state.ExternalCommitStartedAt = &now
+	return s.publishWatchState(state, policy, true)
+}
+
+// AbandonExternalCommit retires the marker BeginExternalCommit wrote at
+// startedAt, for the pass that provably recorded nothing.
+//
+// A snapshot that reached the repository and committed no tree owes the floor
+// nothing, so holding the interval against it would spend a vault's snapshot
+// budget on a non-event. The instant is matched rather than assumed: only the
+// attempt that wrote a marker may retire it, so a pass cannot lift a floor some
+// other attempt is still holding.
+func (s *safetyState) AbandonExternalCommit(policy config.AutosavePolicy, startedAt time.Time) (WatchState, error) {
+	state := s.LoadWatchState()
+	if state.ExternalCommitStartedAt == nil || !state.ExternalCommitStartedAt.Equal(startedAt.UTC()) {
+		return state, nil
+	}
+	state.ExternalCommitStartedAt = nil
+	return s.publishWatchState(state, policy, true)
+}
+
 // NoteCommit closes the current burst and anchors the external floor at now.
 //
 // It is called from exactly one place — [Manager.CommitPending], after a
 // successful external snapshot — and that is the whole of the floor's contract.
 // Every other entry point commits without touching this record, so an explicit
 // mutation neither waits for the floor nor resets it.
+//
+// It also retires the in-flight marker, which is what makes this the *durable*
+// statement of the same fact rather than a second one: from here on the anchor is
+// LastCommitAt, and it names when the snapshot finished rather than when it
+// started. A failure here is survivable precisely because the marker it would
+// have retired is still on disk holding the floor.
 func (s *safetyState) NoteCommit(policy config.AutosavePolicy, now time.Time) (WatchState, error) {
 	now = now.UTC()
 	state := s.LoadWatchState()
 	state.FirstChangeAt = time.Time{}
 	state.LastChangeAt = time.Time{}
 	state.LastCommitAt = now
+	state.ExternalCommitStartedAt = nil
 	return s.publishWatchState(state, policy, true)
 }
 
@@ -690,13 +772,35 @@ func (w WatchState) DueTime(policy config.AutosavePolicy) (time.Time, bool) {
 			ready = quiet
 		}
 	}
-	if w.LastCommitAt.IsZero() {
+	anchor := w.externalAnchor()
+	if anchor.IsZero() {
 		return ready, true
 	}
-	if floor := w.LastCommitAt.UTC().Add(policy.Interval); floor.After(ready) {
+	if floor := anchor.Add(policy.Interval); floor.After(ready) {
 		return floor, true
 	}
 	return ready, true
+}
+
+// externalAnchor reports the instant the floor is measured from: the later of the
+// last external autosave known to have finished and the last one known to have
+// been attempted.
+//
+// The two disagree only across the window this record exists to survive — a
+// commit that landed and whose completion could not be written down, because the
+// state write failed or the process died. Taking the later of them is what makes
+// that window fail closed: the anchor is never earlier than the commit the
+// history actually holds, so the next external snapshot cannot land inside the
+// configured interval no matter which of the two writes survived.
+func (w WatchState) externalAnchor() time.Time {
+	anchor := w.LastCommitAt.UTC()
+	if w.ExternalCommitStartedAt == nil {
+		return anchor
+	}
+	if started := w.ExternalCommitStartedAt.UTC(); started.After(anchor) {
+		return started
+	}
+	return anchor
 }
 
 // DueAt reports whether an open burst may be committed at now: readiness has

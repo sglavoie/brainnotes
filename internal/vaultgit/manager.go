@@ -733,6 +733,11 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 		return CommitResult{}, err
 	}
 
+	// The instant the floor was anchored at, for the attempt that is about to run.
+	// It is zero until an attempt writes one, which is what distinguishes "this
+	// pass took no snapshot" from "this pass found nothing to snapshot" — only the
+	// first of those has a marker of its own to retire.
+	var anchoredAt time.Time
 	result, err := m.withCAS(ctx, op, func(head string) (*commitPlan, error) {
 		set, err := m.scanPending(ctx, head, op)
 		if err != nil {
@@ -741,6 +746,23 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 		if set.empty() {
 			return nil, nil
 		}
+		// Write-ahead the floor's anchor, before anything below can produce a
+		// commit. The pair of writes that brackets this attempt is what closes the
+		// window the floor used to have: if only this one survives, the anchor is
+		// the attempt's start; if both do, it is the snapshot's end; and there is no
+		// ordering in which a commit exists and neither does.
+		//
+		// Its failure stops the attempt, exactly as a failed intent record does and
+		// for a sibling reason — a snapshot that cannot say when it happened is one
+		// the next burst would be free to repeat inside the vault's own interval.
+		// Nothing has been written to the repository at this point, the burst stays
+		// open, and the next poll retries.
+		at := m.now()
+		if _, err := m.state.BeginExternalCommit(m.policy(), at); err != nil {
+			return nil, safetyErrorf(KindRepositoryState, op,
+				"the external autosave floor could not be anchored, so no snapshot was attempted: %s", agent.SanitizedDiagnostic(err))
+		}
+		anchoredAt = at
 		plan := &commitPlan{
 			add:          append(append([]string{}, set.added...), set.modified...),
 			remove:       set.deleted,
@@ -755,14 +777,34 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 		return plan, nil
 	})
 	if err != nil {
+		// The marker stays. An attempt that failed on the way to the repository may
+		// or may not have left a commit behind — a latched block says the vault is
+		// refused either way, and a floor held for one interval by a snapshot that
+		// never landed is the cheap side of that uncertainty.
 		return result, err
 	}
 	if result.Committed {
 		// This is the one call that advances the external floor's anchor, because
-		// this is the one entry point that takes an external autosave.
+		// this is the one entry point that takes an external autosave. It also
+		// retires the marker written above, replacing it with the same fact stated
+		// durably.
 		if _, err := m.state.NoteCommit(m.policy(), m.now()); err != nil {
-			// The debounce clock is a scheduling hint. Losing it costs at most one
-			// redundant scan, so it must not turn a successful commit into a failure.
+			// Losing this write no longer loses the floor: the marker is still on
+			// disk and still anchors it, so the cost is a burst that stays open for
+			// one redundant scan. It must not turn a successful commit into a
+			// failure.
+			_ = err
+		}
+		return result, nil
+	}
+	if !anchoredAt.IsZero() {
+		// The pass reached the repository and provably recorded nothing — every
+		// discovered addition was unreadable, or the tree it built already matched
+		// the tip. No history was written, so no interval is owed.
+		if _, err := m.state.AbandonExternalCommit(m.policy(), anchoredAt); err != nil {
+			// Failing to retire the marker only defers the next external snapshot by
+			// one interval, which is the safe direction and self-correcting: the
+			// anchor it states recedes with the clock.
 			_ = err
 		}
 	}

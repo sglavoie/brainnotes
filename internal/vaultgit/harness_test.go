@@ -287,6 +287,29 @@ func (h *testHarness) commitPending() CommitResult {
 	return result
 }
 
+// failWatchWriteFrom makes the nth durable write of watch.json on mgr fail, and
+// every later one, standing in for a full disk or a process that died in that
+// instant.
+//
+// Counting is how a test reaches the one write that matters. A single
+// CommitPending writes the record exactly twice — once to anchor the floor
+// before the attempt and once to record the result — and the failure this is
+// about is the second of those, which cannot be provoked from outside the
+// process without also breaking the first.
+func failWatchWriteFrom(mgr *Manager, n int) {
+	writes := 0
+	mgr.state.failWrite = func(name string) error {
+		if name != watchStateFileName {
+			return nil
+		}
+		writes++
+		if writes < n {
+			return nil
+		}
+		return errors.New("injected: the debounce clock could not be written")
+	}
+}
+
 // head reports the current commit, or an empty string on an unborn branch.
 func (h *testHarness) head() string {
 	h.t.Helper()

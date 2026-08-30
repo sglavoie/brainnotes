@@ -92,6 +92,17 @@ fields the health check reads: `autosave_min_interval`, the policy actually in
 force, and `next_commit_due_at`, the `due_at` above, absent when no burst is open
 or when autosave is off.
 
+The floor's anchor is written twice on purpose. Before an autosave can produce a
+commit the guard records `external_commit_started_at`; once the snapshot is
+durable it replaces that with `last_commit_at` and clears the marker. The floor
+is measured from whichever of the two is later, so there is no ordering in which
+a commit is in the history and nothing on disk anchors it — a guard killed in
+that instant, or a state file that could not be written, defers the next autosave
+by one interval instead of forgetting the one it just took. A marker left behind
+by a crash expires on its own, because the instant it names recedes like any
+other. If the marker cannot be written at all, no autosave is attempted: the
+edits stay in the working tree, the burst stays open, and the next poll retries.
+
 ### Changing the floor while the guard is running
 
 The guard re-reads `brainnotes.toml` before every scan, so

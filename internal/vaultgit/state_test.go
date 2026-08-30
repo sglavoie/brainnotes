@@ -542,6 +542,9 @@ func TestWatchStateSerializationIsStable(t *testing.T) {
 	if _, present := idle["next_commit_due_at"]; present {
 		t.Fatalf("an idle vault published a due time: %v", idle["next_commit_due_at"])
 	}
+	if _, present := idle["external_commit_started_at"]; present {
+		t.Fatalf("a vault with no snapshot in flight published one: %v", idle["external_commit_started_at"])
+	}
 
 	if _, err := state.NoteChange(policy, watchStart); err != nil {
 		t.Fatalf("NoteChange: %v", err)
@@ -560,6 +563,38 @@ func TestWatchStateSerializationIsStable(t *testing.T) {
 	}
 	if !parsed.Equal(watchStart.Add(DebounceQuiet)) {
 		t.Fatalf("next_commit_due_at = %s, want %s", parsed, watchStart.Add(DebounceQuiet))
+	}
+
+	// The in-flight anchor is present only while a snapshot is unfinished, and it
+	// is written in the same shape as the due time — an absent key rather than a
+	// zero instant, so a consumer reading flat top-level keys can tell the two
+	// apart without knowing what a Go zero time looks like.
+	if _, err := state.BeginExternalCommit(policy, watchStart.Add(time.Minute)); err != nil {
+		t.Fatalf("BeginExternalCommit: %v", err)
+	}
+	inFlight := decodeWatchJSON(t, state)
+	started, ok := inFlight["external_commit_started_at"].(string)
+	if !ok {
+		t.Fatalf("external_commit_started_at = %v, want an RFC3339 string", inFlight["external_commit_started_at"])
+	}
+	startedAt, err := time.Parse(time.RFC3339, started)
+	if err != nil {
+		t.Fatalf("external_commit_started_at %q is not RFC3339: %v", started, err)
+	}
+	if startedAt.Location() != time.UTC || !startedAt.Equal(watchStart.Add(time.Minute)) {
+		t.Fatalf("external_commit_started_at = %q, want %s in UTC", started, watchStart.Add(time.Minute))
+	}
+	// And the due time it implies is the floor it anchors, not the readiness the
+	// burst would otherwise have had.
+	if got := inFlight["next_commit_due_at"]; got != watchStart.Add(6*time.Minute).Format(time.RFC3339) {
+		t.Fatalf("next_commit_due_at = %v, want the in-flight anchor plus the 5m floor", got)
+	}
+
+	if _, err := state.NoteCommit(policy, watchStart.Add(2*time.Minute)); err != nil {
+		t.Fatalf("NoteCommit: %v", err)
+	}
+	if _, present := decodeWatchJSON(t, state)["external_commit_started_at"]; present {
+		t.Fatal("a finished snapshot still publishes an in-flight anchor")
 	}
 }
 
