@@ -31,6 +31,11 @@ import verify_vault_safety_evidence as harness
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RECORD_NAME = "docs/operations/vault-safety-evidence.json"
 
+# The timing gate, named once because several tests drive it: it is the only
+# one whose scenario asserts a *configured* policy, so it is where a narrative
+# can claim a floor the run never enforced.
+FLOOR_GATE = "external_edit_scheduled_by_readiness_and_floor"
+
 
 def fake_args(root: Path) -> argparse.Namespace:
     """The harness's argv, with the live-machine arguments pointed nowhere.
@@ -211,9 +216,11 @@ class TestRewrittenEvidence(RecordTestCase):
             self.verify()
 
     def test_a_verdict_recorded_before_the_run_it_describes_is_rejected(self) -> None:
-        self.replace_in_evidence(
-            "bn_doctor", "# outcome: pass (2026-08-29T03:32:15Z)", "# outcome: pass (2026-08-28T00:00:00Z)"
-        )
+        # Read the trailer the retained narrative actually carries rather than
+        # naming a timestamp here: refreshing the evidence must not rot the test.
+        text = self.evidence_text("bn_doctor")
+        trailer = text[text.index("# outcome:") :].splitlines()[0]
+        self.replace_in_evidence("bn_doctor", trailer, "# outcome: pass (2026-08-28T00:00:00Z)")
         with self.assertRejected("outcome predates the run"):
             self.verify()
 
@@ -263,11 +270,72 @@ class TestMalformedGateSpecificResults(RecordTestCase):
 
     def test_a_policy_the_build_does_not_implement_is_rejected(self) -> None:
         self.replace_in_evidence(
-            "external_edit_debounced_quiet_and_max",
+            FLOOR_GATE,
             "maximum_latency_seconds_policy: 120",
             "maximum_latency_seconds_policy: 900",
         )
         with self.assertRejected("maximum_latency_seconds_policy"):
+            self.verify()
+
+    def test_a_floor_the_guard_was_not_enforcing_is_rejected(self) -> None:
+        # The floor is configured rather than compiled in, so the gate records
+        # the guard's own published token. A narrative that measured a
+        # five-minute wait and claims a thirty-minute floor is describing a run
+        # that did not happen.
+        self.replace_in_evidence(
+            FLOOR_GATE,
+            "published_autosave_min_interval: 5m",
+            "published_autosave_min_interval: 30m",
+        )
+        with self.assertRejected("published_autosave_min_interval"):
+            self.verify()
+
+    def test_an_autosave_taken_sooner_than_the_floor_allows_is_rejected(self) -> None:
+        # The property the second section exists for: the commit waited out the
+        # floor rather than landing when readiness alone would have allowed it.
+        # A narrative reporting a readiness-shaped delay here has shown the
+        # opposite of the gate.
+        self.replace_in_evidence(
+            FLOOR_GATE,
+            "seconds_from_previous_autosave_to_deferred_commit: 305.1",
+            "seconds_from_previous_autosave_to_deferred_commit: 41.2",
+        )
+        with self.assertRejected(
+            "seconds_from_previous_autosave_to_deferred_commit.*below the required"
+        ):
+            self.verify()
+
+    def test_a_due_time_the_floor_never_deferred_is_rejected(self) -> None:
+        self.replace_in_evidence(
+            FLOOR_GATE,
+            "due_time_was_deferred_past_readiness: True",
+            "due_time_was_deferred_past_readiness: False",
+        )
+        with self.assertRejected("due_time_was_deferred_past_readiness.*requires True"):
+            self.verify()
+
+    def test_a_floor_that_swallowed_an_autosave_of_its_own_is_rejected(self) -> None:
+        # Two autosaves five minutes apart with a third in between is not one
+        # deferred commit; it is a floor that was not in force, wearing the
+        # right durations.
+        self.replace_in_evidence(
+            FLOOR_GATE,
+            "commits_between_the_two_autosaves: 0",
+            "commits_between_the_two_autosaves: 1",
+        )
+        with self.assertRejected("commits_between_the_two_autosaves"):
+            self.verify()
+
+    def test_a_readiness_only_timing_narrative_is_rejected(self) -> None:
+        # The shape the retired quiet-and-maximum drill produced: readiness
+        # measured, the floor never exercised. It is a perfectly well-formed
+        # narrative and it passes every integrity check, which is exactly why
+        # the section is what refuses it.
+        text = self.evidence_text(FLOOR_GATE)
+        head, marker, _ = text.partition("## the floor:")
+        self.assertTrue(marker, "the floor section is not in the fixture")
+        self.rewrite_evidence(FLOOR_GATE, head + "# outcome: pass (2026-08-29T23:27:59Z)\n")
+        with self.assertRejected("no `## the floor"):
             self.verify()
 
     def test_an_unexercised_scenario_section_is_rejected(self) -> None:

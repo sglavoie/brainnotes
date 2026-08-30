@@ -39,6 +39,52 @@ Config:      /Users/you/vault/brainnotes.toml
 Resolved by: upward search
 ```
 
+### `bn config get` / `set` / `unset` — script one configuration key
+
+```sh
+bn config get   autosave.min_interval
+bn config set   autosave.min_interval VALUE [--dry-run]
+bn config unset autosave.min_interval [--dry-run]
+```
+
+`autosave.min_interval` — the floor between two commits the external file
+watcher makes on its own — is currently the **only** scriptable key, and any
+other key is refused by name. A key becomes scriptable only once its normalized
+spelling, what an absent assignment falls back to, and whether rewriting it
+under a running watcher is safe all have answers; nothing else has all three
+yet.
+
+`get` prints the effective value and a newline, normalized the way `bn` writes
+it, so it reads straight into a shell variable. `set` rewrites exactly one
+assignment and leaves every other byte — comments included — alone, creating the
+`[autosave]` table at the end of the file when it is absent. `unset` removes the
+assignment so the built-in default applies again, which is the right way to
+restore a default: passing it explicitly writes an assignment that happens to
+equal it.
+
+A change is an ordinary mutation with one transaction, one undo-journal entry,
+and one immediate commit, so `bn undo` reverts it. A no-op — setting the value
+already stored, or unsetting a key that is not assigned — writes nothing and
+records nothing, and neither does `--dry-run`, which prints the same diff the
+apply would have written.
+
+```text
+$ bn config get autosave.min_interval
+5m
+
+$ bn config set autosave.min_interval 30m
+$ bn config get autosave.min_interval
+30m
+
+$ bn config unset autosave.min_interval --dry-run
+--- brainnotes.toml
+- 151: min_interval = "30m"
+```
+
+See [Configuration](configuration.md#the-autosave-floor) for the accepted
+values and [Vault Safety](operations/vault-safety.md#immediate-versus-scheduled-snapshots)
+for what the floor does.
+
 ### `bn schema` — show the configured frontmatter property schema
 
 ```sh

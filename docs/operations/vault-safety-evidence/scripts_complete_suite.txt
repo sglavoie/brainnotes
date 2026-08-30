@@ -1,7 +1,7 @@
 # gate: scripts_complete_suite
-# title: the scripts repository's complete suite passes, including the new guard module
-# recorded: 2026-08-29T03:25:17Z
-# redaction: this drill touches only synthetic vault-safety-drill-* paths;
+# title: the scripts repository's complete suite passes, including the guard module
+# recorded: 2026-08-29T23:48:30Z
+# redaction: this gate records a build-and-test run in a source repository;
 #            no vault note name and no note body appears below.
 
 
@@ -12,11 +12,11 @@
 
 ## observe
 
-  brainnotes guard shard result: ok  tests.test_brainnotes_vault_guard              61.9s    34 tests
+  brainnotes guard shard result: ok  tests.test_brainnotes_vault_guard             117.8s    72 tests
   --- tail of output ---
-  |   ok  tests.test_asl_review_lifecycle               416.8s   167 tests
-  | 
-  | complete suite passed: 5742 tests across 82 shards in 416.8s (0 failed shard(s))
-  | python3 -m tests.run_suite --all
+  |   ok  tests.test_asl_run_gates                      252.7s   116 tests
+  |   ok  tests.test_asl_review_lifecycle               336.6s   167 tests
+  |
+  | complete suite passed: 5780 tests across 82 shards in 336.6s (0 failed shard(s))
 
-# outcome: pass (2026-08-29T03:32:14Z)
+# outcome: pass (2026-08-29T23:55:18Z)

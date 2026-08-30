@@ -217,6 +217,12 @@ person  = "People"
 goal    = "Goals"
 project = "Projects"
 daily   = "Daily"
+
+[autosave]
+# Hard floor between two commits the external file watcher makes on its own.
+# A Go duration between "30s" and "24h" inclusive, or "off". Absent means "5m".
+# Explicit `bn`, web, and sidecar changes commit immediately either way.
+min_interval = "5m"
 ```
 
 Explicit wikilinks in any frontmatter property participate in the note graph,
@@ -262,5 +268,104 @@ carrying its error** — a `STATUS` of `error` in `bn views`, a failure in
 `bn init` does not write a starter `[[views]]` block; add one by hand, or save
 the current query from the Library page of `bn serve`, which patches this file
 for you after showing the exact diff.
+
+### The autosave floor
+
+`[autosave].min_interval` is a floor on how often the vault's content history
+may gain a commit that *nobody asked for* — a snapshot of a change made outside
+BrainNotes, by Obsidian, `vim`, a sync client, or a script. It is the only
+safety timing a vault configures, and it is the one that is a matter of taste
+rather than of correctness: it says how much history you want, not how quickly
+the vault reacts to a change.
+
+| | |
+| --- | --- |
+| Default | `5m`, applied when the key is absent |
+| Range | `30s` to `24h`, inclusive |
+| Disabled | `off`, the only non-duration value, in lower case |
+| Normalization | Go duration syntax; `300s` and `5m0s` are stored and printed as `5m` |
+
+The lower bound sits above the watcher's fixed 30-second quiet period, so a
+floor can never be shorter than the readiness it defers. `Off` and `OFF` are
+rejected by name rather than guessed at, because a value meaning "stop
+committing on your own" is not a place to be lenient. A value outside the range
+or in a spelling that does not parse is a load error: `bn` refuses to run
+against the file, and `bn-vault-guard` refuses to start on it.
+
+What the floor does **not** touch, at any value including `off`:
+
+- Explicit BrainNotes mutations. Every `bn` command, web write, `bn undo`, and
+  durable sidecar update still commits its own paths before it returns, and
+  never waits for or resets the floor.
+- Deletion protection. A tracked file that disappears with no undo-journal
+  record still blocks the vault on the poll that noticed it.
+- Pushing, which is scheduled independently of committing.
+- The five-second scan, health reporting, and the log.
+
+Read [Vault Safety](operations/vault-safety.md#immediate-versus-scheduled-snapshots)
+for the schedule the floor participates in, what changing it does to a running
+guard, and how the health check reports a vault that is waiting on it.
+
+#### Reading and writing it from a script
+
+`autosave.min_interval` is the one configuration key with a scriptable
+read/write surface. Every other key is edited in the file.
+
+```sh
+bn config get   autosave.min_interval
+bn config set   autosave.min_interval VALUE [--dry-run]
+bn config unset autosave.min_interval [--dry-run]
+```
+
+`get` prints the **effective** value and a newline, normalized: `5m` whether the
+file says `5m`, `300s`, or nothing at all. It therefore cannot distinguish an
+explicit `5m` from an absent key, which is deliberate — what a script wants to
+know is which floor is in force.
+
+`set` rewrites exactly that one assignment, leaving every other byte of the file
+— including the comments around it and on it — where it was, and creates the
+`[autosave]` table at the end of the file if it does not exist yet. The value is
+normalized before it is written, so `bn config set autosave.min_interval 300s`
+against a file storing `5m` changes nothing and records nothing, while the same
+command against a file storing `300s` is a real change that normalizes the
+assignment.
+
+`unset` removes the assignment so the built-in `5m` default applies again. Use
+it rather than setting the default explicitly: `bn config set
+autosave.min_interval 5m` against a vault with no assignment is a real change —
+it writes an assignment, commits, and journals one — even though `bn config get`
+answered `5m` before and after. Unsetting a key that is not assigned changes
+nothing and records nothing.
+
+A change through either command is an ordinary BrainNotes mutation — one
+transaction pinned to the bytes the patch was computed from, one undo-journal
+entry, one immediate commit — so `bn undo` reverts a floor change like any
+other. A semantic no-op and a `--dry-run` create no transaction, no journal
+entry, and no commit; `--dry-run` prints the same diff the apply would write.
+
+```text
+$ bn config get autosave.min_interval
+5m
+
+$ bn config set autosave.min_interval 30m --dry-run
+--- brainnotes.toml
+- 151: min_interval = "5m"
++ 151: min_interval = "30m"
+
+$ bn config set autosave.min_interval 15s
+bn: config: autosave.min_interval "15s" must be between 30s and 24h inclusive
+```
+
+The starter config ships the `[autosave]` table with its key commented out, so
+`set` fills the assignment in beside the comment. A `brainnotes.toml` written
+before the key existed has no such table, and gets one appended:
+
+```text
+$ bn config set autosave.min_interval 30m --dry-run
+--- brainnotes.toml
++ 206:
++ 207: [autosave]
++ 208: min_interval = "30m"
+```
 
 

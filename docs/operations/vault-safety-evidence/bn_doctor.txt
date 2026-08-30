@@ -1,8 +1,8 @@
 # gate: bn_doctor
 # title: the vault hygiene check runs cleanly against the live vault
-# recorded: 2026-08-29T03:32:14Z
-# redaction: this drill touches only synthetic vault-safety-drill-* paths;
-#            no vault note name and no note body appears below.
+# recorded: 2026-08-29T23:54:54Z
+# redaction: bn doctor's hygiene queue names real vault notes, so its output
+#            is not retained; only counts and stream emptiness appear below.
 
 
 ## act
@@ -12,8 +12,8 @@
 
 ## observe
 
-  output_lines: 36
+  output_lines: 61
   stderr_empty: True
   queue_output_withheld: the hygiene queue names notes and is not retained
 
-# outcome: pass (2026-08-29T03:32:15Z)
+# outcome: pass (2026-08-29T23:55:18Z)

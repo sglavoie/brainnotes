@@ -57,7 +57,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-CATALOGUE_VERSION = 1
+CATALOGUE_VERSION = 2
 
 # --------------------------------------------------------------------------
 # policy the scenarios are asserted against
@@ -71,6 +71,14 @@ QUIET_SECONDS_POLICY = 30
 MAXIMUM_LATENCY_SECONDS_POLICY = 120
 PUSH_INTERVAL_SECONDS_POLICY = 300
 PUSH_FAILURE_STREAK_THRESHOLD = 3
+
+# The autosave floor the timing gate is run at, and the canonical token
+# `internal/config` normalises it to. Unlike the three constants above this one
+# is a *configured* value rather than a compiled-in one, which is exactly why
+# the gate records both forms: a narrative that measured a different floor from
+# the one it claims to have set is describing a run nobody can reproduce.
+AUTOSAVE_FLOOR_SECONDS_POLICY = 300
+AUTOSAVE_FLOOR_TOKEN_POLICY = "5m"
 
 # A measured latency is the policy window plus however long the observer took to
 # notice the commit. The slack is what separates "later than the policy allows"
@@ -444,31 +452,87 @@ _SCENARIO_LIST = (
         exit_status_key="exit_status",
     ),
     Scenario(
-        name="external_edit_debounced_quiet_and_max",
-        summary="an external edit commits after quiet, and no later than the maximum",
+        name="external_edit_scheduled_by_readiness_and_floor",
+        summary="an external edit commits once it is both ready and past the autosave floor",
+        # Two sections because the schedule is two independent conditions, and a
+        # drill that measured only the first would still look like a passing
+        # timing gate. `due_at = max(ready_at, floor_at)`: the first section
+        # holds `floor_at` out of the way and measures readiness on its own; the
+        # second makes the change ready early and measures the floor deferring
+        # it. Neither section on its own distinguishes the two.
         required_sections=(
-            "quiet window (30s of no change)",
-            "maximum latency (a burst that never goes quiet)",
+            "readiness alone: the first external edit after a quiet history",
+            "the floor: an edit that is ready long before the floor allows a commit",
         ),
         requires=(
-            Require("commits_after_20s", TEXT),
-            Require("commit_landed", BOOL, equals=True),
-            Require("external_writes_during_burst", INT, minimum=1),
-            Require("quiet_seconds_policy", INT, equals=QUIET_SECONDS_POLICY),
+            # The policy each section ran under, recorded from the guard's own
+            # published record rather than from the drill's intent, so a floor
+            # that never took effect cannot be reported as one that did.
+            Require("quiet_seconds_policy", INT, equals=QUIET_SECONDS_POLICY, count=2),
             Require(
-                "maximum_latency_seconds_policy", INT, equals=MAXIMUM_LATENCY_SECONDS_POLICY
+                "maximum_latency_seconds_policy",
+                INT,
+                equals=MAXIMUM_LATENCY_SECONDS_POLICY,
+                count=2,
             ),
-            # Both windows are measured, and neither may land before the quiet
-            # policy would allow or after the maximum latency plus observation
-            # slack. One bound covers both because the quiet commit is the lower
-            # end of the same range the burst commit sits at the top of.
+            Require(
+                "autosave_floor_seconds_policy",
+                INT,
+                equals=AUTOSAVE_FLOOR_SECONDS_POLICY,
+                count=2,
+            ),
+            Require(
+                "published_autosave_min_interval",
+                TEXT,
+                equals=AUTOSAVE_FLOOR_TOKEN_POLICY,
+                count=2,
+            ),
+            Require("external_writes_during_burst", INT, minimum=1, count=2),
+            Require("commit_landed", BOOL, equals=True, count=2),
+            # Section one. With no previous external autosave the floor has
+            # nothing to be measured from, so readiness alone decides and the
+            # commit lands inside the window the fixed constants define.
+            Require("previous_external_autosave_recorded", BOOL, equals=False),
             Require(
                 "seconds_from_first_change_to_commit",
                 FLOAT,
                 minimum=QUIET_SECONDS_POLICY,
                 maximum=MAXIMUM_LATENCY_SECONDS_POLICY + OBSERVATION_SLACK_SECONDS,
-                count=2,
             ),
+            # Section two, and the decisive half of the gate. The change is
+            # ready within 30 seconds and would have been committed within two
+            # minutes under readiness alone; the floor pushes the published due
+            # time past that ceiling, and the commit lands where the due time
+            # said it would rather than where readiness did.
+            Require("due_time_was_deferred_past_readiness", BOOL, equals=True),
+            Require(
+                "seconds_from_first_change_to_published_due",
+                FLOAT,
+                minimum=MAXIMUM_LATENCY_SECONDS_POLICY,
+                maximum=AUTOSAVE_FLOOR_SECONDS_POLICY + OBSERVATION_SLACK_SECONDS,
+            ),
+            Require(
+                "seconds_from_previous_autosave_to_published_due",
+                FLOAT,
+                minimum=AUTOSAVE_FLOOR_SECONDS_POLICY,
+                maximum=AUTOSAVE_FLOOR_SECONDS_POLICY + OBSERVATION_SLACK_SECONDS,
+            ),
+            Require(
+                "seconds_from_first_change_to_deferred_commit",
+                FLOAT,
+                minimum=MAXIMUM_LATENCY_SECONDS_POLICY,
+                maximum=AUTOSAVE_FLOOR_SECONDS_POLICY + OBSERVATION_SLACK_SECONDS,
+            ),
+            Require(
+                "seconds_from_previous_autosave_to_deferred_commit",
+                FLOAT,
+                minimum=AUTOSAVE_FLOOR_SECONDS_POLICY,
+                maximum=AUTOSAVE_FLOOR_SECONDS_POLICY + OBSERVATION_SLACK_SECONDS,
+            ),
+            # A floor that deferred nothing because the guard committed twice in
+            # between would satisfy every duration above. This is what says the
+            # wait was one wait.
+            Require("commits_between_the_two_autosaves", INT, equals=0),
             Require("commit", OID, count=2),
             Require("subject", TEXT, count=2),
             Require("changed_paths", INT, equals=1, count=2),

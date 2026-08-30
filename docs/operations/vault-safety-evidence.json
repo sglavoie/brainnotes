@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "scenario_catalogue_version": 1,
+  "scenario_catalogue_version": 2,
   "description": "Live acceptance and restore gates for the BrainNotes vault loss-prevention work. Every gate here is a claim. scripts/verify_vault_safety_evidence.py re-derives each one from files, repositories and processes, and re-decides each gate's verdict by parsing its retained narrative against the scenario declared for it in scripts/vault_safety_scenarios.py; it never accepts a gate because this file says it passed. A gate may record an exit status only when its narrative shows one.",
   "gates": {
     "artifacts_contain_no_note_bodies": {
@@ -12,18 +12,18 @@
     },
     "bn_doctor": {
       "outcome": true,
-      "checked_at": "2026-08-29T03:32:14Z",
+      "checked_at": "2026-08-29T23:54:54Z",
       "exit_status": 0,
       "evidence_path": "docs/operations/vault-safety-evidence/bn_doctor.txt",
-      "evidence_sha256": "5bfefb7d4f3e82405226ade39d4b96650d0f891ba11da47c0cddb3f5e8a354d0",
+      "evidence_sha256": "ce02e0bbfa58c05fcc4a7e883d11c0e7a8e4c6e9bd233e63e9966df0e43f56e3",
       "paths_redacted": true
     },
     "brainnotes_ci": {
       "outcome": true,
-      "checked_at": "2026-08-29T03:44:30Z",
+      "checked_at": "2026-08-29T23:49:20Z",
       "exit_status": 0,
       "evidence_path": "docs/operations/vault-safety-evidence/brainnotes_ci.txt",
-      "evidence_sha256": "6de848fd0f12ca76acda5a4ac6a9bb3d61ff6563cbd72c570e1e7b28b80d51e6",
+      "evidence_sha256": "9a5df3138c8cd7b84b3cd91083cd217ac4e2d3c2efac17f3d662e0cd8ea2e7af",
       "paths_redacted": true
     },
     "cli_mutation_commits_immediately": {
@@ -57,11 +57,11 @@
       "evidence_sha256": "391f51d2a74412939871b53401149e82402492d21208ad99df1b63d88fe60326",
       "paths_redacted": true
     },
-    "external_edit_debounced_quiet_and_max": {
+    "external_edit_scheduled_by_readiness_and_floor": {
       "outcome": true,
-      "checked_at": "2026-08-29T02:51:20Z",
-      "evidence_path": "docs/operations/vault-safety-evidence/external_edit_debounced_quiet_and_max.txt",
-      "evidence_sha256": "a48b9ebc6ef4840d4baab10119b412ecd738cbd4eedba042ea10735ed73c0ba4",
+      "checked_at": "2026-08-29T23:22:16Z",
+      "evidence_path": "docs/operations/vault-safety-evidence/external_edit_scheduled_by_readiness_and_floor.txt",
+      "evidence_sha256": "de3a351842ce60fd7ccc726ef68e69a83561aeb6aa1bb5ba0f12fe3d01e50b45",
       "paths_redacted": true
     },
     "fresh_clone_of_content_remote": {
@@ -141,10 +141,10 @@
     },
     "scripts_complete_suite": {
       "outcome": true,
-      "checked_at": "2026-08-29T03:25:17Z",
+      "checked_at": "2026-08-29T23:48:30Z",
       "exit_status": 0,
       "evidence_path": "docs/operations/vault-safety-evidence/scripts_complete_suite.txt",
-      "evidence_sha256": "ac118a29a7eecf33ea9a0f14c02f06df2d355d9f3a88c4032a1a4718d8aa9d5d",
+      "evidence_sha256": "d7705dce2dfe5d2fd4346830389780f87e017401a50b8c6c328ef5e11cfd4ba1",
       "paths_redacted": true
     },
     "txn_crash_converges_and_is_idempotent": {

@@ -1,2 +1,10 @@
 /bn
 node_modules/
+
+# A user's global ignore file can quietly swallow a retained narrative: on a
+# case-insensitive volume a pattern like `BRAIN[A-Z]*` matches
+# `brainnotes_ci.txt`, so the evidence record ends up naming a file the
+# repository never carried. The evidence is the artifact the verifier re-hashes,
+# so nothing under here is ever ignorable.
+!/docs/operations/vault-safety-evidence/
+!/docs/operations/vault-safety-evidence/**

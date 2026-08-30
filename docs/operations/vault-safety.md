@@ -25,7 +25,7 @@ under `.bnotes/locks/`, and the transaction records under `.bnotes/txn/`. Those
 are derived state and process bookkeeping. Committing them would put a commit on
 every read-shaped operation and would record nothing a person could use.
 
-## Immediate versus debounced snapshots
+## Immediate versus scheduled snapshots
 
 Two different things write to the vault, and they are treated differently
 because they know different amounts about their own intent.
@@ -37,22 +37,86 @@ changed, so there is nothing to wait for. If that commit cannot be made, the
 command fails loudly, says the bytes are already on disk, and refuses the next
 mutation. It never claims a rollback it did not perform.
 
-**An external editor is debounced.** A change made by anything else — Obsidian,
-`vim`, a sync client, a script — is noticed by the guard on its five-second
-poll and then waits:
+**An external editor is scheduled.** A change made by anything else — Obsidian,
+`vim`, a sync client, a script — is noticed by the guard on its five-second poll
+and then waits for two independent conditions, one about the edit and one about
+the history:
 
-| Policy | Value |
-| --- | --- |
-| Quiet window | 30 seconds after the last observed change |
-| Maximum latency | 2 minutes after the first observed change |
-| Poll interval | 5 seconds |
-| Push interval | at startup, and at least every 5 minutes |
+| Policy | Value | Configurable |
+| --- | --- | --- |
+| Quiet window | 30 seconds after the last observed change | no |
+| Readiness deadline | 2 minutes after the first observed change | no |
+| Autosave floor | `[autosave] min_interval`, default 5 minutes | **yes** |
+| Poll interval | 5 seconds | no |
+| Push interval | at startup, and at least every 5 minutes | no |
 
-Whichever fires first wins, so a burst of saves becomes one commit, and a burst
-that never goes quiet is still committed within two minutes. The debounce clock
-is persisted, so killing the guard — or logging out, or a crash — cannot
-postpone a pending snapshot: the maximum is measured from the first change the
-guard ever saw, not from the last time the guard started.
+The first two decide when the *edit* is ready to be committed; the third decides
+when the *history* is willing to take another commit of the guard's own making:
+
+```
+ready_at = min(last_change + 30s, first_change + 2m)
+floor_at = last_external_autosave + min_interval
+due_at   = max(ready_at, floor_at)
+```
+
+So the quiet window still collapses a burst of saves into one commit, and two
+minutes still bounds how long a burst that never goes quiet can stay
+*unready* — but readiness is not the commit. The floor can only ever push the
+due time later, never earlier, so a vault under continuous editing no longer
+acquires one commit every two minutes forever; it acquires one every
+`min_interval`.
+
+Two worked examples, both at the default five-minute floor:
+
+- **You edit a note in a vault the guard last autosaved an hour ago.** The floor
+  has nothing recent to be measured from, so readiness alone decides: you stop
+  typing, the quiet window expires, and the commit lands about half a minute
+  later.
+- **You keep editing.** Your next save is ready 30 seconds after it, but the
+  autosave above was under a minute ago, so `due_at` is `that commit + 5m` and
+  the snapshot lands roughly four minutes later than readiness alone would have
+  put it. The bytes are on disk the whole time; what waits is the commit.
+
+Nothing here is a knob on how much of the vault is recoverable. At *any* floor
+value, including `off`, an explicit BrainNotes mutation still commits before the
+command returns, a deletion is still refused unless a journal record explains it,
+and the history is still pushed on the same schedule. The floor governs one
+thing: how often the guard adds a commit **of its own**. See
+[Configuration](../configuration.md#the-autosave-floor) for the accepted values.
+
+The clocks are persisted in `<git-dir>/brainnotes-safety/watch.json`, so killing
+the guard — or logging out, or a crash — cannot postpone a pending snapshot: both
+the readiness deadline and the floor are measured from what the guard recorded,
+not from the last time it started. That record also publishes the two derived
+fields the health check reads: `autosave_min_interval`, the policy actually in
+force, and `next_commit_due_at`, the `due_at` above, absent when no burst is open
+or when autosave is off.
+
+### Changing the floor while the guard is running
+
+The guard re-reads `brainnotes.toml` before every scan, so
+`bn config set autosave.min_interval` and a hand edit both take effect within one
+poll. The LaunchAgent never needs restarting for this.
+
+A file that does not decode is refused rather than obeyed. The guard logs one
+warning — deduplicated by the file's own bytes, so a broken file does not fill
+the log — and **keeps enforcing the last valid policy** until the file parses
+again. A half-typed edit therefore never becomes the policy, and the vault is
+never left without one. The exception is startup: an invalid file when the guard
+launches is fatal, because there is no last valid policy to fall back on.
+
+Turning autosave `off` is a transition, not just a smaller schedule. On the next
+poll the guard takes **one immediate full snapshot**, bypassing both the quiet
+window and the floor, so whatever was pending when you disabled autosave is in
+the history rather than stranded. `off` becomes effective only after that
+snapshot succeeds — a vault that cannot take its final snapshot does not get to
+stop taking snapshots. From then on external edits accumulate uncommitted until
+you re-enable the floor or run an explicit `bn` command, and the health check
+says so as a warning rather than a problem: it is a state you chose.
+
+The guard keeps watching either way. `off` asks it to stop writing history on its
+own initiative, not to stop looking, so a note deleted by a sync client while
+autosave is off still latches the block marker on the poll that noticed it.
 
 ## Deletions
 
@@ -105,7 +169,8 @@ OK: …
 ```
 
 It reports the guard's process state, whether the vault is refusing writes
-(either marker below), whether the working tree is clean or dirty (by counts,
+(either marker below), which autosave floor the guard is enforcing and when it
+next intends to snapshot, whether the working tree is clean or dirty (by counts,
 never by name), when the last local snapshot was, and whether the local branch
 has diverged from the remote. It exits 0 when healthy, 1 when something needs
 attention, and 2 when it could not run at all. `--json` gives the same answers
@@ -113,6 +178,26 @@ as data.
 
 A vault that is refusing writes is never a healthy result. Either marker on its
 own exits 1, including a bare `intent.json` with no `blocked.json` beside it.
+
+**A dirty working tree is not, on its own, a problem.** A vault with a
+five-minute floor is *supposed* to sit with uncommitted edits for most of five
+minutes, so the check judges pending edits against the schedule the guard itself
+published in `watch.json` rather than against the clock:
+
+- **Pending.** Edits are waiting and `next_commit_due_at` is still ahead. This is
+  the system working, and it exits 0.
+- **Overdue.** The due time has passed by more than the five-second poll grace,
+  so the guard is not snapshotting work it said it would. That is a problem and
+  exits 1, quoting how late it is, the time it promised, and the floor in force.
+- **Warning.** The floor is `off`, so the pending edits stay uncommitted until it
+  is re-enabled or an explicit `bn` command commits them. Reported, not failed.
+
+The unreadable cases are problems too, and for the same reason: a policy this
+build cannot parse, a due time that cannot be read, or edits waiting with no
+scheduled snapshot at all all mean a late snapshot cannot be told apart from an
+on-time one. A pending *deletion* is a problem at any floor value and is never
+resolved by waiting — the guard commits a deletion only when a journal record
+authorizes it, and refuses otherwise.
 
 ## Recovering from a refusal
 
@@ -343,3 +428,9 @@ There is no `bn recover`, no `bn unblock`, and no `bn vault-guard`. The recovery
 path is Git plus two files to delete, both of which work when `bn` itself is the
 thing that is broken. A recovery command that depends on the program you are
 recovering from is a recovery command you cannot rely on.
+
+There is also no setting for the quiet window, the readiness deadline, the poll
+interval, or the push schedule. `[autosave] min_interval` is the one timing a
+vault configures, and it is the only one that is a matter of taste: it bounds how
+often the guard adds a commit nobody asked for. Every other number above bounds
+how much of the vault is recoverable, and that is not a preference.

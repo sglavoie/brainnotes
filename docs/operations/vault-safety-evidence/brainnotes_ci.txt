@@ -1,0 +1,31 @@
+# gate: brainnotes_ci
+# title: the full BrainNotes validation envelope passes
+# recorded: 2026-08-29T23:49:20Z
+# redaction: this gate records a build-and-test run in a source repository;
+#            no vault note name and no note body appears below.
+
+
+## act
+
+  command: just ci (in the BrainNotes repository)
+  exit_status: 0
+
+## observe
+
+  --- tail of output ---
+  |  Test Files  52 passed (52)
+  |       Tests  489 passed (489)
+  |    Start at  17:49:17
+  |    Duration  2.91s (transform 6.28s, setup 0ms, import 8.87s, tests 6.66s, environment 27.79s)
+  |
+  |
+  | > build:web
+  | > esbuild internal/web/static_src/main.ts --bundle --format=iife --global-name=BrainNotesApp --outfile=internal/web/static/app.js
+  |
+  |
+  |   internal/web/static/app.js  518.2kb
+  |
+  | ⚡ Done in 9ms
+  | CI clean
+
+# outcome: pass (2026-08-29T23:55:18Z)

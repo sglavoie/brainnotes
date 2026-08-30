@@ -1,0 +1,46 @@
+# gate: external_edit_scheduled_by_readiness_and_floor
+# title: an external edit is committed once it is both ready and past the autosave floor
+# recorded: 2026-08-29T23:22:16Z
+# redaction: this drill runs in a disposable vault and touches only synthetic
+#            vault-safety-drill-* paths; no vault note name and no note body appears below.
+
+
+## readiness alone: the first external edit after a quiet history
+
+  quiet_seconds_policy: 30
+  maximum_latency_seconds_policy: 120
+  autosave_floor_seconds_policy: 300
+  published_autosave_min_interval: 5m
+  previous_external_autosave_recorded: False
+  external_writes_during_burst: 1
+  commit_landed: True
+  seconds_from_first_change_to_commit: 38.4
+  commit: 40ac51b
+  subject: brainnotes: autosave 2026-08-29T23:22:54Z
+  changed_paths: 1
+  drill_owned_paths: ['vault-safety-drill-floor.md']
+  unrelated_paths_swept_in: 0
+
+## the floor: an edit that is ready long before the floor allows a commit
+
+  quiet_seconds_policy: 30
+  maximum_latency_seconds_policy: 120
+  autosave_floor_seconds_policy: 300
+  published_autosave_min_interval: 5m
+  external_writes_during_burst: 1
+  previous_autosave_at: 2026-08-29T23:22:54.457736Z
+  published_next_commit_due_at: 2026-08-29T23:27:54.457736Z
+  seconds_from_first_change_to_published_due: 299.8
+  seconds_from_previous_autosave_to_published_due: 300.0
+  due_time_was_deferred_past_readiness: True
+  commit_landed: True
+  seconds_from_first_change_to_deferred_commit: 304.8
+  seconds_from_previous_autosave_to_deferred_commit: 305.1
+  commits_between_the_two_autosaves: 0
+  commit: 4ad1a8a
+  subject: brainnotes: autosave 2026-08-29T23:27:59Z
+  changed_paths: 1
+  drill_owned_paths: ['vault-safety-drill-floor.md']
+  unrelated_paths_swept_in: 0
+
+# outcome: pass (2026-08-29T23:27:59Z)
