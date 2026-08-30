@@ -214,12 +214,24 @@ published in `watch.json` rather than against the clock:
 - **Warning.** The floor is `off`, so the pending edits stay uncommitted until it
   is re-enabled or an explicit `bn` command commits them. Reported, not failed.
 
-The unreadable cases are problems too, and for the same reason: a policy this
-build cannot parse, a due time that cannot be read, or edits waiting with no
-scheduled snapshot at all all mean a late snapshot cannot be told apart from an
-on-time one. A pending *deletion* is a problem at any floor value and is never
-resolved by waiting — the guard commits a deletion only when a journal record
-authorizes it, and refuses otherwise.
+The unreadable cases are problems too, and unlike the three above they are judged
+on the record alone, dirty tree or not. A record carrying no policy, a policy the
+check cannot read, a due time that cannot be parsed, and a record that says `off`
+while still naming a snapshot it intends to take all mean the same thing: nobody
+can name the floor this vault is being held to. That is worth saying while the
+vault is still clean, which is when it can still be fixed quietly. The one
+verdict that does need a dirty tree is edits waiting under a readable floor with
+no snapshot scheduled for them — a clean vault is *supposed* to have none.
+
+A token is read as a floor only if the guard could have written it: `off`, or the
+one canonical spelling of a duration inside the same inclusive 30s–24h bounds
+`bn config set` enforces. `300s`, `5m0s`, `1ns` and `48h` are all duration-shaped
+and none of them is a floor this vault could be under, so each is reported as
+unreadable rather than obeyed.
+
+A pending *deletion* is a problem at any floor value and is never resolved by
+waiting — the guard commits a deletion only when a journal record authorizes it,
+and refuses otherwise.
 
 ## Recovering from a refusal
 
