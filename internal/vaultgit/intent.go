@@ -101,7 +101,7 @@ func (m *Manager) beginIntent(op, ref, head string, plan *commitPlan) (IntentRec
 // operation before update-ref: landing a commit whose object name is written
 // nowhere durable would produce precisely the state this protocol exists to
 // prevent — a ref that may or may not have moved, and no way to find out which.
-func (m *Manager) promoteIntent(op string, record IntentRecord, commit string) error {
+func (m *Manager) promoteIntent(op string, record IntentRecord, commit string) (IntentRecord, error) {
 	record.Phase = IntentPhaseCommitted
 	record.NewOID = commit
 	record.ObservedAt = m.now()
@@ -110,7 +110,7 @@ func (m *Manager) promoteIntent(op string, record IntentRecord, commit string) e
 	// text says there is not.
 	record.Recovery = intentRecovery(IntentPhaseCommitted, m.state.path(intentFileName))
 	if err := m.state.SaveIntent(record); err != nil {
-		return m.latch(&SafetyError{
+		return IntentRecord{}, m.latch(&SafetyError{
 			Kind:   KindCommitFailed,
 			Op:     op,
 			Reason: "the snapshot could not be recorded as in progress, so the branch was not advanced",
@@ -119,7 +119,7 @@ func (m *Manager) promoteIntent(op string, record IntentRecord, commit string) e
 			Err:    errors.New(agent.SanitizedDiagnostic(err)),
 		})
 	}
-	return nil
+	return record, nil
 }
 
 // clearIntent retires the record after a durable outcome, or after a verdict
@@ -139,21 +139,40 @@ func (m *Manager) clearIntent() error { return m.state.ClearIntent() }
 // than equality is required — another writer committing on top does not un-land
 // the snapshot underneath, and demanding equality would block every vault whose
 // watcher committed once more before the recovery pass ran.
-func (m *Manager) recoverIntentLocked(ctx context.Context, op string) error {
+func (m *Manager) recoverIntentLocked(ctx context.Context, op string) (bool, error) {
 	record, present, loadErr := m.state.LoadIntent()
 	if !present {
-		return nil
+		return false, nil
 	}
 	if loadErr == nil && record.NewOID != "" && record.Ref != "" {
 		if landed, err := m.intentLanded(ctx, record); err == nil && landed {
+			if record.Operation == "commit-pending" {
+				// An external intent outlives its ref update until the floor anchor is
+				// durable. Prefer the post-ref bound the original process recorded;
+				// an older intent has no such field, so the instant recovery observes
+				// the landed commit is the conservative replacement.
+				landedAt := m.now().UTC()
+				if record.LandedAt != nil {
+					landedAt = record.LandedAt.UTC()
+				}
+				if _, noteErr := m.state.NoteCommit(m.policy(), landedAt); noteErr != nil {
+					return false, safetyErrorf(KindRepositoryState, op,
+						"the recovered external snapshot's floor could not be anchored: %s", agent.SanitizedDiagnostic(noteErr))
+				}
+				if clearErr := m.clearIntent(); clearErr != nil {
+					return false, safetyErrorf(KindRepositoryState, op,
+						"the finished snapshot's intent record could not be removed: %s", agent.SanitizedDiagnostic(clearErr))
+				}
+				return true, nil
+			}
 			if clearErr := m.clearIntent(); clearErr != nil {
-				return safetyErrorf(KindRepositoryState, op,
+				return false, safetyErrorf(KindRepositoryState, op,
 					"the finished snapshot's intent record could not be removed: %s", agent.SanitizedDiagnostic(clearErr))
 			}
-			return nil
+			return false, nil
 		}
 	}
-	return &SafetyError{
+	return false, &SafetyError{
 		Kind:   KindBlocked,
 		Op:     op,
 		Reason: intentBlockReason(record),
@@ -197,7 +216,7 @@ func (m *Manager) recoverIntentOnOpen(ctx context.Context) {
 		return
 	}
 	defer release()
-	_ = m.recoverIntentLocked(ctx, "open")
+	_, _ = m.recoverIntentLocked(ctx, "open")
 }
 
 // intentBlockReason explains a surviving record in one clause, naming counts and

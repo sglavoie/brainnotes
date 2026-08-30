@@ -229,6 +229,9 @@ func TestRecoveryRetiresAnIntentWhoseCommitLanded(t *testing.T) {
 	if _, present := restarted.Interrupted(); present {
 		t.Fatal("opening the vault did not retire a record whose commit is in the history")
 	}
+	if got := restarted.WatchStatus().LastCommitAt; !got.Equal(h.clock) {
+		t.Fatalf("recovery without a stored landing bound anchored at %s, want conservative observation %s", got, h.clock)
+	}
 	if err := restarted.Preflight(context.Background()); err != nil {
 		t.Fatalf("Preflight after a proven snapshot: %v", err)
 	}
@@ -424,7 +427,7 @@ func TestIntentRecoveryStepsAreWrittenForThePhase(t *testing.T) {
 		[]string{"names no commit", "Nothing will retire this record on its own"},
 		[]string{"merge-base", "--ff-only"})
 
-	if err := mgr.promoteIntent("commit-pending", planned, head); err != nil {
+	if _, err := mgr.promoteIntent("commit-pending", planned, head); err != nil {
 		t.Fatalf("promoteIntent: %v", err)
 	}
 	stored, present, err = mgr.state.LoadIntent()

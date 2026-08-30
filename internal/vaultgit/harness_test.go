@@ -236,12 +236,10 @@ func (h *testHarness) advance(d time.Duration) { h.clock = h.clock.Add(d) }
 // previous one, and returns a function that hands the clock back to the test.
 //
 // It provokes the one condition a fixed fake clock cannot express: a snapshot
-// that takes real time. A staging pass over a large vault reads the clock to
-// anchor the floor, again to stamp the commit object, and again to record the
-// completion, and on a slow disk those instants are genuinely apart. Holding all
-// three equal is what let a shortened floor go unnoticed — the gap between the
-// anchor and the commit it bounds is invisible when the gap is zero by
-// construction.
+// that takes real time. Intent creation and promotion, commit creation, and the
+// observed ref landing read the clock at distinct points. Holding those instants
+// equal is what lets a shortened floor or a backdated explicit commit go
+// unnoticed.
 func (h *testHarness) slowClock(step time.Duration) (restore func()) {
 	mgr := h.mgr
 	previous := mgr.now
@@ -312,10 +310,10 @@ func (h *testHarness) commitPending() CommitResult {
 // instant.
 //
 // Counting is how a test reaches the one write that matters. A single
-// CommitPending writes the record exactly twice — once to anchor the floor
-// before the attempt and once to record the result — and the failure this is
-// about is the second of those, which cannot be provoked from outside the
-// process without also breaking the first.
+// CommitPending writes watch.json exactly twice — once before the attempt and
+// once with the observed ref-landing bound — and the failure this is about is
+// the second of those, which cannot be provoked from outside the process without
+// also breaking the first.
 func failWatchWriteFrom(mgr *Manager, n int) {
 	writes := 0
 	mgr.state.failWrite = func(name string) error {

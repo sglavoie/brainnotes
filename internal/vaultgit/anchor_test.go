@@ -20,12 +20,10 @@ import (
 // after it, so no ordering exists in which a commit is in the history and
 // nothing on disk anchors it.
 //
-// Written before the attempt, that marker is only a bound on the commit if the
-// commit cannot be stamped after it — otherwise a snapshot that took real time
-// would subtract its own execution time from the vault's configured interval.
-// The end-to-end tests below therefore run under a clock that advances on every
-// read, so the anchor, the commit object, and the completion are three distinct
-// instants exactly as they are on a real disk.
+// The marker is updated through the recovery intent once the ref is observed to
+// land. The end-to-end tests below therefore run under a clock that advances on
+// every read, so the write-ahead marker, commit object, and observed ref landing
+// are distinct instants exactly as they are on a real disk.
 
 // An attempt that has been recorded but not yet completed anchors the floor
 // exactly as a completed one does. This is the whole of the fail-closed rule,
@@ -142,8 +140,8 @@ func TestSettlingABurstKeepsTheInFlightAnchor(t *testing.T) {
 // The end-to-end version, against a real repository: a snapshot that takes real
 // time lands, the write that would record its completion fails, and the vault
 // must still refuse a second external snapshot for the whole configured interval
-// after the commit the history actually holds.
-func TestALostCompletionWriteStillHoldsTheExternalFloor(t *testing.T) {
+// after the first ref was observed to land.
+func TestLostCompletionWriteHoldsFloorAfterObservedRefLanding(t *testing.T) {
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}
@@ -158,9 +156,9 @@ func TestALostCompletionWriteStillHoldsTheExternalFloor(t *testing.T) {
 	}
 
 	// The snapshot is taken directly rather than through the poll, so the two
-	// writes it makes are the only ones the injection has to count. It runs under
-	// a clock that moves on every read, so anchoring the floor, stamping the
-	// commit, and recording the completion are three separated instants.
+	// watch-state writes it makes are the only ones the injection has to count. It
+	// runs under a clock that moves on every read, so the write-ahead marker,
+	// authored commit timestamp, and observed ref landing are separated.
 	restore := h.slowClock(45 * time.Second)
 	failWatchWriteFrom(h.mgr, 2)
 	result, err := h.mgr.CommitPending(ctx)
@@ -172,7 +170,7 @@ func TestALostCompletionWriteStillHoldsTheExternalFloor(t *testing.T) {
 	if !result.Committed {
 		t.Fatalf("the fixture never took a snapshot: %+v", result)
 	}
-	committedAt := requireAnchorCoversTheCommit(t, h)
+	landedAt := requireObservedLandingBound(t, h, result)
 
 	lost := h.mgr.WatchStatus()
 	if !lost.LastCommitAt.IsZero() {
@@ -182,7 +180,7 @@ func TestALostCompletionWriteStillHoldsTheExternalFloor(t *testing.T) {
 	// Four minutes of editing inside the five-minute floor. The burst the failed
 	// write left open is already past its own latency bound, so anything short of
 	// the floor would commit on the very next poll.
-	requireNoSnapshotBefore(t, ctx, h, w, committedAt.Add(5*time.Minute))
+	requireNoSnapshotBefore(t, ctx, h, w, landedAt.Add(5*time.Minute))
 }
 
 // The same window, survived by a different process. Everything held in memory is
@@ -208,41 +206,48 @@ func TestARestartAfterALostCompletionWriteStillHoldsTheFloor(t *testing.T) {
 	if err != nil || !result.Committed {
 		t.Fatalf("the fixture never took a snapshot: %+v (%v)", result, err)
 	}
-	committedAt := requireAnchorCoversTheCommit(t, h)
+	landedAt := requireObservedLandingBound(t, h, result)
 
-	// The guard dies here and a new one starts on the same vault.
+	// The guard dies here and a new one starts on the same vault. Open proves the
+	// intent's commit reached the ref, publishes its observed landing bound as the
+	// completion anchor, and only then retires the intent.
 	h.mgr = h.open(Options{})
-	if h.mgr.WatchStatus().ExternalCommitStartedAt == nil {
-		t.Fatal("the restarted process found no anchor for the snapshot in its history")
+	recovered := h.mgr.WatchStatus()
+	if !recovered.LastCommitAt.Equal(landedAt) {
+		t.Fatalf("the restarted process anchored at %s, want observed landing %s", recovered.LastCommitAt, landedAt)
 	}
-	requireNoSnapshotBefore(t, ctx, h, h.newWatcher(&watchRecorder{}), committedAt.Add(5*time.Minute))
+	if recovered.ExternalCommitStartedAt != nil {
+		t.Fatalf("the restarted process left the recovered intent marker behind: %s", recovered.ExternalCommitStartedAt)
+	}
+	requireNoSnapshotBefore(t, ctx, h, h.newWatcher(&watchRecorder{}), landedAt.Add(5*time.Minute))
 }
 
-// requireAnchorCoversTheCommit asserts that the only anchor a lost completion
-// write leaves behind is no earlier than the commit it is supposed to bound, and
-// reports that commit's own timestamp.
+// requireObservedLandingBound asserts that the recovery intent persisted the
+// first clock reading after the ref was observed to land, and returns that bound.
 //
-// This is the finding stated at the level it was actually wrong at. The floor is
-// applied to the anchor, but the interval a person configured is about the
-// spacing of *commits*, so an anchor earlier than its own commit hands the next
-// snapshot the difference for free — and the difference is exactly how long the
-// snapshot took, which is unbounded.
-func requireAnchorCoversTheCommit(t *testing.T, h *testHarness) time.Time {
+// The authored Git timestamp is deliberately not the boundary: it is chosen
+// before update-ref and cannot prove when the ref actually became visible.
+func requireObservedLandingBound(t *testing.T, h *testHarness, result CommitResult) time.Time {
 	t.Helper()
+	if result.landedAt.IsZero() {
+		t.Fatal("the successful snapshot reported no observed ref landing")
+	}
 	times := h.commitTimes()
 	if len(times) == 0 {
-		t.Fatal("the fixture left no commit for the anchor to cover")
+		t.Fatal("the fixture left no commit for the landing bound to cover")
 	}
 	committedAt := times[0]
-	anchor := h.mgr.WatchStatus().ExternalCommitStartedAt
-	if anchor == nil {
-		t.Fatal("a completed external snapshot is anchored by nothing on disk")
+	if !result.landedAt.After(committedAt) {
+		t.Fatalf("observed landing = %s, want an instant after authored commit time %s", result.landedAt, committedAt)
 	}
-	if anchor.Before(committedAt) {
-		t.Fatalf("the surviving anchor is %s but its commit is dated %s, so the floor is short by %s",
-			anchor.UTC(), committedAt, committedAt.Sub(anchor.UTC()))
+	intent, present := h.mgr.Interrupted()
+	if !present || intent.LandedAt == nil {
+		t.Fatal("the failed completion write left no durable observed landing in the recovery intent")
 	}
-	return committedAt
+	if !intent.LandedAt.Equal(result.landedAt) {
+		t.Fatalf("intent landed_at = %s, want observed landing %s", intent.LandedAt, result.landedAt)
+	}
+	return result.landedAt
 }
 
 // requireNoSnapshotBefore edits and polls w up to floorEnd, asserting the vault
@@ -280,10 +285,8 @@ func requireNoSnapshotBefore(t *testing.T, ctx context.Context, h *testHarness, 
 	}
 }
 
-// Pinning the commit's date to the anchored instant bounds the commit; it does
-// not replace the completion anchor. A slow snapshot that finishes normally still
-// records when it *finished*, which is later than the commit it wrote, so the
-// durable anchor of a healthy vault is unchanged by any of this.
+// An external commit keeps its deliberately preselected authored date, but the
+// floor is anchored at the later instant its ref was observed to land.
 func TestASlowSnapshotThatCompletesStillAnchorsAtItsCompletion(t *testing.T) {
 	h := newHarness(t)
 	h.setAutosave("5m")
@@ -306,13 +309,37 @@ func TestASlowSnapshotThatCompletesStillAnchorsAtItsCompletion(t *testing.T) {
 	if record.ExternalCommitStartedAt != nil {
 		t.Fatalf("a finished snapshot left its in-flight anchor behind: %s", record.ExternalCommitStartedAt)
 	}
-	committedAt := h.commitTimes()[0]
-	if !record.LastCommitAt.After(committedAt) {
-		t.Fatalf("last_commit_at = %s, want the completion instant, which is after the commit it recorded (%s)",
-			record.LastCommitAt, committedAt)
+	if !record.LastCommitAt.Equal(result.landedAt) {
+		t.Fatalf("last_commit_at = %s, want observed ref landing %s", record.LastCommitAt, result.landedAt)
 	}
 	if got := record.externalAnchor(); !got.Equal(record.LastCommitAt.UTC()) {
 		t.Fatalf("anchor = %s, want the completion instant %s", got, record.LastCommitAt.UTC())
+	}
+}
+
+// Explicit mutations have no write-ahead floor marker to match, so their
+// user-visible timestamp is chosen at commit creation, after intent creation and
+// staging, exactly as it was before external floor anchoring was introduced.
+func TestExplicitCommitTimestampIsChosenAtCommitCreation(t *testing.T) {
+	h := newHarness(t)
+	h.write(".bnotes/recall.json", `{"generation":1}`)
+
+	const step = 45 * time.Second
+	startedAt := h.clock
+	restore := h.slowClock(step)
+	result, err := h.mgr.CommitPaths(context.Background(), "recall-state", []string{".bnotes/recall.json"})
+	restore()
+	if err != nil || !result.Committed {
+		t.Fatalf("the explicit fixture never committed: %+v (%v)", result, err)
+	}
+
+	want := startedAt.Add(2 * step) // beginIntent, then commit creation
+	if got := h.commitTimes()[0]; !got.Equal(want) {
+		t.Fatalf("explicit commit timestamp = %s, want commit-creation reading %s", got, want)
+	}
+	state := h.mgr.WatchStatus()
+	if !state.LastCommitAt.IsZero() || state.ExternalCommitStartedAt != nil {
+		t.Fatalf("explicit commit advanced external floor state: %+v", state)
 	}
 }
 

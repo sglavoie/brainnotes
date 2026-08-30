@@ -92,23 +92,24 @@ fields the health check reads: `autosave_min_interval`, the policy actually in
 force, and `next_commit_due_at`, the `due_at` above, absent when no burst is open
 or when autosave is off.
 
-The floor's anchor is written twice on purpose. Before an autosave can produce a
-commit the guard records `external_commit_started_at`; once the snapshot is
-durable it replaces that with `last_commit_at` and clears the marker. The floor
-is measured from whichever of the two is later, so there is no ordering in which
-a commit is in the history and nothing on disk anchors it — a guard killed in
-that instant, or a state file that could not be written, defers the next autosave
-by one interval instead of forgetting the one it just took. A marker left behind
-by a crash expires on its own, because the instant it names recedes like any
-other. If the marker cannot be written at all, no autosave is attempted: the
-edits stay in the working tree, the burst stays open, and the next poll retries.
+The floor's anchor is bracketed on purpose. Before an autosave can produce a
+commit the guard records `external_commit_started_at`. After Git advances the
+branch and the guard observes that ref landing, the recovery intent records that
+later bound; `last_commit_at` then publishes it to the watch state and both
+temporary markers are cleared. If the final watch-state write fails or the guard
+dies, the committed intent remains. Recovery proves its commit is reachable,
+publishes the observed landing bound, and only then allows another external
+snapshot. If the process died before it could record that bound, recovery uses
+the later instant at which it proves the ref landed, which defers conservatively.
 
-The marker is also the date the autosave commit itself carries, so the interval
-holds after the commit rather than after the moment the guard decided to take it.
-That matters on a large or slow vault: staging and writing a tree take real time,
-and a floor measured from before that work would give the next autosave back
-however long the last one ran for. `git log` on a vault that lost a completion
-write therefore still shows a full interval between consecutive autosaves.
+That distinction matters on a large or slow vault: staging, writing a tree, and
+updating a ref take real time. The configured interval begins only after the
+first ref was observed to land; none of the staging time is deducted. The
+autosave commit retains the earlier write-ahead timestamp in its subject and Git
+metadata, but scheduling never treats that authored timestamp as evidence of
+when the ref became visible. If the initial marker cannot be written at all, no
+autosave is attempted: the edits stay in the working tree, the burst stays open,
+and the next poll retries.
 
 ### Changing the floor while the guard is running
 

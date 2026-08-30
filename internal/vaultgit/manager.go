@@ -409,6 +409,11 @@ type CommitResult struct {
 	// DeferredDeletions lists proven deletions that were held back because
 	// something else in the same pass was skipped.
 	DeferredDeletions []string
+	// landedAt is the first clock reading after the ref update was observed to
+	// succeed and its containing directory was synced. It stays internal because
+	// callers need only the commit verdict; the external floor protocol uses it
+	// to record the completion boundary.
+	landedAt time.Time
 }
 
 // Unrecorded reports the paths this snapshot was asked to record and did not:
@@ -468,7 +473,7 @@ func (m *Manager) preflightLocked(ctx context.Context, op string) error {
 	// is a fifth refusal condition and it is the only one the working tree does
 	// not show: the paths involved may look perfectly ordinary while the history
 	// is missing them.
-	if err := m.recoverIntentLocked(ctx, op); err != nil {
+	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
 		return err
 	}
 	if err := m.checkRepositoryState(op); err != nil {
@@ -683,7 +688,7 @@ func (m *Manager) ScanPending(ctx context.Context) (PendingSummary, error) {
 	if err := m.checkBlocked(op); err != nil {
 		return PendingSummary{}, err
 	}
-	if err := m.recoverIntentLocked(ctx, op); err != nil {
+	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
 		return PendingSummary{}, err
 	}
 	if err := m.checkRepositoryState(op); err != nil {
@@ -726,8 +731,16 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	if err := m.checkBlocked(op); err != nil {
 		return CommitResult{}, err
 	}
-	if err := m.recoverIntentLocked(ctx, op); err != nil {
+	recoveredExternal, err := m.recoverIntentLocked(ctx, op)
+	if err != nil {
 		return CommitResult{}, err
+	}
+	if recoveredExternal {
+		// Recovery just anchored a previously landed external snapshot at its
+		// observed completion bound. Do not let this same call land a second one;
+		// the watcher will reopen the still-dirty burst on its next scan and the
+		// recovered floor will schedule it normally.
+		return CommitResult{}, nil
 	}
 	if err := m.checkRepositoryState(op); err != nil {
 		return CommitResult{}, err
@@ -746,11 +759,11 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 		if set.empty() {
 			return nil, nil
 		}
-		// Write-ahead the floor's anchor, before anything below can produce a
-		// commit. The pair of writes that brackets this attempt is what closes the
-		// window the floor used to have: if only this one survives, the anchor is
-		// the attempt's start; if both do, it is the snapshot's end; and there is no
-		// ordering in which a commit exists and neither does.
+		// Write-ahead the floor's first marker before anything below can produce a
+		// commit. Once the ref lands, the still-live recovery intent is updated with
+		// that observed bound and remains until NoteCommit publishes it. Thus a
+		// lost completion write leaves a recoverable landed intent rather than a
+		// shortened floor.
 		//
 		// Its failure stops the attempt, exactly as a failed intent record does and
 		// for a sibling reason — a snapshot that cannot say when it happened is one
@@ -764,13 +777,10 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 		}
 		anchoredAt = at
 		plan := &commitPlan{
-			// The snapshot is stamped with the instant it was anchored at rather
-			// than with whatever the clock says once the tree has been staged and
-			// written. That equality is what makes the marker a *sufficient* anchor
-			// on its own: if the completion write is lost, the floor is still
-			// measured from an instant no earlier than the commit the history holds,
-			// so a snapshot that took real time cannot subtract that time from the
-			// interval the vault configured. See stageAndCommit and externalAnchor.
+			// External autosaves deliberately retain their write-ahead timestamp.
+			// Explicit mutations leave at zero and choose theirs at commit creation.
+			// The floor itself is anchored later, at the observed ref landing; see
+			// stageAndCommit and recoverIntentLocked.
 			at:           at,
 			add:          append(append([]string{}, set.added...), set.modified...),
 			remove:       set.deleted,
@@ -794,14 +804,13 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	if result.Committed {
 		// This is the one call that advances the external floor's anchor, because
 		// this is the one entry point that takes an external autosave. It also
-		// retires the marker written above, replacing it with the same fact stated
-		// durably.
-		if _, err := m.state.NoteCommit(m.policy(), m.now()); err != nil {
-			// Losing this write no longer loses the floor: the marker is still on
-			// disk and still anchors it, so the cost is a burst that stays open for
-			// one redundant scan. It must not turn a successful commit into a
-			// failure.
-			_ = err
+		// retires the write-ahead marker, replacing it with the later ref-landing
+		// boundary already persisted in the recovery intent.
+		if _, err := m.state.NoteCommit(m.policy(), result.landedAt); err == nil {
+			// An external intent remains live until watch.json durably names the
+			// post-ref anchor. If clearing fails, the next recovery pass proves the
+			// commit landed, writes the same anchor again, and retires it.
+			_ = m.clearIntent()
 		}
 		return result, nil
 	}
@@ -844,7 +853,7 @@ func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation str
 	if err := m.checkBlocked(op); err != nil {
 		return CommitResult{}, err
 	}
-	if err := m.recoverIntentLocked(ctx, op); err != nil {
+	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	if err := m.checkRepositoryState(op); err != nil {
@@ -950,7 +959,7 @@ func (m *Manager) CommitPaths(ctx context.Context, operation string, paths []str
 	if err := m.checkBlocked(op); err != nil {
 		return CommitResult{}, err
 	}
-	if err := m.recoverIntentLocked(ctx, op); err != nil {
+	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	if err := m.checkRepositoryState(op); err != nil {
@@ -1020,7 +1029,7 @@ func (m *Manager) CommitRestore(ctx context.Context, operation string) (CommitRe
 	if err := m.checkBlocked(op); err != nil {
 		return CommitResult{}, err
 	}
-	if err := m.recoverIntentLocked(ctx, op); err != nil {
+	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	if err := m.checkRepositoryState(op); err != nil {
@@ -1105,16 +1114,14 @@ func fileDigest(path string) (string, int64, error) {
 // commitPlan is the exact set of index changes one snapshot will make.
 type commitPlan struct {
 	// at is the instant the commit object is stamped with, in both its author and
-	// its committer date. It is the plan's own build time rather than a clock read
-	// taken later, so the commit a plan produces bears the instant the engine had
-	// already decided the snapshot was happening at.
+	// its committer date. Only an external autosave sets it deliberately, tying
+	// the commit subject and object to its write-ahead marker. Explicit mutation
+	// plans leave it zero and stageAndCommit chooses the commit-creation reading.
 	//
-	// That matters for exactly one plan. An external autosave anchors the floor by
-	// writing that instant down before it can produce a commit, and the anchor is
-	// only a bound on the *commit* if the commit cannot be stamped after it. It is
-	// therefore set by the one builder with a reason to choose it; withCAS reads
-	// the clock for the plans that leave it zero, which is what every explicit
-	// mutation does and what the previous behaviour was for all of them.
+	// That matters for exactly one plan: an external autosave uses the same instant
+	// for its marker, generated subject, and commit metadata. It is not the final
+	// scheduling boundary; the external floor is measured from the later observed
+	// ref landing.
 	at     time.Time
 	add    []string
 	remove []string
@@ -1161,15 +1168,6 @@ func (m *Manager) withCAS(ctx context.Context, op string, build func(head string
 		if plan == nil {
 			return CommitResult{Branch: ref, Parent: head}, nil
 		}
-		if plan.at.IsZero() {
-			// Every plan carries the instant its commit will be stamped with, and this
-			// is where that becomes true regardless of which builder produced it. A
-			// plan that reached the repository with a zero instant would otherwise
-			// write a commit dated in the year 1, so the one builder that has a reason
-			// to choose the instant states it and the rest are given the clock here.
-			plan.at = m.now()
-		}
-
 		result, err := m.stageAndCommit(ctx, op, head, ref, plan)
 		if err == nil {
 			return result, nil
@@ -1365,7 +1363,14 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 		}
 	}
 
-	commit, err := m.git.commitTree(ctx, tree, head, plan.message, m.who, plan.at)
+	commitAt := plan.at
+	if commitAt.IsZero() {
+		// Explicit mutations retain the pre-floor behavior: their visible author
+		// and committer dates are chosen immediately before commit creation, after
+		// intent creation, staging, and tree writing have completed.
+		commitAt = m.now()
+	}
+	commit, err := m.git.commitTree(ctx, tree, head, plan.message, m.who, commitAt)
 	if err != nil {
 		return CommitResult{}, m.latch(&SafetyError{
 			Kind:   KindCommitFailed,
@@ -1379,7 +1384,8 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 	// The commit object exists but nothing points at it yet. Recording its name
 	// now is what lets a restart after the next line ask the only question that
 	// settles the outcome: is this commit in the branch's history?
-	if err := m.promoteIntent(op, intent, commit); err != nil {
+	intent, err = m.promoteIntent(op, intent, commit)
+	if err != nil {
 		return CommitResult{}, err
 	}
 
@@ -1414,9 +1420,20 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 	// destructive answer to the harmless problem. A packed ref has no such
 	// directory, and the failed sync is ignored for the same reason.
 	_ = vault.SyncDir(filepath.Dir(filepath.Join(m.gitDir, filepath.FromSlash(ref))))
-	// Durable completion, so the record goes. A record that outlives this call
-	// costs one recovery pass that proves the commit landed and clears it.
-	_ = m.clearIntent()
+	result.landedAt = m.now().UTC()
+	if plan.externalAdditions {
+		// The ref is now observably durable. Persist that upper bound in the intent
+		// before watch.json is asked to replace the write-ahead marker. If this
+		// rewrite fails, the earlier committed-phase intent remains and recovery
+		// conservatively anchors at the later instant when it proves landing.
+		intent.LandedAt = &result.landedAt
+		intent.ObservedAt = result.landedAt
+		_ = m.state.SaveIntent(intent)
+	} else {
+		// Explicit commits have no external floor to complete, so their durable ref
+		// update remains the point at which the recovery intent can be retired.
+		_ = m.clearIntent()
+	}
 
 	result.Committed = true
 	result.Commit = commit

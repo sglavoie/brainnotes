@@ -158,6 +158,11 @@ type IntentRecord struct {
 	// is committed.
 	OldOID string `json:"old_oid,omitempty"`
 	NewOID string `json:"new_oid,omitempty"`
+	// LandedAt is the first clock reading taken after the ref update was observed
+	// to succeed and its containing directory was synced. It is populated only
+	// for external autosaves, whose recovery must preserve the full configured
+	// interval after that landing even when watch.json's completion write is lost.
+	LandedAt *time.Time `json:"landed_at,omitempty"`
 	// Paths are the vault-relative paths involved, truncated at intentPathCap.
 	Paths []string `json:"paths,omitempty"`
 	// PathCount is the untruncated count, so a truncated Paths list never
@@ -231,24 +236,15 @@ type WatchState struct {
 	// ExternalCommitStartedAt is the durable statement that an external autosave
 	// was attempted at that instant and its outcome is not known to be recorded
 	// here. It is written and fsynced *before* the snapshot can produce a commit
-	// and retired only once LastCommitAt durably names the result, so the window
-	// in which a crash or a failed state write could lose the floor's anchor is
-	// closed by construction: whatever survives that window, one of the two
-	// fields already holds an instant no earlier than the commit's.
-	//
-	// "No earlier than the commit's" is an equality rather than a hope, and that
-	// is the whole reason the marker is a sufficient anchor on its own. The
-	// instant recorded here is also the instant the snapshot's commit object is
-	// stamped with — see commitPlan.at — so a snapshot whose staging and commit
-	// creation take real time cannot end up with a commit dated after the anchor
-	// that bounds it, and cannot therefore subtract its own execution time from
-	// the interval the vault configured.
+	// and retired only once LastCommitAt durably names the result. A landed
+	// snapshot whose completion write is lost keeps its recovery intent too; that
+	// intent records the first clock reading after the ref was observed to land,
+	// and recovery publishes that later bound before retiring either marker.
 	//
 	// It anchors the floor exactly as LastCommitAt does — see externalAnchor —
-	// which is what makes it fail-closed rather than merely diagnostic. A record
-	// left behind by a crash therefore defers the next external snapshot by one
-	// interval and then expires on its own, because the anchor it states recedes
-	// with the clock like any other.
+	// which is what makes a pre-intent crash fail closed rather than merely
+	// diagnostic. With no commit or recovery intent to settle, that marker defers
+	// one interval and then expires on its own as its timestamp recedes.
 	//
 	// Like the two fields above it is written only by the watcher's own paths, so
 	// an explicit `bn`, web, or sidecar commit still neither waits for the floor
@@ -507,6 +503,10 @@ func unreadableIntentRecovery(path string) []string {
 func (s *safetyState) SaveIntent(record IntentRecord) error {
 	record.Version = stateVersion
 	record.ObservedAt = record.ObservedAt.UTC()
+	if record.LandedAt != nil {
+		landedAt := record.LandedAt.UTC()
+		record.LandedAt = &landedAt
+	}
 	if len(record.Paths) > intentPathCap {
 		record.Paths = record.Paths[:intentPathCap]
 	}
@@ -664,12 +664,13 @@ func (s *safetyState) NoteSettled(policy config.AutosavePolicy) (closed bool, er
 }
 
 // BeginExternalCommit records that an external autosave is about to be attempted
-// at now, and anchors the floor there before it can be taken.
+// at now, and establishes a conservative floor marker before it can be taken.
 //
 // This is the write-ahead half of the floor's durability contract, and its
-// ordering is the whole of it: it runs before anything the attempt does can
-// produce a commit, so a commit that exists is a commit an anchor no earlier than
-// it already survives. Its failure is decisive for the same reason
+// ordering is the first half of it: it runs before anything the attempt does can
+// produce a commit. Once the ref lands, the recovery intent carries the later
+// observed landing bound until NoteCommit publishes it here. Its failure is
+// decisive for the same reason
 // [safetyState.SaveIntent]'s is — a snapshot whose floor could not be anchored is
 // one that could be taken twice inside the interval the vault configured — and it
 // costs nothing but a deferral, because the burst it refuses stays open and the
@@ -711,9 +712,10 @@ func (s *safetyState) AbandonExternalCommit(policy config.AutosavePolicy, starte
 //
 // It also retires the in-flight marker, which is what makes this the *durable*
 // statement of the same fact rather than a second one: from here on the anchor is
-// LastCommitAt, and it names when the snapshot finished rather than when it
-// started. A failure here is survivable precisely because the marker it would
-// have retired is still on disk holding the floor.
+// LastCommitAt, and it names the first observation after the ref landed rather
+// than when staging started. A failure here is survivable because the committed
+// recovery intent remains on disk; the next recovery pass publishes its landing
+// bound before allowing another external snapshot.
 func (s *safetyState) NoteCommit(policy config.AutosavePolicy, now time.Time) (WatchState, error) {
 	now = now.UTC()
 	state := s.LoadWatchState()
@@ -794,17 +796,11 @@ func (w WatchState) DueTime(policy config.AutosavePolicy) (time.Time, bool) {
 // last external autosave known to have finished and the last one known to have
 // been attempted.
 //
-// The two disagree only across the window this record exists to survive — a
-// commit that landed and whose completion could not be written down, because the
-// state write failed or the process died. Taking the later of them is what makes
-// that window fail closed: the anchor is never earlier than the commit the
-// history actually holds, so the next external snapshot cannot land inside the
-// configured interval no matter which of the two writes survived.
-//
-// The attempted-at instant bounds the commit because the commit is stamped with
-// it, not because a snapshot is assumed to be fast. A slow one therefore holds
-// the *full* interval after its own commit date rather than the interval minus
-// however long it took to stage and write a tree.
+// The two disagree while an attempt is in flight and across the recovery window
+// after a ref landed but its completion could not be written. During that latter
+// window the retained intent prevents a second external commit; recovery then
+// replaces the attempted-at fallback with the observed landing bound before it
+// permits another one.
 func (w WatchState) externalAnchor() time.Time {
 	anchor := w.LastCommitAt.UTC()
 	if w.ExternalCommitStartedAt == nil {
