@@ -223,6 +223,95 @@ func TestConfigSet_LeavesAnEquivalentStoredSpellingAlone(t *testing.T) {
 	}
 }
 
+// autosaveEncodings are TOML spellings that all decode to the 5m policy. The
+// loader accepts every one of them, so `bn config set ... 5m` has nothing to do
+// against any of them — the no-op is judged on the value the file *means*, not
+// on the bytes it uses to say it.
+var autosaveEncodings = []struct{ name, stored string }{
+	{"a basic string", "[autosave]\nmin_interval = \"300s\"\n"},
+	{"a literal string", "[autosave]\nmin_interval = '5m'\n"},
+	{"a triple-quoted basic string", "[autosave]\nmin_interval = \"\"\"5m\"\"\"\n"},
+	{"a triple-quoted literal string", "[autosave]\nmin_interval = '''300s'''\n"},
+	{"a triple-quoted string opened by a newline", "[autosave]\nmin_interval = \"\"\"\n5m0s\"\"\"\n"},
+	{"a Unicode escape", "[autosave]\nmin_interval = \"5\\u006d\"\n"},
+	{"an escape beside a comment", "[autosave]\nmin_interval = \"\\u0033\\u0030\\u0030s\" # quiet\n"},
+}
+
+// Every encoding above is one the config loader reads as the 5m floor, which is
+// what makes rewriting it a commit that moves nothing. `get` answering `5m` for
+// each is the premise; the no-op below is the consequence.
+func TestConfigGet_ReadsEveryValidEncodingOfThePolicy(t *testing.T) {
+	for _, tc := range autosaveEncodings {
+		t.Run(tc.name, func(t *testing.T) {
+			configVault(t, tc.stored)
+
+			out, _, err := runConfig(t, "config", "get", "autosave.min_interval")
+			if err != nil {
+				t.Fatalf("config get: %v", err)
+			}
+			if out != config.DefaultAutosaveMinInterval+"\n" {
+				t.Fatalf("config get printed %q, want %q", out, config.DefaultAutosaveMinInterval+"\n")
+			}
+		})
+	}
+}
+
+// The finding this closes: a stored value the loader resolves to the requested
+// policy was still rewritten when the patcher could not read its *spelling*, so
+// a converging script produced a commit on every run against a vault that
+// happened to quote its floor unusually. Apply and dry run both have nothing to
+// do here, and neither leaves an artifact behind.
+func TestConfigSet_LeavesEveryValidEncodingOfThePolicyAlone(t *testing.T) {
+	for _, tc := range autosaveEncodings {
+		for _, args := range [][]string{
+			{"config", "set", "autosave.min_interval", config.DefaultAutosaveMinInterval},
+			{"config", "set", "autosave.min_interval", "300s"},
+			{"config", "set", "autosave.min_interval", config.DefaultAutosaveMinInterval, "--dry-run"},
+		} {
+			t.Run(tc.name+"/"+strings.Join(args[3:], " "), func(t *testing.T) {
+				root, cfgPath := configVault(t, tc.stored)
+
+				out, _, err := runConfig(t, args...)
+				if err != nil {
+					t.Fatalf("bn %s: %v", strings.Join(args, " "), err)
+				}
+				if out != "" {
+					t.Fatalf("bn %s printed %q, want nothing", strings.Join(args, " "), out)
+				}
+				if got := readConfigFile(t, cfgPath); got != tc.stored {
+					t.Fatalf("brainnotes.toml =\n%q\nwant the stored encoding left alone", got)
+				}
+				assertNoMutationArtifacts(t, root)
+			})
+		}
+	}
+}
+
+// The other side of it: the policy moving is still a real mutation, and what
+// lands is one canonical assignment even when the value it replaces spanned
+// several lines.
+func TestConfigSet_RewritesAMultiLineValueWhenThePolicyMoves(t *testing.T) {
+	const stored = "[autosave]\nmin_interval = \"\"\"\n1h\"\"\" # quiet\n\n[capture]\ninbox_note = \"Inbox.md\"\n"
+	root, cfgPath := configVault(t, stored)
+
+	if _, _, err := runConfig(t, "config", "set", "autosave.min_interval", "600s"); err != nil {
+		t.Fatalf("config set: %v", err)
+	}
+	want := "[autosave]\nmin_interval = \"10m\" # quiet\n\n[capture]\ninbox_note = \"Inbox.md\"\n"
+	if got := readConfigFile(t, cfgPath); got != want {
+		t.Fatalf("brainnotes.toml =\n%q\nwant\n%q", got, want)
+	}
+	assertJournalEntries(t, root, 1)
+
+	printed, _, err := runConfig(t, "config", "get", "autosave.min_interval")
+	if err != nil {
+		t.Fatalf("config get: %v", err)
+	}
+	if printed != "10m\n" {
+		t.Fatalf("config get printed %q, want the new policy", printed)
+	}
+}
+
 // The same file, and a value that does move the floor: the write happens, and
 // what lands is the canonical spelling of the new policy rather than the
 // non-canonical shape of the one it replaced.

@@ -334,6 +334,14 @@ assignment at all, because `bn config get` answers `5m` in all three cases. A
 script may therefore assert the floor it wants on every run and produce a commit
 only on the run that moves it.
 
+"Already means" is decided by reading the file the way `bn` loads it, so it
+covers every way TOML can write the same string — `'5m'`, `"""5m"""`, and
+`"5\u006d"` name the 5m floor as much as `"5m"` does, and none of them is
+rewritten by a `set` that asks for it. A value the loader would *refuse* — a
+number, a list, a duration outside the bounds — is no policy at all, so `set`
+rewrites it rather than comparing against it. A value written across several
+lines is rewritten whole, so what replaces it is one canonical assignment.
+
 `unset` names an **assignment**: it removes the key so the built-in `5m` default
 applies again, which is how an explicit floor is taken back out of the file even
 when it happens to equal the default. Unsetting a key that is not assigned
