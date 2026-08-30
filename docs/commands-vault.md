@@ -55,18 +55,21 @@ under a running watcher is safe all have answers; nothing else has all three
 yet.
 
 `get` prints the effective value and a newline, normalized the way `bn` writes
-it, so it reads straight into a shell variable. `set` rewrites exactly one
-assignment and leaves every other byte — comments included — alone, creating the
-`[autosave]` table at the end of the file when it is absent. `unset` removes the
-assignment so the built-in default applies again, which is the right way to
-restore a default: passing it explicitly writes an assignment that happens to
-equal it.
+it, so it reads straight into a shell variable. `set` names a policy: it rewrites
+exactly one assignment — leaving every other byte, comments included, alone, and
+creating the `[autosave]` table at the end of the file when it is absent — but
+only when the value asked for is not the one already in force. `unset` names an
+assignment: it removes the key so the built-in default applies again, which is
+how an explicit floor is taken back out of the file.
 
 A change is an ordinary mutation with one transaction, one undo-journal entry,
-and one immediate commit, so `bn undo` reverts it. A no-op — setting the value
-already stored, or unsetting a key that is not assigned — writes nothing and
+and one immediate commit, so `bn undo` reverts it. A no-op writes nothing and
 records nothing, and neither does `--dry-run`, which prints the same diff the
-apply would have written.
+apply would have written. "No-op" is measured against the policy in force, not
+the bytes: setting `5m` against a file storing `5m`, storing `300s`, or storing
+no assignment at all are all three the same nothing, so a script may assert the
+floor it wants on every run and commit only on the run that moves it. Unsetting
+a key that is not assigned is a no-op too.
 
 ```text
 $ bn config get autosave.min_interval

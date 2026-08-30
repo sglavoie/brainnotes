@@ -195,28 +195,84 @@ func TestConfigSet_SemanticNoOpWritesAndRecordsNothing(t *testing.T) {
 	assertNoMutationArtifacts(t, root)
 }
 
-// The boundary of the no-op rule, and the reason it is drawn at the file rather
-// than at the policy: a stored spelling that is not the canonical one is
-// rewritten even when the requested value names the same policy. `set` says what
-// the file will read afterwards, so leaving `300s` in place after
-// `bn config set ... 5m` would be the command not doing what it was told. Run it
-// twice and the second call is the no-op above.
-func TestConfigSet_NormalizesANonCanonicalStoredSpelling(t *testing.T) {
+// The no-op rule is drawn at the policy, not at the file: a stored spelling
+// that is not the canonical one is left exactly as it is when the requested
+// value names the same policy. `set` says what the vault's floor will be, and a
+// vault storing `300s` is already on the floor `bn config set ... 5m` asks for,
+// so normalizing the spelling would be a commit that changes nothing the
+// watcher does.
+func TestConfigSet_LeavesAnEquivalentStoredSpellingAlone(t *testing.T) {
+	const stored = "[autosave]\nmin_interval = \"300s\"\n"
+
+	for _, value := range []string{"5m", "300s", "5m0s"} {
+		t.Run(value, func(t *testing.T) {
+			root, cfgPath := configVault(t, stored)
+
+			out, _, err := runConfig(t, "config", "set", "autosave.min_interval", value)
+			if err != nil {
+				t.Fatalf("config set: %v", err)
+			}
+			if out != "" {
+				t.Fatalf("a no-op config set printed %q, want nothing", out)
+			}
+			if got := readConfigFile(t, cfgPath); got != stored {
+				t.Fatalf("brainnotes.toml =\n%q\nwant the stored spelling left alone", got)
+			}
+			assertNoMutationArtifacts(t, root)
+		})
+	}
+}
+
+// The same file, and a value that does move the floor: the write happens, and
+// what lands is the canonical spelling of the new policy rather than the
+// non-canonical shape of the one it replaced.
+func TestConfigSet_WritesCanonicallyOverANonCanonicalStoredSpelling(t *testing.T) {
 	const stored = "[autosave]\nmin_interval = \"300s\"\n"
 	root, cfgPath := configVault(t, stored)
 
-	if _, _, err := runConfig(t, "config", "set", "autosave.min_interval", "5m"); err != nil {
+	if _, _, err := runConfig(t, "config", "set", "autosave.min_interval", "600s"); err != nil {
 		t.Fatalf("config set: %v", err)
 	}
-	if got := readConfigFile(t, cfgPath); got != "[autosave]\nmin_interval = \"5m\"\n" {
-		t.Fatalf("brainnotes.toml =\n%q\nwant the canonical spelling", got)
+	if got := readConfigFile(t, cfgPath); got != "[autosave]\nmin_interval = \"10m\"\n" {
+		t.Fatalf("brainnotes.toml =\n%q\nwant the canonical spelling of the new policy", got)
 	}
 	assertJournalEntries(t, root, 1)
+}
 
-	if _, _, err := runConfig(t, "config", "set", "autosave.min_interval", "300s"); err != nil {
-		t.Fatalf("second config set: %v", err)
+// The absent-assignment half of the same rule, and the one a converging script
+// hits: a vault with no assignment is already on the default, so asking for the
+// default writes nothing at all — no assignment appears, and with `--dry-run`
+// there is nothing to preview either.
+func TestConfigSet_TheDefaultOverAnAbsentAssignmentRecordsNothing(t *testing.T) {
+	for _, args := range [][]string{
+		{"config", "set", "autosave.min_interval", config.DefaultAutosaveMinInterval},
+		{"config", "set", "autosave.min_interval", "300s"},
+		{"config", "set", "autosave.min_interval", config.DefaultAutosaveMinInterval, "--dry-run"},
+	} {
+		t.Run(strings.Join(args[2:], " "), func(t *testing.T) {
+			root, cfgPath := configVault(t, testPropertyDefinitions)
+
+			out, _, err := runConfig(t, args...)
+			if err != nil {
+				t.Fatalf("bn %s: %v", strings.Join(args, " "), err)
+			}
+			if out != "" {
+				t.Fatalf("bn %s printed %q, want nothing", strings.Join(args, " "), out)
+			}
+			if got := readConfigFile(t, cfgPath); got != testPropertyDefinitions {
+				t.Fatalf("the default over an absent assignment rewrote the file:\n%s", got)
+			}
+			assertNoMutationArtifacts(t, root)
+
+			printed, _, err := runConfig(t, "config", "get", "autosave.min_interval")
+			if err != nil {
+				t.Fatalf("config get: %v", err)
+			}
+			if printed != config.DefaultAutosaveMinInterval+"\n" {
+				t.Fatalf("config get printed %q, want the unchanged default %q", printed, config.DefaultAutosaveMinInterval)
+			}
+		})
 	}
-	assertJournalEntries(t, root, 1)
 }
 
 // Creating the assignment is the one case that adds lines rather than rewriting
@@ -262,18 +318,31 @@ func TestConfigSet_DryRunPrintsThePatchDiffAndWritesNothing(t *testing.T) {
 }
 
 // A dry run of a change that is not a change prints nothing at all, so the
-// "nothing to do" answer is the same whether or not --dry-run was passed.
+// "nothing to do" answer is the same whether or not --dry-run was passed — and
+// it is the same for every spelling of the policy already in force, because the
+// preview is the patcher's own and the patcher judged the policy.
 func TestConfigSet_DryRunOfANoOpPrintsNothing(t *testing.T) {
-	root, _ := configVault(t, commentedAutosaveConfig)
+	for _, tc := range []struct{ name, stored, value string }{
+		{"the canonical spelling", commentedAutosaveConfig, "5m0s"},
+		{"a non-canonical stored spelling", "[autosave]\nmin_interval = \"300s\"\n", "5m"},
+		{"no assignment at all", testPropertyDefinitions, "5m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, cfgPath := configVault(t, tc.stored)
 
-	out, _, err := runConfig(t, "config", "set", "autosave.min_interval", "5m0s", "--dry-run")
-	if err != nil {
-		t.Fatalf("config set --dry-run: %v", err)
+			out, _, err := runConfig(t, "config", "set", "autosave.min_interval", tc.value, "--dry-run")
+			if err != nil {
+				t.Fatalf("config set --dry-run: %v", err)
+			}
+			if out != "" {
+				t.Fatalf("dry-run output = %q, want nothing", out)
+			}
+			if got := readConfigFile(t, cfgPath); got != tc.stored {
+				t.Fatalf("a dry run rewrote the file:\n%s", got)
+			}
+			assertNoMutationArtifacts(t, root)
+		})
 	}
-	if out != "" {
-		t.Fatalf("dry-run output = %q, want nothing", out)
-	}
-	assertNoMutationArtifacts(t, root)
 }
 
 func TestConfigSet_RejectsValuesTheVaultCannotHold(t *testing.T) {

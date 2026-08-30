@@ -138,6 +138,80 @@ func TestPatchAutosaveWritesTheCanonicalValue(t *testing.T) {
 	}
 }
 
+// The no-op rule is drawn at the policy, not at the file: a patch declines
+// whenever the body already means what was asked for, however it spells it and
+// whether it spells it at all. That is what keeps a converging script — one
+// that reasserts the same floor on every run — from writing a config mutation
+// on every run.
+func TestPatchAutosaveDeclinesAPolicyAlreadyInForce(t *testing.T) {
+	for _, tc := range []struct{ name, source, value string }{
+		{"the canonical spelling of the stored value", "[autosave]\nmin_interval = \"300s\"\n", "5m"},
+		{"another non-canonical spelling of it", "[autosave]\nmin_interval = \"300s\"\n", "5m0s"},
+		{"the spelling already stored", "[autosave]\nmin_interval = \"1h\"\n", "1h"},
+		{"a quoted key holding a literal string", "[autosave]\n  \"min_interval\" = '300s'\n", "5m"},
+		{"an inline comment beside the value", "[autosave]\nmin_interval = \"300s\" # quiet\n", "5m"},
+		{"a dotted root key", "autosave.min_interval = \"300s\"\n\n[serve]\naddr = \"x\"\n", "5m"},
+		{"off over off", "[autosave]\nmin_interval = \"off\"\n", "off"},
+		{"the default over an absent assignment", "[templates]\ndir = \"Templates\"\n", DefaultAutosaveMinInterval},
+		{"the default over an empty file", "", DefaultAutosaveMinInterval},
+		{"the default over the starter template", DefaultTemplate(), DefaultAutosaveMinInterval},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := setAutosave(t, tc.source, tc.value)
+			if result.Changed {
+				t.Fatalf("the policy is unchanged, so the patch should report no change:\n%s", result.Patched)
+			}
+			if len(result.Diff) != 0 {
+				t.Fatalf("a no-op patch should produce no diff, got %v", result.Diff)
+			}
+			if string(result.Patched) != tc.source {
+				t.Fatalf("a no-op patch returned %q, want the source unchanged", result.Patched)
+			}
+		})
+	}
+}
+
+// The other side of that rule: a policy that genuinely moves is written, and it
+// is written canonically even when the value it replaces was not.
+func TestPatchAutosaveRewritesANonCanonicalSpellingWhenThePolicyMoves(t *testing.T) {
+	const source = "[autosave]\nmin_interval = \"300s\" # quiet\n"
+	result := setAutosave(t, source, "600s")
+	if !result.Changed {
+		t.Fatal("5m to 10m is a change")
+	}
+	if got := string(result.Patched); got != "[autosave]\nmin_interval = \"10m\" # quiet\n" {
+		t.Fatalf("brainnotes.toml =\n%q\nwant the canonical spelling of the new policy", got)
+	}
+}
+
+// A stored value that cannot be read as a policy is not a policy in force, so
+// there is nothing to decline against and the assignment is rewritten. Every
+// one of these bodies is a config the loader already refuses; rewriting the one
+// line this patcher owns is what makes the file say something again.
+func TestPatchAutosaveRewritesAnUnreadableStoredValue(t *testing.T) {
+	for _, tc := range []struct{ name, source string }{
+		{"a number", "[autosave]\nmin_interval = 300\n"},
+		{"an empty string", "[autosave]\nmin_interval = \"\"\n"},
+		{"a string that is not a duration", "[autosave]\nmin_interval = \"soon\"\n"},
+		{"an array", "[autosave]\nmin_interval = [\"5m\"]\n"},
+		{"a multi-line string", "[autosave]\nmin_interval = \"\"\"5m\"\"\"\n"},
+	} {
+		source := tc.source
+		t.Run(tc.name, func(t *testing.T) {
+			result := setAutosave(t, source, DefaultAutosaveMinInterval)
+			if !result.Changed {
+				t.Fatalf("an unreadable value should be rewritten, not accepted as %q", DefaultAutosaveMinInterval)
+			}
+			if !strings.Contains(string(result.Patched), `min_interval = "5m"`) {
+				t.Fatalf("the canonical value should have been written:\n%s", result.Patched)
+			}
+			if strings.Count(string(result.Patched), "min_interval") != 1 {
+				t.Fatalf("exactly one assignment should remain:\n%s", result.Patched)
+			}
+		})
+	}
+}
+
 func TestPatchAutosaveInsertsIntoAnExistingTable(t *testing.T) {
 	source := "[templates]\ndir = \"Templates\"\n\n[autosave]\n# the floor is documented here\n\n[serve]\naddr = \"x\"\n"
 	result := setAutosave(t, source, "10m")

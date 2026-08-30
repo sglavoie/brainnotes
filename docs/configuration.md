@@ -283,7 +283,7 @@ the vault reacts to a change.
 | Default | `5m`, applied when the key is absent |
 | Range | `30s` to `24h`, inclusive |
 | Disabled | `off`, the only non-duration value, in lower case |
-| Normalization | Go duration syntax; `300s` and `5m0s` are stored and printed as `5m` |
+| Normalization | Go duration syntax; `300s` and `5m0s` are read and printed as `5m`, and a value `bn config set` writes is written in that spelling |
 
 The lower bound sits above the watcher's fixed 30-second quiet period, so a
 floor can never be shorter than the readiness it defers. `Off` and `OFF` are
@@ -322,20 +322,22 @@ file says `5m`, `300s`, or nothing at all. It therefore cannot distinguish an
 explicit `5m` from an absent key, which is deliberate — what a script wants to
 know is which floor is in force.
 
-`set` rewrites exactly that one assignment, leaving every other byte of the file
-— including the comments around it and on it — where it was, and creates the
-`[autosave]` table at the end of the file if it does not exist yet. The value is
-normalized before it is written, so `bn config set autosave.min_interval 300s`
-against a file storing `5m` changes nothing and records nothing, while the same
-command against a file storing `300s` is a real change that normalizes the
-assignment.
+`set` names a **policy**, not a spelling. It changes the file only when the
+floor it asks for is not the one already in force, and then it rewrites exactly
+that one assignment — leaving every other byte, including the comments around it
+and on it, where it was — creating the `[autosave]` table at the end of the file
+if it does not exist yet. What it writes is the canonical spelling of the new
+value. What it does *not* do is rewrite a file that already means what was
+asked: `bn config set autosave.min_interval 5m` records nothing against a file
+storing `5m`, against a file storing `300s`, and against a file with no
+assignment at all, because `bn config get` answers `5m` in all three cases. A
+script may therefore assert the floor it wants on every run and produce a commit
+only on the run that moves it.
 
-`unset` removes the assignment so the built-in `5m` default applies again. Use
-it rather than setting the default explicitly: `bn config set
-autosave.min_interval 5m` against a vault with no assignment is a real change —
-it writes an assignment, commits, and journals one — even though `bn config get`
-answered `5m` before and after. Unsetting a key that is not assigned changes
-nothing and records nothing.
+`unset` names an **assignment**: it removes the key so the built-in `5m` default
+applies again, which is how an explicit floor is taken back out of the file even
+when it happens to equal the default. Unsetting a key that is not assigned
+changes nothing and records nothing.
 
 A change through either command is an ordinary BrainNotes mutation — one
 transaction pinned to the bytes the patch was computed from, one undo-journal

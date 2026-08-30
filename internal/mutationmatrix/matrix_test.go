@@ -608,19 +608,24 @@ func TestBackupRestoreWipeKeepsTheHistoryItCommitsInto(t *testing.T) {
 	}
 }
 
-// TestConfigMutationsWithNothingToDoLeaveNoHistory covers the two config-command
+// TestConfigMutationsWithNothingToDoLeaveNoHistory covers the config-command
 // answers the matrix rows cannot express.
 //
 // A row's no-op runs after its prepare, and for `config unset` the prepare is
 // precisely what assigns the key, so "unsetting a key that is not there" has
-// nowhere to live in the table. A dry run has nowhere to live either: it is not
-// a mutation, and the table describes mutations.
+// nowhere to live in the table. Neither does the case a converging script
+// actually produces — asserting the default against a vault that assigns
+// nothing — because a row's no-op runs against a vault its own apply has
+// already moved off the default. A dry run has nowhere to live either: it is
+// not a mutation, and the table describes mutations.
 //
-// Both are the same claim, which is the one thing a scriptable config surface
-// has to get right to be safe in a loop: an invocation with nothing to do
-// touches neither the file, nor the undo journal, nor the history — so a script
-// that reasserts the vault's policy on every run does not produce a commit on
-// every run.
+// All of them are the same claim, which is the one thing a scriptable config
+// surface has to get right to be safe in a loop: an invocation with nothing to
+// do touches neither the file, nor the undo journal, nor the history — so a
+// script that reasserts the vault's policy on every run does not produce a
+// commit on every run. "Nothing to do" is measured against the policy in force,
+// not against the bytes: this vault assigns no floor at all, and every call
+// below names the floor it is already on.
 func TestConfigMutationsWithNothingToDoLeaveNoHistory(t *testing.T) {
 	h := newHarness(t, nil)
 	before := h.head()
@@ -628,7 +633,10 @@ func TestConfigMutationsWithNothingToDoLeaveNoHistory(t *testing.T) {
 
 	for _, args := range [][]string{
 		{"config", "unset", autosaveKey},
+		{"config", "set", autosaveKey, config.DefaultAutosaveMinInterval},
+		{"config", "set", autosaveKey, "300s"},
 		{"config", "set", autosaveKey, "1m", "--dry-run"},
+		{"config", "set", autosaveKey, config.DefaultAutosaveMinInterval, "--dry-run"},
 		{"config", "unset", autosaveKey, "--dry-run"},
 	} {
 		if err := runCLI(t, h, args...); err != nil {

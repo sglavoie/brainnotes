@@ -71,9 +71,10 @@ func newConfigSetCmd() *cobra.Command {
 		Use:   "set KEY VALUE",
 		Short: "Set one configuration value in the vault's brainnotes.toml",
 		Long: "Set a configuration key in the vault's brainnotes.toml, rewriting exactly that one assignment and leaving every other byte — including comments — where it was.\n\n" +
-			"The value is normalized before it is written, so `300s` is stored as `5m`. Setting a value that already " +
-			"names the stored policy changes nothing and records nothing. To restore the default, use `bn config unset` " +
-			"rather than passing the default explicitly.\n\n" +
+			"The value is normalized before it is written, so `300s` is stored as `5m`. Setting a value that names the " +
+			"policy already in force changes nothing and records nothing — whatever spelling the file uses, and " +
+			"including the default over a file that assigns nothing — so a script may reassert a policy on every run " +
+			"without producing a commit on every run. To remove the assignment itself, use `bn config unset`.\n\n" +
 			configScriptableKey + " is currently the only scriptable key. It takes `off` or a Go duration between " +
 			config.CanonicalAutosaveDuration(config.MinAutosaveInterval) + " and " +
 			config.CanonicalAutosaveDuration(config.MaxAutosaveInterval) + " inclusive.",
@@ -198,7 +199,11 @@ type configPatch struct {
 // The three cheap answers come first and each one returns before any artifact
 // could exist: a patch that changes nothing is a success that writes nothing, a
 // dry run prints the patch's own diff and stops, and a candidate that would not
-// load is refused while it is still only bytes in memory. Only past those does
+// load is refused while it is still only bytes in memory. "Changes nothing" is
+// the patcher's judgement and it is a policy-level one — a set whose value
+// names the policy already in force reports no change, so the dry run below
+// prints nothing for it too, and neither answer depends on how the file
+// happens to spell what it already means. Only past those does
 // the operation begin, and from there it is the same lifecycle every other
 // mutation uses — the preflight ahead of the first artifact, one transaction
 // pinned to the bytes the patch was computed from, and a finalize that writes

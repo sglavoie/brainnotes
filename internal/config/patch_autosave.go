@@ -17,9 +17,15 @@ const (
 //
 // Unlike the property and view patchers this one never rewrites a block: it
 // rewrites (or adds) exactly one assignment line, so comments around it — and
-// the inline comment on the line itself — survive. Writing an already-canonical
-// value is a no-op, which is what makes `bn config set` idempotent: setting
-// "300s" over a stored "5m" changes nothing, because both name the same policy.
+// the inline comment on the line itself — survive.
+//
+// The unit of change is the *policy*, not the text. A value naming the policy
+// already in force is a no-op whatever spelling the file uses and whether or
+// not the key is assigned at all: "5m" over a stored "300s", and "5m" over a
+// file that assigns nothing and so is already on the 5m default, both leave the
+// bytes alone and report no change. That is what makes a script reasserting a
+// vault's policy on every run produce history only when the policy moves. A
+// policy that does move is still written in the canonical spelling.
 //
 // The value is validated by ParseAutosaveMinInterval, so a patch can never put
 // a body on disk that Decode would then refuse to load. An empty value is
@@ -36,6 +42,11 @@ func PatchAutosaveMinInterval(source []byte, value string) (PatchResult, error) 
 	}
 
 	lines, trailingNewline := splitConfigLines(source)
+	if current, ok := effectiveAutosavePolicy(lines); ok && current.Canonical == policy.Canonical {
+		// Nothing to say: the file already means what the caller asked for, so no
+		// candidate is rendered and no diff is reported.
+		return autosavePatchResult(source, lines, lines, trailingNewline), nil
+	}
 	// An empty file has no final-newline state to preserve, so the section this
 	// call creates is written the way every other config file ends.
 	if len(lines) == 0 {
@@ -43,6 +54,69 @@ func PatchAutosaveMinInterval(source []byte, value string) (PatchResult, error) 
 	}
 	return autosavePatchResult(
 		source, lines, setAutosaveMinInterval(lines, policy.Canonical), trailingNewline), nil
+}
+
+// effectiveAutosavePolicy resolves the policy a config body is already under:
+// the value its min_interval assignment binds, or the default when the key is
+// absent — the same two cases (*Config).AutosavePolicy answers from a loaded
+// config, reached here from bytes a patch has not been applied to yet.
+//
+// ok is false when the assignment is present but its value cannot be read as a
+// policy. That is a body Decode would refuse to load, so there is no policy in
+// force to compare a request against, and the caller rewrites the line rather
+// than declining against an answer it does not have.
+func effectiveAutosavePolicy(lines []string) (AutosavePolicy, bool) {
+	site := findAutosaveSite(lines)
+	if site.assign < 0 {
+		// ParseAutosaveMinInterval reads an empty value as the default, which is a
+		// policy like any other: assigning the default explicitly over an absent
+		// key changes what the file says and not what the vault does.
+		policy, _ := ParseAutosaveMinInterval("")
+		return policy, true
+	}
+	raw, ok := assignmentStringValue(lines[site.assign])
+	if !ok {
+		return AutosavePolicy{}, false
+	}
+	policy, err := ParseAutosaveMinInterval(raw)
+	if err != nil {
+		return AutosavePolicy{}, false
+	}
+	return policy, true
+}
+
+// assignmentStringValue reads the string an assignment line binds.
+//
+// It is deliberately narrow: a basic or literal string with no escape, followed
+// by nothing but a comment, and nothing else. A multi-line string, a number, an
+// array, or an escaped character all report false, because the only caller uses
+// this to decline a rewrite and declining wrongly is the one outcome that has a
+// cost. A value naming an autosave policy never needs an escape.
+func assignmentStringValue(line string) (string, bool) {
+	body := strings.TrimSuffix(line, "\r")
+	eq := strings.IndexByte(body, '=')
+	if eq < 0 {
+		return "", false
+	}
+	rest := strings.TrimSpace(body[eq+1:])
+	if len(rest) < 2 || (rest[0] != '"' && rest[0] != '\'') {
+		return "", false
+	}
+	// A closing quote at offset 0 is an empty string, which is also how the
+	// opening delimiter of a """ or ''' multi-line string reads from here;
+	// neither is a policy.
+	end := strings.IndexByte(rest[1:], rest[0])
+	if end < 1 {
+		return "", false
+	}
+	value := rest[1 : 1+end]
+	if strings.ContainsRune(value, '\\') {
+		return "", false
+	}
+	if after := strings.TrimSpace(rest[end+2:]); after != "" && !strings.HasPrefix(after, "#") {
+		return "", false
+	}
+	return value, true
 }
 
 // UnsetAutosaveMinInterval removes the autosave.min_interval assignment,
