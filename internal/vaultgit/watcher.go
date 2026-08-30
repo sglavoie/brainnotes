@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
@@ -223,12 +224,17 @@ type Watcher struct {
 	invalidPolicyKey string
 	// pendingOff records that a valid configuration asked for `off` and the final
 	// snapshot the vault is owed under the outgoing policy has not landed yet.
-	// The intent lives here rather than on disk on purpose: it is worth exactly
-	// one process lifetime, because a guard that restarts mid-transition re-reads
-	// the same configuration on its first poll and re-derives the same intent.
+	// The intent lives here rather than in a file of its own because the vault
+	// already carries a durable statement of the policy the last guard was
+	// enforcing — see resumeInterruptedOffTransition, which rebuilds this pair
+	// from it on the first poll of a new process.
 	pendingOff bool
 	// pendingPolicy is what will be published once that snapshot lands.
 	pendingPolicy config.AutosavePolicy
+	// resumeChecked records that the startup question — is this vault mid-way
+	// through a switch to `off`? — has been asked. It is asked once per process,
+	// because after that this loop is the thing that knows the answer.
+	resumeChecked bool
 }
 
 // NewWatcher builds a watcher over an open Manager.
@@ -271,12 +277,13 @@ func (w *Watcher) Run(ctx context.Context) error {
 
 	// The first poll runs before the first tick rather than one interval into the
 	// loop. A guard that is starting is most often a guard that was just
-	// restarted, and the two things that are true at that moment are exactly the
-	// two this poll handles: a debounce burst may already be past its deadline,
-	// and the remote may never have seen the commits on disk. Waiting out a poll
-	// interval first would add latency to both for no reason. The push inside it
-	// is unconditional in intent and gated only by the persisted backoff, since
-	// lastPushAttempt is zero on a fresh process.
+	// restarted, and the three things that may be true at that moment are exactly
+	// the three this poll handles: a debounce burst may already be past its
+	// deadline, a switch to `off` may be owed a snapshot the previous process
+	// never took, and the remote may never have seen the commits on disk. Waiting
+	// out a poll interval first would add latency to all three for no reason. The
+	// push inside it is unconditional in intent and gated only by the persisted
+	// backoff, since lastPushAttempt is zero on a fresh process.
 	w.tick(ctx)
 
 	ticker := time.NewTicker(w.poll)
@@ -291,17 +298,23 @@ func (w *Watcher) Run(ctx context.Context) error {
 	}
 }
 
-// tick is one poll: apply any configuration change, classify the working tree,
-// advance the debounce clock, snapshot if the burst is due, and attempt the
-// remote if it is time.
+// tick is one poll: recover an interrupted transition, apply any configuration
+// change, classify the working tree, advance the debounce clock, snapshot if the
+// burst is due, and attempt the remote if it is time.
 //
-// The reload runs first, before anything reads the working tree, because every
-// decision the rest of the poll makes is a decision under a policy. A poll that
-// scanned first and reloaded second would spend one whole interval acting on the
-// policy the user just replaced, and in the case that matters most — the user
-// turning autosave off — that stale interval is exactly where an unwanted commit
-// would land.
+// The reload runs before anything reads the working tree, because every decision
+// the rest of the poll makes is a decision under a policy. A poll that scanned
+// first and reloaded second would spend one whole interval acting on the policy
+// the user just replaced, and in the case that matters most — the user turning
+// autosave off — that stale interval is exactly where an unwanted commit would
+// land.
+//
+// The recovery runs before even that, and only on the first poll of a process,
+// because the reload cannot see what it is about: a configuration that already
+// says `off` reads identically whether the transition to it finished or was
+// interrupted, and only the vault's durable state separates the two.
 func (w *Watcher) tick(ctx context.Context) {
+	w.resumeInterruptedOffTransition()
 	w.reloadPolicy()
 	committed := w.scanAndCommit(ctx)
 	w.maybePush(ctx, committed)
@@ -390,6 +403,10 @@ func (w *Watcher) adoptPolicy(next config.AutosavePolicy) {
 
 	if next.Disabled {
 		if current.Disabled {
+			// Already off, so nothing is owed *by this read*. Whether the transition
+			// that made it off ever finished is a question about a previous process,
+			// and resumeInterruptedOffTransition has already answered it from durable
+			// state by the time any poll reaches here.
 			return
 		}
 		// Re-recorded rather than ignored when a transition is already pending, so
@@ -445,6 +462,93 @@ func (w *Watcher) publishPolicy(next config.AutosavePolicy, freshBurst bool, mes
 		}
 	}
 	w.emit(WatchEvent{Kind: WatchEventConfigChanged, Message: message, Policy: next.Canonical})
+}
+
+// resumeInterruptedOffTransition rebuilds a switch to `off` that a previous
+// process began and did not finish.
+//
+// It exists because the intent [adoptPolicy] records is worth exactly one
+// process lifetime while the obligation that intent stands for is not. A guard
+// starting under an already-`off` configuration cannot tell from that file alone
+// whether `off` has been effective for a month or whether it was typed thirty
+// seconds before the last process died: the bytes are identical, adoptPolicy
+// answers "already off, nothing to do" to both, and in the second case the edits
+// the previous process was about to snapshot stay outside the history for as
+// long as the vault stays off — which is exactly the state the final snapshot
+// exists to prevent.
+//
+// The vault's own durable record is what separates them. `watch.json` names the
+// policy the engine was enforcing when it last wrote that file, `off` is
+// published there only by [Watcher.finishOffTransition] — that is, only once the
+// owed snapshot has landed — and nothing outside this loop ever publishes a
+// policy at all. So a record still naming an enabled floor under an `off`
+// configuration is the previous process saying it never got that far.
+//
+// What this does about it is to put the loop into precisely the state the poll
+// that read the edit would have left it in: the outgoing policy in force, the
+// transition held as intent. Every guarantee of the live path then applies
+// unchanged rather than being restated here — the snapshot bypasses the quiet
+// period and the floor, contention retries because the attempt does not consume
+// the intent, and a safety failure leaves the vault enabled and blocked instead
+// of quietly off.
+func (w *Watcher) resumeInterruptedOffTransition() {
+	if w.resumeChecked {
+		return
+	}
+	w.resumeChecked = true
+
+	target := w.mgr.AutosavePolicy()
+	if !target.Disabled {
+		// This process did not start under `off`, so there is no transition to be
+		// part-way through. Whatever the record says, the configuration that was
+		// loaded asks for snapshots, and adoptPolicy owns every change from here.
+		return
+	}
+	previous, published := previouslyEffectivePolicy(w.mgr.WatchStatus())
+	if !published || previous.Disabled {
+		// Either no guard has ever published a policy for this vault, or the last
+		// one to do so published `off` — which it does only after the owed snapshot
+		// landed. Neither is evidence of an interrupted transition, and inventing
+		// one would put a commit on the startup of every already-off vault.
+		return
+	}
+	if err := w.mgr.SetAutosavePolicy(previous); err != nil {
+		// The policy is restored in memory either way; only its republication to
+		// watch.json failed, which is the same trade publishPolicy makes.
+		w.emit(WatchEvent{
+			Kind:    WatchEventError,
+			Message: "the outgoing autosave policy could not be republished while resuming an interrupted switch to off",
+			Policy:  previous.Canonical,
+			Detail:  agent.SanitizedDiagnostic(err),
+		})
+	}
+	w.pendingOff = true
+	w.pendingPolicy = target
+}
+
+// previouslyEffectivePolicy reads the policy the vault was last known to be
+// enforcing out of its persisted watch state.
+//
+// An absent token means no guard has ever published one — a vault that has never
+// been watched, or one whose state directory was cleared — and that is evidence
+// of nothing rather than evidence of an interrupted transition.
+//
+// A token that is neither `off` nor a spelling this build parses is corruption,
+// and it is read as "enabled under a floor this build cannot name". That is the
+// fail-closed direction: acting on it costs at most one snapshot of bytes the
+// vault was going to commit anyway, while reading it as `off` would silently
+// discard an owed one, and discarding it is the failure this whole path exists
+// to rule out.
+func previouslyEffectivePolicy(state WatchState) (config.AutosavePolicy, bool) {
+	token := strings.TrimSpace(state.AutosaveMinInterval)
+	if token == "" {
+		return config.AutosavePolicy{}, false
+	}
+	policy, err := config.ParseAutosaveMinInterval(token)
+	if err != nil {
+		return resolveAutosavePolicy(config.AutosavePolicy{}), true
+	}
+	return resolveAutosavePolicy(policy), true
 }
 
 // finishOffTransition publishes `off` once the vault has been left whole.

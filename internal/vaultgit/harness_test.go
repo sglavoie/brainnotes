@@ -351,6 +351,42 @@ func (h *testHarness) watchJSON() map[string]any {
 	return fields
 }
 
+// requireWatchPolicy asserts the policy token the vault has *published*, which
+// is a different question from the one requirePolicy asks: that one is what this
+// process is enforcing, and this one is what a process starting fresh would find
+// on disk and have to reason from.
+func requireWatchPolicy(t *testing.T, h *testHarness, want string) {
+	t.Helper()
+	if got := h.mgr.WatchStatus().AutosaveMinInterval; got != want {
+		t.Fatalf("watch.json publishes policy %q, want %q", got, want)
+	}
+}
+
+// corruptWatchPolicy replaces the published policy token with bytes this build
+// cannot resolve, leaving the rest of the record intact and readable. It stands
+// in for a hand edit or a half-written file — the record still decodes, so the
+// only thing in question is what an unreadable token means.
+func (h *testHarness) corruptWatchPolicy(token string) {
+	h.t.Helper()
+	path := filepath.Join(h.mgr.StateDir(), watchStateFileName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		h.t.Fatalf("read watch.json: %v", err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		h.t.Fatalf("decode watch.json: %v", err)
+	}
+	fields["autosave_min_interval"] = token
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		h.t.Fatalf("encode watch.json: %v", err)
+	}
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
+		h.t.Fatalf("write watch.json: %v", err)
+	}
+}
+
 // commitTimes reports every commit's committer date, newest first. The engine
 // stamps both dates from its injected clock, so on this harness these are
 // exactly the instants the schedule chose.

@@ -114,6 +114,17 @@ stop taking snapshots. From then on external edits accumulate uncommitted until
 you re-enable the floor or run an explicit `bn` command, and the health check
 says so as a warning rather than a problem: it is a state you chose.
 
+That promise survives a restart. If the guard is stopped — or crashes, or the
+machine reboots — after the edit but before the final snapshot, the next launch
+reads a file that already says `off` and would otherwise have no way to tell that
+from a vault that was already off for weeks. The vault's own durable record
+settles it: it names the policy last actually enforced, so a record still naming
+a duration while the file says `off` is a transition that never finished. The
+guard resumes it on its first poll, under the outgoing policy, and publishes
+`off` only once the owed snapshot lands. A vault that was genuinely already off
+carries no such record and is left alone — restarting the guard never adds a
+commit to it.
+
 The guard keeps watching either way. `off` asks it to stop writing history on its
 own initiative, not to stop looking, so a note deleted by a sync client while
 autosave is off still latches the block marker on the poll that noticed it.
