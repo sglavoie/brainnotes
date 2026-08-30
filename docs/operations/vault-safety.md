@@ -103,6 +103,13 @@ by a crash expires on its own, because the instant it names recedes like any
 other. If the marker cannot be written at all, no autosave is attempted: the
 edits stay in the working tree, the burst stays open, and the next poll retries.
 
+The marker is also the date the autosave commit itself carries, so the interval
+holds after the commit rather than after the moment the guard decided to take it.
+That matters on a large or slow vault: staging and writing a tree take real time,
+and a floor measured from before that work would give the next autosave back
+however long the last one ran for. `git log` on a vault that lost a completion
+write therefore still shows a full interval between consecutive autosaves.
+
 ### Changing the floor while the guard is running
 
 The guard re-reads `brainnotes.toml` before every scan, so

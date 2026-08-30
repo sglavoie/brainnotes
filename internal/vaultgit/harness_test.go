@@ -232,6 +232,26 @@ func (h *testHarness) open(opts Options) *Manager {
 
 func (h *testHarness) advance(d time.Duration) { h.clock = h.clock.Add(d) }
 
+// slowClock makes every clock read on the current Manager land step after the
+// previous one, and returns a function that hands the clock back to the test.
+//
+// It provokes the one condition a fixed fake clock cannot express: a snapshot
+// that takes real time. A staging pass over a large vault reads the clock to
+// anchor the floor, again to stamp the commit object, and again to record the
+// completion, and on a slow disk those instants are genuinely apart. Holding all
+// three equal is what let a shortened floor go unnoticed — the gap between the
+// anchor and the commit it bounds is invisible when the gap is zero by
+// construction.
+func (h *testHarness) slowClock(step time.Duration) (restore func()) {
+	mgr := h.mgr
+	previous := mgr.now
+	mgr.now = func() time.Time {
+		h.clock = h.clock.Add(step)
+		return h.clock
+	}
+	return func() { mgr.now = previous }
+}
+
 // write creates or replaces a note.
 func (h *testHarness) write(rel, body string) {
 	h.t.Helper()

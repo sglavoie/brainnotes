@@ -19,6 +19,13 @@ import (
 // The repair is a second durable field written before the attempt rather than
 // after it, so no ordering exists in which a commit is in the history and
 // nothing on disk anchors it.
+//
+// Written before the attempt, that marker is only a bound on the commit if the
+// commit cannot be stamped after it — otherwise a snapshot that took real time
+// would subtract its own execution time from the vault's configured interval.
+// The end-to-end tests below therefore run under a clock that advances on every
+// read, so the anchor, the commit object, and the completion are three distinct
+// instants exactly as they are on a real disk.
 
 // An attempt that has been recorded but not yet completed anchors the floor
 // exactly as a completed one does. This is the whole of the fail-closed rule,
@@ -132,9 +139,10 @@ func TestSettlingABurstKeepsTheInFlightAnchor(t *testing.T) {
 	}
 }
 
-// The end-to-end version, against a real repository: a snapshot lands, the write
-// that would record its completion fails, and the vault must still refuse a
-// second external snapshot inside the configured interval.
+// The end-to-end version, against a real repository: a snapshot that takes real
+// time lands, the write that would record its completion fails, and the vault
+// must still refuse a second external snapshot for the whole configured interval
+// after the commit the history actually holds.
 func TestALostCompletionWriteStillHoldsTheExternalFloor(t *testing.T) {
 	h := newHarness(t)
 	h.setAutosave("5m")
@@ -150,24 +158,25 @@ func TestALostCompletionWriteStillHoldsTheExternalFloor(t *testing.T) {
 	}
 
 	// The snapshot is taken directly rather than through the poll, so the two
-	// writes it makes are the only ones the injection has to count.
+	// writes it makes are the only ones the injection has to count. It runs under
+	// a clock that moves on every read, so anchoring the floor, stamping the
+	// commit, and recording the completion are three separated instants.
+	restore := h.slowClock(45 * time.Second)
 	failWatchWriteFrom(h.mgr, 2)
 	result, err := h.mgr.CommitPending(ctx)
 	h.mgr.state.failWrite = nil
+	restore()
 	if err != nil {
 		t.Fatalf("a failed scheduling write turned a successful snapshot into an error: %v", err)
 	}
 	if !result.Committed {
 		t.Fatalf("the fixture never took a snapshot: %+v", result)
 	}
-	committedAt := h.clock
+	committedAt := requireAnchorCoversTheCommit(t, h)
 
 	lost := h.mgr.WatchStatus()
 	if !lost.LastCommitAt.IsZero() {
 		t.Fatalf("the injected failure never landed: last_commit_at = %s", lost.LastCommitAt)
-	}
-	if lost.ExternalCommitStartedAt == nil {
-		t.Fatal("a completed external snapshot is anchored by nothing on disk")
 	}
 
 	// Four minutes of editing inside the five-minute floor. The burst the failed
@@ -178,7 +187,8 @@ func TestALostCompletionWriteStillHoldsTheExternalFloor(t *testing.T) {
 
 // The same window, survived by a different process. Everything held in memory is
 // gone, which is the case the finding named: a restarted guard reads only
-// watch.json and must schedule from what a crash left there.
+// watch.json and must schedule from what a crash left there — including how long
+// the snapshot it is recovering from took.
 func TestARestartAfterALostCompletionWriteStillHoldsTheFloor(t *testing.T) {
 	h := newHarness(t)
 	h.setAutosave("5m")
@@ -190,13 +200,15 @@ func TestARestartAfterALostCompletionWriteStillHoldsTheFloor(t *testing.T) {
 	}
 	h.advance(DebounceQuiet + time.Second)
 
+	restore := h.slowClock(45 * time.Second)
 	failWatchWriteFrom(h.mgr, 2)
 	result, err := h.mgr.CommitPending(ctx)
 	h.mgr.state.failWrite = nil
+	restore()
 	if err != nil || !result.Committed {
 		t.Fatalf("the fixture never took a snapshot: %+v (%v)", result, err)
 	}
-	committedAt := h.clock
+	committedAt := requireAnchorCoversTheCommit(t, h)
 
 	// The guard dies here and a new one starts on the same vault.
 	h.mgr = h.open(Options{})
@@ -204,6 +216,33 @@ func TestARestartAfterALostCompletionWriteStillHoldsTheFloor(t *testing.T) {
 		t.Fatal("the restarted process found no anchor for the snapshot in its history")
 	}
 	requireNoSnapshotBefore(t, ctx, h, h.newWatcher(&watchRecorder{}), committedAt.Add(5*time.Minute))
+}
+
+// requireAnchorCoversTheCommit asserts that the only anchor a lost completion
+// write leaves behind is no earlier than the commit it is supposed to bound, and
+// reports that commit's own timestamp.
+//
+// This is the finding stated at the level it was actually wrong at. The floor is
+// applied to the anchor, but the interval a person configured is about the
+// spacing of *commits*, so an anchor earlier than its own commit hands the next
+// snapshot the difference for free — and the difference is exactly how long the
+// snapshot took, which is unbounded.
+func requireAnchorCoversTheCommit(t *testing.T, h *testHarness) time.Time {
+	t.Helper()
+	times := h.commitTimes()
+	if len(times) == 0 {
+		t.Fatal("the fixture left no commit for the anchor to cover")
+	}
+	committedAt := times[0]
+	anchor := h.mgr.WatchStatus().ExternalCommitStartedAt
+	if anchor == nil {
+		t.Fatal("a completed external snapshot is anchored by nothing on disk")
+	}
+	if anchor.Before(committedAt) {
+		t.Fatalf("the surviving anchor is %s but its commit is dated %s, so the floor is short by %s",
+			anchor.UTC(), committedAt, committedAt.Sub(anchor.UTC()))
+	}
+	return committedAt
 }
 
 // requireNoSnapshotBefore edits and polls w up to floorEnd, asserting the vault
@@ -238,6 +277,42 @@ func requireNoSnapshotBefore(t *testing.T, ctx context.Context, h *testHarness, 
 	}
 	if resumed.ExternalCommitStartedAt != nil {
 		t.Fatalf("the crash marker outlived the snapshot that replaced it: %s", resumed.ExternalCommitStartedAt)
+	}
+}
+
+// Pinning the commit's date to the anchored instant bounds the commit; it does
+// not replace the completion anchor. A slow snapshot that finishes normally still
+// records when it *finished*, which is later than the commit it wrote, so the
+// durable anchor of a healthy vault is unchanged by any of this.
+func TestASlowSnapshotThatCompletesStillAnchorsAtItsCompletion(t *testing.T) {
+	h := newHarness(t)
+	h.setAutosave("5m")
+	ctx := context.Background()
+
+	h.write("note.md", "first")
+	if _, err := h.mgr.NoteExternalChange(); err != nil {
+		t.Fatalf("NoteExternalChange: %v", err)
+	}
+	h.advance(DebounceQuiet + time.Second)
+
+	restore := h.slowClock(45 * time.Second)
+	result, err := h.mgr.CommitPending(ctx)
+	restore()
+	if err != nil || !result.Committed {
+		t.Fatalf("the fixture never took a snapshot: %+v (%v)", result, err)
+	}
+
+	record := h.mgr.WatchStatus()
+	if record.ExternalCommitStartedAt != nil {
+		t.Fatalf("a finished snapshot left its in-flight anchor behind: %s", record.ExternalCommitStartedAt)
+	}
+	committedAt := h.commitTimes()[0]
+	if !record.LastCommitAt.After(committedAt) {
+		t.Fatalf("last_commit_at = %s, want the completion instant, which is after the commit it recorded (%s)",
+			record.LastCommitAt, committedAt)
+	}
+	if got := record.externalAnchor(); !got.Equal(record.LastCommitAt.UTC()) {
+		t.Fatalf("anchor = %s, want the completion instant %s", got, record.LastCommitAt.UTC())
 	}
 }
 

@@ -764,10 +764,18 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 		}
 		anchoredAt = at
 		plan := &commitPlan{
+			// The snapshot is stamped with the instant it was anchored at rather
+			// than with whatever the clock says once the tree has been staged and
+			// written. That equality is what makes the marker a *sufficient* anchor
+			// on its own: if the completion write is lost, the floor is still
+			// measured from an instant no earlier than the commit the history holds,
+			// so a snapshot that took real time cannot subtract that time from the
+			// interval the vault configured. See stageAndCommit and externalAnchor.
+			at:           at,
 			add:          append(append([]string{}, set.added...), set.modified...),
 			remove:       set.deleted,
 			proofEntries: set.proofEntries,
-			message:      autosaveMessage(m.now()),
+			message:      autosaveMessage(at),
 			// The external scan is the one entry point whose additions are
 			// discovered rather than named, so it is the one that may skip an
 			// addition the engine cannot read.
@@ -1096,6 +1104,18 @@ func fileDigest(path string) (string, int64, error) {
 
 // commitPlan is the exact set of index changes one snapshot will make.
 type commitPlan struct {
+	// at is the instant the commit object is stamped with, in both its author and
+	// its committer date. It is the plan's own build time rather than a clock read
+	// taken later, so the commit a plan produces bears the instant the engine had
+	// already decided the snapshot was happening at.
+	//
+	// That matters for exactly one plan. An external autosave anchors the floor by
+	// writing that instant down before it can produce a commit, and the anchor is
+	// only a bound on the *commit* if the commit cannot be stamped after it. It is
+	// therefore set by the one builder with a reason to choose it; withCAS reads
+	// the clock for the plans that leave it zero, which is what every explicit
+	// mutation does and what the previous behaviour was for all of them.
+	at     time.Time
 	add    []string
 	remove []string
 	// proofEntries are the journal entry IDs whose records authorize the
@@ -1140,6 +1160,14 @@ func (m *Manager) withCAS(ctx context.Context, op string, build func(head string
 		}
 		if plan == nil {
 			return CommitResult{Branch: ref, Parent: head}, nil
+		}
+		if plan.at.IsZero() {
+			// Every plan carries the instant its commit will be stamped with, and this
+			// is where that becomes true regardless of which builder produced it. A
+			// plan that reached the repository with a zero instant would otherwise
+			// write a commit dated in the year 1, so the one builder that has a reason
+			// to choose the instant states it and the rest are given the clock here.
+			plan.at = m.now()
 		}
 
 		result, err := m.stageAndCommit(ctx, op, head, ref, plan)
@@ -1337,7 +1365,7 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 		}
 	}
 
-	commit, err := m.git.commitTree(ctx, tree, head, plan.message, m.who, m.now())
+	commit, err := m.git.commitTree(ctx, tree, head, plan.message, m.who, plan.at)
 	if err != nil {
 		return CommitResult{}, m.latch(&SafetyError{
 			Kind:   KindCommitFailed,

@@ -236,6 +236,14 @@ type WatchState struct {
 	// closed by construction: whatever survives that window, one of the two
 	// fields already holds an instant no earlier than the commit's.
 	//
+	// "No earlier than the commit's" is an equality rather than a hope, and that
+	// is the whole reason the marker is a sufficient anchor on its own. The
+	// instant recorded here is also the instant the snapshot's commit object is
+	// stamped with — see commitPlan.at — so a snapshot whose staging and commit
+	// creation take real time cannot end up with a commit dated after the anchor
+	// that bounds it, and cannot therefore subtract its own execution time from
+	// the interval the vault configured.
+	//
 	// It anchors the floor exactly as LastCommitAt does — see externalAnchor —
 	// which is what makes it fail-closed rather than merely diagnostic. A record
 	// left behind by a crash therefore defers the next external snapshot by one
@@ -792,6 +800,11 @@ func (w WatchState) DueTime(policy config.AutosavePolicy) (time.Time, bool) {
 // that window fail closed: the anchor is never earlier than the commit the
 // history actually holds, so the next external snapshot cannot land inside the
 // configured interval no matter which of the two writes survived.
+//
+// The attempted-at instant bounds the commit because the commit is stamped with
+// it, not because a snapshot is assumed to be fast. A slow one therefore holds
+// the *full* interval after its own commit date rather than the interval minus
+// however long it took to stage and write a tree.
 func (w WatchState) externalAnchor() time.Time {
 	anchor := w.LastCommitAt.UTC()
 	if w.ExternalCommitStartedAt == nil {
