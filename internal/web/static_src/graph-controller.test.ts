@@ -26,52 +26,78 @@ const emptyCollection: FakeCollection = {
 };
 
 /**
- * The smallest Cytoscape stand-in initGraph can drive.
+ * A Cytoscape stand-in that records what the controller mounted.
  *
- * Every payload in this file is an empty graph, which is what keeps the fake
- * this small: with no nodes, the layout, fit and viewport paths all short
- * circuit, so what is left is exactly the plumbing under test — which URL the
- * controller fetches, and what makes it fetch again.
+ * It stays collection-blind on purpose — `nodes()`, `edges()` and
+ * `getElementById()` all answer with the empty collection, so the layout, fit
+ * and viewport paths short circuit and what is left is the plumbing under test.
+ * What it does not throw away is the element definitions themselves: `add`
+ * retains them and `elements().remove()` clears them, mirroring the
+ * clear-then-add sequence `applyGraphElements` performs, so a test can assert
+ * which nodes and edges are actually mounted rather than only what the status
+ * line says about them.
  */
 type FakeTapEvent = { target: { id: () => string; data: () => unknown } };
 
 /**
- * The `tap` handler the controller bound for node selection.
+ * The node handlers the controller bound, by event name.
  *
  * The fake never dispatches events of its own, so a test that needs a selection
- * — the isolate control is disabled without one — calls this directly.
+ * — the isolate control is disabled without one — calls these directly. That is
+ * also the only way to deliver the late event a real Cytoscape can emit for an
+ * element a remount already removed.
  */
-let nodeTapHandler: ((event: FakeTapEvent) => void) | null = null;
+const nodeHandlers = new Map<string, (event: FakeTapEvent) => void>();
 
-const tapNode = (nodeID: string): void => {
-  if (!nodeTapHandler) {
-    throw new Error("graph controller bound no node tap handler");
+const fireNodeEvent = (event: string, nodeID: string): void => {
+  const handler = nodeHandlers.get(event);
+  if (!handler) {
+    throw new Error(`graph controller bound no node ${event} handler`);
   }
-  nodeTapHandler({ target: { id: () => nodeID, data: () => ({ id: nodeID }) } });
+  handler({ target: { id: () => nodeID, data: () => ({ id: nodeID }) } });
 };
+
+const tapNode = (nodeID: string): void => fireNodeEvent("tap", nodeID);
 
 /**
  * How many times the controller has remounted the element set.
  *
  * `applyGraphElements` is the only caller of `add`, and it runs exactly once per
  * `rebuildDisplay`, so this counts rebuilds — which is what a debounce test
- * needs to see coalescing. The layout itself is invisible here: the fake mounts
+ * needs to see coalescing. The layout itself is invisible here: the fake reports
  * no nodes, so `runLayout` short-circuits before it asks for one.
  */
 let addCalls = 0;
 
+/** Element definitions currently mounted, in the order the controller added them. */
+type MountedElement = { data: { id?: string; source?: string; target?: string } };
+
+let mountedElements: MountedElement[] = [];
+
+/** Ids of the mounted nodes — an element definition with no endpoints. */
+const mountedNodeIDs = (): string[] =>
+  mountedElements
+    .filter((element) => element.data.source === undefined)
+    .map((element) => String(element.data.id));
+
+const mountedEdgeIDs = (): string[] =>
+  mountedElements
+    .filter((element) => element.data.source !== undefined)
+    .map((element) => String(element.data.id));
+
 const fakeCytoscape = () => ({
   on(event: string, selector?: unknown, handler?: unknown): void {
-    if (event === "tap" && selector === "node" && typeof handler === "function") {
-      nodeTapHandler = handler as (tapEvent: FakeTapEvent) => void;
+    if (selector === "node" && typeof handler === "function") {
+      nodeHandlers.set(event, handler as (nodeEvent: FakeTapEvent) => void);
     }
   },
   batch(fn: () => void): void {
     fn();
   },
   style(): void {},
-  add(): void {
+  add(elements: MountedElement[]): void {
     addCalls += 1;
+    mountedElements = [...mountedElements, ...elements];
   },
   fit(): void {},
   pan(): { x: number; y: number } {
@@ -81,7 +107,11 @@ const fakeCytoscape = () => ({
     return 1;
   },
   elements(): { remove: () => void } {
-    return { remove: () => {} };
+    return {
+      remove: (): void => {
+        mountedElements = [];
+      },
+    };
   },
   nodes(): FakeCollection {
     return emptyCollection;
@@ -149,8 +179,9 @@ const startGraph = (
 ): ReturnType<typeof vi.fn> => {
   setURL(url);
   mountGraphPage();
-  nodeTapHandler = null;
+  nodeHandlers.clear();
   addCalls = 0;
+  mountedElements = [];
   const fetchMock = vi.fn(async () => ({
     ok: true,
     json: async () => payload,
@@ -350,6 +381,80 @@ describe("graph display controls", () => {
     expect(displayParam("g_isolate")).toBeNull();
     expect(control<HTMLButtonElement>("graph-isolate-clear-button").disabled).toBe(true);
     expect(statusText()).toContain('Isolation cleared: "missing" is not in the current graph.');
+  });
+});
+
+const detailsTitle = (): string => control("graph-hover-title").textContent || "";
+
+// What the display pipeline excludes must leave Cytoscape, not merely stop being
+// mentioned in the status line: an element that is still mounted is still
+// tappable, hoverable and reachable from the keyboard.
+describe("graph mounted-element boundary", () => {
+  it("mounts only the anchor neighborhood while isolated, and the whole source again after", async () => {
+    startGraph("/graph", chainPayload);
+    await flush();
+
+    // The fetched graph, mounted whole: alpha - beta - gamma, with delta adrift.
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta", "gamma", "delta"]);
+    expect(mountedEdgeIDs()).toEqual(["e1", "e2"]);
+
+    tapNode("alpha");
+    control<HTMLButtonElement>("graph-isolate-button").click();
+
+    // One hop from alpha: the anchor and beta. gamma is two hops out and delta is
+    // unreachable, so e2 loses an endpoint and goes with them.
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
+    expect(mountedEdgeIDs()).toEqual(["e1"]);
+
+    control<HTMLButtonElement>("graph-isolate-clear-button").click();
+
+    // "Show whole graph" is a remount of the fetched set, not an unhide.
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta", "gamma", "delta"]);
+    expect(mountedEdgeIDs()).toEqual(["e1", "e2"]);
+  });
+
+  it("ignores late node events for an element isolation removed", async () => {
+    const fetchMock = startGraph("/graph", chainPayload);
+    await flush();
+
+    const isolateButton = control<HTMLButtonElement>("graph-isolate-button");
+    const canvas = control("graph-canvas");
+    const openNote = control<HTMLAnchorElement>("graph-open-note");
+
+    tapNode("alpha");
+    isolateButton.click();
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
+    expect(detailsTitle()).toBe("Alpha");
+    // The anchor is the selection, so isolating it again is a no-op the control
+    // already refuses.
+    expect(isolateButton.disabled).toBe(true);
+    const anchorHref = openNote.getAttribute("href");
+    const mountsBefore = addCalls;
+
+    // gamma left the graph with the rebuild; Cytoscape can still deliver a queued
+    // gesture or a pointer event that named it.
+    tapNode("gamma");
+    fireNodeEvent("select", "gamma");
+    fireNodeEvent("mouseover", "gamma");
+
+    // Selection, details, and the display controls all still describe the anchor.
+    expect(detailsTitle()).toBe("Alpha");
+    expect(openNote.getAttribute("href")).toBe(anchorHref);
+    expect(isolateButton.disabled).toBe(true);
+    expect(canvas.classList.contains("is-node-hovered")).toBe(false);
+    expect(displayParam("g_isolate")).toBe("alpha");
+    expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
+
+    // The hidden node cannot be acted on either: the isolate control stays dead,
+    // so clicking it cannot re-anchor the view onto gamma.
+    isolateButton.click();
+    expect(displayParam("g_isolate")).toBe("alpha");
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
+    expect(addCalls).toBe(mountsBefore);
+
+    // None of it touched the network, either.
+    await flush();
+    expect(graphRequests(fetchMock)).toHaveLength(1);
   });
 });
 

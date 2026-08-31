@@ -5623,8 +5623,8 @@ var BrainNotesApp = (() => {
       setStatusText(dom.status, message, baseStatusKind, ["is-loading", "is-empty", "is-error"]);
     }
     function renderDetailsPanel(fallbackHoveredModel = null) {
-      const selectedModel = findNodeModel(state.selectedNodeID);
-      const hoveredModel = selectedModel ? null : findNodeModel(state.hoveredNodeID) || fallbackHoveredModel || null;
+      const selectedModel = findDisplayedNodeModel(state.selectedNodeID);
+      const hoveredModel = selectedModel ? null : findDisplayedNodeModel(state.hoveredNodeID) || fallbackHoveredModel || null;
       renderGraphDetails(detailsRefs, selectedModel, hoveredModel);
     }
     function setLabelMode(nextMode) {
@@ -5682,8 +5682,11 @@ var BrainNotesApp = (() => {
     function bindGraphEvents(instance) {
       instance.on("tap", "node", (event) => {
         const nodeID = event.target.id();
-        const model = findNodeModel(nodeID);
-        if (model && model.isAggregate) {
+        const model = findDisplayedNodeModel(nodeID);
+        if (!model) {
+          return;
+        }
+        if (model.isAggregate) {
           toggleFolderExpansion(model.folder);
           return;
         }
@@ -5695,9 +5698,13 @@ var BrainNotesApp = (() => {
         }
       });
       instance.on("mouseover", "node", (event) => {
+        const nodeID = event.target.id();
+        if (!isDisplayedNodeID(nodeID)) {
+          return;
+        }
         const data = event.target.data();
         canvas.classList.add("is-node-hovered");
-        setHoveredNode(event.target.id(), data);
+        setHoveredNode(nodeID, data);
       });
       instance.on("mouseout", "node", () => {
         canvas.classList.remove("is-node-hovered");
@@ -5709,7 +5716,8 @@ var BrainNotesApp = (() => {
         }
       });
       instance.on("unselect", "node", (event) => {
-        if (!selectionSyncing && event.target.id() === state.selectedNodeID) {
+        const nodeID = event.target.id();
+        if (!selectionSyncing && isDisplayedNodeID(nodeID) && nodeID === state.selectedNodeID) {
           clearSelectedNode({ fromCytoscape: true });
         }
       });
@@ -5721,11 +5729,14 @@ var BrainNotesApp = (() => {
     function findSourceNodeModel(nodeID) {
       return state.currentGraphElements.nodes.find((node) => node.id === nodeID) || null;
     }
-    function findNodeModel(nodeID) {
+    function findDisplayedNodeModel(nodeID) {
       if (nodeID === "") {
         return null;
       }
-      return state.displayGraphElements.nodes.find((node) => node.id === nodeID) || findSourceNodeModel(nodeID);
+      return state.displayGraphElements.nodes.find((node) => node.id === nodeID) || null;
+    }
+    function isDisplayedNodeID(nodeID) {
+      return findDisplayedNodeModel(nodeID) !== null;
     }
     function syncCytoscapeSelection(nodeID) {
       if (!state.cy || selectionSyncing) {
@@ -5746,8 +5757,11 @@ var BrainNotesApp = (() => {
       }
     }
     function selectNode(nodeID, options = {}) {
-      const model = findNodeModel(nodeID);
-      state.selectedNodeID = model && !model.isAggregate ? model.id : "";
+      const model = findDisplayedNodeModel(nodeID);
+      if (!model) {
+        return;
+      }
+      state.selectedNodeID = model.isAggregate ? "" : model.id;
       if (!options || !options.fromCytoscape) {
         syncCytoscapeSelection(state.selectedNodeID);
       }
@@ -5776,17 +5790,21 @@ var BrainNotesApp = (() => {
       applyGraphVisualState();
     }
     function keyboardTargetNodeID() {
-      if (state.hoveredNodeID && findNodeModel(state.hoveredNodeID)) {
+      if (isDisplayedNodeID(state.hoveredNodeID)) {
         return state.hoveredNodeID;
       }
-      if (state.selectedNodeID && findNodeModel(state.selectedNodeID)) {
+      if (isDisplayedNodeID(state.selectedNodeID)) {
         return state.selectedNodeID;
       }
       if (!state.cy) {
         return "";
       }
       const selectedNode = state.cy.nodes().filter((node) => node.selected()).first();
-      return selectedNode && selectedNode.length > 0 ? selectedNode.id() : "";
+      if (!selectedNode || selectedNode.length === 0) {
+        return "";
+      }
+      const nodeID = selectedNode.id();
+      return isDisplayedNodeID(nodeID) ? nodeID : "";
     }
     function handleGraphKeyDown(event) {
       if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") {

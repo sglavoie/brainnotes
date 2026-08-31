@@ -283,10 +283,10 @@ export const initGraph = (): void => {
   }
 
   function renderDetailsPanel(fallbackHoveredModel: GraphNodeModel | null = null): void {
-    const selectedModel = findNodeModel(state.selectedNodeID);
+    const selectedModel = findDisplayedNodeModel(state.selectedNodeID);
     const hoveredModel = selectedModel
       ? null
-      : findNodeModel(state.hoveredNodeID) || fallbackHoveredModel || null;
+      : findDisplayedNodeModel(state.hoveredNodeID) || fallbackHoveredModel || null;
     renderGraphDetails(detailsRefs, selectedModel, hoveredModel);
   }
 
@@ -354,11 +354,23 @@ export const initGraph = (): void => {
     return state.cy;
   }
 
+  /**
+   * Node events are only honoured for elements the display pipeline kept.
+   *
+   * Cytoscape can deliver a tap, select or mouseover for an element a remount
+   * already removed — a queued gesture, or a pointer that was over an excluded
+   * node when the rebuild ran. Such an event names a node the user can no longer
+   * see, so it must not move selection, details, the display controls or the
+   * isolation state.
+   */
   function bindGraphEvents(instance: cytoscape.Core): void {
     instance.on("tap", "node", (event: cytoscape.EventObjectNode) => {
       const nodeID = event.target.id();
-      const model = findNodeModel(nodeID);
-      if (model && model.isAggregate) {
+      const model = findDisplayedNodeModel(nodeID);
+      if (!model) {
+        return;
+      }
+      if (model.isAggregate) {
         // A collapsed folder is a drill-down affordance, not a note: tapping it
         // expands the group back out rather than selecting a synthetic node.
         toggleFolderExpansion(model.folder);
@@ -374,9 +386,13 @@ export const initGraph = (): void => {
     });
 
     instance.on("mouseover", "node", (event: cytoscape.EventObjectNode) => {
+      const nodeID = event.target.id();
+      if (!isDisplayedNodeID(nodeID)) {
+        return;
+      }
       const data = event.target.data();
       canvas.classList.add("is-node-hovered");
-      setHoveredNode(event.target.id(), data);
+      setHoveredNode(nodeID, data);
     });
     instance.on("mouseout", "node", () => {
       canvas.classList.remove("is-node-hovered");
@@ -388,7 +404,8 @@ export const initGraph = (): void => {
       }
     });
     instance.on("unselect", "node", (event: cytoscape.EventObjectNode) => {
-      if (!selectionSyncing && event.target.id() === state.selectedNodeID) {
+      const nodeID = event.target.id();
+      if (!selectionSyncing && isDisplayedNodeID(nodeID) && nodeID === state.selectedNodeID) {
         clearSelectedNode({ fromCytoscape: true });
       }
     });
@@ -398,20 +415,37 @@ export const initGraph = (): void => {
     });
   }
 
+  /**
+   * Vault-level metadata about a *fetched* node, displayed or not.
+   *
+   * Deliberately not an interactive lookup: the only caller is the isolation
+   * status label, which names an anchor the pipeline may have thinned away. A
+   * node that is not mounted cannot be selected, hovered, opened or expanded, so
+   * nothing that drives interaction may reach past the displayed set.
+   */
   function findSourceNodeModel(nodeID: string): GraphNodeModel | null {
     return state.currentGraphElements.nodes.find((node) => node.id === nodeID) || null;
   }
 
-  // The displayed set comes first: an aggregate has no entry in the fetched
-  // source, and a displayed note carries the recomputed degrees the panel shows.
-  function findNodeModel(nodeID: string): GraphNodeModel | null {
+  /**
+   * The one interactive source of truth: the elements currently mounted.
+   *
+   * `state.displayGraphElements` is exactly what `applyGraphElements` last put
+   * into Cytoscape, so resolving here — with no fallback to the fetched source —
+   * is what makes a node the display pipeline excluded unaddressable. It also
+   * carries the recomputed degrees the details panel shows, and the aggregates
+   * that have no entry in the fetched source at all.
+   */
+  function findDisplayedNodeModel(nodeID: string): GraphNodeModel | null {
     if (nodeID === "") {
       return null;
     }
-    return (
-      state.displayGraphElements.nodes.find((node) => node.id === nodeID) ||
-      findSourceNodeModel(nodeID)
-    );
+    return state.displayGraphElements.nodes.find((node) => node.id === nodeID) || null;
+  }
+
+  /** Whether an id arriving from Cytoscape still belongs to the mounted graph. */
+  function isDisplayedNodeID(nodeID: string): boolean {
+    return findDisplayedNodeModel(nodeID) !== null;
   }
 
   function syncCytoscapeSelection(nodeID: string): void {
@@ -435,10 +469,15 @@ export const initGraph = (): void => {
   }
 
   function selectNode(nodeID: string, options: GraphSelectionOptions = {}): void {
-    const model = findNodeModel(nodeID);
+    const model = findDisplayedNodeModel(nodeID);
+    if (!model) {
+      // Nothing mounted answers to this id, so there is no selection to make and
+      // no reason to disturb the one already in place.
+      return;
+    }
     // An aggregate is never a selection: it stands for a group, and every
     // selection-driven affordance (Open note, Isolate) means one note.
-    state.selectedNodeID = model && !model.isAggregate ? model.id : "";
+    state.selectedNodeID = model.isAggregate ? "" : model.id;
     if (!options || !options.fromCytoscape) {
       syncCytoscapeSelection(state.selectedNodeID);
     }
@@ -473,10 +512,10 @@ export const initGraph = (): void => {
   }
 
   function keyboardTargetNodeID(): string {
-    if (state.hoveredNodeID && findNodeModel(state.hoveredNodeID)) {
+    if (isDisplayedNodeID(state.hoveredNodeID)) {
       return state.hoveredNodeID;
     }
-    if (state.selectedNodeID && findNodeModel(state.selectedNodeID)) {
+    if (isDisplayedNodeID(state.selectedNodeID)) {
       return state.selectedNodeID;
     }
     if (!state.cy) {
@@ -487,7 +526,14 @@ export const initGraph = (): void => {
       .nodes()
       .filter((node) => node.selected())
       .first();
-    return selectedNode && selectedNode.length > 0 ? selectedNode.id() : "";
+    if (!selectedNode || selectedNode.length === 0) {
+      return "";
+    }
+    // Cytoscape's own selection is the last resort, and it is checked against the
+    // displayed set like every other id: a keyboard activation must not reach an
+    // element the pipeline excluded.
+    const nodeID = selectedNode.id();
+    return isDisplayedNodeID(nodeID) ? nodeID : "";
   }
 
   function handleGraphKeyDown(event: KeyboardEvent): void {
