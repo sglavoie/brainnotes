@@ -503,6 +503,59 @@ describe("graph mounted-element boundary", () => {
     await flush();
     expect(graphRequests(fetchMock)).toHaveLength(1);
   });
+
+  // A mouseout is delivered after the pointer has already left, so it is the one
+  // node event that routinely arrives *late* — after a rebuild removed its node,
+  // or after the hover has already moved on to another node.
+  it("ignores a late mouseout for an element isolation removed", async () => {
+    const fetchMock = startGraph("/graph?g_isolate=alpha", chainPayload);
+    await flush();
+
+    const canvas = control("graph-canvas");
+    // Isolated from the URL, so nothing is selected and the panel is free to
+    // report the hover.
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
+
+    fireNodeEvent("mouseover", "beta");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(true);
+    expect(detailsTitle()).toBe("Beta");
+
+    // gamma left the graph with the rebuild; its queued mouseout names a node
+    // the user cannot see and must not end beta's hover.
+    fireNodeEvent("mouseout", "gamma");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(true);
+    expect(detailsTitle()).toBe("Beta");
+
+    // The node that owns the hover still ends it.
+    fireNodeEvent("mouseout", "beta");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(false);
+    expect(detailsTitle()).toBe("Hover a node");
+
+    await flush();
+    expect(graphRequests(fetchMock)).toHaveLength(1);
+  });
+
+  it("does not let an older mouseout clear a newer hover on another node", async () => {
+    startGraph("/graph", chainPayload);
+    await flush();
+
+    const canvas = control("graph-canvas");
+
+    // The pointer crosses alpha and lands on beta before alpha's mouseout is
+    // delivered — both nodes are displayed, so the displayed-set guard alone
+    // would let the stale event through.
+    fireNodeEvent("mouseover", "alpha");
+    fireNodeEvent("mouseover", "beta");
+    expect(detailsTitle()).toBe("Beta");
+
+    fireNodeEvent("mouseout", "alpha");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(true);
+    expect(detailsTitle()).toBe("Beta");
+
+    fireNodeEvent("mouseout", "beta");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(false);
+    expect(detailsTitle()).toBe("Hover a node");
+  });
 });
 
 // A hub with three same-folder satellites plus a leaf and a stray in a second

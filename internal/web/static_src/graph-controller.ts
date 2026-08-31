@@ -370,11 +370,11 @@ export const initGraph = (): void => {
   /**
    * Node events are only honoured for elements the display pipeline kept.
    *
-   * Cytoscape can deliver a tap, select or mouseover for an element a remount
-   * already removed — a queued gesture, or a pointer that was over an excluded
-   * node when the rebuild ran. Such an event names a node the user can no longer
-   * see, so it must not move selection, details, the display controls or the
-   * isolation state.
+   * Cytoscape can deliver a tap, select, mouseover or mouseout for an element a
+   * remount already removed — a queued gesture, or a pointer that was over an
+   * excluded node when the rebuild ran. Such an event names a node the user can
+   * no longer see, so it must not move selection, details, the display controls
+   * or the isolation state.
    */
   function bindGraphEvents(instance: cytoscape.Core): void {
     instance.on("tap", "node", (event: cytoscape.EventObjectNode) => {
@@ -407,7 +407,20 @@ export const initGraph = (): void => {
       canvas.classList.add("is-node-hovered");
       setHoveredNode(nodeID, data);
     });
-    instance.on("mouseout", "node", () => {
+    instance.on("mouseout", "node", (event: cytoscape.EventObjectNode) => {
+      const nodeID = event.target.id();
+      if (!isDisplayedNodeID(nodeID)) {
+        return;
+      }
+      // Only the node that currently owns the hover may end it. A mouseout is
+      // delivered after the fact, so one that left node A can arrive once the
+      // pointer is already over node B; clearing on it would blank details and
+      // hover styling that belong to a node the user is still pointing at. An
+      // empty owner is not a competing hover — a remount clears the hover state
+      // without clearing the canvas class, and this is what takes it back off.
+      if (state.hoveredNodeID !== "" && state.hoveredNodeID !== nodeID) {
+        return;
+      }
       canvas.classList.remove("is-node-hovered");
       setHoveredNode("", null);
     });

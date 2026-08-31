@@ -5683,7 +5683,14 @@ var BrainNotesApp = (() => {
         canvas.classList.add("is-node-hovered");
         setHoveredNode(nodeID, data);
       });
-      instance.on("mouseout", "node", () => {
+      instance.on("mouseout", "node", (event) => {
+        const nodeID = event.target.id();
+        if (!isDisplayedNodeID(nodeID)) {
+          return;
+        }
+        if (state.hoveredNodeID !== "" && state.hoveredNodeID !== nodeID) {
+          return;
+        }
         canvas.classList.remove("is-node-hovered");
         setHoveredNode("", null);
       });
