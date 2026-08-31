@@ -404,7 +404,6 @@ export const initGraph = (): void => {
         return;
       }
       const data = event.target.data();
-      canvas.classList.add("is-node-hovered");
       setHoveredNode(nodeID, data);
     });
     instance.on("mouseout", "node", (event: cytoscape.EventObjectNode) => {
@@ -415,13 +414,12 @@ export const initGraph = (): void => {
       // Only the node that currently owns the hover may end it. A mouseout is
       // delivered after the fact, so one that left node A can arrive once the
       // pointer is already over node B; clearing on it would blank details and
-      // hover styling that belong to a node the user is still pointing at. An
-      // empty owner is not a competing hover — a remount clears the hover state
-      // without clearing the canvas class, and this is what takes it back off.
-      if (state.hoveredNodeID !== "" && state.hoveredNodeID !== nodeID) {
+      // hover styling that belong to a node the user is still pointing at. A
+      // hover nobody owns is already ended — a remount clears it, canvas class
+      // included — so there is nothing left for a late event to take off.
+      if (state.hoveredNodeID !== nodeID) {
         return;
       }
-      canvas.classList.remove("is-node-hovered");
       setHoveredNode("", null);
     });
     instance.on("select", "node", (event: cytoscape.EventObjectNode) => {
@@ -522,8 +520,17 @@ export const initGraph = (): void => {
     updateDisplayControls();
   }
 
+  /**
+   * The hovered id and the canvas hover cursor are one piece of state, so the
+   * class is written here beside the id it describes rather than at each call
+   * site. That is what keeps a remount honest: `applyGraphElements` clears the
+   * hover for a node that may not have survived the rebuild, and that node's
+   * late mouseout is refused by the displayed-set guard, so nothing else would
+   * ever take the class back off.
+   */
   function setHoveredNode(nodeID: string, fallbackData: unknown): void {
     state.hoveredNodeID = nodeID || "";
+    canvas.classList.toggle("is-node-hovered", state.hoveredNodeID !== "");
     if (!state.hoveredNodeID) {
       renderDetailsPanel();
       applyGraphVisualState();

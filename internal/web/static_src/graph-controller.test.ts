@@ -595,6 +595,41 @@ describe("graph mounted-element boundary", () => {
     expect(detailsTitle()).toBe("Hover a node");
   });
 
+  // A rebuild can take the node under the pointer with it. The hover state goes
+  // with the node and the canvas cursor has to go with the hover: the excluded
+  // node's late mouseout is refused by the displayed-set guard, so it is not
+  // coming back to clean the class up.
+  it("clears hover cursor when a remount excludes the hovered node", async () => {
+    vi.useFakeTimers();
+    const fetchMock = startGraph("/graph", chainPayload);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const canvas = control("graph-canvas");
+
+    // Nothing is selected, so the details panel reports the hover alone.
+    fireNodeEvent("mouseover", "gamma");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(true);
+    expect(detailsTitle()).toBe("Gamma");
+
+    // A degree floor of 2 keeps only beta, so gamma leaves the graph while the
+    // pointer is still on it.
+    moveSlider("graph-mindegree-input", "2");
+    await vi.advanceTimersByTimeAsync(150);
+    expect(mountedNodeIDs()).toEqual(["beta"]);
+
+    expect(detailsTitle()).toBe("Hover a node");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(false);
+
+    // gamma's mouseout lands afterwards, naming a node the user can no longer
+    // see: it is refused, and the cursor it would have cleared is already gone.
+    fireNodeEvent("mouseout", "gamma");
+    expect(detailsTitle()).toBe("Hover a node");
+    expect(canvas.classList.contains("is-node-hovered")).toBe(false);
+
+    // Display state throughout: the exclusion cost no request.
+    expect(graphRequests(fetchMock)).toHaveLength(1);
+  });
+
   /** Presses a key on the canvas and reports whether the controller claimed it. */
   const pressCanvasKey = (key: string): boolean => {
     const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });

@@ -5680,7 +5680,6 @@ var BrainNotesApp = (() => {
           return;
         }
         const data = event.target.data();
-        canvas.classList.add("is-node-hovered");
         setHoveredNode(nodeID, data);
       });
       instance.on("mouseout", "node", (event) => {
@@ -5688,10 +5687,9 @@ var BrainNotesApp = (() => {
         if (!isDisplayedNodeID(nodeID)) {
           return;
         }
-        if (state.hoveredNodeID !== "" && state.hoveredNodeID !== nodeID) {
+        if (state.hoveredNodeID !== nodeID) {
           return;
         }
-        canvas.classList.remove("is-node-hovered");
         setHoveredNode("", null);
       });
       instance.on("select", "node", (event) => {
@@ -5764,6 +5762,7 @@ var BrainNotesApp = (() => {
     }
     function setHoveredNode(nodeID, fallbackData) {
       state.hoveredNodeID = nodeID || "";
+      canvas.classList.toggle("is-node-hovered", state.hoveredNodeID !== "");
       if (!state.hoveredNodeID) {
         renderDetailsPanel();
         applyGraphVisualState();
