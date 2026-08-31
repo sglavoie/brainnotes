@@ -140,8 +140,6 @@ const mountGraphPage = (): void => {
       <output id="graph-spread-value"></output>
       <button id="graph-isolate-button" type="button" disabled></button>
       <button id="graph-isolate-clear-button" type="button" disabled></button>
-      <input id="graph-hops-input" type="range" min="1" max="3" step="1" value="1" />
-      <output id="graph-hops-value"></output>
       <input id="graph-mindegree-input" type="range" min="0" max="10" step="1" value="0" />
       <output id="graph-mindegree-value"></output>
       <input id="graph-collapse-input" type="range" min="0" max="3" step="1" value="0" />
@@ -332,7 +330,6 @@ describe("graph display controls", () => {
 
     const isolateButton = control<HTMLButtonElement>("graph-isolate-button");
     const clearButton = control<HTMLButtonElement>("graph-isolate-clear-button");
-    const hopsInput = control<HTMLInputElement>("graph-hops-input");
 
     // Isolation needs an anchor, so both controls start dead.
     expect(isolateButton.disabled).toBe(true);
@@ -346,12 +343,9 @@ describe("graph display controls", () => {
     expect(clearButton.disabled).toBe(false);
     // The reduction is stated outright rather than left for the user to notice.
     expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
-
-    hopsInput.value = "3";
-    hopsInput.dispatchEvent(new Event("input"));
-    expect(displayParam("g_hops")).toBe("3");
-    expect(control("graph-hops-value").textContent).toBe("3 hops");
-    expect(statusText()).toContain('Showing 3 of 4 nodes — isolated 3 hops from "Alpha"');
+    // The radius is not a knob, so isolating writes one display param and no
+    // retired companion alongside it.
+    expect(displayParam("g_hops")).toBeNull();
 
     clearButton.click();
     expect(displayParam("g_isolate")).toBeNull();
@@ -364,14 +358,12 @@ describe("graph display controls", () => {
   });
 
   it("reproduces an isolated view from the URL without leaking g_ params into the fetch", async () => {
-    const fetchMock = startGraph("/graph?g_isolate=beta&g_hops=2", chainPayload);
+    const fetchMock = startGraph("/graph?g_isolate=beta", chainPayload);
     await flush();
 
     expect(graphRequests(fetchMock)).toEqual(["/api/graph.json"]);
-    expect(control<HTMLInputElement>("graph-hops-input").value).toBe("2");
-    expect(control("graph-hops-value").textContent).toBe("2 hops");
     expect(control<HTMLButtonElement>("graph-isolate-clear-button").disabled).toBe(false);
-    expect(statusText()).toContain('Showing 3 of 4 nodes — isolated 2 hops from "Beta"');
+    expect(statusText()).toContain('Showing 3 of 4 nodes — isolated 1 hop from "Beta"');
   });
 
   it("clears an isolate anchor the loaded graph does not contain, and says so", async () => {
@@ -384,6 +376,58 @@ describe("graph display controls", () => {
   });
 });
 
+// `g_hops` was the isolation radius before the neighborhood became fixed. Links
+// carrying it are still out there — in notes, in chat logs, in browser history —
+// and they have to keep working, which means rendering the one-hop view and
+// saying so in the address bar rather than half-honouring a radius that no
+// longer exists.
+describe("graph legacy g_hops URLs", () => {
+  for (const legacy of ["2", "3"]) {
+    it(`strips g_hops=${legacy} and renders exactly one hop`, async () => {
+      const fetchMock = startGraph(`/graph?g_isolate=alpha&g_hops=${legacy}`, chainPayload);
+      await flush();
+
+      expect(displayParam("g_hops")).toBeNull();
+      expect(displayParam("g_isolate")).toBe("alpha");
+      // The value is not merely dropped from the URL, it is dropped from the
+      // view: gamma sat inside the old radius and is not mounted.
+      expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
+      expect(mountedEdgeIDs()).toEqual(["e1"]);
+      expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
+      expect(graphRequests(fetchMock)).toEqual(["/api/graph.json"]);
+    });
+  }
+
+  it("keeps the path, the hash and every other parameter while canonicalizing", async () => {
+    startGraph("/graph?q=daily&g_hops=2&tag=work&g_mindeg=2#anchor", chainPayload);
+    await flush();
+
+    expect(window.location.pathname).toBe("/graph");
+    expect(window.location.hash).toBe("#anchor");
+    expect(window.location.search).toBe("?q=daily&tag=work&g_mindeg=2");
+    // The surviving display knob is still in force, not just still in the URL.
+    expect(control<HTMLInputElement>("graph-mindegree-input").value).toBe("2");
+    expect(control("graph-mindegree-value").textContent).toBe("≥ 2");
+  });
+
+  it("removes every value of a repeated g_hops", async () => {
+    startGraph("/graph?g_hops=2&g_isolate=alpha&g_hops=3", chainPayload);
+    await flush();
+
+    expect(window.location.search).toBe("?g_isolate=alpha");
+  });
+
+  it("keeps display params out of the graph request", async () => {
+    const fetchMock = startGraph(
+      "/graph?q=daily&g_isolate=alpha&g_hops=3&g_mindeg=1&g_collapse=1",
+      chainPayload
+    );
+    await flush();
+
+    expect(graphRequests(fetchMock)).toEqual(["/api/graph.json?q=daily"]);
+  });
+});
+
 const detailsTitle = (): string => control("graph-hover-title").textContent || "";
 
 // What the display pipeline excludes must leave Cytoscape, not merely stop being
@@ -391,7 +435,7 @@ const detailsTitle = (): string => control("graph-hover-title").textContent || "
 // tappable, hoverable and reachable from the keyboard.
 describe("graph mounted-element boundary", () => {
   it("mounts only the anchor neighborhood while isolated, and the whole source again after", async () => {
-    startGraph("/graph", chainPayload);
+    const fetchMock = startGraph("/graph", chainPayload);
     await flush();
 
     // The fetched graph, mounted whole: alpha - beta - gamma, with delta adrift.
@@ -408,9 +452,12 @@ describe("graph mounted-element boundary", () => {
 
     control<HTMLButtonElement>("graph-isolate-clear-button").click();
 
-    // "Show whole graph" is a remount of the fetched set, not an unhide.
+    // "Show whole graph" is a remount of the fetched set, not an unhide — and it
+    // comes from the payload already in hand, so restoring costs no request.
     expect(mountedNodeIDs()).toEqual(["alpha", "beta", "gamma", "delta"]);
     expect(mountedEdgeIDs()).toEqual(["e1", "e2"]);
+    await flush();
+    expect(graphRequests(fetchMock)).toHaveLength(1);
   });
 
   it("ignores late node events for an element isolation removed", async () => {
@@ -524,10 +571,7 @@ describe("graph thinning controls", () => {
   });
 
   it("reproduces every knob from the URL and names each reduction in one line", async () => {
-    const fetchMock = startGraph(
-      "/graph?g_isolate=hub&g_hops=1&g_mindeg=2&g_collapse=1",
-      clusterPayload
-    );
+    const fetchMock = startGraph("/graph?g_isolate=hub&g_mindeg=2&g_collapse=1", clusterPayload);
     await flush();
 
     expect(graphRequests(fetchMock)).toEqual(["/api/graph.json"]);

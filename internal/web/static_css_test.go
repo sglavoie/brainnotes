@@ -415,9 +415,6 @@ func TestGraphViewControlsCSSContract(t *testing.T) {
 		".graph-view-controls",
 		".graph-view-actions",
 		".graph-view-controls-header",
-		"#graph-hops-value",
-		".graph-hops-input",
-		".graph-hops-input:focus-visible",
 		"#graph-mindegree-value",
 		".graph-mindegree-input",
 		".graph-mindegree-input:focus-visible",
@@ -429,6 +426,18 @@ func TestGraphViewControlsCSSContract(t *testing.T) {
 	} {
 		if !strings.Contains(css, want) {
 			t.Fatalf("graph view controls CSS missing %q", want)
+		}
+	}
+
+	// Isolation is fixed at one hop, so the Hops range no longer exists in the
+	// markup. A selector that outlives its element is dead weight nobody trips
+	// over until they try to style something else in this block.
+	for _, gone := range []string{
+		"#graph-hops-value",
+		".graph-hops-input",
+	} {
+		if strings.Contains(css, gone) {
+			t.Fatalf("graph view controls CSS still carries the removed Hops selector %q", gone)
 		}
 	}
 

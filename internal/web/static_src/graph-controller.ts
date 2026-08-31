@@ -80,9 +80,6 @@ const syncPageSearchModeParam = (mode: GraphSearchMode): void => {
   updateBrowserQuery(params);
 };
 
-/** Hop bound of the isolate control, matching `buildDisplayGraph`'s own clamp. */
-const maxIsolateHops = 3;
-
 /** Slider bound of the min-degree control. The pipeline itself has no upper clamp. */
 const maxMinDegree = 10;
 
@@ -91,9 +88,6 @@ const maxCollapseDepth = 3;
 
 const clampSliderInteger = (value: number, min: number, max: number): number =>
   Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
-
-export const clampIsolateHops = (value: number): number =>
-  clampSliderInteger(value, 1, maxIsolateHops);
 
 export const clampMinDegree = (value: number): number =>
   clampSliderInteger(value, 0, maxMinDegree);
@@ -104,24 +98,45 @@ export const clampCollapseDepth = (value: number): number =>
 /** The full display-knob set the URL carries. */
 type GraphDisplayParams = {
   isolateID: string;
-  hops: number;
   minDegree: number;
   collapseDepth: number;
 };
 
-// `g_isolate` / `g_hops` / `g_mindeg` / `g_collapse` are display-only params,
-// read and written exactly like `q_mode` above: never through
-// `publishFilterChange`, and never copied by `buildFilteredAPIURL`, so moving
-// them cannot refetch the graph.
+/** The isolation radius parameter this page used to carry, now retired. */
+const legacyHopsParamKey = "g_hops";
+
+// `g_isolate` / `g_mindeg` / `g_collapse` are display-only params, read and
+// written exactly like `q_mode` above: never through `publishFilterChange`, and
+// never copied by `buildFilteredAPIURL`, so moving them cannot refetch the
+// graph.
 const readPageDisplayParams = (): GraphDisplayParams => {
   const params = new URLSearchParams(window.location.search);
   const readInt = (key: string): number => Number.parseInt(params.get(key) || "", 10);
   return {
     isolateID: params.get("g_isolate") || "",
-    hops: clampIsolateHops(readInt("g_hops")),
     minDegree: clampMinDegree(readInt("g_mindeg")),
     collapseDepth: clampCollapseDepth(readInt("g_collapse")),
   };
+};
+
+/**
+ * Drops the retired isolation-radius parameter from a legacy link.
+ *
+ * Isolation is fixed at one hop, so a shared URL carrying a radius describes a
+ * view this page can no longer render. Deleting it before the first load — not
+ * merely ignoring it — is what keeps the address bar an honest description of
+ * what is on screen, and `URLSearchParams.delete` removes every value under the
+ * key, so a doubled `g_hops=2&g_hops=3` leaves nothing behind. Everything else
+ * survives: `updateBrowserQuery` rebuilds the URL from the current pathname, the
+ * remaining parameters, and the current hash.
+ */
+const canonicalizeLegacyDisplayParams = (): void => {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has(legacyHopsParamKey)) {
+    return;
+  }
+  params.delete(legacyHopsParamKey);
+  updateBrowserQuery(params);
 };
 
 /**
@@ -140,14 +155,14 @@ const syncPageDisplayParams = (display: GraphDisplayParams): void => {
     params.set(key, value);
   };
   write("g_isolate", display.isolateID, "");
-  write("g_hops", String(display.hops), "1");
   write("g_mindeg", String(display.minDegree), "0");
   write("g_collapse", String(display.collapseDepth), "0");
+  // Defensive, not merely tidy: this is the one writer of the display knobs, so
+  // deleting the retired radius here means no path can put it back into a URL
+  // the user is about to share.
+  params.delete(legacyHopsParamKey);
   updateBrowserQuery(params);
 };
-
-export const formatIsolateHopsLabel = (hops: number): string =>
-  hops === 1 ? "1 hop" : `${hops} hops`;
 
 export const formatMinDegreeLabel = (minDegree: number): string =>
   minDegree <= 0 ? "off" : `≥ ${minDegree}`;
@@ -170,8 +185,6 @@ export const initGraph = (): void => {
     spreadValue: getElementByID("graph-spread-value", HTMLElement),
     isolateButton: getElementByID("graph-isolate-button", HTMLButtonElement),
     isolateClearButton: getElementByID("graph-isolate-clear-button", HTMLButtonElement),
-    hopsInput: getElementByID("graph-hops-input", HTMLInputElement),
-    hopsValue: getElementByID("graph-hops-value", HTMLElement),
     minDegreeInput: getElementByID("graph-mindegree-input", HTMLInputElement),
     minDegreeValue: getElementByID("graph-mindegree-value", HTMLElement),
     collapseInput: getElementByID("graph-collapse-input", HTMLInputElement),
@@ -262,9 +275,9 @@ export const initGraph = (): void => {
     if (displayStats.isolated) {
       const anchor = findSourceNodeModel(state.display.isolateID);
       const anchorLabel = anchor ? anchor.title || anchor.id : state.display.isolateID;
-      reasons.push(
-        `isolated ${formatIsolateHopsLabel(state.display.hops)} from "${anchorLabel}"`
-      );
+      // The radius is fixed, but the sentence still names it: "isolated from X"
+      // would leave the user guessing how much of the neighborhood is on screen.
+      reasons.push(`isolated 1 hop from "${anchorLabel}"`);
     }
     if (displayStats.droppedByDegree > 0) {
       reasons.push(`degree ≥ ${state.display.minDegree}`);
@@ -597,12 +610,6 @@ export const initGraph = (): void => {
     }
     if (dom.isolateClearButton instanceof HTMLButtonElement) {
       dom.isolateClearButton.disabled = state.display.isolateID === "";
-    }
-    if (dom.hopsInput instanceof HTMLInputElement) {
-      dom.hopsInput.value = String(state.display.hops);
-    }
-    if (dom.hopsValue) {
-      dom.hopsValue.textContent = formatIsolateHopsLabel(state.display.hops);
     }
     if (dom.minDegreeInput instanceof HTMLInputElement) {
       dom.minDegreeInput.value = String(state.display.minDegree);
@@ -1060,9 +1067,9 @@ export const initGraph = (): void => {
       });
     }
 
-    // The display controls deliberately bypass `publishFilterChange`: `g_isolate`
-    // and `g_hops` describe what is drawn from the already-loaded graph, so
-    // moving them must never cost a request.
+    // The display controls deliberately bypass `publishFilterChange`: `g_isolate`,
+    // `g_mindeg` and `g_collapse` describe what is drawn from the already-loaded
+    // graph, so moving them must never cost a request.
     if (dom.isolateButton instanceof HTMLButtonElement) {
       dom.isolateButton.addEventListener("click", () => {
         if (state.selectedNodeID === "") {
@@ -1081,25 +1088,6 @@ export const initGraph = (): void => {
         }
         state.display.isolateID = "";
         syncPageDisplayParams(state.display);
-        rebuildDisplayForControl();
-      });
-    }
-
-    if (dom.hopsInput instanceof HTMLInputElement) {
-      const hopsInput = dom.hopsInput;
-      hopsInput.addEventListener("input", () => {
-        const hops = clampIsolateHops(Number.parseInt(hopsInput.value, 10));
-        if (hops === state.display.hops) {
-          return;
-        }
-        state.display.hops = hops;
-        syncPageDisplayParams(state.display);
-        if (state.display.isolateID === "") {
-          // Nothing is isolated, so the hop count changes no element: update the
-          // label and the URL and stop, rather than paying for a relayout.
-          updateDisplayControls();
-          return;
-        }
         rebuildDisplayForControl();
       });
     }
@@ -1204,6 +1192,9 @@ export const initGraph = (): void => {
   // there. Restyle in place without reloading graph data.
   document.addEventListener(THEME_EVENT, restyleGraphForTheme);
 
+  // Runs before the first load so the graph is never fetched under a URL that
+  // still promises a radius the page cannot honour.
+  canonicalizeLegacyDisplayParams();
   bindControls();
   // The URL is authoritative for the display knobs at init, so a shared link
   // reproduces the view before the first payload lands.

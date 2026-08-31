@@ -5126,13 +5126,11 @@ var BrainNotesApp = (() => {
   var aggregateNodeIDForFolder = (folder) => `${aggregateNodeIDPrefix}${folder}`;
   var defaultGraphDisplayOptions = () => ({
     isolateID: "",
-    hops: 1,
     minDegree: 0,
     collapseDepth: 0,
     expandedFolders: /* @__PURE__ */ new Set(),
     keepIDs: /* @__PURE__ */ new Set()
   });
-  var maxHops = 3;
   var maxCollapseDepth = 3;
   var clampInteger = (value, min, max) => {
     if (!Number.isFinite(value)) {
@@ -5169,29 +5167,12 @@ var BrainNotesApp = (() => {
     }
     return neighbors;
   };
-  var isolateStage = (elements, isolateID, hops) => {
+  var isolateStage = (elements, isolateID) => {
     if (isolateID === "" || !elements.nodes.some((node) => node.id === isolateID)) {
       return { elements, isolated: false };
     }
     const neighbors = undirectedNeighbors(elements.edges);
-    const reached = /* @__PURE__ */ new Set([isolateID]);
-    let frontier = [isolateID];
-    for (let hop = 0; hop < hops; hop += 1) {
-      const next = [];
-      for (const id of frontier) {
-        for (const neighbor of neighbors.get(id) || []) {
-          if (reached.has(neighbor)) {
-            continue;
-          }
-          reached.add(neighbor);
-          next.push(neighbor);
-        }
-      }
-      if (next.length === 0) {
-        break;
-      }
-      frontier = next;
-    }
+    const reached = /* @__PURE__ */ new Set([isolateID, ...neighbors.get(isolateID) || []]);
     const nodes = elements.nodes.filter((node) => reached.has(node.id));
     const kept = new Set(nodes.map((node) => node.id));
     const edges = elements.edges.filter((edge) => kept.has(edge.source) && kept.has(edge.target));
@@ -5327,14 +5308,9 @@ var BrainNotesApp = (() => {
     return { nodes, edges: elements.edges };
   };
   var buildDisplayGraph = (source, options) => {
-    const hops = clampInteger(options.hops, 1, maxHops);
     const minDegree = Math.max(0, clampInteger(options.minDegree, 0, Number.MAX_SAFE_INTEGER));
     const collapseDepth = clampInteger(options.collapseDepth, 0, maxCollapseDepth);
-    const isolate = isolateStage(
-      { nodes: source.nodes, edges: source.edges },
-      options.isolateID,
-      hops
-    );
+    const isolate = isolateStage({ nodes: source.nodes, edges: source.edges }, options.isolateID);
     const thinned = minDegreeStage(isolate.elements, minDegree, options.keepIDs);
     const collapsed = collapseStage(thinned.elements, collapseDepth, options.expandedFolders);
     const sized = withRecomputedDegrees(collapsed.elements);
@@ -5488,22 +5464,28 @@ var BrainNotesApp = (() => {
     }
     updateBrowserQuery(params);
   };
-  var maxIsolateHops = 3;
   var maxMinDegree = 10;
   var maxCollapseDepth2 = 3;
   var clampSliderInteger = (value, min, max) => Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
-  var clampIsolateHops = (value) => clampSliderInteger(value, 1, maxIsolateHops);
   var clampMinDegree = (value) => clampSliderInteger(value, 0, maxMinDegree);
   var clampCollapseDepth = (value) => clampSliderInteger(value, 0, maxCollapseDepth2);
+  var legacyHopsParamKey = "g_hops";
   var readPageDisplayParams = () => {
     const params = new URLSearchParams(window.location.search);
     const readInt = (key) => Number.parseInt(params.get(key) || "", 10);
     return {
       isolateID: params.get("g_isolate") || "",
-      hops: clampIsolateHops(readInt("g_hops")),
       minDegree: clampMinDegree(readInt("g_mindeg")),
       collapseDepth: clampCollapseDepth(readInt("g_collapse"))
     };
+  };
+  var canonicalizeLegacyDisplayParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(legacyHopsParamKey)) {
+      return;
+    }
+    params.delete(legacyHopsParamKey);
+    updateBrowserQuery(params);
   };
   var syncPageDisplayParams = (display) => {
     const params = new URLSearchParams(window.location.search);
@@ -5515,12 +5497,11 @@ var BrainNotesApp = (() => {
       params.set(key, value);
     };
     write("g_isolate", display.isolateID, "");
-    write("g_hops", String(display.hops), "1");
     write("g_mindeg", String(display.minDegree), "0");
     write("g_collapse", String(display.collapseDepth), "0");
+    params.delete(legacyHopsParamKey);
     updateBrowserQuery(params);
   };
-  var formatIsolateHopsLabel = (hops) => hops === 1 ? "1 hop" : `${hops} hops`;
   var formatMinDegreeLabel = (minDegree) => minDegree <= 0 ? "off" : `\u2265 ${minDegree}`;
   var formatCollapseDepthLabel = (depth) => depth <= 0 ? "off" : `depth ${depth}`;
   var initGraph = () => {
@@ -5538,8 +5519,6 @@ var BrainNotesApp = (() => {
       spreadValue: getElementByID("graph-spread-value", HTMLElement),
       isolateButton: getElementByID("graph-isolate-button", HTMLButtonElement),
       isolateClearButton: getElementByID("graph-isolate-clear-button", HTMLButtonElement),
-      hopsInput: getElementByID("graph-hops-input", HTMLInputElement),
-      hopsValue: getElementByID("graph-hops-value", HTMLElement),
       minDegreeInput: getElementByID("graph-mindegree-input", HTMLInputElement),
       minDegreeValue: getElementByID("graph-mindegree-value", HTMLElement),
       collapseInput: getElementByID("graph-collapse-input", HTMLInputElement),
@@ -5606,9 +5585,7 @@ var BrainNotesApp = (() => {
       if (displayStats.isolated) {
         const anchor = findSourceNodeModel(state.display.isolateID);
         const anchorLabel = anchor ? anchor.title || anchor.id : state.display.isolateID;
-        reasons.push(
-          `isolated ${formatIsolateHopsLabel(state.display.hops)} from "${anchorLabel}"`
-        );
+        reasons.push(`isolated 1 hop from "${anchorLabel}"`);
       }
       if (displayStats.droppedByDegree > 0) {
         reasons.push(`degree \u2265 ${state.display.minDegree}`);
@@ -5852,12 +5829,6 @@ var BrainNotesApp = (() => {
       }
       if (dom.isolateClearButton instanceof HTMLButtonElement) {
         dom.isolateClearButton.disabled = state.display.isolateID === "";
-      }
-      if (dom.hopsInput instanceof HTMLInputElement) {
-        dom.hopsInput.value = String(state.display.hops);
-      }
-      if (dom.hopsValue) {
-        dom.hopsValue.textContent = formatIsolateHopsLabel(state.display.hops);
       }
       if (dom.minDegreeInput instanceof HTMLInputElement) {
         dom.minDegreeInput.value = String(state.display.minDegree);
@@ -6224,22 +6195,6 @@ var BrainNotesApp = (() => {
           rebuildDisplayForControl();
         });
       }
-      if (dom.hopsInput instanceof HTMLInputElement) {
-        const hopsInput = dom.hopsInput;
-        hopsInput.addEventListener("input", () => {
-          const hops = clampIsolateHops(Number.parseInt(hopsInput.value, 10));
-          if (hops === state.display.hops) {
-            return;
-          }
-          state.display.hops = hops;
-          syncPageDisplayParams(state.display);
-          if (state.display.isolateID === "") {
-            updateDisplayControls();
-            return;
-          }
-          rebuildDisplayForControl();
-        });
-      }
       if (dom.minDegreeInput instanceof HTMLInputElement) {
         const minDegreeInput = dom.minDegreeInput;
         minDegreeInput.addEventListener("input", () => {
@@ -6321,6 +6276,7 @@ var BrainNotesApp = (() => {
       scheduleLoad(query, 0);
     });
     document.addEventListener(THEME_EVENT, restyleGraphForTheme);
+    canonicalizeLegacyDisplayParams();
     bindControls();
     updateDisplayControls();
     scheduleLoad(initialQuery, 0);

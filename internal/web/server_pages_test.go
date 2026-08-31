@@ -308,6 +308,50 @@ func TestServer_GraphPageIncludesAssets(t *testing.T) {
 	}
 }
 
+// TestServer_GraphPageViewControlsMarkup pins which display knobs the rendered
+// page offers. Isolation is fixed at one hop, so "Isolate selection" takes no
+// radius: the Hops control is gone from the template, and markup left behind
+// would be a dead input the controller no longer reads or writes — visible,
+// draggable, and silently inert.
+func TestServer_GraphPageViewControlsMarkup(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Note.md": []byte("---\ntitle: Note\n---\nBody\n"),
+	})
+
+	resp, err := http.Get(ts.URL + "/graph") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /graph: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	for _, want := range []string{
+		`id="graph-isolate-button"`,
+		`id="graph-isolate-clear-button"`,
+		`id="graph-mindegree-input"`,
+		`id="graph-mindegree-value"`,
+		`id="graph-collapse-input"`,
+		`id="graph-collapse-value"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("graph view controls missing %q, got %q", want, body)
+		}
+	}
+
+	for _, gone := range []string{
+		`graph-hops-input`,
+		`graph-hops-value`,
+		`graph-hops`,
+		`>Hops<`,
+	} {
+		if strings.Contains(body, gone) {
+			t.Fatalf("graph page still renders removed Hops markup %q, got %q", gone, body)
+		}
+	}
+}
+
 // TestServer_PagesIncludeSavedViewsNavContainer pins the client-side rendering
 // decision: siteNav carries one static container on every page that renders it,
 // and initSavedViewsNav fills it from GET /api/views. Nothing is threaded

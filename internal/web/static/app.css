@@ -4797,7 +4797,6 @@ code {
 
 .graph-filter-input:focus-visible,
 .graph-spread-input:focus-visible,
-.graph-hops-input:focus-visible,
 .graph-mindegree-input:focus-visible,
 .graph-collapse-input:focus-visible,
 #graph-canvas:focus-visible,
@@ -4847,7 +4846,6 @@ code {
   gap: 0.6rem;
 }
 
-#graph-hops-value,
 #graph-mindegree-value,
 #graph-collapse-value {
   color: var(--bn-text-subtle);
@@ -4855,7 +4853,6 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
-.graph-hops-input,
 .graph-mindegree-input,
 .graph-collapse-input {
   width: 100%;

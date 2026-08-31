@@ -76,10 +76,9 @@ const chainGraph = (): GraphElements => ({
 });
 
 describe("defaultGraphDisplayOptions", () => {
-  it("is every knob off with hops at the minimum", () => {
+  it("is every knob off", () => {
     expect(defaultGraphDisplayOptions()).toEqual({
       isolateID: "",
-      hops: 1,
       minDegree: 0,
       collapseDepth: 0,
       expandedFolders: new Set<string>(),
@@ -130,12 +129,11 @@ describe("folderGroupKey", () => {
 });
 
 describe("buildDisplayGraph isolate stage", () => {
-  it("keeps the anchor neighborhood and drops every edge with a dropped endpoint", () => {
-    const { elements, stats } = buildDisplayGraph(
-      chainGraph(),
-      withOptions({ isolateID: "b", hops: 1 })
-    );
+  it("keeps the anchor and its immediate neighbors, and drops every edge with a dropped endpoint", () => {
+    const { elements, stats } = buildDisplayGraph(chainGraph(), withOptions({ isolateID: "b" }));
 
+    // a links in and c links out, so both are immediate neighbors. d is one step
+    // further and cd loses an endpoint along with it.
     expect(nodeIDs(elements)).toEqual(["a", "b", "c"]);
     expect(edgeIDs(elements)).toEqual(["ab", "bc"]);
     expect(stats.isolated).toBe(true);
@@ -144,18 +142,53 @@ describe("buildDisplayGraph isolate stage", () => {
   });
 
   it("walks edges undirected, so an inbound-only neighbor is still reached", () => {
-    const { elements } = buildDisplayGraph(
-      chainGraph(),
-      withOptions({ isolateID: "d", hops: 1 })
-    );
+    const { elements } = buildDisplayGraph(chainGraph(), withOptions({ isolateID: "d" }));
 
     expect(nodeIDs(elements)).toEqual(["c", "d"]);
+  });
+
+  it("keeps an outbound-only neighbor and stops there", () => {
+    const { elements } = buildDisplayGraph(chainGraph(), withOptions({ isolateID: "a" }));
+
+    expect(nodeIDs(elements)).toEqual(["a", "b"]);
+    expect(edgeIDs(elements)).toEqual(["ab"]);
+  });
+
+  // The radius is not configurable, so "one more hop" is not something the caller
+  // can ask for: a neighbor's own neighbor is outside the selection, always.
+  it("never reaches a neighbor's neighbor, however the graph is shaped", () => {
+    const star: GraphElements = {
+      nodes: [makeNode("anchor"), makeNode("near"), makeNode("far"), makeNode("farther")],
+      edges: [
+        makeEdge("an", "anchor", "near"),
+        makeEdge("nf", "near", "far"),
+        makeEdge("ff", "far", "farther"),
+      ],
+    };
+
+    const { elements } = buildDisplayGraph(star, withOptions({ isolateID: "anchor" }));
+
+    expect(nodeIDs(elements)).toEqual(["anchor", "near"]);
+    expect(edgeIDs(elements)).toEqual(["an"]);
+  });
+
+  it("keeps an unlinked anchor on its own rather than emptying the graph", () => {
+    const { elements, stats } = buildDisplayGraph(
+      {
+        nodes: [makeNode("lonely"), makeNode("other")],
+        edges: [],
+      },
+      withOptions({ isolateID: "lonely" })
+    );
+
+    expect(nodeIDs(elements)).toEqual(["lonely"]);
+    expect(stats.isolated).toBe(true);
   });
 
   it("is a no-op when the anchor is not in the source", () => {
     const { elements, stats } = buildDisplayGraph(
       chainGraph(),
-      withOptions({ isolateID: "missing", hops: 2 })
+      withOptions({ isolateID: "missing" })
     );
 
     expect(nodeIDs(elements)).toEqual(["a", "b", "c", "d", "e", "f"]);
@@ -166,24 +199,6 @@ describe("buildDisplayGraph isolate stage", () => {
   it("reports isolated false when isolateID is empty", () => {
     const { stats } = buildDisplayGraph(chainGraph(), withOptions());
     expect(stats.isolated).toBe(false);
-  });
-
-  it("is exact at each hop boundary", () => {
-    const atHops = (hops: number): string[] =>
-      nodeIDs(buildDisplayGraph(chainGraph(), withOptions({ isolateID: "a", hops })).elements);
-
-    expect(atHops(1)).toEqual(["a", "b"]);
-    expect(atHops(2)).toEqual(["a", "b", "c"]);
-    expect(atHops(3)).toEqual(["a", "b", "c", "d"]);
-  });
-
-  it("clamps hops into 1..3", () => {
-    const atHops = (hops: number): string[] =>
-      nodeIDs(buildDisplayGraph(chainGraph(), withOptions({ isolateID: "a", hops })).elements);
-
-    expect(atHops(0)).toEqual(["a", "b"]);
-    expect(atHops(99)).toEqual(["a", "b", "c", "d"]);
-    expect(atHops(Number.NaN)).toEqual(["a", "b"]);
   });
 });
 
@@ -211,11 +226,11 @@ describe("buildDisplayGraph min-degree stage", () => {
   });
 
   it("counts degrees within the current subset, not the source graph", () => {
-    // Isolating on leaf1 at 1 hop leaves hub with subset degree 1, so a threshold of 2
-    // drops it even though it has degree 2 in the full graph.
+    // Isolating on leaf1 leaves hub with subset degree 1, so a threshold of 2 drops it
+    // even though it has degree 2 in the full graph.
     const { elements } = buildDisplayGraph(
       hubGraph(),
-      withOptions({ isolateID: "leaf1", hops: 1, minDegree: 2, keepIDs: new Set(["leaf1"]) })
+      withOptions({ isolateID: "leaf1", minDegree: 2, keepIDs: new Set(["leaf1"]) })
     );
 
     expect(nodeIDs(elements)).toEqual(["leaf1"]);
@@ -382,7 +397,7 @@ describe("buildDisplayGraph degree and size recompute", () => {
 
     const { elements } = buildDisplayGraph(
       source,
-      withOptions({ isolateID: "hub", hops: 1, minDegree: 2 })
+      withOptions({ isolateID: "hub", minDegree: 2 })
     );
 
     expect(nodeIDs(elements)).toEqual(["hub"]);
@@ -480,7 +495,6 @@ describe("buildDisplayGraph composition", () => {
       composedSource(),
       withOptions({
         isolateID: "hub",
-        hops: 1,
         minDegree: 2,
         collapseDepth: 1,
         keepIDs: new Set(["hub"]),
@@ -504,7 +518,7 @@ describe("buildDisplayGraph composition", () => {
   it("does not let the collapse stage resurrect nodes the earlier stages dropped", () => {
     const { elements } = buildDisplayGraph(
       composedSource(),
-      withOptions({ isolateID: "hub", hops: 1, collapseDepth: 1 })
+      withOptions({ isolateID: "hub", collapseDepth: 1 })
     );
 
     expect(nodeIDs(elements)).not.toContain("far");
@@ -520,7 +534,6 @@ describe("buildDisplayGraph purity and determinism", () => {
   it("returns identical output for identical input", () => {
     const options = withOptions({
       isolateID: "hub",
-      hops: 2,
       minDegree: 1,
       collapseDepth: 1,
       keepIDs: new Set(["hub"]),
@@ -545,7 +558,8 @@ describe("buildDisplayGraph purity and determinism", () => {
 
     expect(second.elements).toEqual(first.elements);
     expect(second.stats).toEqual(first.stats);
-    expect(nodeIDs(first.elements)).toEqual(["hub", "folder:A", "b1"]);
+    // b1 sits one step past a1/a2, so isolation drops it before collapse sees it.
+    expect(nodeIDs(first.elements)).toEqual(["hub", "folder:A"]);
   });
 
   it("does not mutate the source elements", () => {
@@ -554,7 +568,7 @@ describe("buildDisplayGraph purity and determinism", () => {
 
     buildDisplayGraph(
       source,
-      withOptions({ isolateID: "a", hops: 2, minDegree: 1, collapseDepth: 1 })
+      withOptions({ isolateID: "a", minDegree: 1, collapseDepth: 1 })
     );
 
     expect(source).toEqual(snapshot);
@@ -588,7 +602,7 @@ describe("buildDisplayGraph purity and determinism", () => {
     it("keeps the flag through the isolate stage", () => {
       const { elements } = buildDisplayGraph(
         mergedSource(),
-        withOptions({ isolateID: "a", hops: 1 })
+        withOptions({ isolateID: "a" })
       );
 
       expect(edgePairs(elements)).toEqual(["a->c*"]);

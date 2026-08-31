@@ -1,7 +1,7 @@
 // The graph display pipeline: a pure transform from the normalized full-vault graph to
 // the subset that actually gets drawn. No DOM, no Cytoscape — the controller (Session 5)
 // owns both. Stages apply in one fixed order (isolate -> min-degree -> collapse) so the
-// four knobs compose predictably regardless of the order the user touches them in.
+// knobs compose predictably regardless of the order the user touches them in.
 
 import {
   colorForFolder,
@@ -14,8 +14,7 @@ import {
 } from "./graph";
 
 export type GraphDisplayOptions = {
-  isolateID: string; // "" = off
-  hops: number; // 1..3
+  isolateID: string; // "" = off — when set, the anchor plus exactly its immediate neighbors
   minDegree: number; // 0 = off
   collapseDepth: number; // 0 = off, else 1..3 folder path segments
   expandedFolders: ReadonlySet<string>;
@@ -46,14 +45,12 @@ export const folderForAggregateNodeID = (id: string): string =>
 
 export const defaultGraphDisplayOptions = (): GraphDisplayOptions => ({
   isolateID: "",
-  hops: 1,
   minDegree: 0,
   collapseDepth: 0,
   expandedFolders: new Set<string>(),
   keepIDs: new Set<string>(),
 });
 
-const maxHops = 3;
 const maxCollapseDepth = 3;
 
 const clampInteger = (value: number, min: number, max: number): number => {
@@ -94,37 +91,22 @@ const undirectedNeighbors = (edges: readonly NormalizedGraphEdge[]): Map<string,
   return neighbors;
 };
 
-// Undirected BFS from the anchor, bounded by hops. An anchor missing from the source is
-// a no-op rather than an empty graph: a query change can filter the anchor away while
-// the isolate param is still in the URL.
+// Exactly one undirected step out of the anchor: the selected note and the notes it is
+// immediately linked to, in either direction, and nothing further. The radius is fixed
+// rather than configurable — "the selection" means that neighborhood — so there is no
+// traversal here to bound. An anchor missing from the source is a no-op rather than an
+// empty graph: a query change can filter the anchor away while the isolate param is still
+// in the URL.
 const isolateStage = (
   elements: GraphElements,
-  isolateID: string,
-  hops: number
+  isolateID: string
 ): { elements: GraphElements; isolated: boolean } => {
   if (isolateID === "" || !elements.nodes.some((node) => node.id === isolateID)) {
     return { elements, isolated: false };
   }
 
   const neighbors = undirectedNeighbors(elements.edges);
-  const reached = new Set<string>([isolateID]);
-  let frontier: string[] = [isolateID];
-  for (let hop = 0; hop < hops; hop += 1) {
-    const next: string[] = [];
-    for (const id of frontier) {
-      for (const neighbor of neighbors.get(id) || []) {
-        if (reached.has(neighbor)) {
-          continue;
-        }
-        reached.add(neighbor);
-        next.push(neighbor);
-      }
-    }
-    if (next.length === 0) {
-      break;
-    }
-    frontier = next;
-  }
+  const reached = new Set<string>([isolateID, ...(neighbors.get(isolateID) || [])]);
 
   const nodes = elements.nodes.filter((node) => reached.has(node.id));
   const kept = new Set(nodes.map((node) => node.id));
@@ -301,15 +283,10 @@ export const buildDisplayGraph = (
   source: GraphElements,
   options: GraphDisplayOptions
 ): { elements: GraphElements; stats: GraphDisplayStats } => {
-  const hops = clampInteger(options.hops, 1, maxHops);
   const minDegree = Math.max(0, clampInteger(options.minDegree, 0, Number.MAX_SAFE_INTEGER));
   const collapseDepth = clampInteger(options.collapseDepth, 0, maxCollapseDepth);
 
-  const isolate = isolateStage(
-    { nodes: source.nodes, edges: source.edges },
-    options.isolateID,
-    hops
-  );
+  const isolate = isolateStage({ nodes: source.nodes, edges: source.edges }, options.isolateID);
   const thinned = minDegreeStage(isolate.elements, minDegree, options.keepIDs);
   const collapsed = collapseStage(thinned.elements, collapseDepth, options.expandedFolders);
   const sized = withRecomputedDegrees(collapsed.elements);
