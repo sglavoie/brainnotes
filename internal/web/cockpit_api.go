@@ -25,6 +25,10 @@ const cockpitLongTailCleanupCommand = "bn serve clean long tail"
 // file cannot be loaded, so the client still sees every generated task.
 const cockpitStateWarning = "Cockpit state could not be loaded; showing all generated tasks."
 
+// cockpitStateCleanupWarning distinguishes a usable loaded state from a failed
+// best-effort stale-record cleanup. Filtering remains correct for this response.
+const cockpitStateCleanupWarning = "Cockpit state was loaded, but stale task state could not be saved; filtering is current for this page."
+
 // Item-endpoint triage actions. mark_done and snooze mirror the ActionKind
 // vocabulary the task advertises; clear is the reverse of both (it returns a
 // suppressed task to the active queue). "done" is accepted as an alias for

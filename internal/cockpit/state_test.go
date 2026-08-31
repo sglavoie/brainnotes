@@ -321,6 +321,59 @@ func TestStateStore_CorruptCockpitStateErrorsAndCorruptReviewIgnored(t *testing.
 	})
 }
 
+func TestStateStore_FilterQueueReturnsFilteredResultWhenCleanupSaveFails(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "Source.md", "---\ntitle: Source\n---\n[[Missing]]\n")
+
+	queue := buildQueue(t, root)
+	task := findTask(t, queue, RuleBrokenTarget, "missing")
+	targetRel := ".bnotes/cockpit-target.json"
+	writeJSONState(t, root, targetRel, stateFile{
+		Version: stateVersion,
+		Items: map[string]stateRecord{
+			task.ID: {
+				ID:        task.ID,
+				Signature: task.Signature,
+				State:     stateDone,
+				UpdatedAt: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+			},
+			"task_stale": {
+				ID:        "task_stale",
+				Signature: "stale",
+				State:     stateDone,
+				UpdatedAt: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+	})
+	statePath := filepath.Join(root, filepath.FromSlash(stateRelPath))
+	if err := os.Symlink(filepath.Base(targetRel), statePath); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+
+	filtered, err := NewStateStore(root).FilterQueue(queue)
+	if !IsStateCleanupError(err) {
+		t.Fatalf("filter error = %v, want state cleanup error", err)
+	}
+	if hasTaskID(filtered, task.ID) {
+		t.Fatalf("done task remained active after cleanup failure")
+	}
+	if filtered.Counts.DoneHidden != 1 || filtered.Counts.TotalGenerated != len(queue.Tasks) {
+		t.Fatalf("filtered counts = %#v, want one done-hidden and %d total", filtered.Counts, len(queue.Tasks))
+	}
+
+	data, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(targetRel)))
+	if readErr != nil {
+		t.Fatalf("read unchanged state target: %v", readErr)
+	}
+	var persisted stateFile
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatalf("decode unchanged state target: %v", err)
+	}
+	if _, ok := persisted.Items["task_stale"]; !ok {
+		t.Fatalf("failed cleanup unexpectedly changed persisted state: %#v", persisted.Items)
+	}
+}
+
 func buildQueue(t *testing.T, root string) Queue {
 	t.Helper()
 	v, err := openVault(root)

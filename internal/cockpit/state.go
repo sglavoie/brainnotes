@@ -2,6 +2,7 @@ package cockpit
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -67,6 +68,34 @@ type stateRecord struct {
 	State        string     `json:"state"`
 	SnoozedUntil *time.Time `json:"snoozed_until,omitempty"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// stateCleanupError reports that queue filtering completed from readable state,
+// but the best-effort write that removes stale records did not complete. Callers
+// can still use the returned Queue: only the on-disk cleanup is in doubt.
+type stateCleanupError struct {
+	err error
+}
+
+func (e *stateCleanupError) Error() string {
+	if e == nil || e.err == nil {
+		return "cockpit: save pruned state"
+	}
+	return fmt.Sprintf("cockpit: save pruned state: %v", e.err)
+}
+
+func (e *stateCleanupError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+// IsStateCleanupError reports whether err means FilterQueue produced a valid
+// filtered queue but could not persist its removal of stale workflow records.
+func IsStateCleanupError(err error) bool {
+	var cleanup *stateCleanupError
+	return errors.As(err, &cleanup)
 }
 
 // NewStateStore returns a store rooted at the vault root. The state file lives
@@ -206,7 +235,7 @@ func (s *StateStore) FilterQueue(queue Queue) (Queue, error) {
 
 	if changed {
 		if err := s.saveLocked(state); err != nil {
-			return Queue{}, err
+			return queue, &stateCleanupError{err: err}
 		}
 	}
 	return queue, nil

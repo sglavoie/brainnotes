@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
 )
 
 func (s *Server) handleFixesPreview(w http.ResponseWriter, r *http.Request) {
@@ -226,11 +227,19 @@ func (s *Server) cockpitQueueFilteredFrom(data diagnosticsData) cockpit.Queue {
 	return s.filterCockpitQueue(s.cockpitQueueFrom(data))
 }
 
-// filterCockpitQueue hides workflow-suppressed tasks, degrading to the
-// unfiltered queue plus a warning when the state file cannot be loaded.
+// filterCockpitQueue hides workflow-suppressed tasks. An unreadable state file
+// degrades to the unfiltered queue, while a failed stale-record cleanup keeps
+// the valid filtered result. Retryable contention with the Git safety watcher is
+// silent because a later request or watcher pass will finish the cleanup.
 func (s *Server) filterCockpitQueue(queue cockpit.Queue) cockpit.Queue {
 	filtered, ferr := s.cockpitStore().FilterQueue(queue)
 	if ferr == nil {
+		return filtered
+	}
+	if cockpit.IsStateCleanupError(ferr) {
+		if !vaultgit.IsBusy(ferr) {
+			filtered.Warnings = append(filtered.Warnings, cockpit.Warning{Message: cockpitStateCleanupWarning})
+		}
 		return filtered
 	}
 	queue.Warnings = append(queue.Warnings, cockpit.Warning{Message: cockpitStateWarning})
