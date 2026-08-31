@@ -9,12 +9,15 @@ const setURL = (url: string): void => {
   window.history.replaceState(null, "", url);
 };
 
+/** A singular element: Cytoscape reports `length: 1` for one node, 0 for a miss. */
+type FakeNode = { length: number; id: () => string };
+
 type FakeCollection = {
   length: number;
   forEach: () => void;
   filter: () => FakeCollection;
   toArray: () => unknown[];
-  first: () => null;
+  first: () => FakeNode | null;
 };
 
 const emptyCollection: FakeCollection = {
@@ -23,6 +26,40 @@ const emptyCollection: FakeCollection = {
   filter: () => emptyCollection,
   toArray: () => [],
   first: () => null,
+};
+
+/**
+ * A node Cytoscape still reports as selected, whatever the controller mounted.
+ *
+ * Keyboard activation falls back to Cytoscape's own selection when neither the
+ * hover nor the controller's selection resolves, and that fallback is the one
+ * interactive lookup a test cannot reach through the node handlers: it reads the
+ * renderer, not the controller's state. Setting this is how a test puts the
+ * renderer into the state a remount can leave it in — a selection flag still
+ * standing on an element the display pipeline removed — so the guard that checks
+ * that id against the displayed set has something to refuse.
+ */
+let staleCytoscapeSelectionID = "";
+
+/**
+ * The node collection, still length-blind so layout and fit short circuit.
+ *
+ * Only `first()` carries anything, and only when a test asked for a stale
+ * selection; `filter()` answers with the same collection because the controller
+ * filters on `selected()` and this fake has exactly one selection to report.
+ */
+const nodesCollection = (): FakeCollection => {
+  const collection: FakeCollection = {
+    length: 0,
+    forEach: () => {},
+    filter: () => collection,
+    toArray: () => [],
+    first: () =>
+      staleCytoscapeSelectionID === ""
+        ? null
+        : { length: 1, id: () => staleCytoscapeSelectionID },
+  };
+  return collection;
 };
 
 /**
@@ -114,7 +151,7 @@ const fakeCytoscape = () => ({
     };
   },
   nodes(): FakeCollection {
-    return emptyCollection;
+    return nodesCollection();
   },
   // Nothing is mounted in this fake, so every id lookup misses — which is what
   // the label policy already handles for a stale id.
@@ -180,6 +217,7 @@ const startGraph = (
   nodeHandlers.clear();
   addCalls = 0;
   mountedElements = [];
+  staleCytoscapeSelectionID = "";
   const fetchMock = vi.fn(async () => ({
     ok: true,
     json: async () => payload,
@@ -555,6 +593,73 @@ describe("graph mounted-element boundary", () => {
     fireNodeEvent("mouseout", "beta");
     expect(canvas.classList.contains("is-node-hovered")).toBe(false);
     expect(detailsTitle()).toBe("Hover a node");
+  });
+
+  /** Presses a key on the canvas and reports whether the controller claimed it. */
+  const pressCanvasKey = (key: string): boolean => {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    control("graph-canvas").dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+
+  // Keyboard activation is the one interactive path that does not start from a
+  // node event: with no hover and no controller selection it asks Cytoscape which
+  // node is selected. A remount clears the controller's selection but the
+  // renderer can still be holding a selection flag on an element the display
+  // pipeline removed, so that answer has to be checked against the displayed set
+  // like every id arriving from Cytoscape.
+  it("refuses a keyboard activation of a stale Cytoscape selection outside the displayed set", async () => {
+    const fetchMock = startGraph("/graph?g_isolate=alpha", chainPayload);
+    await flush();
+
+    const isolateButton = control<HTMLButtonElement>("graph-isolate-button");
+    const openNote = control<HTMLAnchorElement>("graph-open-note");
+
+    // Isolated from the URL: gamma is two hops out and never reached Cytoscape,
+    // and with nothing hovered or selected the details panel is at rest.
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
+    expect(mountedEdgeIDs()).toEqual(["e1"]);
+    expect(detailsTitle()).toBe("Hover a node");
+    expect(isolateButton.disabled).toBe(true);
+    const mountsBefore = addCalls;
+
+    staleCytoscapeSelectionID = "gamma";
+
+    // The key is left unclaimed — the controller never calls preventDefault for a
+    // target it refuses — and nothing else moves either.
+    expect(pressCanvasKey("Enter")).toBe(false);
+    expect(pressCanvasKey(" ")).toBe(false);
+
+    expect(detailsTitle()).toBe("Hover a node");
+    expect(openNote.getAttribute("aria-disabled")).toBe("true");
+    expect(openNote.hasAttribute("href")).toBe(false);
+    expect(isolateButton.disabled).toBe(true);
+    expect(displayParam("g_isolate")).toBe("alpha");
+    expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
+    expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
+    expect(mountedEdgeIDs()).toEqual(["e1"]);
+    expect(addCalls).toBe(mountsBefore);
+
+    await flush();
+    expect(graphRequests(fetchMock)).toHaveLength(1);
+  });
+
+  // The other half of the same guard: without this, the refusal above would pass
+  // just as well if keyboard activation had quietly stopped working at all.
+  it("still activates a Cytoscape selection the display pipeline kept", async () => {
+    startGraph("/graph?g_isolate=alpha", chainPayload);
+    await flush();
+
+    const isolateButton = control<HTMLButtonElement>("graph-isolate-button");
+    expect(detailsTitle()).toBe("Hover a node");
+
+    staleCytoscapeSelectionID = "beta";
+
+    expect(pressCanvasKey("Enter")).toBe(true);
+    expect(detailsTitle()).toBe("Beta");
+    // A real selection, not just a details repaint: the isolate control wakes up
+    // because there is now a note to re-anchor on.
+    expect(isolateButton.disabled).toBe(false);
   });
 });
 
