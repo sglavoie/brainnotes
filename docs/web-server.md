@@ -329,10 +329,13 @@ over the graph already in the browser, and the status line names each reduction
 that is actually removing something.
 
 The isolation radius used to be a **Hops** slider carried as `g_hops`. That
-parameter is retired. An old link that still has it opens the same one-hop
-neighborhood and the page rewrites its own address bar to drop `g_hops`, keeping
-every other query parameter and the fragment intact; nothing on the server ever
-sees or redirects it.
+parameter is retired. Opening an old link still sends `g_hops` to the server on
+that first `/graph` request — the `/graph` handler simply ignores it, as it
+ignores every display parameter. Once the page has loaded, its own
+initialization rewrites the address bar to drop `g_hops`, keeping every other
+query parameter and the fragment intact, and the view renders the same fixed
+one-hop neighborhood. The later `/api/graph.json` request never carries any
+display parameter, `g_hops` included.
 
 ## Options, assets, and security
 
