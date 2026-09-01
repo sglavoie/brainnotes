@@ -1,0 +1,16 @@
+@media (prefers-reduced-motion: reduce) {
+  .brief-slot,
+  .brief-action-button,
+  .brief-insight-prompt,
+  .brief-insight-copy,
+  .related-tab,
+  .related-show-more,
+  .related-card-action,
+  .related-later-control > summary,
+  .related-feedback-drawer > summary,
+  .capture-input,
+  .note-insight-prompt {
+    transition: none;
+  }
+}
+

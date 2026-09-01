@@ -1,0 +1,124 @@
+.properties-schema {
+  margin-top: 1rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bn-sunken);
+}
+
+.properties-schema-note {
+  margin: 0.3rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.8rem;
+}
+
+.properties-schema-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.properties-schema-label {
+  color: var(--bn-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.properties-schema-items {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.properties-schema-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+}
+
+.properties-schema-error {
+  margin: 0.4rem 0 0;
+  color: var(--bn-danger);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.properties-schema-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.properties-control {
+  min-height: 2.15rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0 0.5rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font-size: 0.85rem;
+}
+
+.properties-control:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.properties-control-input {
+  min-width: 12rem;
+}
+
+.properties-control-textarea {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.properties-control-list {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.properties-control-list-items {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.properties-control-list-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.properties-control-add,
+.properties-control-remove {
+  justify-self: start;
+}
+
+.properties-keyboard-hint {
+  margin: 0.5rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.78rem;
+}
+
+.properties-keyboard-hint kbd {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  background: var(--bn-raised);
+  font-family: inherit;
+  font-size: 0.72rem;
+}
+

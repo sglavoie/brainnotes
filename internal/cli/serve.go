@@ -18,6 +18,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/web"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/web/cssbuild"
 )
 
 var runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opts web.Options) error {
@@ -139,6 +140,14 @@ func prepareServeStaticFiles(ctx context.Context, out io.Writer) (fs.FS, error) 
 	}
 	if !ok {
 		return nil, nil
+	}
+
+	// The stylesheet is generated too, but by internal/web/cssbuild rather than
+	// esbuild, so it is regenerated here even in a checkout with no Node
+	// toolchain installed. It runs first because it cannot fail for a reason the
+	// JavaScript build would explain better.
+	if _, err := cssbuild.WriteBundle(root); err != nil {
+		return nil, fmt.Errorf("serve: build web assets: %w", err)
 	}
 
 	if err := runWebBuild(ctx, root, out); err != nil {

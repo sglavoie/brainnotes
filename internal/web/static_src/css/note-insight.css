@@ -1,0 +1,93 @@
+.note-insight {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.note-insight > h2,
+.note-insight-result-header h3 {
+  margin: 0;
+}
+
+.note-insight-label {
+  color: var(--bn-text-strong);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.note-insight-controls {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) auto;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
+.note-insight-prompt {
+  width: 100%;
+  min-width: 300px;
+  min-height: 3.7rem;
+  resize: vertical;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  box-sizing: border-box;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.note-insight-prompt::placeholder {
+  color: var(--bn-text-subtle);
+}
+
+.note-insight-prompt:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.note-insight-hint,
+.note-insight-status {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.8rem;
+}
+
+.note-insight-status {
+  min-height: 1.15rem;
+}
+
+.note-insight-status.is-success {
+  color: var(--bn-success);
+}
+
+.note-insight-status.is-error {
+  color: var(--bn-danger);
+}
+
+.note-insight-result {
+  margin-top: 0.2rem;
+  border-top: 1px solid var(--bn-border);
+  padding-top: 0.65rem;
+}
+
+.note-insight-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.note-insight-result-header h3 {
+  font-size: 0.95rem;
+}
+
+.note-insight-body {
+  overflow-wrap: anywhere;
+}
+

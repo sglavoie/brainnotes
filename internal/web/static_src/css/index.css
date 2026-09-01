@@ -1,0 +1,57 @@
+/*
+ * Stylesheet manifest. `internal/web/cssbuild` concatenates these parts, in the
+ * order listed here, into the committed `internal/web/static/app.css`.
+ *
+ * The order is the cascade, so moving an import moves the rules it names.
+ * `tokens.css` stays first because every part below it reads the custom
+ * properties it declares, and `responsive.css` stays last because its
+ * width-scoped blocks override the components they narrow and only win by
+ * coming after them. `focus.css` sits between the two facet parts for the same
+ * reason: it is the shared focus ring for controls declared across the whole
+ * sheet, and it was written at that point in the cascade.
+ *
+ * This file is never served and is not fetched by a browser. The builder reads
+ * these lines itself and rejects anything that is not a blank line, a comment,
+ * or an `@import "<part>.css";` naming a file in this directory.
+ */
+@import "tokens.css";
+@import "base.css";
+@import "chrome.css";
+@import "search.css";
+@import "query-bar.css";
+@import "facets.css";
+@import "focus.css";
+@import "facet-options.css";
+@import "layout.css";
+@import "brief.css";
+@import "capture.css";
+@import "brief-actions.css";
+@import "related.css";
+@import "overview-bulk.css";
+@import "history.css";
+@import "overview-results.css";
+@import "review.css";
+@import "fixes.css";
+@import "diagnostics.css";
+@import "recent.css";
+@import "pinned.css";
+@import "note-actions.css";
+@import "note-layout.css";
+@import "note-insight.css";
+@import "note-body.css";
+@import "chroma.css";
+@import "note-body-markdown.css";
+@import "frontmatter.css";
+@import "backlinks.css";
+@import "broken.css";
+@import "filters.css";
+@import "graph.css";
+@import "properties.css";
+@import "properties-values.css";
+@import "properties-schema.css";
+@import "properties-selection.css";
+@import "properties-dialog.css";
+@import "synthesize.css";
+@import "synthesize-sources.css";
+@import "motion.css";
+@import "responsive.css";

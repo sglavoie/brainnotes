@@ -1,0 +1,296 @@
+.site-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 1.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.55rem;
+  background: var(--bn-surface);
+  box-sizing: border-box;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.1rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 0.35rem;
+  box-sizing: border-box;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.site-nav a:hover {
+  background: var(--bn-hover);
+  text-decoration: none;
+}
+
+/*
+ * The saved-views strip is filled by initSavedViewsNav() after the page paints,
+ * so its row height is reserved here: without min-height the nav grows when the
+ * first item lands and the anchors beside it visibly shift.
+ */
+.saved-views-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-height: 2.1rem;
+  box-sizing: border-box;
+}
+
+.saved-views-nav:not(:empty) {
+  margin-left: 0.15rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid var(--bn-border);
+}
+
+.saved-views-nav-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.1rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 0.35rem;
+  box-sizing: border-box;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.saved-views-nav-item.is-disabled {
+  color: var(--bn-muted);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.saved-views-save {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+.saved-views-save-button {
+  min-height: 2.1rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.35rem;
+  background: var(--bn-surface);
+  color: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.saved-views-save-button:hover {
+  background: var(--bn-hover);
+}
+
+.saved-views-save-button:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.saved-views-save-form {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 0.35rem;
+  width: min(24rem, 90vw);
+  padding: 0.75rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.55rem;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-popover);
+  text-align: left;
+}
+
+.saved-views-save-form[hidden] {
+  display: none;
+}
+
+.saved-views-save-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--bn-muted);
+}
+
+.saved-views-save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.saved-views-save-diff {
+  margin: 0;
+  padding: 0.5rem;
+  border-radius: 0.35rem;
+  background: var(--bn-sunken);
+  font-size: 0.78rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.saved-views-save-diff[hidden] {
+  display: none;
+}
+
+/* A create's diff is a receipt for a write that already happened, not the
+   question an overwrite confirms; the left rule is what tells them apart. */
+.saved-views-save-diff[data-saved-views-diff-role='receipt'] {
+  border-left: 3px solid var(--bn-accent-subtle-border);
+}
+
+.saved-views-save-status {
+  margin: 0;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.saved-views-save-status.is-error {
+  color: var(--bn-danger);
+}
+
+.saved-views-save-status.is-success {
+  color: var(--bn-success);
+}
+
+.saved-views-save-status.is-warning {
+  color: var(--bn-warning);
+}
+
+.site-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.site-header-copy {
+  min-width: 12rem;
+}
+
+.site-header-tools {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.theme-control {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.theme-control-legend {
+  padding: 0;
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  color: var(--bn-muted);
+}
+
+.theme-control-options {
+  display: inline-flex;
+  box-sizing: border-box;
+  min-height: var(--bn-header-control-height);
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: var(--bn-surface);
+}
+
+.theme-control-option {
+  display: inline-flex;
+  margin: 0;
+}
+
+.theme-control-option + .theme-control-option {
+  border-left: 1px solid var(--bn-border);
+}
+
+.theme-control-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-control-option span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--bn-text-subtle);
+  cursor: pointer;
+}
+
+.theme-control-option input:checked + span {
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+}
+
+.theme-control-option input:focus-visible + span {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: -2px;
+}
+
+.graph-header-copy .theme-control {
+  margin-top: 0.6rem;
+}
+
+.note-breadcrumbs {
+  margin-bottom: 0.75rem;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+}
+
+.note-breadcrumbs ol {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-breadcrumbs li {
+  display: inline-flex;
+  gap: 0.35rem;
+  min-width: 0;
+  align-items: center;
+}
+
+.note-breadcrumbs li + li::before {
+  color: var(--bn-faint);
+  content: '/';
+}
+
+.note-breadcrumbs a,
+.note-breadcrumbs span {
+  overflow-wrap: anywhere;
+}
+
+.note-breadcrumbs span[aria-current='page'] {
+  color: var(--bn-text-subtle);
+}
+
+.page-subtitle {
+  margin-top: 0.4rem;
+  color: var(--bn-muted);
+}
+

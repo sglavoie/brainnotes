@@ -1,0 +1,51 @@
+.panel {
+  margin-top: 1rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.6rem;
+  background: var(--bn-surface);
+  padding: 0.9rem 1rem;
+}
+
+.panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--bn-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--bn-text-subtle);
+  background: var(--bn-raised);
+}
+
+code,
+pre {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+code {
+  color: var(--bn-code-text);
+}
+
+.index-main {
+  max-width: 62rem;
+}
+

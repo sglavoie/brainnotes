@@ -1,0 +1,363 @@
+@media (max-width: 960px) {
+  .synthesize-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .brief-slot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brief-card-actions {
+    gap: 0.35rem;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-counts {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .review-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-item-actions {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-self: stretch;
+  }
+
+  .diagnostic-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .graph-panel {
+    grid-template-columns: 1fr;
+  }
+
+  #graph-canvas {
+    min-height: 60vh;
+  }
+
+  .graph-controls {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.8fr);
+  }
+
+  .graph-view-controls {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  main {
+    margin-top: 1.4rem;
+    padding: 0 0.85rem;
+  }
+
+  .synthesize-anchor-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+  }
+
+  .synthesize-source {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .synthesize-source-controls,
+  .synthesize-source-role {
+    grid-column: 1 / -1;
+  }
+
+  .synthesize-search-form,
+  .synthesize-context-actions,
+  .synthesize-generate-actions,
+  .synthesize-create-actions,
+  .synthesize-candidate-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .synthesize-search-submit,
+  .synthesize-action {
+    width: 100%;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-panel {
+    padding: 0.75rem;
+  }
+
+  .brief-panel {
+    padding: 0.75rem;
+  }
+
+  .related-tab-list,
+  .related-results {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .related-feedback-row,
+  .related-later-custom {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .related-tab-description {
+    font-size: 0.82rem;
+  }
+
+  .brief-card-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brief-insight-prompt-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .capture-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .note-insight-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .brief-action-button,
+  .brief-insight-copy,
+  .note-insight-button,
+  .note-insight-copy {
+    width: 100%;
+  }
+
+  .brief-insight-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .brief-insight-copy {
+    align-self: flex-start;
+  }
+
+  .review-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-count {
+    padding: 0.42rem 0.5rem;
+  }
+
+  .review-item {
+    padding: 0.65rem;
+  }
+
+  .review-item-actions {
+    gap: 0.35rem;
+  }
+
+  .review-action {
+    min-height: 2.55rem;
+    padding: 0.32rem 0.38rem;
+    font-size: 0.78rem;
+  }
+
+  .review-affected-note {
+    align-items: stretch;
+  }
+
+  .review-open-editor {
+    flex: 1 1 9rem;
+  }
+
+  .diagnostic-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .recent-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+  }
+
+  .recent-note-meta {
+    white-space: normal;
+  }
+
+  .search-box {
+    width: 100%;
+  }
+
+  .facet-control-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .facet-picker {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .facet-clear-all {
+    width: 100%;
+  }
+
+  .overview-bulk-row,
+  .history-actions {
+    align-items: stretch;
+  }
+
+  .overview-bulk-form {
+    width: 100%;
+  }
+
+  .overview-bulk-form input,
+  .overview-bulk-form select {
+    flex: 1 1 10rem;
+    width: auto;
+  }
+
+  .overview-bulk-preview-header,
+  .overview-bulk-preview-result-header,
+  .overview-bulk-preview-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .overview-bulk-preview-actions .overview-bulk-button {
+    flex: 1 1 10rem;
+  }
+
+  .overview-bulk-preview-count {
+    flex: 1 1 7rem;
+  }
+
+  .overview-bulk-button,
+  .history-button {
+    flex: 1 1 10rem;
+  }
+
+  .history-item {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .history-item > .history-button {
+    justify-self: stretch;
+  }
+
+  .note-action-group,
+  .note-copy-actions {
+    width: 100%;
+  }
+
+  .open-editor-button,
+  .trash-note-button,
+  .frontmatter-button,
+  .create-note-button,
+  .copy-button,
+  .synthesize-launch {
+    flex: 1 1 11rem;
+  }
+
+  .properties-panel {
+    padding: 0.75rem;
+  }
+
+  .properties-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .properties-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .properties-filter-input,
+  .properties-filter-select,
+  .properties-button {
+    width: 100%;
+  }
+
+  .properties-value-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .properties-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .properties-selection {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .properties-selection-actions {
+    flex-direction: column;
+    margin-left: 0;
+  }
+
+  .properties-schema-fields {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .properties-control,
+  .properties-control-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .properties-control-list-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .properties-row-actions {
+    flex-direction: column;
+  }
+
+  .properties-dialog {
+    max-height: 100vh;
+    padding: 0.75rem;
+  }
+
+  .properties-toast {
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+  }
+
+  .graph-controls {
+    gap: 0.7rem;
+    grid-template-columns: 1fr;
+  }
+
+  .graph-view-controls {
+    gap: 0.5rem;
+  }
+
+  .graph-view-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .graph-main {
+    margin: 0;
+    padding: 0.75rem;
+  }
+}

@@ -1,0 +1,92 @@
+.brief-action-button,
+.brief-insight-copy {
+  min-height: 2.1rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.38rem 0.72rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.brief-action-button:hover,
+.brief-insight-copy:hover {
+  background: var(--bn-hover);
+}
+
+.brief-action-button:disabled,
+.brief-insight-copy:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.brief-action-button.is-opened {
+  border-color: var(--bn-success);
+  color: var(--bn-success);
+  background: var(--bn-success-bg);
+}
+
+.brief-action-hint {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.brief-slot-status,
+.brief-global-status {
+  margin: 0;
+  min-height: 1.2rem;
+  overflow-wrap: anywhere;
+}
+
+.brief-slot-empty {
+  margin-top: 0.5rem;
+}
+
+.brief-insight {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.45rem;
+  padding: 0.65rem;
+  background: var(--bn-sunken);
+}
+
+.brief-insight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.brief-insight-title {
+  margin: 0;
+  color: var(--bn-text-strong);
+  font-size: 0.9rem;
+}
+
+.brief-insight-body {
+  margin-top: 0.55rem;
+  overflow-wrap: anywhere;
+}
+
+.brief-insight-body :first-child {
+  margin-top: 0;
+}
+
+.brief-insight-body :last-child {
+  margin-bottom: 0;
+}
+
+.brief-insight-body pre,
+.brief-insight-body code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+

@@ -1,0 +1,267 @@
+.note-main {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.note-main h1,
+.note-layout h1,
+.note-layout h2,
+.note-layout h3,
+.note-layout h4,
+.note-layout h5,
+.note-layout h6 {
+  overflow-wrap: anywhere;
+}
+
+.note-layout-toolbar {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 0.5rem;
+}
+
+.note-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0.35rem;
+  box-sizing: border-box;
+  line-height: 0;
+  color: var(--bn-text);
+}
+
+.note-sidebar-toggle[aria-expanded='false'] .note-sidebar-toggle-panel {
+  display: none;
+}
+
+.note-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.note-meta-sidebar,
+.note-toc-sidebar,
+.note-content {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.note-meta-resize-handle {
+  display: none;
+}
+
+.note-layout .panel {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.note-layout a,
+.note-layout code,
+.note-layout li,
+.note-layout p {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 961px) {
+  .note-layout {
+    grid-template-columns:
+      minmax(13.5rem, var(--bn-note-meta-width, 31.25rem))
+      minmax(0, 1fr);
+  }
+
+  .note-layout-with-toc {
+    grid-template-columns:
+      minmax(
+        13.5rem,
+        var(
+          --bn-note-meta-width,
+          min(31.25rem, max(13.5rem, calc((100vw - 48rem - 2rem) / 2)))
+        )
+      )
+      minmax(0, 48rem)
+      minmax(12rem, 1fr);
+  }
+
+  .note-layout.is-metadata-hidden,
+  :root[data-note-meta-sidebar='hidden'] .note-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .note-layout-with-toc.is-metadata-hidden,
+  :root[data-note-meta-sidebar='hidden'] .note-layout-with-toc {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(
+        12rem,
+        min(
+          var(--bn-note-toc-sidebar-width, 31.25rem),
+          31.25rem,
+          calc(100vw - 13.5rem - 20rem - 2rem)
+        )
+      );
+  }
+
+  .note-meta-sidebar {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .note-meta-sidebar {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding-right: 0.1rem;
+    scrollbar-gutter: stable;
+  }
+
+  .note-content {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .note-toc-sidebar {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    width: 100%;
+    max-width: 31.25rem;
+    box-sizing: border-box;
+  }
+
+  .note-layout.is-metadata-hidden .note-content,
+  :root[data-note-meta-sidebar='hidden'] .note-layout .note-content {
+    grid-column: 1;
+  }
+
+  .note-layout-with-toc.is-metadata-hidden .note-toc-sidebar,
+  :root[data-note-meta-sidebar='hidden']
+    .note-layout-with-toc
+    .note-toc-sidebar {
+    grid-column: 2;
+  }
+
+  .note-layout.is-metadata-hidden .note-meta-sidebar,
+  :root[data-note-meta-sidebar='hidden'] .note-layout .note-meta-sidebar {
+    display: none;
+  }
+
+  .note-toc-sidebar {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding-right: 0.1rem;
+    scrollbar-gutter: stable;
+  }
+
+  .note-meta-resize-handle {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    width: 0.9rem;
+    cursor: col-resize;
+    touch-action: none;
+    outline: none;
+  }
+
+  .note-meta-resize-handle::after {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.3rem;
+    bottom: 0.4rem;
+    width: 2px;
+    border-radius: 999px;
+    background: transparent;
+    content: '';
+  }
+
+  .note-meta-resize-handle:hover::after,
+  .note-meta-resize-handle:focus-visible::after {
+    background: var(--bn-focus);
+  }
+
+  :root.is-resizing-note-sidebar,
+  :root.is-resizing-note-sidebar * {
+    cursor: col-resize !important;
+    user-select: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .note-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .note-meta-sidebar,
+  .note-toc-sidebar,
+  .note-content {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .note-meta-sidebar,
+  .note-toc-sidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+    scrollbar-gutter: auto;
+  }
+
+  .note-layout.is-metadata-hidden .note-meta-sidebar,
+  :root[data-note-meta-sidebar='hidden'] .note-layout .note-meta-sidebar {
+    display: none;
+  }
+}
+
+.note-toc-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.note-toc-list a {
+  overflow-wrap: anywhere;
+}
+
+.note-toc-list .toc-level-2 {
+  margin-left: 1rem;
+}
+
+.note-toc-list .toc-level-3,
+.note-toc-list .toc-level-4,
+.note-toc-list .toc-level-5,
+.note-toc-list .toc-level-6 {
+  margin-left: 2rem;
+}
+
+.note-toc-sidebar .note-toc-list {
+  padding-left: 1rem;
+  font-size: 0.92rem;
+}
+
+.note-toc-sidebar .note-toc-list .toc-level-2 {
+  margin-left: 0.65rem;
+}
+
+.note-toc-sidebar .note-toc-list .toc-level-3,
+.note-toc-sidebar .note-toc-list .toc-level-4,
+.note-toc-sidebar .note-toc-list .toc-level-5,
+.note-toc-sidebar .note-toc-list .toc-level-6 {
+  margin-left: 1.1rem;
+}
+

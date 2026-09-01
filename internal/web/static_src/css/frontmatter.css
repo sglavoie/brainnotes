@@ -1,0 +1,144 @@
+.frontmatter-anchors a {
+  margin-left: 0;
+}
+
+.frontmatter-rows {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.frontmatter-panel-header {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.frontmatter-edit-status {
+  flex: 1 1 8rem;
+  text-align: right;
+}
+
+.frontmatter-row {
+  min-width: 0;
+  border-top: 1px solid var(--bn-border);
+  padding-top: 0.65rem;
+}
+
+.frontmatter-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.frontmatter-row dt {
+  margin: 0 0 0.18rem;
+  color: var(--bn-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.frontmatter-row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--bn-text-subtle);
+  overflow-wrap: anywhere;
+}
+
+.frontmatter-controls {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.frontmatter-inline-form,
+.frontmatter-add-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.frontmatter-inline-form label,
+.frontmatter-add-form label {
+  display: grid;
+  gap: 0.15rem;
+  flex: 1 1 7rem;
+  min-width: 0;
+  color: var(--bn-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.frontmatter-inline-form input,
+.frontmatter-add-form input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.35rem;
+  padding: 0.34rem 0.45rem;
+  background: var(--bn-sunken);
+  color: var(--bn-text);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.frontmatter-inline-form input:focus,
+.frontmatter-add-form input:focus {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 1px;
+}
+
+.frontmatter-button {
+  padding: 0.32rem 0.54rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.frontmatter-unset-button {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
+
+.frontmatter-unset-button:hover {
+  background: var(--bn-danger-bg);
+}
+
+.frontmatter-add-form {
+  margin-top: 0.85rem;
+  border-top: 1px solid var(--bn-border);
+  padding-top: 0.75rem;
+}
+
+.frontmatter-text {
+  overflow-wrap: anywhere;
+}
+
+.frontmatter-anchors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-width: 100%;
+  margin-left: 0.4rem;
+  vertical-align: baseline;
+}
+
+.frontmatter-list,
+.frontmatter-map,
+.link-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.frontmatter-list li,
+.frontmatter-map li,
+.link-list li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+

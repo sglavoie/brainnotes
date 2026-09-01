@@ -1,0 +1,186 @@
+.query-bar {
+  margin-bottom: 1rem;
+}
+
+.query-bar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.query-bar-label {
+  padding-bottom: 0.6rem;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.query-bar-field {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.query-bar-input {
+  width: 100%;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--bn-sunken);
+  color: var(--bn-text);
+  box-sizing: border-box;
+  font-family: var(--bn-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.9rem;
+}
+
+.query-bar-input[aria-invalid='true'] {
+  border-color: var(--bn-danger-border);
+}
+
+.query-bar-button {
+  min-height: 2.25rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.42rem 0.65rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.query-bar-button:hover {
+  background: var(--bn-hover);
+}
+
+.query-bar-input:focus-visible,
+.query-bar-button:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.query-bar-completions {
+  position: absolute;
+  z-index: 35;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  left: 0;
+  max-height: 22rem;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  overflow-y: auto;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.45rem;
+  background: var(--bn-sunken);
+  box-shadow: var(--bn-shadow-popover);
+}
+
+.query-bar-completions[hidden] {
+  display: none;
+}
+
+.query-bar-completion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.55rem;
+  align-items: baseline;
+  border-radius: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+}
+
+.query-bar-completion:hover,
+.query-bar-completion.is-active {
+  background: var(--bn-hover);
+}
+
+.query-bar-completion[aria-selected='true'] {
+  color: var(--bn-text-strong);
+  background: var(--bn-accent-subtle-bg);
+}
+
+.query-bar-completion-value {
+  font-family: var(--bn-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.query-bar-completion-kind {
+  justify-self: end;
+  color: var(--bn-text-subtle);
+  font-size: 0.75rem;
+}
+
+.query-bar-completion-detail {
+  grid-column: 1 / -1;
+  color: var(--bn-text-subtle);
+  font-size: 0.78rem;
+}
+
+.query-bar-error {
+  margin-top: 0.6rem;
+  border: 1px solid var(--bn-danger-border);
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--bn-danger-bg);
+}
+
+.query-bar-error[hidden] {
+  display: none;
+}
+
+.query-bar-error-message {
+  margin: 0;
+  color: var(--bn-danger);
+  font-size: 0.85rem;
+}
+
+/*
+ * The echoed query and the caret row are two lines of one monospace block so
+ * column N of the caret sits under column N of the expression.
+ */
+.query-bar-error-strip {
+  margin: 0.35rem 0 0;
+  overflow-x: auto;
+  color: var(--bn-text);
+  font-family: var(--bn-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+  line-height: 1.3;
+  white-space: pre;
+}
+
+.query-bar-error-caret {
+  color: var(--bn-danger);
+}
+
+.query-bar-error-suggestions {
+  margin: 0.35rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.82rem;
+}
+
+.query-bar-error-suggestions[hidden] {
+  display: none;
+}
+
+.query-bar-status {
+  min-height: 1.25rem;
+  margin: 0.55rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.query-bar-status.is-success {
+  color: var(--bn-success);
+}
+
+.query-bar-status.is-error {
+  color: var(--bn-danger);
+}
+
+.query-bar-status.is-warning {
+  color: var(--bn-warning);
+}
+

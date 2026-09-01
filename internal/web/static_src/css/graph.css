@@ -1,0 +1,403 @@
+.graph-page {
+  min-height: 100vh;
+}
+
+.graph-main {
+  max-width: none;
+  margin: 0;
+  min-height: 100vh;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.graph-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.graph-header-copy {
+  min-width: 12rem;
+}
+
+.graph-controls {
+  width: min(60rem, 100%);
+  display: grid;
+  grid-template-columns:
+    minmax(16rem, 1.35fr)
+    minmax(12rem, 0.85fr)
+    minmax(12rem, auto)
+    minmax(8rem, auto);
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.graph-filter,
+.graph-controls .facet-controls,
+.graph-spread,
+.graph-view-controls,
+.graph-action-controls,
+.graph-label-mode,
+.graph-search-mode {
+  min-width: 0;
+}
+
+.graph-controls .facet-controls {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+}
+
+.graph-control-label {
+  display: block;
+  margin: 0 0 0.3rem;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.graph-filter-input {
+  width: 100%;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--bn-sunken);
+  color: var(--bn-text);
+  box-sizing: border-box;
+}
+
+.graph-filter-input:focus-visible,
+.graph-spread-input:focus-visible,
+.graph-mindegree-input:focus-visible,
+.graph-collapse-input:focus-visible,
+#graph-canvas:focus-visible,
+.graph-control-button:focus-visible,
+.graph-label-mode-option input:focus-visible + span,
+.graph-search-mode-option input:focus-visible + span,
+.graph-open-note:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 1px;
+}
+
+.graph-spread-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+#graph-spread-value {
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-spread-input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--bn-accent);
+}
+
+.graph-view-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.graph-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.graph-view-controls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+#graph-mindegree-value,
+#graph-collapse-value {
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-mindegree-input,
+.graph-collapse-input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--bn-accent);
+}
+
+.graph-action-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.graph-action-controls .graph-control-button {
+  flex: 1 1 5.7rem;
+}
+
+.graph-control-button {
+  min-height: 2.15rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.38rem 0.55rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.graph-control-button:hover:not(:disabled) {
+  background: var(--bn-hover);
+}
+
+.graph-control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The graph's query bar is the same component the Library renders, dropped into
+   a grid of controls: it spans the whole row and drops the panel chrome so it
+   reads as one more control rather than a second panel. The heading is clipped
+   rather than removed because `aria-labelledby` still points at it. */
+.graph-query-bar {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+}
+
+.graph-query-bar .panel-header {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.graph-query-bar .query-bar-label {
+  padding-bottom: 0.55rem;
+}
+
+.graph-label-mode,
+.graph-search-mode {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.graph-label-mode legend,
+.graph-search-mode legend {
+  padding: 0;
+}
+
+.graph-label-mode-options,
+.graph-search-mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(3.5rem, 1fr));
+  min-height: 2.15rem;
+  overflow: hidden;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-sunken);
+}
+
+.graph-label-mode-option,
+.graph-search-mode-option {
+  display: flex;
+  min-width: 0;
+}
+
+.graph-label-mode-option input,
+.graph-search-mode-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.graph-label-mode-option span,
+.graph-search-mode-option span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.38rem 0.5rem;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.graph-label-mode-option + .graph-label-mode-option span,
+.graph-search-mode-option + .graph-search-mode-option span {
+  border-left: 1px solid var(--bn-border);
+}
+
+.graph-label-mode-option input:checked + span,
+.graph-search-mode-option input:checked + span {
+  color: var(--bn-text-strong);
+  background: var(--bn-hover);
+}
+
+.graph-header h1 {
+  margin: 0;
+}
+
+#graph-status {
+  margin: 0.25rem 0 0;
+  color: var(--bn-muted);
+  min-height: 1.25rem;
+}
+
+#graph-status.is-loading {
+  color: var(--bn-muted);
+}
+
+#graph-status.is-empty {
+  color: var(--bn-warning);
+}
+
+#graph-status.is-error {
+  color: var(--bn-danger);
+}
+
+.graph-links {
+  margin: 0.5rem 0 0;
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.graph-panel {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+#graph-canvas {
+  min-width: 0;
+  min-height: 72vh;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.6rem;
+  background: var(--bn-graph-canvas-bg);
+  cursor: grab;
+}
+
+#graph-canvas:active {
+  cursor: grabbing;
+}
+
+#graph-canvas.is-node-hovered,
+#graph-canvas.is-node-hovered:active {
+  cursor: pointer;
+}
+
+.graph-hover {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.6rem;
+  padding: 0.75rem;
+  background: var(--bn-raised);
+}
+
+.graph-hover.is-transient {
+  border-color: var(--bn-graph-transient);
+}
+
+.graph-hover.is-locked {
+  border-color: var(--bn-graph-locked);
+  box-shadow: inset 3px 0 0 var(--bn-graph-locked);
+}
+
+.graph-hover h2 {
+  margin-top: 0;
+}
+
+#graph-hover-title,
+#graph-hover-folder,
+#graph-hover-degree {
+  margin: 0.35rem 0;
+  word-break: break-word;
+}
+
+.graph-issue-list {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graph-issue-list[hidden] {
+  display: none;
+}
+
+.graph-issue-item {
+  display: inline-flex;
+  max-width: 100%;
+  border: 1px solid var(--bn-accent-subtle-border);
+  border-radius: 0.35rem;
+  padding: 0.08rem 0.42rem;
+  color: var(--bn-text-subtle);
+  background: var(--bn-accent-subtle-bg);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.graph-issue-item.is-broken {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
+
+.graph-issue-item.is-orphan {
+  border-color: var(--bn-border-strong);
+  color: var(--bn-text);
+  background: var(--bn-hover);
+}
+
+.graph-issue-item.is-dead-end {
+  border-color: var(--bn-warning-border);
+  color: var(--bn-warning);
+  background: var(--bn-warning-bg);
+}
+
+.graph-open-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.15rem;
+  margin-top: 0.55rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0 0.65rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font-size: 0.9rem;
+}
+
+.graph-open-note.is-disabled,
+.graph-open-note[aria-disabled='true'] {
+  color: var(--bn-faint);
+  background: var(--bn-sunken);
+  cursor: default;
+  pointer-events: none;
+}
+

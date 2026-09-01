@@ -1,0 +1,141 @@
+.history-panel {
+  margin-top: 1rem;
+}
+
+.history-panel[aria-busy='true'] {
+  border-color: var(--bn-border-strong);
+}
+
+.history-header {
+  gap: 0.7rem;
+}
+
+.history-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.history-button {
+  min-height: 2rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.35rem;
+  padding: 0.32rem 0.65rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.86rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.history-button:hover {
+  background: var(--bn-hover);
+}
+
+.history-danger {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
+
+.history-danger:hover {
+  background: var(--bn-danger-bg);
+}
+
+.history-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.history-status {
+  min-height: 1.2rem;
+  margin: 0.1rem 0 0.7rem;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+}
+
+.history-status.is-success {
+  color: var(--bn-success);
+}
+
+.history-status.is-error {
+  color: var(--bn-danger);
+}
+
+.history-status.is-loading {
+  color: var(--bn-muted);
+}
+
+.history-status.is-empty {
+  color: var(--bn-text-subtle);
+}
+
+.history-conflict {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0 0 0.75rem;
+  border: 1px solid var(--bn-danger-border);
+  border-radius: 0.45rem;
+  padding: 0.65rem;
+  background: var(--bn-danger-bg);
+}
+
+.history-conflict[hidden] {
+  display: none;
+}
+
+.history-conflict p {
+  flex: 1 1 16rem;
+  margin: 0;
+  color: var(--bn-danger);
+  font-size: 0.88rem;
+}
+
+.history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+  border-top: 1px solid var(--bn-border);
+  padding: 0.7rem 0;
+}
+
+.history-item:first-child {
+  border-top: 0;
+}
+
+.history-item-main {
+  min-width: 0;
+}
+
+.history-command {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--bn-text);
+  font-weight: 650;
+}
+
+.history-meta {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+  color: var(--bn-muted);
+  font-size: 0.83rem;
+}
+
+.history-item > .history-button {
+  justify-self: end;
+}
+

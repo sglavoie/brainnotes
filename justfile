@@ -39,15 +39,17 @@ test:
     @echo "Running tests..."
     go test ./...
 
-# Build the browser JavaScript bundle
+# Build the browser JavaScript bundle and the stylesheet
 web-build:
     npm run build:web
+    go run ./internal/web/cssbuild/gen
 
-# Type-check and build the browser JavaScript bundle
+# Type-check and build the browser assets
 web-check:
     npm run typecheck:web
     npm run test:web
     npm run build:web
+    go run ./internal/web/cssbuild/gen
 
 # Run go vet across all packages
 vet:

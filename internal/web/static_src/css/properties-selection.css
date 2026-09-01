@@ -1,0 +1,84 @@
+.properties-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  background: var(--bn-sunken);
+}
+
+.properties-selection-count {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.properties-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.properties-row.is-selected {
+  border-color: var(--bn-accent-subtle-border);
+  background: var(--bn-accent-subtle-bg);
+}
+
+.properties-row:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.properties-row-select {
+  margin: 0 0.25rem 0 0;
+}
+
+.properties-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.properties-editor {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  border: 1px solid var(--bn-border-strong);
+  border-radius: 0.5rem;
+  padding: 0.6rem;
+  background: var(--bn-raised);
+}
+
+.properties-editor-title {
+  margin: 0;
+  color: var(--bn-text-strong);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.properties-editor-error {
+  margin: 0;
+  color: var(--bn-danger);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.properties-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.properties-button-primary {
+  border-color: var(--bn-accent-subtle-border);
+  color: var(--bn-accent-subtle-text);
+  background: var(--bn-accent-subtle-bg);
+  font-weight: 600;
+}
+

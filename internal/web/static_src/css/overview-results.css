@@ -1,0 +1,118 @@
+.overview-result-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overview-result-item {
+  border-top: 1px solid var(--bn-border);
+}
+
+.overview-result-item:first-child {
+  border-top: 0;
+}
+
+.overview-result-row {
+  display: block;
+}
+
+.overview-result-row.has-selection {
+  display: grid;
+  grid-template-columns: 1.65rem minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: start;
+}
+
+.overview-result-pin {
+  margin-top: 0.6rem;
+  justify-self: end;
+}
+
+.overview-result-select {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 0.72rem;
+}
+
+.overview-result-select input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--bn-accent);
+}
+
+.overview-result-link {
+  display: block;
+  padding: 0.65rem 0;
+  color: inherit;
+  min-width: 0;
+}
+
+.overview-result-link:hover {
+  text-decoration: none;
+}
+
+.overview-result-link:hover .overview-result-title {
+  text-decoration: underline;
+}
+
+.overview-result-title {
+  display: block;
+  color: var(--bn-link);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.overview-result-meta {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.2rem;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.overview-result-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--bn-accent-subtle-border);
+  border-radius: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  color: var(--bn-text-subtle);
+  background: var(--bn-accent-subtle-bg);
+  text-transform: capitalize;
+}
+
+.overview-result-badge.is-issue {
+  border-color: var(--bn-warning-border);
+  color: var(--bn-warning);
+  background: var(--bn-warning-bg);
+}
+
+.overview-result-snippet {
+  margin: 0.35rem 0 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.metric-card {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.6rem;
+  background: var(--bn-surface);
+  padding: 0.9rem 1rem;
+}
+
+.metric-card p {
+  margin-bottom: 0;
+}
+
+.metric-value {
+  margin: 0.2rem 0 0.45rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--bn-text-strong);
+}
+

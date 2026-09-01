@@ -1,0 +1,135 @@
+.note-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 1.1rem;
+}
+
+.note-action-group {
+  display: contents;
+}
+
+.note-copy-actions {
+  display: contents;
+}
+
+.open-editor-button,
+.trash-note-button,
+.pin-button,
+.note-sidebar-toggle,
+.frontmatter-button,
+.create-note-button,
+.copy-button,
+.synthesize-launch,
+.note-insight-button,
+.note-insight-copy {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.42rem 0.8rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.note-actions .open-editor-button,
+.note-actions .trash-note-button,
+.note-actions .pin-button,
+.note-actions .copy-button,
+.note-actions .synthesize-launch {
+  order: 1;
+}
+
+.synthesize-launch {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.trash-note-button {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
+
+.open-editor-button:hover,
+.trash-note-button:hover,
+.pin-button:hover,
+.note-sidebar-toggle:hover,
+.frontmatter-button:hover,
+.create-note-button:hover,
+.copy-button:hover,
+.synthesize-launch:hover,
+.note-insight-button:hover,
+.note-insight-copy:hover {
+  background: var(--bn-hover);
+}
+
+.trash-note-button:hover {
+  background: var(--bn-danger-bg);
+}
+
+.open-editor-button:disabled,
+.trash-note-button:disabled,
+.pin-button:disabled,
+.pinned-drag-handle:disabled,
+.note-sidebar-toggle:disabled,
+.frontmatter-button:disabled,
+.create-note-button:disabled,
+.copy-button:disabled,
+.note-insight-button:disabled,
+.note-insight-copy:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.open-editor-status,
+.trash-note-status,
+.pin-note-status,
+.frontmatter-edit-status,
+.create-note-status,
+.copy-status {
+  margin: 0.15rem 0 0;
+  min-height: 1.2rem;
+  color: var(--bn-muted);
+  font-size: 0.88rem;
+}
+
+.note-actions .open-editor-status,
+.note-actions .trash-note-status,
+.note-actions .pin-note-status,
+.note-actions .copy-status {
+  order: 2;
+  flex: 0 0 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.note-actions .open-editor-status:empty,
+.note-actions .trash-note-status:empty,
+.note-actions .pin-note-status:empty,
+.note-actions .copy-status:empty {
+  display: none;
+}
+
+.open-editor-status.is-success,
+.trash-note-status.is-success,
+.pin-note-status.is-success,
+.frontmatter-edit-status.is-success,
+.create-note-status.is-success,
+.copy-status.is-success {
+  color: var(--bn-success);
+}
+
+.open-editor-status.is-error,
+.trash-note-status.is-error,
+.pin-note-status.is-error,
+.frontmatter-edit-status.is-error,
+.create-note-status.is-error,
+.copy-status.is-error {
+  color: var(--bn-danger);
+}
+

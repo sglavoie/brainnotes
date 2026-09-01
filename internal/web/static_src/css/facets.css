@@ -1,0 +1,43 @@
+.facet-controls {
+  position: relative;
+  width: min(46rem, 100%);
+  margin: 0 0 1rem;
+}
+
+.index-main > .facet-controls {
+  width: 100%;
+}
+
+.facet-control-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.facet-picker {
+  position: relative;
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.facet-label {
+  display: block;
+  margin: 0 0 0.3rem;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.facet-input-wrap {
+  position: relative;
+}
+
+.facet-input {
+  width: 100%;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.55rem 4rem 0.55rem 0.7rem;
+  background: var(--bn-sunken);
+  color: var(--bn-text);
+  box-sizing: border-box;
+}
+

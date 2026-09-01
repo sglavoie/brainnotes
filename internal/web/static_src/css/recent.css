@@ -1,0 +1,32 @@
+.recent-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  border-top: 1px solid var(--bn-border);
+  padding: 0.55rem 0;
+}
+
+.recent-list-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.recent-note-title {
+  font-weight: 600;
+}
+
+.recent-note-meta {
+  display: flex;
+  gap: 0.75rem;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+

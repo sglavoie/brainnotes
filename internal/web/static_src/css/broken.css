@@ -1,0 +1,38 @@
+.broken-list {
+  color: var(--bn-danger);
+}
+
+.broken-link-row {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.broken-link-main {
+  min-width: 0;
+}
+
+.broken-location {
+  margin-left: 0.35rem;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+}
+
+.broken-create-action {
+  display: inline-flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.create-note-button {
+  padding: 0.24rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.create-note-status {
+  min-height: 1rem;
+  font-size: 0.82rem;
+}
+

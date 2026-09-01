@@ -34,7 +34,11 @@ Run `npm ci` before frontend work or after package-lock changes. `just web-build
 regenerates the committed `internal/web/static/app.js` from
 `internal/web/static_src`; `just web-check` type-checks, runs frontend tests, and
 rebuilds it. The generated JavaScript is committed so Go-only builds do not need
-Node. Local `just build` and `just install` stamp this checkout path into the
+Node. The stylesheet is generated the same way but by Go: `internal/web/static/app.css`
+is the concatenation of the parts under `internal/web/static_src/css/` in the
+order `index.css` lists them, rebuilt by `just web-build` (or
+`go run ./internal/web/cssbuild/gen`) and checked for drift by `go test ./...`,
+so editing CSS needs no Node at all. Edit the parts, never the generated file. Local `just build` and `just install` stamp this checkout path into the
 binary so `bn serve` can refresh web assets from this source tree even when
 launched from another directory.
 
