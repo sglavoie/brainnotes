@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-)
 
-import "github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+)
 
 func TestServer_BulkAPI_FrontmatterSetPartialMissingKeysJournalsAndInvalidatesState(t *testing.T) {
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{

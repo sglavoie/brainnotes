@@ -57,6 +57,12 @@ What it checks
    byte-present either in the live vault's Git object database or in the sealed
    archive — so that retiring it demonstrably lost nothing.
 
+This module is the driver: argument parsing, the order the checks run in, and
+the report. Each check itself lives in a sibling module — `vault_safety_gitio`
+(the readers everything else re-derives from), `vault_safety_record` (record
+shape, scenario re-derivation, redaction), `vault_safety_restores`,
+`vault_safety_livestate`, and `vault_safety_retirement`.
+
 Exit status is 0 only when every check passes. Any failure prints the reason and
 exits 1; a harness that cannot run its own checks exits 2.
 """
@@ -64,322 +70,33 @@ exits 1; a harness that cannot run its own checks exits 2.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
-import re
 import subprocess
 import sys
-import tempfile
-from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
+import vault_safety_livestate as livestate
+import vault_safety_retirement as retirement
 import vault_safety_scenarios as scenarios
+from vault_safety_gitio import CheckFailure, HarnessError
+from vault_safety_record import (
+    EVIDENCE_DIR_NAME,
+    GateEvidence,
+    validate_gates,
+    validate_recorded_claims,
+    validate_scenarios,
+    verify_no_orphan_evidence,
+    verify_redaction,
+)
+from vault_safety_restores import verify_restores
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EVIDENCE_DIR_NAME = "docs/operations/vault-safety-evidence"
 SCHEMA_VERSION = 2
-HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
-
-# Tracked paths that are repository or BrainNotes machinery rather than note
-# content. These are allowed to appear verbatim in a retained evidence file: an
-# evidence record that could not name `blocked.json` or `brainnotes.toml` would
-# be unreadable, and neither one reveals anything about what the user writes.
-STRUCTURAL_PREFIXES = (".bnotes/",)
-STRUCTURAL_PATHS = frozenset({".gitignore", "brainnotes.toml"})
 
 # The manifest scope the sealed archive is compared over. It lives in the
 # scenario catalogue because the restore gates record it too, so the exclusion
 # this harness applies and the one those drills applied are the same list.
 ARCHIVE_MANIFEST_EXCLUSIONS = scenarios.ARCHIVE_MANIFEST_EXCLUSIONS
-
-# A basename shorter than this is not distinctive enough to be worth scanning
-# for: "ok.md" or "b.md" would collide with ordinary English in an evidence
-# narrative and turn the redaction check into noise. Full relative paths are
-# checked at every length, which is what a real leak would look like.
-MIN_SCANNED_BASENAME = 8
-
-# The old root kept being written to after the pre-migration baseline was
-# sealed. `bn` refuses every write under File Provider storage, but an editor
-# does not, so notes continued to land there and were migrated forward later.
-# "The Trash copy still equals the sealed archive" is therefore false, and it was
-# never the property that mattered anyway. What matters is that retiring the old
-# root lost nothing: every file in it is byte-present either in the live vault's
-# Git object database — at any commit, so a superseded version still counts — or
-# in the sealed archive.
-#
-# The remainder is machinery, and it is classified here rather than waived,
-# because "everything left over is fine" is exactly how a stranded note gets
-# retired. Anything outside these classes is unaccounted and fails the check.
-RETIREMENT_MACHINERY_PREFIXES = (
-    ".bnotes/index/",  # derived note cache, deliberately untracked
-    ".bnotes/locks/",  # process bookkeeping
-    ".bnotes/journal/",  # the old root's own undo journal
-    ".codegraph/",  # a code index that was pointed at the directory
-    "backups/",  # `bn`'s own archive tarballs of this same content
-)
-RETIREMENT_MACHINERY_PATHS = frozenset(
-    {
-        ".bnotes/brief.json",
-        ".bnotes/cockpit.json",
-        ".bnotes/recall.json",
-        ".gitignore",
-        "brainnotes.toml",
-    }
-)
-RETIREMENT_MACHINERY_NAMES = frozenset({".DS_Store"})
-
-
-class CheckFailure(Exception):
-    """A gate did not hold. Carries the operator-facing reason."""
-
-
-class HarnessError(Exception):
-    """The harness could not run a check at all."""
-
-
-# --------------------------------------------------------------------------
-# process helpers
-# --------------------------------------------------------------------------
-
-
-def run(argv: list[str], *, cwd: Path | None = None, timeout: int = 120, stdin: str | None = None):
-    env = dict(os.environ)
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    # A prompt under an automated harness is an indefinite hang, not a failure.
-    env.setdefault("GIT_ASKPASS", "/usr/bin/true")
-    return subprocess.run(
-        argv,
-        cwd=str(cwd) if cwd else None,
-        env=env,
-        input=stdin,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=timeout,
-    )
-
-
-def git(args: list[str], *, cwd: Path, timeout: int = 120) -> str:
-    completed = run(["git", *args], cwd=cwd, timeout=timeout)
-    if completed.returncode != 0:
-        raise HarnessError(
-            f"git {' '.join(args)} failed in {cwd}: "
-            f"{completed.stderr.strip() or completed.stdout.strip()}"
-        )
-    return completed.stdout
-
-
-def tracked_paths(repo: Path, commit: str) -> list[str]:
-    """Tracked paths at a commit, NUL-separated so filenames survive intact.
-
-    `git ls-tree` without `-z` quotes anything non-ASCII, and a vault of prose
-    notes is full of names that trip that. A quoted path would silently miss its
-    file and the manifest would agree with itself about the wrong bytes.
-    """
-    raw = git(["ls-tree", "-r", "-z", "--name-only", commit], cwd=repo)
-    return [entry for entry in raw.split("\0") if entry]
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def git_blob_oid(path: Path) -> str:
-    """The object name Git would give this file's bytes.
-
-    Computed rather than shelled out to, so a directory of a thousand notes is
-    one pass instead of a thousand processes, and streamed so a 40 MB backup
-    tarball does not have to be held in memory.
-    """
-    size = path.stat().st_size
-    digest = hashlib.new("sha1", usedforsecurity=False)
-    digest.update(b"blob %d\0" % size)
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def blobs_present(repo: Path, oids: list[str]) -> set[str]:
-    """Which of these object names the repository actually holds.
-
-    `--batch-check` answers for every name in one process and reports the ones
-    it does not have as `missing`, which is the answer this is after: a blob is
-    reachable history if the object store has it.
-    """
-    if not oids:
-        return set()
-    completed = run(
-        ["git", "cat-file", "--batch-check"], cwd=repo, stdin="\n".join(oids) + "\n", timeout=900
-    )
-    if completed.returncode != 0:
-        raise HarnessError(f"git cat-file failed in {repo}: {completed.stderr.strip()}")
-    present = set()
-    for line in completed.stdout.splitlines():
-        parts = line.split()
-        if len(parts) >= 2 and parts[1] != "missing":
-            present.add(parts[0])
-    return present
-
-
-def regular_files(root: Path) -> list[Path]:
-    return sorted(p for p in root.rglob("*") if p.is_file() and not p.is_symlink())
-
-
-def canonical_manifest(root: Path, relpaths: list[str]) -> bytes:
-    """A stable `<sha256>  <path>` manifest over an exact path set.
-
-    Sorted by path so two sources that hold the same bytes produce the same
-    bytes here, and a path that is missing from a source is recorded rather than
-    skipped — a manifest that silently omitted what it could not find would
-    report a truncated restore as a perfect one.
-    """
-    lines = []
-    for rel in sorted(relpaths):
-        candidate = root / rel
-        if candidate.is_file() and not candidate.is_symlink():
-            lines.append(f"{sha256_file(candidate)}  {rel}")
-        else:
-            lines.append(f"{'MISSING'.ljust(64)}  {rel}")
-    return ("\n".join(lines) + "\n").encode("utf-8")
-
-
-# --------------------------------------------------------------------------
-# record validation
-# --------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class GateEvidence:
-    """A gate's record, the retained file it names, and that file read back."""
-
-    name: str
-    gate: dict
-    path: Path
-    parsed: scenarios.ParsedEvidence
-
-
-def validate_evidence_path(raw: object, repo_root: Path, evidence_root: Path) -> Path:
-    """Resolve a gate's evidence path, refusing anything that leaves the tree.
-
-    Three distinct escapes are refused: an absolute path, a traversal through
-    `..`, and a path that only *resolves* outside the directory because a symlink
-    inside it points away. The third is the one a shape check alone would miss,
-    and it is the one that would let a gate be "verified" against a file nobody
-    reviewed.
-    """
-    if not isinstance(raw, str) or not raw:
-        raise CheckFailure(f"evidence_path must be a non-empty string, got {raw!r}")
-    pure = PurePosixPath(raw)
-    if pure.is_absolute():
-        raise CheckFailure(f"evidence_path must be repository-relative: {raw}")
-    if any(part == ".." for part in pure.parts):
-        raise CheckFailure(f"evidence_path must not traverse upward: {raw}")
-    if not raw.startswith(EVIDENCE_DIR_NAME + "/"):
-        raise CheckFailure(f"evidence_path must live under {EVIDENCE_DIR_NAME}/: {raw}")
-    resolved = (repo_root / raw).resolve()
-    if not str(resolved).startswith(str(evidence_root.resolve()) + os.sep):
-        raise CheckFailure(f"evidence_path resolves outside the evidence directory: {raw}")
-    return resolved
-
-
-def validate_gate(name: str, gate: object, repo_root: Path, evidence_root: Path) -> GateEvidence:
-    """Shape, integrity, and readability. Deliberately not the gate's verdict.
-
-    Nothing here decides whether the gate passed: `outcome` and `exit_status`
-    are claims, and they are judged in `validate_recorded_claims` against the
-    narrative this function only proves is intact and parseable.
-    """
-    if name not in scenarios.SCENARIOS:
-        raise CheckFailure(
-            f"gate {name}: no scenario of that name exists in the repository-owned catalogue, "
-            "so nothing defines what it is supposed to have shown"
-        )
-    if not isinstance(gate, dict):
-        raise CheckFailure(f"gate {name} must be an object")
-    if gate.get("paths_redacted") is not True:
-        raise CheckFailure(f"gate {name}: paths_redacted is not true")
-    checked_at = gate.get("checked_at")
-    if not isinstance(checked_at, str):
-        raise CheckFailure(f"gate {name}: checked_at must be an ISO-8601 string")
-    try:
-        datetime.fromisoformat(checked_at.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise CheckFailure(f"gate {name}: checked_at is not ISO-8601: {checked_at}") from exc
-    digest = gate.get("evidence_sha256")
-    if not isinstance(digest, str) or not HEX64.match(digest):
-        raise CheckFailure(f"gate {name}: evidence_sha256 must be 64 lowercase hex characters")
-
-    path = validate_evidence_path(gate.get("evidence_path"), repo_root, evidence_root)
-    if not path.is_file():
-        raise CheckFailure(f"gate {name}: evidence file is missing: {gate.get('evidence_path')}")
-    actual = sha256_file(path)
-    if actual != digest:
-        raise CheckFailure(
-            f"gate {name}: evidence file does not hash to its recorded digest "
-            f"(recorded {digest}, actual {actual})"
-        )
-    try:
-        parsed = scenarios.parse_evidence(path.read_text(encoding="utf-8"))
-    except (UnicodeDecodeError, scenarios.EvidenceFormatError) as exc:
-        raise CheckFailure(f"gate {name}: evidence file cannot be read as a gate record: {exc}")
-    return GateEvidence(name=name, gate=gate, path=path, parsed=parsed)
-
-
-def validate_gates(record: dict, repo_root: Path, evidence_root: Path) -> dict[str, GateEvidence]:
-    """The whole gate set, not merely the gates someone chose to record.
-
-    A missing gate is the cheapest possible way to make this harness pass: drop
-    the one that stopped holding and every remaining record still hashes. The
-    required set is therefore the catalogue's, not the record's.
-    """
-    gates = record["gates"]
-    missing = sorted(scenarios.REQUIRED_GATES - set(gates))
-    if missing:
-        raise CheckFailure(f"the record is missing required gate(s): {', '.join(missing)}")
-    return {name: validate_gate(name, gates[name], repo_root, evidence_root) for name in sorted(gates)}
-
-
-def validate_scenarios(gates: dict[str, GateEvidence]) -> str:
-    """Re-decide every gate from its own narrative."""
-    failures: list[str] = []
-    for name, evidence in sorted(gates.items()):
-        for problem in scenarios.validate_evidence(scenarios.SCENARIOS[name], evidence.parsed):
-            failures.append(f"gate {name}: {problem}")
-    if failures:
-        raise CheckFailure("; ".join(failures))
-    observations = sum(len(found) for e in gates.values() for found in e.parsed.observations.values())
-    return f"{len(gates)} scenario(s) re-derived from {observations} recorded observation(s)"
-
-
-def validate_recorded_claims(gates: dict[str, GateEvidence]) -> str:
-    """Every claim in the record is either substantiated by its evidence or refused."""
-    failures: list[str] = []
-    for name, evidence in sorted(gates.items()):
-        scenario = scenarios.SCENARIOS[name]
-        for problem in scenarios.unsupported_claims(scenario, evidence.gate, evidence.parsed):
-            failures.append(f"gate {name}: {problem}")
-    failures.extend(
-        scenarios.cross_gate_disagreements({n: e.parsed for n, e in gates.items()})
-    )
-    if failures:
-        raise CheckFailure("; ".join(failures))
-    substantiated = sum(1 for name in gates if scenarios.SCENARIOS[name].exit_status_key)
-    return (
-        f"{len(gates)} outcome(s) and {substantiated} exit status(es) substantiated by their "
-        f"own evidence; {len(scenarios.CROSS_GATE_AGREEMENTS)} cross-gate agreement(s) hold"
-    )
-
-
-# --------------------------------------------------------------------------
-# checks
-# --------------------------------------------------------------------------
 
 
 class Harness:
@@ -453,373 +170,62 @@ class Harness:
         return validate_recorded_claims(self.gates)
 
     def verify_no_orphan_evidence(self) -> str:
-        """Every retained file belongs to a gate.
-
-        An evidence file with no gate pointing at it is unhashed and unreviewed,
-        and it is exactly where a file that failed its check would end up if
-        someone quietly dropped the gate instead of fixing it.
-        """
-        if not self.evidence_root.is_dir():
-            raise CheckFailure(f"evidence directory is missing: {EVIDENCE_DIR_NAME}")
-        claimed = {path.resolve() for path in self.evidence_files.values()}
-        found = {path.resolve() for path in self.evidence_root.rglob("*") if path.is_file()}
-        orphans = sorted(str(path.relative_to(self.evidence_root)) for path in found - claimed)
-        if orphans:
-            raise CheckFailure(f"retained evidence with no gate record: {', '.join(orphans)}")
-        return f"{len(found)} retained file(s), all claimed by a gate"
+        return verify_no_orphan_evidence(self.evidence_root, self.evidence_files)
 
     # -- redaction --------------------------------------------------------
 
     def verify_redaction(self) -> str:
-        """Prove `paths_redacted`, do not take its word for it."""
-        head = git(["rev-parse", "HEAD"], cwd=self.live_vault).strip()
-        needles: set[str] = set()
-        for rel in tracked_paths(self.live_vault, head):
-            if rel in STRUCTURAL_PATHS or rel.startswith(STRUCTURAL_PREFIXES):
-                continue
-            needles.add(rel)
-            base = PurePosixPath(rel).name
-            if len(base) >= MIN_SCANNED_BASENAME:
-                needles.add(base)
-        if not needles:
-            raise CheckFailure("no tracked note paths found, so redaction cannot be proven")
-
-        leaks: list[str] = []
-        for name, path in sorted(self.evidence_files.items()):
-            text = path.read_text(encoding="utf-8", errors="replace")
-            for needle in needles:
-                if needle in text:
-                    # Deliberately does not echo the needle: an error message
-                    # that printed the leaked filename would itself become the
-                    # leak, in a log nobody redacts.
-                    leaks.append(f"{name} contains a tracked note path")
-                    break
-        if leaks:
-            raise CheckFailure("; ".join(leaks))
-        return f"{len(self.evidence_files)} evidence file(s) scanned against {len(needles)} note path(s)"
+        return verify_redaction(self.live_vault, self.evidence_files)
 
     # -- restores ---------------------------------------------------------
 
     def verify_restores(self) -> str:
-        live_head = git(["rev-parse", "HEAD"], cwd=self.live_vault).strip()
-        baseline = git(["rev-list", "--max-parents=0", "HEAD"], cwd=self.live_vault).strip()
-        if len(baseline.split()) != 1:
-            raise CheckFailure("the vault has more than one root commit; the baseline is ambiguous")
-
-        origin = git(["remote", "get-url", "origin"], cwd=self.live_vault).strip()
-        slug = self.args.github_repository
-        if slug not in origin:
-            raise CheckFailure(
-                f"the vault's origin does not name {slug}; refusing to verify against a "
-                "repository the vault does not actually push to"
-            )
-
-        head_paths = tracked_paths(self.live_vault, live_head)
-        base_paths = [
-            rel
-            for rel in tracked_paths(self.live_vault, baseline)
-            if rel not in ARCHIVE_MANIFEST_EXCLUSIONS
-        ]
-        if not head_paths or not base_paths:
-            raise CheckFailure("the vault has no tracked paths to compare")
-
-        with tempfile.TemporaryDirectory(prefix="vault-restore-") as tmp:
-            root = Path(tmp)
-            local = root / "from-local-git"
-            remote = root / "from-github"
-            # --no-hardlinks makes the local restore a real copy of the objects
-            # rather than a set of links back into the vault it is meant to be
-            # independent of.
-            git(["clone", "--no-hardlinks", "--quiet", str(self.live_vault), str(local)], cwd=root)
-            git(["clone", "--quiet", origin, str(remote)], cwd=root, timeout=self.args.clone_timeout)
-
-            for name, clone in (("local", local), ("github", remote)):
-                got = git(["rev-parse", "HEAD"], cwd=clone).strip()
-                if got != live_head:
-                    raise CheckFailure(
-                        f"the {name} restore is at {got[:12]} but the live vault is at "
-                        f"{live_head[:12]}"
-                    )
-
-            manifests = {
-                "live vault": canonical_manifest(self.live_vault, head_paths),
-                "local Git restore": canonical_manifest(local, head_paths),
-                "GitHub restore": canonical_manifest(remote, head_paths),
-            }
-            self._require_identical("HEAD", manifests)
-            head_digest = hashlib.sha256(manifests["live vault"]).hexdigest()
-
-            for clone in (local, remote):
-                git(["checkout", "--quiet", "--detach", baseline], cwd=clone)
-
-            baseline_manifests = {
-                "local Git restore": canonical_manifest(local, base_paths),
-                "GitHub restore": canonical_manifest(remote, base_paths),
-                "sealed archive": canonical_manifest(self.archive, base_paths),
-            }
-            self._require_identical("the pre-migration baseline", baseline_manifests)
-            base_digest = hashlib.sha256(baseline_manifests["sealed archive"]).hexdigest()
-
-        return (
-            f"HEAD {live_head[:12]}: {len(head_paths)} paths identical across live vault, "
-            f"local Git and GitHub (manifest {head_digest[:12]}); baseline {baseline[:12]}: "
-            f"{len(base_paths)} paths identical across local Git, GitHub and the sealed "
-            f"archive (manifest {base_digest[:12]})"
+        return verify_restores(
+            live_vault=self.live_vault,
+            archive=self.archive,
+            github_repository=self.args.github_repository,
+            manifest_exclusions=ARCHIVE_MANIFEST_EXCLUSIONS,
+            clone_timeout=self.args.clone_timeout,
         )
-
-    @staticmethod
-    def _require_identical(label: str, manifests: dict[str, bytes]) -> None:
-        reference_name, reference = next(iter(manifests.items()))
-        for name, manifest in manifests.items():
-            if manifest == reference:
-                continue
-            differing = [
-                line.split("  ", 1)[1]
-                for line, other in zip(
-                    manifest.decode().splitlines(), reference.decode().splitlines()
-                )
-                if line != other
-            ]
-            count = len(differing) or "an unknown number of"
-            raise CheckFailure(
-                f"at {label} the {name} manifest differs from the {reference_name} "
-                f"manifest in {count} path(s)"
-            )
 
     # -- live state -------------------------------------------------------
 
     def verify_health_command(self) -> str:
-        command = Path(self.args.health_command)
-        if not command.is_file() or not os.access(command, os.X_OK):
-            raise CheckFailure(f"health command is not installed or not executable: {command}")
-        completed = run(
-            [
-                str(command),
-                "--vault",
-                str(self.live_vault),
-                "--label",
-                self.args.launchagent_label,
-                "--json",
-            ],
-            timeout=90,
+        return livestate.verify_health_command(
+            command=Path(self.args.health_command),
+            live_vault=self.live_vault,
+            launchagent_label=self.args.launchagent_label,
         )
-        try:
-            report = json.loads(completed.stdout)
-        except ValueError as exc:
-            raise CheckFailure(f"health command did not emit JSON: {exc}") from exc
-        if completed.returncode != 0:
-            raise CheckFailure(
-                "health command reported a problem: " + "; ".join(report.get("problems", []))
-            )
-        for key in (
-            "worktree_clean",
-            "guard_running",
-            "agent_loaded",
-            "remote_reachable",
-            "healthy",
-        ):
-            if report.get(key) is not True:
-                raise CheckFailure(f"health command reports {key} is not true")
-        if report.get("blocked") is not False:
-            raise CheckFailure("health command reports the safety engine is blocked")
-        for key in ("ahead", "behind"):
-            if report.get(key) != 0:
-                raise CheckFailure(f"health command reports {report[key]} commit(s) {key}")
-        return f"health command exited 0 with guard pid {report.get('guard_pid')}"
 
     def verify_live_vault_directly(self) -> str:
-        """The same four properties, derived here rather than reported to us."""
-        status = git(["status", "--porcelain"], cwd=self.live_vault)
-        if status.strip():
-            raise CheckFailure(
-                f"the live working tree has {len(status.strip().splitlines())} uncommitted change(s)"
-            )
-
-        git_dir = Path(git(["rev-parse", "--absolute-git-dir"], cwd=self.live_vault).strip())
-        safety_dir = git_dir / "brainnotes-safety"
-        for marker, meaning in (
-            ("blocked.json", "the safety engine is blocked"),
-            ("intent.json", "a snapshot was interrupted and has not been recovered"),
-        ):
-            if (safety_dir / marker).exists():
-                raise CheckFailure(meaning)
-
-        head = git(["rev-parse", "HEAD"], cwd=self.live_vault).strip()
-        branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=self.live_vault).strip()
-        remote_line = git(
-            ["ls-remote", "--heads", "origin", branch], cwd=self.live_vault, timeout=90
-        ).split()
-        if not remote_line:
-            raise CheckFailure(f"origin has no branch {branch}")
-        if remote_line[0] != head:
-            raise CheckFailure(
-                f"origin/{branch} is at {remote_line[0][:12]} but the vault is at {head[:12]}"
-            )
-        return f"clean, unblocked, and pushed at {head[:12]}"
+        return livestate.verify_live_vault_directly(self.live_vault)
 
     def verify_launchagent(self) -> str:
-        label = self.args.launchagent_label
-        completed = run(["launchctl", "print", f"gui/{os.getuid()}/{label}"], timeout=60)
-        if completed.returncode != 0:
-            raise CheckFailure(f"LaunchAgent {label} is not loaded")
-        state = re.search(r"^\s*state\s*=\s*(\S+)", completed.stdout, re.MULTILINE)
-        pid = re.search(r"^\s*pid\s*=\s*(\d+)", completed.stdout, re.MULTILINE)
-        if not pid:
-            raise CheckFailure(f"LaunchAgent {label} is loaded but has no running process")
-        try:
-            os.kill(int(pid.group(1)), 0)
-        except OSError as exc:
-            raise CheckFailure(f"the guard pid {pid.group(1)} is not alive: {exc}") from exc
-
-        # The same dump also carries the job's environment, which is where the
-        # guard is told which vault to watch. A loaded, running agent pointed at
-        # a different directory would satisfy every other check here.
-        if str(self.live_vault) not in completed.stdout:
-            raise CheckFailure(
-                f"LaunchAgent {label} does not name {self.live_vault}, so it is guarding "
-                "something else"
-            )
-        return f"{label} is {state.group(1) if state else 'loaded'} as pid {pid.group(1)}"
+        return livestate.verify_launchagent(
+            launchagent_label=self.args.launchagent_label, live_vault=self.live_vault
+        )
 
     # -- retirement -------------------------------------------------------
 
     def verify_retirement(self) -> str:
-        gate = self.record["gates"].get("old_vault_trashed_recoverably")
-        if not isinstance(gate, dict):
-            raise CheckFailure("no old_vault_trashed_recoverably gate in the evidence record")
-
-        if self.old_root.exists():
-            raise CheckFailure(f"the old File Provider root is still in place: {self.old_root}")
-
-        location = gate.get("trash_location")
-        if not isinstance(location, str) or not location.startswith("~/"):
-            raise CheckFailure(
-                "trash_location must be a redacted home-relative path beginning with ~/"
-            )
-        trashed = Path(location).expanduser()
-        if not trashed.is_dir():
-            raise CheckFailure(
-                "the recorded Trash location does not exist, so the old vault is not recoverable"
-            )
-
-        digest = gate.get("old_vault_manifest_sha256")
-        if not isinstance(digest, str) or not HEX64.match(digest):
-            raise CheckFailure("old_vault_manifest_sha256 must be 64 lowercase hex characters")
-        manifest = self.archive / "SHA256SUMS"
-        if not manifest.is_file():
-            raise CheckFailure(f"the sealed archive has no SHA256SUMS at {manifest}")
-        actual = sha256_file(manifest)
-        if actual != digest:
-            raise CheckFailure(
-                "the sealed archive's manifest does not match the approved old-vault digest "
-                f"(approved {digest[:12]}, actual {actual[:12]})"
-            )
-        return (
-            f"the old root is retired to {location}, which still holds the vault approved "
-            f"against manifest {digest[:12]}"
+        return retirement.verify_retirement(
+            record=self.record, old_root=self.old_root, archive=self.archive
         )
 
     def verify_trashed_copy_is_fully_accounted(self) -> str:
-        """Nothing was lost by retiring the old root.
-
-        `outcome: true` on a retirement gate means "this looked safe when I
-        looked". This re-reads the bytes, because the whole reason the old copy
-        went to Trash rather than to `rm` is that it is the last resort.
-
-        Every file in the Trash copy has to be byte-present somewhere that
-        survives: the live vault's object database, or the sealed archive. Files
-        that are neither are classified as machinery by path, and anything that
-        is not machinery either fails the check by count — never by name, since
-        an unaccounted file is by definition one whose name might be a note.
-        """
-        gate = self.record["gates"].get("old_vault_trashed_recoverably", {})
-        trashed = Path(gate.get("trash_location", "")).expanduser()
-        if not trashed.is_dir():
-            raise CheckFailure("no recoverable Trash copy to compare")
-
-        files = regular_files(trashed)
-        if not files:
-            raise CheckFailure("the Trash copy is empty, so it is not the old vault")
-
-        oids: dict[str, list[str]] = {}
-        for path in files:
-            oids.setdefault(git_blob_oid(path), []).append(
-                str(path.relative_to(trashed)).replace(os.sep, "/")
-            )
-        accounted = blobs_present(self.live_vault, list(oids))
-        remaining = [oid for oid in oids if oid not in accounted]
-        if remaining:
-            archive_oids = {git_blob_oid(path) for path in regular_files(self.archive)}
-            accounted |= {oid for oid in remaining if oid in archive_oids}
-
-        machinery = 0
-        unaccounted = 0
-        for oid, rels in oids.items():
-            if oid in accounted:
-                continue
-            for rel in rels:
-                if (
-                    rel.startswith(RETIREMENT_MACHINERY_PREFIXES)
-                    or rel in RETIREMENT_MACHINERY_PATHS
-                    or PurePosixPath(rel).name in RETIREMENT_MACHINERY_NAMES
-                ):
-                    machinery += 1
-                else:
-                    unaccounted += 1
-        if unaccounted:
-            raise CheckFailure(
-                f"{unaccounted} file(s) in the Trash copy exist in neither the live vault's "
-                "history nor the sealed archive, and are not machinery; the old root must be "
-                "restored from the Trash and reconciled before it is retired"
-            )
-        return (
-            f"{len(files)} file(s) in the Trash copy are accounted for "
-            f"({machinery} machinery file(s) classified, 0 unaccounted)"
+        return retirement.verify_trashed_copy_is_fully_accounted(
+            record=self.record, live_vault=self.live_vault, archive=self.archive
         )
 
     def verify_no_process_uses_the_old_root(self) -> str:
-        completed = run(["ps", "-Ao", "pid=,command="], timeout=60)
-        if completed.returncode != 0:
-            raise HarnessError("could not read the process table")
-        needle = str(self.old_root)
-        offenders = []
-        for line in completed.stdout.splitlines():
-            pid, _, command = line.strip().partition(" ")
-            if needle not in command:
-                continue
-            # This harness is invoked with --old-root on its own argv, so it and
-            # anything that spawned it match by construction. Excluding by
-            # script name rather than by pid also covers the shell and the task
-            # runner in between.
-            if Path(__file__).name in command or pid == str(os.getpid()):
-                continue
-            offenders.append(pid)
-        if offenders:
-            raise CheckFailure(
-                f"{len(offenders)} process(es) still reference the old root: {', '.join(offenders)}"
-            )
-        return "no process references the old root"
+        return retirement.verify_no_process_uses_the_old_root(
+            old_root=self.old_root, harness_script_name=Path(__file__).name
+        )
 
     def verify_config_points_only_at_the_live_vault(self) -> str:
-        marker = self.live_vault / "brainnotes.toml"
-        if not marker.is_file():
-            raise CheckFailure(f"{self.live_vault} has no brainnotes.toml, so it is not a vault")
-        if (self.old_root / "brainnotes.toml").exists():
-            raise CheckFailure(
-                "the old root still contains brainnotes.toml, so `bn` run from inside it "
-                "would still resolve there"
-            )
-        agents = Path.home() / "Library/LaunchAgents"
-        offenders = []
-        for plist in sorted(agents.glob("*.plist")):
-            try:
-                if str(self.old_root) in plist.read_text(encoding="utf-8", errors="replace"):
-                    offenders.append(plist.name)
-            except OSError:
-                continue
-        if offenders:
-            raise CheckFailure(f"LaunchAgents still name the old root: {', '.join(offenders)}")
-        return "the live vault is the only configured root"
+        return retirement.verify_config_points_only_at_the_live_vault(
+            live_vault=self.live_vault, old_root=self.old_root
+        )
 
     # -- driver -----------------------------------------------------------
 

@@ -1970,29 +1970,29 @@ var BrainNotesApp = (() => {
         continue;
       }
       const config = readCreateNoteConfig(container);
-      const setStatus = (message, kind = "") => {
+      const setStatus2 = (message, kind = "") => {
         setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
       };
       button.addEventListener("click", async () => {
         if (!config.sourceKey || !config.target || !config.csrfToken) {
-          setStatus("Create action unavailable.", "is-error");
+          setStatus2("Create action unavailable.", "is-error");
           return;
         }
         button.disabled = true;
-        setStatus("Creating note...");
+        setStatus2("Creating note...");
         try {
           const request = buildCreateNoteFetchRequest(config);
           const resp = await fetcher(request.url, request.init);
           const payload = await readCreateResponsePayload(resp);
           if (!resp.ok) {
-            setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+            setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
             return;
           }
           const result = payload;
           const message = result && result.ok && result.message ? result.message : "Created note.";
-          setStatus(message, "is-success");
+          setStatus2(message, "is-success");
         } catch {
-          setStatus("Create failed.", "is-error");
+          setStatus2("Create failed.", "is-error");
         } finally {
           button.disabled = false;
         }
@@ -2030,13 +2030,13 @@ var BrainNotesApp = (() => {
     const csrfToken = root.getAttribute("data-capture-csrf") || "";
     const target = root.getAttribute("data-capture-target") || "";
     const configured = (root.getAttribute("data-capture-configured") || "").toLowerCase() === "true";
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
     };
     if (!configured) {
       input.disabled = true;
       submit.disabled = true;
-      setStatus(unconfiguredMessage, "is-error");
+      setStatus2(unconfiguredMessage, "is-error");
       return;
     }
     const fetcher = deps.fetch || fetch;
@@ -2052,37 +2052,37 @@ var BrainNotesApp = (() => {
     const run = async () => {
       const text = input.value;
       if (text.trim() === "") {
-        setStatus("Type something to capture.", "is-error");
+        setStatus2("Type something to capture.", "is-error");
         return;
       }
       if (csrfToken === "") {
-        setStatus("Quick capture is unavailable.", "is-error");
+        setStatus2("Quick capture is unavailable.", "is-error");
         return;
       }
       input.disabled = true;
       submit.disabled = true;
-      setStatus("Capturing...", "is-loading");
+      setStatus2("Capturing...", "is-loading");
       try {
         const body = buildCaptureForm({ text, token: csrfToken }).toString();
         const response = await fetcher(captureEndpoint, jsonPostRequest(csrfToken, body));
         const payload = await readResponsePayload(response);
         if (!response.ok) {
-          setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(response.status, payload), "is-error");
           return;
         }
         const result = normalizeCaptureResponse(payload);
         if (!result.ok) {
-          setStatus(result.message || "Capture failed.", "is-error");
+          setStatus2(result.message || "Capture failed.", "is-error");
           return;
         }
         input.value = "";
         if (result.detail) {
           prependRecent(result.detail);
         }
-        setStatus(result.message || `Captured to ${target}.`, "is-success");
+        setStatus2(result.message || `Captured to ${target}.`, "is-success");
         window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
       } catch {
-        setStatus("Capture failed.", "is-error");
+        setStatus2("Capture failed.", "is-error");
       } finally {
         input.disabled = false;
         submit.disabled = false;
@@ -2121,26 +2121,26 @@ var BrainNotesApp = (() => {
       if (!statusEl || buttons.length === 0) {
         return;
       }
-      const setStatus = (message, kind = "") => {
+      const setStatus2 = (message, kind = "") => {
         setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
       };
       buttons.forEach((button) => {
         button.addEventListener("click", async () => {
           const payload = readCopyPayload(button);
           if (!payload.text) {
-            setStatus("Nothing to copy.", "is-error");
+            setStatus2("Nothing to copy.", "is-error");
             return;
           }
           if (!canWriteClipboard) {
-            setStatus("Clipboard unavailable.", "is-error");
+            setStatus2("Clipboard unavailable.", "is-error");
             return;
           }
           button.disabled = true;
           try {
             await clipboard.writeText(payload.text);
-            setStatus(copySuccessMessage(payload.label), "is-success");
+            setStatus2(copySuccessMessage(payload.label), "is-success");
           } catch {
-            setStatus("Copy failed.", "is-error");
+            setStatus2("Copy failed.", "is-error");
           } finally {
             button.disabled = false;
           }
@@ -3329,7 +3329,7 @@ var BrainNotesApp = (() => {
     const previews = /* @__PURE__ */ new Map();
     let busy = false;
     let ignoreNextMutation = false;
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message, kind);
     };
     const setError = (message) => {
@@ -3341,7 +3341,7 @@ var BrainNotesApp = (() => {
     };
     const showError = (message) => {
       setError(message);
-      setStatus(message, "is-error");
+      setStatus2(message, "is-error");
     };
     const setLoading = (loading) => {
       if (loadingEl) {
@@ -3377,13 +3377,13 @@ var BrainNotesApp = (() => {
       renderResult(result);
       const message = successMessage || fixCountsStatusMessage(result.counts);
       const kind = successKind || (result.counts.active === 0 ? "is-empty" : "");
-      setStatus(message, kind);
+      setStatus2(message, kind);
       return true;
     };
     const loadQueue = async (successMessage = "") => {
       setBusy(true);
       setLoading(true);
-      setStatus("Loading fixes queue...", "is-loading");
+      setStatus2("Loading fixes queue...", "is-loading");
       try {
         const resp = await fetcher(config.queueEndpoint, {
           headers: { Accept: "application/json" }
@@ -3418,7 +3418,7 @@ var BrainNotesApp = (() => {
         return;
       }
       setBusy(true);
-      setStatus(itemActionLoadingMessage(action, snooze), "is-loading");
+      setStatus2(itemActionLoadingMessage(action, snooze), "is-loading");
       try {
         const request = buildFixesItemFetchRequest(
           config.itemEndpoint,
@@ -3453,7 +3453,7 @@ var BrainNotesApp = (() => {
         return;
       }
       setBusy(true);
-      setStatus("Previewing fix...", "is-loading");
+      setStatus2("Previewing fix...", "is-loading");
       try {
         const request = buildFixesPreviewFetchRequest(
           config.previewEndpoint,
@@ -3475,7 +3475,7 @@ var BrainNotesApp = (() => {
         previews.set(id, { action, previewID: result.preview_id });
         renderPreview(listEl, id, action, result.previews, result.message || "Preview ready.");
         setError("");
-        setStatus(result.message || "Preview ready.", "is-success");
+        setStatus2(result.message || "Preview ready.", "is-success");
       } catch {
         showError("Fix preview failed.");
       } finally {
@@ -3490,7 +3490,7 @@ var BrainNotesApp = (() => {
         return;
       }
       setBusy(true);
-      setStatus("Applying fix...", "is-loading");
+      setStatus2("Applying fix...", "is-loading");
       try {
         const request = buildFixesApplyFetchRequest(
           config.applyEndpoint,
@@ -3532,7 +3532,7 @@ var BrainNotesApp = (() => {
         return;
       }
       setBusy(true);
-      setStatus("Opening editor...", "is-loading");
+      setStatus2("Opening editor...", "is-loading");
       try {
         const body = buildOpenNoteForm({ key, token: config.csrfToken });
         const request = jsonPostRequest2(config.openEndpoint, config.csrfToken, body.toString());
@@ -3543,7 +3543,7 @@ var BrainNotesApp = (() => {
           return;
         }
         setError("");
-        setStatus("Opened in editor. Refresh after saving changes.", "is-success");
+        setStatus2("Opened in editor. Refresh after saving changes.", "is-success");
       } catch {
         showError("Open failed.");
       } finally {
@@ -3621,27 +3621,27 @@ var BrainNotesApp = (() => {
       return;
     }
     const config = readOpenEditorConfig(container);
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
     button.addEventListener("click", async () => {
       if (!config.key || !config.csrfToken) {
-        setStatus("Open action unavailable.", "is-error");
+        setStatus2("Open action unavailable.", "is-error");
         return;
       }
       button.disabled = true;
-      setStatus("Opening editor\u2026");
+      setStatus2("Opening editor\u2026");
       try {
         const request = buildOpenEditorFetchRequest(config);
         const resp = await fetch(request.url, request.init);
         if (!resp.ok) {
           const detail = await resp.text();
-          setStatus(normalizeOpenErrorMessage(resp.status, detail), "is-error");
+          setStatus2(normalizeOpenErrorMessage(resp.status, detail), "is-error");
           return;
         }
-        setStatus("Opened in editor. Refresh after saving changes.", "is-success");
+        setStatus2("Opened in editor. Refresh after saving changes.", "is-success");
       } catch {
-        setStatus("Open failed.", "is-error");
+        setStatus2("Open failed.", "is-error");
       } finally {
         button.disabled = false;
       }
@@ -3999,7 +3999,7 @@ var BrainNotesApp = (() => {
     }
     const statusEl = queryElement(panel, "[data-frontmatter-status]", HTMLElement);
     const fetcher = deps.fetch || fetch;
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
     for (const form of queryAllElements(panel, "[data-frontmatter-set]", HTMLFormElement)) {
@@ -4007,23 +4007,23 @@ var BrainNotesApp = (() => {
         event.preventDefault();
         const config = readFrontmatterSetConfig(form);
         if (!validFrontmatterBaseConfig(config)) {
-          setStatus("Frontmatter action unavailable.", "is-error");
+          setStatus2("Frontmatter action unavailable.", "is-error");
           return;
         }
         setFormDisabled(form, true);
-        setStatus("Updating frontmatter...");
+        setStatus2("Updating frontmatter...");
         try {
           const request = buildFrontmatterSetFetchRequest(config);
           const resp = await fetcher(request.url, request.init);
           const payload = await readFrontmatterResponsePayload(resp);
           if (!resp.ok) {
-            setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+            setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
             return;
           }
           const result = payload;
-          setStatus(result && result.ok && result.message ? result.message : "Updated frontmatter.", "is-success");
+          setStatus2(result && result.ok && result.message ? result.message : "Updated frontmatter.", "is-success");
         } catch {
-          setStatus("Frontmatter update failed.", "is-error");
+          setStatus2("Frontmatter update failed.", "is-error");
         } finally {
           setFormDisabled(form, false);
         }
@@ -4034,23 +4034,23 @@ var BrainNotesApp = (() => {
         event.preventDefault();
         const config = readFrontmatterUnsetConfig(form);
         if (!validFrontmatterBaseConfig(config)) {
-          setStatus("Frontmatter action unavailable.", "is-error");
+          setStatus2("Frontmatter action unavailable.", "is-error");
           return;
         }
         setFormDisabled(form, true);
-        setStatus("Updating frontmatter...");
+        setStatus2("Updating frontmatter...");
         try {
           const request = buildFrontmatterUnsetFetchRequest(config);
           const resp = await fetcher(request.url, request.init);
           const payload = await readFrontmatterResponsePayload(resp);
           if (!resp.ok) {
-            setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+            setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
             return;
           }
           const result = payload;
-          setStatus(result && result.ok && result.message ? result.message : "Unset frontmatter.", "is-success");
+          setStatus2(result && result.ok && result.message ? result.message : "Unset frontmatter.", "is-success");
         } catch {
-          setStatus("Frontmatter update failed.", "is-error");
+          setStatus2("Frontmatter update failed.", "is-error");
         } finally {
           setFormDisabled(form, false);
         }
@@ -4949,177 +4949,59 @@ var BrainNotesApp = (() => {
     });
   };
 
-  // internal/web/static_src/graph-controller-layout.ts
-  var readSpread = (input) => {
-    if (!input) {
-      return 2;
+  // internal/web/static_src/graph-controller-params.ts
+  var graphFilterMode = "graph";
+  var graphFilterDebounceMs = 150;
+  var readPageSearchMode = () => normalizeSearchMode(new URLSearchParams(window.location.search).get("q_mode"));
+  var syncPageSearchModeParam = (mode) => {
+    const params = new URLSearchParams(window.location.search);
+    if (mode === "focus") {
+      params.set("q_mode", "focus");
+    } else {
+      params.delete("q_mode");
     }
-    const parsed = Number.parseFloat(input.value);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      return 2;
-    }
-    return parsed;
+    updateBrowserQuery(params);
   };
-  var clampedSpread = (input) => Math.min(6, Math.max(0.8, readSpread(input)));
-  var updateSpreadLabel = (input, spreadValue) => {
-    if (!spreadValue) {
-      return;
-    }
-    const spread = readSpread(input);
-    spreadValue.textContent = `${spread.toFixed(1)}x`;
-  };
-  var fcoseRegistered = false;
-  var registerGraphLayouts = () => {
-    if (fcoseRegistered) {
-      return;
-    }
-    const extension = window.cytoscapeFcose;
-    if (!extension) {
-      return;
-    }
-    const factory = window.cytoscape;
-    if (!factory || typeof factory.use !== "function") {
-      return;
-    }
-    factory.use(extension);
-    fcoseRegistered = true;
-  };
-  var hasFcose = () => fcoseRegistered;
-  var coseLayoutOptionsForSpread = (spread) => ({
-    name: "cose",
-    animate: false,
-    fit: false,
-    randomize: false,
-    padding: 72,
-    nodeDimensionsIncludeLabels: true,
-    idealEdgeLength: Math.round(70 + 55 * spread),
-    nodeRepulsion: Math.round(7e3 * spread * spread),
-    componentSpacing: Math.round(100 + 85 * spread),
-    nodeOverlap: Math.round(12 + 16 * spread),
-    gravity: Math.max(0.05, 0.62 - 0.09 * spread),
-    numIter: Math.round(900 + 120 * spread),
-    initialTemp: Math.round(180 + 45 * spread),
-    coolingFactor: 0.95,
-    minTemp: 1
-  });
-  var fcoseLayoutOptionsForSpread = (spread) => ({
-    name: "fcose",
-    quality: "proof",
-    animate: false,
-    fit: false,
-    randomize: false,
-    padding: 72,
-    nodeDimensionsIncludeLabels: true,
-    packComponents: true,
-    tile: true,
-    idealEdgeLength: Math.round(70 + 55 * spread),
-    nodeRepulsion: Math.round(7e3 * spread * spread),
-    nodeSeparation: Math.round(75 + 45 * spread),
-    gravity: Math.max(0.05, 0.62 - 0.09 * spread),
-    numIter: Math.round(900 + 120 * spread)
-  });
-  var layoutOptionsForSpread = (spread) => hasFcose() ? fcoseLayoutOptionsForSpread(spread) : coseLayoutOptionsForSpread(spread);
-  var captureNodePositions = (cy) => {
-    const positions = /* @__PURE__ */ new Map();
-    if (!cy) {
-      return positions;
-    }
-    cy.nodes().toArray().forEach((node) => {
-      const position = node.position();
-      if (Number.isFinite(position.x) && Number.isFinite(position.y)) {
-        positions.set(node.id(), { x: position.x, y: position.y });
-      }
-    });
-    return positions;
-  };
-  var seedDeterministicPositions = (cy, spread, keep = null) => {
-    if (!cy) {
-      return;
-    }
-    const nodes = cy.nodes().toArray().sort((left, right) => left.id().localeCompare(right.id()));
-    const radialGap = 52 + 26 * spread;
-    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-    nodes.forEach((node, index) => {
-      const remembered = keep ? keep.get(node.id()) : void 0;
-      if (remembered) {
-        node.position({ x: remembered.x, y: remembered.y });
-        return;
-      }
-      const radius = radialGap * Math.sqrt(index);
-      const angle = index * goldenAngle;
-      node.position({
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius
-      });
-    });
-  };
-  var separateIsolatedNodes = (cy, spread) => {
-    if (!cy) {
-      return;
-    }
-    const isolatedNodes = cy.nodes().filter((node) => node.connectedEdges().length === 0).toArray().sort((left, right) => left.id().localeCompare(right.id()));
-    if (isolatedNodes.length === 0) {
-      return;
-    }
-    const spacing = 58 + 34 * spread;
-    const columns = Math.ceil(Math.sqrt(isolatedNodes.length));
-    const rows = Math.ceil(isolatedNodes.length / columns);
-    const connectedNodes = cy.nodes().filter((node) => node.connectedEdges().length > 0);
-    let startX = -((columns - 1) * spacing) / 2;
-    let startY = -((rows - 1) * spacing) / 2;
-    if (connectedNodes.length > 0) {
-      const box = connectedNodes.boundingBox();
-      startX = box.x2 + spacing * 1.6;
-      startY = box.y1 + (box.h - (rows - 1) * spacing) / 2;
-    }
-    isolatedNodes.forEach((node, index) => {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      node.position({
-        x: startX + column * spacing,
-        y: startY + row * spacing
-      });
-    });
-  };
-  var currentViewport = (cy) => {
-    if (!cy) {
-      return null;
-    }
-    const pan = cy.pan();
+  var maxMinDegree = 10;
+  var maxCollapseDepth = 3;
+  var clampSliderInteger = (value, min, max) => Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
+  var clampMinDegree = (value) => clampSliderInteger(value, 0, maxMinDegree);
+  var clampCollapseDepth = (value) => clampSliderInteger(value, 0, maxCollapseDepth);
+  var legacyHopsParamKey = "g_hops";
+  var readPageDisplayParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    const readInt = (key) => Number.parseInt(params.get(key) || "", 10);
     return {
-      pan: {
-        x: pan.x,
-        y: pan.y
-      },
-      zoom: cy.zoom()
+      isolateID: params.get("g_isolate") || "",
+      minDegree: clampMinDegree(readInt("g_mindeg")),
+      collapseDepth: clampCollapseDepth(readInt("g_collapse"))
     };
   };
-  var applyViewport = (cy, viewport) => {
-    if (!cy || !viewport) {
+  var canonicalizeLegacyDisplayParams = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(legacyHopsParamKey)) {
       return;
     }
-    cy.viewport({
-      pan: {
-        x: viewport.pan.x,
-        y: viewport.pan.y
-      },
-      zoom: viewport.zoom
-    });
+    params.delete(legacyHopsParamKey);
+    updateBrowserQuery(params);
   };
-
-  // internal/web/static_src/graph-controller-style.ts
-  var currentGraphPalette = () => {
-    if (typeof window === "undefined" || typeof document === "undefined") {
-      return DEFAULT_GRAPH_PALETTE;
-    }
-    const root = document.documentElement;
-    if (!root || typeof window.getComputedStyle !== "function") {
-      return DEFAULT_GRAPH_PALETTE;
-    }
-    const styles = window.getComputedStyle(root);
-    return readGraphPalette((name) => styles.getPropertyValue(name));
+  var syncPageDisplayParams = (display) => {
+    const params = new URLSearchParams(window.location.search);
+    const write = (key, value, offValue) => {
+      if (value === offValue) {
+        params.delete(key);
+        return;
+      }
+      params.set(key, value);
+    };
+    write("g_isolate", display.isolateID, "");
+    write("g_mindeg", String(display.minDegree), "0");
+    write("g_collapse", String(display.collapseDepth), "0");
+    params.delete(legacyHopsParamKey);
+    updateBrowserQuery(params);
   };
-  var buildGraphStyle = () => buildGraphStyleRules(currentGraphPalette());
+  var formatMinDegreeLabel = (minDegree) => minDegree <= 0 ? "off" : `\u2265 ${minDegree}`;
+  var formatCollapseDepthLabel = (depth) => depth <= 0 ? "off" : `depth ${depth}`;
 
   // internal/web/static_src/graph-controller-view.ts
   var aggregateNodeIDPrefix = "folder:";
@@ -5131,7 +5013,7 @@ var BrainNotesApp = (() => {
     expandedFolders: /* @__PURE__ */ new Set(),
     keepIDs: /* @__PURE__ */ new Set()
   });
-  var maxCollapseDepth = 3;
+  var maxCollapseDepth2 = 3;
   var clampInteger = (value, min, max) => {
     if (!Number.isFinite(value)) {
       return min;
@@ -5309,7 +5191,7 @@ var BrainNotesApp = (() => {
   };
   var buildDisplayGraph = (source, options) => {
     const minDegree = Math.max(0, clampInteger(options.minDegree, 0, Number.MAX_SAFE_INTEGER));
-    const collapseDepth = clampInteger(options.collapseDepth, 0, maxCollapseDepth);
+    const collapseDepth = clampInteger(options.collapseDepth, 0, maxCollapseDepth2);
     const isolate = isolateStage({ nodes: source.nodes, edges: source.edges }, options.isolateID);
     const thinned = minDegreeStage(isolate.elements, minDegree, options.keepIDs);
     const collapsed = collapseStage(thinned.elements, collapseDepth, options.expandedFolders);
@@ -5330,6 +5212,817 @@ var BrainNotesApp = (() => {
         isolated: isolate.isolated
       }
     };
+  };
+
+  // internal/web/static_src/graph-controller-runtime.ts
+  var createGraphRuntime = (dom, canvas, detailsRefs) => ({
+    dom,
+    canvas,
+    detailsRefs,
+    state: {
+      cy: null,
+      activeLayout: null,
+      currentQuery: "",
+      currentGraphElements: emptyGraphElements(),
+      display: {
+        ...defaultGraphDisplayOptions(),
+        ...readPageDisplayParams()
+      },
+      displayGraphElements: emptyGraphElements(),
+      expandedFolders: /* @__PURE__ */ new Set(),
+      hoveredNodeID: "",
+      selectedNodeID: "",
+      labelMode: readLabelMode(dom.labelModeInputs),
+      searchMode: readPageSearchMode(),
+      matchIDs: /* @__PURE__ */ new Set(),
+      lastMeaningfulViewport: null,
+      layoutRunID: 0
+    },
+    debounceToken: 0,
+    publishToken: 0,
+    displayToken: 0,
+    requestToken: 0,
+    selectionSyncing: false,
+    currentElementSignature: "",
+    displayStats: null,
+    displayedMatchIDs: /* @__PURE__ */ new Set(),
+    baseStatusMessage: "",
+    baseStatusKind: "",
+    displayNotice: "",
+    toggleFolderExpansion: () => {
+    }
+  });
+  var findSourceNodeModel = (runtime, nodeID) => runtime.state.currentGraphElements.nodes.find((node) => node.id === nodeID) || null;
+  var findDisplayedNodeModel = (runtime, nodeID) => {
+    if (nodeID === "") {
+      return null;
+    }
+    return runtime.state.displayGraphElements.nodes.find((node) => node.id === nodeID) || null;
+  };
+  var isDisplayedNodeID = (runtime, nodeID) => findDisplayedNodeModel(runtime, nodeID) !== null;
+  var computeDisplayedMatchIDs = (runtime) => {
+    const ids = /* @__PURE__ */ new Set();
+    for (const node of runtime.state.displayGraphElements.nodes) {
+      if (node.isAggregate) {
+        if ((node.memberIDs || []).some((memberID) => runtime.state.matchIDs.has(memberID))) {
+          ids.add(node.id);
+        }
+        continue;
+      }
+      if (runtime.state.matchIDs.has(node.id)) {
+        ids.add(node.id);
+      }
+    }
+    return ids;
+  };
+  var elementSignature = (graphElements) => {
+    const nodeIDs = graphElements.nodes.map((node) => node.id).sort();
+    const edgeIDs = graphElements.edges.map((edge) => edge.id).sort();
+    return `${nodeIDs.join("\n")} ${edgeIDs.join("\n")}`;
+  };
+  var matchIDsFor = (graphElements) => {
+    const ids = /* @__PURE__ */ new Set();
+    for (const node of graphElements.nodes) {
+      if (node.matchesQuery) {
+        ids.add(node.id);
+      }
+    }
+    return ids;
+  };
+  var currentDisplayOptions = (runtime) => {
+    const keepIDs = /* @__PURE__ */ new Set();
+    if (runtime.state.selectedNodeID !== "") {
+      keepIDs.add(runtime.state.selectedNodeID);
+    }
+    if (runtime.state.display.isolateID !== "") {
+      keepIDs.add(runtime.state.display.isolateID);
+    }
+    return {
+      ...runtime.state.display,
+      expandedFolders: runtime.state.expandedFolders,
+      keepIDs
+    };
+  };
+  var pruneExpandedFolders = (runtime, graphElements) => {
+    if (runtime.state.expandedFolders.size === 0) {
+      return;
+    }
+    const live = /* @__PURE__ */ new Set();
+    for (const node of graphElements.nodes) {
+      const key = folderGroupKey(node.folder, runtime.state.display.collapseDepth);
+      if (key !== "") {
+        live.add(key);
+      }
+    }
+    for (const folder of Array.from(runtime.state.expandedFolders)) {
+      if (!live.has(folder)) {
+        runtime.state.expandedFolders.delete(folder);
+      }
+    }
+  };
+
+  // internal/web/static_src/graph-controller-layout.ts
+  var readSpread = (input) => {
+    if (!input) {
+      return 2;
+    }
+    const parsed = Number.parseFloat(input.value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 2;
+    }
+    return parsed;
+  };
+  var clampedSpread = (input) => Math.min(6, Math.max(0.8, readSpread(input)));
+  var updateSpreadLabel = (input, spreadValue) => {
+    if (!spreadValue) {
+      return;
+    }
+    const spread = readSpread(input);
+    spreadValue.textContent = `${spread.toFixed(1)}x`;
+  };
+  var fcoseRegistered = false;
+  var registerGraphLayouts = () => {
+    if (fcoseRegistered) {
+      return;
+    }
+    const extension = window.cytoscapeFcose;
+    if (!extension) {
+      return;
+    }
+    const factory = window.cytoscape;
+    if (!factory || typeof factory.use !== "function") {
+      return;
+    }
+    factory.use(extension);
+    fcoseRegistered = true;
+  };
+  var hasFcose = () => fcoseRegistered;
+  var coseLayoutOptionsForSpread = (spread) => ({
+    name: "cose",
+    animate: false,
+    fit: false,
+    randomize: false,
+    padding: 72,
+    nodeDimensionsIncludeLabels: true,
+    idealEdgeLength: Math.round(70 + 55 * spread),
+    nodeRepulsion: Math.round(7e3 * spread * spread),
+    componentSpacing: Math.round(100 + 85 * spread),
+    nodeOverlap: Math.round(12 + 16 * spread),
+    gravity: Math.max(0.05, 0.62 - 0.09 * spread),
+    numIter: Math.round(900 + 120 * spread),
+    initialTemp: Math.round(180 + 45 * spread),
+    coolingFactor: 0.95,
+    minTemp: 1
+  });
+  var fcoseLayoutOptionsForSpread = (spread) => ({
+    name: "fcose",
+    quality: "proof",
+    animate: false,
+    fit: false,
+    randomize: false,
+    padding: 72,
+    nodeDimensionsIncludeLabels: true,
+    packComponents: true,
+    tile: true,
+    idealEdgeLength: Math.round(70 + 55 * spread),
+    nodeRepulsion: Math.round(7e3 * spread * spread),
+    nodeSeparation: Math.round(75 + 45 * spread),
+    gravity: Math.max(0.05, 0.62 - 0.09 * spread),
+    numIter: Math.round(900 + 120 * spread)
+  });
+  var layoutOptionsForSpread = (spread) => hasFcose() ? fcoseLayoutOptionsForSpread(spread) : coseLayoutOptionsForSpread(spread);
+  var captureNodePositions = (cy) => {
+    const positions = /* @__PURE__ */ new Map();
+    if (!cy) {
+      return positions;
+    }
+    cy.nodes().toArray().forEach((node) => {
+      const position = node.position();
+      if (Number.isFinite(position.x) && Number.isFinite(position.y)) {
+        positions.set(node.id(), { x: position.x, y: position.y });
+      }
+    });
+    return positions;
+  };
+  var seedDeterministicPositions = (cy, spread, keep = null) => {
+    if (!cy) {
+      return;
+    }
+    const nodes = cy.nodes().toArray().sort((left, right) => left.id().localeCompare(right.id()));
+    const radialGap = 52 + 26 * spread;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    nodes.forEach((node, index) => {
+      const remembered = keep ? keep.get(node.id()) : void 0;
+      if (remembered) {
+        node.position({ x: remembered.x, y: remembered.y });
+        return;
+      }
+      const radius = radialGap * Math.sqrt(index);
+      const angle = index * goldenAngle;
+      node.position({
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius
+      });
+    });
+  };
+  var separateIsolatedNodes = (cy, spread) => {
+    if (!cy) {
+      return;
+    }
+    const isolatedNodes = cy.nodes().filter((node) => node.connectedEdges().length === 0).toArray().sort((left, right) => left.id().localeCompare(right.id()));
+    if (isolatedNodes.length === 0) {
+      return;
+    }
+    const spacing = 58 + 34 * spread;
+    const columns = Math.ceil(Math.sqrt(isolatedNodes.length));
+    const rows = Math.ceil(isolatedNodes.length / columns);
+    const connectedNodes = cy.nodes().filter((node) => node.connectedEdges().length > 0);
+    let startX = -((columns - 1) * spacing) / 2;
+    let startY = -((rows - 1) * spacing) / 2;
+    if (connectedNodes.length > 0) {
+      const box = connectedNodes.boundingBox();
+      startX = box.x2 + spacing * 1.6;
+      startY = box.y1 + (box.h - (rows - 1) * spacing) / 2;
+    }
+    isolatedNodes.forEach((node, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      node.position({
+        x: startX + column * spacing,
+        y: startY + row * spacing
+      });
+    });
+  };
+  var currentViewport = (cy) => {
+    if (!cy) {
+      return null;
+    }
+    const pan = cy.pan();
+    return {
+      pan: {
+        x: pan.x,
+        y: pan.y
+      },
+      zoom: cy.zoom()
+    };
+  };
+  var applyViewport = (cy, viewport) => {
+    if (!cy || !viewport) {
+      return;
+    }
+    cy.viewport({
+      pan: {
+        x: viewport.pan.x,
+        y: viewport.pan.y
+      },
+      zoom: viewport.zoom
+    });
+  };
+
+  // internal/web/static_src/graph-controller-style.ts
+  var currentGraphPalette = () => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return DEFAULT_GRAPH_PALETTE;
+    }
+    const root = document.documentElement;
+    if (!root || typeof window.getComputedStyle !== "function") {
+      return DEFAULT_GRAPH_PALETTE;
+    }
+    const styles = window.getComputedStyle(root);
+    return readGraphPalette((name) => styles.getPropertyValue(name));
+  };
+  var buildGraphStyle = () => buildGraphStyleRules(currentGraphPalette());
+
+  // internal/web/static_src/graph-controller-visual.ts
+  var applyGraphVisualState = (runtime) => {
+    applyGraphVisualClasses(
+      runtime.state.cy,
+      runtime.state.labelMode,
+      runtime.state.selectedNodeID,
+      runtime.state.hoveredNodeID,
+      runtime.displayedMatchIDs
+    );
+  };
+  var setLabelMode = (runtime, nextMode) => {
+    runtime.state.labelMode = nextMode === "all" ? "all" : "auto";
+    applyGraphVisualState(runtime);
+  };
+  var restyleGraphForTheme = (runtime) => {
+    if (!runtime.state.cy) {
+      return;
+    }
+    runtime.state.cy.style(buildGraphStyle());
+    applyGraphVisualState(runtime);
+  };
+  var stopActiveLayout = (runtime) => {
+    if (runtime.state.activeLayout && typeof runtime.state.activeLayout.stop === "function") {
+      runtime.state.activeLayout.stop();
+    }
+    runtime.state.activeLayout = null;
+  };
+  var rememberMeaningfulViewport = (runtime) => {
+    if (!runtime.state.cy || runtime.state.cy.nodes().length === 0) {
+      return;
+    }
+    runtime.state.lastMeaningfulViewport = currentViewport(runtime.state.cy);
+  };
+  var fitCurrentGraph = (runtime) => {
+    if (!runtime.state.cy || runtime.state.cy.nodes().length === 0) {
+      return;
+    }
+    runtime.state.cy.fit(runtime.state.cy.elements(), 72);
+    rememberMeaningfulViewport(runtime);
+  };
+  var updateZoomMatchesButton = (runtime) => {
+    if (runtime.dom.zoomMatchesButton instanceof HTMLButtonElement) {
+      runtime.dom.zoomMatchesButton.disabled = runtime.displayedMatchIDs.size === 0;
+    }
+  };
+  var updateDisplayControls = (runtime) => {
+    const { dom, state } = runtime;
+    if (dom.isolateButton instanceof HTMLButtonElement) {
+      dom.isolateButton.disabled = state.selectedNodeID === "" || state.selectedNodeID === state.display.isolateID;
+    }
+    if (dom.isolateClearButton instanceof HTMLButtonElement) {
+      dom.isolateClearButton.disabled = state.display.isolateID === "";
+    }
+    if (dom.minDegreeInput instanceof HTMLInputElement) {
+      dom.minDegreeInput.value = String(state.display.minDegree);
+    }
+    if (dom.minDegreeValue) {
+      dom.minDegreeValue.textContent = formatMinDegreeLabel(state.display.minDegree);
+    }
+    if (dom.collapseInput instanceof HTMLInputElement) {
+      dom.collapseInput.value = String(state.display.collapseDepth);
+    }
+    if (dom.collapseValue) {
+      dom.collapseValue.textContent = formatCollapseDepthLabel(state.display.collapseDepth);
+    }
+  };
+  var zoomToMatches = (runtime) => {
+    if (!runtime.state.cy || runtime.displayedMatchIDs.size === 0) {
+      return;
+    }
+    const matchedNodes = runtime.state.cy.nodes().filter((node) => runtime.displayedMatchIDs.has(node.id()));
+    if (matchedNodes.length === 0) {
+      return;
+    }
+    runtime.state.cy.fit(matchedNodes, 96);
+    rememberMeaningfulViewport(runtime);
+  };
+  var runLayout = (runtime, options = {}) => {
+    const { dom, state } = runtime;
+    if (!state.cy || state.cy.nodes().length === 0) {
+      return;
+    }
+    const layoutOptions = options;
+    const fitAfterLayout = Boolean(layoutOptions.fitAfterLayout);
+    const preservedViewport = layoutOptions.preserveViewport ? currentViewport(state.cy) : null;
+    const runID = state.layoutRunID + 1;
+    state.layoutRunID = runID;
+    stopActiveLayout(runtime);
+    if (layoutOptions.resetPositions) {
+      seedDeterministicPositions(state.cy, clampedSpread(dom.spreadInput));
+    }
+    let finalized = false;
+    const finalizeLayout = () => {
+      if (finalized || runID !== state.layoutRunID) {
+        return;
+      }
+      finalized = true;
+      if (!hasFcose()) {
+        separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
+      }
+      if (fitAfterLayout) {
+        fitCurrentGraph(runtime);
+      } else if (preservedViewport) {
+        applyViewport(state.cy, preservedViewport);
+        rememberMeaningfulViewport(runtime);
+      } else {
+        rememberMeaningfulViewport(runtime);
+      }
+      applyGraphVisualState(runtime);
+      state.activeLayout = null;
+    };
+    const layout = state.cy.layout(layoutOptionsForSpread(clampedSpread(dom.spreadInput)));
+    state.activeLayout = layout;
+    if (typeof layout.one === "function") {
+      layout.one("layoutstop", finalizeLayout);
+    }
+    layout.run();
+    if (typeof layout.one !== "function") {
+      finalizeLayout();
+    }
+  };
+
+  // internal/web/static_src/graph-controller-interaction.ts
+  var renderDetailsPanel = (runtime, fallbackHoveredModel = null) => {
+    const selectedModel = findDisplayedNodeModel(runtime, runtime.state.selectedNodeID);
+    const hoveredModel = selectedModel ? null : findDisplayedNodeModel(runtime, runtime.state.hoveredNodeID) || fallbackHoveredModel || null;
+    renderGraphDetails(runtime.detailsRefs, selectedModel, hoveredModel);
+  };
+  var syncCytoscapeSelection = (runtime, nodeID) => {
+    if (!runtime.state.cy || runtime.selectionSyncing) {
+      return;
+    }
+    runtime.selectionSyncing = true;
+    try {
+      runtime.state.cy.nodes().forEach((node) => {
+        const shouldSelect = node.id() === nodeID;
+        if (shouldSelect && !node.selected()) {
+          node.select();
+        } else if (!shouldSelect && node.selected()) {
+          node.unselect();
+        }
+      });
+    } finally {
+      runtime.selectionSyncing = false;
+    }
+  };
+  var selectNode = (runtime, nodeID, options = {}) => {
+    const model = findDisplayedNodeModel(runtime, nodeID);
+    if (!model) {
+      return;
+    }
+    runtime.state.selectedNodeID = model.isAggregate ? "" : model.id;
+    if (!options || !options.fromCytoscape) {
+      syncCytoscapeSelection(runtime, runtime.state.selectedNodeID);
+    }
+    renderDetailsPanel(runtime);
+    applyGraphVisualState(runtime);
+    updateDisplayControls(runtime);
+  };
+  var clearSelectedNode = (runtime, options = {}) => {
+    runtime.state.selectedNodeID = "";
+    if (!options || !options.fromCytoscape) {
+      syncCytoscapeSelection(runtime, "");
+    }
+    renderDetailsPanel(runtime);
+    applyGraphVisualState(runtime);
+    updateDisplayControls(runtime);
+  };
+  var setHoveredNode = (runtime, nodeID, fallbackData) => {
+    runtime.state.hoveredNodeID = nodeID || "";
+    runtime.canvas.classList.toggle("is-node-hovered", runtime.state.hoveredNodeID !== "");
+    if (!runtime.state.hoveredNodeID) {
+      renderDetailsPanel(runtime);
+      applyGraphVisualState(runtime);
+      return;
+    }
+    const fallbackModel = fallbackData ? graphNodeModelFromData(fallbackData, runtime.state.hoveredNodeID) : null;
+    renderDetailsPanel(runtime, fallbackModel);
+    applyGraphVisualState(runtime);
+  };
+  var keyboardTargetNodeID = (runtime) => {
+    if (isDisplayedNodeID(runtime, runtime.state.hoveredNodeID)) {
+      return runtime.state.hoveredNodeID;
+    }
+    if (isDisplayedNodeID(runtime, runtime.state.selectedNodeID)) {
+      return runtime.state.selectedNodeID;
+    }
+    if (!runtime.state.cy) {
+      return "";
+    }
+    const selectedNode = runtime.state.cy.nodes().filter((node) => node.selected()).first();
+    if (!selectedNode || selectedNode.length === 0) {
+      return "";
+    }
+    const nodeID = selectedNode.id();
+    return isDisplayedNodeID(runtime, nodeID) ? nodeID : "";
+  };
+  var handleGraphKeyDown = (runtime, event) => {
+    if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") {
+      return;
+    }
+    const nodeID = keyboardTargetNodeID(runtime);
+    if (!nodeID) {
+      return;
+    }
+    event.preventDefault();
+    selectNode(runtime, nodeID);
+  };
+
+  // internal/web/static_src/graph-controller-mount.ts
+  var bindGraphEvents = (runtime, instance) => {
+    instance.on("tap", "node", (event) => {
+      const nodeID = event.target.id();
+      const model = findDisplayedNodeModel(runtime, nodeID);
+      if (!model) {
+        return;
+      }
+      if (model.isAggregate) {
+        runtime.toggleFolderExpansion(model.folder);
+        return;
+      }
+      selectNode(runtime, nodeID);
+    });
+    instance.on("tap", (event) => {
+      if (event.target === instance) {
+        clearSelectedNode(runtime);
+      }
+    });
+    instance.on("mouseover", "node", (event) => {
+      const nodeID = event.target.id();
+      if (!isDisplayedNodeID(runtime, nodeID)) {
+        return;
+      }
+      const data = event.target.data();
+      setHoveredNode(runtime, nodeID, data);
+    });
+    instance.on("mouseout", "node", (event) => {
+      const nodeID = event.target.id();
+      if (!isDisplayedNodeID(runtime, nodeID)) {
+        return;
+      }
+      if (runtime.state.hoveredNodeID !== nodeID) {
+        return;
+      }
+      setHoveredNode(runtime, "", null);
+    });
+    instance.on("select", "node", (event) => {
+      if (!runtime.selectionSyncing) {
+        selectNode(runtime, event.target.id(), { fromCytoscape: true });
+      }
+    });
+    instance.on("unselect", "node", (event) => {
+      const nodeID = event.target.id();
+      if (!runtime.selectionSyncing && isDisplayedNodeID(runtime, nodeID) && nodeID === runtime.state.selectedNodeID) {
+        clearSelectedNode(runtime, { fromCytoscape: true });
+      }
+    });
+    instance.on("viewport", () => {
+      rememberMeaningfulViewport(runtime);
+      applyGraphVisualState(runtime);
+    });
+  };
+  var ensureGraph = (runtime) => {
+    if (runtime.state.cy) {
+      return runtime.state.cy;
+    }
+    registerGraphLayouts();
+    const createCytoscape = window.cytoscape;
+    runtime.state.cy = createCytoscape({
+      container: runtime.canvas,
+      elements: [],
+      style: buildGraphStyle()
+    });
+    bindGraphEvents(runtime, runtime.state.cy);
+    return runtime.state.cy;
+  };
+  var applyGraphElements = (runtime, graphElements, layoutOptions) => {
+    const { dom, state } = runtime;
+    const instance = ensureGraph(runtime);
+    stopActiveLayout(runtime);
+    const selectedNodeID = state.selectedNodeID;
+    const rememberedPositions = layoutOptions.resetPositions ? null : captureNodePositions(instance);
+    runtime.selectionSyncing = true;
+    try {
+      instance.elements().remove();
+      if (graphElements.nodes.length > 0 || graphElements.edges.length > 0) {
+        instance.add(toCytoscapeElements(graphElements));
+      }
+    } finally {
+      runtime.selectionSyncing = false;
+    }
+    state.selectedNodeID = graphElements.nodes.some((node) => node.id === selectedNodeID) ? selectedNodeID : "";
+    syncCytoscapeSelection(runtime, state.selectedNodeID);
+    setHoveredNode(runtime, "", null);
+    if (instance.nodes().length === 0) {
+      state.lastMeaningfulViewport = null;
+      applyGraphVisualState(runtime);
+      return;
+    }
+    if (rememberedPositions) {
+      seedDeterministicPositions(instance, clampedSpread(dom.spreadInput), rememberedPositions);
+    }
+    runLayout(runtime, layoutOptions);
+  };
+
+  // internal/web/static_src/graph-controller-status.ts
+  var displayReductionSentence = (runtime) => {
+    const stats = runtime.displayStats;
+    if (!stats || stats.displayedNodeCount >= stats.sourceNodeCount) {
+      return "";
+    }
+    const counts = `Showing ${stats.displayedNodeCount} of ${stats.sourceNodeCount} nodes`;
+    const reasons = [];
+    if (stats.isolated) {
+      const anchor = findSourceNodeModel(runtime, runtime.state.display.isolateID);
+      const anchorLabel = anchor ? anchor.title || anchor.id : runtime.state.display.isolateID;
+      reasons.push(`isolated 1 hop from "${anchorLabel}"`);
+    }
+    if (stats.droppedByDegree > 0) {
+      reasons.push(`degree \u2265 ${runtime.state.display.minDegree}`);
+    }
+    if (stats.aggregateCount > 0) {
+      reasons.push(`folders collapsed to depth ${runtime.state.display.collapseDepth}`);
+    }
+    return reasons.length === 0 ? `${counts}.` : `${counts} \u2014 ${reasons.join(", ")}.`;
+  };
+  var renderStatus = (runtime) => {
+    const message = [runtime.baseStatusMessage, displayReductionSentence(runtime), runtime.displayNotice].filter((part) => part !== "").join(" ");
+    setStatusText(runtime.dom.status, message, runtime.baseStatusKind, [
+      "is-loading",
+      "is-empty",
+      "is-error"
+    ]);
+  };
+  var setStatus = (runtime, message, kind = "") => {
+    runtime.baseStatusMessage = message;
+    runtime.baseStatusKind = kind;
+    renderStatus(runtime);
+  };
+
+  // internal/web/static_src/graph-controller-display.ts
+  var rebuildDisplay = (runtime, layoutOptions, prebuilt = null) => {
+    const { state } = runtime;
+    const built = prebuilt || buildDisplayGraph(state.currentGraphElements, currentDisplayOptions(runtime));
+    if (state.display.isolateID !== "" && !built.stats.isolated) {
+      const droppedAnchor = state.display.isolateID;
+      state.display.isolateID = "";
+      syncPageDisplayParams(state.display);
+      runtime.displayNotice = `Isolation cleared: "${droppedAnchor}" is not in the current graph.`;
+    } else {
+      runtime.displayNotice = "";
+    }
+    state.displayGraphElements = built.elements;
+    runtime.displayStats = built.stats;
+    runtime.displayedMatchIDs = computeDisplayedMatchIDs(runtime);
+    runtime.currentElementSignature = elementSignature(built.elements);
+    applyGraphElements(runtime, built.elements, layoutOptions);
+    updateZoomMatchesButton(runtime);
+    updateDisplayControls(runtime);
+    renderStatus(runtime);
+  };
+  var rebuildDisplayForControl = (runtime) => {
+    rebuildDisplay(runtime, {
+      fitAfterLayout: false,
+      preserveViewport: true,
+      resetPositions: false
+    });
+  };
+  var scheduleDisplayRebuild = (runtime, delay) => {
+    window.clearTimeout(runtime.displayToken);
+    if (delay <= 0) {
+      rebuildDisplayForControl(runtime);
+      return;
+    }
+    stopActiveLayout(runtime);
+    runtime.displayToken = window.setTimeout(() => {
+      rebuildDisplayForControl(runtime);
+    }, delay);
+  };
+  var toggleFolderExpansion = (runtime, folder) => {
+    if (folder === "") {
+      return;
+    }
+    if (runtime.state.expandedFolders.has(folder)) {
+      runtime.state.expandedFolders.delete(folder);
+    } else {
+      runtime.state.expandedFolders.add(folder);
+    }
+    rebuildDisplayForControl(runtime);
+  };
+
+  // internal/web/static_src/graph-controller-load.ts
+  var buildQueryURL = (runtime, query) => {
+    const url = buildFilteredAPIURL("/api/graph.json", query);
+    if (runtime.state.searchMode !== "focus") {
+      return url;
+    }
+    const parsed = new URL(url, window.location.origin);
+    parsed.searchParams.set("q_mode", "focus");
+    return `${parsed.pathname}${parsed.search}`;
+  };
+  var refreshMatchHighlighting = (runtime, graphElements, displayElements) => {
+    const instance = runtime.state.cy;
+    if (!instance) {
+      return;
+    }
+    runtime.state.currentGraphElements = graphElements;
+    runtime.state.displayGraphElements = displayElements;
+    runtime.displayedMatchIDs = computeDisplayedMatchIDs(runtime);
+    instance.batch(() => {
+      instance.nodes().forEach((node) => {
+        node.data("matchesQuery", runtime.displayedMatchIDs.has(node.id()));
+      });
+    });
+    renderDetailsPanel(runtime);
+    applyGraphVisualState(runtime);
+  };
+  var loadGraph = async (runtime, query, localToken) => {
+    const { state } = runtime;
+    if (typeof window.cytoscape !== "function") {
+      setStatus(runtime, "Graph library failed to load.", "is-error");
+      return;
+    }
+    setStatus(runtime, "Loading graph...", "is-loading");
+    let payload;
+    try {
+      const resp = await fetch(buildQueryURL(runtime, query), {
+        headers: { Accept: "application/json" }
+      });
+      if (localToken !== runtime.requestToken) {
+        return;
+      }
+      if (!resp.ok) {
+        setStatus(runtime, `Graph load failed (${resp.status}).`, "is-error");
+        return;
+      }
+      payload = await resp.json();
+    } catch (error) {
+      if (localToken !== runtime.requestToken) {
+        return;
+      }
+      setStatus(runtime, "Graph load failed.", "is-error");
+      return;
+    }
+    if (localToken !== runtime.requestToken) {
+      return;
+    }
+    const graphElements = normalizeGraphPayload(payload);
+    const focusMode = state.searchMode === "focus";
+    state.matchIDs = matchIDsFor(graphElements);
+    pruneExpandedFolders(runtime, graphElements);
+    const built = buildDisplayGraph(graphElements, currentDisplayOptions(runtime));
+    const signature = elementSignature(built.elements);
+    if (focusMode && state.cy && signature === runtime.currentElementSignature) {
+      refreshMatchHighlighting(runtime, graphElements, built.elements);
+      runtime.displayStats = built.stats;
+    } else {
+      state.currentGraphElements = graphElements;
+      rebuildDisplay(
+        runtime,
+        {
+          fitAfterLayout: true,
+          resetPositions: true
+        },
+        built
+      );
+    }
+    updateZoomMatchesButton(runtime);
+    const hasFilters = hasActiveFilters();
+    const scopeLabel = graphScopeLabel(query, hasFilters);
+    if (focusMode && query) {
+      if (state.matchIDs.size === 0) {
+        setStatus(runtime, `No notes match ${scopeLabel}.`, "is-empty");
+        return;
+      }
+      setStatus(
+        runtime,
+        `Focusing ${state.matchIDs.size} of ${graphElements.nodes.length} nodes matching ${scopeLabel}.`
+      );
+      return;
+    }
+    if (scopeLabel) {
+      if (graphElements.nodes.length === 0) {
+        setStatus(runtime, `No notes match ${scopeLabel}.`, "is-empty");
+        return;
+      }
+      setStatus(
+        runtime,
+        `Showing ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges for ${scopeLabel}.`
+      );
+      return;
+    }
+    setStatus(
+      runtime,
+      `Loaded ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges.`
+    );
+  };
+  var scheduleLoad = (runtime, query, delay) => {
+    window.clearTimeout(runtime.debounceToken);
+    runtime.state.currentQuery = query;
+    const localToken = ++runtime.requestToken;
+    if (delay <= 0) {
+      void loadGraph(runtime, query, localToken);
+      return;
+    }
+    runtime.debounceToken = window.setTimeout(() => {
+      void loadGraph(runtime, query, localToken);
+    }, delay);
+  };
+  var publishFilterChange = (runtime, delay) => {
+    window.clearTimeout(runtime.publishToken);
+    const emit = () => {
+      dispatchFiltersChange(window, {
+        mode: graphFilterMode,
+        params: new URLSearchParams(window.location.search)
+      });
+    };
+    if (delay <= 0) {
+      emit();
+      return;
+    }
+    runtime.publishToken = window.setTimeout(emit, delay);
+  };
+  var setSearchMode = (runtime, nextMode) => {
+    if (runtime.state.searchMode === nextMode) {
+      return;
+    }
+    runtime.state.searchMode = nextMode;
+    syncPageSearchModeParam(nextMode);
+    publishFilterChange(runtime, 0);
   };
 
   // internal/web/static_src/theme.ts
@@ -5452,58 +6145,130 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/graph-controller.ts
-  var graphFilterMode = "graph";
-  var graphFilterDebounceMs = 150;
-  var readPageSearchMode = () => normalizeSearchMode(new URLSearchParams(window.location.search).get("q_mode"));
-  var syncPageSearchModeParam = (mode) => {
-    const params = new URLSearchParams(window.location.search);
-    if (mode === "focus") {
-      params.set("q_mode", "focus");
-    } else {
-      params.delete("q_mode");
+  var bindControls = (runtime) => {
+    const { canvas, dom, state } = runtime;
+    canvas.addEventListener("keydown", (event) => {
+      handleGraphKeyDown(runtime, event);
+    });
+    const openNote = dom.openNote;
+    if (openNote instanceof HTMLAnchorElement) {
+      openNote.addEventListener("click", (event) => {
+        if (openNote.getAttribute("aria-disabled") === "true") {
+          event.preventDefault();
+        }
+      });
     }
-    updateBrowserQuery(params);
-  };
-  var maxMinDegree = 10;
-  var maxCollapseDepth2 = 3;
-  var clampSliderInteger = (value, min, max) => Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
-  var clampMinDegree = (value) => clampSliderInteger(value, 0, maxMinDegree);
-  var clampCollapseDepth = (value) => clampSliderInteger(value, 0, maxCollapseDepth2);
-  var legacyHopsParamKey = "g_hops";
-  var readPageDisplayParams = () => {
-    const params = new URLSearchParams(window.location.search);
-    const readInt = (key) => Number.parseInt(params.get(key) || "", 10);
-    return {
-      isolateID: params.get("g_isolate") || "",
-      minDegree: clampMinDegree(readInt("g_mindeg")),
-      collapseDepth: clampCollapseDepth(readInt("g_collapse"))
-    };
-  };
-  var canonicalizeLegacyDisplayParams = () => {
-    const params = new URLSearchParams(window.location.search);
-    if (!params.has(legacyHopsParamKey)) {
-      return;
+    const filterInput = dom.filterInput;
+    if (filterInput instanceof HTMLInputElement) {
+      filterInput.addEventListener("input", () => {
+        syncPageQueryParam(filterInput.value.trim());
+        publishFilterChange(runtime, graphFilterDebounceMs);
+      });
+      filterInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+        event.preventDefault();
+        zoomToMatches(runtime);
+      });
     }
-    params.delete(legacyHopsParamKey);
-    updateBrowserQuery(params);
-  };
-  var syncPageDisplayParams = (display) => {
-    const params = new URLSearchParams(window.location.search);
-    const write = (key, value, offValue) => {
-      if (value === offValue) {
-        params.delete(key);
-        return;
+    updateSpreadLabel(dom.spreadInput, dom.spreadValue);
+    if (dom.spreadInput instanceof HTMLInputElement) {
+      dom.spreadInput.addEventListener("input", () => {
+        updateSpreadLabel(dom.spreadInput, dom.spreadValue);
+        runLayout(runtime, {
+          fitAfterLayout: false,
+          preserveViewport: true
+        });
+      });
+    }
+    if (dom.isolateButton instanceof HTMLButtonElement) {
+      dom.isolateButton.addEventListener("click", () => {
+        if (state.selectedNodeID === "") {
+          return;
+        }
+        state.display.isolateID = state.selectedNodeID;
+        syncPageDisplayParams(state.display);
+        rebuildDisplayForControl(runtime);
+      });
+    }
+    if (dom.isolateClearButton instanceof HTMLButtonElement) {
+      dom.isolateClearButton.addEventListener("click", () => {
+        if (state.display.isolateID === "") {
+          return;
+        }
+        state.display.isolateID = "";
+        syncPageDisplayParams(state.display);
+        rebuildDisplayForControl(runtime);
+      });
+    }
+    if (dom.minDegreeInput instanceof HTMLInputElement) {
+      const minDegreeInput = dom.minDegreeInput;
+      minDegreeInput.addEventListener("input", () => {
+        const minDegree = clampMinDegree(Number.parseInt(minDegreeInput.value, 10));
+        if (minDegree === state.display.minDegree) {
+          return;
+        }
+        state.display.minDegree = minDegree;
+        syncPageDisplayParams(state.display);
+        updateDisplayControls(runtime);
+        scheduleDisplayRebuild(runtime, graphFilterDebounceMs);
+      });
+    }
+    if (dom.collapseInput instanceof HTMLInputElement) {
+      const collapseInput = dom.collapseInput;
+      collapseInput.addEventListener("input", () => {
+        const collapseDepth = clampCollapseDepth(Number.parseInt(collapseInput.value, 10));
+        if (collapseDepth === state.display.collapseDepth) {
+          return;
+        }
+        state.display.collapseDepth = collapseDepth;
+        state.expandedFolders.clear();
+        syncPageDisplayParams(state.display);
+        updateDisplayControls(runtime);
+        scheduleDisplayRebuild(runtime, graphFilterDebounceMs);
+      });
+    }
+    if (dom.fitButton instanceof HTMLButtonElement) {
+      dom.fitButton.addEventListener("click", () => {
+        fitCurrentGraph(runtime);
+      });
+    }
+    if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
+      dom.zoomMatchesButton.addEventListener("click", () => {
+        zoomToMatches(runtime);
+      });
+    }
+    updateZoomMatchesButton(runtime);
+    if (dom.resetLayoutButton instanceof HTMLButtonElement) {
+      dom.resetLayoutButton.addEventListener("click", () => {
+        runLayout(runtime, {
+          fitAfterLayout: true,
+          resetPositions: true
+        });
+      });
+    }
+    for (const input of dom.labelModeInputs) {
+      if (!(input instanceof HTMLInputElement)) {
+        continue;
       }
-      params.set(key, value);
-    };
-    write("g_isolate", display.isolateID, "");
-    write("g_mindeg", String(display.minDegree), "0");
-    write("g_collapse", String(display.collapseDepth), "0");
-    params.delete(legacyHopsParamKey);
-    updateBrowserQuery(params);
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          setLabelMode(runtime, input.value);
+        }
+      });
+    }
+    for (const input of dom.searchModeInputs) {
+      if (!(input instanceof HTMLInputElement)) {
+        continue;
+      }
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          setSearchMode(runtime, normalizeSearchMode(input.value));
+        }
+      });
+    }
   };
-  var formatMinDegreeLabel = (minDegree) => minDegree <= 0 ? "off" : `\u2265 ${minDegree}`;
-  var formatCollapseDepthLabel = (depth) => depth <= 0 ? "off" : `depth ${depth}`;
   var initGraph = () => {
     const dom = {
       canvas: getElementByID("graph-canvas", HTMLElement),
@@ -5532,7 +6297,6 @@ var BrainNotesApp = (() => {
     if (!dom.canvas) {
       return;
     }
-    const canvas = dom.canvas;
     const detailsRefs = {
       detailsPanel: dom.detailsPanel,
       hoverTitle: dom.hoverTitle,
@@ -5541,729 +6305,10 @@ var BrainNotesApp = (() => {
       hoverIssues: dom.hoverIssues,
       openNote: dom.openNote
     };
-    const state = {
-      cy: null,
-      activeLayout: null,
-      currentQuery: "",
-      currentGraphElements: emptyGraphElements(),
-      display: {
-        ...defaultGraphDisplayOptions(),
-        ...readPageDisplayParams()
-      },
-      displayGraphElements: emptyGraphElements(),
-      expandedFolders: /* @__PURE__ */ new Set(),
-      hoveredNodeID: "",
-      selectedNodeID: "",
-      labelMode: readLabelMode(dom.labelModeInputs),
-      searchMode: readPageSearchMode(),
-      matchIDs: /* @__PURE__ */ new Set(),
-      lastMeaningfulViewport: null,
-      layoutRunID: 0
+    const runtime = createGraphRuntime(dom, dom.canvas, detailsRefs);
+    runtime.toggleFolderExpansion = (folder) => {
+      toggleFolderExpansion(runtime, folder);
     };
-    let debounceToken = 0;
-    let publishToken = 0;
-    let displayToken = 0;
-    let requestToken = 0;
-    let selectionSyncing = false;
-    let currentElementSignature = "";
-    let displayStats = null;
-    let displayedMatchIDs = /* @__PURE__ */ new Set();
-    let baseStatusMessage = "";
-    let baseStatusKind = "";
-    let displayNotice = "";
-    function setStatus(message, kind = "") {
-      baseStatusMessage = message;
-      baseStatusKind = kind;
-      renderStatus();
-    }
-    function displayReductionSentence() {
-      if (!displayStats || displayStats.displayedNodeCount >= displayStats.sourceNodeCount) {
-        return "";
-      }
-      const counts = `Showing ${displayStats.displayedNodeCount} of ${displayStats.sourceNodeCount} nodes`;
-      const reasons = [];
-      if (displayStats.isolated) {
-        const anchor = findSourceNodeModel(state.display.isolateID);
-        const anchorLabel = anchor ? anchor.title || anchor.id : state.display.isolateID;
-        reasons.push(`isolated 1 hop from "${anchorLabel}"`);
-      }
-      if (displayStats.droppedByDegree > 0) {
-        reasons.push(`degree \u2265 ${state.display.minDegree}`);
-      }
-      if (displayStats.aggregateCount > 0) {
-        reasons.push(`folders collapsed to depth ${state.display.collapseDepth}`);
-      }
-      return reasons.length === 0 ? `${counts}.` : `${counts} \u2014 ${reasons.join(", ")}.`;
-    }
-    function renderStatus() {
-      const message = [baseStatusMessage, displayReductionSentence(), displayNotice].filter((part) => part !== "").join(" ");
-      setStatusText(dom.status, message, baseStatusKind, ["is-loading", "is-empty", "is-error"]);
-    }
-    function renderDetailsPanel(fallbackHoveredModel = null) {
-      const selectedModel = findDisplayedNodeModel(state.selectedNodeID);
-      const hoveredModel = selectedModel ? null : findDisplayedNodeModel(state.hoveredNodeID) || fallbackHoveredModel || null;
-      renderGraphDetails(detailsRefs, selectedModel, hoveredModel);
-    }
-    function setLabelMode(nextMode) {
-      state.labelMode = nextMode === "all" ? "all" : "auto";
-      applyGraphVisualState();
-    }
-    function setSearchMode(nextMode) {
-      if (state.searchMode === nextMode) {
-        return;
-      }
-      state.searchMode = nextMode;
-      syncPageSearchModeParam(nextMode);
-      publishFilterChange(0);
-    }
-    function restyleGraphForTheme() {
-      if (!state.cy) {
-        return;
-      }
-      state.cy.style(buildGraphStyle());
-      applyGraphVisualState();
-    }
-    function stopActiveLayout() {
-      if (state.activeLayout && typeof state.activeLayout.stop === "function") {
-        state.activeLayout.stop();
-      }
-      state.activeLayout = null;
-    }
-    function fitCurrentGraph() {
-      if (!state.cy || state.cy.nodes().length === 0) {
-        return;
-      }
-      state.cy.fit(state.cy.elements(), 72);
-      rememberMeaningfulViewport();
-    }
-    function rememberMeaningfulViewport() {
-      if (!state.cy || state.cy.nodes().length === 0) {
-        return;
-      }
-      state.lastMeaningfulViewport = currentViewport(state.cy);
-    }
-    function ensureGraph() {
-      if (state.cy) {
-        return state.cy;
-      }
-      registerGraphLayouts();
-      const createCytoscape = window.cytoscape;
-      state.cy = createCytoscape({
-        container: canvas,
-        elements: [],
-        style: buildGraphStyle()
-      });
-      bindGraphEvents(state.cy);
-      return state.cy;
-    }
-    function bindGraphEvents(instance) {
-      instance.on("tap", "node", (event) => {
-        const nodeID = event.target.id();
-        const model = findDisplayedNodeModel(nodeID);
-        if (!model) {
-          return;
-        }
-        if (model.isAggregate) {
-          toggleFolderExpansion(model.folder);
-          return;
-        }
-        selectNode(nodeID);
-      });
-      instance.on("tap", (event) => {
-        if (event.target === instance) {
-          clearSelectedNode();
-        }
-      });
-      instance.on("mouseover", "node", (event) => {
-        const nodeID = event.target.id();
-        if (!isDisplayedNodeID(nodeID)) {
-          return;
-        }
-        const data = event.target.data();
-        setHoveredNode(nodeID, data);
-      });
-      instance.on("mouseout", "node", (event) => {
-        const nodeID = event.target.id();
-        if (!isDisplayedNodeID(nodeID)) {
-          return;
-        }
-        if (state.hoveredNodeID !== nodeID) {
-          return;
-        }
-        setHoveredNode("", null);
-      });
-      instance.on("select", "node", (event) => {
-        if (!selectionSyncing) {
-          selectNode(event.target.id(), { fromCytoscape: true });
-        }
-      });
-      instance.on("unselect", "node", (event) => {
-        const nodeID = event.target.id();
-        if (!selectionSyncing && isDisplayedNodeID(nodeID) && nodeID === state.selectedNodeID) {
-          clearSelectedNode({ fromCytoscape: true });
-        }
-      });
-      instance.on("viewport", () => {
-        rememberMeaningfulViewport();
-        applyGraphVisualState();
-      });
-    }
-    function findSourceNodeModel(nodeID) {
-      return state.currentGraphElements.nodes.find((node) => node.id === nodeID) || null;
-    }
-    function findDisplayedNodeModel(nodeID) {
-      if (nodeID === "") {
-        return null;
-      }
-      return state.displayGraphElements.nodes.find((node) => node.id === nodeID) || null;
-    }
-    function isDisplayedNodeID(nodeID) {
-      return findDisplayedNodeModel(nodeID) !== null;
-    }
-    function syncCytoscapeSelection(nodeID) {
-      if (!state.cy || selectionSyncing) {
-        return;
-      }
-      selectionSyncing = true;
-      try {
-        state.cy.nodes().forEach((node) => {
-          const shouldSelect = node.id() === nodeID;
-          if (shouldSelect && !node.selected()) {
-            node.select();
-          } else if (!shouldSelect && node.selected()) {
-            node.unselect();
-          }
-        });
-      } finally {
-        selectionSyncing = false;
-      }
-    }
-    function selectNode(nodeID, options = {}) {
-      const model = findDisplayedNodeModel(nodeID);
-      if (!model) {
-        return;
-      }
-      state.selectedNodeID = model.isAggregate ? "" : model.id;
-      if (!options || !options.fromCytoscape) {
-        syncCytoscapeSelection(state.selectedNodeID);
-      }
-      renderDetailsPanel();
-      applyGraphVisualState();
-      updateDisplayControls();
-    }
-    function clearSelectedNode(options = {}) {
-      state.selectedNodeID = "";
-      if (!options || !options.fromCytoscape) {
-        syncCytoscapeSelection("");
-      }
-      renderDetailsPanel();
-      applyGraphVisualState();
-      updateDisplayControls();
-    }
-    function setHoveredNode(nodeID, fallbackData) {
-      state.hoveredNodeID = nodeID || "";
-      canvas.classList.toggle("is-node-hovered", state.hoveredNodeID !== "");
-      if (!state.hoveredNodeID) {
-        renderDetailsPanel();
-        applyGraphVisualState();
-        return;
-      }
-      const fallbackModel = fallbackData ? graphNodeModelFromData(fallbackData, state.hoveredNodeID) : null;
-      renderDetailsPanel(fallbackModel);
-      applyGraphVisualState();
-    }
-    function keyboardTargetNodeID() {
-      if (isDisplayedNodeID(state.hoveredNodeID)) {
-        return state.hoveredNodeID;
-      }
-      if (isDisplayedNodeID(state.selectedNodeID)) {
-        return state.selectedNodeID;
-      }
-      if (!state.cy) {
-        return "";
-      }
-      const selectedNode = state.cy.nodes().filter((node) => node.selected()).first();
-      if (!selectedNode || selectedNode.length === 0) {
-        return "";
-      }
-      const nodeID = selectedNode.id();
-      return isDisplayedNodeID(nodeID) ? nodeID : "";
-    }
-    function handleGraphKeyDown(event) {
-      if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") {
-        return;
-      }
-      const nodeID = keyboardTargetNodeID();
-      if (!nodeID) {
-        return;
-      }
-      event.preventDefault();
-      selectNode(nodeID);
-    }
-    function computeDisplayedMatchIDs() {
-      const ids = /* @__PURE__ */ new Set();
-      for (const node of state.displayGraphElements.nodes) {
-        if (node.isAggregate) {
-          if ((node.memberIDs || []).some((memberID) => state.matchIDs.has(memberID))) {
-            ids.add(node.id);
-          }
-          continue;
-        }
-        if (state.matchIDs.has(node.id)) {
-          ids.add(node.id);
-        }
-      }
-      return ids;
-    }
-    function applyGraphVisualState() {
-      applyGraphVisualClasses(
-        state.cy,
-        state.labelMode,
-        state.selectedNodeID,
-        state.hoveredNodeID,
-        displayedMatchIDs
-      );
-    }
-    function updateZoomMatchesButton() {
-      if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
-        dom.zoomMatchesButton.disabled = displayedMatchIDs.size === 0;
-      }
-    }
-    function updateDisplayControls() {
-      if (dom.isolateButton instanceof HTMLButtonElement) {
-        dom.isolateButton.disabled = state.selectedNodeID === "" || state.selectedNodeID === state.display.isolateID;
-      }
-      if (dom.isolateClearButton instanceof HTMLButtonElement) {
-        dom.isolateClearButton.disabled = state.display.isolateID === "";
-      }
-      if (dom.minDegreeInput instanceof HTMLInputElement) {
-        dom.minDegreeInput.value = String(state.display.minDegree);
-      }
-      if (dom.minDegreeValue) {
-        dom.minDegreeValue.textContent = formatMinDegreeLabel(state.display.minDegree);
-      }
-      if (dom.collapseInput instanceof HTMLInputElement) {
-        dom.collapseInput.value = String(state.display.collapseDepth);
-      }
-      if (dom.collapseValue) {
-        dom.collapseValue.textContent = formatCollapseDepthLabel(state.display.collapseDepth);
-      }
-    }
-    function zoomToMatches() {
-      if (!state.cy || displayedMatchIDs.size === 0) {
-        return;
-      }
-      const matchedNodes = state.cy.nodes().filter((node) => displayedMatchIDs.has(node.id()));
-      if (matchedNodes.length === 0) {
-        return;
-      }
-      state.cy.fit(matchedNodes, 96);
-      rememberMeaningfulViewport();
-    }
-    function runLayout(options = {}) {
-      if (!state.cy || state.cy.nodes().length === 0) {
-        return;
-      }
-      const layoutOptions = options;
-      const fitAfterLayout = Boolean(layoutOptions.fitAfterLayout);
-      const preservedViewport = layoutOptions.preserveViewport ? currentViewport(state.cy) : null;
-      const runID = state.layoutRunID + 1;
-      state.layoutRunID = runID;
-      stopActiveLayout();
-      if (layoutOptions.resetPositions) {
-        seedDeterministicPositions(state.cy, clampedSpread(dom.spreadInput));
-      }
-      let finalized = false;
-      const finalizeLayout = () => {
-        if (finalized || runID !== state.layoutRunID) {
-          return;
-        }
-        finalized = true;
-        if (!hasFcose()) {
-          separateIsolatedNodes(state.cy, clampedSpread(dom.spreadInput));
-        }
-        if (fitAfterLayout) {
-          fitCurrentGraph();
-        } else if (preservedViewport) {
-          applyViewport(state.cy, preservedViewport);
-          rememberMeaningfulViewport();
-        } else {
-          rememberMeaningfulViewport();
-        }
-        applyGraphVisualState();
-        state.activeLayout = null;
-      };
-      const layout = state.cy.layout(layoutOptionsForSpread(clampedSpread(dom.spreadInput)));
-      state.activeLayout = layout;
-      if (typeof layout.one === "function") {
-        layout.one("layoutstop", finalizeLayout);
-      }
-      layout.run();
-      if (typeof layout.one !== "function") {
-        finalizeLayout();
-      }
-    }
-    function applyGraphElements(graphElements, layoutOptions) {
-      const instance = ensureGraph();
-      stopActiveLayout();
-      const selectedNodeID = state.selectedNodeID;
-      const rememberedPositions = layoutOptions.resetPositions ? null : captureNodePositions(instance);
-      selectionSyncing = true;
-      try {
-        instance.elements().remove();
-        if (graphElements.nodes.length > 0 || graphElements.edges.length > 0) {
-          instance.add(toCytoscapeElements(graphElements));
-        }
-      } finally {
-        selectionSyncing = false;
-      }
-      state.selectedNodeID = graphElements.nodes.some((node) => node.id === selectedNodeID) ? selectedNodeID : "";
-      syncCytoscapeSelection(state.selectedNodeID);
-      setHoveredNode("", null);
-      if (instance.nodes().length === 0) {
-        state.lastMeaningfulViewport = null;
-        applyGraphVisualState();
-        return;
-      }
-      if (rememberedPositions) {
-        seedDeterministicPositions(instance, clampedSpread(dom.spreadInput), rememberedPositions);
-      }
-      runLayout(layoutOptions);
-    }
-    function currentDisplayOptions() {
-      const keepIDs = /* @__PURE__ */ new Set();
-      if (state.selectedNodeID !== "") {
-        keepIDs.add(state.selectedNodeID);
-      }
-      if (state.display.isolateID !== "") {
-        keepIDs.add(state.display.isolateID);
-      }
-      return {
-        ...state.display,
-        expandedFolders: state.expandedFolders,
-        keepIDs
-      };
-    }
-    function rebuildDisplay(layoutOptions, prebuilt = null) {
-      const built = prebuilt || buildDisplayGraph(state.currentGraphElements, currentDisplayOptions());
-      if (state.display.isolateID !== "" && !built.stats.isolated) {
-        const droppedAnchor = state.display.isolateID;
-        state.display.isolateID = "";
-        syncPageDisplayParams(state.display);
-        displayNotice = `Isolation cleared: "${droppedAnchor}" is not in the current graph.`;
-      } else {
-        displayNotice = "";
-      }
-      state.displayGraphElements = built.elements;
-      displayStats = built.stats;
-      displayedMatchIDs = computeDisplayedMatchIDs();
-      currentElementSignature = elementSignature(built.elements);
-      applyGraphElements(built.elements, layoutOptions);
-      updateZoomMatchesButton();
-      updateDisplayControls();
-      renderStatus();
-    }
-    function rebuildDisplayForControl() {
-      rebuildDisplay({
-        fitAfterLayout: false,
-        preserveViewport: true,
-        resetPositions: false
-      });
-    }
-    function scheduleDisplayRebuild(delay) {
-      window.clearTimeout(displayToken);
-      if (delay <= 0) {
-        rebuildDisplayForControl();
-        return;
-      }
-      stopActiveLayout();
-      displayToken = window.setTimeout(() => {
-        rebuildDisplayForControl();
-      }, delay);
-    }
-    function pruneExpandedFolders(graphElements) {
-      if (state.expandedFolders.size === 0) {
-        return;
-      }
-      const live = /* @__PURE__ */ new Set();
-      for (const node of graphElements.nodes) {
-        const key = folderGroupKey(node.folder, state.display.collapseDepth);
-        if (key !== "") {
-          live.add(key);
-        }
-      }
-      for (const folder of Array.from(state.expandedFolders)) {
-        if (!live.has(folder)) {
-          state.expandedFolders.delete(folder);
-        }
-      }
-    }
-    function toggleFolderExpansion(folder) {
-      if (folder === "") {
-        return;
-      }
-      if (state.expandedFolders.has(folder)) {
-        state.expandedFolders.delete(folder);
-      } else {
-        state.expandedFolders.add(folder);
-      }
-      rebuildDisplayForControl();
-    }
-    function buildQueryURL(query) {
-      const url = buildFilteredAPIURL("/api/graph.json", query);
-      if (state.searchMode !== "focus") {
-        return url;
-      }
-      const parsed = new URL(url, window.location.origin);
-      parsed.searchParams.set("q_mode", "focus");
-      return `${parsed.pathname}${parsed.search}`;
-    }
-    function elementSignature(graphElements) {
-      const nodeIDs = graphElements.nodes.map((node) => node.id).sort();
-      const edgeIDs = graphElements.edges.map((edge) => edge.id).sort();
-      return `${nodeIDs.join("\n")}\0${edgeIDs.join("\n")}`;
-    }
-    function matchIDsFor(graphElements) {
-      const ids = /* @__PURE__ */ new Set();
-      for (const node of graphElements.nodes) {
-        if (node.matchesQuery) {
-          ids.add(node.id);
-        }
-      }
-      return ids;
-    }
-    function refreshMatchHighlighting(graphElements, displayElements) {
-      const instance = state.cy;
-      if (!instance) {
-        return;
-      }
-      state.currentGraphElements = graphElements;
-      state.displayGraphElements = displayElements;
-      displayedMatchIDs = computeDisplayedMatchIDs();
-      instance.batch(() => {
-        instance.nodes().forEach((node) => {
-          node.data("matchesQuery", displayedMatchIDs.has(node.id()));
-        });
-      });
-      renderDetailsPanel();
-      applyGraphVisualState();
-    }
-    async function loadGraph(query, localToken) {
-      if (typeof window.cytoscape !== "function") {
-        setStatus("Graph library failed to load.", "is-error");
-        return;
-      }
-      setStatus("Loading graph...", "is-loading");
-      let payload;
-      try {
-        const resp = await fetch(buildQueryURL(query), {
-          headers: { Accept: "application/json" }
-        });
-        if (localToken !== requestToken) {
-          return;
-        }
-        if (!resp.ok) {
-          setStatus(`Graph load failed (${resp.status}).`, "is-error");
-          return;
-        }
-        payload = await resp.json();
-      } catch (error) {
-        if (localToken !== requestToken) {
-          return;
-        }
-        setStatus("Graph load failed.", "is-error");
-        return;
-      }
-      if (localToken !== requestToken) {
-        return;
-      }
-      const graphElements = normalizeGraphPayload(payload);
-      const focusMode = state.searchMode === "focus";
-      state.matchIDs = matchIDsFor(graphElements);
-      pruneExpandedFolders(graphElements);
-      const built = buildDisplayGraph(graphElements, currentDisplayOptions());
-      const signature = elementSignature(built.elements);
-      if (focusMode && state.cy && signature === currentElementSignature) {
-        refreshMatchHighlighting(graphElements, built.elements);
-        displayStats = built.stats;
-      } else {
-        state.currentGraphElements = graphElements;
-        rebuildDisplay(
-          {
-            fitAfterLayout: true,
-            resetPositions: true
-          },
-          built
-        );
-      }
-      updateZoomMatchesButton();
-      const hasFilters = hasActiveFilters();
-      const scopeLabel = graphScopeLabel(query, hasFilters);
-      if (focusMode && query) {
-        if (state.matchIDs.size === 0) {
-          setStatus(`No notes match ${scopeLabel}.`, "is-empty");
-          return;
-        }
-        setStatus(
-          `Focusing ${state.matchIDs.size} of ${graphElements.nodes.length} nodes matching ${scopeLabel}.`
-        );
-        return;
-      }
-      if (scopeLabel) {
-        if (graphElements.nodes.length === 0) {
-          setStatus(`No notes match ${scopeLabel}.`, "is-empty");
-          return;
-        }
-        setStatus(
-          `Showing ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges for ${scopeLabel}.`
-        );
-        return;
-      }
-      setStatus(`Loaded ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges.`);
-    }
-    function scheduleLoad(query, delay) {
-      window.clearTimeout(debounceToken);
-      state.currentQuery = query;
-      const localToken = ++requestToken;
-      if (delay <= 0) {
-        void loadGraph(query, localToken);
-        return;
-      }
-      debounceToken = window.setTimeout(() => {
-        void loadGraph(query, localToken);
-      }, delay);
-    }
-    function publishFilterChange(delay) {
-      window.clearTimeout(publishToken);
-      const emit = () => {
-        dispatchFiltersChange(window, {
-          mode: graphFilterMode,
-          params: new URLSearchParams(window.location.search)
-        });
-      };
-      if (delay <= 0) {
-        emit();
-        return;
-      }
-      publishToken = window.setTimeout(emit, delay);
-    }
-    function bindControls() {
-      canvas.addEventListener("keydown", handleGraphKeyDown);
-      const openNote = dom.openNote;
-      if (openNote instanceof HTMLAnchorElement) {
-        openNote.addEventListener("click", (event) => {
-          if (openNote.getAttribute("aria-disabled") === "true") {
-            event.preventDefault();
-          }
-        });
-      }
-      const filterInput2 = dom.filterInput;
-      if (filterInput2 instanceof HTMLInputElement) {
-        filterInput2.addEventListener("input", () => {
-          syncPageQueryParam(filterInput2.value.trim());
-          publishFilterChange(graphFilterDebounceMs);
-        });
-        filterInput2.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter") {
-            return;
-          }
-          event.preventDefault();
-          zoomToMatches();
-        });
-      }
-      updateSpreadLabel(dom.spreadInput, dom.spreadValue);
-      if (dom.spreadInput instanceof HTMLInputElement) {
-        dom.spreadInput.addEventListener("input", () => {
-          updateSpreadLabel(dom.spreadInput, dom.spreadValue);
-          runLayout({
-            fitAfterLayout: false,
-            preserveViewport: true
-          });
-        });
-      }
-      if (dom.isolateButton instanceof HTMLButtonElement) {
-        dom.isolateButton.addEventListener("click", () => {
-          if (state.selectedNodeID === "") {
-            return;
-          }
-          state.display.isolateID = state.selectedNodeID;
-          syncPageDisplayParams(state.display);
-          rebuildDisplayForControl();
-        });
-      }
-      if (dom.isolateClearButton instanceof HTMLButtonElement) {
-        dom.isolateClearButton.addEventListener("click", () => {
-          if (state.display.isolateID === "") {
-            return;
-          }
-          state.display.isolateID = "";
-          syncPageDisplayParams(state.display);
-          rebuildDisplayForControl();
-        });
-      }
-      if (dom.minDegreeInput instanceof HTMLInputElement) {
-        const minDegreeInput = dom.minDegreeInput;
-        minDegreeInput.addEventListener("input", () => {
-          const minDegree = clampMinDegree(Number.parseInt(minDegreeInput.value, 10));
-          if (minDegree === state.display.minDegree) {
-            return;
-          }
-          state.display.minDegree = minDegree;
-          syncPageDisplayParams(state.display);
-          updateDisplayControls();
-          scheduleDisplayRebuild(graphFilterDebounceMs);
-        });
-      }
-      if (dom.collapseInput instanceof HTMLInputElement) {
-        const collapseInput = dom.collapseInput;
-        collapseInput.addEventListener("input", () => {
-          const collapseDepth = clampCollapseDepth(Number.parseInt(collapseInput.value, 10));
-          if (collapseDepth === state.display.collapseDepth) {
-            return;
-          }
-          state.display.collapseDepth = collapseDepth;
-          state.expandedFolders.clear();
-          syncPageDisplayParams(state.display);
-          updateDisplayControls();
-          scheduleDisplayRebuild(graphFilterDebounceMs);
-        });
-      }
-      if (dom.fitButton instanceof HTMLButtonElement) {
-        dom.fitButton.addEventListener("click", fitCurrentGraph);
-      }
-      if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
-        dom.zoomMatchesButton.addEventListener("click", zoomToMatches);
-      }
-      updateZoomMatchesButton();
-      if (dom.resetLayoutButton instanceof HTMLButtonElement) {
-        dom.resetLayoutButton.addEventListener("click", () => {
-          runLayout({
-            fitAfterLayout: true,
-            resetPositions: true
-          });
-        });
-      }
-      for (const input of dom.labelModeInputs) {
-        if (!(input instanceof HTMLInputElement)) {
-          continue;
-        }
-        input.addEventListener("change", () => {
-          if (input.checked) {
-            setLabelMode(input.value);
-          }
-        });
-      }
-      for (const input of dom.searchModeInputs) {
-        if (!(input instanceof HTMLInputElement)) {
-          continue;
-        }
-        input.addEventListener("change", () => {
-          if (input.checked) {
-            setSearchMode(normalizeSearchMode(input.value));
-          }
-        });
-      }
-    }
     const initialQuery = readPageQuery();
     const filterInput = dom.filterInput;
     if (filterInput instanceof HTMLInputElement) {
@@ -6271,21 +6316,23 @@ var BrainNotesApp = (() => {
     }
     for (const input of dom.searchModeInputs) {
       if (input instanceof HTMLInputElement) {
-        input.checked = normalizeSearchMode(input.value) === state.searchMode;
+        input.checked = normalizeSearchMode(input.value) === runtime.state.searchMode;
       }
     }
     window.addEventListener(filterChangeEventName, (event) => {
       if (!shouldHandleFilterChangeForMode(event, graphFilterMode)) {
         return;
       }
-      const query = filterInput instanceof HTMLInputElement ? filterInput.value.trim() : state.currentQuery;
-      scheduleLoad(query, 0);
+      const query = filterInput instanceof HTMLInputElement ? filterInput.value.trim() : runtime.state.currentQuery;
+      scheduleLoad(runtime, query, 0);
     });
-    document.addEventListener(THEME_EVENT, restyleGraphForTheme);
+    document.addEventListener(THEME_EVENT, () => {
+      restyleGraphForTheme(runtime);
+    });
     canonicalizeLegacyDisplayParams();
-    bindControls();
-    updateDisplayControls();
-    scheduleLoad(initialQuery, 0);
+    bindControls(runtime);
+    updateDisplayControls(runtime);
+    scheduleLoad(runtime, initialQuery, 0);
   };
 
   // internal/web/static_src/history-panel.ts
@@ -6350,7 +6397,7 @@ var BrainNotesApp = (() => {
         forceButton.disabled = next || !pendingConflict?.entry_id;
       }
     };
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message, kind);
     };
     const hideConflict = () => {
@@ -6412,44 +6459,44 @@ var BrainNotesApp = (() => {
     };
     const loadHistory = async (successMessage = "") => {
       setBusy(true);
-      setStatus("Loading history...", "is-loading");
+      setStatus2("Loading history...", "is-loading");
       try {
         const resp = await fetcher("/api/history", {
           headers: { Accept: "application/json" }
         });
         const payload = await readHistoryPanelPayload(resp);
         if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         entries = normalizeHistoryEntries(payload);
         renderEntries();
         if (entries.length === 0) {
-          setStatus("No recent changes.", "is-empty");
+          setStatus2("No recent changes.", "is-empty");
         } else {
-          setStatus(successMessage || `${entries.length} recent changes.`, successMessage ? "is-success" : "");
+          setStatus2(successMessage || `${entries.length} recent changes.`, successMessage ? "is-success" : "");
         }
       } catch {
-        setStatus("History unavailable.", "is-error");
+        setStatus2("History unavailable.", "is-error");
       } finally {
         setBusy(false);
       }
     };
     const runUndo = async (entryID, force) => {
       if (csrfToken.trim() === "") {
-        setStatus("Undo unavailable.", "is-error");
+        setStatus2("Undo unavailable.", "is-error");
         return;
       }
       if (!force && !confirmAction("Undo this change?")) {
-        setStatus("Undo canceled.");
+        setStatus2("Undo canceled.");
         return;
       }
       if (force && !confirmAction("Force undo and overwrite conflicting paths?")) {
-        setStatus("Force undo canceled.");
+        setStatus2("Force undo canceled.");
         return;
       }
       setBusy(true);
-      setStatus(force ? "Forcing undo..." : "Undoing change...", "is-loading");
+      setStatus2(force ? "Forcing undo..." : "Undoing change...", "is-loading");
       try {
         const body = buildUndoForm({
           token: csrfToken,
@@ -6470,18 +6517,18 @@ var BrainNotesApp = (() => {
         const result = payload;
         if (resp.status === 409 && result?.requires_force) {
           showConflict(result);
-          setStatus("Undo has conflicts.", "is-error");
+          setStatus2("Undo has conflicts.", "is-error");
           return;
         }
         if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         hideConflict();
         const message = result && result.ok && result.message ? result.message : "Undo restored paths.";
         await loadHistory(message);
       } catch {
-        setStatus("Undo failed.", "is-error");
+        setStatus2("Undo failed.", "is-error");
       } finally {
         setBusy(false);
       }
@@ -6496,7 +6543,7 @@ var BrainNotesApp = (() => {
     forceButton?.addEventListener("click", () => {
       const entryID = pendingConflict?.entry_id || "";
       if (entryID === "") {
-        setStatus("No conflict selected.", "is-error");
+        setStatus2("No conflict selected.", "is-error");
         return;
       }
       void runUndo(entryID, true);
@@ -6770,7 +6817,7 @@ var BrainNotesApp = (() => {
     const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text) => navigator.clipboard.writeText(text) : void 0);
     let disclosureAccepted = false;
     let output = "";
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
     };
     const setBusy = (busy) => {
@@ -6781,18 +6828,18 @@ var BrainNotesApp = (() => {
     };
     const run = async () => {
       if (!enabled || key === "" || csrfToken === "") {
-        setStatus("Ask AI is unavailable.", "is-error");
+        setStatus2("Ask AI is unavailable.", "is-error");
         return;
       }
       if (!disclosureAccepted) {
         disclosureAccepted = confirmer(disclosureMessage);
         if (!disclosureAccepted) {
-          setStatus("Ask AI canceled.");
+          setStatus2("Ask AI canceled.");
           return;
         }
       }
       setBusy(true);
-      setStatus("Generating response...", "is-loading");
+      setStatus2("Generating response...", "is-loading");
       try {
         const requestBody = buildNoteInsightForm({
           key,
@@ -6802,24 +6849,24 @@ var BrainNotesApp = (() => {
         const response = await fetcher(endpoint, postRequest(csrfToken, requestBody));
         const payload = await readResponsePayload3(response);
         if (!response.ok) {
-          setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(response.status, payload), "is-error");
           return;
         }
         const normalized = normalizeNoteInsightResponse(payload);
         if (!normalized.ok || !normalized.enabled) {
-          setStatus(normalized.message || "Ask AI is unavailable.", "is-error");
+          setStatus2(normalized.message || "Ask AI is unavailable.", "is-error");
           return;
         }
         if (normalized.key && normalized.key !== key) {
-          setStatus("Note changed while the response was running. Try again.", "is-error");
+          setStatus2("Note changed while the response was running. Try again.", "is-error");
           return;
         }
         output = normalized.output;
         body.innerHTML = normalized.rendered_html;
         result.hidden = false;
-        setStatus("Response ready.", "is-success");
+        setStatus2("Response ready.", "is-success");
       } catch (error) {
-        setStatus(describeClientError(error), "is-error");
+        setStatus2(describeClientError(error), "is-error");
       } finally {
         setBusy(false);
       }
@@ -6836,19 +6883,19 @@ var BrainNotesApp = (() => {
     });
     copy.addEventListener("click", async () => {
       if (output.trim() === "") {
-        setStatus("Nothing to copy.", "is-error");
+        setStatus2("Nothing to copy.", "is-error");
         return;
       }
       if (!clipboardWrite) {
-        setStatus("Clipboard unavailable.", "is-error");
+        setStatus2("Clipboard unavailable.", "is-error");
         return;
       }
       copy.disabled = true;
       try {
         await clipboardWrite(output);
-        setStatus("Response markdown copied.", "is-success");
+        setStatus2("Response markdown copied.", "is-success");
       } catch {
-        setStatus("Copy failed.", "is-error");
+        setStatus2("Copy failed.", "is-error");
       } finally {
         copy.disabled = false;
       }
@@ -6877,7 +6924,7 @@ var BrainNotesApp = (() => {
     }
     const config = readNotePinConfig(container);
     const fetcher = deps.fetch || fetch;
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
     const applyState = (pinned) => {
@@ -6888,26 +6935,26 @@ var BrainNotesApp = (() => {
     };
     button.addEventListener("click", async () => {
       if (!config.key || !config.csrfToken) {
-        setStatus("Pin action unavailable.", "is-error");
+        setStatus2("Pin action unavailable.", "is-error");
         return;
       }
       const pinning = !config.pinned;
       button.disabled = true;
-      setStatus(pinning ? "Pinning note..." : "Unpinning note...");
+      setStatus2(pinning ? "Pinning note..." : "Unpinning note...");
       try {
         const request = buildNotePinToggleRequest(config);
         const resp = await fetcher(request.url, request.init);
         const payload = await readNotePinResponsePayload(resp);
         if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         const result = payload;
         applyState(pinning);
         const fallback = pinning ? "Pinned note." : "Unpinned note.";
-        setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
+        setStatus2(result && result.ok && result.message ? result.message : fallback, "is-success");
       } catch {
-        setStatus(pinning ? "Pin failed." : "Unpin failed.", "is-error");
+        setStatus2(pinning ? "Pin failed." : "Unpin failed.", "is-error");
       } finally {
         button.disabled = false;
       }
@@ -6950,34 +6997,34 @@ var BrainNotesApp = (() => {
     const fetcher = deps.fetch || fetch;
     const confirmAction = deps.confirm || ((message) => window.confirm(message));
     const redirect = deps.redirect || ((path) => window.location.assign(path));
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
     button.addEventListener("click", async () => {
       if (!config.key || !config.csrfToken) {
-        setStatus("Trash action unavailable.", "is-error");
+        setStatus2("Trash action unavailable.", "is-error");
         return;
       }
       if (!confirmAction(config.confirmMessage)) {
-        setStatus("Trash canceled.");
+        setStatus2("Trash canceled.");
         return;
       }
       button.disabled = true;
-      setStatus("Moving note to Trash...");
+      setStatus2("Moving note to Trash...");
       try {
         const request = buildTrashNoteFetchRequest(config);
         const resp = await fetcher(request.url, request.init);
         const payload = await readTrashResponsePayload(resp);
         if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         const result = payload;
         const message = result && result.ok && result.message ? result.message : "Moved note to Trash.";
-        setStatus(`${message} Redirecting...`, "is-success");
+        setStatus2(`${message} Redirecting...`, "is-success");
         redirect(config.redirectPath);
       } catch {
-        setStatus("Trash failed.", "is-error");
+        setStatus2("Trash failed.", "is-error");
       } finally {
         button.disabled = false;
       }
@@ -7530,7 +7577,7 @@ var BrainNotesApp = (() => {
     let debounceToken = 0;
     let ignoreNextManagementMutationClear = false;
     let requestToken = 0;
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
     };
     const setBulkStatus = (message, kind = "") => {
@@ -7636,7 +7683,7 @@ var BrainNotesApp = (() => {
       listEl.hidden = true;
       selectedKeys.clear();
       clearPreviewState({ clearStatus: true });
-      setStatus(message, kind);
+      setStatus2(message, kind);
     };
     const renderResults = (payload, query) => {
       const results = normalizeSearchResults(payload);
@@ -7663,7 +7710,7 @@ var BrainNotesApp = (() => {
       listEl.hidden = false;
       const noun = renderedCount === 1 ? "note" : "notes";
       const scope = query ? ` for "${query}"` : "";
-      setStatus(`${renderedCount} matching ${noun}${scope}.`, "");
+      setStatus2(`${renderedCount} matching ${noun}${scope}.`, "");
     };
     const scheduleSearch = (delay) => {
       const query = overviewSearchQuery(input);
@@ -7678,7 +7725,7 @@ var BrainNotesApp = (() => {
       }
       const localToken = ++requestToken;
       setOverviewBusy(root, true);
-      setStatus("Loading matching notes...", "is-loading");
+      setStatus2("Loading matching notes...", "is-loading");
       debounceToken = window.setTimeout(async () => {
         try {
           const resp = await fetcher(buildSearchAPIURL(query, true), {
@@ -7903,7 +7950,7 @@ var BrainNotesApp = (() => {
     const csrfToken = root.getAttribute("data-pinned-csrf") || "";
     const fetcher = deps.fetch || fetch;
     const reload = deps.reload || (() => window.location.reload());
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
     const rows = () => queryAllElements(list, "[data-pinned-item]", HTMLElement);
@@ -7912,14 +7959,14 @@ var BrainNotesApp = (() => {
         const resp = await fetcher(request.url, request.init);
         const payload = await readNotePinResponsePayload(resp);
         if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return false;
         }
         const result = payload;
-        setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
+        setStatus2(result && result.ok && result.message ? result.message : fallback, "is-success");
         return true;
       } catch {
-        setStatus("Pin request failed.", "is-error");
+        setStatus2("Pin request failed.", "is-error");
         return false;
       }
     };
@@ -7928,10 +7975,10 @@ var BrainNotesApp = (() => {
     let resyncing = false;
     const sendMove = async (move) => {
       if (!move.key || !csrfToken) {
-        setStatus("Reorder unavailable.", "is-error");
+        setStatus2("Reorder unavailable.", "is-error");
         return false;
       }
-      setStatus("Saving pin order...");
+      setStatus2("Saving pin order...");
       return post(
         buildNotePinReorderFetchRequest({
           key: move.key,
@@ -7951,7 +7998,7 @@ var BrainNotesApp = (() => {
         before: neighbors.before,
         after: neighbors.after
       };
-      setStatus("Saving pin order...");
+      setStatus2("Saving pin order...");
       moveQueue = moveQueue.then(async () => {
         if (resyncing) {
           return;
@@ -8030,11 +8077,11 @@ var BrainNotesApp = (() => {
     const unpin = async (item, button) => {
       const key = pinnedItemKey(item);
       if (!key || !csrfToken) {
-        setStatus("Unpin unavailable.", "is-error");
+        setStatus2("Unpin unavailable.", "is-error");
         return;
       }
       button.disabled = true;
-      setStatus("Unpinning note...");
+      setStatus2("Unpinning note...");
       const ok = await post(
         buildNotePinRemoveFetchRequest({ key, token: csrfToken }),
         "Unpinned note."
@@ -9140,7 +9187,7 @@ var BrainNotesApp = (() => {
     const dialog = config.token !== "" && dialogHost ? createPreviewDialog(root.ownerDocument, dialogHost) : null;
     let latest = null;
     let mutationBusy = false;
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message, kind);
     };
     const currentFilter = () => ({
@@ -9161,22 +9208,22 @@ var BrainNotesApp = (() => {
       }
       const shown = filterCatalog(latest.properties, currentFilter());
       renderCatalog(listEl, shown);
-      setStatus(
+      setStatus2(
         catalogStatusMessage(latest, shown.length),
         shown.length === 0 ? "is-empty" : ""
       );
     };
     const applyProposal = async (proposal, previewID) => {
       setMutationBusy(true);
-      setStatus("Adding the inferred definition...", "is-loading");
+      setStatus2("Adding the inferred definition...", "is-loading");
       try {
         const outcome = await applyPropertySchema(fetcher, config.token, previewID);
         if (!outcome.ok) {
-          setStatus(outcome.message, "is-error");
+          setStatus2(outcome.message, "is-error");
           return;
         }
         await load();
-        setStatus(`Added ${proposal.property} to brainnotes.toml.`, "is-success");
+        setStatus2(`Added ${proposal.property} to brainnotes.toml.`, "is-success");
       } finally {
         setMutationBusy(false);
       }
@@ -9187,11 +9234,11 @@ var BrainNotesApp = (() => {
       }
       const definition = inferredDefinition(proposal);
       if (!dialog || config.token === "" || !definition) {
-        setStatus("This inferred definition cannot be added.", "is-error");
+        setStatus2("This inferred definition cannot be added.", "is-error");
         return;
       }
       setMutationBusy(true);
-      setStatus("Previewing the inferred definition...", "is-loading");
+      setStatus2("Previewing the inferred definition...", "is-loading");
       try {
         const outcome = await previewPropertySchema(fetcher, config.token, {
           op: "upsert",
@@ -9199,11 +9246,11 @@ var BrainNotesApp = (() => {
           definition
         });
         if (!outcome.ok) {
-          setStatus(outcome.message, "is-error");
+          setStatus2(outcome.message, "is-error");
           return;
         }
         const result = outcome.result;
-        setStatus(previewSummaryLabel(result));
+        setStatus2(previewSummaryLabel(result));
         dialog.open({
           title: `Add ${proposal.property} to brainnotes.toml`,
           summary: previewSummaryLabel(result),
@@ -9213,7 +9260,7 @@ var BrainNotesApp = (() => {
             void applyProposal(proposal, result.preview_id);
           },
           onCancel: () => {
-            setStatus("Definition change canceled.");
+            setStatus2("Definition change canceled.");
           }
         });
       } finally {
@@ -9222,17 +9269,17 @@ var BrainNotesApp = (() => {
     };
     const load = async () => {
       root.setAttribute("aria-busy", "true");
-      setStatus("Loading properties...", "is-loading");
+      setStatus2("Loading properties...", "is-loading");
       try {
         const resp = await fetcher(config.endpoint, { headers: { Accept: "application/json" } });
         const payload = await readPayload2(resp);
         if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         const result = normalizePropertiesResponse(payload);
         if (!result.ok) {
-          setStatus(result.message || "Properties unavailable.", "is-error");
+          setStatus2(result.message || "Properties unavailable.", "is-error");
           return;
         }
         latest = result;
@@ -9247,7 +9294,7 @@ var BrainNotesApp = (() => {
         }
         applyFilter();
       } catch {
-        setStatus("Properties unavailable.", "is-error");
+        setStatus2("Properties unavailable.", "is-error");
       } finally {
         root.setAttribute("aria-busy", "false");
       }
@@ -9259,20 +9306,20 @@ var BrainNotesApp = (() => {
     });
     configOpenEl?.addEventListener("click", async () => {
       if (config.token === "") {
-        setStatus("Open action unavailable.", "is-error");
+        setStatus2("Open action unavailable.", "is-error");
         return;
       }
       configOpenEl.disabled = true;
-      setStatus("Opening brainnotes.toml in the configured editor...", "is-loading");
+      setStatus2("Opening brainnotes.toml in the configured editor...", "is-loading");
       try {
         const resp = await fetcher("/api/config/open", buildOpenConfigFetchRequest(config.token));
         if (!resp.ok) {
-          setStatus(normalizeOpenErrorMessage(resp.status, await resp.text()), "is-error");
+          setStatus2(normalizeOpenErrorMessage(resp.status, await resp.text()), "is-error");
           return;
         }
-        setStatus("Opened brainnotes.toml in the configured editor.", "is-success");
+        setStatus2("Opened brainnotes.toml in the configured editor.", "is-success");
       } catch {
-        setStatus("Open failed.", "is-error");
+        setStatus2("Open failed.", "is-error");
       } finally {
         configOpenEl.disabled = false;
       }
@@ -9859,7 +9906,7 @@ var BrainNotesApp = (() => {
     let rows = [];
     let matchValue = null;
     let busy = false;
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       host.setStatus(message, kind);
     };
     const rowElements = () => queryAllElements(host.rowsEl, "[data-property-row]", HTMLElement);
@@ -9943,7 +9990,7 @@ var BrainNotesApp = (() => {
       property: host.property,
       reload: host.reload,
       setBusy,
-      setStatus,
+      setStatus: setStatus2,
       toast,
       token: host.token,
       updateRowText
@@ -10008,7 +10055,7 @@ var BrainNotesApp = (() => {
       const current = summary;
       const notes = [...selected];
       if (notes.length === 0) {
-        setStatus("Select at least one note first.", "is-error");
+        setStatus2("Select at least one note first.", "is-error");
         return;
       }
       if (action === "unset" || action === "repair") {
@@ -10183,7 +10230,7 @@ var BrainNotesApp = (() => {
         if (selected.size > 0) {
           selected.clear();
           renderSelection();
-          setStatus("Selection cleared.");
+          setStatus2("Selection cleared.");
         }
       }
     });
@@ -10251,7 +10298,7 @@ var BrainNotesApp = (() => {
     const filter = emptyDetailFilter();
     const invalidEl = queryElement(root, "[data-property-config-invalid]", HTMLElement);
     const restartEl = queryElement(root, "[data-property-config-restart]", HTMLElement);
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message, kind);
     };
     const renderBanners = (status) => {
@@ -10274,7 +10321,7 @@ var BrainNotesApp = (() => {
         token: config.token,
         historyHref: config.historyPath,
         reload: () => load(),
-        setStatus
+        setStatus: setStatus2
       },
       deps
     );
@@ -10284,7 +10331,7 @@ var BrainNotesApp = (() => {
         void workbench.previewSchema(op, definition);
       },
       setStatus: (message) => {
-        setStatus(message);
+        setStatus2(message);
       }
     }) : null;
     const renderActiveValue = () => {
@@ -10298,7 +10345,7 @@ var BrainNotesApp = (() => {
     };
     const load = async () => {
       root.setAttribute("aria-busy", "true");
-      setStatus("Loading property...", "is-loading");
+      setStatus2("Loading property...", "is-loading");
       try {
         const url = buildPropertyDetailURL(config.detailEndpoint, {
           property: config.property,
@@ -10311,12 +10358,12 @@ var BrainNotesApp = (() => {
         const resp = await fetcher(url, { headers: { Accept: "application/json" } });
         const payload = await readPayload3(resp);
         if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         const result = normalizePropertyDetailResponse(payload);
         if (!result.ok) {
-          setStatus(result.message || "Property unavailable.", "is-error");
+          setStatus2(result.message || "Property unavailable.", "is-error");
           return;
         }
         renderSummary(summaryEl, result.property);
@@ -10344,7 +10391,7 @@ var BrainNotesApp = (() => {
           nextEl.disabled = !result.pagination.has_more;
         }
         filter.offset = result.pagination.offset;
-        setStatus(
+        setStatus2(
           detailStatusMessage(result),
           result.pagination.total === 0 ? "is-empty" : ""
         );
@@ -10358,7 +10405,7 @@ var BrainNotesApp = (() => {
           );
         }
       } catch {
-        setStatus("Property unavailable.", "is-error");
+        setStatus2("Property unavailable.", "is-error");
       } finally {
         root.setAttribute("aria-busy", "false");
       }
@@ -10409,7 +10456,7 @@ var BrainNotesApp = (() => {
         fetch: fetcher,
         onStatus: renderBanners,
         onGenerationChange: () => {
-          setStatus("brainnotes.toml changed on disk. Reloading...", "is-loading");
+          setStatus2("brainnotes.toml changed on disk. Reloading...", "is-loading");
           void load();
         }
       }).start();
@@ -11854,7 +11901,7 @@ var BrainNotesApp = (() => {
       rediscover: null,
       connect: null
     };
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(view.status, message, kind);
     };
     const showStatus = (mode) => {
@@ -11862,7 +11909,7 @@ var BrainNotesApp = (() => {
         return;
       }
       const [message, kind] = statusForMode(model, mode);
-      setStatus(message, kind);
+      setStatus2(message, kind);
     };
     const load = (mode, requestedLimit) => {
       const state = model.modes[mode];
@@ -11953,13 +12000,13 @@ var BrainNotesApp = (() => {
     };
     const runMutation = async (action, candidate, until, origin) => {
       if (config.source === "" || config.csrfToken === "" || candidate === "") {
-        setStatus("Related action unavailable.", "is-error");
+        setStatus2("Related action unavailable.", "is-error");
         return;
       }
       if (action === "later") {
         const validationError = validateRelatedLaterDate(model.serverDate, until);
         if (validationError) {
-          setStatus(validationError, "is-error");
+          setStatus2(validationError, "is-error");
           return;
         }
       }
@@ -11975,7 +12022,7 @@ var BrainNotesApp = (() => {
       if (drawerRow) {
         setRelatedFeedbackBusy(drawerRow, true);
       }
-      setStatus(action === "open_editor" ? "Opening editor\u2026" : "Saving feedback\u2026", "is-loading");
+      setStatus2(action === "open_editor" ? "Opening editor\u2026" : "Saving feedback\u2026", "is-loading");
       try {
         const result = await requestRelatedItem(fetcher, config.itemEndpoint, {
           source: config.source,
@@ -11986,9 +12033,9 @@ var BrainNotesApp = (() => {
         });
         if (action === "open_editor") {
           if (result.warning) {
-            setStatus(`Editor opened. ${result.warning}`, "is-warning");
+            setStatus2(`Editor opened. ${result.warning}`, "is-warning");
           } else {
-            setStatus("Opened in editor and recorded in recall history.", "is-success");
+            setStatus2("Opened in editor and recorded in recall history.", "is-success");
           }
           return;
         }
@@ -11997,17 +12044,17 @@ var BrainNotesApp = (() => {
         const activeState = model.modes[activeMode];
         const refreshed = await refreshAfterMutation(activeMode);
         if (!refreshed) {
-          setStatus(
+          setStatus2(
             `Feedback was saved, but related notes could not be refreshed: ${activeState.error || "refresh failed"}`,
             "is-warning"
           );
           return;
         }
         const outcome = action === "dismissed" ? "Dismissed note." : action === "later" ? `Hidden until ${until}.` : action === "clear" ? "Cleared feedback." : "Marked note as useful.";
-        setStatus(outcome, "is-success");
+        setStatus2(outcome, "is-success");
         focusAfterMutation(candidate, nextCandidate, previousCandidate, drawerRow !== null);
       } catch (error) {
-        setStatus(errorMessage(error), "is-error");
+        setStatus2(errorMessage(error), "is-error");
       } finally {
         if (card?.isConnected) {
           setRelatedCardBusy(card, false);
@@ -12243,7 +12290,7 @@ var BrainNotesApp = (() => {
     let pending = null;
     let receipt = null;
     let busy = false;
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       hooks.onStatus?.(message, kind);
     };
     const setPending = (next) => {
@@ -12258,14 +12305,14 @@ var BrainNotesApp = (() => {
       hooks.onReceipt?.(next);
     };
     const runApply = async (issued) => {
-      setStatus(`Saving view "${issued.name}"...`, "is-loading");
+      setStatus2(`Saving view "${issued.name}"...`, "is-loading");
       const outcome = await applySavedView(deps.fetch, deps.token, issued.previewID);
       setPending(null);
       if (!outcome.ok) {
-        setStatus(outcome.message, "is-error");
+        setStatus2(outcome.message, "is-error");
         return;
       }
-      setStatus(savedViewSavedMessage(issued.name, issued.created), "is-success");
+      setStatus2(savedViewSavedMessage(issued.name, issued.created), "is-success");
       if (issued.created) {
         setReceipt(savedViewCreateReceipt(issued));
       }
@@ -12279,19 +12326,19 @@ var BrainNotesApp = (() => {
       if (refusal !== "") {
         setPending(null);
         setReceipt(null);
-        setStatus(refusal, "is-error");
+        setStatus2(refusal, "is-error");
         return;
       }
       if (deps.token.trim() === "") {
         setPending(null);
         setReceipt(null);
-        setStatus("Saving views is unavailable.", "is-error");
+        setStatus2("Saving views is unavailable.", "is-error");
         return;
       }
       busy = true;
       setPending(null);
       setReceipt(null);
-      setStatus(`Previewing view "${input.name}"...`, "is-loading");
+      setStatus2(`Previewing view "${input.name}"...`, "is-loading");
       try {
         const outcome = await previewSavedView(deps.fetch, deps.token, {
           token: deps.token,
@@ -12300,11 +12347,11 @@ var BrainNotesApp = (() => {
           view: savedViewDefinition(input)
         });
         if (!outcome.ok) {
-          setStatus(outcome.message, "is-error");
+          setStatus2(outcome.message, "is-error");
           return;
         }
         if (outcome.result.preview_id === "") {
-          setStatus(savedViewNoChangeMessage(input.name), "");
+          setStatus2(savedViewNoChangeMessage(input.name), "");
           return;
         }
         const receipt2 = savedViewPendingSave(input.name, outcome.result);
@@ -12313,7 +12360,7 @@ var BrainNotesApp = (() => {
           return;
         }
         setPending(receipt2);
-        setStatus(savedViewOverwriteMessage(input.name), "is-warning");
+        setStatus2(savedViewOverwriteMessage(input.name), "is-warning");
       } finally {
         busy = false;
       }
@@ -12324,7 +12371,7 @@ var BrainNotesApp = (() => {
       }
       const issued = pending;
       if (!issued) {
-        setStatus("Preview the view before saving it.", "is-error");
+        setStatus2("Preview the view before saving it.", "is-error");
         return;
       }
       busy = true;
@@ -12340,7 +12387,7 @@ var BrainNotesApp = (() => {
         return;
       }
       setPending(null);
-      setStatus("Overwrite cancelled.", "");
+      setStatus2("Overwrite cancelled.", "");
     };
     return {
       save,
@@ -12447,7 +12494,7 @@ var BrainNotesApp = (() => {
       return null;
     }
     const fetcher = deps.fetch || ((input, init) => fetch(input, init));
-    const setStatus = (message, kind = "") => {
+    const setStatus2 = (message, kind = "") => {
       setStatusText(els.statusEl, message, kind);
     };
     const showPending = (pending) => {
@@ -12466,7 +12513,7 @@ var BrainNotesApp = (() => {
       fetch: fetcher,
       token: els.token,
       hooks: {
-        onStatus: setStatus,
+        onStatus: setStatus2,
         onPending: showPending,
         onReceipt: showReceipt,
         onSaved: (result) => {

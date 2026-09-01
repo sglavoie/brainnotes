@@ -1,0 +1,286 @@
+package web
+
+import (
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func TestQueryCompletionsAPI_CompletesFieldNames(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	payload := ts.completions(url.Values{"expr": {"ta"}, "pos": {"2"}})
+	if !payload.OK {
+		t.Fatalf("ok = false; payload=%#v", payload)
+	}
+	if got, want := payload.Kind, "field"; got != want {
+		t.Fatalf("kind = %q, want %q", got, want)
+	}
+	if got, want := payload.Prefix, "ta"; got != want {
+		t.Errorf("prefix = %q, want %q", got, want)
+	}
+	if payload.Replace != (queryReplaceRange{Start: 0, End: 2}) {
+		t.Errorf("replace = %+v, want {0 2}", payload.Replace)
+	}
+
+	tag := findCompletion(payload.Completions, "tag")
+	if tag == nil {
+		t.Fatalf("completions = %#v, want one for tag", payload.Completions)
+	}
+	if got, want := tag.Insert, "tag:"; got != want {
+		t.Errorf("tag insert = %q, want %q", got, want)
+	}
+	if got, want := tag.Kind, "field"; got != want {
+		t.Errorf("tag kind = %q, want %q", got, want)
+	}
+	if strings.TrimSpace(tag.Detail) == "" {
+		t.Errorf("tag detail is empty, want the field hint")
+	}
+	// A declared property is spelled bare, so it belongs in the same list.
+	if rating := findCompletion(payload.Completions, "rating"); rating != nil {
+		t.Errorf("rating matched the prefix %q unexpectedly: %#v", payload.Prefix, rating)
+	}
+	all := ts.completions(url.Values{"expr": {""}})
+	if rating := findCompletion(all.Completions, "rating"); rating == nil {
+		t.Errorf("completions = %#v, want the declared property rating", all.Completions)
+	}
+}
+
+func TestQueryCompletionsAPI_CompletesFacetValues(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	payload := ts.completions(url.Values{"expr": {"tag:"}})
+	if got, want := payload.Kind, "value"; got != want {
+		t.Fatalf("kind = %q, want %q; payload=%#v", got, want, payload)
+	}
+	if got, want := payload.Field, "tag"; got != want {
+		t.Fatalf("field = %q, want %q", got, want)
+	}
+	if payload.Replace != (queryReplaceRange{Start: 4, End: 4}) {
+		t.Errorf("replace = %+v, want {4 4}", payload.Replace)
+	}
+
+	// wip is on two notes and focus on two; both come from the facet counts.
+	wip := findCompletion(payload.Completions, "wip")
+	if wip == nil {
+		t.Fatalf("completions = %#v, want one for wip", payload.Completions)
+	}
+	if wip.Count != 2 {
+		t.Errorf("wip count = %d, want 2", wip.Count)
+	}
+	if got, want := wip.Kind, "tag"; got != want {
+		t.Errorf("wip kind = %q, want %q", got, want)
+	}
+
+	folders := ts.completions(url.Values{"expr": {"folder:"}})
+	if findCompletion(folders.Completions, "Archive") == nil {
+		t.Errorf("folder completions = %#v, want Archive", folders.Completions)
+	}
+
+	statuses := ts.completions(url.Values{"expr": {"status:d"}})
+	if findCompletion(statuses.Completions, "done") == nil {
+		t.Errorf("status completions = %#v, want done", statuses.Completions)
+	}
+	if findCompletion(statuses.Completions, "wip") != nil {
+		t.Errorf("status completions = %#v, want the prefix d to exclude wip", statuses.Completions)
+	}
+}
+
+func TestQueryCompletionsAPI_CompletesPropertyNamesAndValues(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	names := ts.completions(url.Values{"expr": {"has:rat"}})
+	rating := findCompletion(names.Completions, "rating")
+	if rating == nil {
+		t.Fatalf("has: completions = %#v, want rating", names.Completions)
+	}
+	if got, want := rating.Kind, "property"; got != want {
+		t.Errorf("rating kind = %q, want %q", got, want)
+	}
+
+	values := ts.completions(url.Values{"expr": {"prop:rating="}})
+	if got, want := values.Field, "prop"; got != want {
+		t.Fatalf("field = %q, want %q; payload=%#v", got, want, values)
+	}
+	if got, want := values.Arg, "rating"; got != want {
+		t.Fatalf("arg = %q, want %q", got, want)
+	}
+	if findCompletion(values.Completions, "5") == nil {
+		t.Errorf("prop:rating= completions = %#v, want the stored value 5", values.Completions)
+	}
+
+	// A declared property is spelled bare, so its values follow it directly.
+	bare := ts.completions(url.Values{"expr": {"rating="}})
+	if findCompletion(bare.Completions, "3") == nil {
+		t.Errorf("rating= completions = %#v, want the stored value 3", bare.Completions)
+	}
+
+	dates := ts.completions(url.Values{"expr": {"age:"}})
+	if findCompletion(dates.Completions, "reviewed") == nil {
+		t.Errorf("age: completions = %#v, want the declared date property", dates.Completions)
+	}
+}
+
+func TestQueryCompletionsAPI_CompletesWikilinkTargets(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	payload := ts.completions(url.Values{"expr": {"links-to:[[Deep"}})
+	if got, want := payload.Kind, "value"; got != want {
+		t.Fatalf("kind = %q, want %q; payload=%#v", got, want, payload)
+	}
+	if got, want := payload.Prefix, "Deep"; got != want {
+		t.Errorf("prefix = %q, want %q", got, want)
+	}
+	// The replacement covers the [[ the user already typed.
+	if payload.Replace != (queryReplaceRange{Start: 9, End: 15}) {
+		t.Errorf("replace = %+v, want {9 15}", payload.Replace)
+	}
+
+	target := findCompletion(payload.Completions, "Deep Work")
+	if target == nil {
+		t.Fatalf("completions = %#v, want Deep Work", payload.Completions)
+	}
+	if got, want := target.Insert, "[[Deep Work]]"; got != want {
+		t.Errorf("insert = %q, want %q", got, want)
+	}
+	if got, want := target.Kind, "note"; got != want {
+		t.Errorf("kind = %q, want %q", got, want)
+	}
+
+	// A bare target position still inserts the brackets.
+	bare := ts.completions(url.Values{"expr": {"near:"}})
+	if got := findCompletion(bare.Completions, "Deep Work"); got == nil || got.Insert != "[[Deep Work]]" {
+		t.Errorf("near: completions = %#v, want a bracketed Deep Work", bare.Completions)
+	}
+}
+
+func TestQueryCompletionsAPI_QuotesValuesThatWouldResplit(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	// A bare value containing a space would re-lex as two terms, so the insert
+	// has to quote it even though the user typed no quote.
+	payload := ts.completions(url.Values{"expr": {"status:in"}})
+	spaced := findCompletion(payload.Completions, "in review")
+	if spaced == nil {
+		t.Fatalf("completions = %#v, want the spaced status value", payload.Completions)
+	}
+	if got, want := spaced.Insert, `"in review"`; got != want {
+		t.Errorf("insert = %q, want %q", got, want)
+	}
+
+	inQuote := ts.completions(url.Values{"expr": {"status:\"do"}})
+	if got, want := inQuote.Prefix, "do"; got != want {
+		t.Fatalf("prefix = %q, want %q; payload=%#v", got, want, inQuote)
+	}
+	// The span covers the opening quote, so the insert must supply both.
+	if inQuote.Replace != (queryReplaceRange{Start: 7, End: 10}) {
+		t.Errorf("replace = %+v, want {7 10}", inQuote.Replace)
+	}
+	done := findCompletion(inQuote.Completions, "done")
+	if done == nil {
+		t.Fatalf("completions = %#v, want done", inQuote.Completions)
+	}
+	if got, want := done.Insert, `"done"`; got != want {
+		t.Errorf("insert = %q, want %q", got, want)
+	}
+}
+
+// TestQueryCompletionsAPI_ReadsPosAsUTF16CodeUnits pins the other half of the
+// offset contract: pos arrives in the browser's units, so an astral rune before
+// the caret must not shift which token the server thinks is under it.
+func TestQueryCompletionsAPI_ReadsPosAsUTF16CodeUnits(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	const expr = "tag:\U0001F3A7 sta"
+	// 4 ASCII + 2 surrogate halves + 1 space + 3 = 10 code units, against 12
+	// bytes and 9 runes.
+	const caret = 10
+	if got, want := len(expr), 12; got != want {
+		t.Fatalf("fixture is %d bytes, want %d", got, want)
+	}
+
+	payload := ts.completions(url.Values{"expr": {expr}, "pos": {strconv.Itoa(caret)}})
+	if got, want := payload.Kind, "field"; got != want {
+		t.Fatalf("kind = %q, want %q; payload=%#v", got, want, payload)
+	}
+	if got, want := payload.Prefix, "sta"; got != want {
+		t.Fatalf("prefix = %q, want %q", got, want)
+	}
+	if got, want := payload.Pos, caret; got != want {
+		t.Errorf("pos = %d, want %d", got, want)
+	}
+	if payload.Replace != (queryReplaceRange{Start: 7, End: 10}) {
+		t.Errorf("replace = %+v, want {7 10} in UTF-16 code units", payload.Replace)
+	}
+	if findCompletion(payload.Completions, "status") == nil {
+		t.Errorf("completions = %#v, want status", payload.Completions)
+	}
+}
+
+func TestQueryCompletionsAPI_RejectsABadPos(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	for _, pos := range []string{"abc", "-1", "1.5"} {
+		resp, err := http.Get(ts.URL + queryCompletionsAPIRoutePath + "?expr=tag:&pos=" + url.QueryEscape(pos)) // #nosec G107 -- test-only local URL
+		if err != nil {
+			t.Fatalf("GET with pos=%q: %v", pos, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("pos=%q status = %d, want %d; body=%q", pos, resp.StatusCode, http.StatusBadRequest, string(body))
+		}
+	}
+}
+
+func TestQueryCompletionsAPI_ClampsAnOutOfRangePos(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	payload := ts.completions(url.Values{"expr": {"tag:wi"}, "pos": {"9999"}})
+	if got, want := payload.Prefix, "wi"; got != want {
+		t.Errorf("prefix = %q, want %q; payload=%#v", got, want, payload)
+	}
+	if got, want := payload.Pos, 6; got != want {
+		t.Errorf("pos = %d, want it clamped to %d", got, want)
+	}
+}
+
+func TestQueryCompletionsAPI_MatchesAccentedValuesAcrossUnicodeForms(t *testing.T) {
+	ts := newQueryAPIServer(t)
+
+	// The vault stores the composed spelling; a decomposed prefix must still
+	// match it, because the compiler NFC-normalizes atom text either way.
+	// Written with explicit escapes: two literal spellings of the same accented
+	// word collapse to one form in Go source and make the test vacuous.
+	const decomposed = "cafe\u0301"
+	const composed = "caf\u00e9"
+	if decomposed == composed {
+		t.Fatal("fixture spellings are identical; the test would be vacuous")
+	}
+
+	payload := ts.completions(url.Values{"expr": {"tag:" + decomposed}})
+	if findCompletion(payload.Completions, composed) == nil {
+		t.Errorf("completions for a decomposed prefix = %#v, want the composed tag", payload.Completions)
+	}
+}
+
+func findCompletion(completions []queryCompletion, value string) *queryCompletion {
+	for i := range completions {
+		if completions[i].Value == value {
+			return &completions[i]
+		}
+	}
+	return nil
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}

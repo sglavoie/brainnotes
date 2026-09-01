@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-)
 
-import "github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+)
 
 func TestServer_BulkAPI_TrashCollisionPreviewAndApplyKeepPlannedDestination(t *testing.T) {
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{

@@ -263,7 +263,7 @@ renamed, a field was removed) still loads, so one stale view can never make the
 vault unopenable. Instead it is reported everywhere as a **disabled entry
 carrying its error** — a `STATUS` of `error` in `bn views`, a failure in
 `bn views check`, a disabled item in the web nav. Run
-[`bn views check`](commands-query.md#bn-views--inspect-saved-views) to see why.
+[`bn views check`](commands-views.md#bn-views--inspect-saved-views) to see why.
 
 `bn init` does not write a starter `[[views]]` block; add one by hand, or save
 the current query from the Library page of `bn serve`, which patches this file

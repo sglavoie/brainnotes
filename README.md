@@ -75,9 +75,10 @@ bn find --tag drafts | bn set - status=done
 
 - [Configuration](docs/configuration.md)
 - Command reference:
-  - [Query and research](docs/commands-query.md)
-    - [Query expressions (`-q`)](docs/commands-query.md#query-expressions--q) and
-      [saved views (`bn views`)](docs/commands-query.md#bn-views--inspect-saved-views)
+  - [Finding notes](docs/commands-query.md)
+    - [Query expressions (`-q`)](docs/commands-query.md#query-expressions--q)
+  - [Saved views](docs/commands-views.md)
+  - [Research commands](docs/commands-research.md)
   - [Vault administration and recovery](docs/commands-vault.md)
   - [Note creation and navigation](docs/commands-notes.md)
   - [Local web server](docs/web-server.md)
