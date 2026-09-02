@@ -3,11 +3,13 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -63,53 +65,15 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 		return err
 	}
 
-	var noteArg, newFolderArg string
-	if len(args) == 2 {
-		noteArg = args[0]
-		newFolderArg = args[1]
-	} else {
-		newFolderArg = args[0]
-		selected, pickErr := pickNotes(v, cfg, false)
-		if pickErr != nil {
-			return pickErr
-		}
-		if len(selected) == 0 {
-			return nil
-		}
-		noteArg = selected[0]
-	}
-
-	target, err := resolveMoveTarget(v, noteArg)
+	noteArg, newFolderArg, ok, err := resolveMoveArgs(v, cfg, args)
 	if err != nil {
 		return err
 	}
-
-	title := target.Title()
-	oldFolder, err := target.Folder(v.Root)
-	if err != nil {
-		return fmt.Errorf("move: %w", err)
+	if !ok {
+		return nil
 	}
 
-	newFolderRel, newFolderAbs, err := noteops.ResolveNewFolder(v.Root, newFolderArg)
-	if err != nil {
-		return err
-	}
-
-	newPath := filepath.Join(newFolderAbs, title+filepath.Ext(target.Path))
-	if err := noteops.CheckMoveDestination(target.Path, newPath, opts.force); err != nil {
-		return err
-	}
-
-	oldRel := noteops.JoinFolderTitle(oldFolder, title)
-	newRel := noteops.JoinFolderTitle(newFolderRel, title)
-	if err := noteops.ValidateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
-		return err
-	}
-	if oldRel == newRel {
-		return fmt.Errorf("move: destination is the same as source: %s", oldRel)
-	}
-
-	plan, err := noteops.BuildMovePlan(v, target.Path, newPath, oldRel, newRel, cfg)
+	plan, newFolderAbs, err := planMove(v, cfg, noteArg, newFolderArg, opts.force)
 	if err != nil {
 		return err
 	}
@@ -118,6 +82,71 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	if opts.dryRun {
 		return noteops.PrintMovePlan(out, v.Root, plan)
 	}
+	return applyMove(cmd, args, v, cfg, plan, newFolderAbs, opts.force, out)
+}
+
+// resolveMoveArgs maps the one- and two-argument forms onto (note, new folder).
+// The one-argument form opens the picker; a dismissed picker reports ok=false so
+// the caller returns without moving anything.
+func resolveMoveArgs(v *vault.Vault, cfg *config.Config, args []string) (noteArg, newFolderArg string, ok bool, err error) {
+	if len(args) == 2 {
+		return args[0], args[1], true, nil
+	}
+	selected, err := pickNotes(v, cfg, false)
+	if err != nil {
+		return "", "", false, err
+	}
+	if len(selected) == 0 {
+		return "", "", false, nil
+	}
+	return selected[0], args[0], true, nil
+}
+
+// planMove runs every refusal and builds the plan. Nothing on disk changes here,
+// which is what makes --dry-run one `if` away from the apply path. The absolute
+// destination folder is returned alongside the plan because the apply path has
+// to name it to BeginOperation before creating it.
+func planMove(v *vault.Vault, cfg *config.Config, noteArg, newFolderArg string, force bool) (*noteops.MovePlan, string, error) {
+	target, err := resolveMoveTarget(v, noteArg)
+	if err != nil {
+		return nil, "", err
+	}
+
+	title := target.Title()
+	oldFolder, err := target.Folder(v.Root)
+	if err != nil {
+		return nil, "", fmt.Errorf("move: %w", err)
+	}
+
+	newFolderRel, newFolderAbs, err := noteops.ResolveNewFolder(v.Root, newFolderArg)
+	if err != nil {
+		return nil, "", err
+	}
+
+	newPath := filepath.Join(newFolderAbs, title+filepath.Ext(target.Path))
+	if err := noteops.CheckMoveDestination(target.Path, newPath, force); err != nil {
+		return nil, "", err
+	}
+
+	oldRel := noteops.JoinFolderTitle(oldFolder, title)
+	newRel := noteops.JoinFolderTitle(newFolderRel, title)
+	if err := noteops.ValidateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
+		return nil, "", err
+	}
+	if oldRel == newRel {
+		return nil, "", fmt.Errorf("move: destination is the same as source: %s", oldRel)
+	}
+
+	plan, err := noteops.BuildMovePlan(v, target.Path, newPath, oldRel, newRel, cfg)
+	if err != nil {
+		return nil, "", err
+	}
+	return plan, newFolderAbs, nil
+}
+
+// applyMove is the only writing path. The destination check runs a second time
+// here, after the journal exists, because the plan was built before it.
+func applyMove(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, plan *noteops.MovePlan, newFolderAbs string, force bool, out io.Writer) error {
 	// Ahead of the destination folder, which a refused move would otherwise
 	// leave behind empty.
 	journaler, err := noteops.BeginOperation(v.Root, "move", commandInvocation(cmd, args),
@@ -131,19 +160,11 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
 		return fmt.Errorf("move: mkdir %q: %w", newFolderAbs, err)
 	}
-	if err := noteops.CheckMoveDestination(plan.Target, plan.NewPath, opts.force); err != nil {
+	if err := noteops.CheckMoveDestination(plan.Target, plan.NewPath, force); err != nil {
 		return err
 	}
-	if err := journaler.Capture(plan.Target); err != nil {
+	if err := captureMovePaths(journaler, plan); err != nil {
 		return err
-	}
-	if err := journaler.Capture(plan.NewPath); err != nil {
-		return err
-	}
-	for _, p := range plan.FileOrder {
-		if err := journaler.Capture(p); err != nil {
-			return err
-		}
 	}
 
 	if err := noteops.ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
@@ -159,4 +180,16 @@ func runMove(cmd *cobra.Command, args []string, opts *moveOptions) error {
 	}
 	_, err = fmt.Fprintf(out, "moved: %s -> %s\n", plan.Target, plan.NewPath)
 	return err
+}
+
+// captureMovePaths records the pre-image of the source, the destination, and
+// every note whose links the move rewrites, in that order.
+func captureMovePaths(journaler *noteops.Journal, plan *noteops.MovePlan) error {
+	paths := append([]string{plan.Target, plan.NewPath}, plan.FileOrder...)
+	for _, p := range paths {
+		if err := journaler.Capture(p); err != nil {
+			return err
+		}
+	}
+	return nil
 }

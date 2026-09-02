@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -28,18 +29,7 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 		return err
 	}
 
-	noteArgs, pairs, err := splitSetArgs(args)
-	if err != nil {
-		return err
-	}
-	if opts.nullSep && !usesStdinNoteInput(noteArgs) {
-		return errors.New("set: --null requires '-' stdin note input")
-	}
-	if len(pairs) == 0 {
-		return errors.New("set: at least one key=value pair is required")
-	}
-
-	parsedPairs, err := parsePairs(pairs, opts.typeFlag, cfg)
+	noteArgs, parsedPairs, err := parseSetArgs(args, opts, cfg)
 	if err != nil {
 		return err
 	}
@@ -57,15 +47,49 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 	}
 	var journaler *noteops.Journal
 	if dry == nil {
-		var err error
 		journaler, err = noteops.BeginOperation(v.Root, "set", commandInvocation(cmd, args), paths)
 		if err != nil {
 			return err
 		}
 	}
 
+	if err := applySetPaths(paths, parsedPairs, cfg, v.Root, dry, journaler, out); err != nil {
+		return err
+	}
+	if _, err := journaler.Finalize(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// parseSetArgs splits the positional arguments into notes and key=value pairs
+// and parses the pairs. The refusal order is the reported order: the --null
+// input-shape refusal precedes the empty-pairs refusal, which precedes any
+// per-pair parse error.
+func parseSetArgs(args []string, opts setOptions, cfg *config.Config) ([]string, []setPair, error) {
+	noteArgs, pairs, err := splitSetArgs(args)
+	if err != nil {
+		return nil, nil, err
+	}
+	if opts.nullSep && !usesStdinNoteInput(noteArgs) {
+		return nil, nil, errors.New("set: --null requires '-' stdin note input")
+	}
+	if len(pairs) == 0 {
+		return nil, nil, errors.New("set: at least one key=value pair is required")
+	}
+	parsedPairs, err := parsePairs(pairs, opts.typeFlag, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return noteArgs, parsedPairs, nil
+}
+
+// applySetPaths applies the pairs to each path in order, reporting only the
+// notes that actually changed and only outside --dry-run (where applySet has
+// already rendered the preview).
+func applySetPaths(paths []string, pairs []setPair, cfg *config.Config, vaultRoot string, dry *DryRun, journaler *noteops.Journal, out io.Writer) error {
 	for _, path := range paths {
-		changed, err := applySet(path, parsedPairs, &cfg.Frontmatter, v.Root, dry, journaler)
+		changed, err := applySet(path, pairs, &cfg.Frontmatter, vaultRoot, dry, journaler)
 		if err != nil {
 			return err
 		}
@@ -74,9 +98,6 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 				return err
 			}
 		}
-	}
-	if _, err := journaler.Finalize(); err != nil {
-		return err
 	}
 	return nil
 }

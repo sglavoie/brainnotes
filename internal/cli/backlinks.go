@@ -92,6 +92,21 @@ func (r verboseRow) format() string {
 // each referrer's body or frontmatter. Rows are sorted by path, frontmatter
 // rows before body rows for the same path, then by line number.
 func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Note, referrers []string, g *query.Graph) error {
+	rows := collectVerboseRows(notes, target, referrers, g)
+	sortVerboseRows(rows)
+	for _, r := range rows {
+		if _, err := fmt.Fprintln(out, r.format()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// collectVerboseRows gathers one row per occurrence of a link to target, body
+// rows before frontmatter rows for a given note. A note whose body or
+// frontmatter will not parse contributes whichever half did parse rather than
+// failing the command.
+func collectVerboseRows(notes []*vault.Note, target *vault.Note, referrers []string, g *query.Graph) []verboseRow {
 	wantKey := g.KeyForNote(target)
 	referrerSet := make(map[string]struct{}, len(referrers))
 	for _, p := range referrers {
@@ -116,7 +131,13 @@ func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Not
 			rows = append(rows, renderVerboseFront(n.Path, fm, filter)...)
 		}
 	}
+	return rows
+}
 
+// sortVerboseRows orders rows by path, frontmatter rows before body rows for the
+// same path, then by line number. Stable, so two frontmatter rows on the same
+// note keep their key order.
+func sortVerboseRows(rows []verboseRow) {
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].path != rows[j].path {
 			return rows[i].path < rows[j].path
@@ -126,13 +147,6 @@ func writeVerboseBacklinks(out io.Writer, notes []*vault.Note, target *vault.Not
 		}
 		return rows[i].line < rows[j].line
 	})
-
-	for _, r := range rows {
-		if _, err := fmt.Fprintln(out, r.format()); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func renderBodyLinks(path, body string, filter func(wikilink.Link) bool) []verboseRow {
@@ -214,21 +228,7 @@ func graphLinkKeys(g *query.Graph, link wikilink.Link) []string {
 		return nil
 	}
 	if link.Folder != "" {
-		targetKey := relinkNormalizeTarget(link.Target)
-		if targetKey == "" {
-			return nil
-		}
-		if _, ok := g.Titles[targetKey]; ok {
-			return []string{targetKey}
-		}
-		titleKey := relinkNormalizeTitle(link.Title())
-		if titleKey == "" {
-			return nil
-		}
-		if keys := g.NoteKeysByTitle[titleKey]; len(keys) == 1 {
-			return append([]string(nil), keys...)
-		}
-		return nil
+		return graphFolderLinkKeys(g, link)
 	}
 
 	titleKey := relinkNormalizeTitle(link.Title())
@@ -236,6 +236,28 @@ func graphLinkKeys(g *query.Graph, link wikilink.Link) []string {
 		return nil
 	}
 	return append([]string(nil), g.NoteKeysByTitle[titleKey]...)
+}
+
+// graphFolderLinkKeys resolves a folder-prefixed link to graph keys: the exact
+// path key first, then the title, and only when the title names exactly one
+// note. A bare [[Title]] is handled by graphLinkKeys itself, where an ambiguous
+// title legitimately yields every candidate.
+func graphFolderLinkKeys(g *query.Graph, link wikilink.Link) []string {
+	targetKey := relinkNormalizeTarget(link.Target)
+	if targetKey == "" {
+		return nil
+	}
+	if _, ok := g.Titles[targetKey]; ok {
+		return []string{targetKey}
+	}
+	titleKey := relinkNormalizeTitle(link.Title())
+	if titleKey == "" {
+		return nil
+	}
+	if keys := g.NoteKeysByTitle[titleKey]; len(keys) == 1 {
+		return append([]string(nil), keys...)
+	}
+	return nil
 }
 
 // truncateSnippet caps s at maxVerboseSnippet runes, replacing the tail with

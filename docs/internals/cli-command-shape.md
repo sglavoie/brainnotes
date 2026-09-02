@@ -263,15 +263,38 @@ No behaviour change is permitted in a decomposition, so the checks are:
   `search` dropped the `internal/cli` gocognit score total from 1326 to 1094 and
   the package's violation count from 80 to 75.
 - `just lint-phase-gate` — the verdict, as opposed to the score. It reads the
-  whole-tree report and fails if any line names a `New*Cmd`/`new*Cmd` function,
-  tolerating every other violation, so it answers "is a constructor still
-  oversized" without requiring the baseline to reach zero. It has to read
-  `lint-full` rather than `lint-new`: the constructors are old code and the
-  ratchet cannot see them, so a gate built on `lint-new` would pass on day one.
-  It matches on the function name in the message, which covers cyclop, gocognit,
-  and funlen but not `nestif` — that message names an `if` condition and no
-  function — so a constructor whose only violation is a nested block would slip
-  through. In practice such a constructor trips gocognit first.
+  whole-tree report and fails if **any non-test file under `internal/cli`** is
+  named on an issue line, tolerating every violation outside that package, so it
+  answers "is production CLI code under the thresholds" without requiring the
+  tree-wide baseline to reach zero. It has to read `lint-full` rather than
+  `lint-new`: this is old code and the ratchet cannot see it, so a gate built on
+  `lint-new` would pass on day one.
+  It selects by **path**, and that is a repair. The first version matched the
+  function name in the message and only fired on a `New*Cmd`/`new*Cmd` name,
+  which made it green at the end of Phase 1 while 21 production violations sat in
+  the same package on ordinary helpers — `runValues` (gocognit 42), `applyRelink`
+  (26), `runMove` (25), `validateRelatedOptions` (cyclop 18). A path match also
+  sees `nestif`, whose message names an `if` condition and no function at all and
+  so was invisible to any name match.
+- `just lint-phase-gate-selftest` — the gate's own regression test
+  (`scripts/lint_phase_gate_selftest.py`): a throwaway module with one
+  over-threshold *non-constructor* function in production `internal/cli` code,
+  proving the gate exits non-zero and names the file — then proving a violation
+  outside `internal/cli` and one in an `internal/cli` `_test.go` are still
+  tolerated. It copies this repository's `.golangci.yml` **and** its `justfile`,
+  so it runs the thresholds and the recipe in force rather than a
+  re-implementation. Like `lint-ratchet-selftest` it is outside `just ci` (only
+  one golangci-lint may run at a time) and wired into `.github/workflows/ci.yml`
+  as its own step, alongside the gate itself.
+
+**A gate that checks less than it reports on will certify the difference.**
+Phase 1 was closed with `lint-phase-gate` green and 21 complexity violations
+still in production `internal/cli` code, because the gate looked only at command
+constructors while the criterion it stood for was the package. Decomposing those
+21 is what the section below records; widening the gate to the package, and
+giving it a self-test that fails when it stops enforcing, is what makes the next
+one impossible to close the same way. When a gate and the criterion it is named
+after disagree, the gate is the thing that is wrong.
 
 **The gate names constructors the phase list may not.** Finishing Phase 1 with
 only the six commands it named would have left `lint-phase-gate` red:

@@ -91,41 +91,58 @@ func runPin(cmd *cobra.Command, args []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	rel := displayPath(note.Path, v.Root)
-	out := cmd.OutOrStdout()
-
 	kind, err := notePinKind(note)
 	if err != nil {
 		return err
 	}
+	out := cmd.OutOrStdout()
+	rel := displayPath(note.Path, v.Root)
 	if kind != pins.NotPinned {
-		if dryRun {
-			return nil
-		}
-		_, err := fmt.Fprintf(out, "already pinned: %s\n", rel)
-		return err
+		return reportAlreadyPinned(out, rel, dryRun)
 	}
 
-	notes, err := v.Notes()
+	writes, err := planPinWrites(v, &cfg.Frontmatter, rel)
 	if err != nil {
 		return err
+	}
+	return applyOrPreviewPin(v.Root, writes, &cfg.Frontmatter, rel, commandInvocation(cmd, args), out, dryRun)
+}
+
+// reportAlreadyPinned is the no-op path for a note that already carries a rank.
+// --dry-run prints nothing at all, because nothing would change; the pinned
+// ordering is edited in the web UI, never by re-pinning.
+func reportAlreadyPinned(out io.Writer, rel string, dryRun bool) error {
+	if dryRun {
+		return nil
+	}
+	_, err := fmt.Fprintf(out, "already pinned: %s\n", rel)
+	return err
+}
+
+// planPinWrites plans the append against the current pinned list. Nothing on
+// disk changes here, which is what keeps --dry-run and the apply path one branch
+// apart, working from the identical plan.
+func planPinWrites(v *vault.Vault, fm *config.FrontmatterConfig, rel string) ([]noteops.NoteFrontmatterWrite, error) {
+	notes, err := v.Notes()
+	if err != nil {
+		return nil, err
 	}
 	plan, err := pins.PlanAppend(pins.List(v.Root, notes), rel)
 	if err != nil {
-		return fmt.Errorf("pin: %w", err)
+		return nil, fmt.Errorf("pin: %w", err)
 	}
-	writes, err := pinAssignmentWrites(plan.Assignments, &cfg.Frontmatter)
-	if err != nil {
-		return err
-	}
+	return pinAssignmentWrites(plan.Assignments, fm)
+}
 
+// applyOrPreviewPin is the one branch between previewing the plan and writing it.
+func applyOrPreviewPin(root string, writes []noteops.NoteFrontmatterWrite, fm *config.FrontmatterConfig, rel, command string, out io.Writer, dryRun bool) error {
 	if dryRun {
-		return renderPinPreviews(out, v.Root, writes, &cfg.Frontmatter)
+		return renderPinPreviews(out, root, writes, fm)
 	}
-	if err := applyPinWrites(v.Root, writes, &cfg.Frontmatter, commandInvocation(cmd, args)); err != nil {
+	if err := applyPinWrites(root, writes, fm, command); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "pinned: %s\n", rel)
+	_, err := fmt.Fprintf(out, "pinned: %s\n", rel)
 	return err
 }
 

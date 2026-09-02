@@ -47,6 +47,18 @@ jobs:
       - name: Self-test the complexity ratchet
         run: just lint-ratchet-selftest
 
+      # Same reasoning for the Phase 1 gate, which has already been green while
+      # enforcing less than it claimed: it checked command constructors only, so
+      # 21 production complexity violations in internal/cli passed under it.
+      # Kept out of `just ci` because only one golangci-lint may run at a time.
+      - name: Self-test the phase gate
+        run: just lint-phase-gate-selftest
+
+      # The gate itself: production internal/cli code must carry no complexity
+      # violation. Separate from `just ci` for the same single-run reason.
+      - name: Phase gate
+        run: just lint-phase-gate
+
       - name: Run CI checks
         run: just ci
 

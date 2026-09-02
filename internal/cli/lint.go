@@ -49,12 +49,33 @@ type groupKey struct {
 }
 
 func formatViolations(cmd *cobra.Command, violations []schema.Violation) {
+	groups := groupViolations(violations)
+	out := cmd.OutOrStdout()
+	for _, key := range sortedViolationKeys(groups) {
+		paths := groups[key]
+		sort.Strings(paths)
+		fmt.Fprint(out, violationHeadline(key, len(paths)))
+		for _, p := range paths {
+			fmt.Fprintf(out, "  %s\n", p)
+		}
+	}
+}
+
+// groupViolations collapses the per-note violations into one group per
+// (property, kind, detail), which is what makes the report one headline per
+// distinct problem rather than one line per note.
+func groupViolations(violations []schema.Violation) map[groupKey][]string {
 	groups := make(map[groupKey][]string)
 	for _, v := range violations {
 		key := groupKey{Property: v.Property, Kind: v.Kind, Detail: v.Detail}
 		groups[key] = append(groups[key], v.NotePath)
 	}
+	return groups
+}
 
+// sortedViolationKeys orders the groups by property, then kind, then detail, so
+// the report is stable across runs.
+func sortedViolationKeys(groups map[groupKey][]string) []groupKey {
 	keys := make([]groupKey, 0, len(groups))
 	for k := range groups {
 		keys = append(keys, k)
@@ -68,29 +89,25 @@ func formatViolations(cmd *cobra.Command, violations []schema.Violation) {
 		}
 		return keys[i].Detail < keys[j].Detail
 	})
+	return keys
+}
 
-	out := cmd.OutOrStdout()
-	for _, key := range keys {
-		paths := groups[key]
-		sort.Strings(paths)
-
-		n := len(paths)
-		noun := "notes"
-		if n == 1 {
-			noun = "note"
-		}
-
-		switch key.Kind {
-		case "missing":
-			fmt.Fprintf(out, "%s: missing in %d %s (%s)\n", key.Property, n, noun, key.Detail)
-		case "type":
-			fmt.Fprintf(out, "%s: wrong type in %d %s (%s)\n", key.Property, n, noun, key.Detail)
-		case "value":
-			fmt.Fprintf(out, "%s: %s in %d %s\n", key.Property, key.Detail, n, noun)
-		}
-
-		for _, p := range paths {
-			fmt.Fprintf(out, "  %s\n", p)
-		}
+// violationHeadline renders the group's summary line, including its trailing
+// newline. An unrecognized kind renders nothing — the group's note paths are
+// still listed — which is what the switch here has always done rather than
+// inventing a headline for a kind the schema layer did not define.
+func violationHeadline(key groupKey, n int) string {
+	noun := "notes"
+	if n == 1 {
+		noun = "note"
 	}
+	switch key.Kind {
+	case "missing":
+		return fmt.Sprintf("%s: missing in %d %s (%s)\n", key.Property, n, noun, key.Detail)
+	case "type":
+		return fmt.Sprintf("%s: wrong type in %d %s (%s)\n", key.Property, n, noun, key.Detail)
+	case "value":
+		return fmt.Sprintf("%s: %s in %d %s\n", key.Property, key.Detail, n, noun)
+	}
+	return ""
 }

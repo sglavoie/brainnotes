@@ -68,46 +68,17 @@ func sortFindResults(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 // a saved view carrying a direction and a limit cannot select a different top N
 // here than it does in the browser.
 func sortByRelevance(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, error) {
-	anchorNote, err := resolveNoteTarget(in.vault, spec.RelativeTo)
+	anchorPath, err := relevanceAnchorPath(in.vault, spec.RelativeTo)
 	if err != nil {
 		return nil, err
 	}
-	anchorPath, ok := recallPath(in.vault.Root, anchorNote.Path)
-	if !ok {
-		return nil, fmt.Errorf("find: --relative-to note %q is outside the vault", anchorNote.Path)
-	}
-
-	setup, err := newRecallSetup(in.vault.Root, recallNow())
+	corpus, err := relevanceCorpus(in)
 	if err != nil {
 		return nil, err
 	}
-	corpus, err := buildRecallCorpus(in.vault, in.notes, in.graph, setup.rankOptions())
+	pathByNote, candidates, err := relevanceCandidates(in, corpus, anchorPath)
 	if err != nil {
 		return nil, err
-	}
-
-	indexed := make(map[string]bool, len(corpus.documents))
-	for _, document := range corpus.documents {
-		indexed[document.Path] = true
-	}
-
-	pathByNote := make(map[*vault.Note]string, len(in.matched))
-	candidates := make([]string, 0, len(in.matched))
-	seen := make(map[string]bool, len(in.matched))
-	for _, n := range in.matched {
-		relPath, ok := recallPath(in.vault.Root, n.Path)
-		if !ok {
-			return nil, fmt.Errorf("find: note %q is outside the vault", n.Path)
-		}
-		pathByNote[n] = relPath
-		// The anchor is ranked against, not ranked; a note the corpus never
-		// indexed cannot be ranked at all and stays unscored rather than
-		// turning the whole ordering into an error.
-		if relPath == anchorPath || seen[relPath] || !indexed[relPath] {
-			continue
-		}
-		seen[relPath] = true
-		candidates = append(candidates, relPath)
 	}
 
 	results, err := corpus.ranker.RankSelected(anchorPath, candidates)
@@ -123,6 +94,60 @@ func sortByRelevance(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 	return query.OrderNotesByRelevance(in.matched, func(n *vault.Note) string {
 		return pathByNote[n]
 	}, scores, spec.Descending), nil
+}
+
+// relevanceAnchorPath resolves --relative-to to the vault-relative path the
+// ranker keys on.
+func relevanceAnchorPath(v *vault.Vault, relativeTo string) (string, error) {
+	anchorNote, err := resolveNoteTarget(v, relativeTo)
+	if err != nil {
+		return "", err
+	}
+	anchorPath, ok := recallPath(v.Root, anchorNote.Path)
+	if !ok {
+		return "", fmt.Errorf("find: --relative-to note %q is outside the vault", anchorNote.Path)
+	}
+	return anchorPath, nil
+}
+
+// relevanceCorpus builds the corpus the ordering ranks against, over the whole
+// vault rather than the matched subset, and reusing the filter's graph when it
+// already built one.
+func relevanceCorpus(in findSortInput) (*recallCorpus, error) {
+	setup, err := newRecallSetup(in.vault.Root, recallNow())
+	if err != nil {
+		return nil, err
+	}
+	return buildRecallCorpus(in.vault, in.notes, in.graph, setup.rankOptions())
+}
+
+// relevanceCandidates returns the vault-relative path of every matched note and
+// the deduplicated subset of them to rank. The anchor is ranked against rather
+// than ranked, and a note the corpus never indexed cannot be ranked at all — both
+// stay out of the candidate list but keep their path, so they are still reported
+// as unscored rather than dropped.
+func relevanceCandidates(in findSortInput, corpus *recallCorpus, anchorPath string) (map[*vault.Note]string, []string, error) {
+	indexed := make(map[string]bool, len(corpus.documents))
+	for _, document := range corpus.documents {
+		indexed[document.Path] = true
+	}
+
+	pathByNote := make(map[*vault.Note]string, len(in.matched))
+	candidates := make([]string, 0, len(in.matched))
+	seen := make(map[string]bool, len(in.matched))
+	for _, n := range in.matched {
+		relPath, ok := recallPath(in.vault.Root, n.Path)
+		if !ok {
+			return nil, nil, fmt.Errorf("find: note %q is outside the vault", n.Path)
+		}
+		pathByNote[n] = relPath
+		if relPath == anchorPath || seen[relPath] || !indexed[relPath] {
+			continue
+		}
+		seen[relPath] = true
+		candidates = append(candidates, relPath)
+	}
+	return pathByNote, candidates, nil
 }
 
 // validateFindSort turns the --sort and --relative-to values into a SortSpec.

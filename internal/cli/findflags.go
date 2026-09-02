@@ -131,55 +131,88 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 		return nil, err
 	}
 
-	var resolved *queryexpr.View
+	resolved, err := ff.resolveViewFlag(cfg, env)
+	if err != nil {
+		return nil, err
+	}
 	viewQuery := ""
-	if name := strings.TrimSpace(ff.view); name != "" {
-		view, err := resolveView(cfg, name, env)
-		if err != nil {
-			return nil, err
-		}
-		if !ff.ordersResults {
-			if err := rejectUnrunnableView(ff.command, view); err != nil {
-				return nil, err
-			}
-		}
-		resolved = &view
-		viewQuery = view.Saved.Query
+	if resolved != nil {
+		viewQuery = resolved.Saved.Query
 	}
 
+	operands, source, err := compileQuerySources([]string{ff.query, viewQuery}, env, flagsExpr)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := &queryexpr.Plan{Expr: &queryexpr.And{Operands: operands}, Source: source}
+	applyViewOrdering(plan, resolved)
+	return plan, nil
+}
+
+// resolveViewFlag resolves --view, or returns a nil view when the flag was not
+// set. A command that cannot execute a stored ordering refuses the view here,
+// before any query text is compiled, so the refusal is what the user sees rather
+// than a parse error from the view's own query.
+func (ff *findFlags) resolveViewFlag(cfg *config.Config, env queryexpr.Env) (*queryexpr.View, error) {
+	name := strings.TrimSpace(ff.view)
+	if name == "" {
+		return nil, nil
+	}
+	view, err := resolveView(cfg, name, env)
+	if err != nil {
+		return nil, err
+	}
+	if ff.ordersResults {
+		return &view, nil
+	}
+	if err := rejectUnrunnableView(ff.command, view); err != nil {
+		return nil, err
+	}
+	return &view, nil
+}
+
+// compileQuerySources compiles each non-empty query source on its own and
+// returns the AND operands (flagsExpr first) plus the plan's Source.
+//
+// Source is what a later ParseError — one raised by Plan.Predicate rather than
+// by Compile — renders against, so it holds the first source given, which is why
+// the caller passes the user's --query ahead of a view's stored text.
+func compileQuerySources(sources []string, env queryexpr.Env, flagsExpr queryexpr.Expr) ([]queryexpr.Expr, string, error) {
 	operands := []queryexpr.Expr{flagsExpr}
-	// Source is what a later ParseError — one raised by Plan.Predicate rather
-	// than by Compile — renders against, so it holds the text the user typed
-	// in preference to a view's stored text.
 	source := ""
-	for _, src := range []string{ff.query, viewQuery} {
+	for _, src := range sources {
 		if strings.TrimSpace(src) == "" {
 			continue
 		}
 		part, err := queryexpr.Compile(src, env)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		operands = append(operands, part.Expr)
 		if source == "" {
 			source = src
 		}
 	}
+	return operands, source, nil
+}
 
-	plan := &queryexpr.Plan{Expr: &queryexpr.And{Operands: operands}, Source: source}
-	// A view's stored ordering and cap ride on the plan so the command that
-	// produces the ordering can read them, and only that command applies them.
-	// Sort is copied only when the view actually stores one: ResolveView turns
-	// an empty sort into the default `path` spec, and copying that would make
-	// every view look like an explicit ordering request and suppress the
-	// implicit --pinned ordering in `bn find`.
-	if resolved != nil && resolved.Plan != nil {
-		if strings.TrimSpace(resolved.Saved.Sort) != "" {
-			plan.Sort = resolved.Plan.Sort
-		}
-		plan.Limit = resolved.Plan.Limit
+// applyViewOrdering copies a view's stored ordering and cap onto the plan, so
+// the command that produces the ordering can read them — and only that command
+// applies them.
+//
+// Sort is copied only when the view actually stores one: ResolveView turns an
+// empty sort into the default `path` spec, and copying that would make every
+// view look like an explicit ordering request and suppress the implicit --pinned
+// ordering in `bn find`.
+func applyViewOrdering(plan *queryexpr.Plan, view *queryexpr.View) {
+	if view == nil || view.Plan == nil {
+		return
 	}
-	return plan, nil
+	if strings.TrimSpace(view.Saved.Sort) != "" {
+		plan.Sort = view.Plan.Sort
+	}
+	plan.Limit = view.Plan.Limit
 }
 
 // resolveView maps a --view name onto the fully resolved saved view: its

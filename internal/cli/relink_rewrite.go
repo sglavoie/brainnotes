@@ -24,31 +24,85 @@ func applyRelink(n *vault.Note, idx *relinkIndex, g *query.Graph, fmCfg *config.
 	if len(preBroken) == 0 {
 		return false, nil, nil
 	}
+	changes, err := rewriteRelinkNote(n, idx, preBroken)
+	if err != nil {
+		return false, nil, err
+	}
+
+	relPath := displayPath(n.Path, vaultRoot)
+	if len(changes) == 0 {
+		return false, relinkResiduesForNote(relPath, preBroken), nil
+	}
+	sortRelinkChanges(changes)
+
+	if err := commitRelink(n, fmCfg, relPath, changes, dry, journaler); err != nil {
+		return false, nil, err
+	}
+
+	postBroken := query.UnresolvedLinks(n, g)
+	return true, relinkResiduesForNote(relPath, postBroken), nil
+}
+
+// commitRelink is the one branch between rendering the preview and writing the
+// note. The journal capture precedes the save, so the pre-image exists even when
+// the save itself fails.
+func commitRelink(n *vault.Note, fmCfg *config.FrontmatterConfig, relPath string, changes []relinkChange, dry *DryRun, journaler *noteops.Journal) error {
+	if dry != nil {
+		return renderRelinkPreview(dry, relPath, changes)
+	}
+	if err := journaler.Capture(n.Path); err != nil {
+		return err
+	}
+	return n.Save(fmCfg)
+}
+
+// rewriteRelinkNote rewrites the body first and the frontmatter second, which is
+// the order the changes are collected in and the order sortRelinkChanges then
+// normalizes. The note is mutated in memory; the caller decides whether to save
+// it or render it.
+func rewriteRelinkNote(n *vault.Note, idx *relinkIndex, preBroken []query.BrokenLink) ([]relinkChange, error) {
+	bodyChanges, err := rewriteRelinkBody(n, idx, preBroken)
+	if err != nil {
+		return nil, err
+	}
+	frontChanges, err := rewriteRelinkFront(n, idx)
+	if err != nil {
+		return nil, err
+	}
+	return append(bodyChanges, frontChanges...), nil
+}
+
+// rewriteRelinkBody rewrites the note body. preBroken supplies the line number
+// each body link sits on, keyed by its byte offset, because the rewriter sees
+// offsets rather than lines.
+func rewriteRelinkBody(n *vault.Note, idx *relinkIndex, preBroken []query.BrokenLink) ([]relinkChange, error) {
 	bodyLineByStart := make(map[int]int, len(preBroken))
 	for _, bl := range preBroken {
 		if bl.FrontmatterKey == "" {
 			bodyLineByStart[bl.Link.Start] = bl.Line
 		}
 	}
-
-	var changes []relinkChange
-
 	body, err := n.Body()
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
-	newBody, bodyChanges := rewriteRelinkText(body, idx, "", bodyLineByStart)
-	if newBody != body {
-		if err := n.SetBody(newBody); err != nil {
-			return false, nil, err
-		}
-		changes = append(changes, bodyChanges...)
+	newBody, changes := rewriteRelinkText(body, idx, "", bodyLineByStart)
+	if newBody == body {
+		return nil, nil
 	}
+	if err := n.SetBody(newBody); err != nil {
+		return nil, err
+	}
+	return changes, nil
+}
 
+// rewriteRelinkFront rewrites every frontmatter value, in key order.
+func rewriteRelinkFront(n *vault.Note, idx *relinkIndex) ([]relinkChange, error) {
 	front, err := n.Front()
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
+	var changes []relinkChange
 	for _, key := range front.Keys() {
 		value, ok := front.Get(key)
 		if !ok {
@@ -61,46 +115,32 @@ func applyRelink(n *vault.Note, idx *relinkIndex, g *query.Graph, fmCfg *config.
 		front.Set(key, newValue)
 		changes = append(changes, fmChanges...)
 	}
+	return changes, nil
+}
 
-	relPath := displayPath(n.Path, vaultRoot)
-	if len(changes) == 0 {
-		return false, relinkResiduesForNote(relPath, preBroken), nil
-	}
-	sortRelinkChanges(changes)
-
-	if dry != nil {
-		preview := noteops.NotePreview{RelPath: relPath}
-		for _, change := range changes {
-			if change.frontmatterKey != "" {
-				preview.Changes = append(preview.Changes, noteops.PreviewChange{
-					Kind: noteops.PreviewFrontmatter,
-					Key:  change.frontmatterKey,
-					Old:  noteops.PresentText(change.oldRaw),
-					New:  noteops.PresentText(change.newRaw),
-				})
-				continue
-			}
+// renderRelinkPreview renders the --dry-run view through the canonical
+// NotePreview model, so relink's preview cannot drift from every other
+// mutating command's.
+func renderRelinkPreview(dry *DryRun, relPath string, changes []relinkChange) error {
+	preview := noteops.NotePreview{RelPath: relPath}
+	for _, change := range changes {
+		if change.frontmatterKey != "" {
 			preview.Changes = append(preview.Changes, noteops.PreviewChange{
-				Kind: noteops.PreviewBody,
-				Line: change.line,
+				Kind: noteops.PreviewFrontmatter,
+				Key:  change.frontmatterKey,
 				Old:  noteops.PresentText(change.oldRaw),
 				New:  noteops.PresentText(change.newRaw),
 			})
+			continue
 		}
-		if err := noteops.RenderNotePreview(dry.Out, preview); err != nil {
-			return false, nil, err
-		}
-	} else {
-		if err := journaler.Capture(n.Path); err != nil {
-			return false, nil, err
-		}
-		if err := n.Save(fmCfg); err != nil {
-			return false, nil, err
-		}
+		preview.Changes = append(preview.Changes, noteops.PreviewChange{
+			Kind: noteops.PreviewBody,
+			Line: change.line,
+			Old:  noteops.PresentText(change.oldRaw),
+			New:  noteops.PresentText(change.newRaw),
+		})
 	}
-
-	postBroken := query.UnresolvedLinks(n, g)
-	return true, relinkResiduesForNote(relPath, postBroken), nil
+	return noteops.RenderNotePreview(dry.Out, preview)
 }
 
 func rewriteRelinkValue(v any, topKey string, idx *relinkIndex) (any, []relinkChange, bool) {
@@ -112,45 +152,59 @@ func rewriteRelinkValue(v any, topKey string, idx *relinkIndex) (any, []relinkCh
 		}
 		return out, changes, true
 	case []any:
-		out := make([]any, len(vv))
-		changed := false
-		var changes []relinkChange
-		for i, item := range vv {
-			newItem, itemChanges, itemChanged := rewriteRelinkValue(item, topKey, idx)
-			out[i] = newItem
-			if itemChanged {
-				changed = true
-			}
-			changes = append(changes, itemChanges...)
-		}
-		if !changed {
-			return v, nil, false
-		}
-		return out, changes, true
+		return rewriteRelinkList(vv, topKey, idx)
 	case map[string]any:
-		keys := make([]string, 0, len(vv))
-		for key := range vv {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		out := make(map[string]any, len(vv))
-		changed := false
-		var changes []relinkChange
-		for _, key := range keys {
-			newItem, itemChanges, itemChanged := rewriteRelinkValue(vv[key], topKey, idx)
-			out[key] = newItem
-			if itemChanged {
-				changed = true
-			}
-			changes = append(changes, itemChanges...)
-		}
-		if !changed {
-			return v, nil, false
-		}
-		return out, changes, true
+		return rewriteRelinkMap(vv, topKey, idx)
 	default:
 		return v, nil, false
 	}
+}
+
+// rewriteRelinkList rewrites every element, preserving order. An unchanged list
+// is returned as-is rather than as a copy, so a frontmatter value nothing
+// rewrote is not re-marshalled.
+func rewriteRelinkList(list []any, topKey string, idx *relinkIndex) (any, []relinkChange, bool) {
+	out := make([]any, len(list))
+	changed := false
+	var changes []relinkChange
+	for i, item := range list {
+		newItem, itemChanges, itemChanged := rewriteRelinkValue(item, topKey, idx)
+		out[i] = newItem
+		if itemChanged {
+			changed = true
+		}
+		changes = append(changes, itemChanges...)
+	}
+	if !changed {
+		return list, nil, false
+	}
+	return out, changes, true
+}
+
+// rewriteRelinkMap rewrites every value, walking the keys in sorted order so the
+// changes a nested map contributes are reported deterministically.
+func rewriteRelinkMap(m map[string]any, topKey string, idx *relinkIndex) (any, []relinkChange, bool) {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make(map[string]any, len(m))
+	changed := false
+	var changes []relinkChange
+	for _, key := range keys {
+		newItem, itemChanges, itemChanged := rewriteRelinkValue(m[key], topKey, idx)
+		out[key] = newItem
+		if itemChanged {
+			changed = true
+		}
+		changes = append(changes, itemChanges...)
+	}
+	if !changed {
+		return m, nil, false
+	}
+	return out, changes, true
 }
 
 func rewriteRelinkText(text string, idx *relinkIndex, frontmatterKey string, bodyLineByStart map[int]int) (string, []relinkChange) {

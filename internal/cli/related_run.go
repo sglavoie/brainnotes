@@ -16,10 +16,10 @@ import (
 // result in the mode the flags select.
 //
 // Order is behaviour: the whole flag matrix and the --mode value are refused by
-// validateRelatedOptions before the config is read, so `bn related x --mode
+// relatedOptions.validate before the config is read, so `bn related x --mode
 // nonsense` outside a vault is a mode error rather than a vault error.
 func runRelatedCommand(cmd *cobra.Command, args []string, options relatedOptions) error {
-	mode, err := validateRelatedOptions(options)
+	mode, err := options.validate()
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func openRelatedSelection(cfg *config.Config, absolutePath string) error {
 }
 
 // runRelatedListing is the read-only half: three renderings of the same ranked
-// results, selected by flags validateRelatedOptions has already proven are not
+// results, selected by flags relatedOptions.validate has already proven are not
 // combined.
 func runRelatedListing(cmd *cobra.Command, root string, queryResult relatedQuery, options relatedOptions) error {
 	out := cmd.OutOrStdout()

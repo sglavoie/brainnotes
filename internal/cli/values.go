@@ -116,11 +116,19 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 	}
 
 	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
-	errOut := cmd.ErrOrStderr()
+	counts, files := collectValueCounts(v, notes, property, opts.showFiles, verbose, cmd.ErrOrStderr())
+	entries := sortValueEntries(counts, opts.sortMode)
+	return writeValuesOutput(cmd.OutOrStdout(), entries, files, opts)
+}
 
+// collectValueCounts walks the notes and tallies every occurrence of property.
+// A note whose frontmatter will not parse, or which does not carry the property,
+// is skipped silently — `values` reports on what it can read rather than
+// refusing the whole vault for one bad note. files is nil unless wantFiles.
+func collectValueCounts(v *vault.Vault, notes []*vault.Note, property string, wantFiles, verbose bool, errOut io.Writer) (map[string]int, map[string]map[string]struct{}) {
 	counts := map[string]int{}
 	var files map[string]map[string]struct{}
-	if opts.showFiles {
+	if wantFiles {
 		files = make(map[string]map[string]struct{})
 	}
 	warnedNotes := map[string]struct{}{}
@@ -137,18 +145,23 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 			continue
 		}
 		var relPath string
-		if opts.showFiles {
+		if wantFiles {
 			relPath, _ = filepath.Rel(v.Root, n.Path)
 		}
 		countValue(raw, n.Path, relPath, counts, files, warnedNotes, verbose, errOut)
 	}
+	return counts, files
+}
 
+// sortValueEntries orders the tally: by count descending with an alphabetical
+// tie-break, or alphabetically when sortMode is "name".
+func sortValueEntries(counts map[string]int, sortMode string) []valEntry {
 	entries := make([]valEntry, 0, len(counts))
 	for k, c := range counts {
 		entries = append(entries, valEntry{value: k, count: c})
 	}
 	sort.Slice(entries, func(i, j int) bool {
-		if opts.sortMode == "name" {
+		if sortMode == "name" {
 			return entries[i].value < entries[j].value
 		}
 		if entries[i].count != entries[j].count {
@@ -156,42 +169,42 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 		}
 		return entries[i].value < entries[j].value
 	})
+	return entries
+}
 
-	out := cmd.OutOrStdout()
-
+// writeValuesOutput renders the three output forms: the per-value file listing,
+// bare values, and the count-prefixed default.
+func writeValuesOutput(out io.Writer, entries []valEntry, files map[string]map[string]struct{}, opts valuesOptions) error {
+	width := 0
+	if opts.showCount {
+		width = valueCountWidth(entries)
+	}
 	if opts.showFiles {
-		width := 0
-		if opts.showCount {
-			for _, e := range entries {
-				if w := len(strconv.Itoa(e.count)); w > width {
-					width = w
-				}
-			}
-		}
 		return writeFilesOutput(out, entries, files, opts.showCount, width)
 	}
-
-	if !opts.showCount {
-		for _, e := range entries {
+	for _, e := range entries {
+		if !opts.showCount {
 			if _, err := fmt.Fprintln(out, e.value); err != nil {
 				return err
 			}
+			continue
 		}
-		return nil
+		if _, err := fmt.Fprintf(out, "%*d  %s\n", width, e.count, e.value); err != nil {
+			return err
+		}
 	}
+	return nil
+}
 
+// valueCountWidth is the column width that right-aligns every count.
+func valueCountWidth(entries []valEntry) int {
 	width := 0
 	for _, e := range entries {
 		if w := len(strconv.Itoa(e.count)); w > width {
 			width = w
 		}
 	}
-	for _, e := range entries {
-		if _, err := fmt.Fprintf(out, "%*d  %s\n", width, e.count, e.value); err != nil {
-			return err
-		}
-	}
-	return nil
+	return width
 }
 
 // countValue increments counts for v's contributions, recursing into lists.
@@ -200,32 +213,48 @@ func countValue(v any, notePath string, relPath string, counts map[string]int, f
 	switch vv := v.(type) {
 	case nil:
 		return
-	case string:
-		record(vv, counts, files, relPath)
 	case []any:
 		for _, item := range vv {
 			countValue(item, notePath, relPath, counts, files, warnedNotes, verbose, errOut)
 		}
 	case map[string]any:
-		if !verbose {
-			return
-		}
-		if _, seen := warnedNotes[notePath]; seen {
-			return
-		}
-		warnedNotes[notePath] = struct{}{}
-		fmt.Fprintf(errOut, "values: skipping map-typed value in %s\n", notePath)
-	case time.Time:
-		record(frontmatter.FormatTimestamp(vv), counts, files, relPath)
-	case bool:
-		record(strconv.FormatBool(vv), counts, files, relPath)
-	case int:
-		record(strconv.Itoa(vv), counts, files, relPath)
-	case float64:
-		record(strconv.FormatFloat(vv, 'g', -1, 64), counts, files, relPath)
+		warnSkippedMapValue(notePath, warnedNotes, verbose, errOut)
 	default:
-		record(fmt.Sprintf("%v", vv), counts, files, relPath)
+		record(formatValueScalar(vv), counts, files, relPath)
 	}
+}
+
+// formatValueScalar renders one scalar frontmatter value as the string the tally
+// is keyed by. The default arm is what keeps an unmodelled YAML scalar counted
+// rather than dropped.
+func formatValueScalar(v any) string {
+	switch vv := v.(type) {
+	case string:
+		return vv
+	case time.Time:
+		return frontmatter.FormatTimestamp(vv)
+	case bool:
+		return strconv.FormatBool(vv)
+	case int:
+		return strconv.Itoa(vv)
+	case float64:
+		return strconv.FormatFloat(vv, 'g', -1, 64)
+	default:
+		return fmt.Sprintf("%v", vv)
+	}
+}
+
+// warnSkippedMapValue emits at most one map-skipped warning per note, and only
+// under --verbose.
+func warnSkippedMapValue(notePath string, warnedNotes map[string]struct{}, verbose bool, errOut io.Writer) {
+	if !verbose {
+		return
+	}
+	if _, seen := warnedNotes[notePath]; seen {
+		return
+	}
+	warnedNotes[notePath] = struct{}{}
+	fmt.Fprintf(errOut, "values: skipping map-typed value in %s\n", notePath)
 }
 
 func record(key string, counts map[string]int, files map[string]map[string]struct{}, relPath string) {

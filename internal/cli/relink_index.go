@@ -90,21 +90,7 @@ func (idx *relinkIndex) resolve(link wikilink.Link) []relinkTarget {
 		return nil
 	}
 	if link.Folder != "" {
-		pathKey := relinkNormalizeTarget(link.Target)
-		if pathKey == "" {
-			return nil
-		}
-		if target, ok := idx.byPathKey[pathKey]; ok {
-			return []relinkTarget{target}
-		}
-		titleKey := relinkNormalizeTitle(link.Title())
-		if titleKey == "" {
-			return nil
-		}
-		if targets := idx.byTitleKey[titleKey]; len(targets) == 1 {
-			return append([]relinkTarget(nil), targets...)
-		}
-		return nil
+		return idx.resolveFolderLink(link)
 	}
 
 	titleKey := relinkNormalizeTitle(link.Title())
@@ -112,6 +98,28 @@ func (idx *relinkIndex) resolve(link wikilink.Link) []relinkTarget {
 		return nil
 	}
 	return append([]relinkTarget(nil), idx.byTitleKey[titleKey]...)
+}
+
+// resolveFolderLink resolves a folder-prefixed link: the exact path key first,
+// then the title, and only when the title names exactly one target. A bare
+// [[Title]] is resolved by resolve itself, where an ambiguous title is allowed
+// to return every candidate.
+func (idx *relinkIndex) resolveFolderLink(link wikilink.Link) []relinkTarget {
+	pathKey := relinkNormalizeTarget(link.Target)
+	if pathKey == "" {
+		return nil
+	}
+	if target, ok := idx.byPathKey[pathKey]; ok {
+		return []relinkTarget{target}
+	}
+	titleKey := relinkNormalizeTitle(link.Title())
+	if titleKey == "" {
+		return nil
+	}
+	if targets := idx.byTitleKey[titleKey]; len(targets) == 1 {
+		return append([]relinkTarget(nil), targets...)
+	}
+	return nil
 }
 
 func (idx *relinkIndex) deterministicTarget(link wikilink.Link) (string, bool) {

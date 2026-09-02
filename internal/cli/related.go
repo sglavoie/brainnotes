@@ -82,27 +82,14 @@ func NewRelatedCmd() *cobra.Command {
 	return cmd
 }
 
-func validateRelatedOptions(options relatedOptions) (recall.Mode, error) {
-	if options.openResult && !options.interactive {
-		return "", errors.New("related: --open requires --interactive")
-	}
-	if options.interactive && options.asJSON {
-		return "", errors.New("related: --interactive cannot be used with --json")
-	}
-	if options.interactive && options.paths {
-		return "", errors.New("related: --interactive cannot be used with --paths")
-	}
-	if options.interactive && options.nullSep {
-		return "", errors.New("related: --interactive cannot be used with --null")
-	}
-	if options.asJSON && options.paths {
-		return "", errors.New("related: --json cannot be used with --paths")
-	}
-	if options.asJSON && options.nullSep {
-		return "", errors.New("related: --json cannot be used with --null")
-	}
-	if options.nullSep && !options.paths {
-		return "", errors.New("related: --null requires --paths")
+// validate refuses every unusable flag combination and returns the parsed mode.
+//
+// The order of the checks is the order they are reported in: the flag matrix
+// first, then --limit, then --mode. `bn related x --interactive --json --limit
+// 0` reports the --interactive/--json conflict, not the limit.
+func (options relatedOptions) validate() (recall.Mode, error) {
+	if err := options.validateFlagCombos(); err != nil {
+		return "", err
 	}
 	if options.limit < 1 || options.limit > maxRelatedLimit {
 		return "", fmt.Errorf("related: --limit must be between 1 and %d (got %d)", maxRelatedLimit, options.limit)
@@ -115,6 +102,48 @@ func validateRelatedOptions(options relatedOptions) (recall.Mode, error) {
 		)
 	}
 	return mode, nil
+}
+
+// validateFlagCombos owns the mutual-exclusion matrix, split into the
+// --interactive cluster and the --json/--paths/--null cluster so neither half
+// grows past the threshold when a flag is added.
+func (options relatedOptions) validateFlagCombos() error {
+	if options.openResult && !options.interactive {
+		return errors.New("related: --open requires --interactive")
+	}
+	if err := options.validateInteractiveCombos(); err != nil {
+		return err
+	}
+	return options.validateOutputCombos()
+}
+
+func (options relatedOptions) validateInteractiveCombos() error {
+	if !options.interactive {
+		return nil
+	}
+	if options.asJSON {
+		return errors.New("related: --interactive cannot be used with --json")
+	}
+	if options.paths {
+		return errors.New("related: --interactive cannot be used with --paths")
+	}
+	if options.nullSep {
+		return errors.New("related: --interactive cannot be used with --null")
+	}
+	return nil
+}
+
+func (options relatedOptions) validateOutputCombos() error {
+	if options.asJSON && options.paths {
+		return errors.New("related: --json cannot be used with --paths")
+	}
+	if options.asJSON && options.nullSep {
+		return errors.New("related: --json cannot be used with --null")
+	}
+	if options.nullSep && !options.paths {
+		return errors.New("related: --null requires --paths")
+	}
+	return nil
 }
 
 func selectRelatedPath(root string, results []recall.Result, extraArgs []string) (relatedSelection, error) {
@@ -177,41 +206,19 @@ func cleanRelatedFZFField(value string) string {
 	return strings.NewReplacer("\t", " ", "\r", " ", "\n", " ").Replace(value)
 }
 
+// relatedFZFArgs is the `related --interactive` row layout: rank and
+// relationship in column 2, reasons in column 3, and the absolute path hidden in
+// column 1 for the preview. Injection follows the shared fzf table rules.
 func relatedFZFArgs(extraArgs []string) []string {
-	hasFlag := func(flag string) bool {
-		for _, arg := range extraArgs {
-			if arg == flag || strings.HasPrefix(arg, flag+"=") {
-				return true
-			}
-		}
-		return false
-	}
-
-	hasWithNth := hasFlag("--with-nth")
-	hasNth := hasFlag("--nth")
-	var injected []string
-	if !hasFlag("--delimiter") {
-		injected = append(injected, "--delimiter", "\t")
-	}
-	if !hasWithNth {
-		injected = append(injected, "--with-nth", "{2}\t{3}")
-	}
-	if !hasNth && !hasWithNth {
-		injected = append(injected, "--nth", "1..")
-	}
-	if !hasFlag("--tabstop") {
-		injected = append(injected, "--tabstop", "1")
-	}
-	if !hasFlag("--no-hscroll") && !hasFlag("--hscroll-off") {
-		injected = append(injected, "--no-hscroll")
-	}
-	if !hasFlag("--preview") {
-		injected = append(injected, "--preview", "cat {1}")
-	}
-	if !hasFlag("--preview-window") {
-		injected = append(injected, "--preview-window", "right:60%")
-	}
-	return append(injected, extraArgs...)
+	return injectFZFDefaults(extraArgs, []fzfDefault{
+		{suppressedBy: []string{"--delimiter"}, args: []string{"--delimiter", "\t"}},
+		{suppressedBy: []string{"--with-nth"}, args: []string{"--with-nth", "{2}\t{3}"}},
+		{suppressedBy: []string{"--nth", "--with-nth"}, args: []string{"--nth", "1.."}},
+		{suppressedBy: []string{"--tabstop"}, args: []string{"--tabstop", "1"}},
+		{suppressedBy: []string{"--no-hscroll", "--hscroll-off"}, args: []string{"--no-hscroll"}},
+		{suppressedBy: []string{"--preview"}, args: []string{"--preview", "cat {1}"}},
+		{suppressedBy: []string{"--preview-window"}, args: []string{"--preview-window", "right:60%"}},
+	})
 }
 
 func buildRelatedQuery(

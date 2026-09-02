@@ -96,6 +96,25 @@ func normalizeNewDefaultExtension(ext string) string {
 }
 
 func resolveNewDestFolder(vaultRoot, raw, label string) (string, error) {
+	normalized, err := normalizeNewDestFolder(raw, label)
+	if err != nil {
+		return "", err
+	}
+	cleaned := path.Clean(normalized)
+	if cleaned == "." {
+		return vaultRoot, nil
+	}
+	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", fmt.Errorf("%s %q is outside the vault", label, raw)
+	}
+	return filepath.Join(vaultRoot, filepath.FromSlash(cleaned)), nil
+}
+
+// normalizeNewDestFolder owns the refusals a destination folder is judged by and
+// returns the slash-normalized, trailing-slash-free remainder. The control-
+// character scan reads the raw value, not the trimmed one, so a folder name that
+// hides a NUL or an escape between visible characters is still refused.
+func normalizeNewDestFolder(raw, label string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return "", fmt.Errorf("%s %q is whitespace-only", label, raw)
@@ -114,14 +133,7 @@ func resolveNewDestFolder(vaultRoot, raw, label string) (string, error) {
 	if normalized == "" {
 		return "", fmt.Errorf("%s %q is whitespace-only", label, raw)
 	}
-	cleaned := path.Clean(normalized)
-	if cleaned == "." {
-		return vaultRoot, nil
-	}
-	if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
-		return "", fmt.Errorf("%s %q is outside the vault", label, raw)
-	}
-	return filepath.Join(vaultRoot, filepath.FromSlash(cleaned)), nil
+	return normalized, nil
 }
 
 func isNewDestAbsLike(p string) bool {
@@ -155,13 +167,9 @@ func atomicWriteFile(label, dest string, data []byte) error {
 		return err
 	}
 	dir := filepath.Dir(dest)
-	var destMode os.FileMode
-	destExists := false
-	if info, err := os.Stat(dest); err == nil {
-		destMode = info.Mode().Perm()
-		destExists = true
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("%s: stat %q: %w", label, dest, err)
+	wantMode, err := destWriteMode(label, dest)
+	if err != nil {
+		return err
 	}
 
 	tmp, err := os.CreateTemp(dir, ".new-*.tmp")
@@ -185,10 +193,6 @@ func atomicWriteFile(label, dest string, data []byte) error {
 		cleanup()
 		return fmt.Errorf("%s: close %q: %w", label, tmpPath, err)
 	}
-	wantMode := destMode
-	if !destExists {
-		wantMode = 0o644
-	}
 	if err := os.Chmod(tmpPath, wantMode); err != nil {
 		cleanup()
 		return fmt.Errorf("%s: chmod %q: %w", label, tmpPath, err)
@@ -198,4 +202,20 @@ func atomicWriteFile(label, dest string, data []byte) error {
 		return fmt.Errorf("%s: rename %q -> %q: %w", label, tmpPath, dest, err)
 	}
 	return nil
+}
+
+// destWriteMode is the mode the temp file is chmod'ed to before it is renamed
+// onto dest: an overwrite keeps the destination's own permission bits, and a
+// fresh file gets 0644. A stat that fails for any reason other than "not there"
+// is an error rather than a silent fall back to 0644, which would widen the
+// permissions of a file the process merely could not read.
+func destWriteMode(label, dest string) (os.FileMode, error) {
+	info, err := os.Stat(dest)
+	if err == nil {
+		return info.Mode().Perm(), nil
+	}
+	if !os.IsNotExist(err) {
+		return 0, fmt.Errorf("%s: stat %q: %w", label, dest, err)
+	}
+	return 0o644, nil
 }

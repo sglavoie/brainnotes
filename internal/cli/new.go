@@ -77,18 +77,45 @@ func resolveDest(cfg *config.Config, resolvedTemplatePath, folderFlag string) (s
 	}
 }
 
+// routeMatch is one [new.routes] entry whose template name resolves to the same
+// template file the command is rendering. rawDest is kept alongside the resolved
+// one so a conflict is reported in the words the user wrote in the config.
+type routeMatch struct {
+	name         string
+	rawDest      string
+	resolvedDest string
+}
+
 func routeForTemplate(cfg *config.Config, routes map[string]string, resolvedTemplatePath string) (string, bool, error) {
+	resolvedTemplatePath = filepath.Clean(resolvedTemplatePath)
+	matches, err := matchingTemplateRoutes(cfg, routes, resolvedTemplatePath)
+	if err != nil {
+		return "", false, err
+	}
+	if len(matches) == 0 {
+		return "", false, nil
+	}
+	canonicalDest := matches[0].resolvedDest
+	for _, match := range matches[1:] {
+		if sameNewRouteDestination(cfg.Vault, resolvedTemplatePath, canonicalDest, match.resolvedDest) {
+			continue
+		}
+		return "", false, conflictingRoutesError(cfg, resolvedTemplatePath, matches)
+	}
+	return canonicalDest, true, nil
+}
+
+// matchingTemplateRoutes returns every route naming the same template file, in
+// route-name order so the first match is deterministic. A route naming a
+// template that no longer resolves is skipped rather than refused: it routes
+// nothing, and `bn new` already reports an unresolvable template by name.
+func matchingTemplateRoutes(cfg *config.Config, routes map[string]string, resolvedTemplatePath string) ([]routeMatch, error) {
 	names := make([]string, 0, len(routes))
 	for name := range routes {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	resolvedTemplatePath = filepath.Clean(resolvedTemplatePath)
-	type routeMatch struct {
-		name         string
-		rawDest      string
-		resolvedDest string
-	}
+
 	var matches []routeMatch
 	for _, name := range names {
 		dest := routes[name]
@@ -104,23 +131,20 @@ func routeForTemplate(cfg *config.Config, routes map[string]string, resolvedTemp
 		}
 		resolvedDest, err := resolveNewDestFolder(cfg.Vault, dest, fmt.Sprintf("new: route for %q", name))
 		if err != nil {
-			return "", false, err
+			return nil, err
 		}
 		matches = append(matches, routeMatch{name: name, rawDest: dest, resolvedDest: resolvedDest})
 	}
-	if len(matches) == 0 {
-		return "", false, nil
+	return matches, nil
+}
+
+// conflictingRoutesError names every route involved, not just the two that
+// disagreed, so the config edit that fixes it is visible from the message.
+func conflictingRoutesError(cfg *config.Config, resolvedTemplatePath string, matches []routeMatch) error {
+	parts := make([]string, 0, len(matches))
+	for _, m := range matches {
+		parts = append(parts, fmt.Sprintf("%q -> %q", m.name, m.rawDest))
 	}
-	canonicalDest := matches[0].resolvedDest
-	for _, match := range matches[1:] {
-		if sameNewRouteDestination(cfg.Vault, resolvedTemplatePath, canonicalDest, match.resolvedDest) {
-			continue
-		}
-		parts := make([]string, 0, len(matches))
-		for _, m := range matches {
-			parts = append(parts, fmt.Sprintf("%q -> %q", m.name, m.rawDest))
-		}
-		return "", false, fmt.Errorf("new: conflicting routes for resolved template %q: %s", describeNewResolvedTemplate(cfg.Vault, resolvedTemplatePath), strings.Join(parts, ", "))
-	}
-	return canonicalDest, true, nil
+	return fmt.Errorf("new: conflicting routes for resolved template %q: %s",
+		describeNewResolvedTemplate(cfg.Vault, resolvedTemplatePath), strings.Join(parts, ", "))
 }

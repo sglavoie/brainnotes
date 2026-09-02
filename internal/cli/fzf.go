@@ -34,9 +34,16 @@ func RunFZF(paths []string, extraArgs []string) ([]string, error) {
 	if _, err := fzfLookPath("fzf"); err != nil {
 		return nil, ErrFZFNotFound
 	}
-	args := append([]string(nil), extraArgs...)
+	return runFZFProcess(append([]string(nil), extraArgs...), strings.Join(paths, "\n"))
+}
+
+// runFZFProcess is the single place fzf is spawned and its exit code mapped, so
+// the no-match and interrupt conventions cannot drift between the two entry
+// points. stderr is forwarded to the parent so the TUI renders in the user's
+// terminal.
+func runFZFProcess(args []string, input string) ([]string, error) {
 	cmd := fzfCommand("fzf", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(paths, "\n"))
+	cmd.Stdin = strings.NewReader(input)
 	cmd.Stderr = os.Stderr
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -54,6 +61,50 @@ func RunFZF(paths []string, extraArgs []string) ([]string, error) {
 		return nil, fmt.Errorf("fzf: %w", err)
 	}
 	return splitSelection(out.String()), nil
+}
+
+// fzfDefault is one fzf flag this CLI injects unless the user's own
+// `[fzf].args` already covers it. suppressedBy lists every flag whose presence
+// makes the injection unnecessary — usually just the flag being injected, but
+// `--nth` is also covered by `--with-nth` and `--no-hscroll` by
+// `--hscroll-off`.
+type fzfDefault struct {
+	suppressedBy []string
+	args         []string
+}
+
+// injectFZFDefaults prepends the defaults the user did not already set and
+// returns the full argv. The user's own args come last so they win on any flag
+// fzf resolves last-one-wins.
+func injectFZFDefaults(extraArgs []string, defaults []fzfDefault) []string {
+	var injected []string
+	for _, d := range defaults {
+		if anyFZFFlagSet(extraArgs, d.suppressedBy) {
+			continue
+		}
+		injected = append(injected, d.args...)
+	}
+	return append(injected, extraArgs...)
+}
+
+func anyFZFFlagSet(extraArgs []string, flags []string) bool {
+	for _, flag := range flags {
+		if fzfHasFlag(extraArgs, flag) {
+			return true
+		}
+	}
+	return false
+}
+
+// fzfHasFlag reports whether extraArgs sets flag, in either the `--flag value`
+// or the `--flag=value` form.
+func fzfHasFlag(extraArgs []string, flag string) bool {
+	for _, a := range extraArgs {
+		if a == flag || strings.HasPrefix(a, flag+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 func splitSelection(s string) []string {
@@ -130,61 +181,19 @@ func runFZFLinesRaw(lines []string, extraArgs []string) ([]string, error) {
 	if _, err := fzfLookPath("fzf"); err != nil {
 		return nil, ErrFZFNotFound
 	}
+	return runFZFProcess(fzfLineArgs(extraArgs), strings.Join(lines, "\n"))
+}
 
-	hasFlag := func(flag string) bool {
-		for _, a := range extraArgs {
-			if a == flag || strings.HasPrefix(a, flag+"=") {
-				return true
-			}
-		}
-		return false
-	}
-
-	hasWithNth := hasFlag("--with-nth")
-	hasNth := hasFlag("--nth")
-
-	var injected []string
-	if !hasFlag("--delimiter") {
-		injected = append(injected, "--delimiter", "\t")
-	}
-	if !hasWithNth {
-		injected = append(injected, "--with-nth", "{3}:{2}:\t{4..}")
-	}
-	if !hasNth && !hasWithNth {
-		injected = append(injected, "--nth", "2..")
-	}
-	if !hasFlag("--tabstop") {
-		injected = append(injected, "--tabstop", "1")
-	}
-	if !hasFlag("--no-hscroll") && !hasFlag("--hscroll-off") {
-		injected = append(injected, "--no-hscroll")
-	}
-	if !hasFlag("--preview") {
-		injected = append(injected, "--preview", "cat {1}")
-	}
-	if !hasFlag("--preview-window") {
-		injected = append(injected, "--preview-window", "right:60%:+{2}/3")
-	}
-	args := append(injected, extraArgs...)
-
-	cmd := fzfCommand("fzf", args...)
-	cmd.Stdin = strings.NewReader(strings.Join(lines, "\n"))
-	cmd.Stderr = os.Stderr
-	var out bytes.Buffer
-	cmd.Stdout = &out
-
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			switch exitErr.ExitCode() {
-			case 1:
-				return nil, nil
-			case 130:
-				return nil, ErrFZFInterrupted
-			}
-		}
-		return nil, fmt.Errorf("fzf: %w", err)
-	}
-
-	return splitSelection(out.String()), nil
+// fzfLineArgs is the grep-style record layout documented on RunFZFLines. The
+// order of the table is the order the flags are injected in.
+func fzfLineArgs(extraArgs []string) []string {
+	return injectFZFDefaults(extraArgs, []fzfDefault{
+		{suppressedBy: []string{"--delimiter"}, args: []string{"--delimiter", "\t"}},
+		{suppressedBy: []string{"--with-nth"}, args: []string{"--with-nth", "{3}:{2}:\t{4..}"}},
+		{suppressedBy: []string{"--nth", "--with-nth"}, args: []string{"--nth", "2.."}},
+		{suppressedBy: []string{"--tabstop"}, args: []string{"--tabstop", "1"}},
+		{suppressedBy: []string{"--no-hscroll", "--hscroll-off"}, args: []string{"--no-hscroll"}},
+		{suppressedBy: []string{"--preview"}, args: []string{"--preview", "cat {1}"}},
+		{suppressedBy: []string{"--preview-window"}, args: []string{"--preview-window", "right:60%:+{2}/3"}},
+	})
 }

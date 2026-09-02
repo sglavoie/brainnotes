@@ -175,49 +175,70 @@ lint-ratchet-selftest: _require-golangci
 lint-full: _require-golangci
     golangci-lint run --issues-exit-code=0 ./...
 
-# The Phase 1 completion gate: no Cobra command constructor may still carry a
-# complexity violation. It reads the whole-tree report rather than the ratchet,
-# because the constructors it is about are *old* code — `lint-new` cannot see
-# them by construction, and a gate built on it would pass on day one.
+# The Phase 1 completion gate: **no production file under internal/cli may carry
+# a complexity violation** — not the Cobra constructors alone. It reads the
+# whole-tree report rather than the ratchet, because the code it is about is
+# *old* code: `lint-new` cannot see it by construction, and a gate built on it
+# would pass on day one.
 #
-# It is deliberately a whole-tree scan with a narrow verdict: every other
-# violation in the report is tolerated, so the baseline recorded in
+# It selects by *path*, not by function name. The earlier version matched lines
+# naming a `New*Cmd`/`new*Cmd` function, which made the gate green while 21
+# production violations sat in the same package on ordinary helpers — the
+# constructors were the visible half of Phase 1, never the whole of it. Matching
+# the path also picks up `nestif`, whose message names an `if` condition and no
+# function at all, so it was invisible to any name match.
+#
+# The verdict stays narrow in the other direction: violations outside
+# internal/cli are tolerated, so the tree-wide baseline recorded in
 # docs/internals/refactor-baseline.md does not have to reach zero for this to
-# pass. Only lines naming a `New*Cmd`/`new*Cmd` function fail it.
+# pass. `_test.go` files are excluded — a test's table-driven bulk is not what
+# this is about.
 #
-# Two limits are worth knowing before trusting a green run. It matches on the
-# function name in the message, so it covers cyclop, gocognit, and funlen (which
-# all name their function) but not nestif, whose message names an `if` condition
-# and no function at all — a constructor deep enough to trip nestif alone would
-# slip through, though in practice it trips gocognit first. And the match is
-# textual, so a message that merely mentions such a name fails the gate; that
-# error is in the safe direction.
+# The filter is byte-for-byte the one the Phase 1 completion contract runs, so a
+# green gate and a green contract check cannot mean different things. Real issue
+# lines are `path.go:LINE:COL: message (linter)` and start in column 1; the
+# echoed source context below each one is indented, so anchoring on `^internal/`
+# keeps a violating function's own source out of the match.
 #
 # Not wired into `lint` or `ci`: `lint-new` is what stops a *new* violation, and
 # only one golangci-lint may run at a time on a machine, so this stays a
 # separately invoked gate like `lint-full`.
 
-# Fail if any Cobra `New*Cmd` constructor still has a complexity violation
+# Fail if any non-test file under internal/cli still has a complexity violation
 lint-phase-gate: _require-golangci
     #!/usr/bin/env bash
     set -euo pipefail
     report=$(golangci-lint run --issues-exit-code=0 ./... 2>&1)
-    # Real issue lines are `path.go:LINE:COL: message (linter)` and start in
-    # column 1; the echoed source context below each one is indented, so
-    # anchoring on that shape keeps a constructor's own source out of the match.
-    # The location prefix is consumed before the name is looked for, so a path
-    # containing "cmd" cannot trigger it.
-    hits=$(printf '%s\n' "$report" | grep -iE '^[^[:space:]]+\.go:[0-9]+:[0-9]+: .*(^|[^a-z0-9_])new[a-z0-9_]*cmd([^a-z0-9_]|$)' || true)
+    hits=$(printf '%s\n' "$report" | awk '/^internal\/cli\/.*\.go:/ && $1 !~ /_test\.go:/ {print}')
     if [ -n "$hits" ]; then
         count=$(printf '%s\n' "$hits" | wc -l | tr -d ' ')
-        echo "phase gate: $count complexity violation(s) still on a command constructor:"
+        echo "phase gate: $count complexity violation(s) still in production internal/cli code:"
         printf '%s\n' "$hits"
         echo
-        echo "Decompose each one per docs/internals/cli-command-shape.md: the constructor keeps"
-        echo "Use/Short/Long/Args/flags and a one-line RunE, and the behaviour moves to <cmd>_run.go."
+        echo "Decompose each one per docs/internals/cli-command-shape.md: a constructor keeps"
+        echo "Use/Short/Long/Args/flags and a one-line RunE, the flag matrix lives in one"
+        echo "validate(), and each mode is one named function in <cmd>_run.go."
         exit 1
     fi
-    echo "phase gate: no command constructor carries a complexity violation."
+    echo "phase gate: no production file under internal/cli carries a complexity violation."
+
+# The gate above certified Phase 1 while 21 production violations sat in
+# internal/cli, because it only looked at command constructors. So it gets a test
+# that can fail: a throwaway module carrying one over-threshold *non-constructor*
+# function in production internal/cli code, and the assertion that the gate exits
+# non-zero and names the file — plus the complementary assertions that a
+# violation outside internal/cli and one in an internal/cli `_test.go` are still
+# tolerated. It copies this repository's `.golangci.yml` *and* this justfile, so
+# it runs the thresholds and the recipe actually in force rather than a
+# re-implementation of them.
+#
+# Outside `just ci` for the same reason as lint-ratchet-selftest: it runs
+# golangci-lint against a synthetic tree, and only one golangci-lint may run at a
+# time on a machine. Wired into .github/workflows/ci.yml as its own step.
+
+# Prove the phase gate catches a violating non-constructor function
+lint-phase-gate-selftest: _require-golangci
+    @python3 -B scripts/lint_phase_gate_selftest.py
 
 # Format Go code with gofmt
 fmt:
