@@ -103,6 +103,22 @@ ci:
     fi
     echo "CI clean"
 
+# `metrics` is deliberately absent from `just ci` and from `just lint`: it is a
+# report, not a gate. It reads the repository and writes only to stdout.
+# Compare its output against docs/internals/refactor-baseline.md, which is the
+# committed baseline every refactoring session measures against.
+#
+# `-B` is load-bearing, not a style choice: metrics.py imports sibling
+# metrics_*.py modules, and without it Python would drop scripts/__pycache__/
+# into the working tree. That directory is ignored only by a *user's global*
+# gitignore, never by this repo's — the hazard the .gitignore comment already
+# warns about — so on any other machine a read-only report would leave
+# untracked files behind.
+
+# Report the refactoring measurements (file size, complexity, duplication, dead code)
+metrics:
+    @python3 -B scripts/metrics.py
+
 # Remove build artifacts
 clean:
     @echo "Cleaning..."

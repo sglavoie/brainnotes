@@ -1,0 +1,41 @@
+# go test -cover ./... — refactoring coverage baseline
+#
+# Captured at HEAD 9d18e34 on 2026-09-01. Closes the audit §6 "test quality"
+# blind spot: the 1.32 Go test ratio in docs/internals/refactor-baseline.md is
+# a volume number, and this is the statement-coverage number behind it.
+#
+# A bare line with no "ok" prefix and 0.0% is a package with no test files of
+# its own. All packages passed.
+#
+# Regenerate with: go test -cover ./...
+
+ok  	github.com/sglavoie/sglavoie_brainnotes/cmd/bn	1.070s	coverage: 88.6% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/cmd/bn-vault-guard	8.217s	coverage: 68.8% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/agent	2.001s	coverage: 89.7% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/audit	1.466s	coverage: [no statements]
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/backup	0.896s	coverage: 73.3% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/brief	3.361s	coverage: 75.4% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/cli	127.076s	coverage: 84.7% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/cockpit	6.844s	coverage: 83.7% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/config	15.918s	coverage: 94.3% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/editor	5.731s	coverage: 77.4% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter	3.503s	coverage: 92.3% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/index	22.126s	coverage: 73.9% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/journal	11.312s	coverage: 73.7% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/mutationmatrix	204.185s	coverage: [no statements]
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/noteops	303.216s	coverage: 63.2% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/pins	3.141s	coverage: 93.4% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/properties	7.544s	coverage: 63.4% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/query	17.412s	coverage: 87.1% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr	13.269s	coverage: 90.6% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/recall	3.455s	coverage: 86.5% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/schema	2.281s	coverage: 91.1% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/template	7.473s	coverage: 80.1% of statements
+	github.com/sglavoie/sglavoie_brainnotes/internal/textnorm		coverage: 0.0% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vault	245.834s	coverage: 79.7% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit	238.455s	coverage: 82.7% of statements
+	github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate		coverage: 0.0% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/web	161.392s	coverage: 79.9% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/web/cssbuild	7.841s	coverage: 87.9% of statements
+	github.com/sglavoie/sglavoie_brainnotes/internal/web/cssbuild/gen		coverage: 0.0% of statements
+ok  	github.com/sglavoie/sglavoie_brainnotes/internal/wikilink	6.809s	coverage: 96.7% of statements
