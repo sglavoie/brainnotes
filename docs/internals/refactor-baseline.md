@@ -377,3 +377,89 @@ The assumption largely holds. The safety-critical packages are well covered:
    was written in plan mode and could not install `dupl`, `jscpd`, `knip`, or
    ESLint. The two known divergences (§2.4 TypeScript, §2.5 duplication) are
    documented inline above with their cause.
+
+---
+
+## 5. The ratchet gate (S02)
+
+`.golangci.yml` at the repo root now enforces the §2.4 thresholds — **funlen
+100/50, cyclop 10, gocognit 20, nestif 4** — with the generated Unicode tables
+and `internal/web/static/` excluded by path as well as by header.
+
+| Recipe            | What it does                                | In `ci`? |
+| ----------------- | ------------------------------------------- | -------- |
+| `just lint-new`   | Fails on any violation in code newer than the ratchet base | **yes**, and in `just lint` |
+| `just lint-full`  | Reports the whole-tree count, exit 0        | no — a report |
+| `just install-lint` | Installs the pinned golangci-lint         | no — CI calls it |
+
+### The ratchet floor
+
+**281 source-level violations and 271 test-file violations, 552 total.** These
+are the §2.4 numbers, re-measured through the committed `.golangci.yml` rather
+than the ephemeral one `scripts/metrics.py` writes; both produce 552 with the
+same per-linter split (cyclop 346, gocognit 165, nestif 35, funlen 6), which is
+what makes the gate and the metrics report comparable.
+
+552 is a count of *reported* issues, and both configs report with
+`uniq-by-line` on. cyclop and gocognit both anchor to a function's declaration
+line, so a function over both thresholds contributes one issue, not two —
+`NewSearchCmd` is cyclop 80 *and* gocognit 231 and counts once. The gate is
+unaffected either way: collapsing requires two issues on one line, so one of
+them is always still reported and the run still fails.
+
+**281 must fall and never rise.** The gate does not enforce that directly — it
+enforces the stronger local property that no *new* code violates the
+thresholds. Read the floor with `just lint-full`.
+
+### The enforcement anchor, and why it is a commit
+
+The gate is anchored by the `ratchet_base` variable in the `justfile`, pinned to
+**`61f2296`** — the commit S01 recorded this baseline at.
+
+The audit called for `--new-from-merge-base=main`. On a repository with feature
+branches that is correct, but work here lands directly on `main`, and then
+`git merge-base main HEAD` **is** `HEAD`: the diff range is empty and the gate
+passes on anything. That was measured, not assumed. With a gocognit-28 function
+committed to the branch the anchor names, golangci-lint reports `0 issues.` and
+exits 0; anchored at `61f2296` the same tree exits 1 on the same function.
+
+Naming the baseline commit keeps both workflows working, because the merge base
+of an ancestor commit and any descendant is that commit — so the anchor resolves
+to `61f2296` on `main` and on a feature branch cut from it alike.
+
+`61f2296` is S01's commit, not the `9d18e34` this file's tables were measured
+at. S01 added only Python, Markdown, and `justfile` lines, so the Go tree — and
+therefore all of §2.4 — is byte-identical between the two.
+
+**Sessions S04–S08 inherit this anchor.** Every line they touch is inside the
+diff range, so a decomposed command must land *under* the thresholds; moving an
+oversized function to a new file without decomposing it will fail the gate. That
+is the intended behaviour.
+
+Raise `ratchet_base` only together with the floor above. Lowering it can only
+re-admit violations that are already excluded.
+
+### CI
+
+`.github/workflows/ci.yml` needs two things the gate did not previously require:
+
+- `fetch-depth: 0` on the `ci` job's checkout. The default shallow checkout has
+  one commit, so `61f2296` would not exist and no merge base could resolve. The
+  `vault-native` job does not run the gate and stays shallow.
+- `just install-lint`, which installs `golangci-lint` at the version pinned by
+  `golangci_version` in the `justfile`. Installing through the recipe keeps the
+  version in one place rather than one in the workflow and one on each machine.
+
+`just lint-new` **fails** when `golangci-lint` is missing rather than skipping.
+A gate that quietly does nothing when a tool is absent reads as green and
+enforces nothing.
+
+### Suppressions remain at zero
+
+§2.8 records zero `//nolint` in the repository. Turning the linters on
+introduced none, and the whole design of the gate is what makes that possible:
+because existing violations are outside the diff range, no file needed
+silencing to get CI green. The only annotation in use is still the repo's own
+15 `//bn:direct-write` markers, which add required justification rather than
+remove a check. **A `//nolint` added later is a signal that a threshold is
+wrong, or that the code is — not that the directive was needed.**

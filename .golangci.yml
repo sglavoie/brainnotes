@@ -1,0 +1,62 @@
+# Function-complexity ratchet. See docs/internals/refactor-baseline.md.
+#
+# This config is measurement and gate at once: `just lint-full` runs it over the
+# whole tree to report the remaining count, and `just lint` / `just ci` run it
+# over new code only so the existing violations do not block while no new one
+# can land.
+#
+# The four thresholds below are the ones the baseline was measured with. They
+# are duplicated in scripts/metrics_complexity.py, deliberately: that script
+# writes its own ephemeral config so a change here cannot silently move the
+# numbers docs/internals/refactor-baseline.md records. Changing a threshold
+# means changing both files and re-recording the baseline.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - cyclop
+    - funlen
+    - gocognit
+    - nestif
+
+  settings:
+    cyclop:
+      max-complexity: 10
+    funlen:
+      lines: 100
+      statements: 50
+    gocognit:
+      min-complexity: 20
+    nestif:
+      min-complexity: 4
+
+  exclusions:
+    # Generated files carry a "Code generated ... DO NOT EDIT" header and are
+    # not hand-maintained, so a complexity score for them is not actionable.
+    generated: lax
+    paths:
+      # Generated Unicode normalization tables. Excluded by path as well as by
+      # header so the exclusion survives a regenerator that drops the header.
+      - internal/template/unicode_normalize.*\.go$
+      - internal/template/unicode_combining_class.*\.go$
+      # Build output and vendored third-party assets. No Go files today; listed
+      # so this file names the same generated paths as .refactorignore and the
+      # bundle-drift check in `just ci`.
+      - internal/web/static/
+
+issues:
+  # The gate must report every violation it finds. golangci-lint truncates to 50
+  # per linter and 3 identical messages by default, which would let a new
+  # violation land unreported once a linter's list is long.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  # Left at the default, and stated so it is a decision rather than a default.
+  # cyclop and gocognit both report on a function's declaration line, so a
+  # function over both thresholds collapses to one issue here. That is why the
+  # whole-tree total is 552 rather than the sum of the raw per-linter runs, and
+  # it is what docs/internals/refactor-baseline.md and the ephemeral config in
+  # scripts/metrics_complexity.py both measure. It cannot weaken the gate:
+  # collapsing needs two issues on one line, so one of them is always reported.
+  uniq-by-line: true

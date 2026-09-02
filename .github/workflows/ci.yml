@@ -9,7 +9,14 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
+      # `just ci` runs the complexity ratchet, which diffs against the baseline
+      # commit named by `ratchet_base` in the justfile. The default shallow
+      # checkout fetches one commit, so that commit would not exist here and
+      # golangci-lint could not resolve a merge base. Full history is what makes
+      # the gate runnable in CI at all.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -26,6 +33,11 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      # The version is pinned in the justfile and installed through it, so the
+      # workflow and a developer machine cannot end up on different linters.
+      - name: Install the pinned golangci-lint
+        run: just install-lint
 
       - name: Run CI checks
         run: just ci
