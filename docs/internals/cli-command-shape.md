@@ -63,6 +63,22 @@ report cannot produce). Not every command needs the parameter: `find` reads
 `--broken-links` off the shared `*findFlags` it already holds, so its
 `validate()` is a pure function of the struct and takes nothing.
 
+**One rule is enough to earn a `validate()`.** Sessions asked repeatedly whether
+a method holding a single `if` was ceremony. It is not, and the distribution
+settles it: eight commands now have a one-rule `validate()` (`unset`, `replace`,
+`relink`, `rename-key`, `repair`, `open`, `graph`, and the shared
+`linkListOptions`), two have enough to split the method (`find`, `search`), and
+three have none (`new`, `undo`, `lint`). `related`'s eight rules are the
+exception that proves the shape rather than a counterexample: they live in the
+package-level `validateRelatedOptions`, which predates this contract and carries
+a cyclop violation the ratchet pins in place, so it stays where it is.
+
+The method is where the *second* rule goes, and a rule that starts as a
+package-level function has to be found and moved when that happens, so the cost
+of the method is one name and the cost of not having it is a decision every
+future flag re-litigates. Refusals that are not about the flag matrix still stay
+out of it (below).
+
 **A command with no mutual-exclusion rules gets no `validate()`.** `new` is the
 case: `--folder`, `--var`, `--edit`, and `--force` all compose, so an empty
 method would be ceremony rather than the place a rule goes. Give the options
@@ -106,13 +122,46 @@ type its helper files share out of the constructor file: `relinkIndex` and
 `relink_rewrite.go`, `relinkResidue` in `relink_residue.go`, so `relink.go` is
 the constructor and nothing else.
 
+**When two commands share a whole prologue, the shared thing is a run builder,
+not a copied closure.** `links` and `backlinks` are the same command up to one
+lookup: both take an optional note argument, fall back to the fzf picker, report
+an empty vault on stderr, open the vault, load the notes, and build the graph —
+thirteen duplicate windows of it. `linklist.go` is that prologue once:
+`linkListOptions` (the `--null`/`--verbose` pair and their one rule),
+`resolveLinkListTarget` returning `(target, ok, err)` so a dismissed picker is a
+silent success, and `newLinkListRun` returning the `linkListRun{target, notes,
+graph}` both runners then read. What is left in `links_run.go` and
+`backlinks_run.go` is only what actually differs: which direction of the graph
+is read, and how the verbose form is rendered. The verbose renderers were
+deliberately **not** pulled into the shared file — they share no code, and
+moving them would have put `writeVerboseBacklinks`'s existing cyclop violation
+inside the ratchet's diff range (see *Verifying a decomposition*).
+
 A single writer per output form is also how a format detail stops drifting.
-`-0` is defined in exactly one function, `writePathList`, and both `find` and
-`search` write their paths through it, so the documented
-`bn find -0 | bn set --null -` pipeline and `bn search -0` cannot end up with
-different separators — and neither can a command's interactive selection output
-and its default listing. `TestFindSetNullPipeline` runs that pipeline end to end
-rather than testing each half on its own.
+`-0` is defined in exactly one function, `writePathList`, and five commands
+write their paths through it — `find`, `search`, `related --paths`,
+`open --print`, and the shared link listing behind `links`/`backlinks` — so the
+documented `bn find -0 | bn set --null -` pipeline and `bn search -0` cannot end
+up with different separators, and neither can a command's interactive selection
+output and its default listing. `open --print -0` prints a single path and still
+goes through it, because a one-element list is exactly the case where an inlined
+`fmt.Fprintf(out, "%s%c", ...)` looks harmless and drifts.
+`TestFindSetNullPipeline` runs that pipeline end to end rather than testing each
+half on its own.
+
+**A shared prologue is a function, not a context object.** Sessions 5 and 7
+asked whether a `runContext{cmd, args, cfg, root}` should collapse the
+five-to-seven-parameter `new<cmd>Run` constructors, and left the call to this
+one. The answer is no, and the question is closed. `newLinkListRun` is the
+strongest case that could have been made for it — two commands, an identical
+prologue, four values to carry — and it came out better as a named function
+returning a struct scoped to *those two commands* than it would have as a
+vocabulary every command has to learn. A generic `runContext` bundles `cmd` and
+`args` (which the runner already receives) with `cfg` and `root` (which most
+runners derive in two lines) and buys nothing at the call site, while costing
+every reader an indirection to find out which fields a given command actually
+uses. Share the prologue that two commands genuinely have in common; do not
+invent a container for prologues that merely rhyme.
 
 ## Order is behaviour
 
@@ -141,12 +190,35 @@ that `os.MkdirAll` for the same reason: `internal/audit` accepts it on the line
 above the call or in the enclosing function's doc comment, so a moved write must
 carry its comment group with it or the audit fails.
 
+`undo` is the case where the order that matters is on the *error* path. Its
+restore is a single `noteops.Undo` call and was not touched; what was extracted
+is `describeUndoError`, and its three cases are ordered: a conflict renders the
+per-path report, a `noteops.IsSnapshotFailure` is wrapped bare because the
+partial-failure guidance would be actively wrong for a change that already
+landed on disk, and only the remaining errors get the guidance appended.
+Reordering those cases silently changes what a user is told to do after a failed
+restore.
+
 `rename` states the same rule as a sequence: `planRename` runs all seven
 refusals — title shape, target resolution, identical-title, source-title
 uniqueness, path computation, destination occupancy, destination-title
 uniqueness — and returns a `*noteops.RenamePlan`, and only `applyRename` opens
 the journal. Splitting on that line is what keeps every `rename` refusal
 artifact-free, and it is why `--dry-run` can be a single `if` between the two.
+
+**A read/write boundary that lives in control flow has to be restated as
+structure.** `bn related` is read-only except on one path: an accepted
+interactive selection calls `setup.store.RecordOpened`, and that write is the
+whole point of the mode, because it is what later rankings read back as the
+recall signal (`docs/internals/recall-context.md`). Inside the old closure the
+boundary was an `if options.interactive` two thirds of the way down a
+seventy-line body. The decomposition makes it a function: `runRelatedInteractive`
+is the only writer and is reachable only from that branch,
+`runRelatedListing` holds all three read-only renderings, and the doc comment on
+the writer says which line writes and why. A reviewer asking "can a
+non-interactive `bn related` touch `.bnotes`" now reads one signature instead of
+tracing a body. `bn context` ranks through the same corpus and writes nothing at
+all, including on its `--agent` path.
 
 **A resolver that can legally select nothing returns `(value, ok, err)`, not a
 nil sentinel.** `unset` and `rename` both offer an fzf picker, and an empty
@@ -186,6 +258,25 @@ No behaviour change is permitted in a decomposition, so the checks are:
 - `just lint-full` — the report that shows the score actually moved. Decomposing
   `search` dropped the `internal/cli` gocognit score total from 1326 to 1094 and
   the package's violation count from 80 to 75.
+- `just lint-phase-gate` — the verdict, as opposed to the score. It reads the
+  whole-tree report and fails if any line names a `New*Cmd`/`new*Cmd` function,
+  tolerating every other violation, so it answers "is a constructor still
+  oversized" without requiring the baseline to reach zero. It has to read
+  `lint-full` rather than `lint-new`: the constructors are old code and the
+  ratchet cannot see them, so a gate built on `lint-new` would pass on day one.
+  It matches on the function name in the message, which covers cyclop, gocognit,
+  and funlen but not `nestif` — that message names an `if` condition and no
+  function — so a constructor whose only violation is a nested block would slip
+  through. In practice such a constructor trips gocognit first.
+
+**The gate names constructors the phase list may not.** Finishing Phase 1 with
+only the six commands it named would have left `lint-phase-gate` red:
+`NewDoctorCmd` (cyclop 11), `NewGraphCmd` (cyclop 12), and `newContextCmd`
+(gocognit 21) were also in the report, small enough to have escaped the
+size-ranked survey the phase list was built from. All three were decomposed too,
+which is the right response — narrowing the gate to the six named commands would
+have made it pass by describing less than it checks. If a phase list and a gate
+disagree, widen the work, not the exemption.
 
 Expect a decomposition to remove **more** issues than it removes constructors.
 `unset`/`replace`/`rename`/`relink` together took the whole-tree total from 541
@@ -195,6 +286,10 @@ one-arg-vs-two-arg branch) lived *inside* the closures and left with them.
 `issues.uniq-by-line` still collapses each constructor's cyclop score into its
 gocognit report, so the constructors themselves are one issue each; a nested
 block reported on its own line is a second, separate issue in the same function.
+The nine constructors of the final Phase 1 session repeated the pattern: 535 to
+522 whole-tree and 35 to 22 in `internal/cli` source — thirteen, not nine,
+because the `nestif` blocks at `links.go:41`, `backlinks.go:52`, `undo.go:64`
+and `related.go:97` were all inside the closures and left with them.
 Measure it the way `search` and `find` were measured — `git worktree add
 --detach /tmp/<name> HEAD`, run `golangci-lint run ./...` there and again in the
 working tree — rather than reading a delta off two remembered numbers.

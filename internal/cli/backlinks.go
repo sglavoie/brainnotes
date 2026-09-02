@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -25,8 +24,7 @@ const maxVerboseSnippet = 120
 
 // NewBacklinksCmd returns the `backlinks` subcommand. Exported for tests.
 func NewBacklinksCmd() *cobra.Command {
-	var nullSep bool
-	var verbose bool
+	var opts linkListOptions
 
 	cmd := &cobra.Command{
 		Use:           "backlinks [note]",
@@ -36,75 +34,14 @@ func NewBacklinksCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("backlinks: no config in context")
-			}
-			if nullSep && verbose {
-				return errors.New("backlinks: --null cannot be used with --verbose")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-
-			var target *vault.Note
-			if len(args) == 0 {
-				paths, walkErr := collectNotePaths(v)
-				if walkErr != nil {
-					return walkErr
-				}
-				if len(paths) == 0 {
-					fmt.Fprintln(cmd.ErrOrStderr(), "backlinks: no notes in vault")
-					return nil
-				}
-				extraArgs := append([]string(nil), cfg.Fzf.Args...)
-				selected, pickErr := notePicker(paths, extraArgs)
-				if pickErr != nil {
-					return pickErr
-				}
-				if len(selected) == 0 {
-					return nil
-				}
-				target = &vault.Note{Path: selected[0]}
-			} else {
-				var resolveErr error
-				target, resolveErr = resolveNoteTarget(v, args[0])
-				if resolveErr != nil {
-					return resolveErr
-				}
-			}
-
-			notes, err := v.Notes()
-			if err != nil {
-				return err
-			}
-			graph := query.BuildGraphForRoot(v.Root, notes)
-
-			referrers := backlinkReferrers(graph, target)
-
-			out := cmd.OutOrStdout()
-			if verbose {
-				return writeVerboseBacklinks(out, notes, target, referrers, graph)
-			}
-
-			sep := byte('\n')
-			if nullSep {
-				sep = 0
-			}
-			for _, p := range referrers {
-				if _, err := fmt.Fprintf(out, "%s%c", p, sep); err != nil {
-					return err
-				}
-			}
-			return nil
+			return runBacklinksCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
-	f.BoolVarP(&nullSep, "null", "0", false, "separate paths with NUL instead of newline")
+	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline")
 	// Long-only `--verbose`: a `-v` short would shadow the root `--verbose`.
-	f.BoolVar(&verbose, "verbose", false, "show file:line and a snippet for each backlink (long-only; -v is reserved by the root command)")
+	f.BoolVar(&opts.verbose, "verbose", false, "show file:line and a snippet for each backlink (long-only; -v is reserved by the root command)")
 
 	return cmd
 }

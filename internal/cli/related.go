@@ -1,17 +1,13 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -69,69 +65,7 @@ func NewRelatedCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mode, err := validateRelatedOptions(options)
-			if err != nil {
-				return err
-			}
-
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("related: no config in context")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-			setup, err := newRecallSetup(v.Root, recallNow())
-			if err != nil {
-				return err
-			}
-
-			queryResult, err := buildRelatedQuery(v, args[0], mode, setup.rankOptions())
-			if err != nil {
-				return err
-			}
-			if len(queryResult.results) > options.limit {
-				queryResult.results = queryResult.results[:options.limit]
-			}
-			if options.interactive {
-				selection, err := selectRelatedPath(v.Root, queryResult.results, cfg.Fzf.Args)
-				if err != nil {
-					return err
-				}
-				if selection.absolutePath == "" {
-					return nil
-				}
-				if err := setup.store.RecordOpened(queryResult.source.Path, selection.relativePath); err != nil {
-					return fmt.Errorf("related: record selected note: %w", err)
-				}
-				if !options.openResult {
-					_, err := fmt.Fprintln(cmd.OutOrStdout(), selection.absolutePath)
-					return err
-				}
-
-				editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
-				if errors.Is(err, editutil.ErrNoEditorConfigured) {
-					return errors.New("related: --open requires [open].editor or $EDITOR")
-				}
-				if err != nil {
-					return fmt.Errorf("related: resolve editor: %w", err)
-				}
-				if err := relatedOpenExec(editorSpec, selection.absolutePath); err != nil {
-					return fmt.Errorf("related: open selected note: %w", err)
-				}
-				return nil
-			}
-
-			out := cmd.OutOrStdout()
-			switch {
-			case options.asJSON:
-				return writeRelatedJSON(out, queryResult)
-			case options.paths:
-				return writeRelatedPaths(out, v.Root, queryResult.results, options.nullSep)
-			default:
-				return writeRelatedHuman(out, queryResult.results)
-			}
+			return runRelatedCommand(cmd, args, options)
 		},
 	}
 
@@ -319,137 +253,4 @@ func buildRelatedQuery(
 		weights:   corpus.ranker.Weights(),
 		results:   results,
 	}, nil
-}
-
-func writeRelatedHuman(w io.Writer, results []recall.Result) error {
-	for index, result := range results {
-		relationship := string(result.Relationship)
-		if relationship == "" {
-			relationship = "none"
-		}
-		if _, err := fmt.Fprintf(w, "%d. [%s] %s\n", index+1, relationship, result.Path); err != nil {
-			return err
-		}
-		for reasonIndex, reason := range result.Reasons {
-			if reasonIndex == 3 {
-				break
-			}
-			if _, err := fmt.Fprintf(w, "   %s: %s\n", reason.Kind, reason.Detail); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func writeRelatedPaths(w io.Writer, root string, results []recall.Result, nullSep bool) error {
-	separator := byte('\n')
-	if nullSep {
-		separator = 0
-	}
-	for _, result := range results {
-		absolute := filepath.Join(root, filepath.FromSlash(result.Path))
-		if _, err := fmt.Fprintf(w, "%s%c", absolute, separator); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type relatedJSONResponse struct {
-	Source         relatedJSONNote     `json:"source"`
-	Mode           recall.Mode         `json:"mode"`
-	RankingVersion int                 `json:"ranking_version"`
-	Weights        relatedJSONWeights  `json:"weights"`
-	Results        []relatedJSONResult `json:"results"`
-}
-
-type relatedJSONNote struct {
-	Path  string `json:"path"`
-	Title string `json:"title"`
-}
-
-type relatedJSONWeights struct {
-	Text     float64 `json:"text"`
-	Graph    float64 `json:"graph"`
-	Metadata float64 `json:"metadata"`
-	Recall   float64 `json:"recall"`
-}
-
-type relatedJSONResult struct {
-	Rank         int                      `json:"rank"`
-	Path         string                   `json:"path"`
-	Title        string                   `json:"title"`
-	Score        float64                  `json:"score"`
-	Relationship recall.RelationshipClass `json:"relationship"`
-	Bridge       *relatedJSONNote         `json:"bridge,omitempty"`
-	Signals      relatedJSONSignals       `json:"signals"`
-	Reasons      []relatedJSONReason      `json:"reasons"`
-}
-
-type relatedJSONSignals struct {
-	Text     float64 `json:"text"`
-	Graph    float64 `json:"graph"`
-	Metadata float64 `json:"metadata"`
-	Recall   float64 `json:"recall"`
-}
-
-type relatedJSONReason struct {
-	Kind         recall.ReasonKind `json:"kind"`
-	Contribution float64           `json:"contribution"`
-	Detail       string            `json:"detail"`
-}
-
-func writeRelatedJSON(w io.Writer, queryResult relatedQuery) error {
-	results := make([]relatedJSONResult, len(queryResult.results))
-	for index, result := range queryResult.results {
-		reasons := make([]relatedJSONReason, len(result.Reasons))
-		for reasonIndex, reason := range result.Reasons {
-			reasons[reasonIndex] = relatedJSONReason{
-				Kind:         reason.Kind,
-				Contribution: reason.Contribution,
-				Detail:       reason.Detail,
-			}
-		}
-
-		jsonResult := relatedJSONResult{
-			Rank:         index + 1,
-			Path:         result.Path,
-			Title:        result.Title,
-			Score:        result.Score,
-			Relationship: result.Relationship,
-			Signals: relatedJSONSignals{
-				Text:     result.Signals.Text,
-				Graph:    result.Signals.Graph,
-				Metadata: result.Signals.Metadata,
-				Recall:   result.Signals.Recall,
-			},
-			Reasons: reasons,
-		}
-		if result.BridgePath != "" || result.BridgeTitle != "" {
-			jsonResult.Bridge = &relatedJSONNote{Path: result.BridgePath, Title: result.BridgeTitle}
-		}
-		results[index] = jsonResult
-	}
-
-	response := relatedJSONResponse{
-		Source: relatedJSONNote{
-			Path:  queryResult.source.Path,
-			Title: queryResult.source.Title,
-		},
-		Mode:           queryResult.mode,
-		RankingVersion: recall.RankingVersion,
-		Weights: relatedJSONWeights{
-			Text:     queryResult.weights.Text,
-			Graph:    queryResult.weights.Graph,
-			Metadata: queryResult.weights.Metadata,
-			Recall:   queryResult.weights.Recall,
-		},
-		Results: results,
-	}
-
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(response)
 }

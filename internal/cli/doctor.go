@@ -2,7 +2,6 @@ package cli
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -11,19 +10,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // NewDoctorCmd builds the read-only cockpit/health queue command. It surfaces
 // the same deterministic hygiene queue the web cockpit serves, honoring the
 // per-task workflow state (done/snoozed) stored under .bnotes/cockpit.json.
 func NewDoctorCmd() *cobra.Command {
-	var (
-		asJSON        bool
-		daily         bool
-		reviewContext bool
-		folder        string
-	)
+	var opts doctorOptions
 
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -47,60 +40,15 @@ clean.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("doctor: no config in context")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-
-			rawQueue, err := cockpit.BuildQueue(v, cfg)
-			if err != nil {
-				return err
-			}
-
-			store := cockpit.NewStateStore(v.Root)
-			queue, err := store.FilterQueue(rawQueue)
-			if err != nil {
-				return err
-			}
-
-			if strings.TrimSpace(folder) != "" {
-				queue, err = scopeQueueToFolder(queue, rawQueue, store, folder)
-				if err != nil {
-					return err
-				}
-			}
-
-			// Daily view caps the surfaced tasks last, after workflow-state
-			// filtering and any folder scoping, so done/snoozed tasks never
-			// consume a daily slot. Counts stay intact as the full totals. The
-			// review context is inherently a daily surface, so it caps too.
-			if daily || reviewContext {
-				queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
-			}
-
-			// The review context is a deterministic, redacted, read-only view of
-			// the daily queue built for agent consumption; it never invokes any
-			// AI command. It is always emitted as JSON.
-			if reviewContext {
-				return writeDoctorJSON(cmd.OutOrStdout(), cockpit.BuildReviewContext(queue))
-			}
-
-			if asJSON {
-				return writeDoctorJSON(cmd.OutOrStdout(), queue)
-			}
-			writeDoctorHuman(cmd.OutOrStdout(), queue)
-			return nil
+			return runDoctorCommand(cmd, opts)
 		},
 	}
 
-	cmd.Flags().BoolVar(&asJSON, "json", false, "emit the queue as JSON")
-	cmd.Flags().BoolVar(&daily, "daily", false, "limit to the daily cockpit view (at most cockpit.daily_limit tasks)")
-	cmd.Flags().BoolVar(&reviewContext, "review-context", false, "emit the deterministic, redacted daily-review context as JSON (implies --daily; no AI command is run)")
-	cmd.Flags().StringVar(&folder, "folder", "", "only tasks touching a note under this vault-relative folder")
+	flags := cmd.Flags()
+	flags.BoolVar(&opts.asJSON, "json", false, "emit the queue as JSON")
+	flags.BoolVar(&opts.daily, "daily", false, "limit to the daily cockpit view (at most cockpit.daily_limit tasks)")
+	flags.BoolVar(&opts.reviewContext, "review-context", false, "emit the deterministic, redacted daily-review context as JSON (implies --daily; no AI command is run)")
+	flags.StringVar(&opts.folder, "folder", "", "only tasks touching a note under this vault-relative folder")
 
 	return cmd
 }

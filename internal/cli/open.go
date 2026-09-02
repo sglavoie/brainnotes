@@ -1,15 +1,7 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-	"os"
-	"sort"
-
 	"github.com/spf13/cobra"
-
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // openPicker is the picker used by `open`. Tests swap it to avoid spawning fzf.
@@ -21,10 +13,7 @@ var openExec = func(editor, file string) error { return runEditor(editor, file) 
 
 // NewOpenCmd returns the `open` subcommand. Exported for tests.
 func NewOpenCmd() *cobra.Command {
-	var (
-		printOnly bool
-		nullSep   bool
-	)
+	var opts openOptions
 
 	cmd := &cobra.Command{
 		Use:           "open [query]",
@@ -34,77 +23,13 @@ func NewOpenCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("open: no config in context")
-			}
-			// --null only changes the separator on the printed path; pairing it
-			// with the editor handoff is meaningless and almost certainly a flag
-			// mistake. Reject upfront rather than silently dropping it.
-			if nullSep && !printOnly {
-				return errors.New("open: --null requires --print")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-
-			var paths []string
-			if err := v.Walk(vault.WalkFilter{}, func(n *vault.Note) error {
-				paths = append(paths, n.Path)
-				return nil
-			}); err != nil {
-				return err
-			}
-			sort.Strings(paths)
-
-			if len(paths) == 0 {
-				fmt.Fprintln(cmd.ErrOrStderr(), "open: no notes in vault")
-				return nil
-			}
-
-			extraArgs := append([]string(nil), cfg.Fzf.Args...)
-			if len(args) == 1 && args[0] != "" {
-				extraArgs = append(extraArgs, "--query", args[0])
-			}
-
-			selected, err := openPicker(paths, extraArgs)
-			if err != nil {
-				return err
-			}
-			if len(selected) == 0 {
-				return nil
-			}
-			target := selected[0]
-
-			if printOnly {
-				sep := byte('\n')
-				if nullSep {
-					sep = 0
-				}
-				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s%c", target, sep); err != nil {
-					return err
-				}
-				return nil
-			}
-
-			editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
-			if errors.Is(err, editutil.ErrNoEditorConfigured) {
-				return errors.New("open: no editor configured (set [open].editor in config or $EDITOR)")
-			}
-			if err != nil {
-				return fmt.Errorf("open: %w", err)
-			}
-			if err := openExec(editorSpec, target); err != nil {
-				return fmt.Errorf("open: %w", err)
-			}
-			return nil
+			return runOpenCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
-	f.BoolVar(&printOnly, "print", false, "print the selected path instead of invoking $EDITOR")
-	f.BoolVarP(&nullSep, "null", "0", false, "with --print, terminate the path with NUL instead of newline")
+	f.BoolVar(&opts.printOnly, "print", false, "print the selected path instead of invoking $EDITOR")
+	f.BoolVarP(&opts.nullSep, "null", "0", false, "with --print, terminate the path with NUL instead of newline")
 
 	return cmd
 }

@@ -1,15 +1,12 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // LintError signals that lint found violations. main.go prints it and exits 1.
@@ -22,9 +19,7 @@ func (e *LintError) Error() string {
 }
 
 func NewLintCmd() *cobra.Command {
-	var property string
-
-	ff := new(findFlags)
+	opts := lintOptions{ff: new(findFlags)}
 
 	cmd := &cobra.Command{
 		Use:   "lint",
@@ -37,60 +32,12 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("lint: no config in context")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-
-			if len(cfg.Frontmatter.Properties) == 0 {
-				writeSchemaHint(cmd.ErrOrStderr(), "lint", cfg.SourcePath)
-				return nil
-			}
-
-			propsToUse := cfg.Frontmatter.Properties
-			if property != "" {
-				def, ok := cfg.Frontmatter.Definition(property)
-				if !ok {
-					return fmt.Errorf("lint: property %q not defined in [frontmatter.properties]", property)
-				}
-				propsToUse = map[string]config.PropertyDefinition{property: def}
-			}
-
-			notes, err := v.Notes()
-			if err != nil {
-				return err
-			}
-
-			sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, notes, nil)
-			if err != nil {
-				return err
-			}
-
-			var allViolations []schema.Violation
-			for _, n := range sel.notes {
-				front, err := n.Front()
-				if err != nil {
-					return err
-				}
-				vs := schema.ValidateNote(front, displayPath(n.Path, v.Root), propsToUse)
-				allViolations = append(allViolations, vs...)
-			}
-
-			if len(allViolations) == 0 {
-				return nil
-			}
-
-			formatViolations(cmd, allViolations)
-			return &LintError{Count: len(allViolations)}
+			return runLintCommand(cmd, opts)
 		},
 	}
 
-	ff.register(cmd)
-	cmd.Flags().StringVar(&property, "property", "", "lint only this schema property")
+	opts.ff.register(cmd)
+	cmd.Flags().StringVar(&opts.property, "property", "", "lint only this schema property")
 
 	return cmd
 }

@@ -134,6 +134,50 @@ lint-new: _require-golangci
 lint-full: _require-golangci
     golangci-lint run --issues-exit-code=0 ./...
 
+# The Phase 1 completion gate: no Cobra command constructor may still carry a
+# complexity violation. It reads the whole-tree report rather than the ratchet,
+# because the constructors it is about are *old* code — `lint-new` cannot see
+# them by construction, and a gate built on it would pass on day one.
+#
+# It is deliberately a whole-tree scan with a narrow verdict: every other
+# violation in the report is tolerated, so the baseline recorded in
+# docs/internals/refactor-baseline.md does not have to reach zero for this to
+# pass. Only lines naming a `New*Cmd`/`new*Cmd` function fail it.
+#
+# Two limits are worth knowing before trusting a green run. It matches on the
+# function name in the message, so it covers cyclop, gocognit, and funlen (which
+# all name their function) but not nestif, whose message names an `if` condition
+# and no function at all — a constructor deep enough to trip nestif alone would
+# slip through, though in practice it trips gocognit first. And the match is
+# textual, so a message that merely mentions such a name fails the gate; that
+# error is in the safe direction.
+#
+# Not wired into `lint` or `ci`: `lint-new` is what stops a *new* violation, and
+# only one golangci-lint may run at a time on a machine, so this stays a
+# separately invoked gate like `lint-full`.
+
+# Fail if any Cobra `New*Cmd` constructor still has a complexity violation
+lint-phase-gate: _require-golangci
+    #!/usr/bin/env bash
+    set -euo pipefail
+    report=$(golangci-lint run --issues-exit-code=0 ./... 2>&1)
+    # Real issue lines are `path.go:LINE:COL: message (linter)` and start in
+    # column 1; the echoed source context below each one is indented, so
+    # anchoring on that shape keeps a constructor's own source out of the match.
+    # The location prefix is consumed before the name is looked for, so a path
+    # containing "cmd" cannot trigger it.
+    hits=$(printf '%s\n' "$report" | grep -iE '^[^[:space:]]+\.go:[0-9]+:[0-9]+: .*(^|[^a-z0-9_])new[a-z0-9_]*cmd([^a-z0-9_]|$)' || true)
+    if [ -n "$hits" ]; then
+        count=$(printf '%s\n' "$hits" | wc -l | tr -d ' ')
+        echo "phase gate: $count complexity violation(s) still on a command constructor:"
+        printf '%s\n' "$hits"
+        echo
+        echo "Decompose each one per docs/internals/cli-command-shape.md: the constructor keeps"
+        echo "Use/Short/Long/Args/flags and a one-line RunE, and the behaviour moves to <cmd>_run.go."
+        exit 1
+    fi
+    echo "phase gate: no command constructor carries a complexity violation."
+
 # Format Go code with gofmt
 fmt:
     @echo "Formatting code..."

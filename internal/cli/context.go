@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -60,49 +58,7 @@ func newContextCmd(agentRunner agent.Runner) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			validated, err := validateContextOptions(options)
-			if err != nil {
-				return err
-			}
-
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("context: no config in context")
-			}
-			if options.runAgent && len(cfg.Agent.Command) == 0 {
-				return errors.New("context: --agent requires agent.command configuration")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-
-			setup, err := newRecallSetup(v.Root, recallNow())
-			if err != nil {
-				return err
-			}
-			payload, err := buildContextPayload(v, args[0], validated, setup.rankOptions())
-			if err != nil {
-				return err
-			}
-			if !options.runAgent {
-				return writeContextPayload(cmd.OutOrStdout(), payload)
-			}
-
-			ctx := cmd.Context()
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			if timeout := time.Duration(cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, timeout)
-				defer cancel()
-			}
-			output, err := agentRunner(ctx, append([]string(nil), cfg.Agent.Command...), payload)
-			if err != nil {
-				return fmt.Errorf("context: run agent: %w", err)
-			}
-			return writeContextPayload(cmd.OutOrStdout(), output)
+			return runContextCommand(cmd, args, options, agentRunner)
 		},
 	}
 
