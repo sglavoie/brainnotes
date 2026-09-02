@@ -76,6 +76,21 @@ test:
     @echo "Running tests..."
     go test {{ go_packages }}
 
+# `$BNOTES_VAULT` is usually set in a developer's shell and it overrides a `cd`,
+# so `cd $scratch && bn rename-key ...` runs against the real vault. That is not
+# hypothetical: it renamed a frontmatter key in 214 real notes once, and the
+# recovery left two commits and two journal entries to clean up by hand.
+#
+# So a mutating `bn` command must never be verified by hand against an ambient
+# vault. This recipe is the sanctioned way: it scrubs `$BNOTES_VAULT`, creates a
+# throwaway vault under the system temp directory, asks `bn config` which root it
+# actually resolved, and refuses (exit 2) unless that root is the sandbox. The
+# test half of the same rule is `internal/cli/vault_isolation_test.go`.
+
+# Run one `bn` command against a throwaway sandbox vault
+vault-sandbox *ARGS:
+    python3 scripts/vault_sandbox.py {{ ARGS }}
+
 # Build the browser JavaScript bundle and the stylesheet
 web-build:
     npm run build:web
