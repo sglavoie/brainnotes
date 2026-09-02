@@ -247,10 +247,14 @@ No behaviour change is permitted in a decomposition, so the checks are:
 - `just lint-new` — every line of a decomposition is inside the ratchet's diff
   range, so each new function must land under funlen 100/50, cyclop 10,
   gocognit 20, nestif 4. Moving an oversized function to a new file without
-  decomposing it fails the gate, by design. The inverse is also true and is
-  worth knowing before you tidy: a pre-existing violation that merely *shifts*
-  line number stays outside the range, because the gate anchors on added lines
-  rather than on final position. Deleting the 110-line `NewNewCmd` closure moved
+  decomposing it fails the gate, by design. The unit of judgement is the
+  **function**: change one line of a function's body and the whole function is
+  measured, because a complexity score is reported on the declaration line that
+  a body-only edit never touches. So a function you edit at all has to be under
+  the thresholds — you cannot make an existing one worse and stay green.
+  The inverse is also true and is worth knowing before you tidy: a pre-existing
+  violation in a function you did *not* touch stays outside the gate, even when
+  it merely *shifts* line number. Deleting the 110-line `NewNewCmd` closure moved
   `routeForTemplate` (cyclop 11) from line 197 to line 80 of the same file and
   the gate stayed green; cutting and pasting it into `new_run.go` would have
   failed. So leave a neighbouring violation where it sits unless you intend to

@@ -404,7 +404,8 @@ and `internal/web/static/` excluded by path as well as by header.
 
 | Recipe            | What it does                                | In `ci`? |
 | ----------------- | ------------------------------------------- | -------- |
-| `just lint-new`   | Fails on any violation in code newer than the ratchet base | **yes**, and in `just lint` |
+| `just lint-new`   | Fails on any violation in a **function** changed since the ratchet base | **yes**, and in `just lint` |
+| `just lint-ratchet-selftest` | Proves the gate still catches a body-only complexity increase | no — a CI workflow step of its own |
 | `just lint-full`  | Reports the whole-tree count, exit 0        | no — a report |
 | `just install-lint` | Installs the pinned golangci-lint         | no — CI calls it |
 
@@ -427,6 +428,60 @@ them is always still reported and the run still fails.
 enforces the stronger local property that no *new* code violates the
 thresholds. Read the floor with `just lint-full`.
 
+### The unit of judgement is the function, not the line
+
+The gate was originally `golangci-lint run --new-from-merge-base={{ratchet_base}}`,
+and that had a hole a review caught: `--new-from-merge-base` filters issues by
+changed **line**, while cyclop, gocognit and funlen all report a function's
+score on its **declaration** line. Editing only the body of an existing function
+therefore leaves that function's own violation outside the diff range — the
+function gets worse and the gate stays green. Measured, not inferred:
+`contextOutput` in `internal/cli/search_output.go` took body changes after
+`61f2296` and sat at gocognit 21 while `just lint-new` reported `0 issues.`
+
+`just lint-new` is now `go run ./scripts/lintratchet -base {{ratchet_base}}`.
+It asks golangci-lint for the whole-tree report with `--issues-exit-code=0`
+(the violations are data; this gate decides which are in scope), maps each issue
+onto its enclosing top-level `*ast.FuncDecl` with `go/parser`, and fails when
+any line of that function differs from the base. The diff is
+`git diff --no-prefix --unified=0 --diff-filter=d <base> -- '*.go'`, which
+compares the **working tree** to the base — so an unstaged violation is caught —
+plus untracked `.go` files taken whole, the same shape `scripts/lint_web.mjs`
+uses on the TypeScript side.
+
+Three properties are deliberate:
+
+- **An untouched violation is still tolerated.** That is what keeps the floor
+  above out of the way, and it is why this is not golangci-lint's
+  `issues.whole-files`: whole-file granularity would make every untouched
+  violation in a touched file the editor's problem, contradicting the line-shift
+  tolerance S04–S08 relied on. A pre-existing violation that merely *shifts*
+  line number is still outside the gate, because its function's lines did not
+  change.
+- **A function span starts at the `func` keyword, not at its doc comment**, so
+  rewording a comment above a function does not put that function back inside
+  the gate.
+- **An issue outside every function declaration** — a score on a package-level
+  function literal, say — falls back to a one-line span, which is the old
+  line-anchored behaviour and the honest answer there.
+
+`just lint-ratchet-selftest` (`scripts/lint_ratchet_selftest.py`) is the
+regression test for exactly this hole. It builds a throwaway git repository
+carrying the repo's own `.golangci.yml`, asserts the fixture's thresholds are
+where it thinks they are, edits **only the body** of a pre-existing function
+from 1 branch to 10 (gocognit 21), asserts the declaration line is *not* in the
+diff, and then asserts the ratchet exits non-zero naming that function while an
+untouched violation in the same file stays tolerated. It was mutation-tested in
+both directions: reverting the enclosing-function lookup to line-anchored fails
+the "body went over gocognit 20" assertion, and widening the changed-line test
+to whole-file fails the "untouched function" one. It is a CI workflow step of
+its own rather than part of `just ci`, because it runs golangci-lint a second
+time against a synthetic tree.
+
+Adopting the gate required decomposing one function: `contextOutput`, the
+instance that exposed the hole, split into `matchingBodyLines`,
+`contextWindows` and `writeContextWindows` with no behaviour change.
+
 ### The enforcement anchor, and why it is a commit
 
 The gate is anchored by the `ratchet_base` variable in the `justfile`, pinned to
@@ -436,12 +491,15 @@ The audit called for `--new-from-merge-base=main`. On a repository with feature
 branches that is correct, but work here lands directly on `main`, and then
 `git merge-base main HEAD` **is** `HEAD`: the diff range is empty and the gate
 passes on anything. That was measured, not assumed. With a gocognit-28 function
-committed to the branch the anchor names, golangci-lint reports `0 issues.` and
-exits 0; anchored at `61f2296` the same tree exits 1 on the same function.
+committed to the branch the anchor names, golangci-lint reported `0 issues.` and
+exited 0; anchored at `61f2296` the same tree exited 1 on the same function.
 
-Naming the baseline commit keeps both workflows working, because the merge base
-of an ancestor commit and any descendant is that commit — so the anchor resolves
-to `61f2296` on `main` and on a feature branch cut from it alike.
+Naming the baseline commit keeps both workflows working: the diff is taken
+against `61f2296` itself, which is an ancestor of `main` and of any branch cut
+from it alike. The successor gate diffs against the commit directly rather than
+against a merge base, so the failure mode above cannot recur at all — but the
+anchor stays a commit for the same reason it became one, and both halves of the
+ratchet still read it from the one `ratchet_base` line in the `justfile`.
 
 `61f2296` is S01's commit, not the `9d18e34` this file's tables were measured
 at. S01 added only Python, Markdown, and `justfile` lines, so the Go tree — and
@@ -460,8 +518,10 @@ re-admit violations that are already excluded.
 `.github/workflows/ci.yml` needs two things the gate did not previously require:
 
 - `fetch-depth: 0` on the `ci` job's checkout. The default shallow checkout has
-  one commit, so `61f2296` would not exist and no merge base could resolve. The
-  `vault-native` job does not run the gate and stays shallow.
+  one commit, so `61f2296` would not exist and nothing could be diffed against
+  it. `scripts/lintratchet` checks that the base resolves before doing anything
+  else and says so in those words when it does not. The `vault-native` job does
+  not run the gate and stays shallow.
 - `just install-lint`, which installs `golangci-lint` at the version pinned by
   `golangci_version` in the `justfile`. Installing through the recipe keeps the
   version in one place rather than one in the workflow and one on each machine.
@@ -620,8 +680,10 @@ Go gate and this one cannot end up on different anchors. The file list is
 base, so an unstaged violation is caught) plus untracked files under
 `internal/web/static_src`.
 
-golangci-lint has a built-in new-code mode that reports per changed *line*.
-ESLint has none. The alternatives were a generated per-file override list —
+The Go half judges a changed *function* (`scripts/lintratchet`, above), which
+needs an AST. ESLint has no new-code mode at all, and this gate has no Go-style
+parse of the TypeScript to fall back on. The alternatives were a generated
+per-file override list —
 which has to be maintained and rots silently — or this. The consequence is
 deliberate: **editing one line of a file that still contains a violation makes
 that whole file the editor's problem.** With 91 of 196 files currently

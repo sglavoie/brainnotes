@@ -125,8 +125,20 @@ _require-golangci:
     exit 1
 
 # The complexity ratchet. Fails on any funlen/cyclop/gocognit/nestif violation
-# in code added or changed since `ratchet_base`; the violations the baseline
-# recorded are out of the diff range by construction, so they do not block.
+# in a function added or changed since `ratchet_base`; a violation in a function
+# nobody touched is tolerated, so the baseline recorded in
+# docs/internals/refactor-baseline.md does not block.
+#
+# It runs through scripts/lintratchet rather than through
+# `golangci-lint --new-from-merge-base` because that flag filters by changed
+# *line*, and cyclop, gocognit and funlen all report a function's score on its
+# *declaration* line — so editing only a function's body left its own violation
+# outside the diff range and the gate passed while the function got worse. That
+# was not hypothetical: `contextOutput` in internal/cli/search_output.go reached
+# gocognit 21 that way while this recipe reported `0 issues.` The unit of
+# judgement is now the enclosing function, mapped with go/parser.
+#
+# `just lint-ratchet-selftest` is the regression test for exactly that hole.
 #
 # This is wired into both `lint` and `ci`. Those two recipes duplicate their
 # gofmt and vet steps rather than sharing them, so a gate added to only one of
@@ -136,9 +148,23 @@ _require-golangci:
 # which is why the rationale sits above a blank line and a one-line summary sits
 # directly on top of the recipe.
 
-# Fail on complexity violations in code added since the ratchet baseline
+# Fail on complexity violations in functions changed since the ratchet baseline
 lint-new: _require-golangci
-    golangci-lint run --new-from-merge-base={{ ratchet_base }} ./...
+    go run ./scripts/lintratchet -base {{ ratchet_base }}
+
+# The gate above is the only thing standing between the recorded floor and a
+# function that quietly gets worse, and its first version enforced nothing
+# against a body-only edit while reading green. So it gets a test that can fail:
+# a throwaway repository, one function taken from under a threshold to over it
+# by editing its body and nothing else, and the assertion that the ratchet exits
+# non-zero — plus the complementary assertion that an untouched violation in the
+# same edited file is still tolerated. Nothing in this repository is read except
+# `.golangci.yml`, so the self-test cannot pass against thresholds that are not
+# the ones in force.
+
+# Prove the ratchet still catches a body-only complexity increase
+lint-ratchet-selftest: _require-golangci
+    @python3 -B scripts/lint_ratchet_selftest.py
 
 # Report every complexity violation in the tree, not just new ones. This is a
 # measurement, not a gate — it is deliberately absent from `lint` and `ci`, and

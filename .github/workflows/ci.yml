@@ -39,6 +39,14 @@ jobs:
       - name: Install the pinned golangci-lint
         run: just install-lint
 
+      # The ratchet's own regression test, kept out of `just ci` because it
+      # builds a throwaway repository and runs golangci-lint a second time — a
+      # cost the local envelope should not pay on every run. It belongs here
+      # instead of nowhere: the gate it protects reads as green while enforcing
+      # nothing when it breaks, which is exactly the failure it was written for.
+      - name: Self-test the complexity ratchet
+        run: just lint-ratchet-selftest
+
       - name: Run CI checks
         run: just ci
 

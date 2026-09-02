@@ -166,20 +166,29 @@ func contextOutput(out io.Writer, n *vault.Note, vaultRoot string, match func(st
 	if len(fileLines) == 0 || bodyStartIdx >= len(fileLines) {
 		return nil
 	}
+	matchIdxs := matchingBodyLines(fileLines, bodyStartIdx, match)
+	if len(matchIdxs) == 0 {
+		return nil
+	}
+	wins := mergeWindows(contextWindows(matchIdxs, bodyStartIdx, len(fileLines)-1, contextN))
+	writeContextWindows(out, wins, fileLines, relOrAbsPath(vaultRoot, n.Path), match)
+	return nil
+}
 
-	// Collect indices of matching lines.
+// matchingBodyLines returns the 0-based indices of the body lines that match.
+func matchingBodyLines(fileLines []string, bodyStartIdx int, match func(string) bool) []int {
 	var matchIdxs []int
 	for i := bodyStartIdx; i < len(fileLines); i++ {
 		if match(fileLines[i]) {
 			matchIdxs = append(matchIdxs, i)
 		}
 	}
-	if len(matchIdxs) == 0 {
-		return nil
-	}
+	return matchIdxs
+}
 
-	// Build context windows clamped to body range.
-	last := len(fileLines) - 1
+// contextWindows builds one window per match, each clamped to the body range so
+// context never reaches back into the frontmatter or past the last line.
+func contextWindows(matchIdxs []int, bodyStartIdx, lastIdx, contextN int) []window {
 	wins := make([]window, len(matchIdxs))
 	for k, idx := range matchIdxs {
 		lo := idx - contextN
@@ -187,15 +196,20 @@ func contextOutput(out io.Writer, n *vault.Note, vaultRoot string, match func(st
 			lo = bodyStartIdx
 		}
 		hi := idx + contextN
-		if hi > last {
-			hi = last
+		if hi > lastIdx {
+			hi = lastIdx
 		}
 		wins[k] = window{lo, hi}
 	}
-	wins = mergeWindows(wins)
+	return wins
+}
 
-	relPath := relOrAbsPath(vaultRoot, n.Path)
-
+// writeContextWindows emits the merged windows in grep's own shape: "--"
+// between non-adjacent blocks, ":" before a matching line's number and "-"
+// before a context line's. Write errors are dropped here exactly as they were
+// when this was inline; `--context` is a display mode with no consumer that
+// reads its exit status differently.
+func writeContextWindows(out io.Writer, wins []window, fileLines []string, relPath string, match func(string) bool) {
 	for i, w := range wins {
 		if i > 0 {
 			fmt.Fprintln(out, "--")
@@ -210,7 +224,6 @@ func contextOutput(out io.Writer, n *vault.Note, vaultRoot string, match func(st
 			}
 		}
 	}
-	return nil
 }
 
 // buildInteractiveLines builds the fzf input corpus for interactive search.
