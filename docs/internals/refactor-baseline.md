@@ -22,6 +22,11 @@ Two details that look incidental and are not:
   pins the thresholds to the ones below, so a repo-level `.golangci.yml` —
   Session S02's deliverable — cannot silently move the numbers this baseline
   records.
+- The TypeScript complexity half is the one measurement that does **not** pin
+  its own thresholds: it runs the repo's `eslint.config.js`, because that file
+  is where those thresholds were first written (§6) rather than a config added
+  after the fact. It needs `npm ci` to have run; without ESLint installed the
+  section reports "unavailable" instead of failing.
 - The recipe runs `python3 -B`. Without it, importing the sibling modules
   writes `scripts/__pycache__/` into the working tree, which this repo's
   `.gitignore` does not cover — only a user's *global* gitignore does, which is
@@ -110,6 +115,13 @@ The one file over 500 is `internal/web/static_src/css/chroma.css` (870), a flat
 syntax-highlight theme table — not a refactoring target. Nothing sits between
 501 and 869. **File size is a dead metric in this repo**; the discipline is
 hand-applied and should not be relaxed.
+
+**This table is as of the audit. Since S03 there are two files over 500: this
+one, now 696 lines** (see §6 — measured tables, the ESLint findings, and the
+`node_modules` incident). No source file crossed the line, and no lint rule
+enforces it in the first place (§2.9). The headline finding is about Go, CSS and
+TypeScript, and it is unchanged; a measurement record was not shortened to keep
+a statistic tidy.
 
 Largest 10: `chroma.css` 870, `overview-search.ts` 500,
 `vaultgit/intent_integration_test.go` 494, `web/related_api.go` 491,
@@ -202,9 +214,13 @@ Files with most source violations: `brief/service_selection.go` 5,
 
 ### 2.4 Function complexity — TypeScript (proxy)
 
-Real TypeScript complexity is still **unavailable** — no ESLint config, no
-ESLint dependency. **S03 closes this blind spot**; until then the substitute is
-a brace-depth top-level-function length scan over non-test `static_src/*.ts`.
+> **Superseded by §6 below.** S03 added `eslint.config.js` and the real numbers
+> are recorded there. This section is the pre-ESLint proxy, kept because it is
+> what the ranked worklist in the audit was built from and because the gap
+> between the two is itself a finding.
+
+The substitute was a brace-depth top-level-function length scan over non-test
+`static_src/*.ts`.
 
 | Metric                          | Baseline |
 | ------------------------------- | -------- |
@@ -463,3 +479,229 @@ silencing to get CI green. The only annotation in use is still the repo's own
 15 `//bn:direct-write` markers, which add required justification rather than
 remove a check. **A `//nolint` added later is a signal that a threshold is
 wrong, or that the code is — not that the directive was needed.**
+
+---
+
+## 6. The TypeScript ratchet gate (S03)
+
+`eslint.config.js` at the repo root is the frontend half of the same gate. It
+covers `internal/web/static_src/**/*.ts` and enables four rules:
+
+| ESLint rule                        | Setting | Go counterpart in `.golangci.yml` |
+| ---------------------------------- | ------- | --------------------------------- |
+| `complexity`                       | 10      | `cyclop` 10                       |
+| `max-lines-per-function`           | 100     | `funlen` 100                      |
+| `max-depth`                        | 4       | `nestif` 4                        |
+| `@typescript-eslint/no-unused-vars` | error  | — (`deadcode`, §2.6, is separate) |
+
+There is **no ESLint equivalent of `gocognit`**, so cognitive complexity stays
+unmeasured on the TypeScript side. `complexity` is cyclomatic only.
+
+Dependencies: `eslint` and `typescript-eslint` in `devDependencies`.
+`typescript-eslint` 8.69 declares `typescript >=4.8.4 <6.1.0`, which covers the
+repo's pinned `^6.0.3`. Only the parser and the one rule from that plugin are
+used — no `recommended` preset — so no type-aware linting runs and the whole
+tree lints in about two seconds.
+
+### The measured baseline — this closes the audit §6 TypeScript blind spot
+
+Whole tree, 196 files (`npm run lint:web:full`, also printed by `just metrics`):
+
+| Rule                                | Total   | Source | Test    |
+| ----------------------------------- | ------- | ------ | ------- |
+| `@typescript-eslint/no-unused-vars`  | 199     | 4      | 195     |
+| `complexity`                         | 61      | 52     | 9       |
+| `max-lines-per-function`             | 66      | 29     | 37      |
+| `max-depth`                          | **0**   | 0      | 0       |
+| **Total**                            | **326** | **85** | **241** |
+
+`*.test.ts` is the split, matching `scripts/metrics_corpus.py`, so
+`*.test-helpers.ts` counts as source.
+
+**52 of 139 source files and 39 of 57 test files carry at least one violation**
+— 91 of 196 files in total. That number matters because the gate is per file
+(see below).
+
+Ten worst source functions by cyclomatic complexity:
+
+```
+28  related-controller.ts:218
+23  overview-search-elements.ts:33
+22  synthesize.test-helpers.ts:163
+20  daily-brief-render.ts:192
+20  daily-brief-actions.ts:142
+18  note-insight.ts:52
+18  graph-controller-view.ts:173
+17  related-controller.ts:332
+17  properties-detail.ts:45
+17  overview-search-render.ts:152
+```
+
+Two results are worth stating on their own:
+
+- **`max-depth` is zero across the entire tree.** The §6 blind spot was worded
+  as "deeply nested but short TS functions — callback pyramids and promise
+  chains in `graph*.ts` / `synthesize-*.ts` that a length proxy scores as
+  fine." That hypothesis is **wrong**: nothing in this codebase nests blocks
+  four deep. The complexity here is flat and wide, not deep.
+- **199 unused variables, 195 of them in test files**, almost all unused
+  imports. `tsc --strict` does not catch these (`noUnusedLocals` is off), so
+  they had never been reported. They are dead code, not style.
+
+### The proxy was wrong, and S19–S22 must be re-scoped
+
+This is the review question S03 was asked to answer, measured rather than
+argued. `just metrics` prints it as "Source `complexity` violations outside any
+proxy-flagged (≥60 line) function".
+
+**19 of the 52 source `complexity` violations sit in functions the length proxy
+never flagged.** 17 are short top-level functions — 23 to 58 lines, every one
+of them under the proxy's 60-line cut. The other 2 the proxy's parser does not
+detect as functions at all.
+
+```
+ 22  synthesize.test-helpers.ts:163  -- proxy detected no enclosing function --
+ 18  graph-controller-view.ts:173    -- proxy detected no enclosing function --
+ 16  properties-value-control.ts:101 scalarValueError               (25 lines)
+ 16  graph-controller-details.ts:132 renderGraphDetails             (34 lines)
+ 16  daily-brief-actions.ts:92       runAnother                     (49 lines)
+ 15  query-bar-render.ts:42          renderQueryBarError            (47 lines)
+ 15  query-bar-model.ts:69           reduceQueryBar                 (58 lines)
+ 15  query-bar-completions.ts:199    splitFieldAndValue             (46 lines)
+ 15  daily-fixes-model.ts:66         fixKindLabel                   (34 lines)
+ 13  synthesize-model.ts:87          readSynthesisConfig            (31 lines)
+ 12  overview-search-render.ts:69    renderPreviewResultRow         (44 lines)
+ 12  graph.ts:175                    computeNormalizedGraphDegrees  (41 lines)
+ 12  graph-controller-labels.ts:258  labelIDsForCurrentState        (53 lines)
+ 12  api-facets.ts:56                normalizeFacetOptions          (36 lines)
+ 11  related-actions.ts:49           normalizeRelatedItemResponse   (29 lines)
+ 11  note-pin.ts:63                  initNotePinAction              (55 lines)
+ 11  graph-controller-labels.ts:311  visualFocusState               (48 lines)
+ 11  graph-controller-labels.ts:197  cullCollidingLabels            (58 lines)
+ 11  api-properties.ts:300           buildPropertyDetailURL         (23 lines)
+```
+
+The two undetected ones are a parser limitation worth knowing about before
+trusting the proxy again: `collapseStage` in `graph-controller-view.ts` is a
+top-level arrow whose multi-line signature carries an object-literal **return
+type**, and the `;` inside that type sits at paren depth 0, which
+`ts_body_open` reads as the end of a declaration. The `synthesize.test-helpers`
+hit is an arrow nested inside a `vi.fn(...)` call, which the proxy — top-level
+functions only — never looks inside.
+
+The audit's rank-4 target list — `overview-search.ts`, `daily-fixes.ts`,
+`related-controller.ts`, `facets.ts`, `daily-brief.ts` and five more — was
+built by sorting functions by **length**. Those files are still real targets;
+`max-lines-per-function` independently confirms 29 source functions over 100
+lines and reproduces the proxy's ten longest at the same file and function. But
+a plan that decomposes only them leaves roughly **a third of the measured
+complexity untouched**, in files that never appear on the length list at all:
+`properties-value-control.ts`, `daily-fixes-model.ts`, `query-bar-*.ts`,
+`graph-controller-details.ts`, `api-facets.ts`, `api-properties.ts`.
+
+**Consequence for the session plan: S19–S22 must be split from this ESLint
+list, not from §2.4's length ranking, and the phase gate should be `npm run
+lint:web:full` reaching zero source violations rather than
+`max-lines-per-function` alone.** S23 (TS export narrowing) gains a real
+starting number too: the 199 `no-unused-vars` hits are a stricter, non-regex
+signal than §2.6's export/reference scan.
+
+### The gate, and why it is per file rather than per line
+
+| Script                   | What it does                                            | In `ci`? |
+| ------------------------ | ------------------------------------------------------- | -------- |
+| `npm run lint:web`       | Lints only the `.ts` files changed since `ratchet_base` | **yes**, and in `just web-check` / `just lint` |
+| `npm run lint:web:full`  | Reports the whole-tree count, exit 0                    | no — a report |
+
+`scripts/lint_web.mjs` selects the files; `eslint.config.js` holds the rules.
+The base commit is read from the `ratchet_base` line in the `justfile`, so the
+Go gate and this one cannot end up on different anchors. The file list is
+`git diff --diff-filter=d <base>` (which compares the **working tree** to the
+base, so an unstaged violation is caught) plus untracked files under
+`internal/web/static_src`.
+
+golangci-lint has a built-in new-code mode that reports per changed *line*.
+ESLint has none. The alternatives were a generated per-file override list —
+which has to be maintained and rots silently — or this. The consequence is
+deliberate: **editing one line of a file that still contains a violation makes
+that whole file the editor's problem.** With 91 of 196 files currently
+carrying one, that is a real cost, and it is the point — those files are
+exactly what Phase 5 and Phase 6 exist to decompose. Everything the gate can
+fail to establish is fatal rather than skipped, for the same reason
+`just lint-new` fails when `golangci-lint` is missing.
+
+Measured behaviour, not asserted: with nothing changed the gate lints zero
+files and exits 0 in ~0.2 s. A new file with a complexity-12 arrow and one
+unused local exits 1 naming both. Appending a comment to an already-clean file
+(`api-types-core.ts`) exits 0; appending one to `overview-search.ts` exits 1 on
+that file's four pre-existing violations.
+
+### CI
+
+`just ci` inlines the frontend steps and never calls `just web-check`, so
+`npm run lint:web` is added to **both** recipe bodies. A gate wired into only
+one of them is half-enforced — the same duplication `lint-new` already has.
+
+The workflow needed no change: `npm ci` already installs the dev dependencies,
+and the `ci` job already checks out with `fetch-depth: 0` for the Go gate,
+which this gate needs for exactly the same reason.
+
+### Suppressions remain at zero
+
+No `eslint-disable` of any kind was introduced, and there is still no
+`@ts-ignore` / `@ts-expect-error` / `@ts-nocheck` anywhere. The gate design is
+what makes that possible on this side too: existing violations sit in files no
+one is changing, so nothing had to be silenced to get CI green.
+
+### An npm dependency moved the Go floor: `node_modules` is now excluded
+
+Installing ESLint pulled in `flatted` (via `flat-cache`, ESLint's lint cache),
+and **`flatted` ships a Go port of itself** at
+`node_modules/flatted/golang/pkg/flatted/flatted.go`. Go's `./...` matcher skips
+`testdata`, `vendor`, and dot/underscore directories — but **not
+`node_modules`** — so from the moment `npm ci` ran, every Go tool in this repo
+treated that third-party package as ours:
+
+| Measurement                     | Contaminated | Correct |
+| ------------------------------- | ------------ | ------- |
+| §5 complexity floor (`lint-full`) | 555 / 284 source | **552 / 281** |
+| `gocyclo -over 10` cross-check    | 495          | **493** |
+| `deadcode ./...`                  | 88           | **81**  |
+| `deadcode -test ./...`            | 39           | **32**  |
+
+`flatted.go`'s `Stringify` scores gocognit 74 and would have ranked fourth-worst
+in the whole repository. This was caught by re-running the numbers after the
+install rather than by any check — nothing failed, the floor simply moved.
+
+The fix is one decision applied in four places, all of which name each other:
+
+- `.golangci.yml` and the ephemeral config in `scripts/metrics_complexity.py`
+  exclude `node_modules/` by path, so both the gate and the report agree.
+- `scripts/metrics_complexity.py` passes `gocyclo -ignore node_modules/`, and
+  `scripts/metrics_exports.py` drops `node_modules/` lines from `deadcode`.
+- The `justfile` defines `go_packages` (`go list ./... | grep -v
+  '/node_modules/'`) and `gofmt_check`, used by `test`, `vet`, `lint`, and `ci`.
+  Neither `go` nor `gofmt` has an exclude flag, so a substitution is the only
+  way to say it.
+
+`internal/audit`'s repository walk already skipped `node_modules` by name
+(`direct_write_test.go`, `skipDir`), which is the same judgement reached earlier
+for the same reason.
+
+**Any future npm dependency can do this again.** The check is cheap: after
+adding one, run `just lint-full` and `just metrics` and confirm the Go numbers
+above are unchanged.
+
+### Denominator drift caused by this session
+
+`eslint.config.js` and `scripts/lint_web.mjs` add roughly 190 LOC of JavaScript
+to the corpus, and `package.json` / `package-lock.json` grow. As with S01 this
+moves only §1 and §2.1–§2.2 and cannot move a ratcheted number: neither file is
+Go, and neither is under `internal/web/static_src`, so §2.4 is untouched by
+them. `node_modules` was never in the denominator — `scripts/metrics.py` builds
+its corpus from `git ls-files`, which is why §1 was the one family of numbers
+the `flatted` contamination above could not reach.
+
+After S01 and S03, `just metrics` reports **1,103 REAL files / 215,722 LOC**
+against §1's audit-time 1,093 / 213,900. The one visible consequence is in
+§2.1: this file is now the second REAL file over 500 lines, noted there.

@@ -32,9 +32,11 @@ just lint
 
 Run `npm ci` before frontend work or after package-lock changes. `just web-build`
 regenerates the committed `internal/web/static/app.js` from
-`internal/web/static_src`; `just web-check` type-checks, runs frontend tests, and
-rebuilds it. The generated JavaScript is committed so Go-only builds do not need
-Node. The stylesheet is generated the same way but by Go: `internal/web/static/app.css`
+`internal/web/static_src`; `just web-check` type-checks, lints, runs frontend
+tests, and rebuilds it. The lint step is `npm run lint:web` — ESLint over the
+TypeScript files changed since the complexity baseline, so existing offenders do
+not block while no new violation can land. The generated JavaScript is committed
+so Go-only builds do not need Node. The stylesheet is generated the same way but by Go: `internal/web/static/app.css`
 is the concatenation of the parts under `internal/web/static_src/css/` in the
 order `index.css` lists them, rebuilt by `just web-build` (or
 `go run ./internal/web/cssbuild/gen`) and checked for drift by `go test ./...`,

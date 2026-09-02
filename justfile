@@ -39,6 +39,19 @@ ratchet_base := "61f2296e7df02143c9542769debd45db93ebbb0e"
 # and the developer machine.
 golangci_version := "v2.13.2"
 
+# npm dependencies can ship Go source: `eslint` pulls in `flatted`, which
+# vendors a Go port under `node_modules/flatted/golang`. Go's `./...` matcher
+# skips `testdata`, `vendor`, and dot/underscore directories but NOT
+# `node_modules`, so after `npm ci` the whole Go toolchain — build, vet, test,
+# gofmt, golangci-lint — silently treats that package as ours. It moved the
+# recorded complexity floor from 552 to 555 before this filter existed.
+#
+# `internal/audit`'s repository walk already skips `node_modules` by name; this
+# is the same decision applied to the toolchain. The two substitutions below are
+# the only way to express it: neither `go` nor `gofmt` has an exclude flag.
+go_packages := "$(go list ./... | grep -v '/node_modules/')"
+gofmt_check := "gofmt -l . | grep -v '^node_modules/' || true"
+
 # Show available recipes
 help:
     @just --list
@@ -61,23 +74,24 @@ install:
 # Run the full test suite
 test:
     @echo "Running tests..."
-    go test ./...
+    go test {{ go_packages }}
 
 # Build the browser JavaScript bundle and the stylesheet
 web-build:
     npm run build:web
     go run ./internal/web/cssbuild/gen
 
-# Type-check and build the browser assets
+# Type-check, lint, and build the browser assets
 web-check:
     npm run typecheck:web
+    npm run lint:web
     npm run test:web
     npm run build:web
     go run ./internal/web/cssbuild/gen
 
 # Run go vet across all packages
 vet:
-    go vet ./...
+    go vet {{ go_packages }}
 
 # Install the pinned golangci-lint into $GOPATH/bin
 install-lint:
@@ -129,13 +143,13 @@ fmt:
 lint:
     #!/usr/bin/env bash
     set -euo pipefail
-    out=$(gofmt -l .)
+    out=$({{ gofmt_check }})
     if [ -n "$out" ]; then
         echo "gofmt issues:"
         echo "$out"
         exit 1
     fi
-    go vet ./...
+    go vet {{ go_packages }}
     just lint-new
     just web-check
     echo "Lint clean"
@@ -144,16 +158,20 @@ lint:
 ci:
     #!/usr/bin/env bash
     set -euo pipefail
-    out=$(gofmt -l .)
+    out=$({{ gofmt_check }})
     if [ -n "$out" ]; then
         echo "gofmt issues:"
         echo "$out"
         exit 1
     fi
-    go vet ./...
+    go vet {{ go_packages }}
     just lint-new
-    go test ./...
+    go test {{ go_packages }}
     npm run typecheck:web
+    # The TypeScript half of the complexity ratchet. `ci` inlines the frontend
+    # steps rather than calling `just web-check`, so — exactly like `lint-new`
+    # above — a gate wired into only one of the two recipes is half-enforced.
+    npm run lint:web
     npm run test:web
     bundle=internal/web/static/app.js
     if [ ! -f "$bundle" ]; then

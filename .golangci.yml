@@ -44,6 +44,13 @@ linters:
       # so this file names the same generated paths as .refactorignore and the
       # bundle-drift check in `just ci`.
       - internal/web/static/
+      # npm dependencies that happen to ship Go source. `eslint` pulls in
+      # `flatted`, which vendors a Go port under node_modules/flatted/golang,
+      # and Go's `./...` matcher skips testdata, vendor and dot/underscore
+      # directories but NOT node_modules — so without this the floor recorded in
+      # docs/internals/refactor-baseline.md moves whenever a dependency does.
+      # internal/audit's own repository walk already skips node_modules by name.
+      - node_modules/
 
 issues:
   # The gate must report every violation it finds. golangci-lint truncates to 50

@@ -41,7 +41,15 @@ def report_deadcode(c: Corpus) -> None:
         ("unreachable including tests", ["deadcode", "-test", "./..."]),
     ):
         proc = subprocess.run(argv, cwd=c.root, capture_output=True, text=True)
-        lines = [l for l in proc.stdout.splitlines() if l.strip()]
+        # `./...` walks into node_modules — Go's matcher skips testdata, vendor
+        # and dot/underscore directories but not that one — and an npm
+        # dependency (flatted, via eslint) ships Go source. Reachability in a
+        # third-party package is not a measurement of this repository.
+        lines = [
+            l
+            for l in proc.stdout.splitlines()
+            if l.strip() and not l.startswith("node_modules/")
+        ]
         print(f"  {len(lines):4d}  {label}")
         if "-test" in argv:
             counter = collections.Counter(
