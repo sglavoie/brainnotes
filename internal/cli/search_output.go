@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -76,6 +77,23 @@ func buildHighlightPreview(pattern string, isRegex, caseSensitive bool) string {
 		flags = "--color=always -n -iE"
 	}
 	return fmt.Sprintf("grep %s -- '%s|$' {1}", flags, p)
+}
+
+// searchFzfArgs returns the fzf argument list for interactive search. A
+// highlight preview is injected ahead of the user's own [fzf].args unless those
+// already carry a --preview, which stays authoritative.
+func searchFzfArgs(cfg *config.Config, pattern string, opts searchOptions) []string {
+	args := cfg.Fzf.Args
+	for _, a := range args {
+		if a == "--preview" || strings.HasPrefix(a, "--preview=") {
+			return args
+		}
+	}
+	preview := buildLiveQueryHighlightPreview()
+	if pattern != "" {
+		preview = buildHighlightPreview(pattern, opts.regex, opts.caseSensitive)
+	}
+	return append([]string{"--preview", preview}, args...)
 }
 
 func buildLiveQueryHighlightPreview() string {
@@ -176,10 +194,7 @@ func contextOutput(out io.Writer, n *vault.Note, vaultRoot string, match func(st
 	}
 	wins = mergeWindows(wins)
 
-	relPath := n.Path
-	if rel, err2 := filepath.Rel(vaultRoot, n.Path); err2 == nil {
-		relPath = filepath.ToSlash(rel)
-	}
+	relPath := relOrAbsPath(vaultRoot, n.Path)
 
 	for i, w := range wins {
 		if i > 0 {
@@ -220,10 +235,7 @@ func buildInteractiveLines(
 		if bodyStart >= len(lines) {
 			continue
 		}
-		relPath := n.Path
-		if rel, err2 := filepath.Rel(vaultRoot, n.Path); err2 == nil {
-			relPath = filepath.ToSlash(rel)
-		}
+		relPath := relOrAbsPath(vaultRoot, n.Path)
 		for i := bodyStart; i < len(lines); i++ {
 			line := lines[i]
 			if matcher != nil && !matcher(line) {
@@ -235,4 +247,96 @@ func buildInteractiveLines(
 		}
 	}
 	return result, nil
+}
+
+// relOrAbsPath renders path relative to vaultRoot with forward slashes, falling
+// back to path itself when no relative form exists.
+func relOrAbsPath(vaultRoot, path string) string {
+	rel, err := filepath.Rel(vaultRoot, path)
+	if err != nil {
+		return path
+	}
+	return filepath.ToSlash(rel)
+}
+
+// bodyHasMatch reports whether any body line matches. An empty body is one
+// empty line here, so a regex that matches nothing still gets asked — which is
+// deliberately not what collectSearchCounts does.
+func bodyHasMatch(body string, matcher func(string) bool) bool {
+	for _, line := range strings.Split(body, "\n") {
+		if matcher(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func countMatchingLines(body string, matcher func(string) bool) int {
+	c := 0
+	for _, line := range strings.Split(body, "\n") {
+		if matcher(line) {
+			c++
+		}
+	}
+	return c
+}
+
+// searchCount is one row of `search --count` output.
+type searchCount struct {
+	count   int
+	relpath string
+}
+
+// collectSearchCounts counts matching body lines per note and orders the rows
+// by count descending, then relative path. Notes with an empty body are skipped
+// before matching, so an empty note is never a zero-length match.
+func collectSearchCounts(notes []*vault.Note, vaultRoot string, matcher func(string) bool) ([]searchCount, error) {
+	var results []searchCount
+	for _, n := range notes {
+		body, err := n.Body()
+		if err != nil {
+			return nil, err
+		}
+		if body == "" {
+			continue
+		}
+		c := countMatchingLines(body, matcher)
+		if c == 0 {
+			continue
+		}
+		results = append(results, searchCount{count: c, relpath: relOrAbsPath(vaultRoot, n.Path)})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].count != results[j].count {
+			return results[i].count > results[j].count
+		}
+		return results[i].relpath < results[j].relpath
+	})
+	return results, nil
+}
+
+// writeSearchCounts writes the tab-separated "<count>\t<relpath>" rows.
+func writeSearchCounts(out io.Writer, results []searchCount) error {
+	for _, r := range results {
+		if _, err := fmt.Fprintf(out, "%d\t%s\n", r.count, r.relpath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeSearchPaths writes one path per record, NUL-separated when nullSep is
+// set and newline-separated otherwise. Both the default paths mode and
+// interactive selection output go through here so the separator cannot drift.
+func writeSearchPaths(out io.Writer, paths []string, nullSep bool) error {
+	sep := byte('\n')
+	if nullSep {
+		sep = 0
+	}
+	for _, p := range paths {
+		if _, err := fmt.Fprintf(out, "%s%c", p, sep); err != nil {
+			return err
+		}
+	}
+	return nil
 }
