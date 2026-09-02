@@ -297,3 +297,25 @@ func noteKey(n *vault.Note) string {
 	base := filepath.Base(n.Path)
 	return strings.ToLower(strings.TrimSuffix(base, filepath.Ext(base)))
 }
+
+// queryFlagNames lists the `find`-style flags that scope a mutating command
+// (`replace`, `relink`, `repair`, `rename-key`) and `search`. It lives here
+// beside the flag surface it names, together with its only reader, because it
+// must list every registered scoping flag or the note-args / find-flags mutual
+// exclusion silently stops firing.
+var queryFlagNames = []string{
+	"tag", "category", "status", "type", "has", "missing",
+	"age", "created", "folder", "orphan", "broken-links",
+	"min-backlinks", "max-backlinks", "min-links", "max-links",
+	"dead-end", "query", "view",
+}
+
+// anyQueryFlagSet reports whether any find-style scoping flag was set on cmd.
+func anyQueryFlagSet(cmd *cobra.Command) bool {
+	for _, name := range queryFlagNames {
+		if f := cmd.Flag(name); f != nil && f.Changed {
+			return true
+		}
+	}
+	return false
+}

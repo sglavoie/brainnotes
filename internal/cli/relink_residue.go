@@ -8,6 +8,15 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 )
 
+// relinkResidue is one unresolved link relink deliberately left alone because
+// no deterministic target exists.
+type relinkResidue struct {
+	relPath        string
+	line           int
+	frontmatterKey string
+	raw            string
+}
+
 func relinkResiduesForNote(relPath string, broken []query.BrokenLink) []relinkResidue {
 	out := make([]relinkResidue, 0, len(broken))
 	for _, bl := range broken {

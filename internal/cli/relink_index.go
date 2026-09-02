@@ -10,6 +10,21 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
+// relinkTarget is one note the index can rewrite a link to.
+type relinkTarget struct {
+	key      string
+	relNoExt string
+	title    string
+}
+
+// relinkIndex is the two lookups a deterministic rewrite is allowed to use: an
+// exact normalized path key, and a normalized title that must resolve to
+// exactly one target.
+type relinkIndex struct {
+	byPathKey  map[string]relinkTarget
+	byTitleKey map[string][]relinkTarget
+}
+
 func newRelinkIndex(vaultRoot string, g *query.Graph) *relinkIndex {
 	idx := &relinkIndex{
 		byPathKey:  make(map[string]relinkTarget),

@@ -171,18 +171,6 @@ func splitSearchArgs(args []string, interactive bool) (pattern string, noteArgs 
 	return args[0], args[1:], nil
 }
 
-// anyQueryFlagSet reports whether any find-style scoping flag was set on cmd.
-// queryFlagNames (replace.go) must list every one of them or the note-args /
-// find-flags mutual exclusion silently stops firing.
-func anyQueryFlagSet(cmd *cobra.Command) bool {
-	for _, name := range queryFlagNames {
-		if f := cmd.Flag(name); f != nil && f.Changed {
-			return true
-		}
-	}
-	return false
-}
-
 // selectSearchNotes resolves the note set to search: explicit note arguments,
 // the find-flag filter, or the whole vault.
 func selectSearchNotes(

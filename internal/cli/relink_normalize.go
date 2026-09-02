@@ -9,6 +9,13 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
+// relinkMediaExts names the embed extensions relink never rewrites: an
+// unresolved `![[diagram.png]]` is an asset reference, not a broken note link.
+var relinkMediaExts = map[string]struct{}{
+	".png": {}, ".jpg": {}, ".jpeg": {}, ".gif": {}, ".svg": {}, ".webp": {},
+	".pdf": {}, ".mp4": {}, ".mov": {}, ".mp3": {}, ".wav": {}, ".ogg": {}, ".heic": {},
+}
+
 func relinkNormalizeTarget(target string) string {
 	target = strings.TrimSpace(strings.ReplaceAll(target, "\\", "/"))
 	target = strings.TrimPrefix(path.Clean("/"+target), "/")

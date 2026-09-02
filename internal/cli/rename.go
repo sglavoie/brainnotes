@@ -1,23 +1,12 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-	"path/filepath"
-	"strings"
-
 	"github.com/spf13/cobra"
-
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // NewRenameCmd returns the `rename` subcommand. Exported for tests.
 func NewRenameCmd() *cobra.Command {
-	var (
-		dryRun bool
-		force  bool
-	)
+	var opts renameOptions
 
 	cmd := &cobra.Command{
 		Use:   "rename [note] <new-title>",
@@ -39,141 +28,12 @@ Inspect with 'git diff' to recover.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("rename: no config in context")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-
-			var noteArg, newTitle string
-			if len(args) == 2 {
-				noteArg = args[0]
-				newTitle = args[1]
-			} else {
-				newTitle = args[0]
-				if err := noteops.ValidateRenameTitle(newTitle); err != nil {
-					return err
-				}
-				selected, pickErr := pickNotes(v, cfg, false)
-				if pickErr != nil {
-					return pickErr
-				}
-				if len(selected) == 0 {
-					return nil
-				}
-				noteArg = selected[0]
-			}
-			if err := noteops.ValidateRenameTitle(newTitle); err != nil {
-				return err
-			}
-
-			target, err := resolveRenameTarget(v, noteArg)
-			if err != nil {
-				return err
-			}
-
-			oldTitle := target.Title()
-			if oldTitle == newTitle {
-				return fmt.Errorf("rename: new title %q is identical to current title", newTitle)
-			}
-			if err := noteops.EnsureUniqueRenameSourceTitle(v, target.Path, oldTitle); err != nil {
-				return err
-			}
-
-			newPath, err := noteops.ComputeRenamePath(target.Path, newTitle, cfg)
-			if err != nil {
-				return err
-			}
-
-			if err := noteops.CheckRenameDestination(target.Path, newPath, force); err != nil {
-				return err
-			}
-			if err := noteops.EnsureUniqueRenameDestinationTitle(v, target.Path, newPath, newTitle, force); err != nil {
-				return err
-			}
-
-			plan, err := noteops.BuildRenamePlan(v, target.Path, newPath, oldTitle, newTitle, cfg)
-			if err != nil {
-				return err
-			}
-
-			out := cmd.OutOrStdout()
-			if dryRun {
-				return noteops.PrintRenamePlan(out, v.Root, plan)
-			}
-			journaler, err := noteops.BeginOperation(v.Root, "rename", commandInvocation(cmd, args),
-				[]string{plan.Target, plan.NewPath})
-			if err != nil {
-				return err
-			}
-			if err := journaler.Capture(plan.Target); err != nil {
-				return err
-			}
-			if err := journaler.Capture(plan.NewPath); err != nil {
-				return err
-			}
-			for _, p := range plan.FileOrder {
-				if err := journaler.Capture(p); err != nil {
-					return err
-				}
-			}
-
-			if err := noteops.ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted; run 'git diff' to inspect partial state")
-				return err
-			}
-			if err := noteops.RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted after content rewrites; run 'git diff' to inspect partial state")
-				return err
-			}
-			if _, err := journaler.Finalize(); err != nil {
-				return err
-			}
-			rel, relErr := filepath.Rel(v.Root, plan.NewPath)
-			if relErr != nil {
-				rel = plan.NewPath
-			}
-			_, err = fmt.Fprintf(out, "renamed: %s -> %s\n", plan.Target, filepath.Join(v.Root, rel))
-			return err
+			return runRenameCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
-	f.BoolVar(&dryRun, "dry-run", false, "print the plan without modifying any files")
-	f.BoolVar(&force, "force", false, "overwrite the destination file if it already exists")
+	f.BoolVar(&opts.dryRun, "dry-run", false, "print the plan without modifying any files")
+	f.BoolVar(&opts.force, "force", false, "overwrite the destination file if it already exists")
 	return cmd
-}
-
-// validateNewTitle rejects titles that would map to an invalid filename: empty
-// or whitespace-only, contain `/` (use `move`), contain a NUL byte or any
-// other ASCII control character (including newline/tab), have leading or
-// trailing whitespace, or begin with `.` (hidden).
-func validateNewTitle(t string) error {
-	if t == "" {
-		return errors.New("rename: empty new title")
-	}
-	if strings.TrimSpace(t) == "" {
-		return errors.New("rename: new title may not be whitespace-only")
-	}
-	if t != strings.TrimSpace(t) {
-		return errors.New("rename: new title may not have leading or trailing whitespace")
-	}
-	if strings.ContainsRune(t, '/') {
-		return errors.New("rename: new title may not contain '/'; use 'bn move' to change folders")
-	}
-	for _, r := range t {
-		if r == 0 {
-			return errors.New("rename: new title contains a NUL byte")
-		}
-		if r < 0x20 || r == 0x7f {
-			return fmt.Errorf("rename: new title contains a control character (U+%04X)", r)
-		}
-	}
-	if strings.HasPrefix(t, ".") {
-		return errors.New("rename: new title may not start with '.'")
-	}
-	return nil
 }

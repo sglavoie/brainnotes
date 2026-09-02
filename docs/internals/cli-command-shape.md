@@ -95,6 +95,17 @@ has one seven-line preview renderer, so it stays in `rename_key_run.go`, and
 `repair`'s preview already lives in `repair_apply.go` and was not moved. A file
 per renderer is not the goal; one home per command's rendering is.
 
+**A surface more than one command shares lives with the surface, not with the
+first command that needed it.** `queryFlagNames` and its only reader
+`anyQueryFlagSet` are in `findflags.go`, beside the flag registrations they
+enumerate, because five commands (`search`, `repair`, `rename-key`, `replace`,
+`relink`) read them and the list must name every registered scoping flag or the
+note-args / find-flags exclusion silently stops firing. The same rule sends a
+type its helper files share out of the constructor file: `relinkIndex` and
+`relinkTarget` are declared in `relink_index.go`, `relinkChange` in
+`relink_rewrite.go`, `relinkResidue` in `relink_residue.go`, so `relink.go` is
+the constructor and nothing else.
+
 A single writer per output form is also how a format detail stops drifting.
 `-0` is defined in exactly one function, `writePathList`, and both `find` and
 `search` write their paths through it, so the documented
@@ -130,6 +141,24 @@ that `os.MkdirAll` for the same reason: `internal/audit` accepts it on the line
 above the call or in the enclosing function's doc comment, so a moved write must
 carry its comment group with it or the audit fails.
 
+`rename` states the same rule as a sequence: `planRename` runs all seven
+refusals — title shape, target resolution, identical-title, source-title
+uniqueness, path computation, destination occupancy, destination-title
+uniqueness — and returns a `*noteops.RenamePlan`, and only `applyRename` opens
+the journal. Splitting on that line is what keeps every `rename` refusal
+artifact-free, and it is why `--dry-run` can be a single `if` between the two.
+
+**A resolver that can legally select nothing returns `(value, ok, err)`, not a
+nil sentinel.** `unset` and `rename` both offer an fzf picker, and an empty
+selection is a silent success — not an error, and *not* a run that continues
+with zero paths, because `noteops.BeginOperation` would then open a journal for
+an operation the user cancelled. Extracting that branch is also what clears the
+`nestif` the picker's `if len(noteArgs) == 0 { ... } else { ... }` costs, so
+`resolveUnsetPaths` and `resolveRenameArgs` both report the cancellation through
+a third return value and the runner answers it with a bare `return nil`. Reusing
+`set`'s `resolveSetPaths` here would be wrong for exactly that reason: it
+returns `(nil, nil)` on an empty selection and `set` deliberately proceeds.
+
 ## Test seams
 
 Package-level `var` function seams stay at package scope and keep their names.
@@ -157,3 +186,15 @@ No behaviour change is permitted in a decomposition, so the checks are:
 - `just lint-full` — the report that shows the score actually moved. Decomposing
   `search` dropped the `internal/cli` gocognit score total from 1326 to 1094 and
   the package's violation count from 80 to 75.
+
+Expect a decomposition to remove **more** issues than it removes constructors.
+`unset`/`replace`/`rename`/`relink` together took the whole-tree total from 541
+to 535 and `internal/cli` from 69 to 63 — six, not four, because the `nestif`
+violations at `unset.go:71` (the picker branch) and `rename.go:52` (the
+one-arg-vs-two-arg branch) lived *inside* the closures and left with them.
+`issues.uniq-by-line` still collapses each constructor's cyclop score into its
+gocognit report, so the constructors themselves are one issue each; a nested
+block reported on its own line is a second, separate issue in the same function.
+Measure it the way `search` and `find` were measured — `git worktree add
+--detach /tmp/<name> HEAD`, run `golangci-lint run ./...` there and again in the
+working tree — rather than reading a delta off two remembered numbers.

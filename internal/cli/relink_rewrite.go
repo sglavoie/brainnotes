@@ -10,6 +10,15 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
+// relinkChange is one rewritten link, carrying the body line it sits on or the
+// frontmatter key it was stored under so the dry-run preview can render it.
+type relinkChange struct {
+	line           int
+	frontmatterKey string
+	oldRaw         string
+	newRaw         string
+}
+
 func applyRelink(n *vault.Note, idx *relinkIndex, g *query.Graph, fmCfg *config.FrontmatterConfig, vaultRoot string, dry *DryRun, journaler *noteops.Journal) (bool, []relinkResidue, error) {
 	preBroken := query.UnresolvedLinks(n, g)
 	if len(preBroken) == 0 {
