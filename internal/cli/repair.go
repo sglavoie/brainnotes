@@ -1,24 +1,12 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/spf13/cobra"
-
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
+// NewRepairCmd returns the `repair` subcommand. Exported for tests.
 func NewRepairCmd() *cobra.Command {
-	var (
-		dryRun   bool
-		property string
-	)
-
-	ff := new(findFlags)
+	opts := repairOptions{ff: new(findFlags)}
 
 	cmd := &cobra.Command{
 		Use:   "repair [notes...]",
@@ -48,144 +36,14 @@ printed as a unified diff block; unchanged files are omitted.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("repair: no config in context")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-
-			if len(cfg.Frontmatter.Properties) == 0 {
-				writeSchemaHint(cmd.ErrOrStderr(), "repair", cfg.SourcePath)
-				return nil
-			}
-
-			propsToUse := cfg.Frontmatter.Properties
-			if property != "" {
-				def, ok := cfg.Frontmatter.Definition(property)
-				if !ok {
-					return fmt.Errorf("repair: property %q not defined in [frontmatter.properties]", property)
-				}
-				propsToUse = map[string]config.PropertyDefinition{property: def}
-			}
-
-			anyFlagSet := false
-			for _, name := range queryFlagNames {
-				if f := cmd.Flag(name); f != nil && f.Changed {
-					anyFlagSet = true
-					break
-				}
-			}
-			if len(args) > 0 && anyFlagSet {
-				return errors.New("repair: cannot combine positional notes with find filter flags")
-			}
-
-			candidates, err := collectReplaceCandidates(cmd, v, cfg, args, ff)
-			if err != nil {
-				return err
-			}
-
-			out := cmd.OutOrStdout()
-			stderr := cmd.ErrOrStderr()
-			var dry *DryRun
-			if dryRun {
-				dry = &DryRun{Out: out}
-			}
-			var journaler *noteops.Journal
-			if dry == nil {
-				journaler, err = noteops.BeginOperation(v.Root, "repair", commandInvocation(cmd, args), nil)
-				if err != nil {
-					return err
-				}
-			}
-
-			repaired := 0
-			totalSkips := 0
-			hasMissingRequired := false
-			for _, n := range candidates {
-				front, err := n.Front()
-				if err != nil {
-					return err
-				}
-
-				result := schema.PlanRepairs(front, propsToUse)
-				if property != "" {
-					result = filterRepairResult(result, property)
-				}
-				if len(result.Actions) == 0 && len(result.Skips) == 0 {
-					continue
-				}
-
-				for _, s := range result.Skips {
-					relPath := displayPath(n.Path, v.Root)
-					fmt.Fprintf(stderr, "SKIP: %s: %s: %s (%s)\n", relPath, s.Property, s.Detail, s.Kind)
-					totalSkips++
-					if s.Kind == "missing_required" {
-						hasMissingRequired = true
-					}
-				}
-
-				if len(result.Actions) == 0 {
-					continue
-				}
-				if dry == nil {
-					if err := journaler.Capture(n.Path); err != nil {
-						return err
-					}
-				}
-
-				changed, err := applyRepairs(n, result, &cfg.Frontmatter, v.Root, dry)
-				if err != nil {
-					_, _ = fmt.Fprintln(stderr, "WARN: repair interrupted; run 'git diff' to inspect partial state")
-					return err
-				}
-				if !changed {
-					continue
-				}
-				repaired++
-				if dry == nil {
-					fmt.Fprintf(out, "repaired: %s\n", displayPath(n.Path, v.Root))
-				}
-			}
-			if _, err := journaler.Finalize(); err != nil {
-				return err
-			}
-
-			if dry == nil {
-				summary := fmt.Sprintf("repaired %d file(s)", repaired)
-				if totalSkips > 0 {
-					summary += fmt.Sprintf(", %d skipped", totalSkips)
-				}
-				fmt.Fprintln(out, summary)
-			}
-			if hasMissingRequired {
-				fmt.Fprintln(stderr, "\nhint: set missing properties with: bn set <note> <property>=<value>")
-			}
-			return nil
+			return runRepairCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
-	ff.register(cmd)
-	f.BoolVar(&dryRun, "dry-run", false, "preview changes without writing")
-	f.StringVar(&property, "property", "", "repair only this schema property")
+	opts.ff.register(cmd)
+	f.BoolVar(&opts.dryRun, "dry-run", false, "preview changes without writing")
+	f.StringVar(&opts.property, "property", "", "repair only this schema property")
 
 	return cmd
-}
-
-func filterRepairResult(r schema.RepairResult, prop string) schema.RepairResult {
-	var out schema.RepairResult
-	for _, a := range r.Actions {
-		if a.Property == prop {
-			out.Actions = append(out.Actions, a)
-		}
-	}
-	for _, s := range r.Skips {
-		if s.Property == prop {
-			out.Skips = append(out.Skips, s)
-		}
-	}
-	return out
 }
