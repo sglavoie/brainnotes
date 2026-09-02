@@ -325,10 +325,14 @@ func writeSearchCounts(out io.Writer, results []searchCount) error {
 	return nil
 }
 
-// writeSearchPaths writes one path per record, NUL-separated when nullSep is
-// set and newline-separated otherwise. Both the default paths mode and
-// interactive selection output go through here so the separator cannot drift.
-func writeSearchPaths(out io.Writer, paths []string, nullSep bool) error {
+// writePathList writes one path per record, NUL-separated when nullSep is set
+// and newline-separated otherwise.
+//
+// It is the CLI's single definition of `-0`. `bn find -0 | bn set --null -` is a
+// documented pipeline, and `bn search -0` feeds the same consumers, so both
+// commands' path output — including an interactive selection — is written here
+// rather than each deciding a separator for itself.
+func writePathList(out io.Writer, paths []string, nullSep bool) error {
 	sep := byte('\n')
 	if nullSep {
 		sep = 0

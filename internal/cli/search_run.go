@@ -252,7 +252,7 @@ func runSearchInteractive(r *searchRun) error {
 	if err != nil {
 		return err
 	}
-	return writeSearchPaths(r.cmd.OutOrStdout(), selected, r.opts.nullSep)
+	return writePathList(r.cmd.OutOrStdout(), selected, r.opts.nullSep)
 }
 
 // runSearchInteractiveOpen is `-i --open`: fzf selects the line, the editor
@@ -339,7 +339,7 @@ func runSearchPaths(r *searchRun) error {
 	for i, n := range matched {
 		paths[i] = n.Path
 	}
-	return writeSearchPaths(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
+	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
 }
 
 // openSearchMatch resolves the editor and opens path at line. Resolution is

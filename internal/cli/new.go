@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,10 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // execReplace is patched in tests to avoid actually replacing the test process.
@@ -27,12 +22,7 @@ var clockForNew tmpl.Clock = tmpl.SystemClock{}
 
 // NewNewCmd returns the `new` subcommand. Exported for tests.
 func NewNewCmd() *cobra.Command {
-	var (
-		folder string
-		vars   []string
-		edit   bool
-		force  bool
-	)
+	var opts newOptions
 
 	cmd := &cobra.Command{
 		Use:           "new <template> <title>",
@@ -42,122 +32,15 @@ func NewNewCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("new: no config in context")
-			}
-			templateName := args[0]
-			title := args[1]
-			if err := validateNewTitle(title); err != nil {
-				// validateNewTitle prefixes with "rename:"; relabel for new.
-				return fmt.Errorf("new: %s", strings.TrimPrefix(err.Error(), "rename: "))
-			}
-
-			varMap, err := parseVars(vars)
-			if err != nil {
-				return err
-			}
-
-			tmplPath, err := tmpl.Find(cfg, templateName)
-			if err != nil {
-				return fmt.Errorf("new: %w", err)
-			}
-
-			dest, err := resolveDest(cfg, tmplPath, folder)
-			if err != nil {
-				return err
-			}
-			relFolder, err := filepath.Rel(cfg.Vault, dest)
-			if err != nil {
-				return fmt.Errorf("new: rel %q: %w", dest, err)
-			}
-			// Reject destinations outside the vault so '--folder ../escape'
-			// (or a misconfigured route) can't write past the vault root.
-			if relFolder == ".." || strings.HasPrefix(relFolder, ".."+string(filepath.Separator)) {
-				return fmt.Errorf("new: destination %q is outside the vault", dest)
-			}
-			relFolderSlash := filepath.ToSlash(relFolder)
-			if relFolderSlash == "." {
-				relFolderSlash = ""
-			}
-
-			body, err := os.ReadFile(tmplPath)
-			if err != nil {
-				return fmt.Errorf("new: read template %q: %w", tmplPath, err)
-			}
-
-			ext := normalizeNewDefaultExtension(cfg.Templates.DefaultExtension)
-			outPath := filepath.Join(dest, title+ext)
-
-			if !force {
-				if _, statErr := os.Stat(outPath); statErr == nil {
-					return fmt.Errorf("new: %s already exists (use --force to overwrite)", outPath)
-				} else if !os.IsNotExist(statErr) {
-					return fmt.Errorf("new: stat %q: %w", outPath, statErr)
-				}
-			}
-
-			ctx := tmpl.NewContext(title, relFolderSlash, cfg.Vault, varMap, clockForNew)
-			rendered, err := tmpl.Render(string(body), ctx)
-			if err != nil {
-				return err
-			}
-			// Ahead of the folder, which is the first artifact here and would
-			// otherwise survive a write the policy goes on to refuse.
-			journaler, err := noteops.BeginOperation(cfg.Vault, "new", commandInvocation(cmd, args),
-				[]string{dest, outPath})
-			if err != nil {
-				return err
-			}
-			// BeginOperation above named this folder as a target, so a refused
-			// note never leaves it behind empty.
-			//bn:direct-write guarded by BeginOperation above
-			if err := os.MkdirAll(dest, 0o755); err != nil {
-				return fmt.Errorf("new: mkdir %q: %w", dest, err)
-			}
-			if err := journaler.Capture(outPath); err != nil {
-				return err
-			}
-			// Locked here rather than inside atomicWriteFile because 'bn init' shares
-			// that helper to write the vault marker, before any vault exists to lock in.
-			release, err := vault.LockPaths(cfg.Vault, outPath)
-			if err != nil {
-				return err
-			}
-			writeErr := atomicWriteFile("new", outPath, []byte(rendered))
-			release()
-			if writeErr != nil {
-				return writeErr
-			}
-			if _, err := journaler.Finalize(); err != nil {
-				return err
-			}
-
-			if _, err := fmt.Fprintln(cmd.OutOrStdout(), outPath); err != nil {
-				return err
-			}
-
-			if edit {
-				editorSpec, err := editutil.Spec("", os.Getenv("EDITOR"))
-				if errors.Is(err, editutil.ErrNoEditorConfigured) {
-					return errors.New("new: --edit requires $EDITOR to be set")
-				}
-				if err != nil {
-					return fmt.Errorf("new: %w", err)
-				}
-				if err := runEditor(editorSpec, outPath); err != nil {
-					return fmt.Errorf("new: %w", err)
-				}
-			}
-			return nil
+			return runNewCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
-	f.StringVar(&folder, "folder", "", "destination folder, vault-relative (overrides config route)")
-	f.StringArrayVar(&vars, "var", nil, "template variable as key=value (repeatable)")
-	f.BoolVar(&edit, "edit", false, "exec $EDITOR on the created note")
-	f.BoolVar(&force, "force", false, "overwrite the destination file if it already exists")
+	f.StringVar(&opts.folder, "folder", "", "destination folder, vault-relative (overrides config route)")
+	f.StringArrayVar(&opts.vars, "var", nil, "template variable as key=value (repeatable)")
+	f.BoolVar(&opts.edit, "edit", false, "exec $EDITOR on the created note")
+	f.BoolVar(&opts.force, "force", false, "overwrite the destination file if it already exists")
 
 	return cmd
 }

@@ -56,6 +56,20 @@ inputs and therefore directly testable.
 Split the method when the rules outgrow one threshold-clean function
 (`validateContextCombos`, `validateCountCombos`), with the guard clause inside
 the helper so the caller stays a flat list of `if err := ...; err != nil`.
+`find` splits at five rules, into `validateBrokenLinkRequirements` (which
+reports the two asked for without `--broken-links`) and
+`validateBrokenOutputCombos` (which rejects the path-shaped modes a broken-link
+report cannot produce). Not every command needs the parameter: `find` reads
+`--broken-links` off the shared `*findFlags` it already holds, so its
+`validate()` is a pure function of the struct and takes nothing.
+
+**A command with no mutual-exclusion rules gets no `validate()`.** `new` is the
+case: `--folder`, `--var`, `--edit`, and `--force` all compose, so an empty
+method would be ceremony rather than the place a rule goes. Give the options
+struct a comment saying so, so the absence reads as a decision. Refusals that
+are properties of a *positional argument* rather than of the flag matrix stay
+out of it too, as package-level functions (`validateRenameKeys`,
+`validateNewTitle`).
 
 **One named function per behaviour mode, in `<cmd>_run.go`.** A command with
 several output modes gets one function per mode — `runSearchInteractive`,
@@ -71,11 +85,23 @@ after selection, and hand it to the mode.
 
 **Rendering stays in `<cmd>_output.go`.** Writers, formatters, and the
 collectors that feed them belong beside the existing output helpers, not in a
-third new file: `writeSearchPaths` and `writeSearchCounts` sit next to
-`contextOutput` and `buildInteractiveLines`. A single writer per output form is
-also how a format detail stops drifting — NUL separation lives in exactly one
-function, so the default paths mode and interactive selection output cannot
-disagree about the separator.
+third new file: `writePathList` and `writeSearchCounts` sit next to
+`contextOutput` and `buildInteractiveLines`.
+
+The threshold for creating the file at all is **more than one output form**.
+`find` has three — the path list, `--show-broken`, and `--list-broken-targets` —
+so `find_output.go` exists and holds all three plus `pinnedOrder`. `rename-key`
+has one seven-line preview renderer, so it stays in `rename_key_run.go`, and
+`repair`'s preview already lives in `repair_apply.go` and was not moved. A file
+per renderer is not the goal; one home per command's rendering is.
+
+A single writer per output form is also how a format detail stops drifting.
+`-0` is defined in exactly one function, `writePathList`, and both `find` and
+`search` write their paths through it, so the documented
+`bn find -0 | bn set --null -` pipeline and `bn search -0` cannot end up with
+different separators — and neither can a command's interactive selection output
+and its default listing. `TestFindSetNullPipeline` runs that pipeline end to end
+rather than testing each half on its own.
 
 ## Order is behaviour
 
@@ -90,6 +116,19 @@ When a rewrite would collapse two branches that look identical, check the empty
 case first. `search --count` skips a note with an empty body *before* matching,
 while the default paths mode does not — a regex like `^$` therefore matches an
 empty note in one mode and not the other. That is preserved, not repaired.
+
+For a **mutating** command the order decides what a refusal leaves on disk, not
+just which error is printed. `new` resolves the destination, reads the template,
+refuses an occupied path, and renders — all of it in `planNewNote`, before
+`writeNewNote` calls `noteops.BeginOperation` — so every refusal happens while
+no artifact exists. `BeginOperation` then names the destination *folder* as one
+of its targets ahead of creating it, which is what stops a note the location
+policy goes on to refuse from leaving an empty folder behind. A decomposition
+that hoisted `os.MkdirAll` above `BeginOperation`, or that validated after it,
+would still pass every output test. The `//bn:direct-write` marker travels with
+that `os.MkdirAll` for the same reason: `internal/audit` accepts it on the line
+above the call or in the enclosing function's doc comment, so a moved write must
+carry its comment group with it or the audit fails.
 
 ## Test seams
 
@@ -107,7 +146,14 @@ No behaviour change is permitted in a decomposition, so the checks are:
 - `just lint-new` — every line of a decomposition is inside the ratchet's diff
   range, so each new function must land under funlen 100/50, cyclop 10,
   gocognit 20, nestif 4. Moving an oversized function to a new file without
-  decomposing it fails the gate, by design.
+  decomposing it fails the gate, by design. The inverse is also true and is
+  worth knowing before you tidy: a pre-existing violation that merely *shifts*
+  line number stays outside the range, because the gate anchors on added lines
+  rather than on final position. Deleting the 110-line `NewNewCmd` closure moved
+  `routeForTemplate` (cyclop 11) from line 197 to line 80 of the same file and
+  the gate stayed green; cutting and pasting it into `new_run.go` would have
+  failed. So leave a neighbouring violation where it sits unless you intend to
+  decompose it in the same session.
 - `just lint-full` — the report that shows the score actually moved. Decomposing
   `search` dropped the `internal/cli` gocognit score total from 1326 to 1094 and
   the package's violation count from 80 to 75.

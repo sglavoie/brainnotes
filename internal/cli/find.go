@@ -1,34 +1,14 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-	"io"
-	"path/filepath"
-	"sort"
-	"strings"
-
 	"github.com/spf13/cobra"
-
-	"github.com/sglavoie/sglavoie_brainnotes/internal/pins"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // NewFindCmd returns the `find` subcommand. Exported for tests.
 func NewFindCmd() *cobra.Command {
-	var (
-		interactive       bool
-		nullSep           bool
-		showBroken        bool
-		listBrokenTargets bool
-		sortText          string
-		relativeTo        string
-	)
-
 	// find is the one flag-scoped command that orders and caps its output, so
 	// it is the one command allowed to run a saved view's stored sort and limit.
-	ff := &findFlags{ordersResults: true}
+	opts := findOptions{ff: &findFlags{ordersResults: true}}
 
 	cmd := &cobra.Command{
 		Use:   "find",
@@ -56,226 +36,20 @@ same signals bn related does. Sorting never changes which notes match.`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("find: no config in context")
-			}
-			if showBroken && !ff.brokenLinks {
-				return errors.New("--show-broken requires --broken-links")
-			}
-			if listBrokenTargets && !ff.brokenLinks {
-				return errors.New("--list-broken-targets requires --broken-links")
-			}
-			if showBroken && listBrokenTargets {
-				return errors.New("--show-broken and --list-broken-targets are mutually exclusive")
-			}
-			if (showBroken || listBrokenTargets) && interactive {
-				return errors.New("--interactive cannot be used with --show-broken or --list-broken-targets")
-			}
-			if (showBroken || listBrokenTargets) && nullSep {
-				return errors.New("--null cannot be used with --show-broken or --list-broken-targets")
-			}
-			sortSpec, err := validateFindSort(sortText, relativeTo)
-			if err != nil {
-				return err
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-			notes, err := v.Notes()
-			if err != nil {
-				return err
-			}
-
-			sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, notes, nil)
-			if err != nil {
-				return err
-			}
-			matched := sel.notes
-			// `bn find` is the only flag-scoped command that produces an
-			// ordering, so it is the only one that executes the ordering and
-			// cap a saved view stores; every other command refuses such a view
-			// outright. Explicit flags win: --sort or --relative-to on the
-			// command line replaces the view's ordering wholesale rather than
-			// merging with it, so the two halves cannot disagree.
-			spec, ordered := sortSpec, strings.TrimSpace(sortText) != "" || strings.TrimSpace(relativeTo) != ""
-			if !ordered && sel.plan.Sort.Key != "" {
-				spec, ordered = sel.plan.Sort, true
-			}
-			switch {
-			case ordered:
-				// An explicit ordering wins over the implicit pinned ordering
-				// below, including when it asks for plain path order.
-				matched, err = sortFindResults(findSortInput{
-					vault:   v,
-					matched: matched,
-					notes:   notes,
-					graph:   sel.graph,
-				}, spec)
-				if err != nil {
-					return err
-				}
-			case ff.pinned:
-				matched = pinnedOrder(v.Root, matched)
-			}
-			// The cap is applied last, over the ordered result, so a view that
-			// saves "the 10 most recently modified" returns those ten rather
-			// than ten arbitrary matches re-sorted.
-			if limit := sel.plan.Limit; limit > 0 && len(matched) > limit {
-				matched = matched[:limit]
-			}
-
-			out := cmd.OutOrStdout()
-
-			if showBroken {
-				return printShowBroken(out, matched, sel.graph, v.Root)
-			}
-			if listBrokenTargets {
-				return printListBrokenTargets(out, matched, sel.graph)
-			}
-
-			paths := make([]string, len(matched))
-			for i, n := range matched {
-				paths[i] = n.Path
-			}
-
-			if interactive {
-				selected, err := RunFZF(paths, cfg.Fzf.Args)
-				if err != nil {
-					return err
-				}
-				paths = selected
-			}
-
-			sep := byte('\n')
-			if nullSep {
-				sep = 0
-			}
-			for _, p := range paths {
-				if _, err := fmt.Fprintf(out, "%s%c", p, sep); err != nil {
-					return err
-				}
-			}
-			return nil
+		// Args is NoArgs, so there are never positional arguments to hand on.
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runFindCommand(cmd, opts)
 		},
 	}
 
-	ff.register(cmd)
+	opts.ff.register(cmd)
 	f := cmd.Flags()
-	f.BoolVarP(&interactive, "interactive", "i", false, "pipe matches into fzf for selection")
-	f.BoolVarP(&nullSep, "null", "0", false, "separate paths with NUL instead of newline")
-	f.BoolVar(&showBroken, "show-broken", false, "show each broken link (requires --broken-links)")
-	f.BoolVar(&listBrokenTargets, "list-broken-targets", false, "list unique broken targets (requires --broken-links)")
-	f.StringVar(&sortText, "sort", "", findSortHelp())
-	f.StringVar(&relativeTo, "relative-to", "", "anchor note for --sort relevance (title or path)")
+	f.BoolVarP(&opts.interactive, "interactive", "i", false, "pipe matches into fzf for selection")
+	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline")
+	f.BoolVar(&opts.showBroken, "show-broken", false, "show each broken link (requires --broken-links)")
+	f.BoolVar(&opts.listBrokenTargets, "list-broken-targets", false, "list unique broken targets (requires --broken-links)")
+	f.StringVar(&opts.sortText, "sort", "", findSortHelp())
+	f.StringVar(&opts.relativeTo, "relative-to", "", "anchor note for --sort relevance (title or path)")
 
 	return cmd
-}
-
-// pinnedOrder re-sorts matched notes into the canonical pinned order (ascending
-// rank, then unranked, path-tiebroken) instead of the default path sort. Any
-// note pins.List does not place keeps its path-sorted position at the end,
-// which cannot happen while --pinned is the only caller.
-func pinnedOrder(root string, matched []*vault.Note) []*vault.Note {
-	byRel := make(map[string]*vault.Note, len(matched))
-	for _, n := range matched {
-		rel, err := filepath.Rel(root, n.Path)
-		if err != nil {
-			continue
-		}
-		byRel[filepath.ToSlash(rel)] = n
-	}
-	ordered := make([]*vault.Note, 0, len(matched))
-	placed := make(map[*vault.Note]bool, len(matched))
-	for _, e := range pins.List(root, matched) {
-		n, ok := byRel[e.RelPath]
-		if !ok || placed[n] {
-			continue
-		}
-		placed[n] = true
-		ordered = append(ordered, n)
-	}
-	for _, n := range matched {
-		if !placed[n] {
-			ordered = append(ordered, n)
-		}
-	}
-	return ordered
-}
-
-type brokenRecord struct {
-	relpath        string
-	line           int
-	frontmatterKey string
-	raw            string
-}
-
-func printShowBroken(out io.Writer, matched []*vault.Note, g *query.Graph, root string) error {
-	var records []brokenRecord
-	for _, n := range matched {
-		rel, err := filepath.Rel(root, n.Path)
-		if err != nil {
-			rel = n.Path
-		}
-		for _, bl := range query.UnresolvedLinks(n, g) {
-			records = append(records, brokenRecord{
-				relpath:        rel,
-				line:           bl.Line,
-				frontmatterKey: bl.FrontmatterKey,
-				raw:            bl.Link.Raw,
-			})
-		}
-	}
-	sort.Slice(records, func(i, j int) bool {
-		if records[i].relpath != records[j].relpath {
-			return records[i].relpath < records[j].relpath
-		}
-		if records[i].line != records[j].line {
-			return records[i].line < records[j].line
-		}
-		if records[i].frontmatterKey != records[j].frontmatterKey {
-			return records[i].frontmatterKey < records[j].frontmatterKey
-		}
-		return records[i].raw < records[j].raw
-	})
-	for _, r := range records {
-		var err error
-		if r.frontmatterKey != "" {
-			_, err = fmt.Fprintf(out, "%s:frontmatter[%s]: %s\n", r.relpath, r.frontmatterKey, r.raw)
-		} else {
-			_, err = fmt.Fprintf(out, "%s:%d: %s\n", r.relpath, r.line, r.raw)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func printListBrokenTargets(out io.Writer, matched []*vault.Note, g *query.Graph) error {
-	seen := make(map[string]string)
-	for _, n := range matched {
-		for _, bl := range query.UnresolvedLinks(n, g) {
-			title := bl.Link.Title()
-			key := strings.ToLower(title)
-			if _, ok := seen[key]; !ok {
-				seen[key] = title
-			}
-		}
-	}
-	targets := make([]string, 0, len(seen))
-	for _, title := range seen {
-		targets = append(targets, title)
-	}
-	sort.Slice(targets, func(i, j int) bool {
-		return strings.ToLower(targets[i]) < strings.ToLower(targets[j])
-	})
-	for _, t := range targets {
-		if _, err := fmt.Fprintf(out, "%s\n", t); err != nil {
-			return err
-		}
-	}
-	return nil
 }

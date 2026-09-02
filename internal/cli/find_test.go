@@ -340,6 +340,59 @@ func TestFind_MinBacklinksWithTag(t *testing.T) {
 	}
 }
 
+// TestFindSetNullPipeline runs the documented `bn find ... -0 | bn set ...`
+// composition end to end, against an isolated temporary vault.
+//
+// TestFindNullSeparator pins the producer and TestSetNullRequiresStdinNoteInput
+// pins the consumer's input requirement, but neither one runs the join, so a
+// separator that changed on only one side would pass both. This feeds find's
+// real NUL-separated bytes into `set --null -` and then reads the notes back off
+// disk, which is also what makes it notice a path that survived the pipe but
+// resolved to the wrong note.
+func TestFindSetNullPipeline(t *testing.T) {
+	isolateBnEnv(t)
+	root := t.TempDir()
+
+	notes := map[string]string{
+		"Alpha.md": "---\ntags:\n  - pipeline\ntitle: Alpha\n---\nAlpha body.\n",
+		"Beta.md":  "---\ntags:\n  - pipeline\ntitle: Beta\n---\nBeta body.\n",
+		// Control: matched by neither filter, so it proves the pipe carried the
+		// selection rather than the whole vault.
+		"Gamma.md": "---\ntags:\n  - other\ntitle: Gamma\n---\nGamma body.\n",
+	}
+	for rel, body := range notes {
+		if err := os.WriteFile(filepath.Join(root, rel), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+	markVaultRoot(t, root, testPropertyDefinitions)
+
+	piped, err := runCLI(t, "", "--vault", root, "find", "--tag", "pipeline", "-0")
+	if err != nil {
+		t.Fatalf("find -0: %v\noutput: %q", err, piped)
+	}
+	wantPiped := filepath.Join(root, "Alpha.md") + "\x00" + filepath.Join(root, "Beta.md") + "\x00"
+	if piped != wantPiped {
+		t.Fatalf("find -0 output:\n got=%q\nwant=%q", piped, wantPiped)
+	}
+
+	out, err := runCLI(t, piped, "--vault", root, "set", "--null", "-", "status=done")
+	if err != nil {
+		t.Fatalf("set --null -: %v\noutput: %q", err, out)
+	}
+
+	want := map[string]string{
+		"Alpha.md": "---\nstatus: done\ntags:\n  - pipeline\ntitle: Alpha\n---\nAlpha body.\n",
+		"Beta.md":  "---\nstatus: done\ntags:\n  - pipeline\ntitle: Beta\n---\nBeta body.\n",
+		"Gamma.md": notes["Gamma.md"],
+	}
+	for rel, wantBytes := range want {
+		if got := readNote(t, filepath.Join(root, rel)); got != wantBytes {
+			t.Fatalf("%s after the pipeline:\n got=%q\nwant=%q", rel, got, wantBytes)
+		}
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
