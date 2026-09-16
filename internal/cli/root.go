@@ -17,6 +17,44 @@ type ctxKey string
 
 const configKey ctxKey = "bnotes.config"
 
+// skipConfigLoad is the annotation key a command sets to run without a loaded
+// configuration. Its value is the reason, so the exemption has to be justified
+// where it is taken rather than in a list somewhere else.
+//
+// A command that sets it gets no *config.Config in its context and must resolve
+// the vault root itself. That is a deliberate cost: the only commands entitled
+// to skip the load are the ones whose job is to repair a vault that cannot load,
+// and they have to say which root they are repairing.
+const skipConfigLoad = "bn:skip-config-load"
+
+// skipsConfigLoad reports whether cmd runs without a loaded configuration.
+//
+// Three groups qualify, and they are different kinds of thing: cobra's own
+// generated commands and `help`, which have no vault to speak of; `init`, which
+// creates the vault-root configuration file that loading would require; and any
+// command carrying the skipConfigLoad annotation.
+//
+// The first two groups are recognised by name, which only works because those
+// names are cobra's or a top-level command's. A nested command cannot be
+// recognised that way — `migrate` alone would also match some future
+// `bn vault migrate` — so one that must run on a vault it cannot load says so on
+// itself instead.
+func skipsConfigLoad(cmd *cobra.Command) bool {
+	switch cmd.Name() {
+	case "completion", "help", "init", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+		return true
+	}
+	if _, skip := cmd.Annotations[skipConfigLoad]; skip {
+		return true
+	}
+	for p := cmd.Parent(); p != nil; p = p.Parent() {
+		if p.Name() == "completion" {
+			return true
+		}
+	}
+	return false
+}
+
 // Execute runs the root command and returns any error from the chosen subcommand.
 func Execute() error {
 	return NewRootCmd().Execute()
@@ -56,17 +94,8 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Skip config loading for commands that don't need a vault
-			// (completion scripts, help) and for `init`, which creates the
-			// vault-root config file that loading would require.
-			if cmd.Name() == "completion" || cmd.Name() == "help" || cmd.Name() == "init" ||
-				cmd.Name() == cobra.ShellCompRequestCmd || cmd.Name() == cobra.ShellCompNoDescRequestCmd {
+			if skipsConfigLoad(cmd) {
 				return nil
-			}
-			for p := cmd.Parent(); p != nil; p = p.Parent() {
-				if p.Name() == "completion" {
-					return nil
-				}
 			}
 			cfg, err := config.Load(config.LoadOptions{VaultFlag: vaultPath})
 			if err != nil {

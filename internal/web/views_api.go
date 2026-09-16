@@ -2,7 +2,6 @@ package web
 
 import (
 	"net/http"
-	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -132,11 +131,7 @@ func (p *viewsPlan) fileStates() []propertyPreviewFileState {
 	if p == nil || p.Config == nil {
 		return []propertyPreviewFileState{}
 	}
-	return []propertyPreviewFileState{{
-		RelPath: config.FileName,
-		AbsPath: p.Config.AbsPath,
-		Digest:  p.Config.SourceHash,
-	}}
+	return p.Config.fileStates()
 }
 
 // handleViews lists every saved view. It is read-only and takes no CSRF token,
@@ -273,36 +268,19 @@ func (s *Server) planViewsRequest(req viewMutationRequest) (*config.Config, *vie
 // result, so the projected list is the one the loader would accept rather than
 // the one the patcher happened to emit.
 func planViewsMutation(cfg *config.Config, configPath, root string, req viewMutationRequest) (*viewsPlan, error) {
-	_, exists := cfg.View(req.Name)
 	plan := &viewsPlan{Op: req.Op, Name: req.Name, NewName: req.NewName, Views: cfg.Views}
 
-	patch := config.ViewPatch{Name: req.Name}
-	switch req.Op {
-	case viewOpUpsert:
-		patch.Op = config.PatchUpsert
-		patch.View = req.View.savedView(req.Name)
-		plan.Created = !exists
-		if err := checkViewResolves(patch.View, cfg, root); err != nil {
-			return nil, err
-		}
-	case viewOpRename:
-		if !exists {
-			return nil, viewNotDeclaredError(req.Name)
-		}
-		patch.Op = config.PatchRename
-		patch.NewName = req.NewName
-	case viewOpDelete:
-		if !exists {
-			return nil, viewNotDeclaredError(req.Name)
-		}
-		patch.Op = config.PatchDelete
-	}
-
-	source, err := os.ReadFile(configPath)
+	patch, created, err := viewPatchForRequest(cfg, root, req)
 	if err != nil {
-		return nil, noteops.WrapError(noteops.CodeInternal, "views: read "+config.FileName, err)
+		return nil, err
 	}
-	result, err := config.PatchViews(source, []config.ViewPatch{patch})
+	plan.Created = created
+
+	sources, localPin, err := planConfigSources(root)
+	if err != nil {
+		return nil, err
+	}
+	result, err := config.PatchViews(sources.Portable, []config.ViewPatch{patch})
 	if err != nil {
 		return nil, noteops.WrapError(noteops.CodeInvalidRequest, err.Error(), err)
 	}
@@ -310,19 +288,57 @@ func planViewsMutation(cfg *config.Config, configPath, root string, req viewMuta
 		return plan, nil
 	}
 
-	loaded, err := config.Decode(cfg.Vault, cfg.VaultOrigin, result.Patched)
+	// Decoded as the layered pair: [[views]] is portable, but the projection is
+	// taken from a whole loaded configuration and the overlay is part of what
+	// the loader accepts.
+	patched := config.Sources{Portable: result.Patched, Local: sources.Local}
+	loaded, err := config.DecodeSources(cfg.Vault, cfg.VaultOrigin, patched)
 	if err != nil {
 		return nil, noteops.WrapError(noteops.CodeInvalidRequest, "views: patched "+config.FileName+" is invalid", err)
 	}
 	plan.Views = loaded.Views
 	plan.Config = &propertyConfigPlan{
 		AbsPath:    configPath,
-		SourceHash: vault.HashBytes(source),
+		SourceHash: vault.HashBytes(sources.Portable),
 		Data:       result.Patched,
 		Diff:       result.Diff,
 		Properties: loaded.Frontmatter.Properties,
+		Local:      localPin,
 	}
 	return plan, nil
+}
+
+// viewPatchForRequest turns one request into the patch it asks for, and reports
+// whether an upsert creates the view or replaces one.
+//
+// Renaming or deleting a view that was never declared is refused rather than
+// patched: the patcher would report no change for either, and "nothing
+// happened" read back as a success is the wrong answer to a request naming a
+// view that does not exist.
+func viewPatchForRequest(cfg *config.Config, root string, req viewMutationRequest) (config.ViewPatch, bool, error) {
+	_, exists := cfg.View(req.Name)
+	patch := config.ViewPatch{Name: req.Name}
+	switch req.Op {
+	case viewOpUpsert:
+		patch.Op = config.PatchUpsert
+		patch.View = req.View.savedView(req.Name)
+		if err := checkViewResolves(patch.View, cfg, root); err != nil {
+			return config.ViewPatch{}, false, err
+		}
+		return patch, !exists, nil
+	case viewOpRename:
+		if !exists {
+			return config.ViewPatch{}, false, viewNotDeclaredError(req.Name)
+		}
+		patch.Op = config.PatchRename
+		patch.NewName = req.NewName
+	case viewOpDelete:
+		if !exists {
+			return config.ViewPatch{}, false, viewNotDeclaredError(req.Name)
+		}
+		patch.Op = config.PatchDelete
+	}
+	return patch, false, nil
 }
 
 // checkViewResolves refuses to save a view that would land disabled. config

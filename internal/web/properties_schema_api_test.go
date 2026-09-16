@@ -264,6 +264,30 @@ func TestPropertySchemaApply_RejectsStaleConfiguration(t *testing.T) {
 	}
 }
 
+// The receipt is a statement about the whole configuration, not about the file
+// the patch happens to land in: an overlay that appeared is a second source the
+// reviewed diff was never measured against.
+func TestPropertySchemaApply_RejectsAnOverlayThatAppeared(t *testing.T) {
+	ts, _, root := newPropertyFixtureServer(t)
+
+	preview := previewPropertySchema(t, ts.URL, propertySchemaRequest{
+		Op:         propertySchemaOpUpsert,
+		Property:   "topic",
+		Definition: &propertySchemaDefinition{Type: config.KindString},
+	})
+	writeLocalOverlay(t, root, "[open]\neditor = \"hx\"\n")
+
+	status, raw := postProperty(t, ts.URL, propertySchemaApplyAPIRoutePath, propertyTestToken,
+		propertyApplyRequest{PreviewID: preview.PreviewID})
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (body %q)", status, http.StatusConflict, raw)
+	}
+	requireErrorCode(t, raw, string(noteops.CodePreviewStale))
+	if strings.Contains(readVaultFile(t, root, config.FileName), "[frontmatter.properties.topic]") {
+		t.Fatal("a stale apply must write nothing")
+	}
+}
+
 func TestPropertySchemaApply_RefusedWhileConfigurationInvalid(t *testing.T) {
 	ts, _, root := newPropertyFixtureServer(t)
 

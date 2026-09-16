@@ -246,7 +246,7 @@ func (s *Server) buildSynthesisContext(request synthesisContextRequest) (synthes
 	if err := s.reloadConfig(); err != nil {
 		return synthesisContextRecord{}, recall.ContextBundle{}, noteops.WrapError(noteops.CodeInternal, "synthesis: reload configuration", err)
 	}
-	configDigest, err := s.synthesisConfigDigest()
+	configDigest, configRequires, err := s.synthesisConfigState()
 	if err != nil {
 		return synthesisContextRecord{}, recall.ContextBundle{}, err
 	}
@@ -264,23 +264,9 @@ func (s *Server) buildSynthesisContext(request synthesisContextRequest) (synthes
 	if err != nil {
 		return synthesisContextRecord{}, recall.ContextBundle{}, err
 	}
-	supporters := make([]synthesisNoteIdentity, 0, len(request.candidateKeys))
-	selected := make(map[string]struct{}, len(request.candidateKeys))
-	for _, key := range request.candidateKeys {
-		identity, _, err := s.synthesisIdentity(snapshot, corpus, key)
-		if err != nil {
-			return synthesisContextRecord{}, recall.ContextBundle{}, err
-		}
-		if identity.RelPath == anchor.RelPath {
-			return synthesisContextRecord{}, recall.ContextBundle{}, noteops.Errorf(noteops.CodeInvalidRequest,
-				"synthesis: the anchor note cannot also be a supporting note")
-		}
-		if _, exists := selected[identity.RelPath]; exists {
-			return synthesisContextRecord{}, recall.ContextBundle{}, noteops.Errorf(noteops.CodeInvalidRequest,
-				"synthesis: %s is selected more than once", identity.RelPath)
-		}
-		selected[identity.RelPath] = struct{}{}
-		supporters = append(supporters, identity)
+	supporters, err := s.resolveSynthesisSupporters(snapshot, corpus, anchor, request.candidateKeys)
+	if err != nil {
+		return synthesisContextRecord{}, recall.ContextBundle{}, err
 	}
 
 	results, err := s.rankSynthesisSupporters(corpus, anchor, supporters)
@@ -300,16 +286,52 @@ func (s *Server) buildSynthesisContext(request synthesisContextRequest) (synthes
 	}
 
 	return synthesisContextRecord{
-		PurposeName:  request.purposeName,
-		Purpose:      options.Purpose,
-		Prompt:       request.prompt,
-		Anchor:       anchor,
-		Supporters:   supporters,
-		Packet:       packet,
-		Manifest:     bundle.Manifest,
-		ConfigDigest: configDigest,
-		Generation:   status.Generation,
+		PurposeName:    request.purposeName,
+		Purpose:        options.Purpose,
+		Prompt:         request.prompt,
+		Anchor:         anchor,
+		Supporters:     supporters,
+		Packet:         packet,
+		Manifest:       bundle.Manifest,
+		ConfigDigest:   configDigest,
+		ConfigRequires: configRequires,
+		Generation:     status.Generation,
 	}, bundle, nil
+}
+
+// resolveSynthesisSupporters turns the requested keys into identities in the
+// order they were asked for.
+//
+// The two refusals are about the selection rather than about any one note: a
+// packet whose anchor is also one of its supporters would quote the same note
+// twice in two roles, and a note named twice would weight itself. Both are
+// invalid requests and neither is recoverable by dropping the duplicate,
+// because a caller that sent one did not mean what the trimmed selection says.
+func (s *Server) resolveSynthesisSupporters(
+	snapshot vaultSnapshot,
+	corpus *relatedCorpus,
+	anchor synthesisNoteIdentity,
+	keys []string,
+) ([]synthesisNoteIdentity, error) {
+	supporters := make([]synthesisNoteIdentity, 0, len(keys))
+	selected := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		identity, _, err := s.synthesisIdentity(snapshot, corpus, key)
+		if err != nil {
+			return nil, err
+		}
+		if identity.RelPath == anchor.RelPath {
+			return nil, noteops.Errorf(noteops.CodeInvalidRequest,
+				"synthesis: the anchor note cannot also be a supporting note")
+		}
+		if _, exists := selected[identity.RelPath]; exists {
+			return nil, noteops.Errorf(noteops.CodeInvalidRequest,
+				"synthesis: %s is selected more than once", identity.RelPath)
+		}
+		selected[identity.RelPath] = struct{}{}
+		supporters = append(supporters, identity)
+	}
+	return supporters, nil
 }
 
 // rankSynthesisSupporters scores the chosen notes without letting the score
@@ -418,7 +440,7 @@ func (s *Server) verifySynthesisContext(snapshot vaultSnapshot, record synthesis
 		return err
 	}
 	if digest != record.ConfigDigest {
-		return noteops.Errorf(noteops.CodeConflict, "synthesis: %s changed since the context was built", config.FileName)
+		return noteops.Errorf(noteops.CodeConflict, "synthesis: this vault's configuration changed since the context was built")
 	}
 	for _, identity := range record.notes() {
 		note, _, ok := noteForRoute(snapshot, identity.Key)
@@ -434,25 +456,49 @@ func (s *Server) verifySynthesisContext(snapshot vaultSnapshot, record synthesis
 	return nil
 }
 
-// synthesisConfigDigest hashes brainnotes.toml as it is on disk. It reads the
-// file instead of reusing the published ConfigStatus hash because an edit that
-// fails to validate leaves the last valid configuration — and its hash —
-// published, and a packet built before that edit still has to be reported as
-// stale. A server with no configuration file on disk digests to the empty
-// string, which compares equal to itself and therefore never reports staleness.
+// synthesisConfigDigest fingerprints the whole configuration as it is on disk.
+// It reads the files instead of reusing the published ConfigStatus hashes
+// because an edit that fails to validate leaves the last valid configuration —
+// and its digests — published, and a packet built before that edit still has to
+// be reported as stale. A server with no configuration file on disk digests to
+// the empty string, which compares equal to itself and therefore never reports
+// staleness.
+//
+// It covers both layers. brainnotes.local.toml names the agent this vault runs
+// and the timeout it runs under, so a change to it changes what a generation
+// does with brainnotes.toml untouched.
 func (s *Server) synthesisConfigDigest() (string, error) {
-	path := strings.TrimSpace(s.configState.sourcePath)
-	if path == "" {
-		return "", nil
+	digest, _, err := s.synthesisConfigState()
+	return digest, err
+}
+
+// synthesisConfigState reads both layers once and reports the two forms a
+// synthesis write needs: the composite digest a freshness check compares, and
+// the per-file requirements a transaction can pin. A composite digest is not a
+// file state, so it can only ever answer the first question — pinning it as one
+// would expect a hash no file on disk holds.
+//
+// The paths are vault-relative because that is the form a SynthesisRequirement
+// carries; noteops resolves and contains them. An absent overlay is required to
+// stay absent, so one created between the preview and the commit is a conflict.
+func (s *Server) synthesisConfigState() (string, []noteops.SynthesisRequirement, error) {
+	root := strings.TrimSpace(s.configState.root)
+	if root == "" {
+		return "", nil, nil
 	}
-	data, err := os.ReadFile(path)
+	sources, err := config.ReadSources(root)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil, nil
 		}
-		return "", noteops.WrapError(noteops.CodeInternal, "synthesis: read configuration", err)
+		return "", nil, noteops.WrapError(noteops.CodeInternal, "synthesis: read configuration", err)
 	}
-	return vault.HashBytes(data), nil
+	fingerprint := sources.Fingerprint()
+	local := configLayerPin{Hash: fingerprint.Local, Present: fingerprint.LocalPresent}
+	return fingerprint.Composite, []noteops.SynthesisRequirement{
+		{Path: config.FileName, Expect: vault.ExpectHash(fingerprint.Portable)},
+		{Path: config.LocalFileName, Expect: local.expectation()},
+	}, nil
 }
 
 // synthesisBundleError maps the curated builder's sentinels onto the shared

@@ -25,6 +25,10 @@ type MigrationMove struct {
 	Key  string
 	From Layer
 	To   Layer
+	// Shadowed reports that both files assigned this key, so only one of the two
+	// assignments was ever in force. The overlay is the file that wins, and the
+	// migration keeps that value and drops the other; see resolveShadowedMove.
+	Shadowed bool
 }
 
 // MigrationPlan is a previewable, not-yet-written routing of every misplaced
@@ -151,7 +155,10 @@ func plannedMoves(root string, src Sources) ([]MigrationMove, error) {
 	for _, spec := range fieldSpecs {
 		for _, held := range []Layer{LayerPortable, LayerLocal} {
 			if spec.layer != held && assigned[held][spec.key] {
-				moves = append(moves, MigrationMove{Key: spec.key, From: held, To: spec.layer})
+				moves = append(moves, MigrationMove{
+					Key: spec.key, From: held, To: spec.layer,
+					Shadowed: assigned[LayerPortable][spec.key] && assigned[LayerLocal][spec.key],
+				})
 			}
 		}
 	}
@@ -171,39 +178,81 @@ func plannedMoves(root string, src Sources) ([]MigrationMove, error) {
 func relocate(src Sources, moves []MigrationMove) (PatchResult, PatchResult, error) {
 	portableBefore, portableNewline := splitConfigLines(src.Portable)
 	localBefore, localNewline := splitConfigLines(src.Local)
-	if !src.LocalPresent() || len(localBefore) == 0 {
-		// A file being created here ends the way every other config file ends.
+	files := map[Layer][]string{LayerPortable: portableBefore, LayerLocal: localBefore}
+	if len(localBefore) == 0 {
+		// The overlay is absent or empty and is about to receive a key, so this
+		// call is creating it: it ends the way every other configuration file
+		// ends, and it says why it exists. Only a portable-to-local move can
+		// reach here, because a move *out* of the overlay needs the overlay to
+		// have assigned something.
 		localNewline = true
+		files[LayerLocal] = append([]string(nil), localFileHeader...)
 	}
-	lines := map[Layer][]string{LayerPortable: portableBefore, LayerLocal: localBefore}
-	created := !src.LocalPresent() || len(localBefore) == 0
 
 	for _, move := range moves {
-		table, leaf, ok := strings.Cut(move.Key, ".")
-		if !ok {
-			return PatchResult{}, PatchResult{}, fmt.Errorf(
-				"config: %s is not a table key, so it cannot be relocated automatically; move it by hand", move.Key)
+		if err := applyMove(files, move); err != nil {
+			return PatchResult{}, PatchResult{}, err
 		}
-		site := findKeySite(lines[move.From], table, leaf)
-		if !site.found() {
-			return PatchResult{}, PatchResult{}, fmt.Errorf(
-				"config: %s: %s is assigned in a form this migration cannot move; move it into %s by hand",
-				move.From.FileName(), move.Key, move.To.FileName())
-		}
-		assignment := append([]string(nil), lines[move.From][site.assign:site.assignEnd+1]...)
-		if site.dotted {
-			assignment[0] = rekeyAssignment(assignment[0], leaf)
-		}
-		lines[move.From] = cutKeySite(lines[move.From], site)
-		if created && len(lines[move.To]) == 0 && move.To == LayerLocal {
-			lines[move.To] = append([]string(nil), localFileHeader...)
-		}
-		lines[move.To] = insertKeyAssignment(lines[move.To], table, assignment)
 	}
 
-	return patchResultFor(src.Portable, portableBefore, lines[LayerPortable], portableNewline),
-		patchResultFor(src.Local, localBefore, lines[LayerLocal], localNewline),
+	return patchResultFor(src.Portable, portableBefore, files[LayerPortable], portableNewline),
+		patchResultFor(src.Local, localBefore, files[LayerLocal], localNewline),
 		nil
+}
+
+// applyMove relocates one assignment between the two working copies.
+func applyMove(files map[Layer][]string, move MigrationMove) error {
+	table, leaf, ok := strings.Cut(move.Key, ".")
+	if !ok {
+		return fmt.Errorf(
+			"config: %s is not a table key, so it cannot be relocated automatically; move it by hand", move.Key)
+	}
+	site := findKeySite(files[move.From], table, leaf)
+	if !site.found() {
+		return fmt.Errorf(
+			"config: %s: %s is assigned in a form this migration cannot move; move it into %s by hand",
+			move.From.FileName(), move.Key, move.To.FileName())
+	}
+	assignment := append([]string(nil), files[move.From][site.assign:site.assignEnd+1]...)
+	if site.dotted {
+		assignment[0] = rekeyAssignment(assignment[0], leaf)
+	}
+	files[move.From] = cutKeySite(files[move.From], site)
+	if move.Shadowed {
+		return resolveShadowedMove(files, move, table, leaf, assignment)
+	}
+	files[move.To] = insertKeyAssignment(files[move.To], table, assignment)
+	return nil
+}
+
+// resolveShadowedMove finishes a move of a key that *both* files assigned.
+//
+// Only one of the two assignments was ever in force: the overlay wins wherever
+// both files bind a key, so the portable file's copy is already dead text. The
+// migration therefore keeps the value the vault is actually using and drops the
+// other one — the only way to leave a single assignment behind without changing
+// what the vault does. The discarded line shows up in the dry run and is
+// recoverable through `bn undo`.
+//
+// Refusing instead is not available: `bn config set` already refuses a write the
+// overlay would shadow and sends the user here, so a migration that also refused
+// would leave that vault in a state no command can repair.
+func resolveShadowedMove(files map[Layer][]string, move MigrationMove, table, leaf string, assignment []string) error {
+	if move.To == LayerLocal {
+		// The destination is the overlay, so the line just cut out of the portable
+		// file is the dead one and the winning value is already in the file that
+		// owns it. Nothing is inserted.
+		return nil
+	}
+	dest := findKeySite(files[move.To], table, leaf)
+	if !dest.found() {
+		return fmt.Errorf(
+			"config: %s: %s is assigned in a form this migration cannot replace; "+
+				"remove one of the two assignments by hand and run this again",
+			move.To.FileName(), move.Key)
+	}
+	files[move.To] = insertKeyAssignment(cutKeySite(files[move.To], dest), table, assignment)
+	return nil
 }
 
 // patchResultFor renders one file's rewrite in the shape every other config

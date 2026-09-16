@@ -153,3 +153,13 @@ func writeSynthesisConfig(t *testing.T, root, source string) {
 		t.Fatalf("write config: %v", err)
 	}
 }
+
+// writeSynthesisOverlay creates the machine-local layer. Every synthesis fixture
+// starts without one, so calling this is the "a second source appeared" case.
+func writeSynthesisOverlay(t *testing.T, root, source string) {
+	t.Helper()
+
+	if err := os.WriteFile(filepath.Join(root, config.LocalFileName), []byte(source), 0o644); err != nil {
+		t.Fatalf("write %s: %v", config.LocalFileName, err)
+	}
+}

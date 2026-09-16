@@ -57,7 +57,7 @@ min_interval = "10m"
 // TestPlanMigration_LegacyVaultRoutesLocalKeys is the case every existing vault
 // is in: one portable file holding both kinds of key.
 func TestPlanMigration_LegacyVaultRoutesLocalKeys(t *testing.T) {
-	root, _, plan := planVault(t, legacyConfig, "")
+	_, _, plan := planVault(t, legacyConfig, "")
 
 	if !plan.Changed() {
 		t.Fatal("expected the legacy config to need migrating")
@@ -71,8 +71,15 @@ func TestPlanMigration_LegacyVaultRoutesLocalKeys(t *testing.T) {
 			t.Fatalf("%s moved %s -> %s", move.Key, move.From, move.To)
 		}
 	}
+}
 
+// TestPlanMigration_LegacyVaultRewritesBothFiles checks the bytes: every moved
+// assignment left one file and arrived in the other, and nothing else went with
+// it.
+func TestPlanMigration_LegacyVaultRewritesBothFiles(t *testing.T) {
+	_, _, plan := planVault(t, legacyConfig, "")
 	portable, local := string(plan.Portable.Patched), string(plan.Local.Patched)
+
 	for _, gone := range []string{"editor =", "addr =", "open_browser ="} {
 		if strings.Contains(portable, gone) {
 			t.Errorf("portable file still assigns %q:\n%s", gone, portable)
@@ -88,13 +95,23 @@ func TestPlanMigration_LegacyVaultRoutesLocalKeys(t *testing.T) {
 			t.Errorf("overlay is missing %q:\n%s", moved, local)
 		}
 	}
+}
 
+// TestPlanMigration_LegacyVaultKeepsEffectiveValues is the property the whole
+// operation is judged on: the vault does exactly what it did before, and only
+// the file answering for each key has changed.
+func TestPlanMigration_LegacyVaultKeepsEffectiveValues(t *testing.T) {
+	root, _, plan := planVault(t, legacyConfig, "")
 	cfg := applied(t, root, plan)
+
 	if cfg.Open.Editor != "nvim" || cfg.Serve.Addr != "127.0.0.1:8099" || !cfg.Serve.BrowserEnabled() {
 		t.Fatalf("migration changed the effective config: %+v", cfg.Serve)
 	}
 	if layer, ok := cfg.SourceOf("open.editor"); !ok || layer != LayerLocal {
 		t.Fatalf("open.editor now comes from %q (assigned=%v), want the overlay", layer, ok)
+	}
+	if layer, ok := cfg.SourceOf("autosave.min_interval"); !ok || layer != LayerPortable {
+		t.Fatalf("autosave.min_interval now comes from %q (assigned=%v), want the portable file", layer, ok)
 	}
 }
 
@@ -255,6 +272,56 @@ func TestPlanMigration_MovesPortableKeyOutOfOverlay(t *testing.T) {
 	}
 }
 
+// TestPlanMigration_ShadowedLocalKeyIsDropped covers a key both files assign
+// whose owner is the overlay. The overlay already holds the value in force, so
+// the portable copy is dead text and is removed rather than copied in beside the
+// live one — which would bind the key twice and stop the file loading.
+func TestPlanMigration_ShadowedLocalKeyIsDropped(t *testing.T) {
+	root, _, plan := planVault(t,
+		"[open]\neditor = \"nvim\"\n",
+		"[open]\neditor = \"hx\"\n")
+
+	want := MigrationMove{Key: "open.editor", From: LayerPortable, To: LayerLocal, Shadowed: true}
+	if len(plan.Moves) != 1 || plan.Moves[0] != want {
+		t.Fatalf("moves = %+v, want %+v", plan.Moves, want)
+	}
+	if got := string(plan.Portable.Patched); got != "[open]\n" {
+		t.Fatalf("portable file = %q, want the dead assignment removed and the table kept", got)
+	}
+	if got := string(plan.Local.Patched); got != "[open]\neditor = \"hx\"\n" {
+		t.Fatalf("overlay = %q, want it untouched", got)
+	}
+	if cfg := applied(t, root, plan); cfg.Open.Editor != "hx" {
+		t.Fatalf("open.editor = %q, want the value that was in force", cfg.Open.Editor)
+	}
+}
+
+// TestPlanMigration_ShadowedPortableKeyReplacesTheDeadOne is the same situation
+// with the ownership the other way round. Here the assignment that has to travel
+// is the live one, so it replaces the dead assignment already sitting in the
+// destination instead of joining it.
+func TestPlanMigration_ShadowedPortableKeyReplacesTheDeadOne(t *testing.T) {
+	root, _, plan := planVault(t,
+		"[capture]\ninbox_note = \"Inbox.md\" # the vault's own\n",
+		"[capture]\ninbox_note = \"Later.md\"\n")
+
+	want := MigrationMove{Key: "capture.inbox_note", From: LayerLocal, To: LayerPortable, Shadowed: true}
+	if len(plan.Moves) != 1 || plan.Moves[0] != want {
+		t.Fatalf("moves = %+v, want %+v", plan.Moves, want)
+	}
+	// The line that arrives is the overlay's, byte for byte; the portable file's
+	// own line — comment included — is the one that was never in force.
+	if got := string(plan.Portable.Patched); got != "[capture]\ninbox_note = \"Later.md\"\n" {
+		t.Fatalf("portable file = %q, want the live assignment to have replaced the dead one", got)
+	}
+	if got := string(plan.Local.Patched); got != "[capture]\n" {
+		t.Fatalf("overlay = %q, want the moved assignment gone", got)
+	}
+	if cfg := applied(t, root, plan); cfg.Capture.InboxNote != "Later.md" {
+		t.Fatalf("capture.inbox_note = %q, want the value that was in force", cfg.Capture.InboxNote)
+	}
+}
+
 // TestPlanMigration_RepairsEnrolledVault is the case the loader refuses: an
 // enrolled vault whose keys are misplaced does not load at all, and the command
 // that repairs it must still be able to run.
@@ -357,101 +424,65 @@ func TestPlanMigration_DiffsBothFiles(t *testing.T) {
 // so the table staying the single source of the split also keeps this honest.
 func TestSameEffectiveConfig_NoticesEveryOwnedKey(t *testing.T) {
 	for _, spec := range fieldSpecs {
-		a, b := &Config{}, &Config{}
-		mutateField(spec.key, b)
-		if sameEffectiveConfig(a, b) {
+		mutate, ok := fieldMutators[spec.key]
+		if !ok {
+			t.Errorf("%s has no mutator, so nothing here proves a change to it is noticed", spec.key)
+			continue
+		}
+		before, after := &Config{}, &Config{}
+		mutate(after)
+		if sameEffectiveConfig(before, after) {
 			t.Errorf("a change to %s was not noticed", spec.key)
 		}
 	}
 }
 
-// mutateField sets one distinguishable value for the named key. It is the
-// hand-written half of the guard above: if a new key is added to fieldSpecs
-// without a case here, the test fails rather than passing vacuously.
-func mutateField(key string, cfg *Config) {
-	switch key {
-	case "ignore":
-		cfg.Ignore = []string{"x"}
-	case "templates.dir":
-		cfg.Templates.Dir = "x"
-	case "templates.default_extension":
-		cfg.Templates.DefaultExtension = "x"
-	case "frontmatter.properties":
-		cfg.Frontmatter.Properties = map[string]PropertyDefinition{"x": {Type: "string"}}
-	case "fzf.args":
-		cfg.Fzf.Args = []string{"x"}
-	case "open.editor":
-		cfg.Open.Editor = "x"
-	case "serve.addr":
-		cfg.Serve.Addr = "x"
-	case "serve.open_browser":
-		cfg.Serve.OpenBrowser = new(bool)
-	case "new.routes":
-		cfg.New.Routes = map[string]string{"x": "y"}
-	case "related.metadata_properties":
-		cfg.Related.MetadataProperties = []string{"x"}
-	case "brief.exclude_folders":
-		cfg.Brief.ExcludeFolders = []string{"x"}
-	case "brief.exclude_types":
-		cfg.Brief.ExcludeTypes = []string{"x"}
-	case "capture.inbox_note":
-		cfg.Capture.InboxNote = "x"
-	case "capture.heading":
-		cfg.Capture.Heading = "x"
-	case "agent.command":
-		cfg.Agent.Command = []string{"x"}
-	case "agent.timeout_seconds":
-		cfg.Agent.TimeoutSeconds = 1
-	case "autosave.min_interval":
-		cfg.Autosave.MinInterval = "x"
-	case "views":
-		cfg.Views = []SavedView{{Name: "x"}}
-	default:
-		mutateCockpitField(key, cfg)
-	}
-}
+// fieldMutators sets one distinguishable value per configuration key.
+//
+// It is the hand-written half of the guard above, and a table rather than a
+// switch for the same reason fieldSpecs is: the test can then check that every
+// owned key has an entry, so a key added to the ownership table without one
+// fails loudly instead of passing vacuously.
+var fieldMutators = map[string]func(*Config){
+	"ignore":                      func(c *Config) { c.Ignore = []string{"x"} },
+	"templates.dir":               func(c *Config) { c.Templates.Dir = "x" },
+	"templates.default_extension": func(c *Config) { c.Templates.DefaultExtension = "x" },
+	"frontmatter.properties": func(c *Config) {
+		c.Frontmatter.Properties = map[string]PropertyDefinition{"x": {Type: "string"}}
+	},
+	"fzf.args":                    func(c *Config) { c.Fzf.Args = []string{"x"} },
+	"open.editor":                 func(c *Config) { c.Open.Editor = "x" },
+	"serve.addr":                  func(c *Config) { c.Serve.Addr = "x" },
+	"serve.open_browser":          func(c *Config) { c.Serve.OpenBrowser = new(bool) },
+	"new.routes":                  func(c *Config) { c.New.Routes = map[string]string{"x": "y"} },
+	"related.metadata_properties": func(c *Config) { c.Related.MetadataProperties = []string{"x"} },
+	"brief.exclude_folders":       func(c *Config) { c.Brief.ExcludeFolders = []string{"x"} },
+	"brief.exclude_types":         func(c *Config) { c.Brief.ExcludeTypes = []string{"x"} },
+	"capture.inbox_note":          func(c *Config) { c.Capture.InboxNote = "x" },
+	"capture.heading":             func(c *Config) { c.Capture.Heading = "x" },
+	"agent.command":               func(c *Config) { c.Agent.Command = []string{"x"} },
+	"agent.timeout_seconds":       func(c *Config) { c.Agent.TimeoutSeconds = 1 },
+	"autosave.min_interval":       func(c *Config) { c.Autosave.MinInterval = "x" },
+	"views":                       func(c *Config) { c.Views = []SavedView{{Name: "x"}} },
 
-func mutateCockpitField(key string, cfg *Config) {
-	switch key {
-	case "cockpit.disabled_rules":
-		cfg.Cockpit.DisabledRules = []string{"x"}
-	case "cockpit.priority":
-		cfg.Cockpit.Priority = []string{"x"}
-	case "cockpit.long_tail_limit":
-		cfg.Cockpit.LongTailLimit = 1
-	case "cockpit.long_tail_max_count":
-		cfg.Cockpit.LongTailMaxCount = 1
-	case "cockpit.long_tail_head_factor":
-		cfg.Cockpit.LongTailHeadFactor = 1
-	case "cockpit.long_tail_ignore_properties":
-		cfg.Cockpit.LongTailIgnoreProperties = []string{"x"}
-	case "cockpit.daily_limit":
-		cfg.Cockpit.DailyLimit = 1
-	case "cockpit.review_date_property":
-		cfg.Cockpit.ReviewDateProperty = "x"
-	case "cockpit.review_statuses":
-		cfg.Cockpit.ReviewStatuses = []string{"x"}
-	case "cockpit.wip_statuses":
-		cfg.Cockpit.WIPStatuses = []string{"x"}
-	case "cockpit.max_wip":
-		cfg.Cockpit.MaxWIP = 1
-	case "cockpit.stale_status_days":
-		cfg.Cockpit.StaleStatusDays = 1
-	case "cockpit.max_captures":
-		cfg.Cockpit.MaxCaptures = 1
-	case "cockpit.hub_type_values":
-		cfg.Cockpit.HubTypeValues = []string{"x"}
-	case "cockpit.hub_empty_headings":
-		cfg.Cockpit.HubEmptyHeadings = []string{"x"}
-	case "cockpit.sensitive_scan":
-		cfg.Cockpit.SensitiveScan = true
-	case "cockpit.sensitive_ignore_paths":
-		cfg.Cockpit.SensitiveIgnorePaths = []string{"x"}
-	case "cockpit.sensitive_ignore_patterns":
-		cfg.Cockpit.SensitiveIgnorePatterns = []string{"x"}
-	case "cockpit.agent_command":
-		cfg.Cockpit.AgentCommand = "x"
-	case "cockpit.agent_timeout_seconds":
-		cfg.Cockpit.AgentTimeoutSeconds = 1
-	}
+	"cockpit.disabled_rules":              func(c *Config) { c.Cockpit.DisabledRules = []string{"x"} },
+	"cockpit.priority":                    func(c *Config) { c.Cockpit.Priority = []string{"x"} },
+	"cockpit.long_tail_limit":             func(c *Config) { c.Cockpit.LongTailLimit = 1 },
+	"cockpit.long_tail_max_count":         func(c *Config) { c.Cockpit.LongTailMaxCount = 1 },
+	"cockpit.long_tail_head_factor":       func(c *Config) { c.Cockpit.LongTailHeadFactor = 1 },
+	"cockpit.long_tail_ignore_properties": func(c *Config) { c.Cockpit.LongTailIgnoreProperties = []string{"x"} },
+	"cockpit.daily_limit":                 func(c *Config) { c.Cockpit.DailyLimit = 1 },
+	"cockpit.review_date_property":        func(c *Config) { c.Cockpit.ReviewDateProperty = "x" },
+	"cockpit.review_statuses":             func(c *Config) { c.Cockpit.ReviewStatuses = []string{"x"} },
+	"cockpit.wip_statuses":                func(c *Config) { c.Cockpit.WIPStatuses = []string{"x"} },
+	"cockpit.max_wip":                     func(c *Config) { c.Cockpit.MaxWIP = 1 },
+	"cockpit.stale_status_days":           func(c *Config) { c.Cockpit.StaleStatusDays = 1 },
+	"cockpit.max_captures":                func(c *Config) { c.Cockpit.MaxCaptures = 1 },
+	"cockpit.hub_type_values":             func(c *Config) { c.Cockpit.HubTypeValues = []string{"x"} },
+	"cockpit.hub_empty_headings":          func(c *Config) { c.Cockpit.HubEmptyHeadings = []string{"x"} },
+	"cockpit.sensitive_scan":              func(c *Config) { c.Cockpit.SensitiveScan = true },
+	"cockpit.sensitive_ignore_paths":      func(c *Config) { c.Cockpit.SensitiveIgnorePaths = []string{"x"} },
+	"cockpit.sensitive_ignore_patterns":   func(c *Config) { c.Cockpit.SensitiveIgnorePatterns = []string{"x"} },
+	"cockpit.agent_command":               func(c *Config) { c.Cockpit.AgentCommand = "x" },
+	"cockpit.agent_timeout_seconds":       func(c *Config) { c.Cockpit.AgentTimeoutSeconds = 1 },
 }

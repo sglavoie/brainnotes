@@ -121,11 +121,42 @@ address, or agent command. A vault that is not enrolled synchronizes with
 nothing, so neither failure exists there and any placement loads — which is also
 what keeps every existing single-file configuration working untouched.
 
-`bn config set` writes `brainnotes.toml`. The only key it accepts
-(`autosave.min_interval`) is portable, so it cannot create a misplacement — but
-if you have put that key in the overlay anyway (legal on an unenrolled vault),
-`bn config set` patches the portable file and `bn config get` keeps reporting
-the overlay's value, because the overlay still wins. Keep it in one file.
+`bn config set` writes **the file that owns the key**, so it can never create a
+misplacement. The only key it accepts today (`autosave.min_interval`) is
+portable, so it patches `brainnotes.toml`. If you have put that key in the
+overlay anyway — legal on an unenrolled vault — the write is **refused** rather
+than applied to the portable file: the overlay still wins, so patching the file
+underneath it would report success while leaving the value you just set out of
+force. Move the key into one file (`bn config migrate` does it for you) and try
+again.
+
+### Repairing a misplaced configuration
+
+```
+bn config migrate [--dry-run]
+```
+
+Moves each assignment sitting in the wrong file into the one that owns it: the
+keys naming this machine into `brainnotes.local.toml`, everything describing the
+vault into `brainnotes.toml`. It is the repair for a legacy single-file vault
+about to be enrolled, and the repair for a vault already enrolled whose
+configuration the loader now refuses — so it is one of the few commands that
+runs **without** a successful configuration load behind it.
+
+- Assignments move as text. Values, quoting, and the comment on a moved line
+  arrive unchanged; a comment sitting *above* a key stays where it is.
+- Nothing about the vault's behaviour changes. The migration is refused rather
+  than written if any key would end up with a different effective value.
+- A key both files assign is a special case, because one of the two assignments
+  is not in force and will disappear. It is named in the summary rather than
+  reported as a plain move, so you can tell whether the value that was being
+  shadowed mattered to you.
+- Running it again does nothing, and says so rather than passing over it in
+  silence.
+- `--dry-run` prints the moves and both files' diffs and writes nothing.
+- The originals are recoverable through `bn undo`, and an interrupted run leaves
+  either both files migrated or neither: the pair is written as one transaction
+  under one journal entry.
 
 ### Schema
 
@@ -429,6 +460,16 @@ lines is rewritten whole, so what replaces it is one canonical assignment.
 applies again, which is how an explicit floor is taken back out of the file even
 when it happens to equal the default. Unsetting a key that is not assigned
 changes nothing and records nothing.
+
+Both commands write **the file that owns the key**, and both read the pair to
+decide what is in force. `autosave.min_interval` is portable, so that file is
+`brainnotes.toml`; a key the overlay assigns anyway makes the write a refusal
+rather than a silent no-change (see [the machine-local
+overlay](#the-machine-local-overlay)). The precondition covers the pair too: the
+file being patched is pinned to the exact bytes the patch was computed from, and
+the other layer is pinned to the state the decision was made against — including
+its *absence*, so an overlay created between the read and the commit is a
+conflict rather than a write made under a configuration nothing ever read.
 
 A change through either command is an ordinary BrainNotes mutation — one
 transaction pinned to the bytes the patch was computed from, one undo-journal

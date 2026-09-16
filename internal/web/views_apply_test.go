@@ -202,6 +202,67 @@ func TestViewsApply_RejectsStaleConfiguration(t *testing.T) {
 	}
 }
 
+// The overlay never assigns `views`, and it still invalidates this receipt:
+// what the apply re-checks is the configuration, and the configuration is both
+// files.
+func TestViewsApply_RejectsAnOverlayThatAppeared(t *testing.T) {
+	ts, _, root := newViewsFixtureServer(t)
+
+	preview := previewView(t, ts.URL, viewMutationRequest{
+		Op:   viewOpUpsert,
+		Name: "Fresh",
+		View: &viewDefinition{Query: "status:done"},
+	})
+	writeLocalOverlay(t, root, "[open]\neditor = \"hx\"\n")
+
+	status, raw := postProperty(t, ts.URL, viewsApplyAPIRoutePath, propertyTestToken,
+		propertyApplyRequest{PreviewID: preview.PreviewID})
+	if status != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (body %q)", status, http.StatusConflict, raw)
+	}
+	requireErrorCode(t, raw, string(noteops.CodePreviewStale))
+	if strings.Contains(readVaultFile(t, root, config.FileName), `name = "Fresh"`) {
+		t.Fatal("a stale apply must write nothing")
+	}
+}
+
+// The inverse of the two tests above, and the one an overlay-carrying vault
+// depends on every day: an overlay that is present and did not move must not
+// block anything. It is worth its own test because the two halves of that
+// comparison are computed by different packages from different reads — the pin's
+// digest comes from config's Fingerprint, the plan's from vault.HashBytes over a
+// fresh read — and the presence flag is bookkeeping neither of them can check.
+// Every other overlay test here asserts a refusal, so a drift between those two
+// derivations would leave them all green while making a configuration write
+// impossible in exactly the vaults the overlay was built for.
+func TestViewsApply_SucceedsWithAnUnchangedOverlayPresent(t *testing.T) {
+	ts, _, root := newViewsFixtureServer(t)
+
+	// Written before the preview and published through the status poll, so the
+	// pin the apply carries names an overlay that really exists.
+	writeLocalOverlay(t, root, "[open]\neditor = \"hx\"\n")
+	if status, payload := getConfigStatus(t, ts.URL); status != http.StatusOK || !payload.LocalPresent {
+		t.Fatalf("config status = %d, local_present = %t, want 200 and true", status, payload.LocalPresent)
+	}
+
+	preview := previewView(t, ts.URL, viewMutationRequest{
+		Op:   viewOpUpsert,
+		Name: "Fresh",
+		View: &viewDefinition{Query: "status:done"},
+	})
+	status, raw := postProperty(t, ts.URL, viewsApplyAPIRoutePath, propertyTestToken,
+		propertyApplyRequest{PreviewID: preview.PreviewID})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body %q)", status, http.StatusOK, raw)
+	}
+	if !strings.Contains(readVaultFile(t, root, config.FileName), `name = "Fresh"`) {
+		t.Fatal("the view was not written")
+	}
+	if got := readVaultFile(t, root, config.LocalFileName); got != "[open]\neditor = \"hx\"\n" {
+		t.Fatalf("the overlay was disturbed by a portable write:\n%s", got)
+	}
+}
+
 // TestViewsApply_RejectsAConcurrentViewWrite is the same race between two view
 // writers rather than between a view and a property writer.
 func TestViewsApply_RejectsAConcurrentViewWrite(t *testing.T) {

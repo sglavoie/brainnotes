@@ -53,7 +53,18 @@ type mutation struct {
 	overHTTP bool
 }
 
+// mutations is the whole table. It is assembled from three groups rather than
+// written as one literal only because of its length: the groups are the layer a
+// writer is reached through, and the runner treats every row identically.
 func mutations() []mutation {
+	all := noteopsMutations()
+	all = append(all, cliMutations()...)
+	return append(all, surfaceMutations()...)
+}
+
+// noteopsMutations are the shared mutation layer's own entry points, called
+// directly the way both the CLI and the web APIs call them.
+func noteopsMutations() []mutation {
 	return []mutation{
 		{
 			name: "noteops/capture",
@@ -126,6 +137,12 @@ func mutations() []mutation {
 			touches:   []string{"Alpha Renamed.md", "Alpha.md"},
 			journaled: true,
 		},
+	}
+}
+
+// cliMutations are commands driven through the real Cobra tree, from argv down.
+func cliMutations() []mutation {
+	return []mutation{
 		{
 			name: "cli/set",
 			apply: func(t *testing.T, h *harness, _ any) error {
@@ -175,6 +192,41 @@ func mutations() []mutation {
 			// here, because this row's prepare is what puts the key there.
 			// TestConfigMutationsWithNothingToDoLeaveNoHistory covers it.
 		},
+		{
+			name: "cli/config-migrate",
+			prepare: func(t *testing.T, h *harness) any {
+				// A misplaced key, committed, so the row measures the migration and
+				// not the edit that made one necessary. open.editor names this
+				// machine, so the portable file is the wrong file for it — legal
+				// here only because this vault is not enrolled.
+				h.writeFile(config.FileName, fixtureConfig+"\n[open]\neditor = \"hx\"\n")
+				h.rawGit("add", "-A")
+				h.rawGit("commit", "-q", "-m", "misplace a machine-local key")
+				return nil
+			},
+			apply: func(t *testing.T, h *harness, _ any) error {
+				return runCLI(t, h, "config", "migrate")
+			},
+			// One commit, and only the portable half of the pair is in it. The
+			// migration writes both files under one transaction, but
+			// brainnotes.local.toml is out of the content history's scope by
+			// design — it names this machine, and committing it would hand one
+			// machine's settings to whatever restores from the remote. So the
+			// vault's history records the departure and not the arrival, which is
+			// the same thing it records for a key that was never misplaced.
+			touches:   []string{config.FileName},
+			journaled: true,
+			// The no-op — a second migrate, or a vault that was never misplaced —
+			// cannot live here, because this row's prepare is what creates the work.
+			// TestConfigMigrateWithNothingToDoLeavesNoHistory covers it.
+		},
+	}
+}
+
+// surfaceMutations are the remaining production writers: the HTTP boundary,
+// restore, and durable sidecar state.
+func surfaceMutations() []mutation {
+	return []mutation{
 		{
 			name: "web/capture",
 			apply: func(t *testing.T, h *harness, _ any) error {

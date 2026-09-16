@@ -26,9 +26,11 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// brainnotes.toml can itself be restored by undo, so history and undo both
-	// re-read it before answering; otherwise the UI would report a configuration
-	// generation that no longer matches disk.
+	// Either configuration file can itself be restored by undo — `bn config
+	// migrate` journals both, and undoing it can remove an overlay that did not
+	// exist before — so history and undo both re-read the pair before answering;
+	// otherwise the UI would report a configuration generation that no longer
+	// matches disk.
 	if err := s.reloadConfig(); err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "config: reload failed", err))
 		return

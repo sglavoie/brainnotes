@@ -1,7 +1,6 @@
 package web
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -89,7 +88,7 @@ func replacePropertyValue(front *frontmatter.Map, key string, match, value prope
 
 // planPropertyConfigRename retargets the property's definition block. A rename
 // onto a declared name is a collision, never a merge.
-func planPropertyConfigRename(configPath, property, newName string, fm *config.FrontmatterConfig) (*propertyConfigPlan, *propertyBlocker, error) {
+func planPropertyConfigRename(root, configPath, property, newName string, fm *config.FrontmatterConfig) (*propertyConfigPlan, *propertyBlocker, error) {
 	if _, declared := fm.Definition(property); !declared {
 		return nil, nil, nil
 	}
@@ -101,10 +100,11 @@ func planPropertyConfigRename(configPath, property, newName string, fm *config.F
 		}, nil
 	}
 
-	source, err := os.ReadFile(configPath)
+	sources, localPin, err := planConfigSources(root)
 	if err != nil {
-		return nil, nil, noteops.WrapError(noteops.CodeInternal, "properties: read "+config.FileName, err)
+		return nil, nil, err
 	}
+	source := sources.Portable
 	result, err := config.PatchProperties(source, []config.PropertyPatch{{
 		Op:     config.PatchRename,
 		Key:    property,
@@ -135,6 +135,7 @@ func planPropertyConfigRename(configPath, property, newName string, fm *config.F
 		Data:       result.Patched,
 		Diff:       result.Diff,
 		Properties: props,
+		Local:      localPin,
 	}, nil, nil
 }
 
@@ -268,26 +269,44 @@ func propertyPlanPaths(plan *propertyPlan) []string {
 	return paths
 }
 
-// pinPlanConfig ties the transaction to the brainnotes.toml the plan was
-// validated against. A plan that rewrites that file already pins it through its
-// own write precondition and only has to agree with the pin; every other plan
-// takes a read-only precondition, which is what stops a note-only write from
-// landing under declarations that were replaced after planning.
+// pinPlanConfig ties the transaction to the configuration the plan was validated
+// against — both layers, because either one decides what a declaration means.
+// The file a plan rewrites is already pinned by its own write precondition and
+// only has to agree with the pin; every other layer takes a read-only
+// precondition, which is what stops a note-only write from landing under
+// declarations that were replaced after planning.
+//
+// A plan disagreeing with the pin is a race between publication and planning
+// rather than a race at the commit boundary, so it is refused here instead of
+// being handed to the transaction, which would have nothing to compare it to.
 func pinPlanConfig(txn *vault.FileTxn, plan *propertyPlan, pin configPin) error {
 	if !pin.tracked() {
 		return nil
 	}
+	written := ""
 	if plan.Config != nil {
-		if plan.Config.SourceHash != pin.Hash {
-			return noteops.Errorf(noteops.CodeConflict,
-				"properties: %s changed while the change was being planned", config.FileName)
+		if plan.Config.SourceHash != pin.Portable.Hash {
+			return configPlanRaceError(config.FileName)
 		}
-		return nil
+		if plan.Config.Local != pin.Local {
+			return configPlanRaceError(config.LocalFileName)
+		}
+		written = plan.Config.AbsPath
 	}
-	if err := txn.Require(pin.Path, pin.expectation()); err != nil {
-		return noteops.WrapError(noteops.CodeInternal, "properties: pin "+config.FileName, err)
+	for _, layer := range pin.layers() {
+		if layer.Path == written {
+			continue
+		}
+		if err := txn.Require(layer.Path, layer.expectation()); err != nil {
+			return noteops.WrapError(noteops.CodeInternal, "properties: pin "+layer.name(), err)
+		}
 	}
 	return nil
+}
+
+func configPlanRaceError(name string) error {
+	return noteops.Errorf(noteops.CodeConflict,
+		"properties: %s changed while the change was being planned", name)
 }
 
 // classifyPropertyTxnError maps transaction failures onto the stable API codes.

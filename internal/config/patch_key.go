@@ -234,30 +234,48 @@ type valueScan struct {
 // reports the trailing comment it found and whether the value ended here.
 func (s *valueScan) scanLine(body string, from int) (comment string, done bool) {
 	for i := from; i < len(body); {
-		rest := body[i:]
-		switch {
-		case s.quote != "":
-			i = s.scanQuoted(body, i)
-		case body[i] == '#':
-			if s.depth == 0 {
-				return strings.TrimSpace(rest), true
-			}
-			// A comment inside a multi-line array runs to end of line and the
-			// value continues below it.
-			i = len(body)
-		case strings.HasPrefix(rest, `"""`), strings.HasPrefix(rest, `'''`):
-			s.quote, i = rest[:3], i+3
-		case body[i] == '"' || body[i] == '\'':
-			s.quote, i = rest[:1], i+1
-		case body[i] == '[' || body[i] == '{':
-			s.depth, i = s.depth+1, i+1
-		case body[i] == ']' || body[i] == '}':
-			s.depth, i = s.depth-1, i+1
-		default:
-			i++
+		if s.quote == "" && s.depth == 0 && body[i] == '#' {
+			// Outside a string and outside any bracket, a '#' ends the value:
+			// what follows is the assignment's trailing comment.
+			return strings.TrimSpace(body[i:]), true
 		}
+		i = s.advance(body, i)
 	}
 	return "", s.quote == "" && s.depth <= 0
+}
+
+// advance moves one step through a value and returns the next position to read.
+func (s *valueScan) advance(body string, i int) int {
+	if s.quote != "" {
+		return s.scanQuoted(body, i)
+	}
+	if open := openingQuote(body[i:]); open != "" {
+		s.quote = open
+		return i + len(open)
+	}
+	switch body[i] {
+	case '#':
+		// Only reachable inside a bracketed value, where a comment runs to end
+		// of line and the value continues below it.
+		return len(body)
+	case '[', '{':
+		s.depth++
+	case ']', '}':
+		s.depth--
+	}
+	return i + 1
+}
+
+// openingQuote reports the string delimiter rest begins with, longest first so
+// `"""` is never read as an empty `""` followed by a third quote, or "" when
+// rest begins no string at all.
+func openingQuote(rest string) string {
+	for _, delim := range []string{`"""`, `'''`, `"`, `'`} {
+		if strings.HasPrefix(rest, delim) {
+			return delim
+		}
+	}
+	return ""
 }
 
 // scanQuoted advances one step inside a string literal and returns the next

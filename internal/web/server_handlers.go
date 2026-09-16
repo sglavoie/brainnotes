@@ -313,9 +313,12 @@ func (s *Server) Handler() http.Handler {
 	return s.handler
 }
 
-// Run binds the listener and optionally opens a browser. Both settings are
-// read once here: a later reload of brainnotes.toml reports them through
-// ConfigStatus.RestartRequired rather than rebinding a live listener.
+// Run binds the listener and optionally opens a browser. Both settings are read
+// once here: a later reload reports them through ConfigStatus.RestartRequired
+// rather than rebinding a live listener. The reload that matters is usually the
+// overlay's — serve.addr and serve.open_browser are the machine-local layer's
+// keys — but RestartRequired is computed from the merged configuration, so it
+// does not care which file moved.
 func (s *Server) Run(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("web: context is required")

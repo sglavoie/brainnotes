@@ -14,9 +14,12 @@ type configStatusResponse struct {
 }
 
 // handleConfigStatus is the lightweight polling path for configuration reloads.
-// It re-reads brainnotes.toml, publishes it when it is valid and changed, and
-// always reports the resulting status so a client can surface an invalid file
-// without waiting for the next write to fail.
+// It re-reads both configuration layers, publishes them when they are valid and
+// the composite fingerprint changed, and always reports the resulting status so
+// a client can surface an invalid file without waiting for the next write to
+// fail. An edit confined to brainnotes.local.toml — including its appearance or
+// removal — moves the generation exactly as a portable edit does, which is what
+// makes an overlay change invalidate outstanding receipts.
 func (s *Server) handleConfigStatus(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != configStatusRoutePath {
 		http.NotFound(w, r)

@@ -63,12 +63,16 @@ type synthesisContextRecord struct {
 	Supporters  []synthesisNoteIdentity
 	Packet      []byte
 	Manifest    recall.ContextManifest
-	// ConfigDigest is the hex SHA-256 of brainnotes.toml as it was on disk when
-	// the packet was built, not the published configuration's hash: a file that
-	// fails to reload leaves the last valid configuration published, and the
-	// freshness check has to notice that edit too.
+	// ConfigDigest is the composite fingerprint of the configuration as it was on
+	// disk when the packet was built, not the published configuration's: a file
+	// that fails to reload leaves the last valid configuration published, and the
+	// freshness check has to notice that edit too. It covers both layers, so an
+	// overlay edit is the change it is even with brainnotes.toml untouched.
 	ConfigDigest string
-	Generation   int64
+	// ConfigRequires is the same reading expressed per file, because a composite
+	// digest is something to compare and not something a transaction can require.
+	ConfigRequires []noteops.SynthesisRequirement
+	Generation     int64
 }
 
 // notes returns the ordered identities the packet was built from: the anchor

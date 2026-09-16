@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
 func TestConfigSet_RejectsValuesTheVaultCannotHold(t *testing.T) {
@@ -85,6 +87,41 @@ func TestConfigSet_RefusesWhenTheFileChangedUnderIt(t *testing.T) {
 	}
 	// The refusal happens while staging, before anything is captured, so the
 	// conflict leaves no undo entry to explain a change that never landed.
+	if entries, err := os.ReadDir(filepath.Join(root, ".bnotes", "journal")); err == nil && len(entries) != 0 {
+		t.Fatalf("a refused config set recorded %d journal entries", len(entries))
+	}
+}
+
+// The same race on the layer the write does *not* touch. Whether this patch is
+// even worth writing was decided by reading the pair — an overlay assigning
+// autosave.min_interval makes the portable write a no-op the user would be told
+// succeeded — so an overlay that appeared under the command has to be a refusal
+// too. Only an expectation of absence can catch it.
+func TestConfigSet_RefusesWhenAnOverlayAppearedUnderIt(t *testing.T) {
+	root, cfgPath := configVault(t, commentedAutosaveConfig)
+	localPath := filepath.Join(root, config.LocalFileName)
+	const concurrent = "[autosave]\nmin_interval = \"45s\"\n"
+	stubBeforeConfigCommit(t, func() {
+		if err := os.WriteFile(localPath, []byte(concurrent), 0o644); err != nil {
+			t.Fatalf("simulate a concurrent writer: %v", err)
+		}
+	})
+
+	_, _, err := runConfig(t, "config", "set", "autosave.min_interval", "600s")
+	if err == nil {
+		t.Fatal("a patch was committed under an overlay nothing had read")
+	}
+	for _, want := range []string{"changed on disk", "nothing was written", "re-run it"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want it to contain %q", err, want)
+		}
+	}
+	if got := readConfigFile(t, cfgPath); got != commentedAutosaveConfig {
+		t.Fatalf("the portable file was written anyway:\n%s", got)
+	}
+	if got := readConfigFile(t, localPath); got != concurrent {
+		t.Fatalf("the other writer's overlay was disturbed:\n%s", got)
+	}
 	if entries, err := os.ReadDir(filepath.Join(root, ".bnotes", "journal")); err == nil && len(entries) != 0 {
 		t.Fatalf("a refused config set recorded %d journal entries", len(entries))
 	}

@@ -65,6 +65,30 @@ func TestSynthesisApplyAPI_CreatesTheReviewedNote(t *testing.T) {
 	}
 }
 
+// Every other overlay test on this route asserts a refusal, so none of them
+// would notice the overlay requirement being wrong in the direction that matters
+// most: an overlay that is present and unmoved has to let the write through. The
+// requirement's ExpectHash is built from config's own fingerprint and verified
+// by vault against the file, and the two only agree because they hash the same
+// way — which nothing here would catch if it stopped being true.
+func TestSynthesisApplyAPI_CreatesTheNoteWithAnUnchangedOverlayPresent(t *testing.T) {
+	ts, _, root := newSynthesisServer(t, Options{})
+	// Written before the context is built, so the packet's requirements name an
+	// overlay that exists rather than one that is absent.
+	writeSynthesisOverlay(t, root, "[open]\neditor = \"hx\"\n")
+
+	built := buildSynthesisContextRequest(t, ts.URL, defaultSynthesisContextForm())
+	preview := buildSynthesisPreview(t, ts.URL, defaultSynthesisPreviewForm(built.ContextID))
+
+	status, body := applySynthesisPreview(t, ts.URL, preview.PreviewID)
+	if status != http.StatusOK {
+		t.Fatalf("apply status = %d, body = %s", status, body)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(synthesisDraftRel))); err != nil {
+		t.Fatalf("stat created note: %v", err)
+	}
+}
+
 func TestSynthesisApplyAPI_RecordsAnUndoableEntry(t *testing.T) {
 	baseURL, root, _, preview := newSynthesisDraftServer(t)
 
@@ -262,6 +286,12 @@ func TestSynthesisApplyAPI_RefusesStalePreview(t *testing.T) {
 		"changed configuration": func(t *testing.T, root string) {
 			writeSynthesisConfig(t, root, synthesisTestConfigTOML+"\n[frontmatter.properties.status]\ntype = \"string\"\n")
 		},
+		// The configuration is two files, and the overlay's absence is as much a
+		// part of the reading as its contents: one that appeared is a layer
+		// nothing in the reviewed plan ever read.
+		"overlay appeared": func(t *testing.T, root string) {
+			writeSynthesisOverlay(t, root, "[open]\neditor = \"hx\"\n")
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			baseURL, root, _, preview := newSynthesisDraftServer(t)
@@ -306,6 +336,9 @@ func TestSynthesisApplyAPI_RefusesAChangeDuringCommit(t *testing.T) {
 		},
 		"changed configuration": func(t *testing.T, root string) {
 			writeSynthesisConfig(t, root, synthesisTestConfigTOML+"\n[frontmatter.properties.status]\ntype = \"string\"\n")
+		},
+		"overlay appeared": func(t *testing.T, root string) {
+			writeSynthesisOverlay(t, root, "[open]\neditor = \"hx\"\n")
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

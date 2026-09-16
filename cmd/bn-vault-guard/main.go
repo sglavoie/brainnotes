@@ -131,9 +131,9 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 // policySource is the guard's half of live reload: it owns the file format so
 // internal/vaultgit does not have to.
 //
-// It re-reads `brainnotes.toml` from the path the startup load resolved rather
-// than re-resolving the vault, because the vault a guard watches is fixed for
-// its lifetime — it holds a single-instance lock inside that vault — and a
+// It re-reads both configuration layers from the vault root the startup load
+// resolved rather than re-resolving the vault, because the vault a guard watches
+// is fixed for its lifetime — it holds a single-instance lock inside that vault — and a
 // $BNOTES_VAULT that changed under a running process must not silently move it.
 //
 // The whole file is decoded rather than just its `[autosave]` table, and that is

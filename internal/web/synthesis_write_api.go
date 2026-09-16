@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -148,21 +147,8 @@ func (s *Server) planSynthesisNote(record synthesisContextRecord, title, folder,
 		Folder:   strings.TrimSpace(folder),
 		Draft:    draft,
 		Sources:  sources,
-		Requires: s.synthesisConfigRequirement(record.ConfigDigest),
+		Requires: record.ConfigRequires,
 	})
-}
-
-// synthesisConfigRequirement pins brainnotes.toml for the commit boundary. A
-// vault with no configuration file on disk pins nothing; the apply-time digest
-// comparison is what notices a file appearing where there was none.
-func (s *Server) synthesisConfigRequirement(digest string) []noteops.SynthesisRequirement {
-	if strings.TrimSpace(s.configState.sourcePath) == "" || digest == "" {
-		return nil
-	}
-	return []noteops.SynthesisRequirement{{
-		Path:   config.FileName,
-		Expect: vault.ExpectHash(digest),
-	}}
 }
 
 // verifySynthesisPreview refuses a receipt whose world moved on, before
@@ -175,7 +161,7 @@ func (s *Server) verifySynthesisPreview(record synthesisPreviewRecord) error {
 		return err
 	}
 	if digest != record.ConfigDigest {
-		return noteops.Errorf(noteops.CodePreviewStale, "synthesis: %s changed since the preview", config.FileName)
+		return noteops.Errorf(noteops.CodePreviewStale, "synthesis: this vault's configuration changed since the preview")
 	}
 	for _, requirement := range record.Plan.Requirements {
 		if err := vault.VerifyState(requirement.Path, requirement.Expect); err != nil {

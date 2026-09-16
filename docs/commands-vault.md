@@ -24,6 +24,12 @@ bn config edit
 loaded, and which of `--vault` / `$BNOTES_VAULT` / the upward search resolved
 it. `bn config edit` opens that same file in `$EDITOR`.
 
+Both name the portable file. A `brainnotes.local.toml` sitting next to it is
+loaded on top of it, but it is neither printed here nor what `edit` opens — it
+holds the settings that describe *this machine* rather than the vault, so it is
+not the file you reach for to change how the vault behaves. Open it by path when
+you do need it.
+
 `bn serve` can edit two parts of that file from the browser: the
 `[frontmatter.properties.<key>]` blocks, through the property workbench, and
 the `[[views]]` blocks, through the saved-views control on `/library`. Every
@@ -85,9 +91,66 @@ $ bn config unset autosave.min_interval --dry-run
 - 151: min_interval = "30m"
 ```
 
+`set` and `unset` write **the file that owns the key**. `autosave.min_interval`
+is portable, so that is `brainnotes.toml`; if `brainnotes.local.toml` assigns it
+anyway, the overlay wins and the write is refused rather than applied to the
+file underneath it — a patch nothing would use, reported as a success, is the
+one outcome worth refusing over. `bn config migrate` is the way out of that.
+
 See [Configuration](configuration.md#the-autosave-floor) for the accepted
 values and [Vault Safety](operations/vault-safety.md#immediate-versus-scheduled-snapshots)
 for what the floor does.
+
+### `bn config migrate` — move every key into the file that owns it
+
+```sh
+bn config migrate [--dry-run]
+```
+
+Relocates each assignment sitting in the wrong configuration file: the keys
+naming *this machine* — `open.editor`, `serve.addr`, `serve.open_browser`,
+`fzf.args`, `agent.*`, `cockpit.agent_*` — into `brainnotes.local.toml`, and
+everything describing the vault itself into `brainnotes.toml`. Run it on a
+legacy single-file vault before enrolling it in synchronization, or on an
+enrolled vault whose configuration the loader has started refusing.
+
+It is one of the few commands that runs **without** a successful configuration
+load behind it, for that second case: once a vault is enrolled, a misplaced key
+stops it loading at all, and requiring a load first would put the only repair
+behind the fault it repairs.
+
+- Assignments move as text, so values, quoting, and the comment on a moved line
+  arrive unchanged. A comment sitting *above* a key stays where it is — nothing
+  in a TOML file says which key a free-standing comment documents.
+- The vault behaves identically afterwards. If any key would end up with a
+  different effective value the migration is refused rather than written.
+- A key **both** files assign is the one case where an assignment disappears:
+  only the overlay's copy was ever in force, so that is the one kept. It is
+  spelled out in the summary rather than reported as a plain move.
+- Running it again does nothing, and says so.
+- `--dry-run` prints the moves and both files' diffs and writes nothing.
+- Both files move under one transaction and one journal entry, so `bn undo`
+  restores the originals — including removing an overlay the migration created —
+  and an interrupted run leaves either both files migrated or neither.
+
+```text
+$ bn config migrate --dry-run
+open.editor: brainnotes.toml -> brainnotes.local.toml
+serve.addr: brainnotes.toml -> brainnotes.local.toml
+--- brainnotes.toml
+- 12: editor = "hx"
+- 18: addr = "127.0.0.1:8733"
+--- brainnotes.local.toml
++ 7: [open]
++ 8: editor = "hx"
++ 10: [serve]
++ 11: addr = "127.0.0.1:8733"
+```
+
+See [Configuration](configuration.md#the-machine-local-overlay) for which file
+owns which key and
+[Repairing a misplaced configuration](configuration.md#repairing-a-misplaced-configuration)
+for when to run this.
 
 ### `bn schema` — show the configured frontmatter property schema
 

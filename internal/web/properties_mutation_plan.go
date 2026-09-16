@@ -64,6 +64,34 @@ type propertyConfigPlan struct {
 	Data       []byte
 	Diff       []config.PatchLine
 	Properties map[string]config.PropertyDefinition
+	// Local is brainnotes.local.toml as the plan read it. Every key these plans
+	// touch is portable, so the overlay is never written — but it decides the
+	// value of whatever it assigns, so the patched bytes were re-decoded against
+	// it and it is pinned exactly as strictly as the file that is written.
+	Local configLayerPin
+}
+
+// fileStates pins both configuration layers to the bytes the plan was computed
+// from. The overlay is listed whether or not it exists: an absent file digests
+// to the empty string, so one appearing between preview and apply reads as the
+// change it is.
+func (p *propertyConfigPlan) fileStates() []propertyPreviewFileState {
+	if p == nil {
+		return nil
+	}
+	states := []propertyPreviewFileState{{
+		RelPath: config.FileName,
+		AbsPath: p.AbsPath,
+		Digest:  p.SourceHash,
+	}}
+	if p.Local.Path != "" {
+		states = append(states, propertyPreviewFileState{
+			RelPath: config.LocalFileName,
+			AbsPath: p.Local.Path,
+			Digest:  p.Local.Hash,
+		})
+	}
+	return states
 }
 
 // propertyViolationTotals counts schema violations for the properties a plan
@@ -123,14 +151,7 @@ func (p *propertyPlan) fileStates() []propertyPreviewFileState {
 			Digest:  note.SourceHash,
 		})
 	}
-	if p.Config != nil {
-		states = append(states, propertyPreviewFileState{
-			RelPath: config.FileName,
-			AbsPath: p.Config.AbsPath,
-			Digest:  p.Config.SourceHash,
-		})
-	}
-	return states
+	return append(states, p.Config.fileStates()...)
 }
 
 // planPropertyMutation resolves a note-mutation request into the exact bytes it
@@ -154,6 +175,40 @@ func planPropertyMutation(root string, snapshot vaultSnapshot, cfg *config.Confi
 		return nil, noteops.Errorf(noteops.CodeInvalidKey, "properties: invalid property name %q (allowed: letters, digits, '_', '-')", req.NewName)
 	}
 
+	overrides, err := planPropertyNotes(root, snapshot, fm, req, replacement, plan)
+	if err != nil {
+		return nil, err
+	}
+
+	afterProps, err := planPropertyRenameConfig(root, configPath, req, fm, plan)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := []string{req.Property}
+	if req.NewName != "" {
+		keys = append(keys, req.NewName)
+	}
+	plan.Projection = projectPropertyViolations(root, snapshot, fm.Properties, afterProps, keys, overrides)
+	return plan, nil
+}
+
+// planPropertyNotes plans every selected note and returns the planned
+// frontmatter of each one that changed, keyed by relative path, for the
+// projection to be computed against.
+//
+// A note that cannot be planned becomes a blocker rather than an error: the
+// request names a selection, and one unreadable or missing note in it is
+// something to report next to the notes that are fine, not a reason to refuse
+// the whole mutation.
+func planPropertyNotes(
+	root string,
+	snapshot vaultSnapshot,
+	fm *config.FrontmatterConfig,
+	req propertyMutationRequest,
+	replacement any,
+	plan *propertyPlan,
+) (map[string]*frontmatter.Map, error) {
 	byRelPath := snapshotNotesByRelPath(root, snapshot)
 	parseErrors := snapshotParseErrorsByRelPath(root, snapshot)
 	overrides := make(map[string]*frontmatter.Map, len(req.Notes))
@@ -188,28 +243,35 @@ func planPropertyMutation(root string, snapshot vaultSnapshot, cfg *config.Confi
 		plan.Notes = append(plan.Notes, *planned)
 		overrides[relPath] = planned.Front
 	}
+	return overrides, nil
+}
 
-	afterProps := fm.Properties
-	if req.Action == propertyActionRename {
-		configPlan, blocker, err := planPropertyConfigRename(configPath, req.Property, req.NewName, fm)
-		if err != nil {
-			return nil, err
-		}
-		if blocker != nil {
-			plan.Blockers = append(plan.Blockers, *blocker)
-		}
-		if configPlan != nil {
-			plan.Config = configPlan
-			afterProps = configPlan.Properties
-		}
+// planPropertyRenameConfig folds a rename's configuration half into the plan and
+// returns the property set the projection has to be computed against — the
+// renamed one when the configuration declared the property, and the unchanged
+// one otherwise, because a rename of an undeclared property changes notes only.
+func planPropertyRenameConfig(
+	root string,
+	configPath string,
+	req propertyMutationRequest,
+	fm *config.FrontmatterConfig,
+	plan *propertyPlan,
+) (map[string]config.PropertyDefinition, error) {
+	if req.Action != propertyActionRename {
+		return fm.Properties, nil
 	}
-
-	keys := []string{req.Property}
-	if req.NewName != "" {
-		keys = append(keys, req.NewName)
+	configPlan, blocker, err := planPropertyConfigRename(root, configPath, req.Property, req.NewName, fm)
+	if err != nil {
+		return nil, err
 	}
-	plan.Projection = projectPropertyViolations(root, snapshot, fm.Properties, afterProps, keys, overrides)
-	return plan, nil
+	if blocker != nil {
+		plan.Blockers = append(plan.Blockers, *blocker)
+	}
+	if configPlan == nil {
+		return fm.Properties, nil
+	}
+	plan.Config = configPlan
+	return configPlan.Properties, nil
 }
 
 // decodePropertyMutationValue validates the requested value once, before any

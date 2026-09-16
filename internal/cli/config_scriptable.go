@@ -33,7 +33,7 @@ const (
 	configUnsetOperation = "config-unset"
 )
 
-// readConfigSource reads the brainnotes.toml a patch is computed from.
+// readConfigSource reads one configuration layer a patch is computed from.
 //
 // It is a variable because two failures this command has to survive can only be
 // produced by another writer landing in the microseconds between the read and
@@ -87,14 +87,14 @@ func newConfigSetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			source, err := loadConfigSource(label, cfg)
+			target, err := resolveConfigTarget(label, cfg, args[0])
 			if err != nil {
 				return err
 			}
 			// Returned unwrapped: the patcher's message already names the key and
 			// the range it rejected the value against, and prefixing it with the
 			// command would only spell "config" twice.
-			result, err := config.PatchAutosaveMinInterval(source, args[1])
+			result, err := config.PatchAutosaveMinInterval(target.source(), args[1])
 			if err != nil {
 				return err
 			}
@@ -102,7 +102,7 @@ func newConfigSetCmd() *cobra.Command {
 				label:     label,
 				operation: configSetOperation,
 				command:   commandInvocation(cmd, args),
-				source:    source,
+				target:    target,
 				result:    result,
 				dryRun:    dryRun,
 			})
@@ -130,7 +130,7 @@ func newConfigUnsetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			source, err := loadConfigSource(label, cfg)
+			target, err := resolveConfigTarget(label, cfg, args[0])
 			if err != nil {
 				return err
 			}
@@ -138,8 +138,8 @@ func newConfigUnsetCmd() *cobra.Command {
 				label:     label,
 				operation: configUnsetOperation,
 				command:   commandInvocation(cmd, args),
-				source:    source,
-				result:    config.UnsetAutosaveMinInterval(source),
+				target:    target,
+				result:    config.UnsetAutosaveMinInterval(target.source()),
 				dryRun:    dryRun,
 			})
 		},
@@ -174,22 +174,173 @@ func configForKey(label string, cmd *cobra.Command, key string) (*config.Config,
 	return cfg, nil
 }
 
-func loadConfigSource(label string, cfg *config.Config) ([]byte, error) {
-	source, err := readConfigSource(cfg.SourcePath)
-	if err != nil {
-		return nil, fmt.Errorf("%s: read %s: %w", label, cfg.SourcePath, err)
-	}
-	return source, nil
+// configTarget is the file one scriptable write lands in, together with the
+// bytes every configuration layer held when the patch was computed.
+//
+// The destination is decided by the ownership table and not by where the value
+// currently comes from. A key no file assigns still has an owner, which is the
+// case a first write is always in; routing by provenance would make the same
+// command write a different file on a different machine.
+type configTarget struct {
+	// root is the vault both layers live at the top of, so the file this write
+	// does *not* touch can still be named as a precondition.
+	root string
+	// layer and path name the file that owns the key being written.
+	layer config.Layer
+	path  string
+	// sources holds both layers as they were read. A patch is computed from one
+	// file and validated against the pair, because what the vault loads is never
+	// one file on its own.
+	sources config.Sources
+	// exists records whether the target file was on disk. An absent overlay is a
+	// state of its own, and the transaction must expect the state it read.
+	exists bool
 }
 
-// configPatch is one planned rewrite of brainnotes.toml: the bytes it was
-// computed from, the candidate it produced, and the fixed tokens the resulting
-// snapshot and undo entry are recorded under.
+// source returns the bytes of the layer being written.
+func (t configTarget) source() []byte {
+	if t.layer == config.LayerLocal {
+		return t.sources.Local
+	}
+	return t.sources.Portable
+}
+
+// candidate returns both layers with the patched bytes substituted for the
+// target's, which is what the vault would load if this write landed.
+func (t configTarget) candidate(patched []byte) config.Sources {
+	out := t.sources
+	if t.layer == config.LayerLocal {
+		out.Local = patched
+		return out
+	}
+	out.Portable = patched
+	return out
+}
+
+// expectation is the transaction precondition this write needs: the exact bytes
+// the patch was computed from, or the file's absence when it had none. An
+// overlay that appeared between the read and the commit is another writer's,
+// and ExpectMissing is what turns that into a refusal instead of a clobber.
+func (t configTarget) expectation() vault.FileExpectation {
+	if !t.exists {
+		return vault.ExpectMissing()
+	}
+	return vault.ExpectHash(vault.HashBytes(t.source()))
+}
+
+// otherLayer names the file this write does not touch.
+func (t configTarget) otherLayer() config.Layer {
+	if t.layer == config.LayerLocal {
+		return config.LayerPortable
+	}
+	return config.LayerLocal
+}
+
+// otherPath is where that file lives.
+func (t configTarget) otherPath() string {
+	return config.LayerPath(t.root, t.otherLayer())
+}
+
+// otherExpectation pins the layer this write does not touch.
+//
+// The patch is only correct because of what the *pair* said: whether the write
+// is shadowed, whether it is a semantic no-op, and whether the result loads at
+// all are each decided by reading both files. Writing the target after the other
+// layer moved would be a write nothing validated — and in the shadowing case a
+// write with no effect, reported as a success, which is the one outcome this
+// command refuses everywhere else. An absent overlay is required to stay absent
+// for the same reason: one that appeared could assign the very key being
+// written.
+func (t configTarget) otherExpectation() vault.FileExpectation {
+	if t.otherLayer() == config.LayerLocal && !t.sources.LocalPresent() {
+		return vault.ExpectMissing()
+	}
+	if t.otherLayer() == config.LayerLocal {
+		return vault.ExpectHash(vault.HashBytes(t.sources.Local))
+	}
+	return vault.ExpectHash(vault.HashBytes(t.sources.Portable))
+}
+
+// resolveConfigTarget decides which file a write to key belongs in and reads
+// every layer it will be validated against.
+func resolveConfigTarget(label string, cfg *config.Config, key string) (configTarget, error) {
+	path, ok := cfg.OwnerPath(key)
+	if !ok {
+		return configTarget{}, fmt.Errorf("%s: %s names no configuration field", label, key)
+	}
+	layer, _ := config.KeyLayer(key)
+	if err := refuseShadowedWrite(label, cfg, key, layer); err != nil {
+		return configTarget{}, err
+	}
+	sources, err := readConfigSources(label, cfg.Vault)
+	if err != nil {
+		return configTarget{}, err
+	}
+	return configTarget{
+		root:    cfg.Vault,
+		layer:   layer,
+		path:    path,
+		sources: sources,
+		// The portable file is the vault-root marker, so it is always on disk;
+		// only the overlay can be absent.
+		exists: layer != config.LayerLocal || sources.LocalPresent(),
+	}, nil
+}
+
+// readConfigSources reads every configuration layer through the same seam, so
+// an absent overlay stays distinguishable from an unreadable one.
+func readConfigSources(label, root string) (config.Sources, error) {
+	portablePath := config.LayerPath(root, config.LayerPortable)
+	portable, err := readConfigSource(portablePath)
+	if err != nil {
+		return config.Sources{}, fmt.Errorf("%s: read %s: %w", label, portablePath, err)
+	}
+	src := config.Sources{Portable: portable}
+
+	localPath := config.LayerPath(root, config.LayerLocal)
+	switch local, err := readConfigSource(localPath); {
+	case err == nil:
+		if local == nil {
+			// Everywhere else an empty file reads as non-nil empty bytes; a nil
+			// here would read as "no overlay", which is a different vault.
+			local = []byte{}
+		}
+		src.Local = local
+	case !os.IsNotExist(err):
+		return config.Sources{}, fmt.Errorf("%s: read %s: %w", label, localPath, err)
+	}
+	return src, nil
+}
+
+// refuseShadowedWrite stops a write whose result the vault would not use.
+//
+// The overlay wins wherever both files assign a key, so writing the portable
+// file for a key the overlay assigns produces a correct file and no change in
+// behaviour — the worst shape a configuration command can have, because it
+// reports success while the value the user just set is not the one in force.
+// The other direction needs no guard: a write to the overlay is the one that
+// wins, so it takes effect immediately.
+func refuseShadowedWrite(label string, cfg *config.Config, key string, layer config.Layer) error {
+	if layer != config.LayerPortable {
+		return nil
+	}
+	if source, ok := cfg.SourceOf(key); !ok || source != config.LayerLocal {
+		return nil
+	}
+	return fmt.Errorf(
+		"%s: %s assigns %s and the overlay wins, so writing %s would not change what this vault does; "+
+			"remove it from %s or run `bn config migrate`",
+		label, config.LocalFileName, key, config.FileName, config.LocalFileName)
+}
+
+// configPatch is one planned rewrite of a configuration file: the file it lands
+// in, the candidate it produced, and the fixed tokens the resulting snapshot and
+// undo entry are recorded under.
 type configPatch struct {
 	label     string
 	operation string
 	command   string
-	source    []byte
+	target    configTarget
 	result    config.PatchResult
 	dryRun    bool
 }
@@ -213,7 +364,7 @@ func applyConfigPatch(cmd *cobra.Command, cfg *config.Config, patch configPatch)
 		return nil
 	}
 	if patch.dryRun {
-		return writeConfigPatchDiff(cmd.OutOrStdout(), patch.result.Diff)
+		return writeConfigPatchDiff(cmd.OutOrStdout(), patch.target.layer.FileName(), patch.result.Diff)
 	}
 	// The patcher validates the value it writes, so this cannot normally fire.
 	// It is here because the candidate is a whole file and the patcher only
@@ -221,12 +372,17 @@ func applyConfigPatch(cmd *cobra.Command, cfg *config.Config, patch configPatch)
 	// load at startup and the read just now is in these bytes too, and a
 	// configuration the vault could not start from is not something to leave
 	// behind.
-	if _, err := config.Decode(cfg.Vault, cfg.VaultOrigin, patch.result.Patched); err != nil {
+	//
+	// Both layers are decoded, not just the one being written. A candidate that
+	// loads on its own can still be refused by the pair — a key the other file
+	// owns, or an overlay that changed since startup — and the vault loads the
+	// pair.
+	if _, err := config.DecodeSources(cfg.Vault, cfg.VaultOrigin, patch.target.candidate(patch.result.Patched)); err != nil {
 		return fmt.Errorf("%s: the patched %s would not load, so it was not written: %w",
-			patch.label, config.FileName, err)
+			patch.label, patch.target.layer.FileName(), err)
 	}
 
-	journaler, err := noteops.BeginOperation(cfg.Vault, patch.operation, patch.command, []string{cfg.SourcePath})
+	journaler, err := noteops.BeginOperation(cfg.Vault, patch.operation, patch.command, []string{patch.target.path})
 	if err != nil {
 		return fmt.Errorf("%s: %w", patch.label, err)
 	}
@@ -234,20 +390,41 @@ func applyConfigPatch(cmd *cobra.Command, cfg *config.Config, patch configPatch)
 	if err != nil {
 		return fmt.Errorf("%s: open transaction: %w", patch.label, err)
 	}
-	// The expectation is the whole point of reading the source rather than
-	// re-rendering the loaded Config: a patch is only valid against the bytes it
-	// was computed from, and anything else on that path is another writer's.
-	if err := txn.Write(cfg.SourcePath, patch.result.Patched, 0, vault.ExpectHash(vault.HashBytes(patch.source))); err != nil {
-		return configTxnError(patch.label, err)
+	if err := stageConfigPatch(txn, patch); err != nil {
+		return err
 	}
 	if beforeConfigCommit != nil {
 		beforeConfigCommit()
 	}
 	if err := txn.Commit(journaler); err != nil {
-		return configTxnError(patch.label, err)
+		// Either file can lose the race here — one was written, the other was
+		// required — and the transaction names the one that did, so guessing a
+		// file name in the prefix would only contradict it.
+		return configTxnError(patch.label, "the configuration", err)
 	}
 	if _, err := journaler.Finalize(); err != nil {
 		return fmt.Errorf("%s: %w", patch.label, err)
+	}
+	return nil
+}
+
+// stageConfigPatch stages the file the patch lands in and pins the one it does
+// not touch.
+//
+// The other layer is required rather than written: the decision to write these
+// bytes was made by reading the pair — which file owns the key, and whether the
+// overlay shadows it — so the pair is what the commit has to still agree with.
+// An overlay appearing under a portable write is the case this catches, and it
+// is the one that would otherwise report a success nothing acts on.
+func stageConfigPatch(txn *vault.FileTxn, patch configPatch) error {
+	// The expectation is the whole point of reading the source rather than
+	// re-rendering the loaded Config: a patch is only valid against the bytes it
+	// was computed from, and anything else on that path is another writer's.
+	if err := txn.Write(patch.target.path, patch.result.Patched, 0, patch.target.expectation()); err != nil {
+		return configTxnError(patch.label, patch.target.layer.FileName(), err)
+	}
+	if err := txn.Require(patch.target.otherPath(), patch.target.otherExpectation()); err != nil {
+		return configTxnError(patch.label, patch.target.otherLayer().FileName(), err)
 	}
 	return nil
 }
@@ -261,10 +438,10 @@ var beforeConfigCommit func()
 // the generic wrapper. A stale precondition means someone else wrote the file,
 // which is fixed by running the command again; everything else is passed
 // through so the classified codes underneath it survive.
-func configTxnError(label string, err error) error {
+func configTxnError(label, file string, err error) error {
 	if vault.IsTxnConflict(err) {
 		return fmt.Errorf("%s: %s changed on disk while the command was running, so nothing was written; re-run it: %w",
-			label, config.FileName, err)
+			label, file, err)
 	}
 	return fmt.Errorf("%s: %w", label, err)
 }
@@ -273,8 +450,8 @@ func configTxnError(label string, err error) error {
 // `--- <relpath>` header every other dry run uses. The lines are the patcher's,
 // not a re-derivation: what a dry run shows and what an apply would write come
 // from one computation, so they cannot disagree.
-func writeConfigPatchDiff(out io.Writer, diff []config.PatchLine) error {
-	if _, err := fmt.Fprintf(out, "--- %s\n", config.FileName); err != nil {
+func writeConfigPatchDiff(out io.Writer, file string, diff []config.PatchLine) error {
+	if _, err := fmt.Fprintf(out, "--- %s\n", file); err != nil {
 		return err
 	}
 	for _, line := range diff {

@@ -2,7 +2,6 @@ package web
 
 import (
 	"net/http"
-	"os"
 	"reflect"
 	"time"
 
@@ -26,11 +25,7 @@ func (p *propertySchemaPlan) fileStates() []propertyPreviewFileState {
 	if p == nil || p.Config == nil {
 		return []propertyPreviewFileState{}
 	}
-	return []propertyPreviewFileState{{
-		RelPath: config.FileName,
-		AbsPath: p.Config.AbsPath,
-		Digest:  p.Config.SourceHash,
-	}}
+	return p.Config.fileStates()
 }
 
 // handlePropertySchemaPreview plans a definition change and issues the one-use
@@ -153,10 +148,11 @@ func planPropertySchema(root string, snapshot vaultSnapshot, cfg *config.Config,
 		return nil, noteops.Errorf(noteops.CodeNotFound, "properties: %s is not declared in %s", req.Property, config.FileName)
 	}
 
-	source, err := os.ReadFile(configPath)
+	sources, localPin, err := planConfigSources(root)
 	if err != nil {
-		return nil, noteops.WrapError(noteops.CodeInternal, "properties: read "+config.FileName, err)
+		return nil, err
 	}
+	source := sources.Portable
 
 	patch := config.PropertyPatch{Key: req.Property}
 	switch req.Op {
@@ -179,7 +175,12 @@ func planPropertySchema(root string, snapshot vaultSnapshot, cfg *config.Config,
 	}
 	afterProps := cfg.Frontmatter.Properties
 	if result.Changed {
-		loaded, err := config.Decode(cfg.Vault, cfg.VaultOrigin, result.Patched)
+		// Re-decoded as the layered pair rather than as the patched file alone,
+		// so the projected definitions are the ones the loader would accept in
+		// this vault — overlay included — rather than the ones brainnotes.toml
+		// would mean on its own.
+		patched := config.Sources{Portable: result.Patched, Local: sources.Local}
+		loaded, err := config.DecodeSources(cfg.Vault, cfg.VaultOrigin, patched)
 		if err != nil {
 			return nil, noteops.WrapError(noteops.CodeInvalidRequest, "properties: patched "+config.FileName+" is invalid", err)
 		}
@@ -190,6 +191,7 @@ func planPropertySchema(root string, snapshot vaultSnapshot, cfg *config.Config,
 			Data:       result.Patched,
 			Diff:       result.Diff,
 			Properties: afterProps,
+			Local:      localPin,
 		}
 	}
 
