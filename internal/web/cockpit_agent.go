@@ -12,6 +12,8 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
+const dailyReviewAgentAPIRoutePath = "/api/daily-review/agent"
+
 // dailyReviewAgentResponse is the POST /api/daily-review/agent payload. When the
 // optional agent command is not configured it reports Enabled=false and carries
 // no output; otherwise it returns the command's stdout verbatim (markdown or
@@ -32,7 +34,7 @@ type dailyReviewAgentResponse struct {
 // feature only when it is available.
 func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	if r.URL.Path != "/api/daily-review/agent" {
+	if r.URL.Path != dailyReviewAgentAPIRoutePath {
 		http.NotFound(w, r)
 		return
 	}
@@ -86,7 +88,7 @@ func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) 
 		defer cancel()
 	}
 
-	output, runErr := s.runAgent(ctx, argv, stdin)
+	output, runErr := s.launchAgent(ctx, argv, stdin)
 	if runErr != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "AI daily review command timed out"))

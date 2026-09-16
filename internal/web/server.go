@@ -24,7 +24,12 @@ const shutdownTimeout = 5 * time.Second
 var embeddedFiles embed.FS
 
 type Options struct {
+	// ReadOnly and Hosted are independent: ReadOnly publishes a replica of a
+	// vault this process does not own, Hosted publishes the vault itself over
+	// the network with document actions intact and process launches denied.
+	// Setting both is refused rather than resolved — see modeFor.
 	ReadOnly          bool
+	Hosted            bool
 	StateDir          string
 	ReplicaStatusFile string
 	OpenBrowser       func(url string) error
@@ -42,7 +47,11 @@ type Options struct {
 }
 
 type Server struct {
-	readOnly          bool
+	// caps is the resolved capability table for this server's mode. It replaces
+	// the former readOnly field outright: nothing in the package branches on the
+	// Options flags again after NewServer, so there is one source of truth for
+	// what this deployment may do.
+	caps              capabilities
 	replicaStatusFile string
 	configState       *configManager
 	vault             *vault.Vault
@@ -149,15 +158,24 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	if err := validateServerOptions(cfg, v, opts); err != nil {
 		return nil, err
 	}
+	mode, err := modeFor(opts)
+	if err != nil {
+		return nil, err
+	}
+	caps := capabilitiesFor(mode)
 
+	// The two template predicates are capabilities, not modes: a template asks
+	// what it may render, so a fourth profile never needs a template edit.
 	tpl, err := template.New("").Funcs(template.FuncMap{
-		"readOnly":      func() bool { return opts.ReadOnly },
+		"readOnly":      func() bool { return !caps.documentWrites },
+		"processLaunch": func() bool { return caps.processLaunch },
+		"serveMode":     func() string { return string(caps.mode) },
 		"replicaStatus": func() replicaStatus { return readReplicaStatus(opts.ReplicaStatusFile) },
 	}).ParseFS(embeddedFiles, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("web: parse templates: %w", err)
 	}
-	state, err := newServeVaultState(v, opts.ReadOnly)
+	state, err := newServeVaultState(v, caps)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +201,12 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	// a second reference would let one of them be wired to a different engine
 	// than the operation it calls. A vault with no content history resolves to a
 	// nil engine and is normal — the server serves it unversioned.
-	if err := initializeServeSafety(v.Root, opts.ReadOnly); err != nil {
+	if err := initializeServeSafety(v.Root, caps); err != nil {
 		return nil, fmt.Errorf("web: vault git safety: %w", err)
 	}
 
 	srv := &Server{
-		readOnly:          opts.ReadOnly,
+		caps:              caps,
 		replicaStatusFile: opts.ReplicaStatusFile,
 		configState:       configState,
 		vault:             v,
@@ -336,19 +354,19 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(queryValidateAPIRoutePath, srv.handleQueryValidate)
 	mux.HandleFunc(queryCompletionsAPIRoutePath, srv.handleQueryCompletions)
 	mux.HandleFunc(searchAPIRoutePath, srv.handleSearch)
-	mux.HandleFunc("/api/open", srv.handleOpen)
+	mux.HandleFunc(openAPIRoutePath, srv.handleOpen)
 	mux.HandleFunc(configOpenAPIRoutePath, srv.handleConfigOpen)
-	mux.HandleFunc("/api/brief/view", srv.handleBriefView)
-	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
+	mux.HandleFunc(briefViewAPIRoutePath, srv.handleBriefView)
+	mux.HandleFunc(briefItemAPIRoutePath, srv.handleBriefItem)
 	mux.HandleFunc(relatedAPIRoutePath, srv.handleRelated)
 	mux.HandleFunc(relatedItemAPIRoutePath, srv.handleRelatedItem)
-	mux.HandleFunc("/api/note/insight", srv.handleNoteInsight)
+	mux.HandleFunc(noteInsightAPIRoutePath, srv.handleNoteInsight)
 	srv.registerNoteMutationRoutes(mux)
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
 	mux.HandleFunc("/api/cockpit", srv.handleCockpitQueue)
 	mux.HandleFunc("/api/cockpit/item", srv.handleCockpitItem)
 	mux.HandleFunc("/api/daily-review/context", srv.handleDailyReviewContext)
-	mux.HandleFunc("/api/daily-review/agent", srv.handleDailyReviewAgent)
+	mux.HandleFunc(dailyReviewAgentAPIRoutePath, srv.handleDailyReviewAgent)
 	mux.HandleFunc("/api/fixes/preview", srv.handleFixesPreview)
 	mux.HandleFunc("/api/fixes/apply", srv.handleFixesApply)
 	mux.HandleFunc(propertiesAPIRoutePath, srv.handleProperties)
@@ -376,7 +394,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
 	mux.HandleFunc("/", srv.handleIndex)
 
-	return srv.readOnlyGuard(mux)
+	return srv.requestGuard(mux)
 }
 
 func (srv *Server) configureRuntime(opts Options) error {
@@ -431,19 +449,23 @@ func serveStaticRoot(staticRoot fs.FS) (fs.FS, error) {
 	return fs.Sub(embeddedFiles, "static")
 }
 
-func newServeVaultState(v *vault.Vault, readOnly bool) (*vaultState, error) {
+// newServeVaultState keeps the note index in memory for a mode that cannot write
+// the vault directory: a replica must not create <vault>/.bnotes/index/ in a
+// tree it does not own. A hosted server owns its vault and keeps the persistent
+// index, which is why this keys on documentWrites rather than on the mode.
+func newServeVaultState(v *vault.Vault, caps capabilities) (*vaultState, error) {
 	state, err := newVaultState(v, time.Second)
 	if err != nil {
 		return nil, err
 	}
-	if readOnly {
+	if !caps.documentWrites {
 		state.source, err = newIndexNoteSource(v, index.WithMemoryOnly())
 	}
 	return state, err
 }
 
 func (srv *Server) registerNoteMutationRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)
+	mux.HandleFunc(briefInsightAPIRoutePath, srv.handleBriefInsight)
 	mux.HandleFunc("/api/capture", srv.handleCapture)
 	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
 	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)

@@ -15,7 +15,10 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
-const noteInsightPurpose = "note-question"
+const (
+	noteInsightAPIRoutePath = "/api/note/insight"
+	noteInsightPurpose      = "note-question"
+)
 
 type noteInsightResponse struct {
 	OK           bool   `json:"ok"`
@@ -28,7 +31,7 @@ type noteInsightResponse struct {
 
 func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	if r.URL.Path != "/api/note/insight" {
+	if r.URL.Path != noteInsightAPIRoutePath {
 		http.NotFound(w, r)
 		return
 	}
@@ -93,7 +96,7 @@ func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	output, runErr := s.runAgent(ctx, argv, packet)
+	output, runErr := s.launchAgent(ctx, argv, packet)
 	if runErr != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "note insight command timed out"))

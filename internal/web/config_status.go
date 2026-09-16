@@ -35,7 +35,9 @@ func (s *Server) handleConfigStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := s.configState.Status()
-	status.Writable = status.Writable && !s.readOnly
+	status.Writable = status.Writable && s.caps.documentWrites
+	status.Mode = string(s.caps.mode)
+	status.ProcessLaunch = s.caps.processLaunch
 	writeManagementJSON(w, http.StatusOK, configStatusResponse{
 		OK:           true,
 		ConfigStatus: status,

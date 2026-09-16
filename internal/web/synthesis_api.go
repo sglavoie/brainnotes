@@ -155,7 +155,7 @@ func (s *Server) handleSynthesisGenerate(w http.ResponseWriter, r *http.Request)
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	output, runErr := s.runAgent(ctx, argv, record.Packet)
+	output, runErr := s.launchAgent(ctx, argv, record.Packet)
 	if runErr != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "synthesis: generation command timed out"))

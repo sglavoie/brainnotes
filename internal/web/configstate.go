@@ -60,6 +60,15 @@ type ConfigStatus struct {
 	RestartRequired []string `json:"restart_required,omitempty"`
 	// Writable reports whether property mutations are currently allowed.
 	Writable bool `json:"writable"`
+	// Mode names the serving profile: local, read-only, or hosted. It is filled
+	// by the handler rather than by the configuration manager, because it is a
+	// property of the deployment and not of any file on disk.
+	Mode string `json:"mode,omitempty"`
+	// ProcessLaunch reports whether this deployment may start the configured
+	// editor or agent command. It is the capability behind every Open-in-editor
+	// and Ask-AI control, published so a client can tell "not configured" from
+	// "not available here".
+	ProcessLaunch bool `json:"process_launch"`
 }
 
 // configLayerPin is one configuration file as a mutation found it.

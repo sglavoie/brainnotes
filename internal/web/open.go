@@ -20,17 +20,36 @@ const csrfHeaderName = "X-BN-CSRF"
 
 var errOpenPathOutsideVault = errors.New("web: open path resolves outside vault")
 
-const configOpenAPIRoutePath = "/api/config/open"
+const (
+	openAPIRoutePath       = "/api/open"
+	configOpenAPIRoutePath = "/api/config/open"
+)
+
+// openNavigationResponse is what POST /api/open answers with when the mode has
+// no process-launch capability: the browser route that displays the note, which
+// the client navigates to. A 204 would leave the caller believing an editor
+// opened somewhere it cannot see.
+type openNavigationResponse struct {
+	OK          bool   `json:"ok"`
+	Destination string `json:"destination"`
+}
 
 type openFailureStage string
 
 const (
+	openFailureCapability   openFailureStage = "capability"
 	openFailureStat         openFailureStage = "stat"
 	openFailureResolvePath  openFailureStage = "resolve-path"
 	openFailureEditorSpec   openFailureStage = "editor-spec"
 	openFailureEditorTarget openFailureStage = "editor-target"
 	openFailureEditorStart  openFailureStage = "editor-start"
 )
+
+// errProcessLaunchDisabled is the refusal openPath raises for a mode with no
+// process-launch capability. It exists so the guarantee is stated at the single
+// place an editor is started rather than only at the routing boundary: a future
+// caller that forgets the guard still cannot spawn a process.
+var errProcessLaunchDisabled = errors.New("web: process launch is unavailable in this serving mode")
 
 type openFailure struct {
 	stage openFailureStage
@@ -52,7 +71,7 @@ func (f *openFailure) Unwrap() error {
 }
 
 func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/open" {
+	if r.URL.Path != openAPIRoutePath {
 		http.NotFound(w, r)
 		return
 	}
@@ -113,8 +132,23 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// A mode that cannot start a process answers with the route that displays
+	// the note instead. This branch returns before openPath is reachable, so the
+	// only exec in this handler is the one the local profile asked for.
+	if s.caps.browserOpen {
+		destination, err := s.noteNavigationTarget(notePath)
+		if err != nil {
+			http.Error(w, "note path error", http.StatusInternalServerError)
+			return
+		}
+		writeManagementJSON(w, http.StatusOK, openNavigationResponse{OK: true, Destination: destination})
+		return
+	}
 	if err := s.openPath(notePath); err != nil {
 		switch failureStage(err) {
+		case openFailureCapability:
+			http.Error(w, errProcessLaunchDisabled.Error(), http.StatusForbidden)
+			return
 		case openFailureStat:
 			if errors.Is(err, os.ErrNotExist) {
 				http.NotFound(w, r)
@@ -189,6 +223,8 @@ func (s *Server) handleConfigOpen(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.openPath(configPath); err != nil {
 		switch failureStage(err) {
+		case openFailureCapability:
+			http.Error(w, errProcessLaunchDisabled.Error(), http.StatusForbidden)
 		case openFailureStat:
 			if errors.Is(err, os.ErrNotExist) {
 				http.NotFound(w, r)
@@ -253,8 +289,30 @@ func (s *Server) notePathForOpenRouteFallback(key string) (string, error) {
 	return resolvedPath, nil
 }
 
+// noteNavigationTarget turns a resolved absolute note path into the /n/ route
+// that displays it. The path has already been through resolveOpenPath, so the
+// containment check here is a second statement of an invariant rather than the
+// only one: a path that escapes the vault must never become a route.
+func (s *Server) noteNavigationTarget(notePath string) (string, error) {
+	realRoot, err := filepath.EvalSymlinks(s.vault.Root)
+	if err != nil {
+		return "", fmt.Errorf("web: resolve root %q: %w", s.vault.Root, err)
+	}
+	rel, err := filepath.Rel(realRoot, notePath)
+	if err != nil {
+		return "", fmt.Errorf("web: rel %q: %w", notePath, err)
+	}
+	if relEscapesRoot(rel) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("%w: %q", errOpenPathOutsideVault, notePath)
+	}
+	return notePathForKey(managementRouteKeyForRelPath(filepath.ToSlash(rel)))
+}
+
 func (s *Server) openPath(path string) error {
 	cfg := s.config()
+	if !s.caps.processLaunch {
+		return &openFailure{stage: openFailureCapability, err: errProcessLaunchDisabled}
+	}
 	if _, err := os.Stat(path); err != nil {
 		return &openFailure{stage: openFailureStat, err: err}
 	}

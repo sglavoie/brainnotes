@@ -12,8 +12,12 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
-func initializeServeSafety(root string, readOnly bool) error {
-	if readOnly {
+// initializeServeSafety resolves the Git safety engine for a mode that can
+// write. A mode with no document writes never reaches a mutation, so requiring
+// the engine there would refuse to serve a replica of a vault whose history
+// lives on another machine.
+func initializeServeSafety(root string, caps capabilities) error {
+	if !caps.documentWrites {
 		return nil
 	}
 	_, err := noteops.SafetyFor(root)
@@ -77,28 +81,17 @@ func replicaReadPath(path string) bool {
 
 func replicaRequestAllowed(r *http.Request) bool {
 	if r.Method == http.MethodPost {
-		return r.URL.Path == "/api/brief/view" || r.URL.Path == "/api/brief/item"
+		return r.URL.Path == briefViewAPIRoutePath || r.URL.Path == briefItemAPIRoutePath
 	}
 	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && replicaReadPath(r.URL.Path)
 }
 
-func (s *Server) readOnlyGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.readOnly {
-			w.Header().Set("Cache-Control", "private, no-store")
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			if !replicaRequestAllowed(r) {
-				writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "read-only replica"))
-				return
-			}
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
+// openBriefTarget is the Brief's Open action. It keys on the browserOpen
+// capability rather than on read-only, because hosted mode is equally unable to
+// start an editor: the navigating branch resolves a route and provably never
+// reaches openPath.
 func (s *Server) openBriefTarget(notePath, rel string) (string, error) {
-	if !s.readOnly {
+	if !s.caps.browserOpen {
 		return "", s.openPath(notePath)
 	}
 	if _, ok, err := resolveContainedRegularFile(s.vault.Root, rel); err != nil || !ok {

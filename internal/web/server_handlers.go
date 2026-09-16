@@ -81,12 +81,12 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Backlinks:          backlinksForNote(snapshot, note),
 		Outgoing:           outgoingLinksForNote(snapshot.graph, note),
 		Broken:             brokenAffordancesForNote(note, snapshot.graph),
-		InsightConfigured:  len(cfg.Agent.Command) > 0,
+		InsightConfigured:  s.agentConfigured(cfg),
 		Pinned:             query.Pinned()(note),
 		SynthesizePath:     synthesizeRoutePath + "?source=" + url.QueryEscape(normalizedKey),
 	}
 	if !data.InsightConfigured {
-		data.InsightStatusMsg = "Ask AI is unavailable until [agent].command is configured."
+		data.InsightStatusMsg = s.agentUnavailableMessage("Ask AI is unavailable until [agent].command is configured.")
 	}
 	if err := s.templates.ExecuteTemplate(w, "note", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
@@ -293,7 +293,8 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(mediaPath)))
-	if contentType == "" {
+	declared := contentType != ""
+	if !declared {
 		sniff := make([]byte, 512)
 		n, _ := io.ReadFull(file, sniff)
 		contentType = http.DetectContentType(sniff[:n])
@@ -302,9 +303,7 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if contentType != "" {
-		w.Header().Set("Content-Type", contentType)
-	}
+	applyMediaSafetyHeaders(w.Header(), filepath.Base(mediaPath), contentType, declared)
 
 	http.ServeContent(w, r, filepath.Base(mediaPath), info.ModTime(), file)
 }

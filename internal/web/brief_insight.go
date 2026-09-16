@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	briefInsightAPIRoutePath      = "/api/brief/insight"
 	briefInsightPurposeContinue   = "brief-continue"
 	briefInsightPurposeRediscover = "brief-rediscover"
 	briefInsightPurposeConnect    = "brief-connect"
@@ -36,7 +37,7 @@ type briefInsightResponse struct {
 
 func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	if r.URL.Path != "/api/brief/insight" {
+	if r.URL.Path != briefInsightAPIRoutePath {
 		http.NotFound(w, r)
 		return
 	}
@@ -115,7 +116,7 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	output, runErr := s.runAgent(ctx, argv, packet)
+	output, runErr := s.launchAgent(ctx, argv, packet)
 	if runErr != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "brief insight command timed out"))

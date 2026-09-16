@@ -240,9 +240,9 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 		Heading:              "Daily Brief",
 		DateISO:              dateISO,
 		DateLabel:            dateLabel,
-		BriefViewEndpoint:    "/api/brief/view",
-		BriefItemEndpoint:    "/api/brief/item",
-		BriefInsightEndpoint: "/api/brief/insight",
+		BriefViewEndpoint:    briefViewAPIRoutePath,
+		BriefItemEndpoint:    briefItemAPIRoutePath,
+		BriefInsightEndpoint: briefInsightAPIRoutePath,
 		LibraryPath:          libraryRoutePath,
 		HealthPath:           healthRoutePath,
 		GraphPath:            graphRoutePath,
@@ -272,13 +272,15 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 
 func (s *Server) briefAvailability(cfg *config.Config) (bool, string, bool, string) {
 	editorConfigured, editorStatusMsg := editorAvailability(cfg.Open.Editor, os.Getenv("EDITOR"))
-	if s.readOnly {
+	if s.caps.browserOpen {
+		// The Open action navigates instead of starting an editor, so the local
+		// editor configuration is not a precondition for it.
 		editorConfigured, editorStatusMsg = true, ""
 	}
-	insightConfigured := !s.readOnly && len(cfg.Agent.Command) > 0
+	insightConfigured := s.agentConfigured(cfg)
 	insightStatusMsg := ""
 	if !insightConfigured {
-		insightStatusMsg = "AI insight is not configured. Set [agent].command to enable Ask AI."
+		insightStatusMsg = s.agentUnavailableMessage("AI insight is not configured. Set [agent].command to enable Ask AI.")
 	}
 
 	return editorConfigured, editorStatusMsg, insightConfigured, insightStatusMsg

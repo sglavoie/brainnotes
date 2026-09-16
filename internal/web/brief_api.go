@@ -13,6 +13,11 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
+const (
+	briefViewAPIRoutePath = "/api/brief/view"
+	briefItemAPIRoutePath = "/api/brief/item"
+)
+
 type briefViewResponse struct {
 	OK       bool                  `json:"ok"`
 	Activity brief.RollingActivity `json:"activity"`
@@ -40,7 +45,7 @@ type resolvedBriefCard struct {
 }
 
 func (s *Server) handleBriefView(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/brief/view" {
+	if r.URL.Path != briefViewAPIRoutePath {
 		http.NotFound(w, r)
 		return
 	}
@@ -263,7 +268,7 @@ func writeBriefOpenError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) parseBriefItemRequest(w http.ResponseWriter, r *http.Request) (brief.CardID, string, bool) {
-	if r.URL.Path != "/api/brief/item" {
+	if r.URL.Path != briefItemAPIRoutePath {
 		http.NotFound(w, r)
 		return "", "", false
 	}
