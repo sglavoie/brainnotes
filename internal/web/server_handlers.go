@@ -347,7 +347,20 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 		return errors.New("web: listener is required")
 	}
 
-	httpServer := &http.Server{Handler: s.handler}
+	httpServer := &http.Server{
+		Handler: s.handler,
+		// A connection that opens and then dribbles its headers costs a
+		// goroutine until it is closed, which matters the moment the listener is
+		// reachable from anything but loopback.
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+		// ReadTimeout and WriteTimeout are deliberately unset. They bound the
+		// whole request and the whole response, and the agent routes legitimately
+		// take minutes: a bound loose enough for those is too loose to be a
+		// defence, so the slow-client risk is answered by the header and idle
+		// timeouts above and the per-profile body bound in requestGuard.
+	}
 	errCh := make(chan error, 1)
 	go func() {
 		err := httpServer.Serve(listener)

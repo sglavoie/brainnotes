@@ -6,6 +6,7 @@ import {
   normalizeBriefItemResponse,
   normalizeBriefViewResponse,
   normalizeManagementErrorMessage,
+  noteNavigationDestination,
   type BriefItemResult,
   type BriefInsightResult,
   type BriefRollingActivity,
@@ -78,8 +79,9 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
     ctx.updateActivity(result.activity);
     ctx.openedCards.add(cardID);
     ctx.markCardOpened(slot, cardID);
-    if (result.destination?.startsWith("/n/")) {
-      window.location.assign(result.destination);
+    const destination = noteNavigationDestination(payload);
+    if (destination) {
+      window.location.assign(destination);
       return;
     }
     ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");

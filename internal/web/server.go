@@ -20,6 +20,16 @@ import (
 
 const shutdownTimeout = 5 * time.Second
 
+// Connection bounds that hold in every serving mode. Unlike the body bound they
+// are not per profile: a request line and a header block are the same size
+// whoever sent them, and a local server has nothing to gain from accepting a
+// connection that never finishes its headers.
+const (
+	readHeaderTimeout = 20 * time.Second
+	idleTimeout       = 2 * time.Minute
+	maxHeaderBytes    = 1 << 20
+)
+
 //go:embed templates/*.html static/*
 var embeddedFiles embed.FS
 
@@ -242,9 +252,15 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 // the running binary or source checkout. The browser otherwise reuses an older
 // app.css URL across rebuilds, which can leave newly rendered markup completely
 // unstyled even though the server is serving the current stylesheet.
+//
+// It relaxes the guard's blanket no-store for this one prefix: the bundle holds
+// no vault content, so it may be stored and revalidated. `private` is repeated
+// here rather than inherited, because Set replaces the guard's header outright
+// and a shared cache upstream of a hosted deployment must not treat these as
+// public even though they are the same bytes for everyone.
 func noCacheStatic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Cache-Control", "private, no-cache")
 		next.ServeHTTP(w, r)
 	})
 }

@@ -113,6 +113,25 @@ export const normalizeManagementErrorMessage = (status: number, detail: unknown)
   return message || `Request failed (${status}).`;
 };
 
+// noteNavigationDestination reads the route a server that cannot start an
+// editor answers an Open action with. A server that launched a process answers
+// without one, so an empty string means "the editor opened it" rather than an
+// error.
+//
+// The `/n/` prefix is a requirement, not a sanity check: this value is handed
+// to window.location.assign, and a payload naming any other destination — an
+// absolute URL to another host most of all — would turn an Open button into an
+// open redirect. It is the one definition of a navigable Open destination;
+// both the Brief's Open and the note/fix-queue Open route through it.
+export const noteNavigationDestination = (payload: unknown): string => {
+  const record = asRecord(payload);
+  if (!record) {
+    return "";
+  }
+  const destination = normalizeParamValue(readRecordValue(record, ["destination", "Destination"]));
+  return destination.startsWith("/n/") ? destination : "";
+};
+
 export const normalizeOpenErrorMessage = (status: number, detail: unknown): string => {
   const message = normalizeParamValue(detail);
   return message || `Open failed (${status}).`;

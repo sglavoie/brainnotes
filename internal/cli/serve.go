@@ -79,6 +79,7 @@ func NewServeCmd() *cobra.Command {
 		port              int
 		noOpen            bool
 		readOnly          bool
+		hosted            bool
 		stateDir          string
 		replicaStatusFile string
 	)
@@ -99,7 +100,9 @@ func NewServeCmd() *cobra.Command {
 				cmd.Flags().Changed("addr"),
 				port,
 				cmd.Flags().Changed("port"),
-				noOpen || readOnly,
+				// Neither published profile opens a browser: the machine running
+				// the process is not the machine the person is reading from.
+				noOpen || readOnly || hosted,
 			)
 			if err != nil {
 				return err
@@ -127,6 +130,7 @@ func NewServeCmd() *cobra.Command {
 
 			opts := web.Options{
 				ReadOnly:          readOnly,
+				Hosted:            hosted,
 				StateDir:          stateDir,
 				ReplicaStatusFile: replicaStatusFile,
 				NotifyListening: func(url string) {
@@ -140,6 +144,12 @@ func NewServeCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&readOnly, "read-only", false, "serve a read-only replica with external activity state")
+	cmd.Flags().BoolVar(&hosted, "hosted", false, "serve this vault over the network: document actions stay available, process launches are denied")
+	// The two published profiles are different deployments of different vaults,
+	// so asking for both is a question rather than something to resolve. The
+	// library boundary refuses the same pair in web.modeFor; this is only the
+	// clearer message for a person at a shell.
+	cmd.MarkFlagsMutuallyExclusive("read-only", "hosted")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "external directory for Daily Brief activity (required with --read-only)")
 	cmd.Flags().StringVar(&replicaStatusFile, "replica-status-file", "", "replica synchronization status JSON")
 	cmd.Flags().StringVar(&addr, "addr", "", "listen address host:port (overrides [serve].addr)")
