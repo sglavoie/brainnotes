@@ -84,12 +84,46 @@ test:
 # So a mutating `bn` command must never be verified by hand against an ambient
 # vault. This recipe is the sanctioned way: it scrubs `$BNOTES_VAULT`, creates a
 # throwaway vault under the system temp directory, asks `bn config` which root it
-# actually resolved, and refuses (exit 2) unless that root is the sandbox. The
-# test half of the same rule is `internal/cli/vault_isolation_test.go`.
+# actually resolved, and refuses (exit 2) unless that root is the sandbox.
+#
+# The test half of the same rule is `internal/vaultfixture`, which states the
+# three refusals once as `IsolationError` and hands out the disposable Git-backed
+# vaults, pinned clock, and loopback ports that Go fixtures build on;
+# `internal/cli/vault_isolation_test.go` delegates to it. `just test-e2e` is the
+# third caller and invokes `scripts/vault_sandbox.py` directly, so the browser
+# suite's server goes through the same guard rather than through a JavaScript
+# re-implementation of it.
 
 # Run one `bn` command against a throwaway sandbox vault
 vault-sandbox *ARGS:
     python3 scripts/vault_sandbox.py {{ ARGS }}
+
+# The real-browser gate. It builds a throwaway `bn` and a disposable vault pair
+# under the system temp directory, launches `bn serve` through
+# `scripts/vault_sandbox.py` on a reserved loopback port, and drives Chromium
+# against it. What it proves is what Vitest/jsdom structurally cannot: that the
+# committed `internal/web/static/app.js` the binary embeds actually executes,
+# that server-rendered HTML parses and its wikilinks navigate, that a quick
+# capture typed into the browser lands in the fixture vault and nowhere else, and
+# that nothing the page loads leaves the fixture origin.
+#
+# Deliberately **not** in `just ci`, unlike every other frontend gate. It needs a
+# browser binary that `npm ci` does not install (`npm run test:e2e:install`), and
+# a CI recipe that silently skips when a dependency is missing is a gate that
+# stops gating. Keeping it a named recipe means its absence is visible.
+#
+# Serving the *embedded* bundle rather than a freshly rebuilt one takes two
+# separate measures, and neither is sufficient alone. The suite's `go build` is
+# unstamped, which removes the checkout path a `just build` binary bakes in — but
+# an unstamped binary then falls back to searching every ancestor of its working
+# directory, so `playwright.config.js` also sets that directory to the fixture
+# and `prepare.mjs` refuses a fixture root that lies under this checkout. Drop
+# either one and `bn serve` regenerates `internal/web/static/app.js` into the
+# working tree and serves that, with every spec still green.
+
+# Run the real-browser end-to-end suite (needs `npm run test:e2e:install` once)
+test-e2e:
+    npm run test:e2e
 
 # Build the browser JavaScript bundle and the stylesheet
 web-build:

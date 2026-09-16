@@ -51,4 +51,40 @@ export default [
       "@typescript-eslint/no-unused-vars": "error",
     },
   },
+  {
+    // The browser harness, which is plain ESM JavaScript rather than TypeScript
+    // and so falls outside every pattern above.
+    //
+    // It is a separate block rather than an extra glob on the one above, and
+    // `npm run lint:e2e` rather than part of `npm run lint:web`, because
+    // scripts/lint_web.mjs is a *ratchet*: it counts violations under
+    // internal/web/static_src and docs/internals/refactor-baseline.md records
+    // that number. Folding these files into it would move a recorded baseline
+    // to lint files the baseline was never about. The rules are the same; only
+    // the bookkeeping is separate. `npm run test:e2e` runs this first, so the
+    // gate that owns these files is the gate that lints them.
+    //
+    // No @typescript-eslint here: the plugin's no-unused-vars wants type-aware
+    // parsing these files have no tsconfig for, and the core rule reports the
+    // same thing for plain JavaScript.
+    files: ["internal/web/e2e/**/*.{js,mjs}", "playwright.config.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        window: "readonly",
+        document: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+      },
+    },
+    rules: {
+      complexity: ["error", 10],
+      "max-lines-per-function": ["error", 100],
+      "max-depth": ["error", 4],
+      "no-unused-vars": "error",
+    },
+  },
 ];

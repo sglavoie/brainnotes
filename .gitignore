@@ -1,6 +1,12 @@
 /bn
 node_modules/
 
+# Everything `npm run test:e2e` generates: the fixture manifest naming this
+# run's throwaway vaults, and Playwright's traces and screenshots. The fixture
+# itself lives under the system temporary directory and is never in the
+# checkout; this is only what points at it.
+/internal/web/e2e/.artifacts/
+
 # A user's global ignore file can quietly swallow a retained narrative: on a
 # case-insensitive volume a pattern like `BRAIN[A-Z]*` matches
 # `brainnotes_ci.txt`, so the evidence record ends up naming a file the

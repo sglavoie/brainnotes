@@ -1,208 +1,52 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
 )
 
-// This file is the verification-time counterpart of the production storage
-// guard in internal/vault: that one refuses a mutation to storage `bn` must not
-// write to, this one refuses a *verification* run against a vault a session must
-// not touch.
+// This file wires this package's fixtures into the shared verification-time
+// isolation guard in internal/vaultfixture, which is the counterpart of the
+// production storage guard in internal/vault: that one refuses a mutation to
+// storage `bn` must not write to, the shared one refuses a *verification* run
+// against a vault a session must not touch.
 //
-// It exists because of a real incident. A refactoring session verified `bn
-// rename-key` by running the built binary after a plain `cd` into a scratch
-// directory, and $BNOTES_VAULT was set in the ambient shell to the developer's
-// real vault. `cd` does not override the environment, so the equivalence matrix
-// renamed a frontmatter key in 214 real notes. The notes were recovered from the
-// journal, but two accidental commits and two journal entries had to be cleaned
-// up afterwards by hand.
+// The rules and their regression tests live in internal/vaultfixture because
+// two-vault synchronization work and the browser harness need the same refusals
+// from outside this package, and a safety rule with two Go implementations is a
+// safety rule with two behaviours. What stays here is the wiring that cannot
+// move: the package-wide scrub, and the checks markVaultRoot and useVaultRoot
+// call, so every CLI fixture is covered by construction rather than by
+// remembering to call them.
 //
-// The rule this file enforces is therefore the rule that incident violated: a
-// mutating verification may only ever resolve an isolated temporary vault that
-// the test itself created and named, and never the real vault. It is wired into
-// markVaultRoot and useVaultRoot, so every CLI fixture is covered by
-// construction rather than by remembering to call it, and TestMain scrubs
-// $BNOTES_VAULT so an ambient value cannot be resolved by anything in this
-// package in the first place.
-//
-// The manual half of the same rule is scripts/vault_sandbox.py, which is the
-// only sanctioned way to run a mutating `bn` command by hand during
-// verification. Both implement the same three refusals.
+// The manual half of the same rule is scripts/vault_sandbox.py, the only
+// sanctioned way to run a mutating `bn` command by hand during verification.
 
 // bnotesVaultEnv is the environment variable that overrides a working directory
-// when `bn` resolves its vault. Spelled here rather than imported because
-// internal/config keeps it unexported.
-const bnotesVaultEnv = "BNOTES_VAULT"
-
-// realVaultDirNames are directory names that identify a real vault wherever
-// they appear in a resolved path. The temp-directory rule below already refuses
-// every path outside the system temporary directory; this list is the
-// belt-and-braces half, so a real vault reached through a symlink or a bind
-// mount under the temp directory is still refused, and so the refusal message
-// names the vault that was actually damaged.
-var realVaultDirNames = []string{"BrainNotesVault"}
+// when `bn` resolves its vault.
+const bnotesVaultEnv = vaultfixture.EnvVault
 
 // TestMain removes $BNOTES_VAULT from the test process before any test runs.
 //
 // Every helper in this package that needs a vault points the variable at its own
 // fixture with t.Setenv, so nothing here has a use for the developer's ambient
 // value — but a command run from a test that forgot to set one would otherwise
-// resolve it, which is exactly the incident above. Scrubbing it once makes the
-// unsafe resolution unreachable instead of merely discouraged.
+// resolve it, which is exactly the incident internal/vaultfixture documents.
+// Scrubbing it once makes the unsafe resolution unreachable instead of merely
+// discouraged.
 func TestMain(m *testing.M) {
-	if err := os.Unsetenv(bnotesVaultEnv); err != nil {
-		fmt.Fprintf(os.Stderr, "cli: cannot scrub $%s: %v\n", bnotesVaultEnv, err)
+	if err := vaultfixture.ScrubProcessEnv(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	os.Exit(m.Run())
-}
-
-// vaultIsolationError reports why resolved is not the isolated temporary vault
-// the caller asserted, or nil when it is.
-//
-// It fails closed on every input it cannot prove safe: an unasserted sandbox and
-// an unresolvable vault are both refusals, because "no evidence of isolation" is
-// what the incident looked like from inside the process.
-func vaultIsolationError(resolved, sandbox string) error {
-	if strings.TrimSpace(sandbox) == "" {
-		return errors.New("no isolated vault was asserted; a mutating verification must name the sandbox it is allowed to write to")
-	}
-	if strings.TrimSpace(resolved) == "" {
-		return fmt.Errorf("no vault resolved, so a mutating verification cannot be proved to target the sandbox %q", sandbox)
-	}
-	resolvedPath, err := normalizeVaultPath(resolved)
-	if err != nil {
-		return fmt.Errorf("resolve %q: %w", resolved, err)
-	}
-	sandboxPath, err := normalizeVaultPath(sandbox)
-	if err != nil {
-		return fmt.Errorf("resolve sandbox %q: %w", sandbox, err)
-	}
-	if err := refuseRealVault(resolvedPath); err != nil {
-		return err
-	}
-	if err := refuseOutsideTempDir(resolvedPath, sandboxPath); err != nil {
-		return err
-	}
-	return refuseOutsideSandbox(resolvedPath, sandboxPath)
-}
-
-// refuseRealVault refuses a path that names a real vault at any depth.
-func refuseRealVault(resolved string) error {
-	for _, name := range realVaultDirNames {
-		if pathHasElement(resolved, name) {
-			return fmt.Errorf(
-				"refusing to verify against %q: it is the real vault %q, which no test or manual verification may write to",
-				resolved, name)
-		}
-	}
-	return nil
-}
-
-// refuseOutsideTempDir refuses a vault or a sandbox that is not throwaway
-// storage. An isolated vault is one the run created and will delete; anything
-// outside the system temporary directory outlives the verification and is
-// somebody's data.
-func refuseOutsideTempDir(resolved, sandbox string) error {
-	tempDir, err := normalizeVaultPath(os.TempDir())
-	if err != nil {
-		return fmt.Errorf("resolve the system temporary directory: %w", err)
-	}
-	// Ordered rather than a map, so the same input always produces the same
-	// refusal message.
-	for _, candidate := range []struct{ label, path string }{
-		{"asserted sandbox", sandbox},
-		{"resolved vault", resolved},
-	} {
-		if !pathWithin(candidate.path, tempDir) {
-			return fmt.Errorf(
-				"refusing to verify against %q: the %s is outside the system temporary directory %q, so it is not an isolated vault",
-				candidate.path, candidate.label, tempDir)
-		}
-	}
-	return nil
-}
-
-// refuseOutsideSandbox refuses a vault that is isolated but is not the one the
-// caller asserted. A verification that writes to a temporary vault it did not
-// build proves nothing about the command under test.
-func refuseOutsideSandbox(resolved, sandbox string) error {
-	if !pathWithin(resolved, sandbox) {
-		return fmt.Errorf(
-			"refusing to verify against %q: it is outside the asserted isolated vault %q", resolved, sandbox)
-	}
-	return nil
-}
-
-// normalizeVaultPath makes a path comparable: absolute, symlink-free where the
-// path exists, and lexically clean where it does not. macOS temp directories are
-// reached through /var -> /private/var, so a comparison that skipped this would
-// refuse every legitimate sandbox.
-func normalizeVaultPath(path string) (string, error) {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		return filepath.Clean(abs), nil
-	}
-	return resolved, nil
-}
-
-// pathHasElement reports whether any path segment of p equals name.
-func pathHasElement(p, name string) bool {
-	for _, element := range strings.Split(filepath.ToSlash(p), "/") {
-		if element == name {
-			return true
-		}
-	}
-	return false
-}
-
-// pathWithin reports whether child is dir itself or lives under it.
-func pathWithin(child, dir string) bool {
-	rel, err := filepath.Rel(dir, child)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
-}
-
-// ambientVaultRoot reports the vault root `bn` would resolve right now from
-// process state alone, with no --vault flag: $BNOTES_VAULT if it is set, else
-// the nearest ancestor of the working directory holding brainnotes.toml. It
-// returns "" when nothing resolves.
-//
-// It reads process state deliberately. config.Load takes the same inputs as
-// injectable options and also decodes the file, and a guard that decoded would
-// mistake an intentionally invalid fixture config for an isolation failure. The
-// two resolutions are pinned together by TestMutationVerificationRejectsAmbientVault.
-func ambientVaultRoot() string {
-	if env := strings.TrimSpace(os.Getenv(bnotesVaultEnv)); env != "" {
-		return env
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, config.FileName)); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
 }
 
 // requireSandboxVaultRoot refuses a fixture root that is not throwaway storage.
@@ -210,7 +54,7 @@ func ambientVaultRoot() string {
 // and whether the process will resolve it is not yet known.
 func requireSandboxVaultRoot(t *testing.T, root string) {
 	t.Helper()
-	if err := vaultIsolationError(root, root); err != nil {
+	if err := vaultfixture.IsolationError(root, root); err != nil {
 		t.Fatalf("refusing to build a vault fixture: %v", err)
 	}
 }
@@ -220,104 +64,132 @@ func requireSandboxVaultRoot(t *testing.T, root string) {
 // then $BNOTES_VAULT names the fixture.
 func requireIsolatedVault(t *testing.T, sandbox string) {
 	t.Helper()
-	if err := vaultIsolationError(ambientVaultRoot(), sandbox); err != nil {
+	if err := vaultfixture.IsolationError(vaultfixture.AmbientVaultRoot(), sandbox); err != nil {
 		t.Fatalf("refusing to run a mutating verification: %v", err)
 	}
 }
 
-// TestMutationVerificationRejectsAmbientVault is the regression test for the
-// incident described at the top of this file. It proves the guard refuses the
-// exact shape that damaged the real vault — an ambient $BNOTES_VAULT pointing
-// somewhere other than the sandbox the run asserted — and that it still admits a
-// genuine sandbox, so the refusals are not vacuous.
-func TestMutationVerificationRejectsAmbientVault(t *testing.T) {
+// TestCLIFixturesAreGuardedAgainstAnAmbientVault is the regression test for the
+// incident, stated as a property of *this package's* fixtures rather than of the
+// predicate: with an ambient $BNOTES_VAULT naming a real vault, the guard the
+// fixtures call refuses, and `bn`'s own loader confirms that ambient value is
+// what it would have resolved. internal/vaultfixture owns the refusal cases
+// themselves.
+func TestCLIFixturesAreGuardedAgainstAnAmbientVault(t *testing.T) {
 	if got := os.Getenv(bnotesVaultEnv); got != "" {
 		t.Fatalf("$%s = %q at test start; TestMain must scrub it before any test resolves a vault", bnotesVaultEnv, got)
 	}
 
-	t.Run("ambient env is what the guard reads", func(t *testing.T) {
-		sandbox := t.TempDir()
-		ambient := filepath.Join(t.TempDir(), "BrainNotesVault")
-		if err := os.MkdirAll(ambient, 0o755); err != nil {
-			t.Fatalf("mkdir ambient vault: %v", err)
-		}
-		markVaultRootUnguarded(t, ambient, testPropertyDefinitions)
-		t.Setenv(bnotesVaultEnv, ambient)
+	sandbox := t.TempDir()
+	ambient := filepath.Join(t.TempDir(), "BrainNotesVault")
+	if err := os.MkdirAll(ambient, 0o755); err != nil {
+		t.Fatalf("mkdir ambient vault: %v", err)
+	}
+	markVaultRootUnguarded(t, ambient, testPropertyDefinitions)
+	t.Setenv(bnotesVaultEnv, ambient)
 
-		if got := ambientVaultRoot(); got != ambient {
-			t.Fatalf("ambientVaultRoot() = %q, want the ambient $%s value %q", got, bnotesVaultEnv, ambient)
-		}
-		assertRefused(t, vaultIsolationError(ambientVaultRoot(), sandbox), "BrainNotesVault")
+	if got := vaultfixture.AmbientVaultRoot(); got != ambient {
+		t.Fatalf("AmbientVaultRoot() = %q, want the ambient $%s value %q", got, bnotesVaultEnv, ambient)
+	}
+	err := vaultfixture.IsolationError(vaultfixture.AmbientVaultRoot(), sandbox)
+	if err == nil {
+		t.Fatal("the guard admitted the real vault while the run asserted a sandbox")
+	}
+	if !strings.Contains(err.Error(), "BrainNotesVault") {
+		t.Fatalf("refusal = %q, want it to name the real vault", err)
+	}
 
-		// The guard's own resolution must not drift from the one `bn` performs.
-		cfg, err := config.Load(config.LoadOptions{})
-		if err != nil {
-			t.Fatalf("config.Load: %v", err)
-		}
-		if cfg.Vault != ambient {
-			t.Fatalf("config.Load resolved %q, guard resolved %q", cfg.Vault, ambient)
-		}
-	})
-
-	t.Run("refusals", func(t *testing.T) { runVaultIsolationRefusalCases(t) })
-	t.Run("a real sandbox is admitted", func(t *testing.T) { runVaultIsolationAcceptCases(t) })
+	// The guard's resolution must not drift from the one `bn` performs.
+	cfg, err := config.Load(config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if cfg.Vault != ambient {
+		t.Fatalf("config.Load resolved %q, the guard resolved %q", cfg.Vault, ambient)
+	}
 }
 
-// runVaultIsolationRefusalCases covers every way a verification can fail to be
-// isolated: the real vault by name, ordinary durable storage, another sandbox,
-// an unasserted sandbox, and nothing resolved at all.
-func runVaultIsolationRefusalCases(t *testing.T) {
-	t.Helper()
-	sandbox := t.TempDir()
-	// An absolute path outside the temp tree stands in for durable storage. It
-	// need not exist: the guard refuses on where a path is, before anything
-	// there is opened.
-	durable := filepath.Join(string(filepath.Separator), "Users", "someone", "Notes")
-	cases := []struct {
-		name     string
-		resolved string
-		sandbox  string
-		want     string
-	}{
-		{"the real vault", filepath.Join(sandbox, "BrainNotesVault"), sandbox, "BrainNotesVault"},
-		{"durable storage", durable, sandbox, "outside the system temporary directory"},
-		{"another sandbox", t.TempDir(), sandbox, "outside the asserted isolated vault"},
-		{"a durable sandbox", sandbox, durable, "outside the system temporary directory"},
-		{"no sandbox asserted", sandbox, "", "no isolated vault was asserted"},
-		{"nothing resolved", "", sandbox, "no vault resolved"},
+// guardProbeEnv names the fixture helper a probe subprocess should run against a
+// root it must refuse. It is empty in the parent process.
+const guardProbeEnv = "BN_CLI_GUARD_PROBE"
+
+// TestTheFixtureHelpersThemselvesRefuseARealVault is the wiring test, and it is
+// the one that would catch the regression that matters here.
+//
+// Everything else in this file asserts about vaultfixture.IsolationError — which
+// internal/vaultfixture already tests, and which would keep passing if somebody
+// deleted the requireSandboxVaultRoot call out of markVaultRoot. The question
+// this package actually owns is whether *its* helpers still consult the guard,
+// and the only way to observe that is to hand one a root it must refuse and see
+// it refuse.
+//
+// The helpers report refusal through t.Fatalf, which a test in the same process
+// cannot catch, so each probe runs in a subprocess of this test binary and the
+// assertion is on that process's exit status and output. That is the standard
+// shape for testing a code path that ends a test.
+func TestTheFixtureHelpersThemselvesRefuseARealVault(t *testing.T) {
+	if helper := os.Getenv(guardProbeEnv); helper != "" {
+		runGuardProbe(t, helper)
+		return
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assertRefused(t, vaultIsolationError(tc.resolved, tc.sandbox), tc.want)
+	for _, helper := range []string{"markVaultRoot", "useVaultRoot"} {
+		t.Run(helper, func(t *testing.T) {
+			out, err := runGuardProbeSubprocess(t, helper)
+			if err == nil {
+				t.Fatalf("%s accepted a root named like the real vault, so the guard is not wired into it:\n%s", helper, out)
+			}
+			// Matched against the refusal's own wording, not against the probe
+			// root's name. The probe root is deliberately called BrainNotesVault,
+			// so that string appears in *any* message quoting the path — including
+			// the "write brainnotes.toml" failure a helper would report if the
+			// guard were deleted and the unguarded write then failed for its own
+			// reasons. That would read as a pass for a guard that is gone.
+			// "it is the real vault" is emitted only by IsolationError.
+			if !strings.Contains(out, "it is the real vault") {
+				t.Fatalf("%s failed, but not with the isolation refusal:\n%s", helper, out)
+			}
 		})
 	}
 }
 
-// runVaultIsolationAcceptCases keeps the guard honest: a sandbox the run built,
-// and a vault nested inside it, are both allowed. Without these a guard that
-// refused unconditionally would pass every refusal case above.
-func runVaultIsolationAcceptCases(t *testing.T) {
+// runGuardProbe is the subprocess half: it calls one helper with a root the
+// guard must reject, and passing means never returning from that call.
+func runGuardProbe(t *testing.T, helper string) {
 	t.Helper()
-	sandbox := t.TempDir()
-	nested := filepath.Join(sandbox, "vault")
-	if err := os.MkdirAll(nested, 0o755); err != nil {
-		t.Fatalf("mkdir nested vault: %v", err)
+	root := filepath.Join(t.TempDir(), "BrainNotesVault")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("mkdir probe root: %v", err)
 	}
-	for _, resolved := range []string{sandbox, nested} {
-		if err := vaultIsolationError(resolved, sandbox); err != nil {
-			t.Fatalf("vaultIsolationError(%q, %q) = %v, want nil", resolved, sandbox, err)
-		}
+	switch helper {
+	case "markVaultRoot":
+		markVaultRoot(t, root, testPropertyDefinitions)
+	case "useVaultRoot":
+		useVaultRoot(t, root, testPropertyDefinitions)
+	default:
+		t.Fatalf("unknown probe helper %q", helper)
 	}
 }
 
-// assertRefused fails unless err is a refusal whose message contains want, so a
-// refusal that fires for the wrong reason is not mistaken for a passing guard.
-func assertRefused(t *testing.T, err error, want string) {
+func runGuardProbeSubprocess(t *testing.T, helper string) (string, error) {
 	t.Helper()
-	if err == nil {
-		t.Fatalf("the guard admitted a vault it must refuse (expected a refusal mentioning %q)", want)
+	cmd := exec.Command(os.Args[0], "-test.run", "^TestTheFixtureHelpersThemselvesRefuseARealVault$", "-test.v")
+	cmd.Env = append(os.Environ(), guardProbeEnv+"="+helper)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// TestCLIFixtureHelpersAdmitARealSandbox keeps the wiring from being vacuous: a
+// fixture built and used the sanctioned way passes both checks, so a guard that
+// refused unconditionally would not read as green here.
+func TestCLIFixtureHelpersAdmitARealSandbox(t *testing.T) {
+	root := t.TempDir()
+	useVaultRoot(t, root, testPropertyDefinitions)
+
+	cfg, err := config.Load(config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
 	}
-	if !strings.Contains(err.Error(), want) {
-		t.Fatalf("refusal = %q, want it to mention %q", err, want)
+	if cfg.Vault != root {
+		t.Fatalf("config.Load resolved %q, want the fixture %q", cfg.Vault, root)
 	}
 }

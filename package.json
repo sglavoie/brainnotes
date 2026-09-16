@@ -5,10 +5,14 @@
     "build:web": "esbuild internal/web/static_src/main.ts --bundle --format=iife --global-name=BrainNotesApp --outfile=internal/web/static/app.js",
     "typecheck:web": "tsc --project tsconfig.web.json --noEmit",
     "test:web": "vitest run internal/web/static_src",
+    "test:e2e": "npm run lint:e2e && node internal/web/e2e/prepare.mjs && playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "lint:e2e": "eslint --no-error-on-unmatched-pattern internal/web/e2e playwright.config.js",
     "lint:web": "node scripts/lint_web.mjs",
     "lint:web:full": "node scripts/lint_web.mjs --full"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "cytoscape": "3.33.4",
     "esbuild": "^0.28.0",
     "eslint": "^10.9.1",
