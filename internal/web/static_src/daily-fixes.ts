@@ -10,7 +10,12 @@ import {
   type PreviewState,
 } from "./daily-fixes-model";
 import { clearPreviewEl } from "./daily-fixes-preview";
-import { renderCounts, renderGroups, renderWarnings } from "./daily-fixes-render";
+import {
+  renderCounts,
+  renderGroups,
+  renderWarnings,
+  type FixesCountElements,
+} from "./daily-fixes-render";
 import { queryAllElements, queryElement } from "./dom";
 import { setStatusText, type StatusKind } from "./status";
 
@@ -29,6 +34,16 @@ export {
   buildFixesPreviewFetchRequest,
 } from "./daily-fixes-requests";
 export { type DailyFixesContext } from "./daily-fixes-actions";
+
+// readFixesCountElements collects the four header counters. They are looked up
+// together and only ever handed to renderCounts as a unit, so they are read as
+// one rather than as four more lines of element wiring in the panel.
+const readFixesCountElements = (root: HTMLElement): FixesCountElements => ({
+  active: queryElement(root, "[data-fixes-count-active]", HTMLElement),
+  doneHidden: queryElement(root, "[data-fixes-count-done-hidden]", HTMLElement),
+  snoozedHidden: queryElement(root, "[data-fixes-count-snoozed-hidden]", HTMLElement),
+  totalGenerated: queryElement(root, "[data-fixes-count-total-generated]", HTMLElement),
+});
 
 // initDailyFixes owns the panel: its elements, its mutable state, and the
 // wiring. Every queue action itself lives in daily-fixes-actions and receives
@@ -50,12 +65,7 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
     return;
   }
 
-  const countEls = {
-    active: queryElement(root, "[data-fixes-count-active]", HTMLElement),
-    doneHidden: queryElement(root, "[data-fixes-count-done-hidden]", HTMLElement),
-    snoozedHidden: queryElement(root, "[data-fixes-count-snoozed-hidden]", HTMLElement),
-    totalGenerated: queryElement(root, "[data-fixes-count-total-generated]", HTMLElement),
-  };
+  const countEls = readFixesCountElements(root);
   const previews = new Map<string, PreviewState>();
   let busy = false;
   let ignoreNextMutation = false;

@@ -79,6 +79,7 @@ func (s *Server) handleSynthesizePage(w http.ResponseWriter, r *http.Request) {
 		title = normalizedKey
 	}
 	cfg := s.config()
+	agentConfigured, agentStatusMsg := s.agentAvailability(cfg, "Generation is unavailable until [agent].command is configured.")
 	data := synthesizePageData{
 		Title:           synthesizePageTitle,
 		CSRFToken:       s.csrfToken,
@@ -91,7 +92,8 @@ func (s *Server) handleSynthesizePage(w http.ResponseWriter, r *http.Request) {
 		DefaultPurpose:  recall.PurposeSynthesis,
 		Purposes:        recall.StandardPurposeNames(),
 		MaxSupporters:   recall.MaxCuratedSupporters,
-		AgentConfigured: s.agentConfigured(cfg),
+		AgentConfigured: agentConfigured,
+		AgentStatusMsg:  agentStatusMsg,
 		ContextPath:     synthesisContextAPIRoutePath,
 		GeneratePath:    synthesisGenerateAPIRoutePath,
 		PreviewPath:     synthesisPreviewAPIRoutePath,
@@ -99,9 +101,6 @@ func (s *Server) handleSynthesizePage(w http.ResponseWriter, r *http.Request) {
 		RelatedPath:     relatedAPIRoutePath,
 		SearchPath:      searchAPIRoutePath,
 		LibraryPath:     libraryRoutePath,
-	}
-	if !data.AgentConfigured {
-		data.AgentStatusMsg = s.agentUnavailableMessage("Generation is unavailable until [agent].command is configured.")
 	}
 	if err := s.templates.ExecuteTemplate(w, "synthesize", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)

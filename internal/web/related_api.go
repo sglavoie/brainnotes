@@ -65,8 +65,12 @@ type relatedItemResponse struct {
 	State     recall.FeedbackState `json:"state,omitempty"`
 	Until     string               `json:"until,omitempty"`
 	Opened    bool                 `json:"opened,omitempty"`
-	Recorded  *bool                `json:"recorded,omitempty"`
-	Warning   string               `json:"warning,omitempty"`
+	// Destination is the browser route an Open answered with when this mode does
+	// not start editors. Empty means a process was started, exactly as it does
+	// for the Brief's Open.
+	Destination string `json:"destination,omitempty"`
+	Recorded    *bool  `json:"recorded,omitempty"`
+	Warning     string `json:"warning,omitempty"`
 }
 
 type relatedItemRequest struct {
@@ -214,19 +218,9 @@ func (s *Server) handleRelatedItem(w http.ResponseWriter, r *http.Request) {
 		}
 		response.Recorded = boolPointer(true)
 	case "open_editor":
-		candidatePath := filepath.Join(s.vault.Root, filepath.FromSlash(request.candidatePath))
-		if err := s.openPath(candidatePath); err != nil {
-			writeBriefOpenError(w, err)
+		if !s.applyRelatedOpen(w, request, &response) {
 			return
 		}
-		response.Opened = true
-		if err := request.stateStore.RecordOpened(request.sourcePath, request.candidatePath); err != nil {
-			response.Recorded = boolPointer(false)
-			response.Warning = "Editor opened, but recall history could not be recorded."
-			writeManagementJSON(w, http.StatusOK, response)
-			return
-		}
-		response.Recorded = boolPointer(true)
 	case "useful", "dismissed", "clear":
 		feedback := recall.FeedbackState(request.action)
 		if err := request.stateStore.SetFeedback(request.sourcePath, request.candidatePath, feedback, time.Time{}); err != nil {
@@ -235,20 +229,60 @@ func (s *Server) handleRelatedItem(w http.ResponseWriter, r *http.Request) {
 		}
 		response.State = feedback
 	case "later":
-		until, err := relatedLaterDeadline(r.Form.Get("until"), request.requestNow)
-		if err != nil {
-			writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid later date", err))
+		if !applyRelatedLater(w, r, request, &response) {
 			return
 		}
-		if err := request.stateStore.SetFeedback(request.sourcePath, request.candidatePath, recall.FeedbackLater, until); err != nil {
-			writeRelatedStateMutationError(w, err)
-			return
-		}
-		response.State = recall.FeedbackLater
-		response.Until = until.Format(time.DateOnly)
 	}
 
 	writeManagementJSON(w, http.StatusOK, response)
+}
+
+// applyRelatedLater is the one feedback state with a deadline to validate. It
+// reports whether the caller still owes a response, like applyRelatedOpen.
+func applyRelatedLater(w http.ResponseWriter, r *http.Request, request relatedItemRequest, response *relatedItemResponse) bool {
+	until, err := relatedLaterDeadline(r.Form.Get("until"), request.requestNow)
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid later date", err))
+		return false
+	}
+	if err := request.stateStore.SetFeedback(request.sourcePath, request.candidatePath, recall.FeedbackLater, until); err != nil {
+		writeRelatedStateMutationError(w, err)
+		return false
+	}
+	response.State = recall.FeedbackLater
+	response.Until = until.Format(time.DateOnly)
+	return true
+}
+
+// applyRelatedOpen is the Related panel's Open: the third Open action in the
+// server, and it goes through the same door the Brief's does — a mode without
+// processLaunch answers with the route that displays the note rather than
+// refusing an action whose whole point is to put the reader in front of it.
+//
+// It reports whether the caller still owes a response. A recall-history failure
+// is answered here, because the note is reachable either way and that makes it
+// a warning rather than an error.
+func (s *Server) applyRelatedOpen(w http.ResponseWriter, request relatedItemRequest, response *relatedItemResponse) bool {
+	candidatePath := filepath.Join(s.vault.Root, filepath.FromSlash(request.candidatePath))
+	destination, err := s.openNoteTarget(candidatePath, request.candidatePath)
+	if err != nil {
+		writeBriefOpenError(w, err)
+		return false
+	}
+	response.Destination = destination
+	response.Opened = true
+	if err := request.stateStore.RecordOpened(request.sourcePath, request.candidatePath); err != nil {
+		response.Recorded = boolPointer(false)
+		// The warning names only what failed. It is deliberately free of any claim
+		// about an editor or a page, because the same response goes to a client
+		// that just started one and to a client that is about to navigate, and
+		// each composes its own sentence around this one.
+		response.Warning = "Recall history could not be recorded."
+		writeManagementJSON(w, http.StatusOK, *response)
+		return false
+	}
+	response.Recorded = boolPointer(true)
+	return true
 }
 
 func (s *Server) relatedItemRequest(w http.ResponseWriter, r *http.Request) (relatedItemRequest, bool) {

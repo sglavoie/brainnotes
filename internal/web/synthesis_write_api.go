@@ -206,23 +206,5 @@ func (s *Server) vaultRelLabel(absPath string) string {
 // token. Sharing it keeps one policy across the read-only pair and the two
 // write routes.
 func (s *Server) requireSynthesisPost(w http.ResponseWriter, r *http.Request, route string, bodyLimit int64) bool {
-	if r.URL.Path != route {
-		http.NotFound(w, r)
-		return false
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
-		return false
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, bodyLimit)
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return false
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
-		return false
-	}
-	return true
+	return s.requireManagementPost(w, r, route, bodyLimit)
 }

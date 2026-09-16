@@ -1,15 +1,11 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
-	"unicode/utf8"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -31,21 +27,7 @@ type noteInsightResponse struct {
 
 func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	if r.URL.Path != noteInsightAPIRoutePath {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+	if !s.requireManagementPost(w, r, noteInsightAPIRoutePath, 0) {
 		return
 	}
 
@@ -54,13 +36,8 @@ func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "note key is required"))
 		return
 	}
-	userPrompt := strings.TrimSpace(r.Form.Get("prompt"))
-	if !utf8.ValidString(userPrompt) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "AI prompt must be valid UTF-8"))
-		return
-	}
-	if utf8.RuneCountInString(userPrompt) > agentPromptMaxRunes {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "AI prompt must be %d characters or fewer", agentPromptMaxRunes))
+	userPrompt, ok := readAgentPrompt(w, r)
+	if !ok {
 		return
 	}
 
@@ -79,8 +56,8 @@ func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "snapshot error", err))
 		return
 	}
-	note, normalizedKey, ok := noteForRoute(snapshot, key)
-	if !ok {
+	note, normalizedKey, found := noteForRoute(snapshot, key)
+	if !found {
 		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "note not found or stale"))
 		return
 	}
@@ -90,23 +67,11 @@ func (s *Server) handleNoteInsight(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	if timeout := time.Duration(cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-	output, runErr := s.launchAgent(ctx, argv, packet)
-	if runErr != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "note insight command timed out"))
-			return
-		}
-		message := "run note insight command"
-		if diagnostic := agent.SanitizedDiagnostic(runErr); diagnostic != "" {
-			message += ": " + diagnostic
-		}
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, message, runErr))
+	output, ok := s.runAgentForRequest(w, r, argv, packet, cfg.Agent.TimeoutSeconds, agentRunLabels{
+		timeout: "note insight command timed out",
+		failure: "run note insight command",
+	})
+	if !ok {
 		return
 	}
 	rendered, err := s.markdown.render(string(output))

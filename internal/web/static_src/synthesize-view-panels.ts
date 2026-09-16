@@ -26,7 +26,11 @@ export const buildGenerateSection = (
   const intro = element(doc, "p", "synthesize-section-intro");
   intro.textContent = config.agentEnabled
     ? "Generation sends the prepared context packet to your configured [agent].command. The candidate is shown here and never replaces your draft on its own."
-    : "Generation is unavailable until [agent].command is configured. Everything else on this page works without an agent.";
+    : // Why generation is unavailable is the server's answer, rendered in the
+      // status line beside this one: a hosted vault cannot start a process at
+      // all, and telling its reader to configure [agent].command would send
+      // them editing a file on a machine they are not using.
+      "Everything else on this page works without an agent.";
 
   const actions = element(doc, "div", "synthesize-generate-actions");
   const generate = element(doc, "button", "synthesize-action", {

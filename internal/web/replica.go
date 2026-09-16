@@ -86,16 +86,20 @@ func replicaRequestAllowed(r *http.Request) bool {
 	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && replicaReadPath(r.URL.Path)
 }
 
-// openBriefTarget is the Brief's Open action. It keys on the browserOpen
-// capability rather than on read-only, because hosted mode is equally unable to
-// start an editor: the navigating branch resolves a route and provably never
-// reaches openPath.
-func (s *Server) openBriefTarget(notePath, rel string) (string, error) {
+// openNoteTarget is the Open action shared by the Brief and the Related Notes
+// panel. It keys on the browserOpen capability rather than on read-only, because
+// hosted mode is equally unable to start an editor: the navigating branch
+// resolves a route and provably never reaches openPath.
+//
+// Both callers route through it rather than calling openPath directly, so a mode
+// that cannot start a process answers every Open with somewhere to go instead of
+// with a refusal the panel has no wording for.
+func (s *Server) openNoteTarget(notePath, rel string) (string, error) {
 	if !s.caps.browserOpen {
 		return "", s.openPath(notePath)
 	}
 	if _, ok, err := resolveContainedRegularFile(s.vault.Root, rel); err != nil || !ok {
-		return "", noteops.Errorf(noteops.CodeNotFound, "brief note is unavailable")
+		return "", noteops.Errorf(noteops.CodeNotFound, "note is unavailable")
 	}
 	return notePathForKey(managementRouteKeyForRelPath(rel))
 }

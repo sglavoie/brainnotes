@@ -67,6 +67,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	insightConfigured, insightStatusMsg := s.agentAvailability(cfg, "Ask AI is unavailable until [agent].command is configured.")
 	data := notePageData{
 		Title:              note.Title(),
 		Path:               notePath,
@@ -81,12 +82,10 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Backlinks:          backlinksForNote(snapshot, note),
 		Outgoing:           outgoingLinksForNote(snapshot.graph, note),
 		Broken:             brokenAffordancesForNote(note, snapshot.graph),
-		InsightConfigured:  s.agentConfigured(cfg),
+		InsightConfigured:  insightConfigured,
+		InsightStatusMsg:   insightStatusMsg,
 		Pinned:             query.Pinned()(note),
 		SynthesizePath:     synthesizeRoutePath + "?source=" + url.QueryEscape(normalizedKey),
-	}
-	if !data.InsightConfigured {
-		data.InsightStatusMsg = s.agentUnavailableMessage("Ask AI is unavailable until [agent].command is configured.")
 	}
 	if err := s.templates.ExecuteTemplate(w, "note", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
@@ -331,7 +330,13 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.notifyListen != nil {
 		s.notifyListen(baseURL)
 	}
-	if cfg.Serve.BrowserEnabled() {
+	// Launching the browser is a process launch like any other, so it answers to
+	// the capability rather than to the configuration alone. `bn serve` already
+	// forces --no-open for both remote profiles; this is the same refusal stated
+	// where the process is started, so a library caller that builds Options by
+	// hand over a vault whose [serve] section enables the browser cannot spawn
+	// one on a hosted machine nobody is sitting at.
+	if cfg.Serve.BrowserEnabled() && s.caps.processLaunch {
 		go func() {
 			_ = s.openBrowser(baseURL)
 		}()

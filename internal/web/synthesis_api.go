@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -10,7 +9,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
@@ -149,23 +147,11 @@ func (s *Server) handleSynthesisGenerate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ctx := r.Context()
-	if timeout := time.Duration(cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-	output, runErr := s.launchAgent(ctx, argv, record.Packet)
-	if runErr != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "synthesis: generation command timed out"))
-			return
-		}
-		message := "run synthesis generation command"
-		if diagnostic := agent.SanitizedDiagnostic(runErr); diagnostic != "" {
-			message += ": " + diagnostic
-		}
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, message, runErr))
+	output, ok := s.runAgentForRequest(w, r, argv, record.Packet, cfg.Agent.TimeoutSeconds, agentRunLabels{
+		timeout: "synthesis: generation command timed out",
+		failure: "run synthesis generation command",
+	})
+	if !ok {
 		return
 	}
 	if len(output) > synthesisCandidateMaxBytes {

@@ -239,10 +239,6 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	if err := srv.configureRuntime(opts); err != nil {
 		return nil, err
 	}
-
-	if srv.openBrowser == nil {
-		srv.openBrowser = openBrowserDefault
-	}
 	srv.handler = srv.routes(staticRoot)
 
 	return srv, nil
@@ -425,6 +421,9 @@ func (srv *Server) configureRuntime(opts Options) error {
 	}
 	if srv.startEditor == nil {
 		srv.startEditor = startEditorProcess
+	}
+	if srv.openBrowser == nil {
+		srv.openBrowser = openBrowserDefault
 	}
 	srv.briefNow = opts.BriefNow
 	if srv.briefNow == nil {

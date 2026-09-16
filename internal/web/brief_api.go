@@ -118,7 +118,7 @@ func (s *Server) executeBriefAction(w http.ResponseWriter, runtime briefRuntime,
 	case "open":
 		noteRelPath := openTargetRelPathForCard(resolved.card)
 		notePath := filepath.Join(s.vault.Root, filepath.FromSlash(noteRelPath))
-		destination, err := s.openBriefTarget(notePath, noteRelPath)
+		destination, err := s.openNoteTarget(notePath, noteRelPath)
 		if err != nil {
 			writeBriefOpenError(w, err)
 			return
@@ -231,7 +231,27 @@ func hasStateUnreadableWarning(warnings []brief.ServiceWarning) bool {
 }
 
 func writeBriefOpenError(w http.ResponseWriter, err error) {
+	// openNoteTarget's navigating branch reports a noteops error rather than an
+	// openFailure: nothing was launched, so there is no stage to map. It is
+	// passed through as itself, because the default arm below would report a
+	// vanished note as an editor-start failure — a 500 about a subsystem this
+	// mode does not even have.
+	var failure *openFailure
+	if !errors.As(err, &failure) {
+		writeManagementError(w, err)
+		return
+	}
+	writeBriefLaunchFailure(w, err)
+}
+
+// writeBriefLaunchFailure maps a launch that was actually attempted onto the
+// status its stage owes. Every arm here describes an editor, which is why the
+// caller above keeps the navigating modes out of it.
+func writeBriefLaunchFailure(w http.ResponseWriter, err error) {
 	switch failureStage(err) {
+	case openFailureCapability:
+		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "process launch is unavailable in this serving mode"))
+		return
 	case openFailureStat:
 		if errors.Is(err, os.ErrNotExist) {
 			writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "note not found"))
@@ -240,14 +260,7 @@ func writeBriefOpenError(w http.ResponseWriter, err error) {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "note stat error", err))
 		return
 	case openFailureResolvePath:
-		switch {
-		case errors.Is(err, errOpenPathOutsideVault):
-			writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "forbidden note path"))
-		case errors.Is(err, os.ErrNotExist):
-			writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "note not found"))
-		default:
-			writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "note path error", err))
-		}
+		writeBriefResolvePathFailure(w, err)
 		return
 	case openFailureEditorSpec:
 		if errors.Is(err, editor.ErrNoEditorConfigured) {
@@ -264,6 +277,17 @@ func writeBriefOpenError(w http.ResponseWriter, err error) {
 		return
 	default:
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "editor start error", err))
+	}
+}
+
+func writeBriefResolvePathFailure(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, errOpenPathOutsideVault):
+		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "forbidden note path"))
+	case errors.Is(err, os.ErrNotExist):
+		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "note not found"))
+	default:
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "note path error", err))
 	}
 }
 

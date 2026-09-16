@@ -38,6 +38,23 @@ const (
 	remoteMaxRequestBody = 1 << 20
 )
 
+// requestBodyLimit is the bound a request is actually held to: the profile's,
+// widened for the routes whose legitimate request is larger than it.
+//
+// Without the widening the profile bound would silently cap a feature rather
+// than defend it — a synthesis draft may be a megabyte on its own, so
+// form-encoding it inside a preview request exceeds the remote bound every time
+// and a hosted deployment could never preview a full-size draft at all. The
+// route still applies its own narrower bound afterwards in requireManagementPost,
+// so widening here does not make the request unbounded; it makes the bound the
+// route's instead of the profile's.
+func (c capabilities) requestBodyLimit(path string) int64 {
+	if path == synthesisPreviewAPIRoutePath && synthesisPreviewBodyLimit > c.maxRequestBody {
+		return synthesisPreviewBodyLimit
+	}
+	return c.maxRequestBody
+}
+
 // capabilities is the one table stating what a mode may do. Everything that used
 // to branch on `readOnly` asks this instead, so "hosted" is not "read-only with
 // writes turned back on": the two dimensions are independent and the table is
@@ -104,11 +121,14 @@ func modeFor(opts Options) (Mode, error) {
 // every mode without processLaunch, so a crafted request cannot reach an
 // exec.Cmd through any of them.
 //
-// Two further routes can start a process and are deliberately *not* listed here,
-// because they mean something without one: /api/open and /api/brief/item answer
-// with a destination to navigate to when browserOpen is set. Their boundary is
-// in the handler rather than the guard, and each has a direct test proving the
-// navigating branch never reaches openPath.
+// Three further routes can start a process and are deliberately *not* listed
+// here, because they mean something without one: /api/open, /api/brief/item and
+// /api/related/item answer with a destination to navigate to when browserOpen is
+// set. Their boundary is in the handler rather than the guard, and each has a
+// direct test proving the navigating branch never reaches openPath. Read-only
+// still refuses two of the three — its POST allowlist is exactly /api/brief/view
+// and /api/brief/item — so "not listed here" means "decided by the handler",
+// not "reachable in every mode".
 func processLaunchRoute(path string) bool {
 	switch path {
 	case configOpenAPIRoutePath,
@@ -134,12 +154,25 @@ func (c capabilities) denialReason(r *http.Request) string {
 	return ""
 }
 
-// agentConfigured is the one answer to "may this page offer an AI action". A
-// configured [agent].command is not enough on its own: running it is a process
-// launch, so a mode without that capability reports the feature unavailable
-// rather than rendering a control whose route the guard would refuse.
-func (s *Server) agentConfigured(cfg *config.Config) bool {
-	return s.caps.processLaunch && len(cfg.Agent.Command) > 0
+// agentAvailability is the one answer to "may this page offer an AI action",
+// together with what to say when it may not. A configured [agent].command is not
+// enough on its own: running it is a process launch, so a mode without that
+// capability reports the feature unavailable rather than rendering a control
+// whose route the guard would refuse.
+//
+// The two answers come back together because they are one decision. A mode that
+// cannot launch a process must not tell a person to configure [agent].command —
+// configuring it would change nothing, and the advice would send them editing a
+// file on the wrong machine — so the caller passes the unconfigured wording and
+// this decides whether it is the true explanation.
+func (s *Server) agentAvailability(cfg *config.Config, unconfigured string) (bool, string) {
+	if !s.caps.processLaunch {
+		return false, "AI actions are unavailable in " + string(s.caps.mode) + " mode: this server does not launch processes."
+	}
+	if len(cfg.Agent.Command) == 0 {
+		return false, unconfigured
+	}
+	return true, ""
 }
 
 // errAgentLaunchDisabled is the refusal every agent route shares. Like
@@ -158,17 +191,6 @@ func (s *Server) launchAgent(ctx context.Context, argv []string, stdin []byte) (
 	return s.runAgent(ctx, argv, stdin)
 }
 
-// agentUnavailableMessage explains why an AI action is not on offer. A mode that
-// cannot launch a process must not tell a person to configure [agent].command:
-// configuring it would change nothing, and the advice would send them editing a
-// file on the wrong machine.
-func (s *Server) agentUnavailableMessage(unconfigured string) string {
-	if !s.caps.processLaunch {
-		return "AI actions are unavailable in " + string(s.caps.mode) + " mode: this server does not launch processes."
-	}
-	return unconfigured
-}
-
 // requestGuard is the one middleware every request passes through. It publishes
 // the response headers that are true of a vault in every mode, refuses what the
 // mode cannot do, refuses a state-changing request that did not come from this
@@ -184,6 +206,14 @@ func (s *Server) requestGuard(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
+		// Framing is refused everywhere. The CSRF token is no defence against a
+		// click in a same-origin iframe, so a hosted deployment's write controls
+		// would otherwise be clickjackable from an attacker's page. This is
+		// X-Frame-Options rather than a CSP frame-ancestors directive because
+		// applyMediaSafetyHeaders Sets its own Content-Security-Policy on an
+		// active attachment, and Set replaces, so a guard-set CSP would not
+		// survive on exactly the responses that most need a framing rule.
+		w.Header().Set("X-Frame-Options", "DENY")
 
 		if reason := s.caps.denialReason(r); reason != "" {
 			writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "%s", reason))
@@ -201,12 +231,13 @@ func (s *Server) requestGuard(next http.Handler) http.Handler {
 		// The status is set explicitly rather than derived from the code: this
 		// is a transport bound, not a note-operation failure, so it borrows the
 		// management envelope without claiming a noteops error class of its own.
-		if r.ContentLength > s.caps.maxRequestBody {
+		limit := s.caps.requestBodyLimit(r.URL.Path)
+		if r.ContentLength > limit {
 			writeManagementErrorStatus(w, http.StatusRequestEntityTooLarge,
-				noteops.Errorf(noteops.CodeInvalidRequest, "request body exceeds %d bytes", s.caps.maxRequestBody))
+				noteops.Errorf(noteops.CodeInvalidRequest, "request body exceeds %d bytes", limit))
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, s.caps.maxRequestBody)
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		next.ServeHTTP(w, r)
 	})
 }

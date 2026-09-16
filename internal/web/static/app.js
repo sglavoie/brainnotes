@@ -3128,6 +3128,233 @@ var BrainNotesApp = (() => {
     }
   };
 
+  // internal/web/static_src/daily-fixes-actions.ts
+  var readItemActionRequest = (button, csrfToken) => {
+    const id = button.getAttribute("data-fixes-id") || "";
+    const action = normalizeItemAction(button.getAttribute("data-fixes-item-action") || "");
+    const snooze = normalizeSnooze(button.getAttribute("data-fixes-snooze") || "");
+    if (!id || !action || !csrfToken) {
+      return null;
+    }
+    if (action === "snooze" && !snooze) {
+      return null;
+    }
+    return { id, action, snooze };
+  };
+  var readPreviewRequest = (button, csrfToken) => {
+    const id = button.getAttribute("data-fixes-id") || "";
+    const action = normalizeFixAction(button.getAttribute("data-fixes-fix-action") || "");
+    if (!id || !action || !csrfToken) {
+      return null;
+    }
+    return { id, action };
+  };
+  var applyQueueResult = (ctx, payload, successMessage = "", successKind = "") => {
+    const result = normalizeCockpitQueueResponse(payload);
+    if (!result.ok) {
+      ctx.showError(result.message || "Cockpit request failed.");
+      return false;
+    }
+    ctx.setError("");
+    ctx.renderResult(result);
+    const message = successMessage || fixCountsStatusMessage(result.counts);
+    const kind = successKind || (result.counts.active === 0 ? "is-empty" : "");
+    ctx.setStatus(message, kind);
+    return true;
+  };
+  var loadQueue = async (ctx, successMessage = "") => {
+    ctx.setBusy(true);
+    ctx.setLoading(true);
+    ctx.setStatus("Loading fixes queue...", "is-loading");
+    try {
+      const resp = await ctx.fetcher(ctx.config.queueEndpoint, {
+        headers: { Accept: "application/json" }
+      });
+      const payload = await readResponsePayload2(resp);
+      if (!resp.ok) {
+        ctx.showError(normalizeManagementErrorMessage(resp.status, payload));
+        return;
+      }
+      applyQueueResult(ctx, payload, successMessage, successMessage ? "is-success" : "");
+    } catch {
+      ctx.showError("Fixes queue unavailable.");
+    } finally {
+      ctx.setLoading(false);
+      ctx.setBusy(false);
+    }
+  };
+  var runItemAction = async (ctx, button) => {
+    const request = readItemActionRequest(button, ctx.config.csrfToken);
+    if (!request) {
+      ctx.showError("Fix action unavailable.");
+      return;
+    }
+    ctx.setBusy(true);
+    ctx.setStatus(itemActionLoadingMessage(request.action, request.snooze), "is-loading");
+    try {
+      const fetchRequest = buildFixesItemFetchRequest(
+        ctx.config.itemEndpoint,
+        ctx.config.csrfToken,
+        request.id,
+        request.action,
+        request.snooze
+      );
+      const resp = await ctx.fetcher(fetchRequest.url, fetchRequest.init);
+      const payload = await readResponsePayload2(resp);
+      if (!resp.ok) {
+        ctx.showError(normalizeManagementErrorMessage(resp.status, payload));
+        return;
+      }
+      const result = normalizeCockpitQueueResponse(payload);
+      announceItemMutation(ctx, request.action, payload);
+      applyQueueResult(ctx, payload, result.message || "Fix updated.", "is-success");
+    } catch {
+      ctx.showError("Fix action failed.");
+    } finally {
+      ctx.setBusy(false);
+    }
+  };
+  var announceItemMutation = (ctx, action, payload) => {
+    if (action !== "exempt_dead_end" && action !== "clean_long_tail") {
+      return;
+    }
+    ctx.suppressNextMutation();
+    window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: payload }));
+  };
+  var runPreview = async (ctx, button) => {
+    const request = readPreviewRequest(button, ctx.config.csrfToken);
+    if (!request) {
+      ctx.showError("Fix preview unavailable.");
+      return;
+    }
+    ctx.setBusy(true);
+    ctx.setStatus("Previewing fix...", "is-loading");
+    try {
+      const fetchRequest = buildFixesPreviewFetchRequest(
+        ctx.config.previewEndpoint,
+        ctx.config.csrfToken,
+        request.id,
+        request.action
+      );
+      const resp = await ctx.fetcher(fetchRequest.url, fetchRequest.init);
+      const payload = await readResponsePayload2(resp);
+      if (!resp.ok) {
+        ctx.showError(normalizeManagementErrorMessage(resp.status, payload));
+        return;
+      }
+      recordPreview(ctx, request, payload);
+    } catch {
+      ctx.showError("Fix preview failed.");
+    } finally {
+      ctx.setBusy(false);
+    }
+  };
+  var recordPreview = (ctx, request, payload) => {
+    const result = normalizeFixPreviewResponse(payload);
+    if (!result.ok || !result.preview_id) {
+      ctx.showError(result.message || "Fix preview failed.");
+      return;
+    }
+    ctx.previews.set(request.id, { action: request.action, previewID: result.preview_id });
+    const message = result.message || "Preview ready.";
+    renderPreview(ctx.listEl, request.id, request.action, result.previews, message);
+    ctx.setError("");
+    ctx.setStatus(message, "is-success");
+  };
+  var runApply = async (ctx, button) => {
+    const id = button.getAttribute("data-fixes-id") || "";
+    const state = ctx.previews.get(id);
+    if (!id || !state || !ctx.config.csrfToken) {
+      ctx.showError("Preview the fix before applying it.");
+      return;
+    }
+    ctx.setBusy(true);
+    ctx.setStatus("Applying fix...", "is-loading");
+    try {
+      const request = buildFixesApplyFetchRequest(
+        ctx.config.applyEndpoint,
+        ctx.config.csrfToken,
+        id,
+        state.action,
+        state.previewID
+      );
+      const resp = await ctx.fetcher(request.url, request.init);
+      await completeApply(ctx, id, resp, await readResponsePayload2(resp));
+    } catch {
+      ctx.clearPreview(id);
+      ctx.showError("Fix apply failed.");
+    } finally {
+      ctx.setBusy(false);
+    }
+  };
+  var completeApply = async (ctx, id, resp, payload) => {
+    const result = resp.ok ? normalizeFixApplyResponse(payload) : null;
+    if (!result?.ok) {
+      ctx.clearPreview(id);
+      ctx.showError(
+        result ? result.message || "Fix apply failed." : normalizeManagementErrorMessage(resp.status, payload)
+      );
+      await ctx.loadQueue();
+      return;
+    }
+    ctx.previews.delete(id);
+    ctx.suppressNextMutation();
+    window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
+    await ctx.loadQueue(result.message || "Fix applied.");
+  };
+  var runOpen2 = async (ctx, button) => {
+    const key = button.getAttribute("data-fixes-open-key") || "";
+    if (!key || !ctx.config.csrfToken) {
+      ctx.showError("Open action unavailable.");
+      return;
+    }
+    ctx.setBusy(true);
+    ctx.setStatus("Opening note...", "is-loading");
+    try {
+      const body = buildOpenNoteForm({ key, token: ctx.config.csrfToken });
+      const request = jsonPostRequest2(ctx.config.openEndpoint, ctx.config.csrfToken, body.toString());
+      const resp = await ctx.fetcher(request.url, request.init);
+      const payload = await readResponsePayload2(resp);
+      if (!resp.ok) {
+        ctx.showError(normalizeOpenErrorMessage(resp.status, payload));
+        return;
+      }
+      ctx.setError("");
+      const destination = noteNavigationDestination(payload);
+      if (destination) {
+        window.location.assign(destination);
+        return;
+      }
+      ctx.setStatus("Opened in editor. Refresh after saving changes.", "is-success");
+    } catch {
+      ctx.showError("Open failed.");
+    } finally {
+      ctx.setBusy(false);
+    }
+  };
+  var fixesClickHandlers = [
+    { selector: "[data-fixes-fix-action]", run: (ctx, button) => void runPreview(ctx, button) },
+    { selector: "[data-fixes-preview-apply]", run: (ctx, button) => void runApply(ctx, button) },
+    {
+      selector: "[data-fixes-preview-cancel]",
+      run: (ctx, button) => ctx.clearPreview(button.getAttribute("data-fixes-id") || "")
+    },
+    { selector: "[data-fixes-item-action]", run: (ctx, button) => void runItemAction(ctx, button) },
+    { selector: "[data-fixes-open-key]", run: (ctx, button) => void runOpen2(ctx, button) }
+  ];
+  var dispatchFixesClick = (ctx, root, target) => {
+    if (!(target instanceof Element)) {
+      return;
+    }
+    for (const handler of fixesClickHandlers) {
+      const button = target.closest(handler.selector);
+      if (button && root.contains(button)) {
+        handler.run(ctx, button);
+        return;
+      }
+    }
+  };
+
   // internal/web/static_src/daily-fixes-render.ts
   var renderCounts = (countEls, counts) => {
     if (countEls.active) {
@@ -3338,6 +3565,12 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/daily-fixes.ts
+  var readFixesCountElements = (root) => ({
+    active: queryElement(root, "[data-fixes-count-active]", HTMLElement),
+    doneHidden: queryElement(root, "[data-fixes-count-done-hidden]", HTMLElement),
+    snoozedHidden: queryElement(root, "[data-fixes-count-snoozed-hidden]", HTMLElement),
+    totalGenerated: queryElement(root, "[data-fixes-count-total-generated]", HTMLElement)
+  });
   var initDailyFixes = (deps = {}) => {
     const root = queryElement(document, "[data-fixes-panel]", HTMLElement);
     if (!root) {
@@ -3352,14 +3585,7 @@ var BrainNotesApp = (() => {
     if (!statusEl || !listEl) {
       return;
     }
-    const countEls = {
-      active: queryElement(root, "[data-fixes-count-active]", HTMLElement),
-      doneHidden: queryElement(root, "[data-fixes-count-done-hidden]", HTMLElement),
-      snoozedHidden: queryElement(root, "[data-fixes-count-snoozed-hidden]", HTMLElement),
-      totalGenerated: queryElement(root, "[data-fixes-count-total-generated]", HTMLElement)
-    };
-    const config = readDailyFixesConfig(root);
-    const fetcher = deps.fetch || fetch;
+    const countEls = readFixesCountElements(root);
     const previews = /* @__PURE__ */ new Map();
     let busy = false;
     let ignoreNextMutation = false;
@@ -3372,15 +3598,6 @@ var BrainNotesApp = (() => {
       }
       errorEl.textContent = message;
       errorEl.hidden = message === "";
-    };
-    const showError = (message) => {
-      setError(message);
-      setStatus2(message, "is-error");
-    };
-    const setLoading = (loading) => {
-      if (loadingEl) {
-        loadingEl.hidden = !loading;
-      }
     };
     const setBusy = (next) => {
       busy = next;
@@ -3401,232 +3618,44 @@ var BrainNotesApp = (() => {
       }
       setBusy(busy);
     };
-    const applyQueueResult = (payload, successMessage = "", successKind = "") => {
-      const result = normalizeCockpitQueueResponse(payload);
-      if (!result.ok) {
-        showError(result.message || "Cockpit request failed.");
-        return false;
-      }
-      setError("");
-      renderResult(result);
-      const message = successMessage || fixCountsStatusMessage(result.counts);
-      const kind = successKind || (result.counts.active === 0 ? "is-empty" : "");
-      setStatus2(message, kind);
-      return true;
-    };
-    const loadQueue = async (successMessage = "") => {
-      setBusy(true);
-      setLoading(true);
-      setStatus2("Loading fixes queue...", "is-loading");
-      try {
-        const resp = await fetcher(config.queueEndpoint, {
-          headers: { Accept: "application/json" }
-        });
-        const payload = await readResponsePayload2(resp);
-        if (!resp.ok) {
-          showError(normalizeManagementErrorMessage(resp.status, payload));
-          return;
+    const ctx = {
+      config: readDailyFixesConfig(root),
+      fetcher: deps.fetch || fetch,
+      listEl,
+      previews,
+      setBusy,
+      setStatus: setStatus2,
+      setError,
+      showError: (message) => {
+        setError(message);
+        setStatus2(message, "is-error");
+      },
+      setLoading: (loading) => {
+        if (loadingEl) {
+          loadingEl.hidden = !loading;
         }
-        applyQueueResult(payload, successMessage, successMessage ? "is-success" : "");
-      } catch {
-        showError("Fixes queue unavailable.");
-      } finally {
-        setLoading(false);
-        setBusy(false);
-      }
-    };
-    const clearPreview = (id) => {
-      previews.delete(id);
-      clearPreviewEl(listEl, id);
-    };
-    const runItemAction = async (button) => {
-      const id = button.getAttribute("data-fixes-id") || "";
-      const action = normalizeItemAction(button.getAttribute("data-fixes-item-action") || "");
-      const snooze = normalizeSnooze(button.getAttribute("data-fixes-snooze") || "");
-      if (!id || !action || !config.csrfToken) {
-        showError("Fix action unavailable.");
-        return;
-      }
-      if (action === "snooze" && !snooze) {
-        showError("Fix snooze unavailable.");
-        return;
-      }
-      setBusy(true);
-      setStatus2(itemActionLoadingMessage(action, snooze), "is-loading");
-      try {
-        const request = buildFixesItemFetchRequest(
-          config.itemEndpoint,
-          config.csrfToken,
-          id,
-          action,
-          snooze
-        );
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload2(resp);
-        if (!resp.ok) {
-          showError(normalizeManagementErrorMessage(resp.status, payload));
-          return;
-        }
-        const result = normalizeCockpitQueueResponse(payload);
-        if (action === "exempt_dead_end" || action === "clean_long_tail") {
-          ignoreNextMutation = true;
-          window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: payload }));
-        }
-        applyQueueResult(payload, result.message || "Fix updated.", "is-success");
-      } catch {
-        showError("Fix action failed.");
-      } finally {
-        setBusy(false);
-      }
-    };
-    const runPreview = async (button) => {
-      const id = button.getAttribute("data-fixes-id") || "";
-      const action = normalizeFixAction(button.getAttribute("data-fixes-fix-action") || "");
-      if (!id || !action || !config.csrfToken) {
-        showError("Fix preview unavailable.");
-        return;
-      }
-      setBusy(true);
-      setStatus2("Previewing fix...", "is-loading");
-      try {
-        const request = buildFixesPreviewFetchRequest(
-          config.previewEndpoint,
-          config.csrfToken,
-          id,
-          action
-        );
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload2(resp);
-        if (!resp.ok) {
-          showError(normalizeManagementErrorMessage(resp.status, payload));
-          return;
-        }
-        const result = normalizeFixPreviewResponse(payload);
-        if (!result.ok || !result.preview_id) {
-          showError(result.message || "Fix preview failed.");
-          return;
-        }
-        previews.set(id, { action, previewID: result.preview_id });
-        renderPreview(listEl, id, action, result.previews, result.message || "Preview ready.");
-        setError("");
-        setStatus2(result.message || "Preview ready.", "is-success");
-      } catch {
-        showError("Fix preview failed.");
-      } finally {
-        setBusy(false);
-      }
-    };
-    const runApply = async (button) => {
-      const id = button.getAttribute("data-fixes-id") || "";
-      const state = previews.get(id);
-      if (!id || !state || !config.csrfToken) {
-        showError("Preview the fix before applying it.");
-        return;
-      }
-      setBusy(true);
-      setStatus2("Applying fix...", "is-loading");
-      try {
-        const request = buildFixesApplyFetchRequest(
-          config.applyEndpoint,
-          config.csrfToken,
-          id,
-          state.action,
-          state.previewID
-        );
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload2(resp);
-        if (!resp.ok) {
-          clearPreview(id);
-          showError(normalizeManagementErrorMessage(resp.status, payload));
-          await loadQueue();
-          return;
-        }
-        const result = normalizeFixApplyResponse(payload);
-        if (!result.ok) {
-          clearPreview(id);
-          showError(result.message || "Fix apply failed.");
-          await loadQueue();
-          return;
-        }
+      },
+      renderResult,
+      clearPreview: (id) => {
         previews.delete(id);
+        clearPreviewEl(listEl, id);
+      },
+      loadQueue: (successMessage = "") => loadQueue(ctx, successMessage),
+      suppressNextMutation: () => {
         ignoreNextMutation = true;
-        window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
-        await loadQueue(result.message || "Fix applied.");
-      } catch {
-        clearPreview(id);
-        showError("Fix apply failed.");
-      } finally {
-        setBusy(false);
-      }
-    };
-    const runOpen2 = async (button) => {
-      const key = button.getAttribute("data-fixes-open-key") || "";
-      if (!key || !config.csrfToken) {
-        showError("Open action unavailable.");
-        return;
-      }
-      setBusy(true);
-      setStatus2("Opening note...", "is-loading");
-      try {
-        const body = buildOpenNoteForm({ key, token: config.csrfToken });
-        const request = jsonPostRequest2(config.openEndpoint, config.csrfToken, body.toString());
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readResponsePayload2(resp);
-        if (!resp.ok) {
-          showError(normalizeOpenErrorMessage(resp.status, payload));
-          return;
-        }
-        setError("");
-        const destination = noteNavigationDestination(payload);
-        if (destination) {
-          window.location.assign(destination);
-          return;
-        }
-        setStatus2("Opened in editor. Refresh after saving changes.", "is-success");
-      } catch {
-        showError("Open failed.");
-      } finally {
-        setBusy(false);
       }
     };
     root.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      const fix = target.closest("[data-fixes-fix-action]");
-      if (fix && root.contains(fix)) {
-        void runPreview(fix);
-        return;
-      }
-      const applyBtn = target.closest("[data-fixes-preview-apply]");
-      if (applyBtn && root.contains(applyBtn)) {
-        void runApply(applyBtn);
-        return;
-      }
-      const cancelBtn = target.closest("[data-fixes-preview-cancel]");
-      if (cancelBtn && root.contains(cancelBtn)) {
-        clearPreview(cancelBtn.getAttribute("data-fixes-id") || "");
-        return;
-      }
-      const itemBtn = target.closest("[data-fixes-item-action]");
-      if (itemBtn && root.contains(itemBtn)) {
-        void runItemAction(itemBtn);
-        return;
-      }
-      const openBtn = target.closest("[data-fixes-open-key]");
-      if (openBtn && root.contains(openBtn)) {
-        void runOpen2(openBtn);
-      }
+      dispatchFixesClick(ctx, root, event.target);
     });
     window.addEventListener(managementMutationEventName, () => {
       if (ignoreNextMutation) {
         ignoreNextMutation = false;
         return;
       }
-      void loadQueue("Fixes refreshed.");
+      void ctx.loadQueue("Fixes refreshed.");
     });
-    void loadQueue();
+    void ctx.loadQueue();
   };
 
   // internal/web/static_src/editor-open.ts
@@ -9238,7 +9267,7 @@ var BrainNotesApp = (() => {
       query: queryEl?.value || "",
       issuesOnly: issuesOnlyEl?.checked || false
     });
-    const setMutationBusy = (busy) => {
+    const setMutationBusy2 = (busy) => {
       mutationBusy = busy;
       for (const button of root.querySelectorAll(
         "[data-properties-proposal-add]"
@@ -9258,7 +9287,7 @@ var BrainNotesApp = (() => {
       );
     };
     const applyProposal = async (proposal, previewID) => {
-      setMutationBusy(true);
+      setMutationBusy2(true);
       setStatus2("Adding the inferred definition...", "is-loading");
       try {
         const outcome = await applyPropertySchema(fetcher, config.token, previewID);
@@ -9269,7 +9298,7 @@ var BrainNotesApp = (() => {
         await load();
         setStatus2(`Added ${proposal.property} to brainnotes.toml.`, "is-success");
       } finally {
-        setMutationBusy(false);
+        setMutationBusy2(false);
       }
     };
     const addProposal = async (proposal) => {
@@ -9281,7 +9310,7 @@ var BrainNotesApp = (() => {
         setStatus2("This inferred definition cannot be added.", "is-error");
         return;
       }
-      setMutationBusy(true);
+      setMutationBusy2(true);
       setStatus2("Previewing the inferred definition...", "is-loading");
       try {
         const outcome = await previewPropertySchema(fetcher, config.token, {
@@ -9308,7 +9337,7 @@ var BrainNotesApp = (() => {
           }
         });
       } finally {
-        setMutationBusy(false);
+        setMutationBusy2(false);
       }
     };
     const load = async () => {
@@ -9801,7 +9830,7 @@ var BrainNotesApp = (() => {
       );
       await options.reload();
     };
-    const runApply = async (previewID) => {
+    const runApply2 = async (previewID) => {
       options.setBusy(true);
       options.setStatus("Applying change...", "is-loading");
       try {
@@ -9815,7 +9844,7 @@ var BrainNotesApp = (() => {
         options.setBusy(false);
       }
     };
-    const runPreview = async (request) => {
+    const runPreview2 = async (request) => {
       options.setBusy(true);
       options.setStatus("Previewing change...", "is-loading");
       try {
@@ -9831,7 +9860,7 @@ var BrainNotesApp = (() => {
           confirmLabel: actionConfirmLabel(request.action),
           result,
           onConfirm: () => {
-            void runApply(result.preview_id);
+            void runApply2(result.preview_id);
           },
           onCancel: () => {
             options.setStatus("Change canceled.");
@@ -9917,7 +9946,7 @@ var BrainNotesApp = (() => {
         options.setBusy(false);
       }
     };
-    return { previewSchema, runImmediate, runPreview, runUndo };
+    return { previewSchema, runImmediate, runPreview: runPreview2, runUndo };
   };
 
   // internal/web/static_src/properties-workbench.ts
@@ -10039,7 +10068,7 @@ var BrainNotesApp = (() => {
       token: host.token,
       updateRowText
     });
-    const { previewSchema, runImmediate, runPreview } = mutations;
+    const { previewSchema, runImmediate, runPreview: runPreview2 } = mutations;
     runUndo = mutations.runUndo;
     const buildValueControl = (form, current, seed) => {
       const control = createValueControl(doc, {
@@ -10103,7 +10132,7 @@ var BrainNotesApp = (() => {
         return;
       }
       if (action === "unset" || action === "repair") {
-        void runPreview({ action, property: host.property, notes });
+        void runPreview2({ action, property: host.property, notes });
         return;
       }
       if (!editorEl || !current) {
@@ -10130,7 +10159,7 @@ var BrainNotesApp = (() => {
             if (newName === host.property) {
               return "Enter a name different from the current one.";
             }
-            void runPreview({
+            void runPreview2({
               action,
               property: host.property,
               new_name: newName,
@@ -10151,7 +10180,7 @@ var BrainNotesApp = (() => {
             if (!matchValue) {
               return "Choose the value to replace first.";
             }
-            void runPreview({
+            void runPreview2({
               action,
               property: host.property,
               notes,
@@ -10160,7 +10189,7 @@ var BrainNotesApp = (() => {
             });
             return null;
           }
-          void runPreview({ action, property: host.property, notes, value });
+          void runPreview2({ action, property: host.property, notes, value });
           return null;
         };
       });
@@ -10189,7 +10218,7 @@ var BrainNotesApp = (() => {
       }
       const unset = target.closest("[data-property-row-unset]");
       if (unset && !unset.disabled) {
-        void runPreview({
+        void runPreview2({
           action: "unset",
           property: host.property,
           notes: [unset.getAttribute("data-property-row-unset") || ""]
@@ -11294,10 +11323,106 @@ var BrainNotesApp = (() => {
     return identity.key !== "" && identity.path !== "" && identity.route !== "" ? identity : null;
   };
 
+  // internal/web/static_src/related-actions.ts
+  var itemActions = [
+    "view",
+    "open_editor",
+    "useful",
+    "dismissed",
+    "later",
+    "clear"
+  ];
+  var feedbackStates = ["useful", "dismissed", "later"];
+  var buildRelatedItemForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("source", request.source);
+    body.set("candidate", request.candidate);
+    body.set("action", request.action);
+    if (request.until) {
+      body.set("until", request.until);
+    }
+    body.set("token", request.token);
+    return body;
+  };
+  var buildRelatedItemRequest = (request, keepalive = false) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": request.token
+    },
+    body: buildRelatedItemForm(request).toString(),
+    ...keepalive ? { keepalive: true } : {}
+  });
+  var normalizeFeedbackState = (value) => {
+    const state = normalizeParamValue(value).toLowerCase();
+    if (state === "clear" || feedbackStates.includes(state)) {
+      return state;
+    }
+    return void 0;
+  };
+  var normalizeRelatedItemResponse = (payload) => {
+    const record = asRecord(payload);
+    if (!record || !readBoolean(record.ok)) {
+      return null;
+    }
+    const action = normalizeParamValue(record.action).toLowerCase();
+    const source = normalizeIdentity(record.source);
+    const candidate = normalizeIdentity(record.candidate);
+    if (!itemActions.includes(action) || !source || !candidate) {
+      return null;
+    }
+    return {
+      ok: true,
+      action,
+      source,
+      candidate,
+      state: normalizeFeedbackState(record.state),
+      until: normalizeParamValue(record.until) || void 0,
+      opened: readBoolean(record.opened),
+      // Read through the same `/n/` guard the Brief's Open uses: this value ends
+      // up in window.location.assign, so it is a navigable note route or nothing.
+      destination: noteNavigationDestination(payload) || void 0,
+      recorded: typeof record.recorded === "boolean" ? record.recorded : void 0,
+      warning: normalizeParamValue(record.warning) || void 0
+    };
+  };
+  var itemErrorMessage = (payload, status) => {
+    const record = asRecord(payload);
+    return record && normalizeParamValue(record.message) || `Related action failed (${status}).`;
+  };
+  var requestRelatedItem = async (fetcher, endpoint, request) => {
+    const response = await fetcher(endpoint, buildRelatedItemRequest(request));
+    const payload = await readResponsePayload(response);
+    if (!response.ok) {
+      throw new Error(itemErrorMessage(payload, response.status));
+    }
+    const result = normalizeRelatedItemResponse(payload);
+    if (!result || result.action !== request.action || result.source.key !== request.source || result.candidate.key !== request.candidate) {
+      throw new Error("Related action returned an invalid response.");
+    }
+    return result;
+  };
+  var trackRelatedView = (fetcher, beacon, endpoint, request) => {
+    const viewRequest = { ...request, action: "view" };
+    if (beacon) {
+      try {
+        const body = new Blob([buildRelatedItemForm(viewRequest).toString()], {
+          type: "application/x-www-form-urlencoded; charset=UTF-8"
+        });
+        if (beacon(endpoint, body)) {
+          return;
+        }
+      } catch {
+      }
+    }
+    void fetcher(endpoint, buildRelatedItemRequest(viewRequest, true)).catch(() => void 0);
+  };
+
   // internal/web/static_src/related-api.ts
   var relatedModes = ["balanced", "rediscover", "connect"];
   var reasonKinds = ["text", "graph", "metadata", "recall"];
-  var feedbackStates = ["useful", "dismissed", "later"];
+  var feedbackStates2 = ["useful", "dismissed", "later"];
   var normalizeRelatedMode = (value) => {
     const mode = normalizeParamValue(value).toLowerCase();
     return relatedModes.includes(mode) ? mode : null;
@@ -11356,7 +11481,7 @@ var BrainNotesApp = (() => {
     }
     const candidate = normalizeIdentity(record.candidate);
     const state = normalizeParamValue(record.state).toLowerCase();
-    if (!candidate || !feedbackStates.includes(state)) {
+    if (!candidate || !feedbackStates2.includes(state)) {
       return null;
     }
     const until = normalizeParamValue(record.until);
@@ -11419,94 +11544,6 @@ var BrainNotesApp = (() => {
       throw new Error("Related notes returned an invalid response.");
     }
     return normalized;
-  };
-
-  // internal/web/static_src/related-actions.ts
-  var itemActions = [
-    "view",
-    "open_editor",
-    "useful",
-    "dismissed",
-    "later",
-    "clear"
-  ];
-  var feedbackStates2 = ["useful", "dismissed", "later"];
-  var buildRelatedItemForm = (request) => {
-    const body = new URLSearchParams();
-    body.set("source", request.source);
-    body.set("candidate", request.candidate);
-    body.set("action", request.action);
-    if (request.until) {
-      body.set("until", request.until);
-    }
-    body.set("token", request.token);
-    return body;
-  };
-  var buildRelatedItemRequest = (request, keepalive = false) => ({
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-BN-CSRF": request.token
-    },
-    body: buildRelatedItemForm(request).toString(),
-    ...keepalive ? { keepalive: true } : {}
-  });
-  var normalizeRelatedItemResponse = (payload) => {
-    const record = asRecord(payload);
-    if (!record || !readBoolean(record.ok)) {
-      return null;
-    }
-    const action = normalizeParamValue(record.action).toLowerCase();
-    const source = normalizeIdentity(record.source);
-    const candidate = normalizeIdentity(record.candidate);
-    if (!itemActions.includes(action) || !source || !candidate) {
-      return null;
-    }
-    const stateValue = normalizeParamValue(record.state).toLowerCase();
-    const state = feedbackStates2.includes(stateValue) || stateValue === "clear" ? stateValue : void 0;
-    return {
-      ok: true,
-      action,
-      source,
-      candidate,
-      state,
-      until: normalizeParamValue(record.until) || void 0,
-      opened: readBoolean(record.opened),
-      recorded: typeof record.recorded === "boolean" ? record.recorded : void 0,
-      warning: normalizeParamValue(record.warning) || void 0
-    };
-  };
-  var itemErrorMessage = (payload, status) => {
-    const record = asRecord(payload);
-    return record && normalizeParamValue(record.message) || `Related action failed (${status}).`;
-  };
-  var requestRelatedItem = async (fetcher, endpoint, request) => {
-    const response = await fetcher(endpoint, buildRelatedItemRequest(request));
-    const payload = await readResponsePayload(response);
-    if (!response.ok) {
-      throw new Error(itemErrorMessage(payload, response.status));
-    }
-    const result = normalizeRelatedItemResponse(payload);
-    if (!result || result.action !== request.action || result.source.key !== request.source || result.candidate.key !== request.candidate) {
-      throw new Error("Related action returned an invalid response.");
-    }
-    return result;
-  };
-  var trackRelatedView = (fetcher, beacon, endpoint, request) => {
-    const viewRequest = { ...request, action: "view" };
-    if (beacon) {
-      try {
-        const body = new Blob([buildRelatedItemForm(viewRequest).toString()], {
-          type: "application/x-www-form-urlencoded; charset=UTF-8"
-        });
-        if (beacon(endpoint, body)) {
-          return;
-        }
-      } catch {
-      }
-    }
-    void fetcher(endpoint, buildRelatedItemRequest(viewRequest, true)).catch(() => void 0);
   };
 
   // internal/web/static_src/related-model.ts
@@ -11887,14 +11924,8 @@ var BrainNotesApp = (() => {
     }
   };
 
-  // internal/web/static_src/related-controller.ts
-  var readRelatedConfig = (root) => ({
-    source: (root.getAttribute("data-related-source-key") || "").trim(),
-    endpoint: root.getAttribute("data-related-endpoint") || "/api/related",
-    itemEndpoint: root.getAttribute("data-related-item-endpoint") || "/api/related/item",
-    csrfToken: root.getAttribute("data-related-csrf") || ""
-  });
-  var errorMessage = (error) => error instanceof Error && error.message !== "" ? error.message : "Related notes could not be loaded.";
+  // internal/web/static_src/related-loader.ts
+  var relatedErrorMessage = (error) => error instanceof Error && error.message !== "" ? error.message : "Related notes could not be loaded.";
   var statusForMode = (model, mode) => {
     const state = model.modes[mode];
     if (state.loading) {
@@ -11912,33 +11943,20 @@ var BrainNotesApp = (() => {
     }
     return ["Select a mode to load related notes.", ""];
   };
-  var actionFromValue = (value) => {
-    switch (value) {
-      case "open_editor":
-      case "useful":
-      case "dismissed":
-      case "later":
-      case "clear":
-        return value;
-      default:
-        return null;
-    }
+  var applyResponse = (model, view, mode, limit, response) => {
+    const state = model.modes[mode];
+    state.limit = limit;
+    state.loaded = true;
+    state.stale = false;
+    state.response = response;
+    model.feedback = response.feedback;
+    model.serverDate = response.serverDate;
+    renderRelatedResponse(view, response, limit);
+    renderRelatedFeedback(view, model.feedback);
   };
-  var cardForCandidate = (view, mode, candidate) => {
-    for (const card of view.results[mode].querySelectorAll("[data-related-card]")) {
-      if (card.getAttribute("data-related-card") === candidate) {
-        return card;
-      }
-    }
-    return null;
-  };
-  var createRelatedController = (root, deps = {}) => {
-    const config = readRelatedConfig(root);
+  var createRelatedLoader = (root, config, fetcher) => {
     const model = createRelatedModel();
     const view = createRelatedView(root);
-    const request = deps.fetch || fetch;
-    const fetcher = (input, init) => request(input, init);
-    const beacon = deps.sendBeacon || (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function" ? navigator.sendBeacon.bind(navigator) : void 0);
     const requestIDs = { balanced: 0, rediscover: 0, connect: 0 };
     const loadPromises = {
       balanced: null,
@@ -11969,24 +11987,23 @@ var BrainNotesApp = (() => {
       const loadPromise = (async () => {
         let succeeded = false;
         try {
-          const response = await requestRelated(fetcher, config.endpoint, config.source, mode, requestedLimit);
+          const response = await requestRelated(
+            fetcher,
+            config.endpoint,
+            config.source,
+            mode,
+            requestedLimit
+          );
           if (requestIDs[mode] !== requestID) {
             return false;
           }
-          state.limit = requestedLimit;
-          state.loaded = true;
-          state.stale = false;
-          state.response = response;
-          model.feedback = response.feedback;
-          model.serverDate = response.serverDate;
-          renderRelatedResponse(view, response, requestedLimit);
-          renderRelatedFeedback(view, model.feedback);
+          applyResponse(model, view, mode, requestedLimit, response);
           succeeded = true;
         } catch (error) {
           if (requestIDs[mode] !== requestID) {
             return false;
           }
-          state.error = errorMessage(error);
+          state.error = relatedErrorMessage(error);
         } finally {
           if (requestIDs[mode] === requestID) {
             state.loading = false;
@@ -12005,68 +12022,126 @@ var BrainNotesApp = (() => {
       void loadPromise.then(clearLoadPromise, clearLoadPromise);
       return loadPromise;
     };
-    const refreshAfterMutation = async (mode) => {
+    const reload = async (mode) => {
       const pendingLoad = loadPromises[mode];
       if (pendingLoad) {
         await pendingLoad;
       }
       return load(mode, model.modes[mode].limit);
     };
-    const selectMode = (mode) => {
-      model.activeMode = mode;
-      selectRelatedModeView(view, mode);
-      showStatus(mode);
-      const state = model.modes[mode];
-      if ((!state.loaded || state.stale) && !state.loading) {
-        void load(mode, state.limit);
+    return { model, view, load, reload, setStatus: setStatus2, showStatus };
+  };
+
+  // internal/web/static_src/related-mutations.ts
+  var cardForCandidate = (view, mode, candidate) => {
+    for (const card of view.results[mode].querySelectorAll("[data-related-card]")) {
+      if (card.getAttribute("data-related-card") === candidate) {
+        return card;
       }
+    }
+    return null;
+  };
+  var mutationTargets = (view, mode, candidate, origin) => {
+    const cards = Array.from(
+      view.results[mode].querySelectorAll("[data-related-card]")
+    );
+    const index = cards.findIndex((item) => item.getAttribute("data-related-card") === candidate);
+    const sibling = (offset) => cards[index + offset]?.getAttribute("data-related-card") || "";
+    return {
+      card: origin.closest("[data-related-card]"),
+      drawerRow: origin.closest("[data-related-feedback-row]"),
+      next: index >= 0 ? sibling(1) : "",
+      previous: index > 0 ? sibling(-1) : ""
     };
-    const markInactiveModesStale = () => {
-      for (const definition of relatedModeDefinitions) {
-        if (definition.mode !== model.activeMode) {
-          model.modes[definition.mode].stale = true;
-        }
+  };
+  var setMutationBusy = (targets, busy) => {
+    if (targets.card && (busy || targets.card.isConnected)) {
+      setRelatedCardBusy(targets.card, busy);
+    }
+    if (targets.drawerRow && (busy || targets.drawerRow.isConnected)) {
+      setRelatedFeedbackBusy(targets.drawerRow, busy);
+    }
+  };
+  var focusAfterMutation = (loader, candidate, targets) => {
+    const { model, view } = loader;
+    const fromDrawer = targets.drawerRow !== null;
+    const preferred = fromDrawer ? [candidate] : [candidate, targets.next, targets.previous];
+    for (const key of preferred) {
+      if (key === "") {
+        continue;
       }
-    };
-    const focusAfterMutation = (candidate, nextCandidate, previousCandidate, fromDrawer) => {
-      const preferred = fromDrawer ? [candidate] : [candidate, nextCandidate, previousCandidate];
-      for (const key of preferred) {
-        if (key === "") {
-          continue;
-        }
-        const card = cardForCandidate(view, model.activeMode, key);
-        if (card) {
-          card.focus({ preventScroll: true });
-          return;
-        }
-      }
-      (fromDrawer ? view.feedbackSummary : view.tabs[model.activeMode]).focus({ preventScroll: true });
-    };
-    const runMutation = async (action, candidate, until, origin) => {
-      if (config.source === "" || config.csrfToken === "" || candidate === "") {
-        setStatus2("Related action unavailable.", "is-error");
+      const card = cardForCandidate(view, model.activeMode, key);
+      if (card) {
+        card.focus({ preventScroll: true });
         return;
       }
-      if (action === "later") {
-        const validationError = validateRelatedLaterDate(model.serverDate, until);
-        if (validationError) {
-          setStatus2(validationError, "is-error");
-          return;
-        }
+    }
+    (fromDrawer ? view.feedbackSummary : view.tabs[model.activeMode]).focus({ preventScroll: true });
+  };
+  var markInactiveModesStale = (model) => {
+    for (const definition of relatedModeDefinitions) {
+      if (definition.mode !== model.activeMode) {
+        model.modes[definition.mode].stale = true;
       }
-      const card = origin.closest("[data-related-card]");
-      const drawerRow = origin.closest("[data-related-feedback-row]");
-      const cards = Array.from(view.results[model.activeMode].querySelectorAll("[data-related-card]"));
-      const index = cards.findIndex((item) => item.getAttribute("data-related-card") === candidate);
-      const nextCandidate = index >= 0 ? cards[index + 1]?.getAttribute("data-related-card") || "" : "";
-      const previousCandidate = index > 0 ? cards[index - 1]?.getAttribute("data-related-card") || "" : "";
-      if (card) {
-        setRelatedCardBusy(card, true);
+    }
+  };
+  var feedbackOutcome = (action, until) => {
+    switch (action) {
+      case "dismissed":
+        return "Dismissed note.";
+      case "later":
+        return `Hidden until ${until}.`;
+      case "clear":
+        return "Cleared feedback.";
+      default:
+        return "Marked note as useful.";
+    }
+  };
+  var reportOpenOutcome = (loader, result) => {
+    if (result.warning) {
+      loader.setStatus(
+        result.destination ? `${result.warning} Open the note from its title link.` : `Editor opened. ${result.warning}`,
+        "is-warning"
+      );
+      return;
+    }
+    if (result.destination) {
+      window.location.assign(result.destination);
+      return;
+    }
+    loader.setStatus("Opened in editor and recorded in recall history.", "is-success");
+  };
+  var applyFeedbackOutcome = async (loader, action, candidate, until, targets) => {
+    const { model } = loader;
+    markInactiveModesStale(model);
+    const activeMode = model.activeMode;
+    const activeState = model.modes[activeMode];
+    const refreshed = await loader.reload(activeMode);
+    if (!refreshed) {
+      loader.setStatus(
+        `Feedback was saved, but related notes could not be refreshed: ${activeState.error || "refresh failed"}`,
+        "is-warning"
+      );
+      return;
+    }
+    loader.setStatus(feedbackOutcome(action, until), "is-success");
+    focusAfterMutation(loader, candidate, targets);
+  };
+  var createRelatedMutation = (loader, config, fetcher) => {
+    const { model, view } = loader;
+    return async (action, candidate, until, origin) => {
+      if (config.source === "" || config.csrfToken === "" || candidate === "") {
+        loader.setStatus("Related action unavailable.", "is-error");
+        return;
       }
-      if (drawerRow) {
-        setRelatedFeedbackBusy(drawerRow, true);
+      const laterError = action === "later" ? validateRelatedLaterDate(model.serverDate, until) : "";
+      if (laterError !== "") {
+        loader.setStatus(laterError, "is-error");
+        return;
       }
-      setStatus2(action === "open_editor" ? "Opening editor\u2026" : "Saving feedback\u2026", "is-loading");
+      const targets = mutationTargets(view, model.activeMode, candidate, origin);
+      setMutationBusy(targets, true);
+      loader.setStatus(action === "open_editor" ? "Opening note\u2026" : "Saving feedback\u2026", "is-loading");
       try {
         const result = await requestRelatedItem(fetcher, config.itemEndpoint, {
           source: config.source,
@@ -12076,59 +12151,62 @@ var BrainNotesApp = (() => {
           ...until ? { until } : {}
         });
         if (action === "open_editor") {
-          if (result.warning) {
-            setStatus2(`Editor opened. ${result.warning}`, "is-warning");
-          } else {
-            setStatus2("Opened in editor and recorded in recall history.", "is-success");
-          }
+          reportOpenOutcome(loader, result);
           return;
         }
-        markInactiveModesStale();
-        const activeMode = model.activeMode;
-        const activeState = model.modes[activeMode];
-        const refreshed = await refreshAfterMutation(activeMode);
-        if (!refreshed) {
-          setStatus2(
-            `Feedback was saved, but related notes could not be refreshed: ${activeState.error || "refresh failed"}`,
-            "is-warning"
-          );
-          return;
-        }
-        const outcome = action === "dismissed" ? "Dismissed note." : action === "later" ? `Hidden until ${until}.` : action === "clear" ? "Cleared feedback." : "Marked note as useful.";
-        setStatus2(outcome, "is-success");
-        focusAfterMutation(candidate, nextCandidate, previousCandidate, drawerRow !== null);
+        await applyFeedbackOutcome(loader, action, candidate, until, targets);
       } catch (error) {
-        setStatus2(errorMessage(error), "is-error");
+        loader.setStatus(relatedErrorMessage(error), "is-error");
       } finally {
-        if (card?.isConnected) {
-          setRelatedCardBusy(card, false);
-        }
-        if (drawerRow?.isConnected) {
-          setRelatedFeedbackBusy(drawerRow, false);
-        }
+        setMutationBusy(targets, false);
       }
     };
+  };
+
+  // internal/web/static_src/related-controller.ts
+  var readRelatedConfig = (root) => ({
+    source: (root.getAttribute("data-related-source-key") || "").trim(),
+    endpoint: root.getAttribute("data-related-endpoint") || "/api/related",
+    itemEndpoint: root.getAttribute("data-related-item-endpoint") || "/api/related/item",
+    csrfToken: root.getAttribute("data-related-csrf") || ""
+  });
+  var actionFromValue = (value) => {
+    switch (value) {
+      case "open_editor":
+      case "useful":
+      case "dismissed":
+      case "later":
+      case "clear":
+        return value;
+      default:
+        return null;
+    }
+  };
+  var nextModeIndex = (key, currentIndex) => {
+    const count = relatedModeDefinitions.length;
+    switch (key) {
+      case "ArrowLeft":
+        return (currentIndex - 1 + count) % count;
+      case "ArrowRight":
+        return (currentIndex + 1) % count;
+      case "Home":
+        return 0;
+      case "End":
+        return count - 1;
+      default:
+        return null;
+    }
+  };
+  var wireModeTabs = (loader, selectMode) => {
+    const { model, view } = loader;
     for (const definition of relatedModeDefinitions) {
       const { mode } = definition;
       view.tabs[mode].addEventListener("click", () => selectMode(mode));
       view.tabs[mode].addEventListener("keydown", (event) => {
         const currentIndex = relatedModeDefinitions.findIndex((item) => item.mode === mode);
-        let targetIndex = currentIndex;
-        switch (event.key) {
-          case "ArrowLeft":
-            targetIndex = (currentIndex - 1 + relatedModeDefinitions.length) % relatedModeDefinitions.length;
-            break;
-          case "ArrowRight":
-            targetIndex = (currentIndex + 1) % relatedModeDefinitions.length;
-            break;
-          case "Home":
-            targetIndex = 0;
-            break;
-          case "End":
-            targetIndex = relatedModeDefinitions.length - 1;
-            break;
-          default:
-            return;
+        const targetIndex = nextModeIndex(event.key, currentIndex);
+        if (targetIndex === null) {
+          return;
         }
         event.preventDefault();
         const targetMode = relatedModeDefinitions[targetIndex].mode;
@@ -12140,40 +12218,52 @@ var BrainNotesApp = (() => {
         if (state.loading || state.limit >= RELATED_MAX_LIMIT || !state.response?.hasMore) {
           return;
         }
-        void load(mode, nextRelatedLimit(state.limit));
+        void loader.load(mode, nextRelatedLimit(state.limit));
       });
     }
+  };
+  var trackViewClick = (target, config, fetcher, beacon) => {
+    const link = target?.closest("[data-related-view-candidate]");
+    if (!link) {
+      return false;
+    }
+    const candidate = link.getAttribute("data-related-view-candidate") || "";
+    if (candidate && config.source && config.csrfToken) {
+      trackRelatedView(fetcher, beacon, config.itemEndpoint, {
+        source: config.source,
+        candidate,
+        token: config.csrfToken
+      });
+    }
+    return true;
+  };
+  var actionClickFromTarget = (target) => {
+    const button = target?.closest("[data-related-action]");
+    if (!button || button.disabled) {
+      return null;
+    }
+    const action = actionFromValue(button.getAttribute("data-related-action") || "");
+    if (!action) {
+      return null;
+    }
+    const pressed = action === "useful" && button.getAttribute("aria-pressed") === "true";
+    return {
+      action: pressed ? "clear" : action,
+      candidate: button.getAttribute("data-related-candidate") || "",
+      until: button.getAttribute("data-related-until") || "",
+      button
+    };
+  };
+  var wireRootEvents = (root, config, fetcher, beacon, runMutation) => {
     root.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      const link = target?.closest("[data-related-view-candidate]");
-      if (link) {
-        const candidate = link.getAttribute("data-related-view-candidate") || "";
-        if (candidate && config.source && config.csrfToken) {
-          trackRelatedView(fetcher, beacon, config.itemEndpoint, {
-            source: config.source,
-            candidate,
-            token: config.csrfToken
-          });
-        }
+      if (trackViewClick(target, config, fetcher, beacon)) {
         return;
       }
-      const button = target?.closest("[data-related-action]");
-      if (!button || button.disabled) {
-        return;
+      const click = actionClickFromTarget(target);
+      if (click) {
+        void runMutation(click.action, click.candidate, click.until, click.button);
       }
-      let action = actionFromValue(button.getAttribute("data-related-action") || "");
-      if (!action) {
-        return;
-      }
-      if (action === "useful" && button.getAttribute("aria-pressed") === "true") {
-        action = "clear";
-      }
-      void runMutation(
-        action,
-        button.getAttribute("data-related-candidate") || "",
-        button.getAttribute("data-related-until") || "",
-        button
-      );
     });
     root.addEventListener("submit", (event) => {
       const form = event.target instanceof HTMLFormElement ? event.target : null;
@@ -12182,11 +12272,35 @@ var BrainNotesApp = (() => {
       }
       event.preventDefault();
       const input = form.querySelector("[data-related-later-date]");
-      void runMutation("later", form.getAttribute("data-related-later-form") || "", input?.value || "", form);
+      void runMutation(
+        "later",
+        form.getAttribute("data-related-later-form") || "",
+        input?.value || "",
+        form
+      );
     });
+  };
+  var defaultBeacon = (deps) => deps.sendBeacon || (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function" ? navigator.sendBeacon.bind(navigator) : void 0);
+  var createRelatedController = (root, deps = {}) => {
+    const config = readRelatedConfig(root);
+    const request = deps.fetch || fetch;
+    const fetcher = (input, init) => request(input, init);
+    const loader = createRelatedLoader(root, config, fetcher);
+    const { model, view } = loader;
+    const selectMode = (mode) => {
+      model.activeMode = mode;
+      selectRelatedModeView(view, mode);
+      loader.showStatus(mode);
+      const state = model.modes[mode];
+      if ((!state.loaded || state.stale) && !state.loading) {
+        void loader.load(mode, state.limit);
+      }
+    };
+    wireModeTabs(loader, selectMode);
+    wireRootEvents(root, config, fetcher, defaultBeacon(deps), createRelatedMutation(loader, config, fetcher));
     if (config.source === "") {
       model.modes.balanced.error = "Related notes are unavailable for this page.";
-      showStatus("balanced");
+      loader.showStatus("balanced");
       return;
     }
     selectMode("balanced");
@@ -12348,7 +12462,7 @@ var BrainNotesApp = (() => {
       receipt = next;
       hooks.onReceipt?.(next);
     };
-    const runApply = async (issued) => {
+    const runApply2 = async (issued) => {
       setStatus2(`Saving view "${issued.name}"...`, "is-loading");
       const outcome = await applySavedView(deps.fetch, deps.token, issued.previewID);
       setPending(null);
@@ -12400,7 +12514,7 @@ var BrainNotesApp = (() => {
         }
         const receipt2 = savedViewPendingSave(input.name, outcome.result);
         if (receipt2.created) {
-          await runApply(receipt2);
+          await runApply2(receipt2);
           return;
         }
         setPending(receipt2);
@@ -12420,7 +12534,7 @@ var BrainNotesApp = (() => {
       }
       busy = true;
       try {
-        await runApply(issued);
+        await runApply2(issued);
       } finally {
         busy = false;
       }
@@ -13445,7 +13559,13 @@ var BrainNotesApp = (() => {
     heading.id = "synthesize-generate-heading";
     heading.textContent = "Generated candidate";
     const intro = element(doc, "p", "synthesize-section-intro");
-    intro.textContent = config.agentEnabled ? "Generation sends the prepared context packet to your configured [agent].command. The candidate is shown here and never replaces your draft on its own." : "Generation is unavailable until [agent].command is configured. Everything else on this page works without an agent.";
+    intro.textContent = config.agentEnabled ? "Generation sends the prepared context packet to your configured [agent].command. The candidate is shown here and never replaces your draft on its own." : (
+      // Why generation is unavailable is the server's answer, rendered in the
+      // status line beside this one: a hosted vault cannot start a process at
+      // all, and telling its reader to configure [agent].command would send
+      // them editing a file on a machine they are not using.
+      "Everything else on this page works without an agent."
+    );
     const actions = element(doc, "div", "synthesize-generate-actions");
     const generate = element(doc, "button", "synthesize-action", {
       "data-synthesize-generate": ""
@@ -13774,7 +13894,7 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/synthesize-runtime.ts
-  var errorMessage2 = (error, fallback) => error instanceof Error && error.message !== "" ? error.message : fallback;
+  var errorMessage = (error, fallback) => error instanceof Error && error.message !== "" ? error.message : fallback;
   var errorCode = (error) => error instanceof SynthesisRequestError ? error.code : "";
   var modeLabel = (mode) => relatedModeDefinitions.find((definition) => definition.mode === mode)?.label || mode;
   var SUGGESTIONS_EMPTY = "No suggestions are available in this mode.";
@@ -13945,7 +14065,7 @@ var BrainNotesApp = (() => {
         runtime.render();
         setStatusText(
           view.contextStatus,
-          errorMessage2(error, "The context packet could not be built."),
+          errorMessage(error, "The context packet could not be built."),
           "is-error"
         );
       } finally {
@@ -14028,7 +14148,7 @@ var BrainNotesApp = (() => {
         }
         setStatusText(
           view.generateStatus,
-          errorMessage2(error, "The generation command failed."),
+          errorMessage(error, "The generation command failed."),
           "is-error"
         );
       } finally {
@@ -14326,7 +14446,7 @@ ${candidate.markdown}`;
         runtime.render();
         setStatusText(
           view.previewStatus,
-          errorMessage2(error, "The note preview could not be built."),
+          errorMessage(error, "The note preview could not be built."),
           "is-error"
         );
       } finally {
@@ -14373,7 +14493,7 @@ ${candidate.markdown}`;
         runtime.render();
         setStatusText(
           view.previewStatus,
-          `${errorMessage2(error, "The note could not be created.")} Preview again to retry; nothing you wrote was lost.`,
+          `${errorMessage(error, "The note could not be created.")} Preview again to retry; nothing you wrote was lost.`,
           "is-error"
         );
       } finally {
@@ -14512,7 +14632,7 @@ ${candidate.markdown}`;
         if (mode === activeMode) {
           setStatusText(
             view.suggestionStatus,
-            errorMessage2(error, "Suggestions could not be loaded."),
+            errorMessage(error, "Suggestions could not be loaded."),
             "is-error"
           );
         }
@@ -14574,7 +14694,7 @@ ${candidate.markdown}`;
         }
         runtime.searchEntries = null;
         view.searchResults.replaceChildren();
-        setStatusText(view.searchStatus, errorMessage2(error, "Search failed."), "is-error");
+        setStatusText(view.searchStatus, errorMessage(error, "Search failed."), "is-error");
       }
     };
     return { selectMode, runSearch };

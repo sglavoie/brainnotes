@@ -11,6 +11,8 @@ Three of the larger web surfaces have their own pages: the
 
 ```sh
 bn serve [--addr host:port] [--port N] [--no-open]
+bn serve --hosted [--addr host:port] [--no-open]
+bn serve --read-only --state-dir DIR [--replica-status-file FILE] [--no-open]
 ```
 
 Starts a local HTTP server for vault browsing and lightweight note management:
@@ -350,10 +352,57 @@ does not need to launch `node` or `npm`. If that binary is missing, it falls bac
 to `npm run build:web`. Binaries without the local checkout stamp fall back to
 detecting a checkout from the current directory, then to embedded assets.
 
-The default bind is localhost (`127.0.0.1:8729`). This is single-user local
-software; there is no auth layer. All side-effecting web routes use `POST`,
+### Serving modes
+
+`bn serve` publishes the vault under one of three profiles, chosen once at
+startup. `--read-only` and `--hosted` are mutually exclusive — they are different
+deployments, so the pair is refused rather than resolved.
+
+| | local (default) | `--read-only` | `--hosted` |
+| --- | --- | --- | --- |
+| Note, property, pin, cockpit, config writes | yes | no | yes |
+| Editor and `[agent].command` launches | yes | no | no |
+| Open action | starts the editor | navigates to `/n/<key>` | navigates to `/n/<key>` |
+| Request body limit | 32 MiB | 1 MiB | 1 MiB |
+
+Read-only is an allowlist: a route it does not name is unavailable, so its only
+writes are the Daily Brief visit and Open/Another activity records in the
+external `--state-dir`. Hosted is **not** read-only with writes re-enabled — the
+two dimensions are independent. A hosted server keeps every document action and
+refuses the routes that would start a *configured* command on the serving machine
+(`/api/config/open`, `/api/note/insight`, `/api/brief/insight`,
+`/api/daily-review/agent`, `/api/synthesis/generate`), which are refused before
+the handler reads the request and refused again at the one place each process
+would be started. That is the boundary being defended — a command a person named
+in `brainnotes.local.toml`, run on a machine nobody is sitting at — and not
+subprocesses as such: a hosted write still forks `git` through
+`internal/vaultgit`, because the Git safety engine is what makes the write
+recoverable, and it runs a fixed executable with argv the engine builds. The Ask AI, daily review, and synthesis generation controls
+report that this server does not launch processes, rather than advising a
+`[agent].command` that would change nothing on this machine.
+
+The default bind is localhost (`127.0.0.1:8729`). There is no auth layer in any
+mode; a server reachable from another machine belongs behind an authenticated
+reverse proxy or tunnel that protects every path, including attachments and
+readiness. All side-effecting web routes use `POST`,
 require a per-process CSRF token (`X-BN-CSRF` header or `token` form field),
-validate note route keys, and reject paths outside the vault. Overview bulk
+validate note route keys, and reject paths outside the vault. A state-changing
+request must additionally be same-origin — judged from `Sec-Fetch-Site` when the
+browser sends it, otherwise from `Origin` against the request host; a request
+with neither header is not a browser request and is left to the token. A request
+body over the profile's limit is rejected with `413`. Every response is
+`private, no-store` with `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: same-origin`, and `X-Frame-Options: DENY`, so an upstream
+shared cache retains nothing, the note being read stays out of the `Referer` of
+its external links, and no page can be framed into a clickjack of a write
+control the CSRF token would have accepted; `/static/`
+assets relax that to `private, no-cache` because the bundle holds no vault
+content. Attachments served from `/media` are declared by extension, and one
+whose type a browser would execute (HTML, XML, SVG, script) is sent under
+`Content-Security-Policy: sandbox` as a `Content-Disposition: attachment`
+download; a type merely sniffed from the bytes is downgraded to
+`application/octet-stream`. `brainnotes.toml`, `brainnotes.local.toml`, and every
+dot-path are never attachments, symlink aliases included. Overview bulk
 automation must `POST /api/notes/bulk/preview` first, then send the returned
 one-use `preview_id` to `POST /api/notes/bulk`; missing, stale, mismatched, or
 reused previews are rejected with `409`. Preview receipts stay process-local,
@@ -406,3 +455,4 @@ Over two weeks, from local state only:
 - [Related Notes explorer](web-related-notes.md)
 - [Synthesis workbench](web-synthesis.md)
 - [Health, Daily Fixes, and properties](web-health.md)
+- [Serving modes and capabilities](internals/serving-modes.md) — the internal contract behind the table above.

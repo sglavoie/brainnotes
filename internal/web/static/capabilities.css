@@ -14,20 +14,23 @@
 */
 
 /* Document writes: hidden wherever the vault is served read-only, including
-   controls rendered by JavaScript. */
+   controls rendered by JavaScript. The synthesis launch belongs here rather
+   than below: the workbench creates a note, and everything on it except the
+   optional generation step works without an agent, so a hosted vault keeps it. */
 html[data-read-only] :is(
  [data-capture-root], [data-pin-note], [data-pin-button],
  [data-trash-note], [data-create-note],
  [data-frontmatter-set], [data-frontmatter-unset],
- [data-saved-views-save], [data-saved-views-delete], [data-saved-views-edit],
+ [data-saved-views-save],
+ [data-synthesize-launch],
  [data-pinned-handle], .pinned-hint, [data-history-panel],
  [data-property-schema-save], [data-property-schema-delete], [data-property-schema-adopt],
  [data-property-action], [data-property-select-all], [data-property-clear-selection],
  [data-property-selection-count], [data-property-editor],
- [data-bulk-toolbar], [data-bulk-select], [data-bulk-action],
- [data-fix-action], [data-fixes-button],
- [data-overview-bulk], .overview-result-select, [data-overview-open],
- [data-property-row-select], [data-property-schema], .properties-schema-editor,
+ [data-bulk-trash], [data-bulk-move], [data-bulk-frontmatter-set], [data-bulk-frontmatter-unset],
+ [data-fixes-fix-action], [data-fixes-item-action], [data-fixes-button],
+ [data-overview-bulk], .overview-result-select,
+ [data-property-row-select], [data-property-schema],
  [data-related-action], [data-related-later-control], [data-related-feedback-drawer],
  .frontmatter-controls,
  .properties-proposal-actions, .properties-row-actions
@@ -37,14 +40,18 @@ html[data-read-only] :is(
    editor or agent command. Every AI control belongs here, as does the note
    page's "Open in editor" — a mode that navigates instead would send a reader
    to the note they are already on. The Brief's and the fix queue's Open are
-   deliberately absent: those navigate somewhere else and stay useful. */
+   deliberately absent from *this* group: those navigate somewhere else, so a
+   missing editor is no reason to hide them. Read-only hides the fix queue's
+   anyway — it posts to /api/open, which is not on the replica allowlist, and
+   the same button carries data-fixes-button above. The Brief's posts to
+   /api/brief/item, which is, so it survives every mode. Absent too is
+   /api/daily-review/agent, which no page renders a control for at all. */
 html[data-no-process-launch] :is(
  [data-open-editor], [data-open-button],
- [data-config-open], [data-open-config], [data-properties-config-open],
+ [data-properties-config-open],
  [data-note-insight], [data-brief-action-insight], [data-brief-insight-prompt],
- [data-brief-insight-panel], [data-brief-agent-unconfigured], .brief-insight,
- .brief-insight-composer, .brief-insight-prompt-field, .brief-action-hint,
- [data-daily-review-agent], [data-synthesize-launch],
+ [data-brief-insight-panel], [data-brief-agent-unconfigured],
+ .brief-insight-prompt-controls, .brief-insight-prompt-field, .brief-action-hint,
  .properties-proposals-note
 ) { display: none !important; }
 

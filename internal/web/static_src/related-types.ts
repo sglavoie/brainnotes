@@ -57,6 +57,13 @@ export type RelatedResponse = {
   feedback: RelatedFeedback[];
 };
 
+export type RelatedConfig = {
+  source: string;
+  endpoint: string;
+  itemEndpoint: string;
+  csrfToken: string;
+};
+
 export type RelatedFetch = (
   input: RequestInfo | URL,
   init?: RequestInit
@@ -86,6 +93,9 @@ export type RelatedItemResponse = {
   state?: RelatedFeedbackState | "clear";
   until?: string;
   opened: boolean;
+  // destination is the route an Open answered with when the server does not
+  // start editors. Empty means a process was started.
+  destination?: string;
   recorded?: boolean;
   warning?: string;
 };

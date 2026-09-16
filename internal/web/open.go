@@ -71,64 +71,17 @@ func (f *openFailure) Unwrap() error {
 }
 
 func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != openAPIRoutePath {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid request form", http.StatusBadRequest)
-		return
-	}
-
-	key := strings.TrimSpace(r.Form.Get("key"))
-	if key == "" {
-		http.Error(w, "missing key", http.StatusBadRequest)
-		return
-	}
-	if _, err := routePathForKey(noteRoutePrefix, key); err != nil {
-		http.Error(w, "invalid key", http.StatusBadRequest)
-		return
-	}
-
-	token := strings.TrimSpace(r.Header.Get(csrfHeaderName))
-	if token == "" {
-		token = strings.TrimSpace(r.Form.Get("token"))
-	}
-	if !csrfTokenMatches(s.csrfToken, token) {
-		http.Error(w, "csrf token required", http.StatusForbidden)
-		return
-	}
-
-	notePath := ""
-	ok := false
-	snapshot, err := s.state.currentSnapshot()
-	if err != nil {
-		notePath, err = s.notePathForOpenRouteFallback(key)
-		ok = notePath != ""
-		if err == nil && !ok {
-			http.Error(w, "snapshot error", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		notePath, ok, err = s.notePathForOpenKey(snapshot, key)
-	}
-	if err != nil {
-		switch {
-		case errors.Is(err, errOpenPathOutsideVault):
-			http.Error(w, "forbidden note path", http.StatusForbidden)
-		case errors.Is(err, os.ErrNotExist):
-			http.NotFound(w, r)
-		default:
-			http.Error(w, "note path error", http.StatusInternalServerError)
-		}
-		return
-	}
+	key, ok := readOpenNoteRequest(s, w, r)
 	if !ok {
+		return
+	}
+
+	notePath, found, err := s.openNotePath(key)
+	if err != nil {
+		writeOpenPathError(w, r, err, openSubjectNote)
+		return
+	}
+	if !found {
 		http.NotFound(w, r)
 		return
 	}
@@ -137,60 +90,71 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	// only exec in this handler is the one the local profile asked for.
 	if s.caps.browserOpen {
 		destination, err := s.noteNavigationTarget(notePath)
-		switch {
-		case err == nil:
-			writeManagementJSON(w, http.StatusOK, openNavigationResponse{OK: true, Destination: destination})
-		case errors.Is(err, errOpenPathOutsideVault):
-			http.Error(w, "forbidden note path", http.StatusForbidden)
-		case errors.Is(err, os.ErrNotExist):
-			http.NotFound(w, r)
-		default:
-			http.Error(w, "note path error", http.StatusInternalServerError)
+		if err != nil {
+			writeOpenPathError(w, r, err, openSubjectNote)
+			return
 		}
+		writeManagementJSON(w, http.StatusOK, openNavigationResponse{OK: true, Destination: destination})
 		return
 	}
 	if err := s.openPath(notePath); err != nil {
-		switch failureStage(err) {
-		case openFailureCapability:
-			http.Error(w, errProcessLaunchDisabled.Error(), http.StatusForbidden)
-			return
-		case openFailureStat:
-			if errors.Is(err, os.ErrNotExist) {
-				http.NotFound(w, r)
-				return
-			}
-			http.Error(w, "note stat error", http.StatusInternalServerError)
-			return
-		case openFailureResolvePath:
-			switch {
-			case errors.Is(err, errOpenPathOutsideVault):
-				http.Error(w, "forbidden note path", http.StatusForbidden)
-			case errors.Is(err, os.ErrNotExist):
-				http.NotFound(w, r)
-			default:
-				http.Error(w, "note path error", http.StatusInternalServerError)
-			}
-			return
-		case openFailureEditorSpec:
-			if errors.Is(err, editor.ErrNoEditorConfigured) {
-				http.Error(w, "editor not configured", http.StatusPreconditionFailed)
-				return
-			}
-			http.Error(w, "editor spec error", http.StatusInternalServerError)
-			return
-		case openFailureEditorTarget:
-			http.Error(w, "editor resolve error", http.StatusPreconditionFailed)
-			return
-		case openFailureEditorStart:
-			http.Error(w, "editor start error", http.StatusInternalServerError)
-			return
-		default:
-			http.Error(w, "editor start error", http.StatusInternalServerError)
-			return
-		}
+		writeOpenFailure(w, r, err, openSubjectNote)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// readOpenNoteRequest performs the route, method, form, key and CSRF checks POST
+// /api/open shares with every other management POST, and reports whether the
+// request may proceed. It has already answered when it reports false.
+func readOpenNoteRequest(s *Server, w http.ResponseWriter, r *http.Request) (string, bool) {
+	if r.URL.Path != openAPIRoutePath {
+		http.NotFound(w, r)
+		return "", false
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return "", false
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid request form", http.StatusBadRequest)
+		return "", false
+	}
+
+	key := strings.TrimSpace(r.Form.Get("key"))
+	if key == "" {
+		http.Error(w, "missing key", http.StatusBadRequest)
+		return "", false
+	}
+	if _, err := routePathForKey(noteRoutePrefix, key); err != nil {
+		http.Error(w, "invalid key", http.StatusBadRequest)
+		return "", false
+	}
+	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
+		http.Error(w, "csrf token required", http.StatusForbidden)
+		return "", false
+	}
+	return key, true
+}
+
+// openNotePath resolves a route key to an absolute note path. A snapshot that
+// cannot be built is not fatal on its own: the route-shaped fallback can still
+// find the file, and only a key that neither path resolves is a server error.
+func (s *Server) openNotePath(key string) (string, bool, error) {
+	snapshot, err := s.state.currentSnapshot()
+	if err == nil {
+		return s.notePathForOpenKey(snapshot, key)
+	}
+	notePath, err := s.notePathForOpenRouteFallback(key)
+	if err != nil {
+		return "", false, err
+	}
+	if notePath == "" {
+		return "", false, errOpenSnapshotUnavailable
+	}
+	return notePath, true, nil
 }
 
 // handleConfigOpen opens the active vault-local brainnotes.toml through the
@@ -211,11 +175,7 @@ func (s *Server) handleConfigOpen(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request form", http.StatusBadRequest)
 		return
 	}
-	token := strings.TrimSpace(r.Header.Get(csrfHeaderName))
-	if token == "" {
-		token = strings.TrimSpace(r.Form.Get("token"))
-	}
-	if !csrfTokenMatches(s.csrfToken, token) {
+	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
 		http.Error(w, "csrf token required", http.StatusForbidden)
 		return
 	}
@@ -227,36 +187,73 @@ func (s *Server) handleConfigOpen(w http.ResponseWriter, r *http.Request) {
 		configPath = filepath.Join(s.vault.Root, config.FileName)
 	}
 	if err := s.openPath(configPath); err != nil {
-		switch failureStage(err) {
-		case openFailureCapability:
-			http.Error(w, errProcessLaunchDisabled.Error(), http.StatusForbidden)
-		case openFailureStat:
-			if errors.Is(err, os.ErrNotExist) {
-				http.NotFound(w, r)
-				return
-			}
-			http.Error(w, "config stat error", http.StatusInternalServerError)
-		case openFailureResolvePath:
-			if errors.Is(err, errOpenPathOutsideVault) {
-				http.Error(w, "forbidden config path", http.StatusForbidden)
-				return
-			}
-			http.Error(w, "config path error", http.StatusInternalServerError)
-		case openFailureEditorSpec:
-			if errors.Is(err, editor.ErrNoEditorConfigured) {
-				http.Error(w, "editor not configured", http.StatusPreconditionFailed)
-				return
-			}
-			http.Error(w, "editor spec error", http.StatusInternalServerError)
-		case openFailureEditorTarget:
-			http.Error(w, "editor resolve error", http.StatusPreconditionFailed)
-		default:
-			http.Error(w, "editor start error", http.StatusInternalServerError)
-		}
+		writeOpenFailure(w, r, err, openSubjectConfig)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// The two things this server will open on request. They exist so the shared
+// failure mapping below names the right noun without either handler keeping its
+// own copy of the switch — which is how the two came to disagree about which
+// resolution failures were a 404.
+const (
+	openSubjectNote   = "note"
+	openSubjectConfig = "config"
+)
+
+// errOpenSnapshotUnavailable is the one failure that is neither containment nor
+// an absent file: the vault snapshot could not be built and the route-shaped
+// fallback found nothing either, so the server cannot say whether the key names
+// a real note.
+var errOpenSnapshotUnavailable = errors.New("web: vault snapshot unavailable")
+
+// writeOpenPathError maps a path-resolution failure onto a status. Containment
+// is a 403 and an absent target a 404, so a caller cannot distinguish "outside
+// the vault" from "not there" by anything but a path it already supplied.
+func writeOpenPathError(w http.ResponseWriter, r *http.Request, err error, subject string) {
+	switch {
+	case errors.Is(err, errOpenPathOutsideVault):
+		http.Error(w, "forbidden "+subject+" path", http.StatusForbidden)
+	case errors.Is(err, os.ErrNotExist):
+		http.NotFound(w, r)
+	case errors.Is(err, errOpenSnapshotUnavailable):
+		http.Error(w, "snapshot error", http.StatusInternalServerError)
+	default:
+		http.Error(w, subject+" path error", http.StatusInternalServerError)
+	}
+}
+
+// writeOpenFailure maps an openPath failure onto a status. The stage says which
+// step failed and the subject says what was being opened; every editor stage is
+// about this machine's configuration rather than about the target, so those
+// messages are the same for a note and for the configuration file.
+func writeOpenFailure(w http.ResponseWriter, r *http.Request, err error, subject string) {
+	switch failureStage(err) {
+	case openFailureCapability:
+		// The sentinel's own text carries the package prefix every internal Go
+		// error here carries; what reaches the browser is written for a reader.
+		http.Error(w, "process launch is unavailable in this serving mode", http.StatusForbidden)
+	case openFailureStat:
+		if errors.Is(err, os.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, subject+" stat error", http.StatusInternalServerError)
+	case openFailureResolvePath:
+		writeOpenPathError(w, r, err, subject)
+	case openFailureEditorSpec:
+		if errors.Is(err, editor.ErrNoEditorConfigured) {
+			http.Error(w, "editor not configured", http.StatusPreconditionFailed)
+			return
+		}
+		http.Error(w, "editor spec error", http.StatusInternalServerError)
+	case openFailureEditorTarget:
+		http.Error(w, "editor resolve error", http.StatusPreconditionFailed)
+	default:
+		http.Error(w, "editor start error", http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) notePathForOpenKey(snapshot vaultSnapshot, key string) (string, bool, error) {

@@ -270,6 +270,34 @@ export const runApply = async (
   }
 };
 
+// completeApply decides what an answered apply meant. It is a function of its
+// own so runApply stays a request and a failure envelope: the three outcomes
+// here — a refusal the server described, a refusal it did not, and a success
+// that every other panel needs to hear about — are one decision, not three
+// branches sharing a try block.
+const completeApply = async (
+  ctx: DailyFixesContext,
+  id: string,
+  resp: { ok: boolean; status: number },
+  payload: unknown
+): Promise<void> => {
+  const result = resp.ok ? normalizeFixApplyResponse(payload) : null;
+  if (!result?.ok) {
+    ctx.clearPreview(id);
+    ctx.showError(
+      result
+        ? result.message || "Fix apply failed."
+        : normalizeManagementErrorMessage(resp.status, payload)
+    );
+    await ctx.loadQueue();
+    return;
+  }
+  ctx.previews.delete(id);
+  ctx.suppressNextMutation();
+  window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
+  await ctx.loadQueue(result.message || "Fix applied.");
+};
+
 // runOpen is the fix queue's Open action. A server that cannot start an editor
 // answers with the route to navigate to instead, so the queue stays useful in
 // hosted mode: the point of an Open here is reaching the offending note, and

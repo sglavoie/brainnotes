@@ -1,15 +1,11 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
-	"unicode/utf8"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
@@ -37,21 +33,7 @@ type briefInsightResponse struct {
 
 func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	if r.URL.Path != briefInsightAPIRoutePath {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+	if !s.requireManagementPost(w, r, briefInsightAPIRoutePath, 0) {
 		return
 	}
 
@@ -60,13 +42,8 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "brief card id is required"))
 		return
 	}
-	userPrompt := strings.TrimSpace(r.Form.Get("prompt"))
-	if !utf8.ValidString(userPrompt) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "AI prompt must be valid UTF-8"))
-		return
-	}
-	if utf8.RuneCountInString(userPrompt) > agentPromptMaxRunes {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "AI prompt must be %d characters or fewer", agentPromptMaxRunes))
+	userPrompt, ok := readAgentPrompt(w, r)
+	if !ok {
 		return
 	}
 	argv := append([]string(nil), cfg.Agent.Command...)
@@ -79,54 +56,22 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	snapshot, err := s.state.currentSnapshot()
-	if err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "snapshot error", err))
-		return
-	}
-	runtime, err := s.newBriefRuntime(snapshot)
-	if err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build brief service", err))
-		return
-	}
-	daily, err := runtime.service.Daily(runtime.selection.Snapshot)
-	if err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "load current brief", err))
-		return
-	}
-	if hasStateUnreadableWarning(daily.Warnings) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeConflict, "brief state unavailable"))
-		return
-	}
-	resolved, ok := resolveBriefCardByID(daily.Brief, cardID)
+	target, ok := s.resolveBriefInsightTarget(w, cardID)
 	if !ok {
-		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "brief card not found or stale"))
 		return
 	}
 
-	packet, err := s.buildBriefInsightPacket(runtime.selection, resolved.card, userPrompt)
+	packet, err := s.buildBriefInsightPacket(target.selection, target.resolved.card, userPrompt)
 	if err != nil {
 		writeBriefInsightBuildError(w, err)
 		return
 	}
 
-	ctx := r.Context()
-	if timeout := time.Duration(cfg.Agent.TimeoutSeconds) * time.Second; timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-	output, runErr := s.launchAgent(ctx, argv, packet)
-	if runErr != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "brief insight command timed out"))
-			return
-		}
-		message := "run brief insight command"
-		if diagnostic := agent.SanitizedDiagnostic(runErr); diagnostic != "" {
-			message += ": " + diagnostic
-		}
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, message, runErr))
+	output, ok := s.runAgentForRequest(w, r, argv, packet, cfg.Agent.TimeoutSeconds, agentRunLabels{
+		timeout: "brief insight command timed out",
+		failure: "run brief insight command",
+	})
+	if !ok {
 		return
 	}
 	rendered, err := s.markdown.render(string(output))
@@ -138,11 +83,56 @@ func (s *Server) handleBriefInsight(w http.ResponseWriter, r *http.Request) {
 	writeManagementJSON(w, http.StatusOK, briefInsightResponse{
 		OK:           true,
 		Enabled:      true,
-		CardID:       resolved.card.ID,
-		Slot:         resolved.slot,
+		CardID:       target.resolved.card.ID,
+		Slot:         target.resolved.slot,
 		Output:       string(output),
 		RenderedHTML: string(rendered),
 	})
+}
+
+// briefInsightTarget is the card an insight was asked about together with the
+// selection corpus that produced it. They travel together because a card ID is
+// only meaningful against one brief: resolving the card from a freshly built
+// brief and then ranking against a different corpus would quote notes the person
+// was never shown.
+type briefInsightTarget struct {
+	selection brief.SelectionCorpus
+	resolved  resolvedBriefCard
+}
+
+// resolveBriefInsightTarget rebuilds today's brief and finds the card the
+// request names. It has already answered when it reports false.
+//
+// A brief whose state could not be read is a conflict rather than a server
+// error: the brief is regenerated from scratch each time it is asked for, so an
+// unreadable state file means the card the person clicked may not be the card
+// that ID now refers to.
+func (s *Server) resolveBriefInsightTarget(w http.ResponseWriter, cardID brief.CardID) (briefInsightTarget, bool) {
+	snapshot, err := s.state.currentSnapshot()
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "snapshot error", err))
+		return briefInsightTarget{}, false
+	}
+	runtime, err := s.newBriefRuntime(snapshot)
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build brief service", err))
+		return briefInsightTarget{}, false
+	}
+	daily, err := runtime.service.Daily(runtime.selection.Snapshot)
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "load current brief", err))
+		return briefInsightTarget{}, false
+	}
+	if hasStateUnreadableWarning(daily.Warnings) {
+		writeManagementError(w, noteops.Errorf(noteops.CodeConflict, "brief state unavailable"))
+		return briefInsightTarget{}, false
+	}
+	resolved, ok := resolveBriefCardByID(daily.Brief, cardID)
+	if !ok {
+		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "brief card not found or stale"))
+		return briefInsightTarget{}, false
+	}
+	return briefInsightTarget{selection: runtime.selection, resolved: resolved}, true
 }
 
 func (s *Server) buildBriefInsightPacket(selection brief.SelectionCorpus, card brief.Card, userPrompt string) ([]byte, error) {

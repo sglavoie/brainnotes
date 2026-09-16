@@ -21,7 +21,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("daily fixes panel DOM behavior", () => {
+describe("daily fixes panel rendering", () => {
   it("loads grouped tasks, counts, warnings, and open keys", async () => {
     renderPanel();
     const fetchMock = vi.fn(async () => jsonResponse(queuePayload([brokenTask(), orphanTask()])));
@@ -45,7 +45,15 @@ describe("daily fixes panel DOM behavior", () => {
       )
     ).toEqual(["relink", "create_stub"]);
     expect(document.querySelectorAll('[data-fixes-id="task_orphan"] [data-fixes-fix-action]')).toHaveLength(0);
-    expect(document.querySelector("[data-fixes-open-key]")?.getAttribute("data-fixes-open-key")).toBe("work/source");
+    const openButton = document.querySelector("[data-fixes-open-key]");
+    expect(openButton?.getAttribute("data-fixes-open-key")).toBe("work/source");
+    // The second attribute is what hides this button in a read-only replica:
+    // static/capabilities.css hides [data-fixes-button] there, and the Open
+    // posts to /api/open, which the replica's POST allowlist refuses. Drop the
+    // attribute and the button stays on the page and answers 403. Nothing else
+    // in the tree asserts the pair — the Go test over that stylesheet can only
+    // read the stylesheet.
+    expect(openButton?.hasAttribute("data-fixes-button")).toBe(true);
   });
 
   it("renders advisory findings with labels, grouping, and no fix buttons", async () => {
@@ -90,6 +98,9 @@ describe("daily fixes panel DOM behavior", () => {
       .toBe("line 12: AWS access key ID");
   });
 
+});
+
+describe("daily fixes panel previewed and triaged actions", () => {
   it("previews and applies a fix, then reloads the queue", async () => {
     renderPanel();
     let queueCalls = 0;
@@ -184,6 +195,9 @@ describe("daily fixes panel DOM behavior", () => {
     expect(document.querySelector("[data-fixes-count-snoozed-hidden]")?.textContent).toBe("2");
   });
 
+});
+
+describe("daily fixes panel unpreviewed immediate actions", () => {
   it("marks a dead-end note as intentional immediately", async () => {
     renderPanel();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -263,6 +277,9 @@ describe("daily fixes panel DOM behavior", () => {
     expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(0);
   });
 
+});
+
+describe("daily fixes panel errors and refresh", () => {
   it("surfaces request errors", async () => {
     renderPanel();
     const fetchMock = vi.fn(async () =>

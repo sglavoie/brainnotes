@@ -94,7 +94,7 @@ bn find --tag drafts | bn set - status=done
   - [Maintenance and bulk edits](docs/commands-maintenance.md)
 - [Shell completion and editor integration](docs/integrations.md)
 - [Recipes, safety, performance, and migration notes](docs/workflows.md)
-- Contributors: `docs/internals/` documents the architecture, locking model, web write classes, recall boundaries, graph view invariants, and synthesis workbench invariants.
+- Contributors: `docs/internals/` documents the architecture, locking model, serving modes and capabilities, web write classes, recall boundaries, graph view invariants, and synthesis workbench invariants.
 
 ### Read-only replica server
 
@@ -112,3 +112,19 @@ and freshness, with stale content still available. Use an authenticated reverse
 proxy for remote access; protect every path, including attachments and readiness.
 The Pi deployment and verified synchronization tooling live in the sibling
 `sglavoie_raspberry_pi/services/brainnotes` project.
+
+### Hosted server
+
+`bn --vault /path/to/vault serve --hosted --no-open` serves the vault itself over
+the network. It is not a read-only replica with writes re-enabled: document
+actions (capture, properties, pins, cockpit fixes, synthesis) stay available,
+while every route that would start a process on the serving machine — the editor,
+and the `[agent].command` routes behind Ask AI, daily review, and synthesis
+generation — is refused, and the pages that would offer those actions say why
+instead of pointing at a config file on the wrong machine. Open navigates to the
+rendered note, as in read-only mode. Request bodies are bounded at 1 MiB (local
+serving keeps 32 MiB), state-changing requests must be same-origin as well as
+carry the CSRF token, responses are `private, no-store`, and an attachment whose
+type a browser would execute is sandboxed and sent as a download.
+`--read-only` and `--hosted` are mutually exclusive. There is still no auth
+layer: put an authenticated reverse proxy or tunnel in front of every path.

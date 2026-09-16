@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -30,6 +32,11 @@ type capabilityHarness struct {
 	agentRan      *bool
 }
 
+// capabilityOption adjusts the fixture after the mode has decided its options
+// and before the server is built, for the rows that need a setting the matrix
+// otherwise holds constant — the startup browser is the only one so far.
+type capabilityOption func(*config.Config, *Options)
+
 // newCapabilityHarness builds one server per mode over an identical vault, so a
 // difference between two rows of the matrix is the mode and nothing else.
 //
@@ -38,7 +45,7 @@ type capabilityHarness struct {
 // vault for writing. The editor and agent hooks record rather than fail, because
 // several rows below assert a launch *did* happen in local mode — a fixture that
 // fataled on launch could only ever test the denials.
-func newCapabilityHarness(t *testing.T, mode Mode) *capabilityHarness {
+func newCapabilityHarness(t *testing.T, mode Mode, options ...capabilityOption) *capabilityHarness {
 	t.Helper()
 
 	root := t.TempDir()
@@ -86,6 +93,9 @@ func newCapabilityHarness(t *testing.T, mode Mode) *capabilityHarness {
 	case ModeHosted:
 		opts.Hosted = true
 	case ModeLocal:
+	}
+	for _, option := range options {
+		option(cfg, &opts)
 	}
 
 	v, err := openVault(cfg)
@@ -214,24 +224,7 @@ func TestCapabilityMatrixOverProcessLaunchRoutes(t *testing.T) {
 			h := newCapabilityHarness(t, mode)
 			wantLaunch := mode == ModeLocal
 
-			for _, route := range []string{
-				configOpenAPIRoutePath,
-				noteInsightAPIRoutePath,
-				dailyReviewAgentAPIRoutePath,
-				synthesisGenerateAPIRoutePath,
-				briefInsightAPIRoutePath,
-			} {
-				rec := h.post(route, capabilityForm(url.Values{"key": {"Alpha"}, "card_id": {"missing"}}))
-				if wantLaunch {
-					if rec.Code == http.StatusForbidden {
-						t.Errorf("%s refused in local mode: %s", route, rec.Body.String())
-					}
-					continue
-				}
-				if rec.Code != http.StatusForbidden {
-					t.Errorf("%s: status %d, want 403 in %s mode", route, rec.Code, mode)
-				}
-			}
+			assertProcessLaunchRoutesRefused(t, h, mode, wantLaunch)
 
 			if !wantLaunch {
 				if *h.editorStarted || *h.agentRan {
@@ -247,6 +240,71 @@ func TestCapabilityMatrixOverProcessLaunchRoutes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// assertProcessLaunchRoutesRefused posts to every route whose success ends in an
+// exec.Cmd and asserts the status the mode owes. The form carries every field
+// any of them needs, because the assertion is about the refusal arriving before
+// the handler reads the form at all: a mode without processLaunch must answer
+// 403 whether or not the request would otherwise have been well formed.
+//
+// The refusal's *reason* is asserted alongside the status. 403 on its own does
+// not distinguish the two refusals the guard can make, and read-only refuses
+// most of these as a replica whether or not processLaunchRoute still names
+// them — so without the reason, dropping a route from that list would go
+// unnoticed in the mode where it is the only thing standing in the way.
+func assertProcessLaunchRoutesRefused(t *testing.T, h *capabilityHarness, mode Mode, wantLaunch bool) {
+	t.Helper()
+
+	launchReason := "process launch is unavailable in " + string(mode) + " mode"
+	for _, route := range []string{
+		configOpenAPIRoutePath,
+		noteInsightAPIRoutePath,
+		dailyReviewAgentAPIRoutePath,
+		synthesisGenerateAPIRoutePath,
+		briefInsightAPIRoutePath,
+	} {
+		rec := h.post(route, capabilityForm(url.Values{"key": {"Alpha"}, "card_id": {"missing"}}))
+		if wantLaunch {
+			if rec.Code == http.StatusForbidden {
+				t.Errorf("%s refused in local mode: %s", route, rec.Body.String())
+			}
+			continue
+		}
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403 in %s mode", route, rec.Code, mode)
+			continue
+		}
+		got := managementErrorMessage(t, rec)
+		switch mode {
+		case ModeHosted:
+			// Hosted writes, so the replica refusal cannot fire here: the
+			// process-launch capability is the whole reason for the 403.
+			if got != launchReason {
+				t.Errorf("%s in hosted mode: message %q, want %q", route, got, launchReason)
+			}
+		default:
+			if got != "read-only replica" && got != launchReason {
+				t.Errorf("%s in %s mode: message %q, want a named refusal", route, mode, got)
+			}
+		}
+	}
+}
+
+// managementErrorMessage reads the message out of the management envelope every
+// refusal is written in, so an assertion can name the refusal rather than the
+// status class it shares with every other one.
+func managementErrorMessage(t *testing.T, rec *httptest.ResponseRecorder) string {
+	t.Helper()
+	var payload struct {
+		OK      bool   `json:"ok"`
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode management error: %v (%s)", err, rec.Body.String())
+	}
+	return payload.Message
 }
 
 // TestOpenAnswersWithNavigationWithoutLaunching is the /api/open half of the
@@ -296,24 +354,201 @@ func TestOpenAnswersWithNavigationWithoutLaunching(t *testing.T) {
 	}
 }
 
-// TestBriefOpenNavigatesInEveryModeWithoutAnEditor covers the second route that
-// launches a process in local mode and navigates elsewhere. It is allowed in
-// read-only, so it is the one Open action that works in all three modes.
-func TestBriefOpenNavigatesInEveryModeWithoutAnEditor(t *testing.T) {
-	for _, mode := range []Mode{ModeReadOnly, ModeHosted} {
-		t.Run(string(mode), func(t *testing.T) {
-			h := newCapabilityHarness(t, mode)
-			destination, err := h.server.openBriefTarget(filepath.Join(h.root, "Alpha.md"), "Alpha.md")
+// TestOpenNoteTargetIsOneDoorForEveryMode covers the door the Brief's Open and
+// the Related panel's Open share. Local is here as well as the two navigating
+// modes: "a mode without browserOpen still launches" is half of what the door
+// promises, and a branch nobody exercises is a branch that can be inverted.
+func TestOpenNoteTargetIsOneDoorForEveryMode(t *testing.T) {
+	for _, tc := range []struct {
+		mode      Mode
+		wantRoute bool
+	}{
+		{ModeLocal, false},
+		{ModeReadOnly, true},
+		{ModeHosted, true},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			h := newCapabilityHarness(t, tc.mode)
+			destination, err := h.server.openNoteTarget(filepath.Join(h.root, "Alpha.md"), "Alpha.md")
 			if err != nil {
-				t.Fatalf("openBriefTarget: %v", err)
+				t.Fatalf("openNoteTarget: %v", err)
 			}
-			if !strings.HasPrefix(destination, noteRoutePrefix) {
-				t.Fatalf("destination = %q, want an %s route", destination, noteRoutePrefix)
+			if tc.wantRoute {
+				assertOpenNoteTargetNavigates(t, h, destination)
+				return
 			}
-			if *h.editorStarted {
-				t.Fatal("brief Open started an editor")
+			if destination != "" {
+				t.Fatalf("destination = %q, want the launching branch", destination)
+			}
+			if !*h.editorStarted {
+				t.Fatal("local mode navigated instead of starting an editor")
 			}
 		})
+	}
+}
+
+func assertOpenNoteTargetNavigates(t *testing.T, h *capabilityHarness, destination string) {
+	t.Helper()
+	if !strings.HasPrefix(destination, noteRoutePrefix) {
+		t.Fatalf("destination = %q, want an %s route", destination, noteRoutePrefix)
+	}
+	if *h.editorStarted {
+		t.Fatal("Open started an editor")
+	}
+	// A note that vanished is a 404 about the note. The navigating branch never
+	// started an editor, so it must not report one failing to start.
+	_, err := h.server.openNoteTarget(filepath.Join(h.root, "Gone.md"), "Gone.md")
+	if got := noteops.CodeOf(err); got != noteops.CodeNotFound {
+		t.Fatalf("missing note error = %v (code %q), want %q", err, got, noteops.CodeNotFound)
+	}
+}
+
+// TestRelatedOpenAnswersWithNavigationOverHTTP drives the Related panel's Open
+// through the mux rather than through the shared door directly, because the
+// panel's failure mode was in the handler around it: a refusal mapped as an
+// editor-start error became a 500 about a subsystem hosted mode does not have.
+//
+// Read-only refuses the route outright — its POST surface is an allowlist of
+// two brief routes and this is not one of them — so the row asserts the refusal
+// rather than a destination.
+func TestRelatedOpenAnswersWithNavigationOverHTTP(t *testing.T) {
+	for _, tc := range []struct {
+		mode           Mode
+		wantStatus     int
+		wantEditor     bool
+		wantNavigation bool
+	}{
+		{ModeLocal, http.StatusOK, true, false},
+		{ModeHosted, http.StatusOK, false, true},
+		{ModeReadOnly, http.StatusForbidden, false, false},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			h := newCapabilityHarness(t, tc.mode)
+			rec := h.post(relatedItemAPIRoutePath, capabilityForm(url.Values{
+				"action":    {"open_editor"},
+				"source":    {"Alpha"},
+				"candidate": {"Beta"},
+			}))
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status %d, want %d: %s", rec.Code, tc.wantStatus, rec.Body.String())
+			}
+			if *h.editorStarted != tc.wantEditor {
+				t.Fatalf("editor started = %v, want %v", *h.editorStarted, tc.wantEditor)
+			}
+			if tc.wantStatus == http.StatusOK {
+				assertRelatedOpenDestination(t, h, rec, tc.wantNavigation)
+			}
+		})
+	}
+}
+
+func assertRelatedOpenDestination(t *testing.T, h *capabilityHarness, rec *httptest.ResponseRecorder, wantNavigation bool) {
+	t.Helper()
+	var payload relatedItemResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode: %v (%s)", err, rec.Body.String())
+	}
+	if (payload.Destination != "") != wantNavigation {
+		t.Fatalf("destination = %q, want navigation = %v", payload.Destination, wantNavigation)
+	}
+	if !wantNavigation {
+		return
+	}
+	if !strings.HasPrefix(payload.Destination, noteRoutePrefix) {
+		t.Fatalf("destination = %q, want an %s route", payload.Destination, noteRoutePrefix)
+	}
+	// The same check the Brief's Open gets: a route the server does not serve is
+	// an Open button that navigates to a 404.
+	if got := h.get(payload.Destination); got.Code != http.StatusOK {
+		t.Fatalf("navigating to %s: status %d", payload.Destination, got.Code)
+	}
+}
+
+// refuseRecallWrites makes the recall sidecar unwritable while leaving it
+// readable, which is one way to reach applyRelatedOpen's warning branch from
+// outside — the state store is built inside the request, so a test cannot
+// substitute one. related_item_editor_api_test.go gets there the other way, by
+// planting a symlink from its StartEditor hook; this one needs no launch hook
+// and so also covers the hosted branch, where nothing is launched.
+//
+// Validate only reads and therefore still passes. RecordOpened has to take a
+// lock and then replace a file inside this directory, and can do neither.
+func refuseRecallWrites(t *testing.T, root string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions, so the write would succeed")
+	}
+	dir := filepath.Join(root, ".bnotes")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	// Restored so TempDir's own cleanup can remove the tree.
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o750) })
+}
+
+// TestRelatedOpenWarnsWhenTheRecallWriteFails pins the sentence the server sends
+// when it has answered an Open and then failed to record it. The exact string
+// matters to more than this file: the panel decides whether to navigate by
+// looking at `warning` (see static_src/related-mutations.ts), and it composes its
+// own sentence around this one — so a server that quietly stopped setting the
+// warning, or set a different field, would turn a visible failure into a silent
+// navigation away from the only report of it.
+//
+// Both modes are asserted because the two clients differ: local started an
+// editor and has nowhere to send the reader, hosted answers with a destination
+// and deliberately does not follow it.
+func TestRelatedOpenWarnsWhenTheRecallWriteFails(t *testing.T) {
+	for _, tc := range []struct {
+		mode           Mode
+		wantEditor     bool
+		wantNavigation bool
+	}{
+		{ModeLocal, true, false},
+		{ModeHosted, false, true},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			h := newCapabilityHarness(t, tc.mode)
+			refuseRecallWrites(t, h.root)
+
+			rec := h.post(relatedItemAPIRoutePath, capabilityForm(url.Values{
+				"action":    {"open_editor"},
+				"source":    {"Alpha"},
+				"candidate": {"Beta"},
+			}))
+			// A failed recall write is a warning, not an error: the note is
+			// reachable either way, so answering 500 here would hide an Open that
+			// actually happened.
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status %d, want 200: %s", rec.Code, rec.Body.String())
+			}
+			assertUnrecordedOpen(t, rec, tc.wantNavigation)
+			if *h.editorStarted != tc.wantEditor {
+				t.Errorf("editor started = %v, want %v", *h.editorStarted, tc.wantEditor)
+			}
+		})
+	}
+}
+
+func assertUnrecordedOpen(t *testing.T, rec *httptest.ResponseRecorder, wantNavigation bool) {
+	t.Helper()
+	var payload relatedItemResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode: %v (%s)", err, rec.Body.String())
+	}
+	if payload.Warning != "Recall history could not be recorded." {
+		t.Errorf("warning = %q, want the recall-history sentence", payload.Warning)
+	}
+	if payload.Recorded == nil || *payload.Recorded {
+		t.Errorf("recorded = %v, want an explicit false", payload.Recorded)
+	}
+	if !payload.Opened {
+		t.Error("opened = false, but the open succeeded and only the recording failed")
+	}
+	if (payload.Destination != "") != wantNavigation {
+		t.Errorf("destination = %q, want navigation = %v", payload.Destination, wantNavigation)
 	}
 }
 
@@ -340,6 +575,62 @@ func TestProcessLaunchRefusedAtTheExecSite(t *testing.T) {
 
 			if *h.editorStarted || *h.agentRan {
 				t.Fatal("a process was launched despite the refusal")
+			}
+		})
+	}
+}
+
+// TestStartupBrowserAnswersToTheCapability covers the one exec site no request
+// reaches. `bn serve` already forces --no-open for both remote profiles, so this
+// is about the other caller: a library caller that builds Options by hand over a
+// vault whose [serve] section enables the browser. Without the capability check
+// in Run that deployment spawns a browser on a machine nobody is sitting at, and
+// no route-level test would ever see it.
+func TestStartupBrowserAnswersToTheCapability(t *testing.T) {
+	for _, tc := range []struct {
+		mode       Mode
+		wantLaunch bool
+	}{
+		{ModeLocal, true},
+		{ModeHosted, false},
+		{ModeReadOnly, false},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			launched := make(chan string, 1)
+			listening := make(chan string, 1)
+			enabled := true
+			h := newCapabilityHarness(t, tc.mode, func(cfg *config.Config, opts *Options) {
+				cfg.Serve.OpenBrowser = &enabled
+				opts.OpenBrowser = func(url string) error { launched <- url; return nil }
+				opts.NotifyListening = func(url string) { listening <- url }
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan error, 1)
+			go func() { done <- h.server.Run(ctx) }()
+			select {
+			case <-listening:
+			case <-time.After(5 * time.Second):
+				cancel()
+				t.Fatal("server never reported a listener")
+			}
+			cancel()
+			if err := <-done; err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+
+			// The launch is a goroutine started before Serve, so waiting on the
+			// channel is how both rows are judged: the negative one needs the
+			// window to have been long enough for a launch to have shown up.
+			select {
+			case url := <-launched:
+				if !tc.wantLaunch {
+					t.Fatalf("%s mode launched a browser at %s", tc.mode, url)
+				}
+			case <-time.After(2 * time.Second):
+				if tc.wantLaunch {
+					t.Fatalf("%s mode never launched a browser", tc.mode)
+				}
 			}
 		})
 	}
@@ -415,23 +706,49 @@ func TestPrivateFilesAreNeverAttachmentsInAnyMode(t *testing.T) {
 	for _, mode := range []Mode{ModeLocal, ModeReadOnly, ModeHosted} {
 		t.Run(string(mode), func(t *testing.T) {
 			h := newCapabilityHarness(t, mode)
-			for _, route := range []string{
-				"/media/brainnotes.toml",
-				"/media/brainnotes.local.toml",
-				"/media/.secret",
-				"/media/../brainnotes.toml",
-				"/media/./brainnotes.toml",
-				"/media/sub/../brainnotes.local.toml",
+			// The traversal rows are %2e-encoded on purpose. ServeMux resolves
+			// a literal ".." or "." into a redirect before any handler runs, so
+			// the literal form proves the redirect exists and nothing about the
+			// media handler; the encoded form is what actually reaches it — and
+			// what a URL-cleaning proxy in front of a hosted deployment would
+			// not have normalized away either. Both are asserted, with the
+			// status each is expected to produce, so a row cannot quietly stop
+			// testing anything.
+			for _, tc := range []struct {
+				route      string
+				wantStatus int
+			}{
+				{"/media/brainnotes.toml", http.StatusNotFound},
+				{"/media/brainnotes.local.toml", http.StatusNotFound},
+				{"/media/.secret", http.StatusNotFound},
+				{"/media/%2e%2e/brainnotes.toml", http.StatusNotFound},
+				{"/media/%2e/brainnotes.toml", http.StatusNotFound},
+				{"/media/sub/%2e%2e/brainnotes.local.toml", http.StatusNotFound},
+				{"/media/..%2fbrainnotes.toml", http.StatusNotFound},
+				{"/media/../brainnotes.toml", http.StatusTemporaryRedirect},
+				{"/media/./brainnotes.toml", http.StatusTemporaryRedirect},
 			} {
-				rec := h.get(route)
-				if rec.Code == http.StatusOK {
-					t.Errorf("%s exposed: %s", route, rec.Body.String())
-				}
-				if strings.Contains(rec.Body.String(), "secret-editor") {
-					t.Errorf("%s leaked the local config", route)
-				}
+				assertPrivateMediaRefused(t, h, tc.route, tc.wantStatus)
 			}
 		})
+	}
+}
+
+func assertPrivateMediaRefused(t *testing.T, h *capabilityHarness, route string, wantStatus int) {
+	t.Helper()
+	rec := h.get(route)
+	if rec.Code != wantStatus {
+		t.Errorf("%s: status %d, want %d: %s", route, rec.Code, wantStatus, rec.Body.String())
+	}
+	// A redirect is not an exposure, but following it must not become one:
+	// that is the half the literal rows can still test.
+	if location := rec.Header().Get("Location"); location != "" {
+		if followed := h.get(location); followed.Code == http.StatusOK {
+			t.Errorf("%s redirected to %s, which is served: %s", route, location, followed.Body.String())
+		}
+	}
+	if strings.Contains(rec.Body.String(), "secret-editor") {
+		t.Errorf("%s leaked the local config", route)
 	}
 }
 
@@ -526,23 +843,29 @@ func TestActiveMediaTypeClassification(t *testing.T) {
 	}
 }
 
-// TestPrivateCachingHeadersApplyInEveryMode pins the headers the guard sets for
+// TestGuardHeadersApplyInEveryMode pins the headers the guard sets for
 // everything. no-store is what keeps a shared cache in front of a hosted
-// deployment from retaining a note it served to one authenticated person.
-func TestPrivateCachingHeadersApplyInEveryMode(t *testing.T) {
+// deployment from retaining a note it served to one authenticated person, and
+// DENY is what keeps its write controls out of an attacker's frame — the CSRF
+// token is no defence against a click in a frame that carries the real cookie.
+// They are asserted together because they are one decision: these are the four
+// headers true of a vault response in every mode.
+func TestGuardHeadersApplyInEveryMode(t *testing.T) {
+	want := map[string]string{
+		"Cache-Control":          "private, no-store",
+		"X-Content-Type-Options": "nosniff",
+		"Referrer-Policy":        "same-origin",
+		"X-Frame-Options":        "DENY",
+	}
 	for _, mode := range []Mode{ModeLocal, ModeReadOnly, ModeHosted} {
 		t.Run(string(mode), func(t *testing.T) {
 			h := newCapabilityHarness(t, mode)
 			for _, route := range []string{"/", "/n/Alpha", "/api/search?q=Alpha", "/media/file.txt"} {
 				rec := h.get(route)
-				if got := rec.Header().Get("Cache-Control"); got != "private, no-store" {
-					t.Errorf("%s: Cache-Control = %q, want private, no-store", route, got)
-				}
-				if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
-					t.Errorf("%s: X-Content-Type-Options = %q, want nosniff", route, got)
-				}
-				if got := rec.Header().Get("Referrer-Policy"); got != "same-origin" {
-					t.Errorf("%s: Referrer-Policy = %q, want same-origin", route, got)
+				for header, value := range want {
+					if got := rec.Header().Get(header); got != value {
+						t.Errorf("%s: %s = %q, want %q", route, header, got, value)
+					}
 				}
 			}
 		})
@@ -655,6 +978,50 @@ func TestRequestBodyIsBoundedPerProfile(t *testing.T) {
 	}
 }
 
+// TestSynthesisPreviewKeepsItsOwnBoundInEveryProfile covers the one route whose
+// legitimate request is larger than the remote profile's bound. A form-encoded
+// draft is several times its own size, so without the widening the guard would
+// answer 413 before the route's own narrower bound ever applied: a hosted
+// deployment could never preview a full-size draft, and a bound that reads as a
+// defence would in fact be a feature cap nobody chose.
+func TestSynthesisPreviewKeepsItsOwnBoundInEveryProfile(t *testing.T) {
+	for _, tc := range []struct {
+		mode Mode
+		want int64
+	}{
+		{ModeLocal, localMaxRequestBody},
+		{ModeReadOnly, synthesisPreviewBodyLimit},
+		{ModeHosted, synthesisPreviewBodyLimit},
+	} {
+		caps := capabilitiesFor(tc.mode)
+		if got := caps.requestBodyLimit(synthesisPreviewAPIRoutePath); got != tc.want {
+			t.Errorf("%s: preview bound = %d, want %d", tc.mode, got, tc.want)
+		}
+		// The widening is for this route and no other: everything else is held
+		// to the profile's bound.
+		if got := caps.requestBodyLimit("/api/notes/frontmatter/set"); got != caps.maxRequestBody {
+			t.Errorf("%s: other route bound = %d, want the profile's %d", tc.mode, got, caps.maxRequestBody)
+		}
+	}
+
+	// The effective bound, not only the table. A hosted request between the two
+	// bounds must reach the route — whatever the route then makes of it — and
+	// one past the route's own bound must still be refused as too large.
+	h := newCapabilityHarness(t, ModeHosted)
+	between := h.post(synthesisPreviewAPIRoutePath, capabilityForm(url.Values{
+		"draft": {strings.Repeat("x", int(remoteMaxRequestBody)+1024)},
+	}))
+	if between.Code == http.StatusRequestEntityTooLarge {
+		t.Fatalf("draft within the route's bound refused by the profile's: %s", between.Body.String())
+	}
+	past := h.post(synthesisPreviewAPIRoutePath, capabilityForm(url.Values{
+		"draft": {strings.Repeat("x", int(synthesisPreviewBodyLimit)+1024)},
+	}))
+	if past.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("draft past the route's bound: status %d, want 413: %s", past.Code, past.Body.String())
+	}
+}
+
 // TestProcessLaunchRouteListCoversEveryAgentRoute keeps the guard's list honest.
 // A route that runs an agent and is missing from the list would still be refused
 // at launchAgent, but it would be refused *after* parsing and dispatching, which
@@ -689,25 +1056,29 @@ func TestAgentUnavailableMessageDoesNotSendPeopleEditingTheWrongFile(t *testing.
 	unconfigured := "Ask AI is unavailable until [agent].command is configured."
 
 	local := newCapabilityHarness(t, ModeLocal)
-	if got := local.server.agentUnavailableMessage(unconfigured); got != unconfigured {
-		t.Errorf("local message = %q, want the unconfigured advice", got)
-	}
 	cfg := local.server.config()
-	if !local.server.agentConfigured(cfg) {
-		t.Error("local mode reported a configured agent as unavailable")
+	if available, message := local.server.agentAvailability(cfg, unconfigured); !available || message != "" {
+		t.Errorf("configured local = (%v, %q), want (true, no explanation)", available, message)
+	}
+	// The same mode with nothing configured still gets the advice that helps:
+	// on this machine, configuring the command is exactly what is missing.
+	bare := *cfg
+	bare.Agent.Command = nil
+	if available, message := local.server.agentAvailability(&bare, unconfigured); available || message != unconfigured {
+		t.Errorf("unconfigured local = (%v, %q), want (false, the unconfigured advice)", available, message)
 	}
 
 	for _, mode := range []Mode{ModeReadOnly, ModeHosted} {
 		h := newCapabilityHarness(t, mode)
-		got := h.server.agentUnavailableMessage(unconfigured)
+		available, got := h.server.agentAvailability(h.server.config(), unconfigured)
+		if available {
+			t.Errorf("%s reported the agent as available", mode)
+		}
 		if strings.Contains(got, "[agent].command") {
 			t.Errorf("%s message = %q, still advises configuring the agent", mode, got)
 		}
 		if !strings.Contains(got, string(mode)) {
 			t.Errorf("%s message = %q, does not name the mode", mode, got)
-		}
-		if h.server.agentConfigured(h.server.config()) {
-			t.Errorf("%s reported the agent as available", mode)
 		}
 	}
 }

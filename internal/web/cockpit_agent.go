@@ -1,12 +1,9 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
@@ -34,21 +31,7 @@ type dailyReviewAgentResponse struct {
 // feature only when it is available.
 func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
-	if r.URL.Path != dailyReviewAgentAPIRoutePath {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+	if !s.requireManagementPost(w, r, dailyReviewAgentAPIRoutePath, 0) {
 		return
 	}
 
@@ -80,21 +63,11 @@ func (s *Server) handleDailyReviewAgent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	timeout := time.Duration(timeoutSeconds) * time.Second
-	ctx := r.Context()
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-
-	output, runErr := s.launchAgent(ctx, argv, stdin)
-	if runErr != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			writeManagementError(w, noteops.Errorf(noteops.CodeInternal, "AI daily review command timed out"))
-			return
-		}
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "run AI daily review command", runErr))
+	output, ok := s.runAgentForRequest(w, r, argv, stdin, timeoutSeconds, agentRunLabels{
+		timeout: "AI daily review command timed out",
+		failure: "run AI daily review command",
+	})
+	if !ok {
 		return
 	}
 

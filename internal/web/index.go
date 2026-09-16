@@ -277,11 +277,7 @@ func (s *Server) briefAvailability(cfg *config.Config) (bool, string, bool, stri
 		// editor configuration is not a precondition for it.
 		editorConfigured, editorStatusMsg = true, ""
 	}
-	insightConfigured := s.agentConfigured(cfg)
-	insightStatusMsg := ""
-	if !insightConfigured {
-		insightStatusMsg = s.agentUnavailableMessage("AI insight is not configured. Set [agent].command to enable Ask AI.")
-	}
+	insightConfigured, insightStatusMsg := s.agentAvailability(cfg, "AI insight is not configured. Set [agent].command to enable Ask AI.")
 
 	return editorConfigured, editorStatusMsg, insightConfigured, insightStatusMsg
 }

@@ -1,3 +1,4 @@
+import { noteNavigationDestination } from "./api-notes";
 import { asRecord, readBoolean } from "./api-internal";
 import { readResponsePayload } from "./daily-brief-http";
 import { normalizeParamValue } from "./filters";
@@ -46,6 +47,14 @@ export const buildRelatedItemRequest = (
   ...(keepalive ? { keepalive: true } : {}),
 });
 
+const normalizeFeedbackState = (value: unknown): RelatedFeedbackState | "clear" | undefined => {
+  const state = normalizeParamValue(value).toLowerCase();
+  if (state === "clear" || feedbackStates.includes(state as RelatedFeedbackState)) {
+    return state as RelatedFeedbackState | "clear";
+  }
+  return undefined;
+};
+
 export const normalizeRelatedItemResponse = (payload: unknown): RelatedItemResponse | null => {
   const record = asRecord(payload);
   if (!record || !readBoolean(record.ok)) {
@@ -57,19 +66,17 @@ export const normalizeRelatedItemResponse = (payload: unknown): RelatedItemRespo
   if (!itemActions.includes(action as RelatedItemAction) || !source || !candidate) {
     return null;
   }
-  const stateValue = normalizeParamValue(record.state).toLowerCase();
-  const state =
-    feedbackStates.includes(stateValue as RelatedFeedbackState) || stateValue === "clear"
-      ? (stateValue as RelatedFeedbackState | "clear")
-      : undefined;
   return {
     ok: true,
     action: action as RelatedItemAction,
     source,
     candidate,
-    state,
+    state: normalizeFeedbackState(record.state),
     until: normalizeParamValue(record.until) || undefined,
     opened: readBoolean(record.opened),
+    // Read through the same `/n/` guard the Brief's Open uses: this value ends
+    // up in window.location.assign, so it is a navigable note route or nothing.
+    destination: noteNavigationDestination(payload) || undefined,
     recorded:
       typeof record.recorded === "boolean" ? record.recorded : undefined,
     warning: normalizeParamValue(record.warning) || undefined,
