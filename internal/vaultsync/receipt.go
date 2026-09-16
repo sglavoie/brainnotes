@@ -23,8 +23,10 @@ const receiptSuffix = ".json"
 // directory appearing says a publication finished; neither says a note in a
 // live vault changed, and the producer must not drop its own copy of a change
 // on either. A receipt does say that, and it says it with the identity of the
-// local recovery-history entry that can undo it — which is what makes the claim
-// checkable rather than merely asserted.
+// local recovery-history entry that can undo it, so the claim is answerable
+// rather than merely asserted — by an operator, and by the layer that owns the
+// recovery history. Not by this package: it cannot import internal/journal, so
+// it checks that the entry is named and never that it exists.
 type Receipt struct {
 	// Format is the wire format token, always Format.
 	Format string `json:"format"`
@@ -128,7 +130,7 @@ func Acknowledge(local *Enrollment, m *Manifest, applied Application) (*Receipt,
 // coversPackage reports whether applied accounts for every change in m, and
 // only for those.
 func coversPackage(m *Manifest, applied []AppliedPath) error {
-	expected := make(map[string]Change, len(m.Operations))
+	expected := make(map[string]Change, len(m.Paths()))
 	for _, change := range m.Changes() {
 		expected[change.Path] = change
 	}
@@ -248,13 +250,23 @@ func receiptEpoch(r *Receipt, origin *Enrollment) error {
 }
 
 // matchesManifest is the last of VerifyAgainst's checks: the receipt answers
-// *this* package.
+// *this* package, and it answers all of it.
 //
 // A nil manifest is a refusal rather than a skipped check. The producer calls
 // VerifyAgainst to decide whether it may drop its own copy of a change, and the
 // manifest is the only thing in the call that says which change that is. Reading
 // nil as "nothing to compare against, so it matches" would turn a caller's
 // missing lookup into a receipt that verifies for any package at all.
+//
+// The coverage check is here rather than only in Acknowledge for the same
+// reason. Acknowledge runs coversPackage on the applying device, against an
+// Application that device had in memory — which makes a receipt this build mints
+// honest, and says nothing about the receipt the producer is holding. That one
+// arrived as a file, over a transport, possibly from another build. A receipt
+// naming the right package with an empty or partial applied list would otherwise
+// pass every identity check here and be read as "all of it landed", which is the
+// one mistake this whole file exists to prevent: the producer drops its only
+// copy of a change neither replica has.
 func (r *Receipt) matchesManifest(m *Manifest) error {
 	if m == nil {
 		return fmt.Errorf("%w: no package for receipt %s to answer", ErrReceiptMismatch, r.PackageID)
@@ -268,7 +280,7 @@ func (r *Receipt) matchesManifest(m *Manifest) error {
 	if r.VaultID != m.VaultID {
 		return fmt.Errorf("%w: receipt names vault %q, package names %q", ErrWrongVault, r.VaultID, m.VaultID)
 	}
-	return nil
+	return coversPackage(m, r.Applied)
 }
 
 // PublishReceipt writes a receipt into the acknowledging device's own outgoing
@@ -326,6 +338,13 @@ func PublishReceipt(channelDir string, r *Receipt) (string, error) {
 // package must not be handed a statement about another because a file landed
 // under the wrong name.
 func ReadReceipt(channelDir, packageID string) (*Receipt, error) {
+	// Before the identity is joined onto a directory, not after: receiptPath's
+	// containment rests on the name being a checked identity, and packageID here
+	// is an ordinary argument from an exported call rather than a directory entry
+	// this package listed itself.
+	if err := checkIdentity(ErrReceiptMismatch, "package_id", packagePrefix, packageID); err != nil {
+		return nil, err
+	}
 	path := receiptPath(channelDir, packageID)
 	data, err := os.ReadFile(path)
 	if err != nil {

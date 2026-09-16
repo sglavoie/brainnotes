@@ -38,11 +38,12 @@ const tempSuffix = ".tmp"
 //     immutability guarantee and it is atomic: a second publication under the
 //     same identity fails here rather than replacing bytes a peer may already
 //     have read.
-//  3. Every payload is written, fsynced, and its directory entry fsynced.
+//  3. Every payload is written and fsynced, then the payload directory holding
+//     their names, then the package directory holding *its* name.
 //  4. The manifest is written last, under a temporary name, fsynced, and linked
 //     into place.
-//  5. The package directory is fsynced, and then the channel directory that
-//     names it.
+//  5. The package directory is fsynced again — this time for the manifest's own
+//     entry — and then the channel directory that names the package.
 //
 // Step 4 is the commit point, for the same reason internal/vault writes its
 // transaction intent only after staging: every byte the manifest refers to is
@@ -130,6 +131,27 @@ func writePayloads(dir string, m *Manifest, payloads map[string][]byte) error {
 	if err := vault.SyncDir(payloadDir); err != nil {
 		return fmt.Errorf("vaultsync: sync payload directory %q: %w", payloadDir, err)
 	}
+	// And then the package directory, which is the entry naming payloadDir
+	// itself. Fsyncing only payloadDir commits the payload *names inside it* and
+	// leaves the directory they live in uncommitted.
+	//
+	// `payloads` and `manifest.json` are entries in this same directory, so this
+	// is an *ordering* fsync rather than the only one: step 5 fsyncs `dir` again
+	// and would commit both. What it buys is that the payload directory's entry
+	// cannot reach the disk after the manifest's does. Without it the window
+	// between linking the manifest and step 5 completing can leave a durable
+	// manifest beside no payloads directory at all — and a crash inside that
+	// window is unrecoverable rather than merely untidy. The producer never
+	// returns, so discardPartial never runs; the package is immutable, so nothing
+	// may finish it in place; and a retry mints a new package identity rather
+	// than completing this one. The orphan stays, and every reader polling it
+	// gets ErrIncompletePackage — wait, the transfer is still running — forever.
+	//
+	// This is what makes step 4's guarantee true of the directory entries and not
+	// only of the payload bytes.
+	if err := vault.SyncDir(dir); err != nil {
+		return fmt.Errorf("vaultsync: sync package %q: %w", dir, err)
+	}
 	return nil
 }
 
@@ -174,13 +196,63 @@ func checkInventory(m *Manifest, payloads map[string][]byte) error {
 	return nil
 }
 
-// ensureChannel creates a channel directory and its receipts sub-channel.
+// ensureChannel creates a channel directory and its receipts sub-channel, and
+// commits the entry naming each directory it had to create.
+//
+// os.MkdirAll on its own is not enough, for exactly the reason syncPackage
+// fsyncs two levels rather than one: a directory's name is durable only once the
+// directory holding it has been fsynced. Without the loop below, the first
+// publication into a fresh channel writes its payloads, links its manifest,
+// fsyncs the package directory and fsyncs the channel — and still leaves the
+// entry *naming the channel* uncommitted. A machine that lost power there would
+// come back with the channel, the package, the manifest and the payloads all
+// gone together, while the producer has already recorded that sequence as
+// published and will never send it again.
 func ensureChannel(channelDir string) error {
+	receipts := ReceiptsDir(channelDir)
+	missing, err := missingAncestors(receipts)
+	if err != nil {
+		return err
+	}
 	//bn:direct-write the channel is a staging directory under .bnotes/sync, out of the content history's scope and out of the portable scope, and Publish ran the location guard on its destination first
-	if err := os.MkdirAll(ReceiptsDir(channelDir), publishDirPerm); err != nil {
+	if err := os.MkdirAll(receipts, publishDirPerm); err != nil {
 		return fmt.Errorf("vaultsync: create channel %q: %w", channelDir, err)
 	}
+	// Shallowest first, since each fsync commits the name of the directory
+	// created one level below it. The deepest directory created needs none of
+	// its own: it is empty, and the entry naming it is committed by the fsync of
+	// its parent.
+	for i := len(missing) - 1; i >= 0; i-- {
+		parent := filepath.Dir(missing[i])
+		if err := vault.SyncDir(parent); err != nil {
+			return fmt.Errorf("vaultsync: sync %q: %w", parent, err)
+		}
+	}
 	return nil
+}
+
+// missingAncestors returns dir and each ancestor above it that does not exist
+// yet, deepest first, stopping at the first one that does.
+//
+// It runs before the MkdirAll rather than inferring afterwards, because
+// afterwards every one of them exists and there is nothing left to tell apart.
+// A directory another process creates in between is harmless: the cost is one
+// redundant fsync of a directory that was already committed.
+func missingAncestors(dir string) ([]string, error) {
+	var missing []string
+	for {
+		if _, err := os.Stat(dir); err == nil {
+			return missing, nil
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("vaultsync: inspect %q: %w", dir, err)
+		}
+		missing = append(missing, dir)
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return missing, nil
+		}
+		dir = parent
+	}
 }
 
 // writeDurable creates one file inside a package directory and makes its bytes
@@ -217,8 +289,13 @@ func writeDurable(path string, data []byte) error {
 //
 // The temporary is uniquely named rather than derived from the destination so
 // that one interrupted publication cannot wedge every later attempt behind a
-// leftover name — and it is removed on every path out, including the refusal,
-// because a temporary left in a channel is a file the transport would copy.
+// leftover name — and the deferred remove runs on every path out, including the
+// refusal, because a temporary left in a channel is a file the transport would
+// copy. That remove is best-effort: if it fails, or if the process dies between
+// the create and the link, a <name>.*.tmp stays in the directory. Nothing reads
+// it — validation names the manifest exactly and verifyNoExtraPayloads scans
+// only payloads/ — so it is inert here and visible to the operator, which is
+// the right side to fail on for a file this call could not clean up.
 //
 // This is the treatment a *record* needs, not every file. A payload is written
 // straight to its name: a partial payload fails its hash, and a hash failure is

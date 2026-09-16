@@ -435,6 +435,109 @@ func TestVerifyAgainstRefusesAReceiptWithNoPackage(t *testing.T) {
 	requireIs(t, receipt.VerifyAgainst(manifest, nil), ErrNotEnrolled, "a receipt judged by a vault that is not enrolled")
 }
 
+// TestVerifyAgainstRefusesAReceiptThatDoesNotCoverThePackage is the producer's
+// half of the coverage check, and it exists because the acknowledging half
+// cannot stand in for it.
+//
+// Acknowledge runs coversPackage against an Application held in memory on the
+// device that did the applying, which makes the receipts *this build* mints
+// honest and says nothing about the receipt a producer is holding. That one
+// arrived as a file, across a transport, possibly from another build or from a
+// crash between two of the three paths. Every mutation below leaves a receipt
+// whose format, identities, epoch, package and sequence all still match — so
+// without the coverage check in VerifyAgainst each one of them verifies, and the
+// producer drops its only copy of a change that landed nowhere.
+func TestVerifyAgainstRefusesAReceiptThatDoesNotCoverThePackage(t *testing.T) {
+	r := enroll(t)
+	manifest, _ := r.draft(t, func(b *Builder) {
+		b.Write("Alpha.md", []byte("alpha body\n"), Absent())
+		b.Write("Notes/Gamma.md", []byte("gamma body\n"), Absent())
+		b.Delete("Beta.md", Existing(HashBytes([]byte("beta\n"))))
+	})
+
+	cases := []struct {
+		name   string
+		mutate func(*Receipt)
+	}{
+		{
+			name:   "a receipt that acknowledges nothing at all",
+			mutate: func(r *Receipt) { r.Applied = nil },
+		},
+		{
+			name:   "a receipt that stops partway through the package",
+			mutate: func(r *Receipt) { r.Applied = r.Applied[:1] },
+		},
+		{
+			name: "a receipt whose path holds bytes the package did not carry",
+			mutate: func(r *Receipt) {
+				r.Applied[0].SHA256 = HashBytes([]byte("something else\n"))
+			},
+		},
+		{
+			name: "a receipt that reports the deletion as a write",
+			mutate: func(r *Receipt) {
+				for i := range r.Applied {
+					if r.Applied[i].Action == ActionDelete {
+						r.Applied[i].Action = ActionWrite
+					}
+				}
+			},
+		},
+		{
+			name: "a receipt naming a path the package never changed",
+			mutate: func(r *Receipt) {
+				r.Applied[0].Path = "Somewhere/Else.md"
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			receipt, err := Acknowledge(r.local, manifest, applicationOf(r, manifest))
+			if err != nil {
+				t.Fatalf("Acknowledge: %v", err)
+			}
+			if err := receipt.VerifyAgainst(manifest, r.peer); err != nil {
+				t.Fatalf("the unmutated receipt is not evidence: %v", err)
+			}
+			tc.mutate(receipt)
+
+			// Stated rather than assumed: the mutation must leave a receipt that
+			// is still internally consistent, or it would be refused by Validate
+			// and this case would prove nothing about coverage.
+			if err := receipt.Validate(); err != nil {
+				t.Fatalf("the mutation broke the receipt itself, so the coverage check is never reached: %v", err)
+			}
+			requireIs(t, receipt.VerifyAgainst(manifest, r.peer), ErrIncompleteApplication, tc.name)
+		})
+	}
+}
+
+// TestReadReceiptRefusesAnIdentityThatIsAPath is receiptPath's stated
+// precondition made true at the one exported door that did not enforce it.
+//
+// PublishReceipt validates the whole receipt before joining its package identity
+// onto a directory; ReadReceipt takes the identity as an argument. Every
+// in-repository caller passes one it got from a mint or a directory entry, so
+// nothing is exploitable today — which is exactly why this is worth pinning
+// rather than shrugging at. The comment on receiptPath says the name cannot be a
+// path, and the next caller will read that as a guarantee it may lean on.
+func TestReadReceiptRefusesAnIdentityThatIsAPath(t *testing.T) {
+	r := enroll(t)
+	channel := r.channel(t)
+
+	for _, packageID := range []string{
+		"../../../etc/passwd",
+		"pkg-../escape",
+		"/absolute",
+		"",
+		"not-a-package-identity",
+	} {
+		_, err := ReadReceipt(channel, packageID)
+		requireIs(t, err, ErrReceiptMismatch, "ReadReceipt("+packageID+")")
+	}
+}
+
 func mustIDFor(mint func() (string, error)) string {
 	id, err := mint()
 	if err != nil {

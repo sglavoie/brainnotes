@@ -27,10 +27,29 @@ const (
 // loader probes and the path this package owns cannot drift apart.
 var syncStateDir = path.Dir(config.EnrollmentMarker)
 
+// stateRoot is the top-level directory BrainNotes keeps its own state under,
+// `.bnotes`. Like syncStateDir it is derived from config.EnrollmentMarker rather
+// than restated — and here the derivation is what makes the exclusion hold
+// rather than tidiness. This is the rule that refuses to send the enrollment
+// record, and the record's own path is derived. A literal beside a derived
+// EnrollmentPath would let the two drift silently: move the marker out from
+// under `.bnotes/` and EnrollmentPath follows it while Classify stays behind, at
+// which point this machine's device identity becomes portable content.
+var stateRoot = firstComponent(config.EnrollmentMarker)
+
+// firstComponent is the leading slash-separated element of a vault-relative
+// path, or the whole path when it has only one.
+func firstComponent(p string) string {
+	if cut := strings.Index(p, "/"); cut >= 0 {
+		return p[:cut]
+	}
+	return p
+}
+
 // privateRoots are top-level names excluded wholesale from the portable scope.
 //
-// The first three match internal/vaultgit's exclusions for the same reasons —
-// regenerable caches and BrainNotes' own local backups. The fourth is the one
+// The three literals match internal/vaultgit's exclusions for the same reasons —
+// regenerable caches and BrainNotes' own local backups. stateRoot is the one
 // that makes this policy different, and it is the whole point of having a
 // separate policy: `.bnotes/` is excluded *entirely*, with no allowlist and no
 // journal exception. The content history includes `.bnotes/brief.json`,
@@ -41,7 +60,7 @@ var syncStateDir = path.Dir(config.EnrollmentMarker)
 // selections, and undo manifests naming operations it never performed — and,
 // since the outgoing channel itself lives under `.bnotes/sync/`, would package
 // the packages.
-var privateRoots = foldedNames(".bnotes", ".codegraph", ".vault-cache", "backups")
+var privateRoots = foldedNames(stateRoot, ".codegraph", ".vault-cache", "backups")
 
 // privateComponents are names excluded wherever they appear, at any depth.
 //
@@ -234,11 +253,30 @@ func isScratchName(base string) bool {
 // `Strasse.md` and the U+1E9E spelling of it two keys where a case-insensitive
 // volume holds one file.
 //
-// The trailing normalization is there because folding does not preserve NFC. The
-// fold of U+0390 is U+03B9 U+0308 U+0301, which NFC composes straight back to
-// U+0390 — so a key that stopped at the fold would depend on whichever form the
-// caller happened to hold, which is the one thing this function exists to stop
-// depending on.
+// The trailing normalization is there because folding does not preserve NFC, and
+// it earns its place twice over.
+//
+// It keeps the key in NFC. Twenty-four code points that are already NFC fold to
+// a sequence that is not — U+0390, whose fold is the decomposed U+03B9 U+0308
+// U+0301, among them — so a key that stopped at the fold would be neither
+// idempotent nor comparable against the NFC paths every other layer here holds.
+// TestCollisionKeyIsIdempotent pins that, and it needs only one code point.
+//
+// It also decides verdicts, which needs two. A fold can move a base character to
+// one that has a precomposed form with the mark already following it: U+017F
+// (long s) folds to U+0073, so U+017F U+0301 folds to U+0073 U+0301 — still two
+// runes — while U+015A folds to the single rune U+015B. Those are one file on a
+// case-insensitive volume, and only the trailing step composes the first into
+// U+015B so the two collide. Over BMP base characters crossed with the whole
+// U+0300-U+036F block, six groups merge only here;
+// TestCollisionKeyMergesAFoldThatComposesWithTheNextMark pins this one.
+//
+// The *leading* normalization is a different job and does not cover that: it
+// makes the caller's choice of composed or decomposed spelling irrelevant, on
+// both sides of a comparison, before the fold is reached. What it cannot undo is
+// a composition the fold itself makes newly possible. A probe over single code
+// points sees only the first of these two jobs, and concludes the trailing step
+// decides nothing.
 //
 // This is also the comparison every private-path rule above uses, so an
 // exclusion written once in its canonical spelling covers every spelling of it.

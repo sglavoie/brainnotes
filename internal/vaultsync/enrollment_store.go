@@ -243,10 +243,16 @@ func writeEnrollmentLocked(root string, record *Enrollment) (*Enrollment, error)
 	// vault.WriteStateFile rather than vaultstate.Save, deliberately. Save's
 	// third guarantee is a snapshot into the content history, and this path is
 	// out of that history's scope by design: the enrollment record names this
-	// machine, and internal/vaultgit's allowlist does not include it. Asking
-	// Save to commit it would fail on every enrolled vault. The guard above and
-	// the path-continuous replacement below are the two guarantees that do
-	// apply, and they are taken here rather than skipped.
+	// machine, and internal/vaultgit's allowlist does not include it.
+	//
+	// Save would not *refuse* it — CommitPaths drops an out-of-scope path and
+	// returns an empty result, so Save runs a vaultgit preflight and then
+	// reports success with its third guarantee silently inapplicable. That is
+	// the reason to stay out of it rather than a reason it would be caught: a
+	// caller reading Save's contract here would believe the record was
+	// snapshotted. The guard above and the path-continuous replacement below
+	// are the two guarantees that do apply, and they are taken here rather
+	// than skipped.
 	if err := vault.WriteStateFile(path, data, enrollmentPerm); err != nil {
 		return nil, fmt.Errorf("vaultsync: write enrollment: %w", err)
 	}

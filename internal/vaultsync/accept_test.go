@@ -3,6 +3,7 @@ package vaultsync
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
@@ -126,6 +127,10 @@ func TestAcceptChecksEnrollmentBeforeBytes(t *testing.T) {
 	requireIs(t, err, ErrWrongVault, "a misrouted package that is also incomplete")
 }
 
+// alphaBody is the one payload every row below damages. Named because the
+// symlink row has to reproduce these exact bytes at the other end of the link.
+const alphaBody = "alpha body\n"
+
 func TestAcceptRefusesAnIncompletePackage(t *testing.T) {
 	r := enroll(t)
 
@@ -166,13 +171,43 @@ func TestAcceptRefusesAnIncompletePackage(t *testing.T) {
 			},
 		},
 		{
+			// Built so that IsRegular is the only thing left that can refuse it,
+			// which takes two contrivances rather than one.
+			//
+			// Lstat reports the length of the *link*, so the target is sized to
+			// the inventory exactly; an arbitrary one would be refused on the size
+			// check with the regular-file requirement deleted. And it resolves to
+			// a real sibling holding the declared bytes, so hashFile would follow
+			// it and agree; a dangling target would be refused on the open. Either
+			// shortcut leaves the row passing for a reason that has nothing to do
+			// with the guard it is named for.
 			name: "a payload is a symlink to somewhere else",
 			damage: func(t *testing.T, dir string, m *Manifest) {
-				path := filepath.Join(dir, PayloadsName, m.Payloads[0].Name)
+				payload := m.Payloads[0]
+				const prefix, suffix = "../", ".bin"
+				if payload.Size <= int64(len(prefix)+len(suffix)) {
+					t.Fatalf("the payload is %d bytes, too few to name a sibling in exactly that many", payload.Size)
+				}
+				target := prefix + strings.Repeat("a", int(payload.Size)-len(prefix)-len(suffix)) + suffix
+				if int64(len(target)) != payload.Size {
+					t.Fatalf("link target is %d bytes, the inventory declares %d", len(target), payload.Size)
+				}
+
+				body := []byte(alphaBody)
+				if got := HashBytes(body); got != payload.SHA256 {
+					t.Fatalf("fixture is stale: the sibling hashes to %s, the inventory declares %s", got, payload.SHA256)
+				}
+				// Beside the payload directory rather than inside it, or it would
+				// be refused as an unlisted extra file before the link is reached.
+				if err := os.WriteFile(filepath.Join(dir, filepath.Base(target)), body, 0o644); err != nil {
+					t.Fatalf("write link target: %v", err)
+				}
+
+				path := filepath.Join(dir, PayloadsName, payload.Name)
 				if err := os.Remove(path); err != nil {
 					t.Fatalf("remove payload: %v", err)
 				}
-				if err := os.Symlink("/etc/hosts", path); err != nil {
+				if err := os.Symlink(target, path); err != nil {
 					t.Fatalf("symlink: %v", err)
 				}
 			},
@@ -183,7 +218,7 @@ func TestAcceptRefusesAnIncompletePackage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			channel := r.channel(t)
 			manifest, dir := r.publish(t, channel, func(b *Builder) {
-				b.Write("Alpha.md", []byte("alpha body\n"), Absent())
+				b.Write("Alpha.md", []byte(alphaBody), Absent())
 			})
 			tc.damage(t, dir, manifest)
 			_, err := Accept(r.local, dir)
@@ -205,7 +240,12 @@ func TestReadManifestRefusesBytesThatAreNotAPackage(t *testing.T) {
 	}{
 		{"bytes that are not json", []byte("{not json"), ErrMalformedPackage},
 		{"a format this build does not know", []byte(`{"format":"brainnotes-sync-v9"}`), ErrUnsupportedFormat},
-		{"a package that changes nothing", []byte(`{"format":"` + Format + `"}`), ErrMalformedPackage},
+		// A header and nothing else. Named for what it is rather than for the
+		// empty-operations refusal it never reaches: validateHeader rejects the
+		// absent package_id long before validateOperations is asked anything. The
+		// empty package itself is covered in validate_test.go, against a manifest
+		// whose header is complete.
+		{"a manifest that is only a format token", []byte(`{"format":"` + Format + `"}`), ErrMalformedPackage},
 		{
 			// The case the format token is peeked at for. A later format is free
 			// to change what a field *means*: here epoch is a string and

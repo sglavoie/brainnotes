@@ -22,6 +22,8 @@ const (
 	foldedINote             = "i\u0307stanbul.md"     // i plus combining dot above, its fold
 	dialytikaNote           = "\u0390.md"             // composed; its fold is not composed
 	dialytikaDecomposedNote = "\u03b9\u0308\u0301.md" // the same note, spelled as the fold
+	longSAcuteNote          = "\u017f\u0301.md"       // long s + combining acute; folds to s + that acute
+	capSAcuteNote           = "\u015a.md"             // the precomposed spelling; folds to one rune
 )
 
 // classifyCase is one row of the policy table. It is a named type with a
@@ -221,6 +223,25 @@ func TestSyncStateDirIsDerivedFromTheEnrollmentMarker(t *testing.T) {
 	if Classify(config.EnrollmentMarker) != ClassPrivate {
 		t.Error("the enrollment record must never be portable content")
 	}
+
+	// And the exclusion must be by *root* rather than by the marker's own path.
+	// Asking privateRoots whether it contains stateRoot would prove nothing — it
+	// is built out of stateRoot — so ask instead about paths that are not the
+	// marker. An implementation that special-cased the marker's exact path would
+	// pass the assertion above and fail both of these. (That the root is
+	// *derived* rather than hardcoded is the separate claim, and it is the
+	// literal StateDir() check above that pins it.)
+	for _, p := range []string{
+		StateDir() + "/receipts/0000.json",
+		stateRoot + "/journal/0001.json",
+	} {
+		if Classify(p) != ClassPrivate {
+			t.Errorf(
+				"%q lives under %q and must be private; the exclusion is matching a path literal rather than the state root",
+				p, stateRoot,
+			)
+		}
+	}
 }
 
 func TestCollisionKey(t *testing.T) {
@@ -245,14 +266,29 @@ func TestCollisionKey(t *testing.T) {
 		{"small sharp s against its expansion", smallSharpSNote, "strasse.md", true},
 		{"dotted capital I against its expansion", dottedINote, foldedINote, true},
 
-		// The fold of U+0390 is the decomposed U+03B9 U+0308 U+0301, so these two
-		// spellings reach one key only because the key normalizes *after* folding
-		// and not only before.
+		// A polytonic Greek spelling that differs only by normalization, kept
+		// because it is the one whose *fold* is also unnormalized — but the row
+		// passes on the leading normalization like every other pair above it, not
+		// on the trailing one.
 		{"a fold that decomposes", dialytikaNote, dialytikaDecomposedNote, true},
+
+		// This one does need the trailing normalization, and it is the only row
+		// here that does. Both spellings are already NFC, so the leading step is
+		// a no-op on them. They agree because folding U+017F to `s` puts a base
+		// in front of the acute that has a precomposed form with it — a
+		// composition the input could not make — which the third step then
+		// builds, reaching the U+015B the precomposed spelling folds straight to.
+		// TestCollisionKeyMergesAFoldThatComposesWithTheNextMark makes the
+		// dependence explicit rather than incidental.
+		{"a fold that produces a base the next mark composes with", longSAcuteNote, capSAcuteNote, true},
 
 		{"different notes", "Alpha.md", "Beta.md", false},
 		{"different directories", "Notes/Alpha.md", "Other/Alpha.md", false},
-		{"folding is not transliteration", "Stra\u00dfe.md", "Strasze.md", false},
+
+		// Folding is not transliteration: it collapses case, never diacritics. A
+		// row differing at an ASCII letter would hold for the identity function
+		// too and would say nothing, so the difference here is the accent itself.
+		{"folding is not transliteration", composedNote, "Cafe.md", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -264,11 +300,17 @@ func TestCollisionKey(t *testing.T) {
 	}
 }
 
-// TestCollisionKeyIsIdempotent is the reason the key normalizes after folding
-// rather than before. Folding does not preserve NFC: the fold of U+0390 is the
-// decomposed U+03B9 U+0308 U+0301, which NFC composes straight back. A key that
-// stopped at the fold would therefore depend on which form the caller happened
-// to hold, so feeding a key back through must be a no-op or the key is not one.
+// TestCollisionKeyIsIdempotent is one of the two things the third step of the
+// key buys: the key is a normal form in its own right, so feeding one back
+// through changes nothing and it can be compared against the NFC paths every
+// other layer in this repository holds. Folding does not preserve NFC — the fold
+// of U+0390 is the decomposed U+03B9 U+0308 U+0301, which NFC composes straight
+// back — so a fold-and-stop key would be neither.
+//
+// The other thing it buys is verdicts, which is
+// TestCollisionKeyMergesAFoldThatComposesWithTheNextMark below. Neither test
+// subsumes the other: this one is about the shape of a single key, that one is
+// about two paths reaching the same key.
 func TestCollisionKeyIsIdempotent(t *testing.T) {
 	t.Parallel()
 
@@ -290,15 +332,55 @@ func TestCollisionKeyIsIdempotent(t *testing.T) {
 		}
 	}
 
-	// Idempotence alone would still hold for a key that folded and stopped, so
-	// state the premise directly: on this input the trailing normalization
-	// changes the bytes, which is the whole reason the third step exists.
+	// Idempotence alone would still hold for a key that folded and stopped on
+	// most inputs, so state the premise directly: on this one the trailing
+	// normalization changes the bytes, which is what there is to demonstrate.
 	stopped := textnorm.Fold(textnorm.NFC(dialytikaNote))
 	if stopped == CollisionKey(dialytikaNote) {
 		t.Errorf(
 			"folding %q left NFC intact (%q); the trailing normalization is no longer load-bearing and this test proves nothing",
 			dialytikaNote, stopped,
 		)
+	}
+}
+
+// TestCollisionKeyMergesAFoldThatComposesWithTheNextMark is the case that makes
+// the trailing normalization load-bearing for the answer and not only for the
+// shape of the key.
+//
+// The tempting argument is that normalizing both paths on the way in has already
+// made every spelling agree, leaving the third step with nothing to decide. It
+// takes two code points to see that this is false — and the mechanism is not
+// that the fold decomposes anything. U+017F (long s) folds to `s`, one rune for
+// one rune. It is that `s` has a precomposed form with the acute already
+// following it and U+017F does not, so folding makes available a composition the
+// input could not make: U+017F plus a combining acute folds to two runes, while
+// the precomposed U+015A folds straight to the single rune U+015B. A
+// case-insensitive volume holds those two names as one file. Only the trailing
+// normalization makes this package say so.
+//
+// Deliberately asserted in both directions, because the interesting half is the
+// negative one: a fold-and-stop key would report these as two paths and let a
+// producer publish a package that silently overwrites on the Mac.
+func TestCollisionKeyMergesAFoldThatComposesWithTheNextMark(t *testing.T) {
+	t.Parallel()
+
+	// The premise: the leading normalization cannot be what merges them, because
+	// both spellings are already NFC before it runs.
+	for _, in := range []string{longSAcuteNote, capSAcuteNote} {
+		if got := textnorm.NFC(in); got != in {
+			t.Fatalf("fixture is stale: %q is not already NFC (NFC gives %q)", in, got)
+		}
+	}
+
+	if CollisionKey(longSAcuteNote) != CollisionKey(capSAcuteNote) {
+		t.Errorf(
+			"CollisionKey(%q) = %q and CollisionKey(%q) = %q; these are one file on a case-insensitive volume",
+			longSAcuteNote, CollisionKey(longSAcuteNote), capSAcuteNote, CollisionKey(capSAcuteNote),
+		)
+	}
+	if textnorm.Fold(textnorm.NFC(longSAcuteNote)) == textnorm.Fold(textnorm.NFC(capSAcuteNote)) {
+		t.Error("folding alone already merges the pair; this case no longer shows the trailing normalization deciding anything")
 	}
 }
 

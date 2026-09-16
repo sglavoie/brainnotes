@@ -178,9 +178,17 @@ func TestConcurrentPublishOfOneIdentityPublishesOnce(t *testing.T) {
 
 // TestConcurrentPublishAndAcceptNeverSeesAPartialPackage is the transport's own
 // race: a reader polling a channel while a package is being written must either
-// find a complete package or find nothing it mistakes for one. A manifest
-// written before its payloads would show up here as an accepted package whose
-// bytes are missing.
+// find a complete package or find nothing it mistakes for one.
+//
+// What it pins is the *reader's* half — that every answer short of success is a
+// come-back-later one, and in particular that a half-linked manifest is never
+// parsed as a decision. It does not pin the publisher's write order, and it is
+// worth being exact about why, because the opposite is the obvious reading: if
+// the manifest were linked before its payloads, a mid-publication Accept would
+// answer ErrIncompletePackage, the loop below tolerates exactly that sentinel,
+// and this test would pass on every run. The ordering is stated instead by
+// TestPublishWritesEveryPayloadBeforeTheManifestThatNamesThem, which asks the
+// filesystem rather than the clock.
 func TestConcurrentPublishAndAcceptNeverSeesAPartialPackage(t *testing.T) {
 	r := enroll(t)
 	channel := r.channel(t)

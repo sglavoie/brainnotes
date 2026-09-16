@@ -2,12 +2,12 @@
 // that two enrolled replicas of one vault exchange changes through.
 //
 // It is a leaf: it imports internal/config (for the enrollment marker path it
-// shares with the configuration loader), internal/vault (for the guard and the
-// path-continuous replacement every durable write in this repository borrows),
-// and internal/textnorm. It imports nothing above them, and in particular it
-// does not import internal/vaultgit, internal/journal, or internal/noteops —
-// deciding what a package *contains* must not depend on what the content
-// history happens to track.
+// shares with the configuration loader), internal/vault (for the storage
+// location guard, the directory fsync, and — for the enrollment record alone —
+// the path-continuous replacement), and internal/textnorm. It imports nothing
+// above them, and in particular it does not import internal/vaultgit,
+// internal/journal, or internal/noteops — deciding what a package *contains*
+// must not depend on what the content history happens to track.
 //
 // # What is here
 //

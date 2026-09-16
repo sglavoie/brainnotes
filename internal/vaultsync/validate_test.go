@@ -335,6 +335,86 @@ func TestValidateAcceptsABackwardEdgeInsideOnePackage(t *testing.T) {
 	}
 }
 
+// TestValidateAcceptsAPredecessorFromAnEarlierPackage is the other half of the
+// backward-edge rule, and the half the rejection table cannot state.
+//
+// Causality between packages is the only kind that matters over time: the edge
+// that says "this edit follows the rename you applied last week" names an
+// operation that is not in this package and never will be. The index comparison
+// is deliberately silent about such an edge — it constrains only operations it
+// can see — and the one place absentOperationID appears in the rejection table
+// is a row about a *duplicated* edge, which would pass just as well if every
+// out-of-package predecessor were refused outright.
+//
+// So state it: tightening predecessorOrder to require that every predecessor
+// resolve inside this manifest would break every cross-package causal edge in
+// the protocol, and without this test the whole suite would stay green.
+func TestValidateAcceptsAPredecessorFromAnEarlierPackage(t *testing.T) {
+	r := enroll(t)
+
+	builder, err := NewBuilder(r.peer, 2, r.clock.Tick())
+	if err != nil {
+		t.Fatalf("NewBuilder: %v", err)
+	}
+	manifest, _, err := builder.
+		Require(r.peer.DeviceID, 1).
+		BeginOperation("", r.clock.Tick()).
+		Write("Alpha.md", []byte("follows the rename\n"), Absent(), absentOperationID).
+		Build()
+	if err != nil {
+		t.Fatalf("Build rejected an edge onto an operation in an earlier package: %v", err)
+	}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("Validate rejected an edge onto an operation in an earlier package: %v", err)
+	}
+	if got := manifest.Changes()[0].Predecessors; len(got) != 1 || got[0] != absentOperationID {
+		t.Errorf("the causal edge did not survive Build: %v", got)
+	}
+}
+
+// TestValidateAcceptsCausalEdgesOnATombstone says a delete is ordered the same
+// way a write is.
+//
+// Every other predecessor assertion in this file is on a write, and the edge
+// checks are action-independent by construction — manifestScan.change runs the
+// predecessor scan before it looks at the action at all — so nothing can
+// currently hide behind ActionDelete. That is a property of today's control
+// flow, not a stated guarantee, and the guarantee is the load-bearing one: a
+// delete that could not carry causality would be a delete no applier could order
+// against a concurrent edit to the same path, which is the entire reason this
+// protocol carries tombstones instead of inferring absence.
+func TestValidateAcceptsCausalEdgesOnATombstone(t *testing.T) {
+	r := enroll(t)
+	rename := mustID(t, NewOperationID)
+
+	builder, err := NewBuilder(r.peer, 2, r.clock.Tick())
+	if err != nil {
+		t.Fatalf("NewBuilder: %v", err)
+	}
+	manifest, _, err := builder.
+		Require(r.peer.DeviceID, 1).
+		BeginOperation(rename, r.clock.Tick()).
+		Write("Notes/Renamed.md", []byte("body\n"), Absent()).
+		BeginOperation("", r.clock.Tick()).
+		// Both directions at once: the rename this package carries, and an
+		// operation from a package applied before it.
+		Delete("Notes/Original.md", Existing(HashBytes([]byte("body\n"))), rename, absentOperationID).
+		Build()
+	if err != nil {
+		t.Fatalf("Build rejected a tombstone carrying causal edges: %v", err)
+	}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("Validate rejected a tombstone carrying causal edges: %v", err)
+	}
+	deletion := manifest.Changes()[1]
+	if !deletion.Tombstone() {
+		t.Fatalf("the second change is not a tombstone: %+v", deletion)
+	}
+	if len(deletion.Predecessors) != 2 {
+		t.Errorf("the tombstone carries %d causal edges, want 2", len(deletion.Predecessors))
+	}
+}
+
 // TestManifestValidateRejectsAMalformedInventory covers the coupling between a
 // change and the bytes it names. A tombstone is checked from both sides —
 // carrying a payload and carrying resulting content — because a delete that

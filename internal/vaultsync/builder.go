@@ -90,6 +90,9 @@ func (b *Builder) PackageID() string { return b.manifest.PackageID }
 
 // Require records a package this one must be applied after.
 func (b *Builder) Require(originDevice string, sequence uint64) *Builder {
+	if b.err != nil {
+		return b
+	}
 	b.manifest.Requires = append(b.manifest.Requires, Dependency{
 		OriginDevice: originDevice,
 		Sequence:     sequence,

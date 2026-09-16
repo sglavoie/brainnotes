@@ -1,10 +1,12 @@
 package vaultsync
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestPublishLaysOutADurablePackage checks the shape a receiver reads: a
@@ -276,6 +278,126 @@ func TestPublishDiscardsAPackageItCouldNotFinish(t *testing.T) {
 		b.Write("Beta.md", []byte("beta body\n"), Absent())
 	}); published == "" {
 		t.Error("the channel was unusable after a failed publication")
+	}
+}
+
+// TestPublishWritesEveryPayloadBeforeTheManifestThatNamesThem is the commit
+// point stated as an assertion rather than as a comment on Publish.
+//
+// The ordering is the whole guarantee: a manifest is a decision — it says a
+// package exists and names the bytes it carries — so it must not exist until
+// those bytes do. Swap the two steps and the race test still passes, because a
+// reader that finds a manifest with no payloads answers ErrIncompletePackage
+// and a polling reader treats that as "still arriving". Nothing else in this
+// package constrains the order at all.
+//
+// So ask the filesystem, which recorded it. Every payload is fsynced before the
+// manifest is staged, so the manifest's modification time cannot precede any
+// payload's — and under the swapped order it would precede all of them. The one
+// thing that could make this vacuous is a filesystem whose timestamps are too
+// coarse to separate the writes, which the payload spread below is checked for
+// directly rather than hoped about.
+func TestPublishWritesEveryPayloadBeforeTheManifestThatNamesThem(t *testing.T) {
+	r := enroll(t)
+
+	// Several payloads rather than one: each is a separate create-write-fsync,
+	// so together they span enough wall time for any usable timestamp resolution
+	// to separate the first from the last.
+	const payloadCount = 8
+	manifest, dir := r.publish(t, r.channel(t), func(b *Builder) {
+		for i := range payloadCount {
+			b.Write(fmt.Sprintf("Note-%d.md", i), []byte(fmt.Sprintf("body %d\n", i)), Absent())
+		}
+	})
+	if len(manifest.Payloads) != payloadCount {
+		t.Fatalf("the package carries %d payloads, want %d", len(manifest.Payloads), payloadCount)
+	}
+
+	oldest, newest := payloadTimeSpan(t, dir, manifest)
+
+	// The premise: this filesystem can tell two of the publisher's own writes
+	// apart. Without it the comparison below holds for any write order at all
+	// and would be a test that cannot fail.
+	if !oldest.Before(newest) {
+		t.Skipf(
+			"every payload reports the same modification time (%s); this filesystem's timestamps cannot order %d fsynced writes, so the ordering is untestable here",
+			newest, payloadCount,
+		)
+	}
+
+	info, err := os.Stat(filepath.Join(dir, ManifestName))
+	if err != nil {
+		t.Fatalf("stat manifest: %v", err)
+	}
+	// A strict inversion rather than "not strictly after". The manifest is
+	// written immediately after the last payload, so the two can legitimately
+	// land on the same tick even on a filesystem that separated the payload
+	// spread above; demanding a strict gap there would fail a correct publisher.
+	// The swapped order does not survive the weaker check either: the manifest
+	// would precede every payload, and oldest is strictly before newest.
+	if info.ModTime().Before(newest) {
+		t.Errorf(
+			"the manifest was written at %s, before the last payload at %s: the record naming the bytes reached the disk before the bytes did",
+			info.ModTime(), newest,
+		)
+	}
+}
+
+// payloadTimeSpan is the earliest and latest modification time the filesystem
+// recorded across a package's payload files.
+func payloadTimeSpan(t *testing.T, dir string, m *Manifest) (oldest, newest time.Time) {
+	t.Helper()
+	for _, payload := range m.Payloads {
+		info, err := os.Stat(filepath.Join(dir, PayloadsName, payload.Name))
+		if err != nil {
+			t.Fatalf("stat payload: %v", err)
+		}
+		at := info.ModTime()
+		if oldest.IsZero() || at.Before(oldest) {
+			oldest = at
+		}
+		if at.After(newest) {
+			newest = at
+		}
+	}
+	return oldest, newest
+}
+
+// TestMissingAncestorsNamesEveryDirectoryThatHadToBeCreated covers the input
+// ensureChannel's fsync loop is built out of. The fsyncs themselves are not
+// observable from a test, so the observable half is stated instead: which
+// directories a publication had to bring into existence, deepest first.
+func TestMissingAncestorsNamesEveryDirectoryThatHadToBeCreated(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	deep := filepath.Join(root, "sync", "outgoing", "receipts")
+
+	missing, err := missingAncestors(deep)
+	if err != nil {
+		t.Fatalf("missingAncestors: %v", err)
+	}
+	want := []string{deep, filepath.Dir(deep), filepath.Dir(filepath.Dir(deep))}
+	if len(missing) != len(want) {
+		t.Fatalf("missingAncestors = %v, want %v", missing, want)
+	}
+	for i := range want {
+		if missing[i] != want[i] {
+			t.Errorf("missingAncestors[%d] = %q, want %q", i, missing[i], want[i])
+		}
+	}
+
+	// Nothing to commit once they exist: a second publication into a live
+	// channel must not re-fsync directories that were already durable.
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	again, err := missingAncestors(deep)
+	if err != nil {
+		t.Fatalf("missingAncestors: %v", err)
+	}
+	if len(again) != 0 {
+		t.Errorf("missingAncestors on an existing directory = %v, want nothing", again)
 	}
 }
 

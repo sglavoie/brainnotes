@@ -19,6 +19,10 @@ const (
 	foldedI       = "i\u0307"            // i + combining dot above, what folding gives
 	iotaDialytika = "\u0390"             // ΐ, composed
 	iotaFolded    = "\u03b9\u0308\u0301" // its fold, decomposed
+	longSAcute    = "\u017f\u0301"       // long s + combining acute, two runes
+	longSFolded   = "s\u0301"            // its fold: still two runes, still not NFC
+	capSAcute     = "\u015a"             // Ś, one rune, precomposed
+	smallSAcute   = "\u015b"             // ś, its fold and the NFC of longSFolded
 )
 
 // TestNFCComposes is the property every caller in this repository relies on:
@@ -96,9 +100,17 @@ func TestFoldExpandsWhereToLowerMaps(t *testing.T) {
 }
 
 // TestFoldDoesNotPreserveNFC is the ordering rule stated as a fact rather than
-// as a comment. A caller that normalized only *before* folding would hold a key
-// whose bytes depend on which form it was handed, which is the one thing a
-// collision key exists to stop depending on.
+// as a comment: a caller that normalized only *before* folding would hand out a
+// key that is not itself in NFC.
+//
+// This is the idempotence half of the ordering rule: the *output* of a
+// fold-and-stop key would be unnormalized, which is what makes such a key
+// non-idempotent and unmatchable against the NFC paths the rest of the repo
+// holds. It is a one-code-point case and it stops there.
+//
+// The other half — that the trailing normalization also merges spellings the
+// fold alone leaves apart — needs two code points and is
+// TestFoldCanProduceABaseThatComposesWithTheNextMark below.
 func TestFoldDoesNotPreserveNFC(t *testing.T) {
 	t.Parallel()
 
@@ -114,6 +126,54 @@ func TestFoldDoesNotPreserveNFC(t *testing.T) {
 	}
 	if got, want := NFC(folded), iotaDialytika; got != want {
 		t.Errorf("NFC(Fold(%q)) = %q, want %q", iotaDialytika, got, want)
+	}
+}
+
+// TestFoldCanProduceABaseThatComposesWithTheNextMark is the reason the trailing
+// normalization changes answers and not only bytes.
+//
+// It is tempting to argue that normalizing both inputs on the way in already
+// made every spelling agree, so folding last can only tidy the result. That
+// argument is wrong, and one code point is not enough to see it. The mechanism
+// is not that the fold decomposes anything: `ſ` (U+017F) folds to `s`, one rune
+// for one rune. It is that `s` *has* a precomposed form with the acute already
+// sitting behind it and `ſ` does not, so folding makes available a composition
+// the input could not make. `ſ` plus a combining acute folds to `s` plus that
+// same acute, two runes; the precomposed `Ś` (U+015A) folds straight to the
+// single rune `ś` (U+015B). Two names a case-insensitive filesystem holds as one
+// file, and two keys — until the fold's own output is normalized.
+//
+// Over BMP base characters crossed with the whole U+0300-U+036F block, six
+// groups merge only at that step; this is one of them, kept as the named case.
+func TestFoldCanProduceABaseThatComposesWithTheNextMark(t *testing.T) {
+	t.Parallel()
+
+	// The premise: both spellings are already NFC going in, so the leading
+	// normalization has nothing left to do and cannot be what merges them.
+	for _, in := range []string{longSAcute, capSAcute} {
+		if got := NFC(in); got != in {
+			t.Fatalf("fixture is stale: %q is not already NFC (NFC gives %q)", in, got)
+		}
+	}
+	if longSAcute == capSAcute {
+		t.Fatal("the two fixtures are the same bytes; the test proves nothing")
+	}
+
+	stoppedAtFold, composedFold := Fold(longSAcute), Fold(capSAcute)
+	if stoppedAtFold != longSFolded {
+		t.Fatalf("Fold(%q) = %q, want %q", longSAcute, stoppedAtFold, longSFolded)
+	}
+	if composedFold != smallSAcute {
+		t.Fatalf("Fold(%q) = %q, want %q", capSAcute, composedFold, smallSAcute)
+	}
+
+	// The claim, both ways round: folding alone separates them, and the
+	// trailing normalization is what brings them together.
+	if stoppedAtFold == composedFold {
+		t.Errorf("folding alone already merged %q and %q; the case no longer demonstrates anything", longSAcute, capSAcute)
+	}
+	if got, want := NFC(stoppedAtFold), NFC(composedFold); got != want {
+		t.Errorf("NFC(Fold(%q)) = %q, NFC(Fold(%q)) = %q; the trailing normalization did not merge them", longSAcute, got, capSAcute, want)
 	}
 }
 

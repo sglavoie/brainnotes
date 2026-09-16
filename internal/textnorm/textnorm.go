@@ -29,11 +29,20 @@ func NFC(s string) string {
 // as one name, so a caller building a collision key with ToLower would report
 // two distinct keys for one file.
 //
-// Folding is also not normalization-preserving, which is why a caller building a
-// key must normalize *after* folding and not only before: the fold of `ΐ`
-// (U+0390) is U+03B9 U+0308 U+0301, a decomposed sequence NFC composes straight
-// back to U+0390. Folding a normalized string can therefore hand back an
-// unnormalized one.
+// Folding is also not normalization-preserving: the fold of `ΐ` (U+0390) is
+// U+03B9 U+0308 U+0301, a decomposed sequence NFC composes straight back to
+// U+0390. Folding a normalized string can therefore hand back an unnormalized
+// one, which is why a caller building a key normalizes *after* folding as well
+// as before.
+//
+// That second normalization is not merely cosmetic, and normalizing the input
+// does not subsume it. Folding can move a base character to one that *has* a
+// precomposed form with the mark already following it, making a composition
+// newly possible that was not available before: `ſ` (U+017F, long s) folds to
+// `s`, so `ſ` plus a combining acute folds to `s` plus that acute — two runes
+// still — while `Ś` (U+015A) folds to the single rune `ś` (U+015B). Those are
+// one name on a case-insensitive filesystem and two keys unless the fold's own
+// output is normalized too.
 //
 // A cases.Caser may be stateful, so one is made per call rather than shared.
 func Fold(s string) string {
