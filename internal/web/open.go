@@ -137,11 +137,16 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	// only exec in this handler is the one the local profile asked for.
 	if s.caps.browserOpen {
 		destination, err := s.noteNavigationTarget(notePath)
-		if err != nil {
+		switch {
+		case err == nil:
+			writeManagementJSON(w, http.StatusOK, openNavigationResponse{OK: true, Destination: destination})
+		case errors.Is(err, errOpenPathOutsideVault):
+			http.Error(w, "forbidden note path", http.StatusForbidden)
+		case errors.Is(err, os.ErrNotExist):
+			http.NotFound(w, r)
+		default:
 			http.Error(w, "note path error", http.StatusInternalServerError)
-			return
 		}
-		writeManagementJSON(w, http.StatusOK, openNavigationResponse{OK: true, Destination: destination})
 		return
 	}
 	if err := s.openPath(notePath); err != nil {
@@ -294,16 +299,23 @@ func (s *Server) notePathForOpenRouteFallback(key string) (string, error) {
 // containment check here is a second statement of an invariant rather than the
 // only one: a path that escapes the vault must never become a route.
 func (s *Server) noteNavigationTarget(notePath string) (string, error) {
+	// resolveOpenPath is the containment check the launching branch runs, so
+	// the navigating branch is held to the same standard rather than to a
+	// second copy of it: a path that would not be handed to an editor is not
+	// turned into a route either. It also resolves symlinks, which matters
+	// because the path reaching here comes from the snapshot graph and is not
+	// necessarily in the same form as the resolved vault root.
+	resolved, err := resolveOpenPath(s.vault.Root, notePath)
+	if err != nil {
+		return "", err
+	}
 	realRoot, err := filepath.EvalSymlinks(s.vault.Root)
 	if err != nil {
 		return "", fmt.Errorf("web: resolve root %q: %w", s.vault.Root, err)
 	}
-	rel, err := filepath.Rel(realRoot, notePath)
+	rel, err := filepath.Rel(realRoot, resolved)
 	if err != nil {
-		return "", fmt.Errorf("web: rel %q: %w", notePath, err)
-	}
-	if relEscapesRoot(rel) || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("%w: %q", errOpenPathOutsideVault, notePath)
+		return "", fmt.Errorf("web: rel %q: %w", resolved, err)
 	}
 	return notePathForKey(managementRouteKeyForRelPath(filepath.ToSlash(rel)))
 }

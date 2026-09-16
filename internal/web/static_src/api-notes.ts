@@ -132,7 +132,19 @@ export const noteNavigationDestination = (payload: unknown): string => {
   return destination.startsWith("/n/") ? destination : "";
 };
 
+// normalizeOpenErrorMessage explains a refused Open action. The route answers
+// with plain text from its own handler but with a management JSON envelope when
+// the request guard refuses it first — a capability the mode lacks, or a
+// cross-origin request — so both shapes are read here rather than leaving the
+// guard's refusals rendered as a bare status code.
 export const normalizeOpenErrorMessage = (status: number, detail: unknown): string => {
+  if (asRecord(detail)) {
+    const result = normalizeManagementResult(detail);
+    if (!result.ok && result.message) {
+      return result.message;
+    }
+    return `Open failed (${status}).`;
+  }
   const message = normalizeParamValue(detail);
   return message || `Open failed (${status}).`;
 };

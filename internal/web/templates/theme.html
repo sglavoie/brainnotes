@@ -1,6 +1,15 @@
 {{define "themeBoot"}}
-{{if readOnly}}<script>document.documentElement.dataset.readOnly = "true";</script>
-<link rel="stylesheet" href="/static/replica.css">{{end}}
+{{/*
+  The two capability attributes are independent, and the stylesheet keys on them
+  separately: hosted mode sets only data-no-process-launch, so it keeps every
+  document action and loses only the ones that would start a process on the
+  server. The attributes are set from the server's answer rather than inferred
+  in the browser, and the controls they hide are a presentation layer over
+  refusals the server makes on its own.
+*/}}
+{{if or readOnly (not processLaunch)}}<link rel="stylesheet" href="/static/capabilities.css">{{end}}
+{{if readOnly}}<script>document.documentElement.dataset.readOnly = "true";</script>{{end}}
+{{if not processLaunch}}<script>document.documentElement.dataset.noProcessLaunch = "true";</script>{{end}}
 <script>
   (function () {
     try {

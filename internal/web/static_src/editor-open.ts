@@ -1,4 +1,5 @@
-import { buildOpenNoteForm, normalizeOpenErrorMessage } from "./api";
+import { buildOpenNoteForm, normalizeOpenErrorMessage, noteNavigationDestination } from "./api";
+import { readResponsePayload } from "./daily-brief-http";
 import { queryElement } from "./dom";
 import { setStatusText } from "./status";
 
@@ -66,12 +67,20 @@ export const initOpenInEditor = (): void => {
     try {
       const request = buildOpenEditorFetchRequest(config);
       const resp = await fetch(request.url, request.init);
+      const payload = await readResponsePayload(resp);
       if (!resp.ok) {
-        const detail = await resp.text();
-        setStatus(normalizeOpenErrorMessage(resp.status, detail), "is-error");
+        setStatus(normalizeOpenErrorMessage(resp.status, payload), "is-error");
         return;
       }
 
+      // A server without an editor answers with the route to navigate to
+      // instead. The control is hidden in those modes, so this branch is the
+      // safety net rather than the path a person normally takes.
+      const destination = noteNavigationDestination(payload);
+      if (destination) {
+        window.location.assign(destination);
+        return;
+      }
       setStatus("Opened in editor. Refresh after saving changes.", "is-success");
     } catch {
       setStatus("Open failed.", "is-error");

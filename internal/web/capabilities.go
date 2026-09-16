@@ -193,6 +193,19 @@ func (s *Server) requestGuard(next http.Handler) http.Handler {
 			writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "cross-origin request refused"))
 			return
 		}
+		// A declared length over the bound is refused here so the answer is an
+		// honest 413 rather than whatever a handler makes of a truncated form.
+		// MaxBytesReader still wraps the body afterwards, because a chunked
+		// request declares no length and one that declares a small length can
+		// still send more.
+		// The status is set explicitly rather than derived from the code: this
+		// is a transport bound, not a note-operation failure, so it borrows the
+		// management envelope without claiming a noteops error class of its own.
+		if r.ContentLength > s.caps.maxRequestBody {
+			writeManagementErrorStatus(w, http.StatusRequestEntityTooLarge,
+				noteops.Errorf(noteops.CodeInvalidRequest, "request body exceeds %d bytes", s.caps.maxRequestBody))
+			return
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, s.caps.maxRequestBody)
 		next.ServeHTTP(w, r)
 	})

@@ -110,8 +110,12 @@ func TestServer_UsesInjectedStaticFiles(t *testing.T) {
 	if body != "fresh build" {
 		t.Fatalf("body = %q, want fresh build", body)
 	}
-	if got := resp.Header.Get("Cache-Control"); got != "no-cache" {
-		t.Fatalf("Cache-Control = %q, want no-cache", got)
+	// The static prefix is the one place that relaxes the guard's blanket
+	// no-store: the bundle holds no vault content, so it may be stored and
+	// revalidated. It stays private, because the guard's promise that a shared
+	// cache never retains anything this server sent must survive the override.
+	if got := resp.Header.Get("Cache-Control"); got != "private, no-cache" {
+		t.Fatalf("Cache-Control = %q, want private, no-cache", got)
 	}
 }
 

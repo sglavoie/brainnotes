@@ -1006,7 +1006,22 @@ var BrainNotesApp = (() => {
     const message = asRecord(detail) ? "" : normalizeParamValue(detail);
     return message || `Request failed (${status}).`;
   };
+  var noteNavigationDestination = (payload) => {
+    const record = asRecord(payload);
+    if (!record) {
+      return "";
+    }
+    const destination = normalizeParamValue(readRecordValue(record, ["destination", "Destination"]));
+    return destination.startsWith("/n/") ? destination : "";
+  };
   var normalizeOpenErrorMessage = (status, detail) => {
+    if (asRecord(detail)) {
+      const result = normalizeManagementResult(detail);
+      if (!result.ok && result.message) {
+        return result.message;
+      }
+      return `Open failed (${status}).`;
+    }
     const message = normalizeParamValue(detail);
     return message || `Open failed (${status}).`;
   };
@@ -2487,8 +2502,9 @@ var BrainNotesApp = (() => {
       ctx.updateActivity(result.activity);
       ctx.openedCards.add(cardID);
       ctx.markCardOpened(slot, cardID);
-      if (result.destination?.startsWith("/n/")) {
-        window.location.assign(result.destination);
+      const destination = noteNavigationDestination(payload);
+      if (destination) {
+        window.location.assign(destination);
         return;
       }
       ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
@@ -3550,7 +3566,7 @@ var BrainNotesApp = (() => {
         return;
       }
       setBusy(true);
-      setStatus2("Opening editor...", "is-loading");
+      setStatus2("Opening note...", "is-loading");
       try {
         const body = buildOpenNoteForm({ key, token: config.csrfToken });
         const request = jsonPostRequest2(config.openEndpoint, config.csrfToken, body.toString());
@@ -3561,6 +3577,11 @@ var BrainNotesApp = (() => {
           return;
         }
         setError("");
+        const destination = noteNavigationDestination(payload);
+        if (destination) {
+          window.location.assign(destination);
+          return;
+        }
         setStatus2("Opened in editor. Refresh after saving changes.", "is-success");
       } catch {
         showError("Open failed.");
@@ -3652,9 +3673,14 @@ var BrainNotesApp = (() => {
       try {
         const request = buildOpenEditorFetchRequest(config);
         const resp = await fetch(request.url, request.init);
+        const payload = await readResponsePayload(resp);
         if (!resp.ok) {
-          const detail = await resp.text();
-          setStatus2(normalizeOpenErrorMessage(resp.status, detail), "is-error");
+          setStatus2(normalizeOpenErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const destination = noteNavigationDestination(payload);
+        if (destination) {
+          window.location.assign(destination);
           return;
         }
         setStatus2("Opened in editor. Refresh after saving changes.", "is-success");
