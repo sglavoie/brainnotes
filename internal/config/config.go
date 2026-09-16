@@ -1,13 +1,11 @@
-// Package config loads the vault-local brainnotes.toml configuration.
+// Package config loads the vault-local configuration: the portable
+// brainnotes.toml that marks the vault root, and the optional machine-local
+// brainnotes.local.toml overlay beside it. See layers.go for the layering rules
+// and ownership.go for which file owns which key.
 package config
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-
-	"github.com/BurntSushi/toml"
 )
 
 // Config mirrors the on-disk TOML schema. Zero-value fields are filled in with
@@ -40,6 +38,21 @@ type Config struct {
 
 	// SourcePath is the absolute path of the brainnotes.toml that was loaded.
 	SourcePath string `toml:"-"`
+
+	// LocalSourcePath is the absolute path of the brainnotes.local.toml overlay
+	// that was loaded, and empty when the vault has no overlay.
+	LocalSourcePath string `toml:"-"`
+
+	// Provenance names the configuration file that assigned each key, for every
+	// key some file assigned. A key absent from this map holds its default.
+	Provenance map[string]Layer `toml:"-"`
+
+	// Fingerprint identifies the exact bytes every layer contributed.
+	Fingerprint Fingerprint `toml:"-"`
+
+	// Enrollment records whether the vault was enrolled in synchronization when
+	// it was loaded, which is what decides whether field ownership is enforced.
+	Enrollment EnrollmentState `toml:"-"`
 
 	// VaultOrigin records which mechanism resolved the vault root.
 	VaultOrigin VaultOrigin `toml:"-"`
@@ -325,12 +338,14 @@ type LoadOptions struct {
 	Getenv func(string) string
 }
 
-// Load resolves the vault root, then loads <vault>/brainnotes.toml from it.
+// Load resolves the vault root, then loads its configuration layers:
+// <vault>/brainnotes.toml and, when it exists, <vault>/brainnotes.local.toml.
 //
 // Vault precedence: --vault > $BNOTES_VAULT > the nearest ancestor of the
 // working directory that contains brainnotes.toml. An explicit --vault or
 // $BNOTES_VAULT must name an existing directory that contains brainnotes.toml;
-// `bn init` creates that file.
+// `bn init` creates that file. The overlay is never a vault-root marker and is
+// never required — a vault without one is the ordinary single-file shape.
 //
 // Leading `~` or `~/` in an explicit vault path is expanded to the user's home
 // directory. The returned Config has defaults applied for any unset fields.
@@ -339,55 +354,25 @@ func Load(opts LoadOptions) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	source, err := os.ReadFile(filepath.Join(root, FileName))
+	src, err := ReadSources(root)
 	if err != nil {
-		return nil, fmt.Errorf("config: read %s: %w", filepath.Join(root, FileName), err)
+		return nil, err
 	}
-	return Decode(root, origin, source)
+	return DecodeSources(root, origin, src)
 }
 
 // Decode parses one brainnotes.toml body for a known vault root, applying the
-// same defaults and validation as Load. Reload paths use it so a config
-// rebuilt from bytes is byte-for-byte equivalent to one read from disk.
+// same layering, defaults, and validation as Load. Reload paths use it so a
+// config rebuilt from bytes is byte-for-byte equivalent to one read from disk.
+//
+// The body it is handed replaces the portable layer only; the overlay is read
+// from the vault, because a caller holding candidate brainnotes.toml bytes is
+// asking what the vault would load from them, and the vault includes its
+// overlay. Use DecodeSources to supply both layers explicitly.
 func Decode(root string, origin VaultOrigin, source []byte) (*Config, error) {
-	cfg := &Config{
-		Vault:       root,
-		SourcePath:  filepath.Join(root, FileName),
-		VaultOrigin: origin,
-	}
-
-	meta, err := toml.Decode(string(source), cfg)
+	local, err := readLocalSource(root)
 	if err != nil {
-		return nil, fmt.Errorf("config: parse %s: %w", cfg.SourcePath, err)
-	}
-	if undecoded := meta.Undecoded(); len(undecoded) > 0 {
-		keys := make([]string, len(undecoded))
-		for i, k := range undecoded {
-			keys[i] = k.String()
-			if keys[i] == "vault" {
-				return nil, fmt.Errorf(
-					"config: %s: the `vault` key was removed; the vault root is the directory holding %s",
-					cfg.SourcePath, FileName)
-			}
-			if legacy := legacyPropertyKey(keys[i]); legacy != "" {
-				return nil, fmt.Errorf(
-					"config: %s: `%s` was replaced by unified [frontmatter.properties.<name>] definitions with type/items/required/allowed",
-					cfg.SourcePath, legacy)
-			}
-		}
-		return nil, fmt.Errorf("config: %s: unknown keys: %s", cfg.SourcePath, strings.Join(keys, ", "))
-	}
-
-	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
 		return nil, err
 	}
-
-	applyDefaults(cfg)
-
-	if err := validate(cfg); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
+	return DecodeSources(root, origin, Sources{Portable: source, Local: local})
 }

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
 func mediaPathForTarget(root, target string) (string, bool, error) {
@@ -113,11 +115,23 @@ func pathWithinRoot(root, path string) (bool, error) {
 	return true, nil
 }
 
+// privateVaultFiles names the configuration files that are never attachments.
+// Both layers are listed: brainnotes.local.toml carries this machine's editor,
+// listen address, and agent command, so it is at least as private as the
+// portable file beside it and is classified from the moment it can exist rather
+// than once something starts writing one.
+var privateVaultFiles = []string{config.FileName, config.LocalFileName}
+
 // Configuration and runtime internals are never attachments, including symlink aliases.
 func privateMediaPath(rel string) bool {
 	for _, part := range strings.Split(rel, "/") {
-		if strings.HasPrefix(part, ".") || strings.EqualFold(part, "brainnotes.toml") {
+		if strings.HasPrefix(part, ".") {
 			return true
+		}
+		for _, private := range privateVaultFiles {
+			if strings.EqualFold(part, private) {
+				return true
+			}
 		}
 	}
 	return false

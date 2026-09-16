@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // The guard's startup and its half of live reload.
@@ -233,9 +232,10 @@ func TestPolicySourceStaysOnTheVaultResolvedAtStartup(t *testing.T) {
 	}
 }
 
-// The hash is the vault's own content hash, so the fingerprint the guard
-// computes is the one the rest of the system would compute for those bytes.
-func TestPolicySourceFingerprintIsTheVaultContentHash(t *testing.T) {
+// The hash is the configuration's own composite fingerprint, so the value the
+// guard dedups on is the one the rest of the system would compute for the same
+// vault — across both layers, since the guard acts on the merged policy.
+func TestPolicySourceFingerprintIsTheCompositeConfigFingerprint(t *testing.T) {
 	root := newVault(t, "5m")
 	source := policySource(loadVault(t))
 
@@ -243,12 +243,53 @@ func TestPolicySourceFingerprintIsTheVaultContentHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("source: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(root, config.FileName))
+	sources, err := config.ReadSources(root)
 	if err != nil {
-		t.Fatalf("read config: %v", err)
+		t.Fatalf("read sources: %v", err)
 	}
-	if want := vault.HashBytes(data); snapshot.Hash != want {
+	if want := sources.Fingerprint().Composite; snapshot.Hash != want {
 		t.Fatalf("fingerprint %q, want %q", snapshot.Hash, want)
+	}
+}
+
+// The guard's dedup key is what decides whether a changed policy is ever
+// adopted, so it has to move when the overlay moves. `autosave.min_interval` is
+// a portable key, but an unenrolled vault — every vault today — may legally
+// carry it in the overlay, and a guard that fingerprinted only brainnotes.toml
+// would read the new floor on every poll and adopt it never.
+func TestPolicySourceNoticesAnOverlayOnlyChange(t *testing.T) {
+	root := newVault(t, "5m")
+	overlay := filepath.Join(root, config.LocalFileName)
+	source := policySource(loadVault(t))
+
+	before, err := source()
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	if err := os.WriteFile(overlay, []byte("[autosave]\nmin_interval = \"30s\"\n"), 0o600); err != nil {
+		t.Fatalf("write overlay: %v", err)
+	}
+	after, err := source()
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	if after.Hash == before.Hash {
+		t.Error("the fingerprint ignored the overlay, so the watcher would never adopt the new floor")
+	}
+	if after.Policy.Canonical != "30s" {
+		t.Errorf("policy = %q, want the overlay's floor", after.Policy.Canonical)
+	}
+
+	if err := os.Remove(overlay); err != nil {
+		t.Fatalf("remove overlay: %v", err)
+	}
+	restored, err := source()
+	if err != nil {
+		t.Fatalf("source: %v", err)
+	}
+	if restored.Hash != before.Hash || restored.Policy.Canonical != "5m" {
+		t.Errorf("deleting the overlay did not restore the portable floor: %q %q",
+			restored.Hash, restored.Policy.Canonical)
 	}
 }
 

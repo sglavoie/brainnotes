@@ -52,7 +52,7 @@ func TestReplicaRequiresExternalState(t *testing.T) {
 
 func TestReplicaBrowsingAndWriteBarrier(t *testing.T) {
 	root, state := t.TempDir(), t.TempDir()
-	for name, content := range map[string]string{"A.md": "---\ntitle: Alpha\npinned: true\n---\n[[B]]\n", "B.md": "# Beta\n", "file.txt": "attachment", "brainnotes.toml": "", ".secret": "hidden"} {
+	for name, content := range map[string]string{"A.md": "---\ntitle: Alpha\npinned: true\n---\n[[B]]\n", "B.md": "# Beta\n", "file.txt": "attachment", "brainnotes.toml": "", "brainnotes.local.toml": "", ".secret": "hidden"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0444); err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func TestReplicaBrowsingAndWriteBarrier(t *testing.T) {
 			t.Errorf("%s: %d %s", route, rec.Code, rec.Body.String())
 		}
 	}
-	for _, route := range []string{"/media/brainnotes.toml", "/media/.secret", "/media/../brainnotes.toml"} {
+	for _, route := range []string{"/media/brainnotes.toml", "/media/brainnotes.local.toml", "/media/.secret", "/media/../brainnotes.toml"} {
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", route, nil))
 		if rec.Code == 200 {

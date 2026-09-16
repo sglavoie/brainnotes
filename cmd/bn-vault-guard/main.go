@@ -143,18 +143,22 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 // this process acts on.
 //
 // The hash is filled in before the decode is attempted, so an invalid version is
-// still identified by its bytes and reported once rather than once per poll.
+// still identified by its bytes and reported once rather than once per poll. It
+// is the *composite* fingerprint, covering both configuration layers and whether
+// the overlay exists at all, because the guard acts on the merged policy: an
+// `autosave.min_interval` written into brainnotes.local.toml is one this process
+// reads and must therefore be one it notices changing.
 func policySource(cfg *config.Config) vaultgit.PolicySource {
-	root, origin, path := cfg.Vault, cfg.VaultOrigin, cfg.SourcePath
+	root, origin := cfg.Vault, cfg.VaultOrigin
 	return func() (vaultgit.PolicySnapshot, error) {
-		source, err := os.ReadFile(path)
+		sources, err := config.ReadSources(root)
 		if err != nil {
 			// No bytes, so no fingerprint. The watcher falls back to the diagnostic
 			// for deduplication, which is stable for as long as this failure is.
-			return vaultgit.PolicySnapshot{}, fmt.Errorf("read %s: %w", config.FileName, err)
+			return vaultgit.PolicySnapshot{}, err
 		}
-		snapshot := vaultgit.PolicySnapshot{Hash: vault.HashBytes(source)}
-		loaded, err := config.Decode(root, origin, source)
+		snapshot := vaultgit.PolicySnapshot{Hash: sources.Fingerprint().Composite}
+		loaded, err := config.DecodeSources(root, origin, sources)
 		if err != nil {
 			return snapshot, err
 		}

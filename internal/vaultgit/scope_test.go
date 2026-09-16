@@ -14,6 +14,7 @@ func TestInScope(t *testing.T) {
 		{"note that looks like a glob", "Inbox/Draft [2].md", true},
 		{"attachment", "attachments/diagram.png", true},
 		{"vault config", "brainnotes.toml", true},
+		{"local config nested under a folder is a note", "Inbox/brainnotes.local.toml", true},
 		{"journal manifest", ".bnotes/journal/entry-1/manifest.json", true},
 		{"journal snapshot", ".bnotes/journal/entry-1/snapshots/ab.snap", true},
 		{"allowlisted state", ".bnotes/recall.json", true},
@@ -33,6 +34,7 @@ func TestInScope(t *testing.T) {
 		{"lock directory", ".bnotes/locks/note.lock", false},
 		{"unknown bnotes state", ".bnotes/something-new.json", false},
 		{"journal root itself", ".bnotes/journal", false},
+		{"machine-local config overlay", "brainnotes.local.toml", false},
 		{"note scratch temp", "Inbox/.note-abc123.tmp", false},
 		{"txn scratch temp", "Inbox/.txn-custody-abc123.tmp", false},
 	}

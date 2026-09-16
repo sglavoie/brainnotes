@@ -26,6 +26,7 @@ func (c *Config) Clone() *Config {
 	out.Cockpit.SensitiveIgnorePaths = cloneStrings(c.Cockpit.SensitiveIgnorePaths)
 	out.Cockpit.SensitiveIgnorePatterns = cloneStrings(c.Cockpit.SensitiveIgnorePatterns)
 	out.Views = cloneViews(c.Views)
+	out.Provenance = cloneProvenance(c.Provenance)
 	if c.Serve.OpenBrowser != nil {
 		enabled := *c.Serve.OpenBrowser
 		out.Serve.OpenBrowser = &enabled

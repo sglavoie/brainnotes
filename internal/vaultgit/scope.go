@@ -3,6 +3,8 @@ package vaultgit
 import (
 	"path"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
 // The tracked scope is fixed in code rather than read from the vault's
@@ -64,16 +66,7 @@ var scratchPrefixes = []string{".note-", ".txn-"}
 // it, not to fail.
 func InScope(rel string) bool {
 	rel = strings.TrimSpace(rel)
-	if rel == "" {
-		return false
-	}
-	// Git always reports slash-separated relative paths, but a caller may hand
-	// us an OS path. Backslash is a legal character in a POSIX filename, so it
-	// is not translated: a name containing one is simply judged as-is.
-	if strings.HasPrefix(rel, "/") {
-		return false
-	}
-	if rel != path.Clean(rel) {
+	if malformedRelPath(rel) {
 		return false
 	}
 	parts := strings.Split(rel, "/")
@@ -87,17 +80,44 @@ func InScope(rel string) bool {
 	if isScratchName(base) {
 		return false
 	}
+	// The machine-local configuration overlay is the one file at the vault root
+	// that deliberately does not describe the vault: it names this machine's
+	// editor, listen address, and agent command. Committing it would push one
+	// machine's settings to the private remote and hand them to whatever restores
+	// or synchronizes from there, which is precisely what the overlay exists to
+	// prevent. Only at the root, because `brainnotes.toml` is only the vault
+	// marker at the root and a note filed under that name deeper in the tree is
+	// ordinary content.
+	if len(parts) == 1 && base == config.LocalFileName {
+		return false
+	}
 	if _, excluded := scopeExcludedRoots[parts[0]]; excluded {
 		return false
 	}
 	if strings.HasPrefix(rel, bnotesPrefix) {
-		if strings.HasPrefix(rel, bnotesJournalPrefix) && len(rel) > len(bnotesJournalPrefix) {
-			return true
-		}
-		_, allowed := bnotesAllowlist[rel]
-		return allowed
+		return inScopeBnotesPath(rel)
 	}
 	return true
+}
+
+// malformedRelPath reports whether rel is not a usable vault-relative path at
+// all: empty, absolute, or carrying a component Git would have normalized away.
+//
+// Git always reports slash-separated relative paths, but a caller may hand us an
+// OS path. Backslash is a legal character in a POSIX filename, so it is not
+// translated: a name containing one is simply judged as-is.
+func malformedRelPath(rel string) bool {
+	return rel == "" || strings.HasPrefix(rel, "/") || rel != path.Clean(rel)
+}
+
+// inScopeBnotesPath judges a path under `.bnotes/`, which is excluded wholesale
+// except for the journal's own entries and the durable state allowlist.
+func inScopeBnotesPath(rel string) bool {
+	if strings.HasPrefix(rel, bnotesJournalPrefix) && len(rel) > len(bnotesJournalPrefix) {
+		return true
+	}
+	_, allowed := bnotesAllowlist[rel]
+	return allowed
 }
 
 // isScratchName reports whether base is one of the transaction scratch or
