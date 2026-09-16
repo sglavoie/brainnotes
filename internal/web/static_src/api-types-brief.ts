@@ -61,6 +61,7 @@ export type BriefViewResult = {
 export type BriefItemAction = "open" | "another";
 
 export type BriefItemResult = {
+  destination?: string;
   ok: boolean;
   code?: string;
   message?: string;

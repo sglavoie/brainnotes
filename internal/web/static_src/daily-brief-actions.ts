@@ -7,6 +7,7 @@ import {
   normalizeBriefViewResponse,
   normalizeManagementErrorMessage,
   type BriefItemResult,
+  type BriefInsightResult,
   type BriefRollingActivity,
   type BriefSlotKind,
 } from "./api";
@@ -60,7 +61,7 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
   }
 
   ctx.setSlotsBusy([slot], true);
-  ctx.setSlotStatus(slot, "Opening editor...", "is-loading");
+  ctx.setSlotStatus(slot, "Opening note...", "is-loading");
   try {
     const body = buildBriefItemForm({ cardID, action: "open", token: ctx.config.csrfToken }).toString();
     const resp = await ctx.fetcher(ctx.config.itemEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
@@ -77,6 +78,10 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
     ctx.updateActivity(result.activity);
     ctx.openedCards.add(cardID);
     ctx.markCardOpened(slot, cardID);
+    if (result.destination?.startsWith("/n/")) {
+      window.location.assign(result.destination);
+      return;
+    }
     ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
     ctx.setGlobalStatus("Brief activity updated.", "is-success");
   } catch {
@@ -116,19 +121,10 @@ export const runAnother = async (
 
     ctx.updateActivity(result.activity);
     const changedSlots = ctx.applyAnotherPayload(result, slot);
-    const statusMessage =
-      result.message ||
-      (slot === "continue" && changedSlots.includes("connect")
-        ? "Updated Continue and Connect."
-        : `Updated ${slotLabel(slot)}.`);
+    const statusMessage = anotherStatus(result, slot, changedSlots);
     ctx.setSlotStatus(slot, statusMessage, "is-success");
     ctx.setGlobalStatus(statusMessage, "is-success");
-
-    const slotEl = findSlotElement(ctx.root, slot);
-    const nextFocus =
-      (slotEl && queryElement(slotEl, "[data-brief-action-another]", HTMLButtonElement)) ||
-      (slotEl && queryElement(slotEl, "[data-brief-action]", HTMLButtonElement));
-    nextFocus?.focus({ preventScroll: true });
+    focusAnother(ctx.root, slot);
   } catch {
     ctx.setSlotStatus(slot, "Another failed.", "is-error");
   } finally {
@@ -142,21 +138,12 @@ export const runInsight = async (
 ): Promise<void> => {
   const slot = readButtonSlot(button);
   const cardID = readButtonCardID(button);
-  if (!slot || !cardID || !ctx.config.csrfToken) {
+  if (!briefActionAvailable(ctx, slot, cardID)) {
     ctx.setGlobalStatus("Ask AI is unavailable.", "is-error");
     return;
   }
-  const cardEl = button.closest<HTMLElement>("[data-brief-card]");
-  const prompt = cardEl
-    ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || ""
-    : "";
-  if (!ctx.insightDisclosureAccepted) {
-    ctx.insightDisclosureAccepted = ctx.confirmer(insightDisclosureMessage);
-    if (!ctx.insightDisclosureAccepted) {
-      ctx.setSlotStatus(slot, "Ask AI canceled.", "is-empty");
-      return;
-    }
-  }
+  const prompt = insightPrompt(button);
+  if (!acceptInsightDisclosure(ctx, slot)) return;
 
   ctx.setSlotsBusy([slot], true);
   ctx.setSlotStatus(slot, "Generating insight...", "is-loading");
@@ -180,18 +167,7 @@ export const runInsight = async (
     }
 
     const result = normalizeBriefInsightResponse(payload);
-    if (!result.ok) {
-      ctx.setSlotStatus(slot, result.message || "Ask AI failed.", "is-error");
-      return;
-    }
-    if (!result.enabled) {
-      ctx.setSlotStatus(slot, result.message || "Ask AI is unavailable.", "is-error");
-      return;
-    }
-    if (result.card_id && result.card_id !== cardID) {
-      ctx.setSlotStatus(slot, "Card changed while insight was running. Try again.", "is-error");
-      return;
-    }
+    if (!validInsightResult(ctx, slot, cardID, result)) return;
 
     renderInsight(ctx.root, slot, cardID, result.rendered_html, result.output);
     ctx.setSlotStatus(slot, "Insight ready.", "is-success");
@@ -257,3 +233,47 @@ export const recordView = async (ctx: BriefActionContext): Promise<void> => {
     ctx.setGlobalStatus("Brief activity unavailable.", "is-error");
   }
 };
+
+const anotherStatus = (result: BriefItemResult, slot: BriefSlotKind, changedSlots: BriefSlotKind[]): string =>
+  result.message || (slot === "continue" && changedSlots.includes("connect")
+    ? "Updated Continue and Connect." : `Updated ${slotLabel(slot)}.`);
+
+const focusAnother = (root: HTMLElement, slot: BriefSlotKind): void => {
+  const slotEl = findSlotElement(root, slot);
+  if (!slotEl) return;
+  const nextFocus = queryElement(slotEl, "[data-brief-action-another]", HTMLButtonElement)
+    || queryElement(slotEl, "[data-brief-action]", HTMLButtonElement);
+  nextFocus?.focus({ preventScroll: true });
+};
+
+const insightPrompt = (button: HTMLButtonElement): string => {
+  const cardEl = button.closest<HTMLElement>("[data-brief-card]");
+  return cardEl ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || "" : "";
+};
+
+const acceptInsightDisclosure = (ctx: BriefActionContext, slot: BriefSlotKind): boolean => {
+  if (ctx.insightDisclosureAccepted) return true;
+  ctx.insightDisclosureAccepted = ctx.confirmer(insightDisclosureMessage);
+  if (!ctx.insightDisclosureAccepted) ctx.setSlotStatus(slot, "Ask AI canceled.", "is-empty");
+  return ctx.insightDisclosureAccepted;
+};
+
+const validInsightResult = (ctx: BriefActionContext, slot: BriefSlotKind, cardID: string, result: BriefInsightResult): boolean => {
+    if (!result.ok) {
+      ctx.setSlotStatus(slot, result.message || "Ask AI failed.", "is-error");
+      return false;
+    }
+    if (!result.enabled) {
+      ctx.setSlotStatus(slot, result.message || "Ask AI is unavailable.", "is-error");
+      return false;
+    }
+    if (result.card_id && result.card_id !== cardID) {
+      ctx.setSlotStatus(slot, "Card changed while insight was running. Try again.", "is-error");
+      return false;
+    }
+
+ return true;
+};
+
+const briefActionAvailable = (ctx: BriefActionContext, slot: BriefSlotKind | "", cardID: string): slot is BriefSlotKind =>
+  Boolean(slot && cardID && ctx.config.csrfToken);

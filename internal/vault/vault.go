@@ -36,6 +36,15 @@ type Vault struct {
 // Open validates that cfg.Vault is an existing directory and returns a Vault
 // pinned to its absolute path.
 func Open(cfg *config.Config) (*Vault, error) {
+	return openVault(cfg, false)
+}
+
+// OpenReadOnly opens a replica without transaction recovery or storage writes.
+func OpenReadOnly(cfg *config.Config) (*Vault, error) {
+	return openVault(cfg, true)
+}
+
+func openVault(cfg *config.Config, readOnly bool) (*Vault, error) {
 	if cfg == nil {
 		return nil, errors.New("vault: nil config")
 	}
@@ -75,7 +84,9 @@ func Open(cfg *config.Config) (*Vault, error) {
 	// path fails closed on the same condition — acquirePathLocks runs the same
 	// pass and returns its error — so nothing mutates a vault that is still
 	// undecided.
-	_ = recoverTxnIntents(abs)
+	if !readOnly {
+		_ = recoverTxnIntents(abs)
+	}
 	return &Vault{Root: abs, cfg: cfg.Clone()}, nil
 }
 

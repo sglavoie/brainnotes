@@ -23,17 +23,22 @@ import { initSynthesize } from "./synthesize";
 import { initTheme } from "./theme";
 
 (function () {
+  const readOnly = document.documentElement.dataset.readOnly === "true";
   initTheme();
-  initCapture();
+  if (!readOnly) {
+    initCapture();
+    initOpenInEditor();
+    initNotePinAction();
+    initTrashNoteAction();
+    initPinnedList();
+    initNoteInsight();
+    initFrontmatterEditing();
+    initBrokenCreateActions();
+    initHistoryPanel();
+    initSynthesize();
+  }
   initFacets();
-  initOpenInEditor();
-  initNotePinAction();
-  initTrashNoteAction();
-  initPinnedList();
   initNoteLayout();
-  initNoteInsight();
-  initFrontmatterEditing();
-  initBrokenCreateActions();
   initCopyControls();
   initDailyBrief();
   initRelatedNotes();
@@ -42,8 +47,6 @@ import { initTheme } from "./theme";
   initQueryBar();
   initSavedViews();
   initOverviewSearchResults();
-  initHistoryPanel();
   initDailyFixes();
   initProperties();
-  initSynthesize();
 })();

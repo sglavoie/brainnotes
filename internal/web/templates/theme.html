@@ -1,4 +1,6 @@
 {{define "themeBoot"}}
+{{if readOnly}}<script>document.documentElement.dataset.readOnly = "true";</script>
+<link rel="stylesheet" href="/static/replica.css">{{end}}
 <script>
   (function () {
     try {
@@ -36,6 +38,11 @@
 {{end}}
 
 {{define "siteNav"}}
+ {{if readOnly}}
+ <p class="replica-status" role="status">Read-only replica ·
+ {{with replicaStatus}}{{if .LastSuccessfulSync.IsZero}}No verified sync recorded{{else}}Last successful sync: <time>{{.LastSuccessfulSync.Format "2006-01-02 15:04:05 MST"}}</time>{{end}}{{if .Stale}} · Sync stale (over 15 minutes){{end}}{{end}}
+ </p>
+ {{end}}
   <nav class="site-nav" aria-label="Primary">
     <a href="/">Brief</a>
     <a href="/library">Library</a>

@@ -95,3 +95,20 @@ bn find --tag drafts | bn set - status=done
 - [Shell completion and editor integration](docs/integrations.md)
 - [Recipes, safety, performance, and migration notes](docs/workflows.md)
 - Contributors: `docs/internals/` documents the architecture, locking model, web write classes, recall boundaries, graph view invariants, and synthesis workbench invariants.
+
+### Read-only replica server
+
+`bn --vault /path/to/replica serve --read-only --state-dir /path/to/activity --no-open`
+serves a read-only note browser. Create the activity directory outside the vault first.
+The server skips transaction recovery and Git safety initialization, keeps its note
+index in memory, and permits only Daily Brief visits and Open/Another actions to
+write external activity state. Open navigates to a rendered note in this mode.
+Editor, agent, note/config writes and undo are blocked centrally.
+
+Optionally supply `--replica-status-file /path/to/status.json` containing
+`{"last_successful_sync":"2026-09-15T12:00:00Z"}`. The browser shows the last sync
+and flags it stale after 15 minutes. `/api/ready` returns content-free readiness
+and freshness, with stale content still available. Use an authenticated reverse
+proxy for remote access; protect every path, including attachments and readiness.
+The Pi deployment and verified synchronization tooling live in the sibling
+`sglavoie_raspberry_pi/services/brainnotes` project.

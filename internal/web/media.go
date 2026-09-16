@@ -54,7 +54,7 @@ func normalizeVaultRelativePath(raw string) (string, error) {
 	return strings.Join(parts, "/"), nil
 }
 
-func resolveContainedRegularFile(root, rel string) (string, bool, error) {
+func resolveMediaFile(root, rel string) (string, bool, error) {
 	if root == "" || rel == "" {
 		return "", false, nil
 	}
@@ -81,6 +81,10 @@ func resolveContainedRegularFile(root, rel string) (string, bool, error) {
 		return "", false, nil
 	}
 
+	return regularMediaFile(resolved)
+}
+
+func regularMediaFile(resolved string) (string, bool, error) {
 	info, err := os.Stat(resolved)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -107,4 +111,33 @@ func pathWithinRoot(root, path string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// Configuration and runtime internals are never attachments, including symlink aliases.
+func privateMediaPath(rel string) bool {
+	for _, part := range strings.Split(rel, "/") {
+		if strings.HasPrefix(part, ".") || strings.EqualFold(part, "brainnotes.toml") {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveContainedRegularFile(root, rel string) (string, bool, error) {
+	if privateMediaPath(rel) {
+		return "", false, nil
+	}
+	resolved, ok, err := resolveMediaFile(root, rel)
+	if err != nil || !ok {
+		return resolved, ok, err
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", false, err
+	}
+	resolvedRel, err := filepath.Rel(realRoot, resolved)
+	if err != nil || privateMediaPath(filepath.ToSlash(resolvedRel)) {
+		return "", false, err
+	}
+	return resolved, true, nil
 }

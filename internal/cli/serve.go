@@ -75,9 +75,12 @@ var sourceCheckoutRoot string
 
 func NewServeCmd() *cobra.Command {
 	var (
-		addr   string
-		port   int
-		noOpen bool
+		addr              string
+		port              int
+		noOpen            bool
+		readOnly          bool
+		stateDir          string
+		replicaStatusFile string
 	)
 
 	cmd := &cobra.Command{
@@ -96,13 +99,16 @@ func NewServeCmd() *cobra.Command {
 				cmd.Flags().Changed("addr"),
 				port,
 				cmd.Flags().Changed("port"),
-				noOpen,
+				noOpen || readOnly,
 			)
 			if err != nil {
 				return err
 			}
 
-			staticFiles, err := prepareServeStaticFiles(cmd.Context(), cmd.ErrOrStderr())
+			var staticFiles fs.FS
+			if !readOnly {
+				staticFiles, err = prepareServeStaticFiles(cmd.Context(), cmd.ErrOrStderr())
+			}
 			if err != nil {
 				return err
 			}
@@ -110,12 +116,19 @@ func NewServeCmd() *cobra.Command {
 			cfgCopy := *cfg
 			cfgCopy.Serve = serveCfg
 
-			v, err := vault.Open(&cfgCopy)
+			openVault := vault.Open
+			if readOnly {
+				openVault = vault.OpenReadOnly
+			}
+			v, err := openVault(&cfgCopy)
 			if err != nil {
 				return err
 			}
 
 			opts := web.Options{
+				ReadOnly:          readOnly,
+				StateDir:          stateDir,
+				ReplicaStatusFile: replicaStatusFile,
 				NotifyListening: func(url string) {
 					fmt.Fprintf(cmd.ErrOrStderr(), "serving at %s\n", url)
 				},
@@ -126,6 +139,9 @@ func NewServeCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVar(&readOnly, "read-only", false, "serve a read-only replica with external activity state")
+	cmd.Flags().StringVar(&stateDir, "state-dir", "", "external directory for Daily Brief activity (required with --read-only)")
+	cmd.Flags().StringVar(&replicaStatusFile, "replica-status-file", "", "replica synchronization status JSON")
 	cmd.Flags().StringVar(&addr, "addr", "", "listen address host:port (overrides [serve].addr)")
 	cmd.Flags().IntVar(&port, "port", 0, "listen port (overrides the port from [serve].addr)")
 	cmd.Flags().BoolVar(&noOpen, "no-open", false, "do not open a browser on startup")

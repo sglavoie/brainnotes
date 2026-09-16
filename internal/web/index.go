@@ -6,6 +6,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
 const (
@@ -193,26 +194,14 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 	}
 
 	stateUnreadable, stateUnreadableMsg := stateUnreadableWarningMessage(daily.Warnings)
-	editorConfigured, editorStatusMsg := editorAvailability(cfg.Open.Editor, os.Getenv("EDITOR"))
-	insightConfigured := len(cfg.Agent.Command) > 0
-	insightStatusMsg := ""
-	if !insightConfigured {
-		insightStatusMsg = "AI insight is not configured. Set [agent].command to enable Ask AI."
-	}
+	editorConfigured, editorStatusMsg, insightConfigured, insightStatusMsg := s.briefAvailability(cfg)
 
 	slotsByKind := make(map[brief.SlotKind]brief.SlotResult, len(daily.Brief.Slots))
 	for _, slot := range daily.Brief.Slots {
 		slotsByKind[slot.Slot] = slot
 	}
-	continueSlot := rootBriefSlotViewFor(
-		brief.SlotContinue,
-		slotsByKind[brief.SlotContinue],
-		editorConfigured,
-		editorStatusMsg,
-		insightConfigured,
-		insightStatusMsg,
-		stateUnreadable,
-	)
+	continueSlot := rootBriefSlotViewFor(brief.SlotContinue, slotsByKind[brief.SlotContinue],
+		editorConfigured, editorStatusMsg, insightConfigured, insightStatusMsg, stateUnreadable)
 	rediscoverSlot := rootBriefSlotViewFor(
 		brief.SlotRediscover,
 		slotsByKind[brief.SlotRediscover],
@@ -279,4 +268,18 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 		Pinned:             buildPinnedNoteViews(snapshot, s.vault.Root, indexPinnedLimit),
 		Health:             health,
 	}, nil
+}
+
+func (s *Server) briefAvailability(cfg *config.Config) (bool, string, bool, string) {
+	editorConfigured, editorStatusMsg := editorAvailability(cfg.Open.Editor, os.Getenv("EDITOR"))
+	if s.readOnly {
+		editorConfigured, editorStatusMsg = true, ""
+	}
+	insightConfigured := !s.readOnly && len(cfg.Agent.Command) > 0
+	insightStatusMsg := ""
+	if !insightConfigured {
+		insightStatusMsg = "AI insight is not configured. Set [agent].command to enable Ask AI."
+	}
+
+	return editorConfigured, editorStatusMsg, insightConfigured, insightStatusMsg
 }

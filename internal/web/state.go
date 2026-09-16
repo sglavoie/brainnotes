@@ -61,9 +61,9 @@ type indexNoteSource struct {
 	quarantined map[string]struct{}
 }
 
-func newIndexNoteSource(v *vault.Vault) (*indexNoteSource, error) {
+func newIndexNoteSource(v *vault.Vault, options ...index.Option) (*indexNoteSource, error) {
 	source := &indexNoteSource{timeout: noteLoadTimeout}
-	ix, err := index.New(v, index.WithReader(source.read))
+	ix, err := index.New(v, append(options, index.WithReader(source.read))...)
 	if err != nil {
 		return nil, err
 	}

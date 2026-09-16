@@ -33,9 +33,15 @@ func WithClock(now func() time.Time) StateStoreOption {
 }
 
 // FileStateStore persists Daily Brief state for one vault in .bnotes/brief.json.
+// WithStateRoot separates persistence from the vault used for note validation.
+func WithStateRoot(root string) StateStoreOption {
+	return func(store *FileStateStore) { store.storageRoot = root }
+}
+
 type FileStateStore struct {
-	root string
-	now  func() time.Time
+	storageRoot string
+	root        string
+	now         func() time.Time
 
 	mu          sync.Mutex
 	state       *briefStateFile

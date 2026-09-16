@@ -14,7 +14,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/index"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -24,13 +24,16 @@ const shutdownTimeout = 5 * time.Second
 var embeddedFiles embed.FS
 
 type Options struct {
-	OpenBrowser     func(url string) error
-	NotifyListening func(url string)
-	StaticFiles     fs.FS
-	CSRFToken       string
-	StartEditor     func(bin string, argv []string) error
-	BriefState      brief.StateStore
-	BriefNow        func() time.Time
+	ReadOnly          bool
+	StateDir          string
+	ReplicaStatusFile string
+	OpenBrowser       func(url string) error
+	NotifyListening   func(url string)
+	StaticFiles       fs.FS
+	CSRFToken         string
+	StartEditor       func(bin string, argv []string) error
+	BriefState        brief.StateStore
+	BriefNow          func() time.Time
 	// RunAgent executes the optional AI daily-review command. It receives the
 	// argv slice (already split, no shell) and the redacted review-context JSON
 	// on stdin, and returns the command's stdout. Injected in tests so no real
@@ -39,6 +42,8 @@ type Options struct {
 }
 
 type Server struct {
+	readOnly          bool
+	replicaStatusFile string
 	configState       *configManager
 	vault             *vault.Vault
 	templates         *template.Template
@@ -141,21 +146,18 @@ func graphFacetControlsData() facetControlsData {
 }
 
 func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error) {
-	if cfg == nil {
-		return nil, errors.New("web: config is required")
-	}
-	if v == nil {
-		return nil, errors.New("web: vault is required")
-	}
-	if strings.TrimSpace(cfg.Serve.Addr) == "" {
-		return nil, errors.New("web: serve address is required")
+	if err := validateServerOptions(cfg, v, opts); err != nil {
+		return nil, err
 	}
 
-	tpl, err := template.ParseFS(embeddedFiles, "templates/*.html")
+	tpl, err := template.New("").Funcs(template.FuncMap{
+		"readOnly":      func() bool { return opts.ReadOnly },
+		"replicaStatus": func() replicaStatus { return readReplicaStatus(opts.ReplicaStatusFile) },
+	}).ParseFS(embeddedFiles, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("web: parse templates: %w", err)
 	}
-	state, err := newVaultState(v, time.Second)
+	state, err := newServeVaultState(v, opts.ReadOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -163,12 +165,9 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	if err != nil {
 		return nil, err
 	}
-	staticRoot := opts.StaticFiles
-	if staticRoot == nil {
-		staticRoot, err = fs.Sub(embeddedFiles, "static")
-		if err != nil {
-			return nil, fmt.Errorf("web: static assets: %w", err)
-		}
+	staticRoot, err := serveStaticRoot(opts.StaticFiles)
+	if err != nil {
+		return nil, err
 	}
 
 	configState, err := newConfigManager(cfg, v)
@@ -184,11 +183,13 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	// a second reference would let one of them be wired to a different engine
 	// than the operation it calls. A vault with no content history resolves to a
 	// nil engine and is normal — the server serves it unversioned.
-	if _, err := noteops.SafetyFor(v.Root); err != nil {
+	if err := initializeServeSafety(v.Root, opts.ReadOnly); err != nil {
 		return nil, fmt.Errorf("web: vault git safety: %w", err)
 	}
 
 	srv := &Server{
+		readOnly:          opts.ReadOnly,
+		replicaStatusFile: opts.ReplicaStatusFile,
 		configState:       configState,
 		vault:             v,
 		templates:         tpl,
@@ -207,96 +208,14 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		startEditor:       opts.StartEditor,
 		runAgent:          opts.RunAgent,
 	}
-	srv.synthesisContexts.startSweeper(synthesisSweepInterval)
-	srv.synthesisPreviews.startSweeper(synthesisSweepInterval)
-	if srv.csrfToken == "" {
-		srv.csrfToken, err = generateCSRFToken()
-		if err != nil {
-			return nil, err
-		}
+	if err := srv.configureRuntime(opts); err != nil {
+		return nil, err
 	}
-	if srv.startEditor == nil {
-		srv.startEditor = startEditorProcess
-	}
-	srv.briefNow = opts.BriefNow
-	if srv.briefNow == nil {
-		srv.briefNow = time.Now
-	}
-	srv.briefState = opts.BriefState
-	if srv.briefState == nil {
-		srv.briefState = brief.NewFileStateStore(v.Root, brief.WithClock(srv.briefNow))
-	}
-	if srv.runAgent == nil {
-		srv.runAgent = agent.Run
-	}
-
-	mux := http.NewServeMux()
-	staticHandler := http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot)))
-	mux.Handle("/static/", noCacheStatic(staticHandler))
-	mux.HandleFunc(noteRoutePrefix, srv.handleNote)
-	mux.HandleFunc("/broken", srv.handleBroken)
-	mux.HandleFunc("/api/facets", srv.handleFacets)
-	mux.HandleFunc(queryValidateAPIRoutePath, srv.handleQueryValidate)
-	mux.HandleFunc(queryCompletionsAPIRoutePath, srv.handleQueryCompletions)
-	mux.HandleFunc(searchAPIRoutePath, srv.handleSearch)
-	mux.HandleFunc("/api/open", srv.handleOpen)
-	mux.HandleFunc(configOpenAPIRoutePath, srv.handleConfigOpen)
-	mux.HandleFunc("/api/brief/view", srv.handleBriefView)
-	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
-	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)
-	mux.HandleFunc(relatedAPIRoutePath, srv.handleRelated)
-	mux.HandleFunc(relatedItemAPIRoutePath, srv.handleRelatedItem)
-	mux.HandleFunc("/api/note/insight", srv.handleNoteInsight)
-	mux.HandleFunc("/api/capture", srv.handleCapture)
-	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
-	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)
-	mux.HandleFunc("/api/notes/rename", srv.handleNoteRename)
-	mux.HandleFunc("/api/notes/move", srv.handleNoteMove)
-	mux.HandleFunc("/api/notes/frontmatter/set", srv.handleNoteFrontmatterSet)
-	mux.HandleFunc("/api/notes/frontmatter/unset", srv.handleNoteFrontmatterUnset)
-	mux.HandleFunc(notePinSetAPIRoutePath, srv.handleNotePinSet)
-	mux.HandleFunc(notePinRemoveAPIRoutePath, srv.handleNotePinRemove)
-	mux.HandleFunc(notePinReorderAPIRoutePath, srv.handleNotePinReorder)
-	mux.HandleFunc("/api/notes/bulk/preview", srv.handleNotesBulkPreview)
-	mux.HandleFunc("/api/notes/bulk", srv.handleNotesBulk)
-	mux.HandleFunc("/api/history", srv.handleHistory)
-	mux.HandleFunc("/api/undo", srv.handleUndo)
-	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
-	mux.HandleFunc("/api/cockpit", srv.handleCockpitQueue)
-	mux.HandleFunc("/api/cockpit/item", srv.handleCockpitItem)
-	mux.HandleFunc("/api/daily-review/context", srv.handleDailyReviewContext)
-	mux.HandleFunc("/api/daily-review/agent", srv.handleDailyReviewAgent)
-	mux.HandleFunc("/api/fixes/preview", srv.handleFixesPreview)
-	mux.HandleFunc("/api/fixes/apply", srv.handleFixesApply)
-	mux.HandleFunc(propertiesAPIRoutePath, srv.handleProperties)
-	mux.HandleFunc(propertiesDetailAPIRoutePath, srv.handlePropertyDetail)
-	mux.HandleFunc(propertyValueAPIRoutePath, srv.handlePropertyValue)
-	mux.HandleFunc(propertyPreviewAPIRoutePath, srv.handlePropertiesPreview)
-	mux.HandleFunc(propertyApplyAPIRoutePath, srv.handlePropertiesApply)
-	mux.HandleFunc(propertySchemaPreviewAPIRoutePath, srv.handlePropertySchemaPreview)
-	mux.HandleFunc(propertySchemaApplyAPIRoutePath, srv.handlePropertySchemaApply)
-	mux.HandleFunc(viewsAPIRoutePath, srv.handleViews)
-	mux.HandleFunc(viewsPreviewAPIRoutePath, srv.handleViewsPreview)
-	mux.HandleFunc(viewsApplyAPIRoutePath, srv.handleViewsApply)
-	mux.HandleFunc(synthesisContextAPIRoutePath, srv.handleSynthesisContext)
-	mux.HandleFunc(synthesisGenerateAPIRoutePath, srv.handleSynthesisGenerate)
-	mux.HandleFunc(synthesisPreviewAPIRoutePath, srv.handleSynthesisPreview)
-	mux.HandleFunc(synthesisApplyAPIRoutePath, srv.handleSynthesisApply)
-	mux.HandleFunc(synthesizeRoutePath, srv.handleSynthesizePage)
-	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
-	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
-	mux.HandleFunc(pinnedRoutePath, srv.handlePinnedPage)
-	mux.HandleFunc(libraryRoutePath, srv.handleLibrary)
-	mux.HandleFunc(healthRoutePath, srv.handleHealth)
-	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
-	mux.HandleFunc("/graph", srv.handleGraph)
-	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
-	mux.HandleFunc("/", srv.handleIndex)
 
 	if srv.openBrowser == nil {
 		srv.openBrowser = openBrowserDefault
 	}
-	srv.handler = mux
+	srv.handler = srv.routes(staticRoot)
 
 	return srv, nil
 }
@@ -404,4 +323,139 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if err := s.templates.ExecuteTemplate(w, "health", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}
+}
+
+func (srv *Server) routes(staticRoot fs.FS) http.Handler {
+	mux := http.NewServeMux()
+	staticHandler := http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot)))
+	mux.Handle("/static/", noCacheStatic(staticHandler))
+	mux.HandleFunc(noteRoutePrefix, srv.handleNote)
+	mux.HandleFunc("/broken", srv.handleBroken)
+	mux.HandleFunc("/api/facets", srv.handleFacets)
+	mux.HandleFunc("/api/ready", srv.handleReady)
+	mux.HandleFunc(queryValidateAPIRoutePath, srv.handleQueryValidate)
+	mux.HandleFunc(queryCompletionsAPIRoutePath, srv.handleQueryCompletions)
+	mux.HandleFunc(searchAPIRoutePath, srv.handleSearch)
+	mux.HandleFunc("/api/open", srv.handleOpen)
+	mux.HandleFunc(configOpenAPIRoutePath, srv.handleConfigOpen)
+	mux.HandleFunc("/api/brief/view", srv.handleBriefView)
+	mux.HandleFunc("/api/brief/item", srv.handleBriefItem)
+	mux.HandleFunc(relatedAPIRoutePath, srv.handleRelated)
+	mux.HandleFunc(relatedItemAPIRoutePath, srv.handleRelatedItem)
+	mux.HandleFunc("/api/note/insight", srv.handleNoteInsight)
+	srv.registerNoteMutationRoutes(mux)
+	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
+	mux.HandleFunc("/api/cockpit", srv.handleCockpitQueue)
+	mux.HandleFunc("/api/cockpit/item", srv.handleCockpitItem)
+	mux.HandleFunc("/api/daily-review/context", srv.handleDailyReviewContext)
+	mux.HandleFunc("/api/daily-review/agent", srv.handleDailyReviewAgent)
+	mux.HandleFunc("/api/fixes/preview", srv.handleFixesPreview)
+	mux.HandleFunc("/api/fixes/apply", srv.handleFixesApply)
+	mux.HandleFunc(propertiesAPIRoutePath, srv.handleProperties)
+	mux.HandleFunc(propertiesDetailAPIRoutePath, srv.handlePropertyDetail)
+	mux.HandleFunc(propertyValueAPIRoutePath, srv.handlePropertyValue)
+	mux.HandleFunc(propertyPreviewAPIRoutePath, srv.handlePropertiesPreview)
+	mux.HandleFunc(propertyApplyAPIRoutePath, srv.handlePropertiesApply)
+	mux.HandleFunc(propertySchemaPreviewAPIRoutePath, srv.handlePropertySchemaPreview)
+	mux.HandleFunc(propertySchemaApplyAPIRoutePath, srv.handlePropertySchemaApply)
+	mux.HandleFunc(viewsAPIRoutePath, srv.handleViews)
+	mux.HandleFunc(viewsPreviewAPIRoutePath, srv.handleViewsPreview)
+	mux.HandleFunc(viewsApplyAPIRoutePath, srv.handleViewsApply)
+	mux.HandleFunc(synthesisContextAPIRoutePath, srv.handleSynthesisContext)
+	mux.HandleFunc(synthesisGenerateAPIRoutePath, srv.handleSynthesisGenerate)
+	mux.HandleFunc(synthesisPreviewAPIRoutePath, srv.handleSynthesisPreview)
+	mux.HandleFunc(synthesisApplyAPIRoutePath, srv.handleSynthesisApply)
+	mux.HandleFunc(synthesizeRoutePath, srv.handleSynthesizePage)
+	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
+	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
+	mux.HandleFunc(pinnedRoutePath, srv.handlePinnedPage)
+	mux.HandleFunc(libraryRoutePath, srv.handleLibrary)
+	mux.HandleFunc(healthRoutePath, srv.handleHealth)
+	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
+	mux.HandleFunc("/graph", srv.handleGraph)
+	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
+	mux.HandleFunc("/", srv.handleIndex)
+
+	return srv.readOnlyGuard(mux)
+}
+
+func (srv *Server) configureRuntime(opts Options) error {
+	srv.synthesisContexts.startSweeper(synthesisSweepInterval)
+	srv.synthesisPreviews.startSweeper(synthesisSweepInterval)
+	if srv.csrfToken == "" {
+		token, err := generateCSRFToken()
+		srv.csrfToken = token
+		if err != nil {
+			return err
+		}
+	}
+	if srv.startEditor == nil {
+		srv.startEditor = startEditorProcess
+	}
+	srv.briefNow = opts.BriefNow
+	if srv.briefNow == nil {
+		srv.briefNow = time.Now
+	}
+	srv.briefState = opts.BriefState
+	if srv.briefState == nil {
+		srv.briefState = brief.NewFileStateStore(srv.vault.Root, brief.WithClock(srv.briefNow), brief.WithStateRoot(opts.StateDir))
+	}
+	if srv.runAgent == nil {
+		srv.runAgent = agent.Run
+	}
+
+	return nil
+}
+
+func validateServerOptions(cfg *config.Config, v *vault.Vault, opts Options) error {
+	if cfg == nil {
+		return errors.New("web: config is required")
+	}
+	if v == nil {
+		return errors.New("web: vault is required")
+	}
+	if strings.TrimSpace(cfg.Serve.Addr) == "" {
+		return errors.New("web: serve address is required")
+	}
+
+	if err := validateReplicaOptions(v.Root, opts); err != nil {
+		return err
+	}
+	return nil
+}
+
+func serveStaticRoot(staticRoot fs.FS) (fs.FS, error) {
+	if staticRoot != nil {
+		return staticRoot, nil
+	}
+	return fs.Sub(embeddedFiles, "static")
+}
+
+func newServeVaultState(v *vault.Vault, readOnly bool) (*vaultState, error) {
+	state, err := newVaultState(v, time.Second)
+	if err != nil {
+		return nil, err
+	}
+	if readOnly {
+		state.source, err = newIndexNoteSource(v, index.WithMemoryOnly())
+	}
+	return state, err
+}
+
+func (srv *Server) registerNoteMutationRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/brief/insight", srv.handleBriefInsight)
+	mux.HandleFunc("/api/capture", srv.handleCapture)
+	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
+	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)
+	mux.HandleFunc("/api/notes/rename", srv.handleNoteRename)
+	mux.HandleFunc("/api/notes/move", srv.handleNoteMove)
+	mux.HandleFunc("/api/notes/frontmatter/set", srv.handleNoteFrontmatterSet)
+	mux.HandleFunc("/api/notes/frontmatter/unset", srv.handleNoteFrontmatterUnset)
+	mux.HandleFunc(notePinSetAPIRoutePath, srv.handleNotePinSet)
+	mux.HandleFunc(notePinRemoveAPIRoutePath, srv.handleNotePinRemove)
+	mux.HandleFunc(notePinReorderAPIRoutePath, srv.handleNotePinReorder)
+	mux.HandleFunc("/api/notes/bulk/preview", srv.handleNotesBulkPreview)
+	mux.HandleFunc("/api/notes/bulk", srv.handleNotesBulk)
+	mux.HandleFunc("/api/history", srv.handleHistory)
+	mux.HandleFunc("/api/undo", srv.handleUndo)
 }

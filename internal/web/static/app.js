@@ -287,6 +287,7 @@ var BrainNotesApp = (() => {
       ok: base.ok,
       code: base.ok ? void 0 : base.code,
       message: base.message,
+      destination: normalizeParamValue(record.destination),
       action: normalizeParamValue(readRecordValue(record, ["action", "Action"])),
       card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
       slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),
@@ -2469,7 +2470,7 @@ var BrainNotesApp = (() => {
       return;
     }
     ctx.setSlotsBusy([slot], true);
-    ctx.setSlotStatus(slot, "Opening editor...", "is-loading");
+    ctx.setSlotStatus(slot, "Opening note...", "is-loading");
     try {
       const body = buildBriefItemForm({ cardID, action: "open", token: ctx.config.csrfToken }).toString();
       const resp = await ctx.fetcher(ctx.config.itemEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
@@ -2486,6 +2487,10 @@ var BrainNotesApp = (() => {
       ctx.updateActivity(result.activity);
       ctx.openedCards.add(cardID);
       ctx.markCardOpened(slot, cardID);
+      if (result.destination?.startsWith("/n/")) {
+        window.location.assign(result.destination);
+        return;
+      }
       ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
       ctx.setGlobalStatus("Brief activity updated.", "is-success");
     } catch {
@@ -2519,12 +2524,10 @@ var BrainNotesApp = (() => {
       }
       ctx.updateActivity(result.activity);
       const changedSlots = ctx.applyAnotherPayload(result, slot);
-      const statusMessage = result.message || (slot === "continue" && changedSlots.includes("connect") ? "Updated Continue and Connect." : `Updated ${slotLabel(slot)}.`);
+      const statusMessage = anotherStatus(result, slot, changedSlots);
       ctx.setSlotStatus(slot, statusMessage, "is-success");
       ctx.setGlobalStatus(statusMessage, "is-success");
-      const slotEl = findSlotElement(ctx.root, slot);
-      const nextFocus = slotEl && queryElement(slotEl, "[data-brief-action-another]", HTMLButtonElement) || slotEl && queryElement(slotEl, "[data-brief-action]", HTMLButtonElement);
-      nextFocus?.focus({ preventScroll: true });
+      focusAnother(ctx.root, slot);
     } catch {
       ctx.setSlotStatus(slot, "Another failed.", "is-error");
     } finally {
@@ -2534,19 +2537,12 @@ var BrainNotesApp = (() => {
   var runInsight = async (ctx, button) => {
     const slot = readButtonSlot(button);
     const cardID = readButtonCardID(button);
-    if (!slot || !cardID || !ctx.config.csrfToken) {
+    if (!briefActionAvailable(ctx, slot, cardID)) {
       ctx.setGlobalStatus("Ask AI is unavailable.", "is-error");
       return;
     }
-    const cardEl = button.closest("[data-brief-card]");
-    const prompt = cardEl ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || "" : "";
-    if (!ctx.insightDisclosureAccepted) {
-      ctx.insightDisclosureAccepted = ctx.confirmer(insightDisclosureMessage);
-      if (!ctx.insightDisclosureAccepted) {
-        ctx.setSlotStatus(slot, "Ask AI canceled.", "is-empty");
-        return;
-      }
-    }
+    const prompt = insightPrompt(button);
+    if (!acceptInsightDisclosure(ctx, slot)) return;
     ctx.setSlotsBusy([slot], true);
     ctx.setSlotStatus(slot, "Generating insight...", "is-loading");
     const requestID = ctx.insightCounter + 1;
@@ -2567,18 +2563,7 @@ var BrainNotesApp = (() => {
         return;
       }
       const result = normalizeBriefInsightResponse(payload);
-      if (!result.ok) {
-        ctx.setSlotStatus(slot, result.message || "Ask AI failed.", "is-error");
-        return;
-      }
-      if (!result.enabled) {
-        ctx.setSlotStatus(slot, result.message || "Ask AI is unavailable.", "is-error");
-        return;
-      }
-      if (result.card_id && result.card_id !== cardID) {
-        ctx.setSlotStatus(slot, "Card changed while insight was running. Try again.", "is-error");
-        return;
-      }
+      if (!validInsightResult(ctx, slot, cardID, result)) return;
       renderInsight(ctx.root, slot, cardID, result.rendered_html, result.output);
       ctx.setSlotStatus(slot, "Insight ready.", "is-success");
     } catch {
@@ -2638,6 +2623,39 @@ var BrainNotesApp = (() => {
       ctx.setGlobalStatus("Brief activity unavailable.", "is-error");
     }
   };
+  var anotherStatus = (result, slot, changedSlots) => result.message || (slot === "continue" && changedSlots.includes("connect") ? "Updated Continue and Connect." : `Updated ${slotLabel(slot)}.`);
+  var focusAnother = (root, slot) => {
+    const slotEl = findSlotElement(root, slot);
+    if (!slotEl) return;
+    const nextFocus = queryElement(slotEl, "[data-brief-action-another]", HTMLButtonElement) || queryElement(slotEl, "[data-brief-action]", HTMLButtonElement);
+    nextFocus?.focus({ preventScroll: true });
+  };
+  var insightPrompt = (button) => {
+    const cardEl = button.closest("[data-brief-card]");
+    return cardEl ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || "" : "";
+  };
+  var acceptInsightDisclosure = (ctx, slot) => {
+    if (ctx.insightDisclosureAccepted) return true;
+    ctx.insightDisclosureAccepted = ctx.confirmer(insightDisclosureMessage);
+    if (!ctx.insightDisclosureAccepted) ctx.setSlotStatus(slot, "Ask AI canceled.", "is-empty");
+    return ctx.insightDisclosureAccepted;
+  };
+  var validInsightResult = (ctx, slot, cardID, result) => {
+    if (!result.ok) {
+      ctx.setSlotStatus(slot, result.message || "Ask AI failed.", "is-error");
+      return false;
+    }
+    if (!result.enabled) {
+      ctx.setSlotStatus(slot, result.message || "Ask AI is unavailable.", "is-error");
+      return false;
+    }
+    if (result.card_id && result.card_id !== cardID) {
+      ctx.setSlotStatus(slot, "Card changed while insight was running. Try again.", "is-error");
+      return false;
+    }
+    return true;
+  };
+  var briefActionAvailable = (ctx, slot, cardID) => Boolean(slot && cardID && ctx.config.csrfToken);
 
   // internal/web/static_src/daily-brief.ts
   var initDailyBrief = (deps = {}) => {
@@ -14805,17 +14823,22 @@ ${candidate.markdown}`;
 
   // internal/web/static_src/main.ts
   (function() {
+    const readOnly = document.documentElement.dataset.readOnly === "true";
     initTheme();
-    initCapture();
+    if (!readOnly) {
+      initCapture();
+      initOpenInEditor();
+      initNotePinAction();
+      initTrashNoteAction();
+      initPinnedList();
+      initNoteInsight();
+      initFrontmatterEditing();
+      initBrokenCreateActions();
+      initHistoryPanel();
+      initSynthesize();
+    }
     initFacets();
-    initOpenInEditor();
-    initNotePinAction();
-    initTrashNoteAction();
-    initPinnedList();
     initNoteLayout();
-    initNoteInsight();
-    initFrontmatterEditing();
-    initBrokenCreateActions();
     initCopyControls();
     initDailyBrief();
     initRelatedNotes();
@@ -14824,9 +14847,7 @@ ${candidate.markdown}`;
     initQueryBar();
     initSavedViews();
     initOverviewSearchResults();
-    initHistoryPanel();
     initDailyFixes();
     initProperties();
-    initSynthesize();
   })();
 })();

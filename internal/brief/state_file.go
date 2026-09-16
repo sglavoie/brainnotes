@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
 )
 
@@ -165,7 +166,7 @@ func cloneCard(card Card) Card {
 
 func (store *FileStateStore) saveLocked(state briefStateFile) error {
 	state.Version = briefStateVersion
-	root, err := store.rootPath()
+	root, err := store.persistenceRoot()
 	if err != nil {
 		return err
 	}
@@ -178,7 +179,7 @@ func (store *FileStateStore) saveLocked(state briefStateFile) error {
 		return fmt.Errorf("brief: encode state: %w", err)
 	}
 	data = append(data, '\n')
-	if err := writeBriefStateAtomic(root, statePath, data, 0o644); err != nil {
+	if err := store.writeState(root, statePath, data); err != nil {
 		return err
 	}
 	snapshot := cloneBriefState(state)
@@ -236,8 +237,17 @@ func (store *FileStateStore) notePathsLocked(refresh bool) (map[string]struct{},
 	return paths, nil
 }
 
+func (store *FileStateStore) persistenceRoot() (string, error) {
+	if store.storageRoot == "" {
+		return store.rootPath()
+	}
+	// Reuse the same directory validation without changing the note root.
+	storage := &FileStateStore{root: store.storageRoot}
+	return storage.rootPath()
+}
+
 func (store *FileStateStore) statePath() (string, error) {
-	root, err := store.rootPath()
+	root, err := store.persistenceRoot()
 	if err != nil {
 		return "", err
 	}
@@ -298,4 +308,23 @@ func (store *FileStateStore) currentTime() time.Time {
 // vault that cannot be written; only recording one here is refused.
 func writeBriefStateAtomic(vaultRoot, statePath string, data []byte, permissions os.FileMode) error {
 	return vaultstate.Save(vaultRoot, "brief-state", statePath, data, permissions)
+}
+
+// External replica activity is operational state, with no vault Git lifecycle.
+func (store *FileStateStore) writeState(root, path string, data []byte) error {
+	if store.storageRoot == "" {
+		return writeBriefStateAtomic(root, path, data, 0o644)
+	}
+	if err := vault.GuardMutation(root, path); err != nil {
+		return err
+	}
+	//bn:direct-write external activity directory after location preflight; server validates it is outside the vault.
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	// Recheck after creating the directory to preserve symlink refusal.
+	if _, err := store.statePath(); err != nil {
+		return err
+	}
+	return vault.WriteStateFile(path, data, 0o600)
 }

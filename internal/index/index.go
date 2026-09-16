@@ -107,10 +107,16 @@ func WithReader(read func(path string) ([]byte, error)) Option {
 // Index is a vault-scoped cache of note bytes. It is safe for concurrent use;
 // Load serializes against itself so two callers cannot interleave a walk with
 // a rebuild of the same in-process map.
+// WithMemoryOnly disables all persistent cache reads and writes.
+func WithMemoryOnly() Option {
+	return func(ix *Index) { ix.memoryOnly = true }
+}
+
 type Index struct {
-	vault *vault.Vault
-	root  string
-	dir   string
+	memoryOnly bool
+	vault      *vault.Vault
+	root       string
+	dir        string
 
 	now  func() time.Time
 	logf func(format string, args ...any)
@@ -328,6 +334,9 @@ func (ix *Index) Reset() {
 	// goes through the same preflight as every other one. A refusal simply leaves
 	// the stale file alone, which the in-memory reset above has already made
 	// harmless — the same outcome the ignored error below has always produced.
+	if ix.memoryOnly {
+		return
+	}
 	if err := vault.GuardMutation(ix.root, ix.dir); err == nil {
 		_ = os.Remove(filepath.Join(ix.dir, stateFileName))
 	}

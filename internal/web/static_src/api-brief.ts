@@ -142,6 +142,7 @@ export const normalizeBriefItemResponse = (payload: unknown): BriefItemResult =>
     ok: base.ok,
     code: base.ok ? undefined : base.code,
     message: base.message,
+    destination: normalizeParamValue(record.destination),
     action: normalizeParamValue(readRecordValue(record, ["action", "Action"])),
     card_id: normalizeParamValue(readRecordValue(record, ["card_id", "CardID", "cardId"])),
     slot: normalizeParamValue(readRecordValue(record, ["slot", "Slot"])),

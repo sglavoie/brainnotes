@@ -19,13 +19,14 @@ type briefViewResponse struct {
 }
 
 type briefItemResponse struct {
-	OK       bool                  `json:"ok"`
-	Action   string                `json:"action"`
-	CardID   brief.CardID          `json:"card_id"`
-	Slot     brief.SlotKind        `json:"slot"`
-	Daily    brief.DailyBrief      `json:"daily,omitempty"`
-	Activity brief.RollingActivity `json:"activity"`
-	Affected []brief.SlotResult    `json:"affected,omitempty"`
+	Destination string                `json:"destination,omitempty"`
+	OK          bool                  `json:"ok"`
+	Action      string                `json:"action"`
+	CardID      brief.CardID          `json:"card_id"`
+	Slot        brief.SlotKind        `json:"slot"`
+	Daily       brief.DailyBrief      `json:"daily,omitempty"`
+	Activity    brief.RollingActivity `json:"activity"`
+	Affected    []brief.SlotResult    `json:"affected,omitempty"`
 }
 
 type briefRuntime struct {
@@ -74,32 +75,8 @@ func (s *Server) handleBriefView(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBriefItem(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/brief/item" {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
-		return
-	}
-
-	cardID := brief.CardID(strings.TrimSpace(r.Form.Get("card_id")))
-	if cardID == "" {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "brief card id is required"))
-		return
-	}
-	action := strings.ToLower(strings.TrimSpace(r.Form.Get("action")))
-	if action != "open" && action != "another" {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported brief action %q", action))
+	cardID, action, valid := s.parseBriefItemRequest(w, r)
+	if !valid {
 		return
 	}
 
@@ -128,11 +105,16 @@ func (s *Server) handleBriefItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.executeBriefAction(w, runtime, resolved, action)
+}
+
+func (s *Server) executeBriefAction(w http.ResponseWriter, runtime briefRuntime, resolved resolvedBriefCard, action string) {
 	switch action {
 	case "open":
 		noteRelPath := openTargetRelPathForCard(resolved.card)
 		notePath := filepath.Join(s.vault.Root, filepath.FromSlash(noteRelPath))
-		if err := s.openPath(notePath); err != nil {
+		destination, err := s.openBriefTarget(notePath, noteRelPath)
+		if err != nil {
 			writeBriefOpenError(w, err)
 			return
 		}
@@ -142,11 +124,12 @@ func (s *Server) handleBriefItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeManagementJSON(w, http.StatusOK, briefItemResponse{
-			OK:       true,
-			Action:   "open",
-			CardID:   resolved.card.ID,
-			Slot:     resolved.slot,
-			Activity: activity,
+			OK:          true,
+			Action:      "open",
+			Destination: destination,
+			CardID:      resolved.card.ID,
+			Slot:        resolved.slot,
+			Activity:    activity,
 		})
 	case "another":
 		another, err := runtime.service.Another(runtime.selection.Snapshot, resolved.slot)
@@ -277,4 +260,37 @@ func writeBriefOpenError(w http.ResponseWriter, err error) {
 	default:
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "editor start error", err))
 	}
+}
+
+func (s *Server) parseBriefItemRequest(w http.ResponseWriter, r *http.Request) (brief.CardID, string, bool) {
+	if r.URL.Path != "/api/brief/item" {
+		http.NotFound(w, r)
+		return "", "", false
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
+		return "", "", false
+	}
+	if err := r.ParseForm(); err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
+		return "", "", false
+	}
+	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
+		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+		return "", "", false
+	}
+
+	cardID := brief.CardID(strings.TrimSpace(r.Form.Get("card_id")))
+	if cardID == "" {
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "brief card id is required"))
+		return "", "", false
+	}
+	action := strings.ToLower(strings.TrimSpace(r.Form.Get("action")))
+	if action != "open" && action != "another" {
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported brief action %q", action))
+		return "", "", false
+	}
+
+	return cardID, action, true
 }

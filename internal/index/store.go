@@ -32,7 +32,7 @@ type state struct {
 // fail resolves the same way: keep an empty cache, note the failure class once,
 // and let the walk rebuild. Callers must hold ix.mu.
 func (ix *Index) prime() {
-	if ix.primed {
+	if ix.primed || ix.memoryOnly {
 		return
 	}
 	ix.primed = true
@@ -145,6 +145,9 @@ func validEntry(e entry) error {
 // either way. The index takes no vault.lock, shared or otherwise, so a refresh
 // can never block behind an escalating writer nor make one wait.
 func (ix *Index) persist() {
+	if ix.memoryOnly {
+		return
+	}
 	// Checked before the directory, not just before the lock, so a refused vault
 	// never acquires a .bnotes/index/ it will never write into. This is the one
 	// place the refusal is swallowed like every other persist failure: the index

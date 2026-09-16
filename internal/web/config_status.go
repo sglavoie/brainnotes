@@ -31,8 +31,10 @@ func (s *Server) handleConfigStatus(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "config: reload failed", err))
 		return
 	}
+	status := s.configState.Status()
+	status.Writable = status.Writable && !s.readOnly
 	writeManagementJSON(w, http.StatusOK, configStatusResponse{
 		OK:           true,
-		ConfigStatus: s.configState.Status(),
+		ConfigStatus: status,
 	})
 }
