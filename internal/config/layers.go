@@ -100,6 +100,35 @@ func layerPath(root string, layer Layer) string {
 	return filepath.Join(root, layer.FileName())
 }
 
+// LayerPath returns the absolute path of one configuration layer in the vault
+// at root.
+//
+// It exists for the callers that write: a write has to name a file, and the
+// file a key belongs in is a fact about the ownership table rather than
+// something each caller should re-derive by joining a name onto a root. An
+// overlay that does not exist yet still has a path, which is what lets a write
+// create it.
+func LayerPath(root string, layer Layer) string { return layerPath(root, layer) }
+
+// OwnerPath returns the file that owns key for this vault, and whether key
+// names a configuration field at all.
+//
+// This is deliberately not "the file the value came from". A key no file
+// assigns has no source and still has an owner, and that is exactly the case a
+// first write is in. Routing a write by provenance would make the destination
+// depend on the vault's current contents; routing it by ownership makes the
+// same key land in the same file on every machine.
+func (c *Config) OwnerPath(key string) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	layer, ok := KeyLayer(key)
+	if !ok {
+		return "", false
+	}
+	return layerPath(c.Vault, layer), true
+}
+
 // requireRoot refuses an empty vault root.
 //
 // Without it every layerPath would come back relative and the loader would read
@@ -185,7 +214,21 @@ func DecodeSources(root string, origin VaultOrigin, src Sources) (*Config, error
 	if err != nil {
 		return nil, err
 	}
+	return decodeSourcesAs(root, origin, src, enrollment)
+}
 
+// decodeSourcesAs is DecodeSources with the enrollment state supplied rather
+// than read from the vault.
+//
+// Only the migration planner passes anything but the vault's real state, and it
+// passes EnrollmentNone for one narrowly bounded purpose: reading what the
+// configuration *means* before the move, on a vault whose files are misplaced
+// and therefore refused. Ownership is a rule about which file may hold a key,
+// not about what any key is worth, so suspending it cannot change the values
+// that comparison is about — and the migrated result is still decoded under the
+// vault's real state, so nothing this produces reaches disk without having
+// satisfied the rule for real.
+func decodeSourcesAs(root string, origin VaultOrigin, src Sources, enrollment EnrollmentState) (*Config, error) {
 	portable, portableMeta, err := decodeLayer(layerPath(root, LayerPortable), src.Portable)
 	if err != nil {
 		return nil, err

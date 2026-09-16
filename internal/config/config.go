@@ -350,7 +350,7 @@ type LoadOptions struct {
 // Leading `~` or `~/` in an explicit vault path is expanded to the user's home
 // directory. The returned Config has defaults applied for any unset fields.
 func Load(opts LoadOptions) (*Config, error) {
-	root, origin, err := resolveVaultRoot(opts)
+	root, origin, err := ResolveVault(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -359,6 +359,17 @@ func Load(opts LoadOptions) (*Config, error) {
 		return nil, err
 	}
 	return DecodeSources(root, origin, src)
+}
+
+// ResolveVault answers only "which directory is the vault", under the same
+// precedence Load uses, without reading either configuration file.
+//
+// It exists for the one caller that must run on a vault whose configuration
+// does not load: `bn config migrate`, whose whole job is to repair that state.
+// Every other caller wants Load — a command that resolved a root but never
+// loaded it is a command operating on a vault it has not validated.
+func ResolveVault(opts LoadOptions) (string, VaultOrigin, error) {
+	return resolveVaultRoot(opts)
 }
 
 // Decode parses one brainnotes.toml body for a known vault root, applying the

@@ -121,10 +121,7 @@ func effectiveAutosavePolicy(source []byte) (AutosavePolicy, bool) {
 // unset, not text below it.
 func UnsetAutosaveMinInterval(source []byte) PatchResult {
 	lines, trailingNewline := splitConfigLines(source)
-	out := lines
-	if site := findAutosaveSite(lines); site.assign >= 0 {
-		out = append(append([]string(nil), lines[:site.assign]...), lines[site.assignEnd+1:]...)
-	}
+	out := cutKeySite(lines, findAutosaveSite(lines))
 	return autosavePatchResult(source, lines, out, trailingNewline)
 }
 
@@ -142,7 +139,7 @@ func autosavePatchResult(source []byte, before, after []string, trailingNewline 
 
 func setAutosaveMinInterval(lines []string, canonical string) []string {
 	site := findAutosaveSite(lines)
-	if site.assign >= 0 {
+	if site.found() {
 		key := autosaveMinIntervalKey
 		if site.dotted {
 			key = autosaveTablePath + "." + autosaveMinIntervalKey
@@ -155,169 +152,19 @@ func setAutosaveMinInterval(lines []string, canonical string) []string {
 		return append(out, lines[site.assignEnd+1:]...)
 	}
 
-	eol := configLineEnding(lines)
-	assignment := autosaveMinIntervalKey + " = " + quoteTOMLString(canonical) + eol
-	if site.tableStart >= 0 {
-		// Append inside the existing table, ahead of the blank lines separating
-		// it from the next section, so the table's own comments stay above the
-		// key they document.
-		at := site.tableEnd - len(trailingBlankLines(lines[site.tableStart:site.tableEnd]))
-		out := append([]string(nil), lines[:at]...)
-		out = append(out, assignment)
-		return append(out, lines[at:]...)
-	}
-
 	// No [autosave] table: append one at end of file, which is where
 	// DefaultTemplate puts it. Any other position would have to guess which of
 	// the user's sections it may split.
-	block := []string{"[" + autosaveTablePath + "]" + eol, assignment}
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) != "" {
-		block = append([]string{eol}, block...)
-	}
-	return append(append([]string(nil), lines...), block...)
+	eol := configLineEnding(lines)
+	assignment := autosaveMinIntervalKey + " = " + quoteTOMLString(canonical) + eol
+	return insertKeyAssignment(lines, autosaveTablePath, []string{assignment})
 }
 
-// autosaveSite locates the [autosave] table and the one line assigning
-// min_interval. Both may be absent, and the assignment may be a root-level
-// dotted key (`autosave.min_interval = "5m"`) rather than a key inside the
-// table — a spelling that must be found rather than ignored, because adding a
-// second assignment for a key TOML already binds would make the file
-// undecodable.
-type autosaveSite struct {
-	// tableStart is the [autosave] header line, or -1 when the table is absent.
-	tableStart int
-	// tableEnd is the exclusive end of the table's block: the next table header,
-	// or end of file.
-	tableEnd int
-	// assign is the first line of the min_interval assignment, or -1 when it is
-	// absent.
-	assign int
-	// assignEnd is the last line that assignment spans: assign itself for a value
-	// written on one line, a later line for a multi-line string, array, or inline
-	// table. Rewriting or removing the assignment covers the whole span, because
-	// its continuation lines are the key's value and not text below it.
-	assignEnd int
-	// comment is the trailing comment following the value on assignEnd, '#'
-	// included, or "" when the assignment carries none.
-	comment string
-	// dotted reports that assign is a root-level `autosave.min_interval` key.
-	dotted bool
-}
-
-func findAutosaveSite(lines []string) autosaveSite {
-	site := autosaveSite{tableStart: -1, tableEnd: len(lines), assign: -1, assignEnd: -1}
-	inTable, seenHeader := false, false
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		path, isArray, isHeader := parseTOMLTableHeader(line)
-		if isHeader {
-			seenHeader = true
-			if inTable {
-				site.tableEnd = i
-				inTable = false
-			}
-			// Only the first [autosave] table is targeted. A second one is a
-			// duplicate TOML already rejects, so patching it would be patching a
-			// file that cannot load.
-			if !isArray && path == autosaveTablePath && site.tableStart < 0 {
-				site.tableStart, site.tableEnd, inTable = i, len(lines), true
-			}
-			continue
-		}
-		if site.assign >= 0 {
-			continue
-		}
-		switch {
-		case inTable && matchesTOMLKeyPath(line, autosaveMinIntervalKey):
-			site.assign = i
-		case !seenHeader && matchesTOMLKeyPath(line, autosaveTablePath+"."+autosaveMinIntervalKey):
-			// A dotted key binds to the root table, so it only counts before the
-			// first header; the same text under [cockpit] names another key.
-			site.assign, site.dotted = i, true
-		default:
-			continue
-		}
-		site.assignEnd, site.comment = assignmentValueSpan(lines, i)
-		// The rest of a multi-line value is content, not structure: skipping it
-		// keeps a bracketed line inside a string from reading as the table header
-		// that would end this table.
-		i = site.assignEnd
-	}
-	return site
-}
-
-// assignmentValueSpan reports the last line the assignment beginning at start
-// spans, and the trailing comment that follows its value on that line.
-//
-// A TOML value begins on its key's own line but need not end there: a
-// multi-line string, an array, or an inline table may run on. This patcher
-// rewrites and removes whole assignments, so it needs the whole span —
-// replacing only the first line of a multi-line value would leave the rest of
-// that value behind as a body nothing can parse.
-//
-// A value this cannot follow to its end — an unterminated string, a bracket
-// that never closes — reports the starting line and no comment. That is a body
-// TOML already refuses; treating it as a single line is what this patcher did
-// before spans existed, and it keeps a malformed file from having lines deleted
-// on the strength of a guess about where its value stopped.
-func assignmentValueSpan(lines []string, start int) (int, string) {
-	body := strings.TrimSuffix(lines[start], "\r")
-	eq := strings.IndexByte(body, '=')
-	if eq < 0 {
-		return start, ""
-	}
-	// quote is the closing delimiter of the string being read (`"`, `'`, `"""`
-	// or `'''`) or "" outside one; depth counts open brackets and braces, which
-	// are the other way a value continues onto the next line.
-	quote, depth, i := "", 0, eq+1
-	for line := start; line < len(lines); line++ {
-		if line != start {
-			body, i = strings.TrimSuffix(lines[line], "\r"), 0
-		}
-		for i < len(body) {
-			rest := body[i:]
-			switch {
-			case quote != "":
-				switch {
-				case quote[0] == '"' && body[i] == '\\':
-					// An escape, including the backslash that continues a """ string
-					// onto the next line. Literal strings have none.
-					i += 2
-				case strings.HasPrefix(rest, quote):
-					i += len(quote)
-					quote = ""
-				default:
-					i++
-				}
-			case body[i] == '#':
-				if depth == 0 {
-					return line, strings.TrimSpace(rest)
-				}
-				// A comment inside a multi-line array runs to end of line and the
-				// value continues below it.
-				i = len(body)
-			case strings.HasPrefix(rest, `"""`), strings.HasPrefix(rest, `'''`):
-				quote, i = rest[:3], i+3
-			case body[i] == '"' || body[i] == '\'':
-				quote, i = rest[:1], i+1
-			case body[i] == '[' || body[i] == '{':
-				depth, i = depth+1, i+1
-			case body[i] == ']' || body[i] == '}':
-				depth, i = depth-1, i+1
-			default:
-				i++
-			}
-		}
-		switch {
-		case quote == "" && depth <= 0:
-			return line, ""
-		case len(quote) == 1:
-			// A single-line string cannot cross a newline, so the assignment is one
-			// this cannot read rather than one that continues.
-			return start, ""
-		}
-	}
-	return start, ""
+// findAutosaveSite locates the [autosave] table and the one line assigning
+// min_interval, through the same key-site walk every other whole-assignment
+// patch uses.
+func findAutosaveSite(lines []string) keySite {
+	return findKeySite(lines, autosaveTablePath, autosaveMinIntervalKey)
 }
 
 // rewriteAssignmentLine replaces an assignment's value while keeping the line's
@@ -333,51 +180,4 @@ func rewriteAssignmentLine(line, key, value, comment string) string {
 		rendered += " " + comment
 	}
 	return rendered + strings.TrimPrefix(line, body)
-}
-
-// matchesTOMLKeyPath reports whether line assigns exactly the dotted key path
-// want. Every segment spelling a valid key can take — bare, "quoted", or
-// 'literal' — is accepted, so a patch cannot miss an assignment and then add a
-// duplicate of it.
-func matchesTOMLKeyPath(line, want string) bool {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-		return false
-	}
-	eq := strings.IndexByte(trimmed, '=')
-	if eq < 0 {
-		return false
-	}
-	got, ok := normalizeTOMLKeyPath(trimmed[:eq])
-	return ok && got == want
-}
-
-func normalizeTOMLKeyPath(raw string) (string, bool) {
-	segments := strings.Split(raw, ".")
-	out := make([]string, len(segments))
-	for i, segment := range segments {
-		segment = strings.TrimSpace(segment)
-		if len(segment) >= 2 && segment[0] == '\'' && segment[len(segment)-1] == '\'' {
-			out[i] = segment[1 : len(segment)-1]
-			continue
-		}
-		name, ok := unquoteTOMLKey(segment)
-		if !ok {
-			return "", false
-		}
-		out[i] = name
-	}
-	return strings.Join(out, "."), true
-}
-
-// configLineEnding reports the carriage return a line added to this file needs.
-// splitConfigLines splits on "\n" alone, so a CRLF file's lines each keep their
-// "\r" and a line inserted without one would be the only LF line in the file.
-func configLineEnding(lines []string) string {
-	for _, line := range lines {
-		if strings.HasSuffix(line, "\r") {
-			return "\r"
-		}
-	}
-	return ""
 }
