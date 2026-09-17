@@ -73,15 +73,22 @@ type Result struct {
 	// JournalEntry is the local recovery-history entry that can undo the
 	// application. It was read back off the disk before the receipt was minted.
 	JournalEntry string
-	// Receipt is the acknowledgment published for the peer.
+	// Receipt is this vault's acknowledgment of the package: the one it minted
+	// here, or — for a redelivery — the one it minted the first time. It is set
+	// whenever an acknowledgment exists, including when publishing it failed, so
+	// "this vault never acknowledged the package" and "the acknowledgment could not
+	// be put where the peer reads it" stay distinguishable. Nil for a converged
+	// package, which has no recovery entry for a receipt to name.
 	Receipt *vaultsync.Receipt
-	// ReceiptPath is where it was published in this device's outgoing channel.
+	// ReceiptPath is where it was published in this device's outgoing channel, and
+	// is empty when the publication itself failed.
 	ReceiptPath string
 	// Cleanup is a housekeeping failure that did not prevent the application: a
 	// transaction scratch file that could not be unlinked after its destination
-	// was durably written. It is reported rather than returned as an error
-	// because every path the package named holds exactly what it asked for, and
-	// the only action it asks for is deleting the file the message names.
+	// was durably written, or the retained branches of a conflict this delivery
+	// resolved. It is reported rather than returned as an error because every
+	// path the package named holds exactly what it asked for, and the only action
+	// it asks for is deleting the file or directory the message names.
 	Cleanup error
 	// Duplicate reports that this delivery changed nothing because the package
 	// had already been applied here. Everything else in the Result describes that
@@ -90,6 +97,12 @@ type Result struct {
 	// that forwards receipts still should, because a repeated delivery is usually
 	// a peer saying it never got the first reply.
 	Duplicate bool
+	// Converged reports that this vault already held every change the package
+	// carried, so nothing was written, no recovery entry exists, and no receipt
+	// could honestly be minted. See Record.Converged. JournalEntry is empty and
+	// Receipt is nil; the package is remembered as applied all the same, so a
+	// redelivery is answered rather than re-inspected.
+	Converged bool
 }
 
 // Apply applies the package published at packageDir to the vault at root, and
@@ -161,16 +174,87 @@ func applyLocked(root, packageDir string, opts Options) (*Result, error) {
 	if err := session.read(packageDir); err != nil {
 		return nil, err
 	}
+	found, err := session.inspect()
+	if err != nil {
+		return nil, err
+	}
+	if len(found.conflicts) > 0 {
+		return nil, session.decline(found)
+	}
+	session.mark(found)
+	if found.settled() {
+		return session.converge()
+	}
 	entry, err := session.apply()
 	if err != nil {
-		return nil, session.unwind(err)
+		return nil, session.retain(session.unwind(err))
 	}
 	result, ackErr := session.acknowledge(entry)
 	importCrash(crashAcknowledged)
 	if err := session.settle(entry.ID, result.Receipt); err != nil {
 		return result, errors.Join(ackErr, err)
 	}
+	result.Cleanup = session.cleanup
 	return result, ackErr
+}
+
+// decline holds a package whose changes this vault disagrees with, and returns
+// the refusal naming every contested path.
+//
+// The hold is durable and the refusal is not, which is the asymmetry that
+// matters: a caller sees the message once, and the next pass — in another
+// process, after a reboot — has to be able to see the same thing. A hold that
+// could not be written down is joined onto the refusal rather than replacing it,
+// because the package is refused either way and the contested content is still
+// untouched.
+func (a *applier) decline(found *disposition) error {
+	refusal := found.refusal(a.manifest.PackageID)
+	if err := a.hold(found); err != nil {
+		return errors.Join(refusal, err)
+	}
+	return refusal
+}
+
+// mark records which changes need no transaction, so plan stages the rest and
+// declare writes down what a recovery must not roll back.
+func (a *applier) mark(found *disposition) {
+	for i := range a.changes {
+		a.changes[i].converged = found.converged[a.changes[i].change.Path]
+	}
+}
+
+// converge remembers a package this vault had already applied the whole of,
+// without applying anything.
+//
+// It is recorded as applied because that is what it is: every path the package
+// names holds exactly what the package would have installed. What it does not
+// get is a receipt. An acknowledgment promises the peer a local recovery entry
+// that can undo the application, and an application that wrote nothing produced
+// none — noteops creates no entry for an operation that captures nothing, and
+// minting one would mean committing the vault's own content back over itself to
+// have something to name. So the peer keeps its copy and redelivers, which costs
+// a redelivery and loses nothing: this answers the second one from the ledger.
+func (a *applier) converge() (*Result, error) {
+	next := a.state.clone()
+	next.Applied[a.manifest.PackageID] = Record{
+		OperationID:  a.operation.OperationID,
+		OriginDevice: a.manifest.OriginDevice,
+		Sequence:     a.manifest.Sequence,
+		Converged:    true,
+	}
+	released := a.release(next)
+	if err := saveState(a.root, next); err != nil {
+		return nil, err
+	}
+	a.state = next
+	a.discard(released)
+	return &Result{
+		PackageID:    a.manifest.PackageID,
+		OperationID:  a.operation.OperationID,
+		OriginDevice: a.manifest.OriginDevice,
+		Converged:    true,
+		Cleanup:      a.cleanup,
+	}, nil
 }
 
 // applier is one package's journey through this vault, from accepted manifest to
@@ -193,6 +277,10 @@ type applier struct {
 type plannedChange struct {
 	change vaultsync.Change
 	data   []byte
+	// converged means this path already holds what the change installs, so the
+	// transaction skips it. It is still read back and acknowledged: the receipt
+	// states what the vault holds, and it holds this. See applier.mark.
+	converged bool
 }
 
 // accept answers the two questions that must be settled before this vault is
@@ -333,12 +421,29 @@ func (a *applier) recorderOptions(entryID string) []journal.RecorderOption {
 // under this recovery entry.
 func (a *applier) declare(entryID string) error {
 	next := a.state.clone()
-	next.Pending = &Attempt{JournalEntry: entryID, Manifest: a.manifest}
+	next.Pending = &Attempt{
+		JournalEntry: entryID,
+		Manifest:     a.manifest,
+		Converged:    a.convergedPaths(),
+	}
 	if err := saveState(a.root, next); err != nil {
 		return err
 	}
 	a.state = next
 	return nil
+}
+
+// convergedPaths are the paths this application is skipping, in package order.
+// Recorded in the attempt because a recovering process cannot work them out: see
+// Attempt.Converged.
+func (a *applier) convergedPaths() []string {
+	paths := make([]string, 0, len(a.changes))
+	for _, planned := range a.changes {
+		if planned.converged {
+			paths = append(paths, planned.change.Path)
+		}
+	}
+	return paths
 }
 
 // settle ends the attempt and remembers the application, in one write. See
@@ -350,13 +455,20 @@ func (a *applier) settle(entryID string, receipt *vaultsync.Receipt) error {
 	next.Applied[a.manifest.PackageID] = Record{
 		OperationID:  a.operation.OperationID,
 		OriginDevice: a.manifest.OriginDevice,
+		Sequence:     a.manifest.Sequence,
 		JournalEntry: entryID,
 		Receipt:      receipt,
 	}
+	// A package that applies is no longer a package being held. This is the only
+	// way a hold is lifted, and it needs no command: a person resolves a conflict
+	// by editing the note, the next pass finds the expectation met, and the hold
+	// and its retained branches go with the application.
+	released := a.release(next)
 	if err := saveState(a.root, next); err != nil {
 		return err
 	}
 	a.state = next
+	a.discard(released)
 	return nil
 }
 
@@ -422,6 +534,16 @@ func (a *applier) answer(record Record) (*Result, error) {
 			ErrCorruptState, a.manifest.PackageID, record.OperationID, a.operation.OperationID)
 	}
 	a.withoutPayloads()
+	// A converged application has no receipt and never will: there is no recovery
+	// entry for one to name. Minting one now would be worse than saying nothing,
+	// because it would have to name some *other* operation's entry. So the
+	// redelivery is answered with the convergence itself, which is the honest
+	// statement — nothing here changed, and nothing here will.
+	if record.Converged {
+		result := a.duplicate(record)
+		result.Converged = true
+		return result, nil
+	}
 	if record.Receipt != nil {
 		return a.republish(record)
 	}
@@ -440,6 +562,14 @@ func (a *applier) answer(record Record) (*Result, error) {
 // because the bytes it is publishing came out of the record that published them.
 func (a *applier) republish(record Record) (*Result, error) {
 	result := a.duplicate(record)
+	// Carried before the publication rather than after it, because the receipt is a
+	// fact about the earlier application and not about this delivery: it was minted
+	// and it is in the record. A failure below means this vault could not put it
+	// back in the channel, which is a different thing from never having had one,
+	// and a caller that cannot tell them apart looks for a missing receipt instead
+	// of a channel it cannot write. ReceiptPath stays empty, which is the honest
+	// statement that the bytes are not where the peer reads them.
+	result.Receipt = record.Receipt
 	channel := vaultsync.OutgoingDir(a.root)
 	path, err := vaultsync.PublishReceipt(channel, record.Receipt)
 	if errors.Is(err, vaultsync.ErrPackageExists) {
@@ -448,7 +578,6 @@ func (a *applier) republish(record Record) (*Result, error) {
 	if err != nil {
 		return result, err
 	}
-	result.Receipt = record.Receipt
 	result.ReceiptPath = path
 	return result, nil
 }
@@ -476,6 +605,12 @@ func (a *applier) retryAcknowledge(record Record) (*Result, error) {
 	if err := a.settle(record.JournalEntry, result.Receipt); err != nil {
 		return result, errors.Join(ackErr, err)
 	}
+	// settle can drop a hold, and dropping one can fail to remove the bytes it had
+	// retained. acknowledge built this Result before any of that happened, so the
+	// housekeeping failure is copied across here or it would be dropped — the one
+	// place in this package where a Result is made before the last thing that can
+	// add to Cleanup.
+	result.Cleanup = a.cleanup
 	return result, ackErr
 }
 
@@ -532,6 +667,15 @@ func (a *applier) plan() (*vault.FileTxn, error) {
 	written := make(map[string]struct{}, len(a.changes))
 	for _, planned := range a.changes {
 		change := planned.change
+		// A change this vault had already made stages nothing. Requiring it to
+		// hold what it holds would be harmless; writing it would not be, because
+		// the precondition is the producer's *baseline* and the path is already
+		// past it, so the transaction would refuse a package there is nothing
+		// left to do about. It is also left out of `written`, so a configuration
+		// layer that converged is pinned rather than exempted.
+		if planned.converged {
+			continue
+		}
 		written[vaultsync.CollisionKey(change.Path)] = struct{}{}
 		if change.Action == vaultsync.ActionDelete {
 			err = txn.Remove(change.Path, expectation(change))

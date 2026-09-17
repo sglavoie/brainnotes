@@ -18,7 +18,13 @@ import (
 // the reason the export record gives: a newer build may carry a field this one
 // would drop on the next write, and dropping an unresolved attempt silently is
 // worse than refusing to run.
-const stateVersion = 1
+//
+// Raised to 2 for the conflict scheduler: a record now carries the origin
+// sequence a dependency is stated against and the convergence flag that explains
+// an application with no recovery entry, and the file carries the held conflicts.
+// A version 1 file names none of those, and a build that read one would take an
+// applied package for an unapplied position in its origin's stream.
+const stateVersion = 2
 
 // stateFileName is the record's name inside the synchronization state
 // directory, beside the exporter's.
@@ -74,6 +80,16 @@ type State struct {
 	// any number of times, and every delivery after the first must answer from
 	// this map instead of touching the vault again.
 	Applied map[string]Record `json:"applied"`
+	// Conflicts maps a package identity to the hold placed on it: the contested
+	// paths, and where every version of each was kept.
+	//
+	// It is deliberately not an Attempt. A held operation has touched nothing, so
+	// recording it as pending would make every later import refuse — which is the
+	// opposite of holding one operation while independent work proceeds. Each
+	// entry is re-decided on every pass over the package and cleared the moment
+	// the disk stops disagreeing, so a person who resolves a conflict by editing
+	// the note needs no command to say that they did.
+	Conflicts map[string]*ConflictRecord `json:"conflicts,omitempty"`
 }
 
 // Attempt is one application in progress, made durable before it begins.
@@ -97,6 +113,17 @@ type Attempt struct {
 	// peer is owed, since an acknowledgment is checked against the package it
 	// answers.
 	Manifest *vaultsync.Manifest `json:"manifest"`
+	// Converged are the paths the package names that this vault already held at
+	// the result, and which the transaction therefore never staged.
+	//
+	// It has to be here because recovery cannot tell them apart from applied
+	// ones. A rollback decides per path by comparing the disk against what the
+	// package expected and what it installs, and a path that had converged reads
+	// as installed — so a recovering process would restore it to the package's
+	// baseline and destroy content this import never wrote. They are named rather
+	// than re-derived for the reason Restored is: the disk moves on, and the
+	// question is about what this application did.
+	Converged []string `json:"converged,omitempty"`
 	// Restored is the rollback's record of itself, written the moment the
 	// content is back and before the two steps that follow it. Nil means no
 	// rollback has finished.
@@ -139,8 +166,25 @@ type Record struct {
 	OperationID string `json:"operation_id"`
 	// OriginDevice is the peer that produced it.
 	OriginDevice string `json:"origin_device"`
-	// JournalEntry is the local recovery entry that can undo it.
+	// Sequence is the package's position in that peer's stream, which is what a
+	// later package's stated dependency is expressed in. Without it this vault
+	// remembers that it applied a package and cannot answer whether it has
+	// consumed the position another package requires.
+	Sequence uint64 `json:"sequence"`
+	// JournalEntry is the local recovery entry that can undo it. Empty only when
+	// Converged, which is the one application that produced none.
 	JournalEntry string `json:"journal_entry"`
+	// Converged reports a package this vault had already made every change of
+	// before it arrived — two replicas that reached the same content
+	// independently, which is ordinary when both are edited from one source.
+	//
+	// It applied nothing, so there is no recovery entry and no receipt: an
+	// acknowledgment names a local entry that can undo the application, and there
+	// is no honest entry to name. The peer therefore keeps its copy and redelivers,
+	// which is the protocol's safe direction — every redelivery converges again
+	// and changes nothing. It is recorded rather than left unrecorded so a
+	// redelivery is answered from here instead of being inspected again.
+	Converged bool `json:"converged,omitempty"`
 	// Receipt is the acknowledgment minted for the peer, kept whole.
 	//
 	// Stored rather than re-derived, and that is a correctness decision. A
@@ -159,10 +203,11 @@ type Record struct {
 // newState returns the record a vault that has never imported starts from.
 func newState(local *vaultsync.Enrollment) *State {
 	return &State{
-		Version:  stateVersion,
-		VaultID:  local.VaultID,
-		DeviceID: local.DeviceID,
-		Applied:  map[string]Record{},
+		Version:   stateVersion,
+		VaultID:   local.VaultID,
+		DeviceID:  local.DeviceID,
+		Applied:   map[string]Record{},
+		Conflicts: map[string]*ConflictRecord{},
 	}
 }
 
@@ -184,9 +229,29 @@ func (s *State) validate() error {
 	if err := s.Pending.validate(); err != nil {
 		return err
 	}
+	return s.validateLedgers()
+}
+
+// validateLedgers checks the two per-package maps against themselves and against
+// each other.
+//
+// The cross-check is the one that matters: applied and held are contradictory
+// answers to "what happened to this package", and a record holding both would
+// make a redelivery answered from one map while a drain pass re-decides it from
+// the other.
+func (s *State) validateLedgers() error {
 	for packageID, record := range s.Applied {
 		if err := record.validate(packageID); err != nil {
 			return err
+		}
+	}
+	for packageID, held := range s.Conflicts {
+		if err := held.validate(packageID); err != nil {
+			return err
+		}
+		if _, applied := s.Applied[packageID]; applied {
+			return fmt.Errorf("%w: package %s is recorded as both applied and held",
+				ErrCorruptState, packageID)
 		}
 	}
 	return nil
@@ -218,6 +283,14 @@ func (a *Attempt) validate() error {
 	if err != nil {
 		return fmt.Errorf("%w: pending attempt: %v", ErrCorruptState, err)
 	}
+	// Held to the same rule Restored is, and for a sharper reason: a converged
+	// path is one recovery will *not* restore, so a name the operation never
+	// changed would quietly exempt something from the rollback. Naming a path the
+	// package does not carry is the signature of a record that is not this
+	// attempt's.
+	if err := namesChanged(operation, "converged", a.Converged); err != nil {
+		return err
+	}
 	return a.Restored.validate(operation)
 }
 
@@ -236,14 +309,24 @@ func (r *Rollback) validate(operation *vaultsync.Operation) error {
 	if r == nil {
 		return nil
 	}
+	return namesChanged(operation, "restoring", r.Paths)
+}
+
+// namesChanged refuses a list of paths that is not a subset of what the
+// operation changed. role names what the list is, so the refusal says which of
+// the attempt's two path lists is wrong.
+func namesChanged(operation *vaultsync.Operation, role string, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
 	changed := make(map[string]struct{}, len(operation.Changes))
 	for _, change := range operation.Changes {
 		changed[change.Path] = struct{}{}
 	}
-	for _, path := range r.Paths {
-		if _, ok := changed[path]; !ok {
-			return fmt.Errorf("%w: pending attempt records restoring %q, which operation %s never changed",
-				ErrCorruptState, path, operation.OperationID)
+	for _, rel := range paths {
+		if _, ok := changed[rel]; !ok {
+			return fmt.Errorf("%w: pending attempt records %s %q, which operation %s never changed",
+				ErrCorruptState, role, rel, operation.OperationID)
 		}
 	}
 	return nil
@@ -255,8 +338,9 @@ func (r Record) validate(packageID string) error {
 		return fmt.Errorf("%w: applied ledger holds an unnamed package", ErrCorruptState)
 	case strings.TrimSpace(r.OperationID) == "":
 		return fmt.Errorf("%w: applied package %s names no operation", ErrCorruptState, packageID)
-	case strings.TrimSpace(r.JournalEntry) == "":
-		return fmt.Errorf("%w: applied package %s names no journal entry", ErrCorruptState, packageID)
+	}
+	if err := r.validateConvergence(packageID); err != nil {
+		return err
 	}
 	if r.Receipt != nil && r.Receipt.PackageID != packageID {
 		return fmt.Errorf("%w: applied package %s holds a receipt for %s",
@@ -265,10 +349,38 @@ func (r Record) validate(packageID string) error {
 	return nil
 }
 
+// validateConvergence checks the pairing that separates a converged record from
+// an ordinary applied one.
+//
+// Convergence is exactly the application that produced no recovery entry and no
+// receipt, because there was nothing to undo and nothing honest to acknowledge.
+// So the two are not independent fields that happen to agree: a record claiming
+// convergence *and* an entry, or claiming neither, did not come out of this
+// package, and reading it either way would answer a redelivery with a promise
+// the vault cannot keep.
+func (r Record) validateConvergence(packageID string) error {
+	switch {
+	case r.Converged && strings.TrimSpace(r.JournalEntry) != "":
+		return fmt.Errorf("%w: package %s converged and names journal entry %s",
+			ErrCorruptState, packageID, r.JournalEntry)
+	case r.Converged && r.Receipt != nil:
+		return fmt.Errorf("%w: package %s converged and holds a receipt", ErrCorruptState, packageID)
+	case !r.Converged && strings.TrimSpace(r.JournalEntry) == "":
+		return fmt.Errorf("%w: applied package %s names no journal entry", ErrCorruptState, packageID)
+	}
+	return nil
+}
+
 // clone returns a record a caller can build the next one up from and discard
 // wholesale. The attempt's manifest is shared rather than copied: a package is
 // immutable by definition and nothing here or in internal/vaultsync ever writes
 // through one.
+//
+// A conflict record is shared for the same reason and with the same rule behind
+// it: a hold is replaced wholesale on every pass rather than edited in place, so
+// no caller has one to write through. What is copied is the map, which is what
+// lets a caller drop a resolved hold without touching the record it is building
+// the next state from.
 func (s *State) clone() *State {
 	out := *s
 	if s.Pending != nil {
@@ -278,6 +390,10 @@ func (s *State) clone() *State {
 	out.Applied = make(map[string]Record, len(s.Applied))
 	for k, v := range s.Applied {
 		out.Applied[k] = v
+	}
+	out.Conflicts = make(map[string]*ConflictRecord, len(s.Conflicts))
+	for k, v := range s.Conflicts {
+		out.Conflicts[k] = v
 	}
 	return &out
 }
@@ -309,6 +425,9 @@ func loadState(root string, local *vaultsync.Enrollment) (*State, error) {
 	}
 	if record.Applied == nil {
 		record.Applied = map[string]Record{}
+	}
+	if record.Conflicts == nil {
+		record.Conflicts = map[string]*ConflictRecord{}
 	}
 	return &record, nil
 }

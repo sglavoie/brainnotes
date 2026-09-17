@@ -231,6 +231,7 @@ func (r *resolver) complete() (*Recovery, error) {
 	record := Record{
 		OperationID:  r.operation.OperationID,
 		OriginDevice: r.manifest.OriginDevice,
+		Sequence:     r.manifest.Sequence,
 		JournalEntry: entryID,
 		Receipt:      result.Receipt,
 	}
@@ -389,12 +390,25 @@ func (r *resolver) markRestored(paths []string) error {
 // package installed was written and is undone. A path holding anything else was
 // edited by somebody after the interruption — and that edit is newer than the
 // import, newer than the snapshot, and the only copy of itself.
+//
+// A path the attempt recorded as converged is none of the three and is not asked
+// about. It already held the package's result before the import began, so it
+// reads as installed and would be "undone" to a baseline this vault left behind
+// on its own — destroying local content the interrupted application never
+// touched. See Attempt.Converged.
 func (r *resolver) plan() ([]string, error) {
 	var (
 		plan      []string
 		contested []string
 	)
+	skip := make(map[string]struct{}, len(r.attempt.Converged))
+	for _, rel := range r.attempt.Converged {
+		skip[rel] = struct{}{}
+	}
 	for _, change := range r.operation.Changes {
+		if _, converged := skip[change.Path]; converged {
+			continue
+		}
 		state, err := diskState(absPath(r.root, change.Path))
 		if err != nil {
 			return nil, err
@@ -436,7 +450,7 @@ func (r *resolver) restore(paths []string) error {
 	if err != nil {
 		return err
 	}
-	index := r.changeIndex()
+	index := changeIndex(r.operation)
 	for _, rel := range paths {
 		if err := r.stage(txn, index[rel]); err != nil {
 			return err
@@ -472,14 +486,6 @@ func (r *resolver) stage(txn *vault.FileTxn, change vaultsync.Change) error {
 	return txn.Write(change.Path, data, 0, expect)
 }
 
-func (r *resolver) changeIndex() map[string]vaultsync.Change {
-	index := make(map[string]vaultsync.Change, len(r.operation.Changes))
-	for _, change := range r.operation.Changes {
-		index[change.Path] = change
-	}
-	return index
-}
-
 // settle writes the one state change that ends an attempt: the pending record is
 // dropped, and — when the application stands — the package is remembered as
 // applied. Both in a single write, because a crash between two would either
@@ -487,10 +493,27 @@ func (r *resolver) changeIndex() map[string]vaultsync.Change {
 func (r *resolver) settle(record *Record) error {
 	next := r.state.clone()
 	next.Pending = nil
+	released := false
 	if record != nil {
 		next.Applied[r.manifest.PackageID] = *record
+		// A package cannot be both applied and held — State.validate refuses the
+		// pair outright — and an interrupted application that completes is an
+		// application. A hold on this package could only predate it, from a
+		// delivery refused before a later one got through.
+		_, released = next.Conflicts[r.manifest.PackageID]
+		delete(next.Conflicts, r.manifest.PackageID)
 	}
-	return saveState(r.root, next)
+	if err := saveState(r.root, next); err != nil {
+		return err
+	}
+	if released {
+		// The record has stopped naming them, so a failure here leaves a
+		// directory nothing points at — which the next hold on this package
+		// overwrites and Drain's sweep collects. Recovery has no housekeeping
+		// channel to carry it out on and must not fail an application over it.
+		_ = discardRetained(r.root, r.manifest.PackageID)
+	}
+	return nil
 }
 
 // stranded builds the refusal that keeps every version of the content. It names

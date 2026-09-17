@@ -41,6 +41,18 @@ func NewDeviceID() (string, error) { return newIdentity(devicePrefix) }
 // be indistinguishable from a second package.
 func NewPackageID() (string, error) { return newIdentity(packagePrefix) }
 
+// PackageName reports whether a directory entry name is a package identity.
+//
+// It exists for a reader listing a channel, which is a directory the transport
+// also writes into: the receipts folder sits beside the packages, and a
+// half-copied temporary can sit there too. Asking here rather than trying to
+// read each name as a package keeps "not a package" separate from "a package
+// that has not finished arriving", and it is the same check every other caller
+// runs before joining an identity onto a directory — the containment of every
+// path derived from one rests on the name being lowercase hex of a fixed length
+// behind a fixed prefix.
+func PackageName(name string) bool { return validIdentity(packagePrefix, name) }
+
 // NewOperationID mints the immutable identity of one multi-file operation. It
 // is minted where the operation happens and never re-derived, because it is
 // what every later package's causal predecessors point at: re-deriving it from
