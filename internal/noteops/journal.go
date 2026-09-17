@@ -174,6 +174,27 @@ func (j *Journal) snapshot(entry *journal.Entry) error {
 	return nil
 }
 
+// EntryID reports the undo entry this operation will finalize under, or the
+// empty string when nothing has been captured and no entry exists yet.
+//
+// The recorder is created lazily by the first Capture, which is deliberate — a
+// refused operation must not leave an entry directory behind — so the identity
+// exists only once the operation has actually touched something. Between that
+// first capture and Finalize it is knowable, and that window is the only place a
+// caller can record something that has to be durable before the snapshot: the
+// provenance of an applied change, which the exporter reads back to recognize a
+// commit as the peer's rather than this device's.
+//
+// An empty answer is not an error. It is what a no-op operation reports, and the
+// caller that needs an identity is the one that knows whether it planned any
+// change at all.
+func (j *Journal) EntryID() string {
+	if j == nil {
+		return ""
+	}
+	return j.recorder.EntryID()
+}
+
 // Operation reports the token this journal's snapshot commits under.
 func (j *Journal) Operation() string {
 	if j == nil {

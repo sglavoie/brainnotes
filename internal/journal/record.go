@@ -146,6 +146,22 @@ func NewRecorder(vaultRoot, journalRoot, command string, opts ...RecorderOption)
 	}, nil
 }
 
+// EntryID is the identity of the entry this recorder is building.
+//
+// It is minted in NewRecorder, together with the directory that carries it, so
+// it is knowable long before Finalize writes the manifest. That is what a caller
+// needs when something else has to be made durable *before* the mutation the
+// entry describes is committed — a record of where an applied change came from,
+// which is worthless if it is written after the commit it explains. The entry
+// may still fail to finalize, so the identity is a promise about naming and not
+// about existence; journal.LoadEntry is how a caller asks the second question.
+func (r *Recorder) EntryID() string {
+	if r == nil {
+		return ""
+	}
+	return r.entry.ID
+}
+
 // Capture records the pre-change state for path, once per unique path.
 func (r *Recorder) Capture(path string) error {
 	if r == nil {
