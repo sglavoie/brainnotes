@@ -46,6 +46,20 @@ const (
 	// that receipt at any moment after this point, which is what makes the receipt
 	// rather than the ledger the authoritative statement here.
 	crashAcknowledged = "acknowledged"
+	// crashResolved fires on the resolution path only, once the peer's package is
+	// durably applied and acknowledged and before the chosen revision that answers
+	// it exists. It is the widest window this vault is ever knowingly in a state
+	// nobody asked for — the peer's version is on the disk and the person chose
+	// something else — which is why the revision record is durable before the
+	// application starts rather than after it.
+	crashResolved = "resolved"
+	// crashRevised fires on the resolution path only, once the revision's content
+	// is durably committed and before the undo manifest that explains it exists.
+	// It is the resolution's own crashApplied, and it is the point the roll-forward
+	// has the most to take back: internal/vault rolls a prepared transaction
+	// forward rather than back, so what is on the disk here can still be arriving
+	// after the process is gone.
+	crashRevised = "revised"
 )
 
 func importCrash(point string) {

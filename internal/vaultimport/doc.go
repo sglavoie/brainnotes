@@ -8,7 +8,7 @@
 // did not go through internal/vault's transaction, internal/noteops' operation
 // lifecycle, and internal/vaultgit's snapshot.
 //
-// Eight properties define it, and each is a refusal rather than a convention.
+// Nine properties define it, and each is a refusal rather than a convention.
 //
 // Nothing is applied that was not accepted. Apply starts at vaultsync.Accept,
 // so a malformed manifest, a package addressed to another vault, one from an
@@ -41,8 +41,9 @@
 // touches a single destination, and the journal is captured only after staging
 // succeeds — so a package that disagrees with this disk is refused with no
 // partial write, no journal entry, and no commit. That is reported as
-// ErrConflict, which is a fact about two devices rather than a fault, and
-// holding or resolving it belongs to a later layer.
+// ErrConflict, which is a fact about two devices rather than a fault. The hold
+// it leaves keeps every version of the path, and is what a resolution is made
+// against later.
 //
 // The one qualification is where the disagreement is noticed. internal/vault
 // re-verifies its read-only requirements again before and after each individual
@@ -144,8 +145,30 @@
 // acknowledged is the single exception, and it is held to every check a first
 // acknowledgment is held to.
 //
-// What it is not: a transport (Syncthing moves the channel), a conflict resolver
-// (it reports a conflict and leaves both versions where they are), and a
-// scheduler (it applies the package it is handed, and never goes looking for
-// one).
+// A resolution is two commits, and the peer's version is the one in between.
+// Preview reads a held package against this disk and answers with a Plan: every
+// path the decision touches — including the ones a choice derives, such as the
+// copy keep-both writes beside the note — with the branch each will end at and
+// both branches pinned as transaction preconditions, so the person is told what
+// they are about to change before they change it. Resolve then applies the held
+// package exactly as any other import, because a receipt is only honest about a
+// disk that really holds what the package installed and a peer told nothing
+// redelivers forever; and it records the choice as a revision of that
+// application — this device's own commit, publishing with the peer's operation
+// as its predecessor and the peer's own content as what it expects to find. The
+// peer holds exactly that, so the revision applies there with nothing left to
+// decide, and the rejected version is in the content history and the recovery
+// history rather than nowhere. A plan the vault has moved past — a late local
+// edit, a competing resolution, a hold that is gone — is ErrStalePreview with
+// nothing written, and a choice the conflict cannot take is
+// ErrResolutionUnavailable before anything is staged. The plan is durable before
+// the application starts, so an interruption between the two commits is finished
+// by the next pass and one before the application landed is abandoned back to a
+// hold.
+//
+// What it is not: a transport (Syncthing moves the channel), a merge algorithm
+// (a resolution records a decision a person made, including merged content they
+// supply; nothing here computes one), and a scheduler of its own channel beyond
+// causal order (Drain applies what has arrived, and never goes looking for a
+// package).
 package vaultimport

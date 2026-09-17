@@ -60,6 +60,35 @@ type Recovery struct {
 	// rather than undone, carrying the receipt and the recovery entry exactly as
 	// Apply would have.
 	Result *Result
+	// Revised are the packages whose interrupted resolution this pass carried
+	// through to its revision, in package order. It is independent of Outcome,
+	// which is about the one attempt that may have been pending: a vault can have
+	// no interrupted application and still owe a revision, which is exactly the
+	// window a resolution leaves.
+	Revised []string
+	// Abandoned are the packages whose promised resolution this pass dropped, in
+	// package order, and it is the report a person needs rather than a statistic:
+	// a decision they made did not take effect. There are two reasons, and the
+	// vault is left in a different place by each. An application that never
+	// landed leaves the package still held, so the conflict can be previewed and
+	// decided again. A revision the vault has moved past — a note edited between
+	// the application and the revision — leaves the package applied and the edit
+	// standing, which is the newer of the two and the one nothing can put back.
+	// See finishResolution.
+	Abandoned []string
+	// AbandonedBecause says which of those two it was, per package, and carries
+	// the refusal itself for the second — the digest, the path and the entry a
+	// person needs to tell "my edit was newer" from "this vault's copy of my
+	// merge is damaged". Every name in Abandoned has an entry; the first reason
+	// is not a failure and reads as its own sentence rather than an error from
+	// somewhere.
+	//
+	// It is populated even when this pass then returns an error: the promise is
+	// out of the state file by then, so nothing later rediscovers it and dropping
+	// the entry would be the end of the news. For the callers that return no
+	// Recovery at all on a failure, withAbandonments folds the same names into
+	// that error.
+	AbandonedBecause map[string]error
 }
 
 // Recover resolves an application this vault was interrupted in the middle of,
@@ -103,7 +132,10 @@ type Recovery struct {
 //
 // A non-nil Recovery returned *with* a non-nil error means the same thing it
 // means from Apply, and arises the same way: the package is applied, committed
-// and undoable, and the acknowledgment could not be minted or published.
+// and undoable, and the acknowledgment could not be minted or published. It also
+// arises from the second half of a pass — an interrupted resolution whose
+// revision could not be made — where the Recovery describes what the attempt
+// resolved and the error describes the revision that is still owed.
 //
 // Apply runs this itself before every import, so a caller that only ever applies
 // packages never needs it. It is exported for the caller that wants to resolve a
@@ -131,6 +163,52 @@ func recoverLocked(root string, opts Options) (*Recovery, error) {
 	if err != nil {
 		return nil, err
 	}
+	recovery, err := resolveAttempt(root, opts, local, state)
+	if err != nil {
+		return recovery, err
+	}
+	// After the attempt and never before it. A resolution is finished or abandoned
+	// according to whether the application it revises landed, and that is exactly
+	// the question the attempt above was still deciding — asking first would read
+	// an answer that is about to change.
+	revised, abandoned, why, err := finishResolutions(root, opts)
+	recovery.Revised = revised
+	recovery.Abandoned = abandoned
+	recovery.AbandonedBecause = why
+	return recovery, withAbandonments(err, recovery)
+}
+
+// withAbandonments restates a recovery failure so that it also says which
+// decisions the same pass gave up on.
+//
+// The Recovery already carries them, and for Recover that is enough. It is not
+// enough for anybody else: Apply, Resolve and Drain each run this pass and each
+// return a nil report when it fails, so the map is built and dropped in the same
+// breath. Ordinarily that would be survivable — ask the vault later — but an
+// abandonment is exactly the fact the vault stops holding. clearResolution has
+// already rewritten the state file without the promise, so there is no later
+// pass that finds it again and no record left to query. The error is the last
+// carrier there is, and a failure about a scratch directory that does not
+// mention the decision it took with it is how somebody's choice disappears in
+// silence.
+//
+// The cause stays wrapped rather than replaced, so every sentinel a caller tests
+// for still matches.
+func withAbandonments(err error, recovery *Recovery) error {
+	if err == nil || recovery == nil || len(recovery.Abandoned) == 0 {
+		return err
+	}
+	given := make([]string, 0, len(recovery.Abandoned))
+	for _, packageID := range recovery.Abandoned {
+		given = append(given, fmt.Sprintf("%s (%v)", packageID, recovery.AbandonedBecause[packageID]))
+	}
+	return fmt.Errorf("%w; the same pass also gave up on a conflict decision this vault no longer records: %s",
+		err, strings.Join(given, "; "))
+}
+
+// resolveAttempt is the interrupted application half of a recovery pass, and
+// answers OutcomeNone for a vault that was not in the middle of one.
+func resolveAttempt(root string, opts Options, local *vaultsync.Enrollment, state *State) (*Recovery, error) {
 	if state.Pending == nil {
 		return &Recovery{Outcome: OutcomeNone}, nil
 	}
@@ -219,7 +297,7 @@ func (r *resolver) complete() (*Recovery, error) {
 	if err := r.recordProvenance(entryID); err != nil {
 		return nil, err
 	}
-	if err := ensureSnapshot(r.root, entryID); err != nil {
+	if err := ensureSnapshot(r.root, entryID, operationToken); err != nil {
 		return nil, err
 	}
 	entry, err := journal.LoadEntry(noteops.JournalRoot(r.root), entryID)
@@ -581,8 +659,10 @@ func resultExpectation(change vaultsync.Change) vault.FileExpectation {
 }
 
 // ensureSnapshot records the entry in the vault's content history if it is not
-// there already.
-func ensureSnapshot(root, entryID string) error {
+// there already, under the token the operation was begun with. An import and a
+// resolution's revision are different acts and reach the commit message as
+// different words, so the token is passed in rather than assumed.
+func ensureSnapshot(root, entryID, token string) error {
 	needed, err := snapshotNeeded(root, entryID)
 	if err != nil {
 		return err
@@ -590,7 +670,7 @@ func ensureSnapshot(root, entryID string) error {
 	if !needed {
 		return nil
 	}
-	return noteops.SnapshotEntry(root, entryID, operationToken)
+	return noteops.SnapshotEntry(root, entryID, token)
 }
 
 // snapshotNeeded asks the content history whether the entry's manifest is at the

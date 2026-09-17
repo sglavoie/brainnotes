@@ -94,9 +94,81 @@ var (
 	// person has every version of the content to choose between — at the price of
 	// every later import refusing until somebody does.
 	//
+	// A *resolution's* unwind raises the second condition too, and leaves a
+	// different vault behind — read which one raised it before acting on it. By
+	// then the package has been applied and acknowledged, on purpose: a resolution
+	// is two commits and the receipt belongs to the first. So there is no pending
+	// attempt to find, State.Applied names the package, the peer has been told to
+	// drop its copy, and what is preserved is the promised revision, its staged
+	// content and the manifest-less entry of the interrupted revision commit. The
+	// vault holds the peer's version of the contested paths, which is the window
+	// the design opens deliberately, and the decision that was made about it is
+	// still recorded and still owed.
+	//
+	// That one has no remedy through this package. The import-side condition
+	// clears when a person puts the edited paths back; this one is read from an
+	// immutable snapshot, so nothing a person does to the notes changes the
+	// answer, and every entry point runs the resolution pass first and so fails
+	// with it. Clearing it means removing the package's entry from State.Resolutions
+	// by hand. That is a worse position than the import-side refusal and is stated
+	// here rather than discovered, because the alternative — abandoning the promise
+	// — destroys the staged decision and orphans the half-made revision.
+	//
 	// Roll-forward has no counterpart to this. An acknowledgment that cannot be
 	// minted is a failed message rather than an unresolvable vault: the
 	// application is already this vault's history, so the attempt is settled and
 	// the ledger records it with no receipt. See resolver.complete.
 	ErrStrandedImport = errors.New("vaultimport: an interrupted import cannot be resolved without losing content")
+)
+
+// The three below are about resolving a hold, and each names a different reason
+// a decision cannot be carried out. They are separate from the sentinels above
+// because none of them describes damage or contention: a resolution is a person
+// acting on a conflict, and the ways that act can be refused are all ordinary.
+var (
+	// ErrNoConflict reports a package this vault is not holding. It is the answer
+	// to resolving a conflict that resolved itself — somebody edited the note back
+	// to what the package expected, a later drain applied it, and the hold went
+	// with the application.
+	ErrNoConflict = errors.New("vaultimport: no conflict is held for this package")
+
+	// ErrStalePreview reports a plan describing a conflict the vault has moved
+	// past.
+	//
+	// A preview is a reading of two branches at one instant, and a person chooses
+	// between them at another. Between those two instants the note can be edited,
+	// the hold can be released, or a second process can resolve the same package —
+	// and a plan that names a local branch which is no longer there would, if it
+	// were carried out, revise the vault back to a version nobody chose.
+	//
+	// It is raised before anything is written, and it is the outer of two guards
+	// rather than the only one: every branch a plan names is also pinned as a
+	// transaction precondition, so an edit that lands after this check is refused
+	// under the path's own lock. This one exists to refuse cheaply and to say
+	// which path changed, which a precondition failure cannot.
+	ErrStalePreview = errors.New("vaultimport: the resolution was planned against a state this vault no longer holds")
+
+	// ErrResolutionUnavailable reports a choice that cannot be carried out for the
+	// conflict it was made about.
+	//
+	// Not every remedy fits every kind. Keeping both versions of the vault's
+	// declarations would leave a copy of a configuration file that governs
+	// nothing; keeping both sides of a rename this vault diverged on would create
+	// the second copy the conflict exists to prevent; and a name collision has to
+	// be cleared before either version can be named at all. Refusing by name is
+	// what lets a caller offer the choices that do fit rather than discovering the
+	// misfit halfway through.
+	//
+	// It also reports the bytes of a chosen branch being unreachable — a merge
+	// supplied to one process and resolved from another, a local version deleted
+	// between the preview and the resolution, or a staged revision whose file has
+	// gone missing before the promise could be kept.
+	//
+	// The last case it reports is a caller pairing a plan with a package that is
+	// not the one it resolves. That is a mistake about which conflict is being
+	// answered rather than about which remedy fits it, but the consequence is the
+	// same one this sentinel names — there is no resolution to carry out — and
+	// the alternative is applying one decision's content under another's
+	// authorization.
+	ErrResolutionUnavailable = errors.New("vaultimport: that resolution cannot be carried out for this conflict")
 )

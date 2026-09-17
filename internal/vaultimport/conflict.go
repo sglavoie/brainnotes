@@ -724,6 +724,29 @@ func (s *retention) read(rel string, branch Branch) []byte {
 	return data
 }
 
+// readRetained reads one branch back out of the store, or reports nothing.
+//
+// It is how a resolution reaches a version that is no longer on the disk — the
+// peer's, most of all, which exists here only as the copy the hold kept. The
+// digest is checked against the branch rather than against the file name, so a
+// record naming a retained copy that has since been replaced by something else
+// answers nothing rather than the wrong content. Bytes being empty is the
+// ordinary case for a branch that is a deletion or one this vault never had.
+func readRetained(root, packageID string, branch Branch) []byte {
+	if !branch.Exists || branch.Bytes == "" {
+		return nil
+	}
+	dir, err := conflictDir(root, packageID)
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(dir, branch.Bytes))
+	if err != nil || vaultsync.HashBytes(data) != branch.SHA256 {
+		return nil
+	}
+	return data
+}
+
 // baseline finds the bytes both replicas last agreed on, and is best-effort by
 // construction.
 //

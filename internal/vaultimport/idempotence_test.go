@@ -276,7 +276,7 @@ func TestSnapshotNeededAsksTheContentHistoryNotTheJournal(t *testing.T) {
 	// ensureSnapshot is the guard applied: running it against an entry already in
 	// history must cost nothing and must move nothing.
 	head := r.pair.Local.Head(t)
-	if err := ensureSnapshot(r.root(), result.JournalEntry); err != nil {
+	if err := ensureSnapshot(r.root(), result.JournalEntry, operationToken); err != nil {
 		t.Fatalf("ensureSnapshot over an entry already in history: %v", err)
 	}
 	if now := r.pair.Local.Head(t); now != head {

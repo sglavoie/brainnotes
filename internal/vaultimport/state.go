@@ -24,7 +24,14 @@ import (
 // an application with no recovery entry, and the file carries the held conflicts.
 // A version 1 file names none of those, and a build that read one would take an
 // applied package for an unapplied position in its origin's stream.
-const stateVersion = 2
+//
+// Raised to 3 for the resolution engine, and this one is exactly the harm the
+// exact comparison exists to prevent rather than a missing field. A resolution
+// in progress is recorded here between the application it revises and the
+// revision itself; a build that did not know the field would drop it on its next
+// write, and the vault would be left agreeing with the peer about a note
+// somebody had decided to keep, with nothing left that says so.
+const stateVersion = 3
 
 // stateFileName is the record's name inside the synchronization state
 // directory, beside the exporter's.
@@ -90,6 +97,18 @@ type State struct {
 	// the disk stops disagreeing, so a person who resolves a conflict by editing
 	// the note needs no command to say that they did.
 	Conflicts map[string]*ConflictRecord `json:"conflicts,omitempty"`
+	// Resolutions maps a package identity to the revision a resolution has
+	// promised to make on top of it, and is the one field here that describes
+	// something this vault has decided to do rather than something it has done.
+	//
+	// It exists because a resolution is two commits and the first of them agrees
+	// with the peer. An interruption in between leaves a vault holding the version
+	// that was rejected, which is indistinguishable from a package that was simply
+	// accepted — so the decision is written down before the first commit, and
+	// every entry point finishes it before doing anything else. It is cleared when
+	// the revision is made, or when the application it was waiting on turns out
+	// never to have landed. See finishResolutions.
+	Resolutions map[string]*Plan `json:"resolutions,omitempty"`
 }
 
 // Attempt is one application in progress, made durable before it begins.
@@ -203,11 +222,12 @@ type Record struct {
 // newState returns the record a vault that has never imported starts from.
 func newState(local *vaultsync.Enrollment) *State {
 	return &State{
-		Version:   stateVersion,
-		VaultID:   local.VaultID,
-		DeviceID:  local.DeviceID,
-		Applied:   map[string]Record{},
-		Conflicts: map[string]*ConflictRecord{},
+		Version:     stateVersion,
+		VaultID:     local.VaultID,
+		DeviceID:    local.DeviceID,
+		Applied:     map[string]Record{},
+		Conflicts:   map[string]*ConflictRecord{},
+		Resolutions: map[string]*Plan{},
 	}
 }
 
@@ -252,6 +272,11 @@ func (s *State) validateLedgers() error {
 		if _, applied := s.Applied[packageID]; applied {
 			return fmt.Errorf("%w: package %s is recorded as both applied and held",
 				ErrCorruptState, packageID)
+		}
+	}
+	for packageID, promised := range s.Resolutions {
+		if err := promised.validate(packageID); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -395,6 +420,10 @@ func (s *State) clone() *State {
 	for k, v := range s.Conflicts {
 		out.Conflicts[k] = v
 	}
+	out.Resolutions = make(map[string]*Plan, len(s.Resolutions))
+	for k, v := range s.Resolutions {
+		out.Resolutions[k] = v
+	}
 	return &out
 }
 
@@ -428,6 +457,9 @@ func loadState(root string, local *vaultsync.Enrollment) (*State, error) {
 	}
 	if record.Conflicts == nil {
 		record.Conflicts = map[string]*ConflictRecord{}
+	}
+	if record.Resolutions == nil {
+		record.Resolutions = map[string]*Plan{}
 	}
 	return &record, nil
 }

@@ -38,6 +38,18 @@ type Options struct {
 	// RecorderOptions customize the undo entry's clock and identity generation.
 	// They exist for tests; production callers pass none.
 	RecorderOptions []journal.RecorderOption
+	// resolving is the resolution this application is the first half of, and is
+	// unexported because it is not a caller's to set: it is a plan this package
+	// checked against the vault and recorded durably, and an application forced
+	// over a conflict by anything else would be one nobody decided.
+	resolving *Plan
+}
+
+// forResolution is the application a resolution asks for: the same package, with
+// the branches its plan pinned standing in for the producer's expectations.
+func (o Options) forResolution(plan *Plan) Options {
+	o.resolving = plan
+	return o
 }
 
 func (o Options) command() string {
@@ -103,6 +115,15 @@ type Result struct {
 	// Receipt is nil; the package is remembered as applied all the same, so a
 	// redelivery is answered rather than re-inspected.
 	Converged bool
+	// AbandonedResolutions names the conflict decisions this call's recovery pass
+	// dropped on the way in, with the reason for each — see
+	// Recovery.AbandonedBecause, which is the same map. It is about other work
+	// than this package and is carried here because the pass that discovered it
+	// runs inside Apply, where a caller has no other way to hear about it. It
+	// survives nowhere else: the promise is gone from the state file by the time
+	// this returns, so a caller that drops the Result drops the only notice that
+	// somebody's choice was not kept.
+	AbandonedResolutions map[string]error
 }
 
 // Apply applies the package published at packageDir to the vault at root, and
@@ -145,7 +166,9 @@ type Result struct {
 // attempt that cannot be resolved refuses the import and says why, because
 // applying a second package over an unexplained one would bury the evidence. And
 // a package this vault has already applied is answered from the record of that
-// application instead of being applied again — see answer.
+// application instead of being applied again — see answer. A conflict decision
+// that pass had to drop is reported on Result.AbandonedResolutions, because
+// dropping one is not a failure of this import and must not refuse it.
 func Apply(root, packageDir string, opts Options) (*Result, error) {
 	release, acquired, err := lockImports(root)
 	if err != nil {
@@ -155,10 +178,19 @@ func Apply(root, packageDir string, opts Options) (*Result, error) {
 	if !acquired {
 		return nil, fmt.Errorf("%w: %q was not applied", ErrImportBusy, packageDir)
 	}
-	if _, err := recoverLocked(root, opts); err != nil {
+	recovery, err := recoverLocked(root, opts)
+	if err != nil {
 		return nil, err
 	}
-	return applyLocked(root, packageDir, opts)
+	result, err := applyLocked(root, packageDir, opts)
+	// Only onto a Result, and only here. Drain reaches applyLocked with a Recovery
+	// of its own already in hand, so setting this any deeper would report the same
+	// abandonment twice; and a failed application has nothing to hang it on, which
+	// is why Recover is documented as the authority and this as the convenience.
+	if result != nil {
+		result.AbandonedResolutions = recovery.AbandonedBecause
+	}
+	return result, err
 }
 
 // applyLocked is the application itself, with the import guard held and any
@@ -174,15 +206,11 @@ func applyLocked(root, packageDir string, opts Options) (*Result, error) {
 	if err := session.read(packageDir); err != nil {
 		return nil, err
 	}
-	found, err := session.inspect()
+	converged, err := session.decide()
 	if err != nil {
 		return nil, err
 	}
-	if len(found.conflicts) > 0 {
-		return nil, session.decline(found)
-	}
-	session.mark(found)
-	if found.settled() {
+	if converged {
 		return session.converge()
 	}
 	entry, err := session.apply()
@@ -196,6 +224,31 @@ func applyLocked(root, packageDir string, opts Options) (*Result, error) {
 	}
 	result.Cleanup = session.cleanup
 	return result, ackErr
+}
+
+// decide is everything between reading the package and writing anything: what
+// this disk disagrees with, what a resolution was planned to overrule, and which
+// paths are already at the result. It reports whether there is anything left for
+// a transaction to do.
+//
+// It is one step rather than four inline ones because every one of them is a
+// refusal that must happen before a destination is touched, and keeping them
+// together is what makes that ordering readable at the call site.
+func (a *applier) decide() (bool, error) {
+	found, err := a.inspect()
+	if err != nil {
+		return false, err
+	}
+	if len(found.conflicts) > 0 {
+		if err := a.contested(found); err != nil {
+			return false, err
+		}
+	}
+	a.mark(found)
+	if err := a.concede(); err != nil {
+		return false, err
+	}
+	return found.settled() || a.settled(), nil
 }
 
 // decline holds a package whose changes this vault disagrees with, and returns
@@ -213,6 +266,66 @@ func (a *applier) decline(found *disposition) error {
 		return errors.Join(refusal, err)
 	}
 	return refusal
+}
+
+// contested decides what to do about the conflicts inspect found: an ordinary
+// import declines, and a resolution proceeds over exactly the ones it was
+// planned against.
+//
+// The comparison is not a formality. A resolution is applied with the
+// producer's expectations replaced by the branches its plan pinned, which is
+// what lets the peer's version land over content it did not expect — so a plan
+// that no longer describes this vault would be a licence to overwrite whatever
+// is there now. Resolve checks the same facts before it starts; this is the
+// check made again with the package read and the disk inspected, which is the
+// last point before a transaction exists.
+func (a *applier) contested(found *disposition) error {
+	if a.opts.resolving == nil {
+		return a.decline(found)
+	}
+	return a.opts.resolving.covers(found.conflicts)
+}
+
+// concede marks the contested paths a resolution has nothing to do about.
+//
+// One kind reaches here: the source of a divergent rename, which is contested
+// precisely because it already holds what the operation leaves it holding —
+// nothing. Staging it would ask the transaction to remove a file that is not
+// there. The question is asked of every path rather than of that kind, because
+// "the disk is already at the result" is the general statement and the rename is
+// only the case that makes it true today.
+func (a *applier) concede() error {
+	if a.opts.resolving == nil {
+		return nil
+	}
+	for i := range a.changes {
+		if a.changes[i].converged {
+			continue
+		}
+		state, err := diskState(a.abs(a.changes[i].change.Path))
+		if err != nil {
+			return err
+		}
+		if state == afterState(a.changes[i].change) {
+			a.changes[i].converged = true
+		}
+	}
+	return nil
+}
+
+// settled reports a resolution whose application has nothing left to stage,
+// which disposition.settled cannot answer because it was decided before concede
+// ran.
+func (a *applier) settled() bool {
+	if a.opts.resolving == nil {
+		return false
+	}
+	for _, planned := range a.changes {
+		if !planned.converged {
+			return false
+		}
+	}
+	return true
 }
 
 // mark records which changes need no transaction, so plan stages the rest and
@@ -372,7 +485,7 @@ func (a *applier) apply() (*journal.Entry, error) {
 			a.manifest.PackageID, err)
 	}
 	operation, err := noteops.BeginOperation(a.root, operationToken, a.opts.command(),
-		a.targets(), a.recorderOptions(entryID)...)
+		a.targets(), a.opts.recorderOptions(entryID)...)
 	if err != nil {
 		return nil, err
 	}
@@ -409,9 +522,13 @@ func (a *applier) apply() (*journal.Entry, error) {
 // the recovery record cannot name, which is exactly the state the record exists
 // to prevent. A test that wants a predictable entry pins the clock instead — the
 // identity is derived from it.
-func (a *applier) recorderOptions(entryID string) []journal.RecorderOption {
-	opts := make([]journal.RecorderOption, 0, len(a.opts.RecorderOptions)+1)
-	opts = append(opts, a.opts.RecorderOptions...)
+//
+// It is on Options rather than on the applier because a resolution's revision
+// declares its own entry the same way and for the same reason, and the two must
+// not be able to disagree about what pinning one means.
+func (o Options) recorderOptions(entryID string) []journal.RecorderOption {
+	opts := make([]journal.RecorderOption, 0, len(o.RecorderOptions)+1)
+	opts = append(opts, o.RecorderOptions...)
 	return append(opts, journal.WithIDGenerator(func(time.Time) (string, error) {
 		return entryID, nil
 	}))
@@ -678,13 +795,13 @@ func (a *applier) plan() (*vault.FileTxn, error) {
 		}
 		written[vaultsync.CollisionKey(change.Path)] = struct{}{}
 		if change.Action == vaultsync.ActionDelete {
-			err = txn.Remove(change.Path, expectation(change))
+			err = txn.Remove(change.Path, a.expectation(change))
 		} else {
 			// A zero mode derives a new file's permissions from this machine's
 			// umask and preserves an existing file's. Neither is carried in the
 			// package: a mode is a fact about the device that holds the file, and
 			// replicating one would let a peer's umask decide this vault's.
-			err = txn.Write(change.Path, planned.data, 0, expectation(change))
+			err = txn.Write(change.Path, planned.data, 0, a.expectation(change))
 		}
 		if err != nil {
 			return nil, fmt.Errorf("vaultimport: plan %q: %w", change.Path, err)
@@ -694,6 +811,23 @@ func (a *applier) plan() (*vault.FileTxn, error) {
 		return nil, err
 	}
 	return txn, nil
+}
+
+// expectation is the precondition one change is staged under: the producer's
+// belief about the path, or the branch a resolution pinned in its place.
+//
+// A resolution is the one thing entitled to overrule the producer, and it
+// overrules it with a reading of this vault rather than with permission to write
+// anything. The pin is the version somebody looked at when they chose, so the
+// precondition still fails — under the path's own lock, with the content intact
+// — if the note moved between the choice and the application. See Plan.pin.
+func (a *applier) expectation(change vaultsync.Change) vault.FileExpectation {
+	if a.opts.resolving != nil {
+		if pinned, found := a.opts.resolving.pin(change.Path); found {
+			return pinned
+		}
+	}
+	return expectation(change)
 }
 
 // expectation turns the producer's belief about a path into the precondition the

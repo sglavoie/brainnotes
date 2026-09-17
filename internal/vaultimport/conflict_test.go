@@ -733,7 +733,7 @@ func interruptAfterCommit(t *testing.T, r *replicas, packageDir string) {
 		t.Fatalf("NewEntryID: %v", err)
 	}
 	operation, err := noteops.BeginOperation(r.root(), operationToken, "bn sync apply --test",
-		session.targets(), session.recorderOptions(entryID)...)
+		session.targets(), session.opts.recorderOptions(entryID)...)
 	if err != nil {
 		t.Fatalf("BeginOperation: %v", err)
 	}
