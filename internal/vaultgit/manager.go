@@ -110,40 +110,15 @@ type Manager struct {
 // recovery pass rather than another operation on top of it. Its verdict is
 // discarded here, for the same reason the block marker is not read.
 func Open(ctx context.Context, vaultRoot string, opts Options) (*Manager, error) {
-	if strings.TrimSpace(vaultRoot) == "" {
-		return nil, errors.New("vaultgit: vault root is required")
-	}
-	root, err := filepath.Abs(vaultRoot)
+	root, git, err := openWorkingTree(vaultRoot, opts.GitExecutable)
 	if err != nil {
-		return nil, fmt.Errorf("vaultgit: resolve vault root: %w", err)
-	}
-
-	info, err := os.Lstat(filepath.Join(root, ".git"))
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return nil, ErrUnmanaged
-	case err != nil:
-		return nil, safetyErrorf(KindRepositoryState, "open", "the vault's .git entry could not be inspected: %s", agent.SanitizedDiagnostic(err))
-	case !info.IsDir():
-		// A `.git` file points elsewhere: a linked worktree, a submodule, or a
-		// separate git-dir layout. Each is a valid Git arrangement and none is one
-		// this engine has been tested against, so it refuses rather than guessing
-		// which directory it is allowed to write state into.
-		return nil, safetyErrorf(KindRepositoryState, "open", "the vault's .git is a file rather than a directory, which this engine does not manage")
-	}
-
-	exe := strings.TrimSpace(opts.GitExecutable)
-	if exe == "" {
-		exe, err = exec.LookPath("git")
-		if err != nil {
-			return nil, safetyErrorf(KindGitUnavailable, "open", "the git executable could not be found on PATH")
-		}
+		return nil, err
 	}
 
 	m := &Manager{
 		root:        root,
 		journalRoot: filepath.Join(root, filepath.FromSlash(config.DefaultJournalDir)),
-		git:         &gitExec{exe: exe, dir: root},
+		git:         git,
 		remote:      strings.TrimSpace(opts.Remote),
 		who: identity{
 			name:  strings.TrimSpace(opts.AuthorName),
@@ -182,35 +157,87 @@ func Open(ctx context.Context, vaultRoot string, opts Options) (*Manager, error)
 	return m, nil
 }
 
+// openWorkingTree resolves a vault root to an absolute path and a git executable
+// bound to it, applying the two refusals that are about the *vault* rather than
+// about any particular use of its history.
+//
+// It is shared by Open and OpenHistory so the set of directories this package
+// considers managed is stated once. A read-only opening that disagreed with the
+// writing one — accepting a `.git` file, say — would report history for a layout
+// no snapshot could ever be written to.
+func openWorkingTree(vaultRoot, executable string) (string, *gitExec, error) {
+	if strings.TrimSpace(vaultRoot) == "" {
+		return "", nil, errors.New("vaultgit: vault root is required")
+	}
+	root, err := filepath.Abs(vaultRoot)
+	if err != nil {
+		return "", nil, fmt.Errorf("vaultgit: resolve vault root: %w", err)
+	}
+
+	info, err := os.Lstat(filepath.Join(root, ".git"))
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return "", nil, ErrUnmanaged
+	case err != nil:
+		return "", nil, safetyErrorf(KindRepositoryState, "open", "the vault's .git entry could not be inspected: %s", agent.SanitizedDiagnostic(err))
+	case !info.IsDir():
+		// A `.git` file points elsewhere: a linked worktree, a submodule, or a
+		// separate git-dir layout. Each is a valid Git arrangement and none is one
+		// this engine has been tested against, so it refuses rather than guessing
+		// which directory it is allowed to write state into.
+		return "", nil, safetyErrorf(KindRepositoryState, "open", "the vault's .git is a file rather than a directory, which this engine does not manage")
+	}
+
+	exe := strings.TrimSpace(executable)
+	if exe == "" {
+		exe, err = exec.LookPath("git")
+		if err != nil {
+			return "", nil, safetyErrorf(KindGitUnavailable, "open", "the git executable could not be found on PATH")
+		}
+	}
+	return root, &gitExec{exe: exe, dir: root}, nil
+}
+
 // resolveLayout asks git where it thinks it is and checks the answer against
+// where the caller said the vault is, then derives the private state locations
+// from the answer.
+func (m *Manager) resolveLayout(ctx context.Context) error {
+	gitDir, err := resolveGitDir(ctx, m.git, m.root)
+	if err != nil {
+		return err
+	}
+	m.gitDir = gitDir
+	m.state = newSafetyState(gitDir)
+	m.indexPath = m.state.path(indexFileName)
+	return nil
+}
+
+// resolveGitDir asks git where it thinks it is and checks the answer against
 // where the caller said the vault is.
 //
 // The top-level check is the load-bearing one. If the vault is a subdirectory
 // of some larger repository — a dotfiles repo, a home directory someone put
 // under version control — then every path this engine computes would be
 // relative to the wrong root, and it would happily commit the vault into a
-// history that is not the vault's. Refusing is the only safe answer.
-func (m *Manager) resolveLayout(ctx context.Context) error {
-	out, err := m.git.run(ctx, gitCall{args: []string{"rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir"}})
+// history that is not the vault's. Refusing is the only safe answer, and it is
+// the same answer for a reader: paths read out of that history would be relative
+// to the wrong root too, so an exporter would send a peer the enclosing
+// repository's files under vault-relative names.
+func resolveGitDir(ctx context.Context, git *gitExec, root string) (string, error) {
+	out, err := git.run(ctx, gitCall{args: []string{"rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir"}})
 	if err != nil {
-		return safetyErrorf(KindRepositoryState, "open", "the vault's Git repository is not usable: %s", agent.SanitizedDiagnostic(err))
+		return "", safetyErrorf(KindRepositoryState, "open", "the vault's Git repository is not usable: %s", agent.SanitizedDiagnostic(err))
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if len(lines) != 2 || strings.TrimSpace(lines[0]) == "" || strings.TrimSpace(lines[1]) == "" {
-		return safetyErrorf(KindRepositoryState, "open", "the repository layout could not be resolved")
+		return "", safetyErrorf(KindRepositoryState, "open", "the repository layout could not be resolved")
 	}
-	toplevel := strings.TrimSpace(lines[0])
-	gitDir := strings.TrimSpace(lines[1])
-
 	// Compare through EvalSymlinks: on macOS a vault under /tmp is reached via a
 	// /private/var symlink, so the literal strings differ for the same directory.
-	if !sameDir(toplevel, m.root) {
-		return safetyErrorf(KindRepositoryState, "open", "the vault is not the top level of its Git working tree, so BrainNotes will not manage it")
+	if !sameDir(strings.TrimSpace(lines[0]), root) {
+		return "", safetyErrorf(KindRepositoryState, "open", "the vault is not the top level of its Git working tree, so BrainNotes will not manage it")
 	}
-	m.gitDir = gitDir
-	m.state = newSafetyState(gitDir)
-	m.indexPath = m.state.path(indexFileName)
-	return nil
+	return strings.TrimSpace(lines[1]), nil
 }
 
 func sameDir(a, b string) bool {

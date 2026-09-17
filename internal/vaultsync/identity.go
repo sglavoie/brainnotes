@@ -2,6 +2,8 @@ package vaultsync
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -44,6 +46,49 @@ func NewPackageID() (string, error) { return newIdentity(packagePrefix) }
 // what every later package's causal predecessors point at: re-deriving it from
 // content would make an identical edit made twice look like one event.
 func NewOperationID() (string, error) { return newIdentity(operationPrefix) }
+
+// DeriveOperationID returns the operation identity of an event named by parts,
+// so a producer that has to describe the same event twice describes it under the
+// same identity both times.
+//
+// This is the deliberate exception to NewOperationID's rule, and the distinction
+// is what the event is named *by*. Deriving an operation identity from the
+// content it changed would be wrong for the reason NewOperationID gives: the
+// same edit made twice is two events and must not collapse into one. Deriving it
+// from something that already is a durable, unique name for the event itself —
+// a commit object name, which differs for two identical edits because their
+// parents and timestamps differ — collapses nothing that was ever distinct.
+//
+// What it buys is the failure case. A producer that published a package and
+// crashed before recording that it had cannot tell, on restart, whether the peer
+// saw it; it republishes. With a minted identity the peer receives one event
+// twice under two names and has no way to know they are one. With a derived one
+// the second copy carries the identity the first did, and an applier that
+// remembers which operations it has applied is idempotent for free.
+//
+// parts are length-prefixed before hashing, so ("ab", "c") and ("a", "bc") are
+// different events. Callers should lead with the vault identity, which namespaces
+// the derivation: two *unrelated* vaults can genuinely produce the same commit
+// object name — seeded from one template and committed under the same author and
+// timestamp, they have the same tree, the same parent, and therefore the same
+// name — and without the namespace they would mint one operation identity for two
+// unrelated events.
+//
+// It deliberately does not separate a fork or a copy of one vault, because those
+// carry that vault's identity with them and nothing derived here could tell them
+// apart. A copied replica that starts publishing is a different problem with a
+// different answer: the enrollment and export records name a device, and a record
+// arriving under an identity that is not this vault's is refused outright.
+func DeriveOperationID(parts ...string) string {
+	digest := sha256.New()
+	for _, part := range parts {
+		var length [8]byte
+		binary.BigEndian.PutUint64(length[:], uint64(len(part)))
+		_, _ = digest.Write(length[:])
+		_, _ = digest.Write([]byte(part))
+	}
+	return operationPrefix + hex.EncodeToString(digest.Sum(nil)[:identityBytes])
+}
 
 func newIdentity(prefix string) (string, error) {
 	var raw [identityBytes]byte

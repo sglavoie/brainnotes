@@ -58,12 +58,19 @@ func (g *gitExec) isAncestor(ctx context.Context, commit, tip string) (bool, err
 
 // symbolicHead reports the full ref HEAD points at, or an empty string when
 // HEAD is detached.
+//
+// The detached case is told apart by exit status, the way isAncestor above tells
+// its three outcomes apart: `symbolic-ref --quiet` exits 1 when HEAD is not a
+// symbolic ref and 128 when the repository could not be read at all. It is
+// deliberately not told apart by an empty diagnostic — run fills detail from the
+// process's own error when stderr is empty, which `--quiet` guarantees it is, so
+// that reading would have made *every* failure a detached HEAD, and this one
+// none of them.
 func (g *gitExec) symbolicHead(ctx context.Context) (string, error) {
 	out, err := g.run(ctx, gitCall{args: []string{"symbolic-ref", "--quiet", "HEAD"}})
 	if err != nil {
-		var gerr *gitError
-		// A detached HEAD exits non-zero with no output rather than failing.
-		if errors.As(err, &gerr) && strings.TrimSpace(gerr.detail) == "" {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && exit.ExitCode() == 1 {
 			return "", nil
 		}
 		return "", err
