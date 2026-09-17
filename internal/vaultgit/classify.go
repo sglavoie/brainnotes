@@ -289,6 +289,30 @@ func deletionRecovery(paths []string) []string {
 	return steps
 }
 
+// holdsJournalEntry reports whether commit already contains entryID's manifest,
+// which is the history's own record that the entry was committed.
+//
+// The manifest is the right thing to ask about because it is committed with the
+// change it describes and never without it: CommitJournalEntry stages the
+// entry's files alongside the paths it names, in one commit. So a manifest in
+// the tree means the whole mutation is already history, and its absence means
+// none of it is.
+//
+// An unborn branch holds nothing, and asking git about a commit that does not
+// exist is an error rather than an answer, so it is answered here.
+func (m *Manager) holdsJournalEntry(ctx context.Context, commit, entryID string) (bool, error) {
+	if strings.TrimSpace(commit) == "" {
+		return false, nil
+	}
+	rel := bnotesJournalPrefix + entryID + "/" + journal.ManifestFileName
+	entries, err := m.git.lsTree(ctx, commit, []string{rel})
+	if err != nil {
+		return false, err
+	}
+	entry, ok := entries[rel]
+	return ok && (entry.mode == "100644" || entry.mode == "100755"), nil
+}
+
 // journalEntryFiles lists the vault-relative paths that make up one journal
 // entry directory: the manifest and every snapshot under it.
 //

@@ -15,13 +15,19 @@ import (
 // locking document: two packages that both describe the same starting point for
 // one note cannot both be right.
 //
-// Exactly one of them reaches the disk, and which one is genuinely a race.
-// vault.FileTxn holds the per-path lock across the whole commit, so the second
-// one stages against the content the first committed and is refused there —
-// before anything is written. Retrying it afterwards reaches the same refusal
-// for the same reason, because the note now holds content its producer never
+// Exactly one of them reaches the disk, and which one is genuinely a race. The
+// import guard decides it: it is taken without waiting, before either package is
+// read, so the loser is refused having touched nothing at all rather than
+// discovering the disagreement halfway down a transaction.
+//
+// Refused is not resolved, and the second half of this test is the part that
+// matters. Retrying the loser afterwards reaches ErrConflict — vault.FileTxn
+// stages it against the content the winner committed and refuses it there, before
+// anything is written — because the note now holds content its producer never
 // saw, and that is a disagreement a person resolves rather than a write that
-// quietly discards the winner.
+// quietly discards the winner. That refusal is the same one a second delivery
+// would have met with no race at all, which is the point: serializing the two
+// imports changes when the conflict is found, never whether.
 func TestConcurrentImportsOfOnePathLeaveExactlyOneWinner(t *testing.T) {
 	r := enroll(t)
 	start := r.believes(t, "Alpha.md")
@@ -63,12 +69,17 @@ func TestConcurrentImportsOfOnePathLeaveExactlyOneWinner(t *testing.T) {
 // TestConcurrentImportsOfDisjointPathsCostAtMostARetry pins what a concurrent
 // import costs when the packages have nothing in common.
 //
-// They are never merged and never queued. Mutations in this vault are serialized
-// at the Git safety lock, which is taken without waiting, so a second import
-// that reaches the lock while the first holds it is refused as contention — and
-// the property that matters is that the refusal loses nothing. Both notes end up
-// holding exactly what their packages said, and the vault's books balance at
-// every step.
+// They are never merged and never queued. Imports in this vault are serialized at
+// the import guard, which is taken without waiting, so a second import that
+// reaches it while the first holds it is refused as contention — and the property
+// that matters is that the refusal loses nothing. Both notes end up holding
+// exactly what their packages said, and the vault's books balance at every step.
+//
+// Disjoint paths buying no concurrency is the deliberate price of the guard, and
+// what it buys back is this session's subject: the guard is what tells a recovery
+// pass whether the unresolved attempt it can see belongs to a live process or a
+// dead one. Per-path concurrency would make that question unanswerable, and a
+// retry is cheap next to a rollback over somebody's newer edit.
 func TestConcurrentImportsOfDisjointPathsCostAtMostARetry(t *testing.T) {
 	r := enroll(t)
 	const epsilonBody = "---\ntitle: Epsilon\n---\n\nTwo.\n"
@@ -195,7 +206,14 @@ func tally(t *testing.T, outcomes []outcome) *ledger {
 		// apart and would file a landed import as one that never started. A path
 		// lock that genuinely times out here falls through to the loud arm below,
 		// which is the honest answer to a wait this test did not expect.
-		case vaultgit.IsBusy(o.err), errors.Is(o.err, ErrConflict):
+		//
+		// ErrImportBusy is the earliest of these refusals and the safest: the
+		// import guard is taken before the package is read, so an import refused
+		// there has not looked at the vault, let alone written to it. It is also
+		// now the arm a concurrent import normally takes — the guard is upstream
+		// of the safety lock, so the vaultgit refusal above is reachable only when
+		// something outside this package holds that lock.
+		case errors.Is(o.err, ErrImportBusy), vaultgit.IsBusy(o.err), errors.Is(o.err, ErrConflict):
 			books.refused = append(books.refused, o)
 		default:
 			t.Fatalf("a concurrent import failed for an unrecognized reason: %v", o.err)

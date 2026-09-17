@@ -8,15 +8,20 @@
 // did not go through internal/vault's transaction, internal/noteops' operation
 // lifecycle, and internal/vaultgit's snapshot.
 //
-// Six properties define it, and each is a refusal rather than a convention.
+// Eight properties define it, and each is a refusal rather than a convention.
 //
 // Nothing is applied that was not accepted. Apply starts at vaultsync.Accept,
 // so a malformed manifest, a package addressed to another vault, one from an
 // unenrolled device, one from another epoch, and one whose payload bytes have
-// not all arrived are each refused before this vault is touched. The digest of
-// every payload is then verified a *second* time as it is read, because the
-// transport is still running while a package is being applied and "checked a
-// moment ago" is not "checked".
+// not all arrived are each refused before any of this vault's content is
+// touched. The digest of every payload is then verified a *second* time as it is
+// read, because the transport is still running while a package is being applied
+// and "checked a moment ago" is not "checked". Two things do happen first, and
+// both are about earlier runs rather than this package: the import guard is
+// taken, so a package delivered while another import is running is refused with
+// ErrImportBusy before it is looked at, and an interrupted attempt is resolved,
+// so the paths this package is about are settled before its preconditions are
+// checked.
 //
 // One package is one local operation. A package carrying more than one
 // operation is refused with ErrMultipleOperations rather than applied in pieces.
@@ -42,10 +47,12 @@
 // The one qualification is where the disagreement is noticed. internal/vault
 // re-verifies its read-only requirements again before and after each individual
 // change, so a configuration pin that fails mid-commit raises the same sentinel
-// after the journal has been captured: the content is compensated back, but an
-// un-finalized entry directory can survive the refusal. Nothing reads such an
-// entry — it has no manifest, so it is neither undoable nor prunable — and
-// cleaning it up belongs to the session that owns interrupted applications.
+// after the journal has been captured: the content is compensated back, and the
+// un-finalized entry directory left behind is removed by the same resolution an
+// interrupted application gets, run in-process before the failure is returned.
+// Nothing reads such an entry — it has no manifest, so it is neither undoable
+// nor prunable, and journal.ListEntries cannot see it — so leaving one would be
+// residue nothing in this vault could ever account for or collect.
 //
 // The configuration that governs the content is pinned for the whole commit.
 // Both layers are required to stay exactly as they were — the portable
@@ -56,11 +63,11 @@
 // when they are checked, and checks them both at staging and around every change.
 //
 // Provenance is durable before the commit that needs it. The identity of the
-// local journal entry is read off the recorder after the transaction commits and
-// recorded through vaultexport.RecordImport *before* the entry is finalized and
-// snapshotted. Written afterwards, a crash in between would leave a commit the
-// exporter reads as this device's own work and publishes straight back to the
-// peer that sent it.
+// local journal entry is minted before the operation begins and pinned onto the
+// recorder, so it is knowable at every point after that; it is recorded through
+// vaultexport.RecordImport *before* the entry is finalized and snapshotted.
+// Written afterwards, a crash in between would leave a commit the exporter reads
+// as this device's own work and publishes straight back to the peer that sent it.
 //
 // When the ledger write itself fails there is no ordering left to choose: the
 // peer's bytes are already on this disk, so the entry is finalized and
@@ -82,10 +89,63 @@
 // described, so Apply returns the Result alongside the error in that case, with
 // the journal entry named and the receipt nil.
 //
+// An interruption resolves to "never happened" or "happened completely", and
+// never to anything else. An import is six durable events — the peer's bytes,
+// the provenance record, the undo manifest, the commit, the receipt, and the
+// memory of all of it — and no two of them can be made one, so a process that
+// dies in between leaves a vault that is perfectly consistent and completely
+// unexplained. Apply writes an attempt record before the first byte moves,
+// naming the package and the recovery entry it will use, and Recover is the only
+// thing that reads it. Recovery runs ahead of every import and can be called on
+// its own; it is idempotent, so a second pass finds nothing to do.
+//
+// The decision turns on one durable fact, the undo manifest, because that is the
+// moment the change stops being something this vault is doing and becomes
+// something it did: it is what `bn undo` reads, what authorizes committing a
+// deletion, and what the receipt promises the peer. Before it the application is
+// rolled back, since acknowledging a change this vault could not undo is the one
+// thing a peer must never be told; after it the application is rolled forward,
+// since the provenance record is already durable and the change is already this
+// vault's own history. Every step on the forward path is idempotent by
+// construction — RecordImport is a no-op for an entry it already holds, the
+// snapshot is skipped when the content history already has the entry, and a
+// published receipt is adopted rather than re-minted.
+//
+// One thing recovery will not do: roll back over a path holding neither what the
+// package replaced nor what it installed. That refusal is ErrStrandedImport. It
+// keeps every artifact — the attempt, the entry and its snapshots, and the
+// content — and *blocks every further import* until a person resolves it, so the
+// evidence cannot be buried by the next package the transport delivers. A
+// persistent provenance or snapshot failure blocks the same way and for the same
+// reason. Because the price of that refusal is the whole import path, a rollback
+// that has already put the content back records the fact rather than leaving it
+// to be inferred from paths that by then read exactly like untouched ones. That
+// record covers every step after it, including discarding the entry directory,
+// which is a recursive removal rather than one write; what it cannot cover is the
+// instant between the restoration and itself, because a content transaction and a
+// state file cannot be made one write and the other order would have the next
+// pass skip a restoration that never happened.
+//
+// The forward direction has no equivalent refusal: an acknowledgment that cannot
+// be minted fails the message, not the vault, and the attempt is settled with no
+// receipt.
+//
+// A redelivery is answered, not applied. The transport moves whole directories
+// and knows nothing about receipts, so the same package reappears whenever a
+// channel is re-copied, a peer is restored from a backup, or an acknowledgment
+// goes missing — and applying it again would meet preconditions this vault no
+// longer satisfies, because the package itself changed them, and report the peer
+// as being in conflict with its own change. Both halves are answered from the
+// import ledger instead: what was applied is described as it was applied, and
+// the acknowledgment the peer is missing is the *original* receipt republished
+// rather than a new one minted now. A receipt is a statement the peer may drop
+// its only copy of a change on, so repeating one is honest where making a second
+// one would not be. A package that was applied and never successfully
+// acknowledged is the single exception, and it is held to every check a first
+// acknowledgment is held to.
+//
 // What it is not: a transport (Syncthing moves the channel), a conflict resolver
-// (it reports a conflict and leaves both versions where they are), a scheduler
-// (it applies the package it is handed, and never goes looking for one), and not
-// idempotent across a redelivery of a package it already applied — a second
-// delivery meets preconditions this vault no longer satisfies and is reported as
-// a conflict. See session 7's handoff for where that boundary is drawn.
+// (it reports a conflict and leaves both versions where they are), and a
+// scheduler (it applies the package it is handed, and never goes looking for
+// one).
 package vaultimport

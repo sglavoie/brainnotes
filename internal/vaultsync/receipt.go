@@ -369,6 +369,24 @@ func ReadReceipt(channelDir, packageID string) (*Receipt, error) {
 	return &receipt, nil
 }
 
+// ReceiptPath reports where the receipt for packageID lives in channelDir,
+// without reading it or requiring it to exist.
+//
+// It is for a caller that already knows a receipt was published and needs to say
+// where: an applier answering for a package it applied on an earlier run, whose
+// receipt is already in the channel and whose PublishReceipt would therefore
+// refuse with ErrPackageExists rather than hand a path back. Asking here keeps
+// the layout one package's business, which is the same reason ReceiptsDir exists.
+//
+// The identity is checked before it is joined onto a directory, for the reason
+// ReadReceipt states: containment rests on the name being a checked identity.
+func ReceiptPath(channelDir, packageID string) (string, error) {
+	if err := checkIdentity(ErrReceiptMismatch, "package_id", packagePrefix, packageID); err != nil {
+		return "", err
+	}
+	return receiptPath(channelDir, packageID), nil
+}
+
 // receiptPath is the file one package's receipt is published at. The package
 // identity is validated before it is ever joined onto a directory, so the name
 // cannot be a path.

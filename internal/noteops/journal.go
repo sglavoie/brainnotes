@@ -174,6 +174,33 @@ func (j *Journal) snapshot(entry *journal.Entry) error {
 	return nil
 }
 
+// SnapshotEntry records an already-finalized journal entry in the vault's
+// content history, under operation as the commit's token.
+//
+// It is Finalize's second half without its first, for the one caller that cannot
+// use Finalize: a recovery pass resuming an operation whose process died between
+// the manifest and the snapshot. The recorder that wrote that manifest is gone
+// with the process, so there is nothing left to Finalize — but the entry is on
+// disk, complete, and the change it describes is not in the history yet.
+//
+// An entry the history already holds is a no-op: the engine checks for its
+// manifest under the same lock it commits beneath, because a caller that
+// checked beforehand could have been overtaken by the watcher committing the
+// same finalized entry. A caller that can cheaply tell the snapshot already
+// happened should still say so by not calling — this answers the question with
+// a `git ls-tree` — but it owes nothing for correctness.
+//
+// A vault with no content history has no engine and nothing to record, which is
+// the same nil answer Finalize gives it.
+func SnapshotEntry(vaultRoot, entryID, operation string) error {
+	safety, err := SafetyFor(vaultRoot)
+	if err != nil {
+		return err
+	}
+	j := &Journal{vaultRoot: vaultRoot, operation: strings.TrimSpace(operation), safety: safety}
+	return j.snapshot(&journal.Entry{ID: entryID})
+}
+
 // EntryID reports the undo entry this operation will finalize under, or the
 // empty string when nothing has been captured and no entry exists yet.
 //

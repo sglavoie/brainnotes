@@ -147,6 +147,17 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 // call, which is a stale request rather than damage — nothing is committed,
 // nothing is blocked, and the next pending-change snapshot picks up whatever
 // the vault actually holds now.
+//
+// Recording an entry the history already holds is nothing rather than damage,
+// and the check for it is inside the lock deliberately. An entry that deleted a
+// note proves that deletion with its own uncommitted record, so a second commit
+// of one already committed would meet a path missing from the working tree and
+// missing from HEAD, and refuse it as an unexplained deletion — latching the
+// vault over work that is already done. A caller cannot rule that out for
+// itself: whatever it saw before calling, the watcher may commit the same
+// finalized entry in between, and only the answer read under this lock against
+// the head this commit is built on is the answer that still holds when the
+// commit happens.
 func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation string) (CommitResult, error) {
 	const op = "commit-journal"
 	if err := validEntryID(entryID); err != nil {
@@ -177,61 +188,122 @@ func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation str
 		return CommitResult{}, safetyErrorf(KindStaleRequest, op, "journal entry %q could not be read from disk", entryID)
 	}
 
-	message := journalMessage(operation, entryID)
+	spec := journalCommit{
+		op:      op,
+		entryID: entryID,
+		message: journalMessage(operation, entryID),
+		entry:   entry,
+		files:   entryFiles,
+	}
 	return m.withCAS(ctx, op, func(head string) (*commitPlan, error) {
-		plan := &commitPlan{message: message}
-		var deletions []string
-		for _, record := range entry.Files {
-			if !InScope(record.Path) {
-				continue
-			}
-			ok, err := m.matchesWorktree(record)
-			if err != nil {
-				return nil, safetyErrorf(KindStaleRequest, op, "%q could not be read to confirm the recorded change, so nothing was committed", record.Path)
-			}
-			if !ok {
-				return nil, safetyErrorf(KindStaleRequest, op, "%q no longer matches what journal entry %s recorded, so nothing was committed", record.Path, entryID)
-			}
-			switch record.After.Kind {
-			case journal.KindFile:
-				plan.add = append(plan.add, record.Path)
-			case journal.KindMissing:
-				if record.Before.Kind == journal.KindFile {
-					deletions = append(deletions, record.Path)
-				}
-			default:
-				// The entry says the path ended as a directory or a socket. That is a
-				// real state a `bn` command can record, and it is not one this engine
-				// can represent in a tree, so the path is left out rather than guessed
-				// at. It shows up as an ordinary pending change on the next scan.
-				continue
-			}
-		}
-		plan.add = append(plan.add, entryFiles...)
-		sort.Strings(plan.add)
-
-		if len(deletions) > 0 {
-			// The deletion proof is this entry itself, and it only counts while it is
-			// still uncommitted: the manifest is being staged in this very commit, so
-			// the record and the removal it authorizes land together.
-			authority := &deletionAuthority{byPath: map[string][]deletionProof{}}
-			authority.add(entry)
-			unexplained, provers, err := m.verifyDeletions(ctx, head, deletions, authority)
-			if err != nil {
-				return nil, safetyErrorf(KindRepositoryState, op, "a recorded deletion could not be checked against the history: %s", agent.SanitizedDiagnostic(err))
-			}
-			if len(unexplained) > 0 {
-				return nil, m.latch(unexplainedDeletionError(op, unexplained))
-			}
-			plan.remove = deletions
-			plan.proofEntries = provers
-			sort.Strings(plan.remove)
-		}
-		if len(plan.add) == 0 && len(plan.remove) == 0 {
-			return nil, nil
-		}
-		return plan, nil
+		return m.planJournalCommit(ctx, head, spec)
 	})
+}
+
+// journalCommit carries one CommitJournalEntry call's already-loaded inputs into
+// the compare-and-swap, so a retry against a moved head replans from them rather
+// than reading the entry off the disk again.
+type journalCommit struct {
+	op      string
+	entryID string
+	message string
+	entry   *journal.Entry
+	files   []string
+}
+
+// planJournalCommit builds the plan for one journal entry against head, or
+// returns a nil plan when there is nothing to commit.
+//
+// A nil plan means either that the history already holds this entry or that the
+// entry names nothing this engine can represent. Both are no-ops rather than
+// failures, and both are decided here — under the lock, against the head this
+// commit would be built on — because that is the only answer still true when the
+// commit happens.
+func (m *Manager) planJournalCommit(ctx context.Context, head string, spec journalCommit) (*commitPlan, error) {
+	recorded, err := m.holdsJournalEntry(ctx, head, spec.entryID)
+	if err != nil {
+		return nil, safetyErrorf(KindRepositoryState, spec.op,
+			"journal entry %q could not be looked up in the history: %s", spec.entryID, agent.SanitizedDiagnostic(err))
+	}
+	if recorded {
+		return nil, nil
+	}
+	add, deletions, err := m.journalEntryPaths(spec.op, spec.entryID, spec.entry)
+	if err != nil {
+		return nil, err
+	}
+	plan := &commitPlan{message: spec.message, add: append(add, spec.files...)}
+	sort.Strings(plan.add)
+
+	if len(deletions) > 0 {
+		if err := m.authorizeDeletions(ctx, spec.op, head, spec.entry, deletions, plan); err != nil {
+			return nil, err
+		}
+	}
+	if len(plan.add) == 0 && len(plan.remove) == 0 {
+		return nil, nil
+	}
+	return plan, nil
+}
+
+// journalEntryPaths splits the entry's in-scope records into the paths this
+// commit adds and the ones it removes.
+//
+// Both ends of every record are verified here rather than at staging: the
+// working tree must still hold what the entry says it produced. A mismatch
+// refuses the whole commit rather than the one path, because a journal entry is
+// one mutation and committing half of it would record a change nobody made.
+func (m *Manager) journalEntryPaths(op, entryID string, entry *journal.Entry) ([]string, []string, error) {
+	var add, deletions []string
+	for _, record := range entry.Files {
+		if !InScope(record.Path) {
+			continue
+		}
+		ok, err := m.matchesWorktree(record)
+		if err != nil {
+			return nil, nil, safetyErrorf(KindStaleRequest, op, "%q could not be read to confirm the recorded change, so nothing was committed", record.Path)
+		}
+		if !ok {
+			return nil, nil, safetyErrorf(KindStaleRequest, op, "%q no longer matches what journal entry %s recorded, so nothing was committed", record.Path, entryID)
+		}
+		switch record.After.Kind {
+		case journal.KindFile:
+			add = append(add, record.Path)
+		case journal.KindMissing:
+			if record.Before.Kind == journal.KindFile {
+				deletions = append(deletions, record.Path)
+			}
+		default:
+			// The entry says the path ended as a directory or a socket. That is a
+			// real state a `bn` command can record, and it is not one this engine
+			// can represent in a tree, so the path is left out rather than guessed
+			// at. It shows up as an ordinary pending change on the next scan.
+			continue
+		}
+	}
+	return add, deletions, nil
+}
+
+// authorizeDeletions proves every removal against head and fills them into plan.
+//
+// The deletion proof is this entry itself, and it only counts while it is still
+// uncommitted: the manifest is being staged in this very commit, so the record
+// and the removal it authorizes land together. A deletion nothing explains
+// latches the vault, which is the fail-closed half of invariant 1.
+func (m *Manager) authorizeDeletions(ctx context.Context, op, head string, entry *journal.Entry, deletions []string, plan *commitPlan) error {
+	authority := &deletionAuthority{byPath: map[string][]deletionProof{}}
+	authority.add(entry)
+	unexplained, provers, err := m.verifyDeletions(ctx, head, deletions, authority)
+	if err != nil {
+		return safetyErrorf(KindRepositoryState, op, "a recorded deletion could not be checked against the history: %s", agent.SanitizedDiagnostic(err))
+	}
+	if len(unexplained) > 0 {
+		return m.latch(unexplainedDeletionError(op, unexplained))
+	}
+	plan.remove = deletions
+	plan.proofEntries = provers
+	sort.Strings(plan.remove)
+	return nil
 }
 
 // CommitPaths records exactly the paths a caller names, and nothing else.

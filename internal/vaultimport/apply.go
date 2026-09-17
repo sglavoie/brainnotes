@@ -47,6 +47,16 @@ func (o Options) command() string {
 	return o.Command
 }
 
+// now is the clock seam, defaulted the way internal/vaultsync defaults its own.
+// It dates the receipt and mints the recovery entry's identity, and those two
+// must come from one clock: a test that pins time is pinning both.
+func (o Options) now() time.Time {
+	if o.Now == nil {
+		return time.Now().UTC()
+	}
+	return o.Now().UTC()
+}
+
 // Result is what one applied package left behind here.
 //
 // It names the local recovery entry as well as the receipt, because the two are
@@ -73,6 +83,13 @@ type Result struct {
 	// because every path the package named holds exactly what it asked for, and
 	// the only action it asks for is deleting the file the message names.
 	Cleanup error
+	// Duplicate reports that this delivery changed nothing because the package
+	// had already been applied here. Everything else in the Result describes that
+	// earlier application, and the receipt is the one it minted rather than a new
+	// one. A caller that counts applied changes must not count this; a caller
+	// that forwards receipts still should, because a repeated delivery is usually
+	// a peer saying it never got the first reply.
+	Duplicate bool
 }
 
 // Apply applies the package published at packageDir to the vault at root, and
@@ -107,19 +124,53 @@ type Result struct {
 // failing, and the recovery history is what a Result would have pointed at.
 // Acknowledgment is the one *ordinary* failure that would otherwise say nothing
 // about what it left behind, which is why it is the one that carries a Result.
+//
+// Two things happen before the package is looked at, and both are about earlier
+// runs rather than this one. An interrupted application is resolved first, so no
+// vault ever holds two unfinished imports at once and so the paths this package
+// is about are in a settled state before its preconditions are checked; an
+// attempt that cannot be resolved refuses the import and says why, because
+// applying a second package over an unexplained one would bury the evidence. And
+// a package this vault has already applied is answered from the record of that
+// application instead of being applied again — see answer.
 func Apply(root, packageDir string, opts Options) (*Result, error) {
+	release, acquired, err := lockImports(root)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if !acquired {
+		return nil, fmt.Errorf("%w: %q was not applied", ErrImportBusy, packageDir)
+	}
+	if _, err := recoverLocked(root, opts); err != nil {
+		return nil, err
+	}
+	return applyLocked(root, packageDir, opts)
+}
+
+// applyLocked is the application itself, with the import guard held and any
+// earlier attempt already resolved.
+func applyLocked(root, packageDir string, opts Options) (*Result, error) {
 	session, err := accept(root, packageDir, opts)
 	if err != nil {
 		return nil, err
+	}
+	if record, applied := session.state.Applied[session.manifest.PackageID]; applied {
+		return session.answer(record)
 	}
 	if err := session.read(packageDir); err != nil {
 		return nil, err
 	}
 	entry, err := session.apply()
 	if err != nil {
-		return nil, err
+		return nil, session.unwind(err)
 	}
-	return session.acknowledge(entry)
+	result, ackErr := session.acknowledge(entry)
+	importCrash(crashAcknowledged)
+	if err := session.settle(entry.ID, result.Receipt); err != nil {
+		return result, errors.Join(ackErr, err)
+	}
+	return result, ackErr
 }
 
 // applier is one package's journey through this vault, from accepted manifest to
@@ -128,6 +179,7 @@ type applier struct {
 	root      string
 	opts      Options
 	local     *vaultsync.Enrollment
+	state     *State
 	manifest  *vaultsync.Manifest
 	operation *vaultsync.Operation
 	changes   []plannedChange
@@ -159,7 +211,18 @@ func accept(root, packageDir string, opts Options) (*applier, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &applier{root: root, opts: opts, local: local, manifest: manifest, operation: operation}, nil
+	state, err := loadState(root, local)
+	if err != nil {
+		return nil, err
+	}
+	return &applier{
+		root:      root,
+		opts:      opts,
+		local:     local,
+		state:     state,
+		manifest:  manifest,
+		operation: operation,
+	}, nil
 }
 
 // singleOperation returns the one operation the package carries.
@@ -205,8 +268,23 @@ func (a *applier) read(packageDir string) error {
 
 // apply puts the package on this disk as one journaled, snapshotted operation
 // and returns the recovery entry that can undo it.
+//
+// The identity of that entry is minted here rather than read off the recorder
+// afterwards, and declared before the first byte moves. Everything up to declare
+// creates nothing — BeginOperation only refuses, and plan only describes — so
+// this is the last instant at which the vault can still be said not to be
+// applying anything, and it is where the record that explains an interruption has
+// to go. Without it a process that dies inside commit leaves a half-built entry
+// under a name nobody wrote down, applied bytes nothing accounts for, and no way
+// to tell either from a package that was never delivered.
 func (a *applier) apply() (*journal.Entry, error) {
-	operation, err := noteops.BeginOperation(a.root, operationToken, a.opts.command(), a.targets(), a.opts.RecorderOptions...)
+	entryID, err := journal.NewEntryID(a.opts.now())
+	if err != nil {
+		return nil, fmt.Errorf("vaultimport: mint recovery entry identity for %s: %w",
+			a.manifest.PackageID, err)
+	}
+	operation, err := noteops.BeginOperation(a.root, operationToken, a.opts.command(),
+		a.targets(), a.recorderOptions(entryID)...)
 	if err != nil {
 		return nil, err
 	}
@@ -214,13 +292,96 @@ func (a *applier) apply() (*journal.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := a.declare(entryID); err != nil {
+		return nil, err
+	}
+	importCrash(crashDeclared)
 	if err := a.commit(txn, operation); err != nil {
 		return nil, err
 	}
+	importCrash(crashApplied)
 	if err := a.recordProvenance(operation); err != nil {
 		return nil, err
 	}
-	return a.finalize(operation)
+	importCrash(crashProvenance)
+	entry, err := a.finalize(operation)
+	if err != nil {
+		return nil, err
+	}
+	importCrash(crashFinalized)
+	return entry, nil
+}
+
+// recorderOptions pins the entry identity the attempt was declared under.
+//
+// The pin is appended last and so overrides a generator a caller supplied, which
+// is deliberate and is the one place this package overrules its own Options. An
+// identity that has been written down before the entry exists is not a choice
+// left to anybody: a recorder that minted a different one would build an entry
+// the recovery record cannot name, which is exactly the state the record exists
+// to prevent. A test that wants a predictable entry pins the clock instead — the
+// identity is derived from it.
+func (a *applier) recorderOptions(entryID string) []journal.RecorderOption {
+	opts := make([]journal.RecorderOption, 0, len(a.opts.RecorderOptions)+1)
+	opts = append(opts, a.opts.RecorderOptions...)
+	return append(opts, journal.WithIDGenerator(func(time.Time) (string, error) {
+		return entryID, nil
+	}))
+}
+
+// declare makes the attempt durable: this vault is about to apply this package,
+// under this recovery entry.
+func (a *applier) declare(entryID string) error {
+	next := a.state.clone()
+	next.Pending = &Attempt{JournalEntry: entryID, Manifest: a.manifest}
+	if err := saveState(a.root, next); err != nil {
+		return err
+	}
+	a.state = next
+	return nil
+}
+
+// settle ends the attempt and remembers the application, in one write. See
+// resolver.settle: separating the two would let a crash strand the attempt or
+// forget the application.
+func (a *applier) settle(entryID string, receipt *vaultsync.Receipt) error {
+	next := a.state.clone()
+	next.Pending = nil
+	next.Applied[a.manifest.PackageID] = Record{
+		OperationID:  a.operation.OperationID,
+		OriginDevice: a.manifest.OriginDevice,
+		JournalEntry: entryID,
+		Receipt:      receipt,
+	}
+	if err := saveState(a.root, next); err != nil {
+		return err
+	}
+	a.state = next
+	return nil
+}
+
+// unwind resolves the attempt a failed application left behind and returns the
+// original failure.
+//
+// It is the same resolution a crash gets, run in-process, and using one code path
+// for both is the point: an ordinary conflict and a power cut leave the vault in
+// states that differ only in whether anybody is still there to look, so they must
+// converge the same way. It is also what finally cleans up the un-finalized entry
+// directory a mid-commit configuration change leaves behind, which internal/
+// vaultimport has documented as somebody else's problem until now.
+//
+// The cause is returned unchanged whatever resolution did, because the caller
+// asked about the package: a conflict is still a conflict after the vault tidies
+// up. A resolution that *fails* is joined on, since it means something is left
+// behind and the next import will refuse until it is dealt with.
+func (a *applier) unwind(cause error) error {
+	if a.state.Pending == nil {
+		return cause
+	}
+	if _, err := recoverLocked(a.root, a.opts); err != nil {
+		return errors.Join(cause, err)
+	}
+	return cause
 }
 
 // targets are the absolute paths the operation will change, handed to
@@ -234,8 +395,115 @@ func (a *applier) targets() []string {
 	return targets
 }
 
-func (a *applier) abs(rel string) string {
-	return filepath.Join(a.root, filepath.FromSlash(rel))
+func (a *applier) abs(rel string) string { return absPath(a.root, rel) }
+
+func absPath(root, rel string) string {
+	return filepath.Join(root, filepath.FromSlash(rel))
+}
+
+// answer responds to a package this vault has already applied, without applying
+// it again.
+//
+// A redelivery is ordinary, not exceptional. The transport moves whole
+// directories and has no idea what a receipt is, so a package reappears whenever
+// a channel is re-copied, a peer is restored from a backup, or an acknowledgment
+// went missing and the producer tried again. Applying it a second time is not
+// merely wasteful — the vault no longer holds what the package expected to find,
+// because the package itself changed it, so the second delivery would be reported
+// as a conflict between the peer and its own change.
+//
+// Both halves of that are answered from the ledger. What was applied is reported
+// as it was applied, and the acknowledgment the peer is missing is the *original*
+// receipt republished rather than a new one minted now. See Record.Receipt for
+// why a fresh receipt would be the wrong answer and not just a redundant one.
+func (a *applier) answer(record Record) (*Result, error) {
+	if record.OperationID != a.operation.OperationID {
+		return nil, fmt.Errorf("%w: package %s was applied as operation %s and now carries %s",
+			ErrCorruptState, a.manifest.PackageID, record.OperationID, a.operation.OperationID)
+	}
+	a.withoutPayloads()
+	if record.Receipt != nil {
+		return a.republish(record)
+	}
+	return a.retryAcknowledge(record)
+}
+
+// republish puts a receipt this vault already minted back into the outgoing
+// channel.
+//
+// A receipt is immutable and published under a name that can only be taken once,
+// so the name already being taken is not a failure here: it is the state
+// publishing was trying to reach. Anywhere else that would be ErrPackageExists,
+// and it stays that everywhere else — a *first* publication meeting an occupied
+// name means two different receipts for one package, which is a real problem. The
+// difference is that this caller knows the receipt in the channel is its own,
+// because the bytes it is publishing came out of the record that published them.
+func (a *applier) republish(record Record) (*Result, error) {
+	result := a.duplicate(record)
+	channel := vaultsync.OutgoingDir(a.root)
+	path, err := vaultsync.PublishReceipt(channel, record.Receipt)
+	if errors.Is(err, vaultsync.ErrPackageExists) {
+		path, err = vaultsync.ReceiptPath(channel, a.manifest.PackageID)
+	}
+	if err != nil {
+		return result, err
+	}
+	result.Receipt = record.Receipt
+	result.ReceiptPath = path
+	return result, nil
+}
+
+// retryAcknowledge answers a redelivery of a package that was applied and never
+// successfully acknowledged, by minting the receipt that attempt could not.
+//
+// Minting now is honest in this one case and only this one: no receipt was ever
+// published, so there is no earlier statement for a new one to contradict. It is
+// held to exactly the checks a first acknowledgment is held to — the recovery
+// entry is read back off the disk, and every hash comes from what the paths hold
+// now — so a vault whose content has moved on since is refused rather than
+// described.
+func (a *applier) retryAcknowledge(record Record) (*Result, error) {
+	entry, err := journal.LoadEntry(noteops.JournalRoot(a.root), record.JournalEntry)
+	if err != nil {
+		return a.duplicate(record), fmt.Errorf("%w: %s names %s: %v",
+			vaultsync.ErrNoRecoveryEntry, a.manifest.PackageID, record.JournalEntry, err)
+	}
+	result, ackErr := a.acknowledge(entry)
+	result.Duplicate = true
+	if result.Receipt == nil {
+		return result, ackErr
+	}
+	if err := a.settle(record.JournalEntry, result.Receipt); err != nil {
+		return result, errors.Join(ackErr, err)
+	}
+	return result, ackErr
+}
+
+// duplicate is the Result a redelivery reports before anything is said about the
+// receipt.
+func (a *applier) duplicate(record Record) *Result {
+	return &Result{
+		PackageID:    a.manifest.PackageID,
+		OperationID:  record.OperationID,
+		OriginDevice: a.manifest.OriginDevice,
+		JournalEntry: record.JournalEntry,
+		Duplicate:    true,
+	}
+}
+
+// withoutPayloads fills in the per-path changes that reading back and
+// acknowledging need, without opening the package.
+//
+// The payload bytes are deliberately left out. observe hashes what is on this
+// disk precisely so that an acknowledgment compares the vault against the
+// package; a path carrying the package's own bytes around would be in a position
+// to acknowledge those instead, and the comparison would be true by construction.
+func (a *applier) withoutPayloads() {
+	changes := make([]plannedChange, 0, len(a.operation.Changes))
+	for _, change := range a.operation.Changes {
+		changes = append(changes, plannedChange{change: change})
+	}
+	a.changes = changes
 }
 
 // plan builds the transaction: one Write or Remove per change, each carrying the
@@ -430,9 +698,13 @@ func classifyCommit(packageID string, err error) (cleanup, refusal error) {
 // the peer that sent it. Written before, the worst case is a ledger entry for a
 // journal entry that never commits, which the exporter never looks up.
 //
-// The identity is available at all only because it is minted when the recorder
-// is created, inside the transaction's first Capture — which is also why this
-// cannot run any earlier: before Commit there is no entry to name.
+// The identity itself is knowable earlier — this package mints it and pins it
+// onto the recorder before the transaction starts, because the attempt record
+// has to name it before the first byte moves. What is only knowable here is
+// whether there is an entry at all: noteops creates the recorder on the first
+// Capture, so EntryID answers empty for an operation that changed nothing, and
+// reading it after Commit is how this learns the application produced a real
+// entry rather than assuming the one it named was used.
 func (a *applier) recordProvenance(operation *noteops.Journal) error {
 	entryID := operation.EntryID()
 	if entryID == "" {
@@ -503,6 +775,15 @@ func (a *applier) finalize(operation *noteops.Journal) (*journal.Entry, error) {
 // nothing happened, and would withhold the entry identity — the one thing that
 // makes what did happen reversible. The receipt is the part that did not happen,
 // and Receipt being nil is what says so.
+//
+// A receipt already in the channel is adopted rather than replaced, and that
+// short-circuit is checked first, ahead of reading the paths back. It is what
+// makes an interruption between publishing the receipt and remembering it
+// survivable: publication is the moment the peer may drop its own copy, so by the
+// time a recovery pass runs the statement has been made and cannot be revised.
+// Re-minting would fail on the immutable name at best, and at worst would want to
+// describe paths a person has edited since — which is a question this vault has
+// already answered and must not answer twice.
 func (a *applier) acknowledge(entry *journal.Entry) (*Result, error) {
 	result := &Result{
 		PackageID:    a.manifest.PackageID,
@@ -510,6 +791,15 @@ func (a *applier) acknowledge(entry *journal.Entry) (*Result, error) {
 		OriginDevice: a.manifest.OriginDevice,
 		JournalEntry: entry.ID,
 		Cleanup:      a.cleanup,
+	}
+	published, path, err := a.adopt(entry)
+	if err != nil {
+		return result, err
+	}
+	if published != nil {
+		result.Receipt = published
+		result.ReceiptPath = path
+		return result, nil
 	}
 	applied, err := a.observe()
 	if err != nil {
@@ -523,13 +813,52 @@ func (a *applier) acknowledge(entry *journal.Entry) (*Result, error) {
 	if err != nil {
 		return result, err
 	}
-	path, err := vaultsync.PublishReceipt(vaultsync.OutgoingDir(a.root), receipt)
+	path, err = vaultsync.PublishReceipt(vaultsync.OutgoingDir(a.root), receipt)
 	if err != nil {
 		return result, err
 	}
 	result.Receipt = receipt
 	result.ReceiptPath = path
 	return result, nil
+}
+
+// adopt returns the receipt this device has already published for the package,
+// with the path it sits at, or nil when the channel holds none.
+//
+// The channel is consulted rather than the ledger because the two can disagree in
+// exactly one direction: PublishReceipt makes the receipt durable, and the write
+// that records it in the ledger is a separate event. A process that died between
+// them left a statement the peer can read and a vault that does not know it made
+// one, and only the channel can say so.
+//
+// It is checked before adopting, twice. A receipt naming another device is not
+// this vault's to stand behind, and one naming another recovery entry would mean
+// the package was applied twice under two identities — neither is something to
+// hand back as "already acknowledged", and both are refused loudly rather than
+// republished. ReadReceipt has already checked the format, the identities, and
+// that the package_id inside matches the name it was found under.
+func (a *applier) adopt(entry *journal.Entry) (*vaultsync.Receipt, string, error) {
+	channel := vaultsync.OutgoingDir(a.root)
+	receipt, err := vaultsync.ReadReceipt(channel, a.manifest.PackageID)
+	if errors.Is(err, vaultsync.ErrIncompletePackage) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if receipt.Device != a.local.DeviceID {
+		return nil, "", fmt.Errorf("%w: the receipt for %s in this vault's own channel was published by %s",
+			vaultsync.ErrReceiptMismatch, a.manifest.PackageID, receipt.Device)
+	}
+	if receipt.RecoveryEntry != entry.ID {
+		return nil, "", fmt.Errorf("%w: %s was acknowledged under recovery entry %s and is now %s",
+			vaultsync.ErrReceiptMismatch, a.manifest.PackageID, receipt.RecoveryEntry, entry.ID)
+	}
+	path, err := vaultsync.ReceiptPath(channel, a.manifest.PackageID)
+	if err != nil {
+		return nil, "", err
+	}
+	return receipt, path, nil
 }
 
 // observe reports what each of the package's paths holds now, read back off this

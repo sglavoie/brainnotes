@@ -37,6 +37,29 @@ func WithIDGenerator(gen func(time.Time) (string, error)) RecorderOption {
 	}
 }
 
+// NewEntryID mints the identity an entry recorded at ts would be created under.
+// It is what NewRecorder uses when no generator is supplied.
+//
+// It is exported for the one caller that cannot wait for the recorder to exist:
+// an operation whose identity has to be durable *before* the mutation it
+// describes is committed, so that a process death in between leaves a record
+// naming the entry rather than an entry nothing names. Such a caller mints the
+// identity here and hands it back through WithIDGenerator, which is what makes
+// the intent it wrote and the entry the recorder creates the same entry.
+//
+// A minted identity is a name, not a reservation: nothing exists on disk until
+// NewRecorder creates the directory, and two mints in the same nanosecond are
+// kept apart by the random suffix rather than by a check. The retry in NewRecorder
+// is what makes that safe, and a caller pinning one identity gives that retry up
+// — which is correct for a caller that needs the name it already wrote down.
+func NewEntryID(ts time.Time) (string, error) {
+	suffix, err := defaultEntryID()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s", ts.UTC().Format("20060102T150405.000000000Z"), suffix), nil
+}
+
 // Recorder snapshots pre-change states and writes one manifest on finalize.
 type Recorder struct {
 	vaultRoot   string
@@ -50,23 +73,9 @@ type Recorder struct {
 
 // NewRecorder creates a journal entry directory and an in-memory recorder.
 func NewRecorder(vaultRoot, journalRoot, command string, opts ...RecorderOption) (*Recorder, error) {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		return nil, fmt.Errorf("journal: empty command")
-	}
-	if strings.TrimSpace(vaultRoot) == "" {
-		return nil, fmt.Errorf("journal: empty vault root")
-	}
-	if strings.TrimSpace(journalRoot) == "" {
-		return nil, fmt.Errorf("journal: empty journal root")
-	}
-	vaultAbs, err := filepath.Abs(vaultRoot)
+	command, vaultAbs, journalAbs, err := resolveRecorder(vaultRoot, journalRoot, command)
 	if err != nil {
-		return nil, fmt.Errorf("journal: resolve vault root %q: %w", vaultRoot, err)
-	}
-	journalAbs, err := filepath.Abs(journalRoot)
-	if err != nil {
-		return nil, fmt.Errorf("journal: resolve journal root %q: %w", journalRoot, err)
+		return nil, err
 	}
 	// The recorder is usually the first thing a mutation creates on disk — a
 	// high-level caller captures pre-change state before it takes any lock — so
@@ -81,14 +90,8 @@ func NewRecorder(vaultRoot, journalRoot, command string, opts ...RecorderOption)
 	}
 
 	cfg := recorderOptions{
-		now: func() time.Time { return time.Now().UTC() },
-		idGen: func(ts time.Time) (string, error) {
-			suffix, err := defaultEntryID()
-			if err != nil {
-				return "", err
-			}
-			return fmt.Sprintf("%s-%s", ts.UTC().Format("20060102T150405.000000000Z"), suffix), nil
-		},
+		now:   func() time.Time { return time.Now().UTC() },
+		idGen: NewEntryID,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -100,34 +103,9 @@ func NewRecorder(vaultRoot, journalRoot, command string, opts ...RecorderOption)
 		return nil, fmt.Errorf("journal: zero timestamp")
 	}
 
-	var (
-		id       string
-		entryDir string
-	)
-	for i := 0; i < 16; i++ {
-		id, err = cfg.idGen(ts)
-		if err != nil {
-			return nil, fmt.Errorf("journal: generate id: %w", err)
-		}
-		id = strings.TrimSpace(id)
-		if id == "" {
-			return nil, fmt.Errorf("journal: generated empty id")
-		}
-		if strings.Contains(id, "/") || strings.Contains(id, `\`) {
-			return nil, fmt.Errorf("journal: generated id %q contains path separator", id)
-		}
-		entryDir = filepath.Join(journalAbs, id)
-		err = os.Mkdir(entryDir, 0o755)
-		if err == nil {
-			break
-		}
-		if os.IsExist(err) {
-			continue
-		}
-		return nil, fmt.Errorf("journal: mkdir %q: %w", entryDir, err)
-	}
+	id, entryDir, err := allocateEntry(journalAbs, ts, cfg.idGen)
 	if err != nil {
-		return nil, fmt.Errorf("journal: could not allocate unique entry id")
+		return nil, err
 	}
 	if err := os.MkdirAll(filepath.Join(entryDir, SnapshotsDirName), 0o755); err != nil {
 		return nil, fmt.Errorf("journal: mkdir snapshots: %w", err)
@@ -144,6 +122,73 @@ func NewRecorder(vaultRoot, journalRoot, command string, opts ...RecorderOption)
 		},
 		index: make(map[string]int),
 	}, nil
+}
+
+// resolveRecorder checks what the caller asked for and turns it into the two
+// absolute roots an entry is written under.
+//
+// It runs before anything is created, because every argument it rejects would
+// otherwise be rejected later by a call that had already made a directory: an
+// entry recording a mutation nobody can name is worse than no entry, and the
+// only moment it costs nothing to say so is this one.
+func resolveRecorder(vaultRoot, journalRoot, command string) (string, string, string, error) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return "", "", "", fmt.Errorf("journal: empty command")
+	}
+	if strings.TrimSpace(vaultRoot) == "" {
+		return "", "", "", fmt.Errorf("journal: empty vault root")
+	}
+	if strings.TrimSpace(journalRoot) == "" {
+		return "", "", "", fmt.Errorf("journal: empty journal root")
+	}
+	vaultAbs, err := filepath.Abs(vaultRoot)
+	if err != nil {
+		return "", "", "", fmt.Errorf("journal: resolve vault root %q: %w", vaultRoot, err)
+	}
+	journalAbs, err := filepath.Abs(journalRoot)
+	if err != nil {
+		return "", "", "", fmt.Errorf("journal: resolve journal root %q: %w", journalRoot, err)
+	}
+	return command, vaultAbs, journalAbs, nil
+}
+
+// allocateEntry mints an identity and creates the directory that carries it,
+// retrying until it gets one nobody else holds.
+//
+// The exclusive os.Mkdir is what makes the identity real: two recorders that
+// mint the same name in the same nanosecond both try to create it and exactly
+// one succeeds, so the directory is the allocation rather than a check followed
+// by a write. A caller that pinned an identity through WithIDGenerator gets the
+// same generator answer every time round, so for it the loop is one attempt and
+// a collision is a genuine failure — which is correct, since a pinned identity
+// was written down somewhere before this call and cannot be traded for another.
+func allocateEntry(journalAbs string, ts time.Time, idGen func(time.Time) (string, error)) (string, string, error) {
+	var err error
+	for range 16 {
+		var id string
+		id, err = idGen(ts)
+		if err != nil {
+			return "", "", fmt.Errorf("journal: generate id: %w", err)
+		}
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return "", "", fmt.Errorf("journal: generated empty id")
+		}
+		if strings.Contains(id, "/") || strings.Contains(id, `\`) {
+			return "", "", fmt.Errorf("journal: generated id %q contains path separator", id)
+		}
+		entryDir := filepath.Join(journalAbs, id)
+		switch err = os.Mkdir(entryDir, 0o755); {
+		case err == nil:
+			return id, entryDir, nil
+		case os.IsExist(err):
+			continue
+		default:
+			return "", "", fmt.Errorf("journal: mkdir %q: %w", entryDir, err)
+		}
+	}
+	return "", "", fmt.Errorf("journal: could not allocate unique entry id")
 }
 
 // EntryID is the identity of the entry this recorder is building.
