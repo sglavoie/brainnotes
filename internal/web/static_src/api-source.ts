@@ -1,6 +1,7 @@
 import { normalizeParamValue } from "./filters";
 import { asRecord, readBoolean, readRecordValue } from "./api-internal";
 import type {
+  SourceCreateRequest,
   SourceDocument,
   SourcePreviewRequest,
   SourceSaveRequest,
@@ -72,6 +73,15 @@ export const buildSourceSaveForm = (request: SourceSaveRequest): URLSearchParams
   body.set("key", request.key);
   body.set("content", request.content);
   body.set("revision", request.revision);
+  body.set("save_id", request.save_id);
+  body.set("token", request.token);
+  return body;
+};
+
+export const buildSourceCreateForm = (request: SourceCreateRequest): URLSearchParams => {
+  const body = new URLSearchParams();
+  body.set("rel_path", request.rel_path);
+  body.set("content", request.content);
   body.set("save_id", request.save_id);
   body.set("token", request.token);
   return body;

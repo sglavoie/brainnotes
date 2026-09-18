@@ -14,6 +14,13 @@ export type SourceEditorConfig = {
   key: string;
   token: string;
   relPath: string;
+  // vaultID is the server's own name for the vault this note lives in. It is
+  // deliberately *not* in the required list below: a page that somehow arrives
+  // without it should lose its local drafts, not its editor. See vaultIdentity
+  // in internal/web/vault_identity.go for what it is, and source-draft.ts for
+  // why a draft key that lacked it could offer one vault's text over another
+  // vault's note of the same name.
+  vaultID: string;
   maxBytes: number;
   endpoints: SourceEndpoints;
 };
@@ -39,6 +46,17 @@ export type SourceEditorElements = {
   conflictSource: HTMLElement | null;
   conflictOverwrite: HTMLButtonElement | null;
   conflictDiscard: HTMLButtonElement | null;
+  // The draft line and the recovery panel. They are listed beside the conflict
+  // panel and never merged with it: one is about two versions the vault has
+  // seen, the other about text it has never seen at all.
+  draftStatus: HTMLElement | null;
+  recovery: HTMLElement | null;
+  recoveryHeading: HTMLElement | null;
+  recoveryLede: HTMLElement | null;
+  recoverySource: HTMLElement | null;
+  recoveryRestore: HTMLButtonElement | null;
+  recoveryRecreate: HTMLButtonElement | null;
+  recoveryDiscard: HTMLButtonElement | null;
 };
 
 export const readSourceEditorConfig = (panel: HTMLElement): SourceEditorConfig | null => {
@@ -46,11 +64,13 @@ export const readSourceEditorConfig = (panel: HTMLElement): SourceEditorConfig |
     key: attr(panel, "data-source-key"),
     token: attr(panel, "data-source-csrf"),
     relPath: attr(panel, "data-source-rel-path"),
+    vaultID: attr(panel, "data-source-vault-id"),
     maxBytes: Number(attr(panel, "data-source-max-bytes")) || 0,
     endpoints: {
       read: attr(panel, "data-source-read-endpoint"),
       preview: attr(panel, "data-source-preview-endpoint"),
       save: attr(panel, "data-source-save-endpoint"),
+      create: attr(panel, "data-source-create-endpoint"),
       search: attr(panel, "data-source-search-endpoint"),
     },
   };
@@ -61,6 +81,7 @@ export const readSourceEditorConfig = (panel: HTMLElement): SourceEditorConfig |
     config.endpoints.read,
     config.endpoints.preview,
     config.endpoints.save,
+    config.endpoints.create,
     config.endpoints.search,
   ];
   return required.every((value) => value !== "") ? config : null;
@@ -90,6 +111,14 @@ export const readSourceEditorElements = (panel: HTMLElement): SourceEditorElemen
     conflictSource: queryElement(panel, "[data-source-conflict-source]", HTMLElement),
     conflictOverwrite: queryElement(panel, "[data-source-conflict-overwrite]", HTMLButtonElement),
     conflictDiscard: queryElement(panel, "[data-source-conflict-discard]", HTMLButtonElement),
+    draftStatus: queryElement(panel, "[data-source-draft-status]", HTMLElement),
+    recovery: queryElement(panel, "[data-source-recovery]", HTMLElement),
+    recoveryHeading: queryElement(panel, "[data-source-recovery-heading]", HTMLElement),
+    recoveryLede: queryElement(panel, "[data-source-recovery-lede]", HTMLElement),
+    recoverySource: queryElement(panel, "[data-source-recovery-source]", HTMLElement),
+    recoveryRestore: queryElement(panel, "[data-source-recovery-restore]", HTMLButtonElement),
+    recoveryRecreate: queryElement(panel, "[data-source-recovery-recreate]", HTMLButtonElement),
+    recoveryDiscard: queryElement(panel, "[data-source-recovery-discard]", HTMLButtonElement),
   };
 };
 

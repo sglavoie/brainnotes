@@ -23,15 +23,20 @@ const (
 // revision tying them together, so a save could be planned against bytes the
 // editor never showed anybody.
 type editorPageData struct {
-	Title       string
-	CSRFToken   string
-	Key         string
+	Title     string
+	CSRFToken string
+	Key       string
+	// VaultID names the vault this page's note belongs to, so a draft kept in
+	// the browser can never be offered back over a same-named note in a
+	// different vault the same origin served later. See vaultIdentity.
+	VaultID     string
 	NoteTitle   string
 	NoteRoute   string
 	RelPath     string
 	SourcePath  string
 	PreviewPath string
 	SavePath    string
+	CreatePath  string
 	SearchPath  string
 	// MaxSourceBytes is the server's own content limit, published so the editor
 	// can say a note is too large before posting four megabytes to be told.
@@ -86,12 +91,14 @@ func (s *Server) handleEditorPage(w http.ResponseWriter, r *http.Request) {
 		Title:          editorPageTitle,
 		CSRFToken:      s.csrfToken,
 		Key:            normalizedKey,
+		VaultID:        s.vaultIdentity(),
 		NoteTitle:      title,
 		NoteRoute:      route,
 		RelPath:        noteVaultPath(s.vault.Root, note),
 		SourcePath:     sourceAPIRoutePath,
 		PreviewPath:    sourcePreviewAPIRoutePath,
 		SavePath:       sourceSaveAPIRoutePath,
+		CreatePath:     sourceCreateAPIRoutePath,
 		SearchPath:     searchAPIRoutePath,
 		MaxSourceBytes: noteops.MaxSourceBytes,
 	}

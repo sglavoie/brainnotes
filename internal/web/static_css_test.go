@@ -485,3 +485,37 @@ func TestGraphViewControlsCSSContract(t *testing.T) {
 		}
 	}
 }
+
+// TestSourceEditorPanelsCSSContract pins the pair every toggled panel on /edit
+// needs: a rule that sets `display` and a matching `[hidden]` rule that takes it
+// back.
+//
+// `hidden` is a user-agent `display: none` and any author rule setting `display`
+// on the same element outranks it, so a panel styled as a grid and toggled by
+// `hidden` is *visible from page load* with nothing in it — an empty "unsaved
+// text kept in this browser" claim over a note nobody has touched, and a
+// discard that appears to do nothing. jsdom applies no stylesheet, so the
+// TypeScript suite's `hidden` assertions pass either way; this is the cheap
+// check, and internal/web/e2e/editor.spec.js is the one that actually renders.
+func TestSourceEditorPanelsCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for _, want := range []string{
+		".source-editor-recovery",
+		".source-editor-recovery[hidden]",
+		".source-editor-recovery-actions > [hidden]",
+		".source-editor-conflict",
+		".source-editor-conflict[hidden]",
+		"display: none;",
+		// The draft line is styled apart from .source-editor-status deliberately:
+		// one reports the vault and the other reports a copy that has never left
+		// the browser.
+		".source-editor-draft-status",
+		".source-editor-draft-status.is-warning",
+		".source-editor-draft-status.is-error",
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("source editor panel CSS missing %q", want)
+		}
+	}
+}

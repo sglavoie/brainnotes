@@ -29,6 +29,20 @@ export type SourceSaveRequest = {
   token: string;
 };
 
+// SourceCreateRequest is the one request on this surface with no revision, and
+// that is the contract rather than an omission: /api/source/create writes a note
+// that does not exist yet, so there are no bytes for an edit to have been
+// planned against. It names a path instead of a key for the same reason — there
+// is no note to resolve a route key from. validateSaveSourceRequest in
+// internal/noteops/source_save.go refuses a create that carries a revision and a
+// save that does not.
+export type SourceCreateRequest = {
+  rel_path: string;
+  content: string;
+  save_id: string;
+  token: string;
+};
+
 // SourceSaveSuccess is a save the server accepted. `changed` is false for a
 // note that already held the submitted bytes and `replayed` is true for a
 // resubmission the idempotency ledger answered, so a client can word the

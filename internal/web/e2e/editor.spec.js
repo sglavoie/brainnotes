@@ -2,13 +2,15 @@
 //
 // internal/web/static_src/source-*.test.ts covers the editor's decisions — what
 // is dirty, which revision a save is planned against, which preview response
-// wins — against a fake surface, because jsdom has no layout and CodeMirror
-// needs one. What is left is exactly what needs a browser and a server at once:
-// the bundled editor actually mounting, keystrokes reaching the document,
-// Ctrl/⌘ + S reaching /api/source/save, and the typed bytes landing in the
-// fixture vault's note and in nothing else.
+// wins, what is kept locally and what is offered back — against a fake surface,
+// because jsdom has no layout and CodeMirror needs one. What is left is exactly
+// what needs a browser and a server at once: the bundled editor actually
+// mounting, keystrokes reaching the document, Ctrl/⌘ + S reaching
+// /api/source/save, the typed bytes landing in the fixture vault's note and in
+// nothing else — and, for the draft half, a real reload over a real
+// localStorage, keyed by the vault identity this server published.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, gitStatus, manifest, test } from "./fixture.js";
@@ -53,8 +55,30 @@ async function openEditor(page) {
   // as an empty "this note changed on disk" warning over every edit; jsdom
   // applies no stylesheet and cannot see it.
   await expect(page.locator("[data-source-conflict]")).toBeHidden();
+  // The recovery panel is the second element on this page that is `hidden` in
+  // the template and styled with `display`, and it carries a `hidden` button of
+  // its own inside a flex row. Same trap, same blind spot in jsdom: without its
+  // own `[hidden] { display: none; }` it would sit above every edit asking about
+  // a draft nobody has.
+  await expect(page.locator("[data-source-recovery]")).toBeHidden();
   await page.waitForLoadState("networkidle");
   return surface;
+}
+
+// keptDrafts reads this origin's draft records. The key prefix is spelled out
+// rather than imported: it is the contract between two page loads — and, for a
+// note somebody left open on another machine, between two builds — so a test
+// that asked the bundle for it would assert nothing.
+const DRAFT_KEY_PREFIX = "bn.draft.1|";
+
+function keptDrafts(page) {
+  return page.evaluate(
+    (prefix) =>
+      Object.keys(window.localStorage)
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => ({ key, ...JSON.parse(window.localStorage.getItem(key)) })),
+    DRAFT_KEY_PREFIX,
+  );
 }
 
 // caretToEnd clicks the last rendered line and puts the caret after it.
@@ -323,6 +347,122 @@ test("a note that changed under the edit offers the vault's version", async ({ p
 
   expect(readFileSync(notePath, "utf8"), "discarding wrote to the vault").toBe(theirs);
   expect(gitStatus(manifest.localVault), "a write left the vault unsnapshotted").toBe("");
+});
+
+// The interruption this feature exists for, in the only place it is real: a
+// browser that actually reloads, over a localStorage that actually persists,
+// under a key built from the vault identity this server published. jsdom covers
+// what the editor decides; it cannot reload a page, and its storage goes away
+// with the test.
+test("unsaved text survives a reload and is offered back rather than saved", async ({ page }) => {
+  const notePath = join(manifest.localVault, NOTE);
+  const before = readFileSync(notePath, "utf8");
+  const phrase = phraseFor("draft recovery");
+
+  // Leaving a dirty editor arms the browser's own "leave site?" prompt — the
+  // page asks for it in beforeunload — and an unanswered prompt would stall the
+  // reload below.
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await openEditor(page);
+  const vaultID = await page.locator("[data-source-editor]").getAttribute("data-source-vault-id");
+  await caretToEnd(page);
+  await page.keyboard.type(`\n${phrase}`);
+
+  // Written while typing, by the debounce, rather than on the way out. That is
+  // what makes it a copy a power cut survives.
+  await expect.poll(() => keptDrafts(page)).toHaveLength(1);
+  const [kept] = await keptDrafts(page);
+  // The key carries the server's own name for this vault, so one origin serving
+  // two vaults over a machine's life cannot offer one's text over the other's
+  // note of the same name.
+  expect(vaultID).not.toBe("");
+  expect(kept.key).toContain(encodeURIComponent(vaultID));
+  expect(kept.content).toContain(phrase);
+  expect(readFileSync(notePath, "utf8"), "keeping a local copy wrote to the vault").toBe(before);
+
+  await page.reload();
+
+  const recovery = page.locator("[data-source-recovery]");
+  await expect(recovery).toBeVisible();
+  await expect(recovery).toHaveAttribute("data-source-recovery-kind", "resume");
+  await expect(page.locator("[data-source-recovery-source]")).toContainText(phrase);
+  // Offered, never adopted. The editor is showing the vault's bytes, the Save
+  // button has nothing to send, and the note on disk is untouched — a recovered
+  // draft that submitted itself would be this feature's worst failure.
+  await expect(page.locator(SURFACE)).not.toContainText(phrase);
+  await expect(page.locator("[data-source-save]")).toBeDisabled();
+  expect(readFileSync(notePath, "utf8"), "a recovered draft was submitted by itself").toBe(before);
+
+  // And still in storage while the question is on screen. Everything asserted
+  // above is in this page's DOM and nowhere else, so this is the one assertion
+  // that separates "survived the interruption" from "was read into memory once
+  // and deleted" — the second interruption would find nothing left to offer.
+  await expect.poll(() => keptDrafts(page)).toHaveLength(1);
+
+  await page.locator("[data-source-recovery-restore]").click();
+  await expect(recovery).toBeHidden();
+  await expect(page.locator(SURFACE)).toContainText(phrase);
+  await expect(page.locator("[data-source-save]")).toBeEnabled();
+  expect(readFileSync(notePath, "utf8"), "putting the text back wrote it to the vault").toBe(before);
+
+  await page.locator("[data-source-save]").click();
+  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  expect(readFileSync(notePath, "utf8")).toContain(phrase);
+  // The vault holds it now, so the browser's copy is finished.
+  await expect.poll(() => keptDrafts(page)).toHaveLength(0);
+  expect(gitStatus(manifest.localVault), "the note was written but never snapshotted").toBe("");
+});
+
+// The renamed target. The note this tab was opened for stops existing while the
+// tab is open, which is the one refusal the editor answers with an offer rather
+// than a message: there is nothing left to save over, so the kept text is
+// written back as a new note at the path this page was opened for — on a button.
+test("a note renamed under the edit offers the kept text back as a new note", async ({ page }) => {
+  const notePath = join(manifest.localVault, NOTE);
+  const phrase = phraseFor("renamed target");
+
+  await openEditor(page);
+  const panel = page.locator("[data-source-editor]");
+  const key = await panel.getAttribute("data-source-key");
+  const token = await panel.getAttribute("data-source-csrf");
+
+  await caretToEnd(page);
+  await page.keyboard.type(`\n${phrase}`);
+  await expect.poll(() => keptDrafts(page)).toHaveLength(1);
+
+  // The note moves out from under the tab through the same API the rest of the
+  // app renames with. page.request is not the page: the editor is never told.
+  const renamed = await page.request.post("/api/notes/rename", {
+    headers: { "X-BN-CSRF": token },
+    form: { key, title: `Alpha Moved ${phrase}` },
+  });
+  expect(renamed.ok(), "the out-of-band rename was refused").toBe(true);
+  expect(existsSync(notePath), "the rename left the original path in place").toBe(false);
+
+  await page.locator("[data-source-save]").click();
+  await expect(page.locator("[data-source-status]")).toHaveClass(/is-error/);
+
+  const recovery = page.locator("[data-source-recovery]");
+  await expect(recovery).toBeVisible();
+  await expect(recovery).toHaveAttribute("data-source-recovery-kind", "missing");
+  await expect(page.locator("[data-source-recovery-source]")).toContainText(phrase);
+  // The one control on this page that writes a file the vault does not have.
+  // Its `hidden` lives on a flex child, which needs its own rule to mean
+  // anything — so whether it is really on screen can only be asked here.
+  await expect(page.locator("[data-source-recovery-recreate]")).toBeVisible();
+  await expect(page.locator("[data-source-recovery-restore]")).toBeHidden();
+  expect(existsSync(notePath), "the refusal recreated the note by itself").toBe(false);
+
+  await page.locator("[data-source-recovery-recreate]").click();
+  // Leaving for the new note is what the create does; both are consequences of
+  // the one click, and neither happens without it.
+  await expect(page).toHaveURL(/\/n\//);
+  expect(readFileSync(notePath, "utf8"), "the kept text was never written back").toContain(phrase);
+  // Dropped before the navigation: a copy left behind would be offered back
+  // later as unsaved text that is, by then, a file.
+  await expect.poll(() => keptDrafts(page)).toHaveLength(0);
+  expect(gitStatus(manifest.localVault), "the note was written but never snapshotted").toBe("");
 });
 
 // The responsive layout, which is the one part of this page that is entirely

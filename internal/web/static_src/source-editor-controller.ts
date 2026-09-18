@@ -1,8 +1,18 @@
 import { setStatusText, type StatusKind } from "./status";
 import { formatSource, type SourceFormatCommand, type SourceFormatOptions } from "./source-format";
 import { createPreviewScheduler, type PreviewScheduler } from "./source-preview";
-import { classifySaveResponse, newSaveID, type SaveOutcome, type SourceClient } from "./source-save";
+import {
+  SourceReadError,
+  classifySaveResponse,
+  newSaveID,
+  notFoundCode,
+  type SaveOutcome,
+  type SourceClient,
+} from "./source-save";
 import { initSourcePanes, type SourcePanes } from "./source-editor-panes";
+import { createDraftKeeper, type DraftKeeper } from "./source-editor-drafts";
+import type { DraftOffer, VaultReading } from "./source-draft-recovery";
+import type { SourceDraftStore } from "./source-draft";
 import type { SourceEditorConfig, SourceEditorElements } from "./source-editor-elements";
 import type { SourceSurface, SourceSurfaceFactory } from "./source-surface";
 
@@ -26,6 +36,13 @@ export type SourceEditorDeps = {
   createSurface: SourceSurfaceFactory;
   previewDelayMs?: number;
   doc?: Document;
+  // drafts is the browser-local copy of unsaved text. It is optional, and a null
+  // store is a fully working editor with no safety net rather than a broken one:
+  // a browser that refuses storage must not cost somebody their editor as well.
+  drafts?: SourceDraftStore | null;
+  draftDelayMs?: number;
+  now?: () => number;
+  navigate?: (url: string) => void;
 };
 
 export type SourceEditorController = {
@@ -92,14 +109,32 @@ export const createSourceEditorController = (
     }
   };
 
-  const adopt = (content: string, revision: string): void => {
+  const drafts = createKeeper(deps, state, {
+    preview,
+    panes,
+    refreshSaveButton,
+    dirty,
+    setStatus,
+  });
+
+  // adopt records what the vault is believed to hold. `settled` says whether the
+  // browser's own copy is finished with too: true when this editor is the reason
+  // the vault holds it — a save, or taking over the other writer's version from
+  // the conflict panel — and false for a load, where the record in storage is
+  // the one the recovery panel is about to ask about. Dropping it there would be
+  // answering for the person, and after a reload that record is precisely the
+  // text the page exists to hand back.
+  const adopt = (content: string, revision: string, settled = true): void => {
     state.savedContent = content;
     state.baseRevision = revision;
     state.pendingSave = null;
+    if (settled) {
+      drafts.adopted(content, revision);
+    }
     refreshSaveButton();
   };
 
-  const ctx: SaveContext = { setStatus, adopt, refreshSaveButton, preview, panes };
+  const ctx: SaveContext = { setStatus, adopt, refreshSaveButton, preview, panes, drafts };
   let unbind: (() => void) | null = null;
 
   const controller: SourceEditorController = {
@@ -120,6 +155,10 @@ export const createSourceEditorController = (
     },
 
     destroy(): void {
+      // Flushed before anything is torn down: destroy() runs on a page that is
+      // going away, and the debounce may be holding the last few keystrokes.
+      drafts.flush();
+      drafts.dispose();
       preview.dispose();
       state.surface?.destroy();
       state.surface = null;
@@ -127,17 +166,68 @@ export const createSourceEditorController = (
     },
   };
 
-  unbind = bindGlobalKeys(ownerDocument, controller);
-
-  wireControls(elements, controller);
-  wireConflict(elements, state, controller, ctx);
-  panes.onSelect((pane) => {
-    if (pane === "preview") {
-      preview.flush(state.surface?.getValue() ?? "");
-    }
-  });
+  unbind = wireEditor(ownerDocument, elements, state, controller, ctx);
 
   return controller;
+};
+
+// Everything that points at the finished controller, which is why it runs last
+// and in one place: the key bindings hand back the unbind destroy() owes the
+// document, and the pane listener keeps the preview from rendering text nobody
+// is looking at.
+const wireEditor = (
+  ownerDocument: Document,
+  elements: SourceEditorElements,
+  state: EditorState,
+  controller: SourceEditorController,
+  ctx: SaveContext
+): (() => void) => {
+  wireControls(elements, controller);
+  wireConflict(elements, state, controller, ctx);
+  ctx.panes.onSelect((pane) => {
+    if (pane === "preview") {
+      ctx.preview.flush(state.surface?.getValue() ?? "");
+    }
+  });
+  return bindGlobalKeys(ownerDocument, controller);
+};
+
+// createKeeper states the seam between the editor and the draft machinery in
+// one place: five things the keeper may ask of this editor, and not one of them
+// is a save. `restore` is the only one that changes what is on screen, and it
+// goes through restoreDraft, which makes no request either.
+const createKeeper = (
+  deps: SourceEditorDeps,
+  state: EditorState,
+  ctx: RestoreContext & {
+    dirty(): boolean;
+    setStatus(message: string, kind: StatusKind): void;
+  }
+): DraftKeeper => {
+  const { elements } = deps;
+  const view = (deps.doc ?? elements.panel.ownerDocument).defaultView;
+  return createDraftKeeper({
+    store: deps.drafts ?? null,
+    elements,
+    config: deps.config,
+    client: deps.client,
+    host: {
+      currentContent: () => state.surface?.getValue() ?? "",
+      baseRevision: () => state.baseRevision,
+      // No surface is a load that never produced an editor, and it is reported
+      // as "unknown" rather than as clean: a page whose read failed has compared
+      // nothing, and the keeper must not conclude from it that the vault holds
+      // what is kept.
+      status: () => (state.surface === null ? "unknown" : ctx.dirty() ? "unsaved" : "held"),
+      saving: () => state.saving,
+      restore: (offer) => restoreDraft(elements, state, ctx, offer),
+      setStatus: ctx.setStatus,
+    },
+    view,
+    now: deps.now ?? (() => Date.now()),
+    delayMs: deps.draftDelayMs,
+    navigate: deps.navigate ?? ((url) => view?.location.assign(url)),
+  });
 };
 
 const createPreview = (
@@ -224,10 +314,11 @@ const mountSurface = (
 
 type SaveContext = {
   setStatus(message: string, kind?: StatusKind): void;
-  adopt(content: string, revision: string): void;
+  adopt(content: string, revision: string, settled?: boolean): void;
   refreshSaveButton(): void;
   preview: PreviewScheduler;
   panes: SourcePanes;
+  drafts: DraftKeeper;
 };
 
 const runLoad = async (
@@ -236,6 +327,10 @@ const runLoad = async (
   ctx: SaveContext
 ): Promise<void> => {
   ctx.setStatus("Loading the note's source…", "is-loading");
+  // Read before anything adopts or drops: adopting the loaded note clears this
+  // tab's own slot, and after a reload that slot holds precisely the draft this
+  // page exists to offer back.
+  const kept = ctx.drafts.kept();
   try {
     const loaded = await deps.client.read();
     mountSurface(deps, state, loaded.content, () => {
@@ -247,13 +342,63 @@ const runLoad = async (
       // breakpoint that belongs in css/responsive.css into this file, where
       // the two would drift apart silently.
       ctx.preview.schedule(state.surface?.getValue() ?? "");
+      ctx.drafts.keep();
     });
-    ctx.adopt(loaded.content, loaded.revision);
+    ctx.adopt(loaded.content, loaded.revision, false);
     ctx.setStatus(`${deps.config.relPath} loaded. Nothing is written until you save.`);
     ctx.preview.flush(loaded.content);
+    ctx.drafts.present(kept, { kind: "loaded", revision: loaded.revision, content: loaded.content });
   } catch (error: unknown) {
     ctx.setStatus(errorMessage(error, "The note's source could not be loaded."), "is-error");
+    // A load that failed is the one moment a kept draft is most valuable and
+    // most easily thrown away. Nothing is compared, nothing is dropped, and the
+    // offer says which of the two failures this was.
+    ctx.drafts.present(kept, readingFor(error));
   }
+};
+
+// readingFor separates the note being gone from nobody having answered.
+//
+// They arrive at this catch identically — one rejected promise — and mean
+// opposite things: `not_found` is the vault saying the note is not there, which
+// is a recovery choice, while anything else is silence, which entitles this page
+// to conclude nothing at all about the note or about the draft.
+const readingFor = (error: unknown): VaultReading =>
+  error instanceof SourceReadError && error.code === notFoundCode
+    ? { kind: "missing" }
+    : { kind: "unreachable" };
+
+type RestoreContext = {
+  preview: PreviewScheduler;
+  panes: SourcePanes;
+  refreshSaveButton(): void;
+};
+
+// restoreDraft puts kept text back in the editor, and nothing else. No request
+// is made and no revision is adopted: the editor ends up exactly as it would if
+// the person had typed the text again.
+//
+// A stale draft gets one extra thing, and it is the important one. Its base
+// revision is re-pinned to the revision it was *written* against, which is
+// simply true — and it is what makes the next save go through the server's own
+// conflict refusal instead of quietly overwriting whatever landed in the note
+// since. The vault's current version goes on the conflict panel at the same
+// time, so the two choices on offer are the two that already exist: save mine
+// over it, or discard mine and load the note.
+const restoreDraft = (
+  elements: SourceEditorElements,
+  state: EditorState,
+  ctx: RestoreContext,
+  offer: DraftOffer
+): void => {
+  state.surface?.setValue(offer.draft.content);
+  if (offer.kind === "stale") {
+    state.baseRevision = offer.draft.baseRevision;
+    showConflict(elements, offer.vaultContent, offer.vaultRevision);
+    ctx.panes.select("edit");
+  }
+  ctx.refreshSaveButton();
+  ctx.preview.flush(offer.draft.content);
 };
 
 const runSave = async (
@@ -283,6 +428,12 @@ const runSave = async (
     ctx.setStatus(tooLarge, "is-error");
     return;
   }
+
+  // Written before the request, not after it. A save is the likeliest moment for
+  // the tab to be closed, the network to drop or the server to restart, and the
+  // debounce may still be holding the last few keystrokes of what is about to be
+  // sent.
+  ctx.drafts.flush();
 
   state.saving = true;
   const base = state.baseRevision;
@@ -338,6 +489,10 @@ const applyOutcome = (
     case "saved":
       ctx.adopt(submitted, outcome.revision);
       hideConflict(elements);
+      // The other tabs on this origin are told, and told only. Each of them is
+      // holding its own unsaved text against its own pinned revision, so this is
+      // a notice that the note has moved — never an instruction to adopt it.
+      ctx.drafts.announce(outcome.revision);
       ctx.setStatus(outcome.message, "is-success");
       return;
     case "landed":
@@ -353,7 +508,17 @@ const applyOutcome = (
       // other writer's version is still the newest thing anybody has seen, and
       // taking it off screen over an unrelated error would lose the only copy.
       hideConflict(elements);
+      ctx.drafts.announce(outcome.revision);
       ctx.setStatus(outcome.message, "is-error");
+      return;
+    case "missing":
+      // The note this page was opened for is gone, so the refusal is final and
+      // the attempt is settled — but the text on screen now has nowhere to go
+      // back to. It is offered as a new note at the path this editor was opened
+      // for, and it is a button: nothing is written by arriving here.
+      state.pendingSave = null;
+      ctx.setStatus(outcome.message, "is-error");
+      ctx.drafts.offerRecreate(submitted);
       return;
     case "conflict":
       state.pendingSave = null;

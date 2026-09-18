@@ -27,11 +27,13 @@
       class="panel source-editor"
       data-source-editor
       data-source-key="{{ .Key }}"
+      data-source-vault-id="{{ .VaultID }}"
       data-source-csrf="{{ .CSRFToken }}"
       data-source-rel-path="{{ .RelPath }}"
       data-source-read-endpoint="{{ .SourcePath }}"
       data-source-preview-endpoint="{{ .PreviewPath }}"
       data-source-save-endpoint="{{ .SavePath }}"
+      data-source-create-endpoint="{{ .CreatePath }}"
       data-source-search-endpoint="{{ .SearchPath }}"
       data-source-max-bytes="{{ .MaxSourceBytes }}"
       aria-labelledby="source-editor-heading"
@@ -57,6 +59,32 @@
       </div>
 
       <p class="source-editor-status" data-source-status role="status" aria-live="polite">Loading the note's source…</p>
+
+      <!--
+        The draft line is a second status deliberately, and never shares the one
+        above it. That one reports the vault: what this server wrote, refused or
+        left alone. This one reports a copy that has never left the browser, and
+        a person reading "kept" in the same place they read "Saved" would have
+        every reason to think the Pi holds their words. Two lines, two subjects.
+      -->
+      <p class="source-editor-draft-status" data-source-draft-status role="status" aria-live="polite"></p>
+
+      <!--
+        The recovery panel starts hidden and is only ever filled from local
+        storage. Nothing in it is applied without a click: the whole point of
+        keeping a draft is defeated if recovering one can write to the vault by
+        itself.
+      -->
+      <section class="source-editor-recovery" data-source-recovery hidden aria-labelledby="source-editor-recovery-heading">
+        <h3 id="source-editor-recovery-heading" data-source-recovery-heading>Unsaved text kept in this browser</h3>
+        <p class="source-editor-recovery-lede" data-source-recovery-lede></p>
+        <pre class="source-editor-recovery-source" data-source-recovery-source></pre>
+        <div class="source-editor-recovery-actions">
+          <button type="button" class="source-editor-recovery-restore" data-source-recovery-restore>Put it back in the editor</button>
+          <button type="button" class="source-editor-recovery-recreate" data-source-recovery-recreate hidden>Save it as a new note</button>
+          <button type="button" class="source-editor-recovery-discard" data-source-recovery-discard>Discard it</button>
+        </div>
+      </section>
 
       <div class="source-editor-panes" data-source-panes>
         <div class="source-editor-tabs" role="tablist" aria-label="Editor and preview">

@@ -15,11 +15,13 @@ export const editorMarkup = (): string => `
   class="panel source-editor"
   data-source-editor
   data-source-key="alpha"
+  data-source-vault-id="sync:vault-under-test"
   data-source-csrf="csrf-token"
   data-source-rel-path="Alpha.md"
   data-source-read-endpoint="/api/source"
   data-source-preview-endpoint="/api/source/preview"
   data-source-save-endpoint="/api/source/save"
+  data-source-create-endpoint="/api/source/create"
   data-source-search-endpoint="/api/search"
   data-source-max-bytes="1048576"
 >
@@ -29,6 +31,15 @@ export const editorMarkup = (): string => `
     <button type="button" data-source-save disabled>Save</button>
   </div>
   <p data-source-status></p>
+  <p data-source-draft-status></p>
+  <section data-source-recovery hidden>
+    <h3 data-source-recovery-heading></h3>
+    <p data-source-recovery-lede></p>
+    <pre data-source-recovery-source></pre>
+    <button type="button" data-source-recovery-restore>Put it back in the editor</button>
+    <button type="button" data-source-recovery-recreate hidden>Save it as a new note</button>
+    <button type="button" data-source-recovery-discard>Discard it</button>
+  </section>
   <div class="source-editor-panes" data-source-panes>
     <div class="source-editor-tabs" role="tablist">
       <button type="button" role="tab" data-source-tab="edit" aria-selected="true">Edit</button>

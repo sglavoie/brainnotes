@@ -45,6 +45,7 @@ func TestEditorPage_RendersTheEndpointsAndIdentityTheEditorNeeds(t *testing.T) {
 		`data-source-read-endpoint="` + sourceAPIRoutePath + `"`,
 		`data-source-preview-endpoint="` + sourcePreviewAPIRoutePath + `"`,
 		`data-source-save-endpoint="` + sourceSaveAPIRoutePath + `"`,
+		`data-source-create-endpoint="` + sourceCreateAPIRoutePath + `"`,
 		`data-source-search-endpoint="` + searchAPIRoutePath + `"`,
 		`data-source-max-bytes="` + strconv.Itoa(noteops.MaxSourceBytes) + `"`,
 		`data-source-surface`,
@@ -68,10 +69,63 @@ func TestEditorPage_RendersTheEndpointsAndIdentityTheEditorNeeds(t *testing.T) {
 		`data-source-conflict-source`,
 		`data-source-conflict-overwrite`,
 		`data-source-conflict-discard`,
+		`data-source-draft-status`,
+		`data-source-recovery`,
+		`data-source-recovery-heading`,
+		`data-source-recovery-lede`,
+		`data-source-recovery-source`,
+		`data-source-recovery-restore`,
+		`data-source-recovery-recreate`,
+		`data-source-recovery-discard`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("editor page is missing %q", want)
 		}
+	}
+}
+
+// TestEditorPage_PublishesAVaultIdentity pins the field the browser keys its
+// local drafts on.
+//
+// It is asserted as "non-empty and prefixed" rather than as a literal because
+// the value is derived from the vault (see vaultIdentity) and a test that pinned
+// one string would either duplicate that derivation or force it to be constant.
+// What has to hold is that the page publishes *something* naming this vault: an
+// empty attribute silently turns every draft key into note-plus-tab, which is
+// the same key for `Alpha.md` in every vault this origin has ever served.
+func TestEditorPage_PublishesAVaultIdentity(t *testing.T) {
+	ts, srv, _ := newSourceTestServer(t, Options{})
+
+	_, body := getEditorPage(t, ts.URL, "?key=alpha")
+	identity := srv.vaultIdentity()
+	if identity == "" {
+		t.Fatal("vaultIdentity() is empty")
+	}
+	if !strings.HasPrefix(identity, enrolledVaultIdentityPrefix) &&
+		!strings.HasPrefix(identity, locatedVaultIdentityPrefix) {
+		t.Fatalf("vaultIdentity() = %q, want one of the two identity spaces", identity)
+	}
+	if !strings.Contains(body, `data-source-vault-id="`+identity+`"`) {
+		t.Fatalf("editor page does not publish the vault identity %q", identity)
+	}
+}
+
+// TestEditorPage_RecoveryPanelStartsHidden is the draft half of the same rule the
+// conflict panel's test states: the panel is filled from local storage, so a page
+// that shipped it visible would open every edit with an empty "unsaved text kept
+// in this browser" claim over a note nobody has touched.
+func TestEditorPage_RecoveryPanelStartsHidden(t *testing.T) {
+	ts, _, _ := newSourceTestServer(t, Options{})
+
+	_, body := getEditorPage(t, ts.URL, "?key=alpha")
+	if !strings.Contains(body, `data-source-recovery hidden`) {
+		t.Fatal("the recovery panel is not hidden on a freshly served editor page")
+	}
+	// The recreate button is the one control inside it that must also start
+	// hidden: it writes a *new* note, and it is only ever the right answer for a
+	// target that is gone.
+	if !strings.Contains(body, `data-source-recovery-recreate hidden`) {
+		t.Fatal("the recreate button is not hidden on a freshly served editor page")
 	}
 }
 

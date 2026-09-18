@@ -15,6 +15,7 @@ const client = (fetcher: typeof fetch) =>
       read: "/api/source",
       preview: "/api/source/preview",
       save: "/api/source/save",
+      create: "/api/source/create",
       search: "/api/search",
     },
     key: "notes/alpha",
@@ -302,5 +303,147 @@ describe("newSaveID", () => {
   it("mints a distinct id per call", () => {
     expect(newSaveID()).not.toBe(newSaveID());
     expect(newSaveID()).not.toBe("");
+  });
+});
+
+// An answer that did not come from this API at all.
+//
+// The case that forces every test below is an Access-style login redirect: the
+// session cookie lapses, the request is answered 302 to an identity provider,
+// `fetch` follows it, and the sign-in page comes back **200 OK**. Nothing about
+// the status line says anything is wrong.
+const htmlResponse = (status: number): Response =>
+  new Response("<!doctype html><title>Sign in</title>", {
+    status,
+    headers: { "Content-Type": "text/html" },
+  });
+
+// `redirected` is readonly on a constructed Response, and it is the one signal
+// that catches a sign-in page which happens to be valid JSON.
+const redirected = (response: Response): Response => {
+  Object.defineProperty(response, "redirected", { value: true });
+  return response;
+};
+
+describe("createSourceClient on an answer that is not this API's", () => {
+  // The worst outcome this prevents: `response.ok` is true, the body has no
+  // fields, and normalizeSourceDocument yields empty content with an empty
+  // revision — a blank editor over a note full of text, and a kept draft dropped
+  // as "the vault already holds this".
+  it("refuses a 200 sign-in page in place of the note, as unreachable", async () => {
+    const fetcher = vi.fn().mockResolvedValue(htmlResponse(200));
+    await expect(client(fetcher as unknown as typeof fetch).read()).rejects.toMatchObject({
+      name: "SourceReadError",
+      code: "unreachable",
+    });
+  });
+
+  it("refuses a followed redirect even when what came back is JSON", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(redirected(jsonResponse(200, { ok: true, revision: "r1", content: "" })));
+    await expect(client(fetcher as unknown as typeof fetch).read()).rejects.toMatchObject({
+      code: "unreachable",
+    });
+  });
+
+  // The two failures the editor answers differently: one is "sign in again", the
+  // other is "this note is gone and here is your text".
+  it("carries the server's own code when the server did answer", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(404, { ok: false, code: "not_found", message: "source: no note for key" }));
+    await expect(client(fetcher as unknown as typeof fetch).read()).rejects.toMatchObject({
+      code: "not_found",
+      message: "source: no note for key",
+    });
+  });
+
+  // A save is the one request where a foreign answer must not read as a
+  // refusal: the bytes may have reached the vault before the session lapsed. The
+  // empty code is deliberate — it is how this module already spells "nobody said
+  // whether it landed", so classifySaveResponse reports `answered: false` and the
+  // attempt's save_id survives for the replay.
+  it("reports a redirected save as an unknown outcome rather than a refusal", async () => {
+    const fetcher = vi.fn().mockResolvedValue(htmlResponse(200));
+    const response = await client(fetcher as unknown as typeof fetch).save({
+      content: "mine",
+      revision: "r1",
+      saveID: "save-1",
+    });
+
+    if (response.ok) {
+      throw new Error("a redirected save must not read as a success");
+    }
+    expect(response.code).toBe("");
+    const outcome = classifySaveResponse(response, "r1");
+    expect(outcome).toMatchObject({ kind: "failed", answered: false });
+    expect(outcome.message).toContain("whether the note was written is unknown");
+  });
+
+  it("reports a redirected preview rather than rendering the note as empty", async () => {
+    const fetcher = vi.fn().mockResolvedValue(htmlResponse(200));
+    await expect(client(fetcher as unknown as typeof fetch).preview("body")).rejects.toThrow(
+      "a sign-in has expired"
+    );
+  });
+});
+
+describe("createSourceClient.create", () => {
+  // A create carries no revision, and that is the point: there is nothing it
+  // could have been planned against. The server answers "something is already
+  // there" rather than overwriting whatever took the path in the meantime.
+  it("posts the path, the bytes, the save id and the token, and no revision", async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true, revision: "r1", path: "/n/alpha" }));
+    await client(fetcher as unknown as typeof fetch).create({
+      relPath: "Alpha.md",
+      content: "recovered text\n",
+      saveID: "save-2",
+    });
+
+    const [url, init] = fetcher.mock.calls[0];
+    expect(url).toBe("/api/source/create");
+    expect(init.headers["X-BN-CSRF"]).toBe("csrf-token");
+    const body = new URLSearchParams(init.body as string);
+    expect(body.get("rel_path")).toBe("Alpha.md");
+    expect(body.get("content")).toBe("recovered text\n");
+    expect(body.get("save_id")).toBe("save-2");
+    expect(body.get("token")).toBe("csrf-token");
+    expect(body.has("revision")).toBe(false);
+    expect(body.has("key")).toBe(false);
+  });
+
+  it("reports a redirected create as an unknown outcome too", async () => {
+    const fetcher = vi.fn().mockResolvedValue(htmlResponse(200));
+    const response = await client(fetcher as unknown as typeof fetch).create({
+      relPath: "Alpha.md",
+      content: "recovered text\n",
+      saveID: "save-2",
+    });
+    expect(classifySaveResponse(response, "")).toMatchObject({ kind: "failed", answered: false });
+  });
+});
+
+describe("classifySaveResponse on a vanished note", () => {
+  // Renamed, moved or deleted while this tab stayed open. It is separated from
+  // "failed" because it is the one refusal with a remedy: the text on screen has
+  // nowhere to go back to, so it is offered as a new note — and never written by
+  // itself.
+  it("reads not_found as missing rather than a plain failure", () => {
+    const outcome = classifySaveResponse(
+      normalizeSourceSaveResponse({
+        ok: false,
+        code: "not_found",
+        message: "source: Alpha.md is no longer in the vault",
+      }),
+      BASE
+    );
+    expect(outcome).toEqual({ kind: "missing", message: "source: Alpha.md is no longer in the vault" });
+  });
+
+  it("falls back to a sentence that keeps the text accounted for", () => {
+    const outcome = classifySaveResponse(normalizeSourceSaveResponse({ ok: false, code: "not_found" }), BASE);
+    expect(outcome.kind).toBe("missing");
+    expect(outcome.message).toContain("Your text is still here");
   });
 });

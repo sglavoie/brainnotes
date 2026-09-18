@@ -25,14 +25,28 @@ describe("readSourceEditorConfig", () => {
       key: "alpha",
       token: "csrf-token",
       relPath: "Alpha.md",
+      vaultID: "sync:vault-under-test",
       maxBytes: 1048576,
       endpoints: {
         read: "/api/source",
         preview: "/api/source/preview",
         save: "/api/source/save",
+        create: "/api/source/create",
         search: "/api/search",
       },
     });
+  });
+
+  // The vault identity is the one published field whose absence must not take
+  // the editor away. Without it there are no browser-local drafts — a key of
+  // note-plus-tab would be the same key for `Alpha.md` in every vault this
+  // origin has ever served — but editing and saving are untouched.
+  it("keeps the editor usable on a page with no vault identity", () => {
+    document.body.innerHTML = editorMarkup();
+    panel().removeAttribute("data-source-vault-id");
+    const config = readSourceEditorConfig(panel());
+    expect(config).not.toBeNull();
+    expect(config?.vaultID).toBe("");
   });
 
   // An editor that posts to "" is worse than no editor: it looks like it is
@@ -45,6 +59,7 @@ describe("readSourceEditorConfig", () => {
       "data-source-read-endpoint",
       "data-source-preview-endpoint",
       "data-source-save-endpoint",
+      "data-source-create-endpoint",
       "data-source-search-endpoint",
     ]) {
       document.body.innerHTML = editorMarkup();

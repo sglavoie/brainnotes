@@ -6568,6 +6568,27 @@ code {
   color: var(--bn-success);
 }
 
+/*
+ * The draft line is the vault status line's quieter neighbour, and it is styled
+ * to stay that way: smaller and no min-height, so an empty one — which is its
+ * resting state on a note nobody has edited — takes no room at all and the two
+ * are never mistaken for one two-line message about the vault.
+ */
+.source-editor-draft-status {
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.source-editor-draft-status.is-warning {
+  color: var(--bn-warning);
+}
+
+.source-editor-draft-status.is-error {
+  color: var(--bn-danger);
+}
+
 .source-editor-panes {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -6671,6 +6692,93 @@ code {
   border-radius: 0.4rem;
   background: var(--bn-surface);
   overflow: auto;
+}
+
+/*
+ * The recovery panel. It is warning-coloured rather than danger-coloured on
+ * purpose: nothing has gone wrong and nothing is at risk of being lost by
+ * ignoring it — the text is being held — but it is a question waiting for an
+ * answer, and a question in the page's ordinary colours is one a person scrolls
+ * past on their way to the editor.
+ */
+.source-editor-recovery {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--bn-warning-border);
+  border-radius: 0.4rem;
+  background: var(--bn-warning-bg);
+}
+
+/* The same pair the conflict panel carries, for the same reason: see below. */
+.source-editor-recovery[hidden] {
+  display: none;
+}
+
+.source-editor-recovery h3 {
+  margin: 0;
+  color: var(--bn-warning);
+  font-size: 1rem;
+}
+
+.source-editor-recovery-lede {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.9rem;
+}
+
+.source-editor-recovery-source {
+  max-height: 18rem;
+  margin: 0;
+  padding: 0.6rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.3rem;
+  background: var(--bn-surface);
+  font-size: 0.85rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.source-editor-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.source-editor-recovery-restore,
+.source-editor-recovery-recreate,
+.source-editor-recovery-discard {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--bn-border-strong);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/*
+ * The recreate button is the only control on this page that writes a file the
+ * vault does not have, and it appears only for a target that is gone — so it is
+ * the one button here that is not styled to look like every other button here.
+ */
+.source-editor-recovery-recreate {
+  border-color: var(--bn-accent-subtle-border);
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  font-weight: 600;
+}
+
+/*
+ * A `hidden` button inside a flex container needs its own rule for the reason
+ * the panel does: `display: flex` on the parent does not set `display` on the
+ * child, but a rule that did would outrank the user-agent `hidden`. Nothing here
+ * sets `display` on these buttons, so this exists to say that is deliberate —
+ * showDraftOffer toggles `hidden` on all three.
+ */
+.source-editor-recovery-actions > [hidden] {
+  display: none;
 }
 
 .source-editor-conflict {

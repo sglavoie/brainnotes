@@ -1663,6 +1663,14 @@ var BrainNotesApp = (() => {
     body.set("token", request.token);
     return body;
   };
+  var buildSourceCreateForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("rel_path", request.rel_path);
+    body.set("content", request.content);
+    body.set("save_id", request.save_id);
+    body.set("token", request.token);
+    return body;
+  };
   var sourceSaveConflict = (response, baseRevision) => !response.ok && response.code === "conflict" && response.revision !== "" && response.revision !== baseRevision ? { revision: response.revision, content: response.content } : null;
 
   // internal/web/static_src/daily-brief-http.ts
@@ -2128,8 +2136,8 @@ var BrainNotesApp = (() => {
       }
     };
     const run = async () => {
-      const text = input.value;
-      if (text.trim() === "") {
+      const text2 = input.value;
+      if (text2.trim() === "") {
         setStatus2("Type something to capture.", "is-error");
         return;
       }
@@ -2141,7 +2149,7 @@ var BrainNotesApp = (() => {
       submit.disabled = true;
       setStatus2("Capturing...", "is-loading");
       try {
-        const body = buildCaptureForm({ text, token: csrfToken }).toString();
+        const body = buildCaptureForm({ text: text2, token: csrfToken }).toString();
         const response = await fetcher(captureEndpoint, jsonPostRequest(csrfToken, body));
         const payload = await readResponsePayload(response);
         if (!response.ok) {
@@ -2745,7 +2753,7 @@ var BrainNotesApp = (() => {
     const request = deps.fetch || fetch;
     const fetcher = (input, init) => request(input, init);
     const confirmer = deps.confirm || ((message) => window.confirm(message));
-    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text) => navigator.clipboard.writeText(text) : void 0);
+    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text2) => navigator.clipboard.writeText(text2) : void 0);
     const globalStatusEl = queryElement(root, "#brief-global-status", HTMLElement);
     const visitDaysEl = queryElement(root, "[data-brief-activity-visit-days]", HTMLElement);
     const openCountEl = queryElement(root, "[data-brief-activity-open-count]", HTMLElement);
@@ -3470,9 +3478,9 @@ var BrainNotesApp = (() => {
       link.textContent = label;
       item.appendChild(link);
     } else {
-      const text = doc2.createElement("span");
-      text.textContent = label;
-      item.appendChild(text);
+      const text2 = doc2.createElement("span");
+      text2.textContent = label;
+      item.appendChild(text2);
     }
     if (note.folder) {
       const folder = doc2.createElement("span");
@@ -3882,29 +3890,29 @@ var BrainNotesApp = (() => {
         for (const option of options) {
           const chip = document.createElement("span");
           chip.className = "facet-chip";
-          const text = document.createElement("span");
-          text.className = "facet-chip-text";
-          text.textContent = `${option.groupLabel}: ${option.label}`;
-          chip.appendChild(text);
+          const text2 = document.createElement("span");
+          text2.className = "facet-chip-text";
+          text2.textContent = `${option.groupLabel}: ${option.label}`;
+          chip.appendChild(text2);
           if (option.count > 0) {
-            const count2 = document.createElement("span");
-            count2.className = "facet-chip-count";
-            count2.textContent = `(${option.count})`;
-            chip.appendChild(count2);
+            const count3 = document.createElement("span");
+            count3.className = "facet-chip-count";
+            count3.textContent = `(${option.count})`;
+            chip.appendChild(count3);
           }
-          const remove2 = document.createElement("button");
-          remove2.type = "button";
-          remove2.className = "facet-chip-remove";
-          remove2.textContent = "x";
-          remove2.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
-          remove2.addEventListener("click", () => {
+          const remove3 = document.createElement("button");
+          remove3.type = "button";
+          remove3.className = "facet-chip-remove";
+          remove3.textContent = "x";
+          remove3.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
+          remove3.addEventListener("click", () => {
             selected.delete(facetOptionKey(option));
             renderChips();
             renderOptions();
             emitChange();
             input.focus();
           });
-          chip.appendChild(remove2);
+          chip.appendChild(remove3);
           chipsEl.appendChild(chip);
         }
       };
@@ -3952,10 +3960,10 @@ var BrainNotesApp = (() => {
           group.textContent = option.groupLabel;
           main.appendChild(group);
           button.appendChild(main);
-          const count2 = document.createElement("span");
-          count2.className = "facet-option-count";
-          count2.textContent = String(option.count);
-          button.appendChild(count2);
+          const count3 = document.createElement("span");
+          count3.className = "facet-option-count";
+          count3.textContent = String(option.count);
+          button.appendChild(count3);
           button.addEventListener("mouseenter", () => {
             setActive2(index);
           });
@@ -6481,7 +6489,7 @@ var BrainNotesApp = (() => {
       timeStyle: "short"
     });
   };
-  var historyFileCountLabel = (count2) => count2 === 1 ? "1 path" : `${count2} paths`;
+  var historyFileCountLabel = (count3) => count3 === 1 ? "1 path" : `${count3} paths`;
   var historyConflictSummary = (conflicts) => {
     if (conflicts.length === 0) {
       return "Undo has conflicts.";
@@ -6574,8 +6582,8 @@ var BrainNotesApp = (() => {
         const meta2 = document.createElement("span");
         meta2.className = "history-meta";
         const time = formatHistoryTimestamp(entry.timestamp);
-        const count2 = historyFileCountLabel(entry.file_count || entry.files.length);
-        meta2.textContent = time ? `${time} - ${count2}` : count2;
+        const count3 = historyFileCountLabel(entry.file_count || entry.files.length);
+        meta2.textContent = time ? `${time} - ${count3}` : count3;
         main.appendChild(meta2);
         const undoButton = document.createElement("button");
         undoButton.className = "history-button history-danger";
@@ -6795,9 +6803,9 @@ var BrainNotesApp = (() => {
       return;
     }
     const layout = queryElement(doc2, "[data-note-layout]", HTMLElement);
-    const toggle = queryElement(doc2, "[data-note-sidebar-toggle]", HTMLButtonElement);
+    const toggle2 = queryElement(doc2, "[data-note-sidebar-toggle]", HTMLButtonElement);
     const metadata = queryElement(doc2, ".note-meta-sidebar", HTMLElement);
-    if (!layout || !toggle || !metadata) {
+    if (!layout || !toggle2 || !metadata) {
       return;
     }
     const resizeHandle = queryElement(
@@ -6835,10 +6843,10 @@ var BrainNotesApp = (() => {
     const applyVisibility = () => {
       layout.classList.toggle("is-metadata-hidden", !visible);
       metadata.hidden = !visible;
-      toggle.setAttribute("aria-expanded", String(visible));
+      toggle2.setAttribute("aria-expanded", String(visible));
       const label = visible ? "Hide sidebar" : "Show sidebar";
-      toggle.setAttribute("aria-label", label);
-      toggle.setAttribute("title", label);
+      toggle2.setAttribute("aria-label", label);
+      toggle2.setAttribute("title", label);
       if (visible) {
         delete doc2.documentElement.dataset.noteMetaSidebar;
       } else {
@@ -6854,7 +6862,7 @@ var BrainNotesApp = (() => {
     };
     applyWidth(preferredWidth);
     applyVisibility();
-    toggle.addEventListener("click", () => {
+    toggle2.addEventListener("click", () => {
       if (visible && isDesktop(view)) {
         setStoredTOCWidth(doc2, layout, toc, storage);
       }
@@ -6949,7 +6957,7 @@ var BrainNotesApp = (() => {
     }
     const fetcher = deps.fetch || fetch;
     const confirmer = deps.confirm || ((message) => window.confirm(message));
-    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text) => navigator.clipboard.writeText(text) : void 0);
+    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text2) => navigator.clipboard.writeText(text2) : void 0);
     let disclosureAccepted = false;
     let output = "";
     const setStatus2 = (message, kind = "") => {
@@ -7741,14 +7749,14 @@ var BrainNotesApp = (() => {
       if (!bulkRoot) {
         return;
       }
-      const count2 = selectedKeys.size;
-      bulkRoot.hidden = count2 === 0;
+      const count3 = selectedKeys.size;
+      bulkRoot.hidden = count3 === 0;
       if (selectedCountEl) {
-        selectedCountEl.textContent = count2 === 1 ? "1 selected" : `${count2} selected`;
+        selectedCountEl.textContent = count3 === 1 ? "1 selected" : `${count3} selected`;
       }
       for (const control of queryAllElements(bulkRoot, "button, input, select", HTMLElement)) {
         if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
-          control.disabled = bulkBusy || count2 === 0;
+          control.disabled = bulkBusy || count3 === 0;
         }
       }
       syncOverviewActionButton(trashButton, "trash", previewMatches("trash", {}));
@@ -7756,7 +7764,7 @@ var BrainNotesApp = (() => {
       syncOverviewActionButton(setButton, "frontmatter_set", previewMatches("frontmatter_set", readSetFields(setForm)));
       syncOverviewActionButton(unsetButton, "frontmatter_unset", previewMatches("frontmatter_unset", readUnsetFields(unsetForm)));
       if (previewApplyButton) {
-        previewApplyButton.disabled = bulkBusy || count2 === 0 || previewState === null;
+        previewApplyButton.disabled = bulkBusy || count3 === 0 || previewState === null;
       }
       if (previewClearButton) {
         previewClearButton.disabled = bulkBusy || previewState === null;
@@ -8390,10 +8398,10 @@ var BrainNotesApp = (() => {
     stat.appendChild(dd);
     list.appendChild(stat);
   };
-  var appendBadge = (doc2, parent, text, className) => {
+  var appendBadge = (doc2, parent, text2, className) => {
     const badge = doc2.createElement("span");
     badge.className = className;
-    badge.textContent = text;
+    badge.textContent = text2;
     parent.appendChild(badge);
   };
   var renderTotals = (list, totals, totalNotes) => {
@@ -8575,18 +8583,18 @@ var BrainNotesApp = (() => {
         button.classList.add("is-unsupported");
         button.title = "This value has no supported spelling and cannot be filtered on.";
       }
-      const text = doc2.createElement("span");
-      text.className = "properties-value-text";
-      text.textContent = entry.value.text;
-      button.appendChild(text);
+      const text2 = doc2.createElement("span");
+      text2.className = "properties-value-text";
+      text2.textContent = entry.value.text;
+      button.appendChild(text2);
       const kind = doc2.createElement("span");
       kind.className = "properties-value-kind";
       kind.textContent = propertyKindLabel(entry.value.kind);
       button.appendChild(kind);
-      const count2 = doc2.createElement("span");
-      count2.className = "properties-value-count";
-      count2.textContent = `${entry.notes} ${entry.notes === 1 ? "note" : "notes"}`;
-      button.appendChild(count2);
+      const count3 = doc2.createElement("span");
+      count3.className = "properties-value-count";
+      count3.textContent = `${entry.notes} ${entry.notes === 1 ? "note" : "notes"}`;
+      button.appendChild(count3);
       item.appendChild(button);
       list.appendChild(item);
     }
@@ -8618,13 +8626,13 @@ var BrainNotesApp = (() => {
       add.disabled = !editable2;
       actions.appendChild(add);
     }
-    const remove2 = doc2.createElement("button");
-    remove2.type = "button";
-    remove2.className = "properties-button properties-row-unset";
-    remove2.setAttribute("data-property-row-unset", row.rel_path);
-    remove2.textContent = "Remove";
-    remove2.disabled = !row.present;
-    actions.appendChild(remove2);
+    const remove3 = doc2.createElement("button");
+    remove3.type = "button";
+    remove3.className = "properties-button properties-row-unset";
+    remove3.setAttribute("data-property-row-unset", row.rel_path);
+    remove3.textContent = "Remove";
+    remove3.disabled = !row.present;
+    actions.appendChild(remove3);
     item.appendChild(actions);
   };
   var renderRows = (list, rows, options) => {
@@ -8715,10 +8723,10 @@ var BrainNotesApp = (() => {
     const configScope = result.config_diff.length > 0 ? ", plus brainnotes.toml" : "";
     return `${noteScope}${changeScope}${configScope}.`;
   };
-  var appendHeading = (doc2, parent, text) => {
+  var appendHeading = (doc2, parent, text2) => {
     const heading2 = doc2.createElement("h3");
     heading2.className = "properties-dialog-subheading";
-    heading2.textContent = text;
+    heading2.textContent = text2;
     parent.appendChild(heading2);
   };
   var renderBlockers = (doc2, parent, blockers, fatal) => {
@@ -9018,8 +9026,8 @@ var BrainNotesApp = (() => {
     }
     return `${match[1]}T${match[2]}${seconds}${utcOffsetLabel(parsed)}`;
   };
-  var rfc3339ToDatetimeLocal = (text) => {
-    const trimmed = text.trim();
+  var rfc3339ToDatetimeLocal = (text2) => {
+    const trimmed = text2.trim();
     if (trimmed === "") {
       return "";
     }
@@ -9032,8 +9040,8 @@ var BrainNotesApp = (() => {
       `T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`
     ].join("");
   };
-  var wikilinkTargetError = (text) => {
-    const target = text.trim();
+  var wikilinkTargetError = (text2) => {
+    const target = text2.trim();
     if (target === "") {
       return "Enter a note title.";
     }
@@ -9048,13 +9056,13 @@ var BrainNotesApp = (() => {
     }
     return "";
   };
-  var scalarValueError = (kind, text) => {
-    const value = text.trim();
+  var scalarValueError = (kind, text2) => {
+    const value = text2.trim();
     switch (kind) {
       case "string":
         return value === "" ? "Enter a value." : "";
       case "wikilink":
-        return wikilinkTargetError(text);
+        return wikilinkTargetError(text2);
       case "date":
         return DATE_PATTERN.test(value) ? "" : "Enter a date as YYYY-MM-DD.";
       case "datetime":
@@ -9080,7 +9088,7 @@ var BrainNotesApp = (() => {
         return "text";
     }
   };
-  var seedText = (kind, text) => kind === "datetime" ? rfc3339ToDatetimeLocal(text) : text;
+  var seedText = (kind, text2) => kind === "datetime" ? rfc3339ToDatetimeLocal(text2) : text2;
   var readText2 = (kind, raw) => kind === "datetime" ? datetimeLocalToRFC3339(raw) : raw.trim();
   var createSelect = (doc2, options, choices) => {
     const select = doc2.createElement("select");
@@ -9164,32 +9172,32 @@ var BrainNotesApp = (() => {
     const renumber = () => {
       const rows = Array.from(list.children);
       rows.forEach((row, index) => {
-        const remove2 = row.querySelector("[data-property-list-remove]");
-        if (remove2 instanceof HTMLButtonElement) {
-          remove2.setAttribute("aria-label", `Remove item ${index + 1}`);
-          remove2.disabled = rows.length <= 1;
+        const remove3 = row.querySelector("[data-property-list-remove]");
+        if (remove3 instanceof HTMLButtonElement) {
+          remove3.setAttribute("aria-label", `Remove item ${index + 1}`);
+          remove3.disabled = rows.length <= 1;
         }
       });
     };
-    const addRow = (text, focusIt) => {
+    const addRow = (text2, focusIt) => {
       sequence += 1;
       const row = doc2.createElement("li");
       row.className = "properties-control-list-item";
       const control = createScalarControl(doc2, {
         kind: options.items,
         allowed: options.allowed,
-        text,
+        text: text2,
         id: `${options.id}-item-${sequence}`,
         label: `${options.label} item`
       });
       controls.push(control);
       row.appendChild(control.element);
-      const remove2 = doc2.createElement("button");
-      remove2.type = "button";
-      remove2.className = "properties-button properties-control-remove";
-      remove2.setAttribute("data-property-list-remove", "");
-      remove2.textContent = "Remove";
-      remove2.addEventListener("click", () => {
+      const remove3 = doc2.createElement("button");
+      remove3.type = "button";
+      remove3.className = "properties-button properties-control-remove";
+      remove3.setAttribute("data-property-list-remove", "");
+      remove3.textContent = "Remove";
+      remove3.addEventListener("click", () => {
         const index = controls.indexOf(control);
         if (index >= 0) {
           controls.splice(index, 1);
@@ -9197,15 +9205,15 @@ var BrainNotesApp = (() => {
         row.remove();
         renumber();
       });
-      row.appendChild(remove2);
+      row.appendChild(remove3);
       list.appendChild(row);
       renumber();
       if (focusIt) {
         control.focus();
       }
     };
-    for (const text of listSeedTexts(options)) {
-      addRow(text, false);
+    for (const text2 of listSeedTexts(options)) {
+      addRow(text2, false);
     }
     const add = doc2.createElement("button");
     add.type = "button";
@@ -9533,10 +9541,10 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/properties-schema-editor.ts
-  var parseAllowedValues = (text) => {
+  var parseAllowedValues = (text2) => {
     const seen = /* @__PURE__ */ new Set();
     const out = [];
-    for (const line of text.split("\n")) {
+    for (const line of text2.split("\n")) {
       const value = line.trim();
       if (value === "" || seen.has(value)) {
         continue;
@@ -9796,7 +9804,7 @@ var BrainNotesApp = (() => {
         return "Repair notes";
     }
   };
-  var selectionLabel = (count2) => count2 === 0 ? "No notes selected." : `${count2} ${count2 === 1 ? "note" : "notes"} selected.`;
+  var selectionLabel = (count3) => count3 === 0 ? "No notes selected." : `${count3} ${count3 === 1 ? "note" : "notes"} selected.`;
   var mutationSuccessMessage = (result) => {
     const notes = `${result.affected} ${result.affected === 1 ? "note" : "notes"}`;
     const config2 = result.config_diff.length > 0 ? " and brainnotes.toml" : "";
@@ -9808,9 +9816,9 @@ var BrainNotesApp = (() => {
   var createWorkbenchEditor = (doc2) => {
     let removeOpenEditor = null;
     const close = () => {
-      const remove2 = removeOpenEditor;
+      const remove3 = removeOpenEditor;
       removeOpenEditor = null;
-      remove2?.();
+      remove3?.();
     };
     const mount = (parent, title, submitLabel, build) => {
       close();
@@ -10101,7 +10109,7 @@ var BrainNotesApp = (() => {
       });
       elements[clamped]?.focus();
     };
-    const updateRowText = (relPath, text) => {
+    const updateRowText = (relPath, text2) => {
       const element2 = rowElements().find(
         (row) => row.getAttribute("data-property-row") === relPath
       );
@@ -10109,7 +10117,7 @@ var BrainNotesApp = (() => {
       if (!value) {
         return;
       }
-      value.textContent = text;
+      value.textContent = text2;
       value.classList.remove("is-missing");
     };
     const mutations = createWorkbenchMutations({
@@ -10178,8 +10186,8 @@ var BrainNotesApp = (() => {
               return message;
             }
             const value = control.read();
-            const text = op === "replace" ? previewTextFor(value) : `${valueDisplayText(row.value)}, ${value.text}`;
-            void runImmediate(relPath, op, value, row.hash, text);
+            const text2 = op === "replace" ? previewTextFor(value) : `${valueDisplayText(row.value)}, ${value.text}`;
+            void runImmediate(relPath, op, value, row.hash, text2);
             return null;
           };
         }
@@ -10606,59 +10614,59 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/query-bar-completions.ts
   var tokenBreak = /* @__PURE__ */ new Set([" ", "	", "\n", "(", ")"]);
-  var tokenAtCursor = (text, pos) => {
-    const caret = Math.max(0, Math.min(Math.trunc(pos), text.length));
-    const head = text.slice(0, caret);
+  var tokenAtCursor = (text2, pos) => {
+    const caret = Math.max(0, Math.min(Math.trunc(pos), text2.length));
+    const head = text2.slice(0, caret);
     const quoteCount = countUnescapedQuotes(head);
     const quoted = quoteCount % 2 === 1;
     if (quoted) {
       const start2 = lastUnescapedQuote(head);
-      return { start: start2, end: caret, text: text.slice(start2, caret), quoted: true, wikilink: false };
+      return { start: start2, end: caret, text: text2.slice(start2, caret), quoted: true, wikilink: false };
     }
     const openLink = head.lastIndexOf("[[");
     if (openLink >= 0 && head.indexOf("]]", openLink) < 0) {
       return {
         start: openLink,
         end: caret,
-        text: text.slice(openLink, caret),
+        text: text2.slice(openLink, caret),
         quoted: false,
         wikilink: true
       };
     }
     let start = caret;
     while (start > 0) {
-      if (start >= 2 && text.slice(start - 2, start) === "]]") {
-        const open = text.lastIndexOf("[[", start - 2);
+      if (start >= 2 && text2.slice(start - 2, start) === "]]") {
+        const open = text2.lastIndexOf("[[", start - 2);
         if (open >= 0) {
           start = open;
           continue;
         }
       }
-      if (tokenBreak.has(text.charAt(start - 1))) {
+      if (tokenBreak.has(text2.charAt(start - 1))) {
         break;
       }
       start -= 1;
     }
-    return { start, end: caret, text: text.slice(start, caret), quoted: false, wikilink: false };
+    return { start, end: caret, text: text2.slice(start, caret), quoted: false, wikilink: false };
   };
-  var countUnescapedQuotes = (text) => {
-    let count2 = 0;
-    for (let i = 0; i < text.length; i += 1) {
-      const char = text.charAt(i);
+  var countUnescapedQuotes = (text2) => {
+    let count3 = 0;
+    for (let i = 0; i < text2.length; i += 1) {
+      const char = text2.charAt(i);
       if (char === "\\") {
         i += 1;
         continue;
       }
       if (char === '"') {
-        count2 += 1;
+        count3 += 1;
       }
     }
-    return count2;
+    return count3;
   };
-  var lastUnescapedQuote = (text) => {
+  var lastUnescapedQuote = (text2) => {
     let index = -1;
-    for (let i = 0; i < text.length; i += 1) {
-      const char = text.charAt(i);
+    for (let i = 0; i < text2.length; i += 1) {
+      const char = text2.charAt(i);
       if (char === "\\") {
         i += 1;
         continue;
@@ -10667,14 +10675,14 @@ var BrainNotesApp = (() => {
         index = i;
       }
     }
-    return index < 0 ? text.length : index;
+    return index < 0 ? text2.length : index;
   };
   var keywords = /* @__PURE__ */ new Set(["and", "or", "not"]);
   var valueSeparators = [">=", "<=", "!=", "=", ":", ">", "<"];
-  var completionContextAt = (text, pos) => {
-    const token = tokenAtCursor(text, pos);
+  var completionContextAt = (text2, pos) => {
+    const token = tokenAtCursor(text2, pos);
     if (token.wikilink) {
-      const head = text.slice(0, token.start);
+      const head = text2.slice(0, token.start);
       const owner = tokenAtCursor(head, head.length);
       const separated2 = splitFieldAndValue(owner.text);
       return {
@@ -10688,7 +10696,7 @@ var BrainNotesApp = (() => {
       };
     }
     if (token.quoted) {
-      const head = text.slice(0, token.start);
+      const head = text2.slice(0, token.start);
       const owner = tokenAtCursor(head, head.length);
       const separated2 = splitFieldAndValue(owner.text);
       return {
@@ -10764,7 +10772,7 @@ var BrainNotesApp = (() => {
     }
     return { field, arg: "", value: rest, valueOffset: restOffset };
   };
-  var unquote = (text) => text.replace(/\\(["\\])/g, "$1");
+  var unquote = (text2) => text2.replace(/\\(["\\])/g, "$1");
   var foldCompletionValue = (value) => value.trim().toLowerCase().normalize("NFC");
   var filterCompletions = (completions, prefix) => {
     const folded = foldCompletionValue(prefix);
@@ -10801,10 +10809,10 @@ var BrainNotesApp = (() => {
     }
     return out;
   };
-  var applyCompletion = (text, replace2, insert2) => {
-    const start = Math.max(0, Math.min(replace2.start, text.length));
-    const end = Math.max(start, Math.min(replace2.end, text.length));
-    const next = `${text.slice(0, start)}${insert2}${text.slice(end)}`;
+  var applyCompletion = (text2, replace2, insert2) => {
+    const start = Math.max(0, Math.min(replace2.start, text2.length));
+    const end = Math.max(start, Math.min(replace2.end, text2.length));
+    const next = `${text2.slice(0, start)}${insert2}${text2.slice(end)}`;
     return { text: next, pos: start + insert2.length };
   };
   var completionLabel = (completion) => {
@@ -10822,7 +10830,7 @@ var BrainNotesApp = (() => {
     needsGraph: false,
     error: null
   });
-  var isBlankQuery = (text) => text.trim() === "";
+  var isBlankQuery = (text2) => text2.trim() === "";
   var reduceQueryBar = (state, event) => {
     switch (event.type) {
       case "reset":
@@ -10904,17 +10912,17 @@ var BrainNotesApp = (() => {
     const lead = Array.from(query.slice(0, start), (char) => char === "	" ? "	" : " ").join("");
     return `${lead}${"^".repeat(Math.max(1, end - start))}`;
   };
-  var shouldRequestCompletions = (text, pos, cause) => {
+  var shouldRequestCompletions = (text2, pos, cause) => {
     if (cause === "manual") {
       return true;
     }
     if (cause === "focus") {
-      return text === "";
+      return text2 === "";
     }
-    if (pos <= 0 || pos > text.length) {
+    if (pos <= 0 || pos > text2.length) {
       return false;
     }
-    const previous = text.charAt(pos - 1);
+    const previous = text2.charAt(pos - 1);
     return previous.trim() !== "";
   };
   var nextActiveIndex = (current, delta, length) => {
@@ -11191,21 +11199,21 @@ var BrainNotesApp = (() => {
         params: new URLSearchParams(window.location.search)
       });
     };
-    const runValidate = (text) => {
-      validation = reduceQueryBar(validation, { type: "request", text });
+    const runValidate = (text2) => {
+      validation = reduceQueryBar(validation, { type: "request", text: text2 });
       renderAll();
-      void requester.validate(text).then((response) => {
+      void requester.validate(text2).then((response) => {
         if (response === null) {
           return;
         }
-        validation = reduceQueryBar(validation, { type: "response", text, response });
+        validation = reduceQueryBar(validation, { type: "response", text: text2, response });
         renderAll();
         const confirmed = publishableQuery(validation);
         if (confirmed !== null) {
           publish(confirmed);
         }
       }).catch(() => {
-        validation = reduceQueryBar(validation, { type: "failure", text });
+        validation = reduceQueryBar(validation, { type: "failure", text: text2 });
         renderAll();
       });
     };
@@ -11218,8 +11226,8 @@ var BrainNotesApp = (() => {
       listOpen = completions.length > 0;
       renderList();
     };
-    const runCompletions = (text, pos) => {
-      void requester.completions(text, pos).then((response) => {
+    const runCompletions = (text2, pos) => {
+      void requester.completions(text2, pos).then((response) => {
         if (response === null) {
           return;
         }
@@ -11234,9 +11242,9 @@ var BrainNotesApp = (() => {
       return typeof selection === "number" ? selection : els.input.value.length;
     };
     const acceptCompletion2 = (completion) => {
-      const text = els.input.value;
-      const context = completionContextAt(text, caretPosition());
-      const edit2 = applyCompletion(text, context.replace, completion.insert);
+      const text2 = els.input.value;
+      const context = completionContextAt(text2, caretPosition());
+      const edit2 = applyCompletion(text2, context.replace, completion.insert);
       els.input.value = edit2.text;
       els.input.setSelectionRange(edit2.pos, edit2.pos);
       els.input.focus();
@@ -11246,14 +11254,14 @@ var BrainNotesApp = (() => {
         completionCause: context.kind === "field" ? "manual" : null
       });
     };
-    const requestCompletions = (text, cause) => {
+    const requestCompletions = (text2, cause) => {
       const pos = caretPosition();
-      if (!shouldRequestCompletions(text, pos, cause)) {
+      if (!shouldRequestCompletions(text2, pos, cause)) {
         closeList();
         return;
       }
       if (listOpen) {
-        const context = completionContextAt(text, pos);
+        const context = completionContextAt(text2, pos);
         completions = filterCompletions(completions, context.prefix);
         activeIndex = completions.length > 0 ? Math.min(activeIndex, completions.length - 1) : -1;
         renderList();
@@ -11262,15 +11270,15 @@ var BrainNotesApp = (() => {
         runCompletions(els.input.value, caretPosition());
       }, cause === "manual" ? 0 : completionsDebounceMs);
     };
-    const handleTextChange = (text, { immediate = false, completionCause = "input" } = {}) => {
-      validation = reduceQueryBar(validation, { type: "input", text });
+    const handleTextChange = (text2, { immediate = false, completionCause = "input" } = {}) => {
+      validation = reduceQueryBar(validation, { type: "input", text: text2 });
       renderAll();
-      if (isBlankQuery(text)) {
+      if (isBlankQuery(text2)) {
         validateDebounce.cancel();
         requester.cancel();
         publish("");
         if (completionCause === "focus" || completionCause === "manual") {
-          requestCompletions(text, completionCause);
+          requestCompletions(text2, completionCause);
         } else {
           closeList();
         }
@@ -11280,7 +11288,7 @@ var BrainNotesApp = (() => {
         runValidate(els.input.value);
       }, immediate ? 0 : validateDebounceMs);
       if (completionCause !== null) {
-        requestCompletions(text, completionCause);
+        requestCompletions(text2, completionCause);
       }
     };
     els.input.addEventListener("input", () => {
@@ -12000,8 +12008,8 @@ var BrainNotesApp = (() => {
       if (state.response.results.length === 0) {
         return ["No related notes are available in this mode.", "is-empty"];
       }
-      const count2 = state.response.results.length;
-      return [`Showing ${count2} related ${count2 === 1 ? "note" : "notes"}.`, "is-success"];
+      const count3 = state.response.results.length;
+      return [`Showing ${count3} related ${count3 === 1 ? "note" : "notes"}.`, "is-success"];
     }
     return ["Select a mode to load related notes.", ""];
   };
@@ -12245,16 +12253,16 @@ var BrainNotesApp = (() => {
     }
   };
   var nextModeIndex = (key, currentIndex) => {
-    const count2 = relatedModeDefinitions.length;
+    const count3 = relatedModeDefinitions.length;
     switch (key) {
       case "ArrowLeft":
-        return (currentIndex - 1 + count2) % count2;
+        return (currentIndex - 1 + count3) % count3;
       case "ArrowRight":
-        return (currentIndex + 1) % count2;
+        return (currentIndex + 1) % count3;
       case "Home":
         return 0;
       case "End":
-        return count2 - 1;
+        return count3 - 1;
       default:
         return null;
     }
@@ -13184,6 +13192,47 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/source-save.ts
+  var SourceReadError = class extends Error {
+    code;
+    constructor(message, code) {
+      super(message);
+      this.name = "SourceReadError";
+      this.code = code;
+    }
+  };
+  var unreachableCode = "unreachable";
+  var signInMessage = "The vault did not answer \u2014 the reply came from somewhere else, which usually means a sign-in has expired. Nothing was lost; sign in again and reload this page.";
+  var foreignSaveMessage = "The vault did not answer \u2014 the reply came from somewhere else, which usually means a sign-in has expired, so whether the note was written is unknown. Sign in again and press Save to retry; the same submission cannot be written twice.";
+  var foreignAnswer = (response, payload) => response.redirected || payload === null || typeof payload !== "object";
+  var readSource = async (fetcher, endpoint, key) => {
+    const url = `${endpoint}?key=${encodeURIComponent(key)}`;
+    const response = await fetcher(url, { headers: { Accept: "application/json" } });
+    const payload = await readJSON(response);
+    if (foreignAnswer(response, payload)) {
+      throw new SourceReadError(signInMessage, unreachableCode);
+    }
+    if (!response.ok) {
+      throw new SourceReadError(
+        messageFrom(payload, `The note's source could not be loaded (${response.status}).`),
+        codeFrom(payload)
+      );
+    }
+    return normalizeSourceDocument(payload);
+  };
+  var previewSource = async (post, endpoint, content2, token) => {
+    const { response, payload } = await post(endpoint, buildSourcePreviewForm({ content: content2, token }));
+    if (foreignAnswer(response, payload)) {
+      throw new Error(signInMessage);
+    }
+    const html2 = normalizeSourcePreviewHTML(payload);
+    if (html2 === "") {
+      const message = messageFrom(payload, "");
+      if (message !== "") {
+        throw new Error(message);
+      }
+    }
+    return html2;
+  };
   var createSourceClient = (options) => {
     const fetcher = options.fetch || fetch;
     const post = async (url, body) => {
@@ -13196,38 +13245,24 @@ var BrainNotesApp = (() => {
         },
         body: body.toString()
       });
-      return readJSON(response);
+      return { response, payload: await readJSON(response) };
+    };
+    const postSave = async (url, body) => {
+      const { response, payload } = await post(url, body);
+      if (foreignAnswer(response, payload)) {
+        return { ok: false, code: "", message: foreignSaveMessage, revision: "", content: "", changed: false };
+      }
+      return normalizeSourceSaveResponse(payload);
     };
     return {
-      async read() {
-        const url = `${options.endpoints.read}?key=${encodeURIComponent(options.key)}`;
-        const response = await fetcher(url, { headers: { Accept: "application/json" } });
-        const payload = await readJSON(response);
-        if (!response.ok) {
-          throw new Error(messageFrom(payload, `The note's source could not be loaded (${response.status}).`));
-        }
-        return normalizeSourceDocument(payload);
-      },
-      async preview(content2) {
-        const payload = await post(
-          options.endpoints.preview,
-          buildSourcePreviewForm({ content: content2, token: options.token })
-        );
-        const html2 = normalizeSourcePreviewHTML(payload);
-        if (html2 === "") {
-          const message = messageFrom(payload, "");
-          if (message !== "") {
-            throw new Error(message);
-          }
-        }
-        return html2;
-      },
+      read: () => readSource(fetcher, options.endpoints.read, options.key),
+      preview: (content2) => previewSource(post, options.endpoints.preview, content2, options.token),
       // save never throws on a refusal. Every arm of the envelope is a fact the
       // editor has to act on — a stale revision offers a merge, a snapshot
       // failure means the bytes landed — and an exception would flatten all of
       // them into "something went wrong".
       async save(request) {
-        const payload = await post(
+        return postSave(
           options.endpoints.save,
           buildSourceSaveForm({
             key: options.key,
@@ -13237,7 +13272,22 @@ var BrainNotesApp = (() => {
             token: options.token
           })
         );
-        return normalizeSourceSaveResponse(payload);
+      },
+      // create writes a note at a path rather than over a key, and it is here for
+      // exactly one caller: a recovered draft whose note is no longer in the
+      // vault. It carries no revision because there is nothing to have been
+      // planned against — the path either is free, or the server refuses with the
+      // bytes that are in the way.
+      async create(request) {
+        return postSave(
+          options.endpoints.create,
+          buildSourceCreateForm({
+            rel_path: request.relPath,
+            content: request.content,
+            save_id: request.saveID,
+            token: options.token
+          })
+        );
       },
       async search(url) {
         const response = await fetcher(url, { headers: { Accept: "application/json" } });
@@ -13248,12 +13298,13 @@ var BrainNotesApp = (() => {
       }
     };
   };
-  var newSaveID = () => {
+  var newSaveID = () => randomID("save");
+  var randomID = (prefix) => {
     const cryptoAPI = globalThis.crypto;
     if (cryptoAPI && typeof cryptoAPI.randomUUID === "function") {
       return cryptoAPI.randomUUID();
     }
-    return `save-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    return `${prefix}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
   };
   var classifySaveResponse = (response, baseRevision) => {
     if (response.ok) {
@@ -13268,11 +13319,20 @@ var BrainNotesApp = (() => {
         message: response.message || "The note changed since it was loaded, so nothing was written."
       };
     }
+    return classifyFailedSave(response, baseRevision);
+  };
+  var classifyFailedSave = (response, baseRevision) => {
     if (response.changed && response.revision !== "") {
       return {
         kind: "landed",
         revision: response.revision,
         message: response.message || "The note was written but could not be snapshotted."
+      };
+    }
+    if (response.code === notFoundCode) {
+      return {
+        kind: "missing",
+        message: response.message || "This note is no longer in the vault, so there was nothing to save over. Your text is still here."
       };
     }
     if (isUnmovedConflict(response, baseRevision)) {
@@ -13294,6 +13354,16 @@ var BrainNotesApp = (() => {
       };
     }
     return { kind: "failed", answered: true, message: response.message || "The note could not be saved." };
+  };
+  var notFoundCode = "not_found";
+  var codeFrom = (payload) => {
+    if (payload && typeof payload === "object") {
+      const code = payload.code;
+      if (typeof code === "string") {
+        return code.trim();
+      }
+    }
+    return "";
   };
   var readJSON = async (response) => {
     try {
@@ -13358,22 +13428,769 @@ var BrainNotesApp = (() => {
     };
   };
   var paneName = (value) => value === "preview" ? "preview" : "edit";
-  var arrowTarget = (event, index, count2) => {
-    if (count2 === 0) {
+  var arrowTarget = (event, index, count3) => {
+    if (count3 === 0) {
       return null;
     }
     switch (event.key) {
       case "ArrowRight":
-        return (index + 1) % count2;
+        return (index + 1) % count3;
       case "ArrowLeft":
-        return (index - 1 + count2) % count2;
+        return (index - 1 + count3) % count3;
       case "Home":
         return 0;
       case "End":
-        return count2 - 1;
+        return count3 - 1;
       default:
         return null;
     }
+  };
+
+  // internal/web/static_src/source-draft-recovery.ts
+  var decideDraftRecovery = (input) => {
+    const ordered = [...input.drafts].sort((left, right) => right.updatedAt - left.updatedAt);
+    if (input.vault.kind !== "loaded") {
+      const draft = ordered[0];
+      return {
+        offer: draft ? offerFor(input.vault.kind, draft, input.ownDraftID, "", "") : null,
+        superseded: []
+      };
+    }
+    const { revision, content: content2 } = input.vault;
+    const superseded = [];
+    let offer = null;
+    for (const draft of ordered) {
+      if (draft.content === content2) {
+        superseded.push(draft.draftID);
+        continue;
+      }
+      offer ??= offerFor(
+        draft.baseRevision === revision ? "resume" : "stale",
+        draft,
+        input.ownDraftID,
+        content2,
+        revision
+      );
+    }
+    return { offer, superseded };
+  };
+  var offerFromEditor = (draft) => ({
+    kind: "missing",
+    draft,
+    sameTab: true,
+    source: "editor",
+    vaultContent: "",
+    vaultRevision: ""
+  });
+  var offerFor = (kind, draft, ownDraftID, vaultContent, vaultRevision) => ({
+    kind,
+    draft,
+    sameTab: draft.draftID === ownDraftID,
+    source: "storage",
+    vaultContent,
+    vaultRevision
+  });
+  var draftOfferCopy = (offer, when) => {
+    const rel = offer.draft.relPath || "this note";
+    const kept = offer.source === "editor" ? "The text in the editor has not been written anywhere." : `${offer.sameTab ? "This tab" : "Another tab"} kept this text in this browser ${when}, and it never reached the vault.`;
+    switch (offer.kind) {
+      case "resume":
+        return {
+          heading: "Unsaved text kept in this browser",
+          lede: `${kept} ${rel} has not changed since, so putting it back leaves you where you were. It is still not saved until you save it.`,
+          restore: true,
+          recreate: false
+        };
+      case "stale":
+        return {
+          heading: "Unsaved text kept in this browser, and the note has moved on",
+          lede: `${kept} ${rel} has changed since, so this text is not based on what the vault holds now. Putting it back shows you both versions and writes neither.`,
+          restore: true,
+          recreate: false
+        };
+      case "missing":
+        return {
+          heading: "The note is gone, and this text is still here",
+          lede: `${kept} ${rel} is no longer in the vault \u2014 renamed, moved, or deleted \u2014 so there is nothing to save over. You can write it back as a new note at that path, or discard it.`,
+          restore: false,
+          recreate: true
+        };
+      default:
+        return {
+          heading: "Unsaved text kept in this browser",
+          lede: `${kept} The vault could not be reached, so nothing here has been compared against it and nothing has been thrown away. This text will still be here when the note can be loaded again.`,
+          restore: false,
+          recreate: false
+        };
+    }
+  };
+  var describeDraftTime = (updatedAt, now) => {
+    const seconds = Math.max(0, Math.round((now - updatedAt) / 1e3));
+    if (seconds < 45) {
+      return "moments ago";
+    }
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) {
+      return `${count(minutes, "minute")} ago`;
+    }
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) {
+      return `${count(hours, "hour")} ago`;
+    }
+    return `${count(Math.round(hours / 24), "day")} ago`;
+  };
+  var count = (value, unit) => `${value} ${unit}${value === 1 ? "" : "s"}`;
+
+  // internal/web/static_src/source-draft-panel.ts
+  var draftStatusMessages = {
+    kept: "Unsaved text is being kept in this browser only. It is not in the vault until you save.",
+    unavailable: "This browser will not keep a local copy of unsaved text, so nothing is held outside this tab. Save before you leave the page.",
+    refused: "This browser would not keep a copy of the unsaved text \u2014 its storage is full. Nothing is held outside this tab; save before you leave the page.",
+    // There is one slot per tab, and after a reload the recovered text is in it.
+    // Text typed on top of an unanswered offer cannot go there as well, and a
+    // person typing into a page that is quietly keeping nothing is exactly who
+    // this feature exists for — so the page says which of the two it is holding.
+    deferred: "The recovered text is still being kept in this browser, so what you are typing now is not. Restore or discard it and this tab will start keeping the new text.",
+    restored: "The kept text is back in the editor. It is still not in the vault until you save.",
+    // The same answer, when taking it cost the other text. There is one slot per
+    // tab: restoring another tab's draft puts it in this tab's slot, and whatever
+    // this tab was keeping there — a previous session's record nobody had answered
+    // for yet — is overwritten by it. Saying so is the whole of what can be done
+    // about it, and saying nothing would be a copy quietly disappearing at the one
+    // moment somebody was told their text was safe.
+    replaced: "The kept text is back in the editor. It is still not in the vault until you save. This tab keeps one copy, so the other text it had kept from an earlier session is gone.",
+    discarded: "The kept text has been discarded. The editor is unchanged.",
+    peerSaved: "Another tab saved this note. This tab is still showing the version it loaded."
+  };
+  var setDraftStatus = (elements, message, kind = "") => {
+    setStatusText(elements.draftStatus, message, kind);
+  };
+  var showDraftOffer = (elements, offer, when) => {
+    if (!elements.recovery) {
+      return;
+    }
+    const copy = draftOfferCopy(offer, when);
+    setText(elements.recoveryHeading, copy.heading);
+    setText(elements.recoveryLede, copy.lede);
+    setText(elements.recoverySource, offer.draft.content);
+    elements.recovery.setAttribute("data-source-recovery-kind", offer.kind);
+    toggle(elements.recoveryRestore, copy.restore);
+    toggle(elements.recoveryRecreate, copy.recreate);
+    toggle(elements.recoveryDiscard, true);
+    elements.recovery.hidden = false;
+  };
+  var hideDraftOffer = (elements) => {
+    if (!elements.recovery) {
+      return;
+    }
+    elements.recovery.hidden = true;
+    elements.recovery.removeAttribute("data-source-recovery-kind");
+    setText(elements.recoverySource, "");
+  };
+  var setText = (element2, value) => {
+    if (element2) {
+      element2.textContent = value;
+    }
+  };
+  var toggle = (element2, shown) => {
+    if (element2) {
+      element2.hidden = !shown;
+    }
+  };
+
+  // internal/web/static_src/source-draft.ts
+  var draftSchemaVersion = 1;
+  var draftKeyPrefix = `bn.draft.${draftSchemaVersion}|`;
+  var savedKeyPrefix = `bn.draft-saved.${draftSchemaVersion}|`;
+  var defaultMaxAgeMs = 14 * 24 * 60 * 60 * 1e3;
+  var resolveDraftStorage = (view = globalThis.window) => {
+    try {
+      const storage = view?.localStorage;
+      if (!storage) {
+        return null;
+      }
+      const probe = `${draftKeyPrefix}probe`;
+      storage.setItem(probe, "1");
+      storage.removeItem(probe);
+      return storage;
+    } catch {
+      return null;
+    }
+  };
+  var resolveDraftTabID = (newID, view = globalThis.window) => {
+    const key = `bn.draft-tab.${draftSchemaVersion}`;
+    try {
+      const storage = view?.sessionStorage;
+      if (storage) {
+        const existing = storage.getItem(key);
+        if (existing) {
+          return existing;
+        }
+        const minted = newID();
+        storage.setItem(key, minted);
+        return minted;
+      }
+    } catch {
+    }
+    return newID();
+  };
+  var createSourceDraftStore = (options) => {
+    const storage = options.storage;
+    const now = options.now ?? (() => Date.now());
+    const maxAgeMs = options.maxAgeMs ?? defaultMaxAgeMs;
+    const notePrefix = `${draftKeyPrefix}${encode(options.vaultID)}|${encode(options.noteKey)}|`;
+    const ownKey = `${notePrefix}${encode(options.draftID)}`;
+    const savedKey = `${savedKeyPrefix}${encode(options.vaultID)}|${encode(options.noteKey)}`;
+    const write = (key, value) => {
+      if (!storage) {
+        return "unavailable";
+      }
+      try {
+        storage.setItem(key, value);
+        return "stored";
+      } catch {
+        return evictOldestForeignDraft(storage, ownKey) && retry(storage, key, value) ? "stored" : "refused";
+      }
+    };
+    if (storage) {
+      pruneExpiredDrafts(storage, now() - maxAgeMs);
+    }
+    return {
+      draftID: options.draftID,
+      available: () => storage !== null,
+      keep(input) {
+        const draft = {
+          version: draftSchemaVersion,
+          vaultID: options.vaultID,
+          noteKey: options.noteKey,
+          relPath: input.relPath,
+          baseRevision: input.baseRevision,
+          draftID: options.draftID,
+          content: input.content,
+          updatedAt: now()
+        };
+        return write(ownKey, JSON.stringify(draft));
+      },
+      drop(draftID) {
+        remove(storage, draftID === void 0 ? ownKey : `${notePrefix}${encode(draftID)}`);
+      },
+      list() {
+        return readDrafts(storage, notePrefix).sort((left, right) => right.updatedAt - left.updatedAt);
+      },
+      announceSaved(revision) {
+        if (!storage) {
+          return;
+        }
+        try {
+          storage.setItem(savedKey, JSON.stringify({ revision, at: now() }));
+        } catch {
+        }
+      },
+      peerSavedRevision(key, newValue) {
+        if (key !== savedKey || !newValue) {
+          return null;
+        }
+        try {
+          const parsed = JSON.parse(newValue);
+          const revision = parsed?.revision;
+          return typeof revision === "string" && revision !== "" ? revision : null;
+        } catch {
+          return null;
+        }
+      }
+    };
+  };
+  var retry = (storage, key, value) => {
+    try {
+      storage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  var remove = (storage, key) => {
+    if (!storage) {
+      return;
+    }
+    try {
+      storage.removeItem(key);
+    } catch {
+    }
+  };
+  var draftKeys = (storage, prefix) => {
+    const keys = [];
+    try {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key !== null && key.startsWith(prefix)) {
+          keys.push(key);
+        }
+      }
+    } catch {
+      return keys;
+    }
+    return keys;
+  };
+  var readDrafts = (storage, prefix) => {
+    if (!storage) {
+      return [];
+    }
+    const drafts = [];
+    for (const key of draftKeys(storage, prefix)) {
+      const draft = parseDraft(safeGet(storage, key));
+      if (draft) {
+        drafts.push(draft);
+      }
+    }
+    return drafts;
+  };
+  var safeGet = (storage, key) => {
+    try {
+      return storage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  var parseDraft = (raw) => {
+    if (!raw) {
+      return null;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const record = parsed;
+    if (!record || record.version !== draftSchemaVersion) {
+      return null;
+    }
+    if (typeof record.content !== "string" || typeof record.draftID !== "string") {
+      return null;
+    }
+    return {
+      version: draftSchemaVersion,
+      vaultID: text(record.vaultID),
+      noteKey: text(record.noteKey),
+      relPath: text(record.relPath),
+      baseRevision: text(record.baseRevision),
+      draftID: record.draftID,
+      content: record.content,
+      updatedAt: typeof record.updatedAt === "number" && Number.isFinite(record.updatedAt) ? record.updatedAt : 0
+    };
+  };
+  var text = (value) => typeof value === "string" ? value : "";
+  var pruneExpiredDrafts = (storage, before) => {
+    for (const key of draftKeys(storage, draftKeyPrefix)) {
+      const draft = parseDraft(safeGet(storage, key));
+      if (!draft || draft.updatedAt < before) {
+        remove(storage, key);
+      }
+    }
+  };
+  var evictOldestForeignDraft = (storage, except) => {
+    let oldestKey = null;
+    let oldestAt = Number.POSITIVE_INFINITY;
+    for (const key of draftKeys(storage, draftKeyPrefix)) {
+      if (key === except) {
+        continue;
+      }
+      const draft = parseDraft(safeGet(storage, key));
+      const at = draft ? draft.updatedAt : -1;
+      if (at < oldestAt) {
+        oldestAt = at;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey === null) {
+      return false;
+    }
+    remove(storage, oldestKey);
+    return true;
+  };
+  var encode = (value) => encodeURIComponent(value);
+
+  // internal/web/static_src/source-editor-drafts.ts
+  var defaultDelayMs = 300;
+  var createDraftKeeper = (options) => {
+    const { store, elements, host } = options;
+    const writer = createDraftWriter(options);
+    const presenter = createOfferPresenter(options, writer);
+    const unbind = bindDraftEvents({
+      elements,
+      view: options.view,
+      store,
+      baseRevision: () => host.baseRevision(),
+      onRestore: presenter.onRestore,
+      onRecreate: presenter.onRecreate,
+      onDiscard: presenter.onDiscard,
+      onFlush: writer.flush,
+      onPeerSave: () => {
+        writer.unannounce();
+        setDraftStatus(elements, draftStatusMessages.peerSaved, "is-warning");
+      }
+    });
+    if (!store?.available()) {
+      setDraftStatus(elements, draftStatusMessages.unavailable, "is-warning");
+    }
+    return {
+      kept: () => store?.list() ?? [],
+      keep: writer.keep,
+      flush: writer.flush,
+      adopted(content2, revision) {
+        writer.adopted();
+        presenter.revised(content2, revision);
+      },
+      announce(revision) {
+        store?.announceSaved(revision);
+      },
+      present: presenter.present,
+      offerRecreate: presenter.offerRecreate,
+      dispose() {
+        writer.cancel();
+        unbind();
+      }
+    };
+  };
+  var createDraftWriter = (options) => {
+    const delayMs = options.delayMs ?? defaultDelayMs;
+    let timer = null;
+    let announced = false;
+    let stopped = false;
+    let held = false;
+    const cancel = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    const hold = (next) => {
+      if (held !== next) {
+        announced = false;
+      }
+      held = next;
+    };
+    const holding = () => {
+      if (held && !ownSlotHolds(options.store)) {
+        hold(false);
+      }
+      return held;
+    };
+    const write = () => {
+      if (stopped) {
+        return;
+      }
+      const heldNow = holding();
+      announced = writeDraft(options, announced, heldNow);
+    };
+    return {
+      keep() {
+        if (timer !== null) {
+          return;
+        }
+        timer = setTimeout(() => {
+          timer = null;
+          write();
+        }, delayMs);
+      },
+      flush() {
+        cancel();
+        write();
+      },
+      adopted() {
+        cancel();
+        adoptDraft(options, holding());
+        announced = false;
+      },
+      cancel,
+      hold,
+      holding,
+      unannounce() {
+        announced = false;
+      },
+      spoke() {
+        announced = true;
+      },
+      stop() {
+        stopped = true;
+        cancel();
+      }
+    };
+  };
+  var ownSlotHolds = (store) => store === null || store.list().some((draft) => draft.draftID === store.draftID);
+  var ownSlotKeeps = (store, content2) => store !== null && store.list().some((draft) => draft.draftID === store.draftID && draft.content === content2);
+  var adoptDraft = (options, held) => {
+    const { store, elements } = options;
+    if (!held) {
+      store?.drop();
+    }
+    if (store?.available()) {
+      setDraftStatus(elements, "");
+    }
+  };
+  var writeDraft = (options, announced, held) => {
+    const { store, elements, config: config2, host } = options;
+    const status = host.status();
+    if (!store || status === "unknown") {
+      return announced;
+    }
+    if (held) {
+      if (status === "unsaved") {
+        if (!announced) {
+          setDraftStatus(elements, draftStatusMessages.deferred, "is-warning");
+        }
+        return true;
+      }
+      if (announced) {
+        setDraftStatus(elements, "");
+      }
+      return false;
+    }
+    if (status === "held") {
+      store.drop();
+      if (announced) {
+        setDraftStatus(elements, "");
+      }
+      return false;
+    }
+    const outcome = store.keep({
+      relPath: config2.relPath,
+      baseRevision: host.baseRevision(),
+      content: host.currentContent()
+    });
+    return reportWriteOutcome(elements, outcome, announced);
+  };
+  var createSlotHold = (store, writer) => {
+    const ownID = store?.draftID ?? "";
+    const release = () => {
+      writer.hold(false);
+    };
+    return {
+      unanswered: writer.holding,
+      claim(kept) {
+        writer.hold(kept.some((draft) => draft.draftID === ownID));
+      },
+      release,
+      declined(decided) {
+        if (decided.source === "storage" && decided.draft.draftID === ownID) {
+          release();
+        }
+      },
+      drop(ids) {
+        for (const id2 of ids) {
+          store?.drop(id2);
+          if (id2 === ownID) {
+            release();
+          }
+        }
+      }
+    };
+  };
+  var reviseStanding = (standing, ownID, reading, panel) => {
+    if (!standing) {
+      return;
+    }
+    if (standing.source === "editor") {
+      panel.reoffer();
+      return;
+    }
+    const decision = decideDraftRecovery({
+      drafts: [standing.draft],
+      ownDraftID: ownID,
+      vault: reading
+    });
+    panel.drop(decision.superseded);
+    if (!decision.offer) {
+      panel.reoffer();
+      return;
+    }
+    panel.show(decision.offer);
+  };
+  var createOfferPresenter = (options, writer) => {
+    const { store, elements } = options;
+    const ownID = store?.draftID ?? "";
+    const slot = createSlotHold(store, writer);
+    let offer = null;
+    let reading = { kind: "unreachable" };
+    const show = (next) => {
+      offer = next;
+      if (!next) {
+        hideDraftOffer(elements);
+        return;
+      }
+      showDraftOffer(elements, next, describeDraftTime(next.draft.updatedAt, options.now()));
+    };
+    const reoffer = () => {
+      const kept = (store?.list() ?? []).filter(
+        (draft) => slot.unanswered() || draft.draftID !== ownID
+      );
+      const decision = decideDraftRecovery({ drafts: kept, ownDraftID: ownID, vault: reading });
+      slot.drop(decision.superseded);
+      show(decision.offer);
+    };
+    const panel = { show, drop: slot.drop, reoffer };
+    return {
+      ...createOfferActions(options, writer, {
+        current: () => offer,
+        ownHeld: slot.unanswered,
+        declined: slot.declined,
+        chosen: slot.release,
+        show,
+        reoffer
+      }),
+      present(kept, vault) {
+        reading = vault;
+        const decision = decideDraftRecovery({ drafts: kept, ownDraftID: ownID, vault });
+        slot.claim(kept);
+        slot.drop(decision.superseded);
+        show(decision.offer);
+      },
+      revised(content2, revision) {
+        reading = { kind: "loaded", revision, content: content2 };
+        reviseStanding(offer, ownID, reading, panel);
+      },
+      offerRecreate(content2) {
+        reading = { kind: "missing" };
+        show(offerFromEditor(syntheticDraft(options, content2)));
+      }
+    };
+  };
+  var restoreOffer = (options, writer, controls, restored) => {
+    const { store, elements, host } = options;
+    const spent = restored.draft.draftID !== store?.draftID && controls.ownHeld();
+    host.restore(restored);
+    controls.chosen();
+    controls.show(null);
+    setDraftStatus(
+      elements,
+      spent ? draftStatusMessages.replaced : draftStatusMessages.restored,
+      "is-warning"
+    );
+    writer.spoke();
+    writer.flush();
+    if (restored.draft.draftID !== store?.draftID && ownSlotKeeps(store, restored.draft.content)) {
+      store?.drop(restored.draft.draftID);
+    }
+  };
+  var createOfferActions = (options, writer, controls) => {
+    const { store, elements, host } = options;
+    let creating = false;
+    const busy = () => creating || host.saving();
+    return {
+      onRestore() {
+        const restored = controls.current();
+        if (!restored || busy()) {
+          return;
+        }
+        restoreOffer(options, writer, controls, restored);
+      },
+      onRecreate() {
+        const pending = controls.current();
+        if (!pending || busy()) {
+          return;
+        }
+        creating = true;
+        void recreate(options, pending, () => {
+          writer.stop();
+          if (pending.source === "storage" || !controls.ownHeld()) {
+            store?.drop(pending.draft.draftID);
+          }
+          controls.chosen();
+          controls.show(null);
+        }).finally(() => {
+          creating = false;
+        });
+      },
+      onDiscard() {
+        const discarded = controls.current();
+        if (!discarded || creating) {
+          return;
+        }
+        if (discarded.source === "storage") {
+          store?.drop(discarded.draft.draftID);
+        }
+        controls.declined(discarded);
+        controls.show(null);
+        setDraftStatus(elements, draftStatusMessages.discarded);
+        controls.reoffer();
+        if (controls.ownHeld()) {
+          writer.unannounce();
+        }
+        writer.keep();
+      }
+    };
+  };
+  var reportWriteOutcome = (elements, outcome, announced) => {
+    if (outcome === "refused") {
+      setDraftStatus(elements, draftStatusMessages.refused, "is-error");
+      return false;
+    }
+    if (outcome === "unavailable") {
+      setDraftStatus(elements, draftStatusMessages.unavailable, "is-warning");
+      return false;
+    }
+    if (!announced) {
+      setDraftStatus(elements, draftStatusMessages.kept);
+    }
+    return true;
+  };
+  var syntheticDraft = (options, content2) => ({
+    version: draftSchemaVersion,
+    vaultID: options.config.vaultID,
+    noteKey: options.config.key,
+    relPath: options.config.relPath,
+    baseRevision: options.host.baseRevision(),
+    draftID: options.store?.draftID ?? "",
+    content: content2,
+    updatedAt: options.now()
+  });
+  var recreate = async (options, offer, done) => {
+    const { host, elements } = options;
+    host.setStatus("Writing the kept text back as a new note\u2026", "is-loading");
+    try {
+      const response = await options.client.create({
+        relPath: offer.draft.relPath,
+        content: offer.draft.content,
+        saveID: newSaveID()
+      });
+      if (!response.ok) {
+        host.setStatus(response.message || "The note could not be created.", "is-error");
+        return;
+      }
+      done();
+      setDraftStatus(elements, "");
+      host.setStatus(response.message || "Created.", "is-success");
+      options.navigate(response.path);
+    } catch (error) {
+      host.setStatus(
+        error instanceof Error && error.message !== "" ? error.message : "The note could not be created.",
+        "is-error"
+      );
+    }
+  };
+  var bindDraftEvents = (options) => {
+    const { elements, view } = options;
+    elements.recoveryRestore?.addEventListener("click", options.onRestore);
+    elements.recoveryRecreate?.addEventListener("click", options.onRecreate);
+    elements.recoveryDiscard?.addEventListener("click", options.onDiscard);
+    const onHide = () => options.onFlush();
+    view?.addEventListener("beforeunload", onHide);
+    view?.addEventListener("pagehide", onHide);
+    const onStorage = (event) => {
+      const revision = options.store?.peerSavedRevision(event.key, event.newValue);
+      if (revision && revision !== options.baseRevision()) {
+        options.onPeerSave();
+      }
+    };
+    view?.addEventListener("storage", onStorage);
+    return () => {
+      elements.recoveryRestore?.removeEventListener("click", options.onRestore);
+      elements.recoveryRecreate?.removeEventListener("click", options.onRecreate);
+      elements.recoveryDiscard?.removeEventListener("click", options.onDiscard);
+      view?.removeEventListener("beforeunload", onHide);
+      view?.removeEventListener("pagehide", onHide);
+      view?.removeEventListener("storage", onStorage);
+    };
   };
 
   // internal/web/static_src/source-editor-controller.ts
@@ -13398,13 +14215,23 @@ var BrainNotesApp = (() => {
         elements.save.disabled = state.saving || !dirty() && state.pendingSave === null;
       }
     };
-    const adopt = (content2, revision) => {
+    const drafts = createKeeper(deps, state, {
+      preview,
+      panes,
+      refreshSaveButton,
+      dirty,
+      setStatus: setStatus2
+    });
+    const adopt = (content2, revision, settled = true) => {
       state.savedContent = content2;
       state.baseRevision = revision;
       state.pendingSave = null;
+      if (settled) {
+        drafts.adopted(content2, revision);
+      }
       refreshSaveButton();
     };
-    const ctx = { setStatus: setStatus2, adopt, refreshSaveButton, preview, panes };
+    const ctx = { setStatus: setStatus2, adopt, refreshSaveButton, preview, panes, drafts };
     let unbind = null;
     const controller = {
       panes,
@@ -13420,21 +14247,52 @@ var BrainNotesApp = (() => {
         surface.focus();
       },
       destroy() {
+        drafts.flush();
+        drafts.dispose();
         preview.dispose();
         state.surface?.destroy();
         state.surface = null;
         unbind?.();
       }
     };
-    unbind = bindGlobalKeys(ownerDocument, controller);
+    unbind = wireEditor(ownerDocument, elements, state, controller, ctx);
+    return controller;
+  };
+  var wireEditor = (ownerDocument, elements, state, controller, ctx) => {
     wireControls(elements, controller);
     wireConflict(elements, state, controller, ctx);
-    panes.onSelect((pane) => {
+    ctx.panes.onSelect((pane) => {
       if (pane === "preview") {
-        preview.flush(state.surface?.getValue() ?? "");
+        ctx.preview.flush(state.surface?.getValue() ?? "");
       }
     });
-    return controller;
+    return bindGlobalKeys(ownerDocument, controller);
+  };
+  var createKeeper = (deps, state, ctx) => {
+    const { elements } = deps;
+    const view = (deps.doc ?? elements.panel.ownerDocument).defaultView;
+    return createDraftKeeper({
+      store: deps.drafts ?? null,
+      elements,
+      config: deps.config,
+      client: deps.client,
+      host: {
+        currentContent: () => state.surface?.getValue() ?? "",
+        baseRevision: () => state.baseRevision,
+        // No surface is a load that never produced an editor, and it is reported
+        // as "unknown" rather than as clean: a page whose read failed has compared
+        // nothing, and the keeper must not conclude from it that the vault holds
+        // what is kept.
+        status: () => state.surface === null ? "unknown" : ctx.dirty() ? "unsaved" : "held",
+        saving: () => state.saving,
+        restore: (offer) => restoreDraft(elements, state, ctx, offer),
+        setStatus: ctx.setStatus
+      },
+      view,
+      now: deps.now ?? (() => Date.now()),
+      delayMs: deps.draftDelayMs,
+      navigate: deps.navigate ?? ((url) => view?.location.assign(url))
+    });
   };
   var createPreview = (elements, client, delayMs) => createPreviewScheduler({
     delayMs,
@@ -13483,18 +14341,33 @@ var BrainNotesApp = (() => {
   };
   var runLoad = async (deps, state, ctx) => {
     ctx.setStatus("Loading the note's source\u2026", "is-loading");
+    const kept = ctx.drafts.kept();
     try {
       const loaded = await deps.client.read();
       mountSurface(deps, state, loaded.content, () => {
         ctx.refreshSaveButton();
         ctx.preview.schedule(state.surface?.getValue() ?? "");
+        ctx.drafts.keep();
       });
-      ctx.adopt(loaded.content, loaded.revision);
+      ctx.adopt(loaded.content, loaded.revision, false);
       ctx.setStatus(`${deps.config.relPath} loaded. Nothing is written until you save.`);
       ctx.preview.flush(loaded.content);
+      ctx.drafts.present(kept, { kind: "loaded", revision: loaded.revision, content: loaded.content });
     } catch (error) {
       ctx.setStatus(errorMessage(error, "The note's source could not be loaded."), "is-error");
+      ctx.drafts.present(kept, readingFor(error));
     }
+  };
+  var readingFor = (error) => error instanceof SourceReadError && error.code === notFoundCode ? { kind: "missing" } : { kind: "unreachable" };
+  var restoreDraft = (elements, state, ctx, offer) => {
+    state.surface?.setValue(offer.draft.content);
+    if (offer.kind === "stale") {
+      state.baseRevision = offer.draft.baseRevision;
+      showConflict(elements, offer.vaultContent, offer.vaultRevision);
+      ctx.panes.select("edit");
+    }
+    ctx.refreshSaveButton();
+    ctx.preview.flush(offer.draft.content);
   };
   var runSave = async (deps, state, ctx) => {
     const surface = state.surface;
@@ -13510,6 +14383,7 @@ var BrainNotesApp = (() => {
       ctx.setStatus(tooLarge, "is-error");
       return;
     }
+    ctx.drafts.flush();
     state.saving = true;
     const base2 = state.baseRevision;
     state.pendingSave = { id: resumableSaveID(state.pendingSave, content2), content: content2 };
@@ -13538,12 +14412,19 @@ var BrainNotesApp = (() => {
       case "saved":
         ctx.adopt(submitted, outcome.revision);
         hideConflict(elements);
+        ctx.drafts.announce(outcome.revision);
         ctx.setStatus(outcome.message, "is-success");
         return;
       case "landed":
         ctx.adopt(submitted, outcome.revision);
         hideConflict(elements);
+        ctx.drafts.announce(outcome.revision);
         ctx.setStatus(outcome.message, "is-error");
+        return;
+      case "missing":
+        state.pendingSave = null;
+        ctx.setStatus(outcome.message, "is-error");
+        ctx.drafts.offerRecreate(submitted);
         return;
       case "conflict":
         state.pendingSave = null;
@@ -13627,11 +14508,13 @@ var BrainNotesApp = (() => {
       key: attr(panel, "data-source-key"),
       token: attr(panel, "data-source-csrf"),
       relPath: attr(panel, "data-source-rel-path"),
+      vaultID: attr(panel, "data-source-vault-id"),
       maxBytes: Number(attr(panel, "data-source-max-bytes")) || 0,
       endpoints: {
         read: attr(panel, "data-source-read-endpoint"),
         preview: attr(panel, "data-source-preview-endpoint"),
         save: attr(panel, "data-source-save-endpoint"),
+        create: attr(panel, "data-source-create-endpoint"),
         search: attr(panel, "data-source-search-endpoint")
       }
     };
@@ -13641,6 +14524,7 @@ var BrainNotesApp = (() => {
       config2.endpoints.read,
       config2.endpoints.preview,
       config2.endpoints.save,
+      config2.endpoints.create,
       config2.endpoints.search
     ];
     return required.every((value) => value !== "") ? config2 : null;
@@ -13665,7 +14549,15 @@ var BrainNotesApp = (() => {
       conflict: queryElement(panel, "[data-source-conflict]", HTMLElement),
       conflictSource: queryElement(panel, "[data-source-conflict-source]", HTMLElement),
       conflictOverwrite: queryElement(panel, "[data-source-conflict-overwrite]", HTMLButtonElement),
-      conflictDiscard: queryElement(panel, "[data-source-conflict-discard]", HTMLButtonElement)
+      conflictDiscard: queryElement(panel, "[data-source-conflict-discard]", HTMLButtonElement),
+      draftStatus: queryElement(panel, "[data-source-draft-status]", HTMLElement),
+      recovery: queryElement(panel, "[data-source-recovery]", HTMLElement),
+      recoveryHeading: queryElement(panel, "[data-source-recovery-heading]", HTMLElement),
+      recoveryLede: queryElement(panel, "[data-source-recovery-lede]", HTMLElement),
+      recoverySource: queryElement(panel, "[data-source-recovery-source]", HTMLElement),
+      recoveryRestore: queryElement(panel, "[data-source-recovery-restore]", HTMLButtonElement),
+      recoveryRecreate: queryElement(panel, "[data-source-recovery-recreate]", HTMLButtonElement),
+      recoveryDiscard: queryElement(panel, "[data-source-recovery-discard]", HTMLButtonElement)
     };
   };
   var attr = (element2, name2) => (element2.getAttribute(name2) || "").trim();
@@ -13765,7 +14657,7 @@ var BrainNotesApp = (() => {
     /**
     Replace a range of the text with the given content.
     */
-    replace(from, to, text) {
+    replace(from, to, text2) {
       [from, to] = clip(this, from, to);
       let parts = [];
       this.decompose(
@@ -13775,10 +14667,10 @@ var BrainNotesApp = (() => {
         2
         /* Open.To */
       );
-      if (text.length)
-        text.decompose(
+      if (text2.length)
+        text2.decompose(
           0,
-          text.length,
+          text2.length,
           parts,
           1 | 2
           /* Open.To */
@@ -13790,7 +14682,7 @@ var BrainNotesApp = (() => {
         1
         /* Open.From */
       );
-      return TextNode.from(parts, this.length - (to - from) + text.length);
+      return TextNode.from(parts, this.length - (to - from) + text2.length);
     }
     /**
     Append another document to this one.
@@ -13886,18 +14778,18 @@ var BrainNotesApp = (() => {
     /**
     Create a `Text` instance for the given array of lines.
     */
-    static of(text) {
-      if (text.length == 0)
+    static of(text2) {
+      if (text2.length == 0)
         throw new RangeError("A document must have at least one line");
-      if (text.length == 1 && !text[0])
+      if (text2.length == 1 && !text2[0])
         return _Text.empty;
-      return text.length <= 32 ? new TextLeaf(text) : TextNode.from(TextLeaf.split(text, []));
+      return text2.length <= 32 ? new TextLeaf(text2) : TextNode.from(TextLeaf.split(text2, []));
     }
   };
   var TextLeaf = class _TextLeaf extends Text {
-    constructor(text, length = textLength(text)) {
+    constructor(text2, length = textLength(text2)) {
       super();
-      this.text = text;
+      this.text = text2;
       this.length = length;
     }
     get lines() {
@@ -13916,26 +14808,26 @@ var BrainNotesApp = (() => {
       }
     }
     decompose(from, to, target, open) {
-      let text = from <= 0 && to >= this.length ? this : new _TextLeaf(sliceText(this.text, from, to), Math.min(to, this.length) - Math.max(0, from));
+      let text2 = from <= 0 && to >= this.length ? this : new _TextLeaf(sliceText(this.text, from, to), Math.min(to, this.length) - Math.max(0, from));
       if (open & 1) {
         let prev = target.pop();
-        let joined = appendText(text.text, prev.text.slice(), 0, text.length);
+        let joined = appendText(text2.text, prev.text.slice(), 0, text2.length);
         if (joined.length <= 32) {
-          target.push(new _TextLeaf(joined, prev.length + text.length));
+          target.push(new _TextLeaf(joined, prev.length + text2.length));
         } else {
           let mid = joined.length >> 1;
           target.push(new _TextLeaf(joined.slice(0, mid)), new _TextLeaf(joined.slice(mid)));
         }
       } else {
-        target.push(text);
+        target.push(text2);
       }
     }
-    replace(from, to, text) {
-      if (!(text instanceof _TextLeaf))
-        return super.replace(from, to, text);
+    replace(from, to, text2) {
+      if (!(text2 instanceof _TextLeaf))
+        return super.replace(from, to, text2);
       [from, to] = clip(this, from, to);
-      let lines = appendText(this.text, appendText(text.text, sliceText(this.text, 0, from)), to);
-      let newLen = this.length + text.length - (to - from);
+      let lines = appendText(this.text, appendText(text2.text, sliceText(this.text, 0, from)), to);
+      let newLen = this.length + text2.length - (to - from);
       if (lines.length <= 32)
         return new _TextLeaf(lines, newLen);
       return TextNode.from(_TextLeaf.split(lines, []), newLen);
@@ -13960,9 +14852,9 @@ var BrainNotesApp = (() => {
     scanIdentical() {
       return 0;
     }
-    static split(text, target) {
+    static split(text2, target) {
       let part = [], len = -1;
-      for (let line of text) {
+      for (let line of text2) {
         part.push(line);
         len += line.length + 1;
         if (part.length == 32) {
@@ -14007,24 +14899,24 @@ var BrainNotesApp = (() => {
         pos = end + 1;
       }
     }
-    replace(from, to, text) {
+    replace(from, to, text2) {
       [from, to] = clip(this, from, to);
-      if (text.lines < this.lines)
+      if (text2.lines < this.lines)
         for (let i = 0, pos = 0; i < this.children.length; i++) {
           let child = this.children[i], end = pos + child.length;
           if (from >= pos && to <= end) {
-            let updated = child.replace(from - pos, to - pos, text);
+            let updated = child.replace(from - pos, to - pos, text2);
             let totalLines = this.lines - child.lines + updated.lines;
             if (updated.lines < totalLines >> 5 - 1 && updated.lines > totalLines >> 5 + 1) {
               let copy = this.children.slice();
               copy[i] = updated;
-              return new _TextNode(copy, this.length - (to - from) + text.length);
+              return new _TextNode(copy, this.length - (to - from) + text2.length);
             }
             return super.replace(pos, end, updated);
           }
           pos = end + 1;
         }
-      return super.replace(from, to, text);
+      return super.replace(from, to, text2);
     }
     sliceString(from, to = this.length, lineSep = "\n") {
       [from, to] = clip(this, from, to);
@@ -14107,15 +14999,15 @@ var BrainNotesApp = (() => {
     }
   };
   Text.empty = /* @__PURE__ */ new TextLeaf([""], 0);
-  function textLength(text) {
+  function textLength(text2) {
     let length = -1;
-    for (let line of text)
+    for (let line of text2)
       length += line.length + 1;
     return length;
   }
-  function appendText(text, target, from = 0, to = 1e9) {
-    for (let pos = 0, i = 0, first = true; i < text.length && pos <= to; i++) {
-      let line = text[i], end = pos + line.length;
+  function appendText(text2, target, from = 0, to = 1e9) {
+    for (let pos = 0, i = 0, first = true; i < text2.length && pos <= to; i++) {
+      let line = text2[i], end = pos + line.length;
       if (end >= from) {
         if (end > to)
           line = line.slice(0, to - pos);
@@ -14131,17 +15023,17 @@ var BrainNotesApp = (() => {
     }
     return target;
   }
-  function sliceText(text, from, to) {
-    return appendText(text, [""], from, to);
+  function sliceText(text2, from, to) {
+    return appendText(text2, [""], from, to);
   }
   var RawTextCursor = class {
-    constructor(text, dir = 1) {
+    constructor(text2, dir = 1) {
       this.dir = dir;
       this.done = false;
       this.lineBreak = false;
       this.value = "";
-      this.nodes = [text];
-      this.offsets = [dir > 0 ? 1 : (text instanceof TextLeaf ? text.text.length : text.children.length) << 1];
+      this.nodes = [text2];
+      this.offsets = [dir > 0 ? 1 : (text2 instanceof TextLeaf ? text2.text.length : text2.children.length) << 1];
     }
     nextInner(skip, dir) {
       this.done = this.lineBreak = false;
@@ -14198,11 +15090,11 @@ var BrainNotesApp = (() => {
     }
   };
   var PartialTextCursor = class {
-    constructor(text, start, end) {
+    constructor(text2, start, end) {
       this.value = "";
       this.done = false;
-      this.cursor = new RawTextCursor(text, start > end ? -1 : 1);
-      this.pos = start > end ? text.length : 0;
+      this.cursor = new RawTextCursor(text2, start > end ? -1 : 1);
+      this.pos = start > end ? text2.length : 0;
       this.from = Math.min(start, end);
       this.to = Math.max(start, end);
     }
@@ -14278,11 +15170,11 @@ var BrainNotesApp = (() => {
     /**
     @internal
     */
-    constructor(from, to, number2, text) {
+    constructor(from, to, number2, text2) {
       this.from = from;
       this.to = to;
       this.number = number2;
-      this.text = text;
+      this.text = text2;
     }
     /**
     The length of the line (not including any line break after it).
@@ -14291,9 +15183,9 @@ var BrainNotesApp = (() => {
       return this.to - this.from;
     }
   };
-  function clip(text, from, to) {
-    from = Math.max(0, Math.min(text.length, from));
-    return [from, Math.max(from, Math.min(text.length, to))];
+  function clip(text2, from, to) {
+    from = Math.max(0, Math.min(text2.length, from));
+    return [from, Math.max(from, Math.min(text2.length, to))];
   }
   function findClusterBreak2(str, pos, forward = true, includeExtending = true) {
     return findClusterBreak(str, pos, forward, includeExtending);
@@ -14511,7 +15403,7 @@ var BrainNotesApp = (() => {
     apply(doc2) {
       if (this.length != doc2.length)
         throw new RangeError("Applying change set to a document with the wrong length");
-      iterChanges(this, (fromA, toA, fromB, _toB, text) => doc2 = doc2.replace(fromB, fromB + (toA - fromA), text), false);
+      iterChanges(this, (fromA, toA, fromB, _toB, text2) => doc2 = doc2.replace(fromB, fromB + (toA - fromA), text2), false);
       return doc2;
     }
     mapDesc(other, before = false) {
@@ -14755,18 +15647,18 @@ var BrainNotesApp = (() => {
         posA += len;
         posB += len;
       } else {
-        let endA = posA, endB = posB, text = Text.empty;
+        let endA = posA, endB = posB, text2 = Text.empty;
         for (; ; ) {
           endA += len;
           endB += ins;
           if (ins && inserted)
-            text = text.append(inserted[i - 2 >> 1]);
+            text2 = text2.append(inserted[i - 2 >> 1]);
           if (individual || i == desc.sections.length || desc.sections[i + 1] < 0)
             break;
           len = desc.sections[i++];
           ins = desc.sections[i++];
         }
-        f(posA, endA, posB, endB, text);
+        f(posA, endA, posB, endB, text2);
         posA = endA;
         posB = endB;
       }
@@ -16042,12 +16934,12 @@ var BrainNotesApp = (() => {
     Create a [transaction spec](https://codemirror.net/6/docs/ref/#state.TransactionSpec) that
     replaces every selection range with the given content.
     */
-    replaceSelection(text) {
-      if (typeof text == "string")
-        text = this.toText(text);
+    replaceSelection(text2) {
+      if (typeof text2 == "string")
+        text2 = this.toText(text2);
       return this.changeByRange((range) => ({
-        changes: { from: range.from, to: range.to, insert: text },
-        range: EditorSelection.cursor(range.from + text.length)
+        changes: { from: range.from, to: range.to, insert: text2 },
+        range: EditorSelection.cursor(range.from + text2.length)
       }));
     }
     /**
@@ -16266,18 +17158,18 @@ var BrainNotesApp = (() => {
     this returns null.
     */
     wordAt(pos) {
-      let { text, from, length } = this.doc.lineAt(pos);
+      let { text: text2, from, length } = this.doc.lineAt(pos);
       let cat = this.charCategorizer(pos);
       let start = pos - from, end = pos - from;
       while (start > 0) {
-        let prev = findClusterBreak2(text, start, false);
-        if (cat(text.slice(prev, start)) != CharCategory.Word)
+        let prev = findClusterBreak2(text2, start, false);
+        if (cat(text2.slice(prev, start)) != CharCategory.Word)
           break;
         start = prev;
       }
       while (end < length) {
-        let next = findClusterBreak2(text, end);
-        if (cat(text.slice(end, next)) != CharCategory.Word)
+        let next = findClusterBreak2(text2, end);
+        if (cat(text2.slice(end, next)) != CharCategory.Word)
           break;
         end = next;
       }
@@ -16987,9 +17879,9 @@ var BrainNotesApp = (() => {
       this.cursor.forward(pos, side);
     }
     removeActive(index) {
-      remove(this.active, index);
-      remove(this.activeTo, index);
-      remove(this.activeRank, index);
+      remove2(this.active, index);
+      remove2(this.activeTo, index);
+      remove2(this.activeRank, index);
       this.minActive = findMinIndex(this.active, this.activeTo);
     }
     addActive(trackOpen) {
@@ -17019,7 +17911,7 @@ var BrainNotesApp = (() => {
           }
           this.removeActive(a);
           if (trackOpen)
-            remove(trackOpen, a);
+            remove2(trackOpen, a);
         } else if (!this.cursor.value) {
           this.to = this.endSide = 1e9;
           break;
@@ -17112,7 +18004,7 @@ var BrainNotesApp = (() => {
         return false;
     return true;
   }
-  function remove(array, index) {
+  function remove2(array, index) {
     for (let i = index, e = array.length - 1; i < e; i++)
       array[i] = array[i + 1];
     array.pop();
@@ -17272,10 +18164,10 @@ var BrainNotesApp = (() => {
         if (root.adoptedStyleSheets.indexOf(this.sheet) < 0)
           root.adoptedStyleSheets = [this.sheet, ...root.adoptedStyleSheets];
       } else {
-        let text = "";
+        let text2 = "";
         for (let i = 0; i < this.modules.length; i++)
-          text += this.modules[i].getRules() + "\n";
-        this.styleTag.textContent = text;
+          text2 += this.modules[i].getRules() + "\n";
+        this.styleTag.textContent = text2;
         let target = root.head || root;
         if (this.styleTag.parentNode != target)
           target.insertBefore(this.styleTag, target.firstChild);
@@ -18493,9 +19385,9 @@ var BrainNotesApp = (() => {
       return EditorSelection.cursor(nextSpan.side(!forward, dir) + line.from, nextSpan.forward(forward, dir) ? 1 : -1, nextSpan.level);
     return EditorSelection.cursor(nextIndex + line.from, span.forward(forward, dir) ? -1 : 1, span.level);
   }
-  function autoDirection(text, from, to) {
+  function autoDirection(text2, from, to) {
     for (let i = from; i < to; i++) {
-      let type = charType(text.charCodeAt(i));
+      let type = charType(text2.charCodeAt(i));
       if (type == 1)
         return LTR;
       if (type == 2 || type == 4)
@@ -19201,9 +20093,9 @@ var BrainNotesApp = (() => {
     }
   };
   var TextTile = class _TextTile extends Tile {
-    constructor(dom, text) {
-      super(dom, text.length);
-      this.text = text;
+    constructor(dom, text2) {
+      super(dom, text2.length);
+      this.text = text2;
     }
     sync(track) {
       if (this.flags & 2)
@@ -19250,8 +20142,8 @@ var BrainNotesApp = (() => {
         rect = Array.prototype.find.call(rects, (r) => r.width) || rect;
       return rtl == null ? rect : flattenRect(rect, (flatten2 ? flatten2 > 0 : side < 0) == rtl);
     }
-    static of(text, dom) {
-      let tile = new _TextTile(dom || document.createTextNode(text), text);
+    static of(text2, dom) {
+      let tile = new _TextTile(dom || document.createTextNode(text2), text2);
       if (!dom)
         tile.flags |= 2;
       return tile;
@@ -19424,23 +20316,23 @@ var BrainNotesApp = (() => {
       this.wrappers = [];
       this.wrapperPos = 0;
     }
-    addText(text, marks2, openStart, tile) {
+    addText(text2, marks2, openStart, tile) {
       var _a2;
       this.flushBuffer();
       let parent = this.ensureMarks(marks2, openStart);
       let prev = parent.lastChild;
-      if (prev && prev.isText() && !(prev.flags & 8) && prev.length + text.length < 512) {
+      if (prev && prev.isText() && !(prev.flags & 8) && prev.length + text2.length < 512) {
         this.cache.reused.set(
           prev,
           2
           /* Reused.DOM */
         );
-        let tile2 = parent.children[parent.children.length - 1] = new TextTile(prev.dom, prev.text + text);
+        let tile2 = parent.children[parent.children.length - 1] = new TextTile(prev.dom, prev.text + text2);
         tile2.parent = parent;
       } else {
-        parent.append(tile || TextTile.of(text, (_a2 = this.cache.find(TextTile)) === null || _a2 === void 0 ? void 0 : _a2.dom));
+        parent.append(tile || TextTile.of(text2, (_a2 = this.cache.find(TextTile)) === null || _a2 === void 0 ? void 0 : _a2.dom));
       }
-      this.pos += text.length;
+      this.pos += text2.length;
       this.afterWidget = null;
     }
     addComposition(composition, context) {
@@ -19485,10 +20377,10 @@ var BrainNotesApp = (() => {
           2
           /* Reused.DOM */
         );
-      let text = new TextTile(composition.text, composition.text.nodeValue);
-      text.flags |= 8;
+      let text2 = new TextTile(composition.text, composition.text.nodeValue);
+      text2.flags |= 8;
       this.pos = composition.range.toB;
-      head.append(text);
+      head.append(text2);
     }
     addInlineWidget(widget, marks2, openStart) {
       let noSpace = this.afterWidget && widget.flags & 48 && (this.afterWidget.flags & 48) == (widget.flags & 48);
@@ -19965,9 +20857,9 @@ var BrainNotesApp = (() => {
         this.old.advance(5, side, this.reuseWalker);
       }
     }
-    getCompositionContext(text) {
+    getCompositionContext(text2) {
       let marks2 = [], line = null;
-      for (let parent = text.parentNode; ; parent = parent.parentNode) {
+      for (let parent = text2.parentNode; ; parent = parent.parentNode) {
         let tile = Tile.get(parent);
         if (parent == this.view.contentDOM)
           break;
@@ -20208,9 +21100,9 @@ var BrainNotesApp = (() => {
             if (browser.gecko) {
               let nextTo = nextToUneditable(anchor.node, anchor.offset);
               if (nextTo && nextTo != (1 | 2)) {
-                let text = (nextTo == 1 ? textNodeBefore : textNodeAfter)(anchor.node, anchor.offset);
-                if (text)
-                  anchor = new DOMPos(text.node, text.offset);
+                let text2 = (nextTo == 1 ? textNodeBefore : textNodeAfter)(anchor.node, anchor.offset);
+                if (text2)
+                  anchor = new DOMPos(text2.node, text2.offset);
               }
             }
             rawSel.collapse(anchor.node, anchor.offset);
@@ -20628,10 +21520,10 @@ var BrainNotesApp = (() => {
     let found = findCompositionNode(view, headPos);
     if (!found)
       return null;
-    let { node: textNode, from, to } = found, text = textNode.nodeValue;
-    if (/[\n\r]/.test(text))
+    let { node: textNode, from, to } = found, text2 = textNode.nodeValue;
+    if (/[\n\r]/.test(text2))
       return null;
-    if (view.state.doc.sliceString(found.from, found.to) != text)
+    if (view.state.doc.sliceString(found.from, found.to) != text2)
       return null;
     let inv = changes.invertedDesc;
     return { range: new ChangedRange(inv.mapPos(from), inv.mapPos(to), from, to), text: textNode };
@@ -21108,8 +22000,8 @@ var BrainNotesApp = (() => {
       this.text = "";
       this.lineSeparator = view.state.facet(EditorState.lineSeparator);
     }
-    append(text) {
-      this.text += text;
+    append(text2) {
+      this.text += text2;
     }
     lineBreak() {
       this.text += LineBreakPlaceholder;
@@ -21137,20 +22029,20 @@ var BrainNotesApp = (() => {
       return this;
     }
     readTextNode(node) {
-      let text = node.nodeValue;
+      let text2 = node.nodeValue;
       for (let point of this.points)
         if (point.node == node)
-          point.pos = this.text.length + Math.min(point.offset, text.length);
+          point.pos = this.text.length + Math.min(point.offset, text2.length);
       for (let off = 0, re = this.lineSeparator ? null : /\r\n?|\n/g; ; ) {
         let nextBreak = -1, breakSize = 1, m;
         if (this.lineSeparator) {
-          nextBreak = text.indexOf(this.lineSeparator, off);
+          nextBreak = text2.indexOf(this.lineSeparator, off);
           breakSize = this.lineSeparator.length;
-        } else if (m = re.exec(text)) {
+        } else if (m = re.exec(text2)) {
           nextBreak = m.index;
           breakSize = m[0].length;
         }
-        this.append(text.slice(off, nextBreak < 0 ? text.length : nextBreak));
+        this.append(text2.slice(off, nextBreak < 0 ? text2.length : nextBreak));
         if (nextBreak < 0)
           break;
         this.lineBreak();
@@ -21373,12 +22265,12 @@ var BrainNotesApp = (() => {
     // after a completion when you press enter
     (change.from == sel.from || change.from == sel.from - 1 && view.state.sliceDoc(change.from, sel.from) == " ") && change.insert.length == 1 && change.insert.lines == 2 && dispatchKey(view.contentDOM, "Enter", 13) || (change.from == sel.from - 1 && change.to == sel.to && change.insert.length == 0 || lastKey == 8 && change.insert.length < change.to - change.from && change.to > sel.head) && dispatchKey(view.contentDOM, "Backspace", 8) || change.from == sel.from && change.to == sel.to + 1 && change.insert.length == 0 && dispatchKey(view.contentDOM, "Delete", 46)))
       return true;
-    let text = change.insert.toString();
+    let text2 = change.insert.toString();
     if (view.inputState.composing >= 0)
       view.inputState.composing++;
     let defaultTr;
     let defaultInsert = () => defaultTr || (defaultTr = applyDefaultInsert(view, change, newSel));
-    if (!view.state.facet(inputHandler).some((h) => h(view, change.from, change.to, text, defaultInsert)))
+    if (!view.state.facet(inputHandler).some((h) => h(view, change.from, change.to, text2, defaultInsert)))
       view.dispatch(defaultInsert());
     return true;
   }
@@ -21846,16 +22738,16 @@ var BrainNotesApp = (() => {
       doPaste(view, target.value);
     }, 50);
   }
-  function textFilter(state, facet, text) {
+  function textFilter(state, facet, text2) {
     for (let filter of state.facet(facet))
-      text = filter(text, state);
-    return text;
+      text2 = filter(text2, state);
+    return text2;
   }
   function doPaste(view, input) {
     input = textFilter(view.state, clipboardInputFilter, input);
-    let { state } = view, changes, i = 1, text = state.toText(input);
-    let byLine = text.lines == state.selection.ranges.length;
-    let linewise = lastLinewiseCopy != null && state.selection.ranges.every((r) => r.empty) && lastLinewiseCopy == text.toString();
+    let { state } = view, changes, i = 1, text2 = state.toText(input);
+    let byLine = text2.lines == state.selection.ranges.length;
+    let linewise = lastLinewiseCopy != null && state.selection.ranges.every((r) => r.empty) && lastLinewiseCopy == text2.toString();
     if (linewise) {
       let lastLine = -1;
       changes = state.changeByRange((range) => {
@@ -21863,7 +22755,7 @@ var BrainNotesApp = (() => {
         if (line.from == lastLine)
           return { range };
         lastLine = line.from;
-        let insert2 = state.toText((byLine ? text.line(i++).text : input) + state.lineBreak);
+        let insert2 = state.toText((byLine ? text2.line(i++).text : input) + state.lineBreak);
         return {
           changes: { from: line.from, insert: insert2 },
           range: EditorSelection.cursor(range.from + insert2.length)
@@ -21871,14 +22763,14 @@ var BrainNotesApp = (() => {
       });
     } else if (byLine) {
       changes = state.changeByRange((range) => {
-        let line = text.line(i++);
+        let line = text2.line(i++);
         return {
           changes: { from: range.from, to: range.to, insert: line.text },
           range: EditorSelection.cursor(range.from + line.length)
         };
       });
     } else {
-      changes = state.replaceSelection(text);
+      changes = state.replaceSelection(text2);
     }
     view.dispatch(changes, {
       userEvent: "input.paste",
@@ -22035,14 +22927,14 @@ var BrainNotesApp = (() => {
     view.inputState.draggedContent = null;
     return false;
   };
-  function dropText(view, event, text, direct) {
-    text = textFilter(view.state, clipboardInputFilter, text);
-    if (!text)
+  function dropText(view, event, text2, direct) {
+    text2 = textFilter(view.state, clipboardInputFilter, text2);
+    if (!text2)
       return;
     let dropPos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
     let { draggedContent } = view.inputState;
     let del = direct && draggedContent && dragMovesSelection(view, event) ? { from: draggedContent.from, to: draggedContent.to } : null;
-    let ins = { from: dropPos, insert: text };
+    let ins = { from: dropPos, insert: text2 };
     let changes = view.state.changes(del ? [del, ins] : ins);
     view.focus();
     view.dispatch({
@@ -22059,26 +22951,26 @@ var BrainNotesApp = (() => {
       return true;
     let files = event.dataTransfer.files;
     if (files && files.length) {
-      let text = Array(files.length), read = 0;
+      let text2 = Array(files.length), read = 0;
       let finishFile = () => {
         if (++read == files.length)
-          dropText(view, event, text.filter((s) => s != null).join(view.state.lineBreak), false);
+          dropText(view, event, text2.filter((s) => s != null).join(view.state.lineBreak), false);
       };
       for (let i = 0; i < files.length; i++) {
         let reader = new FileReader();
         reader.onerror = finishFile;
         reader.onload = () => {
           if (!/[\x00-\x08\x0e-\x1f]{2}/.test(reader.result))
-            text[i] = reader.result;
+            text2[i] = reader.result;
           finishFile();
         };
         reader.readAsText(files[i]);
       }
       return true;
     } else {
-      let text = event.dataTransfer.getData("Text");
-      if (text) {
-        dropText(view, event, text, true);
+      let text2 = event.dataTransfer.getData("Text");
+      if (text2) {
+        dropText(view, event, text2, true);
         return true;
       }
     }
@@ -22097,15 +22989,15 @@ var BrainNotesApp = (() => {
       return false;
     }
   };
-  function captureCopy(view, text) {
+  function captureCopy(view, text2) {
     let parent = view.dom.parentNode;
     if (!parent)
       return;
     let target = parent.appendChild(document.createElement("textarea"));
     target.style.cssText = "position: fixed; left: -10000px; top: 10px";
-    target.value = text;
+    target.value = text2;
     target.focus();
-    target.selectionEnd = text.length;
+    target.selectionEnd = text2.length;
     target.selectionStart = 0;
     setTimeout(() => {
       target.remove();
@@ -22137,10 +23029,10 @@ var BrainNotesApp = (() => {
   handlers.copy = handlers.cut = (view, event) => {
     if (!hasSelection(view.contentDOM, view.observer.selectionRange))
       return false;
-    let { text, ranges, linewise } = copiedRange(view.state);
-    if (!text && !linewise)
+    let { text: text2, ranges, linewise } = copiedRange(view.state);
+    if (!text2 && !linewise)
       return false;
-    lastLinewiseCopy = linewise ? text : null;
+    lastLinewiseCopy = linewise ? text2 : null;
     if (event.type == "cut" && !view.state.readOnly)
       view.dispatch({
         changes: ranges,
@@ -22150,10 +23042,10 @@ var BrainNotesApp = (() => {
     let data2 = brokenClipboardAPI ? null : event.clipboardData;
     if (data2) {
       data2.clearData();
-      data2.setData("text/plain", text);
+      data2.setData("text/plain", text2);
       return true;
     } else {
-      captureCopy(view, text);
+      captureCopy(view, text2);
       return false;
     }
   };
@@ -22236,11 +23128,11 @@ var BrainNotesApp = (() => {
       view.inputState.insertingTextAt = Date.now();
     }
     if (event.inputType == "insertReplacementText" && view.observer.editContext) {
-      let text = (_a2 = event.dataTransfer) === null || _a2 === void 0 ? void 0 : _a2.getData("text/plain"), ranges = event.getTargetRanges();
-      if (text && ranges.length) {
+      let text2 = (_a2 = event.dataTransfer) === null || _a2 === void 0 ? void 0 : _a2.getData("text/plain"), ranges = event.getTargetRanges();
+      if (text2 && ranges.length) {
         let r = ranges[0];
         let from = view.posAtDOM(r.startContainer, r.startOffset), to = view.posAtDOM(r.endContainer, r.endOffset);
-        applyDOMChangeInner(view, { from, to, insert: view.state.toText(text) }, null);
+        applyDOMChangeInner(view, { from, to, insert: view.state.toText(text2) }, null);
         return true;
       }
     }
@@ -29916,18 +30808,18 @@ var BrainNotesApp = (() => {
     textAfterPos(pos, bias = 1) {
       if (this.options.simulateDoubleBreak && pos == this.options.simulateBreak)
         return "";
-      let { text, from } = this.lineAt(pos, bias);
-      return text.slice(pos - from, Math.min(text.length, pos + 100 - from));
+      let { text: text2, from } = this.lineAt(pos, bias);
+      return text2.slice(pos - from, Math.min(text2.length, pos + 100 - from));
     }
     /**
     Find the column for the given position.
     */
     column(pos, bias = 1) {
-      let { text, from } = this.lineAt(pos, bias);
-      let result = this.countColumn(text, pos - from);
+      let { text: text2, from } = this.lineAt(pos, bias);
+      let result = this.countColumn(text2, pos - from);
       let override = this.options.overrideIndentation ? this.options.overrideIndentation(from) : -1;
       if (override > -1)
-        result += override - this.countColumn(text, text.search(/\S|$/));
+        result += override - this.countColumn(text2, text2.search(/\S|$/));
       return result;
     }
     /**
@@ -29941,14 +30833,14 @@ var BrainNotesApp = (() => {
     Find the indentation column of the line at the given point.
     */
     lineIndent(pos, bias = 1) {
-      let { text, from } = this.lineAt(pos, bias);
+      let { text: text2, from } = this.lineAt(pos, bias);
       let override = this.options.overrideIndentation;
       if (override) {
         let overriden = override(from);
         if (overriden > -1)
           return overriden;
       }
-      return this.countColumn(text, text.search(/\S|$/));
+      return this.countColumn(text2, text2.search(/\S|$/));
     }
     /**
     Returns the [simulated line
@@ -30419,12 +31311,12 @@ var BrainNotesApp = (() => {
     let startToken = { from: dir < 0 ? pos - 1 : pos, to: dir > 0 ? pos + 1 : pos };
     let iter = state.doc.iterRange(pos, dir > 0 ? state.doc.length : 0), depth = 0;
     for (let distance = 0; !iter.next().done && distance <= maxScanDistance; ) {
-      let text = iter.value;
+      let text2 = iter.value;
       if (dir < 0)
-        distance += text.length;
+        distance += text2.length;
       let basePos = pos + distance * dir;
-      for (let pos2 = dir > 0 ? 0 : text.length - 1, end = dir > 0 ? text.length : -1; pos2 != end; pos2 += dir) {
-        let found = brackets.indexOf(text[pos2]);
+      for (let pos2 = dir > 0 ? 0 : text2.length - 1, end = dir > 0 ? text2.length : -1; pos2 != end; pos2 += dir) {
+        let found = brackets.indexOf(text2[pos2]);
         if (found < 0 || tree.resolveInner(basePos + pos2, 1).type != tokenType)
           continue;
         if (found % 2 == 0 == dir > 0) {
@@ -30436,7 +31328,7 @@ var BrainNotesApp = (() => {
         }
       }
       if (dir > 0)
-        distance += text.length;
+        distance += text2.length;
     }
     return iter.done ? { start: startToken, matched: false } : null;
   }
@@ -30634,13 +31526,13 @@ var BrainNotesApp = (() => {
     return new RegExp(`${addStart ? "^" : ""}(?:${source})${addEnd ? "$" : ""}`, (_a2 = expr.flags) !== null && _a2 !== void 0 ? _a2 : expr.ignoreCase ? "i" : "");
   }
   var pickedCompletion = /* @__PURE__ */ Annotation.define();
-  function insertCompletionText(state, text, from, to) {
+  function insertCompletionText(state, text2, from, to) {
     let { main } = state.selection, fromOff = from - main.from, toOff = to - main.from;
     return {
       ...state.changeByRange((range) => {
         if (range != main && from != to && state.sliceDoc(range.from + fromOff, range.from + toOff) != state.sliceDoc(from, to))
           return { range };
-        let lines = state.toText(text);
+        let lines = state.toText(text2);
         return {
           changes: { from: range.from + fromOff, to: to == main.from ? range.to : range.from + toOff, insert: lines },
           range: EditorSelection.cursor(range.from + fromOff + lines.length)
@@ -31480,8 +32372,8 @@ var BrainNotesApp = (() => {
   function checkValid(validFor, state, from, to) {
     if (!validFor)
       return false;
-    let text = state.sliceDoc(from, to);
-    return typeof validFor == "function" ? validFor(text, from, to, state) : ensureAnchor(validFor, true).test(text);
+    let text2 = state.sliceDoc(from, to);
+    return typeof validFor == "function" ? validFor(text2, from, to, state) : ensureAnchor(validFor, true).test(text2);
   }
   var setActiveEffect = /* @__PURE__ */ StateEffect.define({
     map(sources, mapping) {
@@ -31881,21 +32773,21 @@ var BrainNotesApp = (() => {
       this.fieldPositions = fieldPositions;
     }
     instantiate(state, pos) {
-      let text = [], lineStart = [pos];
+      let text2 = [], lineStart = [pos];
       let lineObj = state.doc.lineAt(pos), baseIndent = /^\s*/.exec(lineObj.text)[0];
       for (let line of this.lines) {
-        if (text.length) {
+        if (text2.length) {
           let indent = baseIndent, tabs = /^\t*/.exec(line)[0].length;
           for (let i = 0; i < tabs; i++)
             indent += state.facet(indentUnit);
           lineStart.push(pos + indent.length - tabs);
           line = indent + line.slice(tabs);
         }
-        text.push(line);
+        text2.push(line);
         pos += line.length + 1;
       }
       let ranges = this.fieldPositions.map((pos2) => new FieldRange(pos2.field, lineStart[pos2.line] + pos2.from, lineStart[pos2.line] + pos2.to));
-      return { text, ranges };
+      return { text: text2, ranges };
     }
     static parse(template) {
       let fields = [];
@@ -32004,10 +32896,10 @@ var BrainNotesApp = (() => {
   function snippet(template) {
     let snippet2 = Snippet.parse(template);
     return (editor, completion, from, to) => {
-      let { text, ranges } = snippet2.instantiate(editor.state, from);
+      let { text: text2, ranges } = snippet2.instantiate(editor.state, from);
       let { main } = editor.state.selection;
       let spec = {
-        changes: { from, to: to == main.from ? main.to : to, insert: Text.of(text) },
+        changes: { from, to: to == main.from ? main.to : to, insert: Text.of(text2) },
         scrollIntoView: true,
         annotations: completion ? [pickedCompletion.of(completion), Transaction.userEvent.of("input.complete")] : void 0
       };
@@ -33554,8 +34446,8 @@ var BrainNotesApp = (() => {
     /**
     @internal
     */
-    reset(text) {
-      this.text = text;
+    reset(text2) {
+      this.text = text2;
       this.baseIndent = this.basePos = this.pos = this.indent = 0;
       this.forwardInner();
       this.depth = 1;
@@ -33680,17 +34572,17 @@ var BrainNotesApp = (() => {
   function isHorizontalRule(line, cx, breaking) {
     if (line.next != 42 && line.next != 45 && line.next != 95)
       return -1;
-    let count2 = 1;
+    let count3 = 1;
     for (let pos = line.pos + 1; pos < line.text.length; pos++) {
       let ch = line.text.charCodeAt(pos);
       if (ch == line.next)
-        count2++;
+        count3++;
       else if (!space(ch))
         return -1;
     }
     if (breaking && line.next == 45 && isSetextUnderline(line) > -1 && line.depth == cx.stack.length && cx.parser.leafBlockParsers.indexOf(DefaultLeafBlocks.SetextHeading) > -1)
       return -1;
-    return count2 < 3 ? -1 : 1;
+    return count3 < 3 ? -1 : 1;
   }
   function inList(cx, type) {
     for (let i = cx.stack.length - 1; i >= 0; i--)
@@ -34011,9 +34903,9 @@ var BrainNotesApp = (() => {
       }
     }
   };
-  function lineEnd(text, pos) {
-    for (; pos < text.length; pos++) {
-      let next = text.charCodeAt(pos);
+  function lineEnd(text2, pos) {
+    for (; pos < text2.length; pos++) {
+      let next = text2.charCodeAt(pos);
       if (next == 10)
         break;
       if (!space(next))
@@ -34246,9 +35138,9 @@ var BrainNotesApp = (() => {
     leading characters covered by composite blocks.
     */
     readLine() {
-      let { line } = this, { text, end } = this.scanLine(this.absoluteLineStart);
+      let { line } = this, { text: text2, end } = this.scanLine(this.absoluteLineStart);
       this.absoluteLineEnd = end;
-      line.reset(text);
+      line.reset(text2);
       for (; line.depth < this.stack.length; line.depth++) {
         let cx = this.stack[line.depth], handler = this.parser.skipContextMarkup[cx.type];
         if (!handler)
@@ -34264,14 +35156,14 @@ var BrainNotesApp = (() => {
       }
     }
     lineChunkAt(pos) {
-      let next = this.input.chunk(pos), text;
+      let next = this.input.chunk(pos), text2;
       if (!this.input.lineChunks) {
         let eol = next.indexOf("\n");
-        text = eol < 0 ? next : next.slice(0, eol);
+        text2 = eol < 0 ? next : next.slice(0, eol);
       } else {
-        text = next == "\n" ? "" : next;
+        text2 = next == "\n" ? "" : next;
       }
-      return pos + text.length > this.to ? text.slice(0, this.to - pos) : text;
+      return pos + text2.length > this.to ? text2.slice(0, this.to - pos) : text2;
     }
     /**
     The end position of the previous line.
@@ -34504,8 +35396,8 @@ var BrainNotesApp = (() => {
     returning an array of [`Element`](#Element) objects representing
     the inline content.
     */
-    parseInline(text, offset) {
-      let cx = new InlineContext(this, text, offset);
+    parseInline(text2, offset) {
+      let cx = new InlineContext(this, text2, offset);
       outer: for (let pos = offset; pos < cx.end; ) {
         let next = cx.char(pos);
         for (let token of this.inlineParsers)
@@ -34786,16 +35678,16 @@ var BrainNotesApp = (() => {
     }
   };
   function finishLink(cx, content2, type, start, startPos) {
-    let { text } = cx, next = cx.char(startPos), endPos = startPos;
+    let { text: text2 } = cx, next = cx.char(startPos), endPos = startPos;
     content2.unshift(elt(Type.LinkMark, start, start + (type == Type.Image ? 2 : 1)));
     content2.push(elt(Type.LinkMark, startPos - 1, startPos));
     if (next == 40) {
       let pos = cx.skipSpace(startPos + 1);
-      let dest = parseURL(text, pos - cx.offset, cx.offset), title;
+      let dest = parseURL(text2, pos - cx.offset, cx.offset), title;
       if (dest) {
         pos = cx.skipSpace(dest.to);
         if (pos != dest.to) {
-          title = parseLinkTitle(text, pos - cx.offset, cx.offset);
+          title = parseLinkTitle(text2, pos - cx.offset, cx.offset);
           if (title)
             pos = cx.skipSpace(title.to);
         }
@@ -34810,7 +35702,7 @@ var BrainNotesApp = (() => {
         content2.push(elt(Type.LinkMark, pos, endPos));
       }
     } else if (next == 91) {
-      let label = parseLinkLabel(text, startPos - cx.offset, cx.offset, false);
+      let label = parseLinkLabel(text2, startPos - cx.offset, cx.offset, false);
       if (label) {
         content2.push(label);
         endPos = label.to;
@@ -34818,11 +35710,11 @@ var BrainNotesApp = (() => {
     }
     return elt(type, start, endPos, content2);
   }
-  function parseURL(text, start, offset) {
-    let next = text.charCodeAt(start);
+  function parseURL(text2, start, offset) {
+    let next = text2.charCodeAt(start);
     if (next == 60) {
-      for (let pos = start + 1; pos < text.length; pos++) {
-        let ch = text.charCodeAt(pos);
+      for (let pos = start + 1; pos < text2.length; pos++) {
+        let ch = text2.charCodeAt(pos);
         if (ch == 62)
           return elt(Type.URL, start + offset, pos + 1 + offset);
         if (ch == 60 || ch == 10)
@@ -34831,8 +35723,8 @@ var BrainNotesApp = (() => {
       return null;
     } else {
       let depth = 0, pos = start;
-      for (let escaped = false; pos < text.length; pos++) {
-        let ch = text.charCodeAt(pos);
+      for (let escaped = false; pos < text2.length; pos++) {
+        let ch = text2.charCodeAt(pos);
         if (space(ch)) {
           break;
         } else if (escaped) {
@@ -34847,16 +35739,16 @@ var BrainNotesApp = (() => {
           escaped = true;
         }
       }
-      return pos > start ? elt(Type.URL, start + offset, pos + offset) : pos == text.length ? null : false;
+      return pos > start ? elt(Type.URL, start + offset, pos + offset) : pos == text2.length ? null : false;
     }
   }
-  function parseLinkTitle(text, start, offset) {
-    let next = text.charCodeAt(start);
+  function parseLinkTitle(text2, start, offset) {
+    let next = text2.charCodeAt(start);
     if (next != 39 && next != 34 && next != 40)
       return false;
     let end = next == 40 ? 41 : next;
-    for (let pos = start + 1, escaped = false; pos < text.length; pos++) {
-      let ch = text.charCodeAt(pos);
+    for (let pos = start + 1, escaped = false; pos < text2.length; pos++) {
+      let ch = text2.charCodeAt(pos);
       if (escaped)
         escaped = false;
       else if (ch == end)
@@ -34866,9 +35758,9 @@ var BrainNotesApp = (() => {
     }
     return null;
   }
-  function parseLinkLabel(text, start, offset, requireNonWS) {
-    for (let escaped = false, pos = start + 1, end = Math.min(text.length, pos + 999); pos < end; pos++) {
-      let ch = text.charCodeAt(pos);
+  function parseLinkLabel(text2, start, offset, requireNonWS) {
+    for (let escaped = false, pos = start + 1, end = Math.min(text2.length, pos + 999); pos < end; pos++) {
+      let ch = text2.charCodeAt(pos);
       if (escaped)
         escaped = false;
       else if (ch == 93)
@@ -34888,9 +35780,9 @@ var BrainNotesApp = (() => {
     /**
     @internal
     */
-    constructor(parser5, text, offset) {
+    constructor(parser5, text2, offset) {
       this.parser = parser5;
-      this.text = text;
+      this.text = text2;
       this.offset = offset;
       this.parts = [];
     }
@@ -35250,7 +36142,7 @@ var BrainNotesApp = (() => {
     }]
   };
   function parseRow(cx, line, startI = 0, elts, offset = 0) {
-    let count2 = 0, first = true, cellStart = -1, cellEnd = -1, esc = false;
+    let count3 = 0, first = true, cellStart = -1, cellEnd = -1, esc = false;
     let parseCell = () => {
       elts.push(cx.elt("TableCell", offset + cellStart, offset + cellEnd, cx.parser.parseInline(line.slice(cellStart, cellEnd), offset + cellStart)));
     };
@@ -35258,7 +36150,7 @@ var BrainNotesApp = (() => {
       let next = line.charCodeAt(i);
       if (next == 124 && !esc) {
         if (!first || cellStart > -1)
-          count2++;
+          count3++;
         first = false;
         if (elts) {
           if (cellStart > -1)
@@ -35274,11 +36166,11 @@ var BrainNotesApp = (() => {
       esc = !esc && next == 92;
     }
     if (cellStart > -1) {
-      count2++;
+      count3++;
       if (elts)
         parseCell();
     }
-    return count2;
+    return count3;
   }
   function hasPipe(str, start) {
     for (let i = start; i < str.length; i++) {
@@ -35373,33 +36265,33 @@ var BrainNotesApp = (() => {
   var lastTwoDomainWords = /[\w-]+\.[\w-]+($|[/:])/;
   var emailRE = /[\w.+-]+@[\w-]+(\.[\w.-]+)+/gy;
   var xmppResourceRE = /\/[a-zA-Z\d@.]+/gy;
-  function count(str, from, to, ch) {
+  function count2(str, from, to, ch) {
     let result = 0;
     for (let i = from; i < to; i++)
       if (str[i] == ch)
         result++;
     return result;
   }
-  function autolinkURLEnd(text, from) {
+  function autolinkURLEnd(text2, from) {
     urlRE.lastIndex = from;
-    let m = urlRE.exec(text);
+    let m = urlRE.exec(text2);
     if (!m || lastTwoDomainWords.exec(m[0])[0].indexOf("_") > -1)
       return -1;
     let end = from + m[0].length;
     for (; ; ) {
-      let last2 = text[end - 1], m2;
-      if (/[?!.,:*_~]/.test(last2) || last2 == ")" && count(text, from, end, ")") > count(text, from, end, "("))
+      let last2 = text2[end - 1], m2;
+      if (/[?!.,:*_~]/.test(last2) || last2 == ")" && count2(text2, from, end, ")") > count2(text2, from, end, "("))
         end--;
-      else if (last2 == ";" && (m2 = /&(?:#\d+|#x[a-f\d]+|\w+);$/.exec(text.slice(from, end))))
+      else if (last2 == ";" && (m2 = /&(?:#\d+|#x[a-f\d]+|\w+);$/.exec(text2.slice(from, end))))
         end = from + m2.index;
       else
         break;
     }
     return end;
   }
-  function autolinkEmailEnd(text, from) {
+  function autolinkEmailEnd(text2, from) {
     emailRE.lastIndex = from;
-    let m = emailRE.exec(text);
+    let m = emailRE.exec(text2);
     if (!m)
       return -1;
     let last2 = m[0][m[0].length - 1];
@@ -35577,14 +36469,14 @@ var BrainNotesApp = (() => {
           this.p.lastBigReductionSize = size;
         }
       }
-      let bufferBase = base2 ? this.stack[base2 - 1] : 0, count2 = this.bufferBase + this.buffer.length - bufferBase;
+      let bufferBase = base2 ? this.stack[base2 - 1] : 0, count3 = this.bufferBase + this.buffer.length - bufferBase;
       if (type < parser5.minRepeatTerm || action & 131072) {
         let pos = parser5.stateFlag(
           this.state,
           1
           /* StateFlag.Skipped */
         ) ? this.pos : this.reducePos;
-        this.storeNode(type, start, pos, count2 + 4, true);
+        this.storeNode(type, start, pos, count3 + 4, true);
       }
       if (action & 262144) {
         this.state = this.stack[base2];
@@ -39123,8 +40015,8 @@ var BrainNotesApp = (() => {
     return "";
   }
   var android2 = typeof navigator == "object" && /* @__PURE__ */ /Android\b/.test(navigator.userAgent);
-  var autoCloseTags = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text, defaultInsert) => {
-    if ((android2 ? view.composing : view.compositionStarted) || view.state.readOnly || from != to || text != ">" && text != "/" || !javascriptLanguage.isActiveAt(view.state, from, -1))
+  var autoCloseTags = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text2, defaultInsert) => {
+    if ((android2 ? view.composing : view.compositionStarted) || view.state.readOnly || from != to || text2 != ">" && text2 != "/" || !javascriptLanguage.isActiveAt(view.state, from, -1))
       return false;
     let base2 = defaultInsert(), { state } = base2;
     let closeTags = state.changeByRange((range) => {
@@ -39132,16 +40024,16 @@ var BrainNotesApp = (() => {
       let { head } = range, around = syntaxTree(state).resolveInner(head - 1, -1), name2;
       if (around.name == "JSXStartTag")
         around = around.parent;
-      if (state.doc.sliceString(head - 1, head) != text || around.name == "JSXAttributeValue" && around.to > head) ;
-      else if (text == ">" && around.name == "JSXFragmentTag") {
+      if (state.doc.sliceString(head - 1, head) != text2 || around.name == "JSXAttributeValue" && around.to > head) ;
+      else if (text2 == ">" && around.name == "JSXFragmentTag") {
         return { range, changes: { from: head, insert: `</>` } };
-      } else if (text == "/" && around.name == "JSXStartCloseTag") {
+      } else if (text2 == "/" && around.name == "JSXStartCloseTag") {
         let empty = around.parent, base3 = empty.parent;
         if (base3 && empty.from == head - 2 && ((name2 = elementName(state.doc, base3.firstChild, head)) || ((_a2 = base3.firstChild) === null || _a2 === void 0 ? void 0 : _a2.name) == "JSXFragmentTag")) {
           let insert2 = `${name2}>`;
           return { range: EditorSelection.cursor(head + insert2.length, -1), changes: { from: head, insert: insert2 } };
         }
-      } else if (text == ">") {
+      } else if (text2 == ">") {
         let openTag = findOpenTag(around);
         if (openTag && openTag.name == "JSXOpenTag" && !/^\/?>|^<\//.test(state.doc.sliceString(head, head + 2)) && (name2 = elementName(state.doc, openTag, head)))
           return { range, changes: { from: head, insert: `</${name2}>` } };
@@ -39857,22 +40749,22 @@ var BrainNotesApp = (() => {
       elt2 = next;
     }
   }
-  var autoCloseTags2 = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text, insertTransaction) => {
-    if (view.composing || view.state.readOnly || from != to || text != ">" && text != "/" || !htmlLanguage.isActiveAt(view.state, from, -1))
+  var autoCloseTags2 = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text2, insertTransaction) => {
+    if (view.composing || view.state.readOnly || from != to || text2 != ">" && text2 != "/" || !htmlLanguage.isActiveAt(view.state, from, -1))
       return false;
     let base2 = insertTransaction(), { state } = base2;
     let closeTags = state.changeByRange((range) => {
       var _a2;
-      let didType = state.doc.sliceString(range.from - 1, range.to) == text;
+      let didType = state.doc.sliceString(range.from - 1, range.to) == text2;
       let { head } = range, after = syntaxTree(state).resolveInner(head, -1), name2;
-      if (didType && text == ">" && after.name == "EndTag") {
+      if (didType && text2 == ">" && after.name == "EndTag") {
         let tag = after.parent;
         if ((name2 = elementName2(state.doc, tag.parent, head)) && !selfClosers2.has(name2) && !isClosed(state.doc, tag.parent, name2)) {
           let to2 = head + (state.doc.sliceString(head, head + 1) === ">" ? 1 : 0);
           let insert2 = `</${name2}>`;
           return { range, changes: { from: head, to: to2, insert: insert2 } };
         }
-      } else if (didType && text == "/" && after.name == "IncompleteCloseTag") {
+      } else if (didType && text2 == "/" && after.name == "IncompleteCloseTag") {
         let tag = after.parent;
         if (after.from == head - 2 && ((_a2 = tag.lastChild) === null || _a2 === void 0 ? void 0 : _a2.name) != "CloseTag" && (name2 = elementName2(state.doc, tag, head)) && !selfClosers2.has(name2)) {
           let to2 = head + (state.doc.sliceString(head, head + 1) === ">" ? 1 : 0);
@@ -40522,6 +41414,12 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/source-editor.ts
+  var createDraftStore = (config2) => config2.vaultID === "" ? null : createSourceDraftStore({
+    vaultID: config2.vaultID,
+    noteKey: config2.key,
+    draftID: resolveDraftTabID(() => randomID("tab")),
+    storage: resolveDraftStorage()
+  });
   var initSourceEditor = () => {
     const panel = queryElement(document, "[data-source-editor]", HTMLElement);
     if (!panel) {
@@ -40548,7 +41446,13 @@ var BrainNotesApp = (() => {
         return wikilinkOptions(normalizeSearchResults(payload));
       }
     });
-    controller = createSourceEditorController({ elements, config: config2, client, createSurface });
+    controller = createSourceEditorController({
+      elements,
+      config: config2,
+      client,
+      createSurface,
+      drafts: createDraftStore(config2)
+    });
     void controller.load();
   };
 
@@ -40740,17 +41644,17 @@ var BrainNotesApp = (() => {
     }
     return node;
   };
-  var labelled = (doc2, id2, text, control) => {
+  var labelled = (doc2, id2, text2, control) => {
     const wrapper = element(doc2, "div", "synthesize-field");
     const label = element(doc2, "label", "synthesize-field-label");
     label.setAttribute("for", id2);
-    label.textContent = text;
+    label.textContent = text2;
     control.id = id2;
     wrapper.append(label, control);
     return wrapper;
   };
-  var labelledWithError = (doc2, id2, text, control, errorAttribute) => {
-    const wrapper = labelled(doc2, id2, text, control);
+  var labelledWithError = (doc2, id2, text2, control, errorAttribute) => {
+    const wrapper = labelled(doc2, id2, text2, control);
     const error = element(doc2, "p", "synthesize-field-error", { [errorAttribute]: "" });
     error.id = `${id2}-error`;
     error.hidden = true;
@@ -40803,13 +41707,13 @@ var BrainNotesApp = (() => {
     });
     handle.type = "button";
     handle.textContent = "Drag";
-    const remove2 = element(doc2, "button", "synthesize-source-remove", {
+    const remove3 = element(doc2, "button", "synthesize-source-remove", {
       "data-synthesize-remove": source.key,
       "aria-label": `Remove ${source.title}`
     });
-    remove2.type = "button";
-    remove2.textContent = "Remove";
-    controls.append(handle, remove2);
+    remove3.type = "button";
+    remove3.textContent = "Remove";
+    controls.append(handle, remove3);
     row.appendChild(controls);
     return row;
   };
@@ -42457,9 +43361,9 @@ ${candidate.markdown}`;
     const create = createSynthesisCreateActions(runtime);
     view.sourceList.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      const remove2 = target?.closest("[data-synthesize-remove]");
-      if (remove2) {
-        selection.removeSource(remove2.getAttribute("data-synthesize-remove") || "");
+      const remove3 = target?.closest("[data-synthesize-remove]");
+      if (remove3) {
+        selection.removeSource(remove3.getAttribute("data-synthesize-remove") || "");
       }
     });
     view.sourceList.addEventListener("keydown", (event) => {
