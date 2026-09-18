@@ -150,6 +150,23 @@ func bulkConfigPinOptions(pin configPin) []noteops.BulkOption {
 	return opts
 }
 
+// sourceConfigPinOptions carries the pin into a raw-Markdown save. A source save
+// never re-renders frontmatter, but whether the properties block it submitted is
+// acceptable is a question about the vault's declarations, and answering it
+// against a configuration that has since been replaced is answering the wrong
+// question.
+func sourceConfigPinOptions(pin configPin) []noteops.SourceOption {
+	layers := pin.layers()
+	if len(layers) == 0 {
+		return nil
+	}
+	opts := make([]noteops.SourceOption, 0, len(layers))
+	for _, layer := range layers {
+		opts = append(opts, noteops.WithSourceRequire(layer.Path, layer.expectation()))
+	}
+	return opts
+}
+
 // configManager owns every read of the vault configuration for the server. It
 // publishes immutable deep clones, so a reload can never mutate a snapshot a
 // request is already using, and it tracks the reload bookkeeping the status

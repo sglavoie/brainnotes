@@ -374,6 +374,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(relatedItemAPIRoutePath, srv.handleRelatedItem)
 	mux.HandleFunc(noteInsightAPIRoutePath, srv.handleNoteInsight)
 	srv.registerNoteMutationRoutes(mux)
+	srv.registerSourceRoutes(mux)
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
 	mux.HandleFunc("/api/cockpit", srv.handleCockpitQueue)
 	mux.HandleFunc("/api/cockpit/item", srv.handleCockpitItem)
@@ -391,10 +392,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(viewsAPIRoutePath, srv.handleViews)
 	mux.HandleFunc(viewsPreviewAPIRoutePath, srv.handleViewsPreview)
 	mux.HandleFunc(viewsApplyAPIRoutePath, srv.handleViewsApply)
-	mux.HandleFunc(synthesisContextAPIRoutePath, srv.handleSynthesisContext)
-	mux.HandleFunc(synthesisGenerateAPIRoutePath, srv.handleSynthesisGenerate)
-	mux.HandleFunc(synthesisPreviewAPIRoutePath, srv.handleSynthesisPreview)
-	mux.HandleFunc(synthesisApplyAPIRoutePath, srv.handleSynthesisApply)
+	srv.registerSynthesisRoutes(mux)
 	mux.HandleFunc(synthesizeRoutePath, srv.handleSynthesizePage)
 	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
 	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
@@ -495,4 +493,19 @@ func (srv *Server) registerNoteMutationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/notes/bulk", srv.handleNotesBulk)
 	mux.HandleFunc("/api/history", srv.handleHistory)
 	mux.HandleFunc("/api/undo", srv.handleUndo)
+}
+
+// registerSynthesisRoutes groups the four synthesis APIs out of routes.
+//
+// The grouping is the same one registerNoteMutationRoutes makes and exists for
+// the same reason: routes is a flat list at the funlen ceiling, so a session
+// adding a surface has to give a few statements back. Only the APIs move —
+// /synthesize stays beside the other pages, because grouping a page with the
+// APIs it happens to call would put the two kinds of route in one bucket and
+// make the next reader look for a page where the write classes live.
+func (srv *Server) registerSynthesisRoutes(mux *http.ServeMux) {
+	mux.HandleFunc(synthesisContextAPIRoutePath, srv.handleSynthesisContext)
+	mux.HandleFunc(synthesisGenerateAPIRoutePath, srv.handleSynthesisGenerate)
+	mux.HandleFunc(synthesisPreviewAPIRoutePath, srv.handleSynthesisPreview)
+	mux.HandleFunc(synthesisApplyAPIRoutePath, srv.handleSynthesisApply)
 }

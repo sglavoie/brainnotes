@@ -40,6 +40,14 @@ func TestWalkExclusion_Excluded(t *testing.T) {
 		"./":                      "outside the vault",
 		"Refs/../../outside.md":   "outside the vault",
 		"Archive/../Archive/x.md": "ignored path Archive",
+		// A case variant of an ignored directory. On a case-insensitive filesystem
+		// this resolves onto the ignored directory itself, and Walk then prunes it
+		// under the on-disk name — so a note written here would exist and be
+		// invisible to every query. The reported prefix is the one that was asked
+		// for rather than the configured spelling, the way the templates rows above
+		// already do it.
+		"archive/Note.md":  "ignored path archive",
+		"REFS/VENDOR/x.md": "ignored path REFS/VENDOR",
 	}
 	for rel, wantReason := range cases {
 		reason, excluded := WalkExclusion(cfg, rel)
@@ -63,6 +71,14 @@ func TestWalkExclusion_NilConfig(t *testing.T) {
 
 // TestWalkExclusion_MatchesWalk pins the predicate to the walk it describes: a
 // path Walk never visits must be reported excluded, and vice versa.
+//
+// The fixture is exactly-cased on purpose, and the biconditional is asserted
+// only for exactly-cased names. WalkExclusion compares the configured
+// exclusions fold-wise and Walk prunes by the on-disk name, so on a
+// case-sensitive filesystem a lowercase `archive/` beside an ignored `Archive`
+// is walked *and* reported excluded — the deliberate asymmetry WalkExclusion's
+// own doc comment prices. Adding a case variant here would fail as though that
+// were a bug.
 func TestWalkExclusion_MatchesWalk(t *testing.T) {
 	root := t.TempDir()
 	cfg := walkExclusionConfig()

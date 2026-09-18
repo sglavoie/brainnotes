@@ -49,10 +49,28 @@ const (
 // so widening here does not make the request unbounded; it makes the bound the
 // route's instead of the profile's.
 func (c capabilities) requestBodyLimit(path string) int64 {
-	if path == synthesisPreviewAPIRoutePath && synthesisPreviewBodyLimit > c.maxRequestBody {
-		return synthesisPreviewBodyLimit
+	if widened := routeBodyLimit(path); widened > c.maxRequestBody {
+		return widened
 	}
 	return c.maxRequestBody
+}
+
+// routeBodyLimit is the transport allowance a route needs when its legitimate
+// request is larger than a remote profile's bound. Zero means the profile's
+// bound stands, which is the answer for every route that has no reason to be
+// treated specially.
+//
+// Every route named here applies the same number itself in
+// requireManagementPost, so this widening moves the bound from the profile to
+// the route rather than removing it.
+func routeBodyLimit(path string) int64 {
+	switch path {
+	case synthesisPreviewAPIRoutePath:
+		return synthesisPreviewBodyLimit
+	case sourcePreviewAPIRoutePath, sourceSaveAPIRoutePath, sourceCreateAPIRoutePath:
+		return sourceRequestBodyLimit
+	}
+	return 0
 }
 
 // capabilities is the one table stating what a mode may do. Everything that used

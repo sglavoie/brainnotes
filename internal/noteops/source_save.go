@@ -1,0 +1,344 @@
+package noteops
+
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+)
+
+// SaveSourceRequest is one whole-note Markdown write.
+type SaveSourceRequest struct {
+	RelPath string
+	Content string
+	// BaseRevision is the revision the edit was made against. It is required for
+	// a save of an existing note and must be empty for a create.
+	BaseRevision string
+	// SaveID is the client's idempotency key, or empty to opt out of one. An id
+	// makes a resubmission answerable even after the note moved on; without one
+	// a resubmission is answerable only while the bytes still converge.
+	SaveID string
+	// Create asks for a note that does not exist yet.
+	Create bool
+}
+
+// SaveSourceResult reports what a save did.
+type SaveSourceResult struct {
+	Destination PathResolution
+	// Revision is the note's revision after the save, which is the token the
+	// client has to carry into its next edit. It is filled in on every answer
+	// that leaves the submitted bytes on disk, including a replay, a converged
+	// no-op, and a save whose snapshot failed.
+	Revision string
+	// Changed is false for a save this call did not have to write: the note
+	// already held these exact bytes, or a recorded outcome answered it.
+	Changed bool
+	Created bool
+	// Replayed is true when this answer came from a persisted outcome rather
+	// than from a write this call performed.
+	Replayed bool
+	Journal  *journal.Entry
+}
+
+// SaveSource writes relPath's whole Markdown source, journaled and pinned to the
+// revision the edit was made against.
+//
+// The six ways a submitted note can be lost are each answered rather than
+// swallowed, and the order the checks run in is part of that:
+//
+//   - A *stale* base revision is refused before anything is written, as a
+//     SourceRevisionError the caller can turn into a merge.
+//   - A *duplicate* submission and a *lost response* are the same request twice.
+//     A keyed save replays its recorded outcome; an unkeyed one converges,
+//     because the bytes on disk already are the bytes submitted.
+//   - *Invalid frontmatter* is refused first of all, so nothing else — not a
+//     recorded outcome, not a revision comparison — can turn unstorable content
+//     into a success.
+//   - A *no-op* is reported as a success that changed nothing and returns the
+//     revision the note is actually at, never as a conflict.
+//   - A *snapshot failure* comes back as an error *with* a non-nil result: the
+//     bytes are on disk and the caller has to be able to say so.
+//
+// Callers must handle that last shape. It is the one case where both return
+// values are non-nil, and a caller that checks err alone will report a landed
+// save as a failure and invite a resubmission planned against a revision this
+// save already replaced.
+//
+// Unlike a capture this never replans on a conflict. An append is commutative
+// and a whole-note save is not: re-reading and retrying would overwrite whatever
+// the other writer just stored, so a conflict is the user's answer to give.
+func SaveSource(vaultRoot string, cfg *config.Config, req SaveSourceRequest, opts ...SourceOption) (*SaveSourceResult, error) {
+	options := sourceOptions{command: "bn source save"}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+	plan, err := planSourceSave(vaultRoot, cfg, req)
+	if err != nil {
+		return nil, err
+	}
+	if plan.settled != nil {
+		return plan.settled, nil
+	}
+
+	result, err := commitSourceSave(vaultRoot, plan, options)
+	if err != nil && result == nil {
+		if replay := replaySourceSaveAfterConflict(plan); replay != nil {
+			return replay, nil
+		}
+	}
+	if result != nil && plan.ledger != nil {
+		pruneSourceSaveLedger(filepath.Dir(plan.ledger.destination.AbsPath))
+	}
+	return result, err
+}
+
+// sourceSavePlan is one planned save: the exact bytes, the precondition they are
+// pinned to, and the record the same transaction will carry.
+type sourceSavePlan struct {
+	destination PathResolution
+	content     []byte
+	expect      vault.FileExpectation
+	// revision is the digest of content, which is both the record's digest and
+	// the revision the note ends at — a whole-file write makes those the same
+	// number.
+	revision string
+	base     string
+	created  bool
+	ledger   *sourceSaveLedgerWrite
+	// settled holds the answer for a save that needs no transaction at all: a
+	// replayed record, or a note that already holds the submitted bytes.
+	settled *SaveSourceResult
+}
+
+func planSourceSave(vaultRoot string, cfg *config.Config, req SaveSourceRequest) (sourceSavePlan, error) {
+	if err := validateSaveSourceRequest(req); err != nil {
+		return sourceSavePlan{}, err
+	}
+	dest, err := resolveSourceDestination(vaultRoot, cfg, req.RelPath)
+	if err != nil {
+		return sourceSavePlan{}, err
+	}
+	content := []byte(req.Content)
+	digest := vault.HashBytes(content)
+
+	ledger, replay, err := planSourceSaveLedger(vaultRoot, dest, req.SaveID, digest)
+	if err != nil {
+		return sourceSavePlan{}, err
+	}
+	if replay != nil {
+		return sourceSavePlan{settled: replay}, nil
+	}
+
+	current, err := ReadSource(vaultRoot, cfg, dest.RelPath)
+	if err != nil {
+		return sourceSavePlan{}, err
+	}
+	if settled := convergedSourceSave(current, digest); settled != nil {
+		return sourceSavePlan{settled: settled}, nil
+	}
+	expect, err := sourceSaveExpectation(req, current)
+	if err != nil {
+		return sourceSavePlan{}, err
+	}
+	if ledger != nil {
+		ledger.record = sourceSaveRecord{
+			Version:  sourceSaveRecordVersion,
+			SaveID:   strings.TrimSpace(req.SaveID),
+			Digest:   digest,
+			RelPath:  dest.RelPath,
+			Revision: digest,
+			Created:  !current.Exists,
+		}
+	}
+	return sourceSavePlan{
+		destination: dest,
+		content:     content,
+		expect:      expect,
+		revision:    digest,
+		base:        req.BaseRevision,
+		created:     !current.Exists,
+		ledger:      ledger,
+	}, nil
+}
+
+// validateSaveSourceRequest refuses a request that could not be stored, and one
+// whose revision fields contradict what it is asking for.
+//
+// Content validation runs first, ahead of the record lookup, so a reused save id
+// carrying unstorable bytes is refused rather than answered with the outcome the
+// id recorded for different content. Refusing loudly is the point: replaying
+// there would be the silent discard.
+func validateSaveSourceRequest(req SaveSourceRequest) error {
+	if err := ValidateSource(req.Content); err != nil {
+		return err
+	}
+	if err := validateSourceSaveID(req.SaveID); err != nil {
+		return err
+	}
+	base := strings.TrimSpace(req.BaseRevision)
+	if req.Create {
+		if base != "" {
+			return Errorf(CodeInvalidRequest, "source: a create must not carry a base revision")
+		}
+		return nil
+	}
+	if base == "" {
+		return Errorf(CodeInvalidRequest, "source: a save must carry the revision it was made against")
+	}
+	if !validSourceRevision(base) {
+		return Errorf(CodeInvalidRequest, "source: base revision is not a content digest")
+	}
+	return nil
+}
+
+// convergedSourceSave answers the save whose bytes the note already holds.
+//
+// The check runs ahead of the revision comparison on purpose. A client
+// resubmitting after a lost response — or a second tab saving the same edit —
+// hands over a base revision that is stale *because of its own earlier save*,
+// and calling that a conflict would tell somebody their edit was rejected while
+// the file on disk holds exactly what they asked for. An identical outcome is
+// convergence, not contention.
+//
+// It is also the answer to a repeated create, which is why it runs ahead of the
+// existence check as well. A destination already holding exactly these bytes is
+// the create that already happened; refusing it as a conflict would report a
+// collision to the very client whose request produced the file.
+//
+// Nothing is written, and that includes the record: a converged save is
+// self-idempotent, because the next resubmission converges the same way.
+func convergedSourceSave(current *SourceDocument, digest string) *SaveSourceResult {
+	if current == nil || !current.Exists || current.Revision != digest {
+		return nil
+	}
+	return &SaveSourceResult{
+		Destination: current.Destination,
+		Revision:    current.Revision,
+	}
+}
+
+// sourceSaveExpectation is the precondition the transaction pins the note to.
+//
+// It is derived from what was just read rather than from what the client sent,
+// which is why the stale answer and the transaction's answer cannot disagree:
+// the comparison here produces the message, and the same digest goes into the
+// expectation that produces the guarantee.
+func sourceSaveExpectation(req SaveSourceRequest, current *SourceDocument) (vault.FileExpectation, error) {
+	if req.Create {
+		if current.Exists {
+			return vault.FileExpectation{}, newSourceExistsError(current.Destination.RelPath, current.Revision)
+		}
+		return vault.ExpectMissing(), nil
+	}
+	if !current.Exists {
+		return vault.FileExpectation{}, Errorf(CodeNotFound,
+			"source: %s no longer exists, so nothing was written", current.Destination.RelPath)
+	}
+	if current.Revision != strings.TrimSpace(req.BaseRevision) {
+		return vault.FileExpectation{}, newSourceRevisionError(
+			current.Destination.RelPath, req.BaseRevision, current.Revision)
+	}
+	return vault.ExpectHash(current.Revision), nil
+}
+
+// commitSourceSave writes the note, the idempotency record, and nothing else, in
+// one transaction under one undo entry.
+func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) (*SaveSourceResult, error) {
+	txn, err := vault.NewFileTxn(vaultRoot)
+	if err != nil {
+		return nil, WrapError(CodeInternal, "source: open transaction", err)
+	}
+	if err := txn.Write(plan.destination.AbsPath, plan.content, 0, plan.expect); err != nil {
+		return nil, classifyTxnError("source: plan save", err)
+	}
+	if err := stageSourceSaveLedger(txn, plan.ledger); err != nil {
+		return nil, err
+	}
+	for _, requirement := range cfg.requires {
+		if err := txn.Require(requirement.path, requirement.expect); err != nil {
+			return nil, classifyTxnError("source: pin configuration", err)
+		}
+	}
+	// A create journals a file that does not exist yet, so `bn undo` deletes the
+	// note it made. The record is journaled with it and goes back the same way,
+	// which is what keeps an undone save re-submittable.
+	j, err := BeginOperation(vaultRoot, "save", cfg.command, []string{plan.destination.AbsPath}, cfg.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
+	if err := txn.Commit(j); err != nil {
+		return nil, classifySourceSaveTxnError(plan, err)
+	}
+	result := &SaveSourceResult{
+		Destination: plan.destination,
+		Revision:    plan.revision,
+		Changed:     true,
+		Created:     plan.created,
+	}
+	entry, err := j.Finalize()
+	if err != nil {
+		// The bytes are on disk and the history does not cover them. The result
+		// comes back beside the error because a caller told only "500" resubmits,
+		// and that resubmission would be planned against a revision this save
+		// already replaced — turning an honest snapshot failure into a lost edit.
+		return result, err
+	}
+	result.Journal = entry
+	return result, nil
+}
+
+// classifySourceSaveTxnError turns the transaction's verdict into this API's.
+//
+// A plain conflict means a writer landed between the read and the commit, which
+// is the same thing a stale base revision means and has to be answered the same
+// way. No actual revision is named: the file has moved again, and a digest read
+// here could be stale before it reached the client. A conflict reported
+// alongside displaced content or a failed rollback carries recovery
+// instructions and is passed through untouched, which is the same ordering
+// captureShouldReplan uses.
+//
+// The conflict is reported against the note even though the transaction pins two
+// paths, because the second is the idempotency record and its path derives from
+// the save id alone. Losing that race takes a client that reused one id across
+// two notes, and the message is then wrong about which path moved — but the
+// retry is answered precisely: planSourceSaveLedger finds a usable record naming
+// a different note and says so, in the one sentence that tells the client to mint
+// a fresh id.
+func classifySourceSaveTxnError(plan sourceSavePlan, err error) error {
+	if vault.IsTxnRecoveryNeeded(err) || vault.IsTxnRollbackFailure(err) {
+		return classifyTxnError("source: save note", err)
+	}
+	if vault.IsTxnConflict(err) {
+		return newSourceRevisionError(plan.destination.RelPath, plan.base, "")
+	}
+	return classifyTxnError("source: save note", err)
+}
+
+// replaySourceSaveAfterConflict answers a conflict that a duplicate of this very
+// request caused.
+//
+// Two identical keyed submissions in flight at once both plan against the same
+// state; the winner lands and the loser's preconditions all fail, on the note
+// and on the record alike. Re-reading the record once is what tells those apart
+// from a real conflict: a record naming this save id, these bytes and this path
+// exists only because this exact save landed, so replaying it is reporting the
+// truth rather than retrying anything.
+//
+// One re-read, not a loop. Either the record is there or the conflict was real.
+func replaySourceSaveAfterConflict(plan sourceSavePlan) *SaveSourceResult {
+	if plan.ledger == nil {
+		return nil
+	}
+	state, err := readSourceSaveLedgerState(plan.ledger.destination.AbsPath)
+	if err != nil || !state.usable {
+		return nil
+	}
+	if state.record.Digest != plan.revision || state.record.RelPath != plan.destination.RelPath {
+		return nil
+	}
+	return replayedSourceSave(plan.destination, state.record)
+}

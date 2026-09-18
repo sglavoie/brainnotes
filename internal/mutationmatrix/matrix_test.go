@@ -53,12 +53,13 @@ type mutation struct {
 	overHTTP bool
 }
 
-// mutations is the whole table. It is assembled from three groups rather than
-// written as one literal only because of its length: the groups are the layer a
-// writer is reached through, and the runner treats every row identically.
+// mutations is the whole table. It is assembled from groups rather than written
+// as one literal only because of its length: the groups are the layer a writer
+// is reached through, and the runner treats every row identically.
 func mutations() []mutation {
 	all := noteopsMutations()
 	all = append(all, cliMutations()...)
+	all = append(all, sourceMutations()...)
 	return append(all, surfaceMutations()...)
 }
 
