@@ -12,6 +12,15 @@ pkg := "./cmd/bn"
 guard_binary_name := "bn-vault-guard"
 guard_pkg := "./cmd/bn-vault-guard"
 
+# bn-vault-sync is the second private companion, and it is installed on the same
+# terms and for the same reason: it applies the peer's packages through the same
+# import path `bn sync` uses, so a companion a version behind its CLI is two
+# processes disagreeing about what a package means. It is a separate process from
+# the guard rather than another loop inside it because a vault that synchronizes
+# still needs its content history protected when this one is not installed.
+sync_binary_name := "bn-vault-sync"
+sync_pkg := "./cmd/bn-vault-sync"
+
 source_checkout_root := justfile_directory()
 source_checkout_ldflags := "-X github.com/sglavoie/sglavoie_brainnotes/internal/cli.sourceCheckoutRoot=" + source_checkout_root
 
@@ -70,6 +79,9 @@ install:
     @echo "Installing {{ guard_binary_name }}..."
     go install -ldflags '{{source_checkout_ldflags}}' {{ guard_pkg }}
     @echo "Installed {{ guard_binary_name }}"
+    @echo "Installing {{ sync_binary_name }}..."
+    go install -ldflags '{{source_checkout_ldflags}}' {{ sync_pkg }}
+    @echo "Installed {{ sync_binary_name }}"
 
 # Run the full test suite
 test:

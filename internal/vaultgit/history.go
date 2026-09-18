@@ -52,6 +52,11 @@ type History struct {
 	root   string
 	git    *gitExec
 	branch string
+	// state is the same safety state directory a Manager owns, opened for
+	// reading only. Nothing here writes through it: the two methods that use it
+	// (Blocked, Watch) are file reads, and every mutator on safetyState is
+	// reached from Manager alone.
+	state *safetyState
 }
 
 // HistoryOptions configures a read-only opening. It is deliberately not Options:
@@ -69,7 +74,8 @@ func OpenHistory(ctx context.Context, vaultRoot string, opts HistoryOptions) (*H
 	if err != nil {
 		return nil, err
 	}
-	if _, err := resolveGitDir(ctx, git, root); err != nil {
+	gitDir, err := resolveGitDir(ctx, git, root)
+	if err != nil {
 		return nil, err
 	}
 	// The same refusal Open makes, for a different reason. A detached HEAD has no
@@ -83,11 +89,43 @@ func OpenHistory(ctx context.Context, vaultRoot string, opts HistoryOptions) (*H
 	if ref == "" {
 		return nil, safetyErrorf(KindRepositoryState, "open", "the repository HEAD is detached, so there is no branch to read a history from")
 	}
-	return &History{root: root, git: git, branch: ref}, nil
+	return &History{root: root, git: git, branch: ref, state: newSafetyState(gitDir)}, nil
 }
 
 // Root reports the vault root this view reads.
 func (h *History) Root() string { return h.root }
+
+// Blocked reports the persisted block marker: whether this vault's mutation
+// snapshots are currently refused, and the record explaining why.
+//
+// It is here rather than only on Manager because the question "is this vault
+// safe to write to" is one an observer has to be able to ask. A status command
+// or a background companion that had to open a Manager to find out would resolve
+// a recovery intent as a side effect of asking — an observation with the power
+// to disturb what it observes, which is exactly what this type exists to avoid.
+//
+// It fails closed the way the marker itself does: an unreadable marker is
+// reported as blocked with a record that says so, alongside the decode error. A
+// caller must treat a non-nil error as *more* reason to stop, not less.
+func (h *History) Blocked() (BlockRecord, bool, error) { return h.state.LoadBlock() }
+
+// Watch reports the persisted debounce clock as it stands on disk.
+//
+// A zero FirstChangeAt means no burst is open: everything the working tree holds
+// has reached the content history, or nothing has changed since the last
+// snapshot closed one. A non-zero one means there are edits saved to disk that
+// the history does not carry yet, which is the distinction an observer needs to
+// tell "written locally" from "recorded in the history" — and which it must not
+// answer by scanning the working tree, because that races the very autosave it
+// is describing.
+//
+// It is a pure read with no failure mode: a missing, corrupt, or
+// future-versioned record reports an empty state, because none of those are
+// statements that a burst is open. That is the same reading
+// [safetyState.LoadWatchState] gives every writer in this package, so an
+// observer and the autosave scheduler never disagree about whether a vault is
+// mid-burst.
+func (h *History) Watch() WatchState { return h.state.LoadWatchState() }
 
 // Branch reports the full ref HEAD pointed at when this view was opened, as in
 // `refs/heads/main`. A caller that persists a cursor should persist this beside

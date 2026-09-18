@@ -124,6 +124,10 @@ func readEverything(t *testing.T, view *History, commits []string) {
 
 	_ = view.Root()
 	_ = view.Branch()
+	_ = view.Watch()
+	if _, _, err := view.Blocked(); err != nil {
+		t.Fatalf("Blocked: %v", err)
+	}
 	tip, err := view.Tip(ctx)
 	if err != nil {
 		t.Fatalf("Tip: %v", err)
