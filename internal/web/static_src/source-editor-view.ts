@@ -3,6 +3,7 @@ import {
   closeBrackets,
   closeBracketsKeymap,
   completionKeymap,
+  completionStatus,
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
@@ -45,6 +46,8 @@ export const createSourceSurfaceFactory = (
 ): SourceSurfaceFactory => {
   return (host: HTMLElement, initialValue: string): SourceSurface => {
     const listeners: (() => void)[] = [];
+    // One per editor, because it remembers what this vault answered.
+    const refresh: CompletionRefresh = { noMatchPrefix: null };
 
     const view = new EditorView({
       parent: host,
@@ -61,12 +64,13 @@ export const createSourceSurfaceFactory = (
           EditorView.lineWrapping,
           markdown({ base: markdownLanguage }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-          autocompletion({ override: [wikilinkCompletionSource(options)] }),
+          autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),
           // Tab is deliberately not bound. CodeMirror's own documentation
           // warns that capturing it traps keyboard users in the editor, and a
           // Markdown note has no indentation this page needs to offer.
           keymap.of([
             ...closeBracketsKeymap,
+            ...refreshingCompletionKeymap(refresh),
             ...completionKeymap,
             ...historyKeymap,
             ...formattingKeymap(options),
@@ -146,14 +150,130 @@ const formattingKeymap = (options: SourceViewOptions) => {
   ];
 };
 
+// CompletionRefresh is what the completion source tells the keymap below.
+//
+// noMatchPrefix is the shortest query this vault has answered with nothing. The
+// server matches a note when its folded path or body *contains* the query
+// (internal/web/match.go), so a longer query can only match fewer notes: once
+// `[[Some Note` has come back empty, every query extending it is empty too, and
+// no dialog is coming.
+type CompletionRefresh = { noMatchPrefix: string | null };
+
+// refreshingCompletionKeymap holds the three keys the completion dialog owns for
+// as long as the caret is in an unclosed `[[` and an answer that could fill the
+// dialog has not arrived. It is the price of `filter: false` below, paid here
+// rather than passed on to whoever is typing.
+//
+// Without `validFor` the result is invalidated on every keystroke, and
+// CodeMirror keeps the previous list on screen while the new query runs but
+// marks it disabled (CompletionDialog.build → setDisabled). A disabled dialog is
+// indistinguishable from a live one — same options, same DOM, no attribute — yet
+// acceptCompletion and moveCompletionSelection both decline, which in a keymap
+// means the key falls through: Enter to insertNewlineAndIndent, the arrows to
+// cursorLineUp/Down. So typing `[[Fieldwo` and pressing Enter without pausing
+// would put a newline inside the link and leave the completion behind, at the one
+// moment somebody is most likely to press it.
+//
+// Declining the key loses a keystroke; the alternative spends it on the opposite
+// of what it meant. The window is activateOnTypingDelay (100 ms) plus one
+// in-process query.
+//
+// Position in this array buys one thing only: running ahead of `defaultKeymap`,
+// so Enter never reaches insertNewlineAndIndent. It does *not* order this
+// against `completionKeymap` — `autocompletion()` installs its own copy of those
+// bindings at Prec.highest, so acceptCompletion runs before all of this and
+// declines exactly when the dialog is disabled, which is the gap these fill. The
+// spread below is therefore a duplicate; it is kept so the bindings survive
+// somebody passing `autocompletion({ defaultKeymap: false })`, and CodeMirror
+// dedupes by function identity.
+const refreshingCompletionKeymap = (refresh: CompletionRefresh) => {
+  const run = declineWhileRefreshing(refresh);
+  return [
+    { key: "Enter", run },
+    { key: "ArrowDown", run },
+    { key: "ArrowUp", run },
+  ];
+};
+
+// declineWhileRefreshing is the narrowest predicate the public API can express.
+// It cannot ask whether a dialog is on screen — currentCompletions() returns []
+// for precisely the disabled dialog this is about — so it asks whether an answer
+// that could produce one is still outstanding.
+//
+// The two exclusions are the cases where consuming the key would take it from
+// somebody who meant it for something else. A composition commit is reported as
+// Enter by some IMEs, and cancelling it loses the text being composed rather
+// than a newline. A query extending one already known empty has no dialog coming
+// at all, so waiting for it would eat an Enter for nothing — which is the
+// ordinary move of writing a link before the note exists.
+const declineWhileRefreshing =
+  (refresh: CompletionRefresh) =>
+  (view: EditorView): boolean => {
+    if (view.composing || completionStatus(view.state) !== "pending") {
+      return false;
+    }
+    const { main } = view.state.selection;
+    if (!main.empty) {
+      return false;
+    }
+    const link = wikilinkContextAt(view.state.doc.toString(), main.head);
+    return link !== null && !knownEmpty(refresh, link.query);
+  };
+
+const knownEmpty = (refresh: CompletionRefresh, query: string): boolean =>
+  refresh.noMatchPrefix !== null && query.startsWith(refresh.noMatchPrefix);
+
+// recordEmptyAnswer keeps the shortest query this vault has answered with
+// nothing. Shortest wins because backspacing to a shorter query that is also
+// empty is a stronger fact, and because a query that *matches* clears the field
+// outright.
+//
+// A query with nothing in it is excluded, and that exclusion is the whole of
+// this function. `/api/search?q=` returns no rows without looking at a single
+// note — buildSearchResponse short-circuits on an empty *folded* query, which is
+// why whitespace counts as nothing here too — so its zero is the API declining
+// to scan rather than the vault answering. Recording it would be recording a
+// prefix of everything, turning knownEmpty into a constant true and switching
+// the guard off for the rest of this editor's life. Resting the caret after `[[`
+// for longer than the 100 ms activation delay is the ordinary way to reach it,
+// which would have left the guard silently absent for exactly the first link of
+// every deliberate one.
+//
+// So the field is either null or a query the vault genuinely answered, and
+// knownEmpty can never be vacuously true.
+const recordEmptyAnswer = (refresh: CompletionRefresh, query: string): void => {
+  if (query.trim() === "") {
+    return;
+  }
+  if (refresh.noMatchPrefix === null || query.length < refresh.noMatchPrefix.length) {
+    refresh.noMatchPrefix = query;
+  }
+};
+
 // wikilinkCompletionSource offers vault notes after a `[[`.
 //
 // The context decision is source-wikilink.ts's, over a plain string and offset,
 // so it is tested in Vitest; what is left here is the CodeMirror shape around
-// it. `validFor` keeps the list alive while the query only grows with ordinary
-// characters, which is what stops every keystroke becoming a search request.
+// it.
+//
+// `filter: false` and the absence of `validFor` are one decision: the vault's
+// search is the only thing that can rank these, so every keystroke asks it
+// again and the answer is shown as given. Both defaults are wrong here for the
+// same reason — they re-match what was typed against the option *label*, and
+// the label is the note's path (wikilinkTargetForNote in
+// internal/web/note_model.go) while the search matches its body too. A note at
+// Notes/Fieldwork.md whose body says "Cartographer" is returned by the server
+// for `[[Cartograph` and then dropped by the local filter, so the completion
+// would only ever offer notes somebody could already have typed the path of.
+//
+// The cost is a query per keystroke, though not a request per keystroke:
+// CodeMirror keeps one in flight per source and restarts it when the answer is
+// stale, behind a 100 ms typing delay. `/api/search` is an in-process query over
+// an already-loaded vault, so that is the cheaper side of the trade. The other
+// cost is the window the re-query opens, which refreshingCompletionKeymap above
+// exists to bound.
 const wikilinkCompletionSource =
-  (options: SourceViewOptions) =>
+  (options: SourceViewOptions, refresh: CompletionRefresh) =>
   async (context: CompletionContext): Promise<CompletionResult | null> => {
     if (!options.completeWikilink) {
       return null;
@@ -164,11 +284,13 @@ const wikilinkCompletionSource =
     }
     const matches = await options.completeWikilink(link.query);
     if (matches.length === 0) {
+      recordEmptyAnswer(refresh, link.query);
       return null;
     }
+    refresh.noMatchPrefix = null;
     return {
       from: link.from,
-      validFor: /^[^[\]\n|#]*$/,
+      filter: false,
       options: matches.map((match) => ({
         label: match.label,
         detail: match.detail || undefined,

@@ -146,22 +146,26 @@ describe("classifySaveResponse on a conflict", () => {
   // like a stale one — except that the version it carries is the version the
   // editor already has. Offering a merge here would ask somebody to choose
   // between their draft and their own starting text.
+  //
+  // The message is the server's verbatim, and it is the reason this outcome
+  // gets a sentence of its own: newSourceRevisionError writes "changed since it
+  // was loaded" for every precondition, which is false for the one precondition
+  // that is not about the note.
   it("reads a conflict carrying the revision already in hand as a plain failure", () => {
     const outcome = classifySaveResponse(
       normalizeSourceSaveResponse({
         ok: false,
         code: "conflict",
-        message: "source: the configuration changed while saving Alpha.md, so nothing was written",
+        message: "source: Alpha.md changed since it was loaded, so nothing was written",
         revision: BASE,
         content: "Alpha body.\n",
       }),
       BASE
     );
-    expect(outcome).toEqual({
-      kind: "failed",
-      answered: true,
-      message: "source: the configuration changed while saving Alpha.md, so nothing was written",
-    });
+    expect(outcome).toMatchObject({ kind: "failed", answered: true });
+    expect(outcome.message).not.toContain("changed since it was loaded");
+    expect(outcome.message).toContain("nothing was written");
+    expect(outcome.message).toContain("press Save to try again");
   });
 
   // The save-id reuse refusal (planSourceSaveLedger). It is raised before any

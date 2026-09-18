@@ -20,10 +20,13 @@ type searchResult struct {
 	Key   string `json:"key"`
 	Title string `json:"title"`
 	// Wikilink is the target text a link to this note carries, without the
-	// brackets. It is published because a caller that wants to *write* a link
-	// cannot derive it from the other fields: Key is folded to lower case and
-	// Title is whatever the frontmatter says, while the graph resolves the
-	// exact-case path. The raw-Markdown editor's completion is the first caller.
+	// brackets. It is published so there is one derivation of the target rather
+	// than three: Key is folded to lower case, and Title is the *filename stem*
+	// (vault.Note.Title, not the frontmatter), so reassembling Folder + "/" +
+	// Title is both a reassembly and a subtly different answer — Title applies
+	// textnorm.NFC while noteVaultPath does not, so the two disagree on a
+	// decomposed filename. The raw-Markdown editor's completion is the first
+	// caller.
 	Wikilink      string   `json:"wikilink"`
 	Folder        string   `json:"folder"`
 	Path          string   `json:"path"`

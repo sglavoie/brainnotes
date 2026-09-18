@@ -171,6 +171,29 @@ describe("dirtiness", () => {
     expect(harness.controller.dirty()).toBe(false);
     expect(harness.saveButton().disabled).toBe(true);
   });
+
+  // Undoing is also the natural reaction to a save that did not answer, and
+  // there the text matching the vault proves nothing: those bytes may be on
+  // disk. The button has to keep offering the one action that settles it, or it
+  // says "nothing unsaved" over an attempt of unknown outcome and leaves
+  // Ctrl/⌘+S — which does not consult it — as the only way through.
+  it("keeps Save armed over an unanswered attempt the text was undone after", async () => {
+    const save = vi.fn().mockRejectedValue(new Error("Failed to fetch"));
+    const harness = mount({ save: save as unknown as SourceClient["save"] });
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    await harness.controller.save();
+    expect(harness.status()).toContain("press Save to retry");
+
+    harness.surface().type(LOADED);
+    expect(harness.controller.dirty()).toBe(false);
+    expect(harness.saveButton().disabled).toBe(false);
+
+    harness.saveButton().click();
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1][0].content).toBe(LOADED);
+  });
 });
 
 describe("saving", () => {
@@ -329,6 +352,47 @@ const inConflict = async (): Promise<Harness> => {
   return harness;
 };
 
+const deferred = <T,>(): { promise: Promise<T>; resolve: (value: T) => void } => {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+};
+
+// savingOverAConflict is the overlap the two conflict buttons have to survive:
+// the panel is up, and a *later* save is in flight and has not answered. The
+// second response is a promise this test resolves by hand, because nothing else
+// can hold a request open across a click.
+const savingOverAConflict = async (): Promise<{
+  harness: Harness;
+  pending: { resolve: (value: SourceSaveResponse) => void };
+  inFlight: Promise<void>;
+}> => {
+  const pending = deferred<SourceSaveResponse>();
+  const harness = mount({
+    save: vi
+      .fn()
+      .mockResolvedValueOnce(
+        saveFailure({
+          ok: false,
+          code: "conflict",
+          message: "source: Alpha.md changed since it was loaded, so nothing was written",
+          revision: "r9",
+          content: "Somebody else's text.\n",
+        })
+      )
+      .mockReturnValueOnce(pending.promise) as unknown as SourceClient["save"],
+  });
+  await harness.controller.load();
+  harness.surface().type("my draft\n");
+  await harness.controller.save();
+
+  harness.surface().type("my draft, revised\n");
+  const inFlight = harness.controller.save();
+  return { harness, pending, inFlight };
+};
+
 describe("a note that changed under the edit", () => {
   it("shows the vault's version and leaves the draft in the editor", async () => {
     const harness = await inConflict();
@@ -392,6 +456,79 @@ describe("resolving a conflict", () => {
     expect(harness.elements.conflict?.hasAttribute("data-source-conflict-revision")).toBe(false);
   });
 
+});
+
+// What the panel does while it is up, rather than which choice it applies.
+//
+// Two shapes. It comes down on its own when a later save *wrote* — that is what
+// makes the version it holds obsolete rather than merely unchosen — and it
+// declines both of its buttons while a save is in flight, because either one
+// re-pins and tears the panel down over a request that has not answered. The
+// last two are the adopted-text and successful-save cases of the same rule.
+describe("the conflict panel's own lifetime", () => {
+  // The panel is up for the whole of a later save, so either button can be
+  // clicked over a request that has not answered yet. Each one re-pins the
+  // revision and takes the panel down before calling save — which then refuses,
+  // leaving the editor pinned to a version whose bytes nothing on screen still
+  // holds and a choice nobody ever made.
+  it("declines either choice while a save is in flight", async () => {
+    const { harness, pending, inFlight } = await savingOverAConflict();
+
+    harness.elements.conflictOverwrite?.click();
+    harness.elements.conflictDiscard?.click();
+
+    expect(harness.client.save).toHaveBeenCalledTimes(2);
+    expect(harness.conflict().hidden).toBe(false);
+    expect(harness.conflict().getAttribute("data-source-conflict-revision")).toBe("r9");
+    expect(harness.surface().getValue()).toBe("my draft, revised\n");
+
+    // The in-flight save is what decides the note's fate, and it succeeded, so
+    // the panel goes — on its own terms rather than on a click that was
+    // declined.
+    pending.resolve(saveSuccess({ revision: "r11" }));
+    await inFlight;
+    expect(harness.conflict().hidden).toBe(true);
+  });
+
+  // A save that landed is a write: the note now holds the draft, so the version
+  // on the panel is older than what is on disk. Leaving it up offers to re-pin
+  // to a superseded revision, or to load bytes this save already replaced.
+  // A refusal that wrote nothing is deliberately not treated this way — the
+  // other writer's version is still the newest thing anybody has seen.
+  it("takes the panel down when a later save lands without a snapshot", async () => {
+    const harness = mount({
+      save: vi
+        .fn()
+        .mockResolvedValueOnce(
+          saveFailure({
+            ok: false,
+            code: "conflict",
+            message: "source: Alpha.md changed since it was loaded, so nothing was written",
+            revision: "r9",
+            content: "Somebody else's text.\n",
+          })
+        )
+        .mockResolvedValue(
+          saveFailure({
+            ok: false,
+            code: "snapshot_failed",
+            message: "the change is on disk and further writes are blocked",
+            revision: "r7",
+            changed: true,
+          })
+        ) as unknown as SourceClient["save"],
+    });
+    await harness.controller.load();
+    harness.surface().type("my draft\n");
+    await harness.controller.save();
+    expect(harness.conflict().hidden).toBe(false);
+
+    harness.surface().type("my draft, revised\n");
+    await harness.controller.save();
+    expect(harness.conflict().hidden).toBe(true);
+    expect(harness.conflict().hasAttribute("data-source-conflict-revision")).toBe(false);
+  });
+
   it("previews the adopted text rather than the discarded draft", async () => {
     const harness = await inConflict();
 
@@ -420,13 +557,17 @@ describe("resolving a conflict", () => {
 // revision — code `conflict`, with a revision and content attached. What it
 // carries is the note nobody touched, which is to say the editor's own base.
 describe("a conflict over a version the editor already has", () => {
+  // The message is the server's, verbatim. newSourceRevisionError writes
+  // "changed since it was loaded" for every precondition that failed at the
+  // commit boundary, so this is the sentence a config-pin refusal arrives with
+  // — and it is false, which is why the editor substitutes its own below.
   const pinMoved = (): Harness =>
     mount({
       save: vi.fn().mockResolvedValue(
         saveFailure({
           ok: false,
           code: "conflict",
-          message: "source: the configuration changed while saving Alpha.md, so nothing was written",
+          message: "source: Alpha.md changed since it was loaded, so nothing was written",
           revision: "r1",
           content: "Alpha body.\n",
         })
@@ -443,24 +584,42 @@ describe("a conflict over a version the editor already has", () => {
 
     await harness.controller.save();
     expect(harness.conflict().hidden).toBe(true);
-    expect(harness.status()).toContain("the configuration changed");
     expect(harness.elements.status?.classList.contains("is-error")).toBe(true);
     expect(harness.surface().getValue()).toContain("my draft\n");
     expect(harness.controller.dirty()).toBe(true);
   });
 
-  // The server answered, so pressing Save again is a fresh attempt against the
-  // same, still-current revision.
-  it("leaves the save planned against the revision it was already planned against", async () => {
+  // Passing the server's sentence through would tell somebody their note moved
+  // while showing them no other version and no way to merge it.
+  it("does not repeat the server's claim that the note changed", async () => {
+    const harness = pinMoved();
+    await harness.controller.load();
+    harness.surface().type("my draft\n");
+
+    await harness.controller.save();
+    expect(harness.status()).not.toContain("changed since it was loaded");
+    expect(harness.status()).toContain("nothing was written");
+    expect(harness.status()).toContain("press Save to try again");
+  });
+
+  // The server answered — a 409 is it saying it wrote nothing — so there is no
+  // attempt of unknown outcome left to resume and pressing Save again is a new
+  // one. Reusing the id here would instead meet the ledger's own refusal.
+  it("treats the refusal as answered, so the retry is a fresh attempt", async () => {
     const harness = pinMoved();
     await harness.controller.load();
     harness.surface().type("my draft\n");
 
     await harness.controller.save();
     await harness.controller.save();
-    expect(harness.client.save.mock.calls[1][0].revision).toBe("r1");
     const [first, second] = harness.client.save.mock.calls.map((call) => call[0].saveID);
     expect(second).not.toBe(first);
+    // Fresh attempt, same pin. This is the only guard on it: the response
+    // carries a `revision` field and the "landed" arm re-pins to exactly that,
+    // so re-pinning here is an easy mistake to make and nothing else in this
+    // file would catch it. The revision the editor validated is what protects
+    // the retry.
+    expect(harness.client.save.mock.calls[1][0].revision).toBe("r1");
   });
 });
 
@@ -608,26 +767,6 @@ describe("controls", () => {
     expect(harness.surface().getValue()).toBe("**word**");
   });
 
-  it("saves on Ctrl/⌘+S from anywhere on the page and stops the browser's own handler", async () => {
-    const harness = mount();
-    await harness.controller.load();
-    harness.surface().type("edited\n");
-
-    const event = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, cancelable: true, bubbles: true });
-    document.body.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
-    await vi.waitFor(() => expect(harness.client.save).toHaveBeenCalledTimes(1));
-  });
-
-  it("leaves an unmodified S alone", async () => {
-    const harness = mount();
-    await harness.controller.load();
-    harness.surface().type("edited\n");
-
-    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "s", cancelable: true, bubbles: true }));
-    expect(harness.client.save).not.toHaveBeenCalled();
-  });
-
   // The delay is non-zero on purpose. With a zero debounce the scheduled render
   // has already happened by the time the tab is clicked, so the assertion holds
   // whether or not choosing the pane flushes anything — which is the whole
@@ -649,6 +788,70 @@ describe("controls", () => {
     expect(harness.controller.panes.active()).toBe("preview");
     expect(previewTab?.getAttribute("aria-selected")).toBe("true");
     expect(document.querySelector(".source-editor-panes")?.getAttribute("data-source-active")).toBe("preview");
+  });
+});
+
+// The save shortcut. It is bound on the document rather than only in the
+// editor's keymap, so it reaches Save from the toolbar and the conflict
+// buttons too — and is therefore the one path into a save that the Save
+// button's disabled state cannot speak for.
+describe("the save shortcut", () => {
+  it("saves on Ctrl/⌘+S from anywhere on the page and stops the browser's own handler", async () => {
+    const harness = mount();
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    const event = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, cancelable: true, bubbles: true });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(harness.client.save).toHaveBeenCalledTimes(1));
+  });
+
+  it("leaves an unmodified S alone", async () => {
+    const harness = mount();
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "s", cancelable: true, bubbles: true }));
+    expect(harness.client.save).not.toHaveBeenCalled();
+  });
+
+  // The shortcut does not go through the Save button, so the button being
+  // disabled refuses nothing. Without the same test in the save path, holding
+  // Ctrl/⌘+S on an untouched note writes one save_id into the server's
+  // idempotency ledger per keypress and reports each one as a success.
+  it("saves nothing when the note is untouched", async () => {
+    const harness = mount();
+    await harness.controller.load();
+    expect(harness.saveButton().disabled).toBe(true);
+
+    const event = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, cancelable: true, bubbles: true });
+    document.body.dispatchEvent(event);
+    await Promise.resolve();
+
+    expect(harness.client.save).not.toHaveBeenCalled();
+    expect(harness.status()).not.toContain("Saving");
+  });
+
+  // Ctrl/⌘+Shift+S is somebody else's chord — the browser's, an extension's —
+  // and this listener is in the capture phase, so claiming it would swallow it
+  // and do something the person did not ask for.
+  it("leaves Ctrl/⌘+Shift+S to whatever else claimed it", async () => {
+    const harness = mount();
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    const event = new KeyboardEvent("keydown", {
+      key: "s",
+      ctrlKey: true,
+      shiftKey: true,
+      cancelable: true,
+      bubbles: true,
+    });
+    document.body.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(harness.client.save).not.toHaveBeenCalled();
   });
 
   it("stops listening once destroyed", async () => {

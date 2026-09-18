@@ -80,9 +80,15 @@ export const createSourceEditorController = (
   const dirty = (): boolean =>
     state.surface !== null && state.surface.getValue() !== state.savedContent;
 
+  // The button offers exactly what runSave will accept, including the exception:
+  // an unanswered attempt is still worth pressing Save over even when the text
+  // matches what was last adopted, because its bytes may be on disk. Undoing back
+  // to the saved text is the natural reaction to a save that did not go through,
+  // and a button that disabled itself there would say "nothing unsaved" over an
+  // attempt whose fate nobody knows, leaving Ctrl/⌘+S as the only way to settle it.
   const refreshSaveButton = (): void => {
     if (elements.save) {
-      elements.save.disabled = state.saving || !dirty();
+      elements.save.disabled = state.saving || (!dirty() && state.pendingSave === null);
     }
   };
 
@@ -168,7 +174,17 @@ const bindGlobalKeys = (
   controller: SourceEditorController
 ): (() => void) => {
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey) {
+    // Alt and Shift are excluded rather than ignored: Ctrl/⌘+Alt+S and
+    // Ctrl/⌘+Shift+S are bound elsewhere — by browsers, by extensions, by the
+    // operating system — and this listener runs in the capture phase, so
+    // treating them as Save would swallow a chord that was never meant for the
+    // page and silently do something else with it.
+    if (
+      event.key.toLowerCase() !== "s" ||
+      !(event.metaKey || event.ctrlKey) ||
+      event.altKey ||
+      event.shiftKey
+    ) {
       return;
     }
     event.preventDefault();
@@ -250,6 +266,18 @@ const runSave = async (
     return;
   }
   const content = surface.getValue();
+  // The same refusal the Save button expresses by being disabled. It has to be
+  // here rather than only there because Ctrl/⌘+S does not go through the
+  // button: without it, the shortcut on an untouched note mints a save_id,
+  // writes a ledger entry, takes the vault lock and reports success for a save
+  // nobody asked for — once per keypress.
+  //
+  // An unanswered attempt is the exception. Its bytes may be on disk, so text
+  // that merely matches what this editor last adopted is still worth sending;
+  // resumableSaveID decides whether that is a replay or a new write.
+  if (content === state.savedContent && state.pendingSave === null) {
+    return;
+  }
   const tooLarge = oversizeMessage(content, deps.config.maxBytes);
   if (tooLarge !== "") {
     ctx.setStatus(tooLarge, "is-error");
@@ -317,6 +345,14 @@ const applyOutcome = (
       // revision has to move anyway, or the next save is planned against one
       // this save already replaced.
       ctx.adopt(submitted, outcome.revision);
+      // And the panel goes for the same reason it goes on a success: the
+      // version it holds is now older than what the note contains, so
+      // "overwrite" would offer to re-pin to a superseded revision and
+      // "discard" would offer to load bytes this save has already replaced.
+      // A refusal that is *not* a write is deliberately left alone below — the
+      // other writer's version is still the newest thing anybody has seen, and
+      // taking it off screen over an unrelated error would lose the only copy.
+      hideConflict(elements);
       ctx.setStatus(outcome.message, "is-error");
       return;
     case "conflict":
@@ -358,7 +394,20 @@ const wireConflict = (
   controller: SourceEditorController,
   ctx: SaveContext
 ): void => {
+  // Both buttons are declined while a save is in flight. The panel stays up for
+  // the duration of a request — the two states genuinely overlap — so either
+  // can be clicked over a save that has not answered yet, and each of them
+  // moves `baseRevision` and tears the panel down. Doing that and *then* being
+  // refused by runSave is the worst of both: the editor is left pinned to a
+  // revision whose bytes are no longer on screen anywhere, the answer still to
+  // come adopts over the top of it, and the choice the panel was asking about
+  // was never made. So the click is declined whole rather than half-applied.
+  const settled = (): boolean => !state.saving;
+
   elements.conflictOverwrite?.addEventListener("click", () => {
+    if (!settled()) {
+      return;
+    }
     // Re-pin to the revision the server reported and submit the same text
     // again. This is the one place a revision moves without the vault's bytes
     // having been read here — which is exactly what "overwrite" means. The
@@ -371,6 +420,9 @@ const wireConflict = (
   });
 
   elements.conflictDiscard?.addEventListener("click", () => {
+    if (!settled()) {
+      return;
+    }
     // Adopting is what the vault's version *is* once it is in the editor: the
     // text, the revision and the attempt id move together, and the Save button
     // goes back to disabled because there is now nothing unsaved. Setting the

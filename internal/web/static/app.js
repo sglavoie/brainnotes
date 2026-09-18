@@ -13275,8 +13275,16 @@ var BrainNotesApp = (() => {
         message: response.message || "The note was written but could not be snapshotted."
       };
     }
+    if (isUnmovedConflict(response, baseRevision)) {
+      return {
+        kind: "failed",
+        answered: true,
+        message: "Something else in the vault changed while the note was being saved, so nothing was written. Your text is unchanged; press Save to try again."
+      };
+    }
     return classifyRefusal(response);
   };
+  var isUnmovedConflict = (response, baseRevision) => !response.ok && response.code === "conflict" && baseRevision !== "" && response.revision === baseRevision;
   var classifyRefusal = (response) => {
     if (response.code === "") {
       return {
@@ -13387,7 +13395,7 @@ var BrainNotesApp = (() => {
     const dirty = () => state.surface !== null && state.surface.getValue() !== state.savedContent;
     const refreshSaveButton = () => {
       if (elements.save) {
-        elements.save.disabled = state.saving || !dirty();
+        elements.save.disabled = state.saving || !dirty() && state.pendingSave === null;
       }
     };
     const adopt = (content2, revision) => {
@@ -13447,7 +13455,7 @@ var BrainNotesApp = (() => {
   });
   var bindGlobalKeys = (ownerDocument, controller) => {
     const onKeyDown = (event) => {
-      if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey) {
+      if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
         return;
       }
       event.preventDefault();
@@ -13494,6 +13502,9 @@ var BrainNotesApp = (() => {
       return;
     }
     const content2 = surface.getValue();
+    if (content2 === state.savedContent && state.pendingSave === null) {
+      return;
+    }
     const tooLarge = oversizeMessage(content2, deps.config.maxBytes);
     if (tooLarge !== "") {
       ctx.setStatus(tooLarge, "is-error");
@@ -13531,6 +13542,7 @@ var BrainNotesApp = (() => {
         return;
       case "landed":
         ctx.adopt(submitted, outcome.revision);
+        hideConflict(elements);
         ctx.setStatus(outcome.message, "is-error");
         return;
       case "conflict":
@@ -13558,12 +13570,19 @@ var BrainNotesApp = (() => {
     elements.save?.addEventListener("click", () => void controller.save());
   };
   var wireConflict = (elements, state, controller, ctx) => {
+    const settled = () => !state.saving;
     elements.conflictOverwrite?.addEventListener("click", () => {
+      if (!settled()) {
+        return;
+      }
       state.baseRevision = conflictRevision(elements);
       hideConflict(elements);
       void controller.save();
     });
     elements.conflictDiscard?.addEventListener("click", () => {
+      if (!settled()) {
+        return;
+      }
       const incoming = elements.conflictSource?.textContent ?? "";
       state.surface?.setValue(incoming);
       ctx.adopt(incoming, conflictRevision(elements));
@@ -32306,6 +32325,13 @@ var BrainNotesApp = (() => {
     { key: "Enter", run: acceptCompletion }
   ];
   var completionKeymapExt = /* @__PURE__ */ Prec.highest(/* @__PURE__ */ keymap.computeN([completionConfig], (state) => state.facet(completionConfig).defaultKeymap ? [completionKeymap] : []));
+  function completionStatus(state) {
+    let cState = state.field(completionState, false);
+    return cState && cState.active.some((a) => a.isPending) ? "pending" : cState && cState.active.some(
+      (a) => a.state != 0
+      /* State.Inactive */
+    ) ? "active" : null;
+  }
 
   // node_modules/@codemirror/commands/dist/index.js
   var toggleComment = (target) => {
@@ -40338,6 +40364,7 @@ var BrainNotesApp = (() => {
   var createSourceSurfaceFactory = (options) => {
     return (host, initialValue) => {
       const listeners = [];
+      const refresh = { noMatchPrefix: null };
       const view = new EditorView({
         parent: host,
         state: EditorState.create({
@@ -40353,12 +40380,13 @@ var BrainNotesApp = (() => {
             EditorView.lineWrapping,
             markdown({ base: markdownLanguage }),
             syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-            autocompletion({ override: [wikilinkCompletionSource(options)] }),
+            autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),
             // Tab is deliberately not bound. CodeMirror's own documentation
             // warns that capturing it traps keyboard users in the editor, and a
             // Markdown note has no indentation this page needs to offer.
             keymap.of([
               ...closeBracketsKeymap,
+              ...refreshingCompletionKeymap(refresh),
               ...completionKeymap,
               ...historyKeymap,
               ...formattingKeymap(options),
@@ -40431,7 +40459,35 @@ var BrainNotesApp = (() => {
       ...headings
     ];
   };
-  var wikilinkCompletionSource = (options) => async (context) => {
+  var refreshingCompletionKeymap = (refresh) => {
+    const run = declineWhileRefreshing(refresh);
+    return [
+      { key: "Enter", run },
+      { key: "ArrowDown", run },
+      { key: "ArrowUp", run }
+    ];
+  };
+  var declineWhileRefreshing = (refresh) => (view) => {
+    if (view.composing || completionStatus(view.state) !== "pending") {
+      return false;
+    }
+    const { main } = view.state.selection;
+    if (!main.empty) {
+      return false;
+    }
+    const link = wikilinkContextAt(view.state.doc.toString(), main.head);
+    return link !== null && !knownEmpty(refresh, link.query);
+  };
+  var knownEmpty = (refresh, query) => refresh.noMatchPrefix !== null && query.startsWith(refresh.noMatchPrefix);
+  var recordEmptyAnswer = (refresh, query) => {
+    if (query.trim() === "") {
+      return;
+    }
+    if (refresh.noMatchPrefix === null || query.length < refresh.noMatchPrefix.length) {
+      refresh.noMatchPrefix = query;
+    }
+  };
+  var wikilinkCompletionSource = (options, refresh) => async (context) => {
     if (!options.completeWikilink) {
       return null;
     }
@@ -40441,11 +40497,13 @@ var BrainNotesApp = (() => {
     }
     const matches = await options.completeWikilink(link.query);
     if (matches.length === 0) {
+      recordEmptyAnswer(refresh, link.query);
       return null;
     }
+    refresh.noMatchPrefix = null;
     return {
       from: link.from,
-      validFor: /^[^[\]\n|#]*$/,
+      filter: false,
       options: matches.map((match) => ({
         label: match.label,
         detail: match.detail || void 0,

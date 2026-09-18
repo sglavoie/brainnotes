@@ -157,6 +157,118 @@ test("typing [[ completes a wikilink from the vault", async ({ page }) => {
   expect(gitStatus(manifest.localVault), "the editor wrote without being told to save").toBe("");
 });
 
+// The case above cannot fail on the defect this one is for: `Bet` is a prefix
+// of the note's path, so a completion list re-filtered against that path agrees
+// with the server by accident. `Cartographer` appears only in the *body* of
+// Notes/Fieldwork.md, so the two disagree — the vault matches the note and its
+// own label does not — and searching by what a note says rather than by where
+// it is filed is most of why the completion asks the server at all.
+test("a completion survives when the note matched on something other than its path", async ({ page }) => {
+  await openEditor(page);
+  await caretToEnd(page);
+
+  await page.keyboard.type("[[Cartograph");
+  const options = page.locator(".cm-tooltip-autocomplete li");
+  await expect(options.first()).toContainText("Notes/Fieldwork");
+
+  await page.keyboard.press("Enter");
+  await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
+
+  expect(gitStatus(manifest.localVault), "the editor wrote without being told to save").toBe("");
+});
+
+// The price of asking the server on every keystroke, and the only place it can
+// be seen. Between a keystroke and the answer to the query it started,
+// CodeMirror leaves the previous list on screen and marks it disabled — same
+// options, same DOM, no attribute — and its Enter binding then declines, so the
+// key falls through to inserting a newline. Nothing in jsdom can observe that:
+// it is CodeMirror's own state field, reached through a keymap, over a real
+// async source.
+//
+// So this types the query and presses Enter with no pause at all, which is what
+// somebody finishing a link actually does. Either the completion takes it or
+// refreshingCompletionKeymap declines it; what must not happen is a newline
+// landing inside the brackets.
+test("a completion still open declines Enter rather than breaking the link", async ({ page }) => {
+  await openEditor(page);
+  await caretToEnd(page);
+
+  await page.keyboard.type("[[Cartograph", { delay: 0 });
+  await page.keyboard.press("Enter");
+
+  const value = () => page.locator(SURFACE).innerText();
+  expect(await value(), "Enter fell through to the document mid-query").not.toContain("[[Cartograph\n");
+
+  // And the keystroke is only deferred, not swallowed for good: once the query
+  // lands the dialog is live again and the same Enter completes the link.
+  const options = page.locator(".cm-tooltip-autocomplete li");
+  await expect(options.first()).toContainText("Notes/Fieldwork");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
+
+  expect(gitStatus(manifest.localVault), "the editor wrote without being told to save").toBe("");
+});
+
+// The other side of the same guard, and the reason it consults the vault's
+// answers rather than only the query's status. Writing the link before the note
+// exists is an ordinary move, and there no dialog is ever coming — so a key held
+// back "until the completion arrives" is a key taken for nothing.
+//
+// The shape is exact. The first query has to have *answered* — CodeMirror resets
+// its activation debounce on every keystroke, so nothing is asked while typing
+// runs on — and then one more character reopens the pending window over an
+// answer already known to be empty. That is the window the guard would otherwise
+// fire in, and the search is monotone, so no later query can fill the dialog
+// either.
+test("Enter is not held back for a completion that has already come back empty", async ({ page }) => {
+  await openEditor(page);
+  await caretToEnd(page);
+
+  const answered = page.waitForResponse((response) => response.url().includes("/api/search"));
+  await page.keyboard.type("[[Zzyzx Unwritten", { delay: 0 });
+  await answered;
+
+  await page.keyboard.type("!", { delay: 0 });
+  await page.keyboard.press("Enter");
+
+  const lines = await page.locator(`${SURFACE} .cm-line`).allInnerTexts();
+  const opened = lines.findIndex((line) => line.includes("Zzyzx Unwritten!"));
+  expect(opened, "the typed link never reached the document").toBeGreaterThanOrEqual(0);
+  expect(lines.length - 1, "Enter was swallowed with no completion on the way").toBeGreaterThan(opened);
+
+  expect(gitStatus(manifest.localVault), "the editor wrote without being told to save").toBe("");
+});
+
+// The same link as two tests above, but reached the way somebody actually writes
+// one: type `[[`, pause while deciding, then type the title. The pause is the
+// point. It is longer than CodeMirror's 100 ms activation delay, so the *empty*
+// query runs — and `/api/search?q=` answers with no rows without reading a note,
+// because it is declining to scan rather than reporting on the vault. Taking
+// that zero for a fact about the vault would record `""` as a known-empty
+// prefix, which is a prefix of every query there is, and the guard above would
+// be off for the rest of this editor's life.
+test("a pause after [[ does not switch the guard off for everything typed next", async ({ page }) => {
+  await openEditor(page);
+  await caretToEnd(page);
+
+  const emptyQuery = page.waitForResponse((response) => /\/api\/search\?q=(&|$)/.test(response.url()));
+  await page.keyboard.type("[[", { delay: 0 });
+  await emptyQuery;
+
+  await page.keyboard.type("Cartograph", { delay: 0 });
+  await page.keyboard.press("Enter");
+
+  const value = () => page.locator(SURFACE).innerText();
+  expect(await value(), "Enter fell through to the document mid-query").not.toContain("[[Cartograph\n");
+
+  const options = page.locator(".cm-tooltip-autocomplete li");
+  await expect(options.first()).toContainText("Notes/Fieldwork");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
+
+  expect(gitStatus(manifest.localVault), "the editor wrote without being told to save").toBe("");
+});
+
 // The conflict round trip. jsdom covers what the controller *does* with a 409,
 // against a stubbed client; what it cannot produce is a real second writer
 // moving the note's revision under a mounted editor, and a 409 the server

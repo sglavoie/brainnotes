@@ -51,10 +51,18 @@ const PEER_ONLY_NOTE = "PeerOnly.md";
 const INBOX_NOTE = "Inbox.md";
 const CAPTURE_HEADING = "## Captured";
 
+// FIELDWORK_NOTE is findable by a word that appears only in its body, and never
+// in its path. That is the one shape the wikilink completion cannot be checked
+// without: a completion's label is the note's *path*, so a client that
+// re-matches what was typed against its own labels throws away every result the
+// vault matched on content — which is most of what the search is for.
+const FIELDWORK_NOTE = "Notes/Fieldwork.md";
+
 const SEED_NOTES = {
   "Alpha.md": "---\nstatus: draft\ntitle: Alpha\n---\n\nAlpha body, see [[Beta]].\n",
   "Beta.md": "---\nstatus: draft\ntitle: Beta\n---\n\nBeta body.\n",
   "Notes/Gamma.md": "---\nstatus: draft\ntitle: Gamma\n---\n\nGamma body.\n",
+  [FIELDWORK_NOTE]: "---\nstatus: draft\ntitle: Fieldwork\n---\n\nCartographer notes live here.\n",
   [INBOX_NOTE]: `---\nstatus: draft\ntitle: Inbox\n---\n\n${CAPTURE_HEADING}\n`,
   [UNRELATED_NOTE]: "---\nstatus: draft\ntitle: Unrelated\n---\n\nNobody under test writes this.\n",
 };

@@ -175,8 +175,32 @@ export const classifySaveResponse = (
       message: response.message || "The note was written but could not be snapshotted.",
     };
   }
+  if (isUnmovedConflict(response, baseRevision)) {
+    return {
+      kind: "failed",
+      answered: true,
+      message:
+        "Something else in the vault changed while the note was being saved, so nothing was written. Your text is unchanged; press Save to try again.",
+    };
+  }
   return classifyRefusal(response);
 };
+
+// isUnmovedConflict names a refusal whose revision did not move: a precondition
+// that failed somewhere other than the note, which in practice is the
+// configuration pin.
+//
+// It gets a sentence of its own because the server's is untrue here. The message
+// reads "<note> changed since it was loaded" — newSourceRevisionError writes one
+// for every precondition and classifySourceSaveTxnError routes them all through
+// it — and passing that on would tell somebody their note moved while showing
+// them no other version and no way to merge. What is true is the part that
+// matters: nothing was written, and trying again is the remedy.
+const isUnmovedConflict = (response: SourceSaveResponse, baseRevision: string): boolean =>
+  !response.ok &&
+  response.code === "conflict" &&
+  baseRevision !== "" &&
+  response.revision === baseRevision;
 
 // classifyRefusal tells a refusal this API sent from an answer that was never
 // this API's. Every field of the envelope is absent from a proxy's error page

@@ -8,11 +8,18 @@ import (
 // TestSearchAPI_PublishesTheWikilinkTargetForEachResult pins the field the
 // editor's completion writes into a note.
 //
-// The two rows are the two ways the obvious derivations fail. `Notes/Renamed.md`
-// carries a frontmatter title that is not its filename, so a completion built
-// from Title would insert a link the graph cannot resolve; `Notes/Mixed Case.md`
-// is exact-case, so one built from Key — which is folded — would insert a link
-// that resolves but reads as somebody else's spelling of the note.
+// `Notes/Mixed Case.md` is the row that discriminates today: it is exact-case,
+// so a completion built from Key — which is folded — would insert a link that
+// resolves but reads as somebody else's spelling of the note.
+//
+// `Notes/Renamed.md` carries a frontmatter title that is not its filename, and
+// it guards the *source* of the derivation rather than today's arithmetic. Title
+// is currently the filename stem (vault.Note.Title), so `Folder + "/" + Title`
+// happens to produce the same answer for this row; what the row forbids is
+// Wikilink ever being taken from a title. Anyone who later makes Title read
+// frontmatter — the reading this comment itself once asserted — and leaves
+// Wikilink derived from it fails here rather than shipping links the graph
+// cannot resolve.
 func TestSearchAPI_PublishesTheWikilinkTargetForEachResult(t *testing.T) {
 	files := map[string][]byte{
 		"Notes/Renamed.md":    []byte("---\ntitle: Something Else\n---\n\nSearchable body.\n"),
