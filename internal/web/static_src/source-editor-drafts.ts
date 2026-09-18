@@ -18,7 +18,7 @@ import {
   type SourceDraft,
   type SourceDraftStore,
 } from "./source-draft";
-import { newSaveID, type SourceClient } from "./source-save";
+import { newSaveID, type AttachmentClaims, type SourceClient } from "./source-save";
 import type { SourceEditorConfig, SourceEditorElements } from "./source-editor-elements";
 
 // The draft machinery as the editor uses it: keep the text, offer it back, and
@@ -95,6 +95,11 @@ export type DraftKeeperOptions = {
   now: () => number;
   delayMs?: number;
   navigate: (url: string) => void;
+  // claims is this page's staged uploads. Recreating a recovered draft is a
+  // write like any other and owes them exactly as a save does: the text being
+  // written back is the text the links are in, so a recreate that carried no
+  // ids would land a note referencing files that never left staging.
+  claims?: AttachmentClaims | null;
 };
 
 // defaultDelayMs debounces the write. Local storage is synchronous and on the
@@ -814,7 +819,10 @@ const recreate = async (
       relPath: offer.draft.relPath,
       content: offer.draft.content,
       saveID: newSaveID(),
+      owner: options.claims?.owner,
+      attachments: options.claims?.pending(),
     });
+    options.claims?.committed(response.attachments);
     if (!response.ok) {
       host.setStatus(response.message || "The note could not be created.", "is-error");
       return;

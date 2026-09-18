@@ -413,3 +413,305 @@
 .source-editor-launch:hover {
   background: var(--bn-hover);
 }
+
+/*
+ * Attachments.
+ *
+ * The file input is `hidden` in the markup and stays that way: the button beside
+ * it is what the keyboard and the screen reader are given, and a rule here that
+ * set `display` on the input would put the browser's own unstyleable widget back
+ * on the page.
+ */
+.source-editor-attach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+
+.source-editor-attachment-choose {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-raised);
+  color: var(--bn-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.source-editor-attachment-choose:hover {
+  background: var(--bn-hover);
+}
+
+.source-editor-attach-hint {
+  flex: 1 1 18rem;
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+/*
+ * The drop target outline is drawn inside the surface's own border rather than
+ * replacing it, so the editor does not change size under a file being dragged
+ * across it — a box that grows a pixel as the pointer enters is a box the file
+ * is then dropped beside.
+ */
+.source-editor-surface.is-drop-target {
+  outline: 2px dashed var(--bn-accent-subtle-border);
+  outline-offset: -2px;
+  background: var(--bn-accent-subtle-bg);
+}
+
+.source-editor-attachments {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-sunken);
+}
+
+/* The `display` + `hidden` pair every component here carries; see the conflict
+ * panel above for why it is not optional. renderAttachmentList toggles `hidden`
+ * on this element whenever the list empties. */
+.source-editor-attachments[hidden] {
+  display: none;
+}
+
+.source-editor-attachments h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.source-editor-attachment-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source-editor-attachment {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.3rem;
+  background: var(--bn-surface);
+  font-size: 0.85rem;
+}
+
+.source-editor-attachment-name {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.source-editor-attachment-status {
+  color: var(--bn-muted);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Staged is the state a person has to read correctly — the bytes are on the
+ * server and are not in the vault — so it is the one that is coloured, and it is
+ * coloured as an accent rather than as a success. Nothing has succeeded yet.
+ */
+.source-editor-attachment.is-staged .source-editor-attachment-status {
+  color: var(--bn-accent-subtle-text);
+}
+
+.source-editor-attachment.is-failed .source-editor-attachment-status {
+  color: var(--bn-danger);
+}
+
+.source-editor-attachment-progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 0.4rem;
+}
+
+.source-editor-attachment-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.source-editor-attachment-action {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--bn-border-strong);
+  border-radius: 0.3rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.source-editor-attachment-action:hover {
+  background: var(--bn-hover);
+}
+
+/*
+ * The management panel. It is a <details> so that the note's whole surface is
+ * not a wall of controls above the editor, and it is styled as a bordered block
+ * rather than as part of the panel because everything inside it writes.
+ */
+.source-editor-manage {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-sunken);
+}
+
+.source-editor-manage > summary {
+  color: var(--bn-text-strong);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.source-editor-manage-status {
+  min-height: 1.2rem;
+  margin: 0.5rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.source-editor-manage-status.is-error {
+  color: var(--bn-danger);
+}
+
+.source-editor-manage-status.is-success {
+  color: var(--bn-success);
+}
+
+.source-editor-manage-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.source-editor-manage-group {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  padding: 0.6rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+}
+
+.source-editor-manage-group h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.source-editor-manage-field {
+  color: var(--bn-muted);
+  font-size: 0.8rem;
+}
+
+.source-editor-manage-input {
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.3rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.source-editor-manage-action {
+  justify-self: start;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--bn-border-strong);
+  border-radius: 0.4rem;
+  background: var(--bn-raised);
+  color: var(--bn-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.source-editor-manage-action:hover {
+  background: var(--bn-hover);
+}
+
+/*
+ * Trash is the only control in this panel that takes the note away from the
+ * person looking at it, so it is the only one that says so before it is clicked.
+ */
+.source-editor-manage-action.is-destructive {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+}
+
+.source-editor-manage-hint {
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.8rem;
+}
+
+/*
+ * The dirty gate. Warning-coloured for the recovery panel's reason: nothing has
+ * gone wrong and nothing has been lost — the operation is simply waiting — but a
+ * question in the page's ordinary colours is one that gets clicked past.
+ */
+.source-editor-gate {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--bn-warning-border);
+  border-radius: 0.4rem;
+  background: var(--bn-warning-bg);
+}
+
+.source-editor-gate[hidden] {
+  display: none;
+}
+
+.source-editor-gate h3 {
+  margin: 0;
+  color: var(--bn-warning);
+  font-size: 0.95rem;
+}
+
+.source-editor-gate-message {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.source-editor-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Proceed is hidden for an operation that refuses to run over unsaved text, and
+ * this is the rule that keeps it hidden inside a flex container. */
+.source-editor-gate-actions > [hidden] {
+  display: none;
+}
+
+.source-editor-gate-save,
+.source-editor-gate-proceed,
+.source-editor-gate-cancel {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--bn-border-strong);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.source-editor-gate-save {
+  border-color: var(--bn-accent-subtle-border);
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  font-weight: 600;
+}

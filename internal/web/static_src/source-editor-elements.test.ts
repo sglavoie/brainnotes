@@ -34,7 +34,56 @@ describe("readSourceEditorConfig", () => {
         create: "/api/source/create",
         search: "/api/search",
       },
+      attachments: {
+        upload: "/api/attachments/upload",
+        cancel: "/api/attachments/cancel",
+      },
+      manage: {
+        editor: "/edit",
+        home: "/",
+        capture: "/api/capture",
+        create: "/api/notes/create",
+        rename: "/api/notes/rename",
+        move: "/api/notes/move",
+        trash: "/api/notes/trash",
+        frontmatterSet: "/api/notes/frontmatter/set",
+        frontmatterUnset: "/api/notes/frontmatter/unset",
+        pinSet: "/api/pins/set",
+        pinRemove: "/api/pins/remove",
+        undo: "/api/undo",
+      },
+      maxAttachmentBytes: 26214400,
     });
+  });
+
+  // Attaching and managing are what a *hosted* page publishes. A read-only
+  // replica serves the same template with those routes empty, and a page that
+  // cannot upload must still be a page somebody can read and edit — so an absent
+  // route is an absent feature, never an absent editor.
+  it("keeps the editor usable on a page that publishes no attachment or manage routes", () => {
+    document.body.innerHTML = editorMarkup();
+    for (const attribute of [
+      "data-source-upload-endpoint",
+      "data-source-upload-cancel-endpoint",
+      "data-source-max-attachment-bytes",
+      "data-source-rename-endpoint",
+      "data-source-trash-endpoint",
+      "data-source-undo-endpoint",
+      "data-source-home-path",
+    ]) {
+      panel().removeAttribute(attribute);
+    }
+    const config = readSourceEditorConfig(panel());
+    expect(config).not.toBeNull();
+    expect(config?.attachments).toEqual({ upload: "", cancel: "" });
+    expect(config?.maxAttachmentBytes).toBe(0);
+    expect(config?.manage.rename).toBe("");
+    // Read from the page rather than defaulted, which is why the attribute is
+    // removed here rather than asserted in place: with `data-source-home-path`
+    // left alone this line would echo the fixture's own `/` back and would hold
+    // just as well if nothing read the attribute at all. The value the server
+    // publishes is pinned by the whole-config reading above.
+    expect(config?.manage.home).toBe("");
   });
 
   // The vault identity is the one published field whose absence must not take
@@ -49,6 +98,11 @@ describe("readSourceEditorConfig", () => {
     expect(config?.vaultID).toBe("");
   });
 
+});
+
+// What this does with a page that is missing something: a page it cannot run on
+// at all, and a page it can run on anyway.
+describe("readSourceEditorConfig on an incomplete page", () => {
   // An editor that posts to "" is worse than no editor: it looks like it is
   // working and loses the text. Every route string is the server's, so a page
   // that did not publish one is a page this cannot run on.

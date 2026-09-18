@@ -1,6 +1,8 @@
 import { normalizeParamValue } from "./filters";
 import { asRecord, readBoolean, readRecordValue } from "./api-internal";
 import type {
+  SavedAttachment,
+  SourceAttachmentFields,
   SourceCreateRequest,
   SourceDocument,
   SourcePreviewRequest,
@@ -49,6 +51,7 @@ export const normalizeSourceSaveResponse = (payload: unknown): SourceSaveRespons
       changed: readBoolean(record.changed),
       created: readBoolean(record.created),
       replayed: readBoolean(record.replayed),
+      attachments: normalizeSavedAttachments(record.attachments),
     };
   }
   return {
@@ -58,6 +61,7 @@ export const normalizeSourceSaveResponse = (payload: unknown): SourceSaveRespons
     revision: normalizeParamValue(record.revision),
     content: typeof record.content === "string" ? record.content : "",
     changed: readBoolean(record.changed),
+    attachments: normalizeSavedAttachments(record.attachments),
   };
 };
 
@@ -75,7 +79,7 @@ export const buildSourceSaveForm = (request: SourceSaveRequest): URLSearchParams
   body.set("revision", request.revision);
   body.set("save_id", request.save_id);
   body.set("token", request.token);
-  return body;
+  return appendAttachmentFields(body, request);
 };
 
 export const buildSourceCreateForm = (request: SourceCreateRequest): URLSearchParams => {
@@ -84,7 +88,46 @@ export const buildSourceCreateForm = (request: SourceCreateRequest): URLSearchPa
   body.set("content", request.content);
   body.set("save_id", request.save_id);
   body.set("token", request.token);
+  return appendAttachmentFields(body, request);
+};
+
+// appendAttachmentFields writes the owner once and the ids once each.
+//
+// `append` rather than `set` for the ids is the whole contract: the server reads
+// r.Form["attachment"] and commits one upload per value, so a second `set` would
+// silently drop every attachment but the last. The owner is written only when
+// there are ids to own — a save with no attachments must not start naming a
+// draft identity the server has no use for.
+const appendAttachmentFields = (
+  body: URLSearchParams,
+  request: SourceAttachmentFields
+): URLSearchParams => {
+  const ids = request.attachments ?? [];
+  if (ids.length === 0) {
+    return body;
+  }
+  body.set("owner", request.owner ?? "");
+  for (const id of ids) {
+    body.append("attachment", id);
+  }
   return body;
+};
+
+const normalizeSavedAttachments = (value: unknown): SavedAttachment[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    const uploadID = normalizeParamValue(readRecordValue(record || {}, ["upload_id", "UploadID"]));
+    if (!record || uploadID === "") {
+      return [];
+    }
+    return [{
+      upload_id: uploadID,
+      rel_path: normalizeParamValue(readRecordValue(record, ["rel_path", "RelPath"])),
+    }];
+  });
 };
 
 // sourceSaveConflict names the one refusal an editor answers with a choice

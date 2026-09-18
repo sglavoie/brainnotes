@@ -36,6 +36,21 @@
       data-source-create-endpoint="{{ .CreatePath }}"
       data-source-search-endpoint="{{ .SearchPath }}"
       data-source-max-bytes="{{ .MaxSourceBytes }}"
+      data-source-upload-endpoint="{{ .UploadPath }}"
+      data-source-upload-cancel-endpoint="{{ .UploadCancelPath }}"
+      data-source-max-attachment-bytes="{{ .MaxAttachmentBytes }}"
+      data-source-editor-path="{{ .EditorPath }}"
+      data-source-home-path="{{ .HomePath }}"
+      data-source-capture-endpoint="{{ .CapturePath }}"
+      data-source-note-create-endpoint="{{ .NoteCreatePath }}"
+      data-source-rename-endpoint="{{ .RenamePath }}"
+      data-source-move-endpoint="{{ .MovePath }}"
+      data-source-trash-endpoint="{{ .TrashPath }}"
+      data-source-frontmatter-set-endpoint="{{ .FrontmatterSetPath }}"
+      data-source-frontmatter-unset-endpoint="{{ .FrontmatterUnsetPath }}"
+      data-source-pin-set-endpoint="{{ .PinSetPath }}"
+      data-source-pin-remove-endpoint="{{ .PinRemovePath }}"
+      data-source-undo-endpoint="{{ .UndoPath }}"
       aria-labelledby="source-editor-heading"
     >
       <div class="panel-header source-editor-header">
@@ -111,6 +126,100 @@
           <button type="button" class="source-editor-conflict-discard" data-source-conflict-discard>Discard mine and load the note</button>
         </div>
       </section>
+
+      <!--
+        Attaching is three doors onto one path: this button, a paste into the
+        editor, and a drop onto it. The input is hidden rather than styled
+        because a file input cannot be restyled reliably and the button is what
+        the keyboard and the screen reader are given.
+      -->
+      <div class="source-editor-attach">
+        <input type="file" class="source-editor-attachment-input" data-source-attachment-input multiple hidden aria-hidden="true" tabindex="-1">
+        <button type="button" class="source-editor-attachment-choose" data-source-attachment-choose>Attach files…</button>
+        <p class="source-editor-attach-hint">You can also paste an image or drop files onto the editor. A file is staged on the server and enters the vault when you save.</p>
+      </div>
+
+      <section class="source-editor-attachments" data-source-attachments hidden aria-labelledby="source-editor-attachments-heading">
+        <h3 id="source-editor-attachments-heading">Waiting to be saved with this note</h3>
+        <ul class="source-editor-attachment-list" data-source-attachment-list></ul>
+      </section>
+
+      <!--
+        The note's own management, in the editor rather than on the note page,
+        so that renaming a note you are editing is not a trip away from unsaved
+        text. Every control here goes through the gate below first.
+      -->
+      <details class="source-editor-manage" data-source-manage>
+        <summary>This note and this vault</summary>
+
+        <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
+
+        <!--
+          The gate. It is hidden until an action is asked for over unsaved text,
+          and it is the only thing between that text and an operation that would
+          move the note out from under it.
+        -->
+        <section class="source-editor-gate" data-source-gate hidden aria-labelledby="source-editor-gate-heading">
+          <h3 id="source-editor-gate-heading">There is unsaved text in this editor</h3>
+          <p class="source-editor-gate-message" data-source-gate-message></p>
+          <div class="source-editor-gate-actions">
+            <button type="button" class="source-editor-gate-save" data-source-gate-save>Save first, then continue</button>
+            <button type="button" class="source-editor-gate-proceed" data-source-gate-proceed hidden>Continue anyway</button>
+            <button type="button" class="source-editor-gate-cancel" data-source-gate-cancel>Cancel</button>
+          </div>
+        </section>
+
+        <div class="source-editor-manage-groups">
+          <div class="source-editor-manage-group">
+            <h4>Where this note lives</h4>
+            <label class="source-editor-manage-field" for="source-editor-rename-title">New title</label>
+            <input type="text" id="source-editor-rename-title" class="source-editor-manage-input" data-source-rename-title autocomplete="off">
+            <button type="button" class="source-editor-manage-action" data-source-rename>Rename</button>
+
+            <label class="source-editor-manage-field" for="source-editor-move-folder">Folder</label>
+            <input type="text" id="source-editor-move-folder" class="source-editor-manage-input" data-source-move-folder autocomplete="off">
+            <button type="button" class="source-editor-manage-action" data-source-move>Move</button>
+
+            <button type="button" class="source-editor-manage-action is-destructive" data-source-trash>Move to Trash</button>
+          </div>
+
+          <div class="source-editor-manage-group">
+            <h4>Properties</h4>
+            <label class="source-editor-manage-field" for="source-editor-property-name">Property</label>
+            <input type="text" id="source-editor-property-name" class="source-editor-manage-input" data-source-property-name autocomplete="off">
+            <label class="source-editor-manage-field" for="source-editor-property-value">Value</label>
+            <input type="text" id="source-editor-property-value" class="source-editor-manage-input" data-source-property-value autocomplete="off">
+            <button type="button" class="source-editor-manage-action" data-source-property-set>Set</button>
+            <button type="button" class="source-editor-manage-action" data-source-property-unset>Remove</button>
+          </div>
+
+          <div class="source-editor-manage-group">
+            <h4>Pins</h4>
+            <button type="button" class="source-editor-manage-action" data-source-pin>Pin this note</button>
+            <button type="button" class="source-editor-manage-action" data-source-unpin>Unpin this note</button>
+          </div>
+
+          <div class="source-editor-manage-group">
+            <h4>Capture</h4>
+            <label class="source-editor-manage-field" for="source-editor-capture-text">Line to capture</label>
+            <textarea id="source-editor-capture-text" class="source-editor-manage-input" data-source-capture-text rows="2"></textarea>
+            <button type="button" class="source-editor-manage-action" data-source-capture>Capture</button>
+          </div>
+
+          <div class="source-editor-manage-group">
+            <h4>Create a note</h4>
+            <label class="source-editor-manage-field" for="source-editor-note-create-target">Title or path</label>
+            <input type="text" id="source-editor-note-create-target" class="source-editor-manage-input" data-source-note-create-target autocomplete="off">
+            <button type="button" class="source-editor-manage-action" data-source-note-create>Create</button>
+          </div>
+
+          <div class="source-editor-manage-group">
+            <h4>Undo</h4>
+            <p class="source-editor-manage-hint">Undoes the most recent change to this vault, whatever it was — including a rename or a trash from this page.</p>
+            <button type="button" class="source-editor-manage-action" data-source-undo>Undo the last change</button>
+          </div>
+        </div>
+      </details>
 
       <details class="source-editor-shortcuts">
         <summary>Keyboard shortcuts</summary>

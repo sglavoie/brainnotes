@@ -24,6 +24,21 @@ export const editorMarkup = (): string => `
   data-source-create-endpoint="/api/source/create"
   data-source-search-endpoint="/api/search"
   data-source-max-bytes="1048576"
+  data-source-upload-endpoint="/api/attachments/upload"
+  data-source-upload-cancel-endpoint="/api/attachments/cancel"
+  data-source-max-attachment-bytes="26214400"
+  data-source-editor-path="/edit"
+  data-source-home-path="/"
+  data-source-capture-endpoint="/api/capture"
+  data-source-note-create-endpoint="/api/notes/create"
+  data-source-rename-endpoint="/api/notes/rename"
+  data-source-move-endpoint="/api/notes/move"
+  data-source-trash-endpoint="/api/notes/trash"
+  data-source-frontmatter-set-endpoint="/api/notes/frontmatter/set"
+  data-source-frontmatter-unset-endpoint="/api/notes/frontmatter/unset"
+  data-source-pin-set-endpoint="/api/pins/set"
+  data-source-pin-remove-endpoint="/api/pins/remove"
+  data-source-undo-endpoint="/api/undo"
 >
   <div class="source-editor-toolbar">
     <button type="button" data-source-command="bold">Bold</button>
@@ -58,6 +73,39 @@ export const editorMarkup = (): string => `
     <button type="button" data-source-conflict-overwrite>Save mine over it</button>
     <button type="button" data-source-conflict-discard>Discard mine</button>
   </section>
+  <div class="source-editor-attach">
+    <input type="file" data-source-attachment-input multiple hidden>
+    <button type="button" data-source-attachment-choose>Attach files…</button>
+  </div>
+  <section data-source-attachments hidden>
+    <ul data-source-attachment-list></ul>
+  </section>
+  <details data-source-manage>
+    <summary>Manage this note</summary>
+    <p data-source-manage-status></p>
+    <section data-source-gate hidden>
+      <p data-source-gate-message></p>
+      <button type="button" data-source-gate-save>Save first, then continue</button>
+      <button type="button" data-source-gate-proceed hidden>Continue anyway</button>
+      <button type="button" data-source-gate-cancel>Cancel</button>
+    </section>
+    <input type="text" data-source-rename-title>
+    <button type="button" data-source-rename>Rename</button>
+    <input type="text" data-source-move-folder>
+    <button type="button" data-source-move>Move</button>
+    <button type="button" data-source-trash>Move to Trash</button>
+    <input type="text" data-source-property-name>
+    <input type="text" data-source-property-value>
+    <button type="button" data-source-property-set>Set</button>
+    <button type="button" data-source-property-unset>Remove</button>
+    <button type="button" data-source-pin>Pin this note</button>
+    <button type="button" data-source-unpin>Unpin this note</button>
+    <textarea data-source-capture-text rows="2"></textarea>
+    <button type="button" data-source-capture>Capture</button>
+    <input type="text" data-source-note-create-target>
+    <button type="button" data-source-note-create>Create</button>
+    <button type="button" data-source-undo>Undo the last change</button>
+  </details>
 </section>
 `;
 
@@ -65,6 +113,9 @@ export type FakeSurface = SourceSurface & {
   // type simulates a user edit: it fires the change listeners, which a
   // controller-driven setValue must not.
   type(value: string): void;
+  // select moves the cursor without editing anything, so a test can say where
+  // the person is before asking the controller to insert there.
+  select(from: number, to: number): void;
   destroyed(): boolean;
 };
 
@@ -110,6 +161,9 @@ export const createFakeSurfaceFactory = (): {
         value = next;
         selection = { from: next.length, to: next.length };
         notify();
+      },
+      select(from: number, to: number): void {
+        selection = { from, to };
       },
       destroyed: () => destroyed,
     };

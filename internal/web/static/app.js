@@ -1636,7 +1636,8 @@ var BrainNotesApp = (() => {
         revision: normalizeParamValue(record.revision),
         changed: readBoolean(record.changed),
         created: readBoolean(record.created),
-        replayed: readBoolean(record.replayed)
+        replayed: readBoolean(record.replayed),
+        attachments: normalizeSavedAttachments(record.attachments)
       };
     }
     return {
@@ -1645,7 +1646,8 @@ var BrainNotesApp = (() => {
       message: normalizeParamValue(record.message),
       revision: normalizeParamValue(record.revision),
       content: typeof record.content === "string" ? record.content : "",
-      changed: readBoolean(record.changed)
+      changed: readBoolean(record.changed),
+      attachments: normalizeSavedAttachments(record.attachments)
     };
   };
   var buildSourcePreviewForm = (request) => {
@@ -1661,7 +1663,7 @@ var BrainNotesApp = (() => {
     body.set("revision", request.revision);
     body.set("save_id", request.save_id);
     body.set("token", request.token);
-    return body;
+    return appendAttachmentFields(body, request);
   };
   var buildSourceCreateForm = (request) => {
     const body = new URLSearchParams();
@@ -1669,7 +1671,34 @@ var BrainNotesApp = (() => {
     body.set("content", request.content);
     body.set("save_id", request.save_id);
     body.set("token", request.token);
+    return appendAttachmentFields(body, request);
+  };
+  var appendAttachmentFields = (body, request) => {
+    const ids = request.attachments ?? [];
+    if (ids.length === 0) {
+      return body;
+    }
+    body.set("owner", request.owner ?? "");
+    for (const id2 of ids) {
+      body.append("attachment", id2);
+    }
     return body;
+  };
+  var normalizeSavedAttachments = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.flatMap((item) => {
+      const record = asRecord(item);
+      const uploadID = normalizeParamValue(readRecordValue(record || {}, ["upload_id", "UploadID"]));
+      if (!record || uploadID === "") {
+        return [];
+      }
+      return [{
+        upload_id: uploadID,
+        rel_path: normalizeParamValue(readRecordValue(record, ["rel_path", "RelPath"]))
+      }];
+    });
   };
   var sourceSaveConflict = (response, baseRevision) => !response.ok && response.code === "conflict" && response.revision !== "" && response.revision !== baseRevision ? { revision: response.revision, content: response.content } : null;
 
@@ -2136,8 +2165,8 @@ var BrainNotesApp = (() => {
       }
     };
     const run = async () => {
-      const text2 = input.value;
-      if (text2.trim() === "") {
+      const text3 = input.value;
+      if (text3.trim() === "") {
         setStatus2("Type something to capture.", "is-error");
         return;
       }
@@ -2149,7 +2178,7 @@ var BrainNotesApp = (() => {
       submit.disabled = true;
       setStatus2("Capturing...", "is-loading");
       try {
-        const body = buildCaptureForm({ text: text2, token: csrfToken }).toString();
+        const body = buildCaptureForm({ text: text3, token: csrfToken }).toString();
         const response = await fetcher(captureEndpoint, jsonPostRequest(csrfToken, body));
         const payload = await readResponsePayload(response);
         if (!response.ok) {
@@ -2753,7 +2782,7 @@ var BrainNotesApp = (() => {
     const request = deps.fetch || fetch;
     const fetcher = (input, init) => request(input, init);
     const confirmer = deps.confirm || ((message) => window.confirm(message));
-    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text2) => navigator.clipboard.writeText(text2) : void 0);
+    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text3) => navigator.clipboard.writeText(text3) : void 0);
     const globalStatusEl = queryElement(root, "#brief-global-status", HTMLElement);
     const visitDaysEl = queryElement(root, "[data-brief-activity-visit-days]", HTMLElement);
     const openCountEl = queryElement(root, "[data-brief-activity-open-count]", HTMLElement);
@@ -3478,9 +3507,9 @@ var BrainNotesApp = (() => {
       link.textContent = label;
       item.appendChild(link);
     } else {
-      const text2 = doc2.createElement("span");
-      text2.textContent = label;
-      item.appendChild(text2);
+      const text3 = doc2.createElement("span");
+      text3.textContent = label;
+      item.appendChild(text3);
     }
     if (note.folder) {
       const folder = doc2.createElement("span");
@@ -3890,29 +3919,29 @@ var BrainNotesApp = (() => {
         for (const option of options) {
           const chip = document.createElement("span");
           chip.className = "facet-chip";
-          const text2 = document.createElement("span");
-          text2.className = "facet-chip-text";
-          text2.textContent = `${option.groupLabel}: ${option.label}`;
-          chip.appendChild(text2);
+          const text3 = document.createElement("span");
+          text3.className = "facet-chip-text";
+          text3.textContent = `${option.groupLabel}: ${option.label}`;
+          chip.appendChild(text3);
           if (option.count > 0) {
             const count3 = document.createElement("span");
             count3.className = "facet-chip-count";
             count3.textContent = `(${option.count})`;
             chip.appendChild(count3);
           }
-          const remove3 = document.createElement("button");
-          remove3.type = "button";
-          remove3.className = "facet-chip-remove";
-          remove3.textContent = "x";
-          remove3.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
-          remove3.addEventListener("click", () => {
+          const remove4 = document.createElement("button");
+          remove4.type = "button";
+          remove4.className = "facet-chip-remove";
+          remove4.textContent = "x";
+          remove4.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
+          remove4.addEventListener("click", () => {
             selected.delete(facetOptionKey(option));
             renderChips();
             renderOptions();
             emitChange();
             input.focus();
           });
-          chip.appendChild(remove3);
+          chip.appendChild(remove4);
           chipsEl.appendChild(chip);
         }
       };
@@ -6957,7 +6986,7 @@ var BrainNotesApp = (() => {
     }
     const fetcher = deps.fetch || fetch;
     const confirmer = deps.confirm || ((message) => window.confirm(message));
-    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text2) => navigator.clipboard.writeText(text2) : void 0);
+    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text3) => navigator.clipboard.writeText(text3) : void 0);
     let disclosureAccepted = false;
     let output = "";
     const setStatus2 = (message, kind = "") => {
@@ -8301,8 +8330,8 @@ var BrainNotesApp = (() => {
     return summary.definition.items ? `type: ${summary.definition.type} of ${summary.definition.items}` : `type: ${summary.definition.type}`;
   };
   var coverageLabel = (summary) => {
-    const percent2 = Math.round(summary.coverage * 100);
-    return `${summary.note_count} of ${summary.total_notes} notes (${percent2}%)`;
+    const percent3 = Math.round(summary.coverage * 100);
+    return `${summary.note_count} of ${summary.total_notes} notes (${percent3}%)`;
   };
   var issueSummaryLabel = (summary) => {
     const parts = [];
@@ -8398,10 +8427,10 @@ var BrainNotesApp = (() => {
     stat.appendChild(dd);
     list.appendChild(stat);
   };
-  var appendBadge = (doc2, parent, text2, className) => {
+  var appendBadge = (doc2, parent, text3, className) => {
     const badge = doc2.createElement("span");
     badge.className = className;
-    badge.textContent = text2;
+    badge.textContent = text3;
     parent.appendChild(badge);
   };
   var renderTotals = (list, totals, totalNotes) => {
@@ -8583,10 +8612,10 @@ var BrainNotesApp = (() => {
         button.classList.add("is-unsupported");
         button.title = "This value has no supported spelling and cannot be filtered on.";
       }
-      const text2 = doc2.createElement("span");
-      text2.className = "properties-value-text";
-      text2.textContent = entry.value.text;
-      button.appendChild(text2);
+      const text3 = doc2.createElement("span");
+      text3.className = "properties-value-text";
+      text3.textContent = entry.value.text;
+      button.appendChild(text3);
       const kind = doc2.createElement("span");
       kind.className = "properties-value-kind";
       kind.textContent = propertyKindLabel(entry.value.kind);
@@ -8626,13 +8655,13 @@ var BrainNotesApp = (() => {
       add.disabled = !editable2;
       actions.appendChild(add);
     }
-    const remove3 = doc2.createElement("button");
-    remove3.type = "button";
-    remove3.className = "properties-button properties-row-unset";
-    remove3.setAttribute("data-property-row-unset", row.rel_path);
-    remove3.textContent = "Remove";
-    remove3.disabled = !row.present;
-    actions.appendChild(remove3);
+    const remove4 = doc2.createElement("button");
+    remove4.type = "button";
+    remove4.className = "properties-button properties-row-unset";
+    remove4.setAttribute("data-property-row-unset", row.rel_path);
+    remove4.textContent = "Remove";
+    remove4.disabled = !row.present;
+    actions.appendChild(remove4);
     item.appendChild(actions);
   };
   var renderRows = (list, rows, options) => {
@@ -8723,10 +8752,10 @@ var BrainNotesApp = (() => {
     const configScope = result.config_diff.length > 0 ? ", plus brainnotes.toml" : "";
     return `${noteScope}${changeScope}${configScope}.`;
   };
-  var appendHeading = (doc2, parent, text2) => {
+  var appendHeading = (doc2, parent, text3) => {
     const heading2 = doc2.createElement("h3");
     heading2.className = "properties-dialog-subheading";
-    heading2.textContent = text2;
+    heading2.textContent = text3;
     parent.appendChild(heading2);
   };
   var renderBlockers = (doc2, parent, blockers, fatal) => {
@@ -9026,8 +9055,8 @@ var BrainNotesApp = (() => {
     }
     return `${match[1]}T${match[2]}${seconds}${utcOffsetLabel(parsed)}`;
   };
-  var rfc3339ToDatetimeLocal = (text2) => {
-    const trimmed = text2.trim();
+  var rfc3339ToDatetimeLocal = (text3) => {
+    const trimmed = text3.trim();
     if (trimmed === "") {
       return "";
     }
@@ -9040,8 +9069,8 @@ var BrainNotesApp = (() => {
       `T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`
     ].join("");
   };
-  var wikilinkTargetError = (text2) => {
-    const target = text2.trim();
+  var wikilinkTargetError = (text3) => {
+    const target = text3.trim();
     if (target === "") {
       return "Enter a note title.";
     }
@@ -9056,13 +9085,13 @@ var BrainNotesApp = (() => {
     }
     return "";
   };
-  var scalarValueError = (kind, text2) => {
-    const value = text2.trim();
+  var scalarValueError = (kind, text3) => {
+    const value = text3.trim();
     switch (kind) {
       case "string":
         return value === "" ? "Enter a value." : "";
       case "wikilink":
-        return wikilinkTargetError(text2);
+        return wikilinkTargetError(text3);
       case "date":
         return DATE_PATTERN.test(value) ? "" : "Enter a date as YYYY-MM-DD.";
       case "datetime":
@@ -9088,7 +9117,7 @@ var BrainNotesApp = (() => {
         return "text";
     }
   };
-  var seedText = (kind, text2) => kind === "datetime" ? rfc3339ToDatetimeLocal(text2) : text2;
+  var seedText = (kind, text3) => kind === "datetime" ? rfc3339ToDatetimeLocal(text3) : text3;
   var readText2 = (kind, raw) => kind === "datetime" ? datetimeLocalToRFC3339(raw) : raw.trim();
   var createSelect = (doc2, options, choices) => {
     const select = doc2.createElement("select");
@@ -9172,32 +9201,32 @@ var BrainNotesApp = (() => {
     const renumber = () => {
       const rows = Array.from(list.children);
       rows.forEach((row, index) => {
-        const remove3 = row.querySelector("[data-property-list-remove]");
-        if (remove3 instanceof HTMLButtonElement) {
-          remove3.setAttribute("aria-label", `Remove item ${index + 1}`);
-          remove3.disabled = rows.length <= 1;
+        const remove4 = row.querySelector("[data-property-list-remove]");
+        if (remove4 instanceof HTMLButtonElement) {
+          remove4.setAttribute("aria-label", `Remove item ${index + 1}`);
+          remove4.disabled = rows.length <= 1;
         }
       });
     };
-    const addRow = (text2, focusIt) => {
+    const addRow = (text3, focusIt) => {
       sequence += 1;
       const row = doc2.createElement("li");
       row.className = "properties-control-list-item";
       const control = createScalarControl(doc2, {
         kind: options.items,
         allowed: options.allowed,
-        text: text2,
+        text: text3,
         id: `${options.id}-item-${sequence}`,
         label: `${options.label} item`
       });
       controls.push(control);
       row.appendChild(control.element);
-      const remove3 = doc2.createElement("button");
-      remove3.type = "button";
-      remove3.className = "properties-button properties-control-remove";
-      remove3.setAttribute("data-property-list-remove", "");
-      remove3.textContent = "Remove";
-      remove3.addEventListener("click", () => {
+      const remove4 = doc2.createElement("button");
+      remove4.type = "button";
+      remove4.className = "properties-button properties-control-remove";
+      remove4.setAttribute("data-property-list-remove", "");
+      remove4.textContent = "Remove";
+      remove4.addEventListener("click", () => {
         const index = controls.indexOf(control);
         if (index >= 0) {
           controls.splice(index, 1);
@@ -9205,15 +9234,15 @@ var BrainNotesApp = (() => {
         row.remove();
         renumber();
       });
-      row.appendChild(remove3);
+      row.appendChild(remove4);
       list.appendChild(row);
       renumber();
       if (focusIt) {
         control.focus();
       }
     };
-    for (const text2 of listSeedTexts(options)) {
-      addRow(text2, false);
+    for (const text3 of listSeedTexts(options)) {
+      addRow(text3, false);
     }
     const add = doc2.createElement("button");
     add.type = "button";
@@ -9541,10 +9570,10 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/properties-schema-editor.ts
-  var parseAllowedValues = (text2) => {
+  var parseAllowedValues = (text3) => {
     const seen = /* @__PURE__ */ new Set();
     const out = [];
-    for (const line of text2.split("\n")) {
+    for (const line of text3.split("\n")) {
       const value = line.trim();
       if (value === "" || seen.has(value)) {
         continue;
@@ -9816,9 +9845,9 @@ var BrainNotesApp = (() => {
   var createWorkbenchEditor = (doc2) => {
     let removeOpenEditor = null;
     const close = () => {
-      const remove3 = removeOpenEditor;
+      const remove4 = removeOpenEditor;
       removeOpenEditor = null;
-      remove3?.();
+      remove4?.();
     };
     const mount = (parent, title, submitLabel, build) => {
       close();
@@ -10071,9 +10100,9 @@ var BrainNotesApp = (() => {
       )) {
         box.checked = selected.has(box.getAttribute("data-property-row-select") || "");
       }
-      renderActions();
+      renderActions2();
     };
-    const renderActions = () => {
+    const renderActions2 = () => {
       for (const button of queryAllElements(
         host.root,
         "[data-property-action]",
@@ -10087,7 +10116,7 @@ var BrainNotesApp = (() => {
     const setBusy = (next) => {
       busy = next;
       host.root.setAttribute("aria-busy", next ? "true" : "false");
-      renderActions();
+      renderActions2();
     };
     const toggleSelection = (relPath, force) => {
       const next = force === void 0 ? !selected.has(relPath) : force;
@@ -10109,7 +10138,7 @@ var BrainNotesApp = (() => {
       });
       elements[clamped]?.focus();
     };
-    const updateRowText = (relPath, text2) => {
+    const updateRowText = (relPath, text3) => {
       const element2 = rowElements().find(
         (row) => row.getAttribute("data-property-row") === relPath
       );
@@ -10117,7 +10146,7 @@ var BrainNotesApp = (() => {
       if (!value) {
         return;
       }
-      value.textContent = text2;
+      value.textContent = text3;
       value.classList.remove("is-missing");
     };
     const mutations = createWorkbenchMutations({
@@ -10186,8 +10215,8 @@ var BrainNotesApp = (() => {
               return message;
             }
             const value = control.read();
-            const text2 = op === "replace" ? previewTextFor(value) : `${valueDisplayText(row.value)}, ${value.text}`;
-            void runImmediate(relPath, op, value, row.hash, text2);
+            const text3 = op === "replace" ? previewTextFor(value) : `${valueDisplayText(row.value)}, ${value.text}`;
+            void runImmediate(relPath, op, value, row.hash, text3);
             return null;
           };
         }
@@ -10614,45 +10643,45 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/query-bar-completions.ts
   var tokenBreak = /* @__PURE__ */ new Set([" ", "	", "\n", "(", ")"]);
-  var tokenAtCursor = (text2, pos) => {
-    const caret = Math.max(0, Math.min(Math.trunc(pos), text2.length));
-    const head = text2.slice(0, caret);
+  var tokenAtCursor = (text3, pos) => {
+    const caret = Math.max(0, Math.min(Math.trunc(pos), text3.length));
+    const head = text3.slice(0, caret);
     const quoteCount = countUnescapedQuotes(head);
     const quoted = quoteCount % 2 === 1;
     if (quoted) {
       const start2 = lastUnescapedQuote(head);
-      return { start: start2, end: caret, text: text2.slice(start2, caret), quoted: true, wikilink: false };
+      return { start: start2, end: caret, text: text3.slice(start2, caret), quoted: true, wikilink: false };
     }
     const openLink = head.lastIndexOf("[[");
     if (openLink >= 0 && head.indexOf("]]", openLink) < 0) {
       return {
         start: openLink,
         end: caret,
-        text: text2.slice(openLink, caret),
+        text: text3.slice(openLink, caret),
         quoted: false,
         wikilink: true
       };
     }
     let start = caret;
     while (start > 0) {
-      if (start >= 2 && text2.slice(start - 2, start) === "]]") {
-        const open = text2.lastIndexOf("[[", start - 2);
+      if (start >= 2 && text3.slice(start - 2, start) === "]]") {
+        const open = text3.lastIndexOf("[[", start - 2);
         if (open >= 0) {
           start = open;
           continue;
         }
       }
-      if (tokenBreak.has(text2.charAt(start - 1))) {
+      if (tokenBreak.has(text3.charAt(start - 1))) {
         break;
       }
       start -= 1;
     }
-    return { start, end: caret, text: text2.slice(start, caret), quoted: false, wikilink: false };
+    return { start, end: caret, text: text3.slice(start, caret), quoted: false, wikilink: false };
   };
-  var countUnescapedQuotes = (text2) => {
+  var countUnescapedQuotes = (text3) => {
     let count3 = 0;
-    for (let i = 0; i < text2.length; i += 1) {
-      const char = text2.charAt(i);
+    for (let i = 0; i < text3.length; i += 1) {
+      const char = text3.charAt(i);
       if (char === "\\") {
         i += 1;
         continue;
@@ -10663,10 +10692,10 @@ var BrainNotesApp = (() => {
     }
     return count3;
   };
-  var lastUnescapedQuote = (text2) => {
+  var lastUnescapedQuote = (text3) => {
     let index = -1;
-    for (let i = 0; i < text2.length; i += 1) {
-      const char = text2.charAt(i);
+    for (let i = 0; i < text3.length; i += 1) {
+      const char = text3.charAt(i);
       if (char === "\\") {
         i += 1;
         continue;
@@ -10675,14 +10704,14 @@ var BrainNotesApp = (() => {
         index = i;
       }
     }
-    return index < 0 ? text2.length : index;
+    return index < 0 ? text3.length : index;
   };
   var keywords = /* @__PURE__ */ new Set(["and", "or", "not"]);
   var valueSeparators = [">=", "<=", "!=", "=", ":", ">", "<"];
-  var completionContextAt = (text2, pos) => {
-    const token = tokenAtCursor(text2, pos);
+  var completionContextAt = (text3, pos) => {
+    const token = tokenAtCursor(text3, pos);
     if (token.wikilink) {
-      const head = text2.slice(0, token.start);
+      const head = text3.slice(0, token.start);
       const owner = tokenAtCursor(head, head.length);
       const separated2 = splitFieldAndValue(owner.text);
       return {
@@ -10696,7 +10725,7 @@ var BrainNotesApp = (() => {
       };
     }
     if (token.quoted) {
-      const head = text2.slice(0, token.start);
+      const head = text3.slice(0, token.start);
       const owner = tokenAtCursor(head, head.length);
       const separated2 = splitFieldAndValue(owner.text);
       return {
@@ -10772,7 +10801,7 @@ var BrainNotesApp = (() => {
     }
     return { field, arg: "", value: rest, valueOffset: restOffset };
   };
-  var unquote = (text2) => text2.replace(/\\(["\\])/g, "$1");
+  var unquote = (text3) => text3.replace(/\\(["\\])/g, "$1");
   var foldCompletionValue = (value) => value.trim().toLowerCase().normalize("NFC");
   var filterCompletions = (completions, prefix) => {
     const folded = foldCompletionValue(prefix);
@@ -10809,10 +10838,10 @@ var BrainNotesApp = (() => {
     }
     return out;
   };
-  var applyCompletion = (text2, replace2, insert2) => {
-    const start = Math.max(0, Math.min(replace2.start, text2.length));
-    const end = Math.max(start, Math.min(replace2.end, text2.length));
-    const next = `${text2.slice(0, start)}${insert2}${text2.slice(end)}`;
+  var applyCompletion = (text3, replace2, insert2) => {
+    const start = Math.max(0, Math.min(replace2.start, text3.length));
+    const end = Math.max(start, Math.min(replace2.end, text3.length));
+    const next = `${text3.slice(0, start)}${insert2}${text3.slice(end)}`;
     return { text: next, pos: start + insert2.length };
   };
   var completionLabel = (completion) => {
@@ -10830,7 +10859,7 @@ var BrainNotesApp = (() => {
     needsGraph: false,
     error: null
   });
-  var isBlankQuery = (text2) => text2.trim() === "";
+  var isBlankQuery = (text3) => text3.trim() === "";
   var reduceQueryBar = (state, event) => {
     switch (event.type) {
       case "reset":
@@ -10912,17 +10941,17 @@ var BrainNotesApp = (() => {
     const lead = Array.from(query.slice(0, start), (char) => char === "	" ? "	" : " ").join("");
     return `${lead}${"^".repeat(Math.max(1, end - start))}`;
   };
-  var shouldRequestCompletions = (text2, pos, cause) => {
+  var shouldRequestCompletions = (text3, pos, cause) => {
     if (cause === "manual") {
       return true;
     }
     if (cause === "focus") {
-      return text2 === "";
+      return text3 === "";
     }
-    if (pos <= 0 || pos > text2.length) {
+    if (pos <= 0 || pos > text3.length) {
       return false;
     }
-    const previous = text2.charAt(pos - 1);
+    const previous = text3.charAt(pos - 1);
     return previous.trim() !== "";
   };
   var nextActiveIndex = (current, delta, length) => {
@@ -11199,21 +11228,21 @@ var BrainNotesApp = (() => {
         params: new URLSearchParams(window.location.search)
       });
     };
-    const runValidate = (text2) => {
-      validation = reduceQueryBar(validation, { type: "request", text: text2 });
+    const runValidate = (text3) => {
+      validation = reduceQueryBar(validation, { type: "request", text: text3 });
       renderAll();
-      void requester.validate(text2).then((response) => {
+      void requester.validate(text3).then((response) => {
         if (response === null) {
           return;
         }
-        validation = reduceQueryBar(validation, { type: "response", text: text2, response });
+        validation = reduceQueryBar(validation, { type: "response", text: text3, response });
         renderAll();
         const confirmed = publishableQuery(validation);
         if (confirmed !== null) {
           publish(confirmed);
         }
       }).catch(() => {
-        validation = reduceQueryBar(validation, { type: "failure", text: text2 });
+        validation = reduceQueryBar(validation, { type: "failure", text: text3 });
         renderAll();
       });
     };
@@ -11226,8 +11255,8 @@ var BrainNotesApp = (() => {
       listOpen = completions.length > 0;
       renderList();
     };
-    const runCompletions = (text2, pos) => {
-      void requester.completions(text2, pos).then((response) => {
+    const runCompletions = (text3, pos) => {
+      void requester.completions(text3, pos).then((response) => {
         if (response === null) {
           return;
         }
@@ -11242,9 +11271,9 @@ var BrainNotesApp = (() => {
       return typeof selection === "number" ? selection : els.input.value.length;
     };
     const acceptCompletion2 = (completion) => {
-      const text2 = els.input.value;
-      const context = completionContextAt(text2, caretPosition());
-      const edit2 = applyCompletion(text2, context.replace, completion.insert);
+      const text3 = els.input.value;
+      const context = completionContextAt(text3, caretPosition());
+      const edit2 = applyCompletion(text3, context.replace, completion.insert);
       els.input.value = edit2.text;
       els.input.setSelectionRange(edit2.pos, edit2.pos);
       els.input.focus();
@@ -11254,14 +11283,14 @@ var BrainNotesApp = (() => {
         completionCause: context.kind === "field" ? "manual" : null
       });
     };
-    const requestCompletions = (text2, cause) => {
+    const requestCompletions = (text3, cause) => {
       const pos = caretPosition();
-      if (!shouldRequestCompletions(text2, pos, cause)) {
+      if (!shouldRequestCompletions(text3, pos, cause)) {
         closeList();
         return;
       }
       if (listOpen) {
-        const context = completionContextAt(text2, pos);
+        const context = completionContextAt(text3, pos);
         completions = filterCompletions(completions, context.prefix);
         activeIndex = completions.length > 0 ? Math.min(activeIndex, completions.length - 1) : -1;
         renderList();
@@ -11270,15 +11299,15 @@ var BrainNotesApp = (() => {
         runCompletions(els.input.value, caretPosition());
       }, cause === "manual" ? 0 : completionsDebounceMs);
     };
-    const handleTextChange = (text2, { immediate = false, completionCause = "input" } = {}) => {
-      validation = reduceQueryBar(validation, { type: "input", text: text2 });
+    const handleTextChange = (text3, { immediate = false, completionCause = "input" } = {}) => {
+      validation = reduceQueryBar(validation, { type: "input", text: text3 });
       renderAll();
-      if (isBlankQuery(text2)) {
+      if (isBlankQuery(text3)) {
         validateDebounce.cancel();
         requester.cancel();
         publish("");
         if (completionCause === "focus" || completionCause === "manual") {
-          requestCompletions(text2, completionCause);
+          requestCompletions(text3, completionCause);
         } else {
           closeList();
         }
@@ -11288,7 +11317,7 @@ var BrainNotesApp = (() => {
         runValidate(els.input.value);
       }, immediate ? 0 : validateDebounceMs);
       if (completionCause !== null) {
-        requestCompletions(text2, completionCause);
+        requestCompletions(text3, completionCause);
       }
     };
     els.input.addEventListener("input", () => {
@@ -11954,9 +11983,9 @@ var BrainNotesApp = (() => {
         deadline.textContent = ` until ${entry.until}`;
         state.appendChild(deadline);
       }
-      const clear = actionButton(view.feedbackList.ownerDocument, "Clear", "clear", entry.candidate.key);
-      clear.classList.add("related-feedback-clear");
-      row.append(link, state, clear);
+      const clear2 = actionButton(view.feedbackList.ownerDocument, "Clear", "clear", entry.candidate.key);
+      clear2.classList.add("related-feedback-clear");
+      row.append(link, state, clear2);
       view.feedbackList.appendChild(row);
     }
   };
@@ -13250,7 +13279,15 @@ var BrainNotesApp = (() => {
     const postSave = async (url, body) => {
       const { response, payload } = await post(url, body);
       if (foreignAnswer(response, payload)) {
-        return { ok: false, code: "", message: foreignSaveMessage, revision: "", content: "", changed: false };
+        return {
+          ok: false,
+          code: "",
+          message: foreignSaveMessage,
+          revision: "",
+          content: "",
+          changed: false,
+          attachments: []
+        };
       }
       return normalizeSourceSaveResponse(payload);
     };
@@ -13269,7 +13306,9 @@ var BrainNotesApp = (() => {
             content: request.content,
             revision: request.revision,
             save_id: request.saveID,
-            token: options.token
+            token: options.token,
+            owner: request.owner,
+            attachments: request.attachments
           })
         );
       },
@@ -13285,7 +13324,9 @@ var BrainNotesApp = (() => {
             rel_path: request.relPath,
             content: request.content,
             save_id: request.saveID,
-            token: options.token
+            token: options.token,
+            owner: request.owner,
+            attachments: request.attachments
           })
         );
       },
@@ -14151,8 +14192,11 @@ var BrainNotesApp = (() => {
       const response = await options.client.create({
         relPath: offer.draft.relPath,
         content: offer.draft.content,
-        saveID: newSaveID()
+        saveID: newSaveID(),
+        owner: options.claims?.owner,
+        attachments: options.claims?.pending()
       });
+      options.claims?.committed(response.attachments);
       if (!response.ok) {
         host.setStatus(response.message || "The note could not be created.", "is-error");
         return;
@@ -14238,14 +14282,8 @@ var BrainNotesApp = (() => {
       dirty,
       load: () => runLoad(deps, state, ctx),
       save: () => runSave(deps, state, ctx),
-      runCommand(command2, options) {
-        const surface = state.surface;
-        if (!surface) {
-          return;
-        }
-        surface.applyEdit(formatSource(surface.getValue(), surface.getSelection(), command2, options));
-        surface.focus();
-      },
+      runCommand: (command2, options) => applyCommand(state.surface, command2, options),
+      insertText: (text3) => insertAtCursor(state.surface, text3),
       destroy() {
         drafts.flush();
         drafts.dispose();
@@ -14257,6 +14295,22 @@ var BrainNotesApp = (() => {
     };
     unbind = wireEditor(ownerDocument, elements, state, controller, ctx);
     return controller;
+  };
+  var applyCommand = (surface, command2, options) => {
+    if (!surface) {
+      return;
+    }
+    surface.applyEdit(formatSource(surface.getValue(), surface.getSelection(), command2, options));
+    surface.focus();
+  };
+  var insertAtCursor = (surface, text3) => {
+    if (!surface) {
+      return;
+    }
+    const selection = surface.getSelection();
+    const at = selection.from + text3.length;
+    surface.applyEdit({ ...selection, insert: text3, selectionFrom: at, selectionTo: at });
+    surface.focus();
   };
   var wireEditor = (ownerDocument, elements, state, controller, ctx) => {
     wireControls(elements, controller);
@@ -14291,7 +14345,8 @@ var BrainNotesApp = (() => {
       view,
       now: deps.now ?? (() => Date.now()),
       delayMs: deps.draftDelayMs,
-      navigate: deps.navigate ?? ((url) => view?.location.assign(url))
+      navigate: deps.navigate ?? ((url) => view?.location.assign(url)),
+      claims: deps.claims
     });
   };
   var createPreview = (elements, client, delayMs) => createPreviewScheduler({
@@ -14393,8 +14448,11 @@ var BrainNotesApp = (() => {
       const response = await deps.client.save({
         content: content2,
         revision: base2,
-        saveID: state.pendingSave.id
+        saveID: state.pendingSave.id,
+        owner: deps.claims?.owner,
+        attachments: deps.claims?.pending()
       });
+      deps.claims?.committed(response.attachments);
       applyOutcome(classifySaveResponse(response, base2), content2, state, ctx, deps.elements);
     } catch (error) {
       ctx.setStatus(
@@ -14516,9 +14574,28 @@ var BrainNotesApp = (() => {
         save: attr(panel, "data-source-save-endpoint"),
         create: attr(panel, "data-source-create-endpoint"),
         search: attr(panel, "data-source-search-endpoint")
-      }
+      },
+      attachments: {
+        upload: attr(panel, "data-source-upload-endpoint"),
+        cancel: attr(panel, "data-source-upload-cancel-endpoint")
+      },
+      manage: {
+        editor: attr(panel, "data-source-editor-path"),
+        home: attr(panel, "data-source-home-path"),
+        capture: attr(panel, "data-source-capture-endpoint"),
+        create: attr(panel, "data-source-note-create-endpoint"),
+        rename: attr(panel, "data-source-rename-endpoint"),
+        move: attr(panel, "data-source-move-endpoint"),
+        trash: attr(panel, "data-source-trash-endpoint"),
+        frontmatterSet: attr(panel, "data-source-frontmatter-set-endpoint"),
+        frontmatterUnset: attr(panel, "data-source-frontmatter-unset-endpoint"),
+        pinSet: attr(panel, "data-source-pin-set-endpoint"),
+        pinRemove: attr(panel, "data-source-pin-remove-endpoint"),
+        undo: attr(panel, "data-source-undo-endpoint")
+      },
+      maxAttachmentBytes: Number(attr(panel, "data-source-max-attachment-bytes")) || 0
     };
-    const required = [
+    const required2 = [
       config2.key,
       config2.token,
       config2.endpoints.read,
@@ -14527,7 +14604,7 @@ var BrainNotesApp = (() => {
       config2.endpoints.create,
       config2.endpoints.search
     ];
-    return required.every((value) => value !== "") ? config2 : null;
+    return required2.every((value) => value !== "") ? config2 : null;
   };
   var readSourceEditorElements = (panel) => {
     const surfaceHost = queryElement(panel, "[data-source-surface]", HTMLElement);
@@ -14558,6 +14635,46 @@ var BrainNotesApp = (() => {
       recoveryRestore: queryElement(panel, "[data-source-recovery-restore]", HTMLButtonElement),
       recoveryRecreate: queryElement(panel, "[data-source-recovery-recreate]", HTMLButtonElement),
       recoveryDiscard: queryElement(panel, "[data-source-recovery-discard]", HTMLButtonElement)
+    };
+  };
+  var readAttachmentElements = (panel) => ({
+    panel: queryElement(panel, "[data-source-attachments]", HTMLElement),
+    input: queryElement(panel, "[data-source-attachment-input]", HTMLInputElement),
+    choose: queryElement(panel, "[data-source-attachment-choose]", HTMLButtonElement),
+    list: queryElement(panel, "[data-source-attachment-list]", HTMLElement),
+    dropZone: queryElement(panel, "[data-source-surface]", HTMLElement)
+  });
+  var readSourceManageElements = (panel) => {
+    const root = queryElement(panel, "[data-source-manage]", HTMLElement);
+    if (!root) {
+      return null;
+    }
+    return {
+      root,
+      status: queryElement(root, "[data-source-manage-status]", HTMLElement),
+      gate: {
+        panel: queryElement(root, "[data-source-gate]", HTMLElement),
+        message: queryElement(root, "[data-source-gate-message]", HTMLElement),
+        save: queryElement(root, "[data-source-gate-save]", HTMLButtonElement),
+        proceed: queryElement(root, "[data-source-gate-proceed]", HTMLButtonElement),
+        cancel: queryElement(root, "[data-source-gate-cancel]", HTMLButtonElement)
+      },
+      rename: queryElement(root, "[data-source-rename]", HTMLButtonElement),
+      renameTitle: queryElement(root, "[data-source-rename-title]", HTMLInputElement),
+      move: queryElement(root, "[data-source-move]", HTMLButtonElement),
+      moveFolder: queryElement(root, "[data-source-move-folder]", HTMLInputElement),
+      trash: queryElement(root, "[data-source-trash]", HTMLButtonElement),
+      propertyName: queryElement(root, "[data-source-property-name]", HTMLInputElement),
+      propertyValue: queryElement(root, "[data-source-property-value]", HTMLInputElement),
+      propertySet: queryElement(root, "[data-source-property-set]", HTMLButtonElement),
+      propertyUnset: queryElement(root, "[data-source-property-unset]", HTMLButtonElement),
+      pin: queryElement(root, "[data-source-pin]", HTMLButtonElement),
+      unpin: queryElement(root, "[data-source-unpin]", HTMLButtonElement),
+      capture: queryElement(root, "[data-source-capture]", HTMLButtonElement),
+      captureText: queryElement(root, "[data-source-capture-text]", HTMLTextAreaElement),
+      createNote: queryElement(root, "[data-source-note-create]", HTMLButtonElement),
+      createTarget: queryElement(root, "[data-source-note-create-target]", HTMLInputElement),
+      undo: queryElement(root, "[data-source-undo]", HTMLButtonElement)
     };
   };
   var attr = (element2, name2) => (element2.getAttribute(name2) || "").trim();
@@ -14657,7 +14774,7 @@ var BrainNotesApp = (() => {
     /**
     Replace a range of the text with the given content.
     */
-    replace(from, to, text2) {
+    replace(from, to, text3) {
       [from, to] = clip(this, from, to);
       let parts = [];
       this.decompose(
@@ -14667,10 +14784,10 @@ var BrainNotesApp = (() => {
         2
         /* Open.To */
       );
-      if (text2.length)
-        text2.decompose(
+      if (text3.length)
+        text3.decompose(
           0,
-          text2.length,
+          text3.length,
           parts,
           1 | 2
           /* Open.To */
@@ -14682,7 +14799,7 @@ var BrainNotesApp = (() => {
         1
         /* Open.From */
       );
-      return TextNode.from(parts, this.length - (to - from) + text2.length);
+      return TextNode.from(parts, this.length - (to - from) + text3.length);
     }
     /**
     Append another document to this one.
@@ -14778,18 +14895,18 @@ var BrainNotesApp = (() => {
     /**
     Create a `Text` instance for the given array of lines.
     */
-    static of(text2) {
-      if (text2.length == 0)
+    static of(text3) {
+      if (text3.length == 0)
         throw new RangeError("A document must have at least one line");
-      if (text2.length == 1 && !text2[0])
+      if (text3.length == 1 && !text3[0])
         return _Text.empty;
-      return text2.length <= 32 ? new TextLeaf(text2) : TextNode.from(TextLeaf.split(text2, []));
+      return text3.length <= 32 ? new TextLeaf(text3) : TextNode.from(TextLeaf.split(text3, []));
     }
   };
   var TextLeaf = class _TextLeaf extends Text {
-    constructor(text2, length = textLength(text2)) {
+    constructor(text3, length = textLength(text3)) {
       super();
-      this.text = text2;
+      this.text = text3;
       this.length = length;
     }
     get lines() {
@@ -14808,26 +14925,26 @@ var BrainNotesApp = (() => {
       }
     }
     decompose(from, to, target, open) {
-      let text2 = from <= 0 && to >= this.length ? this : new _TextLeaf(sliceText(this.text, from, to), Math.min(to, this.length) - Math.max(0, from));
+      let text3 = from <= 0 && to >= this.length ? this : new _TextLeaf(sliceText(this.text, from, to), Math.min(to, this.length) - Math.max(0, from));
       if (open & 1) {
         let prev = target.pop();
-        let joined = appendText(text2.text, prev.text.slice(), 0, text2.length);
+        let joined = appendText(text3.text, prev.text.slice(), 0, text3.length);
         if (joined.length <= 32) {
-          target.push(new _TextLeaf(joined, prev.length + text2.length));
+          target.push(new _TextLeaf(joined, prev.length + text3.length));
         } else {
           let mid = joined.length >> 1;
           target.push(new _TextLeaf(joined.slice(0, mid)), new _TextLeaf(joined.slice(mid)));
         }
       } else {
-        target.push(text2);
+        target.push(text3);
       }
     }
-    replace(from, to, text2) {
-      if (!(text2 instanceof _TextLeaf))
-        return super.replace(from, to, text2);
+    replace(from, to, text3) {
+      if (!(text3 instanceof _TextLeaf))
+        return super.replace(from, to, text3);
       [from, to] = clip(this, from, to);
-      let lines = appendText(this.text, appendText(text2.text, sliceText(this.text, 0, from)), to);
-      let newLen = this.length + text2.length - (to - from);
+      let lines = appendText(this.text, appendText(text3.text, sliceText(this.text, 0, from)), to);
+      let newLen = this.length + text3.length - (to - from);
       if (lines.length <= 32)
         return new _TextLeaf(lines, newLen);
       return TextNode.from(_TextLeaf.split(lines, []), newLen);
@@ -14852,9 +14969,9 @@ var BrainNotesApp = (() => {
     scanIdentical() {
       return 0;
     }
-    static split(text2, target) {
+    static split(text3, target) {
       let part = [], len = -1;
-      for (let line of text2) {
+      for (let line of text3) {
         part.push(line);
         len += line.length + 1;
         if (part.length == 32) {
@@ -14899,24 +15016,24 @@ var BrainNotesApp = (() => {
         pos = end + 1;
       }
     }
-    replace(from, to, text2) {
+    replace(from, to, text3) {
       [from, to] = clip(this, from, to);
-      if (text2.lines < this.lines)
+      if (text3.lines < this.lines)
         for (let i = 0, pos = 0; i < this.children.length; i++) {
           let child = this.children[i], end = pos + child.length;
           if (from >= pos && to <= end) {
-            let updated = child.replace(from - pos, to - pos, text2);
+            let updated = child.replace(from - pos, to - pos, text3);
             let totalLines = this.lines - child.lines + updated.lines;
             if (updated.lines < totalLines >> 5 - 1 && updated.lines > totalLines >> 5 + 1) {
               let copy = this.children.slice();
               copy[i] = updated;
-              return new _TextNode(copy, this.length - (to - from) + text2.length);
+              return new _TextNode(copy, this.length - (to - from) + text3.length);
             }
             return super.replace(pos, end, updated);
           }
           pos = end + 1;
         }
-      return super.replace(from, to, text2);
+      return super.replace(from, to, text3);
     }
     sliceString(from, to = this.length, lineSep = "\n") {
       [from, to] = clip(this, from, to);
@@ -14999,15 +15116,15 @@ var BrainNotesApp = (() => {
     }
   };
   Text.empty = /* @__PURE__ */ new TextLeaf([""], 0);
-  function textLength(text2) {
+  function textLength(text3) {
     let length = -1;
-    for (let line of text2)
+    for (let line of text3)
       length += line.length + 1;
     return length;
   }
-  function appendText(text2, target, from = 0, to = 1e9) {
-    for (let pos = 0, i = 0, first = true; i < text2.length && pos <= to; i++) {
-      let line = text2[i], end = pos + line.length;
+  function appendText(text3, target, from = 0, to = 1e9) {
+    for (let pos = 0, i = 0, first = true; i < text3.length && pos <= to; i++) {
+      let line = text3[i], end = pos + line.length;
       if (end >= from) {
         if (end > to)
           line = line.slice(0, to - pos);
@@ -15023,17 +15140,17 @@ var BrainNotesApp = (() => {
     }
     return target;
   }
-  function sliceText(text2, from, to) {
-    return appendText(text2, [""], from, to);
+  function sliceText(text3, from, to) {
+    return appendText(text3, [""], from, to);
   }
   var RawTextCursor = class {
-    constructor(text2, dir = 1) {
+    constructor(text3, dir = 1) {
       this.dir = dir;
       this.done = false;
       this.lineBreak = false;
       this.value = "";
-      this.nodes = [text2];
-      this.offsets = [dir > 0 ? 1 : (text2 instanceof TextLeaf ? text2.text.length : text2.children.length) << 1];
+      this.nodes = [text3];
+      this.offsets = [dir > 0 ? 1 : (text3 instanceof TextLeaf ? text3.text.length : text3.children.length) << 1];
     }
     nextInner(skip, dir) {
       this.done = this.lineBreak = false;
@@ -15090,11 +15207,11 @@ var BrainNotesApp = (() => {
     }
   };
   var PartialTextCursor = class {
-    constructor(text2, start, end) {
+    constructor(text3, start, end) {
       this.value = "";
       this.done = false;
-      this.cursor = new RawTextCursor(text2, start > end ? -1 : 1);
-      this.pos = start > end ? text2.length : 0;
+      this.cursor = new RawTextCursor(text3, start > end ? -1 : 1);
+      this.pos = start > end ? text3.length : 0;
       this.from = Math.min(start, end);
       this.to = Math.max(start, end);
     }
@@ -15170,11 +15287,11 @@ var BrainNotesApp = (() => {
     /**
     @internal
     */
-    constructor(from, to, number2, text2) {
+    constructor(from, to, number2, text3) {
       this.from = from;
       this.to = to;
       this.number = number2;
-      this.text = text2;
+      this.text = text3;
     }
     /**
     The length of the line (not including any line break after it).
@@ -15183,9 +15300,9 @@ var BrainNotesApp = (() => {
       return this.to - this.from;
     }
   };
-  function clip(text2, from, to) {
-    from = Math.max(0, Math.min(text2.length, from));
-    return [from, Math.max(from, Math.min(text2.length, to))];
+  function clip(text3, from, to) {
+    from = Math.max(0, Math.min(text3.length, from));
+    return [from, Math.max(from, Math.min(text3.length, to))];
   }
   function findClusterBreak2(str, pos, forward = true, includeExtending = true) {
     return findClusterBreak(str, pos, forward, includeExtending);
@@ -15403,7 +15520,7 @@ var BrainNotesApp = (() => {
     apply(doc2) {
       if (this.length != doc2.length)
         throw new RangeError("Applying change set to a document with the wrong length");
-      iterChanges(this, (fromA, toA, fromB, _toB, text2) => doc2 = doc2.replace(fromB, fromB + (toA - fromA), text2), false);
+      iterChanges(this, (fromA, toA, fromB, _toB, text3) => doc2 = doc2.replace(fromB, fromB + (toA - fromA), text3), false);
       return doc2;
     }
     mapDesc(other, before = false) {
@@ -15647,18 +15764,18 @@ var BrainNotesApp = (() => {
         posA += len;
         posB += len;
       } else {
-        let endA = posA, endB = posB, text2 = Text.empty;
+        let endA = posA, endB = posB, text3 = Text.empty;
         for (; ; ) {
           endA += len;
           endB += ins;
           if (ins && inserted)
-            text2 = text2.append(inserted[i - 2 >> 1]);
+            text3 = text3.append(inserted[i - 2 >> 1]);
           if (individual || i == desc.sections.length || desc.sections[i + 1] < 0)
             break;
           len = desc.sections[i++];
           ins = desc.sections[i++];
         }
-        f(posA, endA, posB, endB, text2);
+        f(posA, endA, posB, endB, text3);
         posA = endA;
         posB = endB;
       }
@@ -16934,12 +17051,12 @@ var BrainNotesApp = (() => {
     Create a [transaction spec](https://codemirror.net/6/docs/ref/#state.TransactionSpec) that
     replaces every selection range with the given content.
     */
-    replaceSelection(text2) {
-      if (typeof text2 == "string")
-        text2 = this.toText(text2);
+    replaceSelection(text3) {
+      if (typeof text3 == "string")
+        text3 = this.toText(text3);
       return this.changeByRange((range) => ({
-        changes: { from: range.from, to: range.to, insert: text2 },
-        range: EditorSelection.cursor(range.from + text2.length)
+        changes: { from: range.from, to: range.to, insert: text3 },
+        range: EditorSelection.cursor(range.from + text3.length)
       }));
     }
     /**
@@ -17158,18 +17275,18 @@ var BrainNotesApp = (() => {
     this returns null.
     */
     wordAt(pos) {
-      let { text: text2, from, length } = this.doc.lineAt(pos);
+      let { text: text3, from, length } = this.doc.lineAt(pos);
       let cat = this.charCategorizer(pos);
       let start = pos - from, end = pos - from;
       while (start > 0) {
-        let prev = findClusterBreak2(text2, start, false);
-        if (cat(text2.slice(prev, start)) != CharCategory.Word)
+        let prev = findClusterBreak2(text3, start, false);
+        if (cat(text3.slice(prev, start)) != CharCategory.Word)
           break;
         start = prev;
       }
       while (end < length) {
-        let next = findClusterBreak2(text2, end);
-        if (cat(text2.slice(end, next)) != CharCategory.Word)
+        let next = findClusterBreak2(text3, end);
+        if (cat(text3.slice(end, next)) != CharCategory.Word)
           break;
         end = next;
       }
@@ -18164,10 +18281,10 @@ var BrainNotesApp = (() => {
         if (root.adoptedStyleSheets.indexOf(this.sheet) < 0)
           root.adoptedStyleSheets = [this.sheet, ...root.adoptedStyleSheets];
       } else {
-        let text2 = "";
+        let text3 = "";
         for (let i = 0; i < this.modules.length; i++)
-          text2 += this.modules[i].getRules() + "\n";
-        this.styleTag.textContent = text2;
+          text3 += this.modules[i].getRules() + "\n";
+        this.styleTag.textContent = text3;
         let target = root.head || root;
         if (this.styleTag.parentNode != target)
           target.insertBefore(this.styleTag, target.firstChild);
@@ -19385,9 +19502,9 @@ var BrainNotesApp = (() => {
       return EditorSelection.cursor(nextSpan.side(!forward, dir) + line.from, nextSpan.forward(forward, dir) ? 1 : -1, nextSpan.level);
     return EditorSelection.cursor(nextIndex + line.from, span.forward(forward, dir) ? -1 : 1, span.level);
   }
-  function autoDirection(text2, from, to) {
+  function autoDirection(text3, from, to) {
     for (let i = from; i < to; i++) {
-      let type = charType(text2.charCodeAt(i));
+      let type = charType(text3.charCodeAt(i));
       if (type == 1)
         return LTR;
       if (type == 2 || type == 4)
@@ -20093,9 +20210,9 @@ var BrainNotesApp = (() => {
     }
   };
   var TextTile = class _TextTile extends Tile {
-    constructor(dom, text2) {
-      super(dom, text2.length);
-      this.text = text2;
+    constructor(dom, text3) {
+      super(dom, text3.length);
+      this.text = text3;
     }
     sync(track) {
       if (this.flags & 2)
@@ -20142,8 +20259,8 @@ var BrainNotesApp = (() => {
         rect = Array.prototype.find.call(rects, (r) => r.width) || rect;
       return rtl == null ? rect : flattenRect(rect, (flatten2 ? flatten2 > 0 : side < 0) == rtl);
     }
-    static of(text2, dom) {
-      let tile = new _TextTile(dom || document.createTextNode(text2), text2);
+    static of(text3, dom) {
+      let tile = new _TextTile(dom || document.createTextNode(text3), text3);
       if (!dom)
         tile.flags |= 2;
       return tile;
@@ -20316,23 +20433,23 @@ var BrainNotesApp = (() => {
       this.wrappers = [];
       this.wrapperPos = 0;
     }
-    addText(text2, marks2, openStart, tile) {
+    addText(text3, marks2, openStart, tile) {
       var _a2;
       this.flushBuffer();
       let parent = this.ensureMarks(marks2, openStart);
       let prev = parent.lastChild;
-      if (prev && prev.isText() && !(prev.flags & 8) && prev.length + text2.length < 512) {
+      if (prev && prev.isText() && !(prev.flags & 8) && prev.length + text3.length < 512) {
         this.cache.reused.set(
           prev,
           2
           /* Reused.DOM */
         );
-        let tile2 = parent.children[parent.children.length - 1] = new TextTile(prev.dom, prev.text + text2);
+        let tile2 = parent.children[parent.children.length - 1] = new TextTile(prev.dom, prev.text + text3);
         tile2.parent = parent;
       } else {
-        parent.append(tile || TextTile.of(text2, (_a2 = this.cache.find(TextTile)) === null || _a2 === void 0 ? void 0 : _a2.dom));
+        parent.append(tile || TextTile.of(text3, (_a2 = this.cache.find(TextTile)) === null || _a2 === void 0 ? void 0 : _a2.dom));
       }
-      this.pos += text2.length;
+      this.pos += text3.length;
       this.afterWidget = null;
     }
     addComposition(composition, context) {
@@ -20377,10 +20494,10 @@ var BrainNotesApp = (() => {
           2
           /* Reused.DOM */
         );
-      let text2 = new TextTile(composition.text, composition.text.nodeValue);
-      text2.flags |= 8;
+      let text3 = new TextTile(composition.text, composition.text.nodeValue);
+      text3.flags |= 8;
       this.pos = composition.range.toB;
-      head.append(text2);
+      head.append(text3);
     }
     addInlineWidget(widget, marks2, openStart) {
       let noSpace = this.afterWidget && widget.flags & 48 && (this.afterWidget.flags & 48) == (widget.flags & 48);
@@ -20857,9 +20974,9 @@ var BrainNotesApp = (() => {
         this.old.advance(5, side, this.reuseWalker);
       }
     }
-    getCompositionContext(text2) {
+    getCompositionContext(text3) {
       let marks2 = [], line = null;
-      for (let parent = text2.parentNode; ; parent = parent.parentNode) {
+      for (let parent = text3.parentNode; ; parent = parent.parentNode) {
         let tile = Tile.get(parent);
         if (parent == this.view.contentDOM)
           break;
@@ -21100,9 +21217,9 @@ var BrainNotesApp = (() => {
             if (browser.gecko) {
               let nextTo = nextToUneditable(anchor.node, anchor.offset);
               if (nextTo && nextTo != (1 | 2)) {
-                let text2 = (nextTo == 1 ? textNodeBefore : textNodeAfter)(anchor.node, anchor.offset);
-                if (text2)
-                  anchor = new DOMPos(text2.node, text2.offset);
+                let text3 = (nextTo == 1 ? textNodeBefore : textNodeAfter)(anchor.node, anchor.offset);
+                if (text3)
+                  anchor = new DOMPos(text3.node, text3.offset);
               }
             }
             rawSel.collapse(anchor.node, anchor.offset);
@@ -21520,10 +21637,10 @@ var BrainNotesApp = (() => {
     let found = findCompositionNode(view, headPos);
     if (!found)
       return null;
-    let { node: textNode, from, to } = found, text2 = textNode.nodeValue;
-    if (/[\n\r]/.test(text2))
+    let { node: textNode, from, to } = found, text3 = textNode.nodeValue;
+    if (/[\n\r]/.test(text3))
       return null;
-    if (view.state.doc.sliceString(found.from, found.to) != text2)
+    if (view.state.doc.sliceString(found.from, found.to) != text3)
       return null;
     let inv = changes.invertedDesc;
     return { range: new ChangedRange(inv.mapPos(from), inv.mapPos(to), from, to), text: textNode };
@@ -22000,8 +22117,8 @@ var BrainNotesApp = (() => {
       this.text = "";
       this.lineSeparator = view.state.facet(EditorState.lineSeparator);
     }
-    append(text2) {
-      this.text += text2;
+    append(text3) {
+      this.text += text3;
     }
     lineBreak() {
       this.text += LineBreakPlaceholder;
@@ -22029,20 +22146,20 @@ var BrainNotesApp = (() => {
       return this;
     }
     readTextNode(node) {
-      let text2 = node.nodeValue;
+      let text3 = node.nodeValue;
       for (let point of this.points)
         if (point.node == node)
-          point.pos = this.text.length + Math.min(point.offset, text2.length);
+          point.pos = this.text.length + Math.min(point.offset, text3.length);
       for (let off = 0, re = this.lineSeparator ? null : /\r\n?|\n/g; ; ) {
         let nextBreak = -1, breakSize = 1, m;
         if (this.lineSeparator) {
-          nextBreak = text2.indexOf(this.lineSeparator, off);
+          nextBreak = text3.indexOf(this.lineSeparator, off);
           breakSize = this.lineSeparator.length;
-        } else if (m = re.exec(text2)) {
+        } else if (m = re.exec(text3)) {
           nextBreak = m.index;
           breakSize = m[0].length;
         }
-        this.append(text2.slice(off, nextBreak < 0 ? text2.length : nextBreak));
+        this.append(text3.slice(off, nextBreak < 0 ? text3.length : nextBreak));
         if (nextBreak < 0)
           break;
         this.lineBreak();
@@ -22265,12 +22382,12 @@ var BrainNotesApp = (() => {
     // after a completion when you press enter
     (change.from == sel.from || change.from == sel.from - 1 && view.state.sliceDoc(change.from, sel.from) == " ") && change.insert.length == 1 && change.insert.lines == 2 && dispatchKey(view.contentDOM, "Enter", 13) || (change.from == sel.from - 1 && change.to == sel.to && change.insert.length == 0 || lastKey == 8 && change.insert.length < change.to - change.from && change.to > sel.head) && dispatchKey(view.contentDOM, "Backspace", 8) || change.from == sel.from && change.to == sel.to + 1 && change.insert.length == 0 && dispatchKey(view.contentDOM, "Delete", 46)))
       return true;
-    let text2 = change.insert.toString();
+    let text3 = change.insert.toString();
     if (view.inputState.composing >= 0)
       view.inputState.composing++;
     let defaultTr;
     let defaultInsert = () => defaultTr || (defaultTr = applyDefaultInsert(view, change, newSel));
-    if (!view.state.facet(inputHandler).some((h) => h(view, change.from, change.to, text2, defaultInsert)))
+    if (!view.state.facet(inputHandler).some((h) => h(view, change.from, change.to, text3, defaultInsert)))
       view.dispatch(defaultInsert());
     return true;
   }
@@ -22738,16 +22855,16 @@ var BrainNotesApp = (() => {
       doPaste(view, target.value);
     }, 50);
   }
-  function textFilter(state, facet, text2) {
+  function textFilter(state, facet, text3) {
     for (let filter of state.facet(facet))
-      text2 = filter(text2, state);
-    return text2;
+      text3 = filter(text3, state);
+    return text3;
   }
   function doPaste(view, input) {
     input = textFilter(view.state, clipboardInputFilter, input);
-    let { state } = view, changes, i = 1, text2 = state.toText(input);
-    let byLine = text2.lines == state.selection.ranges.length;
-    let linewise = lastLinewiseCopy != null && state.selection.ranges.every((r) => r.empty) && lastLinewiseCopy == text2.toString();
+    let { state } = view, changes, i = 1, text3 = state.toText(input);
+    let byLine = text3.lines == state.selection.ranges.length;
+    let linewise = lastLinewiseCopy != null && state.selection.ranges.every((r) => r.empty) && lastLinewiseCopy == text3.toString();
     if (linewise) {
       let lastLine = -1;
       changes = state.changeByRange((range) => {
@@ -22755,7 +22872,7 @@ var BrainNotesApp = (() => {
         if (line.from == lastLine)
           return { range };
         lastLine = line.from;
-        let insert2 = state.toText((byLine ? text2.line(i++).text : input) + state.lineBreak);
+        let insert2 = state.toText((byLine ? text3.line(i++).text : input) + state.lineBreak);
         return {
           changes: { from: line.from, insert: insert2 },
           range: EditorSelection.cursor(range.from + insert2.length)
@@ -22763,14 +22880,14 @@ var BrainNotesApp = (() => {
       });
     } else if (byLine) {
       changes = state.changeByRange((range) => {
-        let line = text2.line(i++);
+        let line = text3.line(i++);
         return {
           changes: { from: range.from, to: range.to, insert: line.text },
           range: EditorSelection.cursor(range.from + line.length)
         };
       });
     } else {
-      changes = state.replaceSelection(text2);
+      changes = state.replaceSelection(text3);
     }
     view.dispatch(changes, {
       userEvent: "input.paste",
@@ -22927,14 +23044,14 @@ var BrainNotesApp = (() => {
     view.inputState.draggedContent = null;
     return false;
   };
-  function dropText(view, event, text2, direct) {
-    text2 = textFilter(view.state, clipboardInputFilter, text2);
-    if (!text2)
+  function dropText(view, event, text3, direct) {
+    text3 = textFilter(view.state, clipboardInputFilter, text3);
+    if (!text3)
       return;
     let dropPos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
     let { draggedContent } = view.inputState;
     let del = direct && draggedContent && dragMovesSelection(view, event) ? { from: draggedContent.from, to: draggedContent.to } : null;
-    let ins = { from: dropPos, insert: text2 };
+    let ins = { from: dropPos, insert: text3 };
     let changes = view.state.changes(del ? [del, ins] : ins);
     view.focus();
     view.dispatch({
@@ -22951,26 +23068,26 @@ var BrainNotesApp = (() => {
       return true;
     let files = event.dataTransfer.files;
     if (files && files.length) {
-      let text2 = Array(files.length), read = 0;
+      let text3 = Array(files.length), read = 0;
       let finishFile = () => {
         if (++read == files.length)
-          dropText(view, event, text2.filter((s) => s != null).join(view.state.lineBreak), false);
+          dropText(view, event, text3.filter((s) => s != null).join(view.state.lineBreak), false);
       };
       for (let i = 0; i < files.length; i++) {
         let reader = new FileReader();
         reader.onerror = finishFile;
         reader.onload = () => {
           if (!/[\x00-\x08\x0e-\x1f]{2}/.test(reader.result))
-            text2[i] = reader.result;
+            text3[i] = reader.result;
           finishFile();
         };
         reader.readAsText(files[i]);
       }
       return true;
     } else {
-      let text2 = event.dataTransfer.getData("Text");
-      if (text2) {
-        dropText(view, event, text2, true);
+      let text3 = event.dataTransfer.getData("Text");
+      if (text3) {
+        dropText(view, event, text3, true);
         return true;
       }
     }
@@ -22989,15 +23106,15 @@ var BrainNotesApp = (() => {
       return false;
     }
   };
-  function captureCopy(view, text2) {
+  function captureCopy(view, text3) {
     let parent = view.dom.parentNode;
     if (!parent)
       return;
     let target = parent.appendChild(document.createElement("textarea"));
     target.style.cssText = "position: fixed; left: -10000px; top: 10px";
-    target.value = text2;
+    target.value = text3;
     target.focus();
-    target.selectionEnd = text2.length;
+    target.selectionEnd = text3.length;
     target.selectionStart = 0;
     setTimeout(() => {
       target.remove();
@@ -23029,10 +23146,10 @@ var BrainNotesApp = (() => {
   handlers.copy = handlers.cut = (view, event) => {
     if (!hasSelection(view.contentDOM, view.observer.selectionRange))
       return false;
-    let { text: text2, ranges, linewise } = copiedRange(view.state);
-    if (!text2 && !linewise)
+    let { text: text3, ranges, linewise } = copiedRange(view.state);
+    if (!text3 && !linewise)
       return false;
-    lastLinewiseCopy = linewise ? text2 : null;
+    lastLinewiseCopy = linewise ? text3 : null;
     if (event.type == "cut" && !view.state.readOnly)
       view.dispatch({
         changes: ranges,
@@ -23042,10 +23159,10 @@ var BrainNotesApp = (() => {
     let data2 = brokenClipboardAPI ? null : event.clipboardData;
     if (data2) {
       data2.clearData();
-      data2.setData("text/plain", text2);
+      data2.setData("text/plain", text3);
       return true;
     } else {
-      captureCopy(view, text2);
+      captureCopy(view, text3);
       return false;
     }
   };
@@ -23128,11 +23245,11 @@ var BrainNotesApp = (() => {
       view.inputState.insertingTextAt = Date.now();
     }
     if (event.inputType == "insertReplacementText" && view.observer.editContext) {
-      let text2 = (_a2 = event.dataTransfer) === null || _a2 === void 0 ? void 0 : _a2.getData("text/plain"), ranges = event.getTargetRanges();
-      if (text2 && ranges.length) {
+      let text3 = (_a2 = event.dataTransfer) === null || _a2 === void 0 ? void 0 : _a2.getData("text/plain"), ranges = event.getTargetRanges();
+      if (text3 && ranges.length) {
         let r = ranges[0];
         let from = view.posAtDOM(r.startContainer, r.startOffset), to = view.posAtDOM(r.endContainer, r.endOffset);
-        applyDOMChangeInner(view, { from, to, insert: view.state.toText(text2) }, null);
+        applyDOMChangeInner(view, { from, to, insert: view.state.toText(text3) }, null);
         return true;
       }
     }
@@ -30808,18 +30925,18 @@ var BrainNotesApp = (() => {
     textAfterPos(pos, bias = 1) {
       if (this.options.simulateDoubleBreak && pos == this.options.simulateBreak)
         return "";
-      let { text: text2, from } = this.lineAt(pos, bias);
-      return text2.slice(pos - from, Math.min(text2.length, pos + 100 - from));
+      let { text: text3, from } = this.lineAt(pos, bias);
+      return text3.slice(pos - from, Math.min(text3.length, pos + 100 - from));
     }
     /**
     Find the column for the given position.
     */
     column(pos, bias = 1) {
-      let { text: text2, from } = this.lineAt(pos, bias);
-      let result = this.countColumn(text2, pos - from);
+      let { text: text3, from } = this.lineAt(pos, bias);
+      let result = this.countColumn(text3, pos - from);
       let override = this.options.overrideIndentation ? this.options.overrideIndentation(from) : -1;
       if (override > -1)
-        result += override - this.countColumn(text2, text2.search(/\S|$/));
+        result += override - this.countColumn(text3, text3.search(/\S|$/));
       return result;
     }
     /**
@@ -30833,14 +30950,14 @@ var BrainNotesApp = (() => {
     Find the indentation column of the line at the given point.
     */
     lineIndent(pos, bias = 1) {
-      let { text: text2, from } = this.lineAt(pos, bias);
+      let { text: text3, from } = this.lineAt(pos, bias);
       let override = this.options.overrideIndentation;
       if (override) {
         let overriden = override(from);
         if (overriden > -1)
           return overriden;
       }
-      return this.countColumn(text2, text2.search(/\S|$/));
+      return this.countColumn(text3, text3.search(/\S|$/));
     }
     /**
     Returns the [simulated line
@@ -31311,12 +31428,12 @@ var BrainNotesApp = (() => {
     let startToken = { from: dir < 0 ? pos - 1 : pos, to: dir > 0 ? pos + 1 : pos };
     let iter = state.doc.iterRange(pos, dir > 0 ? state.doc.length : 0), depth = 0;
     for (let distance = 0; !iter.next().done && distance <= maxScanDistance; ) {
-      let text2 = iter.value;
+      let text3 = iter.value;
       if (dir < 0)
-        distance += text2.length;
+        distance += text3.length;
       let basePos = pos + distance * dir;
-      for (let pos2 = dir > 0 ? 0 : text2.length - 1, end = dir > 0 ? text2.length : -1; pos2 != end; pos2 += dir) {
-        let found = brackets.indexOf(text2[pos2]);
+      for (let pos2 = dir > 0 ? 0 : text3.length - 1, end = dir > 0 ? text3.length : -1; pos2 != end; pos2 += dir) {
+        let found = brackets.indexOf(text3[pos2]);
         if (found < 0 || tree.resolveInner(basePos + pos2, 1).type != tokenType)
           continue;
         if (found % 2 == 0 == dir > 0) {
@@ -31328,7 +31445,7 @@ var BrainNotesApp = (() => {
         }
       }
       if (dir > 0)
-        distance += text2.length;
+        distance += text3.length;
     }
     return iter.done ? { start: startToken, matched: false } : null;
   }
@@ -31526,13 +31643,13 @@ var BrainNotesApp = (() => {
     return new RegExp(`${addStart ? "^" : ""}(?:${source})${addEnd ? "$" : ""}`, (_a2 = expr.flags) !== null && _a2 !== void 0 ? _a2 : expr.ignoreCase ? "i" : "");
   }
   var pickedCompletion = /* @__PURE__ */ Annotation.define();
-  function insertCompletionText(state, text2, from, to) {
+  function insertCompletionText(state, text3, from, to) {
     let { main } = state.selection, fromOff = from - main.from, toOff = to - main.from;
     return {
       ...state.changeByRange((range) => {
         if (range != main && from != to && state.sliceDoc(range.from + fromOff, range.from + toOff) != state.sliceDoc(from, to))
           return { range };
-        let lines = state.toText(text2);
+        let lines = state.toText(text3);
         return {
           changes: { from: range.from + fromOff, to: to == main.from ? range.to : range.from + toOff, insert: lines },
           range: EditorSelection.cursor(range.from + fromOff + lines.length)
@@ -32372,8 +32489,8 @@ var BrainNotesApp = (() => {
   function checkValid(validFor, state, from, to) {
     if (!validFor)
       return false;
-    let text2 = state.sliceDoc(from, to);
-    return typeof validFor == "function" ? validFor(text2, from, to, state) : ensureAnchor(validFor, true).test(text2);
+    let text3 = state.sliceDoc(from, to);
+    return typeof validFor == "function" ? validFor(text3, from, to, state) : ensureAnchor(validFor, true).test(text3);
   }
   var setActiveEffect = /* @__PURE__ */ StateEffect.define({
     map(sources, mapping) {
@@ -32773,21 +32890,21 @@ var BrainNotesApp = (() => {
       this.fieldPositions = fieldPositions;
     }
     instantiate(state, pos) {
-      let text2 = [], lineStart = [pos];
+      let text3 = [], lineStart = [pos];
       let lineObj = state.doc.lineAt(pos), baseIndent = /^\s*/.exec(lineObj.text)[0];
       for (let line of this.lines) {
-        if (text2.length) {
+        if (text3.length) {
           let indent = baseIndent, tabs = /^\t*/.exec(line)[0].length;
           for (let i = 0; i < tabs; i++)
             indent += state.facet(indentUnit);
           lineStart.push(pos + indent.length - tabs);
           line = indent + line.slice(tabs);
         }
-        text2.push(line);
+        text3.push(line);
         pos += line.length + 1;
       }
       let ranges = this.fieldPositions.map((pos2) => new FieldRange(pos2.field, lineStart[pos2.line] + pos2.from, lineStart[pos2.line] + pos2.to));
-      return { text: text2, ranges };
+      return { text: text3, ranges };
     }
     static parse(template) {
       let fields = [];
@@ -32896,10 +33013,10 @@ var BrainNotesApp = (() => {
   function snippet(template) {
     let snippet2 = Snippet.parse(template);
     return (editor, completion, from, to) => {
-      let { text: text2, ranges } = snippet2.instantiate(editor.state, from);
+      let { text: text3, ranges } = snippet2.instantiate(editor.state, from);
       let { main } = editor.state.selection;
       let spec = {
-        changes: { from, to: to == main.from ? main.to : to, insert: Text.of(text2) },
+        changes: { from, to: to == main.from ? main.to : to, insert: Text.of(text3) },
         scrollIntoView: true,
         annotations: completion ? [pickedCompletion.of(completion), Transaction.userEvent.of("input.complete")] : void 0
       };
@@ -34446,8 +34563,8 @@ var BrainNotesApp = (() => {
     /**
     @internal
     */
-    reset(text2) {
-      this.text = text2;
+    reset(text3) {
+      this.text = text3;
       this.baseIndent = this.basePos = this.pos = this.indent = 0;
       this.forwardInner();
       this.depth = 1;
@@ -34903,9 +35020,9 @@ var BrainNotesApp = (() => {
       }
     }
   };
-  function lineEnd(text2, pos) {
-    for (; pos < text2.length; pos++) {
-      let next = text2.charCodeAt(pos);
+  function lineEnd(text3, pos) {
+    for (; pos < text3.length; pos++) {
+      let next = text3.charCodeAt(pos);
       if (next == 10)
         break;
       if (!space(next))
@@ -35138,9 +35255,9 @@ var BrainNotesApp = (() => {
     leading characters covered by composite blocks.
     */
     readLine() {
-      let { line } = this, { text: text2, end } = this.scanLine(this.absoluteLineStart);
+      let { line } = this, { text: text3, end } = this.scanLine(this.absoluteLineStart);
       this.absoluteLineEnd = end;
-      line.reset(text2);
+      line.reset(text3);
       for (; line.depth < this.stack.length; line.depth++) {
         let cx = this.stack[line.depth], handler = this.parser.skipContextMarkup[cx.type];
         if (!handler)
@@ -35156,14 +35273,14 @@ var BrainNotesApp = (() => {
       }
     }
     lineChunkAt(pos) {
-      let next = this.input.chunk(pos), text2;
+      let next = this.input.chunk(pos), text3;
       if (!this.input.lineChunks) {
         let eol = next.indexOf("\n");
-        text2 = eol < 0 ? next : next.slice(0, eol);
+        text3 = eol < 0 ? next : next.slice(0, eol);
       } else {
-        text2 = next == "\n" ? "" : next;
+        text3 = next == "\n" ? "" : next;
       }
-      return pos + text2.length > this.to ? text2.slice(0, this.to - pos) : text2;
+      return pos + text3.length > this.to ? text3.slice(0, this.to - pos) : text3;
     }
     /**
     The end position of the previous line.
@@ -35396,8 +35513,8 @@ var BrainNotesApp = (() => {
     returning an array of [`Element`](#Element) objects representing
     the inline content.
     */
-    parseInline(text2, offset) {
-      let cx = new InlineContext(this, text2, offset);
+    parseInline(text3, offset) {
+      let cx = new InlineContext(this, text3, offset);
       outer: for (let pos = offset; pos < cx.end; ) {
         let next = cx.char(pos);
         for (let token of this.inlineParsers)
@@ -35678,16 +35795,16 @@ var BrainNotesApp = (() => {
     }
   };
   function finishLink(cx, content2, type, start, startPos) {
-    let { text: text2 } = cx, next = cx.char(startPos), endPos = startPos;
+    let { text: text3 } = cx, next = cx.char(startPos), endPos = startPos;
     content2.unshift(elt(Type.LinkMark, start, start + (type == Type.Image ? 2 : 1)));
     content2.push(elt(Type.LinkMark, startPos - 1, startPos));
     if (next == 40) {
       let pos = cx.skipSpace(startPos + 1);
-      let dest = parseURL(text2, pos - cx.offset, cx.offset), title;
+      let dest = parseURL(text3, pos - cx.offset, cx.offset), title;
       if (dest) {
         pos = cx.skipSpace(dest.to);
         if (pos != dest.to) {
-          title = parseLinkTitle(text2, pos - cx.offset, cx.offset);
+          title = parseLinkTitle(text3, pos - cx.offset, cx.offset);
           if (title)
             pos = cx.skipSpace(title.to);
         }
@@ -35702,7 +35819,7 @@ var BrainNotesApp = (() => {
         content2.push(elt(Type.LinkMark, pos, endPos));
       }
     } else if (next == 91) {
-      let label = parseLinkLabel(text2, startPos - cx.offset, cx.offset, false);
+      let label = parseLinkLabel(text3, startPos - cx.offset, cx.offset, false);
       if (label) {
         content2.push(label);
         endPos = label.to;
@@ -35710,11 +35827,11 @@ var BrainNotesApp = (() => {
     }
     return elt(type, start, endPos, content2);
   }
-  function parseURL(text2, start, offset) {
-    let next = text2.charCodeAt(start);
+  function parseURL(text3, start, offset) {
+    let next = text3.charCodeAt(start);
     if (next == 60) {
-      for (let pos = start + 1; pos < text2.length; pos++) {
-        let ch = text2.charCodeAt(pos);
+      for (let pos = start + 1; pos < text3.length; pos++) {
+        let ch = text3.charCodeAt(pos);
         if (ch == 62)
           return elt(Type.URL, start + offset, pos + 1 + offset);
         if (ch == 60 || ch == 10)
@@ -35723,8 +35840,8 @@ var BrainNotesApp = (() => {
       return null;
     } else {
       let depth = 0, pos = start;
-      for (let escaped = false; pos < text2.length; pos++) {
-        let ch = text2.charCodeAt(pos);
+      for (let escaped = false; pos < text3.length; pos++) {
+        let ch = text3.charCodeAt(pos);
         if (space(ch)) {
           break;
         } else if (escaped) {
@@ -35739,16 +35856,16 @@ var BrainNotesApp = (() => {
           escaped = true;
         }
       }
-      return pos > start ? elt(Type.URL, start + offset, pos + offset) : pos == text2.length ? null : false;
+      return pos > start ? elt(Type.URL, start + offset, pos + offset) : pos == text3.length ? null : false;
     }
   }
-  function parseLinkTitle(text2, start, offset) {
-    let next = text2.charCodeAt(start);
+  function parseLinkTitle(text3, start, offset) {
+    let next = text3.charCodeAt(start);
     if (next != 39 && next != 34 && next != 40)
       return false;
     let end = next == 40 ? 41 : next;
-    for (let pos = start + 1, escaped = false; pos < text2.length; pos++) {
-      let ch = text2.charCodeAt(pos);
+    for (let pos = start + 1, escaped = false; pos < text3.length; pos++) {
+      let ch = text3.charCodeAt(pos);
       if (escaped)
         escaped = false;
       else if (ch == end)
@@ -35758,9 +35875,9 @@ var BrainNotesApp = (() => {
     }
     return null;
   }
-  function parseLinkLabel(text2, start, offset, requireNonWS) {
-    for (let escaped = false, pos = start + 1, end = Math.min(text2.length, pos + 999); pos < end; pos++) {
-      let ch = text2.charCodeAt(pos);
+  function parseLinkLabel(text3, start, offset, requireNonWS) {
+    for (let escaped = false, pos = start + 1, end = Math.min(text3.length, pos + 999); pos < end; pos++) {
+      let ch = text3.charCodeAt(pos);
       if (escaped)
         escaped = false;
       else if (ch == 93)
@@ -35780,9 +35897,9 @@ var BrainNotesApp = (() => {
     /**
     @internal
     */
-    constructor(parser5, text2, offset) {
+    constructor(parser5, text3, offset) {
       this.parser = parser5;
-      this.text = text2;
+      this.text = text3;
       this.offset = offset;
       this.parts = [];
     }
@@ -36272,26 +36389,26 @@ var BrainNotesApp = (() => {
         result++;
     return result;
   }
-  function autolinkURLEnd(text2, from) {
+  function autolinkURLEnd(text3, from) {
     urlRE.lastIndex = from;
-    let m = urlRE.exec(text2);
+    let m = urlRE.exec(text3);
     if (!m || lastTwoDomainWords.exec(m[0])[0].indexOf("_") > -1)
       return -1;
     let end = from + m[0].length;
     for (; ; ) {
-      let last2 = text2[end - 1], m2;
-      if (/[?!.,:*_~]/.test(last2) || last2 == ")" && count2(text2, from, end, ")") > count2(text2, from, end, "("))
+      let last2 = text3[end - 1], m2;
+      if (/[?!.,:*_~]/.test(last2) || last2 == ")" && count2(text3, from, end, ")") > count2(text3, from, end, "("))
         end--;
-      else if (last2 == ";" && (m2 = /&(?:#\d+|#x[a-f\d]+|\w+);$/.exec(text2.slice(from, end))))
+      else if (last2 == ";" && (m2 = /&(?:#\d+|#x[a-f\d]+|\w+);$/.exec(text3.slice(from, end))))
         end = from + m2.index;
       else
         break;
     }
     return end;
   }
-  function autolinkEmailEnd(text2, from) {
+  function autolinkEmailEnd(text3, from) {
     emailRE.lastIndex = from;
-    let m = emailRE.exec(text2);
+    let m = emailRE.exec(text3);
     if (!m)
       return -1;
     let last2 = m[0][m[0].length - 1];
@@ -40015,8 +40132,8 @@ var BrainNotesApp = (() => {
     return "";
   }
   var android2 = typeof navigator == "object" && /* @__PURE__ */ /Android\b/.test(navigator.userAgent);
-  var autoCloseTags = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text2, defaultInsert) => {
-    if ((android2 ? view.composing : view.compositionStarted) || view.state.readOnly || from != to || text2 != ">" && text2 != "/" || !javascriptLanguage.isActiveAt(view.state, from, -1))
+  var autoCloseTags = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text3, defaultInsert) => {
+    if ((android2 ? view.composing : view.compositionStarted) || view.state.readOnly || from != to || text3 != ">" && text3 != "/" || !javascriptLanguage.isActiveAt(view.state, from, -1))
       return false;
     let base2 = defaultInsert(), { state } = base2;
     let closeTags = state.changeByRange((range) => {
@@ -40024,16 +40141,16 @@ var BrainNotesApp = (() => {
       let { head } = range, around = syntaxTree(state).resolveInner(head - 1, -1), name2;
       if (around.name == "JSXStartTag")
         around = around.parent;
-      if (state.doc.sliceString(head - 1, head) != text2 || around.name == "JSXAttributeValue" && around.to > head) ;
-      else if (text2 == ">" && around.name == "JSXFragmentTag") {
+      if (state.doc.sliceString(head - 1, head) != text3 || around.name == "JSXAttributeValue" && around.to > head) ;
+      else if (text3 == ">" && around.name == "JSXFragmentTag") {
         return { range, changes: { from: head, insert: `</>` } };
-      } else if (text2 == "/" && around.name == "JSXStartCloseTag") {
+      } else if (text3 == "/" && around.name == "JSXStartCloseTag") {
         let empty = around.parent, base3 = empty.parent;
         if (base3 && empty.from == head - 2 && ((name2 = elementName(state.doc, base3.firstChild, head)) || ((_a2 = base3.firstChild) === null || _a2 === void 0 ? void 0 : _a2.name) == "JSXFragmentTag")) {
           let insert2 = `${name2}>`;
           return { range: EditorSelection.cursor(head + insert2.length, -1), changes: { from: head, insert: insert2 } };
         }
-      } else if (text2 == ">") {
+      } else if (text3 == ">") {
         let openTag = findOpenTag(around);
         if (openTag && openTag.name == "JSXOpenTag" && !/^\/?>|^<\//.test(state.doc.sliceString(head, head + 2)) && (name2 = elementName(state.doc, openTag, head)))
           return { range, changes: { from: head, insert: `</${name2}>` } };
@@ -40749,22 +40866,22 @@ var BrainNotesApp = (() => {
       elt2 = next;
     }
   }
-  var autoCloseTags2 = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text2, insertTransaction) => {
-    if (view.composing || view.state.readOnly || from != to || text2 != ">" && text2 != "/" || !htmlLanguage.isActiveAt(view.state, from, -1))
+  var autoCloseTags2 = /* @__PURE__ */ EditorView.inputHandler.of((view, from, to, text3, insertTransaction) => {
+    if (view.composing || view.state.readOnly || from != to || text3 != ">" && text3 != "/" || !htmlLanguage.isActiveAt(view.state, from, -1))
       return false;
     let base2 = insertTransaction(), { state } = base2;
     let closeTags = state.changeByRange((range) => {
       var _a2;
-      let didType = state.doc.sliceString(range.from - 1, range.to) == text2;
+      let didType = state.doc.sliceString(range.from - 1, range.to) == text3;
       let { head } = range, after = syntaxTree(state).resolveInner(head, -1), name2;
-      if (didType && text2 == ">" && after.name == "EndTag") {
+      if (didType && text3 == ">" && after.name == "EndTag") {
         let tag = after.parent;
         if ((name2 = elementName2(state.doc, tag.parent, head)) && !selfClosers2.has(name2) && !isClosed(state.doc, tag.parent, name2)) {
           let to2 = head + (state.doc.sliceString(head, head + 1) === ">" ? 1 : 0);
           let insert2 = `</${name2}>`;
           return { range, changes: { from: head, to: to2, insert: insert2 } };
         }
-      } else if (didType && text2 == "/" && after.name == "IncompleteCloseTag") {
+      } else if (didType && text3 == "/" && after.name == "IncompleteCloseTag") {
         let tag = after.parent;
         if (after.from == head - 2 && ((_a2 = tag.lastChild) === null || _a2 === void 0 ? void 0 : _a2.name) != "CloseTag" && (name2 = elementName2(state.doc, tag, head)) && !selfClosers2.has(name2)) {
           let to2 = head + (state.doc.sliceString(head, head + 1) === ">" ? 1 : 0);
@@ -41413,11 +41530,775 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/source-attachment-link.ts
+  var imageExtensions = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "bmp", "ico"]);
+  var isImageFilename = (filename) => {
+    const dot2 = filename.lastIndexOf(".");
+    if (dot2 <= 0 || dot2 === filename.length - 1) {
+      return false;
+    }
+    return imageExtensions.has(filename.slice(dot2 + 1).toLowerCase());
+  };
+  var encodeAttachmentPath = (relPath) => relPath.split("/").map((segment) => encodeURIComponent(segment).replace(/[!'()*]/g, hexEscape)).join("/");
+  var hexEscape = (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`;
+  var attachmentLinkText = (relPath) => {
+    const filename = relPath.slice(relPath.lastIndexOf("/") + 1);
+    const destination = encodeAttachmentPath(relPath);
+    const label = escapeLinkLabel(filename);
+    return isImageFilename(filename) ? `![${label}](${destination})` : `[${label}](${destination})`;
+  };
+  var escapeLinkLabel = (filename) => filename.replace(/([[\]\\])/g, "\\$1");
+
+  // internal/web/static_src/source-attachment-upload.ts
+  var noAnswerMessage = "The file could not be sent to the vault. Nothing was uploaded; press Retry to try again.";
+  var uploadAttachment = (options) => {
+    const request = (options.newRequest ?? (() => new XMLHttpRequest()))();
+    let canceled = false;
+    const outcome = new Promise((resolve) => {
+      request.upload.onprogress = (event) => {
+        if (event.lengthComputable && options.onProgress) {
+          options.onProgress({ loaded: event.loaded, total: event.total });
+        }
+      };
+      request.onload = () => resolve(readUploadResponse(request));
+      request.onerror = () => resolve({ kind: "failed", message: noAnswerMessage });
+      request.onabort = () => resolve({ kind: "canceled" });
+    });
+    request.open("POST", uploadURL(options.endpoint, options.owner, options.filename));
+    request.setRequestHeader("X-BN-CSRF", options.token);
+    request.setRequestHeader("Accept", "application/json");
+    request.setRequestHeader("Content-Type", "application/octet-stream");
+    request.send(options.file);
+    return {
+      outcome,
+      cancel() {
+        if (canceled) {
+          return;
+        }
+        canceled = true;
+        request.abort();
+      }
+    };
+  };
+  var uploadURL = (endpoint, owner, filename) => `${endpoint}?owner=${encodeURIComponent(owner)}&name=${encodeURIComponent(filename)}`;
+  var readUploadResponse = (request) => {
+    const payload = parseJSON(request.responseText);
+    const record = payload && typeof payload === "object" ? payload : null;
+    if (!record) {
+      return { kind: "failed", message: noAnswerMessage };
+    }
+    if (request.status < 200 || request.status >= 300 || record.ok !== true) {
+      return { kind: "failed", message: normalizeManagementErrorMessage(request.status, payload) };
+    }
+    const uploadID = text2(record.upload_id);
+    const relPath = text2(record.rel_path);
+    if (uploadID === "" || relPath === "") {
+      return { kind: "failed", message: noAnswerMessage };
+    }
+    return {
+      kind: "staged",
+      staged: {
+        uploadID,
+        filename: text2(record.filename),
+        relPath,
+        size: typeof record.size === "number" ? record.size : 0,
+        sha256: text2(record.sha256)
+      }
+    };
+  };
+  var cancelStagedUpload = async (options) => {
+    const body = new URLSearchParams();
+    body.set("owner", options.owner);
+    body.set("upload_id", options.uploadID);
+    body.set("token", options.token);
+    try {
+      await (options.fetch ?? fetch)(options.endpoint, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-BN-CSRF": options.token
+        },
+        body: body.toString()
+      });
+    } catch {
+    }
+  };
+  var parseJSON = (raw) => {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  };
+  var text2 = (value) => typeof value === "string" ? value.trim() : "";
+
+  // internal/web/static_src/source-attachments.ts
+  var createAttachmentTracker = (options) => {
+    const tracked = [];
+    const { host } = options;
+    const find2 = (id2) => tracked.find((item) => item.id === id2);
+    return {
+      entries: () => tracked.map(publicEntry),
+      add: (files) => addFiles(options, tracked, files),
+      retry(id2) {
+        const item = find2(id2);
+        if (item && (item.state === "failed" || item.state === "canceled")) {
+          startUpload(options, item);
+        }
+      },
+      cancel(id2) {
+        const item = find2(id2);
+        if (item) {
+          cancelEntry(options, tracked, item);
+        }
+      },
+      pendingIDs: () => tracked.filter((item) => item.state === "staged").map((item) => item.uploadID),
+      settle: (committed) => settleCommitted(host, tracked, committed),
+      uploading: () => tracked.some((item) => item.state === "uploading"),
+      dispose() {
+        for (const item of tracked) {
+          item.handle?.cancel();
+          item.handle = null;
+        }
+      }
+    };
+  };
+  var startUpload = (options, item) => {
+    const { host } = options;
+    item.state = "uploading";
+    item.loaded = 0;
+    item.message = "";
+    item.handle = uploadAttachment({
+      endpoint: options.uploadEndpoint,
+      owner: options.owner,
+      token: options.token,
+      filename: item.file.name,
+      file: item.file,
+      newRequest: options.newRequest,
+      onProgress: (progress) => {
+        item.loaded = progress.loaded;
+        host.changed();
+      }
+    });
+    void item.handle.outcome.then((outcome) => {
+      item.handle = null;
+      applyUploadOutcome(item, outcome, host);
+      host.changed();
+    });
+    host.changed();
+  };
+  var addFiles = (options, tracked, files) => {
+    for (const file of files) {
+      const refusal = oversizeMessage2(file, options.maxBytes);
+      const item = {
+        id: options.newID(),
+        filename: file.name,
+        size: file.size,
+        state: refusal === "" ? "uploading" : "failed",
+        loaded: 0,
+        message: refusal,
+        uploadID: "",
+        relPath: "",
+        file,
+        handle: null
+      };
+      tracked.push(item);
+      if (refusal === "") {
+        startUpload(options, item);
+      } else {
+        options.host.changed();
+      }
+    }
+  };
+  var cancelEntry = (options, tracked, item) => {
+    item.handle?.cancel();
+    if (item.uploadID !== "") {
+      void cancelStagedUpload({
+        endpoint: options.cancelEndpoint,
+        owner: options.owner,
+        uploadID: item.uploadID,
+        token: options.token,
+        fetch: options.fetch
+      });
+    }
+    remove3(tracked, item);
+    options.host.setStatus(cancelMessage(item), "");
+    options.host.changed();
+  };
+  var settleCommitted = (host, tracked, committed) => {
+    for (const saved of committed) {
+      const item = tracked.find((candidate) => candidate.uploadID === saved.uploadID);
+      if (!item) {
+        continue;
+      }
+      if (saved.relPath !== "" && saved.relPath !== item.relPath) {
+        host.setStatus(
+          `${item.filename} was filed as ${saved.relPath}, not ${item.relPath}. Update the link in the note.`,
+          "is-error"
+        );
+      }
+      remove3(tracked, item);
+    }
+    host.changed();
+  };
+  var applyUploadOutcome = (item, outcome, host) => {
+    if (outcome.kind === "staged" && outcome.staged) {
+      item.state = "staged";
+      item.uploadID = outcome.staged.uploadID;
+      item.relPath = outcome.staged.relPath;
+      item.filename = outcome.staged.filename || item.filename;
+      item.loaded = item.size;
+      item.message = "";
+      host.insertLink(attachmentLinkText(outcome.staged.relPath));
+      host.setStatus(`${item.filename} is staged. It enters the vault when you save.`, "is-success");
+      return;
+    }
+    if (outcome.kind === "canceled") {
+      item.state = "canceled";
+      item.message = "Upload stopped.";
+      return;
+    }
+    item.state = "failed";
+    item.message = outcome.message || "The upload failed.";
+    host.setStatus(`${item.filename}: ${item.message}`, "is-error");
+  };
+  var remove3 = (tracked, item) => {
+    const index = tracked.indexOf(item);
+    if (index >= 0) {
+      tracked.splice(index, 1);
+    }
+  };
+  var cancelMessage = (item) => item.state === "staged" ? `${item.filename} was dropped from staging. It is not in the vault.` : `${item.filename} was not uploaded.`;
+  var oversizeMessage2 = (file, maxBytes) => maxBytes > 0 && file.size > maxBytes ? `${file.name} is ${file.size} bytes, over this vault's ${maxBytes}-byte limit for one attachment. Nothing was sent.` : "";
+  var publicEntry = (item) => ({
+    id: item.id,
+    filename: item.filename,
+    size: item.size,
+    state: item.state,
+    loaded: item.loaded,
+    message: item.message,
+    uploadID: item.uploadID,
+    relPath: item.relPath
+  });
+
+  // internal/web/static_src/source-attachment-panel.ts
+  var initAttachmentPanel = (options) => {
+    const { elements, tracker } = options;
+    const render = () => renderAttachmentList(elements.list, tracker.entries(), options.doc);
+    const unbinds = [
+      bindChooser(elements, tracker),
+      bindClipboard(elements.dropZone, tracker),
+      bindDropZone(elements.dropZone, tracker),
+      bindListActions(elements.list, tracker)
+    ];
+    render();
+    return () => {
+      for (const unbind of unbinds) {
+        unbind();
+      }
+    };
+  };
+  var renderAttachmentList = (list, entries, doc2) => {
+    if (!list) {
+      return;
+    }
+    list.replaceChildren(...entries.map((entry) => renderEntry(entry, doc2)));
+    const container = list.closest("[data-source-attachments]");
+    if (container instanceof HTMLElement) {
+      container.hidden = entries.length === 0;
+    }
+  };
+  var renderEntry = (entry, doc2) => {
+    const item = doc2.createElement("li");
+    item.className = `source-editor-attachment is-${entry.state}`;
+    item.setAttribute("data-source-attachment", entry.id);
+    item.setAttribute("data-source-attachment-state", entry.state);
+    const name2 = doc2.createElement("span");
+    name2.className = "source-editor-attachment-name";
+    name2.textContent = entry.relPath || entry.filename;
+    item.append(name2);
+    const status = doc2.createElement("span");
+    status.className = "source-editor-attachment-status";
+    status.textContent = entryStatusText(entry);
+    item.append(status);
+    if (entry.state === "uploading") {
+      item.append(renderProgress(entry, doc2));
+    }
+    item.append(renderActions(entry, doc2));
+    return item;
+  };
+  var renderProgress = (entry, doc2) => {
+    const progress = doc2.createElement("progress");
+    progress.className = "source-editor-attachment-progress";
+    progress.max = Math.max(entry.size, 1);
+    progress.value = Math.min(entry.loaded, Math.max(entry.size, 1));
+    return progress;
+  };
+  var renderActions = (entry, doc2) => {
+    const actions = doc2.createElement("span");
+    actions.className = "source-editor-attachment-actions";
+    if (entry.state === "failed" || entry.state === "canceled") {
+      actions.append(actionButton2(doc2, "data-source-attachment-retry", entry.id, "Retry"));
+    }
+    actions.append(
+      actionButton2(
+        doc2,
+        "data-source-attachment-cancel",
+        entry.id,
+        entry.state === "staged" ? "Remove" : "Cancel"
+      )
+    );
+    return actions;
+  };
+  var actionButton2 = (doc2, marker, id2, label) => {
+    const button = doc2.createElement("button");
+    button.type = "button";
+    button.className = "source-editor-attachment-action";
+    button.setAttribute(marker, "");
+    button.setAttribute("data-source-attachment-id", id2);
+    button.textContent = label;
+    return button;
+  };
+  var entryStatusText = (entry) => {
+    switch (entry.state) {
+      case "uploading":
+        return `Uploading\u2026 ${percent2(entry)}%`;
+      case "staged":
+        return "Staged \u2014 saved with the note";
+      case "canceled":
+        return entry.message || "Upload stopped.";
+      default:
+        return entry.message || "The upload failed.";
+    }
+  };
+  var percent2 = (entry) => entry.size > 0 ? Math.min(100, Math.floor(entry.loaded / entry.size * 100)) : 0;
+  var bindChooser = (elements, tracker) => {
+    const { input, choose } = elements;
+    const onChoose = () => input?.click();
+    const onChange = () => {
+      tracker.add(filesOf(input?.files));
+      if (input) {
+        input.value = "";
+      }
+    };
+    choose?.addEventListener("click", onChoose);
+    input?.addEventListener("change", onChange);
+    return () => {
+      choose?.removeEventListener("click", onChoose);
+      input?.removeEventListener("change", onChange);
+    };
+  };
+  var bindClipboard = (zone, tracker) => {
+    const onPaste = (event) => {
+      const files = filesOf(event.clipboardData?.files);
+      if (files.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      tracker.add(files);
+    };
+    zone?.addEventListener("paste", onPaste);
+    return () => zone?.removeEventListener("paste", onPaste);
+  };
+  var bindDropZone = (zone, tracker) => {
+    const onDragOver = (event) => {
+      if (!carriesFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      zone?.classList.add("is-drop-target");
+    };
+    const onDragLeave = () => zone?.classList.remove("is-drop-target");
+    const onDrop = (event) => {
+      const files = filesOf(event.dataTransfer?.files);
+      zone?.classList.remove("is-drop-target");
+      if (files.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      tracker.add(files);
+    };
+    zone?.addEventListener("dragover", onDragOver, true);
+    zone?.addEventListener("dragleave", onDragLeave, true);
+    zone?.addEventListener("drop", onDrop, true);
+    return () => {
+      zone?.removeEventListener("dragover", onDragOver, true);
+      zone?.removeEventListener("dragleave", onDragLeave, true);
+      zone?.removeEventListener("drop", onDrop, true);
+    };
+  };
+  var carriesFiles = (event) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  var bindListActions = (list, tracker) => {
+    const onClick = (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const id2 = target.getAttribute("data-source-attachment-id");
+      if (id2 === null) {
+        return;
+      }
+      if (target.hasAttribute("data-source-attachment-retry")) {
+        tracker.retry(id2);
+      } else if (target.hasAttribute("data-source-attachment-cancel")) {
+        tracker.cancel(id2);
+      }
+    };
+    list?.addEventListener("click", onClick);
+    return () => list?.removeEventListener("click", onClick);
+  };
+  var filesOf = (files) => files ? Array.from(files) : [];
+
+  // internal/web/static_src/source-dirty-gate.ts
+  var createDirtyGate = (options) => {
+    const { elements } = options;
+    let held = null;
+    const hide = () => {
+      held = null;
+      if (elements.panel) {
+        elements.panel.hidden = true;
+      }
+    };
+    const show = (action) => {
+      held = action;
+      if (elements.message) {
+        elements.message.textContent = gateMessage(action);
+      }
+      if (elements.proceed) {
+        elements.proceed.hidden = !action.allowDirty;
+        elements.proceed.textContent = `${action.label} anyway`;
+      }
+      if (elements.save) {
+        elements.save.textContent = `Save the note, then ${lowerFirst(action.label)}`;
+      }
+      if (elements.panel) {
+        elements.panel.hidden = false;
+      }
+    };
+    const take = (action) => {
+      hide();
+      void action.run();
+    };
+    const onSave = () => {
+      const action = held;
+      if (!action) {
+        return;
+      }
+      void options.save().then(() => {
+        if (options.dirty()) {
+          options.setStatus(
+            `The note was not saved, so ${lowerFirst(action.label)} has not been done.`,
+            "is-error"
+          );
+          return;
+        }
+        take(action);
+      });
+    };
+    const onProceed = () => {
+      const action = held;
+      if (action?.allowDirty) {
+        take(action);
+      }
+    };
+    const onCancel = () => {
+      const action = held;
+      hide();
+      if (action) {
+        options.setStatus(`${action.label}: canceled. Nothing was changed.`, "");
+      }
+    };
+    elements.save?.addEventListener("click", onSave);
+    elements.proceed?.addEventListener("click", onProceed);
+    elements.cancel?.addEventListener("click", onCancel);
+    hide();
+    return {
+      guard(action) {
+        if (!options.dirty()) {
+          take(action);
+          return;
+        }
+        show(action);
+      },
+      pending: () => held,
+      dispose() {
+        elements.save?.removeEventListener("click", onSave);
+        elements.proceed?.removeEventListener("click", onProceed);
+        elements.cancel?.removeEventListener("click", onCancel);
+      }
+    };
+  };
+  var gateMessage = (action) => {
+    const opening = `${action.label} has not been done. This editor is holding text that is not in the vault.`;
+    return action.allowDirty ? `${opening} Saving first keeps both; going ahead anyway leaves your text here, and the note on disk will have moved on.` : `${opening} This one changes where the note lives, which is where your unsaved text is filed too \u2014 so it has to be saved first, or not done.`;
+  };
+  var lowerFirst = (value) => value === "" ? value : value.charAt(0).toLowerCase() + value.slice(1);
+
+  // internal/web/static_src/source-manage-client.ts
+  var postManagement = async (request) => {
+    const response = await (request.fetch ?? fetch)(request.url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-BN-CSRF": request.token
+      },
+      body: request.body.toString()
+    });
+    const payload = await readPayload5(response);
+    return readManageOutcome(response.status, response.ok, payload);
+  };
+  var readManageOutcome = (status, ok, payload) => {
+    const record = asRecord(payload) || {};
+    if (!ok || record.ok === false) {
+      return {
+        ok: false,
+        status,
+        message: normalizeManagementErrorMessage(status, payload),
+        key: "",
+        relPath: "",
+        detail: "",
+        payload
+      };
+    }
+    return {
+      ok: true,
+      status,
+      message: normalizeParamValue(record.message) || "Done.",
+      key: normalizeParamValue(record.key),
+      relPath: normalizeParamValue(readRecordValue(record, ["rel_path", "RelPath"])),
+      detail: normalizeParamValue(record.detail),
+      payload
+    };
+  };
+  var editorURLForKey = (editorPath, key) => `${editorPath}?key=${encodeURIComponent(key)}`;
+  var readPayload5 = async (response) => {
+    const contentType = response.headers?.get("Content-Type") || "";
+    try {
+      return contentType.includes("application/json") ? await response.json() : await response.text();
+    } catch {
+      return null;
+    }
+  };
+
+  // internal/web/static_src/source-editor-manage.ts
+  var initSourceManage = (deps) => {
+    const { elements, config: config2, host } = deps;
+    const setStatus2 = (message, kind = "") => setStatusText(elements.status, message, kind);
+    const gate = createDirtyGate({
+      elements: elements.gate,
+      dirty: host.dirty,
+      save: host.save,
+      setStatus: setStatus2
+    });
+    const run = async (action) => {
+      const planned = action.plan();
+      if (typeof planned === "string") {
+        setStatus2(planned, "is-error");
+        return;
+      }
+      setStatus2(`${action.label}\u2026`, "is-loading");
+      try {
+        const outcome = await postManagement({
+          url: planned.url,
+          body: planned.body,
+          token: config2.token,
+          fetch: deps.fetch
+        });
+        if (!outcome.ok) {
+          setStatus2(action.refused?.(outcome) ?? outcome.message, "is-error");
+          return;
+        }
+        action.after(outcome);
+      } catch {
+        setStatus2(`${action.label} could not be sent. Nothing was changed.`, "is-error");
+      }
+    };
+    const settle = (message) => {
+      if (host.dirty()) {
+        setStatus2(
+          `${message} Your unsaved text is still here, and the note on disk has moved on \u2014 saving will show you both versions.`,
+          "is-success"
+        );
+        return;
+      }
+      setStatus2(message, "is-success");
+      void host.reload();
+    };
+    const actions = buildActions(deps, { setStatus: setStatus2, settle });
+    const unbinds = actions.map((action) => bindAction(action, gate, run));
+    return () => {
+      for (const unbind of unbinds) {
+        unbind();
+      }
+      gate.dispose();
+    };
+  };
+  var bindAction = (action, gate, run) => {
+    const onClick = () => gate.guard({
+      label: action.label,
+      allowDirty: action.allowDirty,
+      run: () => run(action)
+    });
+    action.button?.addEventListener("click", onClick);
+    return () => action.button?.removeEventListener("click", onClick);
+  };
+  var buildActions = (deps, ctx) => [
+    ...identityActions(deps),
+    ...contentActions(deps, ctx),
+    ...vaultActions(deps, ctx)
+  ];
+  var identityActions = (deps) => {
+    const { elements, config: config2, host } = deps;
+    const endpoints = config2.manage;
+    return [
+      {
+        button: elements.rename,
+        label: "Rename this note",
+        allowDirty: false,
+        plan: () => required(elements.renameTitle, "Type the note's new title first.", (title) => ({
+          url: endpoints.rename,
+          body: withField(buildNoteKeyMutationForm(keyed(config2, host)), "title", title)
+        })),
+        after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key))
+      },
+      {
+        button: elements.move,
+        label: "Move this note",
+        allowDirty: false,
+        plan: () => required(elements.moveFolder, "Type the folder to move the note into first.", (folder) => ({
+          url: endpoints.move,
+          body: withField(buildNoteKeyMutationForm(keyed(config2, host)), "folder", folder)
+        })),
+        after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key))
+      },
+      {
+        button: elements.trash,
+        label: "Move this note to Trash",
+        allowDirty: false,
+        plan: () => host.confirm("Move this note to Trash? It can be restored from the history panel.") ? { url: endpoints.trash, body: buildNoteKeyMutationForm(keyed(config2, host)) } : "Move to Trash: canceled. Nothing was changed.",
+        after: () => host.navigate(endpoints.home)
+      }
+    ];
+  };
+  var contentActions = (deps, ctx) => {
+    const { elements, config: config2, host } = deps;
+    const endpoints = config2.manage;
+    return [
+      {
+        button: elements.propertySet,
+        label: "Set this property",
+        allowDirty: true,
+        plan: () => required(elements.propertyName, "Name the property to set first.", (property) => ({
+          url: endpoints.frontmatterSet,
+          body: buildFrontmatterSetForm({
+            ...keyed(config2, host),
+            property,
+            op: "=",
+            value: elements.propertyValue?.value ?? ""
+          })
+        })),
+        after: (outcome) => ctx.settle(outcome.message)
+      },
+      {
+        button: elements.propertyUnset,
+        label: "Remove this property",
+        allowDirty: true,
+        plan: () => required(elements.propertyName, "Name the property to remove first.", (property) => ({
+          url: endpoints.frontmatterUnset,
+          body: buildFrontmatterUnsetForm({ ...keyed(config2, host), property })
+        })),
+        after: (outcome) => ctx.settle(outcome.message)
+      },
+      {
+        button: elements.undo,
+        label: "Undo the last change",
+        allowDirty: true,
+        plan: () => host.confirm("Undo the most recent change to this vault?") ? { url: endpoints.undo, body: buildUndoForm({ token: config2.token }) } : "Undo: canceled. Nothing was changed.",
+        after: (outcome) => ctx.settle(outcome.message),
+        refused: undoRefusal
+      }
+    ];
+  };
+  var vaultActions = (deps, ctx) => {
+    const { elements, config: config2, host } = deps;
+    const endpoints = config2.manage;
+    return [
+      {
+        button: elements.pin,
+        label: "Pin this note",
+        allowDirty: true,
+        plan: () => ({ url: endpoints.pinSet, body: buildNoteKeyMutationForm(keyed(config2, host)) }),
+        after: (outcome) => ctx.setStatus(outcome.message, "is-success")
+      },
+      {
+        button: elements.unpin,
+        label: "Unpin this note",
+        allowDirty: true,
+        plan: () => ({ url: endpoints.pinRemove, body: buildNoteKeyMutationForm(keyed(config2, host)) }),
+        after: (outcome) => ctx.setStatus(outcome.message, "is-success")
+      },
+      {
+        button: elements.capture,
+        label: "Capture this line",
+        allowDirty: true,
+        plan: () => required(elements.captureText, "Type the line to capture first.", (text3) => ({
+          url: endpoints.capture,
+          body: buildCaptureForm({ text: text3, token: config2.token })
+        })),
+        after: (outcome) => {
+          clear(elements.captureText);
+          ctx.setStatus(outcome.detail ? `${outcome.message} ${outcome.detail}` : outcome.message, "is-success");
+        }
+      },
+      {
+        button: elements.createNote,
+        label: "Create this note",
+        allowDirty: true,
+        plan: () => required(elements.createTarget, "Name the note to create first.", (target) => ({
+          url: endpoints.create,
+          body: buildCreateNoteForm({ ...keyed(config2, host), target })
+        })),
+        after: (outcome) => {
+          clear(elements.createTarget);
+          ctx.setStatus(`${outcome.message} ${outcome.relPath}`.trim(), "is-success");
+        }
+      }
+    ];
+  };
+  var undoRefusal = (outcome) => {
+    const result = asRecord(outcome.payload);
+    if (outcome.status !== 409 || !result?.requires_force) {
+      return null;
+    }
+    const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
+    return `${historyConflictSummary(conflicts)} Nothing was restored; the history panel can force it.`;
+  };
+  var keyed = (config2, host) => ({
+    key: host.key() || config2.key,
+    token: config2.token
+  });
+  var required = (input, refusal, plan) => {
+    const value = (input?.value ?? "").trim();
+    return value === "" ? refusal : plan(value);
+  };
+  var withField = (body, name2, value) => {
+    body.set(name2, value);
+    return body;
+  };
+  var clear = (input) => {
+    if (input) {
+      input.value = "";
+    }
+  };
+
   // internal/web/static_src/source-editor.ts
-  var createDraftStore = (config2) => config2.vaultID === "" ? null : createSourceDraftStore({
+  var createDraftStore = (config2, tabID) => config2.vaultID === "" ? null : createSourceDraftStore({
     vaultID: config2.vaultID,
     noteKey: config2.key,
-    draftID: resolveDraftTabID(() => randomID("tab")),
+    draftID: tabID,
     storage: resolveDraftStorage()
   });
   var initSourceEditor = () => {
@@ -41446,14 +42327,68 @@ var BrainNotesApp = (() => {
         return wikilinkOptions(normalizeSearchResults(payload));
       }
     });
+    const tabID = resolveDraftTabID(() => randomID("tab"));
+    const tracker = initAttachments(config2, elements, tabID, () => controller);
     controller = createSourceEditorController({
       elements,
       config: config2,
       client,
       createSurface,
-      drafts: createDraftStore(config2)
+      drafts: createDraftStore(config2, tabID),
+      claims: attachmentClaims(tracker, tabID)
     });
+    initManagement(panel, config2, () => controller);
     void controller.load();
+  };
+  var initAttachments = (config2, elements, owner, current) => {
+    if (config2.attachments.upload === "" || config2.attachments.cancel === "") {
+      return null;
+    }
+    const attachmentElements = readAttachmentElements(elements.panel);
+    const tracker = createAttachmentTracker({
+      owner,
+      token: config2.token,
+      uploadEndpoint: config2.attachments.upload,
+      cancelEndpoint: config2.attachments.cancel,
+      maxBytes: config2.maxAttachmentBytes,
+      newID: () => randomID("attachment"),
+      host: {
+        insertLink: (markdown2) => current()?.insertText(markdown2),
+        setStatus: (message, kind) => setStatusText(elements.status, message, kind),
+        changed: () => renderAttachmentList(attachmentElements.list, tracker.entries(), document)
+      }
+    });
+    initAttachmentPanel({ elements: attachmentElements, tracker, doc: document });
+    return tracker;
+  };
+  var attachmentClaims = (tracker, owner) => tracker === null ? null : {
+    owner,
+    pending: () => tracker.pendingIDs(),
+    committed: (saved) => tracker.settle(
+      saved.map((item) => ({ uploadID: item.upload_id, relPath: item.rel_path }))
+    )
+  };
+  var initManagement = (panel, config2, current) => {
+    const elements = readSourceManageElements(panel);
+    if (!elements) {
+      return;
+    }
+    initSourceManage({
+      elements,
+      config: config2,
+      host: {
+        key: () => config2.key,
+        dirty: () => current()?.dirty() ?? false,
+        reload: async () => {
+          await current()?.load();
+        },
+        navigate: (url) => window.location.assign(url),
+        save: async () => {
+          await current()?.save();
+        },
+        confirm: (message) => window.confirm(message)
+      }
+    });
   };
 
   // internal/web/static_src/synthesize-model.ts
@@ -41644,17 +42579,17 @@ var BrainNotesApp = (() => {
     }
     return node;
   };
-  var labelled = (doc2, id2, text2, control) => {
+  var labelled = (doc2, id2, text3, control) => {
     const wrapper = element(doc2, "div", "synthesize-field");
     const label = element(doc2, "label", "synthesize-field-label");
     label.setAttribute("for", id2);
-    label.textContent = text2;
+    label.textContent = text3;
     control.id = id2;
     wrapper.append(label, control);
     return wrapper;
   };
-  var labelledWithError = (doc2, id2, text2, control, errorAttribute) => {
-    const wrapper = labelled(doc2, id2, text2, control);
+  var labelledWithError = (doc2, id2, text3, control, errorAttribute) => {
+    const wrapper = labelled(doc2, id2, text3, control);
     const error = element(doc2, "p", "synthesize-field-error", { [errorAttribute]: "" });
     error.id = `${id2}-error`;
     error.hidden = true;
@@ -41707,13 +42642,13 @@ var BrainNotesApp = (() => {
     });
     handle.type = "button";
     handle.textContent = "Drag";
-    const remove3 = element(doc2, "button", "synthesize-source-remove", {
+    const remove4 = element(doc2, "button", "synthesize-source-remove", {
       "data-synthesize-remove": source.key,
       "aria-label": `Remove ${source.title}`
     });
-    remove3.type = "button";
-    remove3.textContent = "Remove";
-    controls.append(handle, remove3);
+    remove4.type = "button";
+    remove4.textContent = "Remove";
+    controls.append(handle, remove4);
     row.appendChild(controls);
     return row;
   };
@@ -43361,9 +44296,9 @@ ${candidate.markdown}`;
     const create = createSynthesisCreateActions(runtime);
     view.sourceList.addEventListener("click", (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      const remove3 = target?.closest("[data-synthesize-remove]");
-      if (remove3) {
-        selection.removeSource(remove3.getAttribute("data-synthesize-remove") || "");
+      const remove4 = target?.closest("[data-synthesize-remove]");
+      if (remove4) {
+        selection.removeSource(remove4.getAttribute("data-synthesize-remove") || "");
       }
     });
     view.sourceList.addEventListener("keydown", (event) => {

@@ -81,6 +81,13 @@ type sourceSaveErrorResponse struct {
 	// Changed reports whether the submitted bytes are on disk despite the error.
 	// It is true only for a snapshot failure.
 	Changed bool `json:"changed"`
+	// Attachments names every referenced upload that is in the vault now. A
+	// snapshot failure leaves that as true as a success does — the transaction
+	// committed and forgetCommittedAttachments dropped the staged copies — so a
+	// client told only "500" would go on owing ids nothing can resolve and
+	// resubmit them into a refusal. It is absent from every other refusal,
+	// because nothing was written.
+	Attachments []noteops.SavedAttachment `json:"attachments,omitempty"`
 }
 
 // registerSourceRoutes publishes the raw-Markdown surface.
@@ -303,6 +310,7 @@ func (s *Server) writeSourceSaveError(w http.ResponseWriter, req noteops.SaveSou
 	case result != nil:
 		payload.Revision = result.Revision
 		payload.Changed = result.Changed
+		payload.Attachments = result.Attachments
 	case noteops.IsSourceRevisionConflict(err):
 		if current, readErr := noteops.ReadSource(s.vault.Root, s.config(), req.RelPath); readErr == nil && current.Exists {
 			payload.Revision = current.Revision

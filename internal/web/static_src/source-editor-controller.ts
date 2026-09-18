@@ -11,6 +11,7 @@ import {
 } from "./source-save";
 import { initSourcePanes, type SourcePanes } from "./source-editor-panes";
 import { createDraftKeeper, type DraftKeeper } from "./source-editor-drafts";
+import type { AttachmentClaims } from "./source-save";
 import type { DraftOffer, VaultReading } from "./source-draft-recovery";
 import type { SourceDraftStore } from "./source-draft";
 import type { SourceEditorConfig, SourceEditorElements } from "./source-editor-elements";
@@ -43,12 +44,21 @@ export type SourceEditorDeps = {
   draftDelayMs?: number;
   now?: () => number;
   navigate?: (url: string) => void;
+  // claims is whatever is holding staged uploads for this page. It is optional
+  // on the same terms as `drafts`: a page with no attachment panel saves exactly
+  // as it did before, carrying no owner and no ids.
+  claims?: AttachmentClaims | null;
 };
 
 export type SourceEditorController = {
   load(): Promise<void>;
   save(): Promise<void>;
   runCommand(command: SourceFormatCommand, options?: SourceFormatOptions): void;
+  // insertText puts text where the cursor is, replacing the selection, and
+  // leaves the cursor after it. It is how an attachment's link reaches the note,
+  // and it goes through the surface's own edit rather than through setValue so
+  // the person's undo history survives it.
+  insertText(text: string): void;
   panes: SourcePanes;
   dirty(): boolean;
   destroy(): void;
@@ -145,14 +155,10 @@ export const createSourceEditorController = (
 
     save: (): Promise<void> => runSave(deps, state, ctx),
 
-    runCommand(command: SourceFormatCommand, options?: SourceFormatOptions): void {
-      const surface = state.surface;
-      if (!surface) {
-        return;
-      }
-      surface.applyEdit(formatSource(surface.getValue(), surface.getSelection(), command, options));
-      surface.focus();
-    },
+    runCommand: (command: SourceFormatCommand, options?: SourceFormatOptions): void =>
+      applyCommand(state.surface, command, options),
+
+    insertText: (text: string): void => insertAtCursor(state.surface, text),
 
     destroy(): void {
       // Flushed before anything is torn down: destroy() runs on a page that is
@@ -169,6 +175,33 @@ export const createSourceEditorController = (
   unbind = wireEditor(ownerDocument, elements, state, controller, ctx);
 
   return controller;
+};
+
+const applyCommand = (
+  surface: SourceSurface | null,
+  command: SourceFormatCommand,
+  options: SourceFormatOptions | undefined
+): void => {
+  if (!surface) {
+    return;
+  }
+  surface.applyEdit(formatSource(surface.getValue(), surface.getSelection(), command, options));
+  surface.focus();
+};
+
+// insertAtCursor replaces the selection with the text and leaves the cursor
+// after it — the behaviour of typing it, which is what somebody who just dropped
+// a file into the note expects to have happened. It goes through applyEdit
+// rather than setValue so the edit joins the surface's undo history instead of
+// replacing the document under it.
+const insertAtCursor = (surface: SourceSurface | null, text: string): void => {
+  if (!surface) {
+    return;
+  }
+  const selection = surface.getSelection();
+  const at = selection.from + text.length;
+  surface.applyEdit({ ...selection, insert: text, selectionFrom: at, selectionTo: at });
+  surface.focus();
 };
 
 // Everything that points at the finished controller, which is why it runs last
@@ -227,6 +260,7 @@ const createKeeper = (
     now: deps.now ?? (() => Date.now()),
     delayMs: deps.draftDelayMs,
     navigate: deps.navigate ?? ((url) => view?.location.assign(url)),
+    claims: deps.claims,
   });
 };
 
@@ -445,7 +479,13 @@ const runSave = async (
       content,
       revision: base,
       saveID: state.pendingSave.id,
+      owner: deps.claims?.owner,
+      attachments: deps.claims?.pending(),
     });
+    // Settled before the outcome is acted on, and off the response rather than
+    // off the request: the envelope names what the vault holds, which is the
+    // only thing that entitles this page to stop owing an upload.
+    deps.claims?.committed(response.attachments);
     applyOutcome(classifySaveResponse(response, base), content, state, ctx, deps.elements);
   } catch (error: unknown) {
     // The request never produced an answer, so whether the bytes landed is

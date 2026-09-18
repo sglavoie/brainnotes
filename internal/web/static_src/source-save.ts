@@ -6,6 +6,7 @@ import {
   normalizeSourcePreviewHTML,
   normalizeSourceSaveResponse,
   sourceSaveConflict,
+  type SavedAttachment,
   type SourceDocument,
   type SourceSaveFailure,
   type SourceSaveResponse,
@@ -35,11 +36,44 @@ export type SourceClientOptions = {
   fetch?: FetchLike;
 };
 
+// SourceAttachmentClaim is what a write carries to commit staged uploads: the
+// draft that owns them and the ids it is claiming. It is on both write methods
+// because a recovered draft recreated as a new note owns its uploads exactly as
+// the save that could not find its note did.
+export type SourceAttachmentClaim = {
+  owner: string;
+  attachments: readonly string[];
+};
+
+// AttachmentClaims is whoever is holding this page's staged uploads, stated as
+// the two questions a write has to ask and the one answer it has to pass back.
+//
+// It is a seam rather than a direct dependency on the tracker because the
+// dependency runs the other way at construction time: the tracker inserts a link
+// into the editor, so it is built against a controller that does not exist yet.
+// It lives here, beside the claim the client sends, because the save and the
+// recreate both need it and neither of their modules should have to import the
+// other's.
+export type AttachmentClaims = {
+  // owner identifies the draft that staged the uploads. The server resolves an
+  // id only against its owner, so an id sent without it resolves to nothing.
+  owner: string;
+  pending(): readonly string[];
+  // committed is given what the *server* answered, on either arm of the
+  // envelope: a snapshot failure committed its attachments as surely as a
+  // success did.
+  committed(saved: readonly SavedAttachment[]): void;
+};
+
 export type SourceClient = {
   read(): Promise<SourceDocument>;
   preview(content: string): Promise<string>;
-  save(request: { content: string; revision: string; saveID: string }): Promise<SourceSaveResponse>;
-  create(request: { relPath: string; content: string; saveID: string }): Promise<SourceSaveResponse>;
+  save(
+    request: { content: string; revision: string; saveID: string } & Partial<SourceAttachmentClaim>
+  ): Promise<SourceSaveResponse>;
+  create(
+    request: { relPath: string; content: string; saveID: string } & Partial<SourceAttachmentClaim>
+  ): Promise<SourceSaveResponse>;
   search(url: string): Promise<unknown>;
 };
 
@@ -172,8 +206,20 @@ export const createSourceClient = (options: SourceClientOptions): SourceClient =
   const postSave = async (url: string, body: URLSearchParams): Promise<SourceSaveResponse> => {
     const { response, payload } = await post(url, body);
     if (foreignAnswer(response, payload)) {
-      return { ok: false, code: "", message: foreignSaveMessage, revision: "", content: "", changed: false };
+      return {
+        ok: false,
+        code: "",
+        message: foreignSaveMessage,
+        revision: "",
+        content: "",
+        changed: false,
+        attachments: [],
+      };
     }
+    // A save whose answer never arrived leaves its attachments owed as well as
+    // its bytes. Nothing here drops them: the tracker clears an upload only on
+    // an envelope that names it, so a replay carries the same ids again and the
+    // server's own ledger decides whether they were already committed.
     return normalizeSourceSaveResponse(payload);
   };
 
@@ -196,6 +242,8 @@ export const createSourceClient = (options: SourceClientOptions): SourceClient =
           revision: request.revision,
           save_id: request.saveID,
           token: options.token,
+          owner: request.owner,
+          attachments: request.attachments,
         })
       );
     },
@@ -213,6 +261,8 @@ export const createSourceClient = (options: SourceClientOptions): SourceClient =
           content: request.content,
           save_id: request.saveID,
           token: options.token,
+          owner: request.owner,
+          attachments: request.attachments,
         })
       );
     },

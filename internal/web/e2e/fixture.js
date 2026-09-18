@@ -25,7 +25,16 @@ export const manifest = readManifest();
 // `source-saves/` joined them with the whole-file source API: it is the
 // per-save_id idempotency ledger, deliberately kept outside vaultgit.InScope
 // because it records that a submission was answered, not what a note holds.
-const MACHINE_LOCAL = [".bnotes/index/", ".bnotes/locks/", ".bnotes/source-saves/"];
+// `uploads/` is the attachment staging tree (internal/attachments/store.go), and
+// is outside the allowlist on the same terms: a file a person has chosen but not
+// yet saved is not yet part of the note, and the vault's history must not hold it
+// until the save that references it says it does.
+const MACHINE_LOCAL = [
+  ".bnotes/index/",
+  ".bnotes/locks/",
+  ".bnotes/source-saves/",
+  ".bnotes/uploads/",
+];
 
 // gitStatus reports the vault's porcelain status with those caches removed.
 // `--untracked-files=all` matters: the default collapses an untracked directory

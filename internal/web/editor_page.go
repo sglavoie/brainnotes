@@ -12,6 +12,27 @@ const (
 	editorPageTitle = "Edit source - bn serve"
 )
 
+// The note-management routes the editor page publishes so its script can reach
+// them without holding a route string of its own.
+//
+// They are literals here because the mux is registered from literals and every
+// handler re-checks its own path from one too; a constant would only move the
+// duplication. What keeps the four copies in step is
+// TestEditorPagePublishesServedRoutes, which asks a real server for each of
+// these and fails on a 404 — a check a shared constant could not make, since a
+// renamed route would rename both ends of it at once.
+const (
+	editorCaptureRoutePath          = "/api/capture"
+	editorNoteCreateRoutePath       = "/api/notes/create"
+	editorNoteRenameRoutePath       = "/api/notes/rename"
+	editorNoteMoveRoutePath         = "/api/notes/move"
+	editorNoteTrashRoutePath        = "/api/notes/trash"
+	editorFrontmatterSetRoutePath   = "/api/notes/frontmatter/set"
+	editorFrontmatterUnsetRoutePath = "/api/notes/frontmatter/unset"
+	editorUndoRoutePath             = "/api/undo"
+	editorHomeRoutePath             = "/"
+)
+
 // editorPageData is everything the raw-Markdown editor needs before any script
 // runs.
 //
@@ -41,6 +62,29 @@ type editorPageData struct {
 	// MaxSourceBytes is the server's own content limit, published so the editor
 	// can say a note is too large before posting four megabytes to be told.
 	MaxSourceBytes int
+	// The attachment staging pair, and this vault's own per-file ceiling.
+	// MaxAttachmentBytes is the configured limit rather than the package
+	// constant, because [attachments].max_file_bytes is configurable downward and
+	// a browser that refused at the wrong number would either refuse files the
+	// vault accepts or send files it does not.
+	UploadPath         string
+	UploadCancelPath   string
+	MaxAttachmentBytes int64
+	// The note-management routes, and the two destinations the page navigates to
+	// rather than calls. EditorPath is this page's own route: a rename answers
+	// with the note's new key, and the editor reopens on it.
+	EditorPath           string
+	HomePath             string
+	CapturePath          string
+	NoteCreatePath       string
+	RenamePath           string
+	MovePath             string
+	TrashPath            string
+	FrontmatterSetPath   string
+	FrontmatterUnsetPath string
+	PinSetPath           string
+	PinRemovePath        string
+	UndoPath             string
 }
 
 // handleEditorPage serves the whole-file Markdown editor for one existing note.
@@ -101,6 +145,23 @@ func (s *Server) handleEditorPage(w http.ResponseWriter, r *http.Request) {
 		CreatePath:     sourceCreateAPIRoutePath,
 		SearchPath:     searchAPIRoutePath,
 		MaxSourceBytes: noteops.MaxSourceBytes,
+
+		UploadPath:         attachmentUploadAPIRoutePath,
+		UploadCancelPath:   attachmentCancelAPIRoutePath,
+		MaxAttachmentBytes: s.config().Attachments.MaxFileBytes,
+
+		EditorPath:           editorRoutePath,
+		HomePath:             editorHomeRoutePath,
+		CapturePath:          editorCaptureRoutePath,
+		NoteCreatePath:       editorNoteCreateRoutePath,
+		RenamePath:           editorNoteRenameRoutePath,
+		MovePath:             editorNoteMoveRoutePath,
+		TrashPath:            editorNoteTrashRoutePath,
+		FrontmatterSetPath:   editorFrontmatterSetRoutePath,
+		FrontmatterUnsetPath: editorFrontmatterUnsetRoutePath,
+		PinSetPath:           notePinSetAPIRoutePath,
+		PinRemovePath:        notePinRemoveAPIRoutePath,
+		UndoPath:             editorUndoRoutePath,
 	}
 	if err := s.templates.ExecuteTemplate(w, "editor", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)

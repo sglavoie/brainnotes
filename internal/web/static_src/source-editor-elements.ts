@@ -1,4 +1,6 @@
 import { queryAllElements, queryElement } from "./dom";
+import type { AttachmentElements } from "./source-attachment-panel";
+import type { DirtyGateElements } from "./source-dirty-gate";
 import type { SourceEndpoints } from "./source-save";
 
 // Reading the editor page's own description of itself.
@@ -23,6 +25,65 @@ export type SourceEditorConfig = {
   vaultID: string;
   maxBytes: number;
   endpoints: SourceEndpoints;
+  // attachments and manage are the two surfaces this page grew after the
+  // editor itself. Neither is in the required list below, and that is the same
+  // decision vaultID gets: a page that cannot name an upload route should lose
+  // its attachment panel, not its editor.
+  attachments: SourceAttachmentEndpoints;
+  manage: SourceManageEndpoints;
+  // maxAttachmentBytes is this vault's own per-file limit, which is configurable
+  // downward from config.MaxAttachmentFileBytes and so is not a constant the
+  // browser may hold.
+  maxAttachmentBytes: number;
+};
+
+export type SourceAttachmentEndpoints = {
+  upload: string;
+  cancel: string;
+};
+
+// SourceManageEndpoints are the note-management routes the editor page can now
+// reach. Every one of them already existed for the note page; `editor` and
+// `home` are not routes this page calls but destinations it navigates to, and
+// they are published for the same reason as the rest — so the one place a
+// destination is built is from a string the server wrote.
+export type SourceManageEndpoints = {
+  editor: string;
+  home: string;
+  capture: string;
+  create: string;
+  rename: string;
+  move: string;
+  trash: string;
+  frontmatterSet: string;
+  frontmatterUnset: string;
+  pinSet: string;
+  pinRemove: string;
+  undo: string;
+};
+
+// SourceManageElements is the management panel: one control per action, plus the
+// gate that stands in front of all of them.
+export type SourceManageElements = {
+  root: HTMLElement;
+  status: HTMLElement | null;
+  gate: DirtyGateElements;
+  rename: HTMLButtonElement | null;
+  renameTitle: HTMLInputElement | null;
+  move: HTMLButtonElement | null;
+  moveFolder: HTMLInputElement | null;
+  trash: HTMLButtonElement | null;
+  propertyName: HTMLInputElement | null;
+  propertyValue: HTMLInputElement | null;
+  propertySet: HTMLButtonElement | null;
+  propertyUnset: HTMLButtonElement | null;
+  pin: HTMLButtonElement | null;
+  unpin: HTMLButtonElement | null;
+  capture: HTMLButtonElement | null;
+  captureText: HTMLTextAreaElement | null;
+  createNote: HTMLButtonElement | null;
+  createTarget: HTMLInputElement | null;
+  undo: HTMLButtonElement | null;
 };
 
 export type SourceEditorElements = {
@@ -73,6 +134,25 @@ export const readSourceEditorConfig = (panel: HTMLElement): SourceEditorConfig |
       create: attr(panel, "data-source-create-endpoint"),
       search: attr(panel, "data-source-search-endpoint"),
     },
+    attachments: {
+      upload: attr(panel, "data-source-upload-endpoint"),
+      cancel: attr(panel, "data-source-upload-cancel-endpoint"),
+    },
+    manage: {
+      editor: attr(panel, "data-source-editor-path"),
+      home: attr(panel, "data-source-home-path"),
+      capture: attr(panel, "data-source-capture-endpoint"),
+      create: attr(panel, "data-source-note-create-endpoint"),
+      rename: attr(panel, "data-source-rename-endpoint"),
+      move: attr(panel, "data-source-move-endpoint"),
+      trash: attr(panel, "data-source-trash-endpoint"),
+      frontmatterSet: attr(panel, "data-source-frontmatter-set-endpoint"),
+      frontmatterUnset: attr(panel, "data-source-frontmatter-unset-endpoint"),
+      pinSet: attr(panel, "data-source-pin-set-endpoint"),
+      pinRemove: attr(panel, "data-source-pin-remove-endpoint"),
+      undo: attr(panel, "data-source-undo-endpoint"),
+    },
+    maxAttachmentBytes: Number(attr(panel, "data-source-max-attachment-bytes")) || 0,
   };
 
   const required = [
@@ -119,6 +199,52 @@ export const readSourceEditorElements = (panel: HTMLElement): SourceEditorElemen
     recoveryRestore: queryElement(panel, "[data-source-recovery-restore]", HTMLButtonElement),
     recoveryRecreate: queryElement(panel, "[data-source-recovery-recreate]", HTMLButtonElement),
     recoveryDiscard: queryElement(panel, "[data-source-recovery-discard]", HTMLButtonElement),
+  };
+};
+
+// readAttachmentElements answers the panel's four parts, and the drop zone is
+// the editing surface rather than the panel: a file is dropped where the text
+// is, and a drop target that was the attachment list would mean aiming at a box
+// that is hidden until something is already in it.
+export const readAttachmentElements = (panel: HTMLElement): AttachmentElements => ({
+  panel: queryElement(panel, "[data-source-attachments]", HTMLElement),
+  input: queryElement(panel, "[data-source-attachment-input]", HTMLInputElement),
+  choose: queryElement(panel, "[data-source-attachment-choose]", HTMLButtonElement),
+  list: queryElement(panel, "[data-source-attachment-list]", HTMLElement),
+  dropZone: queryElement(panel, "[data-source-surface]", HTMLElement),
+});
+
+export const readSourceManageElements = (panel: HTMLElement): SourceManageElements | null => {
+  const root = queryElement(panel, "[data-source-manage]", HTMLElement);
+  if (!root) {
+    return null;
+  }
+  return {
+    root,
+    status: queryElement(root, "[data-source-manage-status]", HTMLElement),
+    gate: {
+      panel: queryElement(root, "[data-source-gate]", HTMLElement),
+      message: queryElement(root, "[data-source-gate-message]", HTMLElement),
+      save: queryElement(root, "[data-source-gate-save]", HTMLButtonElement),
+      proceed: queryElement(root, "[data-source-gate-proceed]", HTMLButtonElement),
+      cancel: queryElement(root, "[data-source-gate-cancel]", HTMLButtonElement),
+    },
+    rename: queryElement(root, "[data-source-rename]", HTMLButtonElement),
+    renameTitle: queryElement(root, "[data-source-rename-title]", HTMLInputElement),
+    move: queryElement(root, "[data-source-move]", HTMLButtonElement),
+    moveFolder: queryElement(root, "[data-source-move-folder]", HTMLInputElement),
+    trash: queryElement(root, "[data-source-trash]", HTMLButtonElement),
+    propertyName: queryElement(root, "[data-source-property-name]", HTMLInputElement),
+    propertyValue: queryElement(root, "[data-source-property-value]", HTMLInputElement),
+    propertySet: queryElement(root, "[data-source-property-set]", HTMLButtonElement),
+    propertyUnset: queryElement(root, "[data-source-property-unset]", HTMLButtonElement),
+    pin: queryElement(root, "[data-source-pin]", HTMLButtonElement),
+    unpin: queryElement(root, "[data-source-unpin]", HTMLButtonElement),
+    capture: queryElement(root, "[data-source-capture]", HTMLButtonElement),
+    captureText: queryElement(root, "[data-source-capture-text]", HTMLTextAreaElement),
+    createNote: queryElement(root, "[data-source-note-create]", HTMLButtonElement),
+    createTarget: queryElement(root, "[data-source-note-create-target]", HTMLInputElement),
+    undo: queryElement(root, "[data-source-undo]", HTMLButtonElement),
   };
 };
 

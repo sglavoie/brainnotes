@@ -10,7 +10,7 @@ import {
   type SourceEditorElements,
 } from "./source-editor-elements";
 import { createFakeSurfaceFactory, editorMarkup, type FakeSurface } from "./source-editor.test-helpers";
-import type { SourceClient } from "./source-save";
+import type { AttachmentClaims, SourceClient } from "./source-save";
 import type { SourceSaveResponse } from "./api";
 
 const LOADED = "---\ntitle: Alpha\n---\n\nAlpha body.\n";
@@ -38,7 +38,11 @@ type Harness = {
 // for the rest of the file.
 const mounted: { destroy(): void }[] = [];
 
-const mount = (overrides: Partial<SourceClient> = {}, previewDelayMs = 0): Harness => {
+const mount = (
+  overrides: Partial<SourceClient> = {},
+  previewDelayMs = 0,
+  claims: AttachmentClaims | null = null
+): Harness => {
   document.body.innerHTML = editorMarkup();
   const panel = document.querySelector<HTMLElement>("[data-source-editor]");
   if (!panel) {
@@ -71,6 +75,7 @@ const mount = (overrides: Partial<SourceClient> = {}, previewDelayMs = 0): Harne
     client: client as unknown as SourceClient,
     createSurface: surfaces.factory,
     previewDelayMs,
+    claims,
   });
   mounted.push(controller);
 
@@ -103,7 +108,15 @@ const mount = (overrides: Partial<SourceClient> = {}, previewDelayMs = 0): Harne
 };
 
 const saveFailure = (payload: Partial<SourceSaveResponse> & { ok: false }): SourceSaveResponse =>
-  ({ code: "", message: "", revision: "", content: "", changed: false, ...payload }) as SourceSaveResponse;
+  ({
+    code: "",
+    message: "",
+    revision: "",
+    content: "",
+    changed: false,
+    attachments: [],
+    ...payload,
+  }) as SourceSaveResponse;
 
 const saveSuccess = (payload: Partial<SourceSaveResponse> = {}): SourceSaveResponse =>
   ({
@@ -116,6 +129,7 @@ const saveSuccess = (payload: Partial<SourceSaveResponse> = {}): SourceSaveRespo
     changed: true,
     created: false,
     replayed: false,
+    attachments: [],
     ...payload,
   }) as SourceSaveResponse;
 
@@ -788,6 +802,170 @@ describe("controls", () => {
     expect(harness.controller.panes.active()).toBe("preview");
     expect(previewTab?.getAttribute("aria-selected")).toBe("true");
     expect(document.querySelector(".source-editor-panes")?.getAttribute("data-source-active")).toBe("preview");
+  });
+});
+
+// insertText is the door the attachment tracker writes a link through. What it
+// owes is the behaviour of having typed the link: the selection is replaced, the
+// cursor lands after it, and the editor knows it is dirty.
+describe("insertText", () => {
+  it("replaces the selection and leaves the cursor after what it inserted", async () => {
+    const harness = mount();
+    await harness.controller.load();
+    harness.surface().type("before SELECTED after");
+    harness.surface().select(7, 15);
+
+    harness.controller.insertText("[a](b)");
+    expect(harness.surface().getValue()).toBe("before [a](b) after");
+    expect(harness.surface().getSelection()).toEqual({ from: 13, to: 13 });
+  });
+
+  // An inserted link that the editor does not count as an edit is one the draft
+  // keeper never writes down and the Save button never lights up for: the note
+  // would reference a staged file that no save ever commits.
+  it("counts as an edit, so the draft keeper and the Save button hear it", async () => {
+    const harness = mount();
+    await harness.controller.load();
+    expect(harness.controller.dirty()).toBe(false);
+
+    harness.controller.insertText("![shot.png](attachments/shot.png)");
+    expect(harness.controller.dirty()).toBe(true);
+    expect(harness.saveButton().disabled).toBe(false);
+  });
+
+  // An upload can finish before the read does, or after a read that failed.
+  it("does nothing on a page whose editor never mounted", () => {
+    const harness = mount();
+    expect(() => harness.controller.insertText("![a](b)")).not.toThrow();
+  });
+});
+
+// A staged upload is a file on the server that no note mentions. The save is
+// what turns it into part of the vault, so these tests are about the two halves
+// of that handover: the claim going out with the request, and the page stopping
+// owing an id only on the strength of what came back.
+type StubClaims = AttachmentClaims & { settled: readonly unknown[][] };
+
+const stubClaims = (pending: string[]): StubClaims => {
+  const settled: readonly unknown[][] = [];
+  return {
+    owner: "tab-7",
+    pending: () => pending,
+    committed: (saved) => {
+      (settled as unknown[][]).push([...saved]);
+    },
+    settled,
+  };
+};
+
+const committed = [{ upload_id: "u-1", rel_path: "attachments/shot.png" }];
+
+describe("attachment claims on save", () => {
+  it("sends the owner and the ids this page is holding", async () => {
+    const claims = stubClaims(["u-1", "u-2"]);
+    const harness = mount({}, 0, claims);
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    await harness.controller.save();
+    expect(harness.client.save.mock.calls[0][0]).toMatchObject({
+      owner: "tab-7",
+      attachments: ["u-1", "u-2"],
+    });
+  });
+
+  it("settles what the vault answered, not what the request asked for", async () => {
+    const claims = stubClaims(["u-1", "u-2"]);
+    const harness = mount(
+      {
+        save: vi
+          .fn()
+          .mockResolvedValue(saveSuccess({ attachments: committed })) as unknown as SourceClient["save"],
+      },
+      0,
+      claims
+    );
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    await harness.controller.save();
+    expect(claims.settled).toEqual([committed]);
+  });
+
+});
+
+// The three answers that are not a plain success. What a save committed is the
+// server's statement, so each of these is about believing that statement rather
+// than the request that provoked it.
+describe("attachment claims a save did not plainly commit", () => {
+  // The bytes are on disk; only the content history missed them. A page that
+  // went on owing those ids would cancel them on the way out and delete
+  // attachments the note already links.
+  it("settles on the snapshot failure too, because that arm committed them as well", async () => {
+    const claims = stubClaims(["u-1"]);
+    const harness = mount(
+      {
+        save: vi.fn().mockResolvedValue(
+          saveFailure({
+            ok: false,
+            code: "snapshot_failed",
+            message: "the change is on disk and further writes are blocked",
+            revision: "r7",
+            changed: true,
+            attachments: committed,
+          })
+        ) as unknown as SourceClient["save"],
+      },
+      0,
+      claims
+    );
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    await harness.controller.save();
+    expect(claims.settled).toEqual([committed]);
+  });
+
+  // A conflict wrote nothing, so the ids are still this page's to send with the
+  // merge that follows.
+  it("settles nothing a refusal did not commit", async () => {
+    const claims = stubClaims(["u-1"]);
+    const harness = mount(
+      {
+        save: vi.fn().mockResolvedValue(
+          saveFailure({
+            ok: false,
+            code: "revision_conflict",
+            message: "The note changed since it was read.",
+            content: "theirs\n",
+            revision: "r9",
+          })
+        ) as unknown as SourceClient["save"],
+      },
+      0,
+      claims
+    );
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    await harness.controller.save();
+    expect(claims.settled).toEqual([[]]);
+  });
+
+  // The request never produced an answer, so what the vault holds is unknown.
+  // Settling here would drop an id whose file may never have been committed.
+  it("settles nothing when the request never came back", async () => {
+    const claims = stubClaims(["u-1"]);
+    const harness = mount(
+      { save: vi.fn().mockRejectedValue(new Error("offline")) as unknown as SourceClient["save"] },
+      0,
+      claims
+    );
+    await harness.controller.load();
+    harness.surface().type("edited\n");
+
+    await harness.controller.save();
+    expect(claims.settled).toEqual([]);
   });
 });
 

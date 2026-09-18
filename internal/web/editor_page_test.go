@@ -77,11 +77,201 @@ func TestEditorPage_RendersTheEndpointsAndIdentityTheEditorNeeds(t *testing.T) {
 		`data-source-recovery-restore`,
 		`data-source-recovery-recreate`,
 		`data-source-recovery-discard`,
+
+		// Attaching: the two staging routes, this vault's own ceiling, and the
+		// three controls the panel is read from.
+		`data-source-upload-endpoint="` + attachmentUploadAPIRoutePath + `"`,
+		`data-source-upload-cancel-endpoint="` + attachmentCancelAPIRoutePath + `"`,
+		`data-source-max-attachment-bytes="` + strconv.FormatInt(srv.config().Attachments.MaxFileBytes, 10) + `"`,
+		`data-source-attachment-input`,
+		`data-source-attachment-choose`,
+		`data-source-attachments`,
+		`data-source-attachment-list`,
+
+		// Managing: the two destinations the page navigates to, the ten routes it
+		// calls, and every control that calls one.
+		`data-source-editor-path="` + editorRoutePath + `"`,
+		`data-source-home-path="` + editorHomeRoutePath + `"`,
+		`data-source-capture-endpoint="` + editorCaptureRoutePath + `"`,
+		`data-source-note-create-endpoint="` + editorNoteCreateRoutePath + `"`,
+		`data-source-rename-endpoint="` + editorNoteRenameRoutePath + `"`,
+		`data-source-move-endpoint="` + editorNoteMoveRoutePath + `"`,
+		`data-source-trash-endpoint="` + editorNoteTrashRoutePath + `"`,
+		`data-source-frontmatter-set-endpoint="` + editorFrontmatterSetRoutePath + `"`,
+		`data-source-frontmatter-unset-endpoint="` + editorFrontmatterUnsetRoutePath + `"`,
+		`data-source-pin-set-endpoint="` + notePinSetAPIRoutePath + `"`,
+		`data-source-pin-remove-endpoint="` + notePinRemoveAPIRoutePath + `"`,
+		`data-source-undo-endpoint="` + editorUndoRoutePath + `"`,
+		`data-source-manage`,
+		`data-source-manage-status`,
+		`data-source-gate`,
+		`data-source-gate-message`,
+		`data-source-gate-save`,
+		`data-source-gate-proceed`,
+		`data-source-gate-cancel`,
+		`data-source-rename-title`,
+		`data-source-rename`,
+		`data-source-move-folder`,
+		`data-source-move`,
+		`data-source-trash`,
+		`data-source-property-name`,
+		`data-source-property-value`,
+		`data-source-property-set`,
+		`data-source-property-unset`,
+		`data-source-pin`,
+		`data-source-unpin`,
+		`data-source-capture-text`,
+		`data-source-capture`,
+		`data-source-note-create-target`,
+		`data-source-note-create`,
+		`data-source-undo`,
 	} {
-		if !strings.Contains(body, want) {
+		if !namesAttribute(body, want) {
 			t.Fatalf("editor page is missing %q", want)
 		}
 	}
+}
+
+// namesAttribute reports whether the page names this attribute, rather than
+// merely containing its letters.
+//
+// Nearly every bare name in the list above is a strict prefix of another
+// attribute the same document publishes — `data-source-rename` of
+// `data-source-rename-endpoint`, `data-source-gate` of
+// `data-source-gate-message`, `data-source-pin` of
+// `data-source-pin-set-endpoint`. A plain substring check is therefore satisfied
+// by the endpoint asserted a few lines above it, and stays green with the
+// Rename, Move, Trash, Pin, Capture, Create or Undo *button* deleted outright,
+// which is the whole failure this list exists to catch.
+//
+// An attribute name ends wherever a character that cannot be part of one
+// follows it — whitespace, the tag's `>`, or its own `=`. Entries that already
+// spell a value out are matched as written.
+func namesAttribute(body, want string) bool {
+	if strings.Contains(want, `="`) {
+		return strings.Contains(body, want)
+	}
+	for at := 0; ; {
+		found := strings.Index(body[at:], want)
+		if found < 0 {
+			return false
+		}
+		after := at + found + len(want)
+		if after >= len(body) || !isAttributeNameByte(body[after]) {
+			return true
+		}
+		at = after
+	}
+}
+
+func isAttributeNameByte(c byte) bool {
+	return c == '-' || c == '_' || c == ':' ||
+		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+// TestNamesAttributeRefusesAPrefixOfAnotherAttribute pins the check above,
+// because a presence check that cannot fail is worse than no presence check: the
+// list it guards is long, every entry in it looks alike, and a silently
+// permissive match would be discovered only by a control going inert in
+// production.
+func TestNamesAttributeRefusesAPrefixOfAnotherAttribute(t *testing.T) {
+	// The newline in the opening tag is not decoration: the real page spreads the
+	// editor panel's attributes over lines (templates/editor.html), and the first
+	// version of this helper terminated a name on a space, a `>` or an `=` only —
+	// so it was `data-source-editor`, alone at the end of its line, that caught it.
+	const page = `<article data-source-editor
+  data-source-editor-path="/edit">` +
+		`<section data-source-gate hidden><p data-source-gate-message></p>` +
+		`<button data-source-rename-endpoint="/x" data-source-move>Move</button>`
+	for want, expected := range map[string]bool{
+		"data-source-editor":               true,  // present, followed by a newline
+		"data-source-editor-path":          true,  // present, followed by `=`
+		"data-source-gate":                 true,  // present, followed by a space
+		"data-source-gate-message":         true,  // present, followed by `>`
+		"data-source-move":                 true,  // present, followed by `>`
+		"data-source-rename":               false, // only ever `-endpoint`
+		"data-source-rename-endpoint":      true,  // present, followed by `=`
+		`data-source-rename-endpoint="/x"`: true,
+		"data-source-trash":                false, // not on this page at all
+	} {
+		if got := namesAttribute(page, want); got != expected {
+			t.Errorf("namesAttribute(%q) = %v, want %v", want, got, expected)
+		}
+	}
+}
+
+// TestEditorPagePublishesServedRoutes is what keeps the four copies of each
+// management route in step: the literal in editor_page.go, the literal the mux
+// is registered from, the literal the handler re-checks its own path against,
+// and the attribute the page publishes.
+//
+// A shared constant could not make this check, because a renamed route would
+// rename both ends of it at once and the page would go on publishing a path
+// that reaches nothing. This asks a *real server* for every route the page
+// names and fails on a 404 — which is the one answer that means "no handler".
+// Every other refusal (405 for the wrong method, 400 for a missing field, 403
+// for a missing CSRF token) is a handler answering, which is all this is about.
+func TestEditorPagePublishesServedRoutes(t *testing.T) {
+	ts, _, _ := newSourceTestServer(t, Options{})
+
+	_, body := getEditorPage(t, ts.URL, "?key=alpha")
+
+	// Read back from the page rather than from the constants: a route published
+	// as one string and registered as another is exactly the drift under test,
+	// and asserting the constants would only prove they equal themselves.
+	for _, attribute := range []string{
+		"data-source-read-endpoint",
+		"data-source-preview-endpoint",
+		"data-source-save-endpoint",
+		"data-source-create-endpoint",
+		"data-source-search-endpoint",
+		"data-source-upload-endpoint",
+		"data-source-upload-cancel-endpoint",
+		"data-source-editor-path",
+		"data-source-home-path",
+		"data-source-capture-endpoint",
+		"data-source-note-create-endpoint",
+		"data-source-rename-endpoint",
+		"data-source-move-endpoint",
+		"data-source-trash-endpoint",
+		"data-source-frontmatter-set-endpoint",
+		"data-source-frontmatter-unset-endpoint",
+		"data-source-pin-set-endpoint",
+		"data-source-pin-remove-endpoint",
+		"data-source-undo-endpoint",
+	} {
+		route := publishedAttribute(t, body, attribute)
+		if route == "" {
+			t.Fatalf("%s is published empty", attribute)
+		}
+		resp, err := http.Get(ts.URL + route) // #nosec G107 -- test-only local listener URL
+		if err != nil {
+			t.Fatalf("GET %s (%s): %v", route, attribute, err)
+		}
+		_ = readResponseBody(t, resp)
+		if resp.StatusCode == http.StatusNotFound {
+			t.Fatalf("%s publishes %q, which this server does not serve", attribute, route)
+		}
+	}
+}
+
+// publishedAttribute reads one attribute's value out of the served HTML. The
+// page is the subject here, so the value has to come from the bytes a browser
+// receives rather than from the struct that rendered them.
+func publishedAttribute(t *testing.T, body, attribute string) string {
+	t.Helper()
+
+	marker := attribute + `="`
+	start := strings.Index(body, marker)
+	if start < 0 {
+		t.Fatalf("editor page does not publish %s", attribute)
+	}
+	rest := body[start+len(marker):]
+	end := strings.Index(rest, `"`)
+	if end < 0 {
+		t.Fatalf("%s is unterminated in the served page", attribute)
+	}
+	return rest[:end]
 }
 
 // TestEditorPage_PublishesAVaultIdentity pins the field the browser keys its

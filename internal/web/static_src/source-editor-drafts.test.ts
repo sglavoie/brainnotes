@@ -19,7 +19,12 @@ import {
   type SourceEditorElements,
 } from "./source-editor-elements";
 import { createFakeSurfaceFactory, editorMarkup, type FakeSurface } from "./source-editor.test-helpers";
-import { SourceReadError, notFoundCode, type SourceClient } from "./source-save";
+import {
+  SourceReadError,
+  notFoundCode,
+  type AttachmentClaims,
+  type SourceClient,
+} from "./source-save";
 
 // The draft machinery through the editor that owns it.
 //
@@ -60,6 +65,7 @@ const saveFailure = (payload: {
   revision: "",
   content: "",
   changed: false,
+  attachments: [],
   ...payload,
 });
 
@@ -89,6 +95,7 @@ type MountOptions = {
   client?: Partial<Record<keyof SourceClient, unknown>>;
   storage?: FakeDraftStorage | null;
   draftID?: string;
+  claims?: AttachmentClaims | null;
 };
 
 // Every controller mounted here is torn down afterwards. Two of its listeners
@@ -146,6 +153,7 @@ const mount = (options: MountOptions = {}): Harness => {
     draftDelayMs: 0,
     now,
     navigate,
+    claims: options.claims ?? null,
   });
   mounted.push(controller);
 
@@ -817,6 +825,7 @@ describe("a note that goes missing while the tab is open", () => {
     expect(harness.client.create).not.toHaveBeenCalled();
   });
 
+
   it("creates the note at the path this page was opened for, on the button", async () => {
     const harness = mount({
       client: {
@@ -852,6 +861,89 @@ describe("a note that goes missing while the tab is open", () => {
     expect(harness.drafts()).toEqual([]);
   });
 });
+
+// The recreate is a write, so it owes the staged uploads this page is
+// holding exactly as a save does. These two are that handover.
+describe("the staged uploads a recreate carries", () => {
+  // A recovered draft is text with links in it, and the files those links name
+  // are still in this page's staging area. The recreate is the write that puts
+  // both in the vault, so it owes the ids exactly as the save that could not
+  // find its note did — and stops owing them only on what came back.
+  it("carries this page's staged uploads into the recreate and settles what landed", async () => {
+    const settled: string[][] = [];
+    const claims: AttachmentClaims = {
+      owner: "tab-this",
+      pending: () => ["u-1", "u-2"],
+      committed: (saved) => {
+        settled.push(saved.map((item) => item.rel_path));
+      },
+    };
+    const harness = mount({
+      claims,
+      client: {
+        ...refusedSave(),
+        create: vi.fn().mockResolvedValue(
+          saveSuccess({
+            created: true,
+            attachments: [
+              { upload_id: "u-1", rel_path: "attachments/one.png" },
+              { upload_id: "u-2", rel_path: "attachments/two.png" },
+            ],
+          })
+        ),
+      },
+    });
+    await harness.controller.load();
+    harness.surface().type(EDITED);
+    // The save that went missing settled its own empty envelope on the way past;
+    // what this test is about starts after it.
+    await harness.controller.save();
+    settled.length = 0;
+
+    harness.elements.recoveryRecreate?.click();
+    await tick();
+
+    expect(harness.client.create).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: "tab-this", attachments: ["u-1", "u-2"] })
+    );
+    expect(settled).toEqual([["attachments/one.png", "attachments/two.png"]]);
+  });
+
+  // The note was not created, so nothing was committed — but the envelope is
+  // still what decides, and an empty one leaves the ids with this page to send
+  // again with the next attempt.
+  it("settles only the empty envelope when the recreate is refused", async () => {
+    const settled: string[][] = [];
+    const claims: AttachmentClaims = {
+      owner: "tab-this",
+      pending: () => ["u-1"],
+      committed: (saved) => {
+        settled.push(saved.map((item) => item.rel_path));
+      },
+    };
+    const harness = mount({
+      claims,
+      client: {
+        ...refusedSave(),
+        create: vi
+          .fn()
+          .mockResolvedValue(saveFailure({ code: "exists", message: "That path is taken." })),
+      },
+    });
+    await harness.controller.load();
+    harness.surface().type(EDITED);
+    await harness.controller.save();
+    settled.length = 0;
+
+    harness.elements.recoveryRecreate?.click();
+    await tick();
+
+    expect(settled).toEqual([[]]);
+    expect(harness.status()).toContain("That path is taken.");
+    expect(harness.recovery().hidden).toBe(false);
+  });
+});
+
 
 describe("a note that goes missing, after the offer is up", () => {
   // The refusal is a fresh reading of the vault, and it has to replace the one

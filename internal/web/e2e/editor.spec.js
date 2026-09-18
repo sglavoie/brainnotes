@@ -15,79 +15,15 @@ import { join } from "node:path";
 
 import { expect, gitStatus, manifest, test } from "./fixture.js";
 
+import {
+  caretToEnd,
+  keptDrafts,
+  openEditor,
+  phraseFor,
+  SURFACE,
+} from "./editor-helpers.js";
+
 const NOTE = "Alpha.md";
-// The editable text CodeMirror renders. Its presence is the mount: the server
-// sends an empty <div data-source-surface>, so .cm-content exists only because
-// the shipped bundle constructed an EditorView in it.
-const SURFACE = "[data-source-surface] .cm-content";
-
-// A phrase no other file on this machine contains, so finding it on disk
-// identifies this run's write rather than any pre-existing text.
-function phraseFor(what) {
-  return `e2e ${what} ${manifest.fixtureRoot.split("/").pop()}`;
-}
-
-// openEditor walks the path a person walks: the note page, then its "Edit
-// source" link. Navigating straight to /edit would skip the one affordance that
-// makes the editor reachable at all.
-async function openEditor(page) {
-  await page.goto("/n/Alpha");
-  // The note page's own scripts fetch insights on load, and a save posted into
-  // that window contends for the vaultgit safety lock. Waiting for the page to
-  // go quiet writes after it has finished its own work, which is also what a
-  // person does — the same reason isolation.spec.js waits before a capture.
-  await page.waitForLoadState("networkidle");
-
-  await page.locator("[data-source-editor-launch]").click();
-  await expect(page).toHaveURL(/\/edit\?key=/);
-
-  const surface = page.locator(SURFACE);
-  await expect(surface).toContainText("Alpha body");
-  // A freshly loaded note is clean, so Save starts disabled. Asserting it here
-  // is what gives the later `toBeEnabled()` its meaning: without it, that
-  // assertion would pass just as well on a page whose Save button was never
-  // disabled at all, and "the keystrokes reached CodeMirror" would be proved by
-  // a button that was always on.
-  await expect(page.locator("[data-source-save]")).toBeDisabled();
-  // The conflict panel is `hidden` in the template, and `hidden` is only a
-  // user-agent `display: none` — a stylesheet that sets `display` on the same
-  // element outranks it. This is the assertion that keeps that from coming back
-  // as an empty "this note changed on disk" warning over every edit; jsdom
-  // applies no stylesheet and cannot see it.
-  await expect(page.locator("[data-source-conflict]")).toBeHidden();
-  // The recovery panel is the second element on this page that is `hidden` in
-  // the template and styled with `display`, and it carries a `hidden` button of
-  // its own inside a flex row. Same trap, same blind spot in jsdom: without its
-  // own `[hidden] { display: none; }` it would sit above every edit asking about
-  // a draft nobody has.
-  await expect(page.locator("[data-source-recovery]")).toBeHidden();
-  await page.waitForLoadState("networkidle");
-  return surface;
-}
-
-// keptDrafts reads this origin's draft records. The key prefix is spelled out
-// rather than imported: it is the contract between two page loads — and, for a
-// note somebody left open on another machine, between two builds — so a test
-// that asked the bundle for it would assert nothing.
-const DRAFT_KEY_PREFIX = "bn.draft.1|";
-
-function keptDrafts(page) {
-  return page.evaluate(
-    (prefix) =>
-      Object.keys(window.localStorage)
-        .filter((key) => key.startsWith(prefix))
-        .map((key) => ({ key, ...JSON.parse(window.localStorage.getItem(key)) })),
-    DRAFT_KEY_PREFIX,
-  );
-}
-
-// caretToEnd clicks the last rendered line and puts the caret after it.
-// CodeMirror renders only the lines in view, so this is a click on a real
-// element rather than a cursor command that depends on the platform keymap.
-async function caretToEnd(page) {
-  await page.locator("[data-source-surface] .cm-line").last().click();
-  await page.keyboard.press("End");
-}
 
 test("a note typed in the browser is saved by Ctrl/⌘ + S and lands in the fixture vault", async ({
   page,

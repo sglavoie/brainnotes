@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -48,6 +49,10 @@ type sourceErrorPayload struct {
 	Revision string `json:"revision"`
 	Content  string `json:"content"`
 	Changed  bool   `json:"changed"`
+	// Attachments is on the error payload for one arm only: a snapshot failure
+	// committed its uploads as surely as a success did, and the browser stops
+	// owing an upload id on the strength of this field.
+	Attachments []noteops.SavedAttachment `json:"attachments"`
 }
 
 // newSourceTestServer builds a vault and a server over it.
@@ -646,5 +651,55 @@ func TestSourceSaveErrorTellsALandedSaveFromARefusedOne(t *testing.T) {
 	payload = decodeSourceError(t, recorder.Result(), http.StatusInternalServerError, noteops.CodeSafety)
 	if payload.Changed || payload.Revision != "" {
 		t.Fatalf("payload = %+v, want no claim that anything landed", payload)
+	}
+}
+
+// TestSourceSaveErrorCarriesTheAttachmentsALandedSaveCommitted is the other half
+// of the snapshot-failure envelope, and the one the browser's staging area
+// depends on.
+//
+// The uploads are in the vault — applySourceSave calls forgetCommittedAttachments
+// whenever the result is non-nil, which a snapshot failure is — and the note on
+// disk links them. A body that named none of them would leave the page still
+// owing those ids, and the page gives an id it still owes back on the way out:
+// the files the note references would be deleted from under it. A refusal that
+// wrote nothing must carry none, for the mirror reason — the ids are still the
+// page's to send with the attempt that follows.
+func TestSourceSaveErrorCarriesTheAttachmentsALandedSaveCommitted(t *testing.T) {
+	_, srv, _ := newSourceTestServer(t, Options{})
+	req := noteops.SaveSourceRequest{RelPath: "Alpha.md", Content: sourceTestNote}
+	committed := []noteops.SavedAttachment{
+		{UploadID: "u-1", RelPath: "attachments/one.png"},
+		{UploadID: "u-2", RelPath: "attachments/two.png"},
+	}
+
+	recorder := httptest.NewRecorder()
+	srv.writeSourceSaveError(recorder, req, &noteops.SaveSourceResult{
+		Destination: noteops.PathResolution{RelPath: "Alpha.md"},
+		Revision:    vault.HashBytes([]byte(sourceTestNote)),
+		Changed:     true,
+		Attachments: committed,
+	}, noteops.Errorf(noteops.CodeSnapshotFailed, "the save completed and is on disk"))
+	payload := decodeSourceError(t, recorder.Result(), http.StatusInternalServerError, noteops.CodeSnapshotFailed)
+	if !reflect.DeepEqual(payload.Attachments, committed) {
+		t.Fatalf("attachments = %+v, want the two the save committed", payload.Attachments)
+	}
+
+	// A stale-revision refusal planned nothing and wrote nothing. It is the arm
+	// that fills the payload from a *second* read of the note, so it is also the
+	// one that could plausibly carry a field it has no business carrying.
+	recorder = httptest.NewRecorder()
+	srv.writeSourceSaveError(recorder, req, nil, &noteops.SourceRevisionError{
+		RelPath:  "Alpha.md",
+		Expected: "r-stale",
+		Actual:   vault.HashBytes([]byte(sourceTestNote)),
+		Err:      noteops.Errorf(noteops.CodeConflict, "source: Alpha.md changed since it was loaded"),
+	})
+	payload = decodeSourceError(t, recorder.Result(), http.StatusConflict, noteops.CodeConflict)
+	if len(payload.Attachments) != 0 {
+		t.Fatalf("attachments = %+v, want none on a save that wrote nothing", payload.Attachments)
+	}
+	if payload.Content != sourceTestNote {
+		t.Fatalf("the conflict carried no bytes to merge against: %+v", payload)
 	}
 }
