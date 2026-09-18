@@ -100,19 +100,29 @@ func copyPayloadsForNote(root string, note *vault.Note, notePath string) noteCop
 		return noteCopyPayloads{}
 	}
 
+	return noteCopyPayloads{
+		Wikilink:     "[[" + wikilinkTargetForNote(root, note) + "]]",
+		VaultPath:    noteVaultPath(root, note),
+		RoutePath:    notePath,
+		MarkdownLink: fmt.Sprintf("[%s](%s)", note.Title(), notePath),
+	}
+}
+
+// wikilinkTargetForNote is the text that goes between the brackets of a link to
+// this note: its vault-relative path without the extension, in exact case.
+//
+// It is the path rather than the title because that is the form the graph
+// resolves for every note. A title only resolves while it matches the filename,
+// so a note whose frontmatter renames it would get a link that renders broken —
+// which is precisely the note a person is most likely to reach for a completion
+// on.
+func wikilinkTargetForNote(root string, note *vault.Note) string {
 	vaultPath := noteVaultPath(root, note)
 	target := strings.TrimSuffix(vaultPath, filepath.Ext(vaultPath))
 	if target == "" || target == "." {
 		target = note.Title()
 	}
-	target = filepath.ToSlash(target)
-
-	return noteCopyPayloads{
-		Wikilink:     "[[" + target + "]]",
-		VaultPath:    vaultPath,
-		RoutePath:    notePath,
-		MarkdownLink: fmt.Sprintf("[%s](%s)", note.Title(), notePath),
-	}
+	return filepath.ToSlash(target)
 }
 
 func backlinkOccurrencesForNote(graph *query.Graph, targetKey string, source *vault.Note) []backlinkOccurrence {

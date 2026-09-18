@@ -7,11 +7,47 @@
 // than intended, so requests leaving the fixture origin are aborted and
 // recorded, and a spec asserts the recording is empty.
 
+import { execFileSync } from "node:child_process";
+
 import { test as base, expect } from "@playwright/test";
 
 import { readManifest } from "./manifest.mjs";
 
 export const manifest = readManifest();
+
+// MACHINE_LOCAL are the paths a running server creates that its own history is
+// defined to exclude: internal/vaultgit/scope.go allowlists `.bnotes/`, and
+// `index/` and `locks/` are outside that allowlist because both are regenerable
+// machine-local caches. `git status` reports them as untracked all the same, so
+// a raw porcelain comparison would call a correctly-behaving server dirty. The
+// list is a prefix match on purpose — a *new* `.bnotes/` file, which is what a
+// future in-scope state file would look like, is not covered and will fail here.
+// `source-saves/` joined them with the whole-file source API: it is the
+// per-save_id idempotency ledger, deliberately kept outside vaultgit.InScope
+// because it records that a submission was answered, not what a note holds.
+const MACHINE_LOCAL = [".bnotes/index/", ".bnotes/locks/", ".bnotes/source-saves/"];
+
+// gitStatus reports the vault's porcelain status with those caches removed.
+// `--untracked-files=all` matters: the default collapses an untracked directory
+// to a single `?? .bnotes/` line, and a prefix filter cannot tell that line
+// apart from one hiding a real note.
+//
+// It lives here rather than in a spec because every spec that writes has the
+// same two questions afterwards — did the snapshot happen, and did the peer
+// vault move — and a second copy of the exclusion list is a second thing to
+// keep in step with internal/vaultgit/scope.go.
+export function gitStatus(vault) {
+  const out = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
+    cwd: vault,
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, HOME: manifest.home, GIT_CONFIG_NOSYSTEM: "1" },
+  });
+  return out
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .filter((line) => !MACHINE_LOCAL.some((prefix) => line.slice(3).startsWith(prefix)))
+    .join("\n");
+}
 
 export const test = base.extend({
   // foreignRequests is the list of request URLs that tried to leave the fixture

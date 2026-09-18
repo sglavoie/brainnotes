@@ -4,6 +4,7 @@ export const searchResult = (overrides: Partial<SearchResult> = {}): SearchResul
   key: "folder/note.md",
   path: "/n/folder/note.md",
   title: "Note Title",
+  wikilink: "folder/note",
   folder: "folder",
   matched_fields: ["title"],
   issues: [],

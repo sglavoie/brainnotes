@@ -93,6 +93,12 @@
           <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
         </div>
 
+        {{if not readOnly}}
+          <div class="note-action-group">
+            <a class="source-editor-launch" href="{{.EditSourcePath}}" data-source-editor-launch>Edit source</a>
+          </div>
+        {{end}}
+
         <div class="note-action-group">
           <a class="synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
         </div>

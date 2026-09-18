@@ -7,7 +7,6 @@
 // what it writes to is a throwaway directory nobody owns and that nothing it
 // loads comes from off the machine.
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
@@ -15,33 +14,7 @@ import { connect } from "node:net";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { expect, manifest, test } from "./fixture.js";
-
-// MACHINE_LOCAL are the paths a running server creates that its own history is
-// defined to exclude: internal/vaultgit/scope.go allowlists `.bnotes/`, and
-// `index/` and `locks/` are outside that allowlist because both are regenerable
-// machine-local caches. `git status` reports them as untracked all the same, so
-// a raw porcelain comparison would call a correctly-behaving server dirty. The
-// list is a prefix match on purpose — a *new* `.bnotes/` file, which is what a
-// future in-scope state file would look like, is not covered and will fail here.
-const MACHINE_LOCAL = [".bnotes/index/", ".bnotes/locks/"];
-
-// gitStatus reports the vault's porcelain status with those caches removed.
-// `--untracked-files=all` matters: the default collapses an untracked directory
-// to a single `?? .bnotes/` line, and a prefix filter cannot tell that line
-// apart from one hiding a real note.
-function gitStatus(vault) {
-  const out = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
-    cwd: vault,
-    encoding: "utf8",
-    env: { PATH: process.env.PATH, HOME: manifest.home, GIT_CONFIG_NOSYSTEM: "1" },
-  });
-  return out
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .filter((line) => !MACHINE_LOCAL.some((prefix) => line.slice(3).startsWith(prefix)))
-    .join("\n");
-}
+import { expect, gitStatus, manifest, test } from "./fixture.js";
 
 // expectThrowawayStorage is the containment predicate, applied to whatever path
 // is passed in. The interesting caller is the one that passes a path the

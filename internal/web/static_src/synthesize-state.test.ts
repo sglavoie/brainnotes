@@ -149,12 +149,15 @@ describe("synthesis selection", () => {
     );
     expect(restored.map((source) => source.key)).toEqual(["one", "two"]);
   });
+});
 
+describe("synthesis candidates from a search result", () => {
   it("takes the vault path from a search result key rather than its route", () => {
     const result = candidateFromSearchResult({
       key: "Folder/note",
       path: "/n/Folder/note",
       title: "Note",
+      wikilink: "Folder/note",
       folder: "Folder",
       matched_fields: [],
       issues: [],
@@ -173,6 +176,7 @@ describe("synthesis selection", () => {
         key: "  ",
         path: "",
         title: "",
+        wikilink: "",
         folder: "",
         matched_fields: [],
         issues: [],

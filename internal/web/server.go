@@ -125,6 +125,7 @@ type notePageData struct {
 	InsightStatusMsg   string
 	Pinned             bool
 	SynthesizePath     string
+	EditSourcePath     string
 }
 
 type brokenPageData struct {
@@ -393,18 +394,30 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(viewsPreviewAPIRoutePath, srv.handleViewsPreview)
 	mux.HandleFunc(viewsApplyAPIRoutePath, srv.handleViewsApply)
 	srv.registerSynthesisRoutes(mux)
+	srv.registerPageRoutes(mux)
+	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
+	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
+	mux.HandleFunc("/", srv.handleIndex)
+
+	return srv.requestGuard(mux)
+}
+
+// registerPageRoutes groups the routes that render a page, for the reason
+// registerNoteMutationRoutes and registerSynthesisRoutes group theirs: routes is
+// a flat list at the funlen ceiling, so a session adding a surface has to give
+// statements back. The grouping is by kind — these all answer with HTML a person
+// looks at — which is why /synthesize moved here from beside its APIs and why
+// "/" and /static/ did not: the catch-all has to stay last in its own function
+// for the reader to see that it is last.
+func (srv *Server) registerPageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(synthesizeRoutePath, srv.handleSynthesizePage)
+	mux.HandleFunc(editorRoutePath, srv.handleEditorPage)
 	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
 	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
 	mux.HandleFunc(pinnedRoutePath, srv.handlePinnedPage)
 	mux.HandleFunc(libraryRoutePath, srv.handleLibrary)
 	mux.HandleFunc(healthRoutePath, srv.handleHealth)
-	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
 	mux.HandleFunc("/graph", srv.handleGraph)
-	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
-	mux.HandleFunc("/", srv.handleIndex)
-
-	return srv.requestGuard(mux)
 }
 
 func (srv *Server) configureRuntime(opts Options) error {

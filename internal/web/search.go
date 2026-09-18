@@ -17,8 +17,14 @@ const (
 )
 
 type searchResult struct {
-	Key           string   `json:"key"`
-	Title         string   `json:"title"`
+	Key   string `json:"key"`
+	Title string `json:"title"`
+	// Wikilink is the target text a link to this note carries, without the
+	// brackets. It is published because a caller that wants to *write* a link
+	// cannot derive it from the other fields: Key is folded to lower case and
+	// Title is whatever the frontmatter says, while the graph resolves the
+	// exact-case path. The raw-Markdown editor's completion is the first caller.
+	Wikilink      string   `json:"wikilink"`
 	Folder        string   `json:"folder"`
 	Path          string   `json:"path"`
 	Snippet       string   `json:"snippet"`
@@ -54,6 +60,37 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		return []searchResult{}, nil
 	}
 
+	candidates, err := collectSearchCandidates(snapshot, root, filters)
+	if err != nil {
+		return nil, err
+	}
+
+	// Best-match-first is the ranking a *search* wants, so it stays the default.
+	// An explicit ordering — typed into the query bar or carried by a saved
+	// view's sort= — replaces it wholesale rather than tie-breaking against it,
+	// which is what makes `sort=-modified` here mean the same as `bn find --sort
+	// -modified`.
+	rankSearchCandidates(candidates)
+	if shape.ordered() {
+		candidates, err := orderSearchCandidates(candidates, shape, query.OrderInput{
+			Root:  root,
+			Notes: snapshot.notes,
+			Graph: snapshot.graph,
+		}, rank)
+		if err != nil {
+			return nil, err
+		}
+		return searchResults(limitSearchCandidates(candidates, shape)), nil
+	}
+	candidates = limitSearchCandidates(candidates, shape)
+
+	return searchResults(candidates), nil
+}
+
+// collectSearchCandidates builds one row per note the filters admit, paired
+// with the note it came from so an ordering can run over notes and permute the
+// rows to match.
+func collectSearchCandidates(snapshot vaultSnapshot, root string, filters noteFilters) ([]searchCandidate, error) {
 	issuePredicates := []searchIssuePredicate{
 		{name: "broken", match: query.BrokenLinks(snapshot.graph)},
 		{name: "dead_end", match: query.DeadEnd(snapshot.graph)},
@@ -96,6 +133,7 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 			result: searchResult{
 				Key:           key,
 				Title:         title,
+				Wikilink:      wikilinkTargetForNote(root, note),
 				Folder:        folder,
 				Path:          path,
 				Snippet:       html.EscapeString(makeSearchSnippet(match.Body, match.BodyMatchIndex)),
@@ -109,26 +147,7 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		})
 	}
 
-	// Best-match-first is the ranking a *search* wants, so it stays the default.
-	// An explicit ordering — typed into the query bar or carried by a saved
-	// view's sort= — replaces it wholesale rather than tie-breaking against it,
-	// which is what makes `sort=-modified` here mean the same as `bn find --sort
-	// -modified`.
-	rankSearchCandidates(candidates)
-	if shape.ordered() {
-		candidates, err := orderSearchCandidates(candidates, shape, query.OrderInput{
-			Root:  root,
-			Notes: snapshot.notes,
-			Graph: snapshot.graph,
-		}, rank)
-		if err != nil {
-			return nil, err
-		}
-		return searchResults(limitSearchCandidates(candidates, shape)), nil
-	}
-	candidates = limitSearchCandidates(candidates, shape)
-
-	return searchResults(candidates), nil
+	return candidates, nil
 }
 
 // searchResults strips the rows out of the candidates, in order.

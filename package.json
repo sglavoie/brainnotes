@@ -12,6 +12,12 @@
     "lint:web:full": "node scripts/lint_web.mjs --full"
   },
   "devDependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.5",
+    "@codemirror/view": "^6.43.12",
     "@playwright/test": "1.63.0",
     "cytoscape": "3.33.4",
     "esbuild": "^0.28.0",

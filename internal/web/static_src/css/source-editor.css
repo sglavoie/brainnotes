@@ -1,0 +1,307 @@
+/*
+ * The raw-Markdown editor at /edit.
+ *
+ * The layout here is the wide one — editor and preview side by side — because
+ * every other part of this stylesheet is written that way and responsive.css
+ * narrows it with max-width blocks. The tab strip is therefore declared hidden
+ * below and shown again there: on a wide screen the two panes are columns and a
+ * tablist selecting between them would be a control with nothing to do.
+ */
+
+.source-editor {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.source-editor-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.source-editor-path {
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.source-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.source-editor-commands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.source-editor-command {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-raised);
+  color: var(--bn-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.source-editor-command:hover {
+  background: var(--bn-hover);
+}
+
+.source-editor-save {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--bn-accent-subtle-border);
+  border-radius: 0.4rem;
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/*
+ * A disabled Save is the resting state of a clean note, not an error, so it
+ * reads as quiet rather than broken.
+ */
+.source-editor-save:disabled {
+  border-color: var(--bn-border);
+  background: var(--bn-sunken);
+  color: var(--bn-faint);
+  cursor: default;
+}
+
+.source-editor-status,
+.source-editor-preview-status {
+  min-height: 1.2rem;
+  margin: 0;
+  color: var(--bn-muted);
+  overflow-wrap: anywhere;
+}
+
+.source-editor-status.is-error,
+.source-editor-preview-status.is-error {
+  color: var(--bn-danger);
+}
+
+.source-editor-status.is-success {
+  color: var(--bn-success);
+}
+
+.source-editor-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.source-editor-tabs {
+  display: none;
+  grid-column: 1 / -1;
+  gap: 0.35rem;
+}
+
+.source-editor-tab {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem 0.4rem 0 0;
+  border-bottom-color: transparent;
+  background: var(--bn-sunken);
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.source-editor-tab[aria-selected="true"] {
+  background: var(--bn-surface);
+  color: var(--bn-text-strong);
+  font-weight: 600;
+}
+
+.source-editor-pane {
+  min-width: 0;
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+}
+
+.source-editor-surface {
+  min-width: 0;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  overflow: hidden;
+}
+
+/*
+ * CodeMirror measures its own layout, so the height has to come from here: with
+ * no height on .cm-editor the view collapses to one line and the scroller never
+ * engages. 60vh is a working surface on a laptop that still leaves the toolbar
+ * and the status line on screen.
+ */
+.source-editor-surface .cm-editor {
+  height: 60vh;
+}
+
+.source-editor-surface .cm-scroller {
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.source-editor-surface .cm-content {
+  caret-color: var(--bn-text-strong);
+}
+
+.source-editor-surface .cm-editor.cm-focused {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: -2px;
+}
+
+.source-editor-surface .cm-gutters {
+  border-right: 1px solid var(--bn-border);
+  background: var(--bn-sunken);
+  color: var(--bn-faint);
+}
+
+.source-editor-surface .cm-tooltip-autocomplete {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  box-shadow: var(--bn-shadow-popover);
+}
+
+.source-editor-surface .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+}
+
+.source-editor-surface .cm-completionDetail {
+  color: var(--bn-muted);
+  font-style: normal;
+}
+
+.source-editor-preview {
+  min-width: 0;
+  max-height: 60vh;
+  padding: 0.75rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  overflow: auto;
+}
+
+.source-editor-conflict {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--bn-danger-border);
+  border-radius: 0.4rem;
+  background: var(--bn-danger-bg);
+}
+
+/*
+ * The rule above is why this one has to exist. `hidden` is a user-agent
+ * `display: none`, and any author rule that sets `display` on the same element
+ * outranks it — so without this the panel is on screen from the moment the page
+ * loads, an empty "this note changed on disk" warning above every edit, and the
+ * controller hiding it again after a discard does nothing at all. jsdom applies
+ * no stylesheet, so its `hidden` assertions pass either way; this is caught in
+ * internal/web/e2e/editor.spec.js, in a browser. Every other component here that
+ * sets `display` and toggles `hidden` carries the same pair.
+ */
+.source-editor-conflict[hidden] {
+  display: none;
+}
+
+.source-editor-conflict h3 {
+  margin: 0;
+  color: var(--bn-danger);
+  font-size: 1rem;
+}
+
+.source-editor-conflict-lede {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.9rem;
+}
+
+.source-editor-conflict-source {
+  max-height: 18rem;
+  margin: 0;
+  padding: 0.6rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.3rem;
+  background: var(--bn-surface);
+  font-size: 0.85rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.source-editor-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.source-editor-conflict-overwrite,
+.source-editor-conflict-discard {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--bn-border-strong);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.source-editor-shortcuts {
+  color: var(--bn-text-subtle);
+  font-size: 0.88rem;
+}
+
+.source-editor-shortcut-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.25rem 1rem;
+  margin: 0.5rem 0 0;
+}
+
+.source-editor-shortcut-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.source-editor-shortcut-list dt {
+  color: var(--bn-text-strong);
+  font-weight: 600;
+}
+
+.source-editor-shortcut-list dd {
+  margin: 0;
+}
+
+.source-editor-launch {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-raised);
+  color: var(--bn-text);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.source-editor-launch:hover {
+  background: var(--bn-hover);
+}

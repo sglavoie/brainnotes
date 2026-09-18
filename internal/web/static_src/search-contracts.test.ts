@@ -42,6 +42,7 @@ describe("search URL and result contracts", () => {
         key: " daily/index.md ",
         path: " /n/server/path ",
         title: " Daily Index ",
+        wikilink: " daily/index ",
         folder: " daily ",
         matched_fields: [" title ", "", "body"],
         issues: ["dead_end", 3],
@@ -59,6 +60,7 @@ describe("search URL and result contracts", () => {
       key: "daily/index.md",
       path: "/n/server/path",
       title: "Daily Index",
+      wikilink: "daily/index",
       folder: "daily",
       matched_fields: ["title", "body"],
       issues: ["dead_end", "3"],
@@ -68,7 +70,9 @@ describe("search URL and result contracts", () => {
     expect(searchResultPath(results[0])).toBe("/n/server/path");
     expect(searchResultPath(results[1])).toBe("/n/folder/name%20with%20spaces.md");
   });
+});
 
+describe("bulk request bodies", () => {
   it("normalizes explicit selected keys for bulk preview and apply requests", () => {
     expect(normalizeBulkNoteKeys([" source ", "", "Source", "folder/Note"])).toEqual([
       "source",
@@ -113,150 +117,158 @@ describe("search URL and result contracts", () => {
 
     expect(compatBody.get("preview_id")).toBe("preview-compat");
   });
+});
 
-  it("normalizes bulk preview rows, frontmatter changes, failures, and expiry timestamps", () => {
-    const payload = normalizeBulkPreviewManagementResult({
-      ok: true,
-      action: " move ",
-      message: " Preview: 1 note would be moved. 1 failed. ",
-      changed: "1",
-      unchanged: "0",
-      failed: "1",
-      preview_id: " preview-123 ",
-      expires_at: "2026-06-02T12:34:56-04:00",
-      results: [
+// The bulk preview envelope, as the server spells it and as the page must read
+// it. Both literals are long because the envelope is — every scalar arrives
+// stringly typed and every string padded — so they sit at module scope and the
+// test below reads as the single comparison it is.
+const bulkPreviewPayload = {
+  ok: true,
+  action: " move ",
+  message: " Preview: 1 note would be moved. 1 failed. ",
+  changed: "1",
+  unchanged: "0",
+  failed: "1",
+  preview_id: " preview-123 ",
+  expires_at: "2026-06-02T12:34:56-04:00",
+  results: [
+    {
+      key: " inbox/source ",
+      path: " /n/archive/source ",
+      rel_path: " Archive/Source.md ",
+      source: {
+        key: " inbox/source ",
+        path: " /n/inbox/source ",
+        rel_path: " Inbox/Source.md ",
+      },
+      destination: {
+        key: " archive/source ",
+        path: " /n/archive/source ",
+        rel_path: " Archive/Source.md ",
+      },
+      changed: true,
+      move: {
+        rewrite_count: "2",
+        rewrite_file_count: "2",
+        body_rewrite_count: "1",
+        frontmatter_rewrite_count: "1",
+      },
+      frontmatter: [
         {
+          key: "status",
+          before: { present: true, value: "draft" },
+          after: { present: true, value: "done" },
+          changed: 1,
+        },
+        {
+          key: "empty_value",
+          before: { present: true, value: "" },
+          after: { present: false, value: "ignored" },
+          changed: true,
+        },
+      ],
+      affected: [
+        {
+          role: " source ",
           key: " inbox/source ",
+          path: " /n/inbox/source ",
+          rel_path: " Inbox/Source.md ",
+          exists: 1,
+        },
+        {
+          role: " destination ",
+          key: " archive/source ",
           path: " /n/archive/source ",
           rel_path: " Archive/Source.md ",
-          source: {
-            key: " inbox/source ",
-            path: " /n/inbox/source ",
-            rel_path: " Inbox/Source.md ",
-          },
-          destination: {
-            key: " archive/source ",
-            path: " /n/archive/source ",
-            rel_path: " Archive/Source.md ",
-          },
-          changed: true,
-          move: {
-            rewrite_count: "2",
-            rewrite_file_count: "2",
-            body_rewrite_count: "1",
-            frontmatter_rewrite_count: "1",
-          },
-          frontmatter: [
-            {
-              key: "status",
-              before: { present: true, value: "draft" },
-              after: { present: true, value: "done" },
-              changed: 1,
-            },
-            {
-              key: "empty_value",
-              before: { present: true, value: "" },
-              after: { present: false, value: "ignored" },
-              changed: true,
-            },
-          ],
-          affected: [
-            {
-              role: " source ",
-              key: " inbox/source ",
-              path: " /n/inbox/source ",
-              rel_path: " Inbox/Source.md ",
-              exists: 1,
-            },
-            {
-              role: " destination ",
-              key: " archive/source ",
-              path: " /n/archive/source ",
-              rel_path: " Archive/Source.md ",
-              exists: false,
-            },
-          ],
+          exists: false,
         },
-        "bad",
       ],
-      failures: [
-        { key: " missing ", rel_path: " Missing.md ", code: " not_found ", message: " note not found " },
-        {},
-      ],
-    });
+    },
+    "bad",
+  ],
+  failures: [
+    { key: " missing ", rel_path: " Missing.md ", code: " not_found ", message: " note not found " },
+    {},
+  ],
+};
 
-    expect(payload).toEqual({
-      ok: true,
-      action: "move",
-      message: "Preview: 1 note would be moved. 1 failed.",
-      changed: 1,
-      unchanged: 0,
-      failed: 1,
-      preview_id: "preview-123",
-      expires_at: "2026-06-02T16:34:56.000Z",
-      results: [
+const bulkPreviewNormalized = {
+  ok: true,
+  action: "move",
+  message: "Preview: 1 note would be moved. 1 failed.",
+  changed: 1,
+  unchanged: 0,
+  failed: 1,
+  preview_id: "preview-123",
+  expires_at: "2026-06-02T16:34:56.000Z",
+  results: [
+    {
+      key: "inbox/source",
+      path: "/n/archive/source",
+      rel_path: "Archive/Source.md",
+      source: {
+        key: "inbox/source",
+        path: "/n/inbox/source",
+        rel_path: "Inbox/Source.md",
+      },
+      destination: {
+        key: "archive/source",
+        path: "/n/archive/source",
+        rel_path: "Archive/Source.md",
+      },
+      changed: true,
+      move: {
+        rewrite_count: 2,
+        rewrite_file_count: 2,
+        body_rewrite_count: 1,
+        frontmatter_rewrite_count: 1,
+      },
+      frontmatter: [
         {
+          key: "status",
+          before: { present: true, value: "draft" },
+          after: { present: true, value: "done" },
+          changed: true,
+        },
+        {
+          key: "empty_value",
+          before: { present: true, value: "" },
+          after: { present: false },
+          changed: true,
+        },
+      ],
+      affected: [
+        {
+          role: "source",
           key: "inbox/source",
+          path: "/n/inbox/source",
+          rel_path: "Inbox/Source.md",
+          exists: true,
+        },
+        {
+          role: "destination",
+          key: "archive/source",
           path: "/n/archive/source",
           rel_path: "Archive/Source.md",
-          source: {
-            key: "inbox/source",
-            path: "/n/inbox/source",
-            rel_path: "Inbox/Source.md",
-          },
-          destination: {
-            key: "archive/source",
-            path: "/n/archive/source",
-            rel_path: "Archive/Source.md",
-          },
-          changed: true,
-          move: {
-            rewrite_count: 2,
-            rewrite_file_count: 2,
-            body_rewrite_count: 1,
-            frontmatter_rewrite_count: 1,
-          },
-          frontmatter: [
-            {
-              key: "status",
-              before: { present: true, value: "draft" },
-              after: { present: true, value: "done" },
-              changed: true,
-            },
-            {
-              key: "empty_value",
-              before: { present: true, value: "" },
-              after: { present: false },
-              changed: true,
-            },
-          ],
-          affected: [
-            {
-              role: "source",
-              key: "inbox/source",
-              path: "/n/inbox/source",
-              rel_path: "Inbox/Source.md",
-              exists: true,
-            },
-            {
-              role: "destination",
-              key: "archive/source",
-              path: "/n/archive/source",
-              rel_path: "Archive/Source.md",
-              exists: false,
-            },
-          ],
+          exists: false,
         },
       ],
-      failures: [
-        {
-          key: "missing",
-          rel_path: "Missing.md",
-          code: "not_found",
-          message: "note not found",
-        },
-      ],
-    });
+    },
+  ],
+  failures: [
+    {
+      key: "missing",
+      rel_path: "Missing.md",
+      code: "not_found",
+      message: "note not found",
+    },
+  ],
+};
+
+describe("bulk preview contracts", () => {
+  it("normalizes bulk preview rows, frontmatter changes, failures, and expiry timestamps", () => {
+    expect(normalizeBulkPreviewManagementResult(bulkPreviewPayload)).toEqual(bulkPreviewNormalized);
 
     expect(normalizeBulkPreviewValue({ present: false, value: "ignored" })).toEqual({
       present: false,
@@ -272,7 +284,9 @@ describe("search URL and result contracts", () => {
       },
     ]);
   });
+});
 
+describe("bulk apply contracts", () => {
   it("normalizes bulk apply results and preserves preview error messages", () => {
     expect(normalizeBulkManagementResult({
       ok: true,

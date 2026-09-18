@@ -31,8 +31,9 @@ export default defineConfig({
   testMatch: /.*\.spec\.js$/,
   outputDir: "./internal/web/e2e/.artifacts/results",
   globalTeardown: "./internal/web/e2e/cleanup.mjs",
-  // One server, and two specs that assert on the fixture vaults' Git state.
-  // Concurrency here would buy seconds and cost determinism.
+  // One server, one vault pair, and several specs that write to it and then
+  // assert on its Git state. Concurrency here would buy seconds and cost
+  // determinism.
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

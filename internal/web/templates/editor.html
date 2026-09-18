@@ -1,0 +1,107 @@
+{{define "editor"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg">
+  <title>{{ .NoteTitle }} - {{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main source-editor-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>Edit source</h1>
+        <p class="page-subtitle">The whole file, exactly as it is stored. Saving replaces it; nothing is written until you do.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    <section
+      class="panel source-editor"
+      data-source-editor
+      data-source-key="{{ .Key }}"
+      data-source-csrf="{{ .CSRFToken }}"
+      data-source-rel-path="{{ .RelPath }}"
+      data-source-read-endpoint="{{ .SourcePath }}"
+      data-source-preview-endpoint="{{ .PreviewPath }}"
+      data-source-save-endpoint="{{ .SavePath }}"
+      data-source-search-endpoint="{{ .SearchPath }}"
+      data-source-max-bytes="{{ .MaxSourceBytes }}"
+      aria-labelledby="source-editor-heading"
+    >
+      <div class="panel-header source-editor-header">
+        <h2 id="source-editor-heading"><a href="{{ .NoteRoute }}">{{ .NoteTitle }}</a></h2>
+        <code class="source-editor-path">{{ .RelPath }}</code>
+      </div>
+
+      <div class="source-editor-toolbar" role="toolbar" aria-label="Formatting">
+        <div class="source-editor-commands">
+          <button type="button" class="source-editor-command" data-source-command="bold" title="Bold (Ctrl/⌘ + B)" aria-keyshortcuts="Control+B Meta+B">Bold</button>
+          <button type="button" class="source-editor-command" data-source-command="italic" title="Italic (Ctrl/⌘ + I)" aria-keyshortcuts="Control+I Meta+I">Italic</button>
+          <button type="button" class="source-editor-command" data-source-command="code" title="Inline code (Ctrl/⌘ + E)" aria-keyshortcuts="Control+E Meta+E">Code</button>
+          <button type="button" class="source-editor-command" data-source-command="heading" data-source-heading-level="1" title="Heading (Ctrl/⌘ + Alt + 1)" aria-keyshortcuts="Control+Alt+1 Meta+Alt+1">Heading</button>
+          <button type="button" class="source-editor-command" data-source-command="bullet" title="Bullet list (Ctrl/⌘ + Shift + 8)" aria-keyshortcuts="Control+Shift+8 Meta+Shift+8">List</button>
+          <button type="button" class="source-editor-command" data-source-command="link" title="Markdown link (Ctrl/⌘ + K)" aria-keyshortcuts="Control+K Meta+K">Link</button>
+          <button type="button" class="source-editor-command" data-source-command="wikilink" title="Wikilink (Ctrl/⌘ + Shift + K)" aria-keyshortcuts="Control+Shift+K Meta+Shift+K">Wikilink</button>
+        </div>
+        <div class="source-editor-actions">
+          <button type="button" class="source-editor-save" data-source-save disabled aria-keyshortcuts="Control+S Meta+S">Save</button>
+        </div>
+      </div>
+
+      <p class="source-editor-status" data-source-status role="status" aria-live="polite">Loading the note's source…</p>
+
+      <div class="source-editor-panes" data-source-panes>
+        <div class="source-editor-tabs" role="tablist" aria-label="Editor and preview">
+          <button type="button" role="tab" id="source-editor-tab-edit" class="source-editor-tab" data-source-tab="edit" aria-selected="true" aria-controls="source-editor-pane-edit">Edit</button>
+          <button type="button" role="tab" id="source-editor-tab-preview" class="source-editor-tab" data-source-tab="preview" aria-selected="false" aria-controls="source-editor-pane-preview" tabindex="-1">Preview</button>
+        </div>
+
+        <div class="source-editor-pane source-editor-pane-edit" id="source-editor-pane-edit" role="tabpanel" tabindex="0" aria-labelledby="source-editor-tab-edit" data-source-pane="edit">
+          <div class="source-editor-surface" data-source-surface></div>
+        </div>
+
+        <div class="source-editor-pane source-editor-pane-preview" id="source-editor-pane-preview" role="tabpanel" tabindex="0" aria-labelledby="source-editor-tab-preview" data-source-pane="preview">
+          <p class="source-editor-preview-status" data-source-preview-status role="status" aria-live="polite">The preview updates as you type.</p>
+          <div class="note-body source-editor-preview" data-source-preview></div>
+        </div>
+      </div>
+
+      <section class="source-editor-conflict" data-source-conflict hidden aria-labelledby="source-editor-conflict-heading">
+        <h3 id="source-editor-conflict-heading">This note changed on disk</h3>
+        <p class="source-editor-conflict-lede">Your text is still in the editor and nothing has been written. Below is the version the vault holds now.</p>
+        <pre class="source-editor-conflict-source" data-source-conflict-source></pre>
+        <div class="source-editor-conflict-actions">
+          <button type="button" class="source-editor-conflict-overwrite" data-source-conflict-overwrite>Save mine over it</button>
+          <button type="button" class="source-editor-conflict-discard" data-source-conflict-discard>Discard mine and load the note</button>
+        </div>
+      </section>
+
+      <details class="source-editor-shortcuts">
+        <summary>Keyboard shortcuts</summary>
+        <dl class="source-editor-shortcut-list">
+          <div><dt>Ctrl/⌘ + S</dt><dd>Save</dd></div>
+          <div><dt>Ctrl/⌘ + B</dt><dd>Bold</dd></div>
+          <div><dt>Ctrl/⌘ + I</dt><dd>Italic</dd></div>
+          <div><dt>Ctrl/⌘ + E</dt><dd>Inline code</dd></div>
+          <div><dt>Ctrl/⌘ + Alt + 1…6</dt><dd>Heading level</dd></div>
+          <div><dt>Ctrl/⌘ + Shift + 8</dt><dd>Bullet list</dd></div>
+          <div><dt>Ctrl/⌘ + K</dt><dd>Markdown link</dd></div>
+          <div><dt>Ctrl/⌘ + Shift + K</dt><dd>Wikilink</dd></div>
+          <div><dt><code>[[</code></dt><dd>Complete a wikilink from the vault</dd></div>
+          <div><dt>Tab</dt><dd>Leave the editor for the next control; it never indents</dd></div>
+        </dl>
+      </details>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

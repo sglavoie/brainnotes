@@ -19,6 +19,7 @@ import { initQueryBar } from "./query-bar";
 import { initRelatedNotes } from "./related";
 import { initSavedViews } from "./saved-views";
 import { initSearch } from "./search";
+import { initSourceEditor } from "./source-editor";
 import { initSynthesize } from "./synthesize";
 import { initTheme } from "./theme";
 
@@ -36,6 +37,9 @@ import { initTheme } from "./theme";
     initBrokenCreateActions();
     initHistoryPanel();
     initSynthesize();
+    // The /edit page is refused outright in read-only mode, so the editor is
+    // built only where a save can be accepted.
+    initSourceEditor();
   }
   initFacets();
   initNoteLayout();

@@ -56,6 +56,34 @@
   .graph-view-controls {
     grid-column: 1 / -1;
   }
+
+  /*
+   * The editor stops being two columns and becomes two tabs.
+   *
+   * This is the whole of the narrow layout, and it is why the controller
+   * publishes the selection as `data-source-active` instead of hiding a pane
+   * itself: a `hidden` attribute set from script beats every rule here, so the
+   * wide layout could not have shown both panes without a second, resize-driven
+   * code path to undo it. Here the attribute is read; above, it is ignored.
+   */
+  .source-editor-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .source-editor-tabs {
+    display: flex;
+  }
+
+  .source-editor-panes[data-source-active="edit"] .source-editor-pane-preview,
+  .source-editor-panes[data-source-active="preview"] .source-editor-pane-edit {
+    display: none;
+  }
+
+  .source-editor-surface .cm-editor,
+  .source-editor-preview {
+    height: auto;
+    max-height: 55vh;
+  }
 }
 
 @media (max-width: 640px) {
