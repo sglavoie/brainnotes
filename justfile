@@ -137,6 +137,39 @@ vault-sandbox *ARGS:
 test-e2e:
     npm run test:e2e
 
+# The real-transport gate, and `just test-e2e`'s counterpart for synchronization.
+# It provisions the pinned Syncthing release, builds two disposable vaults under
+# the system temp directory, gives each its own identity, database, loopback
+# listener and private API key, and points them at one send-only and one
+# receive-only staging channel per device — never at a vault directory. What it
+# proves is what `internal/vaultsyncd`'s in-process fixture structurally cannot:
+# that packages produced by `internal/vaultexport` survive a transport nobody
+# here wrote, arriving late, out of order, across a disconnect and across a
+# restart; that an incomplete or altered package is carried faithfully and still
+# never applied; and that removing a package is the sender's to do, because a
+# receiver's deletion of its own copy is a local deviation the owner overrules.
+#
+# Deliberately **not** in `just ci`, on the same terms as `just test-e2e`: the
+# scenarios spend their time waiting on two other processes, and the binary has
+# to be downloaded once. The `synctransport` build tag is on the test files only,
+# so gofmt, `go vet` and the complexity ratchet still cover `internal/syncthingbin`
+# and `internal/synctransport` on every ordinary run.
+#
+# Provisioning happens here rather than inside the tests so that one resolution
+# serves the whole run: `internal/syncthingbin` reads its cache directory at
+# package initialization, before `internal/vaultfixture` rewrites HOME, so a test
+# that resolves for itself still caches outside the fixture — but it pays for its
+# own check every time. The resolved path crosses into the test binary in the
+# environment, and a test that cannot get a binary at all fails rather than skips.
+
+# Run the real two-process Syncthing transport suite
+test-sync-transport:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export BNOTES_SYNCTHING_BIN="$(go run ./scripts/syncthingbin)"
+    echo "syncthing: ${BNOTES_SYNCTHING_BIN}"
+    go test -tags synctransport -count=1 -timeout 1800s -run '^TestRealTransport' ./internal/vaultsyncd/
+
 # Build the browser JavaScript bundle and the stylesheet
 web-build:
     npm run build:web

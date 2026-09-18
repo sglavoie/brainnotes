@@ -12,6 +12,18 @@
 # means changing both files and re-recording the baseline.
 version: "2"
 
+# The build tags whose files would otherwise be invisible to every linter here.
+#
+# `synctransport` guards the real two-process Syncthing scenarios in
+# internal/vaultsyncd, which `just ci` does not run and `just test-sync-transport`
+# does. A gate that judged a function's complexity only when a tag happened to be
+# set would be a gate that stopped applying the moment somebody moved code behind
+# one, so the ratchet reads them the same as everything else. The harness those
+# tests drive carries no tag at all, and is covered without this.
+run:
+  build-tags:
+    - synctransport
+
 linters:
   default: none
   enable:

@@ -30,6 +30,15 @@ from metrics_corpus import BLOCK_COMMENT, Corpus, section
 # baseline was measured with, so a repo-level `.golangci.yml` cannot silently
 # move the numbers docs/internals/refactor-baseline.md compares against.
 GOLANGCI_CONFIG = """version: "2"
+# The same build tags .golangci.yml sets, for the same reason and with a second
+# one of its own: the ratchet judges tagged files, so the recorded floor has to
+# count them too. Without this the two would measure different file sets, and the
+# first tagged function to cross a threshold would appear in `just lint-full` and
+# be invisible to `just metrics` — which is the number the baseline compares
+# against.
+run:
+  build-tags:
+    - synctransport
 linters:
   default: none
   enable: [cyclop, gocognit, nestif, funlen]
