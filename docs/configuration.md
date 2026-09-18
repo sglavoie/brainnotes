@@ -248,6 +248,19 @@ inbox_note = "Inbox.md"
 # absent. One to six '#' characters followed by a title.
 heading = "## Captures"
 
+[attachments]
+# Vault-relative directory files uploaded from the web editor are filed in.
+# Must be relative, must not escape the vault, and must not be hidden: an
+# attachment under a dot-path would be on disk, outside the content history,
+# and unservable. A name colliding with one already claimed or already in the
+# vault gets a suffixed one, decided while the upload is still private.
+dir = "attachments"
+# Per-file upload limit in bytes. Configurable *downward* from the built-in
+# 25 MiB ceiling and never upward: the ceiling is also the transport bound the
+# server applies before a byte is written, so a larger number here would be a
+# limit the request never reaches.
+max_file_bytes = 26214400
+
 [agent]
 # Optional local research command as a literal argv array. No shell is used.
 # The complete context packet is written to stdin; empty disables execution.

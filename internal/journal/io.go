@@ -93,7 +93,12 @@ func snapshotFileName(relSlash string) string {
 	return hex.EncodeToString(sum[:]) + ".snap"
 }
 
-func fileStateFromDisk(path string, strict bool) (FileState, []byte, error) {
+// fileStateFromDisk reads a path's pre-change state together with its bytes, for
+// the one caller that has to snapshot them. Anything that is not a regular file
+// is refused rather than described: there is nothing to snapshot, so recording a
+// before-state for it would promise an undo that cannot happen. Callers that only
+// need the state use fileStateOnly, which never reads the file.
+func fileStateFromDisk(path string) (FileState, []byte, error) {
 	info, err := os.Lstat(path)
 	switch {
 	case err == nil:
@@ -117,15 +122,44 @@ func fileStateFromDisk(path string, strict bool) (FileState, []byte, error) {
 			Mode:   uint32(info.Mode().Perm()),
 		}, data, nil
 	case info.IsDir():
-		if strict {
-			return FileState{}, nil, fmt.Errorf("path %q is a directory", path)
-		}
-		return FileState{Kind: KindDirectory}, nil, nil
+		return FileState{}, nil, fmt.Errorf("path %q is a directory", path)
 	default:
-		if strict {
-			return FileState{}, nil, fmt.Errorf("path %q is not a regular file", path)
+		return FileState{}, nil, fmt.Errorf("path %q is not a regular file", path)
+	}
+}
+
+// fileStateOnly reports a path's state without reading it into memory.
+//
+// It is fileStateFromDisk's non-strict half for the two callers that discard the
+// bytes: finalizing an entry, which only records the after-state's digest, and
+// verifying a restore target. Both may be pointed at an attachment rather than a
+// note, and hashing one by reading it in full would put a file the write itself
+// deliberately streamed back into memory.
+func fileStateOnly(path string) (FileState, error) {
+	info, err := os.Lstat(path)
+	switch {
+	case err == nil:
+	case os.IsNotExist(err):
+		return FileState{Kind: KindMissing}, nil
+	default:
+		return FileState{}, err
+	}
+	switch {
+	case info.Mode().IsRegular():
+		digest, size, err := vault.HashFile(path)
+		if err != nil {
+			return FileState{}, err
 		}
-		return FileState{Kind: KindOther}, nil, nil
+		return FileState{
+			Kind:   KindFile,
+			SHA256: digest,
+			Size:   size,
+			Mode:   uint32(info.Mode().Perm()),
+		}, nil
+	case info.IsDir():
+		return FileState{Kind: KindDirectory}, nil
+	default:
+		return FileState{Kind: KindOther}, nil
 	}
 }
 

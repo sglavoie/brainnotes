@@ -90,7 +90,7 @@ func (t *FileTxn) restoreOverwritten(change *txnChange) error {
 // delete a compare-and-swap; a file another writer put there instead is
 // recognized from the bytes custody took and handed straight back.
 func (t *FileTxn) restoreCreated(change *txnChange) error {
-	custody, err := takeVerifiedCustody(&t.hooks, change.path, ExpectContent(change.data))
+	custody, err := takeVerifiedCustody(&t.hooks, change.path, ExpectHash(change.contentDigest()))
 	if err != nil {
 		return err
 	}
@@ -127,17 +127,20 @@ func (t *FileTxn) restoreRemoved(change *txnChange) error {
 // the undo of a create. Custody vacates the destination, which is precisely what
 // an overwrite must never do, so replacing a file goes through compareAndSwap
 // instead.
+// The custody file is judged by streaming it through a hasher rather than by
+// reading it, so a delete or an undone create of a large attachment costs one
+// pass over the file and not a copy of it in memory. The verdict is reported
+// against path, not against the temp name custody happens to be holding it under.
 func takeVerifiedCustody(hooks *txnHooks, path string, expect FileExpectation) (string, error) {
 	custody, err := takeCustody(path)
 	if err != nil {
 		return "", err
 	}
-	current, err := os.ReadFile(custody)
-	if err != nil {
-		readErr := fmt.Errorf("vault: read %q: %w", custody, err)
-		return "", errors.Join(readErr, placeNew(hooks, custody, path))
-	}
-	if err := verifyExpectation(path, expect, current, true); err != nil {
+	if err := verifyFileDigest(custody, expect); err != nil {
+		var conflict *TxnConflictError
+		if errors.As(err, &conflict) {
+			conflict.Path = path
+		}
 		return "", errors.Join(err, placeNew(hooks, custody, path))
 	}
 	return custody, nil

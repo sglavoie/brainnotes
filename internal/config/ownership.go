@@ -140,6 +140,10 @@ var fieldSpecs = []fieldSpec{
 	{"autosave.min_interval", LayerPortable, func(dst, src *Config) {
 		dst.Autosave.MinInterval = src.Autosave.MinInterval
 	}},
+	{"attachments.dir", LayerPortable, func(dst, src *Config) { dst.Attachments.Dir = src.Attachments.Dir }},
+	{"attachments.max_file_bytes", LayerPortable, func(dst, src *Config) {
+		dst.Attachments.MaxFileBytes = src.Attachments.MaxFileBytes
+	}},
 	{"views", LayerPortable, func(dst, src *Config) { dst.Views = src.Views }},
 }
 

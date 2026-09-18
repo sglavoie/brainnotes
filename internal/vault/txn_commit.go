@@ -138,48 +138,64 @@ func (t *FileTxn) stage() error {
 		return err
 	}
 	for _, path := range t.order {
-		change := t.changes[path]
-		data, mode, exists, err := currentFileState(path)
-		if err != nil {
+		if err := t.stageChange(t.changes[path]); err != nil {
 			return err
 		}
-		if err := verifyExpectation(path, change.expect, data, exists); err != nil {
-			return err
-		}
-		change.priorExists = exists
-		change.priorData = data
-		change.priorMode = mode
-
-		if change.remove {
-			continue
-		}
-		wantMode := change.mode
-		if wantMode == 0 {
-			if exists {
-				wantMode = mode
-			} else {
-				// The probe creates a real file to read the umask off, so the
-				// parent has to exist first. Staging creates it anyway; doing it
-				// here is what lets a transaction write into a folder the vault
-				// does not have yet.
-				dir := filepath.Dir(path)
-				if err := os.MkdirAll(dir, 0o755); err != nil {
-					return fmt.Errorf("vault: mkdir %q: %w", dir, err)
-				}
-				wantMode, err = defaultNewFileMode(dir)
-				if err != nil {
-					return err
-				}
-			}
-		}
-		staged, err := stageTempFile(path, change.data, wantMode)
-		if err != nil {
-			return err
-		}
-		change.staged = staged
-		change.mode = wantMode
 	}
 	return nil
+}
+
+// stageChange validates one planned path and writes its replacement beside it.
+func (t *FileTxn) stageChange(change *txnChange) error {
+	if change.source != "" {
+		return t.stageStreamedChange(change)
+	}
+	path := change.path
+	data, mode, exists, err := currentFileState(path)
+	if err != nil {
+		return err
+	}
+	if err := verifyExpectation(path, change.expect, data, exists); err != nil {
+		return err
+	}
+	change.priorExists = exists
+	change.priorData = data
+	change.priorMode = mode
+
+	if change.remove {
+		return nil
+	}
+	wantMode, err := stagedMode(path, change.mode, mode, exists)
+	if err != nil {
+		return err
+	}
+	staged, err := stageTempFile(path, change.data, wantMode)
+	if err != nil {
+		return err
+	}
+	change.staged = staged
+	change.mode = wantMode
+	return nil
+}
+
+// stagedMode resolves the mode a staged replacement is written with. A zero
+// planned mode preserves an existing destination's mode, or derives a new file's
+// from the process umask.
+func stagedMode(path string, planned, current os.FileMode, exists bool) (os.FileMode, error) {
+	if planned != 0 {
+		return planned, nil
+	}
+	if exists {
+		return current, nil
+	}
+	// The probe creates a real file to read the umask off, so the parent has to
+	// exist first. Staging creates it anyway; doing it here is what lets a
+	// transaction write into a folder the vault does not have yet.
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return 0, fmt.Errorf("vault: mkdir %q: %w", dir, err)
+	}
+	return defaultNewFileMode(dir)
 }
 
 func (t *FileTxn) apply(change *txnChange) error {
@@ -302,6 +318,12 @@ func (t *FileTxn) verifyRequirements() error {
 // It is a pre-check only: claim re-judges the same expectation once it owns the
 // destination, which is what covers the window this check cannot.
 func (t *FileTxn) verifyUnchangedSinceStage(change *txnChange) error {
+	if change.source != "" {
+		// A streamed create judges its destination by stat, so a file another
+		// writer dropped there is refused without being read — which is the same
+		// reason this change never held its own bytes either.
+		return verifyAbsent(change.path)
+	}
 	expect := ExpectMissing()
 	if change.priorExists {
 		expect = ExpectHash(HashBytes(change.priorData))
@@ -314,9 +336,11 @@ func (t *FileTxn) verifyUnchangedSinceStage(change *txnChange) error {
 // to other writers, so without this check compensation would overwrite an edit
 // the transaction never saw.
 func (t *FileTxn) verifyStillCommitted(change *txnChange) error {
-	expect := ExpectMissing()
-	if !change.remove {
-		expect = ExpectContent(change.data)
+	if change.remove {
+		return verifyCurrentState(change.path, ExpectMissing())
 	}
-	return verifyCurrentState(change.path, expect)
+	if change.source != "" {
+		return verifyFileDigest(change.path, ExpectHash(change.digest))
+	}
+	return verifyCurrentState(change.path, ExpectContent(change.data))
 }

@@ -62,6 +62,11 @@ type sourceSaveRecord struct {
 	RelPath  string `json:"rel_path"`
 	Revision string `json:"revision"`
 	Created  bool   `json:"created"`
+	// Attachments is what the save put in the vault beside the note, so a replay
+	// can tell the client its uploads landed. Omitted when there were none, and
+	// absent from every record written before attachments existed — which decodes
+	// to the empty list and is the truth about those saves.
+	Attachments []SavedAttachment `json:"attachments,omitempty"`
 }
 
 // sourceSaveLedgerState is what is on disk at a save id's record path.
@@ -195,6 +200,7 @@ func replayedSourceSave(dest PathResolution, record sourceSaveRecord) *SaveSourc
 		Revision:    record.Revision,
 		Created:     record.Created,
 		Replayed:    true,
+		Attachments: record.Attachments,
 	}
 }
 

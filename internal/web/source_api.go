@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/attachments"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
@@ -48,16 +49,20 @@ type sourcePreviewResponse struct {
 // no-op alike. Changed and Replayed are what let an editor word the outcome
 // honestly instead of claiming a write it may not have performed.
 type sourceSaveResponse struct {
-	OK        bool   `json:"ok"`
-	Message   string `json:"message"`
-	Key       string `json:"key"`
-	Path      string `json:"path"`
-	RelPath   string `json:"rel_path"`
-	Revision  string `json:"revision"`
-	Changed   bool   `json:"changed"`
-	Created   bool   `json:"created"`
-	Replayed  bool   `json:"replayed"`
-	JournalID string `json:"journal_id,omitempty"`
+	OK       bool   `json:"ok"`
+	Message  string `json:"message"`
+	Key      string `json:"key"`
+	Path     string `json:"path"`
+	RelPath  string `json:"rel_path"`
+	Revision string `json:"revision"`
+	Changed  bool   `json:"changed"`
+	Created  bool   `json:"created"`
+	Replayed bool   `json:"replayed"`
+	// Attachments names every referenced upload that is in the vault now, so the
+	// editor can stop tracking them. It is present on a replay too, for the same
+	// reason Revision is: the answer has to describe the vault, not this call.
+	Attachments []noteops.SavedAttachment `json:"attachments,omitempty"`
+	JournalID   string                    `json:"journal_id,omitempty"`
 }
 
 // sourceSaveErrorResponse is the management error envelope plus the two fields a
@@ -161,12 +166,19 @@ func (s *Server) handleSourceSave(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, err)
 		return
 	}
+	uploads, err := s.resolveSaveAttachments(r)
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
 	s.applySourceSave(w, noteops.SaveSourceRequest{
-		RelPath:      source.RelPath,
-		Content:      r.Form.Get("content"),
-		BaseRevision: strings.TrimSpace(r.Form.Get("revision")),
-		SaveID:       strings.TrimSpace(r.Form.Get("save_id")),
-	})
+		RelPath:               source.RelPath,
+		Content:               r.Form.Get("content"),
+		BaseRevision:          strings.TrimSpace(r.Form.Get("revision")),
+		SaveID:                strings.TrimSpace(r.Form.Get("save_id")),
+		Attachments:           uploads.commits,
+		UnresolvedAttachments: uploads.unresolved,
+	}, uploads.staged)
 }
 
 // handleSourceCreate writes a note that does not exist yet.
@@ -181,12 +193,19 @@ func (s *Server) handleSourceCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requireManagementPost(w, r, sourceCreateAPIRoutePath, sourceRequestBodyLimit) {
 		return
 	}
+	uploads, err := s.resolveSaveAttachments(r)
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
 	s.applySourceSave(w, noteops.SaveSourceRequest{
-		RelPath: strings.TrimSpace(r.Form.Get("rel_path")),
-		Content: r.Form.Get("content"),
-		SaveID:  strings.TrimSpace(r.Form.Get("save_id")),
-		Create:  true,
-	})
+		RelPath:               strings.TrimSpace(r.Form.Get("rel_path")),
+		Content:               r.Form.Get("content"),
+		SaveID:                strings.TrimSpace(r.Form.Get("save_id")),
+		Create:                true,
+		Attachments:           uploads.commits,
+		UnresolvedAttachments: uploads.unresolved,
+	}, uploads.staged)
 }
 
 // applySourceSave is the body both write routes share.
@@ -195,7 +214,7 @@ func (s *Server) handleSourceCreate(w http.ResponseWriter, r *http.Request) {
 // frontmatter this request submitted is judged against the declarations that are
 // actually in force and the transaction refuses the save if another revision of
 // either configuration layer replaces it before the commit.
-func (s *Server) applySourceSave(w http.ResponseWriter, req noteops.SaveSourceRequest) {
+func (s *Server) applySourceSave(w http.ResponseWriter, req noteops.SaveSourceRequest, staged []attachments.Staged) {
 	if err := s.ensureConfigWritable(); err != nil {
 		writeManagementError(w, err)
 		return
@@ -211,6 +230,11 @@ func (s *Server) applySourceSave(w http.ResponseWriter, req noteops.SaveSourceRe
 	// the cached snapshot is stale either way.
 	if result != nil {
 		s.state.invalidate()
+		// The staged copies are redundant the moment the transaction commits, and
+		// that is true of a snapshot failure too: the bytes are in the vault, the
+		// save just is not in the history. Keeping staging alive there would leave
+		// files a client has already been told about.
+		s.forgetCommittedAttachments(staged, result)
 	}
 	if err != nil {
 		s.writeSourceSaveError(w, req, result, err)
@@ -227,16 +251,17 @@ func writeSourceSaveResult(w http.ResponseWriter, result *noteops.SaveSourceResu
 		return
 	}
 	writeManagementJSON(w, http.StatusOK, sourceSaveResponse{
-		OK:        true,
-		Message:   sourceSaveMessage(result),
-		Key:       key,
-		Path:      routePath,
-		RelPath:   result.Destination.RelPath,
-		Revision:  result.Revision,
-		Changed:   result.Changed,
-		Created:   result.Created,
-		Replayed:  result.Replayed,
-		JournalID: managementJournalID(result.Journal),
+		OK:          true,
+		Message:     sourceSaveMessage(result),
+		Key:         key,
+		Path:        routePath,
+		RelPath:     result.Destination.RelPath,
+		Revision:    result.Revision,
+		Changed:     result.Changed,
+		Created:     result.Created,
+		Replayed:    result.Replayed,
+		Attachments: result.Attachments,
+		JournalID:   managementJournalID(result.Journal),
 	})
 }
 

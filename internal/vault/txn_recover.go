@@ -155,7 +155,10 @@ func recoverTxnIntent(root, realRoot, dir, path string) error {
 // has taken over is decided, not failed, because there is nothing this process
 // may do about it that would not destroy that writer's work.
 func recoverTxnIntentChange(change txnIntentChange) error {
-	data, _, exists, err := currentFileState(change.Path)
+	// The destination is judged by digest rather than by content: an intent
+	// records the prior and planned hashes, so nothing here needs the bytes, and
+	// a streamed create's destination is the one file this must not hold.
+	digest, exists, err := currentFileDigest(change.Path)
 	if err != nil {
 		if IsTxnConflict(err) {
 			// Something that is not a regular file occupies the destination. Only
@@ -164,7 +167,7 @@ func recoverTxnIntentChange(change txnIntentChange) error {
 		}
 		return err
 	}
-	if txnIntentReached(change, data, exists) {
+	if txnIntentReached(change, digest, exists) {
 		// The staged file, if it is still there, holds bytes the destination has
 		// already superseded — either the replacement that landed, or the content
 		// the swap pushed out. Unlinking it is exactly what the forward path's
@@ -174,7 +177,7 @@ func recoverTxnIntentChange(change txnIntentChange) error {
 		}
 		return nil
 	}
-	if !txnIntentPrior(change, data, exists) {
+	if !txnIntentPrior(change, digest, exists) {
 		// The destination holds neither what staging read nor what the transaction
 		// meant to write, so a writer outside this transaction owns it now. The
 		// staged file is left alone: it holds bytes that exist nowhere else, and
@@ -190,23 +193,23 @@ func recoverTxnIntentChange(change txnIntentChange) error {
 
 // txnIntentReached reports whether the destination already holds the outcome the
 // transaction planned for it.
-func txnIntentReached(change txnIntentChange, data []byte, exists bool) bool {
+func txnIntentReached(change txnIntentChange, digest string, exists bool) bool {
 	if change.Remove {
 		return !exists
 	}
-	return exists && HashBytes(data) == change.NewSHA256
+	return exists && digest == change.NewSHA256
 }
 
 // txnIntentPrior reports whether the destination still holds exactly what
 // staging read, which is the only state a roll-forward may act on.
-func txnIntentPrior(change txnIntentChange, data []byte, exists bool) bool {
+func txnIntentPrior(change txnIntentChange, digest string, exists bool) bool {
 	if exists != change.PriorExists {
 		return false
 	}
 	if !exists {
 		return true
 	}
-	return HashBytes(data) == change.PriorSHA256
+	return digest == change.PriorSHA256
 }
 
 // completeTxnIntentRemoval finishes a delete the crash interrupted. Custody makes
@@ -232,7 +235,9 @@ func completeTxnIntentWrite(change txnIntentChange) error {
 	if change.Staged == "" {
 		return nil
 	}
-	if err := verifyCurrentState(change.Staged, ExpectHash(change.NewSHA256)); err != nil {
+	// Streamed through a hasher rather than read: the staged file is a full copy
+	// of the replacement, and for an attachment that is the whole 25 MiB.
+	if err := verifyFileDigest(change.Staged, ExpectHash(change.NewSHA256)); err != nil {
 		// The staged replacement is gone or no longer holds the planned bytes, so
 		// there is nothing left to roll forward. The destination still holds
 		// exactly what staging read, which is a consistent state: the write simply

@@ -175,7 +175,27 @@ type = "float"
 `
 }
 
+// applyDefaults fills in every unset key and canonicalizes the ones a person can
+// spell more than one way.
+//
+// It is one call per section. The sections are independent — no default here
+// depends on another — so the only thing a single long body added was the need
+// to read all of it to change any of it, and a configuration that grows a
+// section should grow a function rather than this one.
 func applyDefaults(cfg *Config) {
+	applyTemplateDirDefault(cfg)
+	applyTemplateExtensionDefault(cfg)
+	applyCollectionDefaults(cfg)
+	applyCaptureAndAgentDefaults(cfg)
+	applyOpenAndServeDefaults(cfg)
+	applyCockpitListDefaults(cfg)
+	applyCockpitScalarDefaults(cfg)
+	applyAutosaveDefaults(cfg)
+	applyAttachmentDefaults(cfg)
+	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
+}
+
+func applyTemplateDirDefault(cfg *Config) {
 	// Trim surrounding whitespace, convert platform separators to slash, and
 	// strip trailing slashes so the configured templates dir matches the
 	// vault-relative paths Walk compares against. Without this,
@@ -199,6 +219,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Templates.Dir == "" || cfg.Templates.Dir == "." {
 		cfg.Templates.Dir = "Templates"
 	}
+}
+
+func applyTemplateExtensionDefault(cfg *Config) {
 	// Normalize the configured extension: trim surrounding whitespace,
 	// fall back to ".md" when empty or just ".", then ensure a single
 	// leading dot. A bare "." would otherwise produce filenames ending in
@@ -218,6 +241,15 @@ func applyDefaults(cfg *Config) {
 	if !strings.HasPrefix(cfg.Templates.DefaultExtension, ".") {
 		cfg.Templates.DefaultExtension = "." + cfg.Templates.DefaultExtension
 	}
+}
+
+// applyCollectionDefaults gives every configured map and list either a normalized
+// version of what the user wrote or an empty, non-nil value.
+//
+// Non-nil matters beyond tidiness: an absent table and an empty one are the same
+// thing to every reader above this package, and a nil map here would make one of
+// them a panic.
+func applyCollectionDefaults(cfg *Config) {
 	if cfg.Frontmatter.Properties == nil {
 		cfg.Frontmatter.Properties = map[string]PropertyDefinition{}
 	} else {
@@ -243,6 +275,9 @@ func applyDefaults(cfg *Config) {
 	} else {
 		cfg.Brief.ExcludeTypes = normalizeBriefTypes(cfg.Brief.ExcludeTypes)
 	}
+}
+
+func applyCaptureAndAgentDefaults(cfg *Config) {
 	cfg.Capture.InboxNote = normalizeCaptureInbox(cfg.Capture.InboxNote)
 	cfg.Capture.Heading = strings.TrimSpace(cfg.Capture.Heading)
 	if cfg.Capture.Heading == "" {
@@ -251,10 +286,10 @@ func applyDefaults(cfg *Config) {
 	if cfg.Agent.Command == nil {
 		cfg.Agent.Command = []string{}
 	}
-	if cfg.Agent.TimeoutSeconds == 0 {
-		cfg.Agent.TimeoutSeconds = DefaultAgentTimeoutSeconds
-	}
+	cfg.Agent.TimeoutSeconds = intOrDefault(cfg.Agent.TimeoutSeconds, DefaultAgentTimeoutSeconds)
+}
 
+func applyOpenAndServeDefaults(cfg *Config) {
 	// Trim surrounding whitespace from [open].editor. Without this, a value
 	// like `editor = "  "` is non-empty and shadows the $EDITOR fallback in
 	// `bn open`, then fails with an opaque exec error.
@@ -265,73 +300,65 @@ func applyDefaults(cfg *Config) {
 		cfg.Serve.Addr = DefaultServeAddr
 	}
 
-	// Cockpit rule lists default to empty (no rules disabled, no priority
-	// override). They are left otherwise untouched so validate can still see
-	// user-supplied entries; membership against known rule kinds is a wiring-time
-	// concern in internal/cockpit, not a config-load concern.
-	if cfg.Cockpit.DisabledRules == nil {
-		cfg.Cockpit.DisabledRules = []string{}
-	}
-	if cfg.Cockpit.Priority == nil {
-		cfg.Cockpit.Priority = []string{}
-	}
-	if cfg.Cockpit.LongTailIgnoreProperties == nil {
-		cfg.Cockpit.LongTailIgnoreProperties = []string{}
-	}
-	// A zero long_tail_limit means "unset"; fall back to the documented default.
-	// Negative values are left as-is so validate can reject them.
-	if cfg.Cockpit.LongTailLimit == 0 {
-		cfg.Cockpit.LongTailLimit = DefaultCockpitLongTailLimit
-	}
-	if cfg.Cockpit.LongTailMaxCount == 0 {
-		cfg.Cockpit.LongTailMaxCount = DefaultCockpitLongTailMaxCount
-	}
-	if cfg.Cockpit.LongTailHeadFactor == 0 {
-		cfg.Cockpit.LongTailHeadFactor = DefaultCockpitLongTailHeadFactor
-	}
+}
 
-	// New daily-cockpit rule config. Each list defaults to an empty, non-nil
-	// slice so the owning rule stays off until the user opts in, and TOML round
-	// trips cleanly. Scalar review/agent fields are trimmed and defaulted; the
-	// numeric knobs follow the long-tail precedent (zero means "unset" and falls
-	// back to the documented default; negatives survive so validate can reject
-	// them).
-	if cfg.Cockpit.ReviewStatuses == nil {
-		cfg.Cockpit.ReviewStatuses = []string{}
+// listOrEmpty turns an absent list into an empty, non-nil one.
+//
+// Every cockpit rule list defaults this way: the owning rule stays off until the
+// user opts in, and an empty slice round-trips through TOML where a nil one
+// disappears. What the user did write is left exactly as written, so validate
+// still sees it — membership against the known rule kinds is a wiring-time
+// concern in internal/cockpit, not a config-load one.
+func listOrEmpty(values []string) []string {
+	if values == nil {
+		return []string{}
 	}
-	if cfg.Cockpit.WIPStatuses == nil {
-		cfg.Cockpit.WIPStatuses = []string{}
-	}
-	if cfg.Cockpit.HubTypeValues == nil {
-		cfg.Cockpit.HubTypeValues = []string{}
-	}
-	if cfg.Cockpit.HubEmptyHeadings == nil {
-		cfg.Cockpit.HubEmptyHeadings = []string{}
-	}
-	if cfg.Cockpit.SensitiveIgnorePaths == nil {
-		cfg.Cockpit.SensitiveIgnorePaths = []string{}
-	}
-	if cfg.Cockpit.SensitiveIgnorePatterns == nil {
-		cfg.Cockpit.SensitiveIgnorePatterns = []string{}
-	}
-	cfg.Cockpit.ReviewDateProperty = strings.TrimSpace(cfg.Cockpit.ReviewDateProperty)
-	if cfg.Cockpit.ReviewDateProperty == "" {
-		cfg.Cockpit.ReviewDateProperty = DefaultCockpitReviewDateProperty
-	}
-	cfg.Cockpit.AgentCommand = strings.TrimSpace(cfg.Cockpit.AgentCommand)
-	if cfg.Cockpit.DailyLimit == 0 {
-		cfg.Cockpit.DailyLimit = DefaultCockpitDailyLimit
-	}
-	if cfg.Cockpit.MaxWIP == 0 {
-		cfg.Cockpit.MaxWIP = DefaultCockpitMaxWIP
-	}
-	if cfg.Cockpit.StaleStatusDays == 0 {
-		cfg.Cockpit.StaleStatusDays = DefaultCockpitStaleStatusDays
-	}
-	if cfg.Cockpit.AgentTimeoutSeconds == 0 {
-		cfg.Cockpit.AgentTimeoutSeconds = DefaultCockpitAgentTimeoutSeconds
-	}
+	return values
+}
 
+// intOrDefault fills in an unset numeric knob.
+//
+// Zero means "unset" and takes the documented default. Anything else survives —
+// including a negative — because the value a person wrote is the value validate
+// has to be able to complain about.
+func intOrDefault(value, fallback int) int {
+	if value == 0 {
+		return fallback
+	}
+	return value
+}
+
+func applyCockpitListDefaults(cfg *Config) {
+	c := &cfg.Cockpit
+	c.DisabledRules = listOrEmpty(c.DisabledRules)
+	c.Priority = listOrEmpty(c.Priority)
+	c.LongTailIgnoreProperties = listOrEmpty(c.LongTailIgnoreProperties)
+	c.ReviewStatuses = listOrEmpty(c.ReviewStatuses)
+	c.WIPStatuses = listOrEmpty(c.WIPStatuses)
+	c.HubTypeValues = listOrEmpty(c.HubTypeValues)
+	c.HubEmptyHeadings = listOrEmpty(c.HubEmptyHeadings)
+	c.SensitiveIgnorePaths = listOrEmpty(c.SensitiveIgnorePaths)
+	c.SensitiveIgnorePatterns = listOrEmpty(c.SensitiveIgnorePatterns)
+}
+
+func applyCockpitScalarDefaults(cfg *Config) {
+	c := &cfg.Cockpit
+	c.LongTailLimit = intOrDefault(c.LongTailLimit, DefaultCockpitLongTailLimit)
+	c.LongTailMaxCount = intOrDefault(c.LongTailMaxCount, DefaultCockpitLongTailMaxCount)
+	c.LongTailHeadFactor = intOrDefault(c.LongTailHeadFactor, DefaultCockpitLongTailHeadFactor)
+	c.DailyLimit = intOrDefault(c.DailyLimit, DefaultCockpitDailyLimit)
+	c.MaxWIP = intOrDefault(c.MaxWIP, DefaultCockpitMaxWIP)
+	c.StaleStatusDays = intOrDefault(c.StaleStatusDays, DefaultCockpitStaleStatusDays)
+	c.AgentTimeoutSeconds = intOrDefault(c.AgentTimeoutSeconds, DefaultCockpitAgentTimeoutSeconds)
+
+	c.ReviewDateProperty = strings.TrimSpace(c.ReviewDateProperty)
+	if c.ReviewDateProperty == "" {
+		c.ReviewDateProperty = DefaultCockpitReviewDateProperty
+	}
+	c.AgentCommand = strings.TrimSpace(c.AgentCommand)
+}
+
+func applyAutosaveDefaults(cfg *Config) {
 	// An absent autosave floor means DefaultAutosaveMinInterval, and a value the
 	// user spelled some other way ("300s", "5m0s") is stored in its canonical
 	// form so `bn config get`, the watcher's persisted policy, and a re-read of
@@ -344,6 +371,31 @@ func applyDefaults(cfg *Config) {
 	if policy, err := ParseAutosaveMinInterval(cfg.Autosave.MinInterval); err == nil {
 		cfg.Autosave.MinInterval = policy.Canonical
 	}
+}
 
-	cfg.Ignore = mergeIgnore(DefaultIgnore, cfg.Ignore)
+func applyAttachmentDefaults(cfg *Config) {
+	// The attachments directory is normalized exactly the way the templates
+	// directory is, for the same reason: it is compared against vault-relative
+	// slash paths, so `dir = "Media/"` or a stray space has to mean `Media`. An
+	// unusable value falls back to the default rather than being left to fail at
+	// the first upload, because the vault has to be able to say where a new
+	// attachment goes before anyone picks one.
+	cfg.Attachments.Dir = normalizeSlashSeparators(strings.TrimSpace(cfg.Attachments.Dir))
+	cfg.Attachments.Dir = strings.TrimRight(cfg.Attachments.Dir, "/")
+	if cfg.Attachments.Dir != "" {
+		cfg.Attachments.Dir = path.Clean(cfg.Attachments.Dir)
+	}
+	if isAbsolutePathLike(cfg.Attachments.Dir) ||
+		cfg.Attachments.Dir == "" ||
+		cfg.Attachments.Dir == "." ||
+		cfg.Attachments.Dir == ".." ||
+		strings.HasPrefix(cfg.Attachments.Dir, "../") {
+		cfg.Attachments.Dir = DefaultAttachmentsDir
+	}
+	// A zero limit means "unset" and takes the documented default; anything else
+	// — including a negative or an over-ceiling number — survives for validate to
+	// reject with the value the user actually wrote.
+	if cfg.Attachments.MaxFileBytes == 0 {
+		cfg.Attachments.MaxFileBytes = MaxAttachmentFileBytes
+	}
 }

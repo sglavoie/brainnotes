@@ -31,6 +31,7 @@ type Config struct {
 	Agent       AgentConfig       `toml:"agent"`
 	Cockpit     CockpitConfig     `toml:"cockpit"`
 	Autosave    AutosaveConfig    `toml:"autosave"`
+	Attachments AttachmentsConfig `toml:"attachments"`
 
 	// Views holds the saved queries declared by the [[views]] array of tables,
 	// in file order.
@@ -77,6 +78,36 @@ type TemplatesConfig struct {
 	Dir              string `toml:"dir"`
 	DefaultExtension string `toml:"default_extension"`
 }
+
+// AttachmentsConfig decides where files uploaded alongside a note are filed and
+// how large one of them may be.
+//
+// Both keys are portable, because both describe the vault rather than the
+// machine editing it: a link a note carries has to resolve in every clone, so
+// the directory the link points into cannot be a per-machine setting, and a
+// vault that is synchronized to a phone is the same vault whatever it was
+// uploaded from.
+type AttachmentsConfig struct {
+	// Dir is the vault-relative folder new attachments are filed under.
+	Dir string `toml:"dir"`
+	// MaxFileBytes is the largest single upload the vault accepts, at most
+	// MaxAttachmentFileBytes. It is configurable downward rather than upward on
+	// purpose: the transport bound the upload route widens to is a constant, so a
+	// number above it would be a limit the server could never honour.
+	MaxFileBytes int64 `toml:"max_file_bytes"`
+}
+
+// DefaultAttachmentsDir is where attachments are filed when [attachments].dir
+// is unset.
+const DefaultAttachmentsDir = "attachments"
+
+// MaxAttachmentFileBytes is both the default per-file upload limit and the
+// ceiling [attachments].max_file_bytes may be set to.
+//
+// It is 25 MiB, which is under the 32 MiB local request profile, so widening the
+// upload route's transport bound to it narrows nothing on a local server and
+// only lifts a remote profile's 1 MiB default for the one route that needs it.
+const MaxAttachmentFileBytes int64 = 25 << 20
 
 // PropertyKind names the value type of a frontmatter property.
 type PropertyKind string

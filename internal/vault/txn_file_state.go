@@ -58,6 +58,38 @@ func currentFileState(path string) (data []byte, mode os.FileMode, exists bool, 
 	return data, info.Mode().Perm(), true, nil
 }
 
+// currentFileDigest is currentFileState for a caller that only needs to know
+// which bytes are there, not what they say. It stats, refuses the same
+// non-regular destinations, and streams the file through a hasher.
+//
+// Recovery is the caller that makes this necessary. A recovery intent names the
+// prior and planned digests, so every question it asks of a destination is a
+// digest comparison — and the destination may be a 25 MiB attachment a streamed
+// create was in the middle of installing, which is exactly the residency that
+// whole path was built to avoid.
+func currentFileDigest(path string) (digest string, exists bool, err error) {
+	info, statErr := os.Lstat(path)
+	switch {
+	case statErr == nil:
+	case os.IsNotExist(statErr):
+		return "", false, nil
+	default:
+		return "", false, fmt.Errorf("vault: stat %q: %w", path, statErr)
+	}
+	if !info.Mode().IsRegular() {
+		return "", false, &TxnConflictError{
+			Path:     path,
+			Expected: "file",
+			Actual:   nonRegularLabel(info),
+		}
+	}
+	digest, _, hashErr := HashFile(path)
+	if hashErr != nil {
+		return "", false, classifyStateReadError(path, hashErr)
+	}
+	return digest, true, nil
+}
+
 // classifyStateReadError turns a read that follows a successful stat into the
 // right kind of failure. The stat said "regular file", so a read that now
 // reports the path missing means another writer unlinked it in between — a
@@ -132,12 +164,20 @@ func stageTempFile(dest string, data []byte, mode os.FileMode) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("vault: tempfile in %q: %w", dir, err)
 	}
-	cleanup := func() { _ = os.Remove(tmpPath) }
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		cleanup()
+		_ = os.Remove(tmpPath)
 		return "", fmt.Errorf("vault: write %q: %w", tmpPath, err)
 	}
+	return finishTempFile(tmp, tmpPath, mode)
+}
+
+// finishTempFile makes a staged temp file durable and gives it the mode its
+// destination will have, so installing it is a single rename. It owns tmp from
+// here on and removes the file on any failure, because a staged copy that never
+// became durable describes nothing a later step could finish.
+func finishTempFile(tmp *os.File, tmpPath string, mode os.FileMode) (string, error) {
+	cleanup := func() { _ = os.Remove(tmpPath) }
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		cleanup()

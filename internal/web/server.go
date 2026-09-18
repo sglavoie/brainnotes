@@ -241,6 +241,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		return nil, err
 	}
 	srv.handler = srv.routes(staticRoot)
+	srv.sweepStagedUploadsAtStartup()
 
 	return srv, nil
 }
@@ -376,6 +377,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(noteInsightAPIRoutePath, srv.handleNoteInsight)
 	srv.registerNoteMutationRoutes(mux)
 	srv.registerSourceRoutes(mux)
+	srv.registerAttachmentRoutes(mux)
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
 	mux.HandleFunc("/api/cockpit", srv.handleCockpitQueue)
 	mux.HandleFunc("/api/cockpit/item", srv.handleCockpitItem)

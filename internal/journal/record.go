@@ -222,7 +222,7 @@ func (r *Recorder) Capture(path string) error {
 	if _, ok := r.index[relSlash]; ok {
 		return nil
 	}
-	state, data, err := fileStateFromDisk(abs, true)
+	state, data, err := fileStateFromDisk(abs)
 	if err != nil {
 		return fmt.Errorf("journal: capture %q: %w", relSlash, err)
 	}
@@ -249,7 +249,7 @@ func (r *Recorder) Finalize() (*Entry, error) {
 	}
 	for i := range r.files {
 		abs := filepath.Join(r.vaultRoot, filepath.FromSlash(r.files[i].Path))
-		state, _, err := fileStateFromDisk(abs, false)
+		state, err := fileStateOnly(abs)
 		if err != nil {
 			return nil, fmt.Errorf("journal: finalize %q: %w", r.files[i].Path, err)
 		}

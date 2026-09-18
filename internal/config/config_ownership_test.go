@@ -363,7 +363,7 @@ func setNonZero(t *testing.T, v reflect.Value) {
 	switch v.Kind() {
 	case reflect.String:
 		v.SetString("set")
-	case reflect.Int:
+	case reflect.Int, reflect.Int64:
 		v.SetInt(1)
 	case reflect.Bool:
 		v.SetBool(true)

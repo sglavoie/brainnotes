@@ -50,23 +50,21 @@ type sourceErrorPayload struct {
 	Changed  bool   `json:"changed"`
 }
 
-func newSourceTestServer(t *testing.T, opts Options) (*httptest.Server, *Server, string) {
+// newSourceTestServer builds a vault and a server over it.
+//
+// customize runs on the configuration after the fixture's own values and before
+// the vault is opened, which is how a test asks for a narrower attachment limit
+// or a different attachments directory without a second fixture.
+func newSourceTestServer(t *testing.T, opts Options, customize ...func(*config.Config)) (*httptest.Server, *Server, string) {
 	t.Helper()
 
 	root := t.TempDir()
 	writeTestFile(t, root, "Alpha.md", sourceTestNote)
 	writeTestFile(t, root, "Beta.md", "---\ntitle: Beta\n---\n\nBeta body.\n")
 
-	disabled := false
-	// The ignore list and the templates directory are declared because the source
-	// routes honour them: they are two of the locations vault.Walk never visits,
-	// and a fixture that left them unset would exercise a laxer rule than a real
-	// vault's.
-	cfg := &config.Config{
-		Vault:     root,
-		Ignore:    []string{"Archive"},
-		Templates: config.TemplatesConfig{Dir: "Templates"},
-		Serve:     config.ServeConfig{Addr: "127.0.0.1:0", OpenBrowser: &disabled},
+	cfg := sourceTestConfig(root)
+	for _, apply := range customize {
+		apply(cfg)
 	}
 	v, err := vault.Open(cfg)
 	if err != nil {
@@ -82,6 +80,51 @@ func newSourceTestServer(t *testing.T, opts Options) (*httptest.Server, *Server,
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, srv, root
+}
+
+// sourceTestConfig is the vault configuration the source and attachment routes
+// are exercised against.
+//
+// The ignore list and the templates directory are declared because the source
+// routes honour them: they are two of the locations vault.Walk never visits, and
+// a fixture that left them unset would exercise a laxer rule than a real vault's.
+// The attachment settings are declared for the same reason — a loaded
+// configuration always carries both, so a fixture that left them zero would have
+// the upload routes fail on a store no real vault could produce.
+func sourceTestConfig(root string) *config.Config {
+	disabled := false
+	return &config.Config{
+		Vault:     root,
+		Ignore:    []string{"Archive"},
+		Templates: config.TemplatesConfig{Dir: "Templates"},
+		Serve:     config.ServeConfig{Addr: "127.0.0.1:0", OpenBrowser: &disabled},
+		Attachments: config.AttachmentsConfig{
+			Dir:          config.DefaultAttachmentsDir,
+			MaxFileBytes: config.MaxAttachmentFileBytes,
+		},
+	}
+}
+
+// restartTestServer builds a second server over a vault that already exists,
+// which is how a test observes what a process does on startup with an earlier
+// session's leftovers still on disk.
+func restartTestServer(t *testing.T, root string, customize ...func(*Options)) *Server {
+	t.Helper()
+
+	cfg := sourceTestConfig(root)
+	v, err := vault.Open(cfg)
+	if err != nil {
+		t.Fatalf("reopen vault: %v", err)
+	}
+	opts := Options{CSRFToken: sourceTestToken}
+	for _, apply := range customize {
+		apply(&opts)
+	}
+	srv, err := NewServer(cfg, v, opts)
+	if err != nil {
+		t.Fatalf("restart NewServer: %v", err)
+	}
+	return srv
 }
 
 func getSourceDocument(t *testing.T, ts *httptest.Server, key string) *http.Response {

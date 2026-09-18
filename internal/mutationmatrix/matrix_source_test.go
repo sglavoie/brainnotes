@@ -1,6 +1,7 @@
 package mutationmatrix
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/fs"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/web"
 )
@@ -35,7 +37,22 @@ const (
 	// idempotency record stays out of the content history, so it has to name the
 	// place independently of the code that chose it.
 	sourceSaveLedgerDir = ".bnotes/source-saves"
+
+	// The attachment fixture. sourceUploadRel is named independently of the code
+	// for the same reason the ledger directory is: this package asserts where the
+	// bytes end up, so it must not ask the code that decided.
+	sourceUploadOwner = "matrix-draft"
+	sourceUploadName  = "matrix.png"
+	sourceUploadRel   = "attachments/matrix.png"
+	sourceUploadDir   = ".bnotes/uploads"
+
+	sourceSaveContentWithAttachment = "---\ntitle: Alpha\nstatus: done\n---\n\nAlpha body with ![[attachments/matrix.png]].\n"
 )
+
+// sourceUploadPayload is binary and not valid UTF-8, so a byte damaged anywhere
+// between the request body and the vault shows up as a digest that does not
+// match rather than as text that still reads.
+var sourceUploadPayload = []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff}
 
 // sourceState is what a save has to be planned against: the revision the edit
 // was made from, and the bytes that revision stands for, which is what a no-op
@@ -85,6 +102,32 @@ func sourceMutations() []mutation {
 			// The no-op create — the same save id submitted twice — cannot live here,
 			// because this row's apply is what makes the record it would replay.
 			// TestSourceSaveRecordsIdempotencyOutsideTheHistory covers it.
+		},
+		{
+			// A save carrying an attachment is a distinct write class: two paths in
+			// one transaction, one of them copied out of private staging rather than
+			// submitted in the request. The row is here to hold it to the same bar as
+			// every other mutation — one commit, exactly these paths — because the
+			// failure it guards against is a note and its picture landing in two
+			// commits, or the picture landing and the note not.
+			name: "web/source-save-with-attachment",
+			prepare: func(t *testing.T, h *harness) any {
+				return sourceSaveWithUpload{
+					source: getSource(t, h, sourceSaveKey),
+					upload: uploadAttachment(t, h, sourceUploadOwner, sourceUploadName, sourceUploadPayload),
+				}
+			},
+			apply: func(t *testing.T, h *harness, state any) error {
+				prepared := state.(sourceSaveWithUpload)
+				return postSourceSave(t, h, sourceSaveKey,
+					sourceSaveContentWithAttachment, prepared.source.revision, prepared.upload)
+			},
+			touches:   []string{sourceSaveRel, sourceUploadRel},
+			journaled: true,
+			overHTTP:  true,
+			// No no-op row: the save consumes the upload, so resubmitting it is a
+			// different request rather than the same one with nothing to do.
+			// TestAttachmentUploadStaysOutOfTheHistory covers the staging half.
 		},
 		{
 			name: "web/source-save",
@@ -180,7 +223,7 @@ func getSource(t *testing.T, h *harness, key string) sourceState {
 // snapshot failure. An envelope of its own is an envelope that can disagree with
 // the shared status mapping, so this checks the status against the code in the
 // body on every failure the table provokes.
-func postSourceSave(t *testing.T, h *harness, key, content, revision string) error {
+func postSourceSave(t *testing.T, h *harness, key, content, revision string, uploads ...uploadState) error {
 	t.Helper()
 	ts, err := sourceServer(t, h)
 	if err != nil {
@@ -188,11 +231,8 @@ func postSourceSave(t *testing.T, h *harness, key, content, revision string) err
 	}
 	defer ts.Close()
 
-	form := url.Values{}
-	form.Set("key", key)
-	form.Set("content", content)
-	form.Set("revision", revision)
-	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/source/save", strings.NewReader(form.Encode()))
+	body := strings.NewReader(sourceSaveForm(key, content, revision, uploads...).Encode())
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/source/save", body)
 	if err != nil {
 		t.Fatalf("build source save request: %v", err)
 	}
@@ -204,17 +244,42 @@ func postSourceSave(t *testing.T, h *harness, key, content, revision string) err
 	}
 	defer resp.Body.Close()
 
-	var payload struct {
-		OK       bool   `json:"ok"`
-		Code     string `json:"code"`
-		Message  string `json:"message"`
-		Revision string `json:"revision"`
-		Changed  bool   `json:"changed"`
-	}
+	var payload sourceSaveAnswer
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode source save response: %v", err)
 	}
-	if resp.StatusCode == http.StatusOK {
+	return sourceSaveError(t, resp.StatusCode, payload)
+}
+
+// sourceSaveForm is the request body of a save, with the attachment fields the
+// editor sends: one owner for the draft, one `attachment` per upload.
+func sourceSaveForm(key, content, revision string, uploads ...uploadState) url.Values {
+	form := url.Values{}
+	form.Set("key", key)
+	form.Set("content", content)
+	form.Set("revision", revision)
+	for _, upload := range uploads {
+		form.Set("owner", upload.owner)
+		form.Add("attachment", upload.id)
+	}
+	return form
+}
+
+// sourceSaveAnswer is the part of the save payload the matrix judges: whether it
+// succeeded, and, when it did not, the claim the client has to act on.
+type sourceSaveAnswer struct {
+	OK       bool   `json:"ok"`
+	Code     string `json:"code"`
+	Message  string `json:"message"`
+	Revision string `json:"revision"`
+	Changed  bool   `json:"changed"`
+}
+
+// sourceSaveError rebuilds the noteops error a direct caller would have got, so
+// an HTTP row is judged by the same assertions as its in-process twin.
+func sourceSaveError(t *testing.T, status int, payload sourceSaveAnswer) error {
+	t.Helper()
+	if status == http.StatusOK {
 		return nil
 	}
 	// The snapshot-failure row asserts through the returned error that the bytes
@@ -229,10 +294,156 @@ func postSourceSave(t *testing.T, h *harness, key, content, revision string) err
 		}
 	}
 	opErr := &noteops.Error{Code: noteops.ErrorCode(payload.Code), Message: payload.Message}
-	if want := noteops.HTTPStatusForError(opErr); resp.StatusCode != want {
-		t.Fatalf("POST /api/source/save answered %d for code %q, want %d", resp.StatusCode, payload.Code, want)
+	if want := noteops.HTTPStatusForError(opErr); status != want {
+		t.Fatalf("POST /api/source/save answered %d for code %q, want %d", status, payload.Code, want)
 	}
 	return opErr
+}
+
+// uploadState is one staged upload as a save has to name it.
+type uploadState struct {
+	owner   string
+	id      string
+	relPath string
+}
+
+// sourceSaveWithUpload is what an attachment-carrying save is planned against:
+// the note's revision and the upload it references.
+type sourceSaveWithUpload struct {
+	source sourceState
+	upload uploadState
+}
+
+// uploadAttachment stages one file over the real route.
+//
+// The body is the file, raw, and the metadata rides in the query string — the
+// shape a streamed upload has to take, and the reason the CSRF token is sent as
+// a header: there is no form to put it in.
+func uploadAttachment(t *testing.T, h *harness, owner, name string, payload []byte) uploadState {
+	t.Helper()
+	ts, err := sourceServer(t, h)
+	if err != nil {
+		t.Fatalf("build server: %v", err)
+	}
+	defer ts.Close()
+
+	target := ts.URL + "/api/attachments/upload?owner=" + url.QueryEscape(owner) + "&name=" + url.QueryEscape(name)
+	req, err := http.NewRequest(http.MethodPost, target, bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("build upload request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("X-BN-CSRF", matrixCSRFToken)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("post upload: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var payloadResp struct {
+		OK       bool   `json:"ok"`
+		UploadID string `json:"upload_id"`
+		RelPath  string `json:"rel_path"`
+		SHA256   string `json:"sha256"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payloadResp); err != nil {
+		t.Fatalf("decode upload response: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK || !payloadResp.OK {
+		t.Fatalf("POST /api/attachments/upload answered %d (%+v)", resp.StatusCode, payloadResp)
+	}
+	if payloadResp.RelPath != sourceUploadRel {
+		t.Fatalf("staging reserved %q, want %q", payloadResp.RelPath, sourceUploadRel)
+	}
+	return uploadState{owner: owner, id: payloadResp.UploadID, relPath: payloadResp.RelPath}
+}
+
+// TestAttachmentUploadStaysOutOfTheHistory is the staging half of the
+// attachment write class, and the reason an upload has no row of its own: it
+// commits nothing, journals nothing and changes no note, which is a claim the
+// table's "exactly one commit" assertion cannot express.
+//
+// An upload is a write to a private directory and nothing more. The save that
+// references it is what puts the bytes in the vault, so an upload that committed
+// — or that left an undoable entry behind — would mean uploading a file was a
+// change to somebody's notes before they ever saved.
+func TestAttachmentUploadStaysOutOfTheHistory(t *testing.T) {
+	h := newHarness(t, nil)
+	head := h.head()
+	entries := undoEntryCount(t, h)
+
+	upload := uploadAttachment(t, h, sourceUploadOwner, sourceUploadName, sourceUploadPayload)
+
+	if got := h.head(); got != head {
+		t.Fatalf("an upload committed %q", h.subject("HEAD"))
+	}
+	if got := undoEntryCount(t, h); got != entries {
+		t.Fatalf("an upload recorded %d undo entries", got-entries)
+	}
+	// The bytes are on this disk, and they are nowhere a note could reach.
+	if _, err := os.Lstat(filepath.Join(h.root, filepath.FromSlash(sourceUploadRel))); !os.IsNotExist(err) {
+		t.Fatalf("an upload put bytes at its destination before any save: %v", err)
+	}
+	if staged := stagedUploadFiles(t, h); len(staged) == 0 {
+		t.Fatal("the upload left nothing in staging")
+	}
+	if upload.id == "" {
+		t.Fatal("the upload answered with no id")
+	}
+}
+
+// TestAttachmentSaveClearsStagingAndLandsTheExactBytes follows one file the
+// whole way: private staging, into the vault with the note that names it, and
+// out of staging again.
+func TestAttachmentSaveClearsStagingAndLandsTheExactBytes(t *testing.T) {
+	h := newHarness(t, nil)
+	base := getSource(t, h, sourceSaveKey)
+	upload := uploadAttachment(t, h, sourceUploadOwner, sourceUploadName, sourceUploadPayload)
+
+	if err := postSourceSave(t, h, sourceSaveKey, sourceSaveContentWithAttachment, base.revision, upload); err != nil {
+		t.Fatalf("save with an attachment: %v", err)
+	}
+	stored, err := os.ReadFile(filepath.Join(h.root, filepath.FromSlash(sourceUploadRel)))
+	if err != nil {
+		t.Fatalf("read the committed attachment: %v", err)
+	}
+	if !bytes.Equal(stored, sourceUploadPayload) {
+		t.Fatalf("the committed attachment holds %d bytes, want the %d uploaded", len(stored), len(sourceUploadPayload))
+	}
+	// Staging is not a second copy of the vault. Once the bytes are committed the
+	// staged one is redundant, and keeping it would double what every upload costs.
+	if staged := stagedUploadFiles(t, h); len(staged) != 0 {
+		t.Fatalf("staging still holds %v after the save committed the upload", staged)
+	}
+}
+
+// undoEntryCount is how many operations this vault could undo right now.
+func undoEntryCount(t *testing.T, h *harness) int {
+	t.Helper()
+	entries, _, err := journal.ListEntries(noteops.JournalRoot(h.root))
+	if err != nil {
+		t.Fatalf("ListEntries: %v", err)
+	}
+	return len(entries)
+}
+
+// stagedUploadFiles lists what is in private staging, by name only.
+func stagedUploadFiles(t *testing.T, h *harness) []string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(h.root, filepath.FromSlash(sourceUploadDir)))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		t.Fatalf("read %s: %v", sourceUploadDir, err)
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.Type()&fs.ModeDir == 0 {
+			names = append(names, entry.Name())
+		}
+	}
+	return names
 }
 
 // TestSourceSaveRecordsIdempotencyOutsideTheHistory is the other half of the

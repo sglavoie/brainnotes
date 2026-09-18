@@ -69,6 +69,8 @@ func routeBodyLimit(path string) int64 {
 		return synthesisPreviewBodyLimit
 	case sourcePreviewAPIRoutePath, sourceSaveAPIRoutePath, sourceCreateAPIRoutePath:
 		return sourceRequestBodyLimit
+	case attachmentUploadAPIRoutePath:
+		return attachmentUploadBodyLimit
 	}
 	return 0
 }

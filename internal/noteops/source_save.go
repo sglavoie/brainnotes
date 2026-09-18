@@ -22,6 +22,22 @@ type SaveSourceRequest struct {
 	SaveID string
 	// Create asks for a note that does not exist yet.
 	Create bool
+	// Attachments are staged uploads this note references and that must land
+	// with it. They are committed in the note's own transaction, under the note's
+	// own journal entry, so a save either stores the note and every file it
+	// points at or stores none of them — and one `bn undo` takes back all of it.
+	Attachments []AttachmentCommit
+	// UnresolvedAttachments names uploads this note references that the caller
+	// could not find in staging.
+	//
+	// They are carried rather than refused by the caller because a save that
+	// already happened is exactly the save whose staging is gone: the first
+	// attempt committed the bytes and dropped the staged copy, and the retry that
+	// never saw the answer names the same upload ids again. So this is refused
+	// *after* a keyed save has had the chance to replay its recorded outcome, and
+	// only then — a save that is genuinely writing a note must not store a link
+	// to a file nothing is going to put there.
+	UnresolvedAttachments []string
 }
 
 // SaveSourceResult reports what a save did.
@@ -39,7 +55,11 @@ type SaveSourceResult struct {
 	// Replayed is true when this answer came from a persisted outcome rather
 	// than from a write this call performed.
 	Replayed bool
-	Journal  *journal.Entry
+	// Attachments names every referenced upload that is in the vault once this
+	// answer is given, whether this call wrote it or a previous attempt did. It
+	// is what lets a client stop holding the staged copy.
+	Attachments []SavedAttachment
+	Journal     *journal.Entry
 }
 
 // SaveSource writes relPath's whole Markdown source, journaled and pinned to the
@@ -108,7 +128,10 @@ type sourceSavePlan struct {
 	revision string
 	base     string
 	created  bool
-	ledger   *sourceSaveLedgerWrite
+	// attachments are the referenced uploads: the ones this transaction has to
+	// write, and the full list the answer reports.
+	attachments attachmentPlan
+	ledger      *sourceSaveLedgerWrite
 	// settled holds the answer for a save that needs no transaction at all: a
 	// replayed record, or a note that already holds the submitted bytes.
 	settled *SaveSourceResult
@@ -132,37 +155,111 @@ func planSourceSave(vaultRoot string, cfg *config.Config, req SaveSourceRequest)
 	if replay != nil {
 		return sourceSavePlan{settled: replay}, nil
 	}
+	return planSourceSaveWrite(vaultRoot, cfg, req, sourceSaveTarget{
+		destination: dest,
+		content:     content,
+		revision:    digest,
+		ledger:      ledger,
+	})
+}
 
-	current, err := ReadSource(vaultRoot, cfg, dest.RelPath)
+// sourceSaveTarget is what the checks above settled before anything about the
+// note on disk was read: where the bytes go, what they are, and the record that
+// will answer a resubmission.
+type sourceSaveTarget struct {
+	destination PathResolution
+	content     []byte
+	revision    string
+	ledger      *sourceSaveLedgerWrite
+}
+
+// planSourceSaveWrite plans a save that is really going to write, which is the
+// only kind that reaches it: a replayed one has already been answered.
+//
+// That is why the unresolved uploads are refused here rather than at the top.
+// The save whose staging is gone is very often the save that already succeeded
+// and cleared it, so refusing before the replay would turn the retry a lost
+// response invites into a permanent failure.
+func planSourceSaveWrite(vaultRoot string, cfg *config.Config, req SaveSourceRequest, target sourceSaveTarget) (sourceSavePlan, error) {
+	if err := refuseUnresolvedAttachments(req.UnresolvedAttachments); err != nil {
+		return sourceSavePlan{}, err
+	}
+	attachments, err := planAttachmentCommits(vaultRoot, req.Attachments)
 	if err != nil {
 		return sourceSavePlan{}, err
 	}
-	if settled := convergedSourceSave(current, digest); settled != nil {
+	current, err := ReadSource(vaultRoot, cfg, target.destination.RelPath)
+	if err != nil {
+		return sourceSavePlan{}, err
+	}
+	settled, err := settledSourceSave(current, target.revision, attachments)
+	if err != nil {
+		return sourceSavePlan{}, err
+	}
+	if settled != nil {
 		return sourceSavePlan{settled: settled}, nil
 	}
 	expect, err := sourceSaveExpectation(req, current)
 	if err != nil {
 		return sourceSavePlan{}, err
 	}
-	if ledger != nil {
-		ledger.record = sourceSaveRecord{
-			Version:  sourceSaveRecordVersion,
-			SaveID:   strings.TrimSpace(req.SaveID),
-			Digest:   digest,
-			RelPath:  dest.RelPath,
-			Revision: digest,
-			Created:  !current.Exists,
-		}
-	}
-	return sourceSavePlan{
-		destination: dest,
-		content:     content,
+	plan := sourceSavePlan{
+		destination: target.destination,
+		content:     target.content,
 		expect:      expect,
-		revision:    digest,
+		revision:    target.revision,
 		base:        req.BaseRevision,
 		created:     !current.Exists,
-		ledger:      ledger,
-	}, nil
+		attachments: attachments,
+		ledger:      target.ledger,
+	}
+	recordSourceSave(target.ledger, req, plan)
+	return plan, nil
+}
+
+// recordSourceSave fills in the outcome the transaction will persist under this
+// save id, for a save that has one.
+func recordSourceSave(ledger *sourceSaveLedgerWrite, req SaveSourceRequest, plan sourceSavePlan) {
+	if ledger == nil {
+		return
+	}
+	ledger.record = sourceSaveRecord{
+		Version:     sourceSaveRecordVersion,
+		SaveID:      strings.TrimSpace(req.SaveID),
+		Digest:      plan.revision,
+		RelPath:     plan.destination.RelPath,
+		Revision:    plan.revision,
+		Created:     plan.created,
+		Attachments: plan.attachments.saved,
+	}
+}
+
+// settledSourceSave answers the save that needs no transaction, and refuses the
+// one that looks like it but is not.
+//
+// A converged note whose attachments are all in the vault is finished: there is
+// nothing left to write, and the answer names them so the client can drop its
+// staged copies.
+//
+// A converged note with an attachment still in staging is a different thing
+// wearing the same shape, and writing the file anyway would not fix it: the note
+// already holds these exact bytes, so there is no note write to carry the
+// attachment, and committing the file alone would journal a change to a note
+// that did not change. It is refused, because the alternative is reporting
+// success over a file that is not in the vault and will be swept out of staging
+// within the day.
+func settledSourceSave(current *SourceDocument, digest string, attachments attachmentPlan) (*SaveSourceResult, error) {
+	settled := convergedSourceSave(current, digest)
+	if settled == nil {
+		return nil, nil
+	}
+	if len(attachments.pending) > 0 {
+		return nil, Errorf(CodeConflict,
+			"source: %s already holds these bytes, so nothing was written, and %d referenced attachment(s) are not in the vault",
+			current.Destination.RelPath, len(attachments.pending))
+	}
+	settled.Attachments = attachments.saved
+	return settled, nil
 }
 
 // validateSaveSourceRequest refuses a request that could not be stored, and one
@@ -245,8 +342,8 @@ func sourceSaveExpectation(req SaveSourceRequest, current *SourceDocument) (vaul
 	return vault.ExpectHash(current.Revision), nil
 }
 
-// commitSourceSave writes the note, the idempotency record, and nothing else, in
-// one transaction under one undo entry.
+// commitSourceSave writes the note, its attachments, the idempotency record,
+// and nothing else, in one transaction under one undo entry.
 func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) (*SaveSourceResult, error) {
 	txn, err := vault.NewFileTxn(vaultRoot)
 	if err != nil {
@@ -254,6 +351,9 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 	}
 	if err := txn.Write(plan.destination.AbsPath, plan.content, 0, plan.expect); err != nil {
 		return nil, classifyTxnError("source: plan save", err)
+	}
+	if err := stageAttachments(txn, plan.attachments); err != nil {
+		return nil, err
 	}
 	if err := stageSourceSaveLedger(txn, plan.ledger); err != nil {
 		return nil, err
@@ -265,8 +365,12 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 	}
 	// A create journals a file that does not exist yet, so `bn undo` deletes the
 	// note it made. The record is journaled with it and goes back the same way,
-	// which is what keeps an undone save re-submittable.
-	j, err := BeginOperation(vaultRoot, "save", cfg.command, []string{plan.destination.AbsPath}, cfg.journalOptions...)
+	// which is what keeps an undone save re-submittable. The attachments are
+	// named here for the same reason the note is: journaling them is what makes
+	// the one undo take back the whole save rather than the prose alone, leaving
+	// uploaded files nothing refers to.
+	targets := append([]string{plan.destination.AbsPath}, plan.attachments.paths()...)
+	j, err := BeginOperation(vaultRoot, "save", cfg.command, targets, cfg.journalOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +382,7 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 		Revision:    plan.revision,
 		Changed:     true,
 		Created:     plan.created,
+		Attachments: plan.attachments.saved,
 	}
 	entry, err := j.Finalize()
 	if err != nil {

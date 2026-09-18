@@ -298,6 +298,16 @@ type txnChange struct {
 	mode   os.FileMode
 	expect FileExpectation
 
+	// source names a file holding the replacement bytes, for a change planned
+	// through WriteFrom rather than Write. When it is set, data is always nil and
+	// digest and size describe the content instead; see txn_stream.go.
+	source string
+	// digest and size describe the content a source-backed change writes. They
+	// are what the recovery intent records and what every later comparison pins,
+	// standing in for the hash Write would have taken of its slice.
+	digest string
+	size   int64
+
 	// staged is the temp file holding the replacement bytes, empty for removals.
 	staged string
 	// applied records that the destination already carries this change, so a
@@ -308,6 +318,23 @@ type txnChange struct {
 	priorExists bool
 	priorData   []byte
 	priorMode   os.FileMode
+}
+
+// contentDigest and contentSize describe the bytes the change writes. A
+// source-backed change never held them, so it answers from what it verified
+// while staging rather than from a slice it does not have.
+func (c *txnChange) contentDigest() string {
+	if c.source != "" {
+		return c.digest
+	}
+	return HashBytes(c.data)
+}
+
+func (c *txnChange) contentSize() int64 {
+	if c.source != "" {
+		return c.size
+	}
+	return int64(len(c.data))
 }
 
 // FileTxn plans a set of in-vault file changes, validates every precondition

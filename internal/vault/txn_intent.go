@@ -195,8 +195,8 @@ func (t *FileTxn) writeIntent() (*txnIntent, error) {
 			record.PriorSize = int64(len(change.priorData))
 		}
 		if !change.remove {
-			record.NewSHA256 = HashBytes(change.data)
-			record.NewSize = int64(len(change.data))
+			record.NewSHA256 = change.contentDigest()
+			record.NewSize = change.contentSize()
 		}
 		changes = append(changes, record)
 	}

@@ -463,6 +463,8 @@ var fieldMutators = map[string]func(*Config){
 	"agent.command":               func(c *Config) { c.Agent.Command = []string{"x"} },
 	"agent.timeout_seconds":       func(c *Config) { c.Agent.TimeoutSeconds = 1 },
 	"autosave.min_interval":       func(c *Config) { c.Autosave.MinInterval = "x" },
+	"attachments.dir":             func(c *Config) { c.Attachments.Dir = "x" },
+	"attachments.max_file_bytes":  func(c *Config) { c.Attachments.MaxFileBytes = 1 },
 	"views":                       func(c *Config) { c.Views = []SavedView{{Name: "x"}} },
 
 	"cockpit.disabled_rules":              func(c *Config) { c.Cockpit.DisabledRules = []string{"x"} },

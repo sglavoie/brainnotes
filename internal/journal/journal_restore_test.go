@@ -1,10 +1,12 @@
 package journal
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -287,5 +289,82 @@ func TestRestoreForceStillDetectsANonRegularDestination(t *testing.T) {
 	info, err := os.Stat(notePath)
 	if err != nil || !info.IsDir() {
 		t.Fatalf("directory should survive: info=%v err=%v", info, err)
+	}
+}
+
+// largeRestorePayload is big enough that one copy of it is unmistakable in an
+// allocation total, and small enough to stay a cheap test.
+const largeRestorePayload = 8 << 20
+
+// writeFiller creates a file of n deterministic non-zero bytes and returns them.
+// Non-zero because a sparse file would not be read, copied, or hashed at the
+// sizes this is used for, which is the whole point of measuring it.
+func writeFiller(t *testing.T, path string, n int) []byte {
+	t.Helper()
+	payload := make([]byte, n)
+	for i := range payload {
+		payload[i] = byte(i%251 + 1)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %q: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, payload, 0o644); err != nil {
+		t.Fatalf("write %q: %v", path, err)
+	}
+	return payload
+}
+
+// TestRestorePutsALargeFileBackWithoutHoldingIt is the bound on the undo path.
+//
+// applyRestore stages every target before it commits any of them, so a restore
+// that read its snapshots would hold the whole entry at once — and an entry that
+// committed attachments is exactly the one where that sum is measured in
+// hundreds of megabytes. The correctness half is covered by the mixed-operation
+// test above; what is asserted here is that the bytes never became resident.
+func TestRestorePutsALargeFileBackWithoutHoldingIt(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	attachment := filepath.Join(vaultRoot, "attachments", "photo.png")
+
+	payload := writeFiller(t, attachment, largeRestorePayload)
+
+	rec, err := NewRecorder(vaultRoot, journalRoot, "bn attachment-delete")
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	if err := rec.Capture(attachment); err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	if err := os.Remove(attachment); err != nil {
+		t.Fatalf("remove attachment: %v", err)
+	}
+	entry, err := rec.Finalize()
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	if _, err := Restore(vaultRoot, journalRoot, entry.ID, RestoreOptions{}); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	runtime.ReadMemStats(&after)
+
+	// One copy of the file is the regression being watched for; the ceiling is
+	// well under that and far above an io.Copy buffer plus the churn of a
+	// transaction, so it fails on residency and not on noise.
+	allocated := after.TotalAlloc - before.TotalAlloc
+	if ceiling := uint64(largeRestorePayload / 2); allocated > ceiling {
+		t.Fatalf("restoring a %d byte attachment allocated %d bytes, want under %d",
+			len(payload), allocated, ceiling)
+	}
+
+	restored, err := os.ReadFile(attachment)
+	if err != nil {
+		t.Fatalf("read restored attachment: %v", err)
+	}
+	if !bytes.Equal(restored, payload) {
+		t.Fatalf("restored attachment is %d bytes and not the ones that were removed", len(restored))
 	}
 }

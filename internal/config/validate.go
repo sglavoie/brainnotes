@@ -10,33 +10,63 @@ import (
 	"strings"
 )
 
+// sectionValidators are the per-section rules, in the order a person meets them.
+//
+// A list rather than a chain of ifs: the checks are independent, the order is
+// only about which complaint is reported first when a file has several, and a
+// configuration that grows a section should grow this table rather than this
+// function.
+var sectionValidators = []func(*Config) error{
+	func(cfg *Config) error { return validateTemplatesDir(cfg.Templates.Dir) },
+	validateProperties,
+	validateRoutes,
+	validateAgent,
+	validateBrief,
+	validateCapture,
+	validateCockpit,
+	validateViews,
+	validateAutosave,
+	validateAttachments,
+}
+
 func validate(cfg *Config) error {
-	if err := validateTemplatesDir(cfg.Templates.Dir); err != nil {
-		return err
+	for _, check := range sectionValidators {
+		if err := check(cfg); err != nil {
+			return err
+		}
 	}
-	if err := validateProperties(cfg); err != nil {
-		return err
+	return nil
+}
+
+// validateAttachments refuses an attachments section that could not be honoured.
+//
+// applyDefaults has already replaced a directory that escapes the vault, so what
+// is left to refuse is a directory a write would land somewhere invisible and a
+// size limit the server could not enforce. A hidden component is the important
+// one: `.bnotes/` and `.git/` are outside the content history's tracked scope,
+// so an attachment filed there would be on disk, absent from every clone, and
+// unservable — three silent failures for one mis-set key.
+func validateAttachments(cfg *Config) error {
+	dir := cfg.Attachments.Dir
+	for _, r := range dir {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return fmt.Errorf("config: attachments.dir %q contains a control character (U+%04X)", dir, r)
+		}
 	}
-	if err := validateRoutes(cfg); err != nil {
-		return err
+	for _, part := range strings.Split(dir, "/") {
+		if strings.HasPrefix(part, ".") {
+			return fmt.Errorf(
+				"config: attachments.dir %q has a hidden component, and an attachment filed there would be "+
+					"outside the vault's content history", dir)
+		}
 	}
-	if err := validateAgent(cfg); err != nil {
-		return err
-	}
-	if err := validateBrief(cfg); err != nil {
-		return err
-	}
-	if err := validateCapture(cfg); err != nil {
-		return err
-	}
-	if err := validateCockpit(cfg); err != nil {
-		return err
-	}
-	if err := validateViews(cfg); err != nil {
-		return err
-	}
-	if err := validateAutosave(cfg); err != nil {
-		return err
+	switch {
+	case cfg.Attachments.MaxFileBytes < 0:
+		return fmt.Errorf("config: attachments.max_file_bytes %d is negative", cfg.Attachments.MaxFileBytes)
+	case cfg.Attachments.MaxFileBytes > MaxAttachmentFileBytes:
+		return fmt.Errorf(
+			"config: attachments.max_file_bytes %d exceeds the %d byte maximum this server accepts",
+			cfg.Attachments.MaxFileBytes, MaxAttachmentFileBytes)
 	}
 	return nil
 }
