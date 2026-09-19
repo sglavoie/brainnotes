@@ -1,0 +1,269 @@
+/*
+ * The /history page. It reuses .history-button and .history-status from
+ * history.css — the recent-changes panel and this workspace are the same two
+ * controls at two sizes, and a second set of rules for them would let the panel
+ * on /library and the list here drift into looking like different features.
+ */
+
+.history-workspace {
+  display: grid;
+  gap: 1rem;
+}
+
+.history-filters {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  align-items: start;
+  margin: 0;
+}
+
+.history-filter-field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.history-filter-field input,
+.history-filter-field select {
+  min-height: 2.2rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  color: var(--bn-text);
+  background: var(--bn-surface);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.history-filter-group {
+  display: flex;
+  gap: 0.35rem 0.9rem;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.65rem 0.6rem;
+}
+
+.history-filter-group legend {
+  padding: 0 0.3rem;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.history-filter-option {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--bn-text-subtle);
+  font-size: 0.87rem;
+  white-space: nowrap;
+}
+
+/*
+ * Unreadable entries sit above the list and are never hidden by a filter, so
+ * they are styled as a standing notice rather than as a row: a narrowed view
+ * that made them look like ordinary results would invite reading them as part
+ * of the page somebody asked for.
+ */
+.history-warnings {
+  margin: 0 0 0.75rem;
+  border: 1px solid var(--bn-warning-border);
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.7rem 0.55rem 1.6rem;
+  color: var(--bn-warning);
+  background: var(--bn-warning-bg);
+  font-size: 0.86rem;
+}
+
+.history-warnings[hidden] {
+  display: none;
+}
+
+.history-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.75rem;
+  align-items: start;
+  min-width: 0;
+  border-top: 1px solid var(--bn-border);
+  padding: 0.75rem 0;
+}
+
+.history-entry:first-child {
+  border-top: 0;
+}
+
+.history-entry-head {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.history-origin {
+  border: 1px solid var(--bn-accent-subtle-border);
+  border-radius: 0.3rem;
+  padding: 0.08rem 0.4rem;
+  color: var(--bn-accent-subtle-text);
+  background: var(--bn-accent-subtle-bg);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.history-entry .history-command {
+  overflow-wrap: anywhere;
+  color: var(--bn-code-text);
+  background: var(--bn-code-bg);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.84rem;
+  font-weight: 400;
+}
+
+.history-entry .history-meta {
+  grid-column: 1;
+  margin: 0;
+}
+
+.history-entry > .history-button {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  justify-self: end;
+}
+
+.history-pager {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.85rem;
+  border-top: 1px solid var(--bn-border);
+  padding-top: 0.7rem;
+}
+
+.history-range {
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.86rem;
+}
+
+.history-restore-panel[hidden] {
+  display: none;
+}
+
+.history-restore-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.8rem;
+  font-size: 0.87rem;
+}
+
+.history-restore-facts dt {
+  color: var(--bn-muted);
+}
+
+.history-restore-facts dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--bn-text);
+}
+
+.history-restore-changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-change {
+  border-top: 1px solid var(--bn-border);
+  padding: 0.55rem 0;
+}
+
+.history-change:first-child {
+  border-top: 0;
+}
+
+.history-change code {
+  overflow-wrap: anywhere;
+  color: var(--bn-code-text);
+}
+
+.history-change-detail {
+  margin: 0.2rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.history-change.is-conflict {
+  border-left: 3px solid var(--bn-danger-border);
+  padding-left: 0.55rem;
+}
+
+.history-change-conflict {
+  margin: 0.2rem 0 0;
+  color: var(--bn-danger);
+  font-size: 0.85rem;
+}
+
+.history-restore-conflicts {
+  margin-top: 0.85rem;
+  border: 1px solid var(--bn-danger-border);
+  border-radius: 0.45rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--bn-danger-bg);
+}
+
+.history-restore-conflicts[hidden] {
+  display: none;
+}
+
+.history-restore-conflicts h3 {
+  margin: 0 0 0.45rem;
+  color: var(--bn-danger);
+  font-size: 0.95rem;
+}
+
+.history-restore-conflicts ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--bn-danger);
+  font-size: 0.86rem;
+}
+
+.history-restore-consent {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  margin-top: 0.6rem;
+  color: var(--bn-danger);
+  font-size: 0.88rem;
+}
+
+.history-restore-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.9rem;
+}
+
+.history-button.is-primary {
+  border-color: var(--bn-accent);
+  color: var(--bn-surface);
+  background: var(--bn-accent);
+}
+
+.history-button.is-primary:hover {
+  background: var(--bn-link-hover);
+}
+
+.history-button.is-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

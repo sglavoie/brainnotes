@@ -32,6 +32,11 @@ const (
 	// engine re-checks that plan against the vault more strictly than a replan
 	// here could — see the write class in sync_resolve.go.
 	propertyPreviewResolution propertyPreviewKind = "resolution"
+	// propertyPreviewRestore is a restoration from the undo history. Its record
+	// carries the plan's paths and the conflicting paths rather than a request,
+	// because what it authorizes is not "restore this entry" but "restore this
+	// entry over exactly these pieces of newer work" — see historyRestoreRecord.
+	propertyPreviewRestore propertyPreviewKind = "restore"
 )
 
 // propertyPreviewStore holds short-lived, one-use receipts. A receipt carries
@@ -62,6 +67,7 @@ type propertyPreviewRecord struct {
 	Setting    settingMutationRequest
 	Template   templateMutationRequest
 	Resolution syncResolutionRecord
+	Restore    historyRestoreRecord
 	Files      []propertyPreviewFileState
 }
 

@@ -108,22 +108,73 @@ type bulkFailurePayload struct {
 }
 
 type historyPayload struct {
-	OK      bool                  `json:"ok"`
-	Entries []historyEntryPayload `json:"entries"`
+	OK           bool                     `json:"ok"`
+	Entries      []historyEntryPayload    `json:"entries"`
+	Total        int                      `json:"total"`
+	Offset       int                      `json:"offset"`
+	Limit        int                      `json:"limit"`
+	HasMore      bool                     `json:"has_more"`
+	Origins      []historyOptionPayload   `json:"origins"`
+	Classes      []historyOptionPayload   `json:"classes"`
+	Warnings     []historyWarningResponse `json:"warnings"`
+	WarningCount int                      `json:"warning_count"`
+}
+
+type historyOptionPayload struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
 }
 
 type historyEntryPayload struct {
-	ID        string               `json:"id"`
-	Timestamp string               `json:"timestamp"`
-	Command   string               `json:"command"`
-	FileCount int                  `json:"file_count"`
-	Files     []historyFilePayload `json:"files"`
+	ID          string                     `json:"id"`
+	Timestamp   string                     `json:"timestamp"`
+	Command     string                     `json:"command"`
+	Origin      string                     `json:"origin"`
+	OriginLabel string                     `json:"origin_label"`
+	FileCount   int                        `json:"file_count"`
+	Classes     []historyClassCountPayload `json:"classes"`
+	Files       []historyFilePayload       `json:"files"`
+}
+
+type historyClassCountPayload struct {
+	Class string `json:"class"`
+	Label string `json:"label"`
+	Count int    `json:"count"`
 }
 
 type historyFilePayload struct {
-	Path   string `json:"path"`
-	Before string `json:"before"`
-	After  string `json:"after"`
+	Path     string `json:"path"`
+	Before   string `json:"before"`
+	After    string `json:"after"`
+	Class    string `json:"class"`
+	Recorded bool   `json:"recorded"`
+	Travels  bool   `json:"travels"`
+}
+
+type historyPreviewPayload struct {
+	OK            bool                          `json:"ok"`
+	Code          string                        `json:"code"`
+	Message       string                        `json:"message"`
+	PreviewID     string                        `json:"preview_id"`
+	ExpiresAt     string                        `json:"expires_at"`
+	EntryID       string                        `json:"entry_id"`
+	Command       string                        `json:"command"`
+	Origin        string                        `json:"origin"`
+	OriginLabel   string                        `json:"origin_label"`
+	Timestamp     string                        `json:"timestamp"`
+	RequiresForce bool                          `json:"requires_force"`
+	Changes       []historyPreviewChangePayload `json:"changes"`
+	Conflicts     []undoConflictPayload         `json:"conflicts"`
+}
+
+type historyPreviewChangePayload struct {
+	Path          string `json:"path"`
+	CurrentState  string `json:"current_state"`
+	RestoredState string `json:"restored_state"`
+	Class         string `json:"class"`
+	Recorded      bool   `json:"recorded"`
+	Travels       bool   `json:"travels"`
+	Conflict      bool   `json:"conflict"`
 }
 
 type undoPayload struct {
@@ -190,6 +241,15 @@ func decodeHistoryResult(t *testing.T, body string) historyPayload {
 	var payload historyPayload
 	if err := json.Unmarshal([]byte(body), &payload); err != nil {
 		t.Fatalf("decode history result: %v; body=%q", err, body)
+	}
+	return payload
+}
+
+func decodeHistoryPreviewResult(t *testing.T, body string) historyPreviewPayload {
+	t.Helper()
+	var payload historyPreviewPayload
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode history preview result: %v; body=%q", err, body)
 	}
 	return payload
 }

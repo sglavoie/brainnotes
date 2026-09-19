@@ -243,6 +243,11 @@ func postBulkFormRequest(t *testing.T, rawURL, action string, keys []string, fie
 
 func postUndoRequest(t *testing.T, baseURL, entryID, headerToken, formToken string, force, confirmForce bool) *http.Response {
 	t.Helper()
+	return postUndoRequestWithPreview(t, baseURL, entryID, headerToken, formToken, "", force, confirmForce)
+}
+
+func postUndoRequestWithPreview(t *testing.T, baseURL, entryID, headerToken, formToken, previewID string, force, confirmForce bool) *http.Response {
+	t.Helper()
 
 	form := url.Values{}
 	if entryID != "" {
@@ -254,10 +259,32 @@ func postUndoRequest(t *testing.T, baseURL, entryID, headerToken, formToken stri
 	if confirmForce {
 		form.Set("confirm_force", "1")
 	}
+	if previewID != "" {
+		form.Set("preview_id", previewID)
+	}
 	if formToken != "" {
 		form.Set("token", formToken)
 	}
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/undo", strings.NewReader(form.Encode()))
+	return postHistoryForm(t, baseURL+"/api/undo", form, headerToken)
+}
+
+func postHistoryPreviewRequest(t *testing.T, baseURL, entryID, headerToken, formToken string) *http.Response {
+	t.Helper()
+
+	form := url.Values{}
+	if entryID != "" {
+		form.Set("id", entryID)
+	}
+	if formToken != "" {
+		form.Set("token", formToken)
+	}
+	return postHistoryForm(t, baseURL+"/api/history/preview", form, headerToken)
+}
+
+func postHistoryForm(t *testing.T, rawURL string, form url.Values, headerToken string) *http.Response {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodPost, rawURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -267,7 +294,24 @@ func postUndoRequest(t *testing.T, baseURL, entryID, headerToken, formToken stri
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("POST /api/undo: %v", err)
+		t.Fatalf("POST %s: %v", rawURL, err)
 	}
 	return resp
+}
+
+// previewHistoryRestore fetches a restore preview and returns its receipt,
+// failing the test if the preview itself was refused.
+func previewHistoryRestore(t *testing.T, baseURL, entryID, token string) historyPreviewPayload {
+	t.Helper()
+
+	resp := postHistoryPreviewRequest(t, baseURL, entryID, token, "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("preview status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	payload := decodeHistoryPreviewResult(t, body)
+	if !payload.OK || strings.TrimSpace(payload.PreviewID) == "" {
+		t.Fatalf("preview payload = %#v, want a receipt", payload)
+	}
+	return payload
 }

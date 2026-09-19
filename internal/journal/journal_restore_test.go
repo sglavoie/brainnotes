@@ -2,7 +2,10 @@ package journal
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func TestRestoreHandlesRewriteDeleteCreateAndMove(t *testing.T) {
@@ -168,6 +173,137 @@ func TestRestoreForceAppliesDespiteConflict(t *testing.T) {
 		t.Fatalf("restore --force: %v", err)
 	}
 	assertFile(t, note, "before\n")
+}
+
+// TestRestoreForceRefusesWhenTheAuthorizedStateMovedAgain is the reason
+// RestoreOptions.Require exists.
+//
+// Force is a promise about *specific* newer work: somebody was shown what would
+// be replaced and said yes to that. Everything a caller can check itself runs
+// before the vault's locks and before the Git preflight, so a writer that lands
+// in the window — bn-vault-sync applying a peer's change, most realistically —
+// replaces the bytes without changing which paths are in conflict, and no
+// re-check outside the transaction can see it. Pinning the authorized state is
+// what turns the consent into a precondition of the write.
+func TestRestoreForceRefusesWhenTheAuthorizedStateMovedAgain(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	note := filepath.Join(vaultRoot, "A.md")
+	entry := recordOneRewrite(t, vaultRoot, journalRoot, note, "entry-require")
+
+	// What a person was shown, and agreed to lose.
+	writeFile(t, note, "the edit they were shown\n")
+	authorized := map[string]vault.FileExpectation{"A.md": vault.ExpectHash(sha256Of(t, note))}
+
+	// What landed afterwards, while they were reading the confirmation. Same
+	// path, so the conflict set a caller could re-compute is identical.
+	writeFile(t, note, "an edit nobody has seen\n")
+
+	_, err := Restore(vaultRoot, journalRoot, entry.ID, RestoreOptions{Force: true, Require: authorized})
+	if err == nil {
+		t.Fatal("forced restore should refuse a state nobody authorized")
+	}
+	if !vault.IsTxnConflict(err) {
+		t.Fatalf("restore error = %v, want a transaction conflict", err)
+	}
+	assertFile(t, note, "an edit nobody has seen\n")
+}
+
+// TestRestoreRefusesARecordedPathTheAuthorizationDoesNotName pins the
+// name-them-all rule. A path left out of a supplied map would silently fall back
+// to the unpinned reading of disk, which is the exact behavior the map was
+// supplied to replace — so a partial map is a caller bug, not a partial pin.
+func TestRestoreRefusesARecordedPathTheAuthorizationDoesNotName(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	first := filepath.Join(vaultRoot, "A.md")
+	second := filepath.Join(vaultRoot, "B.md")
+	writeFile(t, first, "before\n")
+	writeFile(t, second, "before\n")
+
+	rec, err := NewRecorder(
+		vaultRoot,
+		journalRoot,
+		"bn set",
+		WithIDGenerator(func(time.Time) (string, error) { return "entry-partial", nil }),
+	)
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	for _, path := range []string{first, second} {
+		if err := rec.Capture(path); err != nil {
+			t.Fatalf("capture %s: %v", path, err)
+		}
+		writeFile(t, path, "after\n")
+	}
+	entry, err := rec.Finalize()
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+
+	partial := map[string]vault.FileExpectation{"A.md": vault.ExpectHash(sha256Of(t, first))}
+	_, err = Restore(vaultRoot, journalRoot, entry.ID, RestoreOptions{Force: true, Require: partial})
+	if err == nil {
+		t.Fatal("restore should refuse an authorization that names only some of the entry")
+	}
+	if !strings.Contains(err.Error(), "no authorized state") || !strings.Contains(err.Error(), "B.md") {
+		t.Fatalf("restore error = %v, want it to name B.md as unauthorized", err)
+	}
+	assertFile(t, first, "after\n")
+	assertFile(t, second, "after\n")
+}
+
+// TestRestoreRequireRestoresWhenTheAuthorizedStateStillHolds is the other half:
+// the pin is a precondition, not a refusal. A forced restore over exactly the
+// work somebody agreed to replace still runs.
+func TestRestoreRequireRestoresWhenTheAuthorizedStateStillHolds(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	note := filepath.Join(vaultRoot, "A.md")
+	entry := recordOneRewrite(t, vaultRoot, journalRoot, note, "entry-require-ok")
+
+	writeFile(t, note, "the edit they were shown\n")
+	authorized := map[string]vault.FileExpectation{"A.md": vault.ExpectHash(sha256Of(t, note))}
+
+	if _, err := Restore(vaultRoot, journalRoot, entry.ID, RestoreOptions{Force: true, Require: authorized}); err != nil {
+		t.Fatalf("restore --force with an authorization that holds: %v", err)
+	}
+	assertFile(t, note, "before\n")
+}
+
+// recordOneRewrite journals one note's rewrite from "before" to "after" and
+// returns the finalized entry, leaving "after" on disk.
+func recordOneRewrite(t *testing.T, vaultRoot, journalRoot, notePath, entryID string) *Entry {
+	t.Helper()
+	writeFile(t, notePath, "before\n")
+	rec, err := NewRecorder(
+		vaultRoot,
+		journalRoot,
+		"bn set",
+		WithIDGenerator(func(time.Time) (string, error) { return entryID, nil }),
+	)
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	if err := rec.Capture(notePath); err != nil {
+		t.Fatalf("capture: %v", err)
+	}
+	writeFile(t, notePath, "after\n")
+	entry, err := rec.Finalize()
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	return entry
+}
+
+func sha256Of(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 func TestRestoreConflictErrorMessageDeterministic(t *testing.T) {
@@ -366,5 +502,115 @@ func TestRestorePutsALargeFileBackWithoutHoldingIt(t *testing.T) {
 	}
 	if !bytes.Equal(restored, payload) {
 		t.Fatalf("restored attachment is %d bytes and not the ones that were removed", len(restored))
+	}
+}
+
+// TestRestoreCommitOutcomeKeepsAFinishedRestoreOutOfTheFailurePath is the test
+// the carry in applyRestore exists for.
+//
+// The distinction is not cosmetic. noteops.Undo stops at the first error Restore
+// hands back and never reaches Finalize, so classifying a leftover temp file as a
+// failure leaves the restore's writes on disk with no undo manifest authorizing
+// them — and an undo that removed a tracked note then looks to vaultgit like a
+// deletion nothing explains, which latches blocked.json over the next mutation.
+// Getting a real unlink to fail means arranging a filesystem failure; the
+// classification is a pure function of the error, so it is tested as one, the
+// same way vaultimport tests classifyCommit.
+func TestRestoreCommitOutcomeKeepsAFinishedRestoreOutOfTheFailurePath(t *testing.T) {
+	conflict := &vault.TxnConflictError{Path: "Notes/Alpha.md", Expected: "aaa", Actual: "bbb"}
+	cleanup := &vault.TxnCleanupError{
+		Path:         "Notes/Alpha.md",
+		LeftoverPath: "Notes/.alpha.tmp",
+		Err:          errors.New("permission denied"),
+	}
+
+	cases := []struct {
+		name string
+		err  error
+		// carried says the restore finished and the error is housekeeping.
+		carried bool
+	}{
+		{name: "a commit that succeeded carries nothing and fails with nothing"},
+		{
+			name:    "a temp file that could not be unlinked is not a failed restore",
+			err:     cleanup,
+			carried: true,
+		},
+		{
+			name:    "a wrapped cleanup failure is still a cleanup failure",
+			err:     fmt.Errorf("journal: restore e1: %w", cleanup),
+			carried: true,
+		},
+		{
+			// Nests the conflict, and vault's predicates are errors.As — so asking
+			// the cleanup question first is safe only because this is not one.
+			name: "a failed rollback is a failure, half-applied and needing a person",
+			err: &vault.TxnRollbackError{
+				Path:         "Notes/Alpha.md",
+				Err:          conflict,
+				Restored:     []string{"Notes/Beta.md"},
+				Failed:       []string{"Notes/Alpha.md"},
+				RollbackErrs: []error{errors.New("rename back refused")},
+			},
+		},
+		{name: "a precondition that moved is a failure", err: conflict},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertRestoreCommitOutcome(t, tc.err, tc.carried, cleanup)
+		})
+	}
+}
+
+// assertRestoreCommitOutcome is the table's body lifted out of the table: the
+// slice literal, the loop and the three-way comparison are one function's
+// complexity score, and the comparison is the half worth naming.
+func assertRestoreCommitOutcome(t *testing.T, err error, carried bool, cleanup error) {
+	t.Helper()
+
+	got, fatal := restoreCommitOutcome(err)
+	switch {
+	case err == nil:
+		if got != nil || fatal != nil {
+			t.Fatalf("restoreCommitOutcome(nil) = (%v, %v), want (nil, nil)", got, fatal)
+		}
+	case carried:
+		if fatal != nil {
+			t.Fatalf("a finished restore was reported as a failure: %v", fatal)
+		}
+		if !errors.Is(got, cleanup) {
+			t.Fatalf("carried = %v, want the cleanup failure itself", got)
+		}
+	default:
+		if got != nil {
+			t.Fatalf("carried = %v, want nothing carried out of a failure", got)
+		}
+		if !errors.Is(fatal, err) {
+			t.Fatalf("fatal = %v, want the error itself", fatal)
+		}
+	}
+}
+
+// TestRestoreLeavesCleanupUnsetWhenNothingWasLeftBehind keeps the carried field
+// from reading as "set on every restore": an ordinary one must answer nil, or a
+// caller rendering the notice would announce a temp file on every undo.
+//
+// Deliberately narrow, and worth knowing when leaning on it: a clean commit
+// answers on restoreCommitOutcome's first arm, so this catches an unconditional
+// assignment and nothing else. Rearranging the two arms below it is the table
+// test's job.
+func TestRestoreLeavesCleanupUnsetWhenNothingWasLeftBehind(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	notePath := filepath.Join(vaultRoot, "Clean.md")
+	recordOneRewrite(t, vaultRoot, journalRoot, notePath, "entry-clean")
+
+	plan, err := Restore(vaultRoot, journalRoot, "entry-clean", RestoreOptions{})
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if plan.Cleanup != nil {
+		t.Fatalf("Cleanup = %v, want nil for a restore that left nothing behind", plan.Cleanup)
 	}
 }

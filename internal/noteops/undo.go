@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // UndoOptions controls one restore of a journal entry.
@@ -16,6 +17,11 @@ type UndoOptions struct {
 	// Command is the full invocation recorded in the new journal entry the
 	// restore itself produces.
 	Command string
+	// Require pins each recorded path to the state the restore was authorized
+	// against, and is forwarded verbatim to journal.RestoreOptions.Require — see
+	// there for why a caller that showed somebody what would be replaced has to
+	// state it inside the transaction rather than check it beforehand.
+	Require map[string]vault.FileExpectation
 }
 
 // Undo restores one journal entry through the same begin/finalize contract every
@@ -34,12 +40,18 @@ type UndoOptions struct {
 // A dry run never begins an operation. Previewing an undo stays available on a
 // vault that cannot currently be written — which is exactly when a person most
 // wants to look at one.
+//
+// A returned plan can still carry a RestorePlan.Cleanup: the restore landed, was
+// journaled and was snapshotted, and a transaction temp file outlived it. That
+// is deliberately not this function's error, because stopping here over it would
+// skip Finalize and leave the writes unauthorized — but it is a fact a caller
+// must pass on rather than drop, since nothing else will mention the file again.
 func Undo(vaultRoot, entryID string, opts UndoOptions) (*journal.RestorePlan, error) {
 	entryID = strings.TrimSpace(entryID)
 	if entryID == "" {
 		return nil, Errorf(CodeInvalidRequest, "undo: entry id is required")
 	}
-	restoreOpts := journal.RestoreOptions{Force: opts.Force, DryRun: opts.DryRun}
+	restoreOpts := journal.RestoreOptions{Force: opts.Force, DryRun: opts.DryRun, Require: opts.Require}
 	if opts.DryRun {
 		return journal.Restore(vaultRoot, JournalRoot(vaultRoot), entryID, restoreOpts)
 	}

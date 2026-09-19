@@ -398,6 +398,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	srv.registerTemplateRoutes(mux)
 	srv.registerSynthesisRoutes(mux)
 	srv.registerSyncRoutes(mux)
+	srv.registerHistoryRoutes(mux)
 	srv.registerPageRoutes(mux)
 	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
 	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)
@@ -509,8 +510,6 @@ func (srv *Server) registerNoteMutationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(notePinReorderAPIRoutePath, srv.handleNotePinReorder)
 	mux.HandleFunc("/api/notes/bulk/preview", srv.handleNotesBulkPreview)
 	mux.HandleFunc("/api/notes/bulk", srv.handleNotesBulk)
-	mux.HandleFunc("/api/history", srv.handleHistory)
-	mux.HandleFunc("/api/undo", srv.handleUndo)
 }
 
 // registerSynthesisRoutes groups the four synthesis APIs out of routes.

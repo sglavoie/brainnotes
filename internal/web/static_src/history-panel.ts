@@ -1,14 +1,36 @@
 import {
-  buildUndoForm,
+  HISTORY_ENDPOINT,
+  HISTORY_PREVIEW_ENDPOINT,
+  UNDO_ENDPOINT,
   managementMutationEventName,
-  normalizeHistoryEntries,
-  normalizeManagementErrorMessage,
   type HistoryEntry,
-  type UndoConflict,
-  type UndoResult,
+  type HistoryPreviewResult,
 } from "./api";
-import { queryAllElements, queryElement } from "./dom";
-import { setStatusText, type StatusKind } from "./status";
+import {
+  conflicted,
+  fetchHistoryPage,
+  previewHistoryRestore,
+  restoreHistoryEntry,
+  type HistoryFetch,
+} from "./history-requests";
+import {
+  findHistoryPanelElements,
+  hideHistoryPanelConflict,
+  historyForceConsentMessage,
+  renderHistoryPanelEntries,
+  setHistoryPanelBusy,
+  setHistoryPanelStatus,
+  showHistoryPanelConflict,
+  type HistoryPanelElements,
+} from "./history-panel-view";
+import type { StatusKind } from "./status";
+
+export {
+  formatHistoryTimestamp,
+  historyConflictSummary,
+  historyFileCountLabel,
+  historyForceConsentMessage,
+} from "./history-panel-view";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type ConfirmLike = (message: string) => boolean;
@@ -18,257 +40,202 @@ export type HistoryPanelDeps = {
   confirm?: ConfirmLike;
 };
 
-export const formatHistoryTimestamp = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
-};
-
-export const historyFileCountLabel = (count: number): string =>
-  count === 1 ? "1 path" : `${count} paths`;
-
-export const historyConflictSummary = (conflicts: UndoConflict[]): string => {
-  if (conflicts.length === 0) {
-    return "Undo has conflicts.";
-  }
-  const sample = conflicts.slice(0, 3).map((conflict) => {
-    const path = conflict.path || "path";
-    const expected = conflict.expected_state || "expected";
-    const current = conflict.current_state || "current";
-    return `${path}: expected ${expected}, current ${current}`;
-  });
-  const suffix = conflicts.length > sample.length
-    ? `; ${conflicts.length - sample.length} more`
-    : "";
-  return `Undo has conflicts: ${sample.join("; ")}${suffix}.`;
-};
-
+/**
+ * The recent-changes panel that sits on /library, /properties and /settings.
+ *
+ * Its plain undo is the narrow one: the server refuses it outright if any path
+ * has moved on, so it cannot replace newer work. Forcing is the only way past
+ * that, and this panel reaches it the same way the /history workspace does — by
+ * asking the preview route what the restore would overwrite, showing that in the
+ * confirmation, and sending the receipt back with the force.
+ */
 export const initHistoryPanel = (deps: HistoryPanelDeps = {}): void => {
-  const root = queryElement(document, "[data-history-panel]", HTMLElement);
-  if (!root) {
+  const elements = findHistoryPanelElements(document);
+  if (!elements) {
     return;
   }
+  const controller = createHistoryPanelController(elements, deps);
+  controller.bind();
+  void controller.load();
+};
 
-  const listEl = queryElement(root, "[data-history-list]", HTMLElement);
-  const statusEl = queryElement(root, "[data-history-status]", HTMLElement);
-  const refreshButton = queryElement(root, "[data-history-refresh]", HTMLButtonElement);
-  const undoLatestButton = queryElement(root, "[data-history-undo-latest]", HTMLButtonElement);
-  const conflictBox = queryElement(root, "[data-history-conflict]", HTMLElement);
-  const conflictSummaryEl = queryElement(root, "[data-history-conflict-summary]", HTMLElement);
-  const forceButton = queryElement(root, "[data-history-force]", HTMLButtonElement);
-  if (!listEl || !statusEl) {
-    return;
-  }
+/** HistoryPanelIO is everything the two restore flows below need from the panel:
+ * a way to talk to the server and a way to say what is happening. */
+type HistoryPanelIO = {
+  elements: HistoryPanelElements;
+  fetcher: HistoryFetch;
+  token: string;
+  confirm: ConfirmLike;
+  setBusy: (busy: boolean) => void;
+  setStatus: (message: string, kind?: StatusKind) => void;
+};
 
-  const csrfToken = root.getAttribute("data-history-csrf") || "";
-  const fetcher = deps.fetch || fetch;
-  const confirmAction = deps.confirm || ((message: string): boolean => window.confirm(message));
+type RestoreOutcome =
+  | { kind: "restored"; message: string }
+  // entryID is the entry the *server* resolved, not the one that was asked for.
+  // They differ for "undo the latest change", which is posted with no identifier
+  // and can only be forced against the identifier the refusal answers with.
+  | { kind: "conflict"; entryID: string }
+  | { kind: "halted" };
+
+const createHistoryPanelController = (
+  elements: HistoryPanelElements,
+  deps: HistoryPanelDeps
+): { bind: () => void; load: (successMessage?: string) => Promise<void> } => {
+  const baseFetch = deps.fetch || fetch;
   let entries: HistoryEntry[] = [];
-  let pendingConflict: UndoResult | null = null;
-  let busy = false;
+  let conflictEntryID = "";
 
-  const setBusy = (next: boolean): void => {
-    busy = next;
-    root.setAttribute("aria-busy", next ? "true" : "false");
-    if (refreshButton) {
-      refreshButton.disabled = next;
-    }
-    if (undoLatestButton) {
-      undoLatestButton.disabled = next || entries.length === 0;
-    }
-    for (const button of queryAllElements(listEl, "[data-history-undo-entry]", HTMLButtonElement)) {
-      button.disabled = next;
-    }
-    if (forceButton) {
-      forceButton.disabled = next || !pendingConflict?.entry_id;
-    }
-  };
-
-  const setStatus = (message: string, kind: StatusKind = ""): void => {
-    setStatusText(statusEl, message, kind);
+  const io: HistoryPanelIO = {
+    elements,
+    fetcher: (input, init) => baseFetch(input, init),
+    token: elements.root.getAttribute("data-history-csrf") || "",
+    confirm: deps.confirm || ((message: string): boolean => window.confirm(message)),
+    setBusy: (busy: boolean): void => {
+      setHistoryPanelBusy(elements, busy, entries.length, conflictEntryID !== "");
+    },
+    setStatus: (message: string, kind: StatusKind = ""): void => {
+      setHistoryPanelStatus(elements, message, kind);
+    },
   };
 
   const hideConflict = (): void => {
-    pendingConflict = null;
-    if (conflictBox) {
-      conflictBox.hidden = true;
-    }
-    if (conflictSummaryEl) {
-      conflictSummaryEl.textContent = "";
-    }
-    if (forceButton) {
-      forceButton.disabled = true;
-    }
+    conflictEntryID = "";
+    hideHistoryPanelConflict(elements);
   };
 
-  const showConflict = (result: UndoResult): void => {
-    pendingConflict = result;
-    const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
-    if (conflictSummaryEl) {
-      conflictSummaryEl.textContent = historyConflictSummary(conflicts);
-    }
-    if (conflictBox) {
-      conflictBox.hidden = false;
-    }
-    if (forceButton) {
-      forceButton.disabled = !result.entry_id;
-    }
-  };
-
-  const renderEntries = (): void => {
-    listEl.textContent = "";
-    for (const entry of entries) {
-      const item = document.createElement("li");
-      item.className = "history-item";
-
-      const main = document.createElement("div");
-      main.className = "history-item-main";
-
-      const command = document.createElement("span");
-      command.className = "history-command";
-      command.textContent = entry.command || entry.id;
-      main.appendChild(command);
-
-      const meta = document.createElement("span");
-      meta.className = "history-meta";
-      const time = formatHistoryTimestamp(entry.timestamp);
-      const count = historyFileCountLabel(entry.file_count || entry.files.length);
-      meta.textContent = time ? `${time} - ${count}` : count;
-      main.appendChild(meta);
-
-      const undoButton = document.createElement("button");
-      undoButton.className = "history-button history-danger";
-      undoButton.type = "button";
-      undoButton.setAttribute("data-history-undo-entry", entry.id);
-      undoButton.setAttribute("aria-label", `Undo ${entry.command || "change"}`);
-      undoButton.textContent = "Undo";
-      undoButton.addEventListener("click", () => {
-        void runUndo(entry.id, false);
-      });
-
-      item.appendChild(main);
-      item.appendChild(undoButton);
-      listEl.appendChild(item);
-    }
-    setBusy(busy);
-  };
-
-  const loadHistory = async (successMessage = ""): Promise<void> => {
-    setBusy(true);
-    setStatus("Loading history...", "is-loading");
-    try {
-      const resp = await fetcher("/api/history", {
-        headers: { Accept: "application/json" },
-      });
-      const payload = await readHistoryPanelPayload(resp);
-      if (!resp.ok) {
-        setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-        return;
-      }
-      entries = normalizeHistoryEntries(payload);
-      renderEntries();
-      if (entries.length === 0) {
-        setStatus("No recent changes.", "is-empty");
-      } else {
-        setStatus(successMessage || `${entries.length} recent changes.`, successMessage ? "is-success" : "");
-      }
-    } catch {
-      setStatus("History unavailable.", "is-error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const runUndo = async (entryID: string, force: boolean): Promise<void> => {
-    if (csrfToken.trim() === "") {
-      setStatus("Undo unavailable.", "is-error");
+  const load = async (successMessage = ""): Promise<void> => {
+    io.setBusy(true);
+    io.setStatus("Loading history...", "is-loading");
+    const outcome = await fetchHistoryPage(io.fetcher, HISTORY_ENDPOINT, {});
+    if (!outcome.ok) {
+      io.setBusy(false);
+      io.setStatus(outcome.message, "is-error");
       return;
     }
-    if (!force && !confirmAction("Undo this change?")) {
-      setStatus("Undo canceled.");
+    entries = outcome.result.entries || [];
+    renderHistoryPanelEntries(elements, entries, (entryID) => void restore(entryID, plainRestore));
+    io.setBusy(false);
+    if (entries.length === 0) {
+      io.setStatus("No recent changes.", "is-empty");
       return;
     }
-    if (force && !confirmAction("Force undo and overwrite conflicting paths?")) {
-      setStatus("Force undo canceled.");
-      return;
-    }
+    io.setStatus(
+      successMessage || `${entries.length} recent changes.`,
+      successMessage ? "is-success" : ""
+    );
+  };
 
-    setBusy(true);
-    setStatus(force ? "Forcing undo..." : "Undoing change...", "is-loading");
-    try {
-      const body = buildUndoForm({
-        token: csrfToken,
-        entryID,
-        force,
-        confirmForce: force,
-      });
-      const resp = await fetcher("/api/undo", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-BN-CSRF": csrfToken,
-        },
-        body: body.toString(),
-      });
-      const payload = await readHistoryPanelPayload(resp);
-      const result = payload as UndoResult;
-      if (resp.status === 409 && result?.requires_force) {
-        showConflict(result);
-        setStatus("Undo has conflicts.", "is-error");
-        return;
-      }
-      if (!resp.ok) {
-        setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-        return;
-      }
+  const restore = async (
+    entryID: string,
+    run: (io: HistoryPanelIO, entryID: string) => Promise<RestoreOutcome>
+  ): Promise<void> => {
+    if (io.token.trim() === "") {
+      io.setStatus("Undo unavailable.", "is-error");
+      return;
+    }
+    const outcome = await run(io, entryID);
+    if (outcome.kind === "conflict") {
+      conflictEntryID = outcome.entryID;
+      return;
+    }
+    if (outcome.kind === "restored") {
       hideConflict();
-      const message = result && result.ok && result.message ? result.message : "Undo restored paths.";
-      await loadHistory(message);
-    } catch {
-      setStatus("Undo failed.", "is-error");
-    } finally {
-      setBusy(false);
+      await load(outcome.message);
     }
   };
 
-  refreshButton?.addEventListener("click", () => {
+  const bind = (): void => {
+    elements.refresh?.addEventListener("click", () => {
+      hideConflict();
+      void load();
+    });
+    elements.undoLatest?.addEventListener("click", () => {
+      void restore("", plainRestore);
+    });
+    elements.force?.addEventListener("click", () => {
+      if (conflictEntryID === "") {
+        io.setStatus("No conflict selected.", "is-error");
+        return;
+      }
+      void restore(conflictEntryID, forcedRestore);
+    });
+    window.addEventListener(managementMutationEventName, () => {
+      hideConflict();
+      void load("History refreshed.");
+    });
     hideConflict();
-    void loadHistory();
-  });
-  undoLatestButton?.addEventListener("click", () => {
-    void runUndo("", false);
-  });
-  forceButton?.addEventListener("click", () => {
-    const entryID = pendingConflict?.entry_id || "";
-    if (entryID === "") {
-      setStatus("No conflict selected.", "is-error");
-      return;
-    }
-    void runUndo(entryID, true);
-  });
-  window.addEventListener(managementMutationEventName, () => {
-    hideConflict();
-    void loadHistory("History refreshed.");
-  });
+  };
 
-  hideConflict();
-  void loadHistory();
+  return { bind, load };
 };
 
-const readHistoryPanelPayload = async (resp: Response): Promise<unknown> => {
-  const contentType = resp.headers?.get("Content-Type") || "";
-  try {
-    if (contentType.includes("application/json")) {
-      return await resp.json();
-    }
-    return await resp.text();
-  } catch {
-    return "";
+/** plainRestore is the undo that refuses rather than overwrite. A refusal is
+ * reported with the paths the server named, and is the point at which forcing
+ * becomes available — not a fault to stop on. */
+const plainRestore = async (io: HistoryPanelIO, entryID: string): Promise<RestoreOutcome> => {
+  if (!io.confirm("Undo this change?")) {
+    io.setStatus("Undo canceled.");
+    return { kind: "halted" };
   }
+  io.setBusy(true);
+  io.setStatus("Undoing change...", "is-loading");
+  const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, { token: io.token, entryID });
+  io.setBusy(false);
+  if (outcome.ok) {
+    return { kind: "restored", message: outcome.result.message || "Undo restored paths." };
+  }
+  if (!conflicted(outcome)) {
+    io.setStatus(outcome.message, "is-error");
+    return { kind: "halted" };
+  }
+  // The refusal is what names the entry when none was sent. Forcing is offered
+  // only once there is an identifier to force *against*: re-posting "the latest"
+  // with force would resolve it a second time, against a journal that may have
+  // gained an entry since the refusal — and force is exactly the flag that would
+  // then overwrite without asking.
+  const resolved = outcome.entryID || entryID;
+  showHistoryPanelConflict(io.elements, outcome.conflicts, resolved !== "");
+  io.setStatus(outcome.message, "is-error");
+  return { kind: "conflict", entryID: resolved };
 };
+
+/** forcedRestore previews first, every time. The receipt it takes is what the
+ * server requires before it will replace newer work, and the confirmation is
+ * worded from that preview rather than from the earlier refusal. */
+const forcedRestore = async (io: HistoryPanelIO, entryID: string): Promise<RestoreOutcome> => {
+  io.setBusy(true);
+  io.setStatus("Checking what this would replace...", "is-loading");
+  const preview = await previewHistoryRestore(io.fetcher, HISTORY_PREVIEW_ENDPOINT, io.token, entryID);
+  io.setBusy(false);
+  if (!preview.ok) {
+    io.setStatus(preview.message, "is-error");
+    return { kind: "halted" };
+  }
+  showHistoryPanelConflict(io.elements, preview.result.conflicts || [], true);
+  if (!io.confirm(forceConsentMessage(preview.result))) {
+    io.setStatus("Force undo canceled.");
+    return { kind: "halted" };
+  }
+  io.setBusy(true);
+  io.setStatus("Forcing undo...", "is-loading");
+  const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, {
+    token: io.token,
+    entryID: preview.result.entry_id || entryID,
+    force: true,
+    confirmForce: true,
+    previewID: preview.result.preview_id,
+  });
+  io.setBusy(false);
+  if (!outcome.ok) {
+    io.setStatus(outcome.message, "is-error");
+    return { kind: "halted" };
+  }
+  return { kind: "restored", message: outcome.result.message || "Undo restored paths." };
+};
+
+const forceConsentMessage = (preview: HistoryPreviewResult): string =>
+  historyForceConsentMessage(
+    (preview.conflicts || []).map((conflict) => conflict.path).filter((path) => path !== ""),
+    (preview.changes || []).length
+  );

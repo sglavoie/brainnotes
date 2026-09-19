@@ -56,6 +56,15 @@ func runUndoCommand(cmd *cobra.Command, args []string, opts undoOptions) error {
 	if opts.dryRun {
 		return nil
 	}
+	// Stderr, and not an error: the restore landed, was journaled and was
+	// snapshotted, and only a transaction temp file outlived it. Failing over it
+	// would say the content did not come back; staying silent would leave the one
+	// file nothing else will ever mention again.
+	if plan.Cleanup != nil {
+		if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", plan.Cleanup); err != nil {
+			return err
+		}
+	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "restored %d path(s)\n", len(plan.Changes))
 	return err
 }

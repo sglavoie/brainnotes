@@ -29,6 +29,27 @@ type RestoreOptions struct {
 	// nil keeps the old behavior and is correct only for a caller that has no
 	// vault to protect, which in practice means a test.
 	Journal vault.TxnJournal
+
+	// Require pins each recorded path to the state a caller has already shown
+	// somebody, keyed by the path exactly as the entry spells it.
+	//
+	// It exists because of what Force means. Without it the only expectation this
+	// package can form is its own reading of disk taken moments earlier inside
+	// planRestore (see stageRestoreTarget), which refuses a path that moved
+	// between the plan and the commit but knows nothing about what a person was
+	// shown before they consented. A caller that asked somebody to authorize
+	// replacing specific newer work has to be able to say so *inside the
+	// transaction*: any check it performs itself happens before the locks exist
+	// and before BeginOperation's Git preflight, and a scheduled writer —
+	// bn-vault-sync applying a peer's change, most realistically — can land in
+	// that window without changing which paths are in conflict, so no amount of
+	// re-planning outside the lock can catch it.
+	//
+	// A map that is supplied must name every recorded path, since a path left out
+	// would fall back to exactly the unpinned behavior the caller supplied it to
+	// avoid. nil means no caller-side consent is being enforced, which is right
+	// for an unforced restore: that one aborts on any drift regardless.
+	Require map[string]vault.FileExpectation
 }
 
 // RestoreChange is one path-level transition planned by restore.
@@ -44,6 +65,24 @@ type RestorePlan struct {
 	Command   string
 	Timestamp time.Time
 	Changes   []RestoreChange
+
+	// Cleanup is a housekeeping failure that did not stop the restore: every
+	// path was written and is durable, and a transaction temp file outlived the
+	// commit.
+	//
+	// Carried out here rather than returned as the call's error, which is the
+	// difference between a leftover file and a wedged vault. noteops.Undo stops
+	// at the first error Restore gives it and never reaches Finalize, so
+	// returning this would leave the restore's writes on disk with no undo
+	// manifest authorizing them and no snapshot recording them — and an undo
+	// that removed a tracked note would then look to vaultgit's preflight like a
+	// deletion nothing explains, latching blocked.json and refusing every
+	// subsequent mutation. Same treatment vaultimport gives it on Result.Cleanup,
+	// and for the same reason: this is the one commit failure that means the
+	// work succeeded.
+	//
+	// Always nil for a dry run, which commits nothing.
+	Cleanup error
 }
 
 // RestoreConflict reports one path whose current state no longer matches the
@@ -137,10 +176,60 @@ func Restore(vaultRoot, journalRoot, entryID string, opts RestoreOptions) (*Rest
 	if opts.DryRun {
 		return plan, nil
 	}
-	if err := applyRestore(vaultAbs, entryDirectory, entry.ID, targets, opts); err != nil {
+	if err := applyRestore(vaultAbs, entryDirectory, entry.ID, targets, opts, plan); err != nil {
 		return nil, err
 	}
 	return plan, nil
+}
+
+// restoreCommitOutcome splits what txn.Commit answered into the housekeeping
+// failure a restore survives and the failure it does not.
+//
+// The cleanup question is asked first and alone, the way vaultimport's
+// classifyCommit asks it: *vault.TxnRollbackError and *vault.TxnRecoveryError
+// nest the conflict that caused them and vault's predicates are errors.As, so
+// the order the arms are asked in is what decides which one is reported — and
+// this is the only arm where the bytes are already where the caller asked for
+// them. Provoking a real one means arranging an unlink to fail; the
+// classification is a pure function of the error, so it is tested as one.
+func restoreCommitOutcome(err error) (cleanup, fatal error) {
+	switch {
+	case err == nil:
+		return nil, nil
+	case vault.IsTxnCleanupFailure(err):
+		return err, nil
+	default:
+		return nil, err
+	}
+}
+
+// PreviewRestore answers what restoring one entry would do *and* every path
+// whose current state has moved on since the entry was written, in one pass.
+//
+// Restore already computes both, but it can only ever return one of them: with
+// Force off a conflict is the error and the plan is thrown away, and with Force
+// on the plan comes back with the conflicts silently dropped. A surface that
+// asks somebody to authorize an overriding restore needs the pair — the changes
+// it would make, and the newer work it would replace — and asking Restore twice
+// would read the same paths under two different stats and could answer about two
+// different vaults.
+//
+// It writes nothing, reads no snapshot, and takes no lock, exactly as a dry run
+// does, so previewing stays available on a vault that cannot be written.
+func PreviewRestore(vaultRoot, journalRoot, entryID string) (*RestorePlan, []RestoreConflict, error) {
+	vaultAbs, err := filepath.Abs(vaultRoot)
+	if err != nil {
+		return nil, nil, fmt.Errorf("journal: resolve vault root %q: %w", vaultRoot, err)
+	}
+	entry, err := LoadEntry(journalRoot, entryID)
+	if err != nil {
+		return nil, nil, err
+	}
+	_, plan, conflicts, err := planRestore(vaultAbs, entry)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, conflicts, nil
 }
 
 // planRestore reads what the entry says it left behind and what is on disk now,
@@ -201,7 +290,7 @@ func stillAsRecorded(actual, recorded FileState) bool {
 }
 
 // applyRestore puts the recorded before-states back, in one transaction.
-func applyRestore(vaultAbs, entryDirectory, entryID string, targets []restoreTarget, opts RestoreOptions) error {
+func applyRestore(vaultAbs, entryDirectory, entryID string, targets []restoreTarget, opts RestoreOptions, plan *RestorePlan) error {
 	sort.Slice(targets, func(i, j int) bool { return targets[i].record.Path < targets[j].record.Path })
 	// Named here rather than left to the transaction's own preflight so an undo
 	// onto refused storage reports the location before it reads a single
@@ -215,7 +304,7 @@ func applyRestore(vaultAbs, entryDirectory, entryID string, targets []restoreTar
 		return fmt.Errorf("journal: restore %s: %w", entryID, err)
 	}
 	for _, target := range targets {
-		if err := stageRestoreTarget(txn, entryDirectory, target); err != nil {
+		if err := stageRestoreTarget(txn, entryDirectory, target, opts.Require); err != nil {
 			return err
 		}
 	}
@@ -223,22 +312,40 @@ func applyRestore(vaultAbs, entryDirectory, entryID string, targets []restoreTar
 	// staged and every precondition re-checked before the first file moves, and
 	// a failure mid-commit rolls the already-restored paths back instead of
 	// leaving the entry half-applied.
-	if err := txn.Commit(opts.Journal); err != nil {
-		return fmt.Errorf("journal: restore %s: %w", entryID, err)
+	cleanup, fatal := restoreCommitOutcome(txn.Commit(opts.Journal))
+	if fatal != nil {
+		return fmt.Errorf("journal: restore %s: %w", entryID, fatal)
+	}
+	if cleanup != nil {
+		// Reported alongside the plan rather than instead of it: see
+		// RestorePlan.Cleanup for why an operation that must still be finalized
+		// cannot be stopped over a temp file.
+		plan.Cleanup = fmt.Errorf("journal: restore %s: %w", entryID, cleanup)
 	}
 	return nil
 }
 
-// stageRestoreTarget plans one path's undo, pinned to what is on disk right now.
+// stageRestoreTarget plans one path's undo, pinned to the state the restore was
+// authorized against.
 //
-// The expectation is the current state rather than the recorded one on purpose:
-// --force is what lets an undo run over a path somebody else changed, and the
-// transaction still has to refuse if that path changes again between this plan
-// and the commit.
-func stageRestoreTarget(txn *vault.FileTxn, entryDirectory string, target restoreTarget) error {
+// With no Require map that is this package's own reading of disk rather than the
+// recorded one, on purpose: --force is what lets an undo run over a path
+// somebody else changed, and the transaction still has to refuse if that path
+// changes again between this plan and the commit. With one, it is the caller's
+// pin instead, for the reason RestoreOptions.Require gives — a caller that
+// obtained consent for specific bytes must not have that consent silently
+// re-pointed at whatever the vault held a moment later.
+func stageRestoreTarget(txn *vault.FileTxn, entryDirectory string, target restoreTarget, require map[string]vault.FileExpectation) error {
 	expect := vault.ExpectMissing()
 	if target.actual.Kind == KindFile {
 		expect = vault.ExpectHash(target.actual.SHA256)
+	}
+	if require != nil {
+		pinned, ok := require[target.record.Path]
+		if !ok {
+			return fmt.Errorf("journal: restore %q: no authorized state for this path", target.record.Path)
+		}
+		expect = pinned
 	}
 	switch target.record.Before.Kind {
 	case KindMissing:

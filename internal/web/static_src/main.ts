@@ -8,6 +8,7 @@ import { initFacets } from "./facets";
 import { initFrontmatterEditing } from "./frontmatter-edit";
 import { initGraph } from "./graph-controller";
 import { initHistoryPanel } from "./history-panel";
+import { initHistoryWorkspace } from "./history-workspace";
 import { initNoteLayout } from "./note-layout";
 import { initNoteInsight } from "./note-insight";
 import { initNotePinAction } from "./note-pin";
@@ -39,6 +40,10 @@ import { initTheme } from "./theme";
     initFrontmatterEditing();
     initBrokenCreateActions();
     initHistoryPanel();
+    // The /history page restores earlier content, which is a write, and a
+    // read-only replica does not serve it at all — the route refuses and the
+    // nav link is absent, so the workspace is built only where it exists.
+    initHistoryWorkspace();
     initSynthesize();
     // The /settings page writes brainnotes.toml and the templates directory, so
     // like the editor it is built only where a write can be accepted.

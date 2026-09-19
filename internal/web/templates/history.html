@@ -1,0 +1,150 @@
+{{define "history"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>History</h1>
+        <p class="page-subtitle">Every change this vault recorded, with where it came from: saved here in the browser, landed from your other replica, decided in a conflict, or run at the terminal. Restoring one is previewed first, and never replaces newer work without showing you what it would replace.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    {{/*
+      One element owns the whole workspace. The list, the filters and the restore
+      confirmation all read the same endpoints and the same token, and splitting
+      them across panels with their own copies would let a filter apply to a list
+      that a restore then refreshes out from under it.
+    */}}
+    <div
+      class="history-workspace"
+      data-history-workspace
+      data-history-endpoint="{{ .HistoryEndpoint }}"
+      data-history-preview-endpoint="{{ .PreviewEndpoint }}"
+      data-history-undo-endpoint="{{ .UndoEndpoint }}"
+      data-history-csrf="{{ .CSRFToken }}"
+      data-history-page-size="{{ .PageSize }}"
+      data-history-max-page-size="{{ .MaxPageSize }}"
+    >
+      <section class="panel history-filters-panel" aria-labelledby="history-filters-heading">
+        <div class="panel-header">
+          <h2 id="history-filters-heading">Find a change</h2>
+          <div class="history-actions">
+            <button class="history-button" type="button" data-history-refresh>Refresh</button>
+            <button class="history-button" type="button" data-history-clear-filters>Clear filters</button>
+          </div>
+        </div>
+        <form class="history-filters" data-history-filters>
+          <label class="history-filter-field">
+            <span>Path contains</span>
+            <input type="search" name="path" data-history-path autocomplete="off" placeholder="part of a note or attachment path">
+          </label>
+          <fieldset class="history-filter-group" data-history-origin-filters>
+            <legend>Where it came from</legend>
+          </fieldset>
+          <fieldset class="history-filter-group" data-history-class-filters>
+            <legend>What it touched</legend>
+          </fieldset>
+          <label class="history-filter-field">
+            <span>Entries per page</span>
+            <select data-history-page-size-select>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </label>
+        </form>
+      </section>
+
+      <section
+        class="panel history-list-panel"
+        aria-labelledby="history-list-heading"
+        aria-describedby="history-list-status"
+      >
+        <div class="panel-header">
+          <h2 id="history-list-heading">Recorded changes</h2>
+        </div>
+        <p
+          id="history-list-status"
+          class="history-status is-loading"
+          data-history-status
+          role="status"
+          aria-live="polite"
+        >Reading the history...</p>
+        {{/*
+          Unreadable entries are shown above the list rather than inside it, and
+          on every page rather than on the one their position falls in: they
+          cannot be filtered — a manifest that will not parse has no command and
+          no paths — so a narrowed view that hid them would look complete while
+          part of the journal was unaccounted for.
+        */}}
+        <ul class="history-warnings" data-history-warnings role="status" aria-live="polite"></ul>
+        <ul class="history-list" data-history-list></ul>
+        <nav class="history-pager" data-history-pager aria-label="History pages">
+          <button class="history-button" type="button" data-history-previous>Newer</button>
+          <p class="history-range" data-history-range role="status" aria-live="polite"></p>
+          <button class="history-button" type="button" data-history-next>Older</button>
+        </nav>
+      </section>
+
+      {{/*
+        The restore panel is empty and hidden until a preview has been fetched.
+        There is no control anywhere on this page that restores without going
+        through it, which is the point: the server refuses a forced restore that
+        carries no preview receipt, and a page that offered the button anyway
+        would be offering a refusal.
+      */}}
+      <section
+        class="panel history-restore-panel"
+        data-history-restore
+        hidden
+        aria-labelledby="history-restore-heading"
+        aria-describedby="history-restore-summary"
+      >
+        <div class="panel-header">
+          <h2 id="history-restore-heading">Restore this change</h2>
+          <div class="history-actions">
+            <button class="history-button" type="button" data-history-restore-cancel>Cancel</button>
+          </div>
+        </div>
+        <p
+          id="history-restore-summary"
+          class="history-status"
+          data-history-restore-summary
+          role="status"
+          aria-live="polite"
+        ></p>
+        <dl class="history-restore-facts" data-history-restore-facts></dl>
+        <ul class="history-restore-changes" data-history-restore-changes></ul>
+        <div class="history-restore-conflicts" data-history-restore-conflicts hidden>
+          <h3>Newer work this would replace</h3>
+          <ul data-history-restore-conflict-list></ul>
+          <label class="history-restore-consent">
+            <input type="checkbox" data-history-restore-consent>
+            <span>I understand this replaces the newer work listed above.</span>
+          </label>
+        </div>
+        <div class="history-restore-actions">
+          <button class="history-button is-primary" type="button" data-history-restore-confirm>Restore</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

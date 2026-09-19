@@ -883,6 +883,9 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/api-history.ts
+  var HISTORY_ENDPOINT = "/api/history";
+  var HISTORY_PREVIEW_ENDPOINT = "/api/history/preview";
+  var UNDO_ENDPOINT = "/api/undo";
   var buildUndoForm = (request) => {
     const body = new URLSearchParams();
     body.set("token", request.token);
@@ -895,41 +898,199 @@ var BrainNotesApp = (() => {
     if (request.confirmForce) {
       body.set("confirm_force", "1");
     }
+    if (request.previewID !== void 0 && request.previewID.trim() !== "") {
+      body.set("preview_id", request.previewID.trim());
+    }
     return body;
   };
-  var normalizeHistoryEntries = (payload) => {
-    const data2 = asRecord(payload);
-    const rawEntries = data2 && Array.isArray(data2.entries) ? data2.entries : [];
-    return rawEntries.flatMap((item) => {
+  var buildHistoryPreviewForm = (request) => {
+    const body = new URLSearchParams();
+    body.set("token", request.token);
+    if (request.entryID !== void 0 && request.entryID.trim() !== "") {
+      body.set("id", request.entryID.trim());
+    }
+    return body;
+  };
+  var buildHistoryQuery = (query) => {
+    const params = new URLSearchParams();
+    setPositiveInt(params, "limit", query.limit);
+    setPositiveInt(params, "offset", query.offset);
+    appendNames(params, "origin", query.origins);
+    appendNames(params, "class", query.classes);
+    const path = (query.path || "").trim();
+    if (path !== "") {
+      params.set("path", path);
+    }
+    return params;
+  };
+  var setPositiveInt = (params, name2, value) => {
+    if (value !== void 0 && Number.isFinite(value) && value > 0) {
+      params.set(name2, String(Math.trunc(value)));
+    }
+  };
+  var appendNames = (params, name2, values2) => {
+    for (const value of values2 || []) {
+      if (value.trim() !== "") {
+        params.append(name2, value.trim());
+      }
+    }
+  };
+  var normalizeHistoryFile = (value) => {
+    const file = asRecord(value);
+    if (!file) {
+      return [];
+    }
+    return [{
+      path: normalizeParamValue(file.path),
+      before: normalizeParamValue(file.before),
+      after: normalizeParamValue(file.after),
+      class: normalizeParamValue(file.class),
+      recorded: readBoolean(file.recorded),
+      travels: readBoolean(file.travels)
+    }];
+  };
+  var normalizeClassCounts = (value) => {
+    const raw = Array.isArray(value) ? value : [];
+    return raw.flatMap((item) => {
       const record = asRecord(item);
       if (!record) {
         return [];
       }
-      const id2 = normalizeParamValue(record.id);
-      if (id2 === "") {
+      const name2 = normalizeParamValue(record.class);
+      if (name2 === "") {
         return [];
       }
-      const rawFiles = Array.isArray(record.files) ? record.files : [];
-      const files = rawFiles.flatMap((rawFile) => {
-        const file = asRecord(rawFile);
-        if (!file) {
-          return [];
-        }
-        return [{
-          path: normalizeParamValue(file.path),
-          before: normalizeParamValue(file.before),
-          after: normalizeParamValue(file.after)
-        }];
-      });
       return [{
-        id: id2,
-        timestamp: normalizeParamValue(record.timestamp),
-        command: normalizeParamValue(record.command),
-        file_count: readCount(record.file_count),
-        files
+        class: name2,
+        label: normalizeParamValue(record.label) || name2,
+        count: readCount(record.count)
       }];
     });
   };
+  var normalizeEntry = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return [];
+    }
+    const id2 = normalizeParamValue(record.id);
+    if (id2 === "") {
+      return [];
+    }
+    const files = (Array.isArray(record.files) ? record.files : []).flatMap(normalizeHistoryFile);
+    return [{
+      id: id2,
+      timestamp: normalizeParamValue(record.timestamp),
+      command: normalizeParamValue(record.command),
+      origin: normalizeParamValue(record.origin),
+      origin_label: normalizeParamValue(record.origin_label),
+      file_count: readCount(record.file_count),
+      classes: normalizeClassCounts(record.classes),
+      files
+    }];
+  };
+  var normalizeHistoryEntries = (payload) => {
+    const data2 = asRecord(payload);
+    const rawEntries = data2 && Array.isArray(data2.entries) ? data2.entries : [];
+    return rawEntries.flatMap(normalizeEntry);
+  };
+  var normalizeOptions = (value) => {
+    const raw = Array.isArray(value) ? value : [];
+    return raw.flatMap((item) => {
+      const record = asRecord(item);
+      const name2 = normalizeParamValue(record?.value);
+      if (!record || name2 === "") {
+        return [];
+      }
+      return [{ value: name2, label: normalizeParamValue(record.label) || name2 }];
+    });
+  };
+  var normalizeWarnings = (value) => {
+    const raw = Array.isArray(value) ? value : [];
+    return raw.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      return [{
+        id: normalizeParamValue(record.id),
+        message: normalizeParamValue(record.message)
+      }];
+    });
+  };
+  var normalizeHistoryResult = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    if (!base2.ok) {
+      return base2;
+    }
+    const warnings = normalizeWarnings(record.warnings);
+    return {
+      ...base2,
+      entries: normalizeHistoryEntries(payload),
+      total: readCount(record.total),
+      offset: readCount(record.offset),
+      limit: readCount(record.limit),
+      has_more: readBoolean(record.has_more),
+      origins: normalizeOptions(record.origins),
+      classes: normalizeOptions(record.classes),
+      warnings,
+      warning_count: Math.max(readCount(record.warning_count), warnings.length)
+    };
+  };
+  var normalizeConflicts = (value) => {
+    const raw = Array.isArray(value) ? value : [];
+    return raw.flatMap((item) => {
+      const record = asRecord(item);
+      if (!record) {
+        return [];
+      }
+      return [{
+        path: normalizeParamValue(record.path),
+        expected_state: normalizeParamValue(record.expected_state),
+        current_state: normalizeParamValue(record.current_state)
+      }];
+    });
+  };
+  var normalizePreviewChange = (value) => {
+    const record = asRecord(value);
+    if (!record) {
+      return [];
+    }
+    return [{
+      path: normalizeParamValue(record.path),
+      current_state: normalizeParamValue(record.current_state),
+      restored_state: normalizeParamValue(record.restored_state),
+      class: normalizeParamValue(record.class),
+      recorded: readBoolean(record.recorded),
+      travels: readBoolean(record.travels),
+      conflict: readBoolean(record.conflict)
+    }];
+  };
+  var normalizeHistoryPreview = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    if (!base2.ok) {
+      return base2;
+    }
+    const previewID = normalizeParamValue(record.preview_id);
+    if (previewID === "") {
+      return { ok: false, code: "preview_required", message: "The preview came back without a receipt." };
+    }
+    return {
+      ...base2,
+      preview_id: previewID,
+      expires_at: normalizeParamValue(record.expires_at),
+      entry_id: normalizeParamValue(record.entry_id),
+      command: normalizeParamValue(record.command),
+      origin: normalizeParamValue(record.origin),
+      origin_label: normalizeParamValue(record.origin_label),
+      timestamp: normalizeParamValue(record.timestamp),
+      requires_force: readBoolean(record.requires_force),
+      changes: (Array.isArray(record.changes) ? record.changes : []).flatMap(normalizePreviewChange),
+      conflicts: normalizeConflicts(record.conflicts)
+    };
+  };
+  var normalizeUndoConflicts = normalizeConflicts;
 
   // internal/web/static_src/api-notes.ts
   var managementMutationEventName = "bn:management:mutated";
@@ -6934,7 +7095,119 @@ var BrainNotesApp = (() => {
     scheduleLoad(runtime, initialQuery, 0);
   };
 
-  // internal/web/static_src/history-panel.ts
+  // internal/web/static_src/history-requests.ts
+  var stalePreview = (failure2) => failure2.code === "preview_stale" || failure2.code === "preview_required";
+  var conflicted = (failure2) => failure2.code === "conflict";
+  var readPayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return null;
+    }
+  };
+  var failure = (resp, payload) => ({
+    ok: false,
+    code: normalizeParamValue(asRecord(payload)?.code),
+    status: resp.status,
+    message: normalizeManagementErrorMessage(resp.status, payload),
+    conflicts: normalizeUndoConflicts(asRecord(payload)?.conflicts),
+    entryID: normalizeParamValue(asRecord(payload)?.entry_id)
+  });
+  var finish = async (resp, normalize) => {
+    const payload = await readPayload(resp);
+    if (!resp.ok) {
+      return failure(resp, payload);
+    }
+    const result = normalize(payload);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: result.code || normalizeParamValue(asRecord(payload)?.code),
+        status: resp.status,
+        message: result.message || "The request was refused.",
+        conflicts: normalizeUndoConflicts(asRecord(payload)?.conflicts),
+        entryID: normalizeParamValue(asRecord(payload)?.entry_id)
+      };
+    }
+    return { ok: true, result };
+  };
+  var unreachable = () => ({
+    ok: false,
+    code: "",
+    status: 0,
+    message: "The server did not answer.",
+    conflicts: [],
+    entryID: ""
+  });
+  var formInit = (token, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": token
+    },
+    body: body.toString()
+  });
+  var fetchHistoryPage = async (fetcher, endpoint, query) => {
+    const params = buildHistoryQuery(query).toString();
+    const target = params === "" ? endpoint || HISTORY_ENDPOINT : `${endpoint || HISTORY_ENDPOINT}?${params}`;
+    try {
+      const resp = await fetcher(target, { headers: { Accept: "application/json" } });
+      return await finish(resp, normalizeHistoryResult);
+    } catch {
+      return unreachable();
+    }
+  };
+  var previewHistoryRestore = async (fetcher, endpoint, token, entryID) => {
+    try {
+      const resp = await fetcher(
+        endpoint || HISTORY_PREVIEW_ENDPOINT,
+        formInit(token, buildHistoryPreviewForm({ token, entryID }))
+      );
+      return await finish(resp, normalizeHistoryPreview);
+    } catch {
+      return unreachable();
+    }
+  };
+  var normalizeUndoResult = (payload) => {
+    const record = asRecord(payload) || {};
+    return {
+      ok: readBoolean(record.ok),
+      code: normalizeParamValue(record.code) || void 0,
+      message: normalizeParamValue(record.message) || void 0,
+      entry_id: normalizeParamValue(record.entry_id) || void 0,
+      requires_force: readBoolean(record.requires_force)
+    };
+  };
+  var restoreHistoryEntry = async (fetcher, endpoint, request) => {
+    try {
+      const resp = await fetcher(endpoint || UNDO_ENDPOINT, formInit(request.token, buildUndoForm(request)));
+      const payload = await readPayload(resp);
+      if (!resp.ok) {
+        return failure(resp, payload);
+      }
+      const result = normalizeUndoResult(payload);
+      if (!result.ok) {
+        return {
+          ok: false,
+          code: result.code || "",
+          status: resp.status,
+          message: result.message || "The restore was refused.",
+          conflicts: normalizeUndoConflicts(asRecord(payload)?.conflicts),
+          entryID: result.entry_id || normalizeParamValue(asRecord(payload)?.entry_id)
+        };
+      }
+      return { ok: true, result };
+    } catch {
+      return unreachable();
+    }
+  };
+
+  // internal/web/static_src/history-panel-view.ts
   var formatHistoryTimestamp = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
@@ -6959,212 +7232,732 @@ var BrainNotesApp = (() => {
     const suffix = conflicts.length > sample.length ? `; ${conflicts.length - sample.length} more` : "";
     return `Undo has conflicts: ${sample.join("; ")}${suffix}.`;
   };
-  var initHistoryPanel = (deps = {}) => {
-    const root = queryElement(document, "[data-history-panel]", HTMLElement);
+  var historyForceConsentMessage = (paths, changeCount) => {
+    const sample = paths.slice(0, 3).join(", ");
+    const more = paths.length > 3 ? `, and ${paths.length - 3} more` : "";
+    const replaced = paths.length === 0 ? "no newer work" : `newer work in ${sample}${more}`;
+    return `Restore ${historyFileCountLabel(changeCount)} and replace ${replaced}?`;
+  };
+  var findHistoryPanelElements = (doc2) => {
+    const root = queryElement(doc2, "[data-history-panel]", HTMLElement);
     if (!root) {
-      return;
+      return null;
     }
-    const listEl = queryElement(root, "[data-history-list]", HTMLElement);
-    const statusEl = queryElement(root, "[data-history-status]", HTMLElement);
-    const refreshButton = queryElement(root, "[data-history-refresh]", HTMLButtonElement);
-    const undoLatestButton = queryElement(root, "[data-history-undo-latest]", HTMLButtonElement);
-    const conflictBox = queryElement(root, "[data-history-conflict]", HTMLElement);
-    const conflictSummaryEl = queryElement(root, "[data-history-conflict-summary]", HTMLElement);
-    const forceButton = queryElement(root, "[data-history-force]", HTMLButtonElement);
-    if (!listEl || !statusEl) {
-      return;
+    const list = queryElement(root, "[data-history-list]", HTMLElement);
+    const status = queryElement(root, "[data-history-status]", HTMLElement);
+    if (!list || !status) {
+      return null;
     }
-    const csrfToken = root.getAttribute("data-history-csrf") || "";
-    const fetcher = deps.fetch || fetch;
-    const confirmAction = deps.confirm || ((message) => window.confirm(message));
-    let entries = [];
-    let pendingConflict = null;
-    let busy = false;
-    const setBusy = (next) => {
-      busy = next;
-      root.setAttribute("aria-busy", next ? "true" : "false");
-      if (refreshButton) {
-        refreshButton.disabled = next;
-      }
-      if (undoLatestButton) {
-        undoLatestButton.disabled = next || entries.length === 0;
-      }
-      for (const button of queryAllElements(listEl, "[data-history-undo-entry]", HTMLButtonElement)) {
-        button.disabled = next;
-      }
-      if (forceButton) {
-        forceButton.disabled = next || !pendingConflict?.entry_id;
-      }
+    return {
+      root,
+      list,
+      status,
+      refresh: queryElement(root, "[data-history-refresh]", HTMLButtonElement),
+      undoLatest: queryElement(root, "[data-history-undo-latest]", HTMLButtonElement),
+      conflictBox: queryElement(root, "[data-history-conflict]", HTMLElement),
+      conflictSummary: queryElement(root, "[data-history-conflict-summary]", HTMLElement),
+      force: queryElement(root, "[data-history-force]", HTMLButtonElement)
     };
-    const setStatus2 = (message, kind = "") => {
-      setStatusText(statusEl, message, kind);
+  };
+  var setHistoryPanelStatus = (elements, message, kind = "") => {
+    setStatusText(elements.status, message, kind);
+  };
+  var setHistoryPanelBusy = (elements, busy, entryCount, forceReady) => {
+    elements.root.setAttribute("aria-busy", busy ? "true" : "false");
+    if (elements.refresh) {
+      elements.refresh.disabled = busy;
+    }
+    if (elements.undoLatest) {
+      elements.undoLatest.disabled = busy || entryCount === 0;
+    }
+    for (const button of queryAllElements(elements.list, "[data-history-undo-entry]", HTMLButtonElement)) {
+      button.disabled = busy;
+    }
+    if (elements.force) {
+      elements.force.disabled = busy || !forceReady;
+    }
+  };
+  var historyEntryRow = (entry, onUndo) => {
+    const item = document.createElement("li");
+    item.className = "history-item";
+    const main = document.createElement("div");
+    main.className = "history-item-main";
+    const command2 = document.createElement("span");
+    command2.className = "history-command";
+    command2.textContent = entry.command || entry.id;
+    main.appendChild(command2);
+    const meta2 = document.createElement("span");
+    meta2.className = "history-meta";
+    const time = formatHistoryTimestamp(entry.timestamp);
+    const count4 = historyFileCountLabel(entry.file_count || entry.files.length);
+    meta2.textContent = time ? `${time} - ${count4}` : count4;
+    main.appendChild(meta2);
+    const undoButton = document.createElement("button");
+    undoButton.className = "history-button history-danger";
+    undoButton.type = "button";
+    undoButton.setAttribute("data-history-undo-entry", entry.id);
+    undoButton.setAttribute("aria-label", `Undo ${entry.command || "change"}`);
+    undoButton.textContent = "Undo";
+    undoButton.addEventListener("click", () => {
+      onUndo(entry.id);
+    });
+    item.appendChild(main);
+    item.appendChild(undoButton);
+    return item;
+  };
+  var renderHistoryPanelEntries = (elements, entries, onUndo) => {
+    elements.list.textContent = "";
+    for (const entry of entries) {
+      elements.list.appendChild(historyEntryRow(entry, onUndo));
+    }
+  };
+  var showHistoryPanelConflict = (elements, conflicts, forceReady) => {
+    if (elements.conflictSummary) {
+      elements.conflictSummary.textContent = historyConflictSummary(conflicts);
+    }
+    if (elements.conflictBox) {
+      elements.conflictBox.hidden = false;
+    }
+    if (elements.force) {
+      elements.force.disabled = !forceReady;
+    }
+  };
+  var hideHistoryPanelConflict = (elements) => {
+    if (elements.conflictBox) {
+      elements.conflictBox.hidden = true;
+    }
+    if (elements.conflictSummary) {
+      elements.conflictSummary.textContent = "";
+    }
+    if (elements.force) {
+      elements.force.disabled = true;
+    }
+  };
+
+  // internal/web/static_src/history-panel.ts
+  var initHistoryPanel = (deps = {}) => {
+    const elements = findHistoryPanelElements(document);
+    if (!elements) {
+      return;
+    }
+    const controller = createHistoryPanelController(elements, deps);
+    controller.bind();
+    void controller.load();
+  };
+  var createHistoryPanelController = (elements, deps) => {
+    const baseFetch = deps.fetch || fetch;
+    let entries = [];
+    let conflictEntryID = "";
+    const io = {
+      elements,
+      fetcher: (input, init) => baseFetch(input, init),
+      token: elements.root.getAttribute("data-history-csrf") || "",
+      confirm: deps.confirm || ((message) => window.confirm(message)),
+      setBusy: (busy) => {
+        setHistoryPanelBusy(elements, busy, entries.length, conflictEntryID !== "");
+      },
+      setStatus: (message, kind = "") => {
+        setHistoryPanelStatus(elements, message, kind);
+      }
     };
     const hideConflict2 = () => {
-      pendingConflict = null;
-      if (conflictBox) {
-        conflictBox.hidden = true;
-      }
-      if (conflictSummaryEl) {
-        conflictSummaryEl.textContent = "";
-      }
-      if (forceButton) {
-        forceButton.disabled = true;
-      }
+      conflictEntryID = "";
+      hideHistoryPanelConflict(elements);
     };
-    const showConflict2 = (result) => {
-      pendingConflict = result;
-      const conflicts = Array.isArray(result.conflicts) ? result.conflicts : [];
-      if (conflictSummaryEl) {
-        conflictSummaryEl.textContent = historyConflictSummary(conflicts);
-      }
-      if (conflictBox) {
-        conflictBox.hidden = false;
-      }
-      if (forceButton) {
-        forceButton.disabled = !result.entry_id;
-      }
-    };
-    const renderEntries = () => {
-      listEl.textContent = "";
-      for (const entry of entries) {
-        const item = document.createElement("li");
-        item.className = "history-item";
-        const main = document.createElement("div");
-        main.className = "history-item-main";
-        const command2 = document.createElement("span");
-        command2.className = "history-command";
-        command2.textContent = entry.command || entry.id;
-        main.appendChild(command2);
-        const meta2 = document.createElement("span");
-        meta2.className = "history-meta";
-        const time = formatHistoryTimestamp(entry.timestamp);
-        const count4 = historyFileCountLabel(entry.file_count || entry.files.length);
-        meta2.textContent = time ? `${time} - ${count4}` : count4;
-        main.appendChild(meta2);
-        const undoButton = document.createElement("button");
-        undoButton.className = "history-button history-danger";
-        undoButton.type = "button";
-        undoButton.setAttribute("data-history-undo-entry", entry.id);
-        undoButton.setAttribute("aria-label", `Undo ${entry.command || "change"}`);
-        undoButton.textContent = "Undo";
-        undoButton.addEventListener("click", () => {
-          void runUndo(entry.id, false);
-        });
-        item.appendChild(main);
-        item.appendChild(undoButton);
-        listEl.appendChild(item);
-      }
-      setBusy(busy);
-    };
-    const loadHistory = async (successMessage = "") => {
-      setBusy(true);
-      setStatus2("Loading history...", "is-loading");
-      try {
-        const resp = await fetcher("/api/history", {
-          headers: { Accept: "application/json" }
-        });
-        const payload = await readHistoryPanelPayload(resp);
-        if (!resp.ok) {
-          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        entries = normalizeHistoryEntries(payload);
-        renderEntries();
-        if (entries.length === 0) {
-          setStatus2("No recent changes.", "is-empty");
-        } else {
-          setStatus2(successMessage || `${entries.length} recent changes.`, successMessage ? "is-success" : "");
-        }
-      } catch {
-        setStatus2("History unavailable.", "is-error");
-      } finally {
-        setBusy(false);
-      }
-    };
-    const runUndo = async (entryID, force) => {
-      if (csrfToken.trim() === "") {
-        setStatus2("Undo unavailable.", "is-error");
+    const load = async (successMessage = "") => {
+      io.setBusy(true);
+      io.setStatus("Loading history...", "is-loading");
+      const outcome = await fetchHistoryPage(io.fetcher, HISTORY_ENDPOINT, {});
+      if (!outcome.ok) {
+        io.setBusy(false);
+        io.setStatus(outcome.message, "is-error");
         return;
       }
-      if (!force && !confirmAction("Undo this change?")) {
-        setStatus2("Undo canceled.");
+      entries = outcome.result.entries || [];
+      renderHistoryPanelEntries(elements, entries, (entryID) => void restore(entryID, plainRestore));
+      io.setBusy(false);
+      if (entries.length === 0) {
+        io.setStatus("No recent changes.", "is-empty");
         return;
       }
-      if (force && !confirmAction("Force undo and overwrite conflicting paths?")) {
-        setStatus2("Force undo canceled.");
+      io.setStatus(
+        successMessage || `${entries.length} recent changes.`,
+        successMessage ? "is-success" : ""
+      );
+    };
+    const restore = async (entryID, run) => {
+      if (io.token.trim() === "") {
+        io.setStatus("Undo unavailable.", "is-error");
         return;
       }
-      setBusy(true);
-      setStatus2(force ? "Forcing undo..." : "Undoing change...", "is-loading");
-      try {
-        const body = buildUndoForm({
-          token: csrfToken,
-          entryID,
-          force,
-          confirmForce: force
-        });
-        const resp = await fetcher("/api/undo", {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-BN-CSRF": csrfToken
-          },
-          body: body.toString()
-        });
-        const payload = await readHistoryPanelPayload(resp);
-        const result = payload;
-        if (resp.status === 409 && result?.requires_force) {
-          showConflict2(result);
-          setStatus2("Undo has conflicts.", "is-error");
-          return;
-        }
-        if (!resp.ok) {
-          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
+      const outcome = await run(io, entryID);
+      if (outcome.kind === "conflict") {
+        conflictEntryID = outcome.entryID;
+        return;
+      }
+      if (outcome.kind === "restored") {
         hideConflict2();
-        const message = result && result.ok && result.message ? result.message : "Undo restored paths.";
-        await loadHistory(message);
-      } catch {
-        setStatus2("Undo failed.", "is-error");
-      } finally {
-        setBusy(false);
+        await load(outcome.message);
       }
     };
-    refreshButton?.addEventListener("click", () => {
+    const bind = () => {
+      elements.refresh?.addEventListener("click", () => {
+        hideConflict2();
+        void load();
+      });
+      elements.undoLatest?.addEventListener("click", () => {
+        void restore("", plainRestore);
+      });
+      elements.force?.addEventListener("click", () => {
+        if (conflictEntryID === "") {
+          io.setStatus("No conflict selected.", "is-error");
+          return;
+        }
+        void restore(conflictEntryID, forcedRestore);
+      });
+      window.addEventListener(managementMutationEventName, () => {
+        hideConflict2();
+        void load("History refreshed.");
+      });
       hideConflict2();
-      void loadHistory();
-    });
-    undoLatestButton?.addEventListener("click", () => {
-      void runUndo("", false);
-    });
-    forceButton?.addEventListener("click", () => {
-      const entryID = pendingConflict?.entry_id || "";
-      if (entryID === "") {
-        setStatus2("No conflict selected.", "is-error");
-        return;
-      }
-      void runUndo(entryID, true);
-    });
-    window.addEventListener(managementMutationEventName, () => {
-      hideConflict2();
-      void loadHistory("History refreshed.");
-    });
-    hideConflict2();
-    void loadHistory();
+    };
+    return { bind, load };
   };
-  var readHistoryPanelPayload = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
+  var plainRestore = async (io, entryID) => {
+    if (!io.confirm("Undo this change?")) {
+      io.setStatus("Undo canceled.");
+      return { kind: "halted" };
+    }
+    io.setBusy(true);
+    io.setStatus("Undoing change...", "is-loading");
+    const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, { token: io.token, entryID });
+    io.setBusy(false);
+    if (outcome.ok) {
+      return { kind: "restored", message: outcome.result.message || "Undo restored paths." };
+    }
+    if (!conflicted(outcome)) {
+      io.setStatus(outcome.message, "is-error");
+      return { kind: "halted" };
+    }
+    const resolved = outcome.entryID || entryID;
+    showHistoryPanelConflict(io.elements, outcome.conflicts, resolved !== "");
+    io.setStatus(outcome.message, "is-error");
+    return { kind: "conflict", entryID: resolved };
+  };
+  var forcedRestore = async (io, entryID) => {
+    io.setBusy(true);
+    io.setStatus("Checking what this would replace...", "is-loading");
+    const preview = await previewHistoryRestore(io.fetcher, HISTORY_PREVIEW_ENDPOINT, io.token, entryID);
+    io.setBusy(false);
+    if (!preview.ok) {
+      io.setStatus(preview.message, "is-error");
+      return { kind: "halted" };
+    }
+    showHistoryPanelConflict(io.elements, preview.result.conflicts || [], true);
+    if (!io.confirm(forceConsentMessage(preview.result))) {
+      io.setStatus("Force undo canceled.");
+      return { kind: "halted" };
+    }
+    io.setBusy(true);
+    io.setStatus("Forcing undo...", "is-loading");
+    const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, {
+      token: io.token,
+      entryID: preview.result.entry_id || entryID,
+      force: true,
+      confirmForce: true,
+      previewID: preview.result.preview_id
+    });
+    io.setBusy(false);
+    if (!outcome.ok) {
+      io.setStatus(outcome.message, "is-error");
+      return { kind: "halted" };
+    }
+    return { kind: "restored", message: outcome.result.message || "Undo restored paths." };
+  };
+  var forceConsentMessage = (preview) => historyForceConsentMessage(
+    (preview.conflicts || []).map((conflict) => conflict.path).filter((path) => path !== ""),
+    (preview.changes || []).length
+  );
+
+  // internal/web/static_src/history-workspace-elements.ts
+  var readSize = (root, name2, fallback) => {
+    const raw = Number.parseInt(root.getAttribute(name2) || "", 10);
+    return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+  };
+  var findHistoryWorkspaceElements = (doc2) => {
+    const root = queryElement(doc2, "[data-history-workspace]", HTMLElement);
+    if (!root) {
+      return null;
+    }
+    const status = queryElement(root, "[data-history-status]", HTMLElement);
+    const warnings = queryElement(root, "[data-history-warnings]", HTMLElement);
+    const list = queryElement(root, "[data-history-list]", HTMLElement);
+    if (!status || !warnings || !list) {
+      return null;
+    }
+    const pageSize = readSize(root, "data-history-page-size", 20);
+    return {
+      root,
+      listEndpoint: root.getAttribute("data-history-endpoint") || "",
+      previewEndpoint: root.getAttribute("data-history-preview-endpoint") || "",
+      undoEndpoint: root.getAttribute("data-history-undo-endpoint") || "",
+      token: root.getAttribute("data-history-csrf") || "",
+      pageSize,
+      maxPageSize: readSize(root, "data-history-max-page-size", pageSize),
+      filters: queryElement(root, "[data-history-filters]", HTMLFormElement),
+      path: queryElement(root, "[data-history-path]", HTMLInputElement),
+      originFilters: queryElement(root, "[data-history-origin-filters]", HTMLElement),
+      classFilters: queryElement(root, "[data-history-class-filters]", HTMLElement),
+      pageSizeSelect: queryElement(root, "[data-history-page-size-select]", HTMLSelectElement),
+      refresh: queryElement(root, "[data-history-refresh]", HTMLButtonElement),
+      clearFilters: queryElement(root, "[data-history-clear-filters]", HTMLButtonElement),
+      status,
+      warnings,
+      list,
+      pager: queryElement(root, "[data-history-pager]", HTMLElement),
+      previous: queryElement(root, "[data-history-previous]", HTMLButtonElement),
+      range: queryElement(root, "[data-history-range]", HTMLElement),
+      next: queryElement(root, "[data-history-next]", HTMLButtonElement),
+      restore: queryElement(root, "[data-history-restore]", HTMLElement),
+      restoreSummary: queryElement(root, "[data-history-restore-summary]", HTMLElement),
+      restoreFacts: queryElement(root, "[data-history-restore-facts]", HTMLElement),
+      restoreChanges: queryElement(root, "[data-history-restore-changes]", HTMLElement),
+      restoreConflicts: queryElement(root, "[data-history-restore-conflicts]", HTMLElement),
+      restoreConflictList: queryElement(root, "[data-history-restore-conflict-list]", HTMLElement),
+      restoreConsent: queryElement(root, "[data-history-restore-consent]", HTMLInputElement),
+      restoreConfirm: queryElement(root, "[data-history-restore-confirm]", HTMLButtonElement),
+      restoreCancel: queryElement(root, "[data-history-restore-cancel]", HTMLButtonElement)
+    };
+  };
+
+  // internal/web/static_src/history-workspace-filters.ts
+  var renderHistoryFilterGroup = (container, name2, options, selected) => {
+    if (!container) {
+      return;
+    }
+    const legend = container.querySelector("legend");
+    container.textContent = "";
+    if (legend) {
+      container.appendChild(legend);
+    }
+    for (const option of options) {
+      container.appendChild(filterCheckbox(name2, option, selected.includes(option.value)));
     }
   };
+  var filterCheckbox = (name2, option, checked) => {
+    const label = document.createElement("label");
+    label.className = "history-filter-option";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.name = name2;
+    input.value = option.value;
+    input.checked = checked;
+    input.setAttribute("data-history-filter", name2);
+    const text3 = document.createElement("span");
+    text3.textContent = option.label || option.value;
+    label.appendChild(input);
+    label.appendChild(text3);
+    return label;
+  };
+  var readHistoryFilterGroup = (container) => {
+    if (!container) {
+      return [];
+    }
+    return queryAllElements(container, "input[type=checkbox]", HTMLInputElement).filter((input) => input.checked).map((input) => input.value);
+  };
+  var clearHistoryFilterGroup = (container) => {
+    if (!container) {
+      return;
+    }
+    for (const input of queryAllElements(container, "input[type=checkbox]", HTMLInputElement)) {
+      input.checked = false;
+    }
+  };
+  var readHistoryPageSize = (elements) => {
+    const raw = Number.parseInt(elements.pageSizeSelect?.value || "", 10);
+    if (!Number.isFinite(raw) || raw < 1) {
+      return elements.pageSize;
+    }
+    return Math.min(raw, elements.maxPageSize);
+  };
+  var readHistoryQuery = (elements, offset) => ({
+    limit: readHistoryPageSize(elements),
+    offset: Math.max(0, offset),
+    origins: readHistoryFilterGroup(elements.originFilters),
+    classes: readHistoryFilterGroup(elements.classFilters),
+    path: elements.path?.value || ""
+  });
+
+  // internal/web/static_src/history-workspace-list.ts
+  var renderHistoryWarnings = (container, warnings, warningCount) => {
+    container.textContent = "";
+    container.hidden = warningCount === 0;
+    if (warningCount === 0) {
+      return;
+    }
+    for (const warning of warnings) {
+      const item = document.createElement("li");
+      item.className = "history-warning";
+      item.textContent = warning.id ? `${warning.id}: ${warning.message}` : warning.message;
+      container.appendChild(item);
+    }
+    if (warningCount > warnings.length) {
+      const more = document.createElement("li");
+      more.className = "history-warning";
+      more.textContent = `${warningCount - warnings.length} more unreadable entries are not listed here.`;
+      container.appendChild(more);
+    }
+  };
+  var historyClassSummary = (entry) => entry.classes.map((count4) => `${count4.label || count4.class} ${count4.count}`).join(", ");
+  var historyEntryCard = (entry, onRestore) => {
+    const item = document.createElement("li");
+    item.className = "history-entry";
+    item.setAttribute("data-history-entry", entry.id);
+    const head = document.createElement("div");
+    head.className = "history-entry-head";
+    const origin = document.createElement("span");
+    origin.className = "history-origin";
+    origin.setAttribute("data-history-entry-origin", entry.origin);
+    origin.textContent = entry.origin_label || entry.origin;
+    head.appendChild(origin);
+    const command2 = document.createElement("code");
+    command2.className = "history-command";
+    command2.textContent = entry.command || entry.id;
+    head.appendChild(command2);
+    const meta2 = document.createElement("p");
+    meta2.className = "history-meta";
+    const classes = historyClassSummary(entry);
+    const parts = [
+      formatHistoryTimestamp(entry.timestamp),
+      historyFileCountLabel(entry.file_count || entry.files.length)
+    ];
+    meta2.textContent = classes ? `${parts.join(" - ")} - ${classes}` : parts.join(" - ");
+    const restore = document.createElement("button");
+    restore.className = "history-button";
+    restore.type = "button";
+    restore.setAttribute("data-history-preview-entry", entry.id);
+    restore.setAttribute("aria-label", `Preview restoring ${entry.command || entry.id}`);
+    restore.textContent = "Restore...";
+    restore.addEventListener("click", () => {
+      onRestore(entry.id);
+    });
+    item.appendChild(head);
+    item.appendChild(meta2);
+    item.appendChild(restore);
+    return item;
+  };
+  var renderHistoryEntryList = (container, entries, onRestore) => {
+    container.textContent = "";
+    for (const entry of entries) {
+      container.appendChild(historyEntryCard(entry, onRestore));
+    }
+  };
+  var historyRangeLabel = (offset, shown, total) => {
+    if (total === 0) {
+      return "No entries match.";
+    }
+    if (shown === 0) {
+      return `No entries at this position of ${total}.`;
+    }
+    return `${offset + 1}-${offset + shown} of ${total}`;
+  };
+  var updateHistoryPager = (elements, result, shown) => {
+    const offset = result.offset || 0;
+    const total = result.total || 0;
+    if (elements.range) {
+      elements.range.textContent = historyRangeLabel(offset, shown, total);
+    }
+    if (elements.previous) {
+      elements.previous.disabled = offset <= 0;
+    }
+    if (elements.next) {
+      elements.next.disabled = !result.has_more;
+    }
+  };
+
+  // internal/web/static_src/history-workspace-restore.ts
+  var historyChangeDurability = (change) => {
+    if (!change.recorded) {
+      return "not recorded in the content history";
+    }
+    return change.travels ? "recorded here, and travels to your other replica" : "recorded here only, and stays on this machine";
+  };
+  var appendFact = (list, term, detail) => {
+    const dt = document.createElement("dt");
+    dt.textContent = term;
+    const dd = document.createElement("dd");
+    dd.textContent = detail;
+    list.appendChild(dt);
+    list.appendChild(dd);
+  };
+  var renderRestoreFacts = (container, preview) => {
+    if (!container) {
+      return;
+    }
+    container.textContent = "";
+    appendFact(container, "Came from", preview.origin_label || preview.origin || "unknown");
+    appendFact(container, "Recorded command", preview.command || "(none recorded)");
+    appendFact(container, "Recorded at", formatHistoryTimestamp(preview.timestamp || ""));
+    appendFact(container, "Entry", preview.entry_id || "");
+  };
+  var renderRestoreChanges = (container, changes) => {
+    if (!container) {
+      return;
+    }
+    container.textContent = "";
+    for (const change of changes) {
+      const item = document.createElement("li");
+      item.className = change.conflict ? "history-change is-conflict" : "history-change";
+      item.setAttribute("data-history-change", change.path);
+      const path = document.createElement("code");
+      path.textContent = change.path;
+      item.appendChild(path);
+      const detail = document.createElement("p");
+      detail.className = "history-change-detail";
+      detail.textContent = `${change.current_state} -> ${change.restored_state} (${change.class}; ${historyChangeDurability(change)})`;
+      item.appendChild(detail);
+      if (change.conflict) {
+        const flag = document.createElement("p");
+        flag.className = "history-change-conflict";
+        flag.textContent = "This path holds newer work that restoring would replace.";
+        item.appendChild(flag);
+      }
+      container.appendChild(item);
+    }
+  };
+  var renderRestoreConflicts = (elements, conflicts) => {
+    if (elements.restoreConflictList) {
+      elements.restoreConflictList.textContent = "";
+      for (const conflict of conflicts) {
+        const item = document.createElement("li");
+        item.setAttribute("data-history-conflict-path", conflict.path);
+        item.textContent = `${conflict.path}: the history holds ${conflict.expected_state}, this vault now holds ${conflict.current_state}`;
+        elements.restoreConflictList.appendChild(item);
+      }
+    }
+    if (elements.restoreConflicts) {
+      elements.restoreConflicts.hidden = conflicts.length === 0;
+    }
+    if (elements.restoreConsent) {
+      elements.restoreConsent.checked = false;
+    }
+  };
+  var renderHistoryRestorePreview = (elements, preview) => {
+    const conflicts = preview.conflicts || [];
+    if (elements.restoreSummary) {
+      elements.restoreSummary.textContent = preview.message || "";
+      elements.restoreSummary.classList.toggle("is-warning", conflicts.length > 0);
+    }
+    renderRestoreFacts(elements.restoreFacts, preview);
+    renderRestoreChanges(elements.restoreChanges, preview.changes || []);
+    renderRestoreConflicts(elements, conflicts);
+    if (elements.restore) {
+      elements.restore.hidden = false;
+    }
+    syncHistoryRestoreConsent(elements, conflicts.length > 0);
+  };
+  var syncHistoryRestoreConsent = (elements, requiresConsent) => {
+    if (!elements.restoreConfirm) {
+      return;
+    }
+    elements.restoreConfirm.disabled = requiresConsent && !elements.restoreConsent?.checked;
+    elements.restoreConfirm.textContent = requiresConsent ? "Restore and replace newer work" : "Restore";
+  };
+  var hideHistoryRestorePanel = (elements) => {
+    if (elements.restore) {
+      elements.restore.hidden = true;
+    }
+    if (elements.restoreConflicts) {
+      elements.restoreConflicts.hidden = true;
+    }
+    if (elements.restoreConsent) {
+      elements.restoreConsent.checked = false;
+    }
+    if (elements.restoreConfirm) {
+      elements.restoreConfirm.disabled = false;
+      elements.restoreConfirm.textContent = "Restore";
+    }
+  };
+
+  // internal/web/static_src/history-workspace.ts
+  var initHistoryWorkspace = (deps = {}) => {
+    const elements = findHistoryWorkspaceElements(document);
+    if (!elements) {
+      return;
+    }
+    const baseFetch = deps.fetch || fetch;
+    const ctx = {
+      elements,
+      fetcher: (input, init) => baseFetch(input, init),
+      state: { offset: 0, preview: null, vocabularyRendered: false, issued: 0, success: "" },
+      setStatus: (message, kind = "") => {
+        setStatusText(elements.status, message, kind);
+      }
+    };
+    hideHistoryRestorePanel(elements);
+    bindHistoryWorkspace(ctx);
+    void loadHistoryPage(ctx);
+  };
+  var bindHistoryWorkspace = (ctx) => {
+    const { elements, state } = ctx;
+    const reload = (offset) => {
+      state.offset = Math.max(0, offset);
+      void loadHistoryPage(ctx);
+    };
+    elements.filters?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      reload(0);
+    });
+    elements.filters?.addEventListener("change", () => {
+      reload(0);
+    });
+    bindPathInput(ctx, reload);
+    elements.refresh?.addEventListener("click", () => {
+      reload(state.offset);
+    });
+    elements.clearFilters?.addEventListener("click", () => {
+      if (elements.path) {
+        elements.path.value = "";
+      }
+      clearHistoryFilterGroup(elements.originFilters);
+      clearHistoryFilterGroup(elements.classFilters);
+      reload(0);
+    });
+    elements.previous?.addEventListener("click", () => {
+      reload(state.offset - pageStep(ctx));
+    });
+    elements.next?.addEventListener("click", () => {
+      reload(state.offset + pageStep(ctx));
+    });
+    elements.restoreConsent?.addEventListener("change", () => {
+      syncHistoryRestoreConsent(elements, (state.preview?.conflicts || []).length > 0);
+    });
+    elements.restoreConfirm?.addEventListener("click", () => {
+      void applyHistoryRestore(ctx);
+    });
+    elements.restoreCancel?.addEventListener("click", () => {
+      state.preview = null;
+      hideHistoryRestorePanel(elements);
+      ctx.setStatus("Restore canceled. Nothing was changed.");
+    });
+  };
+  var bindPathInput = (ctx, reload) => {
+    let pending = 0;
+    ctx.elements.path?.addEventListener("input", () => {
+      window.clearTimeout(pending);
+      pending = window.setTimeout(() => {
+        reload(0);
+      }, 300);
+    });
+  };
+  var pageStep = (ctx) => {
+    const limit = readHistoryQuery(ctx.elements, 0).limit;
+    return limit && limit > 0 ? limit : ctx.elements.pageSize;
+  };
+  var loadHistoryPage = async (ctx, success = "") => {
+    const { elements, state } = ctx;
+    if (success !== "") {
+      state.success = success;
+    }
+    const issue = ++state.issued;
+    elements.root.setAttribute("aria-busy", "true");
+    ctx.setStatus("Reading the history...", "is-loading");
+    const query = readHistoryQuery(elements, state.offset);
+    const outcome = await fetchHistoryPage(ctx.fetcher, elements.listEndpoint, query);
+    if (issue !== state.issued) {
+      return;
+    }
+    elements.root.setAttribute("aria-busy", "false");
+    if (!outcome.ok) {
+      ctx.setStatus(outcome.message, "is-error");
+      return;
+    }
+    const reporting = state.success;
+    state.success = "";
+    renderHistoryPage(ctx, outcome.result, query, reporting);
+  };
+  var renderHistoryPage = (ctx, result, query, reporting) => {
+    const { elements, state } = ctx;
+    const entries = result.entries || [];
+    state.offset = result.offset || 0;
+    renderVocabularyOnce(ctx, result, query.origins || [], query.classes || []);
+    renderHistoryWarnings(elements.warnings, result.warnings || [], result.warning_count || 0);
+    renderHistoryEntryList(elements.list, entries, (entryID) => void openHistoryPreview(ctx, entryID));
+    updateHistoryPager(elements, result, entries.length);
+    reportPageStatus(ctx, result, entries.length, reporting);
+  };
+  var renderVocabularyOnce = (ctx, result, origins, classes) => {
+    if (ctx.state.vocabularyRendered) {
+      return;
+    }
+    renderHistoryFilterGroup(ctx.elements.originFilters, "origin", result.origins || [], origins);
+    renderHistoryFilterGroup(ctx.elements.classFilters, "class", result.classes || [], classes);
+    ctx.state.vocabularyRendered = true;
+  };
+  var reportPageStatus = (ctx, result, shown, success) => {
+    if (success !== "") {
+      ctx.setStatus(success, "is-success");
+      return;
+    }
+    const total = result.total || 0;
+    if (total === 0) {
+      ctx.setStatus("No recorded change matches this view.", "is-empty");
+      return;
+    }
+    ctx.setStatus(`Showing ${shown} of ${total} recorded changes.`);
+  };
+  var openHistoryPreview = async (ctx, entryID) => {
+    const { elements, state } = ctx;
+    if (elements.token.trim() === "") {
+      ctx.setStatus("This server does not accept restores.", "is-error");
+      return;
+    }
+    ctx.setStatus("Checking what restoring this would do...", "is-loading");
+    const outcome = await previewHistoryRestore(ctx.fetcher, elements.previewEndpoint, elements.token, entryID);
+    if (!outcome.ok) {
+      state.preview = null;
+      hideHistoryRestorePanel(elements);
+      ctx.setStatus(outcome.message, "is-error");
+      return;
+    }
+    state.preview = outcome.result;
+    renderHistoryRestorePreview(elements, outcome.result);
+    ctx.setStatus(
+      (outcome.result.conflicts || []).length > 0 ? "This restore would replace newer work. Read what it lists before confirming." : "Previewed. Nothing has changed yet.",
+      (outcome.result.conflicts || []).length > 0 ? "is-warning" : ""
+    );
+  };
+  var applyHistoryRestore = async (ctx) => {
+    const { elements, state } = ctx;
+    const preview = state.preview;
+    if (!preview) {
+      ctx.setStatus("Preview a change before restoring it.", "is-error");
+      return;
+    }
+    const forced = (preview.conflicts || []).length > 0;
+    if (forced && !elements.restoreConsent?.checked) {
+      ctx.setStatus("Confirm you understand what this replaces before restoring.", "is-error");
+      return;
+    }
+    ctx.setStatus("Restoring...", "is-loading");
+    const outcome = await restoreHistoryEntry(ctx.fetcher, elements.undoEndpoint, {
+      token: elements.token,
+      entryID: preview.entry_id,
+      force: forced,
+      confirmForce: forced,
+      previewID: preview.preview_id
+    });
+    state.preview = null;
+    hideHistoryRestorePanel(elements);
+    state.offset = 0;
+    if (!outcome.ok) {
+      await loadHistoryPage(ctx);
+      ctx.setStatus(restoreFailureMessage(outcome.message, stalePreview(outcome)), "is-error");
+      return;
+    }
+    await loadHistoryPage(ctx, outcome.result.message || "Restored.");
+  };
+  var restoreFailureMessage = (message, stale) => stale ? `${message} Preview it again to see what changed.` : message;
 
   // internal/web/static_src/note-layout.ts
   var NOTE_META_VISIBLE_STORAGE_KEY = "bn.note-meta-sidebar.visible";
@@ -7791,9 +8584,9 @@ var BrainNotesApp = (() => {
     if (failures.length === 0) {
       return message;
     }
-    const summary = failures.slice(0, 3).map((failure) => {
-      const key = failure.key || failure.rel_path || "note";
-      return `${key}: ${failure.message || failure.code || "failed"}`;
+    const summary = failures.slice(0, 3).map((failure2) => {
+      const key = failure2.key || failure2.rel_path || "note";
+      return `${key}: ${failure2.message || failure2.code || "failed"}`;
     });
     const suffix = failures.length > summary.length ? `; ${failures.length - summary.length} more` : "";
     return `${message} Failures: ${summary.join("; ")}${suffix}.`;
@@ -7877,12 +8670,12 @@ var BrainNotesApp = (() => {
     }
     listEl.appendChild(item);
   };
-  var renderPreviewFailureItem = (listEl, failure) => {
+  var renderPreviewFailureItem = (listEl, failure2) => {
     const doc2 = listEl.ownerDocument;
     const item = doc2.createElement("li");
     item.className = "overview-bulk-preview-failure";
-    const label = failure.rel_path || failure.key || "note";
-    item.textContent = `${label}: ${failure.message || failure.code || "failed"}`;
+    const label = failure2.rel_path || failure2.key || "note";
+    item.textContent = `${label}: ${failure2.message || failure2.code || "failed"}`;
     listEl.appendChild(item);
   };
   var renderPreviewCounts = (previewCountsEl, result) => {
@@ -7954,8 +8747,8 @@ var BrainNotesApp = (() => {
       previewFailuresEl.textContent = "";
       const failures = previewState.result.failures || [];
       previewFailuresEl.hidden = failures.length === 0;
-      for (const failure of failures) {
-        renderPreviewFailureItem(previewFailuresEl, failure);
+      for (const failure2 of failures) {
+        renderPreviewFailureItem(previewFailuresEl, failure2);
       }
     }
     if (previewApplyButton) {
@@ -9387,7 +10180,7 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/properties-workbench-requests.ts
-  var readPayload = async (resp) => {
+  var readPayload2 = async (resp) => {
     try {
       return await resp.json();
     } catch {
@@ -9397,7 +10190,7 @@ var BrainNotesApp = (() => {
   var postProperty = async (fetcher, endpoint, token, body) => {
     try {
       const resp = await fetcher(endpoint, buildPropertyRequestInit(token, body));
-      const payload = await readPayload(resp);
+      const payload = await readPayload2(resp);
       if (!resp.ok) {
         return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
       }
@@ -9430,7 +10223,7 @@ var BrainNotesApp = (() => {
         },
         body: buildUndoForm({ token, entryID }).toString()
       });
-      const payload = await readPayload(resp);
+      const payload = await readPayload2(resp);
       if (!resp.ok) {
         return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
       }
@@ -9725,7 +10518,7 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/properties-catalog.ts
-  var readPayload2 = async (resp) => {
+  var readPayload3 = async (resp) => {
     try {
       return await resp.json();
     } catch {
@@ -9871,7 +10664,7 @@ var BrainNotesApp = (() => {
       setStatus2("Loading properties...", "is-loading");
       try {
         const resp = await fetcher(config2.endpoint, { headers: { Accept: "application/json" } });
-        const payload = await readPayload2(resp);
+        const payload = await readPayload3(resp);
         if (!resp.ok) {
           setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
@@ -10859,7 +11652,7 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/properties-detail.ts
-  var readPayload3 = async (resp) => {
+  var readPayload4 = async (resp) => {
     try {
       return await resp.json();
     } catch {
@@ -10955,7 +11748,7 @@ var BrainNotesApp = (() => {
           offset: filter.offset
         });
         const resp = await fetcher(url, { headers: { Accept: "application/json" } });
-        const payload = await readPayload3(resp);
+        const payload = await readPayload4(resp);
         if (!resp.ok) {
           setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
@@ -12927,15 +13720,15 @@ var BrainNotesApp = (() => {
   }).join("\n");
 
   // internal/web/static_src/saved-views-requests.ts
-  var readPayload4 = async (resp) => {
+  var readPayload5 = async (resp) => {
     try {
       return await resp.json();
     } catch {
       return null;
     }
   };
-  var finish = async (resp) => {
-    const payload = await readPayload4(resp);
+  var finish2 = async (resp) => {
+    const payload = await readPayload5(resp);
     if (!resp.ok) {
       return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
     }
@@ -12950,7 +13743,7 @@ var BrainNotesApp = (() => {
       const resp = await fetcher(SAVED_VIEWS_ENDPOINT, {
         headers: { Accept: "application/json" }
       });
-      return await finish(resp);
+      return await finish2(resp);
     } catch {
       return { ok: false, message: "The server did not answer." };
     }
@@ -12958,7 +13751,7 @@ var BrainNotesApp = (() => {
   var postSavedViews = async (fetcher, endpoint, token, body) => {
     try {
       const resp = await fetcher(endpoint, buildSavedViewsRequestInit(token, body));
-      return await finish(resp);
+      return await finish2(resp);
     } catch {
       return { ok: false, message: "The server did not answer." };
     }
@@ -13536,15 +14329,15 @@ var BrainNotesApp = (() => {
   var settingNoChangeMessage = (key) => `"${key}" already holds that value.`;
 
   // internal/web/static_src/settings-requests.ts
-  var readPayload5 = async (resp) => {
+  var readPayload6 = async (resp) => {
     try {
       return await resp.json();
     } catch {
       return null;
     }
   };
-  var finish2 = async (resp, normalize) => {
-    const payload = await readPayload5(resp);
+  var finish3 = async (resp, normalize) => {
+    const payload = await readPayload6(resp);
     if (!resp.ok) {
       return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
     }
@@ -13557,7 +14350,7 @@ var BrainNotesApp = (() => {
   var get = async (fetcher, endpoint, normalize) => {
     try {
       const resp = await fetcher(endpoint, { headers: { Accept: "application/json" } });
-      return await finish2(resp, normalize);
+      return await finish3(resp, normalize);
     } catch {
       return { ok: false, message: "The server did not answer." };
     }
@@ -13565,7 +14358,7 @@ var BrainNotesApp = (() => {
   var post = async (fetcher, endpoint, token, body, normalize) => {
     try {
       const resp = await fetcher(endpoint, buildConfigRequestInit(token, body));
-      return await finish2(resp, normalize);
+      return await finish3(resp, normalize);
     } catch {
       return { ok: false, message: "The server did not answer." };
     }
@@ -14369,17 +15162,17 @@ var BrainNotesApp = (() => {
       rendered = content2;
       options.sink.pending();
       options.render(content2).then(
-        (html2) => finish4(sequence, () => options.sink.render(html2), "", false),
+        (html2) => finish5(sequence, () => options.sink.render(html2), "", false),
         (error) => {
           if (rendered === content2) {
             rendered = null;
           }
-          finish4(sequence, () => {
+          finish5(sequence, () => {
           }, previewErrorMessage(error), true);
         }
       );
     };
-    const finish4 = (sequence, apply, message, failed) => {
+    const finish5 = (sequence, apply, message, failed) => {
       if (disposed || sequence <= applied) {
         return;
       }
@@ -19390,7 +20183,7 @@ var BrainNotesApp = (() => {
     // selectors (after `&` expansion) to compute the final selector.
     constructor(spec, options) {
       this.rules = [];
-      let { finish: finish4 } = options || {};
+      let { finish: finish5 } = options || {};
       function splitSelector(selector) {
         return /^@/.test(selector) ? [selector] : selector.split(/,\s*/);
       }
@@ -19413,7 +20206,7 @@ var BrainNotesApp = (() => {
           }
         }
         if (local.length || keyframes) {
-          target.push((finish4 && !isAt && !isKeyframes ? selectors.map(finish4) : selectors).join(", ") + " {" + local.join(" ") + "}");
+          target.push((finish5 && !isAt && !isKeyframes ? selectors.map(finish5) : selectors).join(", ") + " {" + local.join(" ") + "}");
         }
       }
       for (let prop in spec) render(splitSelector(prop), spec[prop], this.rules);
@@ -36172,9 +36965,9 @@ var BrainNotesApp = (() => {
       if (this.stage == -1)
         return false;
       let content2 = leaf.content + "\n" + line.scrub();
-      let finish4 = this.advance(content2);
-      if (finish4 > -1 && finish4 < content2.length)
-        return this.complete(cx, leaf, finish4);
+      let finish5 = this.advance(content2);
+      if (finish5 > -1 && finish5 < content2.length)
+        return this.complete(cx, leaf, finish5);
       return false;
     }
     finish(cx, leaf) {
@@ -43259,7 +44052,7 @@ var BrainNotesApp = (() => {
       },
       body: request.body.toString()
     });
-    const payload = await readPayload6(response);
+    const payload = await readPayload7(response);
     return readManageOutcome(response.status, response.ok, payload);
   };
   var readManageOutcome = (status, ok, payload) => {
@@ -43286,7 +44079,7 @@ var BrainNotesApp = (() => {
     };
   };
   var editorURLForKey = (editorPath, key) => `${editorPath}?key=${encodeURIComponent(key)}`;
-  var readPayload6 = async (response) => {
+  var readPayload7 = async (response) => {
     const contentType = response.headers?.get("Content-Type") || "";
     try {
       return contentType.includes("application/json") ? await response.json() : await response.text();
@@ -44144,8 +44937,8 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/sync-requests.ts
-  var stalePreview = (failure) => failure.code === "preview_stale" || failure.code === "preview_required";
-  var readPayload7 = async (resp) => {
+  var stalePreview2 = (failure2) => failure2.code === "preview_stale" || failure2.code === "preview_required";
+  var readPayload8 = async (resp) => {
     try {
       return await resp.json();
     } catch {
@@ -44153,8 +44946,8 @@ var BrainNotesApp = (() => {
     }
   };
   var payloadCode = (payload) => normalizeParamValue(asRecord(payload)?.code);
-  var finish3 = async (resp, normalize) => {
-    const payload = await readPayload7(resp);
+  var finish4 = async (resp, normalize) => {
+    const payload = await readPayload8(resp);
     if (!resp.ok) {
       return {
         ok: false,
@@ -44175,7 +44968,7 @@ var BrainNotesApp = (() => {
   var get2 = async (fetcher, endpoint, normalize) => {
     try {
       const resp = await fetcher(endpoint, { headers: { Accept: "application/json" } });
-      return await finish3(resp, normalize);
+      return await finish4(resp, normalize);
     } catch {
       return { ok: false, code: "", message: "The server did not answer." };
     }
@@ -44183,7 +44976,7 @@ var BrainNotesApp = (() => {
   var post2 = async (fetcher, endpoint, token, body, normalize) => {
     try {
       const resp = await fetcher(endpoint, buildSyncRequestInit(token, body));
-      return await finish3(resp, normalize);
+      return await finish4(resp, normalize);
     } catch {
       return { ok: false, code: "", message: "The server did not answer." };
     }
@@ -44290,7 +45083,7 @@ var BrainNotesApp = (() => {
       decisions.decisions()
     );
     if (!outcome.ok) {
-      if (!stalePreview(outcome)) {
+      if (!stalePreview2(outcome)) {
         say(outcome.message, "is-error");
         return;
       }
@@ -44319,7 +45112,7 @@ var BrainNotesApp = (() => {
     if (!outcome.ok) {
       const merges = ctx.merges();
       scope.reload(
-        stalePreview(outcome) ? staleAnnouncement(outcome, merges) : failureAnnouncement(outcome.message, merges)
+        stalePreview2(outcome) ? staleAnnouncement(outcome, merges) : failureAnnouncement(outcome.message, merges)
       );
       return;
     }
@@ -44428,11 +45221,11 @@ var BrainNotesApp = (() => {
     }
     return kept ? "kept" : "lost";
   };
-  var staleAnnouncement = (failure, merges) => ({
-    message: `${reReadOpening(failure)} ${mergeClause(merges)}`,
+  var staleAnnouncement = (failure2, merges) => ({
+    message: `${reReadOpening(failure2)} ${mergeClause(merges)}`,
     kind: "is-warning"
   });
-  var reReadOpening = (failure) => failure.code === "preview_stale" ? "This vault moved on while the decision was being made, so nothing was applied." : "This review is too old to apply, so nothing was applied.";
+  var reReadOpening = (failure2) => failure2.code === "preview_stale" ? "This vault moved on while the decision was being made, so nothing was applied." : "This review is too old to apply, so nothing was applied.";
   var mergeClause = (merges) => {
     if (merges === "none") {
       return "Both versions are being read again.";
@@ -46947,6 +47740,7 @@ ${candidate.markdown}`;
       initFrontmatterEditing();
       initBrokenCreateActions();
       initHistoryPanel();
+      initHistoryWorkspace();
       initSynthesize();
       initSettings();
       initSourceEditor();
