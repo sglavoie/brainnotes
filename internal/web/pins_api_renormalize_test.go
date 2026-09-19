@@ -69,20 +69,35 @@ func assertReorderRenormalizesWholeList(t *testing.T, count, lockEscalation int)
 		t.Fatalf("journal entries = %d, want 1 undoable action", n)
 	}
 	if lockEscalation > 0 {
-		locks, err := os.ReadDir(filepath.Join(root, ".bnotes", "locks"))
+		locks, err := transactionLockNames(root)
 		if err != nil {
 			t.Fatalf("read transaction locks: %v", err)
 		}
-		if len(locks) != 1 || locks[0].Name() != "vault.lock" {
-			t.Fatalf("transaction locks = %v, want only escalated vault.lock", lockEntryNames(locks))
+		if len(locks) != 1 || locks[0] != "vault.lock" {
+			t.Fatalf("transaction locks = %v, want only escalated vault.lock", locks)
 		}
 	}
 }
 
-func lockEntryNames(entries []os.DirEntry) []string {
+// transactionLockNames lists the lock files a transaction created, which is what
+// this assertion is about: one escalated vault.lock rather than a file per path.
+//
+// The checkpoint barrier keeps its two flocks in the same directory — every
+// flock this program takes lives in one place — and they are not transaction
+// locks: they are created by the join every journaled mutation passes through,
+// once per vault, however many paths the transaction names. Counting them here
+// would make this test fail for a reason it is not asking about.
+func transactionLockNames(root string) ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(root, ".bnotes", "locks"))
+	if err != nil {
+		return nil, err
+	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "checkpoint.") {
+			continue
+		}
 		names = append(names, entry.Name())
 	}
-	return names
+	return names, nil
 }

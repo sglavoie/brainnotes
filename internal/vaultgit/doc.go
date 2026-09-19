@@ -95,6 +95,15 @@
 //     every other in this package, and a busy lock means the record belongs to
 //     a live operation, so opening leaves it alone. On a healthy vault Open
 //     still takes nothing and mutates nothing.
+//   - `safety.lock` — and only it — is taken behind the vault's checkpoint
+//     barrier, which sits above every lock named here and every lock
+//     internal/vault owns. Everything that lock guards writes the content
+//     history, and a copy taken between a note landing and its commit holds a
+//     change the history does not explain. The full order is stated once, in
+//     internal/checkpoint: barrier, then vault locks, then safety lock. The
+//     push lock stays outside it, because a push is a network round trip that
+//     changes nothing on this disk and an unreachable remote would otherwise
+//     exhaust every checkpoint's drain budget.
 //
 // # Scope
 //

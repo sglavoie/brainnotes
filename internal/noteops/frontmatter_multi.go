@@ -42,39 +42,13 @@ type NoteFrontmatterWrite struct {
 // own transaction and reports per-note failures. Use it when partial progress is
 // acceptable, and this when it is not.
 func SetFrontmatterAtomic(vaultRoot string, writes []NoteFrontmatterWrite, fm *config.FrontmatterConfig, opts ...FrontmatterOption) (*FrontmatterResult, error) {
-	options := defaultFrontmatterOptions("bn web frontmatter set atomic")
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newFrontmatterOptions("bn web frontmatter set atomic", opts)
 	if len(writes) == 0 {
 		return nil, Errorf(CodeInvalidRequest, "frontmatter: no notes selected")
 	}
-	sources := make([]PathResolution, 0, len(writes))
-	planned := make([]plannedFrontmatterWrite, 0, len(writes))
-	seen := make(map[string]bool, len(writes))
-	for _, write := range writes {
-		if strings.TrimSpace(write.RelPath) == "" {
-			return nil, Errorf(CodeInvalidRequest, "frontmatter: empty note path")
-		}
-		source, err := resolveFrontmatterSource(vaultRoot, write.RelPath)
-		if err != nil {
-			return nil, err
-		}
-		if seen[source.AbsPath] {
-			return nil, Errorf(CodeInvalidRequest, "frontmatter: %s appears twice in one atomic write", source.RelPath)
-		}
-		seen[source.AbsPath] = true
-		sources = append(sources, source)
-
-		change, err := planFrontmatterWrite(source.AbsPath, write.Mutations, fm)
-		if err != nil {
-			return nil, err
-		}
-		if change != nil {
-			planned = append(planned, *change)
-		}
+	sources, planned, err := planAtomicFrontmatterWrites(vaultRoot, writes, fm)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(planned) == 0 {
@@ -90,6 +64,7 @@ func SetFrontmatterAtomic(vaultRoot string, writes []NoteFrontmatterWrite, fm *c
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	if err := commitFrontmatterWrites(vaultRoot, planned, j, options.requires, options.lockEscalation); err != nil {
 		return nil, err
 	}
@@ -102,6 +77,43 @@ func SetFrontmatterAtomic(vaultRoot string, writes []NoteFrontmatterWrite, fm *c
 		Journal: entry,
 		Changed: true,
 	}, nil
+}
+
+// planAtomicFrontmatterWrites resolves every note in the set and plans its
+// replacement, refusing the whole call on the first problem — an empty path, an
+// unresolvable note, the same note named twice, or a mutation that cannot be
+// planned. Nothing is written here, which is what lets an atomic set decide
+// before it begins.
+//
+// A note whose mutations net to no change contributes a source and no plan, so
+// the caller can tell "nothing to do" from "nothing selected".
+func planAtomicFrontmatterWrites(vaultRoot string, writes []NoteFrontmatterWrite, fm *config.FrontmatterConfig) ([]PathResolution, []plannedFrontmatterWrite, error) {
+	sources := make([]PathResolution, 0, len(writes))
+	planned := make([]plannedFrontmatterWrite, 0, len(writes))
+	seen := make(map[string]bool, len(writes))
+	for _, write := range writes {
+		if strings.TrimSpace(write.RelPath) == "" {
+			return nil, nil, Errorf(CodeInvalidRequest, "frontmatter: empty note path")
+		}
+		source, err := resolveFrontmatterSource(vaultRoot, write.RelPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		if seen[source.AbsPath] {
+			return nil, nil, Errorf(CodeInvalidRequest, "frontmatter: %s appears twice in one atomic write", source.RelPath)
+		}
+		seen[source.AbsPath] = true
+		sources = append(sources, source)
+
+		change, err := planFrontmatterWrite(source.AbsPath, write.Mutations, fm)
+		if err != nil {
+			return nil, nil, err
+		}
+		if change != nil {
+			planned = append(planned, *change)
+		}
+	}
+	return sources, planned, nil
 }
 
 // plannedFrontmatterWrite is one note's serialized replacement plus the revision

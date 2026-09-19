@@ -79,44 +79,14 @@ func RenameNote(v *vault.Vault, cfg *config.Config, targetPath, newTitle string,
 	if cfg == nil {
 		return nil, Errorf(CodeInvalidRequest, "rename: nil config")
 	}
-	options := defaultRenameOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newRenameOptions(opts)
 
-	if err := ValidateRenameTitle(newTitle); err != nil {
-		return nil, err
-	}
-	source, err := resolveExistingMutationPath(v.Root, mutationTargetPath(v.Root, targetPath), "rename:")
+	source, oldTitle, err := resolveRenameSource(v, targetPath, newTitle)
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureRegularSource(source.AbsPath, "rename:"); err != nil {
-		return nil, err
-	}
-	target := &vault.Note{Path: source.AbsPath}
-	oldTitle := target.Title()
-	if oldTitle == newTitle {
-		return nil, Errorf(CodeInvalidRequest, "rename: new title %q is identical to current title", newTitle)
-	}
-	if err := EnsureUniqueRenameSourceTitle(v, source.AbsPath, oldTitle); err != nil {
-		return nil, err
-	}
-
-	newPath, err := ComputeRenamePath(source.AbsPath, newTitle, cfg)
+	dest, err := resolveRenameDestination(v, cfg, source.AbsPath, newTitle, options.force)
 	if err != nil {
-		return nil, err
-	}
-	dest, err := resolveWritableMutationPath(v.Root, newPath, "rename:")
-	if err != nil {
-		return nil, err
-	}
-	if err := CheckRenameDestination(source.AbsPath, dest.AbsPath, options.force); err != nil {
-		return nil, err
-	}
-	if err := EnsureUniqueRenameDestinationTitle(v, source.AbsPath, dest.AbsPath, newTitle, options.force); err != nil {
 		return nil, err
 	}
 
@@ -124,32 +94,7 @@ func RenameNote(v *vault.Vault, cfg *config.Config, targetPath, newTitle string,
 	if err != nil {
 		return nil, err
 	}
-	// Ahead of the first Capture. RenameFile takes locks and would be refused
-	// there anyway, but by then the journal entry and every backlink snapshot
-	// would already be on the storage the policy is protecting.
-	j, err := BeginOperation(v.Root, "rename", options.command, []string{plan.Target, plan.NewPath}, options.journalOptions...)
-	if err != nil {
-		return nil, err
-	}
-	if err := j.Capture(plan.Target); err != nil {
-		return nil, err
-	}
-	if err := j.Capture(plan.NewPath); err != nil {
-		return nil, err
-	}
-	for _, p := range plan.FileOrder {
-		if err := j.Capture(p); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
-		return nil, err
-	}
-	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
-		return nil, err
-	}
-	entry, err := j.Finalize()
+	entry, err := applyRename(v, cfg, plan, options)
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +104,89 @@ func RenameNote(v *vault.Vault, cfg *config.Config, targetPath, newTitle string,
 		Plan:        plan,
 		Journal:     entry,
 	}, nil
+}
+
+// resolveRenameSource answers which note is being renamed and what it is called
+// now, refusing every reason there is nothing to rename: an unusable title, a
+// path that is not a note, a new title identical to the old one, and an old
+// title the vault holds twice — which would make "rewrite the links pointing at
+// it" ambiguous.
+func resolveRenameSource(v *vault.Vault, targetPath, newTitle string) (PathResolution, string, error) {
+	if err := ValidateRenameTitle(newTitle); err != nil {
+		return PathResolution{}, "", err
+	}
+	source, err := resolveExistingMutationPath(v.Root, mutationTargetPath(v.Root, targetPath), "rename:")
+	if err != nil {
+		return PathResolution{}, "", err
+	}
+	if err := ensureRegularSource(source.AbsPath, "rename:"); err != nil {
+		return PathResolution{}, "", err
+	}
+	oldTitle := (&vault.Note{Path: source.AbsPath}).Title()
+	if oldTitle == newTitle {
+		return PathResolution{}, "", Errorf(CodeInvalidRequest, "rename: new title %q is identical to current title", newTitle)
+	}
+	if err := EnsureUniqueRenameSourceTitle(v, source.AbsPath, oldTitle); err != nil {
+		return PathResolution{}, "", err
+	}
+	return source, oldTitle, nil
+}
+
+// resolveRenameDestination derives the path the new title implies and refuses it
+// unless it is writable, free (or forced), and does not collide with a title the
+// vault already holds.
+func resolveRenameDestination(v *vault.Vault, cfg *config.Config, sourceAbs, newTitle string, force bool) (PathResolution, error) {
+	newPath, err := ComputeRenamePath(sourceAbs, newTitle, cfg)
+	if err != nil {
+		return PathResolution{}, err
+	}
+	dest, err := resolveWritableMutationPath(v.Root, newPath, "rename:")
+	if err != nil {
+		return PathResolution{}, err
+	}
+	if err := CheckRenameDestination(sourceAbs, dest.AbsPath, force); err != nil {
+		return PathResolution{}, err
+	}
+	if err := EnsureUniqueRenameDestinationTitle(v, sourceAbs, dest.AbsPath, newTitle, force); err != nil {
+		return PathResolution{}, err
+	}
+	return dest, nil
+}
+
+// applyRename is the mutating half: it opens the operation, captures everything
+// the plan touches, rewrites the backlinks, moves the file, and finalizes.
+//
+// BeginOperation runs ahead of the first Capture. RenameFile takes locks and
+// would be refused there anyway, but by then the journal entry and every
+// backlink snapshot would already be on the storage the policy is protecting.
+func applyRename(v *vault.Vault, cfg *config.Config, plan *RenamePlan, options renameOptions) (*journal.Entry, error) {
+	j, err := BeginOperation(v.Root, "rename", options.command, []string{plan.Target, plan.NewPath}, options.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
+	defer j.Release()
+	if err := captureRelocation(j, plan.Target, plan.NewPath, plan.FileOrder); err != nil {
+		return nil, err
+	}
+	if err := ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
+		return nil, err
+	}
+	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
+		return nil, err
+	}
+	return j.Finalize()
+}
+
+// newRenameOptions folds the variadic options onto the defaults, skipping the
+// nil ones a conditional caller passes.
+func newRenameOptions(opts []RenameOption) renameOptions {
+	options := defaultRenameOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+	return options
 }
 
 func defaultRenameOptions() renameOptions {

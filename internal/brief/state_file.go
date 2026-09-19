@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
@@ -311,10 +312,22 @@ func writeBriefStateAtomic(vaultRoot, statePath string, data []byte, permissions
 }
 
 // External replica activity is operational state, with no vault Git lifecycle.
+//
+// It still joins the vault's checkpoint barrier. The file is outside the vault,
+// so a copy of the vault alone never holds it — but nothing copies the vault
+// alone: the deployment snapshot takes the vault and this activity directory
+// together, and the pair is only consistent if a checkpoint excludes writes to
+// both. The in-vault route below reaches the same barrier through
+// vaultstate.Save; this one has to say so itself.
 func (store *FileStateStore) writeState(root, path string, data []byte) error {
 	if store.storageRoot == "" {
 		return writeBriefStateAtomic(root, path, data, 0o644)
 	}
+	barrier, err := checkpoint.Join(root)
+	if err != nil {
+		return fmt.Errorf("brief: %w", err)
+	}
+	defer barrier()
 	if err := vault.GuardMutation(root, path); err != nil {
 		return err
 	}

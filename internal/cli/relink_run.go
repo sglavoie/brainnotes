@@ -61,6 +61,7 @@ func runRelinkCommand(cmd *cobra.Command, args []string, opts relinkOptions) err
 	if err != nil {
 		return err
 	}
+	defer r.journaler.Release()
 	return r.relinkAll(candidates)
 }
 
@@ -80,6 +81,15 @@ type relinkRun struct {
 	residues  []relinkResidue
 }
 
+// newRelinkRun resolves the output streams and opens the journal, except on a
+// dry-run, which writes a preview instead of taking one.
+//
+// The journal it opens is joined to the checkpoint barrier and stays joined
+// until somebody releases it, so this returns an obligation along with the run.
+// Nothing here can fail after BeginOperation succeeds, which is what makes
+// handing it back safe rather than merely convenient.
+//
+//bn:journal-handoff runRelinkCommand defers r.journaler.Release() on the returned run
 func newRelinkRun(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, allNotes []*vault.Note, opts relinkOptions) (*relinkRun, error) {
 	g := query.BuildGraphForRoot(v.Root, allNotes)
 	out := cmd.OutOrStdout()

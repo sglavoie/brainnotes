@@ -436,6 +436,7 @@ func (s *Server) commitTemplatePlan(plan *templatePlan, pin configPin) (*journal
 	if err != nil {
 		return nil, err
 	}
+	defer entry.Release()
 	txn, err := vault.NewFileTxn(s.vault.Root)
 	if err != nil {
 		return nil, noteops.WrapError(noteops.CodeInternal, "templates: open transaction", err)

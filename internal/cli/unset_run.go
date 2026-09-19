@@ -131,6 +131,7 @@ func unsetAll(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Con
 			return err
 		}
 	}
+	defer journaler.Release()
 
 	for _, p := range paths {
 		changed, err := applyUnset(p, props, cfg, v.Root, dry, journaler)

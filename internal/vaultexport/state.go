@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
@@ -356,6 +357,11 @@ func RecordImport(root, journalEntryID string, record Import) error {
 	if err != nil {
 		return err
 	}
+	barrier, err := joinBarrier(root)
+	if err != nil {
+		return err
+	}
+	defer barrier()
 	release, err := vault.LockPaths(root, StatePath(root))
 	if err != nil {
 		return fmt.Errorf("vaultexport: lock export state: %w", err)
@@ -407,6 +413,11 @@ func Reset(root string) error {
 	if err != nil {
 		return err
 	}
+	barrier, err := joinBarrier(root)
+	if err != nil {
+		return err
+	}
+	defer barrier()
 	release, err := vault.LockPaths(root, StatePath(root))
 	if err != nil {
 		return fmt.Errorf("vaultexport: lock export state: %w", err)
@@ -445,4 +456,17 @@ func hexObjectName(s string) bool {
 		}
 	}
 	return true
+}
+
+// joinBarrier enlists a synchronization-state write in the vault's checkpoint
+// barrier, which every such write takes before it takes the state lock. The
+// order is the one internal/checkpoint documents and is not negotiable: a writer
+// that joined after a vault lock would close a cycle against a checkpoint's
+// settle pass.
+func joinBarrier(root string) (func(), error) {
+	release, err := checkpoint.Join(root)
+	if err != nil {
+		return nil, fmt.Errorf("vaultexport: %w", err)
+	}
+	return release, nil
 }

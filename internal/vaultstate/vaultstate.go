@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
 )
@@ -48,6 +49,17 @@ import (
 // the new state; saying otherwise would invite a caller to retry a write that
 // already happened.
 func Save(vaultRoot, operation, path string, data []byte, perm os.FileMode) error {
+	// Ahead of everything, including the refusals: joining the checkpoint barrier
+	// is what puts this write inside the window a checkpoint waits for, and a
+	// write that joined after it took a lock would have inverted the one ordering
+	// the barrier depends on. The join covers the snapshot as well as the bytes,
+	// because a copy taken between them holds sidecar state the content history
+	// does not explain.
+	barrier, err := checkpoint.Join(vaultRoot)
+	if err != nil {
+		return fmt.Errorf("vaultstate: %w", err)
+	}
+	defer barrier()
 	// Ahead of the state directory, which is the first artifact a fresh vault
 	// would otherwise be left holding after a refusal.
 	if err := vault.GuardMutation(vaultRoot, path); err != nil {
@@ -68,6 +80,14 @@ func Save(vaultRoot, operation, path string, data []byte, perm os.FileMode) erro
 	if err := vault.WriteStateFile(path, data, perm); err != nil {
 		return err
 	}
+	return snapshotState(safety, operation, path)
+}
+
+// snapshotState records the state file that has just landed in the vault's
+// content history. It runs after the bytes are durable, which is why every
+// failure it reports is a *vaultgit.SnapshotError: the write happened and a
+// caller must not be invited to repeat it.
+func snapshotState(safety *vaultgit.Manager, operation, path string) error {
 	if safety == nil {
 		return nil
 	}

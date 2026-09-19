@@ -386,6 +386,7 @@ func applyConfigPatch(cmd *cobra.Command, cfg *config.Config, patch configPatch)
 	if err != nil {
 		return fmt.Errorf("%s: %w", patch.label, err)
 	}
+	defer journaler.Release()
 	txn, err := vault.NewFileTxn(cfg.Vault)
 	if err != nil {
 		return fmt.Errorf("%s: open transaction: %w", patch.label, err)

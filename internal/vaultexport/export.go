@@ -142,6 +142,11 @@ func Export(ctx context.Context, opts Options) (*Result, error) {
 	// One lock for the whole pass. The cursor, the sequence, and the reservation
 	// are read, decided, and written together, and a second exporter that
 	// interleaved with this one would publish two packages under one sequence.
+	barrier, err := joinBarrier(root)
+	if err != nil {
+		return nil, err
+	}
+	defer barrier()
 	release, err := vault.LockPaths(root, StatePath(root))
 	if err != nil {
 		return nil, fmt.Errorf("vaultexport: lock export state: %w", err)

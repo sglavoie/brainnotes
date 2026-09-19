@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
@@ -147,6 +148,15 @@ type Staged struct {
 // exists afterwards. An upload the client abandoned mid-body fails here, leaves
 // no record, and is therefore invisible to everything above.
 func (s *Store) Stage(req StageRequest, src io.Reader, now time.Time) (Staged, error) {
+	// Staging is three durable steps — blob, destination-name claim, record — and
+	// only all three together describe an upload. A copy taken between them holds
+	// a blob nothing points at or a claim on a name nothing owns, which is why the
+	// whole of Stage is inside one join rather than each write being its own.
+	barrier, err := checkpoint.Join(s.root)
+	if err != nil {
+		return Staged{}, fmt.Errorf("attachments: %w", err)
+	}
+	defer barrier()
 	owner, err := cleanOwner(req.Owner)
 	if err != nil {
 		return Staged{}, err
@@ -400,6 +410,11 @@ func (s *Store) Lookup(owner, id string) (Staged, error) {
 // asked deserves to hear that it failed, because the alternative is a file it
 // thinks it removed sitting in the staging area until the sweep age is reached.
 func (s *Store) Discard(owner, id string) error {
+	barrier, err := checkpoint.Join(s.root)
+	if err != nil {
+		return fmt.Errorf("attachments: %w", err)
+	}
+	defer barrier()
 	staged, err := s.Lookup(owner, id)
 	if err != nil {
 		return err
@@ -415,6 +430,14 @@ func (s *Store) Discard(owner, id string) error {
 // must never turn a landed save into an error. [Store.Sweep] collects whatever
 // this leaves.
 func (s *Store) Forget(committed []Staged) {
+	// A refused join is swallowed like every other failure here: the note is
+	// already saved, and leaving the staging files for Sweep is the correct
+	// outcome, not a reason to make the caller wait out a checkpoint.
+	barrier, err := checkpoint.Join(s.root)
+	if err != nil {
+		return
+	}
+	defer barrier()
 	for _, staged := range committed {
 		_ = s.remove(staged.ID, staged.RelPath)
 	}

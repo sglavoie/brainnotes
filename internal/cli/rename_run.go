@@ -120,6 +120,7 @@ func applyRename(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.
 	if err != nil {
 		return err
 	}
+	defer journaler.Release()
 	if err := captureRenamePaths(journaler, plan); err != nil {
 		return err
 	}

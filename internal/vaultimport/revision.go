@@ -630,6 +630,7 @@ func (r *revision) write(pending []Step) error {
 	if err != nil {
 		return err
 	}
+	defer operation.Release()
 	txn, err := r.txn(pending)
 	if err != nil {
 		return err

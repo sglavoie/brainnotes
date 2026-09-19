@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -184,6 +185,11 @@ func AdvanceEpoch(root string, opts Options) (*Enrollment, error) {
 // once cannot both see an unenrolled vault.
 func createEnrollment(root string, record *Enrollment) (*Enrollment, error) {
 	path := EnrollmentPath(root)
+	barrier, err := joinBarrier(root)
+	if err != nil {
+		return nil, err
+	}
+	defer barrier()
 	release, err := vault.LockPaths(root, path)
 	if err != nil {
 		return nil, fmt.Errorf("vaultsync: lock enrollment: %w", err)
@@ -205,6 +211,11 @@ func createEnrollment(root string, record *Enrollment) (*Enrollment, error) {
 // advanced twice concurrently must advance twice, not once.
 func updateEnrollment(root string, mutate func(*Enrollment) error) (*Enrollment, error) {
 	path := EnrollmentPath(root)
+	barrier, err := joinBarrier(root)
+	if err != nil {
+		return nil, err
+	}
+	defer barrier()
 	release, err := vault.LockPaths(root, path)
 	if err != nil {
 		return nil, fmt.Errorf("vaultsync: lock enrollment: %w", err)
@@ -265,4 +276,16 @@ func writeEnrollmentLocked(root string, record *Enrollment) (*Enrollment, error)
 		return nil, fmt.Errorf("%w: %s does not read back as it was written", ErrUnverifiedEnrollment, path)
 	}
 	return written.clone(), nil
+}
+
+// joinBarrier enlists an enrollment write in the vault's checkpoint barrier,
+// before the enrollment lock. Enrollment is the identity a peer's packages are
+// judged against, so a copy taken part-way through an epoch advance would
+// describe a device that never existed.
+func joinBarrier(root string) (func(), error) {
+	release, err := checkpoint.Join(root)
+	if err != nil {
+		return nil, fmt.Errorf("vaultsync: %w", err)
+	}
+	return release, nil
 }

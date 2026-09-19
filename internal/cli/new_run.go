@@ -153,6 +153,7 @@ func writeNewNote(cmd *cobra.Command, args []string, cfg *config.Config, plan ne
 	if err != nil {
 		return err
 	}
+	defer journaler.Release()
 	// BeginOperation above named this folder as a target, so a refused
 	// note never leaves it behind empty.
 	//bn:direct-write guarded by BeginOperation above

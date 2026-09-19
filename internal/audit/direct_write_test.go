@@ -84,24 +84,7 @@ func TestNoUnannotatedDirectWrites(t *testing.T) {
 	root := repositoryRoot(t)
 	var findings []directWrite
 
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() {
-			if skipDir(entry.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
+	err := walkProductionFiles(root, func(path, rel string) error {
 		if approvedDir(filepath.ToSlash(filepath.Dir(rel))) {
 			return nil
 		}
@@ -266,6 +249,35 @@ func approvedDir(dir string) bool {
 		}
 	}
 	return false
+}
+
+// walkProductionFiles calls visit once per production Go file under root, with
+// the file's absolute path and its slash-separated path relative to root.
+//
+// Every audit in this package asks the same question of the same file set — the
+// repository's production Go source, minus the directories skipDir names and
+// minus the tests, which are exempt from all three invariants — so the walk is
+// stated once here rather than copied into each of them.
+func walkProductionFiles(root string, visit func(path, rel string) error) error {
+	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if skipDir(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		return visit(path, filepath.ToSlash(rel))
+	})
 }
 
 func skipDir(name string) bool {

@@ -104,6 +104,18 @@ func WithSynthesisJournalOptions(opts ...journal.RecorderOption) SynthesisOption
 	}
 }
 
+// newSynthesisOptions folds the variadic options onto the defaults, skipping the
+// nil ones a conditional caller passes.
+func newSynthesisOptions(opts []SynthesisOption) synthesisOptions {
+	cfg := defaultSynthesisOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	return cfg
+}
+
 func defaultSynthesisOptions() synthesisOptions {
 	return synthesisOptions{command: "bn web synthesize"}
 }
@@ -159,12 +171,7 @@ func ApplySynthesisNote(vaultRoot string, plan *SynthesisPlan, opts ...Synthesis
 	if plan.Expect.Exists {
 		return nil, Errorf(CodeInvalidRequest, "synthesize: plan must expect a missing destination")
 	}
-	cfg := defaultSynthesisOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&cfg)
-		}
-	}
+	cfg := newSynthesisOptions(opts)
 
 	txn, err := vault.NewFileTxn(vaultRoot)
 	if err != nil {
@@ -183,6 +190,7 @@ func ApplySynthesisNote(vaultRoot string, plan *SynthesisPlan, opts ...Synthesis
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	if err := txn.Commit(j); err != nil {
 		return nil, classifyTxnError("synthesize: create note", err)
 	}

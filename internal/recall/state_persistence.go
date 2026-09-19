@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
@@ -27,6 +28,16 @@ func (store *StateStore) mutateLocked(
 	if err != nil {
 		return err
 	}
+	// Before the path lock, never after. vaultstate.Save joins the barrier itself
+	// and saveLocked below reaches it from inside this lock, so a join taken here
+	// is the nested one that costs nothing — and a join taken only down there
+	// would be a writer asking for the barrier while holding a vault lock, which
+	// is the one ordering internal/checkpoint says closes a cycle.
+	barrier, err := checkpoint.Join(root)
+	if err != nil {
+		return fmt.Errorf("recall: %w", err)
+	}
+	defer barrier()
 	release, err := vault.LockPaths(root, recallStateRelPath)
 	if err != nil {
 		return fmt.Errorf("recall: lock state: %w", err)

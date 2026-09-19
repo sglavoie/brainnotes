@@ -31,6 +31,37 @@
 // editing approvedPackages with a reason, not by annotating call sites one at a
 // time.
 //
+// # The checkpoint barrier
+//
+// The second invariant here is internal/checkpoint's participant list, which is
+// the same kind of claim: a checkpoint promises that a copy of the vault holds
+// no half-finished write, and that promise is only as true as the set of writers
+// that agree to join the barrier. A writer that stops joining removes the
+// promise for the whole vault while every test of the barrier itself keeps
+// passing, and nothing shows it until a copy taken during that write is
+// restored.
+//
+// So barrierDoors names every door, with a sentence saying what would be caught
+// half-done without it, and the check runs in both directions: every listed door
+// must still reach the barrier, and every production call to checkpoint.Join or
+// checkpoint.Hold must be inside a listed door. A new writer package is
+// therefore a prompt to write that sentence rather than a silent gap.
+//
+// # The journal handoff annotation
+//
+// noteops.BeginOperation joins the barrier and hands the caller a hold that
+// lasts until Release, so every call site needs a deferred release. A
+// constructor that opens a journal and returns it cannot defer anything, and
+// says so:
+//
+//	//bn:journal-handoff <who releases it>
+//
+// Same shape and same limits as the direct-write marker: it asks for a name, not
+// for a proof. What it prevents is the obligation quietly disappearing — a
+// forgotten Release does not fail anything, it leaves that vault's barrier
+// permanently unavailable, so the next backup drains until it times out with
+// nothing to say about which command is responsible.
+//
 // Test files are exempt entirely. A fixture writes to a temp directory that is
 // not a vault and has nothing to protect.
 package audit

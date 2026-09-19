@@ -2,10 +2,12 @@ package noteops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -58,6 +60,11 @@ type Journal struct {
 	// history. It is captured once so the snapshot at the end goes to the same
 	// engine the preflight at the start consulted.
 	safety Safety
+	// barrier is this operation's place in the checkpoint barrier, held from
+	// before the first refusal until Release. It is nil only for the internal
+	// journal built by SnapshotEntry, which finishes an operation somebody else
+	// joined for and is itself called from inside a join.
+	barrier func()
 }
 
 // BeginOperation is the one path a journaled mutation starts through.
@@ -77,26 +84,100 @@ type Journal struct {
 // Targets the caller cannot know yet are not a problem: the same policy is
 // enforced again underneath every individual write, so passing what is known
 // makes the refusal early rather than making it possible.
+//
+// It also joins the vault's checkpoint barrier, before either refusal and so
+// before any lock, and the caller owns that join until it calls Release. Every
+// caller must `defer` Release immediately: an operation whose join is dropped
+// only on the success path holds the barrier open on every error return, and
+// under bn serve that blocks every later checkpoint in the process. Finalize
+// does not release, because an operation is not over when its manifest is — the
+// snapshot that makes the change part of the history is inside the window a
+// checkpoint must not cut.
 func BeginOperation(vaultRoot, operation, command string, targets []string, opts ...journal.RecorderOption) (*Journal, error) {
-	if err := guardMutation(vaultRoot, targets...); err != nil {
-		return nil, err
-	}
-	safety, err := SafetyFor(vaultRoot)
+	barrier, err := checkpoint.Join(vaultRoot)
 	if err != nil {
-		return nil, err
+		return nil, classifyBarrierError(err)
 	}
-	if safety != nil {
-		if err := safety.Preflight(context.Background()); err != nil {
-			return nil, classifySafetyError("git safety preflight", err)
-		}
-	}
-	return &Journal{
+	j := &Journal{
 		vaultRoot: vaultRoot,
 		operation: strings.TrimSpace(operation),
 		command:   strings.TrimSpace(command),
 		opts:      append([]journal.RecorderOption(nil), opts...),
-		safety:    safety,
-	}, nil
+		barrier:   barrier,
+	}
+	if err := j.begin(targets); err != nil {
+		j.Release()
+		return nil, err
+	}
+	return j, nil
+}
+
+// begin runs the two refusals that must happen before the operation is allowed
+// to create anything.
+func (j *Journal) begin(targets []string) error {
+	if err := guardMutation(j.vaultRoot, targets...); err != nil {
+		return err
+	}
+	safety, err := SafetyFor(j.vaultRoot)
+	if err != nil {
+		return err
+	}
+	if safety != nil {
+		if err := safety.Preflight(context.Background()); err != nil {
+			return classifySafetyError("git safety preflight", err)
+		}
+	}
+	j.safety = safety
+	return nil
+}
+
+// Release drops this operation's place in the checkpoint barrier.
+//
+// It is idempotent and safe on a nil receiver, so the one shape every caller
+// needs — `defer j.Release()` on the line after BeginOperation, whether or not
+// the journal is nil in a dry run — is always correct.
+func (j *Journal) Release() {
+	if j == nil || j.barrier == nil {
+		return
+	}
+	j.barrier()
+	j.barrier = nil
+}
+
+// classifyBarrierError turns a refused barrier join into the vocabulary the rest
+// of this package speaks, so a command refused because a backup is running says
+// so instead of reporting a journal malfunction.
+func classifyBarrierError(err error) error {
+	if errors.Is(err, checkpoint.ErrBarrierHeld) {
+		return WrapError(CodeBusy, "a checkpoint is copying this vault; try again shortly", err)
+	}
+	if vault.IsForbiddenMutation(err) {
+		return WrapError(CodeForbidden, err.Error(), err)
+	}
+	return WrapError(CodeJournal, "join the checkpoint barrier", err)
+}
+
+// captureRelocation snapshots the pre-mutation state of a plan that moves a note
+// from one path to another: both ends, and then every note whose links are about
+// to be rewritten. The first capture creates the journal entry directory, so
+// this is what makes the operation exist on disk.
+//
+// Rename and move share it because they share the shape — two ends and a
+// rewrite set — and a capture one of them forgot would be an operation the undo
+// manifest cannot reverse.
+func captureRelocation(j *Journal, target, newPath string, rewritten []string) error {
+	if err := j.Capture(target); err != nil {
+		return err
+	}
+	if err := j.Capture(newPath); err != nil {
+		return err
+	}
+	for _, p := range rewritten {
+		if err := j.Capture(p); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Capture snapshots path's pre-mutation state, creating the recorder on demand.
@@ -193,6 +274,15 @@ func (j *Journal) snapshot(entry *journal.Entry) error {
 // A vault with no content history has no engine and nothing to record, which is
 // the same nil answer Finalize gives it.
 func SnapshotEntry(vaultRoot, entryID, operation string) error {
+	// A snapshot is a durable change to the content history, so it joins the
+	// barrier like any other write. Its callers are recovery passes that have
+	// usually joined already, and a nested join is counted rather than taken, so
+	// this costs them nothing and covers the one that has not.
+	barrier, err := checkpoint.Join(vaultRoot)
+	if err != nil {
+		return classifyBarrierError(err)
+	}
+	defer barrier()
 	safety, err := SafetyFor(vaultRoot)
 	if err != nil {
 		return err

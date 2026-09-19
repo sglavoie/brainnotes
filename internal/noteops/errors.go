@@ -28,7 +28,13 @@ const (
 	// cannot share a response — one says "nothing happened", the other says
 	// "it happened and the history does not cover it".
 	CodeSnapshotFailed ErrorCode = "snapshot_failed"
-	CodeInternal       ErrorCode = "internal_error"
+	// CodeBusy means something else holds the vault for a bounded time and the
+	// operation was not attempted. Nothing was written and nothing is wrong: the
+	// same request will succeed once the holder finishes. It is separate from
+	// CodeConflict because a conflict is about the content the caller planned
+	// against and has to be replanned from, while this is about the clock.
+	CodeBusy     ErrorCode = "busy"
+	CodeInternal ErrorCode = "internal_error"
 )
 
 // Error carries a stable code for web JSON responses while preserving causes.
@@ -131,6 +137,12 @@ func HTTPStatusForError(err error) int {
 		return http.StatusNotFound
 	case CodeConflict, CodePreviewRequired, CodePreviewStale:
 		return http.StatusConflict
+	// 503 rather than 409: the request was well formed, nothing about it needs to
+	// change, and the honest instruction to the client is to send it again in a
+	// moment. That is what Service Unavailable means and what a Retry-After would
+	// annotate if the holder could say how long it has left.
+	case CodeBusy:
+		return http.StatusServiceUnavailable
 	// Both safety classes are 500 and they are deliberately distinguishable only
 	// by the code and the message. A refusal before the write and a snapshot
 	// failure after it are both "the server could not complete this safely", but

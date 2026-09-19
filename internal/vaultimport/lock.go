@@ -1,9 +1,11 @@
 package vaultimport
 
 import (
+	"fmt"
 	"path"
 	"path/filepath"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
@@ -38,8 +40,31 @@ const lockFileName = "import.lock"
 // guard, which the shared one this call would be holding blocks — the whole
 // import would deadlock against itself. vault.TryLockPath reaches the same flock
 // primitive with no guard above it.
+//
+// It does take the checkpoint barrier, and takes it first, which is the order
+// internal/checkpoint documents: the barrier sits above everything internal/vault
+// owns, and joining it after this guard — or after any vault lock — is what would
+// close a cycle against a checkpoint's settle pass. One import is therefore one
+// join. That is wider than a single durable step and deliberately so: an import
+// is a sequence of transitions whose intermediate states are meaningful only to
+// the recovery pass, and a copy taken inside one would capture an attempt record
+// rather than an import. It is still narrower than a synchronization pass, which
+// is three separately re-drivable operations and stays three separate joins.
+//
+// A released import drops the barrier as well, so a caller that already defers
+// release owes nothing new.
 func lockImports(root string) (release func(), acquired bool, err error) {
-	return vault.TryLockPath(lockPath(root))
+	noop := func() {}
+	barrier, err := checkpoint.Join(root)
+	if err != nil {
+		return noop, false, fmt.Errorf("vaultimport: %w", err)
+	}
+	guard, acquired, err := vault.TryLockPath(lockPath(root))
+	if err != nil || !acquired {
+		barrier()
+		return noop, acquired, err
+	}
+	return func() { guard(); barrier() }, true, nil
 }
 
 // lockPath is the guard's absolute path, derived from vaultsync.StateDir for the

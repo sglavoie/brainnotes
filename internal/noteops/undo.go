@@ -68,6 +68,7 @@ func Undo(vaultRoot, entryID string, opts UndoOptions) (*journal.RestorePlan, er
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	restoreOpts.Journal = j
 
 	plan, err := journal.Restore(vaultRoot, JournalRoot(vaultRoot), entryID, restoreOpts)

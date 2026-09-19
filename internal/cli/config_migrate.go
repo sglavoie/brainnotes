@@ -155,6 +155,7 @@ func commitMigration(root string, plan config.MigrationPlan, command string) err
 	if err != nil {
 		return fmt.Errorf("%s: %w", label, err)
 	}
+	defer journaler.Release()
 	txn, err := vault.NewFileTxn(root)
 	if err != nil {
 		return fmt.Errorf("%s: open transaction: %w", label, err)

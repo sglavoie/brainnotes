@@ -117,12 +117,7 @@ func PreviewStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string) (*StubP
 // wikilink target. Folder-qualified targets create in that folder; bare
 // targets create beside the source note.
 func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...CreateOption) (*CreateResult, error) {
-	cfg := defaultCreateOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&cfg)
-		}
-	}
+	cfg := newCreateOptions(opts)
 
 	plan, err := planStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget)
 	if err != nil {
@@ -140,6 +135,7 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	// BeginOperation above already refused a forbidden location, so this folder
 	// cannot outlive a refusal.
 	//bn:direct-write guarded by BeginOperation above
@@ -180,6 +176,18 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 
 func defaultCreateOptions() createOptions {
 	return createOptions{command: "bn web create"}
+}
+
+// newCreateOptions folds the variadic options onto the defaults, skipping the
+// nil ones a conditional caller passes.
+func newCreateOptions(opts []CreateOption) createOptions {
+	cfg := defaultCreateOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	return cfg
 }
 
 // resolveSourceNote resolves a vault-relative note that must already exist as a

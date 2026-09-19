@@ -77,14 +77,21 @@ func WithTrashJournalOptions(opts ...journal.RecorderOption) TrashOption {
 	}
 }
 
-// TrashNote moves sourceRel to Trash/<sourceRel> without rewriting backlinks.
-func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, error) {
+// newTrashOptions folds the variadic options onto the defaults, skipping the nil
+// ones a conditional caller passes.
+func newTrashOptions(opts []TrashOption) trashOptions {
 	cfg := defaultTrashOptions()
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&cfg)
 		}
 	}
+	return cfg
+}
+
+// TrashNote moves sourceRel to Trash/<sourceRel> without rewriting backlinks.
+func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, error) {
+	cfg := newTrashOptions(opts)
 
 	source, err := resolveTrashSource(vaultRoot, sourceRel)
 	if err != nil {
@@ -101,6 +108,7 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	if err := j.Capture(source.AbsPath); err != nil {
 		return nil, err
 	}

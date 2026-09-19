@@ -88,6 +88,7 @@ func runRenameKeyCommand(cmd *cobra.Command, args []string, opts renameKeyOption
 			return err
 		}
 	}
+	defer r.journaler.Release()
 
 	for _, n := range candidates {
 		if err := r.renameNote(n); err != nil {

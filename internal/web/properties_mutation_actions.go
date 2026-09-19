@@ -229,21 +229,12 @@ func (s *Server) commitPropertyPlan(plan *propertyPlan, operation, command strin
 	if err != nil {
 		return nil, err
 	}
+	defer entry.Release()
 	txn, err := vault.NewFileTxn(s.vault.Root)
 	if err != nil {
 		return nil, noteops.WrapError(noteops.CodeInternal, "properties: open transaction", err)
 	}
-	for _, note := range plan.Notes {
-		if err := txn.Write(note.AbsPath, note.Data, 0, vault.ExpectHash(note.SourceHash)); err != nil {
-			return nil, classifyPropertyTxnError("properties: plan write", err)
-		}
-	}
-	if plan.Config != nil {
-		if err := txn.Write(plan.Config.AbsPath, plan.Config.Data, 0, vault.ExpectHash(plan.Config.SourceHash)); err != nil {
-			return nil, classifyPropertyTxnError("properties: plan configuration write", err)
-		}
-	}
-	if err := pinPlanConfig(txn, plan, pin); err != nil {
+	if err := stagePropertyPlan(txn, plan, pin); err != nil {
 		return nil, err
 	}
 
@@ -254,6 +245,23 @@ func (s *Server) commitPropertyPlan(plan *propertyPlan, operation, command strin
 		return nil, classifyPropertyTxnError("properties: write", err)
 	}
 	return entry.Finalize()
+}
+
+// stagePropertyPlan stages every planned write onto txn, each pinned to the
+// bytes the plan was computed from, and then pins the configuration the plan was
+// validated against. Nothing is written until the caller commits.
+func stagePropertyPlan(txn *vault.FileTxn, plan *propertyPlan, pin configPin) error {
+	for _, note := range plan.Notes {
+		if err := txn.Write(note.AbsPath, note.Data, 0, vault.ExpectHash(note.SourceHash)); err != nil {
+			return classifyPropertyTxnError("properties: plan write", err)
+		}
+	}
+	if plan.Config != nil {
+		if err := txn.Write(plan.Config.AbsPath, plan.Config.Data, 0, vault.ExpectHash(plan.Config.SourceHash)); err != nil {
+			return classifyPropertyTxnError("properties: plan configuration write", err)
+		}
+	}
+	return pinPlanConfig(txn, plan, pin)
 }
 
 // propertyPlanPaths lists every file a property plan will write, so the

@@ -146,6 +146,72 @@ func TryLockPath(lockPath string) (release func(), acquired bool, err error) {
 	return locks.release, true, nil
 }
 
+// LockDir returns the vault's lock directory without creating it.
+//
+// root is resolved through symlinks, because two names for one vault must meet
+// on the same lock files or the exclusion is between the names rather than
+// between the writers. The directory is not created: a caller asking where the
+// locks live may be a reader, and a status query that creates a folder in a
+// vault it was only inspecting is the kind of artifact the location policy
+// exists to prevent. Every lock acquisition creates it on demand.
+func LockDir(root string) (string, error) {
+	if root == "" {
+		return "", errors.New("vault: lock directory: empty vault root")
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("vault: resolve vault root %q: %w", root, err)
+	}
+	return filepath.Join(realRoot, filepath.FromSlash(pathLockRelDir)), nil
+}
+
+// LockFile takes lockPath's flock, shared or exclusive, within wait, and returns
+// the release function.
+//
+// It is the named-lock end of the same primitive LockPaths and TryLockPath use,
+// for a lock that is not a note-path lock and whose holder needs to wait rather
+// than skip. A shared mode is what makes it more than TryLockPath with a
+// deadline: a barrier that many writers hold together and one coordinator holds
+// alone cannot be expressed with exclusive locks at all.
+//
+// Missing parent directories are created. A wait that runs out is reported as a
+// retryable *TxnLockBusyError, exactly as a contended path lock is. release is
+// idempotent and safe to defer.
+//
+// A zero wait means the default budget; a negative one means a single attempt,
+// which is what a caller with a deadline already behind it wants to pass rather
+// than silently inheriting a fresh five seconds.
+//
+// It lives here for the reason TryLockPath does: flock-not-fcntl is this
+// package's invariant, and an fcntl record lock belongs to the process, so two
+// goroutines inside one bn process would not contend and a barrier built on it
+// would exclude nothing.
+func LockFile(lockPath string, exclusive bool, wait time.Duration) (func(), error) {
+	noop := func() {}
+	if lockPath == "" {
+		return noop, errors.New("vault: lock file: empty lock path")
+	}
+	// A lock file is an artifact like any other, so the location policy decides
+	// before one can exist.
+	if err := GuardMutation("", lockPath); err != nil {
+		return noop, err
+	}
+	if dir := filepath.Dir(lockPath); dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return noop, fmt.Errorf("vault: create lock directory %q: %w", dir, err)
+		}
+	}
+	if wait == 0 {
+		wait = pathLockTimeout
+	}
+	file, err := lockOne(lockPath, lockPath, exclusive, wait)
+	if err != nil {
+		return noop, err
+	}
+	locks := &pathLocks{files: []*os.File{file}}
+	return locks.release, nil
+}
+
 // pathLocks is a set of held exclusive path locks.
 type pathLocks struct {
 	files []*os.File

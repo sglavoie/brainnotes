@@ -156,12 +156,7 @@ func BulkFailureForError(key, relPath string, err error) BulkFailure {
 
 // BulkTrashNotes moves every selected note into Trash using one journal entry.
 func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) (*BulkResult, error) {
-	options := defaultBulkOptions("bn web bulk trash")
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newBulkOptions("bn web bulk trash", opts)
 	if len(sources) == 0 {
 		return nil, Errorf(CodeInvalidRequest, "bulk: no notes selected")
 	}
@@ -173,6 +168,7 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	result := &BulkResult{Action: "trash"}
 	trashCfg := trashOptions{
 		now:     options.now,
@@ -180,51 +176,13 @@ func BulkTrashNotes(vaultRoot string, sources []BulkSource, opts ...BulkOption) 
 	}
 
 	for _, item := range sources {
-		source, err := resolveTrashSource(vaultRoot, item.RelPath)
+		itemResult, err := bulkTrashOne(vaultRoot, item, trashCfg, options.trashPlans, j)
 		if err != nil {
 			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
 			continue
 		}
-		dest, _, err := resolveBulkTrashDestination(vaultRoot, source.RelPath, path.Join("Trash", source.RelPath), trashCfg, options.trashPlans)
-		if err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
-			continue
-		}
-		// Per item as well as per batch: this item's destination folder is created
-		// below, before the move takes its lock and re-checks, so the batch-level
-		// root check is not on its own enough to keep a folder from appearing under
-		// protected storage nested inside a safe vault.
-		if err := guardMutation(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
-			continue
-		}
-		if err := j.Capture(source.AbsPath); err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
-			continue
-		}
-		if err := j.Capture(dest.AbsPath); err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
-			continue
-		}
-		// The batch's BeginOperation already refused a forbidden location before
-		// any note in it was touched.
-		//bn:direct-write guarded by the batch's BeginOperation
-		if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, WrapError(CodeInternal, "create trash folder", err)))
-			continue
-		}
-		if err := moveToTrash(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
-			continue
-		}
-
 		result.Changed++
-		result.Results = append(result.Results, BulkItemResult{
-			Key:         item.Key,
-			Source:      source,
-			Destination: dest,
-			Changed:     true,
-		})
+		result.Results = append(result.Results, itemResult)
 	}
 
 	entry, err := j.Finalize()
@@ -243,12 +201,7 @@ func BulkMoveNotes(v *vault.Vault, cfg *config.Config, sources []BulkSource, new
 	if cfg == nil {
 		return nil, Errorf(CodeInvalidRequest, "move: nil config")
 	}
-	options := defaultBulkOptions("bn web bulk move")
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newBulkOptions("bn web bulk move", opts)
 	if len(sources) == 0 {
 		return nil, Errorf(CodeInvalidRequest, "bulk: no notes selected")
 	}
@@ -266,6 +219,7 @@ func BulkMoveNotes(v *vault.Vault, cfg *config.Config, sources []BulkSource, new
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	// BeginOperation above named this folder as a target, so a refused batch
 	// never reaches it.
 	//bn:direct-write guarded by BeginOperation above
@@ -273,16 +227,7 @@ func BulkMoveNotes(v *vault.Vault, cfg *config.Config, sources []BulkSource, new
 		return nil, WrapError(CodeInternal, fmt.Sprintf("move: mkdir %q", newFolderAbs), err)
 	}
 
-	result := &BulkResult{Action: "move"}
-	for _, item := range sources {
-		itemResult, err := bulkMoveOne(v, cfg, item, newFolderRel, newFolderAbs, j, options)
-		if err != nil {
-			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
-			continue
-		}
-		result.Changed++
-		result.Results = append(result.Results, itemResult)
-	}
+	result := bulkMoveAll(v, cfg, sources, newFolderRel, newFolderAbs, j, options)
 
 	entry, err := j.Finalize()
 	if err != nil {
@@ -294,12 +239,7 @@ func BulkMoveNotes(v *vault.Vault, cfg *config.Config, sources []BulkSource, new
 
 // BulkSetFrontmatter applies frontmatter mutations to every selected note using one journal entry.
 func BulkSetFrontmatter(vaultRoot string, sources []BulkSource, mutations []FrontmatterMutation, fm *config.FrontmatterConfig, opts ...BulkOption) (*BulkResult, error) {
-	options := defaultBulkOptions("bn web bulk frontmatter set")
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newBulkOptions("bn web bulk frontmatter set", opts)
 	if len(sources) == 0 {
 		return nil, Errorf(CodeInvalidRequest, "bulk: no notes selected")
 	}
@@ -308,6 +248,7 @@ func BulkSetFrontmatter(vaultRoot string, sources []BulkSource, mutations []Fron
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	result := &BulkResult{Action: "frontmatter_set"}
 	for _, item := range sources {
 		source, err := resolveFrontmatterSource(vaultRoot, item.RelPath)
@@ -342,12 +283,7 @@ func BulkSetFrontmatter(vaultRoot string, sources []BulkSource, mutations []Fron
 
 // BulkUnsetFrontmatter removes frontmatter properties from every selected note using one journal entry.
 func BulkUnsetFrontmatter(vaultRoot string, sources []BulkSource, props []string, fm *config.FrontmatterConfig, opts ...BulkOption) (*BulkResult, error) {
-	options := defaultBulkOptions("bn web bulk frontmatter unset")
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newBulkOptions("bn web bulk frontmatter unset", opts)
 	if len(sources) == 0 {
 		return nil, Errorf(CodeInvalidRequest, "bulk: no notes selected")
 	}
@@ -356,6 +292,7 @@ func BulkUnsetFrontmatter(vaultRoot string, sources []BulkSource, props []string
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	result := &BulkResult{Action: "frontmatter_unset"}
 	for _, item := range sources {
 		source, err := resolveFrontmatterSource(vaultRoot, item.RelPath)
@@ -386,6 +323,75 @@ func BulkUnsetFrontmatter(vaultRoot string, sources []BulkSource, props []string
 	}
 	result.Journal = entry
 	return result, nil
+}
+
+// newBulkOptions folds the variadic options onto the defaults for command,
+// skipping the nil ones a conditional caller passes.
+func newBulkOptions(command string, opts []BulkOption) bulkOptions {
+	options := defaultBulkOptions(command)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+	return options
+}
+
+// bulkTrashOne trashes a single item of a batch, under the batch's journal. Its
+// failure is its own — the caller records it and carries on with the rest.
+func bulkTrashOne(vaultRoot string, item BulkSource, trashCfg trashOptions, plans map[string]TrashDestinationPlan, j *Journal) (BulkItemResult, error) {
+	source, err := resolveTrashSource(vaultRoot, item.RelPath)
+	if err != nil {
+		return BulkItemResult{}, err
+	}
+	dest, _, err := resolveBulkTrashDestination(vaultRoot, source.RelPath, path.Join("Trash", source.RelPath), trashCfg, plans)
+	if err != nil {
+		return BulkItemResult{}, err
+	}
+	// Per item as well as per batch: this item's destination folder is created
+	// below, before the move takes its lock and re-checks, so the batch-level
+	// root check is not on its own enough to keep a folder from appearing under
+	// protected storage nested inside a safe vault.
+	if err := guardMutation(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
+		return BulkItemResult{}, err
+	}
+	if err := j.Capture(source.AbsPath); err != nil {
+		return BulkItemResult{}, err
+	}
+	if err := j.Capture(dest.AbsPath); err != nil {
+		return BulkItemResult{}, err
+	}
+	// The batch's BeginOperation already refused a forbidden location before
+	// any note in it was touched.
+	//bn:direct-write guarded by the batch's BeginOperation
+	if err := os.MkdirAll(filepath.Dir(dest.AbsPath), 0o755); err != nil {
+		return BulkItemResult{}, WrapError(CodeInternal, "create trash folder", err)
+	}
+	if err := moveToTrash(vaultRoot, source.AbsPath, dest.AbsPath); err != nil {
+		return BulkItemResult{}, err
+	}
+	return BulkItemResult{
+		Key:         item.Key,
+		Source:      source,
+		Destination: dest,
+		Changed:     true,
+	}, nil
+}
+
+// bulkMoveAll runs every selected note through bulkMoveOne under the batch's
+// journal, recording each outcome. An item's failure is its own.
+func bulkMoveAll(v *vault.Vault, cfg *config.Config, sources []BulkSource, newFolderRel, newFolderAbs string, j *Journal, options bulkOptions) *BulkResult {
+	result := &BulkResult{Action: "move"}
+	for _, item := range sources {
+		itemResult, err := bulkMoveOne(v, cfg, item, newFolderRel, newFolderAbs, j, options)
+		if err != nil {
+			result.Failures = append(result.Failures, BulkFailureForError(item.Key, item.RelPath, err))
+			continue
+		}
+		result.Changed++
+		result.Results = append(result.Results, itemResult)
+	}
+	return result
 }
 
 func defaultBulkOptions(command string) bulkOptions {

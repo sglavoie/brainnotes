@@ -11,12 +11,7 @@ import (
 )
 
 func SetFrontmatter(vaultRoot, sourceRel string, mutations []FrontmatterMutation, fm *config.FrontmatterConfig, opts ...FrontmatterOption) (*FrontmatterResult, error) {
-	options := defaultFrontmatterOptions("bn web frontmatter set")
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newFrontmatterOptions("bn web frontmatter set", opts)
 
 	source, err := resolveFrontmatterSource(vaultRoot, sourceRel)
 	if err != nil {
@@ -26,6 +21,7 @@ func SetFrontmatter(vaultRoot, sourceRel string, mutations []FrontmatterMutation
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	changed, err := applyFrontmatterMutations(vaultRoot, source.AbsPath, mutations, fm, j, options.requires)
 	if err != nil {
 		return nil, err
@@ -43,12 +39,7 @@ func SetFrontmatter(vaultRoot, sourceRel string, mutations []FrontmatterMutation
 
 // UnsetFrontmatter removes properties from a vault-relative note path.
 func UnsetFrontmatter(vaultRoot, sourceRel string, props []string, fm *config.FrontmatterConfig, opts ...FrontmatterOption) (*FrontmatterResult, error) {
-	options := defaultFrontmatterOptions("bn web frontmatter unset")
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newFrontmatterOptions("bn web frontmatter unset", opts)
 
 	source, err := resolveFrontmatterSource(vaultRoot, sourceRel)
 	if err != nil {
@@ -58,6 +49,7 @@ func UnsetFrontmatter(vaultRoot, sourceRel string, props []string, fm *config.Fr
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	changed, err := applyFrontmatterUnset(vaultRoot, source.AbsPath, props, fm, j, options.requires)
 	if err != nil {
 		return nil, err
@@ -75,6 +67,18 @@ func UnsetFrontmatter(vaultRoot, sourceRel string, props []string, fm *config.Fr
 
 func defaultFrontmatterOptions(command string) frontmatterOptions {
 	return frontmatterOptions{command: command}
+}
+
+// newFrontmatterOptions folds the variadic options onto the defaults for
+// command, skipping the nil ones a conditional caller passes.
+func newFrontmatterOptions(command string, opts []FrontmatterOption) frontmatterOptions {
+	options := defaultFrontmatterOptions(command)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+	return options
 }
 
 func resolveFrontmatterSource(vaultRoot, sourceRel string) (PathResolution, error) {

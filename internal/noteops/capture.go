@@ -202,6 +202,7 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	if err := txn.Commit(j); err != nil {
 		return nil, classifyTxnError("capture: append to note", err)
 	}

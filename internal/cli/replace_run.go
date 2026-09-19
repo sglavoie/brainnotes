@@ -74,6 +74,7 @@ func runReplaceCommand(cmd *cobra.Command, args []string, opts replaceOptions) e
 	if err != nil {
 		return err
 	}
+	defer r.journaler.Release()
 	return r.replaceAll(candidates)
 }
 
@@ -159,6 +160,15 @@ type replaceRun struct {
 	count     int
 }
 
+// newReplaceRun resolves the output streams and opens the journal, except on a
+// dry-run, which writes a preview instead of taking one.
+//
+// The journal it opens is joined to the checkpoint barrier and stays joined
+// until somebody releases it, so this returns an obligation along with the run.
+// Nothing here can fail after BeginOperation succeeds, which is what makes
+// handing it back safe rather than merely convenient.
+//
+//bn:journal-handoff runReplaceCommand defers r.journaler.Release() on the returned run
 func newReplaceRun(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, target replaceTarget, opts replaceOptions) (*replaceRun, error) {
 	out := cmd.OutOrStdout()
 	r := &replaceRun{

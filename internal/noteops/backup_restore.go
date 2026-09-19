@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/backup"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 )
 
 // RestoreBackup extracts an archive over the vault under the same safety
@@ -25,7 +26,24 @@ import (
 // and the safety preflight both run before the archive is opened, so a blocked
 // vault is refused while it still has its contents, and the snapshot failing
 // afterward is reported as the partial success it is.
+//
+// It joins the checkpoint barrier for the whole operation — preflight,
+// extraction, snapshot — and joins it first, ahead of every lock any of those
+// take. A restore is the one mutation whose intermediate states are not merely
+// inconsistent but empty: --wipe clears the vault before it writes anything
+// back, so a checkpoint taken in the middle of one copies a vault with no
+// notes in it and a content history that still describes them all.
+//
+// backup.Restore does not join on its own behalf. It is a leaf and its only
+// other caller is a test with no history to protect; this is the production
+// door, and it is the layer that already owns the operation's boundaries.
 func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (*backup.RestoreResult, error) {
+	barrier, err := checkpoint.Join(vaultRoot)
+	if err != nil {
+		return nil, classifyBarrierError(err)
+	}
+	defer barrier()
+
 	safety, err := SafetyFor(vaultRoot)
 	if err != nil {
 		return nil, err

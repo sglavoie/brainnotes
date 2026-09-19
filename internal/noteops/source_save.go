@@ -374,6 +374,7 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 	if err != nil {
 		return nil, err
 	}
+	defer j.Release()
 	if err := txn.Commit(j); err != nil {
 		return nil, classifySourceSaveTxnError(plan, err)
 	}

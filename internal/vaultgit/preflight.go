@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -98,18 +99,42 @@ func (m *Manager) checkRepositoryState(op string) error {
 // a vault lock, so it cannot participate in a cycle with internal/vault's
 // per-path locks. The ordering rule for callers is stated once, in doc.go:
 // vault locks first, safety lock last, never the reverse.
+//
+// The safety lock — and only the safety lock — is taken behind the vault's
+// checkpoint barrier, which sits above both. Everything this lock guards writes
+// the content history, and a copy taken between a note landing and its commit
+// holds a change the history does not explain. Most callers have joined already,
+// through noteops.BeginOperation or vaultstate.Save, and a nested join is
+// counted rather than taken; the one that has not is the autosave watcher, which
+// commits on its own schedule and is exactly the writer a checkpoint is most
+// likely to overlap.
+//
+// The push lock is deliberately excluded. A push is a network round trip that
+// changes nothing on this disk, and holding the barrier across it would let an
+// unreachable remote exhaust every checkpoint's drain budget.
 func (m *Manager) acquire(name, op string) (func(), error) {
 	if err := m.state.ensureDir(); err != nil {
 		return nil, err
 	}
+	barrier := func() {}
+	if name == safetyLockName {
+		joined, err := checkpoint.Join(m.root)
+		if err != nil {
+			return nil, safetyErrorf(KindBusy, op,
+				"a checkpoint is copying this vault, so the %s was not taken; try again shortly", name)
+		}
+		barrier = joined
+	}
 	release, acquired, err := vault.TryLockPath(m.state.path(name))
 	if err != nil {
+		barrier()
 		return nil, safetyErrorf(KindRepositoryState, op, "the %s could not be taken: %s", name, agent.SanitizedDiagnostic(err))
 	}
 	if !acquired {
+		barrier()
 		return nil, safetyErrorf(KindBusy, op, "another BrainNotes process is already performing a Git safety operation on this vault")
 	}
-	return release, nil
+	return func() { release(); barrier() }, nil
 }
 
 // headState reports the current branch ref and the commit it points at. An

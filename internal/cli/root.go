@@ -116,6 +116,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewBackupCmd())
 	cmd.AddCommand(NewBacklinksCmd())
 	cmd.AddCommand(NewCaptureCmd())
+	cmd.AddCommand(NewCheckpointCmd())
 	cmd.AddCommand(NewConfigCmd())
 	cmd.AddCommand(NewContextCmd())
 	cmd.AddCommand(NewDoctorCmd())

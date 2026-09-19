@@ -154,6 +154,7 @@ func applyMove(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Co
 	if err != nil {
 		return err
 	}
+	defer journaler.Release()
 	// BeginOperation above named this folder as a target, so a refused move never
 	// leaves it behind empty.
 	//bn:direct-write guarded by BeginOperation above

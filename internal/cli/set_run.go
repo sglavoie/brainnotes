@@ -52,6 +52,7 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 			return err
 		}
 	}
+	defer journaler.Release()
 
 	if err := applySetPaths(paths, parsedPairs, cfg, v.Root, dry, journaler, out); err != nil {
 		return err

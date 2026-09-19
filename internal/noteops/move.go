@@ -77,96 +77,130 @@ func MoveNote(v *vault.Vault, cfg *config.Config, targetPath, newFolderArg strin
 	if cfg == nil {
 		return nil, Errorf(CodeInvalidRequest, "move: nil config")
 	}
-	options := defaultMoveOptions()
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
+	options := newMoveOptions(opts)
 
-	source, err := resolveExistingMutationPath(v.Root, mutationTargetPath(v.Root, targetPath), "move:")
+	source, title, oldFolder, err := resolveMoveSource(v, targetPath)
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureRegularSource(source.AbsPath, "move:"); err != nil {
-		return nil, err
-	}
-	target := &vault.Note{Path: source.AbsPath}
-	title := target.Title()
-	oldFolder, err := target.Folder(v.Root)
+	dst, err := resolveMoveDestination(v, source, title, newFolderArg, options.force)
 	if err != nil {
-		return nil, WrapError(CodeInvalidRequest, "move: resolve source folder", err)
-	}
-
-	newFolderRel, newFolderAbs, err := ResolveNewFolder(v.Root, newFolderArg)
-	if err != nil {
-		return nil, err
-	}
-	newPath := filepath.Join(newFolderAbs, title+filepath.Ext(source.AbsPath))
-	dest, err := resolveWritableMutationPath(v.Root, newPath, "move:")
-	if err != nil {
-		return nil, err
-	}
-	if err := CheckMoveDestination(source.AbsPath, dest.AbsPath, options.force); err != nil {
 		return nil, err
 	}
 
 	oldRel := JoinFolderTitle(oldFolder, title)
-	newRel := JoinFolderTitle(newFolderRel, title)
-	if err := ValidateMoveTargetPath(newFolderArg, newFolderRel); err != nil {
-		return nil, err
-	}
+	newRel := JoinFolderTitle(dst.folderRel, title)
 	if oldRel == newRel {
 		return nil, Errorf(CodeInvalidRequest, "move: destination is the same as source: %s", oldRel)
 	}
 
-	plan, err := BuildMovePlan(v, source.AbsPath, dest.AbsPath, oldRel, newRel, cfg)
+	plan, err := BuildMovePlan(v, source.AbsPath, dst.note.AbsPath, oldRel, newRel, cfg)
 	if err != nil {
 		return nil, err
 	}
-	// Ahead of the destination folder, which a refused move would otherwise leave
-	// behind empty.
-	j, err := BeginOperation(v.Root, "move", options.command, []string{source.AbsPath, dest.AbsPath, newFolderAbs}, options.journalOptions...)
+	entry, err := applyMove(v, cfg, plan, dst, options)
 	if err != nil {
 		return nil, err
 	}
-	// BeginOperation above named this folder as a target, so a refused move never
-	// leaves it behind empty.
+	return &MoveResult{
+		Source:      source,
+		Destination: dst.note,
+		Plan:        plan,
+		Journal:     entry,
+	}, nil
+}
+
+// moveDestination is where a move is going: the note's new path, and the folder
+// that has to exist for it — kept together because the folder is named as a
+// mutation target in its own right.
+type moveDestination struct {
+	note      PathResolution
+	folderRel string
+	folderAbs string
+}
+
+// resolveMoveSource answers which note is being moved, what it is called, and
+// which folder it is leaving.
+func resolveMoveSource(v *vault.Vault, targetPath string) (PathResolution, string, string, error) {
+	source, err := resolveExistingMutationPath(v.Root, mutationTargetPath(v.Root, targetPath), "move:")
+	if err != nil {
+		return PathResolution{}, "", "", err
+	}
+	if err := ensureRegularSource(source.AbsPath, "move:"); err != nil {
+		return PathResolution{}, "", "", err
+	}
+	target := &vault.Note{Path: source.AbsPath}
+	oldFolder, err := target.Folder(v.Root)
+	if err != nil {
+		return PathResolution{}, "", "", WrapError(CodeInvalidRequest, "move: resolve source folder", err)
+	}
+	return source, target.Title(), oldFolder, nil
+}
+
+// resolveMoveDestination derives the new folder and the path inside it, refusing
+// a folder the vault will not accept and a destination that is occupied unless
+// the caller forced it.
+func resolveMoveDestination(v *vault.Vault, source PathResolution, title, newFolderArg string, force bool) (moveDestination, error) {
+	folderRel, folderAbs, err := ResolveNewFolder(v.Root, newFolderArg)
+	if err != nil {
+		return moveDestination{}, err
+	}
+	newPath := filepath.Join(folderAbs, title+filepath.Ext(source.AbsPath))
+	note, err := resolveWritableMutationPath(v.Root, newPath, "move:")
+	if err != nil {
+		return moveDestination{}, err
+	}
+	if err := CheckMoveDestination(source.AbsPath, note.AbsPath, force); err != nil {
+		return moveDestination{}, err
+	}
+	if err := ValidateMoveTargetPath(newFolderArg, folderRel); err != nil {
+		return moveDestination{}, err
+	}
+	return moveDestination{note: note, folderRel: folderRel, folderAbs: folderAbs}, nil
+}
+
+// applyMove is the mutating half: it opens the operation, creates the
+// destination folder, captures everything the plan touches, rewrites the
+// folder-qualified links, moves the file, and finalizes.
+//
+// BeginOperation runs ahead of the destination folder, which a refused move
+// would otherwise leave behind empty, and names it as a target so the refusal
+// happens before the directory exists.
+func applyMove(v *vault.Vault, cfg *config.Config, plan *MovePlan, dst moveDestination, options moveOptions) (*journal.Entry, error) {
+	j, err := BeginOperation(v.Root, "move", options.command, []string{plan.Target, dst.note.AbsPath, dst.folderAbs}, options.journalOptions...)
+	if err != nil {
+		return nil, err
+	}
+	defer j.Release()
 	//bn:direct-write guarded by BeginOperation above
-	if err := os.MkdirAll(newFolderAbs, 0o755); err != nil {
-		return nil, WrapError(CodeInternal, fmt.Sprintf("move: mkdir %q", newFolderAbs), err)
+	if err := os.MkdirAll(dst.folderAbs, 0o755); err != nil {
+		return nil, WrapError(CodeInternal, fmt.Sprintf("move: mkdir %q", dst.folderAbs), err)
 	}
 	if err := CheckMoveDestination(plan.Target, plan.NewPath, options.force); err != nil {
 		return nil, err
 	}
-	if err := j.Capture(plan.Target); err != nil {
+	if err := captureRelocation(j, plan.Target, plan.NewPath, plan.FileOrder); err != nil {
 		return nil, err
 	}
-	if err := j.Capture(plan.NewPath); err != nil {
-		return nil, err
-	}
-	for _, p := range plan.FileOrder {
-		if err := j.Capture(p); err != nil {
-			return nil, err
-		}
-	}
-
 	if err := ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
 		return nil, err
 	}
 	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
 		return nil, err
 	}
-	entry, err := j.Finalize()
-	if err != nil {
-		return nil, err
+	return j.Finalize()
+}
+
+// newMoveOptions folds the variadic options onto the defaults, skipping the nil
+// ones a conditional caller passes.
+func newMoveOptions(opts []MoveOption) moveOptions {
+	options := defaultMoveOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
 	}
-	return &MoveResult{
-		Source:      source,
-		Destination: dest,
-		Plan:        plan,
-		Journal:     entry,
-	}, nil
+	return options
 }
 
 func defaultMoveOptions() moveOptions {

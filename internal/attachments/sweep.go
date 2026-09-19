@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -57,6 +58,14 @@ func (s *Store) Sweep(ttl time.Duration, now time.Time) (Swept, error) {
 	if _, err := os.Stat(s.stagingDir()); os.IsNotExist(err) {
 		return Swept{}, nil
 	}
+	// Before the sweep lock, and refused rather than skipped: a sweep that could
+	// not join is a sweep that would have deleted staging files out from under a
+	// checkpoint's copy. The caller already treats this pass as optional.
+	barrier, err := checkpoint.Join(s.root)
+	if err != nil {
+		return Swept{Skipped: true}, nil
+	}
+	defer barrier()
 	release, acquired, err := vault.TryLockPath(filepath.Join(s.root, filepath.FromSlash(sweepLockRel)))
 	if err != nil {
 		return Swept{}, fmt.Errorf("attachments: take sweep lock: %w", err)

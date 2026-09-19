@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
@@ -140,7 +141,17 @@ func LoadRecord(root string) (*Record, error) {
 //
 // It takes no lock. Two companions cannot both be running against one vault, and
 // the single-instance lock in Run is what makes that true; see runLocked.
+// It does join the checkpoint barrier, which is not a lock in the same sense:
+// the barrier is not about excluding another companion, it is about not being
+// copied half-written. A worker transition recorded here is what a restored
+// vault resumes from, and one captured mid-replacement would resume from a state
+// no pass ever reached.
 func (r *Record) save(root string) error {
+	barrier, err := checkpoint.Join(root)
+	if err != nil {
+		return fmt.Errorf("vaultsyncd: %w", err)
+	}
+	defer barrier()
 	r.Version = recordVersion
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {

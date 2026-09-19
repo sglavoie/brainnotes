@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -24,6 +25,10 @@ const (
 
 type CreateOptions struct {
 	Now func() time.Time
+	// Drain is how long Create waits for in-flight writers to finish before it
+	// gives up on taking a consistent copy. Anything non-positive means
+	// checkpoint.DefaultDrain.
+	Drain time.Duration
 }
 
 type CreateResult struct {
@@ -56,6 +61,23 @@ type archiveEntry struct {
 	Mode fs.FileMode
 }
 
+// Create writes a `.tar.gz` of the whole vault into `backups/`.
+//
+// It is this repository's own checkpoint client, and the reason
+// internal/checkpoint exists: a walk of a live vault reads each file at a
+// different instant, so an archive taken while a rename is half-applied holds
+// the note under both names, or under neither, and a journal entry whose
+// manifest names bytes the archive never copied. Holding the barrier for the
+// whole walk is what makes the archive a state the vault was actually in.
+//
+// The hold is taken after the location guard and before the first byte is
+// written. That order matters in both directions: a vault on refused storage is
+// refused without ever stopping another process's write, and no part of the
+// archive is read before the writers have drained.
+//
+// A drain that does not finish inside the budget is an error rather than a
+// best-effort copy. An archive nobody can trust is worse than no archive, and
+// the operator who ran this can run it again.
 func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 	root, err := resolveVaultRoot(vaultRoot)
 	if err != nil {
@@ -74,6 +96,28 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 	if err := vault.GuardMutation(root, backupsDir); err != nil {
 		return nil, err
 	}
+
+	held, err := checkpoint.Hold(root, checkpoint.Options{Reason: "backup archive", Drain: opts.Drain})
+	if err != nil {
+		return nil, fmt.Errorf("backup: hold the vault still: %w", err)
+	}
+
+	result, createErr := createArchive(root, backupsDir, now)
+	// The release is reported only when nothing else went wrong. A released
+	// checkpoint that could not clear its record is a liveness problem for the
+	// next writer, not a reason to call a finished archive a failure.
+	if releaseErr := held.Release(); releaseErr != nil && createErr == nil {
+		return result, fmt.Errorf("backup: release the checkpoint: %w", releaseErr)
+	}
+	return result, createErr
+}
+
+// createArchive writes the archive with the checkpoint already held.
+//
+// Everything here runs inside that window, including the rename that publishes
+// the archive: `backups/` is excluded from the walk, so the bytes this writes
+// are never bytes it also reads.
+func createArchive(root, backupsDir string, now func() time.Time) (*CreateResult, error) {
 	if err := os.MkdirAll(backupsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("backup: create backups directory: %w", err)
 	}
@@ -104,8 +148,27 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 	tw := tar.NewWriter(gzw)
 
 	result := &CreateResult{ArchivePath: archivePath}
+	walkErr := archiveTree(tw, root, result)
 
-	walkErr := filepath.WalkDir(root, func(current string, d fs.DirEntry, walkErr error) error {
+	closeErr := closeArchiveWriter(tw, gzw, tmp)
+	if walkErr != nil {
+		return nil, walkErr
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+
+	if err := os.Rename(tmp.Name(), archivePath); err != nil {
+		return nil, fmt.Errorf("backup: finalize archive %s: %w", archivePath, err)
+	}
+
+	committed = true
+	return result, nil
+}
+
+// archiveTree walks the vault and hands every eligible entry to archiveOne.
+func archiveTree(tw *tar.Writer, root string, result *CreateResult) error {
+	return filepath.WalkDir(root, func(current string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -133,72 +196,67 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 			return fmt.Errorf("backup: stat %s: %w", current, err)
 		}
 
-		if info.Mode()&os.ModeSymlink != 0 {
-			result.SkippedSymlinks++
-			return nil
-		}
-
-		switch {
-		case info.IsDir():
-			header, err := tar.FileInfoHeader(info, "")
-			if err != nil {
-				return fmt.Errorf("backup: create tar header for %s: %w", current, err)
-			}
-
-			header.Name = relPath + "/"
-			if err := tw.WriteHeader(header); err != nil {
-				return fmt.Errorf("backup: write tar header for %s: %w", current, err)
-			}
-
-		case info.Mode().IsRegular():
-			header, err := tar.FileInfoHeader(info, "")
-			if err != nil {
-				return fmt.Errorf("backup: create tar header for %s: %w", current, err)
-			}
-
-			header.Name = relPath
-			if err := tw.WriteHeader(header); err != nil {
-				return fmt.Errorf("backup: write tar header for %s: %w", current, err)
-			}
-
-			file, err := os.Open(current)
-			if err != nil {
-				return fmt.Errorf("backup: open %s: %w", current, err)
-			}
-
-			_, copyErr := io.Copy(tw, file)
-			closeErr := file.Close()
-			if copyErr != nil {
-				return fmt.Errorf("backup: copy %s into archive: %w", current, copyErr)
-			}
-			if closeErr != nil {
-				return fmt.Errorf("backup: close %s: %w", current, closeErr)
-			}
-
-			result.Files++
-			result.Bytes += info.Size()
-
-		default:
-			return fmt.Errorf("backup: unsupported file type at %s", current)
-		}
-
-		return nil
+		return archiveOne(tw, current, relPath, info, result)
 	})
+}
 
-	closeErr := closeArchiveWriter(tw, gzw, tmp)
-	if walkErr != nil {
-		return nil, walkErr
+// archiveOne writes one walked entry, counting what it wrote and what it left
+// out. A symlink is counted and skipped rather than followed or recorded.
+func archiveOne(tw *tar.Writer, current, relPath string, info fs.FileInfo, result *CreateResult) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		result.SkippedSymlinks++
+		return nil
+	}
+
+	switch {
+	case info.IsDir():
+		return writeArchiveHeader(tw, current, relPath+"/", info)
+
+	case info.Mode().IsRegular():
+		if err := writeArchiveHeader(tw, current, relPath, info); err != nil {
+			return err
+		}
+		if err := copyArchiveFile(tw, current); err != nil {
+			return err
+		}
+
+		result.Files++
+		result.Bytes += info.Size()
+		return nil
+
+	default:
+		return fmt.Errorf("backup: unsupported file type at %s", current)
+	}
+}
+
+func writeArchiveHeader(tw *tar.Writer, current, name string, info fs.FileInfo) error {
+	header, err := tar.FileInfoHeader(info, "")
+	if err != nil {
+		return fmt.Errorf("backup: create tar header for %s: %w", current, err)
+	}
+
+	header.Name = name
+	if err := tw.WriteHeader(header); err != nil {
+		return fmt.Errorf("backup: write tar header for %s: %w", current, err)
+	}
+	return nil
+}
+
+func copyArchiveFile(tw *tar.Writer, current string) error {
+	file, err := os.Open(current)
+	if err != nil {
+		return fmt.Errorf("backup: open %s: %w", current, err)
+	}
+
+	_, copyErr := io.Copy(tw, file)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return fmt.Errorf("backup: copy %s into archive: %w", current, copyErr)
 	}
 	if closeErr != nil {
-		return nil, closeErr
+		return fmt.Errorf("backup: close %s: %w", current, closeErr)
 	}
-
-	if err := os.Rename(tmp.Name(), archivePath); err != nil {
-		return nil, fmt.Errorf("backup: finalize archive %s: %w", archivePath, err)
-	}
-
-	committed = true
-	return result, nil
+	return nil
 }
 
 // Restore extracts an archive over the vault, either overlaid or after wiping.

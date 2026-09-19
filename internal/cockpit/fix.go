@@ -235,6 +235,7 @@ func (f *Fixer) applySchemaRepair(out FixOutcome, task Task, byRel map[string]*v
 	if err != nil {
 		return FixOutcome{}, err
 	}
+	defer j.Release()
 	for _, affected := range task.Affected {
 		note, ok := byRel[affected.RelPath]
 		if !ok {
@@ -249,17 +250,7 @@ func (f *Fixer) applySchemaRepair(out FixOutcome, task Task, byRel map[string]*v
 		if len(actions) == 0 {
 			continue
 		}
-		if err := j.Capture(note.Path); err != nil {
-			return FixOutcome{}, err
-		}
-		front, err := note.Front()
-		if err != nil {
-			return FixOutcome{}, err
-		}
-		for _, act := range actions {
-			schema.ApplyRepairAction(front, act, f.cfg.Frontmatter.Properties)
-		}
-		if err := note.Save(&f.cfg.Frontmatter); err != nil {
+		if err := f.repairNote(j, note, actions); err != nil {
 			return FixOutcome{}, err
 		}
 		out.Changed = append(out.Changed, affected.RelPath)
@@ -270,6 +261,23 @@ func (f *Fixer) applySchemaRepair(out FixOutcome, task Task, byRel map[string]*v
 	}
 	out.Journal = entry
 	return out, nil
+}
+
+// repairNote captures one note under the batch's journal and applies its planned
+// repair actions. The capture comes first, so the undo manifest names the note
+// before its bytes change.
+func (f *Fixer) repairNote(j *noteops.Journal, note *vault.Note, actions []schema.RepairAction) error {
+	if err := j.Capture(note.Path); err != nil {
+		return err
+	}
+	front, err := note.Front()
+	if err != nil {
+		return err
+	}
+	for _, act := range actions {
+		schema.ApplyRepairAction(front, act, f.cfg.Frontmatter.Properties)
+	}
+	return note.Save(&f.cfg.Frontmatter)
 }
 
 // planNoteRepairs runs the schema repair planner over a single note, scoping to
@@ -338,6 +346,7 @@ func (f *Fixer) applyRelink(out FixOutcome, task Task, data vaultData, byRel map
 	if err != nil {
 		return FixOutcome{}, err
 	}
+	defer j.Release()
 	for _, affected := range task.Affected {
 		note, ok := byRel[affected.RelPath]
 		if !ok {
@@ -352,22 +361,7 @@ func (f *Fixer) applyRelink(out FixOutcome, task Task, data vaultData, byRel map
 		if len(rewrite.changes) == 0 {
 			continue
 		}
-		if err := j.Capture(note.Path); err != nil {
-			return FixOutcome{}, err
-		}
-		if rewrite.newBody != nil {
-			if err := note.SetBody(*rewrite.newBody); err != nil {
-				return FixOutcome{}, err
-			}
-		}
-		front, err := note.Front()
-		if err != nil {
-			return FixOutcome{}, err
-		}
-		for key, value := range rewrite.newFront {
-			front.Set(key, value)
-		}
-		if err := note.Save(&f.cfg.Frontmatter); err != nil {
+		if err := f.relinkNote(j, note, rewrite); err != nil {
 			return FixOutcome{}, err
 		}
 		out.Changed = append(out.Changed, affected.RelPath)
@@ -378,6 +372,28 @@ func (f *Fixer) applyRelink(out FixOutcome, task Task, data vaultData, byRel map
 	}
 	out.Journal = entry
 	return out, nil
+}
+
+// relinkNote captures one note under the batch's journal and writes the body and
+// frontmatter the planned rewrite produced. The capture comes first, so the undo
+// manifest names the note before its bytes change.
+func (f *Fixer) relinkNote(j *noteops.Journal, note *vault.Note, rewrite relinkRewrite) error {
+	if err := j.Capture(note.Path); err != nil {
+		return err
+	}
+	if rewrite.newBody != nil {
+		if err := note.SetBody(*rewrite.newBody); err != nil {
+			return err
+		}
+	}
+	front, err := note.Front()
+	if err != nil {
+		return err
+	}
+	for key, value := range rewrite.newFront {
+		front.Set(key, value)
+	}
+	return note.Save(&f.cfg.Frontmatter)
 }
 
 // relinkRewrite is the in-memory result of relinking a single note against the

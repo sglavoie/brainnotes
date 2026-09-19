@@ -489,6 +489,7 @@ func (a *applier) apply() (*journal.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer operation.Release()
 	txn, err := a.plan()
 	if err != nil {
 		return nil, err
