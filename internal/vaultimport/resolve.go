@@ -197,10 +197,17 @@ func (p *Plan) steps() []Step {
 	return steps
 }
 
-// revises reports a plan that has anything to record after the operation is
+// Revises reports a plan that has anything to record after the operation is
 // applied. A plan that revises nothing is a resolution that accepted everything
 // incoming, and it is carried out by applying the package and no more.
-func (p *Plan) revises() bool { return len(p.steps()) > 0 }
+//
+// It is exported because the difference is a sentence somebody reads. A resolution
+// finishes with an empty JournalEntry in two unrelated situations — a plan that had
+// no second commit to make, and a plan whose second commit has not been made yet —
+// and a caller reporting what durably happened has nothing else to tell them apart
+// with. Saying "your decision has not been recorded yet" about the first one sends a
+// person to wait for a commit that is never coming.
+func (p *Plan) Revises() bool { return len(p.steps()) > 0 }
 
 // validate checks a promised resolution read back out of the state file.
 //
@@ -219,7 +226,7 @@ func (p *Plan) validate(packageID string) error {
 	case p.JournalEntry == "":
 		return fmt.Errorf("%w: promised resolution for %s names no recovery entry",
 			ErrCorruptState, packageID)
-	case !p.revises():
+	case !p.Revises():
 		return fmt.Errorf("%w: promised resolution for %s revises nothing", ErrCorruptState, packageID)
 	}
 	return nil

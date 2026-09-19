@@ -69,7 +69,7 @@ const renderVersion = (
   const section = element(doc, "section", "sync-version");
   section.setAttribute("data-sync-version", branch);
   section.append(element(doc, "h5", "sync-version-title", versionTitles[branch]));
-  const note = versionNote(version);
+  const note = versionNote(version, branch);
   if (note !== "") {
     section.append(element(doc, "p", "sync-version-note", note));
     return section;
@@ -329,6 +329,17 @@ const renderOperation = (doc: Document, operation: SyncConflictOperation): SyncO
   plan.setAttribute("data-sync-plan", operation.package_id);
   plan.hidden = true;
 
+  // What waits behind this change is drawn before the problem is consulted, because
+  // the two facts come from different places: the dependents are read off the
+  // channel's own hold graph, while the problem is this one operation's conflict
+  // failing to be described. An undescribable change that half the channel is
+  // queued behind is the case where "what is stuck behind this" matters most, and
+  // dropping it would make the one operation nobody can act on look like the one
+  // with the least consequence.
+  if (operation.blocked.length > 0) {
+    root.append(renderBlocked(doc, operation.blocked));
+  }
+
   if (operation.problem !== "") {
     root.append(
       element(
@@ -342,9 +353,6 @@ const renderOperation = (doc: Document, operation: SyncConflictOperation): SyncO
     return { operation, root, paths: [], plan, status, review: null, apply: null, cancel: null };
   }
 
-  if (operation.blocked.length > 0) {
-    root.append(renderBlocked(doc, operation.blocked));
-  }
   const paths = operation.paths.map((path) => renderPath(doc, operation.package_id, path));
   for (const path of paths) {
     root.append(path.root);
@@ -379,7 +387,13 @@ export const renderSyncOperations = (
 /** renderSyncPlan lists what the resolution will do, step by step. */
 export const renderSyncPlan = (
   host: HTMLElement,
-  paths: { path: string; kind: string; choice: string; steps: { path: string; action: string }[] }[],
+  paths: {
+    path: string;
+    kind: string;
+    choice: string;
+    label: string;
+    steps: { path: string; action: string }[];
+  }[],
   doc: Document
 ): void => {
   host.textContent = "";
@@ -397,7 +411,12 @@ export const renderSyncPlan = (
       path.steps.length === 0
         ? "the other replica's change is applied and nothing further is written"
         : path.steps.map((step) => `${step.action} ${step.path}`).join(", ");
-    item.textContent = `${path.path} — ${path.choice}: ${steps}`;
+    // The choice is named the way the radio that chose it is named. The engine's
+    // slug is jargon in the one place somebody is deciding whether to go ahead, and
+    // the server carries the label from its single wording table — so the fallback
+    // is only for a choice that table has no words for, where the slug beats
+    // nothing at all.
+    item.textContent = `${path.path} — ${path.label || path.choice}: ${steps}`;
     list.append(item);
   }
   host.append(list);

@@ -11,7 +11,11 @@ import type { SyncStatusResult } from "./api";
 // has acknowledged, and counts what is published and unacknowledged as waiting.
 // A copied package is not an applied one, and the only evidence of application
 // this device can ever have is a receipt — so "3 of 4 acknowledged" is the truth
-// and "4 sent" is the comfortable lie.
+// and "4 sent" is the comfortable lie. A published package is a third thing as
+// well as those two: one whose manifest cannot be read is counted as neither, so
+// "acknowledged" and "awaiting" do not have to add up to "published" and a fact
+// that assumed they did would claim everything is acknowledged over a count that
+// says otherwise.
 //
 // **Arrived is not applied either.** A delivered package sitting in the incoming
 // channel is somebody else's change that this vault has not made its own, and it
@@ -102,12 +106,35 @@ const exportFact = (status: SyncStatusResult): SyncFact => {
   };
 };
 
+// interruptedClause names published packages this device cannot read back.
+//
+// A directory in *this* device's own outgoing channel with no readable manifest is
+// a publication interrupted before the manifest landed (see
+// vaultsyncd.TransportStatus.Incomplete). It is counted in neither the
+// acknowledged nor the awaiting total, so leaving it unsaid is what makes
+// "every published change is acknowledged (3 of 4)" possible: a sentence that is
+// false and a count that visibly contradicts it, with no explanation on offer.
+const interruptedClause = (incomplete: number): string => {
+  if (incomplete === 0) {
+    return "";
+  }
+  return (
+    " " +
+    count(
+      incomplete,
+      "publication was interrupted before it finished, so it will never be acknowledged",
+      "publications were interrupted before they finished, so they will never be acknowledged"
+    ) +
+    "."
+  );
+};
+
 // transportFact reports acknowledgment and never delivery. The oldest
 // unacknowledged package is named with its age because "one package is waiting"
 // and "one package has been waiting since Tuesday" are the same count and
 // different situations.
 const transportFact = (status: SyncStatusResult): SyncFact => {
-  const { published, acknowledged, awaiting_receipt: awaiting } = status.transport;
+  const { published, acknowledged, awaiting_receipt: awaiting, incomplete } = status.transport;
   if (published === 0) {
     return {
       term: "Acknowledged by the other replica",
@@ -115,11 +142,18 @@ const transportFact = (status: SyncStatusResult): SyncFact => {
       kind: "",
     };
   }
-  if (awaiting === 0) {
+  if (awaiting === 0 && incomplete === 0) {
     return {
       term: "Acknowledged by the other replica",
       detail: `Every published change is acknowledged (${acknowledged} of ${published}).`,
       kind: "",
+    };
+  }
+  if (awaiting === 0) {
+    return {
+      term: "Acknowledged by the other replica",
+      detail: `${acknowledged} of ${published} acknowledged.` + interruptedClause(incomplete),
+      kind: "waiting",
     };
   }
   const since = formatSyncTimestamp(status.transport.oldest_awaiting);
@@ -129,13 +163,35 @@ const transportFact = (status: SyncStatusResult): SyncFact => {
     detail:
       `${acknowledged} of ${published} acknowledged. ` +
       `${count(awaiting, "change is published and not acknowledged", "changes are published and not acknowledged")}.` +
-      oldest,
+      oldest +
+      interruptedClause(incomplete),
     kind: "waiting",
   };
 };
 
+// arrivingClause separates a change that is here and undecided from one that is
+// still coming. Both are counted as awaiting application — the incomplete ones are
+// a subset of that total (see vaultsyncd.PeerStatus.Incomplete) — and only the
+// first is anything a person can act on: a package the transport has not finished
+// copying is nobody's decision yet, and reading "not applied yet" as "stuck" is
+// what sends somebody looking for the change that has not landed.
+const arrivingClause = (incomplete: number): string => {
+  if (incomplete === 0) {
+    return "";
+  }
+  return (
+    " " +
+    count(
+      incomplete,
+      "of those cannot be read yet, so it is still arriving or arrived damaged",
+      "of those cannot be read yet, so they are still arriving or arrived damaged"
+    ) +
+    "."
+  );
+};
+
 const peerFact = (status: SyncStatusResult): SyncFact => {
-  const { delivered, awaiting_application: waiting, conflicts } = status.peer;
+  const { delivered, awaiting_application: waiting, incomplete, conflicts } = status.peer;
   if (conflicts > 0) {
     return {
       term: "Arrived from the other replica",
@@ -146,7 +202,9 @@ const peerFact = (status: SyncStatusResult): SyncFact => {
   if (waiting > 0) {
     return {
       term: "Arrived from the other replica",
-      detail: `${count(waiting, "change has arrived and is not applied yet", "changes have arrived and are not applied yet")}.`,
+      detail:
+        `${count(waiting, "change has arrived and is not applied yet", "changes have arrived and are not applied yet")}.` +
+        arrivingClause(incomplete),
       kind: "waiting",
     };
   }

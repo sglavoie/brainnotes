@@ -20,8 +20,13 @@ var syncConflictSummaries = map[vaultimport.ConflictKind]string{
 	vaultimport.ConflictEditDelete:     "The other replica changed this note and this one deleted it.",
 	vaultimport.ConflictDivergentRename: "The other replica renamed this note, and it is no longer " +
 		"where it was here.",
-	vaultimport.ConflictFilenameCollision: "This vault already holds this name under a spelling that " +
-		"is the same file on the other replica.",
+	// One kind, two situations: a name this vault already holds under a spelling
+	// the other replica cannot tell apart, and a name occupied here by something
+	// that is not a note at all. The sentence names neither, because the engine
+	// refuses every choice with the specific reason and a summary that guessed the
+	// wrong one of the two would contradict it.
+	vaultimport.ConflictFilenameCollision: "This name is already taken in this vault, so the " +
+		"other replica's note has nowhere to land.",
 	vaultimport.ConflictConfiguration: "Both replicas changed the declarations that govern every " +
 		"note in this vault.",
 }
@@ -30,14 +35,17 @@ var syncConflictSummaries = map[vaultimport.ConflictKind]string{
 //
 // One kind is here, because one kind refuses all four: a filename collision is
 // true whatever either version says, so the work is in the vault and the change
-// waits in the channel until it is done. The sentence is therefore about renaming
-// a file rather than about anything on this page. Every other kind leaves at
+// waits in the channel until it is done. The sentence is therefore about clearing
+// a name rather than about anything on this page, and it points at the refused
+// choices for what is occupying it, since the engine says that per path and this
+// table cannot. Every other kind leaves at
 // least "take the other replica's version" open — that choice adds no revision at
 // all, so nothing but a collision can refuse it — and a path with no choice and no
 // remedy would be a dead end.
 var syncConflictRemedies = map[vaultimport.ConflictKind]string{
-	vaultimport.ConflictFilenameCollision: "Rename or remove the file already here so the two names " +
-		"are no longer one name, and this change will be applied on the next pass.",
+	vaultimport.ConflictFilenameCollision: "Clear the name in this vault — rename or remove what is " +
+		"already there — and this change will be applied on the next pass. The refused choices above " +
+		"say what is in the way.",
 }
 
 // syncChoiceLabels is each choice as a control says it.
@@ -150,10 +158,17 @@ var syncChoiceEffects = map[vaultimport.ConflictKind]map[vaultimport.Choice]sync
 	},
 }
 
-// syncGenericEffects is the fallback, and it says less on purpose. A kind this
-// file has not been taught is described in the vocabulary of the choice alone
-// rather than guessed at, so a kind added to the engine reads as vague here
-// instead of reading as wrong.
+// syncGenericEffects is the fallback, and it says less on purpose. It answers two
+// situations, for the same reason.
+//
+// A kind this file has not been taught is described in the vocabulary of the
+// choice alone rather than guessed at, so a kind added to the engine reads as
+// vague here instead of reading as wrong. And a conflict over content this page
+// could not show — an attachment, or a version past the response bound — is
+// described the same way whatever its kind, because every sentence above is about
+// a note somebody can read: "This note keeps the text it has here" is false of an
+// image in the one way that matters, which is that it invites a decision about
+// text nobody has been shown.
 var syncGenericEffects = map[vaultimport.Choice]syncChoiceEffect{
 	vaultimport.KeepCurrent: {
 		effect:   "What is here is kept. The other replica's version is rejected.",
@@ -172,11 +187,25 @@ var syncGenericEffects = map[vaultimport.Choice]syncChoiceEffect{
 	},
 }
 
-// syncAvailableChoice is one offerable choice as a person reads it.
-func syncAvailableChoice(kind vaultimport.ConflictKind, choice vaultimport.Choice) syncChoiceView {
+// syncAvailableChoice is one offerable choice as a person reads it. neutral sends
+// the wording to syncGenericEffects for the reason stated there; which choices of
+// which conflicts it is true of is syncWordedNeutrally's judgement, and that is
+// where the reasoning about tombstones and merges lives.
+//
+// Only the wording. Discards is taken from the kind whenever the kind is worded at
+// all, because which version stops being here is a fact about the disagreement and
+// not about whether these bytes could be rendered — and the two tables genuinely
+// differ: taking the other replica's version discards nothing under
+// ConflictEditDelete, since nothing is here to discard, while the generic answer
+// has to assume there is. Reading the generic one there would put a confirmation in
+// front of a decision that destroys nothing, which is the same defect as omitting
+// one from a decision that does.
+func syncAvailableChoice(kind vaultimport.ConflictKind, choice vaultimport.Choice, neutral bool) syncChoiceView {
 	effect, worded := syncChoiceEffects[kind][choice]
 	if !worded {
 		effect = syncGenericEffects[choice]
+	} else if neutral {
+		effect.effect = syncGenericEffects[choice].effect
 	}
 	return syncChoiceView{
 		Choice:   string(choice),

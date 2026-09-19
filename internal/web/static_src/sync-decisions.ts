@@ -74,14 +74,42 @@ export const mergeRefusal = (path: SyncContestedPath): string => {
   return "";
 };
 
-/** mergeSeed is the text a fresh merge editor opens with. */
+/**
+ * mergeSeed is the text a fresh merge editor opens with: this vault's version when
+ * there is one to open, and the other replica's when there is not.
+ *
+ * The second case is one conflict — this vault deleted the note and the other
+ * replica changed it — and it is the only kind offering a merge where a version is
+ * missing rather than unshowable, since a merge is refused outright unless both
+ * sides are either shown or absent. An empty editor there would be asking somebody
+ * to retype the note they are deciding about; the peer's text is the only text the
+ * merge can start from, and both versions are on the page above it either way.
+ */
 export const mergeSeed = (path: SyncContestedPath): string =>
   path.local.shown ? path.local.text : path.remote.text;
 
+// absentNote says why there is nothing at this path on this side, and it is one
+// sentence per branch rather than one sentence.
+//
+// "The change is a deletion" is true of a delete-edit and false of the other kind
+// whose contested path exists on neither side: a divergent rename holds nothing
+// locally because *this* vault filed the note somewhere else, and nothing remotely
+// because the package moved it — so a single sentence has to be wrong on one of
+// them, and the one it was wrong about is the one where a person is deciding
+// between two arrangements and is told they are deciding about a deletion.
+const absentNote: Record<string, string> = {
+  local: "Not here: this vault does not hold this file.",
+  remote: "Not there: the other replica's change removes this file from this path.",
+  baseline: "There was nothing at this path to begin with.",
+};
+
 /** versionNote says why a version is not shown, or the empty string when it is. */
-export const versionNote = (version: SyncVersion): string => {
+export const versionNote = (
+  version: SyncVersion,
+  branch: "local" | "remote" | "baseline"
+): string => {
   if (!version.exists) {
-    return "This version does not exist: the change is a deletion.";
+    return absentNote[branch];
   }
   if (version.shown) {
     return "";

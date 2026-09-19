@@ -1,0 +1,558 @@
+/*
+ * Synchronization: the one line every page carries, and the /sync page where a
+ * conflict is decided.
+ *
+ * Two rules run through everything below. The first is that a decision which
+ * throws a version away must not look like the others: a discard sentence is
+ * drawn in the danger triple wherever it appears, on the radio that offers it and
+ * in the plan that spells it out, so the destructive choice is the one that reads
+ * differently rather than the one that reads the same. The second is that a
+ * refused choice stays on screen — visibly out, with its reason beside it — so the
+ * set of decisions looks the same on every conflict and a person can tell "this
+ * vault will not do that here" from "this page forgot to offer it".
+ *
+ * The two contested versions are a two-column grid that responsive.css narrows to
+ * one. They are declared side by side here because that is the comparison the page
+ * exists for; the baseline is a <details> rather than a third column because it is
+ * what both started from and is read only when the other two do not explain
+ * themselves.
+ */
+
+/* The navigation line. It is empty in a mode whose guard refuses the status
+   route, so every bit of its box — margin included — is conditional on there
+   being text: an empty <p> reserving a row would push the nav down on a page that
+   has nothing to say. */
+.sync-line {
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-line:not(:empty) {
+  margin: 0 0 0.4rem;
+}
+
+.sync-line.is-attention {
+  color: var(--bn-warning);
+}
+
+.sync-line-review {
+  color: var(--bn-link);
+}
+
+.sync-panel,
+.sync-conflicts-panel {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.sync-status {
+  min-height: 1.2rem;
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-status.is-loading {
+  color: var(--bn-text-subtle);
+}
+
+.sync-status.is-empty {
+  color: var(--bn-faint);
+}
+
+.sync-status.is-success {
+  color: var(--bn-success);
+}
+
+.sync-status.is-warning {
+  color: var(--bn-warning);
+}
+
+.sync-status.is-error {
+  color: var(--bn-danger);
+}
+
+/*
+ * The itemized status. A <dl> is the right element — each row is a term and what
+ * this vault currently knows about it — and the grid keeps the two columns
+ * aligned down the list. `is-waiting` and `is-problem` come from the status model
+ * rather than from this sheet: a fact that needs a person is marked at the source,
+ * so the colour here follows the same judgement `-check`'s exit code does.
+ */
+.sync-facts {
+  display: grid;
+  grid-template-columns: minmax(10rem, max-content) 1fr;
+  gap: 0.3rem 0.8rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.sync-facts:empty {
+  display: none;
+}
+
+.sync-fact {
+  margin: 0;
+  color: var(--bn-text);
+  overflow-wrap: anywhere;
+}
+
+dt.sync-fact {
+  color: var(--bn-text-subtle);
+}
+
+.sync-fact.is-waiting {
+  color: var(--bn-warning);
+}
+
+.sync-fact.is-problem {
+  color: var(--bn-danger);
+}
+
+.sync-problems {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sync-problem {
+  border: 1px solid var(--bn-danger-border);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.sync-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.15rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0 0.65rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sync-button:hover:not(:disabled) {
+  border-color: var(--bn-border-strong);
+  background: var(--bn-hover);
+}
+
+.sync-button:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.sync-button:disabled {
+  color: var(--bn-faint);
+  background: var(--bn-sunken);
+  cursor: default;
+}
+
+/* Apply is the primary control and is deliberately *not* the danger colour: what
+   it does depends on the decisions above it, and a button that always looked
+   destructive would say nothing about the one case where it is. The discard
+   sentences carry that, per choice. */
+.sync-button.is-primary {
+  border-color: var(--bn-accent-subtle-border);
+  color: var(--bn-accent-subtle-text);
+  background: var(--bn-accent-subtle-bg);
+}
+
+.sync-operations {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.sync-operation {
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--bn-surface);
+  min-width: 0;
+}
+
+.sync-operation-header {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.sync-operation-title {
+  margin: 0;
+  color: var(--bn-text-strong);
+  font-size: 1rem;
+}
+
+.sync-operation-meta {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+/* An operation this server could not describe. It is not an error the page can
+   clear, so it reads as a warning about that one change rather than as a failure
+   of the panel around it. */
+.sync-operation-problem {
+  margin: 0;
+  border: 1px solid var(--bn-warning-border);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  color: var(--bn-warning);
+  background: var(--bn-warning-bg);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-operation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* What else is waiting behind this conflict. Sunken rather than bordered: these
+   are changes nobody is deciding about on this screen, and they must not compete
+   with the ones that have radios. */
+.sync-blocked {
+  display: grid;
+  gap: 0.3rem;
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--bn-sunken);
+}
+
+.sync-blocked-summary {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+}
+
+.sync-blocked-list {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sync-blocked-item {
+  color: var(--bn-muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-path {
+  display: grid;
+  gap: 0.5rem;
+  border-top: 1px solid var(--bn-border);
+  padding-top: 0.6rem;
+  min-width: 0;
+}
+
+.sync-path-name {
+  margin: 0;
+  color: var(--bn-text-strong);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-path-summary {
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+/* The late-arriving-change warning: this vault's version moved after the conflict
+   was recorded, and the version on screen is the one the decision applies to.
+   That is the page's most easily missed sentence, so it is a bordered block in the
+   warning triple rather than another line of prose. */
+.sync-path-warning {
+  margin: 0;
+  border: 1px solid var(--bn-warning-border);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  color: var(--bn-warning);
+  background: var(--bn-warning-bg);
+  font-size: 0.85rem;
+}
+
+.sync-path-remedy {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-versions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* The baseline spans both columns: it is the third version and reading it is a
+   deliberate act, so it sits under the comparison rather than inside it. */
+.sync-baseline {
+  grid-column: 1 / -1;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bn-sunken);
+  font-size: 0.85rem;
+}
+
+.sync-baseline > summary {
+  color: var(--bn-text-subtle);
+  cursor: pointer;
+}
+
+.sync-version {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  align-content: start;
+}
+
+.sync-version-title {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* A version with no text to show — a deletion, a binary payload, one too large to
+   render — says so in words. It is the same slot as the text, so the two branches
+   line up whichever one each side got. */
+.sync-version-note {
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-version-text {
+  margin: 0;
+  max-height: 22rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  color: var(--bn-code-text);
+  background: var(--bn-code-bg);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sync-choices {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  min-width: 0;
+}
+
+.sync-choices > legend {
+  padding: 0 0.3rem;
+  color: var(--bn-text-subtle);
+  font-size: 0.8rem;
+}
+
+.sync-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  align-items: start;
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.4rem;
+  cursor: pointer;
+}
+
+.sync-choice:hover {
+  background: var(--bn-hover);
+}
+
+.sync-choice > input {
+  margin: 0.15rem 0 0;
+  accent-color: var(--bn-accent);
+}
+
+/* A refused choice keeps its place in the list and stops being a control: no
+   pointer, no hover, and the label faint enough to read as unavailable. Its reason
+   is the only part still at full contrast, because that is the sentence somebody
+   came here to read. */
+.sync-choice.is-refused {
+  color: var(--bn-faint);
+  cursor: default;
+}
+
+.sync-choice.is-refused:hover {
+  background: none;
+}
+
+.sync-choice-copy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.sync-choice-label {
+  color: var(--bn-text);
+  font-size: 0.9rem;
+}
+
+.sync-choice.is-refused .sync-choice-label {
+  color: var(--bn-faint);
+}
+
+.sync-choice-effect {
+  color: var(--bn-muted);
+  font-size: 0.8rem;
+}
+
+/* The destructive sentence. It names the version this decision throws away, and
+   it is the one line in the choice list drawn in the danger colour — the button
+   that applies it cannot be, because what Apply does depends on which of these
+   was chosen. */
+.sync-choice-discards {
+  color: var(--bn-danger);
+  font-size: 0.8rem;
+}
+
+.sync-choice.is-refused .sync-choice-discards {
+  color: var(--bn-faint);
+}
+
+.sync-choice-reason {
+  color: var(--bn-warning);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-merge {
+  display: grid;
+  gap: 0.4rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bn-raised);
+  min-width: 0;
+  justify-items: start;
+}
+
+.sync-merge-hint {
+  margin: 0;
+  color: var(--bn-text-subtle);
+  font-size: 0.8rem;
+}
+
+.sync-merge-host {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  overflow: hidden;
+}
+
+/*
+ * CodeMirror measures its own layout, so the height comes from here for the same
+ * reason it does on /edit: with no height on .cm-editor the view collapses to one
+ * line. This one is shorter than the editor's 60vh — the merge is read against the
+ * two versions above it, and a pane tall enough to push them off screen would
+ * defeat the comparison the page is for.
+ */
+.sync-merge-host .cm-editor {
+  height: 28vh;
+}
+
+.sync-merge-host .cm-scroller {
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.sync-merge-host .cm-content {
+  caret-color: var(--bn-text-strong);
+}
+
+.sync-merge-host .cm-editor.cm-focused {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: -2px;
+}
+
+.sync-merge-host .cm-gutters {
+  border-right: 1px solid var(--bn-border);
+  background: var(--bn-sunken);
+  color: var(--bn-faint);
+}
+
+/* The recovered-merge notice. A merge is the one text on this page that exists
+   nowhere else, so "a merge kept in this browser was loaded" is information rather
+   than a fault — and the stronger version of it, when the kept merge started from
+   a version this vault has moved past, is a warning about what to read before
+   applying it. Both are the same slot and the same colour: neither is an error. */
+.sync-merge-notice {
+  margin: 0;
+  color: var(--bn-warning);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.sync-plan {
+  display: grid;
+  gap: 0.3rem;
+  border: 1px solid var(--bn-accent-subtle-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bn-accent-subtle-bg);
+  min-width: 0;
+}
+
+.sync-plan-title {
+  margin: 0;
+  color: var(--bn-accent-subtle-text);
+  font-size: 0.85rem;
+}
+
+.sync-plan-list {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sync-plan-item {
+  color: var(--bn-text);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}

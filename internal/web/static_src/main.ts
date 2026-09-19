@@ -21,6 +21,8 @@ import { initSavedViews } from "./saved-views";
 import { initSearch } from "./search";
 import { initSettings } from "./settings";
 import { initSourceEditor } from "./source-editor";
+import { initSync } from "./sync";
+import { initSyncLine } from "./sync-line";
 import { initSynthesize } from "./synthesize";
 import { initTheme } from "./theme";
 
@@ -44,7 +46,13 @@ import { initTheme } from "./theme";
     // The /edit page is refused outright in read-only mode, so the editor is
     // built only where a save can be accepted.
     initSourceEditor();
+    // The /sync page resolves conflicts, which is a write, and is refused in
+    // read-only mode for the same reason.
+    initSync();
   }
+  // The synchronization line is on every page in every mode: a replica that
+  // publishes a copy has a status worth reading too, and the route answers it.
+  initSyncLine();
   initFacets();
   initNoteLayout();
   initCopyControls();

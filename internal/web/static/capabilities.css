@@ -55,4 +55,13 @@ html[data-no-process-launch] :is(
  .properties-proposals-note
 ) { display: none !important; }
 
-.replica-status { padding: .6rem 1rem; border: 1px solid currentColor; border-radius: .4rem; }
+/* Nothing about synchronization is hidden by either group, and that is a decision
+   rather than an omission. The one line the navigation carries is served in every
+   mode — /api/sync/status is on the replica allowlist and answers a replica with
+   how stale its copy is — and the /sync page's own controls are only ever rendered
+   by a server that would accept a resolution: the page is refused outright in
+   read-only mode and the nav link is not rendered there. This replaced the
+   replica-status rule, which styled a paragraph the navigation no longer
+   renders: the line there now is filled by the browser from the status route in
+   every mode, and its styling belongs in the generated stylesheet with the rest
+   of the page chrome rather than here. */

@@ -135,9 +135,11 @@ type Resolution struct {
 // Resolution.AbandonedResolutions rather than refused, since dropping one is not
 // a failure of the decision being made now. That one exception to the advice
 // above is worth stating: an abandonment is the fact the vault stops holding, so
-// asking it afterwards finds nothing. When the pass itself then fails there is
-// no Resolution to carry the news either, and it is folded into the error
-// instead — see withAbandonments.
+// asking it afterwards finds nothing. So whenever there is no Resolution to carry
+// the news — the pass itself failed, or it succeeded and the resolution after it
+// refused — it is folded into the error instead, see withAbandonments. A refusal
+// is the likelier of the two: deciding again over a plan this vault has since
+// moved past is exactly the sequence that abandons the first attempt.
 func Resolve(root, packageDir string, plan *Plan, opts Options) (*Resolution, error) {
 	if plan == nil {
 		return nil, fmt.Errorf("%w: nothing was previewed", ErrStalePreview)
@@ -160,8 +162,9 @@ func Resolve(root, packageDir string, plan *Plan, opts Options) (*Resolution, er
 	resolution, err := resolveLocked(root, packageDir, plan, opts)
 	if resolution != nil {
 		resolution.AbandonedResolutions = recovery.AbandonedBecause
+		return resolution, err
 	}
-	return resolution, err
+	return nil, withAbandonments(err, recovery)
 }
 
 // resolveLocked is the resolution itself, with the import guard held and any
@@ -303,7 +306,7 @@ func (p *Plan) matches(root string, held *ConflictRecord) error {
 func (p *Plan) commitment(opts Options) (*Plan, error) {
 	record := *p
 	record.Paths = slices.Clone(p.Paths)
-	if !record.revises() {
+	if !record.Revises() {
 		return &record, nil
 	}
 	entryID, err := journal.NewEntryID(opts.now())
@@ -328,7 +331,7 @@ func (p *Plan) commitment(opts Options) (*Plan, error) {
 // applied — which is still held, and still resolvable — or one that was, which
 // is the complete and correct outcome of accepting it.
 func declareResolution(root string, state *State, held *ConflictRecord, record *Plan) error {
-	if !record.revises() {
+	if !record.Revises() {
 		return nil
 	}
 	if err := stageRevision(root, held, record); err != nil {
@@ -344,7 +347,7 @@ func declareResolution(root string, state *State, held *ConflictRecord, record *
 
 // reviseResolution makes the second commit and clears the promise to make it.
 func reviseResolution(root string, record *Plan, opts Options, resolution *Resolution) error {
-	if !record.revises() {
+	if !record.Revises() {
 		return nil
 	}
 	rev := &revision{root: root, record: record, opts: opts}
@@ -948,6 +951,18 @@ func unkeepable(err error) bool {
 		errors.Is(err, ErrCorruptState)
 }
 
+// IsUnrecordableDecision answers whether a revision failure is one no later pass
+// will retry, and it is unkeepable's door for a caller that has to say what
+// happens next rather than decide it.
+//
+// The two answers are not degrees of the same news. An ordinary revision failure
+// leaves the promise in the state file and the next pass makes the second commit,
+// so a vault holding the peer's version holds it for a moment. One of these three
+// abandons the promise instead, so that vault holds the version somebody decided
+// against until they decide again — and the difference is the whole of what a
+// person needs told.
+func IsUnrecordableDecision(err error) bool { return unkeepable(err) }
+
 // abandonUnlessLanded drops a promise the vault has no use for, and keeps one
 // whose application is still being decided.
 //
@@ -1003,7 +1018,7 @@ func abandonUnlessLanded(root string, record *Plan) error {
 // declareResolution — so there is nothing to clear and the promise is vacuously
 // gone.
 func abandonResolution(root string, record *Plan) (cleared bool, err error) {
-	if !record.revises() {
+	if !record.Revises() {
 		return true, nil
 	}
 	if err := clearResolution(root, record.PackageID); err != nil {

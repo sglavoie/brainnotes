@@ -88,6 +88,26 @@
     height: auto;
     max-height: 55vh;
   }
+
+  /*
+   * The two contested versions stack. They are side by side on a wide screen
+   * because that is the comparison /sync exists for, and one above the other is
+   * the honest narrow answer: two columns of wrapped Markdown at this width are
+   * two unreadable columns. The titles carry which is which either way, so
+   * nothing is lost but the adjacency.
+   */
+  .sync-versions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sync-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 0;
+  }
+
+  dd.sync-fact {
+    margin-bottom: 0.35rem;
+  }
 }
 
 @media (max-width: 640px) {

@@ -137,6 +137,38 @@ function buildVault(root, name, home, marker, files) {
   run("git", ["commit", "-q", "-m", `${name} fixture`], root, env);
 }
 
+// seedSync enrolls the vault pair and leaves five conflicts and one blocked
+// dependency waiting in the served vault's incoming channel, then returns what it
+// built so the manifest can carry it.
+//
+// The work is a Go program (scripts/syncfixture) rather than more of this file
+// because it cannot be anything else: a hold is only real once
+// internal/vaultimport has refused to apply a package, and a package is only real
+// once internal/vaultsync's Builder has produced one. Seeding the state file by
+// hand from here would give sync.spec.js a review page that agrees with this
+// harness instead of with the engine, which is the one thing that spec is for.
+//
+// It runs *after* both vaults are committed, so everything it writes into the
+// served vault is either committed by it or under `.bnotes/sync/` — and every
+// other spec's `gitStatus` assertion still sees a clean tree.
+function seedSync(fixtureRoot, localVault, peerVault, home) {
+  const expected = join(fixtureRoot, "expected");
+  const out = execFileSync(
+    "go",
+    [
+      "run",
+      "./scripts/syncfixture",
+      `-local=${localVault}`,
+      `-peer=${peerVault}`,
+      `-home=${home}`,
+      `-sandbox=${fixtureRoot}`,
+      `-expected=${expected}`,
+    ],
+    { cwd: REPO_ROOT, env: process.env, stdio: ["ignore", "pipe", "inherit"], encoding: "utf8" },
+  );
+  return JSON.parse(out);
+}
+
 // reservePort returns a loopback port that was free a moment ago. The gap
 // before `bn serve` binds it is a real race and the reason this is 127.0.0.1:0
 // rather than a constant: a fixed port would collide with whatever a developer
@@ -228,6 +260,8 @@ export async function prepare() {
     [PEER_ONLY_NOTE]: "---\ntitle: PeerOnly\n---\n\nOnly the peer device has this note.\n",
   });
 
+  const sync = seedSync(fixtureRoot, localVault, peerVault, home);
+
   const port = await reservePort();
   const manifest = {
     repoRoot: REPO_ROOT,
@@ -244,6 +278,10 @@ export async function prepare() {
     inboxNote: INBOX_NOTE,
     captureHeading: CAPTURE_HEADING,
     seedNotes: Object.keys(SEED_NOTES),
+    // Deliberately not folded into seedNotes: those are the notes every vault is
+    // supposed to serve, and these are one side of a conflict — one of them a note
+    // the incoming operation deletes.
+    sync,
   };
   writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;

@@ -181,7 +181,10 @@ func requireSyncGet(w http.ResponseWriter, r *http.Request, route string) bool {
 		return false
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		w.Header().Set("Allow", http.MethodGet)
+		// Both of them, because both are accepted. An Allow header that named fewer
+		// methods than the route takes is the one part of a 405 a client is entitled
+		// to act on.
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodHead)
 		writeManagementErrorStatus(w, http.StatusMethodNotAllowed,
 			noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
 		return false

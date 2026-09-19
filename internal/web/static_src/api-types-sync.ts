@@ -193,6 +193,10 @@ export type SyncPlanPath = {
   path: string;
   kind: string;
   choice: string;
+  // label is the choice in the words the radio used. It comes from the server's own
+  // wording table rather than from a second one here, and is empty for a choice this
+  // bundle's server does not word — in which case the slug is shown as it came.
+  label: string;
   steps: SyncPlanStep[];
 };
 

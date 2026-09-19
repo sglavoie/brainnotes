@@ -59,12 +59,14 @@
 
     The element is here in every mode, because every mode has something to say.
     It carries no state of its own: with no script it is empty and takes no room.
+    Where the decision is made is not rendered here either — the status route
+    answers it (`review_path`), because a mode that refuses the review page
+    answers no path at all and a link written here would be one nobody may follow.
   */}}
   <p
     class="sync-line"
     data-sync-line
     data-sync-status-endpoint="/api/sync/status"
-    data-sync-review-path="/sync"
     role="status"
     aria-live="polite"
   ></p>

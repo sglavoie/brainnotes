@@ -16,9 +16,10 @@ import { readManifest } from "./manifest.mjs";
 export const manifest = readManifest();
 
 // MACHINE_LOCAL are the paths a running server creates that its own history is
-// defined to exclude: internal/vaultgit/scope.go allowlists `.bnotes/`, and
-// `index/` and `locks/` are outside that allowlist because both are regenerable
-// machine-local caches. `git status` reports them as untracked all the same, so
+// defined to exclude: internal/vaultgit/scope.go excludes `.bnotes/` wholesale and
+// allowlists three named files back in, so `index/` and `locks/` are outside the
+// history because nothing let them in — both are regenerable machine-local caches.
+// `git status` reports them as untracked all the same, so
 // a raw porcelain comparison would call a correctly-behaving server dirty. The
 // list is a prefix match on purpose — a *new* `.bnotes/` file, which is what a
 // future in-scope state file would look like, is not covered and will fail here.
@@ -29,12 +30,48 @@ export const manifest = readManifest();
 // is outside the allowlist on the same terms: a file a person has chosen but not
 // yet saved is not yet part of the note, and the vault's history must not hold it
 // until the save that references it says it does.
+// `sync/` is the synchronization channel and its state: the enrollment record,
+// the packages the transport delivered, the receipts this device owes the peer,
+// and the retained versions of a contested path under `sync/conflicts/`. It is
+// outside the allowlist for a stronger reason than the caches above — what
+// travels between two replicas must not depend on what the content history
+// tracks, so internal/vaultsync's portable scope excludes `.bnotes` *wholesale*
+// and a vault's history therefore never holds a package or a retained branch.
+// Committing them would be worse than untidy: resolving a conflict discards the
+// retained bytes, and a tracked path deleted with nothing authorizing it is what
+// latches vaultgit's `blocked.json` and refuses every later mutation.
 const MACHINE_LOCAL = [
   ".bnotes/index/",
   ".bnotes/locks/",
   ".bnotes/source-saves/",
+  ".bnotes/sync/",
   ".bnotes/uploads/",
 ];
+
+// gitRead runs a read-only git command in a vault under the fixture's own HOME
+// and with the system configuration off, which is the part worth centralizing: a
+// suite that read the developer's `~/.gitconfig` would behave differently on
+// every machine it ran on.
+export function gitRead(vault, ...args) {
+  return runGit(vault, args, "inherit");
+}
+
+// gitReadQuiet is gitRead for a question whose answer may legitimately be "there
+// is no such path at that commit" — which is exactly what a caller asserting a
+// deletion landed is asking. git diagnoses that on stderr, and an inherited
+// `fatal:` line in the middle of a passing suite reads as a failure.
+export function gitReadQuiet(vault, ...args) {
+  return runGit(vault, args, "ignore");
+}
+
+function runGit(vault, args, stderr) {
+  return execFileSync("git", args, {
+    cwd: vault,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", stderr],
+    env: { PATH: process.env.PATH, HOME: manifest.home, GIT_CONFIG_NOSYSTEM: "1" },
+  });
+}
 
 // gitStatus reports the vault's porcelain status with those caches removed.
 // `--untracked-files=all` matters: the default collapses an untracked directory
@@ -46,11 +83,7 @@ const MACHINE_LOCAL = [
 // vault move — and a second copy of the exclusion list is a second thing to
 // keep in step with internal/vaultgit/scope.go.
 export function gitStatus(vault) {
-  const out = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], {
-    cwd: vault,
-    encoding: "utf8",
-    env: { PATH: process.env.PATH, HOME: manifest.home, GIT_CONFIG_NOSYSTEM: "1" },
-  });
+  const out = gitRead(vault, "status", "--porcelain=v1", "--untracked-files=all");
   return out
     .split("\n")
     .filter((line) => line.trim() !== "")

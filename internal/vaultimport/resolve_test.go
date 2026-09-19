@@ -1003,6 +1003,50 @@ func TestDecidingAgainHearsAnAbandonmentThroughTheError(t *testing.T) {
 	}
 }
 
+// TestAnAbandonmentSurvivesADecisionThatWasRefused is the same news on the path a
+// person is likeliest to take, and the one where nothing failed at all.
+//
+// Both tests above are about a recovery pass that *broke*. This is a pass that
+// worked — it gave the interrupted promise up, exactly as designed — followed by a
+// refusal of the decision being made now, which is the ordinary answer to a package
+// the channel no longer holds. There is no Resolution for an abandonment to travel
+// on and nothing wrong for anybody to go looking behind, so a refusal that did not
+// carry it is where somebody's earlier choice disappears with no trace anywhere.
+func TestAnAbandonmentSurvivesADecisionThatWasRefused(t *testing.T) {
+	vaultfixture.Isolate(t)
+	report := interruptResolution(t, crashDeclared)
+	plan, err := Preview(report.Root, report.PackageID, Choices{Default: KeepCurrent})
+	if err != nil {
+		t.Fatalf("Preview: %v", err)
+	}
+	// The package goes out of the channel between the decision and its being
+	// carried out, which is a real race rather than a contrivance: a drain in
+	// another process cleans the directory up behind the plan.
+	if err := os.RemoveAll(report.PackageDir); err != nil {
+		t.Fatalf("remove the package directory: %v", err)
+	}
+
+	resolution, err := Resolve(report.Root, report.PackageDir, plan, Options{Command: "bn sync resolve --test"})
+	if resolution != nil {
+		t.Fatalf("a refused resolution described an outcome: %+v", resolution)
+	}
+	if err == nil {
+		t.Fatal("resolving against a package that is gone succeeded, so this proves nothing")
+	}
+	if !strings.Contains(err.Error(), report.PackageID) ||
+		!strings.Contains(err.Error(), errApplicationNeverLanded.Error()) {
+		t.Fatalf("the refusal reads %q and never says the earlier decision was dropped", err)
+	}
+	// And it really is gone, which is what makes the error the last carrier.
+	state, loadErr := LoadState(report.Root)
+	if loadErr != nil {
+		t.Fatalf("LoadState: %v", loadErr)
+	}
+	if _, promised := state.Resolutions[report.PackageID]; promised {
+		t.Fatal("the promise survived, so a later pass would have reported it again")
+	}
+}
+
 // sealStagedRevisions makes the staged-revision store unremovable from, which is
 // how discardStaged is made to fail: a child cannot be unlinked from a directory
 // this process cannot write. The mode is put back for the fixture's own cleanup.

@@ -209,6 +209,32 @@ func (s *Server) syncOperationView(
 	return operation, true
 }
 
+// syncWordedNeutrally decides, for one choice, whether the kind's own sentence is
+// replaced by the content-neutral one.
+//
+// A version this response could not carry is better described in the vocabulary of
+// the choice than of the content: "keeps the text it has here" is a sentence about
+// a note, and the same conflict over an attachment is the same decision about bytes
+// nobody on this page has seen. But the neutral sentences are not all true of every
+// kind, so this is asked per choice rather than once per path.
+//
+// Two versions that both exist is the shape the neutral table is written for: it
+// says "what is here is replaced", and on a kind whose incoming side is a tombstone
+// that is false rather than merely vague — it would put a replacement where there is
+// a removal, in exchange for avoiding the word "text". An imprecise true sentence
+// beats a tidy false one when the sentence is what somebody authorizes.
+//
+// A merge is the exception and always takes the neutral wording, because it is the
+// one decision whose neutral sentence is true of every kind — what you assemble
+// replaces both sides, deletion included — while the kind's own sentence promises
+// text about bytes this page never showed.
+func syncWordedNeutrally(view syncContestedPathView, choice vaultimport.Choice, unreadable bool) bool {
+	if !unreadable {
+		return false
+	}
+	return choice == vaultimport.ManualMerge || (view.Local.Exists && view.Remote.Exists)
+}
+
 // sanitizedSyncProblem is an engine failure as this route reports it: the message,
 // with this vault's absolute location taken out of it for the reason
 // syncWorkerViewsOf gives.
@@ -230,8 +256,10 @@ func (s *Server) syncPathView(packageID string, offer vaultimport.Offer) syncCon
 		LocalChanged: offer.Local.SHA256 != contested.Local.SHA256,
 		Available:    make([]syncChoiceView, 0, len(offer.Available)),
 	}
+	unreadable := !view.Local.showable() || !view.Remote.showable()
 	for _, choice := range offer.Available {
-		view.Available = append(view.Available, syncAvailableChoice(contested.Kind, choice))
+		view.Available = append(view.Available,
+			syncAvailableChoice(contested.Kind, choice, syncWordedNeutrally(view, choice, unreadable)))
 	}
 	for _, choice := range syncChoiceLabelOrder {
 		if reason, refused := offer.Refused[choice]; refused {

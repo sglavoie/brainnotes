@@ -326,6 +326,7 @@ const normalizeSyncPlanPaths = (input: unknown): SyncPlanPath[] =>
                 path,
                 kind: normalizeParamValue(record.kind),
                 choice: normalizeParamValue(record.choice),
+                label: normalizeParamValue(record.label),
                 steps: normalizeSyncPlanSteps(record.steps),
               },
             ]

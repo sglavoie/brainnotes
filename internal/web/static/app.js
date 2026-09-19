@@ -2095,6 +2095,292 @@ var BrainNotesApp = (() => {
     body: JSON.stringify(body)
   });
 
+  // internal/web/static_src/api-sync.ts
+  var SYNC_STATUS_ENDPOINT = "/api/sync/status";
+  var SYNC_CONFLICTS_ENDPOINT = "/api/sync/conflicts";
+  var SYNC_PREVIEW_ENDPOINT = "/api/sync/conflicts/preview";
+  var SYNC_RESOLVE_ENDPOINT = "/api/sync/conflicts/resolve";
+  var rawText = (value) => typeof value === "string" ? value : "";
+  var normalizeSyncVersion = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      exists: readBoolean(record.exists),
+      sha256: normalizeParamValue(record.sha256),
+      shown: readBoolean(record.shown),
+      text: rawText(record.text),
+      size: readCount(record.size),
+      binary: readBoolean(record.binary),
+      too_large: readBoolean(record.too_large)
+    };
+  };
+  var normalizeSyncChoice = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return null;
+    }
+    const choice = normalizeParamValue(record.choice);
+    if (choice === "") {
+      return null;
+    }
+    return {
+      choice,
+      label: normalizeParamValue(record.label) || choice,
+      effect: normalizeParamValue(record.effect),
+      discards: normalizeParamValue(record.discards),
+      reason: normalizeParamValue(record.reason)
+    };
+  };
+  var normalizeSyncChoices = (input) => Array.isArray(input) ? input.flatMap((item) => {
+    const choice = normalizeSyncChoice(item);
+    return choice ? [choice] : [];
+  }) : [];
+  var normalizeSyncContestedPath = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return null;
+    }
+    const path = normalizeParamValue(record.path);
+    if (path === "") {
+      return null;
+    }
+    return {
+      path,
+      kind: normalizeParamValue(record.kind),
+      summary: normalizeParamValue(record.summary),
+      renamed_to: normalizeParamValue(record.renamed_to),
+      collides: normalizeParamValue(record.collides),
+      local: normalizeSyncVersion(record.local),
+      remote: normalizeSyncVersion(record.remote),
+      baseline: normalizeSyncVersion(record.baseline),
+      local_changed: readBoolean(record.local_changed),
+      available: normalizeSyncChoices(record.available),
+      refused: normalizeSyncChoices(record.refused),
+      mergeable: readBoolean(record.mergeable),
+      remedy: normalizeParamValue(record.remedy)
+    };
+  };
+  var normalizeSyncBlocked = (input) => {
+    const record = asRecord(input);
+    const packageID = record ? normalizeParamValue(record.package_id) : "";
+    if (!record || packageID === "") {
+      return null;
+    }
+    return {
+      package_id: packageID,
+      origin_device: normalizeParamValue(record.origin_device),
+      sequence: readCount(record.sequence),
+      reason: normalizeParamValue(record.reason),
+      detail: normalizeParamValue(record.detail),
+      waiting_on: normalizeParamValue(record.waiting_on)
+    };
+  };
+  var normalizeSyncOperation = (input) => {
+    const record = asRecord(input);
+    const packageID = record ? normalizeParamValue(record.package_id) : "";
+    if (!record || packageID === "") {
+      return null;
+    }
+    return {
+      package_id: packageID,
+      operation_id: normalizeParamValue(record.operation_id),
+      origin_device: normalizeParamValue(record.origin_device),
+      sequence: readCount(record.sequence),
+      detected_at: normalizeParamValue(record.detected_at),
+      paths: Array.isArray(record.paths) ? record.paths.flatMap((item) => {
+        const path = normalizeSyncContestedPath(item);
+        return path ? [path] : [];
+      }) : [],
+      blocked: Array.isArray(record.blocked) ? record.blocked.flatMap((item) => {
+        const blocked = normalizeSyncBlocked(item);
+        return blocked ? [blocked] : [];
+      }) : [],
+      problem: normalizeParamValue(record.problem)
+    };
+  };
+  var normalizeSyncConflictsResponse = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base2.ok,
+      code: base2.ok ? void 0 : base2.code,
+      message: base2.message,
+      operations: Array.isArray(record.operations) ? record.operations.flatMap((item) => {
+        const operation = normalizeSyncOperation(item);
+        return operation ? [operation] : [];
+      }) : []
+    };
+  };
+  var normalizeSyncSave = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      managed: readBoolean(record.managed),
+      saved_at: normalizeParamValue(record.saved_at),
+      last_commit_at: normalizeParamValue(record.last_commit_at),
+      blocked: readBoolean(record.blocked),
+      block_reason: normalizeParamValue(record.block_reason),
+      block_recovery: normalizeStringArray(record.block_recovery)
+    };
+  };
+  var normalizeSyncExport = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      pending_commits: readCount(record.pending_commits),
+      baseline_pending: readBoolean(record.baseline_pending),
+      reserved: readBoolean(record.reserved)
+    };
+  };
+  var normalizeReceiptProblems = (input) => Array.isArray(input) ? input.flatMap((item) => {
+    const record = asRecord(item);
+    const packageID = record ? normalizeParamValue(record.package_id) : "";
+    return record && packageID !== "" ? [{ package_id: packageID, detail: normalizeParamValue(record.detail) }] : [];
+  }) : [];
+  var normalizeSyncTransport = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      published: readCount(record.published),
+      acknowledged: readCount(record.acknowledged),
+      awaiting_receipt: readCount(record.awaiting_receipt),
+      incomplete: readCount(record.incomplete),
+      oldest_awaiting: normalizeParamValue(record.oldest_awaiting),
+      rejected: normalizeReceiptProblems(record.rejected)
+    };
+  };
+  var normalizeSyncPeer = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      delivered: readCount(record.delivered),
+      awaiting_application: readCount(record.awaiting_application),
+      incomplete: readCount(record.incomplete),
+      applied: readCount(record.applied),
+      pending: readBoolean(record.pending),
+      last_delivery_at: normalizeParamValue(record.last_delivery_at),
+      conflicts: readCount(record.conflicts)
+    };
+  };
+  var normalizeSyncProblems = (input) => Array.isArray(input) ? input.flatMap((item) => {
+    const record = asRecord(item);
+    const detail = record ? normalizeParamValue(record.detail) : "";
+    return record && detail !== "" ? [{ subject: normalizeParamValue(record.subject), detail }] : [];
+  }) : [];
+  var normalizeSyncWorkers = (input) => Array.isArray(input) ? input.flatMap((item) => {
+    const record = asRecord(item);
+    const name2 = record ? normalizeParamValue(record.name) : "";
+    return record && name2 !== "" ? [
+      {
+        name: name2,
+        failures: readCount(record.failures),
+        last_error: normalizeParamValue(record.last_error),
+        last_run_at: normalizeParamValue(record.last_run_at),
+        last_success_at: normalizeParamValue(record.last_success_at),
+        next_attempt_after: normalizeParamValue(record.next_attempt_after),
+        ready: readBoolean(record.ready)
+      }
+    ] : [];
+  }) : [];
+  var normalizeSyncReplica = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return null;
+    }
+    return {
+      recorded: readBoolean(record.recorded),
+      stale: readBoolean(record.stale),
+      last_successful_sync: normalizeParamValue(record.last_successful_sync)
+    };
+  };
+  var normalizeSyncStatusResponse = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base2.ok,
+      code: base2.ok ? void 0 : base2.code,
+      message: base2.message,
+      mode: normalizeParamValue(record.mode),
+      enrolled: readBoolean(record.enrolled),
+      observed_at: normalizeParamValue(record.observed_at),
+      headline: normalizeParamValue(record.headline),
+      states: normalizeStringArray(record.states),
+      summary: normalizeParamValue(record.summary),
+      needs_person: readBoolean(record.needs_person),
+      save: normalizeSyncSave(record.save),
+      export: normalizeSyncExport(record.export),
+      transport: normalizeSyncTransport(record.transport),
+      peer: normalizeSyncPeer(record.peer),
+      workers: normalizeSyncWorkers(record.workers),
+      problems: normalizeSyncProblems(record.problems),
+      replica: normalizeSyncReplica(record.replica),
+      review_path: normalizeParamValue(record.review_path)
+    };
+  };
+  var normalizeSyncPlanSteps = (input) => Array.isArray(input) ? input.flatMap((item) => {
+    const record = asRecord(item);
+    const path = record ? normalizeParamValue(record.path) : "";
+    return record && path !== "" ? [
+      {
+        path,
+        action: normalizeParamValue(record.action),
+        sha256: normalizeParamValue(record.sha256)
+      }
+    ] : [];
+  }) : [];
+  var normalizeSyncPlanPaths = (input) => Array.isArray(input) ? input.flatMap((item) => {
+    const record = asRecord(item);
+    const path = record ? normalizeParamValue(record.path) : "";
+    return record && path !== "" ? [
+      {
+        path,
+        kind: normalizeParamValue(record.kind),
+        choice: normalizeParamValue(record.choice),
+        label: normalizeParamValue(record.label),
+        steps: normalizeSyncPlanSteps(record.steps)
+      }
+    ] : [];
+  }) : [];
+  var normalizeSyncPlanResponse = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base2.ok,
+      code: base2.ok ? void 0 : base2.code,
+      message: base2.message,
+      preview_id: normalizeParamValue(record.preview_id),
+      expires_at: normalizeParamValue(record.expires_at),
+      package_id: normalizeParamValue(record.package_id),
+      operation_id: normalizeParamValue(record.operation_id),
+      paths: normalizeSyncPlanPaths(record.paths)
+    };
+  };
+  var normalizeSyncAbandoned = (input) => Array.isArray(input) ? input.flatMap((item) => {
+    const record = asRecord(item);
+    const packageID = record ? normalizeParamValue(record.package_id) : "";
+    return record && packageID !== "" ? [{ package_id: packageID, reason: normalizeParamValue(record.reason) }] : [];
+  }) : [];
+  var normalizeSyncResolvedResponse = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base2.ok,
+      code: base2.ok ? void 0 : base2.code,
+      message: base2.message,
+      package_id: normalizeParamValue(record.package_id),
+      operation_id: normalizeParamValue(record.operation_id),
+      journal_id: normalizeParamValue(record.journal_id),
+      paths: normalizeStringArray(record.paths),
+      acknowledged: readBoolean(record.acknowledged),
+      abandoned: normalizeSyncAbandoned(record.abandoned),
+      summary: normalizeParamValue(record.summary)
+    };
+  };
+  var buildSyncRequestInit = (token, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-BN-CSRF": token
+    },
+    body: JSON.stringify(body)
+  });
+
   // internal/web/static_src/api-views.ts
   var SAVED_VIEWS_ENDPOINT = "/api/views";
   var SAVED_VIEWS_PREVIEW_ENDPOINT = "/api/views/preview";
@@ -2161,10 +2447,10 @@ var BrainNotesApp = (() => {
   });
 
   // internal/web/static_src/dom.ts
-  var narrowElement = (element2, constructor) => element2 instanceof constructor ? element2 : null;
+  var narrowElement = (element3, constructor) => element3 instanceof constructor ? element3 : null;
   var queryElement = (root, selector, constructor) => narrowElement(root.querySelector(selector), constructor);
-  var queryAllElements = (root, selector, constructor) => Array.from(root.querySelectorAll(selector)).flatMap((element2) => {
-    const narrowed = narrowElement(element2, constructor);
+  var queryAllElements = (root, selector, constructor) => Array.from(root.querySelectorAll(selector)).flatMap((element3) => {
+    const narrowed = narrowElement(element3, constructor);
     return narrowed ? [narrowed] : [];
   });
   var getElementByID = (id2, constructor) => narrowElement(document.getElementById(id2), constructor);
@@ -2177,14 +2463,14 @@ var BrainNotesApp = (() => {
     "is-empty",
     "is-warning"
   ];
-  var setStatusText = (element2, message, kind = "", classNames = statusClassNames) => {
-    if (!element2) {
+  var setStatusText = (element3, message, kind = "", classNames = statusClassNames) => {
+    if (!element3) {
       return;
     }
-    element2.textContent = message;
-    element2.classList.remove(...classNames);
+    element3.textContent = message;
+    element3.classList.remove(...classNames);
     if (kind) {
-      element2.classList.add(kind);
+      element3.classList.add(kind);
     }
   };
 
@@ -4065,10 +4351,10 @@ var BrainNotesApp = (() => {
           text3.textContent = `${option.groupLabel}: ${option.label}`;
           chip.appendChild(text3);
           if (option.count > 0) {
-            const count3 = document.createElement("span");
-            count3.className = "facet-chip-count";
-            count3.textContent = `(${option.count})`;
-            chip.appendChild(count3);
+            const count4 = document.createElement("span");
+            count4.className = "facet-chip-count";
+            count4.textContent = `(${option.count})`;
+            chip.appendChild(count4);
           }
           const remove4 = document.createElement("button");
           remove4.type = "button";
@@ -4130,10 +4416,10 @@ var BrainNotesApp = (() => {
           group.textContent = option.groupLabel;
           main.appendChild(group);
           button.appendChild(main);
-          const count3 = document.createElement("span");
-          count3.className = "facet-option-count";
-          count3.textContent = String(option.count);
-          button.appendChild(count3);
+          const count4 = document.createElement("span");
+          count4.className = "facet-option-count";
+          count4.textContent = String(option.count);
+          button.appendChild(count4);
           button.addEventListener("mouseenter", () => {
             setActive2(index);
           });
@@ -6659,7 +6945,7 @@ var BrainNotesApp = (() => {
       timeStyle: "short"
     });
   };
-  var historyFileCountLabel = (count3) => count3 === 1 ? "1 path" : `${count3} paths`;
+  var historyFileCountLabel = (count4) => count4 === 1 ? "1 path" : `${count4} paths`;
   var historyConflictSummary = (conflicts) => {
     if (conflicts.length === 0) {
       return "Undo has conflicts.";
@@ -6752,8 +7038,8 @@ var BrainNotesApp = (() => {
         const meta2 = document.createElement("span");
         meta2.className = "history-meta";
         const time = formatHistoryTimestamp(entry.timestamp);
-        const count3 = historyFileCountLabel(entry.file_count || entry.files.length);
-        meta2.textContent = time ? `${time} - ${count3}` : count3;
+        const count4 = historyFileCountLabel(entry.file_count || entry.files.length);
+        meta2.textContent = time ? `${time} - ${count4}` : count4;
         main.appendChild(meta2);
         const undoButton = document.createElement("button");
         undoButton.className = "history-button history-danger";
@@ -7919,14 +8205,14 @@ var BrainNotesApp = (() => {
       if (!bulkRoot) {
         return;
       }
-      const count3 = selectedKeys.size;
-      bulkRoot.hidden = count3 === 0;
+      const count4 = selectedKeys.size;
+      bulkRoot.hidden = count4 === 0;
       if (selectedCountEl) {
-        selectedCountEl.textContent = count3 === 1 ? "1 selected" : `${count3} selected`;
+        selectedCountEl.textContent = count4 === 1 ? "1 selected" : `${count4} selected`;
       }
       for (const control of queryAllElements(bulkRoot, "button, input, select", HTMLElement)) {
         if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
-          control.disabled = bulkBusy || count3 === 0;
+          control.disabled = bulkBusy || count4 === 0;
         }
       }
       syncOverviewActionButton(trashButton, "trash", previewMatches("trash", {}));
@@ -7934,7 +8220,7 @@ var BrainNotesApp = (() => {
       syncOverviewActionButton(setButton, "frontmatter_set", previewMatches("frontmatter_set", readSetFields(setForm)));
       syncOverviewActionButton(unsetButton, "frontmatter_unset", previewMatches("frontmatter_unset", readUnsetFields(unsetForm)));
       if (previewApplyButton) {
-        previewApplyButton.disabled = bulkBusy || count3 === 0 || previewState === null;
+        previewApplyButton.disabled = bulkBusy || count4 === 0 || previewState === null;
       }
       if (previewClearButton) {
         previewClearButton.disabled = bulkBusy || previewState === null;
@@ -8267,7 +8553,7 @@ var BrainNotesApp = (() => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
     const rows = () => queryAllElements(list, "[data-pinned-item]", HTMLElement);
-    const post2 = async (request, fallback) => {
+    const post3 = async (request, fallback) => {
       try {
         const resp = await fetcher(request.url, request.init);
         const payload = await readNotePinResponsePayload(resp);
@@ -8292,7 +8578,7 @@ var BrainNotesApp = (() => {
         return false;
       }
       setStatus2("Saving pin order...");
-      return post2(
+      return post3(
         buildNotePinReorderFetchRequest({
           key: move.key,
           token: csrfToken,
@@ -8395,7 +8681,7 @@ var BrainNotesApp = (() => {
       }
       button.disabled = true;
       setStatus2("Unpinning note...");
-      const ok = await post2(
+      const ok = await post3(
         buildNotePinRemoveFetchRequest({ key, token: csrfToken }),
         "Unpinned note."
       );
@@ -8698,35 +8984,35 @@ var BrainNotesApp = (() => {
     appendDefinitionPair(doc2, list, "Missing required", String(summary.missing_required));
     appendDefinitionPair(doc2, list, "Unsupported values", String(summary.unsupported_values));
   };
-  var renderDefinition = (element2, summary) => {
-    if (!element2) {
+  var renderDefinition = (element3, summary) => {
+    if (!element3) {
       return;
     }
-    element2.textContent = definitionLabel(summary);
-    element2.hidden = false;
+    element3.textContent = definitionLabel(summary);
+    element3.hidden = false;
   };
-  var renderProposal = (element2, summary) => {
-    if (!element2) {
+  var renderProposal = (element3, summary) => {
+    if (!element3) {
       return;
     }
-    const doc2 = element2.ownerDocument;
-    element2.textContent = "";
+    const doc2 = element3.ownerDocument;
+    element3.textContent = "";
     const proposal = summary.proposal;
-    element2.hidden = !proposal;
+    element3.hidden = !proposal;
     if (!proposal) {
       return;
     }
     const heading2 = doc2.createElement("h3");
     heading2.textContent = "Inferred definition";
-    element2.appendChild(heading2);
+    element3.appendChild(heading2);
     const rationale = doc2.createElement("p");
     rationale.className = "properties-proposal-rationale";
     rationale.textContent = proposal.rationale;
-    element2.appendChild(rationale);
+    element3.appendChild(rationale);
     const toml = doc2.createElement("pre");
     toml.className = "properties-proposal-toml";
     toml.textContent = proposal.toml;
-    element2.appendChild(toml);
+    element3.appendChild(toml);
   };
   var renderValues = (list, values2, activeValue) => {
     if (!list) {
@@ -8761,10 +9047,10 @@ var BrainNotesApp = (() => {
       kind.className = "properties-value-kind";
       kind.textContent = propertyKindLabel(entry.value.kind);
       button.appendChild(kind);
-      const count3 = doc2.createElement("span");
-      count3.className = "properties-value-count";
-      count3.textContent = `${entry.notes} ${entry.notes === 1 ? "note" : "notes"}`;
-      button.appendChild(count3);
+      const count4 = doc2.createElement("span");
+      count4.className = "properties-value-count";
+      count4.textContent = `${entry.notes} ${entry.notes === 1 ? "note" : "notes"}`;
+      button.appendChild(count4);
       item.appendChild(button);
       list.appendChild(item);
     }
@@ -8865,11 +9151,11 @@ var BrainNotesApp = (() => {
       list.appendChild(item);
     }
   };
-  var renderPagination = (element2, pagination) => {
-    if (!element2) {
+  var renderPagination = (element3, pagination) => {
+    if (!element3) {
       return;
     }
-    element2.textContent = paginationLabel(pagination);
+    element3.textContent = paginationLabel(pagination);
   };
 
   // internal/web/static_src/properties-preview-dialog.ts
@@ -9019,7 +9305,7 @@ var BrainNotesApp = (() => {
     };
     const trapFocus = (event) => {
       const focusable = queryAllElements(dialog, FOCUSABLE_SELECTOR, HTMLElement).filter(
-        (element2) => !element2.hasAttribute("hidden")
+        (element3) => !element3.hasAttribute("hidden")
       );
       if (focusable.length === 0) {
         return;
@@ -9855,16 +10141,16 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/properties-toast.ts
   var createUndoToast = (doc2, host, deps) => {
-    const element2 = doc2.createElement("div");
-    element2.className = "properties-toast";
-    element2.setAttribute("data-property-toast", "");
-    element2.setAttribute("role", "status");
-    element2.setAttribute("aria-live", "polite");
-    element2.hidden = true;
+    const element3 = doc2.createElement("div");
+    element3.className = "properties-toast";
+    element3.setAttribute("data-property-toast", "");
+    element3.setAttribute("role", "status");
+    element3.setAttribute("aria-live", "polite");
+    element3.hidden = true;
     const message = doc2.createElement("p");
     message.className = "properties-toast-message";
     message.setAttribute("data-property-toast-message", "");
-    element2.appendChild(message);
+    element3.appendChild(message);
     const actions = doc2.createElement("div");
     actions.className = "properties-toast-actions";
     const undo2 = doc2.createElement("button");
@@ -9884,12 +10170,12 @@ var BrainNotesApp = (() => {
     dismiss.setAttribute("data-property-toast-dismiss", "");
     dismiss.textContent = "Dismiss";
     actions.appendChild(dismiss);
-    element2.appendChild(actions);
-    host.appendChild(element2);
+    element3.appendChild(actions);
+    host.appendChild(element3);
     let entryID = "";
     const hide = () => {
       entryID = "";
-      element2.hidden = true;
+      element3.hidden = true;
       message.textContent = "";
     };
     undo2.addEventListener("click", () => {
@@ -9902,13 +10188,13 @@ var BrainNotesApp = (() => {
     });
     dismiss.addEventListener("click", hide);
     return {
-      element: element2,
+      element: element3,
       show: (options) => {
         entryID = options.journalID;
         message.textContent = options.message;
         history2.href = options.historyHref;
         undo2.hidden = options.journalID === "";
-        element2.hidden = false;
+        element3.hidden = false;
       },
       hide,
       journalID: () => entryID
@@ -9974,7 +10260,7 @@ var BrainNotesApp = (() => {
         return "Repair notes";
     }
   };
-  var selectionLabel = (count3) => count3 === 0 ? "No notes selected." : `${count3} ${count3 === 1 ? "note" : "notes"} selected.`;
+  var selectionLabel = (count4) => count4 === 0 ? "No notes selected." : `${count4} ${count4 === 1 ? "note" : "notes"} selected.`;
   var mutationSuccessMessage = (result) => {
     const notes = `${result.affected} ${result.affected === 1 ? "note" : "notes"}`;
     const config2 = result.config_diff.length > 0 ? " and brainnotes.toml" : "";
@@ -10230,9 +10516,9 @@ var BrainNotesApp = (() => {
       if (clearSelectionEl) {
         clearSelectionEl.disabled = selected.size === 0;
       }
-      for (const element2 of rowElements()) {
-        const relPath = element2.getAttribute("data-property-row") || "";
-        element2.classList.toggle("is-selected", selected.has(relPath));
+      for (const element3 of rowElements()) {
+        const relPath = element3.getAttribute("data-property-row") || "";
+        element3.classList.toggle("is-selected", selected.has(relPath));
       }
       for (const box of queryAllElements(
         host.rowsEl,
@@ -10241,9 +10527,9 @@ var BrainNotesApp = (() => {
       )) {
         box.checked = selected.has(box.getAttribute("data-property-row-select") || "");
       }
-      renderActions2();
+      renderActions3();
     };
-    const renderActions2 = () => {
+    const renderActions3 = () => {
       for (const button of queryAllElements(
         host.root,
         "[data-property-action]",
@@ -10257,7 +10543,7 @@ var BrainNotesApp = (() => {
     const setBusy = (next) => {
       busy = next;
       host.root.setAttribute("aria-busy", next ? "true" : "false");
-      renderActions2();
+      renderActions3();
     };
     const toggleSelection = (relPath, force) => {
       const next = force === void 0 ? !selected.has(relPath) : force;
@@ -10274,16 +10560,16 @@ var BrainNotesApp = (() => {
         return;
       }
       const clamped = Math.max(0, Math.min(index, elements.length - 1));
-      elements.forEach((element2, position) => {
-        element2.tabIndex = position === clamped ? 0 : -1;
+      elements.forEach((element3, position) => {
+        element3.tabIndex = position === clamped ? 0 : -1;
       });
       elements[clamped]?.focus();
     };
     const updateRowText = (relPath, text3) => {
-      const element2 = rowElements().find(
+      const element3 = rowElements().find(
         (row) => row.getAttribute("data-property-row") === relPath
       );
-      const value = element2 ? queryElement(element2, ".properties-row-value", HTMLElement) : null;
+      const value = element3 ? queryElement(element3, ".properties-row-value", HTMLElement) : null;
       if (!value) {
         return;
       }
@@ -10325,16 +10611,16 @@ var BrainNotesApp = (() => {
     const openRowEditor = (relPath, op) => {
       const current = summary;
       const row = rows.find((candidate) => candidate.rel_path === relPath);
-      const element2 = rowElements().find(
+      const element3 = rowElements().find(
         (candidate) => candidate.getAttribute("data-property-row") === relPath
       );
-      if (!row || !element2 || !current) {
+      if (!row || !element3 || !current) {
         return;
       }
       const itemKind = editItemKind(current);
       const seed = op === "replace" ? typedValueFrom(row.value, editKind(current), itemKind) : void 0;
       editor.mount(
-        element2,
+        element3,
         op === "replace" ? `Edit ${host.property}` : `Add to ${host.property}`,
         "Save",
         (form) => {
@@ -10820,7 +11106,7 @@ var BrainNotesApp = (() => {
     return { start, end: caret, text: text3.slice(start, caret), quoted: false, wikilink: false };
   };
   var countUnescapedQuotes = (text3) => {
-    let count3 = 0;
+    let count4 = 0;
     for (let i = 0; i < text3.length; i += 1) {
       const char = text3.charAt(i);
       if (char === "\\") {
@@ -10828,10 +11114,10 @@ var BrainNotesApp = (() => {
         continue;
       }
       if (char === '"') {
-        count3 += 1;
+        count4 += 1;
       }
     }
-    return count3;
+    return count4;
   };
   var lastUnescapedQuote = (text3) => {
     let index = -1;
@@ -12178,8 +12464,8 @@ var BrainNotesApp = (() => {
       if (state.response.results.length === 0) {
         return ["No related notes are available in this mode.", "is-empty"];
       }
-      const count3 = state.response.results.length;
-      return [`Showing ${count3} related ${count3 === 1 ? "note" : "notes"}.`, "is-success"];
+      const count4 = state.response.results.length;
+      return [`Showing ${count4} related ${count4 === 1 ? "note" : "notes"}.`, "is-success"];
     }
     return ["Select a mode to load related notes.", ""];
   };
@@ -12423,16 +12709,16 @@ var BrainNotesApp = (() => {
     }
   };
   var nextModeIndex = (key, currentIndex) => {
-    const count3 = relatedModeDefinitions.length;
+    const count4 = relatedModeDefinitions.length;
     switch (key) {
       case "ArrowLeft":
-        return (currentIndex - 1 + count3) % count3;
+        return (currentIndex - 1 + count4) % count4;
       case "ArrowRight":
-        return (currentIndex + 1) % count3;
+        return (currentIndex + 1) % count4;
       case "Home":
         return 0;
       case "End":
-        return count3 - 1;
+        return count4 - 1;
       default:
         return null;
     }
@@ -13395,11 +13681,11 @@ var BrainNotesApp = (() => {
     block.hidden = false;
   };
   var appendLabelled = (row, className, text3) => {
-    const element2 = row.ownerDocument.createElement("span");
-    element2.className = className;
-    element2.textContent = text3;
-    row.appendChild(element2);
-    return element2;
+    const element3 = row.ownerDocument.createElement("span");
+    element3.className = className;
+    element3.textContent = text3;
+    row.appendChild(element3);
+    return element3;
   };
   var buildSettingControl = (doc2, summary) => {
     if (summary.kind === "bool") {
@@ -13530,8 +13816,8 @@ var BrainNotesApp = (() => {
     }
     return control.value;
   };
-  var summarize = (count3) => count3 === 0 ? ["No editable settings.", "is-empty"] : [
-    `${count3} portable settings. Machine-local settings stay in brainnotes.local.toml and are not editable here.`,
+  var summarize = (count4) => count4 === 0 ? ["No editable settings.", "is-empty"] : [
+    `${count4} portable settings. Machine-local settings stay in brainnotes.local.toml and are not editable here.`,
     ""
   ];
   var bindRow = (row, summary, writer, refuse) => {
@@ -14083,17 +14369,17 @@ var BrainNotesApp = (() => {
       rendered = content2;
       options.sink.pending();
       options.render(content2).then(
-        (html2) => finish3(sequence, () => options.sink.render(html2), "", false),
+        (html2) => finish4(sequence, () => options.sink.render(html2), "", false),
         (error) => {
           if (rendered === content2) {
             rendered = null;
           }
-          finish3(sequence, () => {
+          finish4(sequence, () => {
           }, previewErrorMessage(error), true);
         }
       );
     };
-    const finish3 = (sequence, apply, message, failed) => {
+    const finish4 = (sequence, apply, message, failed) => {
       if (disposed || sequence <= applied) {
         return;
       }
@@ -14170,8 +14456,8 @@ var BrainNotesApp = (() => {
     }
     return normalizeSourceDocument(payload);
   };
-  var previewSource = async (post2, endpoint, content2, token) => {
-    const { response, payload } = await post2(endpoint, buildSourcePreviewForm({ content: content2, token }));
+  var previewSource = async (post3, endpoint, content2, token) => {
+    const { response, payload } = await post3(endpoint, buildSourcePreviewForm({ content: content2, token }));
     if (foreignAnswer(response, payload)) {
       throw new Error(signInMessage);
     }
@@ -14186,7 +14472,7 @@ var BrainNotesApp = (() => {
   };
   var createSourceClient = (options) => {
     const fetcher = options.fetch || fetch;
-    const post2 = async (url, body) => {
+    const post3 = async (url, body) => {
       const response = await fetcher(url, {
         method: "POST",
         headers: {
@@ -14199,7 +14485,7 @@ var BrainNotesApp = (() => {
       return { response, payload: await readJSON(response) };
     };
     const postSave = async (url, body) => {
-      const { response, payload } = await post2(url, body);
+      const { response, payload } = await post3(url, body);
       if (foreignAnswer(response, payload)) {
         return {
           ok: false,
@@ -14215,7 +14501,7 @@ var BrainNotesApp = (() => {
     };
     return {
       read: () => readSource(fetcher, options.endpoints.read, options.key),
-      preview: (content2) => previewSource(post2, options.endpoints.preview, content2, options.token),
+      preview: (content2) => previewSource(post3, options.endpoints.preview, content2, options.token),
       // save never throws on a refusal. Every arm of the envelope is a fact the
       // editor has to act on — a stale revision offers a merge, a snapshot
       // failure means the bytes landed — and an exception would flatten all of
@@ -14391,19 +14677,19 @@ var BrainNotesApp = (() => {
     };
   };
   var paneName = (value) => value === "preview" ? "preview" : "edit";
-  var arrowTarget = (event, index, count3) => {
-    if (count3 === 0) {
+  var arrowTarget = (event, index, count4) => {
+    if (count4 === 0) {
       return null;
     }
     switch (event.key) {
       case "ArrowRight":
-        return (index + 1) % count3;
+        return (index + 1) % count4;
       case "ArrowLeft":
-        return (index - 1 + count3) % count3;
+        return (index - 1 + count4) % count4;
       case "Home":
         return 0;
       case "End":
-        return count3 - 1;
+        return count4 - 1;
       default:
         return null;
     }
@@ -14550,14 +14836,14 @@ var BrainNotesApp = (() => {
     elements.recovery.removeAttribute("data-source-recovery-kind");
     setText(elements.recoverySource, "");
   };
-  var setText = (element2, value) => {
-    if (element2) {
-      element2.textContent = value;
+  var setText = (element3, value) => {
+    if (element3) {
+      element3.textContent = value;
     }
   };
-  var toggle = (element2, shown) => {
-    if (element2) {
-      element2.hidden = !shown;
+  var toggle = (element3, shown) => {
+    if (element3) {
+      element3.hidden = !shown;
     }
   };
 
@@ -15599,7 +15885,7 @@ var BrainNotesApp = (() => {
       undo: queryElement(root, "[data-source-undo]", HTMLButtonElement)
     };
   };
-  var attr = (element2, name2) => (element2.getAttribute(name2) || "").trim();
+  var attr = (element3, name2) => (element3.getAttribute(name2) || "").trim();
 
   // node_modules/@marijn/find-cluster-break/src/index.js
   var rangeFrom = [];
@@ -17132,24 +17418,24 @@ var BrainNotesApp = (() => {
     In cases where your value depends only on a single field, you'll
     want to use the [`from`](https://codemirror.net/6/docs/ref/#state.Facet.from) method instead.
     */
-    compute(deps, get2) {
+    compute(deps, get3) {
       if (this.isStatic)
         throw new Error("Can't compute a static facet");
-      return new FacetProvider(deps, this, 1, get2);
+      return new FacetProvider(deps, this, 1, get3);
     }
     /**
     Create an extension that computes zero or more values for this
     facet from a state.
     */
-    computeN(deps, get2) {
+    computeN(deps, get3) {
       if (this.isStatic)
         throw new Error("Can't compute a static facet");
-      return new FacetProvider(deps, this, 2, get2);
+      return new FacetProvider(deps, this, 2, get3);
     }
-    from(field, get2) {
-      if (!get2)
-        get2 = (x) => x;
-      return this.compute([field], (state) => get2(state.field(field)));
+    from(field, get3) {
+      if (!get3)
+        get3 = (x) => x;
+      return this.compute([field], (state) => get3(state.field(field)));
     }
   };
   function sameArray(a, b) {
@@ -17234,7 +17520,7 @@ var BrainNotesApp = (() => {
     let providerTypes = providers.map((p) => p.type);
     let dynamic = providerAddrs.filter((p) => !(p & 1));
     let idx = addresses[facet.id] >> 1;
-    function get2(state) {
+    function get3(state) {
       let values2 = [];
       for (let i = 0; i < providerAddrs.length; i++) {
         let value = getAddr(state, providerAddrs[i]);
@@ -17250,13 +17536,13 @@ var BrainNotesApp = (() => {
       create(state) {
         for (let addr of providerAddrs)
           ensureAddr(state, addr);
-        state.values[idx] = get2(state);
+        state.values[idx] = get3(state);
         return 1;
       },
       update(state, tr) {
         if (!ensureAll(state, dynamic))
           return 0;
-        let value = get2(state);
+        let value = get3(state);
         if (facet.compare(value, state.values[idx]))
           return 0;
         state.values[idx] = value;
@@ -17269,7 +17555,7 @@ var BrainNotesApp = (() => {
           state.values[idx] = oldValue;
           return 0;
         }
-        let value = get2(state);
+        let value = get3(state);
         if (facet.compare(value, oldValue)) {
           state.values[idx] = oldValue;
           return 0;
@@ -19100,7 +19386,7 @@ var BrainNotesApp = (() => {
     // selectors (after `&` expansion) to compute the final selector.
     constructor(spec, options) {
       this.rules = [];
-      let { finish: finish3 } = options || {};
+      let { finish: finish4 } = options || {};
       function splitSelector(selector) {
         return /^@/.test(selector) ? [selector] : selector.split(/,\s*/);
       }
@@ -19123,7 +19409,7 @@ var BrainNotesApp = (() => {
           }
         }
         if (local.length || keyframes) {
-          target.push((finish3 && !isAt && !isKeyframes ? selectors.map(finish3) : selectors).join(", ") + " {" + local.join(" ") + "}");
+          target.push((finish4 && !isAt && !isKeyframes ? selectors.map(finish4) : selectors).join(", ") + " {" + local.join(" ") + "}");
         }
       }
       for (let prop in spec) render(splitSelector(prop), spec[prop], this.rules);
@@ -33098,9 +33384,9 @@ var BrainNotesApp = (() => {
   function completionTooltip(stateField, applyCompletion3) {
     return (view) => new CompletionTooltip(view, stateField, applyCompletion3);
   }
-  function scrollIntoView2(container, element2) {
+  function scrollIntoView2(container, element3) {
     let parent = container.getBoundingClientRect();
-    let self = element2.getBoundingClientRect();
+    let self = element3.getBoundingClientRect();
     let scaleY = parent.height / container.offsetHeight;
     if (self.top < parent.top)
       container.scrollTop -= (parent.top - self.top) / scaleY;
@@ -35611,17 +35897,17 @@ var BrainNotesApp = (() => {
   function isHorizontalRule(line, cx, breaking) {
     if (line.next != 42 && line.next != 45 && line.next != 95)
       return -1;
-    let count3 = 1;
+    let count4 = 1;
     for (let pos = line.pos + 1; pos < line.text.length; pos++) {
       let ch = line.text.charCodeAt(pos);
       if (ch == line.next)
-        count3++;
+        count4++;
       else if (!space(ch))
         return -1;
     }
     if (breaking && line.next == 45 && isSetextUnderline(line) > -1 && line.depth == cx.stack.length && cx.parser.leafBlockParsers.indexOf(DefaultLeafBlocks.SetextHeading) > -1)
       return -1;
-    return count3 < 3 ? -1 : 1;
+    return count4 < 3 ? -1 : 1;
   }
   function inList(cx, type) {
     for (let i = cx.stack.length - 1; i >= 0; i--)
@@ -35882,9 +36168,9 @@ var BrainNotesApp = (() => {
       if (this.stage == -1)
         return false;
       let content2 = leaf.content + "\n" + line.scrub();
-      let finish3 = this.advance(content2);
-      if (finish3 > -1 && finish3 < content2.length)
-        return this.complete(cx, leaf, finish3);
+      let finish4 = this.advance(content2);
+      if (finish4 > -1 && finish4 < content2.length)
+        return this.complete(cx, leaf, finish4);
       return false;
     }
     finish(cx, leaf) {
@@ -36918,13 +37204,13 @@ var BrainNotesApp = (() => {
         }
         if (close.type.mark)
           content2.push(this.elt(close.type.mark, close.from, end));
-        let element2 = this.elt(type, start, end, content2);
+        let element3 = this.elt(type, start, end, content2);
         this.parts[j] = emp && open.from != start ? new InlineDelimiter(open.type, open.from, start, open.side) : null;
         let keep = this.parts[i] = emp && close.to != end ? new InlineDelimiter(close.type, end, close.to, close.side) : null;
         if (keep)
-          this.parts.splice(i, 0, element2);
+          this.parts.splice(i, 0, element3);
         else
-          this.parts[i] = element2;
+          this.parts[i] = element3;
       }
       let result = [];
       for (let i = from; i < this.parts.length; i++) {
@@ -37181,7 +37467,7 @@ var BrainNotesApp = (() => {
     }]
   };
   function parseRow(cx, line, startI = 0, elts, offset = 0) {
-    let count3 = 0, first = true, cellStart = -1, cellEnd = -1, esc = false;
+    let count4 = 0, first = true, cellStart = -1, cellEnd = -1, esc = false;
     let parseCell = () => {
       elts.push(cx.elt("TableCell", offset + cellStart, offset + cellEnd, cx.parser.parseInline(line.slice(cellStart, cellEnd), offset + cellStart)));
     };
@@ -37189,7 +37475,7 @@ var BrainNotesApp = (() => {
       let next = line.charCodeAt(i);
       if (next == 124 && !esc) {
         if (!first || cellStart > -1)
-          count3++;
+          count4++;
         first = false;
         if (elts) {
           if (cellStart > -1)
@@ -37205,11 +37491,11 @@ var BrainNotesApp = (() => {
       esc = !esc && next == 92;
     }
     if (cellStart > -1) {
-      count3++;
+      count4++;
       if (elts)
         parseCell();
     }
-    return count3;
+    return count4;
   }
   function hasPipe(str, start) {
     for (let i = start; i < str.length; i++) {
@@ -37508,14 +37794,14 @@ var BrainNotesApp = (() => {
           this.p.lastBigReductionSize = size;
         }
       }
-      let bufferBase = base2 ? this.stack[base2 - 1] : 0, count3 = this.bufferBase + this.buffer.length - bufferBase;
+      let bufferBase = base2 ? this.stack[base2 - 1] : 0, count4 = this.bufferBase + this.buffer.length - bufferBase;
       if (type < parser5.minRepeatTerm || action & 131072) {
         let pos = parser5.stateFlag(
           this.state,
           1
           /* StateFlag.Skipped */
         ) ? this.pos : this.reducePos;
-        this.storeNode(type, start, pos, count3 + 4, true);
+        this.storeNode(type, start, pos, count4 + 4, true);
       }
       if (action & 262144) {
         this.state = this.stack[base2];
@@ -43313,6 +43599,1267 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/sync-decisions.ts
+  var manualMerge = "manual-merge";
+  var choiceIn = (choices, choice) => choices.find((candidate) => candidate.choice === choice) ?? null;
+  var offered = (path, choice) => choiceIn(path.available, choice) !== null;
+  var mergeRefusal = (path) => {
+    const refused = choiceIn(path.refused, manualMerge);
+    if (refused) {
+      return refused.reason;
+    }
+    if (!offered(path, manualMerge)) {
+      return "This conflict cannot be merged by hand.";
+    }
+    if (!path.mergeable) {
+      return "Both versions have to be text shown on this page before they can be merged here.";
+    }
+    return "";
+  };
+  var mergeSeed = (path) => path.local.shown ? path.local.text : path.remote.text;
+  var absentNote = {
+    local: "Not here: this vault does not hold this file.",
+    remote: "Not there: the other replica's change removes this file from this path.",
+    baseline: "There was nothing at this path to begin with."
+  };
+  var versionNote = (version, branch) => {
+    if (!version.exists) {
+      return absentNote[branch];
+    }
+    if (version.shown) {
+      return "";
+    }
+    if (version.binary) {
+      return `Not text (${version.size} bytes), so it is not shown here.`;
+    }
+    if (version.too_large) {
+      return `Too large to show here (${version.size} bytes).`;
+    }
+    return "This version could not be read.";
+  };
+  var discardSentence = (path, choice) => {
+    if (choice.discards === "local") {
+      return `${path}: this vault's version stops being in the vault.`;
+    }
+    if (choice.discards === "remote") {
+      return `${path}: the other replica's version stops being in the vault.`;
+    }
+    return "";
+  };
+  var confirmationText = (discards) => [
+    "Resolving this discards a version:",
+    "",
+    ...discards.map((sentence) => `- ${sentence}`),
+    "",
+    "The resolution itself is recorded in this vault's history. A version that was never recorded here is not in any history.",
+    "",
+    "Continue?"
+  ].join("\n");
+  var createSyncDecisions = (operation) => {
+    const state = /* @__PURE__ */ new Map();
+    const pathsByName = new Map(operation.paths.map((path) => [path.path, path]));
+    const stateOf = (path) => state.get(path) ?? { choice: "", merged: null };
+    return {
+      choose(path, choice) {
+        state.set(path, { ...stateOf(path), choice });
+      },
+      merge(path, text3) {
+        state.set(path, { ...stateOf(path), merged: text3 });
+      },
+      stateOf,
+      chosen: (path) => stateOf(path).choice,
+      decisions() {
+        return operation.paths.map((path) => {
+          const decided = stateOf(path.path);
+          return {
+            path: path.path,
+            choice: decided.choice,
+            merged: decided.choice === manualMerge ? decided.merged : null
+          };
+        });
+      },
+      missing() {
+        return operation.paths.flatMap((path) => {
+          const decided = stateOf(path.path);
+          if (decided.choice === "") {
+            return [`${path.path} has not been decided.`];
+          }
+          if (decided.choice === manualMerge && decided.merged === null) {
+            return [`${path.path} is set to a manual merge with no merged text.`];
+          }
+          return [];
+        });
+      },
+      discards() {
+        return operation.paths.flatMap((path) => {
+          const contested = pathsByName.get(path.path);
+          const chosen = contested ? choiceIn(contested.available, stateOf(path.path).choice) : null;
+          const sentence = chosen ? discardSentence(path.path, chosen) : "";
+          return sentence === "" ? [] : [sentence];
+        });
+      }
+    };
+  };
+
+  // internal/web/static_src/sync-conflict-render.ts
+  var element = (doc2, tag, className, text3 = "") => {
+    const node = doc2.createElement(tag);
+    node.className = className;
+    if (text3 !== "") {
+      node.textContent = text3;
+    }
+    return node;
+  };
+  var versionTitles = {
+    local: "This vault's version",
+    remote: "The other replica's version",
+    baseline: "The version both started from"
+  };
+  var renderVersion = (doc2, branch, version) => {
+    const section = element(doc2, "section", "sync-version");
+    section.setAttribute("data-sync-version", branch);
+    section.append(element(doc2, "h5", "sync-version-title", versionTitles[branch]));
+    const note = versionNote(version, branch);
+    if (note !== "") {
+      section.append(element(doc2, "p", "sync-version-note", note));
+      return section;
+    }
+    const text3 = element(doc2, "pre", "sync-version-text");
+    text3.setAttribute("data-sync-version-text", branch);
+    text3.textContent = version.text;
+    section.append(text3);
+    return section;
+  };
+  var renderVersions = (doc2, path) => {
+    const host = element(doc2, "div", "sync-versions");
+    host.append(renderVersion(doc2, "local", path.local), renderVersion(doc2, "remote", path.remote));
+    const baseline = doc2.createElement("details");
+    baseline.className = "sync-baseline";
+    const summary = doc2.createElement("summary");
+    summary.textContent = versionTitles.baseline;
+    baseline.append(summary, renderVersion(doc2, "baseline", path.baseline));
+    host.append(baseline);
+    return host;
+  };
+  var renderChoice = (doc2, name2, choice, refusal) => {
+    const label = element(doc2, "label", refusal === "" ? "sync-choice" : "sync-choice is-refused");
+    const input = doc2.createElement("input");
+    input.type = "radio";
+    input.name = name2;
+    input.value = choice.choice;
+    input.disabled = refusal !== "";
+    input.setAttribute("data-sync-choice", choice.choice);
+    const copy = element(doc2, "span", "sync-choice-copy");
+    copy.append(element(doc2, "span", "sync-choice-label", choice.label));
+    if (choice.effect !== "") {
+      copy.append(element(doc2, "span", "sync-choice-effect", choice.effect));
+    }
+    if (choice.discards !== "") {
+      copy.append(
+        element(
+          doc2,
+          "span",
+          "sync-choice-discards",
+          choice.discards === "local" ? "Discards this vault's version." : "Discards the other replica's version."
+        )
+      );
+    }
+    if (refusal !== "") {
+      copy.append(element(doc2, "span", "sync-choice-reason", refusal));
+    }
+    label.append(input, copy);
+    return input;
+  };
+  var renderChoices = (doc2, packageID, path) => {
+    const host = doc2.createElement("fieldset");
+    host.className = "sync-choices";
+    host.setAttribute("data-sync-choices", path.path);
+    const legend = doc2.createElement("legend");
+    legend.textContent = "Decision";
+    host.append(legend);
+    const name2 = `sync-choice|${packageID}|${path.path}`;
+    const radios = [];
+    const merge = mergeRefusal(path);
+    for (const choice of path.available) {
+      const refusal = choice.choice === manualMerge ? merge : "";
+      const radio = renderChoice(doc2, name2, choice, refusal);
+      radios.push(radio);
+      host.append(radio.parentElement);
+    }
+    for (const choice of path.refused) {
+      host.append(
+        renderChoice(doc2, name2, choice, choice.reason || "Not available for this conflict.").parentElement
+      );
+    }
+    return { host, radios };
+  };
+  var renderMerge = (doc2, path) => {
+    if (!offered(path, manualMerge) || !path.mergeable) {
+      return { merge: null, mergeHost: null, mergeNotice: null, mergeReset: null };
+    }
+    const merge = element(doc2, "div", "sync-merge");
+    merge.setAttribute("data-sync-merge", path.path);
+    merge.hidden = true;
+    merge.append(
+      element(
+        doc2,
+        "p",
+        "sync-merge-hint",
+        "Compose the version this vault should keep. It starts from this vault's version; the other replica's is above. Unsent text is kept in this browser."
+      )
+    );
+    const host = element(doc2, "div", "sync-merge-host");
+    host.setAttribute("data-sync-merge-host", path.path);
+    const notice = element(doc2, "p", "sync-merge-notice");
+    notice.setAttribute("data-sync-merge-notice", path.path);
+    notice.hidden = true;
+    const reset = element(doc2, "button", "sync-button sync-merge-reset", "Start again");
+    reset.type = "button";
+    reset.setAttribute("data-sync-merge-reset", path.path);
+    merge.append(host, notice, reset);
+    return { merge, mergeHost: host, mergeNotice: notice, mergeReset: reset };
+  };
+  var pathHeading = (path) => {
+    if (path.renamed_to !== "") {
+      return `${path.path} \u2192 ${path.renamed_to}`;
+    }
+    if (path.collides !== "") {
+      return `${path.path} (collides with ${path.collides})`;
+    }
+    return path.path;
+  };
+  var renderPath = (doc2, packageID, path) => {
+    const root = element(doc2, "section", "sync-path");
+    root.setAttribute("data-sync-path", path.path);
+    root.append(element(doc2, "h4", "sync-path-name", pathHeading(path)));
+    if (path.summary !== "") {
+      root.append(element(doc2, "p", "sync-path-summary", path.summary));
+    }
+    if (path.local_changed) {
+      root.append(
+        element(
+          doc2,
+          "p",
+          "sync-path-warning",
+          "This vault's version changed after the conflict was recorded. The version shown here is the one the decision applies to."
+        )
+      );
+    }
+    root.append(renderVersions(doc2, path));
+    const choices = renderChoices(doc2, packageID, path);
+    root.append(choices.host);
+    const merge = renderMerge(doc2, path);
+    if (merge.merge) {
+      root.append(merge.merge);
+    }
+    if (path.available.length === 0) {
+      root.append(
+        element(
+          doc2,
+          "p",
+          "sync-path-remedy",
+          path.remedy || "No decision can be made here. Resolve it from the command line."
+        )
+      );
+    }
+    return { path, root, radios: choices.radios, ...merge };
+  };
+  var renderBlocked = (doc2, blocked) => {
+    const host = element(doc2, "div", "sync-blocked");
+    host.setAttribute("data-sync-blocked", "");
+    host.append(
+      element(
+        doc2,
+        "p",
+        "sync-blocked-summary",
+        blocked.length === 1 ? "1 later change is waiting behind this one and will be applied once it is resolved." : `${blocked.length} later changes are waiting behind this one and will be applied once it is resolved.`
+      )
+    );
+    const list = doc2.createElement("ul");
+    list.className = "sync-blocked-list";
+    for (const waiting of blocked) {
+      const item = doc2.createElement("li");
+      item.className = "sync-blocked-item";
+      const behind = waiting.waiting_on === "" ? "" : ` behind ${waiting.waiting_on}`;
+      const detail = waiting.detail === "" ? "" : ` \u2014 ${waiting.detail}`;
+      item.textContent = `${waiting.package_id} from ${waiting.origin_device} (#${waiting.sequence}): ${waiting.reason}${behind}${detail}`;
+      list.append(item);
+    }
+    host.append(list);
+    return host;
+  };
+  var renderActions2 = (doc2, packageID) => {
+    const host = element(doc2, "div", "sync-operation-actions");
+    const review = element(doc2, "button", "sync-button", "Review this decision");
+    review.type = "button";
+    review.setAttribute("data-sync-review", packageID);
+    const apply = element(doc2, "button", "sync-button is-primary", "Apply the decision");
+    apply.type = "button";
+    apply.hidden = true;
+    apply.setAttribute("data-sync-apply", packageID);
+    const cancel = element(doc2, "button", "sync-button", "Cancel");
+    cancel.type = "button";
+    cancel.hidden = true;
+    cancel.setAttribute("data-sync-cancel", packageID);
+    host.append(review, apply, cancel);
+    return host;
+  };
+  var renderHeader = (doc2, operation) => {
+    const header = doc2.createElement("header");
+    header.className = "sync-operation-header";
+    header.append(
+      element(
+        doc2,
+        "h3",
+        "sync-operation-title",
+        `Change from ${operation.origin_device} (#${operation.sequence})`
+      )
+    );
+    const detected = operation.detected_at === "" ? "" : ` Recorded ${operation.detected_at}.`;
+    header.append(
+      element(
+        doc2,
+        "p",
+        "sync-operation-meta",
+        `Package ${operation.package_id}. Operation ${operation.operation_id}.${detected}`
+      )
+    );
+    return header;
+  };
+  var renderOperation = (doc2, operation) => {
+    const root = element(doc2, "article", "sync-operation");
+    root.setAttribute("data-sync-operation", operation.package_id);
+    root.append(renderHeader(doc2, operation));
+    const status = element(doc2, "p", "sync-status");
+    status.setAttribute("data-sync-operation-status", operation.package_id);
+    status.setAttribute("role", "status");
+    const plan = element(doc2, "div", "sync-plan");
+    plan.setAttribute("data-sync-plan", operation.package_id);
+    plan.hidden = true;
+    if (operation.blocked.length > 0) {
+      root.append(renderBlocked(doc2, operation.blocked));
+    }
+    if (operation.problem !== "") {
+      root.append(
+        element(
+          doc2,
+          "p",
+          "sync-operation-problem",
+          `This change cannot be described here: ${operation.problem}`
+        ),
+        status
+      );
+      return { operation, root, paths: [], plan, status, review: null, apply: null, cancel: null };
+    }
+    const paths = operation.paths.map((path) => renderPath(doc2, operation.package_id, path));
+    for (const path of paths) {
+      root.append(path.root);
+    }
+    const actions = renderActions2(doc2, operation.package_id);
+    root.append(actions, plan, status);
+    return {
+      operation,
+      root,
+      paths,
+      plan,
+      status,
+      review: actions.querySelector("[data-sync-review]"),
+      apply: actions.querySelector("[data-sync-apply]"),
+      cancel: actions.querySelector("[data-sync-cancel]")
+    };
+  };
+  var renderSyncOperations = (host, operations, doc2) => {
+    host.textContent = "";
+    const rendered = operations.map((operation) => renderOperation(doc2, operation));
+    for (const operation of rendered) {
+      host.append(operation.root);
+    }
+    return rendered;
+  };
+  var renderSyncPlan = (host, paths, doc2) => {
+    host.textContent = "";
+    host.hidden = false;
+    host.append(element(doc2, "h4", "sync-plan-title", "What applying this will do"));
+    const list = doc2.createElement("ul");
+    list.className = "sync-plan-list";
+    for (const path of paths) {
+      const item = doc2.createElement("li");
+      item.className = "sync-plan-item";
+      const steps = path.steps.length === 0 ? "the other replica's change is applied and nothing further is written" : path.steps.map((step) => `${step.action} ${step.path}`).join(", ");
+      item.textContent = `${path.path} \u2014 ${path.label || path.choice}: ${steps}`;
+      list.append(item);
+    }
+    host.append(list);
+  };
+
+  // internal/web/static_src/sync-merge-editor.ts
+  var defaultDelayMs2 = 300;
+  var mergeDraftKey = (packageID, path) => `sync-merge|${packageID}|${path}`;
+  var keptMerge = (store, ownID) => {
+    const kept = store.list();
+    return kept.find((draft) => draft.draftID === ownID) ?? kept[0] ?? null;
+  };
+  var noticeFor = (kept, baseRevision, available) => {
+    if (!kept) {
+      return available ? "" : "This browser will not keep a copy of the merge, so it exists only on this page.";
+    }
+    if (kept.baseRevision !== baseRevision) {
+      return "A merge kept in this browser was loaded. It was started from a different version of this vault's copy, so read it against the versions above before applying it.";
+    }
+    return "A merge kept in this browser was loaded.";
+  };
+  var createMergeKeeper = (deps, store, read, report) => {
+    const delayMs = deps.delayMs ?? defaultDelayMs2;
+    let timer = null;
+    let dropped = false;
+    let outcome = null;
+    const cancel = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+    const write = () => {
+      outcome = store.keep({ relPath: deps.path, baseRevision: deps.baseRevision, content: read() });
+      report(outcome);
+    };
+    return {
+      keep() {
+        dropped = false;
+        if (timer !== null) {
+          return;
+        }
+        timer = setTimeout(() => {
+          timer = null;
+          write();
+        }, delayMs);
+      },
+      flush() {
+        cancel();
+        if (dropped) {
+          return;
+        }
+        write();
+      },
+      cancel,
+      drop() {
+        cancel();
+        dropped = true;
+        outcome = null;
+        store.drop();
+      },
+      stored: () => outcome === null || outcome === "stored"
+    };
+  };
+  var writeNotice = (outcome) => {
+    if (outcome === "refused") {
+      return "This browser has no room left to keep a copy of the merge, so it exists only on this page. Copy it somewhere else before leaving.";
+    }
+    return "This browser will not keep a copy of the merge, so it exists only on this page.";
+  };
+  var createSyncMergeEditor = (deps) => {
+    const store = createSourceDraftStore({
+      vaultID: deps.vaultID,
+      noteKey: mergeDraftKey(deps.packageID, deps.path),
+      draftID: deps.draftID,
+      storage: deps.storage,
+      now: deps.now
+    });
+    const kept = keptMerge(store, store.draftID);
+    const initial = kept ? kept.content : deps.seed;
+    const show = (sentence) => {
+      deps.notice.textContent = sentence;
+      deps.notice.hidden = sentence === "";
+    };
+    show(noticeFor(kept, deps.baseRevision, store.available()));
+    let warned2 = false;
+    const reportKeep = (outcome) => {
+      if (outcome !== "stored") {
+        warned2 = true;
+        show(writeNotice(outcome));
+        return;
+      }
+      if (warned2) {
+        warned2 = false;
+        show("");
+      }
+    };
+    const dismiss = () => {
+      warned2 = false;
+      show("");
+    };
+    const surface = deps.factory(deps.host, initial);
+    const keeper = createMergeKeeper(deps, store, () => surface.getValue(), reportKeep);
+    surface.onChange(() => {
+      deps.onText(surface.getValue());
+      keeper.keep();
+    });
+    const onHide = () => keeper.flush();
+    deps.view?.addEventListener("beforeunload", onHide);
+    deps.view?.addEventListener("pagehide", onHide);
+    const restart = () => {
+      surface.setValue(deps.seed);
+      deps.onText(deps.seed);
+      keeper.drop();
+      dismiss();
+    };
+    deps.reset?.addEventListener("click", restart);
+    if (kept) {
+      deps.onText(initial);
+      keeper.flush();
+    }
+    return {
+      text: () => surface.getValue(),
+      restart,
+      applied() {
+        keeper.drop();
+        dismiss();
+      },
+      flush: keeper.flush,
+      kept: keeper.stored,
+      destroy() {
+        keeper.flush();
+        deps.view?.removeEventListener("beforeunload", onHide);
+        deps.view?.removeEventListener("pagehide", onHide);
+        deps.reset?.removeEventListener("click", restart);
+        surface.destroy();
+      }
+    };
+  };
+
+  // internal/web/static_src/sync-requests.ts
+  var stalePreview = (failure) => failure.code === "preview_stale" || failure.code === "preview_required";
+  var readPayload7 = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
+  var payloadCode = (payload) => normalizeParamValue(asRecord(payload)?.code);
+  var finish3 = async (resp, normalize) => {
+    const payload = await readPayload7(resp);
+    if (!resp.ok) {
+      return {
+        ok: false,
+        code: payloadCode(payload),
+        message: normalizeManagementErrorMessage(resp.status, payload)
+      };
+    }
+    const result = normalize(payload);
+    if (!result.ok) {
+      return {
+        ok: false,
+        code: result.code || payloadCode(payload),
+        message: result.message || "The request was refused."
+      };
+    }
+    return { ok: true, result };
+  };
+  var get2 = async (fetcher, endpoint, normalize) => {
+    try {
+      const resp = await fetcher(endpoint, { headers: { Accept: "application/json" } });
+      return await finish3(resp, normalize);
+    } catch {
+      return { ok: false, code: "", message: "The server did not answer." };
+    }
+  };
+  var post2 = async (fetcher, endpoint, token, body, normalize) => {
+    try {
+      const resp = await fetcher(endpoint, buildSyncRequestInit(token, body));
+      return await finish3(resp, normalize);
+    } catch {
+      return { ok: false, code: "", message: "The server did not answer." };
+    }
+  };
+  var fetchSyncStatus = (fetcher, endpoint = SYNC_STATUS_ENDPOINT) => get2(fetcher, endpoint, normalizeSyncStatusResponse);
+  var fetchSyncConflicts = (fetcher, endpoint = SYNC_CONFLICTS_ENDPOINT) => get2(fetcher, endpoint, normalizeSyncConflictsResponse);
+  var previewSyncResolution = (fetcher, endpoint, token, packageID, paths) => post2(
+    fetcher,
+    endpoint || SYNC_PREVIEW_ENDPOINT,
+    token,
+    { token, package_id: packageID, paths },
+    normalizeSyncPlanResponse
+  );
+  var applySyncResolution = (fetcher, endpoint, token, previewID) => post2(
+    fetcher,
+    endpoint || SYNC_RESOLVE_ENDPOINT,
+    token,
+    { preview_id: previewID },
+    normalizeSyncResolvedResponse
+  );
+
+  // internal/web/static_src/sync-conflicts-panel.ts
+  var readElements2 = (root) => {
+    const status = queryElement(root, "[data-sync-conflicts-status]", HTMLElement);
+    const operations = queryElement(root, "[data-sync-operations]", HTMLElement);
+    return status && operations ? { status, operations } : null;
+  };
+  var mergeEditorFor = (ctx, operation, element3, decisions, invalidate) => {
+    if (!element3.mergeHost || !element3.mergeNotice) {
+      return null;
+    }
+    return createSyncMergeEditor({
+      host: element3.mergeHost,
+      notice: element3.mergeNotice,
+      reset: element3.mergeReset,
+      factory: ctx.surface(),
+      vaultID: ctx.vaultID,
+      packageID: operation.package_id,
+      path: element3.path.path,
+      seed: mergeSeed(element3.path),
+      // This vault's digest, whichever version the seed came from: it is the side that
+      // can move under a merge being composed, and a load that found it changed is the
+      // one a person has to be told about. See baseRevision.
+      baseRevision: element3.path.local.sha256,
+      storage: ctx.storage,
+      draftID: ctx.draftID,
+      onText: (text3) => {
+        decisions.merge(element3.path.path, text3);
+        invalidate();
+      },
+      view: ctx.view
+    });
+  };
+  var createPlanState = (elements, say) => {
+    let previewID = "";
+    const show = (planned) => {
+      if (elements.review) {
+        elements.review.hidden = planned;
+      }
+      if (elements.apply) {
+        elements.apply.hidden = !planned;
+      }
+      if (elements.cancel) {
+        elements.cancel.hidden = !planned;
+      }
+    };
+    const unplan = () => {
+      previewID = "";
+      elements.plan.hidden = true;
+      elements.plan.textContent = "";
+      show(false);
+    };
+    return {
+      id: () => previewID,
+      planned(id2) {
+        previewID = id2;
+        show(true);
+      },
+      spend: unplan,
+      dropped(sentence) {
+        if (previewID === "") {
+          return;
+        }
+        unplan();
+        if (sentence !== "") {
+          say(sentence);
+        }
+      }
+    };
+  };
+  var reviewResolution = async (scope) => {
+    const { decisions, say } = scope;
+    const missing = decisions.missing();
+    if (missing.length > 0) {
+      say(`Every contested file has to be decided first. ${missing.join(" ")}`, "is-error");
+      return;
+    }
+    say("Working out what this will do\u2026", "is-loading");
+    const outcome = await previewSyncResolution(
+      scope.ctx.fetch,
+      scope.ctx.previewEndpoint,
+      scope.ctx.token,
+      scope.elements.operation.package_id,
+      decisions.decisions()
+    );
+    if (!outcome.ok) {
+      if (!stalePreview(outcome)) {
+        say(outcome.message, "is-error");
+        return;
+      }
+      scope.reload(staleAnnouncement(mergeSafety(scope)));
+      return;
+    }
+    renderSyncPlan(scope.elements.plan, outcome.result.paths, scope.ctx.doc);
+    scope.plan.planned(outcome.result.preview_id);
+    say("Read what this will do, then apply it.", "is-warning");
+  };
+  var applyResolution = async (scope) => {
+    const { ctx, decisions, plan, say } = scope;
+    const previewID = plan.id();
+    if (previewID === "") {
+      return;
+    }
+    const discards = decisions.discards();
+    if (discards.length > 0 && !ctx.confirm(confirmationText(discards))) {
+      say("Nothing was applied.");
+      return;
+    }
+    say("Applying the decision\u2026", "is-loading");
+    const outcome = await applySyncResolution(ctx.fetch, ctx.resolveEndpoint, ctx.token, previewID);
+    plan.spend();
+    ctx.changed();
+    if (!outcome.ok) {
+      scope.reload(
+        stalePreview(outcome) ? staleAnnouncement(mergeSafety(scope)) : { message: outcome.message, kind: "is-error" }
+      );
+      return;
+    }
+    for (const editor of scope.editors.values()) {
+      editor.applied();
+    }
+    scope.reload({ message: resolvedSentence(outcome.result), kind: "is-success" });
+  };
+  var bindDecisions = (scope) => {
+    const { ctx, elements, decisions, plan, editors } = scope;
+    const openMerge = (element3, chosen) => {
+      if (!element3.merge) {
+        return;
+      }
+      element3.merge.hidden = !chosen;
+      if (!chosen || editors.has(element3.path.path)) {
+        return;
+      }
+      const editor = mergeEditorFor(
+        ctx,
+        elements.operation,
+        element3,
+        decisions,
+        () => plan.dropped("The merge changed, so it has to be reviewed again.")
+      );
+      if (!editor) {
+        return;
+      }
+      editors.set(element3.path.path, editor);
+      decisions.merge(element3.path.path, editor.text());
+    };
+    for (const element3 of elements.paths) {
+      for (const radio of element3.radios) {
+        radio.addEventListener("change", () => {
+          if (!radio.checked) {
+            return;
+          }
+          decisions.choose(element3.path.path, radio.value);
+          plan.dropped("The decision changed, so it has to be reviewed again.");
+          openMerge(element3, radio.value === manualMerge);
+        });
+      }
+    }
+  };
+  var createRequestGate = (elements) => {
+    const buttons = [elements.review, elements.apply, elements.cancel];
+    const enable = (usable) => {
+      for (const button of buttons) {
+        if (button) {
+          button.disabled = !usable;
+        }
+      }
+    };
+    let running = false;
+    return (run) => {
+      if (running) {
+        return;
+      }
+      running = true;
+      enable(false);
+      void run().finally(() => {
+        running = false;
+        enable(true);
+      });
+    };
+  };
+  var createOperationController = (ctx, elements, reload) => {
+    const say = (message, kind = "") => {
+      setStatusText(elements.status, message, kind);
+    };
+    const scope = {
+      ctx,
+      elements,
+      decisions: createSyncDecisions(elements.operation),
+      plan: createPlanState(elements, say),
+      editors: /* @__PURE__ */ new Map(),
+      reload,
+      say
+    };
+    bindDecisions(scope);
+    const gate = createRequestGate(elements);
+    elements.review?.addEventListener("click", () => gate(() => reviewResolution(scope)));
+    elements.apply?.addEventListener("click", () => gate(() => applyResolution(scope)));
+    elements.cancel?.addEventListener("click", () => {
+      scope.plan.dropped("");
+      say("");
+    });
+    return {
+      destroy() {
+        for (const editor of scope.editors.values()) {
+          editor.destroy();
+        }
+        scope.editors.clear();
+      }
+    };
+  };
+  var mergeSafety = (scope) => {
+    if (scope.editors.size === 0) {
+      return "none";
+    }
+    let kept = true;
+    for (const editor of scope.editors.values()) {
+      editor.flush();
+      kept = editor.kept() && kept;
+    }
+    return kept ? "kept" : "lost";
+  };
+  var staleAnnouncement = (merges) => ({
+    message: "This vault moved on while the decision was being made, so nothing was applied. " + mergeClause(merges),
+    kind: "is-warning"
+  });
+  var mergeClause = (merges) => {
+    if (merges === "none") {
+      return "Both versions are being read again.";
+    }
+    if (merges === "kept") {
+      return "Both versions are being read again; any merge you composed is still here.";
+    }
+    return "Both versions are being read again, and a merge you composed has to be typed again: this page could not keep a copy of it.";
+  };
+  var resolvedSentence = (result) => {
+    const parts = [result.summary || "The decision was applied."];
+    if (result.summary === "" && !result.acknowledged) {
+      parts.push(
+        "The other replica has not been told yet, so it still counts this change as waiting."
+      );
+    }
+    for (const abandoned of result.abandoned) {
+      parts.push(`An earlier unfinished resolution of ${abandoned.package_id} was dropped: ${abandoned.reason}`);
+    }
+    return parts.join(" ");
+  };
+  var join = (announced, sentence) => announced === void 0 || announced === "" ? sentence : `${ended(announced)} ${sentence}`;
+  var ended = (text3) => /[.!?…]$/.test(text3) ? text3 : `${text3}.`;
+  var emptyMessage = (count4) => count4 === 0 ? "Nothing is waiting for a decision." : `${count4 === 1 ? "1 change is" : `${count4} changes are`} waiting for a decision.`;
+  var createSyncConflictsPanel = (deps) => {
+    const elements = readElements2(deps.root);
+    if (!elements) {
+      return null;
+    }
+    const attr2 = (name2) => deps.root.getAttribute(name2) ?? "";
+    const ctx = {
+      conflictsEndpoint: attr2("data-sync-conflicts-endpoint"),
+      previewEndpoint: attr2("data-sync-preview-endpoint"),
+      resolveEndpoint: attr2("data-sync-resolve-endpoint"),
+      token: attr2("data-sync-csrf"),
+      vaultID: attr2("data-sync-vault"),
+      fetch: deps.fetch,
+      surface: deps.surface,
+      // A merge is kept under the vault's own identity or not at all. Guessing a key
+      // is how one vault's draft is offered over another's on the same origin, so a
+      // page served without an identity keeps nothing rather than keeping it wrongly.
+      storage: mergeStorage(deps),
+      // The same per-tab identity the editor uses, from the same sessionStorage slot:
+      // one tab is one author, whichever of its pages the text was typed on.
+      draftID: deps.draftID ?? resolveDraftTabID(() => randomID("tab"), deps.view ?? void 0),
+      confirm: deps.confirm ?? ((message) => (deps.view ?? window).confirm(message)),
+      changed: deps.changed ?? (() => {
+      }),
+      view: deps.view ?? null,
+      doc: deps.root.ownerDocument
+    };
+    let controllers = [];
+    const teardown = () => {
+      for (const controller of controllers) {
+        controller.destroy();
+      }
+      controllers = [];
+    };
+    const load = async (announce) => {
+      teardown();
+      setStatusText(elements.status, "Reading the changes waiting for a decision\u2026", "is-loading");
+      const outcome = await fetchSyncConflicts(ctx.fetch, ctx.conflictsEndpoint);
+      if (!outcome.ok) {
+        setStatusText(elements.status, join(announce?.message, outcome.message), "is-error");
+        elements.operations.textContent = "";
+        return;
+      }
+      const rendered = renderSyncOperations(elements.operations, outcome.result.operations, ctx.doc);
+      controllers = rendered.map(
+        (operation) => createOperationController(ctx, operation, (next) => void load(next))
+      );
+      const waiting = emptyMessage(outcome.result.operations.length);
+      setStatusText(
+        elements.status,
+        join(announce?.message, waiting),
+        announce ? announce.kind : outcome.result.operations.length === 0 ? "is-empty" : "is-warning"
+      );
+    };
+    return { load: () => load() };
+  };
+  var mergeStorage = (deps) => {
+    const vaultID = deps.root.getAttribute("data-sync-vault") ?? "";
+    if (vaultID === "") {
+      return null;
+    }
+    return deps.storage === void 0 ? resolveDraftStorage(deps.view ?? void 0) : deps.storage;
+  };
+
+  // internal/web/static_src/sync-status-view.ts
+  var formatSyncTimestamp = (value) => {
+    if (value === "") {
+      return "";
+    }
+    const at = new Date(value);
+    if (Number.isNaN(at.getTime())) {
+      return value;
+    }
+    return at.toLocaleString(void 0, { dateStyle: "short", timeStyle: "short" });
+  };
+  var count3 = (n, one, many) => n === 1 ? `1 ${one}` : `${n} ${many}`;
+  var syncLineSummary = (status) => status.summary;
+  var syncNeedsPerson = (status) => status.needs_person;
+  var saveFact = (status) => {
+    if (status.save.blocked) {
+      return {
+        term: "Saved here",
+        detail: `Recording is blocked: ${status.save.block_reason || "the content history is blocked"}.`,
+        kind: "problem"
+      };
+    }
+    if (!status.save.managed) {
+      return {
+        term: "Saved here",
+        detail: "This vault has no content history, so nothing here is recorded or exported.",
+        kind: "waiting"
+      };
+    }
+    const at = formatSyncTimestamp(status.save.last_commit_at || status.save.saved_at);
+    return {
+      term: "Saved here",
+      detail: at === "" ? "Nothing has been recorded yet." : `Last recorded ${at}.`,
+      kind: ""
+    };
+  };
+  var exportFact = (status) => {
+    const pending = status.export.pending_commits;
+    if (status.export.baseline_pending) {
+      return {
+        term: "Packaged for the other replica",
+        detail: "The first package has not been built yet, so nothing has been offered.",
+        kind: "waiting"
+      };
+    }
+    if (pending === 0) {
+      return {
+        term: "Packaged for the other replica",
+        detail: "Everything recorded here has been packaged.",
+        kind: ""
+      };
+    }
+    return {
+      term: "Packaged for the other replica",
+      detail: `${count3(pending, "recorded change", "recorded changes")} not packaged yet.`,
+      kind: "waiting"
+    };
+  };
+  var interruptedClause = (incomplete) => {
+    if (incomplete === 0) {
+      return "";
+    }
+    return " " + count3(
+      incomplete,
+      "publication was interrupted before it finished, so it will never be acknowledged",
+      "publications were interrupted before they finished, so they will never be acknowledged"
+    ) + ".";
+  };
+  var transportFact = (status) => {
+    const { published, acknowledged, awaiting_receipt: awaiting, incomplete } = status.transport;
+    if (published === 0) {
+      return {
+        term: "Acknowledged by the other replica",
+        detail: "Nothing has been published to the other replica yet.",
+        kind: ""
+      };
+    }
+    if (awaiting === 0 && incomplete === 0) {
+      return {
+        term: "Acknowledged by the other replica",
+        detail: `Every published change is acknowledged (${acknowledged} of ${published}).`,
+        kind: ""
+      };
+    }
+    if (awaiting === 0) {
+      return {
+        term: "Acknowledged by the other replica",
+        detail: `${acknowledged} of ${published} acknowledged.` + interruptedClause(incomplete),
+        kind: "waiting"
+      };
+    }
+    const since = formatSyncTimestamp(status.transport.oldest_awaiting);
+    const oldest = since === "" ? "" : ` The oldest has been waiting since ${since}.`;
+    return {
+      term: "Acknowledged by the other replica",
+      detail: `${acknowledged} of ${published} acknowledged. ${count3(awaiting, "change is published and not acknowledged", "changes are published and not acknowledged")}.` + oldest + interruptedClause(incomplete),
+      kind: "waiting"
+    };
+  };
+  var arrivingClause = (incomplete) => {
+    if (incomplete === 0) {
+      return "";
+    }
+    return " " + count3(
+      incomplete,
+      "of those cannot be read yet, so it is still arriving or arrived damaged",
+      "of those cannot be read yet, so they are still arriving or arrived damaged"
+    ) + ".";
+  };
+  var peerFact = (status) => {
+    const { delivered, awaiting_application: waiting, incomplete, conflicts } = status.peer;
+    if (conflicts > 0) {
+      return {
+        term: "Arrived from the other replica",
+        detail: `${count3(conflicts, "change is waiting for a decision", "changes are waiting for a decision")} below.`,
+        kind: "problem"
+      };
+    }
+    if (waiting > 0) {
+      return {
+        term: "Arrived from the other replica",
+        detail: `${count3(waiting, "change has arrived and is not applied yet", "changes have arrived and are not applied yet")}.` + arrivingClause(incomplete),
+        kind: "waiting"
+      };
+    }
+    const at = formatSyncTimestamp(status.peer.last_delivery_at);
+    if (delivered === 0 && at === "") {
+      return {
+        term: "Arrived from the other replica",
+        detail: "Nothing is waiting to be applied.",
+        kind: ""
+      };
+    }
+    return {
+      term: "Arrived from the other replica",
+      detail: at === "" ? "Everything that arrived has been applied." : `Everything that arrived has been applied. Last delivery ${at}.`,
+      kind: ""
+    };
+  };
+  var replicaFact = (status) => {
+    const replica = status.replica;
+    if (!replica) {
+      return [];
+    }
+    const at = formatSyncTimestamp(replica.last_successful_sync);
+    if (!replica.recorded) {
+      return [
+        {
+          term: "This copy",
+          detail: "No verified copy has been recorded, so its age is unknown.",
+          kind: "problem"
+        }
+      ];
+    }
+    return [
+      {
+        term: "This copy",
+        detail: replica.stale ? `Last verified copy ${at}, which is over 15 minutes ago. The machine making the copy is where that is fixed.` : `Last verified copy ${at}.`,
+        kind: replica.stale ? "problem" : ""
+      }
+    ];
+  };
+  var syncFacts = (status) => {
+    if (status.replica) {
+      return replicaFact(status);
+    }
+    if (!status.enrolled) {
+      return [
+        {
+          term: "Other replica",
+          detail: "This vault is not enrolled with another replica, so nothing is exported or delivered.",
+          kind: ""
+        },
+        saveFact(status)
+      ];
+    }
+    return [saveFact(status), exportFact(status), transportFact(status), peerFact(status)];
+  };
+  var workerProblem = (worker) => {
+    if (worker.failures === 0) {
+      return [];
+    }
+    const next = formatSyncTimestamp(worker.next_attempt_after);
+    const retry2 = next === "" ? "" : ` Next attempt after ${next}.`;
+    const because = worker.last_error === "" ? "" : ` ${worker.last_error}`;
+    return [
+      `${worker.name}: ${count3(worker.failures, "failure in a row", "failures in a row")}.${because}${retry2}`
+    ];
+  };
+  var syncProblems = (status) => {
+    const problems = status.problems.map(
+      (problem) => problem.subject === "" ? problem.detail : `${problem.subject}: ${problem.detail}`
+    );
+    const rejected = status.transport.rejected.map(
+      (receipt) => `Acknowledgment for ${receipt.package_id} was refused: ${receipt.detail}`
+    );
+    const workers = status.workers.flatMap(workerProblem);
+    const recovery = status.save.blocked ? status.save.block_recovery : [];
+    return [...problems, ...rejected, ...workers, ...recovery];
+  };
+
+  // internal/web/static_src/sync-status-panel.ts
+  var readElements3 = (root) => {
+    const summary = queryElement(root, "[data-sync-summary]", HTMLElement);
+    const facts = queryElement(root, "[data-sync-facts]", HTMLElement);
+    const problems = queryElement(root, "[data-sync-problems]", HTMLElement);
+    if (!summary || !facts || !problems) {
+      return null;
+    }
+    return {
+      summary,
+      facts,
+      problems,
+      refresh: queryElement(root, "[data-sync-refresh]", HTMLButtonElement)
+    };
+  };
+  var factClass = (fact) => fact.kind === "" ? "sync-fact" : `sync-fact is-${fact.kind}`;
+  var renderFacts = (host, facts, doc2) => {
+    host.textContent = "";
+    for (const fact of facts) {
+      const term = doc2.createElement("dt");
+      term.className = factClass(fact);
+      term.textContent = fact.term;
+      const detail = doc2.createElement("dd");
+      detail.className = factClass(fact);
+      detail.textContent = fact.detail;
+      host.append(term, detail);
+    }
+  };
+  var renderProblems = (host, problems, doc2) => {
+    host.textContent = "";
+    host.hidden = problems.length === 0;
+    for (const problem of problems) {
+      const item = doc2.createElement("li");
+      item.className = "sync-problem";
+      item.textContent = problem;
+      host.append(item);
+    }
+  };
+  var summaryOf = (status) => {
+    const at = formatSyncTimestamp(status.observed_at);
+    const observed = at === "" ? "" : ` Read ${at}.`;
+    return [`${status.summary}${observed}`, syncNeedsPerson(status) ? "is-warning" : "is-success"];
+  };
+  var createSyncStatusPanel = (deps) => {
+    const elements = readElements3(deps.root);
+    if (!elements) {
+      return null;
+    }
+    const doc2 = deps.root.ownerDocument;
+    const endpoint = deps.root.getAttribute("data-sync-status-endpoint") ?? "";
+    const load = async () => {
+      setStatusText(elements.summary, "Reading synchronization status...", "is-loading");
+      const outcome = await fetchSyncStatus(deps.fetch, endpoint);
+      if (!outcome.ok) {
+        setStatusText(elements.summary, outcome.message, "is-error");
+        renderFacts(elements.facts, [], doc2);
+        renderProblems(elements.problems, [], doc2);
+        return;
+      }
+      setStatusText(elements.summary, ...summaryOf(outcome.result));
+      renderFacts(elements.facts, syncFacts(outcome.result), doc2);
+      renderProblems(elements.problems, syncProblems(outcome.result), doc2);
+    };
+    elements.refresh?.addEventListener("click", () => void load());
+    return { load };
+  };
+
+  // internal/web/static_src/sync.ts
+  var mergeSurface = () => {
+    let surface = null;
+    const build = createSourceSurfaceFactory({
+      onSave: () => {
+      },
+      onCommand: (command2, options) => {
+        if (!surface) {
+          return;
+        }
+        surface.applyEdit(formatSource(surface.getValue(), surface.getSelection(), command2, options));
+        surface.focus();
+      }
+    });
+    return (host, initialValue) => {
+      surface = build(host, initialValue);
+      return surface;
+    };
+  };
+  var initSync = (deps = {}) => {
+    const doc2 = deps.doc ?? document;
+    const view = deps.view ?? window;
+    const panelRoot = queryElement(doc2, "[data-sync-panel]", HTMLElement);
+    const conflictsRoot = queryElement(doc2, "[data-sync-conflicts]", HTMLElement);
+    if (!panelRoot && !conflictsRoot) {
+      return;
+    }
+    const fetcher = (input, init) => view.fetch(input, init);
+    const status = panelRoot ? createSyncStatusPanel({ root: panelRoot, fetch: fetcher }) : null;
+    const conflicts = conflictsRoot ? createSyncConflictsPanel({
+      root: conflictsRoot,
+      fetch: fetcher,
+      surface: mergeSurface,
+      changed: () => void status?.load(),
+      view
+    }) : null;
+    void status?.load();
+    void conflicts?.load();
+  };
+
+  // internal/web/static_src/sync-line.ts
+  var refusalCodes = ["forbidden", "not_found"];
+  var renderLine = (line, status, doc2) => {
+    line.textContent = syncLineSummary(status);
+    line.classList.toggle("is-attention", syncNeedsPerson(status));
+    if (status.review_path === "") {
+      return;
+    }
+    const review = doc2.createElement("a");
+    review.className = "sync-line-review";
+    review.href = status.review_path;
+    review.textContent = "Review";
+    line.append(" ", review);
+  };
+  var renderFailure = (line, outcome) => {
+    line.classList.remove("is-attention");
+    if (refusalCodes.includes(outcome.code)) {
+      line.textContent = "";
+      return;
+    }
+    line.textContent = `Synchronization status is unavailable. ${outcome.message}`;
+    line.classList.add("is-attention");
+  };
+  var renderSyncLine = (line, outcome, doc2) => {
+    line.textContent = "";
+    if (!outcome.ok) {
+      renderFailure(line, outcome);
+      return;
+    }
+    renderLine(line, outcome.result, doc2);
+  };
+  var initSyncLine = (deps = {}) => {
+    const doc2 = deps.doc ?? document;
+    const fetcher = deps.fetch ?? ((input, init) => window.fetch(input, init));
+    const line = queryElement(doc2, "[data-sync-line]", HTMLElement);
+    const endpoint = line?.getAttribute("data-sync-status-endpoint") ?? "";
+    if (!line || endpoint === "") {
+      return;
+    }
+    const read = async () => {
+      renderSyncLine(line, await fetchSyncStatus(fetcher, endpoint), doc2);
+    };
+    void read();
+    doc2.addEventListener("visibilitychange", () => {
+      if (doc2.visibilityState === "visible") {
+        void read();
+      }
+    });
+  };
+
   // internal/web/static_src/synthesize-model.ts
   var SYNTHESIS_MAX_SUPPORTERS = 10;
   var SYNTHESIS_MAX_DRAFT_BYTES = 1 << 20;
@@ -43491,7 +45038,7 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/synthesize-view-elements.ts
   var suggestionID = (kind, mode) => `synthesize-${kind}-${mode}`;
-  var element = (doc2, tag, className, attributes = {}) => {
+  var element2 = (doc2, tag, className, attributes = {}) => {
     const node = doc2.createElement(tag);
     if (className !== "") {
       node.className = className;
@@ -43502,8 +45049,8 @@ var BrainNotesApp = (() => {
     return node;
   };
   var labelled = (doc2, id2, text3, control) => {
-    const wrapper = element(doc2, "div", "synthesize-field");
-    const label = element(doc2, "label", "synthesize-field-label");
+    const wrapper = element2(doc2, "div", "synthesize-field");
+    const label = element2(doc2, "label", "synthesize-field-label");
     label.setAttribute("for", id2);
     label.textContent = text3;
     control.id = id2;
@@ -43512,7 +45059,7 @@ var BrainNotesApp = (() => {
   };
   var labelledWithError = (doc2, id2, text3, control, errorAttribute) => {
     const wrapper = labelled(doc2, id2, text3, control);
-    const error = element(doc2, "p", "synthesize-field-error", { [errorAttribute]: "" });
+    const error = element2(doc2, "p", "synthesize-field-error", { [errorAttribute]: "" });
     error.id = `${id2}-error`;
     error.hidden = true;
     control.setAttribute("aria-describedby", error.id);
@@ -43533,7 +45080,7 @@ var BrainNotesApp = (() => {
     }
   };
   var sourceRow = (doc2, position, total, source, anchor) => {
-    const row = element(doc2, "li", "synthesize-source", {
+    const row = element2(doc2, "li", "synthesize-source", {
       "data-synthesize-source": source.key,
       "data-synthesize-position": String(position)
     });
@@ -43541,30 +45088,30 @@ var BrainNotesApp = (() => {
       row.classList.add("is-anchor");
       row.setAttribute("data-synthesize-anchor", "");
     }
-    const badge = element(doc2, "span", "synthesize-source-position");
+    const badge = element2(doc2, "span", "synthesize-source-position");
     badge.textContent = String(position);
-    const body = element(doc2, "div", "synthesize-source-body");
-    const link = element(doc2, "a", "synthesize-source-title");
+    const body = element2(doc2, "div", "synthesize-source-body");
+    const link = element2(doc2, "a", "synthesize-source-title");
     link.href = source.route;
     link.textContent = source.title;
-    const path = element(doc2, "code", "synthesize-source-path");
+    const path = element2(doc2, "code", "synthesize-source-path");
     path.textContent = source.path;
     body.append(link, path);
     row.append(badge, body);
     if (anchor) {
-      const note = element(doc2, "span", "synthesize-source-role");
+      const note = element2(doc2, "span", "synthesize-source-role");
       note.textContent = "Anchor";
       row.appendChild(note);
       return row;
     }
-    const controls = element(doc2, "div", "synthesize-source-controls");
-    const handle = element(doc2, "button", "synthesize-source-handle", {
+    const controls = element2(doc2, "div", "synthesize-source-controls");
+    const handle = element2(doc2, "button", "synthesize-source-handle", {
       "data-synthesize-handle": source.key,
       "aria-label": `Reorder ${source.title}, position ${position} of ${total}. Press Up or Down to move it.`
     });
     handle.type = "button";
     handle.textContent = "Drag";
-    const remove4 = element(doc2, "button", "synthesize-source-remove", {
+    const remove4 = element2(doc2, "button", "synthesize-source-remove", {
       "data-synthesize-remove": source.key,
       "aria-label": `Remove ${source.title}`
     });
@@ -43585,25 +45132,25 @@ var BrainNotesApp = (() => {
     const remaining = config2.maxSupporters - model.sources.length;
     view.selectionStatus.textContent = remaining > 0 ? `${total} of ${config2.maxSupporters + 1} notes selected. ${remaining} more can be added.` : `${total} of ${config2.maxSupporters + 1} notes selected. Remove one to add another.`;
   };
-  var renderSynthesisCandidates = (container, candidates, selectedKeys, anchorKey, detailIsHTML, emptyMessage) => {
+  var renderSynthesisCandidates = (container, candidates, selectedKeys, anchorKey, detailIsHTML, emptyMessage2) => {
     const doc2 = container.ownerDocument;
     const selected = new Set(selectedKeys);
     const rows = candidates.filter((candidate) => candidate.key !== anchorKey && candidate.key !== "").map((candidate) => {
-      const card = element(doc2, "article", "synthesize-candidate", {
+      const card = element2(doc2, "article", "synthesize-candidate", {
         "data-synthesize-candidate": candidate.key
       });
-      const heading2 = element(doc2, "h4", "synthesize-candidate-title");
-      const link = element(doc2, "a", "");
+      const heading2 = element2(doc2, "h4", "synthesize-candidate-title");
+      const link = element2(doc2, "a", "");
       link.href = candidate.route;
       link.textContent = candidate.title;
       heading2.appendChild(link);
-      const path = element(doc2, "p", "synthesize-candidate-path");
+      const path = element2(doc2, "p", "synthesize-candidate-path");
       const pathCode = doc2.createElement("code");
       pathCode.textContent = candidate.path;
       path.appendChild(pathCode);
       card.append(heading2, path);
       if (candidate.detail !== "") {
-        const detail = element(doc2, "p", "synthesize-candidate-detail");
+        const detail = element2(doc2, "p", "synthesize-candidate-detail");
         if (detailIsHTML) {
           detail.innerHTML = candidate.detail;
         } else {
@@ -43611,7 +45158,7 @@ var BrainNotesApp = (() => {
         }
         card.appendChild(detail);
       }
-      const add = element(doc2, "button", "synthesize-candidate-add", {
+      const add = element2(doc2, "button", "synthesize-candidate-add", {
         "data-synthesize-add": candidate.key
       });
       add.type = "button";
@@ -43626,8 +45173,8 @@ var BrainNotesApp = (() => {
       return card;
     });
     if (rows.length === 0) {
-      const empty = element(doc2, "p", "synthesize-candidates-empty");
-      empty.textContent = emptyMessage;
+      const empty = element2(doc2, "p", "synthesize-candidates-empty");
+      empty.textContent = emptyMessage2;
       container.replaceChildren(empty);
       return;
     }
@@ -43636,7 +45183,7 @@ var BrainNotesApp = (() => {
   var setSynthesisWarning = (view, message, link) => {
     view.warning.textContent = message;
     if (message !== "" && link) {
-      const anchor = element(view.warning.ownerDocument, "a", "synthesize-warning-link", {
+      const anchor = element2(view.warning.ownerDocument, "a", "synthesize-warning-link", {
         "data-synthesize-warning-link": "",
         href: link.href
       });
@@ -43659,9 +45206,9 @@ var BrainNotesApp = (() => {
     const context = model.context;
     view.copyButton.disabled = false;
     view.contextSummary.textContent = `${context.manifest.notes.length} notes, ${formatSynthesisBytes(context.manifest.byte_count)} of a ${formatSynthesisBytes(context.manifest.max_bytes)} budget, purpose ${synthesisPurposeLabel(context.purpose)}.`;
-    const notesHeading = element(doc2, "h4", "synthesize-manifest-heading");
+    const notesHeading = element2(doc2, "h4", "synthesize-manifest-heading");
     notesHeading.textContent = "Selected notes";
-    const notes = element(doc2, "ol", "synthesize-manifest-notes");
+    const notes = element2(doc2, "ol", "synthesize-manifest-notes");
     for (const note of context.manifest.notes) {
       const item = doc2.createElement("li");
       const link = doc2.createElement("a");
@@ -43672,9 +45219,9 @@ var BrainNotesApp = (() => {
       item.append(link, " ", path);
       notes.appendChild(item);
     }
-    const excerptsHeading = element(doc2, "h4", "synthesize-manifest-heading");
+    const excerptsHeading = element2(doc2, "h4", "synthesize-manifest-heading");
     excerptsHeading.textContent = "Excerpt locations";
-    const excerpts = element(doc2, "ul", "synthesize-manifest-excerpts");
+    const excerpts = element2(doc2, "ul", "synthesize-manifest-excerpts");
     if (context.manifest.excerpts.length === 0) {
       const item = doc2.createElement("li");
       item.textContent = "None.";
@@ -43710,7 +45257,7 @@ var BrainNotesApp = (() => {
       return;
     }
     const doc2 = view.candidateRendered.ownerDocument;
-    const note = element(doc2, "p", "synthesize-candidate-plain");
+    const note = element2(doc2, "p", "synthesize-candidate-plain");
     note.textContent = "Restored candidate \u2014 shown as Markdown.";
     view.candidateRendered.replaceChildren(note);
   };
@@ -43758,18 +45305,18 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/synthesize-view-sections.ts
   var buildSourcesSection = (doc2) => {
-    const section = element(doc2, "section", "synthesize-section synthesize-sources", {
+    const section = element2(doc2, "section", "synthesize-section synthesize-sources", {
       "aria-labelledby": "synthesize-sources-heading"
     });
-    const heading2 = element(doc2, "h3", "synthesize-section-heading");
+    const heading2 = element2(doc2, "h3", "synthesize-section-heading");
     heading2.id = "synthesize-sources-heading";
     heading2.textContent = "Sources";
-    const intro = element(doc2, "p", "synthesize-section-intro");
+    const intro = element2(doc2, "p", "synthesize-section-intro");
     intro.textContent = "The anchor is always first. Drag a handle or press Up and Down on it to reorder supporting notes.";
-    const list = element(doc2, "ol", "synthesize-source-list", {
+    const list = element2(doc2, "ol", "synthesize-source-list", {
       "data-synthesize-source-list": ""
     });
-    const status = element(doc2, "p", "synthesize-selection-status", {
+    const status = element2(doc2, "p", "synthesize-selection-status", {
       "data-synthesize-selection-status": ""
     });
     status.tabIndex = -1;
@@ -43777,28 +45324,28 @@ var BrainNotesApp = (() => {
     return { section, list, status };
   };
   var buildSuggestionsSection = (doc2) => {
-    const section = element(doc2, "section", "synthesize-section synthesize-suggestions", {
+    const section = element2(doc2, "section", "synthesize-section synthesize-suggestions", {
       "aria-labelledby": "synthesize-suggestions-heading"
     });
-    const heading2 = element(doc2, "h3", "synthesize-section-heading");
+    const heading2 = element2(doc2, "h3", "synthesize-section-heading");
     heading2.id = "synthesize-suggestions-heading";
     heading2.textContent = "Suggested notes";
-    const tablist = element(doc2, "div", "synthesize-tab-list", {
+    const tablist = element2(doc2, "div", "synthesize-tab-list", {
       role: "tablist",
       "aria-label": "Suggestion modes"
     });
-    const status = element(doc2, "p", "synthesize-suggestions-status", {
+    const status = element2(doc2, "p", "synthesize-suggestions-status", {
       "data-synthesize-suggestions-status": "",
       role: "status",
       "aria-live": "polite"
     });
-    const panelsContainer = element(doc2, "div", "synthesize-suggestion-panels");
+    const panelsContainer = element2(doc2, "div", "synthesize-suggestion-panels");
     const tabs = {};
     const panels = {};
     const results = {};
     for (const definition of relatedModeDefinitions) {
       const active = definition.mode === "balanced";
-      const tab = element(doc2, "button", "synthesize-tab", {
+      const tab = element2(doc2, "button", "synthesize-tab", {
         role: "tab",
         "aria-controls": suggestionID("panel", definition.mode),
         "aria-selected": active ? "true" : "false",
@@ -43809,16 +45356,16 @@ var BrainNotesApp = (() => {
       tab.tabIndex = active ? 0 : -1;
       tab.textContent = definition.label;
       tablist.appendChild(tab);
-      const panel = element(doc2, "div", "synthesize-suggestion-panel", {
+      const panel = element2(doc2, "div", "synthesize-suggestion-panel", {
         role: "tabpanel",
         "aria-labelledby": suggestionID("tab", definition.mode),
         "data-synthesize-panel": definition.mode
       });
       panel.id = suggestionID("panel", definition.mode);
       panel.hidden = !active;
-      const description = element(doc2, "p", "synthesize-tab-description");
+      const description = element2(doc2, "p", "synthesize-tab-description");
       description.textContent = definition.description;
-      const list = element(doc2, "div", "synthesize-candidates", {
+      const list = element2(doc2, "div", "synthesize-candidates", {
         "data-synthesize-suggestions": definition.mode
       });
       panel.append(description, list);
@@ -43831,56 +45378,56 @@ var BrainNotesApp = (() => {
     return { section, tabs, panels, results, status };
   };
   var buildSearchSection = (doc2) => {
-    const section = element(doc2, "section", "synthesize-section synthesize-search", {
+    const section = element2(doc2, "section", "synthesize-section synthesize-search", {
       "aria-labelledby": "synthesize-search-heading"
     });
-    const heading2 = element(doc2, "h3", "synthesize-section-heading");
+    const heading2 = element2(doc2, "h3", "synthesize-section-heading");
     heading2.id = "synthesize-search-heading";
     heading2.textContent = "Search the vault";
-    const form = element(doc2, "form", "synthesize-search-form", {
+    const form = element2(doc2, "form", "synthesize-search-form", {
       "data-synthesize-search-form": "",
       role: "search"
     });
-    const input = element(doc2, "input", "synthesize-search-input", {
+    const input = element2(doc2, "input", "synthesize-search-input", {
       "data-synthesize-search-input": "",
       type: "search",
       placeholder: "Find a note to add"
     });
     input.name = "q";
-    const submit = element(doc2, "button", "synthesize-search-submit");
+    const submit = element2(doc2, "button", "synthesize-search-submit");
     submit.type = "submit";
     submit.textContent = "Search";
     form.append(labelled(doc2, "synthesize-search-query", "Search notes", input), submit);
-    const status = element(doc2, "p", "synthesize-search-status", {
+    const status = element2(doc2, "p", "synthesize-search-status", {
       "data-synthesize-search-status": "",
       role: "status",
       "aria-live": "polite"
     });
-    const results = element(doc2, "div", "synthesize-candidates", {
+    const results = element2(doc2, "div", "synthesize-candidates", {
       "data-synthesize-search-results": ""
     });
     section.append(heading2, form, status, results);
     return { section, form, input, results, status };
   };
   var buildDraftSection = (doc2, config2) => {
-    const section = element(doc2, "section", "synthesize-section synthesize-draft", {
+    const section = element2(doc2, "section", "synthesize-section synthesize-draft", {
       "aria-labelledby": "synthesize-draft-heading"
     });
-    const heading2 = element(doc2, "h3", "synthesize-section-heading");
+    const heading2 = element2(doc2, "h3", "synthesize-section-heading");
     heading2.id = "synthesize-draft-heading";
     heading2.textContent = "New note";
-    const title = element(doc2, "input", "synthesize-input", {
+    const title = element2(doc2, "input", "synthesize-input", {
       "data-synthesize-title": "",
       type: "text"
     });
     title.name = "title";
-    const folder = element(doc2, "input", "synthesize-input", {
+    const folder = element2(doc2, "input", "synthesize-input", {
       "data-synthesize-folder": "",
       type: "text",
       placeholder: "Vault root"
     });
     folder.name = "folder";
-    const purpose = element(doc2, "select", "synthesize-input", {
+    const purpose = element2(doc2, "select", "synthesize-input", {
       "data-synthesize-purpose": ""
     });
     purpose.name = "purpose";
@@ -43890,13 +45437,13 @@ var BrainNotesApp = (() => {
       option.textContent = synthesisPurposeLabel(value);
       purpose.appendChild(option);
     }
-    const prompt = element(doc2, "textarea", "synthesize-textarea", {
+    const prompt = element2(doc2, "textarea", "synthesize-textarea", {
       "data-synthesize-prompt": "",
       rows: "3",
       placeholder: "Optional question or angle for this research packet"
     });
     prompt.name = "prompt";
-    const draft = element(doc2, "textarea", "synthesize-textarea synthesize-draft-body", {
+    const draft = element2(doc2, "textarea", "synthesize-textarea synthesize-draft-body", {
       "data-synthesize-draft": "",
       rows: "12",
       placeholder: "Write the note that says what these sources add up to"
@@ -43923,7 +45470,7 @@ var BrainNotesApp = (() => {
       draft,
       "data-synthesize-draft-error"
     );
-    const grid = element(doc2, "div", "synthesize-field-grid");
+    const grid = element2(doc2, "div", "synthesize-field-grid");
     grid.append(titleField.wrapper, folderField.wrapper, labelled(doc2, "synthesize-purpose", "Purpose", purpose));
     section.append(
       heading2,
@@ -43946,13 +45493,13 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/synthesize-view-panels.ts
   var buildGenerateSection = (doc2, config2) => {
-    const section = element(doc2, "section", "synthesize-section synthesize-generate", {
+    const section = element2(doc2, "section", "synthesize-section synthesize-generate", {
       "aria-labelledby": "synthesize-generate-heading"
     });
-    const heading2 = element(doc2, "h3", "synthesize-section-heading");
+    const heading2 = element2(doc2, "h3", "synthesize-section-heading");
     heading2.id = "synthesize-generate-heading";
     heading2.textContent = "Generated candidate";
-    const intro = element(doc2, "p", "synthesize-section-intro");
+    const intro = element2(doc2, "p", "synthesize-section-intro");
     intro.textContent = config2.agentEnabled ? "Generation sends the prepared context packet to your configured [agent].command. The candidate is shown here and never replaces your draft on its own." : (
       // Why generation is unavailable is the server's answer, rendered in the
       // status line beside this one: a hosted vault cannot start a process at
@@ -43960,53 +45507,53 @@ var BrainNotesApp = (() => {
       // them editing a file on a machine they are not using.
       "Everything else on this page works without an agent."
     );
-    const actions = element(doc2, "div", "synthesize-generate-actions");
-    const generate = element(doc2, "button", "synthesize-action", {
+    const actions = element2(doc2, "div", "synthesize-generate-actions");
+    const generate = element2(doc2, "button", "synthesize-action", {
       "data-synthesize-generate": ""
     });
     generate.type = "button";
     generate.textContent = "Generate draft";
     generate.disabled = true;
     actions.appendChild(generate);
-    const status = element(doc2, "p", "synthesize-generate-status", {
+    const status = element2(doc2, "p", "synthesize-generate-status", {
       "data-synthesize-generate-status": "",
       role: "status",
       "aria-live": "polite"
     });
-    const panel = element(doc2, "article", "synthesize-candidate-panel", {
+    const panel = element2(doc2, "article", "synthesize-candidate-panel", {
       "data-synthesize-candidate-panel": "",
       "aria-labelledby": "synthesize-generate-heading"
     });
     panel.hidden = true;
     panel.tabIndex = -1;
-    const rendered = element(doc2, "div", "synthesize-candidate-rendered", {
+    const rendered = element2(doc2, "div", "synthesize-candidate-rendered", {
       "data-synthesize-candidate-rendered": ""
     });
-    const markdownWrapper = element(doc2, "details", "synthesize-candidate-markdown");
+    const markdownWrapper = element2(doc2, "details", "synthesize-candidate-markdown");
     const markdownSummary = doc2.createElement("summary");
     markdownSummary.textContent = "Candidate Markdown";
-    const markdown2 = element(doc2, "pre", "synthesize-packet-body", {
+    const markdown2 = element2(doc2, "pre", "synthesize-packet-body", {
       "data-synthesize-candidate-markdown": "",
       tabindex: "0"
     });
     markdownWrapper.append(markdownSummary, markdown2);
-    const candidateActions = element(doc2, "div", "synthesize-candidate-actions");
-    const replace2 = element(doc2, "button", "synthesize-action", {
+    const candidateActions = element2(doc2, "div", "synthesize-candidate-actions");
+    const replace2 = element2(doc2, "button", "synthesize-action", {
       "data-synthesize-candidate-replace": ""
     });
     replace2.type = "button";
     replace2.textContent = "Replace draft";
-    const append = element(doc2, "button", "synthesize-action", {
+    const append = element2(doc2, "button", "synthesize-action", {
       "data-synthesize-candidate-append": ""
     });
     append.type = "button";
     append.textContent = "Append to draft";
-    const copy = element(doc2, "button", "synthesize-action", {
+    const copy = element2(doc2, "button", "synthesize-action", {
       "data-synthesize-candidate-copy": ""
     });
     copy.type = "button";
     copy.textContent = "Copy candidate";
-    const dismiss = element(doc2, "button", "synthesize-action is-quiet", {
+    const dismiss = element2(doc2, "button", "synthesize-action is-quiet", {
       "data-synthesize-candidate-dismiss": ""
     });
     dismiss.type = "button";
@@ -44017,56 +45564,56 @@ var BrainNotesApp = (() => {
     return { section, generate, status, panel, rendered, markdown: markdown2, replace: replace2, append, copy, dismiss };
   };
   var buildCreateSection = (doc2) => {
-    const section = element(doc2, "section", "synthesize-section synthesize-create", {
+    const section = element2(doc2, "section", "synthesize-section synthesize-create", {
       "aria-labelledby": "synthesize-create-heading"
     });
-    const heading2 = element(doc2, "h3", "synthesize-section-heading");
+    const heading2 = element2(doc2, "h3", "synthesize-section-heading");
     heading2.id = "synthesize-create-heading";
     heading2.textContent = "Create note";
-    const destination = element(doc2, "p", "synthesize-destination", {
+    const destination = element2(doc2, "p", "synthesize-destination", {
       "data-synthesize-destination": ""
     });
-    const actions = element(doc2, "div", "synthesize-create-actions");
-    const preview = element(doc2, "button", "synthesize-action is-primary", {
+    const actions = element2(doc2, "div", "synthesize-create-actions");
+    const preview = element2(doc2, "button", "synthesize-action is-primary", {
       "data-synthesize-preview": ""
     });
     preview.type = "button";
     preview.textContent = "Preview note";
-    const apply = element(doc2, "button", "synthesize-action", { "data-synthesize-apply": "" });
+    const apply = element2(doc2, "button", "synthesize-action", { "data-synthesize-apply": "" });
     apply.type = "button";
     apply.textContent = "Create note";
     apply.disabled = true;
     actions.append(preview, apply);
-    const status = element(doc2, "p", "synthesize-preview-status", {
+    const status = element2(doc2, "p", "synthesize-preview-status", {
       "data-synthesize-preview-status": "",
       role: "status",
       "aria-live": "polite"
     });
-    const panel = element(doc2, "div", "synthesize-preview-panel", {
+    const panel = element2(doc2, "div", "synthesize-preview-panel", {
       "data-synthesize-preview-panel": ""
     });
     panel.hidden = true;
     panel.tabIndex = -1;
-    const previewDestination = element(doc2, "p", "synthesize-preview-destination", {
+    const previewDestination = element2(doc2, "p", "synthesize-preview-destination", {
       "data-synthesize-preview-destination": ""
     });
-    const expiry = element(doc2, "p", "synthesize-preview-expiry", {
+    const expiry = element2(doc2, "p", "synthesize-preview-expiry", {
       "data-synthesize-preview-expiry": ""
     });
-    const rendered = element(doc2, "div", "synthesize-preview-rendered", {
+    const rendered = element2(doc2, "div", "synthesize-preview-rendered", {
       "data-synthesize-preview-rendered": ""
     });
-    const markdownWrapper = element(doc2, "details", "synthesize-preview-markdown");
+    const markdownWrapper = element2(doc2, "details", "synthesize-preview-markdown");
     const markdownSummary = doc2.createElement("summary");
     markdownSummary.textContent = "Note Markdown";
-    const markdown2 = element(doc2, "pre", "synthesize-packet-body", {
+    const markdown2 = element2(doc2, "pre", "synthesize-packet-body", {
       "data-synthesize-preview-markdown": "",
       tabindex: "0"
     });
     markdownWrapper.append(markdownSummary, markdown2);
-    const sourcesHeading = element(doc2, "h4", "synthesize-manifest-heading");
+    const sourcesHeading = element2(doc2, "h4", "synthesize-manifest-heading");
     sourcesHeading.textContent = "Sources";
-    const sources = element(doc2, "ol", "synthesize-preview-sources", {
+    const sources = element2(doc2, "ol", "synthesize-preview-sources", {
       "data-synthesize-preview-sources": ""
     });
     panel.append(previewDestination, expiry, rendered, markdownWrapper, sourcesHeading, sources);
@@ -44086,43 +45633,43 @@ var BrainNotesApp = (() => {
     };
   };
   var buildContextSection = (doc2) => {
-    const section = element(doc2, "section", "synthesize-section synthesize-context", {
+    const section = element2(doc2, "section", "synthesize-section synthesize-context", {
       "aria-labelledby": "synthesize-context-heading"
     });
-    const heading2 = element(doc2, "h3", "synthesize-section-heading");
+    const heading2 = element2(doc2, "h3", "synthesize-section-heading");
     heading2.id = "synthesize-context-heading";
     heading2.textContent = "Context packet";
-    const actions = element(doc2, "div", "synthesize-context-actions");
-    const prepare = element(doc2, "button", "synthesize-action is-primary", {
+    const actions = element2(doc2, "div", "synthesize-context-actions");
+    const prepare = element2(doc2, "button", "synthesize-action is-primary", {
       "data-synthesize-prepare": ""
     });
     prepare.type = "button";
     prepare.textContent = "Prepare context";
-    const copy = element(doc2, "button", "synthesize-action", { "data-synthesize-copy": "" });
+    const copy = element2(doc2, "button", "synthesize-action", { "data-synthesize-copy": "" });
     copy.type = "button";
     copy.textContent = "Copy context";
     copy.disabled = true;
-    const discard = element(doc2, "button", "synthesize-action is-quiet", {
+    const discard = element2(doc2, "button", "synthesize-action is-quiet", {
       "data-synthesize-discard": ""
     });
     discard.type = "button";
     discard.textContent = "Discard saved work";
     actions.append(prepare, copy, discard);
-    const status = element(doc2, "p", "synthesize-context-status", {
+    const status = element2(doc2, "p", "synthesize-context-status", {
       "data-synthesize-context-status": "",
       role: "status",
       "aria-live": "polite"
     });
-    const summary = element(doc2, "p", "synthesize-context-summary", {
+    const summary = element2(doc2, "p", "synthesize-context-summary", {
       "data-synthesize-context-summary": ""
     });
-    const manifest = element(doc2, "div", "synthesize-manifest", {
+    const manifest = element2(doc2, "div", "synthesize-manifest", {
       "data-synthesize-manifest": ""
     });
-    const packetWrapper = element(doc2, "details", "synthesize-packet");
+    const packetWrapper = element2(doc2, "details", "synthesize-packet");
     const packetSummary = doc2.createElement("summary");
     packetSummary.textContent = "Packet Markdown";
-    const packet = element(doc2, "pre", "synthesize-packet-body", {
+    const packet = element2(doc2, "pre", "synthesize-packet-body", {
       "data-synthesize-packet": "",
       tabindex: "0"
     });
@@ -44134,7 +45681,7 @@ var BrainNotesApp = (() => {
   // internal/web/static_src/synthesize-view.ts
   var createSynthesisView = (mount, config2) => {
     const doc2 = mount.ownerDocument;
-    const warning = element(doc2, "p", "synthesize-warning", {
+    const warning = element2(doc2, "p", "synthesize-warning", {
       "data-synthesize-warning": "",
       role: "status",
       "aria-live": "polite"
@@ -44147,10 +45694,10 @@ var BrainNotesApp = (() => {
     const context = buildContextSection(doc2);
     const generate = buildGenerateSection(doc2, config2);
     const create = buildCreateSection(doc2);
-    const columns = element(doc2, "div", "synthesize-columns");
-    const left = element(doc2, "div", "synthesize-column");
+    const columns = element2(doc2, "div", "synthesize-columns");
+    const left = element2(doc2, "div", "synthesize-column");
     left.append(sources.section, suggestions.section, search.section);
-    const right = element(doc2, "div", "synthesize-column");
+    const right = element2(doc2, "div", "synthesize-column");
     right.append(draft.section, context.section, generate.section, create.section);
     columns.append(left, right);
     mount.replaceChildren(warning, columns);
@@ -45378,7 +46925,9 @@ ${candidate.markdown}`;
       initSynthesize();
       initSettings();
       initSourceEditor();
+      initSync();
     }
+    initSyncLine();
     initFacets();
     initNoteLayout();
     initCopyControls();
