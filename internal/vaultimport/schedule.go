@@ -207,6 +207,9 @@ type candidate struct {
 	// which would describe a wait that has since been satisfied.
 	reason HoldReason
 	detail string
+	// blocker is the package in the channel this one is waiting on, when the rule
+	// that held it named one. Cleared with the verdict it belongs to.
+	blocker string
 	// conflict is the durable hold, when the last verdict was one.
 	conflict *ConflictRecord
 }
@@ -409,7 +412,7 @@ func (d *drain) pass() (bool, error) {
 		if found.done {
 			continue
 		}
-		found.reason, found.detail, found.conflict = "", "", nil
+		found.reason, found.detail, found.blocker, found.conflict = "", "", "", nil
 		if held := d.hold(found, state); held {
 			continue
 		}
@@ -591,6 +594,19 @@ func scanVerdict(err error) HoldReason {
 	return HoldUnreadable
 }
 
+// waits is one scheduling rule's answer: why this package must wait, and which
+// package in the channel it is waiting on when the rule knows one.
+//
+// The blocker is carried rather than left in the message because a reader acts on
+// it — inverted over the channel it is what a held conflict's dependents are —
+// and parsing it back out of a sentence would make the wording load-bearing. An
+// empty reason is a rule that does not hold this package.
+type waits struct {
+	reason  HoldReason
+	detail  string
+	blocker string
+}
+
 // hold decides whether a package must wait, and records why.
 //
 // The four rules are checked in order of how much they explain. An unreadable
@@ -605,11 +621,11 @@ func (d *drain) hold(found *candidate, state *State) bool {
 		found.reason, found.detail = scanVerdict(found.unreadable), found.unreadable.Error()
 		return true
 	}
-	for _, rule := range []func(*candidate, *State) (HoldReason, string){
+	for _, rule := range []func(*candidate, *State) waits{
 		d.dependency, d.predecessor, d.order,
 	} {
-		if reason, detail := rule(found, state); reason != "" {
-			found.reason, found.detail, found.conflict = reason, detail, nil
+		if answer := rule(found, state); answer.reason != "" {
+			found.reason, found.detail, found.blocker, found.conflict = answer.reason, answer.detail, answer.blocker, nil
 			return true
 		}
 	}
@@ -624,15 +640,19 @@ func (d *drain) hold(found *candidate, state *State) bool {
 // one place in one device's stream. A frontier would have to assume the stream
 // has no gaps, and a vault that has applied 1 and 3 has no way to know whether 2
 // was skipped or has not arrived.
-func (d *drain) dependency(found *candidate, state *State) (HoldReason, string) {
+// The blocker is left empty on purpose: a dependency names a position in a
+// device's stream, and the package that would satisfy it is precisely the one
+// this vault has never seen.
+func (d *drain) dependency(found *candidate, state *State) waits {
 	for _, required := range found.manifest.Requires {
 		if appliedPosition(state, required.OriginDevice, required.Sequence) {
 			continue
 		}
-		return HoldDependency, fmt.Sprintf("requires %s position %d, which this vault has not applied",
-			required.OriginDevice, required.Sequence)
+		return waits{reason: HoldDependency, detail: fmt.Sprintf(
+			"requires %s position %d, which this vault has not applied",
+			required.OriginDevice, required.Sequence)}
 	}
-	return "", ""
+	return waits{}
 }
 
 // appliedPosition reports whether this vault has applied the package at one
@@ -659,19 +679,23 @@ func appliedPosition(state *State, origin string, sequence uint64) bool {
 // would deadlock the first package a peer ever sends back. Holding on a known
 // one that has not been applied is the case that is both decidable and worth
 // deciding.
-func (d *drain) predecessor(found *candidate, _ *State) (HoldReason, string) {
+func (d *drain) predecessor(found *candidate, _ *State) waits {
 	waiting := d.carriers()
 	for _, change := range found.operation.Changes {
 		for _, ancestor := range change.Predecessors {
-			blocker, waits := waiting[ancestor]
-			if !waits || blocker == found {
+			blocker, held := waiting[ancestor]
+			if !held || blocker == found {
 				continue
 			}
-			return HoldPredecessor, fmt.Sprintf("%q follows operation %s, which %s still holds",
-				change.Path, ancestor, blocker.manifest.PackageID)
+			return waits{
+				reason: HoldPredecessor,
+				detail: fmt.Sprintf("%q follows operation %s, which %s still holds",
+					change.Path, ancestor, blocker.manifest.PackageID),
+				blocker: blocker.manifest.PackageID,
+			}
 		}
 	}
-	return "", ""
+	return waits{}
 }
 
 // carriers maps the operation identity of every package still in the channel to
@@ -755,7 +779,7 @@ func ancestorsOf(operation *vaultsync.Operation) []string {
 // A package that causally *follows* this one is never earlier, whatever the
 // total order says, and that exception is the other half of the same promise —
 // see follows, which is where the stall this rule cannot see comes from.
-func (d *drain) order(found *candidate, _ *State) (HoldReason, string) {
+func (d *drain) order(found *candidate, _ *State) waits {
 	carriers := d.carriers()
 	for _, other := range d.pending {
 		if other == found || other.done || other.operation == nil || !before(other, found) {
@@ -765,11 +789,14 @@ func (d *drain) order(found *candidate, _ *State) (HoldReason, string) {
 			continue
 		}
 		if shared := overlap(found.operation, other.operation); shared != "" {
-			return HoldOrder, fmt.Sprintf("changes %q, which %s changes first",
-				shared, other.manifest.PackageID)
+			return waits{
+				reason:  HoldOrder,
+				detail:  fmt.Sprintf("changes %q, which %s changes first", shared, other.manifest.PackageID),
+				blocker: other.manifest.PackageID,
+			}
 		}
 	}
-	return "", ""
+	return waits{}
 }
 
 // overlap returns a path both operations change, or the empty string.

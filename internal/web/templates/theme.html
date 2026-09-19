@@ -47,11 +47,27 @@
 {{end}}
 
 {{define "siteNav"}}
- {{if readOnly}}
- <p class="replica-status" role="status">Read-only replica ·
- {{with replicaStatus}}{{if .LastSuccessfulSync.IsZero}}No verified sync recorded{{else}}Last successful sync: <time>{{.LastSuccessfulSync.Format "2006-01-02 15:04:05 MST"}}</time>{{end}}{{if .Stale}} · Sync stale (over 15 minutes){{end}}{{end}}
- </p>
- {{end}}
+  {{/*
+    One line for where synchronization has got to, filled by the browser from
+    /api/sync/status rather than rendered here. It replaced a sentence rendered
+    from the replica status file, and the reason is that the sentence could only
+    ever say one thing: a published replica's copy is this many minutes old. A
+    vault that saves, exports and waits for its peer to acknowledge has a state
+    that changes while somebody is reading the page, and a server-rendered line
+    would be wrong by then. The status route answers both — on a replica it still
+    reports that copy's freshness, which is all a replica knows.
+
+    The element is here in every mode, because every mode has something to say.
+    It carries no state of its own: with no script it is empty and takes no room.
+  */}}
+  <p
+    class="sync-line"
+    data-sync-line
+    data-sync-status-endpoint="/api/sync/status"
+    data-sync-review-path="/sync"
+    role="status"
+    aria-live="polite"
+  ></p>
   <nav class="site-nav" aria-label="Primary">
     <a href="/">Brief</a>
     <a href="/library">Library</a>
@@ -65,6 +81,12 @@
       configuration, it only cannot start a process.
     */}}
     {{if not readOnly}}<a href="/settings">Settings</a>{{end}}
+    {{/*
+      /sync is gated for the same reason and on the same capability: a replica
+      answers the status route and nothing else on that surface, so a link to the
+      page would refuse. Hosted mode keeps it — it can write, so it can resolve.
+    */}}
+    {{if not readOnly}}<a href="/sync">Sync</a>{{end}}
     <div class="saved-views-nav" data-saved-views-nav role="group" aria-label="Saved views"></div>
   </nav>
 {{end}}

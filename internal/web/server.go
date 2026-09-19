@@ -181,7 +181,6 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		"readOnly":      func() bool { return !caps.documentWrites },
 		"processLaunch": func() bool { return caps.processLaunch },
 		"serveMode":     func() string { return string(caps.mode) },
-		"replicaStatus": func() replicaStatus { return readReplicaStatus(opts.ReplicaStatusFile) },
 	}).ParseFS(embeddedFiles, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("web: parse templates: %w", err)
@@ -398,6 +397,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	srv.registerSettingsRoutes(mux)
 	srv.registerTemplateRoutes(mux)
 	srv.registerSynthesisRoutes(mux)
+	srv.registerSyncRoutes(mux)
 	srv.registerPageRoutes(mux)
 	mux.HandleFunc(configStatusRoutePath, srv.handleConfigStatus)
 	mux.HandleFunc(mediaRoutePrefix, srv.handleMedia)

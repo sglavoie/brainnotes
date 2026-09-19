@@ -27,6 +27,11 @@ const (
 	propertyPreviewView     propertyPreviewKind = "view"
 	propertyPreviewSetting  propertyPreviewKind = "setting"
 	propertyPreviewTemplate propertyPreviewKind = "template"
+	// propertyPreviewResolution is a synchronization conflict resolution. It is the
+	// one kind whose record carries a plan rather than a request, because the
+	// engine re-checks that plan against the vault more strictly than a replan
+	// here could — see the write class in sync_resolve.go.
+	propertyPreviewResolution propertyPreviewKind = "resolution"
 )
 
 // propertyPreviewStore holds short-lived, one-use receipts. A receipt carries
@@ -56,6 +61,7 @@ type propertyPreviewRecord struct {
 	View       viewMutationRequest
 	Setting    settingMutationRequest
 	Template   templateMutationRequest
+	Resolution syncResolutionRecord
 	Files      []propertyPreviewFileState
 }
 

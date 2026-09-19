@@ -747,6 +747,34 @@ func readRetained(root, packageID string, branch Branch) []byte {
 	return data
 }
 
+// Version is how a surface outside this package reaches one version of a
+// contested path.
+//
+// It exists because "show me both versions" cannot be answered from anywhere
+// else. The peer's bytes live nowhere but the copy the hold kept, and this
+// vault's own version is on the disk right up until somebody edits it, after
+// which the retained copy is the only place the version the hold recorded still
+// exists. Which of the two places answers is decided by the digest rather than
+// by the caller, so passing the branch a resolution was planned against always
+// shows the version that resolution is about — see branchContent, which is the
+// one implementation of that rule and is also what the revision installs content
+// from.
+//
+// It is a wrapper rather than a second reader on purpose: the digest check is the
+// thing that makes either copy trustworthy, and a second implementation of it is
+// a second chance to leave it out.
+//
+// Nothing is returned for a branch that is a deletion, one this vault never had,
+// or one whose bytes are in neither place — Branch.Exists distinguishes the first
+// two from the third, and a caller offering a merge has to treat "no bytes" as a
+// version it cannot show rather than as an empty file.
+func Version(root, packageID string, contested PathConflict, branch Branch) []byte {
+	if !branch.Exists {
+		return nil
+	}
+	return branchContent(root, packageID, contested, branch)
+}
+
 // baseline finds the bytes both replicas last agreed on, and is best-effort by
 // construction.
 //

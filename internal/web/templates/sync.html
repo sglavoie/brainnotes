@@ -1,0 +1,77 @@
+{{define "sync"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>Synchronization</h1>
+        <p class="page-subtitle">What this vault has saved, what it has sent to your other replica, and what that replica has acknowledged. A change is only reported as arrived once the replica that sent it has a receipt.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    <section
+      class="panel sync-panel"
+      data-sync-panel
+      data-sync-status-endpoint="{{ .StatusEndpoint }}"
+      aria-labelledby="sync-heading"
+      aria-describedby="sync-status"
+    >
+      <div class="panel-header">
+        <h2 id="sync-heading">Status</h2>
+        <div class="sync-actions">
+          <button class="sync-button" type="button" data-sync-refresh>Refresh</button>
+        </div>
+      </div>
+      <p
+        id="sync-status"
+        class="sync-status is-loading"
+        data-sync-summary
+        role="status"
+        aria-live="polite"
+      >Reading synchronization status...</p>
+      <dl class="sync-facts" data-sync-facts></dl>
+      <ul class="sync-problems" data-sync-problems></ul>
+    </section>
+
+    <section
+      class="panel sync-conflicts-panel"
+      data-sync-conflicts
+      data-sync-conflicts-endpoint="{{ .ConflictsEndpoint }}"
+      data-sync-preview-endpoint="{{ .PreviewEndpoint }}"
+      data-sync-resolve-endpoint="{{ .ResolveEndpoint }}"
+      data-sync-csrf="{{ .CSRFToken }}"
+      data-sync-vault="{{ .VaultID }}"
+      aria-labelledby="sync-conflicts-heading"
+      aria-describedby="sync-conflicts-status"
+    >
+      <div class="panel-header">
+        <h2 id="sync-conflicts-heading">Changes waiting for a decision</h2>
+      </div>
+      <p
+        id="sync-conflicts-status"
+        class="sync-status is-loading"
+        data-sync-conflicts-status
+        role="status"
+        aria-live="polite"
+      >Reading the incoming channel...</p>
+      <div class="sync-operations" data-sync-operations></div>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}
