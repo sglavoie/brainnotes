@@ -72,7 +72,7 @@ it("names both re-read refusals and nothing else as stale", () => {
   // A missing or spent receipt is the same advice: read both versions and decide
   // again. A safety refusal is not — deciding again is the wrong thing to suggest.
   expect(stalePreview({ ok: false, code: "preview_required", message: "" })).toBe(true);
-  expect(stalePreview({ ok: false, code: "safety", message: "" })).toBe(false);
+  expect(stalePreview({ ok: false, code: "safety_error", message: "" })).toBe(false);
   expect(stalePreview({ ok: false, code: "", message: "" })).toBe(false);
 });
 

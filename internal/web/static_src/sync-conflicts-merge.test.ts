@@ -12,7 +12,7 @@ import {
 } from "./sync-conflicts.test-helpers";
 import { memoryDraftStorage, readDrafts, seedDraft } from "./source-draft.test-helpers";
 import { mergeDraftKey } from "./sync-merge-editor";
-import { syncJSON } from "./sync.test-helpers";
+import { syncContestedPath, syncJSON, syncOperation } from "./sync.test-helpers";
 
 // The manual merge, driven through the review page rather than in isolation: the
 // same editor the /edit page mounts, over one contested path, with the composed
@@ -159,6 +159,115 @@ it("does not promise a merge back when this browser refused to keep it", async (
   );
   // The sentence is true: the teardown's flush had nowhere to put it.
   expect(readDrafts(storage)).toEqual([]);
+});
+
+it("reports a merge on another card lost to a refusal that was not about staleness", async () => {
+  const server = createSyncServer();
+  // Two holds, because the merge at risk is often on the card nobody clicked: any
+  // failure here re-reads the channel and a re-read replaces *every* card.
+  server.state.holds = [
+    syncOperation(),
+    syncOperation({
+      package_id: "pkg-2",
+      operation_id: "op-2",
+      sequence: 5,
+      paths: [syncContestedPath({ path: "Beta.md" })],
+    }),
+  ];
+  server.state.resolve = () =>
+    syncJSON(
+      {
+        ok: false,
+        code: "safety_error",
+        message: "the content history is blocked, so nothing was written",
+      },
+      500
+    );
+  const storage = memoryDraftStorage();
+  storage.maxBytes = 20;
+  const harness = mountSyncConflicts(server, { storage });
+  await harness.panel.load();
+
+  // The merge is composed on the second card…
+  chooseSyncPath("Beta.md", "manual-merge");
+  harness.surface()?.type("a merge on the other card\n");
+
+  // …and the decision is applied on the first, which is the Apply these helpers find.
+  chooseSyncPath("Alpha.md", "keep-current");
+  syncAction("review").click();
+  await vi.waitFor(() => expect(syncAction("apply").hidden).toBe(false));
+  syncAction("apply").click();
+
+  // The engine's own sentence about the vault, then the one loss nothing else on the
+  // page would ever report. Without the second half this reads as "nothing happened"
+  // over text that has just been destroyed.
+  await vi.waitFor(() =>
+    expect(syncPanelStatus().textContent).toBe(
+      "the content history is blocked, so nothing was written. " +
+        "A merge you composed has to be typed again: this page could not keep a copy of it. " +
+        "2 changes are waiting for a decision."
+    )
+  );
+  expect(readDrafts(storage)).toEqual([]);
+});
+
+it("keeps quiet about merges when a failure lost none of them", async () => {
+  const server = createSyncServer();
+  server.state.resolve = () =>
+    syncJSON(
+      {
+        ok: false,
+        code: "safety_error",
+        message: "the content history is blocked, so nothing was written",
+      },
+      500
+    );
+  const harness = mountSyncConflicts(server);
+  await harness.panel.load();
+
+  chooseSyncPath("Alpha.md", "manual-merge");
+  harness.surface()?.type("a merge this browser can keep\n");
+  syncAction("review").click();
+  await vi.waitFor(() => expect(syncAction("apply").hidden).toBe(false));
+  syncAction("apply").click();
+
+  // The refusal is about the vault, and "your merge is still here" beside it is noise:
+  // the re-read seeds the editor straight back from this browser's copy.
+  await vi.waitFor(() =>
+    expect(syncPanelStatus().textContent).toBe(
+      "the content history is blocked, so nothing was written. " +
+        "1 change is waiting for a decision."
+    )
+  );
+  chooseSyncPath("Alpha.md", "manual-merge");
+  expect(harness.surface()?.getValue()).toBe("a merge this browser can keep\n");
+});
+
+it("stops keeping a merge the resolution decided against", async () => {
+  const server = createSyncServer();
+  const harness = mountSyncConflicts(server);
+  await harness.panel.load();
+
+  chooseSyncPath("Alpha.md", "manual-merge");
+  harness.surface()?.type("a merge nobody applied\n");
+  // Second thoughts: the merge stays on screen, and the decision is somebody else's
+  // version.
+  chooseSyncPath("Alpha.md", "accept-incoming");
+  syncAction("review").click();
+  await vi.waitFor(() => expect(syncAction("apply").hidden).toBe(false));
+  server.state.holds = [];
+  syncAction("apply").click();
+
+  await vi.waitFor(() =>
+    expect(syncPanelStatus().textContent).toBe(
+      "Alpha.md now holds your version, and your decision was recorded. " +
+        "Nothing is waiting for a decision."
+    )
+  );
+  // A resolution covers every contested path of its package, so this conflict is gone
+  // and no page will ever offer that merge again. A merge is ineligible for eviction,
+  // so one left here would hold quota another note's draft needs until it expired.
+  expect(readDrafts(harness.storage)).toEqual([]);
 });
 
 it("says nothing about merges on a stale plan that had none", async () => {

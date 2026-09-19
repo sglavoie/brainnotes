@@ -22,6 +22,7 @@ import {
   previewSyncResolution,
   stalePreview,
   type FetchLike,
+  type SyncFailure,
 } from "./sync-requests";
 import type { SourceSurfaceFactory } from "./source-surface";
 import type { SyncConflictOperation, SyncResolvedResult } from "./api";
@@ -42,7 +43,9 @@ import type { SyncConflictOperation, SyncResolvedResult } from "./api";
 // local edit, a competing resolution, or a hold that is gone — the versions have to
 // be read again, and the composed merge is the one text on the page that exists
 // nowhere else, so the reload seeds every merge editor from the copy kept in this
-// browser rather than starting it over.
+// browser rather than starting it over. `preview_required` takes the same remedy for
+// a different reason (a receipt spent or past its five minutes) and says so in its
+// own words: see reReadOpening.
 //
 // **A discarding decision is confirmed by naming what it discards**, from the
 // engine's own per-choice answer rather than from a guess about which choices are
@@ -106,11 +109,19 @@ type PanelContext = {
   draftID: string;
   confirm: (message: string) => boolean;
   changed: () => void;
+  // merges asks what a re-read can honestly promise about every merge on the page,
+  // not just the ones on the card whose request failed. One reload replaces all of
+  // the cards, so a sentence scoped to one of them is a sentence about a fraction of
+  // what is about to be thrown away. It lives on the context because only the panel
+  // can see every controller.
+  merges: () => MergeSafety;
   view: Window | null;
   doc: Document;
 };
 
 type OperationController = {
+  // editors is what this card has mounted, for the panel-wide merge question above.
+  editors: () => SyncMergeEditor[];
   destroy: () => void;
 };
 
@@ -258,7 +269,7 @@ const reviewResolution = async (scope: ResolutionScope): Promise<void> => {
       say(outcome.message, "is-error");
       return;
     }
-    scope.reload(staleAnnouncement(mergeSafety(scope)));
+    scope.reload(staleAnnouncement(outcome, scope.ctx.merges()));
     return;
   }
   renderSyncPlan(scope.elements.plan, outcome.result.paths, scope.ctx.doc);
@@ -287,13 +298,23 @@ const applyResolution = async (scope: ResolutionScope): Promise<void> => {
   // panel is in a position to decide that nothing happened.
   ctx.changed();
   if (!outcome.ok) {
+    // Every failure here reloads, and every reload replaces the editors — so the
+    // merge question is asked on both branches rather than only the stale one. The
+    // refusal that is not staleness used to reload in silence about a merge this
+    // browser could not keep, which is the one loss nothing else on the page reports.
+    const merges = ctx.merges();
     scope.reload(
       stalePreview(outcome)
-        ? staleAnnouncement(mergeSafety(scope))
-        : { message: outcome.message, kind: "is-error" }
+        ? staleAnnouncement(outcome, merges)
+        : failureAnnouncement(outcome.message, merges)
     );
     return;
   }
+  // Every editor on this card, including one whose path was decided some other way
+  // in the end. A resolution covers *all* of the package's contested paths, so the
+  // card is gone after this and nothing will ever offer those merges back — and a
+  // merge is deliberately ineligible for eviction (see mergeNoteKeyPrefix), so one
+  // kept here would hold quota another note's draft needs until it expires.
   for (const editor of scope.editors.values()) {
     editor.applied();
   }
@@ -404,6 +425,8 @@ const createOperationController = (
   });
 
   return {
+    editors: (): SyncMergeEditor[] => [...scope.editors.values()],
+
     destroy(): void {
       for (const editor of scope.editors.values()) {
         editor.destroy();
@@ -418,37 +441,49 @@ const createOperationController = (
 // kept in this browser, and that they are gone otherwise.
 type MergeSafety = "none" | "kept" | "lost";
 
-// mergeSafety asks the editors rather than asking whether this browser has storage.
+// mergeSafetyOf asks the editors rather than asking whether this browser has storage.
 // A browser whose quota is full *has* storage and refuses the write anyway, and a
 // page served without a vault identity keeps nothing — both answer "there is
 // somewhere to keep one" and lose the text, so the question is what the last keep
 // actually did. It flushes first, or a merge typed a keystroke ago would be judged
 // on a write whose debounce had not fired.
-const mergeSafety = (scope: ResolutionScope): MergeSafety => {
-  if (scope.editors.size === 0) {
+//
+// It takes the editors rather than a card, because a reload replaces every card on
+// the page: the merge at risk is often on one nobody clicked.
+const mergeSafetyOf = (editors: SyncMergeEditor[]): MergeSafety => {
+  if (editors.length === 0) {
     return "none";
   }
   let kept = true;
-  for (const editor of scope.editors.values()) {
+  for (const editor of editors) {
     editor.flush();
     kept = editor.kept() && kept;
   }
   return kept ? "kept" : "lost";
 };
 
-// staleAnnouncement is what a stale plan says.
+// staleAnnouncement is what a plan that has to be read again says.
 //
 // The re-read seeds each merge editor from the copy in this browser, so the promise
 // is true exactly when that copy exists. Telling somebody their merge is still there
 // before replacing the editor it was typed in is the one wording here that could
 // lose the text it is about, which is why it is not said on the strength of storage
 // being present.
-const staleAnnouncement = (merges: MergeSafety): SyncAnnouncement => ({
-  message:
-    "This vault moved on while the decision was being made, so nothing was applied. " +
-    mergeClause(merges),
+const staleAnnouncement = (failure: SyncFailure, merges: MergeSafety): SyncAnnouncement => ({
+  message: `${reReadOpening(failure)} ${mergeClause(merges)}`,
   kind: "is-warning",
 });
+
+// The two refusals `stalePreview` covers share a remedy and not a cause, so they
+// share the re-read and not the first sentence. `preview_stale` is a fact about the
+// vault: something moved under the decision. `preview_required` is a fact about this
+// page's receipt — unknown, already spent, or past its five minutes — and saying the
+// vault moved on there is a claim about somebody's notes that is not true, which
+// sends them looking for a change nobody made.
+const reReadOpening = (failure: SyncFailure): string =>
+  failure.code === "preview_stale"
+    ? "This vault moved on while the decision was being made, so nothing was applied."
+    : "This review is too old to apply, so nothing was applied.";
 
 const mergeClause = (merges: MergeSafety): string => {
   if (merges === "none") {
@@ -457,11 +492,25 @@ const mergeClause = (merges: MergeSafety): string => {
   if (merges === "kept") {
     return "Both versions are being read again; any merge you composed is still here.";
   }
-  return (
-    "Both versions are being read again, and a merge you composed has to be typed " +
-    "again: this page could not keep a copy of it."
-  );
+  return `Both versions are being read again, and a ${lostMergeClause}`;
 };
+
+// The one sentence about a merge this browser could not keep, said in two places
+// because both of them replace the editor it is about.
+const lostMergeClause =
+  "merge you composed has to be typed again: this page could not keep a copy of it.";
+
+// failureAnnouncement carries a refusal that is not about staleness through the
+// re-read, and adds the merge clause only when there is a loss to report.
+//
+// The refusal is the engine's own sentence about the vault, and "your merge is still
+// here" beside it is noise — but a merge this browser could not keep is about to be
+// destroyed by the reload this failure triggers, and nothing else on the page would
+// ever say so.
+const failureAnnouncement = (message: string, merges: MergeSafety): SyncAnnouncement => ({
+  message: merges === "lost" ? `${ended(message)} A ${lostMergeClause}` : message,
+  kind: "is-error",
+});
 
 // resolvedSentence reports what durably happened, in the order it matters.
 //
@@ -507,6 +556,10 @@ export const createSyncConflictsPanel = (
     return null;
   }
   const attr = (name: string): string => deps.root.getAttribute(name) ?? "";
+  // Declared before the context that closes over it: the question is about every card
+  // mounted at the moment it is asked, which is not the set that existed when any one
+  // of them was built.
+  let controllers: OperationController[] = [];
   const ctx: PanelContext = {
     conflictsEndpoint: attr("data-sync-conflicts-endpoint"),
     previewEndpoint: attr("data-sync-preview-endpoint"),
@@ -524,11 +577,11 @@ export const createSyncConflictsPanel = (
     draftID: deps.draftID ?? resolveDraftTabID(() => randomID("tab"), deps.view ?? undefined),
     confirm: deps.confirm ?? ((message: string) => (deps.view ?? window).confirm(message)),
     changed: deps.changed ?? ((): void => {}),
+    merges: (): MergeSafety =>
+      mergeSafetyOf(controllers.flatMap((controller) => controller.editors())),
     view: deps.view ?? null,
     doc: deps.root.ownerDocument,
   };
-
-  let controllers: OperationController[] = [];
 
   const teardown = (): void => {
     for (const controller of controllers) {

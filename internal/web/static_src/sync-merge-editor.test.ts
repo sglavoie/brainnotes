@@ -219,6 +219,29 @@ it("takes the no-room sentence back down once a copy is kept", () => {
   expect(notice().hidden).toBe(true);
 });
 
+it("puts the base-mismatch warning back when the no-room sentence clears", () => {
+  vi.useFakeTimers();
+  seedMerge("older merge\n", { baseRevision: "sha-before" });
+  const editor = mount();
+  expect(notice().textContent).toContain("started from a different version");
+
+  storage.maxBytes = 20;
+  type("a merge that will not fit\n");
+  vi.advanceTimersByTime(300);
+  expect(editor.kept()).toBe(false);
+
+  storage.maxBytes = Number.POSITIVE_INFINITY;
+  type("short\n");
+  vi.advanceTimersByTime(300);
+
+  // The keep is the only thing that recovered. The text on screen is still a merge
+  // composed against a version this vault has moved past, and clearing the line would
+  // answer a storage problem by dropping advice about the merge itself.
+  expect(editor.kept()).toBe(true);
+  expect(notice().textContent).toContain("started from a different version");
+  expect(notice().hidden).toBe(false);
+});
+
 it("leaves the load's own sentence alone when the recovered merge is written back", () => {
   seedMerge("half composed\n");
   const editor = mount();

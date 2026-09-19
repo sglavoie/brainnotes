@@ -173,6 +173,41 @@ describe("createSourceDraftStore under quota pressure", () => {
     expect(storage.keys()).toEqual([]);
   });
 
+  // A merge composed on the sync page is the only copy of itself: this vault holds
+  // one branch and the peer holds the other, and the third version exists nowhere
+  // until it is applied. An editor draft is unsaved text over a note still on disk,
+  // so the refusal lands on the side that can be retyped from something.
+  it("never evicts a composed merge, even when it is the oldest record there is", () => {
+    const storage = memoryDraftStorage(1);
+    seedDraft(storage, {
+      draftID: "tab-9",
+      noteKey: "sync-merge|pkg-1|Alpha.md",
+      updatedAt: 1,
+    });
+
+    expect(store(storage).keep({ relPath: "Alpha.md", baseRevision: "r1", content: "mine\n" })).toBe(
+      "refused"
+    );
+    expect(storage.keys()).toEqual([draftKey("sync:v1", "sync-merge|pkg-1|Alpha.md", "tab-9")]);
+  });
+
+  // The exemption is for the merge and not for everything beside it: an ordinary
+  // draft is still evicted when one is on the shelf, or a single kept merge would
+  // make the store un-freeable for the rest of the page.
+  it("evicts an ordinary draft while a merge is kept", () => {
+    const storage = memoryDraftStorage(2);
+    seedDraft(storage, { draftID: "tab-9", noteKey: "sync-merge|pkg-1|Alpha.md", updatedAt: 1 });
+    seedDraft(storage, { draftID: "tab-8", noteKey: "beta", updatedAt: 9_000 });
+
+    expect(store(storage).keep({ relPath: "Alpha.md", baseRevision: "r1", content: "mine\n" })).toBe(
+      "stored"
+    );
+    expect(storage.keys()).toEqual([
+      draftKey("sync:v1", "sync-merge|pkg-1|Alpha.md", "tab-9"),
+      draftKey("sync:v1", "alpha", "tab-1"),
+    ]);
+  });
+
   // An announcement is a courtesy to another tab. Letting it evict would trade
   // somebody's unsaved words for a notification.
   it("never evicts anything to announce a save", () => {

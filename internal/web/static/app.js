@@ -14851,6 +14851,7 @@ var BrainNotesApp = (() => {
   var draftSchemaVersion = 1;
   var draftKeyPrefix = `bn.draft.${draftSchemaVersion}|`;
   var savedKeyPrefix = `bn.draft-saved.${draftSchemaVersion}|`;
+  var mergeNoteKeyPrefix = "sync-merge|";
   var defaultMaxAgeMs = 14 * 24 * 60 * 60 * 1e3;
   var resolveDraftStorage = (view = globalThis.window) => {
     try {
@@ -15045,6 +15046,9 @@ var BrainNotesApp = (() => {
         continue;
       }
       const draft = parseDraft(safeGet(storage, key));
+      if (draft && draft.noteKey.startsWith(mergeNoteKeyPrefix)) {
+        continue;
+      }
       const at = draft ? draft.updatedAt : -1;
       if (at < oldestAt) {
         oldestAt = at;
@@ -43994,7 +43998,7 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/sync-merge-editor.ts
   var defaultDelayMs2 = 300;
-  var mergeDraftKey = (packageID, path) => `sync-merge|${packageID}|${path}`;
+  var mergeDraftKey = (packageID, path) => `${mergeNoteKeyPrefix}${packageID}|${path}`;
   var keptMerge = (store, ownID) => {
     const kept = store.list();
     return kept.find((draft) => draft.draftID === ownID) ?? kept[0] ?? null;
@@ -44057,6 +44061,35 @@ var BrainNotesApp = (() => {
     }
     return "This browser will not keep a copy of the merge, so it exists only on this page.";
   };
+  var createMergeNotice = (host, standing) => {
+    const show = (sentence) => {
+      host.textContent = sentence;
+      host.hidden = sentence === "";
+    };
+    let line = standing;
+    let warned2 = false;
+    show(line);
+    return {
+      report: (outcome) => {
+        if (outcome !== "stored") {
+          warned2 = true;
+          show(writeNotice(outcome));
+          return;
+        }
+        if (warned2) {
+          warned2 = false;
+          show(line);
+        }
+      },
+      // After a restart or an application there is no recovered merge for the load's
+      // sentence to be about either, so it goes with everything else.
+      dismiss: () => {
+        warned2 = false;
+        line = "";
+        show("");
+      }
+    };
+  };
   var createSyncMergeEditor = (deps) => {
     const store = createSourceDraftStore({
       vaultID: deps.vaultID,
@@ -44067,29 +44100,12 @@ var BrainNotesApp = (() => {
     });
     const kept = keptMerge(store, store.draftID);
     const initial = kept ? kept.content : deps.seed;
-    const show = (sentence) => {
-      deps.notice.textContent = sentence;
-      deps.notice.hidden = sentence === "";
-    };
-    show(noticeFor(kept, deps.baseRevision, store.available()));
-    let warned2 = false;
-    const reportKeep = (outcome) => {
-      if (outcome !== "stored") {
-        warned2 = true;
-        show(writeNotice(outcome));
-        return;
-      }
-      if (warned2) {
-        warned2 = false;
-        show("");
-      }
-    };
-    const dismiss = () => {
-      warned2 = false;
-      show("");
-    };
+    const notice = createMergeNotice(
+      deps.notice,
+      noticeFor(kept, deps.baseRevision, store.available())
+    );
     const surface = deps.factory(deps.host, initial);
-    const keeper = createMergeKeeper(deps, store, () => surface.getValue(), reportKeep);
+    const keeper = createMergeKeeper(deps, store, () => surface.getValue(), notice.report);
     surface.onChange(() => {
       deps.onText(surface.getValue());
       keeper.keep();
@@ -44101,7 +44117,7 @@ var BrainNotesApp = (() => {
       surface.setValue(deps.seed);
       deps.onText(deps.seed);
       keeper.drop();
-      dismiss();
+      notice.dismiss();
     };
     deps.reset?.addEventListener("click", restart);
     if (kept) {
@@ -44113,7 +44129,7 @@ var BrainNotesApp = (() => {
       restart,
       applied() {
         keeper.drop();
-        dismiss();
+        notice.dismiss();
       },
       flush: keeper.flush,
       kept: keeper.stored,
@@ -44278,7 +44294,7 @@ var BrainNotesApp = (() => {
         say(outcome.message, "is-error");
         return;
       }
-      scope.reload(staleAnnouncement(mergeSafety(scope)));
+      scope.reload(staleAnnouncement(outcome, scope.ctx.merges()));
       return;
     }
     renderSyncPlan(scope.elements.plan, outcome.result.paths, scope.ctx.doc);
@@ -44301,8 +44317,9 @@ var BrainNotesApp = (() => {
     plan.spend();
     ctx.changed();
     if (!outcome.ok) {
+      const merges = ctx.merges();
       scope.reload(
-        stalePreview(outcome) ? staleAnnouncement(mergeSafety(scope)) : { message: outcome.message, kind: "is-error" }
+        stalePreview(outcome) ? staleAnnouncement(outcome, merges) : failureAnnouncement(outcome.message, merges)
       );
       return;
     }
@@ -44391,6 +44408,7 @@ var BrainNotesApp = (() => {
       say("");
     });
     return {
+      editors: () => [...scope.editors.values()],
       destroy() {
         for (const editor of scope.editors.values()) {
           editor.destroy();
@@ -44399,21 +44417,22 @@ var BrainNotesApp = (() => {
       }
     };
   };
-  var mergeSafety = (scope) => {
-    if (scope.editors.size === 0) {
+  var mergeSafetyOf = (editors) => {
+    if (editors.length === 0) {
       return "none";
     }
     let kept = true;
-    for (const editor of scope.editors.values()) {
+    for (const editor of editors) {
       editor.flush();
       kept = editor.kept() && kept;
     }
     return kept ? "kept" : "lost";
   };
-  var staleAnnouncement = (merges) => ({
-    message: "This vault moved on while the decision was being made, so nothing was applied. " + mergeClause(merges),
+  var staleAnnouncement = (failure, merges) => ({
+    message: `${reReadOpening(failure)} ${mergeClause(merges)}`,
     kind: "is-warning"
   });
+  var reReadOpening = (failure) => failure.code === "preview_stale" ? "This vault moved on while the decision was being made, so nothing was applied." : "This review is too old to apply, so nothing was applied.";
   var mergeClause = (merges) => {
     if (merges === "none") {
       return "Both versions are being read again.";
@@ -44421,8 +44440,13 @@ var BrainNotesApp = (() => {
     if (merges === "kept") {
       return "Both versions are being read again; any merge you composed is still here.";
     }
-    return "Both versions are being read again, and a merge you composed has to be typed again: this page could not keep a copy of it.";
+    return `Both versions are being read again, and a ${lostMergeClause}`;
   };
+  var lostMergeClause = "merge you composed has to be typed again: this page could not keep a copy of it.";
+  var failureAnnouncement = (message, merges) => ({
+    message: merges === "lost" ? `${ended(message)} A ${lostMergeClause}` : message,
+    kind: "is-error"
+  });
   var resolvedSentence = (result) => {
     const parts = [result.summary || "The decision was applied."];
     if (result.summary === "" && !result.acknowledged) {
@@ -44444,6 +44468,7 @@ var BrainNotesApp = (() => {
       return null;
     }
     const attr2 = (name2) => deps.root.getAttribute(name2) ?? "";
+    let controllers = [];
     const ctx = {
       conflictsEndpoint: attr2("data-sync-conflicts-endpoint"),
       previewEndpoint: attr2("data-sync-preview-endpoint"),
@@ -44462,10 +44487,10 @@ var BrainNotesApp = (() => {
       confirm: deps.confirm ?? ((message) => (deps.view ?? window).confirm(message)),
       changed: deps.changed ?? (() => {
       }),
+      merges: () => mergeSafetyOf(controllers.flatMap((controller) => controller.editors())),
       view: deps.view ?? null,
       doc: deps.root.ownerDocument
     };
-    let controllers = [];
     const teardown = () => {
       for (const controller of controllers) {
         controller.destroy();

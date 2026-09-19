@@ -1,5 +1,6 @@
 import {
   createSourceDraftStore,
+  mergeNoteKeyPrefix,
   type DraftStorage,
   type DraftWriteOutcome,
   type SourceDraft,
@@ -84,8 +85,11 @@ export type SyncMergeEditor = {
 // word while losing only a few characters to a crash.
 const defaultDelayMs = 300;
 
+// The prefix comes from source-draft.ts because that module's eviction reads it: a
+// key built here by hand would be evicted as an ordinary draft the day somebody
+// retyped it.
 export const mergeDraftKey = (packageID: string, path: string): string =>
-  `sync-merge|${packageID}|${path}`;
+  `${mergeNoteKeyPrefix}${packageID}|${path}`;
 
 // keptMerge is the newest kept merge for this conflict, this tab's own preferred.
 // A merge left by an earlier load of this tab is the same person's work and is
@@ -207,6 +211,58 @@ const writeNotice = (outcome: DraftWriteOutcome): string => {
   return "This browser will not keep a copy of the merge, so it exists only on this page.";
 };
 
+// MergeNotice owns the one line of prose under the editor. It is its own thing
+// because that line answers two independent questions — where the text on screen
+// came from, and whether this browser is keeping a copy of it — and the rule
+// between them is the whole of what there is to get right here.
+type MergeNotice = {
+  /** report says what the last keep did, and takes its own sentence back down. */
+  report(outcome: DraftWriteOutcome): void;
+  /** dismiss is the deliberate discard: nothing on the line is about anything now. */
+  dismiss(): void;
+};
+
+// standing is the load's own sentence, and a keep that failed and then worked puts
+// it back rather than clearing the line. The one that matters is "started from a
+// different version of this vault's copy": that is a warning about the text on
+// screen and it stays true however the keep went, so clearing the line outright
+// would answer a storage problem by silently dropping advice about the merge.
+//
+// A failure's own sentence is taken back down when a later keep works, because a
+// line still saying the text is unkept once it is kept is the same wrong answer in
+// the other direction. Only its own — the load's sentence is not a failure, and a
+// recovered merge is written straight back at mount, which would otherwise wipe it
+// at once.
+const createMergeNotice = (host: HTMLElement, standing: string): MergeNotice => {
+  const show = (sentence: string): void => {
+    host.textContent = sentence;
+    host.hidden = sentence === "";
+  };
+  let line = standing;
+  let warned = false;
+  show(line);
+  return {
+    report: (outcome: DraftWriteOutcome): void => {
+      if (outcome !== "stored") {
+        warned = true;
+        show(writeNotice(outcome));
+        return;
+      }
+      if (warned) {
+        warned = false;
+        show(line);
+      }
+    },
+    // After a restart or an application there is no recovered merge for the load's
+    // sentence to be about either, so it goes with everything else.
+    dismiss: (): void => {
+      warned = false;
+      line = "";
+      show("");
+    },
+  };
+};
+
 export const createSyncMergeEditor = (deps: SyncMergeEditorDeps): SyncMergeEditor => {
   const store = createSourceDraftStore({
     vaultID: deps.vaultID,
@@ -218,36 +274,13 @@ export const createSyncMergeEditor = (deps: SyncMergeEditorDeps): SyncMergeEdito
   const kept = keptMerge(store, store.draftID);
   const initial = kept ? kept.content : deps.seed;
 
-  const show = (sentence: string): void => {
-    deps.notice.textContent = sentence;
-    deps.notice.hidden = sentence === "";
-  };
-  show(noticeFor(kept, deps.baseRevision, store.available()));
-
-  // reportKeep puts a failed keep on screen, and takes *its own* sentence back down
-  // when a later one works — a line still saying the text is unkept once it is kept
-  // is the same wrong answer in the other direction. Only its own, because the load's
-  // "a merge kept in this browser was loaded" is not a failure and the recovered merge
-  // is written straight back below, which would otherwise wipe that sentence at once.
-  let warned = false;
-  const reportKeep = (outcome: DraftWriteOutcome): void => {
-    if (outcome !== "stored") {
-      warned = true;
-      show(writeNotice(outcome));
-      return;
-    }
-    if (warned) {
-      warned = false;
-      show("");
-    }
-  };
-  const dismiss = (): void => {
-    warned = false;
-    show("");
-  };
+  const notice = createMergeNotice(
+    deps.notice,
+    noticeFor(kept, deps.baseRevision, store.available())
+  );
 
   const surface: SourceSurface = deps.factory(deps.host, initial);
-  const keeper = createMergeKeeper(deps, store, () => surface.getValue(), reportKeep);
+  const keeper = createMergeKeeper(deps, store, () => surface.getValue(), notice.report);
 
   // The decision model is told on every change and storage is told on a debounce.
   // Those are different deadlines on purpose: what is being applied has to be the
@@ -269,7 +302,7 @@ export const createSyncMergeEditor = (deps: SyncMergeEditorDeps): SyncMergeEdito
     // abandoned text, and storage must not go on holding it either.
     deps.onText(deps.seed);
     keeper.drop();
-    dismiss();
+    notice.dismiss();
   };
 
   deps.reset?.addEventListener("click", restart);
@@ -288,7 +321,7 @@ export const createSyncMergeEditor = (deps: SyncMergeEditorDeps): SyncMergeEdito
 
     applied(): void {
       keeper.drop();
-      dismiss();
+      notice.dismiss();
     },
 
     flush: keeper.flush,

@@ -29,6 +29,17 @@ export const draftSchemaVersion = 1;
 const draftKeyPrefix = `bn.draft.${draftSchemaVersion}|`;
 const savedKeyPrefix = `bn.draft-saved.${draftSchemaVersion}|`;
 
+// mergeNoteKeyPrefix names the note keys whose kept copy is the only copy there is.
+//
+// An editor draft is unsaved text over a note that is still on disk: losing it costs
+// the edits since the last save. A merge composed on the sync page is a third version
+// that exists nowhere else — this vault holds one branch, the peer holds the other,
+// and nothing anywhere holds the one being typed until it is applied — so an eviction
+// that took it would destroy text no read could bring back. Eviction therefore skips
+// these and refuses instead; `sync-merge-editor.ts` builds its note key from this
+// constant, so the two cannot drift apart.
+export const mergeNoteKeyPrefix = "sync-merge|";
+
 // defaultMaxAgeMs is how long an unclaimed draft is worth offering. A draft is
 // somebody's unfinished sentence, not an archive; past a fortnight the note it
 // was written against has usually moved on, and every stale record left behind
@@ -343,6 +354,10 @@ const pruneExpiredDrafts = (storage: DraftStorage, before: number): void => {
 // oldest one that is not it. `except` is excluded by key rather than by age
 // because the record being replaced may well be the oldest one there is, and
 // deleting it to make room for itself would leave the note with nothing.
+//
+// A composed merge is never a candidate, whatever its age: see mergeNoteKeyPrefix.
+// A record this build cannot parse is one — it can never be offered back to anybody,
+// so it is quota and nothing else, which is also why it sorts oldest.
 const evictOldestForeignDraft = (storage: DraftStorage, except: string): boolean => {
   let oldestKey: string | null = null;
   let oldestAt = Number.POSITIVE_INFINITY;
@@ -351,6 +366,9 @@ const evictOldestForeignDraft = (storage: DraftStorage, except: string): boolean
       continue;
     }
     const draft = parseDraft(safeGet(storage, key));
+    if (draft && draft.noteKey.startsWith(mergeNoteKeyPrefix)) {
+      continue;
+    }
     const at = draft ? draft.updatedAt : -1;
     if (at < oldestAt) {
       oldestAt = at;

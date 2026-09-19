@@ -83,7 +83,12 @@ it("resolves once when Apply is pressed twice, so a landed change is never repor
   // server that had just applied the first — and this page would report that nothing
   // was applied over a change that was.
   expect(syncAction("apply").disabled).toBe(true);
-  syncAction("apply").click();
+  // Dispatched rather than `click()`, which is what makes this an assertion about the
+  // gate rather than about the attribute: jsdom's `click()` returns early on a disabled
+  // button and calls no listener at all, so a second press through it would pass
+  // against a page with no gate in it. `dispatchEvent` does not consult `disabled` —
+  // and neither does a second Enter on a focused button in every engine.
+  syncAction("apply").dispatchEvent(new MouseEvent("click"));
 
   await vi.waitFor(() =>
     expect(syncPanelStatus().classList.contains("is-success")).toBe(true)
@@ -198,7 +203,11 @@ it("reports a refusal that is not staleness as itself, and still re-reads the st
   const server = createSyncServer();
   server.state.resolve = () =>
     syncJSON(
-      { ok: false, code: "safety", message: "the content history is blocked, so nothing was written" },
+      {
+        ok: false,
+        code: "safety_error",
+        message: "the content history is blocked, so nothing was written",
+      },
       500
     );
   const harness = mountSyncConflicts(server);
@@ -227,6 +236,34 @@ it("reports a refusal that is not staleness as itself, and still re-reads the st
   // The receipt is one-use whatever the answer was, and the re-read rebuilt the
   // card from the channel besides, so there is no plan left to redeem.
   expect(syncAction("apply").hidden).toBe(true);
+});
+
+it("answers a review too old to apply with its own sentence, not a claim about the vault", async () => {
+  const server = createSyncServer();
+  // The receipt is one-use and lives five minutes, so this is the answer a page left
+  // open over a coffee gets. The vault has not moved and nobody's notes changed.
+  server.state.resolve = () =>
+    syncJSON({ ok: false, code: "preview_required", message: "sync: resolution preview required" }, 409);
+  const harness = mountSyncConflicts(server);
+  await harness.panel.load();
+
+  chooseSyncPath("Alpha.md", "keep-current");
+  syncAction("review").click();
+  await vi.waitFor(() => expect(syncAction("apply").hidden).toBe(false));
+  syncAction("apply").click();
+
+  // The remedy is the stale one's — read both versions and decide again — and the
+  // first sentence is not, because "this vault moved on" would send somebody looking
+  // for a change nobody made.
+  await vi.waitFor(() =>
+    expect(syncPanelStatus().textContent).toBe(
+      "This review is too old to apply, so nothing was applied. " +
+        "Both versions are being read again. " +
+        "1 change is waiting for a decision."
+    )
+  );
+  expect(syncPanelStatus().classList.contains("is-warning")).toBe(true);
+  expect(server.urls()).toEqual([CONFLICTS, PREVIEW, RESOLVE, CONFLICTS]);
 });
 
 it("says a resolution that could not be acknowledged is still waiting for the peer", async () => {

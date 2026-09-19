@@ -209,17 +209,20 @@ func (s *Server) handleSyncResolve(w http.ResponseWriter, r *http.Request) {
 	resolution, err := vaultimport.Resolve(
 		s.vault.Root, record.Resolution.PackageDir, record.Resolution.Plan,
 		vaultimport.Options{Command: syncResolveCommand})
-	if resolution != nil {
-		// Something landed, whatever else failed: the package is applied and is
-		// undoable. Everything this vault serves has to be re-read either way.
-		s.finishPropertyWrite(true)
-	}
+	// Unconditionally, because a nil resolution does not mean nothing landed: an
+	// application that failed after committing has its own in-process recovery, which
+	// can finish the whole resolution on the way out and leaves the error with no
+	// Resolution to carry. The cost of asking when nothing changed is one reload; the
+	// cost of not asking when something did is a page serving the version somebody
+	// decided against.
+	s.finishPropertyWrite(true)
 	if err != nil {
 		writeManagementError(w, syncPartialResolutionError(
 			resolution, record.Resolution.Plan, err, s.vault.Root))
 		return
 	}
-	writeManagementJSON(w, http.StatusOK, syncResolvedViewOf(resolution, s.vault.Root))
+	writeManagementJSON(w, http.StatusOK,
+		syncResolvedViewOf(resolution, record.Resolution.Plan, s.vault.Root))
 }
 
 // heldPackage finds one package this vault is holding for a decision.
@@ -382,7 +385,11 @@ func syncPlanViewOf(plan *vaultimport.Plan, receipt propertyPreviewReceipt) sync
 	return view
 }
 
-func syncResolvedViewOf(resolution *vaultimport.Resolution, root string) syncResolvedView {
+func syncResolvedViewOf(
+	resolution *vaultimport.Resolution,
+	plan *vaultimport.Plan,
+	root string,
+) syncResolvedView {
 	view := syncResolvedView{
 		OK:           true,
 		PackageID:    resolution.PackageID,
@@ -392,26 +399,43 @@ func syncResolvedViewOf(resolution *vaultimport.Resolution, root string) syncRes
 		Acknowledged: resolution.Applied != nil && resolution.Applied.Receipt != nil,
 		Abandoned:    syncAbandonedViewsOf(resolution.AbandonedResolutions, root),
 	}
-	view.Summary = syncResolvedSummary(view)
+	view.Summary = syncResolvedSummary(view, plan)
 	return view
 }
 
-// syncResolvedSummary is what a finished resolution says it did, and both halves
-// of it are read off the resolution rather than assumed.
+// syncResolvedSummary is what a finished resolution says it did, and every half of
+// it is read off the resolution and the plan rather than assumed.
 //
-// A resolution with no journal entry recorded no decision because there was none
-// left to record, which is the ordinary outcome of taking the other replica's
-// version: the application is the whole of the decision and there was no second
-// commit to make. Claiming a recorded decision there would name something a person
-// could go looking for in the history and not find.
+// A resolution with no journal entry is two different successes, and the plan is
+// what tells them apart. A plan that revises nothing had no second commit to make —
+// the ordinary outcome of taking the other replica's version, where the application
+// is the whole of the decision — and claiming a recorded decision there would name
+// something a person could go looking for in the history and not find. A plan that
+// does revise something and still came back with no entry had every step of that
+// revision already satisfied on disk, which is what a re-drive of a rolled-forward
+// promise finds; saying it "needed nothing revised" there would deny the revision
+// this vault is holding.
 //
 // An unacknowledged resolution is finished in this vault and unfinished between the
 // replicas, which is the distinction the status line is also built on.
-func syncResolvedSummary(view syncResolvedView) string {
+//
+// Both of those sentences are claims about a plan, so neither may be made without
+// one. A missing plan is not a state this surface can produce — the receipt carries
+// the plan it was minted for — and the answer to it is the sentence that claims only
+// what the resolution itself reports, exactly as the failure side reads an absent
+// plan as the answer that does not tell somebody to stop looking.
+func syncResolvedSummary(view syncResolvedView, plan *vaultimport.Plan) string {
 	summary := "The change was applied and your decision was recorded."
-	if view.JournalID == "" {
+	switch {
+	case view.JournalID != "":
+	case plan == nil:
+		summary = "The change was applied."
+	case !plan.Revises():
 		summary = "The change was applied, and it needed nothing revised on top of it: what it " +
 			"carries is what you chose."
+	default:
+		summary = "The change was applied, and the revision your decision asked for was already on " +
+			"disk, so no second commit was made: this vault holds what you chose."
 	}
 	if !view.Acknowledged {
 		summary += " The other replica has not been told yet and will keep offering it until it is."
@@ -435,7 +459,12 @@ func syncAbandonedViewsOf(abandoned map[string]error, root string) []syncAbandon
 	for _, packageID := range packages {
 		out = append(out, syncAbandonedView{
 			PackageID: packageID,
-			Reason:    withoutVaultRoot(abandoned[packageID].Error(), root),
+			// Through the same sentence helper as every other engine failure on this
+			// surface: none of these reasons is an errors.Join today — the engine
+			// carries the refusal as text rather than joining it — but syncAbandonedClause
+			// puts this string inside a sentence beside the others, and a rule that holds
+			// only for the ones that happen to be joins is one somebody has to re-derive.
+			Reason: syncFailureSentence(abandoned[packageID], root),
 		})
 	}
 	return out
@@ -454,9 +483,10 @@ func syncAbandonedViewsOf(abandoned map[string]error, root string) []syncAbandon
 // the acknowledgment the peer is owed.
 //
 // The engine's own sentence is kept in either case, because what failed is not
-// derivable from either state, and the code comes from syncWriteCode for the same
-// reason the ordinary refusal's does: a snapshot failure and a busy lock are
-// different answers to a client whether or not a resolution came back beside them.
+// derivable from either state, and the code is the same syncResolutionCode the
+// ordinary refusal uses: a sentinel means the same thing to a client whether or not
+// a resolution came back beside it, and a refused decision in particular is a
+// conflict either way.
 func syncPartialResolutionError(
 	resolution *vaultimport.Resolution,
 	plan *vaultimport.Plan,
@@ -467,30 +497,94 @@ func syncPartialResolutionError(
 		return syncResolveError(err, root)
 	}
 	message := "sync: " + syncPartialOutcome(resolution, plan, err) + " What failed: " +
-		withoutVaultRoot(err.Error(), root) +
+		syncFailureSentence(err, root) +
 		syncAbandonedClause(resolution.AbandonedResolutions, root)
-	return noteops.WrapError(syncWriteCode(err), message, err)
+	return noteops.WrapError(syncPartialResolutionCode(err), message, err)
+}
+
+// syncPartialResolutionCode is syncResolutionCode with the one answer a partial
+// outcome cannot give.
+//
+// CodeSafety is documented as the engine refusing the operation *before it changed
+// anything*, and a resolution that came back at all applied the other replica's
+// version — so on this path that code is false whatever raised it. It is reachable:
+// the revision's own noteops.BeginOperation preflight runs after the application
+// committed, and a vault another process latched in between refuses it there as a
+// blocked safety failure rather than as a snapshot one.
+//
+// Everything else stays shared, which is the point of syncResolutionCode: this
+// narrows one code whose meaning is a claim about the vault rather than about the
+// decision, and CodeInternal is what the other half-applied failure on this surface
+// answers for the same reason — the code says how much a client may assume, and what
+// gets a person to the repair is syncPartialOutcome's sentence.
+func syncPartialResolutionCode(err error) noteops.ErrorCode {
+	if code := syncResolutionCode(err); code != noteops.CodeSafety {
+		return code
+	}
+	return noteops.CodeInternal
 }
 
 // syncPartialOutcome is what is durable, for a resolution that came back beside an
 // error. It is a sentence about this vault and never about what to do, which is
 // syncPartialResolutionError's business.
 //
-// An empty JournalEntry is three states rather than one, and only the plan and the
-// failure together say which. A plan that revises nothing has no second commit to
+// An empty JournalEntry is five states rather than one — six answers, because one of
+// the five is answered two ways — and only the plan and the failure together say
+// which. A plan that revises nothing has no second commit to
 // make — accepting the other replica's version is carried out by applying it — so
 // there is nothing outstanding and no promise anybody is keeping. A plan that does
 // revise something and got no entry has a durable promise the next pass finishes,
 // unless the revision failed on one of the three sentinels that abandon it, in
 // which case no pass will ever make that commit and this vault is left holding the
-// version somebody decided against. Telling those three apart is the difference
-// between a person waiting for a commit that is coming, waiting for one that is
-// not, and waiting for one that was never owed.
+// version somebody decided against. Telling those apart is the difference between a
+// person waiting for a commit that is coming, waiting for one that is not, and
+// waiting for one that was never owed. The promise that survives is the state with
+// two answers, and what splits it is the failure rather than the plan: a vault that
+// latched a block refuses the very write the next pass would make, so the promise is
+// outstanding there and coming to nothing until somebody clears it. That is a second
+// sentence for one state, not a sixth state — the vault is holding exactly what it
+// holds for the promise that is coming.
+//
+// Two failures are neither, and both are asked first because they are answers about
+// the vault that no journal entry is ever written for. A snapshot failure means the
+// decision's bytes and its undo manifest are both durable (noteops.Finalize writes
+// the manifest before it snapshots) and the content history is not — and whether it
+// latched the block is the error's own answer rather than a property of the type:
+// noteops fills Blocked in from vaultgit.Blocks, which is false for a snapshot a
+// lock somebody else was holding merely refused.
+// The two need opposite sentences. A latched block refuses the next write, so the
+// promise the state file still holds cannot be kept and "it will be finished
+// automatically" is exactly wrong; an unlatched one leaves a finalized entry the
+// next pass re-snapshots — revision.commit's own first case — so saying this vault
+// refuses further changes would send somebody to clear a block that is not there.
+// The unlatched sentence still owes the stall, because an unlatched kind is not
+// necessarily a transient one: a busy lock clears itself, a repository mid-rebase
+// and a git nobody can run do not, and finishResolutions runs ahead of every
+// import, drain and resolution, so until that snapshot succeeds this vault applies
+// nothing at all.
+// A stranded import means a half-made revision could not be taken back out, and that
+// is the one refusal that stops every later import until a person looks.
 func syncPartialOutcome(
 	resolution *vaultimport.Resolution,
 	plan *vaultimport.Plan,
 	err error,
 ) string {
+	var snapshot *noteops.SnapshotError
+	if errors.As(err, &snapshot) {
+		if snapshot.Blocked {
+			return "your decision is on disk and is undoable, and the content history was not " +
+				"updated: this vault refuses further changes until that is cleared, so nothing is " +
+				"finished automatically while it stands." + syncPeerClause(resolution)
+		}
+		return "your decision is on disk and is undoable, and the content history was not updated: " +
+			"nothing is blocked, so the next synchronization pass commits it — and until it does, " +
+			"this vault applies nothing else." + syncPeerClause(resolution)
+	}
+	if errors.Is(err, vaultimport.ErrStrandedImport) {
+		return "the other replica's version was applied, your decision was left half recorded, and " +
+			"this vault could not put that half back: synchronization is stopped until somebody " +
+			"resolves it, and no pass will finish it in the meantime."
+	}
 	// A record with no plan is not a state this surface can produce — a receipt
 	// carries the plan it was minted for — and an absent one is read as a promise
 	// still outstanding, which is the answer that sends somebody to look rather
@@ -505,6 +599,19 @@ func syncPartialOutcome(
 				"on top of it, and it will not be tried again: this vault is holding the version you " +
 				"decided against, and the change is undoable."
 		}
+		// A latched block is the other way the promise cannot be kept, and it is the
+		// snapshot answer above one step earlier: the revision's own preflight is
+		// refused, so there is no entry and no snapshot failure to read it off — the
+		// application landed and the second commit never started. The promise does
+		// survive, which is why this is not an abandonment, and saying a later pass
+		// finishes it would still be wrong: the pass is refused the same write, and
+		// finishResolutions running ahead of every import means nothing else is
+		// applied either while it stands.
+		if vaultgit.IsBlocked(err) {
+			return "the other replica's version was applied and your decision has not been recorded " +
+				"yet: this vault refuses further changes until that is cleared, so no pass records it " +
+				"while it stands, and nothing else is applied either." + syncPeerClause(resolution)
+		}
 		return "the other replica's version was applied and your decision has not been recorded yet. " +
 			"It is saved and will be finished automatically on the next synchronization pass."
 	}
@@ -515,10 +622,24 @@ func syncPartialOutcome(
 // syncPartialTail is what is still owed after the commits that did land: the
 // acknowledgment the peer has not been given, or nothing this sentence can name.
 func syncPartialTail(resolution *vaultimport.Resolution) string {
+	if clause := syncPeerClause(resolution); clause != "" {
+		return clause
+	}
+	return " What failed came afterwards."
+}
+
+// syncPeerClause is the acknowledgment half of that tail on its own, for the
+// answers that already name what failed and must not say it came afterwards.
+//
+// It is reachable there: resolveLocked attempts the revision even when the
+// application's own tail failed, so a receipt that could not be published and a
+// snapshot that then failed arrive together as one joined error, and the redelivery
+// is the part of it nobody would otherwise be told about.
+func syncPeerClause(resolution *vaultimport.Resolution) string {
 	if resolution.Applied != nil && resolution.Applied.Receipt == nil {
 		return " The other replica has not been told, so it will keep offering the change until it is."
 	}
-	return " What failed came afterwards."
+	return ""
 }
 
 // syncAbandonedClause carries earlier decisions this call's recovery pass dropped
@@ -547,11 +668,32 @@ func syncAbandonedClause(abandoned map[string]error, root string) string {
 // vault has moved past, the conflict is gone, another import is running — and a
 // client retries or re-reads for those. A write failure is about the vault.
 func syncResolveError(err error, root string) error {
-	message := "sync: " + withoutVaultRoot(err.Error(), root)
+	message := "sync: " + syncFailureSentence(err, root)
+	return noteops.WrapError(syncResolutionCode(err), message, err)
+}
+
+// syncFailureSentence is the engine's own words, with this vault's root taken out
+// and a joined failure put on one line.
+//
+// Both of the engine's answers here can be an errors.Join — an application tail
+// failure beside the revision's, and a pass that dropped an earlier promise beside
+// whatever it failed on — and Join separates with a newline. These messages are
+// read out of a JSON field and put in a sentence on a page, where a raw newline is
+// one statement that looks like two, with the second one missing its subject.
+func syncFailureSentence(err error, root string) string {
+	return strings.ReplaceAll(withoutVaultRoot(err.Error(), root), "\n", "; ")
+}
+
+// syncResolutionCode is the one classification both resolution failures use, so a
+// sentinel cannot mean one thing when the call came back empty-handed and another
+// when a resolution came back beside it. ErrConflict is the reason it has to be one
+// function: it is what a client retries or re-reads for, and syncWriteCode alone
+// would call a decision the vault refused an internal error.
+func syncResolutionCode(err error) noteops.ErrorCode {
 	if code, named := syncDecisionCode(err); named {
-		return noteops.WrapError(code, message, err)
+		return code
 	}
-	return noteops.WrapError(syncWriteCode(err), message, err)
+	return syncWriteCode(err)
 }
 
 func syncDecisionCode(err error) (noteops.ErrorCode, bool) {
@@ -563,8 +705,15 @@ func syncDecisionCode(err error) (noteops.ErrorCode, bool) {
 		return noteops.CodeConflict, true
 	case errors.Is(err, vaultimport.ErrResolutionUnavailable):
 		return noteops.CodeInvalidRequest, true
+	// Named here rather than left to syncWriteCode so the answer cannot drift onto
+	// something nested inside them, and CodeInternal rather than CodeSafety for the
+	// reason syncWriteCode gives: a stranded import is a *half-applied* change —
+	// the package is on disk, the peer has been told to drop its copy, and the
+	// revision is half recorded — which is the negation of what CodeSafety is
+	// documented to mean. What gets a person to the repair is the sentence
+	// syncPartialOutcome writes, not the code.
 	case errors.Is(err, vaultimport.ErrStrandedImport), errors.Is(err, vaultimport.ErrCorruptState):
-		return noteops.CodeSafety, true
+		return noteops.CodeInternal, true
 	}
 	return "", false
 }
@@ -578,7 +727,12 @@ func syncDecisionCode(err error) (noteops.ErrorCode, bool) {
 // same reason: it unwraps to the mutation that failed — often a conflict — and
 // answering "retry" would bury the one sentence saying which file somebody's
 // content is sitting in. internal/noteops and the property class both ask it
-// before the conflict too.
+// before the conflict too, and both answer it with CodeInternal rather than
+// CodeSafety — which this follows, because CodeSafety is documented as the engine
+// refusing *before* anything changed, and a rollback that failed is the one state
+// where content is provably somewhere nobody asked for it. The distinction that
+// matters to a client here is carried by the message, which names the recovery
+// file, and by CodeSnapshotFailed for the other post-write failure.
 func syncWriteCode(err error) noteops.ErrorCode {
 	switch {
 	case vaultgit.IsSnapshotFailure(err):
@@ -586,7 +740,7 @@ func syncWriteCode(err error) noteops.ErrorCode {
 	case vaultgit.IsBlocked(err):
 		return noteops.CodeSafety
 	case vault.IsTxnRollbackFailure(err), vault.IsTxnRecoveryNeeded(err):
-		return noteops.CodeSafety
+		return noteops.CodeInternal
 	case vaultgit.IsBusy(err), vault.IsTxnLockBusy(err), vault.IsTxnConflict(err):
 		return noteops.CodeConflict
 	case vault.IsForbiddenMutation(err):
