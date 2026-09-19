@@ -1,0 +1,146 @@
+{{define "settings"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css?v=settings-1">
+</head>
+<body>
+  <main class="index-main">
+    <header class="site-header">
+      <div class="site-header-copy">
+        <h1>Settings</h1>
+        <p class="page-subtitle">The settings and templates this vault carries to your other replicas. Settings that name <em>this machine</em> — your editor, the address the server listens on, the agent command — live in <code>brainnotes.local.toml</code> and are not shown here.</p>
+      </div>
+      <div class="site-header-tools">
+        {{template "themeControl" .}}
+        {{template "headerSearch" .}}
+      </div>
+    </header>
+    {{template "siteNav" .}}
+
+    <section
+      class="panel settings-panel"
+      data-settings-panel
+      data-settings-endpoint="{{ .SettingsEndpoint }}"
+      data-settings-csrf="{{ .CSRFToken }}"
+      aria-labelledby="settings-heading"
+      aria-describedby="settings-status"
+    >
+      <div class="panel-header">
+        <h2 id="settings-heading">Portable settings</h2>
+        <div class="settings-actions">
+          <button class="settings-button" type="button" data-settings-refresh>Refresh</button>
+        </div>
+      </div>
+      <p
+        id="settings-status"
+        class="settings-status is-loading"
+        data-settings-status
+        role="status"
+        aria-live="polite"
+      >Loading settings...</p>
+      <div class="settings-confirm" data-settings-confirm-block>
+        <pre class="settings-diff" data-settings-diff hidden aria-label="Pending brainnotes.toml change"></pre>
+        <div class="settings-confirm-actions">
+          <button class="settings-button settings-button-primary" type="button" data-settings-confirm hidden>Write it</button>
+          <button class="settings-button" type="button" data-settings-cancel hidden>Cancel</button>
+        </div>
+      </div>
+      <ul class="settings-list" data-settings-list></ul>
+    </section>
+
+    <section
+      class="panel templates-panel"
+      data-templates-panel
+      data-templates-endpoint="{{ .TemplatesEndpoint }}"
+      data-templates-csrf="{{ .CSRFToken }}"
+      aria-labelledby="templates-heading"
+      aria-describedby="templates-status"
+    >
+      <div class="panel-header">
+        <h2 id="templates-heading">Templates</h2>
+        <div class="settings-actions">
+          <button class="settings-button" type="button" data-templates-new>New template</button>
+          <button class="settings-button" type="button" data-templates-refresh>Refresh</button>
+        </div>
+      </div>
+      <p
+        id="templates-status"
+        class="settings-status is-loading"
+        data-templates-status
+        role="status"
+        aria-live="polite"
+      >Loading templates...</p>
+      <p class="templates-notice" data-templates-notice></p>
+      <div class="templates-layout">
+        <ul class="templates-list" data-templates-list aria-label="Templates"></ul>
+        <div class="templates-editor">
+          <label class="settings-control-label" for="templates-name">Name</label>
+          <input
+            id="templates-name"
+            class="settings-control settings-control-text"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Daily"
+            data-templates-name
+          >
+          <label class="settings-control-label" for="templates-content">Content</label>
+          <textarea
+            id="templates-content"
+            class="settings-control templates-content"
+            rows="18"
+            spellcheck="false"
+            data-templates-content
+          ></textarea>
+          <p class="templates-hint">Template placeholders such as <code>{{"{{ .Title }}"}}</code> are stored exactly as typed and are never parsed here.</p>
+          <pre class="settings-diff" data-templates-diff hidden aria-label="Pending template change"></pre>
+          <div class="settings-confirm-actions">
+            <button class="settings-button settings-button-primary" type="button" data-templates-save>Save</button>
+            <button class="settings-button settings-danger" type="button" data-templates-delete disabled>Delete</button>
+            <button class="settings-button settings-button-primary" type="button" data-templates-confirm hidden>Write it</button>
+            <button class="settings-button" type="button" data-templates-cancel hidden>Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="panel history-panel"
+      id="settings-history"
+      data-history-panel
+      data-history-csrf="{{ .CSRFToken }}"
+      aria-labelledby="settings-history-heading"
+      aria-describedby="settings-history-status"
+      aria-busy="false"
+    >
+      <div class="panel-header history-header">
+        <h2 id="settings-history-heading">Recent changes</h2>
+        <div class="history-actions">
+          <button class="history-button" type="button" data-history-refresh>Refresh</button>
+          <button class="history-button history-danger" type="button" data-history-undo-latest disabled>Undo latest change</button>
+        </div>
+      </div>
+      <p
+        id="settings-history-status"
+        class="history-status is-loading"
+        data-history-status
+        role="status"
+        aria-live="polite"
+      >Loading history...</p>
+      <div class="history-conflict" data-history-conflict hidden>
+        <p data-history-conflict-summary></p>
+        <button class="history-button history-danger" type="button" data-history-force disabled>Force undo</button>
+      </div>
+      <ul class="history-list" data-history-list></ul>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

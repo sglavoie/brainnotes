@@ -61,6 +61,22 @@ type PatchResult struct {
 	Diff []PatchLine
 }
 
+// DiffText reports the line-level difference between two text bodies as the
+// same PatchLine a configuration patch reports.
+//
+// It is here, in the package that owns PatchLine, rather than beside its only
+// caller, because the point is that there is one preview vocabulary: a surface
+// that previews a settings change and a template file next to each other renders
+// both with the same code, and a second diff type would be a second renderer to
+// keep honest. Nothing about it is configuration-specific — splitConfigLines
+// splits on "\n" and keeps a CRLF file's "\r" on each line, which is what a
+// verbatim preview of a stored file needs.
+func DiffText(before, after []byte) []PatchLine {
+	beforeLines, _ := splitConfigLines(before)
+	afterLines, _ := splitConfigLines(after)
+	return diffLines(beforeLines, afterLines)
+}
+
 var barePropertyKeyRe = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // PatchProperties applies property-level edits to a brainnotes.toml body while

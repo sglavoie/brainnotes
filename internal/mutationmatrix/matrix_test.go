@@ -60,6 +60,7 @@ func mutations() []mutation {
 	all := noteopsMutations()
 	all = append(all, cliMutations()...)
 	all = append(all, sourceMutations()...)
+	all = append(all, settingsMutations()...)
 	return append(all, surfaceMutations()...)
 }
 

@@ -19,6 +19,7 @@ import { initQueryBar } from "./query-bar";
 import { initRelatedNotes } from "./related";
 import { initSavedViews } from "./saved-views";
 import { initSearch } from "./search";
+import { initSettings } from "./settings";
 import { initSourceEditor } from "./source-editor";
 import { initSynthesize } from "./synthesize";
 import { initTheme } from "./theme";
@@ -37,6 +38,9 @@ import { initTheme } from "./theme";
     initBrokenCreateActions();
     initHistoryPanel();
     initSynthesize();
+    // The /settings page writes brainnotes.toml and the templates directory, so
+    // like the editor it is built only where a write can be accepted.
+    initSettings();
     // The /edit page is refused outright in read-only mode, so the editor is
     // built only where a save can be accepted.
     initSourceEditor();

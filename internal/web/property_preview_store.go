@@ -16,13 +16,17 @@ const propertyPreviewTTL = 5 * time.Minute
 
 // propertyPreviewKind separates the receipt families so a note receipt can
 // never be redeemed at the schema endpoint, or a saved-view receipt at either of
-// them.
+// them. Every preview-gated config or template write mints its own kind rather
+// than sharing one: the receipt names which endpoint may redeem it, so the
+// families cannot be crossed even by a caller holding a valid identifier.
 type propertyPreviewKind string
 
 const (
-	propertyPreviewNotes  propertyPreviewKind = "notes"
-	propertyPreviewSchema propertyPreviewKind = "schema"
-	propertyPreviewView   propertyPreviewKind = "view"
+	propertyPreviewNotes    propertyPreviewKind = "notes"
+	propertyPreviewSchema   propertyPreviewKind = "schema"
+	propertyPreviewView     propertyPreviewKind = "view"
+	propertyPreviewSetting  propertyPreviewKind = "setting"
+	propertyPreviewTemplate propertyPreviewKind = "template"
 )
 
 // propertyPreviewStore holds short-lived, one-use receipts. A receipt carries
@@ -50,6 +54,8 @@ type propertyPreviewRecord struct {
 	Mutation   propertyMutationRequest
 	Schema     propertySchemaRequest
 	View       viewMutationRequest
+	Setting    settingMutationRequest
+	Template   templateMutationRequest
 	Files      []propertyPreviewFileState
 }
 

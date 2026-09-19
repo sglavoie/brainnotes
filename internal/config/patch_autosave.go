@@ -173,11 +173,18 @@ func findAutosaveSite(lines []string) keySite {
 // assignmentValueSpan found after the value, which for a multi-line value is on
 // the last line of the span rather than on this one.
 func rewriteAssignmentLine(line, key, value, comment string) string {
+	return rewriteAssignmentValue(line, key, quoteTOMLString(value), comment)
+}
+
+// rewriteAssignmentValue is the same rewrite for a value that is already TOML:
+// a number, a boolean, or an array, none of which is a quoted string. The
+// caller owns the rendering, so this file never has to know which kinds exist.
+func rewriteAssignmentValue(line, key, rendered, comment string) string {
 	body := strings.TrimSuffix(line, "\r")
 	indent := body[:len(body)-len(strings.TrimLeft(body, " \t"))]
-	rendered := indent + key + " = " + quoteTOMLString(value)
+	out := indent + key + " = " + rendered
 	if comment != "" {
-		rendered += " " + comment
+		out += " " + comment
 	}
-	return rendered + strings.TrimPrefix(line, body)
+	return out + strings.TrimPrefix(line, body)
 }

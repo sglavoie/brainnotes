@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -185,6 +186,47 @@ func readVaultFile(t *testing.T, root, rel string) string {
 	t.Helper()
 	return readNoteFile(t, filepath.Join(root, rel))
 }
+
+// startContentHistory puts a fixture vault under the Git safety engine.
+//
+// It is what makes the safety lock mean anything: an unmanaged vault resolves no
+// engine at all, so a test holding that lock file would be refusing nothing.
+func startContentHistory(t *testing.T, root string) {
+	t.Helper()
+
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skipf("git unavailable: %v", err)
+	}
+	runCockpitTestGit(t, root, "init", "-q")
+	runCockpitTestGit(t, root, "add", "-A")
+	runCockpitTestGit(t, root, "-c", "user.name=BrainNotes Test", "-c", "user.email=brainnotes@example.invalid",
+		"-c", "commit.gpgsign=false", "commit", "-qm", "baseline")
+}
+
+// holdSafetyLock takes the lock every mutation's vaultgit preflight takes, and
+// takes it the same way the engine does — without waiting. A write arriving while
+// it is held is refused as a busy vault rather than queued behind it.
+func holdSafetyLock(t *testing.T, root string) {
+	t.Helper()
+
+	release, acquired, err := vault.TryLockPath(filepath.Join(root, ".git", safetyStateDirName, safetyLockFileName))
+	if err != nil {
+		t.Fatalf("hold Git safety lock: %v", err)
+	}
+	if !acquired {
+		t.Fatal("Git safety lock was unexpectedly busy")
+	}
+	t.Cleanup(release)
+}
+
+// The engine's state directory and lock file, restated rather than imported:
+// they are internal to vaultgit, and a test that derived them from the package
+// under test would agree with it by construction.
+const (
+	safetyStateDirName  = "brainnotes-safety"
+	safetyLockFileName  = "safety.lock"
+	busyVaultRemedyWord = "already performing"
+)
 
 func requireErrorCode(t *testing.T, raw, code string) {
 	t.Helper()

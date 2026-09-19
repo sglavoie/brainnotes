@@ -463,10 +463,11 @@ func viewNotDeclaredError(name string) error {
 }
 
 // viewsStaleConfigError is the one message every stale-preview path returns.
-// brainnotes.toml has three independent writers — /api/properties/apply,
-// /api/properties/schema/apply, and /api/views/apply — and they cannot corrupt
-// each other, because configPin's ExpectHash makes the loser a 409. Naming the
-// remedy is what keeps that correct outcome from reading as a generic failure.
+// brainnotes.toml has four independent writers — /api/properties/apply,
+// /api/properties/schema/apply, /api/views/apply, and /api/settings/apply — and
+// they cannot corrupt each other, because configPin's ExpectHash makes the loser
+// a 409. Naming the remedy is what keeps that correct outcome from reading as a
+// generic failure.
 func viewsStaleConfigError() error {
 	return noteops.Errorf(noteops.CodePreviewStale,
 		"views: %s changed, re-check the diff", config.FileName)

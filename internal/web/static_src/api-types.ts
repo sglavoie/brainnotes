@@ -12,4 +12,5 @@ export type * from "./api-types-query";
 export type * from "./api-types-search";
 export type * from "./api-types-source";
 export type * from "./api-types-synthesis";
+export type * from "./api-types-settings";
 export type * from "./api-types-views";

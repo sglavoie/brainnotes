@@ -12,4 +12,5 @@ export * from "./api-query";
 export * from "./api-search";
 export * from "./api-source";
 export * from "./api-synthesis";
+export * from "./api-settings";
 export * from "./api-views";

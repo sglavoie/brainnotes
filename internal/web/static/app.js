@@ -1954,6 +1954,147 @@ var BrainNotesApp = (() => {
     return normalized;
   };
 
+  // internal/web/static_src/api-settings.ts
+  var SETTINGS_ENDPOINT = "/api/settings";
+  var SETTINGS_PREVIEW_ENDPOINT = "/api/settings/preview";
+  var SETTINGS_APPLY_ENDPOINT = "/api/settings/apply";
+  var TEMPLATES_ENDPOINT = "/api/templates";
+  var TEMPLATES_PREVIEW_ENDPOINT = "/api/templates/preview";
+  var TEMPLATES_APPLY_ENDPOINT = "/api/templates/apply";
+  var settingKinds = ["string", "bool", "int", "string_list"];
+  var normalizeSettingKind = (input) => {
+    const kind = normalizeParamValue(input);
+    return settingKinds.find((candidate) => candidate === kind) || "string";
+  };
+  var normalizeSettingValue = (input, kind) => {
+    const record = asRecord(input) || {};
+    return {
+      kind,
+      // The text of a string setting is content, not a parameter, so it keeps its
+      // surrounding whitespace.
+      text: typeof record.text === "string" ? record.text : "",
+      number: readCount(record.number),
+      flag: readBoolean(record.flag),
+      items: normalizeStringArray(record.items)
+    };
+  };
+  var normalizeSettingSummary = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return null;
+    }
+    const key = normalizeParamValue(record.key);
+    if (key === "") {
+      return null;
+    }
+    const kind = normalizeSettingKind(record.kind);
+    return {
+      key,
+      kind,
+      summary: normalizeParamValue(record.summary),
+      assigned: readBoolean(record.assigned),
+      layer: normalizeParamValue(record.layer),
+      shadowed: readBoolean(record.shadowed),
+      value: normalizeSettingValue(record.value, kind)
+    };
+  };
+  var normalizeSettingSummaries = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const summary = normalizeSettingSummary(item);
+      return summary ? [summary] : [];
+    });
+  };
+  var normalizeSettingsResponse = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base2.ok,
+      code: base2.ok ? void 0 : base2.code,
+      message: base2.message,
+      generation: readCount(record.generation),
+      action: normalizeParamValue(record.action),
+      key: normalizeParamValue(record.key),
+      settings: normalizeSettingSummaries(record.settings),
+      config_diff: normalizePropertyConfigDiff(record.config_diff),
+      preview_id: normalizeParamValue(record.preview_id),
+      expires_at: normalizeParamValue(record.expires_at),
+      journal_id: normalizeParamValue(record.journal_id),
+      config: normalizePropertyConfigStatus(record.config)
+    };
+  };
+  var normalizeTemplateSummary = (input) => {
+    const record = asRecord(input);
+    if (!record) {
+      return null;
+    }
+    const name2 = normalizeParamValue(record.name);
+    if (name2 === "") {
+      return null;
+    }
+    return {
+      name: name2,
+      rel_path: normalizeParamValue(record.rel_path),
+      size: readCount(record.size),
+      revision: normalizeParamValue(record.revision),
+      // Template bytes are the document being edited: trimming them here would
+      // silently drop the trailing newline every save round-trips.
+      content: typeof record.content === "string" ? record.content : ""
+    };
+  };
+  var normalizeTemplateSummaries = (input) => {
+    if (!Array.isArray(input)) {
+      return [];
+    }
+    return input.flatMap((item) => {
+      const summary = normalizeTemplateSummary(item);
+      return summary ? [summary] : [];
+    });
+  };
+  var normalizeTemplateDirStatus = (input) => {
+    const record = asRecord(input) || {};
+    return {
+      excluded_from_notes: readBoolean(record.excluded_from_notes),
+      portable: readBoolean(record.portable)
+    };
+  };
+  var normalizeTemplatesResponse = (payload) => {
+    const base2 = normalizeManagementResult(payload);
+    const record = asRecord(payload) || {};
+    return {
+      ok: base2.ok,
+      code: base2.ok ? void 0 : base2.code,
+      message: base2.message,
+      generation: readCount(record.generation),
+      action: normalizeParamValue(record.action),
+      name: normalizeParamValue(record.name),
+      rel_path: normalizeParamValue(record.rel_path),
+      dir: normalizeParamValue(record.dir),
+      extension: normalizeParamValue(record.extension),
+      templates: normalizeTemplateSummaries(record.templates),
+      created: readBoolean(record.created),
+      removed: readBoolean(record.removed),
+      revision: normalizeParamValue(record.revision),
+      diff: normalizePropertyConfigDiff(record.diff),
+      preview_id: normalizeParamValue(record.preview_id),
+      expires_at: normalizeParamValue(record.expires_at),
+      journal_id: normalizeParamValue(record.journal_id),
+      config: normalizePropertyConfigStatus(record.config),
+      templating: normalizeTemplateDirStatus(record.templating)
+    };
+  };
+  var buildConfigRequestInit = (token, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-BN-CSRF": token
+    },
+    body: JSON.stringify(body)
+  });
+
   // internal/web/static_src/api-views.ts
   var SAVED_VIEWS_ENDPOINT = "/api/views";
   var SAVED_VIEWS_PREVIEW_ENDPOINT = "/api/views/preview";
@@ -8126,7 +8267,7 @@ var BrainNotesApp = (() => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
     const rows = () => queryAllElements(list, "[data-pinned-item]", HTMLElement);
-    const post = async (request, fallback) => {
+    const post2 = async (request, fallback) => {
       try {
         const resp = await fetcher(request.url, request.init);
         const payload = await readNotePinResponsePayload(resp);
@@ -8151,7 +8292,7 @@ var BrainNotesApp = (() => {
         return false;
       }
       setStatus2("Saving pin order...");
-      return post(
+      return post2(
         buildNotePinReorderFetchRequest({
           key: move.key,
           token: csrfToken,
@@ -8254,7 +8395,7 @@ var BrainNotesApp = (() => {
       }
       button.disabled = true;
       setStatus2("Unpinning note...");
-      const ok = await post(
+      const ok = await post2(
         buildNotePinRemoveFetchRequest({ key, token: csrfToken }),
         "Unpinned note."
       );
@@ -13018,6 +13159,787 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/settings-model.ts
+  var settingValueOf = (kind, partial) => ({
+    kind,
+    text: partial.text || "",
+    number: partial.number || 0,
+    flag: partial.flag || false,
+    items: partial.items ? [...partial.items] : []
+  });
+  var formatSettingValue = (value) => {
+    switch (value.kind) {
+      case "bool":
+        return value.flag ? "true" : "false";
+      case "int":
+        return String(value.number);
+      case "string_list":
+        return value.items.length === 0 ? "(empty list)" : value.items.join(", ");
+      default:
+        return value.text === "" ? "(empty)" : value.text;
+    }
+  };
+  var settingEditorText = (value) => {
+    switch (value.kind) {
+      case "int":
+        return String(value.number);
+      case "string_list":
+        return value.items.join("\n");
+      case "bool":
+        return value.flag ? "true" : "false";
+      default:
+        return value.text;
+    }
+  };
+  var parseSettingInput = (kind, raw) => {
+    switch (kind) {
+      case "bool":
+        return { ok: true, value: settingValueOf(kind, { flag: raw === "true" }) };
+      case "int": {
+        const text3 = raw.trim();
+        if (text3 === "" || !/^-?\d+$/.test(text3)) {
+          return { ok: false, message: "This setting takes a whole number." };
+        }
+        const parsed = Number(text3);
+        if (!Number.isSafeInteger(parsed)) {
+          return { ok: false, message: "That number is too large to store." };
+        }
+        return { ok: true, value: settingValueOf(kind, { number: parsed }) };
+      }
+      case "string_list":
+        return {
+          ok: true,
+          value: settingValueOf(kind, {
+            items: raw.split("\n").map((item) => item.trim()).filter((item) => item !== "")
+          })
+        };
+      default:
+        return { ok: true, value: settingValueOf(kind, { text: raw.trim() }) };
+    }
+  };
+  var settingBlockedReason = (summary) => summary.shadowed ? `"${summary.key}" is assigned in brainnotes.local.toml, which overrides the portable file. Remove it there before editing it here.` : "";
+  var settingOriginLabel = (summary) => {
+    if (!summary.assigned) {
+      return "default";
+    }
+    return summary.layer === "local" ? "brainnotes.local.toml" : "brainnotes.toml";
+  };
+  var settingPendingSave = (key, op, requested, result) => ({
+    key,
+    op,
+    previewID: result.preview_id,
+    diff: [...result.config_diff],
+    effective: projectedSetting(key, requested, result.settings)
+  });
+  var projectedSetting = (key, requested, settings) => {
+    const stored = settings.find((summary) => summary.key === key);
+    if (!requested || !stored) {
+      return "";
+    }
+    const shown = formatSettingValue(stored.value);
+    return shown === formatSettingValue(requested) ? "" : shown;
+  };
+  var settingConfirmMessage = (pending) => {
+    if (pending.op === "unset") {
+      return `Remove "${pending.key}" from brainnotes.toml? Review the change, then confirm.`;
+    }
+    const stored = pending.effective === "" ? "" : ` This vault will store it as ${pending.effective}.`;
+    return `Write "${pending.key}" to brainnotes.toml? Review the change, then confirm.${stored}`;
+  };
+  var settingSavedMessage = (pending) => pending.op === "unset" ? `Removed "${pending.key}". It is back to its default.` : `Saved "${pending.key}".`;
+  var settingNoChangeMessage = (key) => `"${key}" already holds that value.`;
+
+  // internal/web/static_src/settings-requests.ts
+  var readPayload5 = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
+  var finish2 = async (resp, normalize) => {
+    const payload = await readPayload5(resp);
+    if (!resp.ok) {
+      return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+    }
+    const result = normalize(payload);
+    if (!result.ok) {
+      return { ok: false, message: result.message || "The change was refused." };
+    }
+    return { ok: true, result };
+  };
+  var get = async (fetcher, endpoint, normalize) => {
+    try {
+      const resp = await fetcher(endpoint, { headers: { Accept: "application/json" } });
+      return await finish2(resp, normalize);
+    } catch {
+      return { ok: false, message: "The server did not answer." };
+    }
+  };
+  var post = async (fetcher, endpoint, token, body, normalize) => {
+    try {
+      const resp = await fetcher(endpoint, buildConfigRequestInit(token, body));
+      return await finish2(resp, normalize);
+    } catch {
+      return { ok: false, message: "The server did not answer." };
+    }
+  };
+  var fetchSettings = (fetcher) => get(fetcher, SETTINGS_ENDPOINT, normalizeSettingsResponse);
+  var previewSetting = (fetcher, token, body) => post(fetcher, SETTINGS_PREVIEW_ENDPOINT, token, body, normalizeSettingsResponse);
+  var applySetting = (fetcher, token, previewID) => post(
+    fetcher,
+    SETTINGS_APPLY_ENDPOINT,
+    token,
+    { preview_id: previewID },
+    normalizeSettingsResponse
+  );
+  var fetchTemplates = (fetcher) => get(fetcher, TEMPLATES_ENDPOINT, normalizeTemplatesResponse);
+  var fetchTemplate = (fetcher, name2) => get(
+    fetcher,
+    `${TEMPLATES_ENDPOINT}?name=${encodeURIComponent(name2)}`,
+    normalizeTemplatesResponse
+  );
+  var previewTemplate = (fetcher, token, body) => post(fetcher, TEMPLATES_PREVIEW_ENDPOINT, token, body, normalizeTemplatesResponse);
+  var applyTemplate = (fetcher, token, previewID) => post(
+    fetcher,
+    TEMPLATES_APPLY_ENDPOINT,
+    token,
+    { preview_id: previewID },
+    normalizeTemplatesResponse
+  );
+
+  // internal/web/static_src/settings-actions.ts
+  var createSettingsWriter = (deps) => {
+    const hooks = deps.hooks || {};
+    let pending = null;
+    let busy = false;
+    const setStatus2 = (message, kind = "") => {
+      hooks.onStatus?.(message, kind);
+    };
+    const setPending = (next) => {
+      pending = next;
+      hooks.onPending?.(next);
+    };
+    const preview = async (key, op, value) => {
+      if (busy) {
+        return;
+      }
+      busy = true;
+      setPending(null);
+      setStatus2(`Previewing "${key}"...`, "is-loading");
+      try {
+        const outcome = await previewSetting(deps.fetch, deps.token, {
+          token: deps.token,
+          op,
+          key,
+          value
+        });
+        if (!outcome.ok) {
+          setStatus2(outcome.message, "is-error");
+          return;
+        }
+        if (outcome.result.preview_id === "") {
+          setStatus2(settingNoChangeMessage(key), "");
+          return;
+        }
+        const issued = settingPendingSave(key, op, op === "set" ? value : null, outcome.result);
+        setPending(issued);
+        setStatus2(settingConfirmMessage(issued), "is-warning");
+      } finally {
+        busy = false;
+      }
+    };
+    const confirm = async () => {
+      const issued = pending;
+      if (busy || !issued) {
+        setStatus2("Preview the change before saving it.", "is-error");
+        return;
+      }
+      busy = true;
+      setStatus2(`Saving "${issued.key}"...`, "is-loading");
+      try {
+        const outcome = await applySetting(deps.fetch, deps.token, issued.previewID);
+        setPending(null);
+        if (!outcome.ok) {
+          setStatus2(outcome.message, "is-error");
+          return;
+        }
+        hooks.onSaved?.(outcome.result);
+        setStatus2(settingSavedMessage(issued), "is-success");
+      } finally {
+        busy = false;
+      }
+    };
+    const cancel = () => {
+      if (pending === null) {
+        return;
+      }
+      setPending(null);
+      setStatus2("Change cancelled.", "");
+    };
+    return { preview, confirm, cancel, pending: () => pending, busy: () => busy };
+  };
+
+  // internal/web/static_src/settings-render.ts
+  var configDiffText = (diff) => diff.map((line) => `${line.kind === "-" ? "-" : "+"} ${line.text}`).join("\n");
+  var renderConfigDiff2 = (block, diff) => {
+    if (!block) {
+      return;
+    }
+    if (diff.length === 0) {
+      block.textContent = "";
+      block.hidden = true;
+      return;
+    }
+    block.textContent = configDiffText(diff);
+    block.hidden = false;
+  };
+  var appendLabelled = (row, className, text3) => {
+    const element2 = row.ownerDocument.createElement("span");
+    element2.className = className;
+    element2.textContent = text3;
+    row.appendChild(element2);
+    return element2;
+  };
+  var buildSettingControl = (doc2, summary) => {
+    if (summary.kind === "bool") {
+      const box = doc2.createElement("input");
+      box.type = "checkbox";
+      box.className = "settings-control settings-control-check";
+      box.checked = summary.value.flag;
+      return box;
+    }
+    if (summary.kind === "string_list") {
+      const area = doc2.createElement("textarea");
+      area.className = "settings-control settings-control-list";
+      area.rows = 3;
+      area.spellcheck = false;
+      area.value = settingEditorText(summary.value);
+      return area;
+    }
+    const field = doc2.createElement("input");
+    field.type = summary.kind === "int" ? "number" : "text";
+    field.className = "settings-control settings-control-text";
+    field.spellcheck = false;
+    field.value = settingEditorText(summary.value);
+    return field;
+  };
+  var buildButton = (doc2, label, className, attribute2) => {
+    const button = doc2.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.textContent = label;
+    button.setAttribute(attribute2, "");
+    return button;
+  };
+  var renderSettingRow = (doc2, summary) => {
+    const item = doc2.createElement("li");
+    item.className = "settings-row";
+    item.setAttribute("data-settings-row", summary.key);
+    const header = doc2.createElement("div");
+    header.className = "settings-row-header";
+    appendLabelled(header, "settings-key", summary.key);
+    appendLabelled(header, "settings-kind", summary.kind);
+    const origin = appendLabelled(header, "settings-origin", settingOriginLabel(summary));
+    origin.setAttribute("data-settings-origin", summary.assigned ? summary.layer : "default");
+    item.appendChild(header);
+    appendLabelled(item, "settings-summary", summary.summary);
+    const current = appendLabelled(item, "settings-current", formatSettingValue(summary.value));
+    current.setAttribute("data-settings-current", "");
+    const control = buildSettingControl(doc2, summary);
+    control.setAttribute("data-settings-control", "");
+    control.id = `setting-${summary.key.replace(/\./g, "-")}`;
+    const label = doc2.createElement("label");
+    label.className = "settings-control-label";
+    label.htmlFor = control.id;
+    label.textContent = "Value";
+    item.appendChild(label);
+    item.appendChild(control);
+    const actions = doc2.createElement("div");
+    actions.className = "settings-row-actions";
+    const save = buildButton(doc2, "Save", "settings-button settings-button-primary", "data-settings-save");
+    const unset = buildButton(doc2, "Reset to default", "settings-button", "data-settings-unset");
+    unset.disabled = !summary.assigned;
+    actions.appendChild(save);
+    actions.appendChild(unset);
+    item.appendChild(actions);
+    const blocked = settingBlockedReason(summary);
+    if (blocked !== "") {
+      item.classList.add("is-shadowed");
+      control.disabled = true;
+      save.disabled = true;
+      unset.disabled = true;
+      const notice = appendLabelled(item, "settings-shadowed", blocked);
+      notice.setAttribute("data-settings-shadowed", "");
+      notice.setAttribute("role", "note");
+    }
+    return { key: summary.key, element: item, control, save, unset };
+  };
+  var renderSettingsList = (list, settings) => {
+    const doc2 = list.ownerDocument;
+    list.textContent = "";
+    return settings.map((summary) => {
+      const row = renderSettingRow(doc2, summary);
+      list.appendChild(row.element);
+      return row;
+    });
+  };
+  var renderTemplateList = (list, templates, selected) => {
+    const doc2 = list.ownerDocument;
+    list.textContent = "";
+    for (const summary of templates) {
+      const item = doc2.createElement("li");
+      item.className = "templates-row";
+      const open = doc2.createElement("button");
+      open.type = "button";
+      open.className = "templates-open";
+      open.textContent = summary.name;
+      open.setAttribute("data-templates-open", summary.name);
+      if (summary.name === selected) {
+        open.classList.add("is-selected");
+        open.setAttribute("aria-current", "true");
+      }
+      item.appendChild(open);
+      const size = doc2.createElement("span");
+      size.className = "templates-size";
+      size.textContent = `${summary.size} bytes`;
+      item.appendChild(size);
+      list.appendChild(item);
+    }
+  };
+
+  // internal/web/static_src/settings-controller.ts
+  var readElements = (root) => {
+    const list = queryElement(root, "[data-settings-list]", HTMLElement);
+    const status = queryElement(root, "[data-settings-status]", HTMLElement);
+    if (!list || !status) {
+      return null;
+    }
+    return {
+      list,
+      status,
+      diff: queryElement(root, "[data-settings-diff]", HTMLElement),
+      confirm: queryElement(root, "[data-settings-confirm]", HTMLButtonElement),
+      cancel: queryElement(root, "[data-settings-cancel]", HTMLButtonElement),
+      refresh: queryElement(root, "[data-settings-refresh]", HTMLButtonElement)
+    };
+  };
+  var controlText = (control) => {
+    if (control instanceof HTMLInputElement && control.type === "checkbox") {
+      return control.checked ? "true" : "false";
+    }
+    return control.value;
+  };
+  var summarize = (count3) => count3 === 0 ? ["No editable settings.", "is-empty"] : [
+    `${count3} portable settings. Machine-local settings stay in brainnotes.local.toml and are not editable here.`,
+    ""
+  ];
+  var bindRow = (row, summary, writer, refuse) => {
+    if (settingBlockedReason(summary) !== "") {
+      return;
+    }
+    row.save.addEventListener("click", () => {
+      const parsed = parseSettingInput(summary.kind, controlText(row.control));
+      if (!parsed.ok) {
+        refuse(parsed.message);
+        return;
+      }
+      void writer.preview(summary.key, "set", parsed.value);
+    });
+    row.unset.addEventListener("click", () => {
+      void writer.preview(summary.key, "unset", settingValueOf(summary.kind, {}));
+    });
+  };
+  var createSettingsPanel = (deps) => {
+    const elements = readElements(deps.root);
+    if (!elements) {
+      return null;
+    }
+    const setStatus2 = (message, kind = "") => {
+      setStatusText(elements.status, message, kind);
+    };
+    const showPending = (pending) => {
+      renderConfigDiff2(elements.diff, pending ? pending.diff : []);
+      if (elements.confirm) {
+        elements.confirm.hidden = pending === null;
+      }
+      if (elements.cancel) {
+        elements.cancel.hidden = pending === null;
+      }
+    };
+    const render = (settings) => {
+      const rows = renderSettingsList(elements.list, settings);
+      rows.forEach((row, index) => {
+        bindRow(row, settings[index], writer, (message) => {
+          showPending(null);
+          setStatus2(message, "is-error");
+        });
+      });
+    };
+    const writer = createSettingsWriter({
+      fetch: deps.fetch,
+      token: deps.token,
+      hooks: {
+        onStatus: setStatus2,
+        onPending: showPending,
+        onSaved: (result) => render(result.settings)
+      }
+    });
+    const load = async () => {
+      showPending(null);
+      setStatus2("Loading settings...", "is-loading");
+      const outcome = await fetchSettings(deps.fetch);
+      if (!outcome.ok) {
+        setStatus2(outcome.message, "is-error");
+        return;
+      }
+      render(outcome.result.settings);
+      setStatus2(...summarize(outcome.result.settings.length));
+    };
+    elements.confirm?.addEventListener("click", () => void writer.confirm());
+    elements.cancel?.addEventListener("click", () => writer.cancel());
+    elements.refresh?.addEventListener("click", () => void load());
+    showPending(null);
+    return { load, pending: () => writer.pending() };
+  };
+
+  // internal/web/static_src/templates-model.ts
+  var emptyTemplateDraft = () => ({
+    name: "",
+    content: "",
+    revision: "",
+    created: false
+  });
+  var templateDraftOf = (summary) => ({
+    name: summary.name,
+    content: summary.content,
+    revision: summary.revision,
+    created: false
+  });
+  var newTemplateDraft = (name2, content2) => ({
+    name: name2,
+    content: content2,
+    revision: "",
+    created: true
+  });
+  var templateSaveError = (draft) => {
+    if (draft.name.trim() === "") {
+      return "Name the template before saving it.";
+    }
+    return "";
+  };
+  var suggestTemplateName = (raw, extension) => {
+    const name2 = raw.trim();
+    if (name2 === "" || extension === "" || name2.includes(".")) {
+      return name2;
+    }
+    return name2 + extension;
+  };
+  var templatePendingSave = (name2, op, content2, result) => ({
+    name: name2,
+    op,
+    content: content2,
+    previewID: result.preview_id,
+    diff: [...result.diff],
+    created: result.created
+  });
+  var templateConfirmMessage = (pending) => {
+    if (pending.op === "delete") {
+      return `Delete "${pending.name}"? Review the change, then confirm.`;
+    }
+    return pending.created ? `Create "${pending.name}"? Review the change, then confirm.` : `Overwrite "${pending.name}"? Review the change, then confirm.`;
+  };
+  var templateSavedMessage = (pending) => {
+    if (pending.op === "delete") {
+      return `Deleted "${pending.name}". Undo it from Recent changes.`;
+    }
+    return pending.created ? `Created "${pending.name}".` : `Saved "${pending.name}".`;
+  };
+  var templateNoChangeMessage = (name2) => `"${name2}" already holds exactly those bytes.`;
+  var templateDirNotice = (dir, status) => {
+    const where = dir === "" ? "The templates directory" : `${dir}/`;
+    if (status.excluded_from_notes && status.portable) {
+      return `${where} is excluded from note queries and synchronizes with your other vaults.`;
+    }
+    if (!status.excluded_from_notes && !status.portable) {
+      return `${where} is indexed as ordinary notes and does not synchronize.`;
+    }
+    return status.excluded_from_notes ? `${where} is excluded from note queries but does not synchronize.` : `${where} synchronizes but is indexed as ordinary notes.`;
+  };
+
+  // internal/web/static_src/templates-actions.ts
+  var createTemplatesWriter = (deps) => {
+    const hooks = deps.hooks || {};
+    let pending = null;
+    let busy = false;
+    const setStatus2 = (message, kind = "") => {
+      hooks.onStatus?.(message, kind);
+    };
+    const setPending = (next) => {
+      pending = next;
+      hooks.onPending?.(next);
+    };
+    const preview = async (request) => {
+      if (busy) {
+        return;
+      }
+      busy = true;
+      setPending(null);
+      setStatus2(`Previewing "${request.name}"...`, "is-loading");
+      try {
+        const outcome = await previewTemplate(deps.fetch, deps.token, {
+          token: deps.token,
+          op: request.op,
+          name: request.name,
+          content: request.op === "delete" ? "" : request.content,
+          revision: request.revision
+        });
+        if (!outcome.ok) {
+          setStatus2(outcome.message, "is-error");
+          return;
+        }
+        if (outcome.result.preview_id === "") {
+          setStatus2(templateNoChangeMessage(request.name), "");
+          return;
+        }
+        const planned = request.op === "delete" ? "" : request.content;
+        const issued = templatePendingSave(request.name, request.op, planned, outcome.result);
+        setPending(issued);
+        setStatus2(templateConfirmMessage(issued), "is-warning");
+      } finally {
+        busy = false;
+      }
+    };
+    const confirm = async () => {
+      const issued = pending;
+      if (busy || !issued) {
+        setStatus2("Preview the change before saving it.", "is-error");
+        return;
+      }
+      busy = true;
+      setStatus2(`Saving "${issued.name}"...`, "is-loading");
+      try {
+        const outcome = await applyTemplate(deps.fetch, deps.token, issued.previewID);
+        setPending(null);
+        if (!outcome.ok) {
+          setStatus2(outcome.message, "is-error");
+          return;
+        }
+        hooks.onSaved?.(issued, outcome.result);
+        setStatus2(templateSavedMessage(issued), "is-success");
+      } finally {
+        busy = false;
+      }
+    };
+    const cancel = () => {
+      if (pending === null) {
+        return;
+      }
+      setPending(null);
+      setStatus2("Change cancelled.", "");
+    };
+    return { preview, confirm, cancel, pending: () => pending, busy: () => busy };
+  };
+
+  // internal/web/static_src/templates-view.ts
+  var readTemplatesElements = (root) => {
+    const list = queryElement(root, "[data-templates-list]", HTMLElement);
+    const status = queryElement(root, "[data-templates-status]", HTMLElement);
+    const name2 = queryElement(root, "[data-templates-name]", HTMLInputElement);
+    const content2 = queryElement(root, "[data-templates-content]", HTMLTextAreaElement);
+    if (!list || !status || !name2 || !content2) {
+      return null;
+    }
+    return {
+      list,
+      status,
+      name: name2,
+      content: content2,
+      notice: queryElement(root, "[data-templates-notice]", HTMLElement),
+      save: queryElement(root, "[data-templates-save]", HTMLButtonElement),
+      remove: queryElement(root, "[data-templates-delete]", HTMLButtonElement),
+      create: queryElement(root, "[data-templates-new]", HTMLButtonElement),
+      diff: queryElement(root, "[data-templates-diff]", HTMLElement),
+      confirm: queryElement(root, "[data-templates-confirm]", HTMLButtonElement),
+      cancel: queryElement(root, "[data-templates-cancel]", HTMLButtonElement),
+      refresh: queryElement(root, "[data-templates-refresh]", HTMLButtonElement)
+    };
+  };
+  var createTemplatesView = (elements) => {
+    let draft = emptyTemplateDraft();
+    let listed = [];
+    let extension = "";
+    const showDraft = (next) => {
+      draft = next;
+      elements.name.value = next.name;
+      elements.content.value = next.content;
+      if (elements.remove) {
+        elements.remove.disabled = next.revision === "";
+      }
+      renderTemplateList(elements.list, listed, next.name);
+    };
+    return {
+      setStatus: (message, kind = "") => setStatusText(elements.status, message, kind),
+      showPending: (pending) => {
+        renderConfigDiff2(elements.diff, pending ? pending.diff : []);
+        elements.content.disabled = pending !== null;
+        elements.name.disabled = pending !== null;
+        if (elements.confirm) {
+          elements.confirm.hidden = pending === null;
+        }
+        if (elements.cancel) {
+          elements.cancel.hidden = pending === null;
+        }
+      },
+      showDraft,
+      absorb: (result) => {
+        extension = result.extension;
+        listed = result.templates;
+        renderTemplateList(elements.list, listed, draft.name);
+        if (elements.notice) {
+          elements.notice.textContent = templateDirNotice(result.dir, result.templating);
+        }
+      },
+      draft: () => draft,
+      extension: () => extension,
+      content: () => elements.content.value,
+      typedName: () => elements.name.value,
+      focusName: () => elements.name.focus()
+    };
+  };
+
+  // internal/web/static_src/templates-controller.ts
+  var listSummary = (result) => result.templates.length === 0 ? [
+    `No templates yet. Name one and save it into ${result.dir || "the templates directory"}.`,
+    "is-empty"
+  ] : [`${result.templates.length} templates in ${result.dir}/.`, ""];
+  var clickedTemplate = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return "";
+    }
+    return target.closest("[data-templates-open]")?.getAttribute("data-templates-open") || "";
+  };
+  var reloadInto = async (fetcher, view) => {
+    const outcome = await fetchTemplates(fetcher);
+    if (!outcome.ok) {
+      view.setStatus(outcome.message, "is-error");
+      return null;
+    }
+    view.absorb(outcome.result);
+    return outcome.result;
+  };
+  var openInto = async (fetcher, view, name2) => {
+    view.setStatus(`Opening "${name2}"...`, "is-loading");
+    const outcome = await fetchTemplate(fetcher, name2);
+    if (!outcome.ok) {
+      view.setStatus(outcome.message, "is-error");
+      return;
+    }
+    const summary = outcome.result.templates[0];
+    if (!summary) {
+      view.setStatus(`"${name2}" is no longer in the templates directory.`, "is-error");
+      return;
+    }
+    view.showDraft(templateDraftOf(summary));
+    view.setStatus(`Editing ${outcome.result.rel_path || name2}.`, "");
+  };
+  var createTemplatesPanel = (deps) => {
+    const elements = readTemplatesElements(deps.root);
+    if (!elements) {
+      return null;
+    }
+    const view = createTemplatesView(elements);
+    const settle = (issued, result) => {
+      view.showDraft(
+        issued.op === "delete" ? emptyTemplateDraft() : { name: issued.name, content: issued.content, revision: result.revision, created: false }
+      );
+      void reloadInto(deps.fetch, view);
+    };
+    const writer = createTemplatesWriter({
+      fetch: deps.fetch,
+      token: deps.token,
+      hooks: { onStatus: view.setStatus, onPending: view.showPending, onSaved: settle }
+    });
+    const requestSave = () => {
+      const draft = view.draft();
+      const name2 = suggestTemplateName(view.typedName(), view.extension());
+      const refusal = templateSaveError({ ...draft, name: name2 });
+      if (refusal !== "") {
+        view.showPending(null);
+        view.setStatus(refusal, "is-error");
+        return;
+      }
+      void writer.preview({
+        op: "save",
+        name: name2,
+        content: view.content(),
+        // A name typed over an opened draft is a different file, so the revision
+        // the draft was read at no longer describes the destination.
+        revision: name2 === draft.name ? draft.revision : ""
+      });
+    };
+    const requestDelete = () => {
+      const draft = view.draft();
+      if (draft.revision === "") {
+        view.setStatus("Open a template before deleting it.", "is-error");
+        return;
+      }
+      void writer.preview({ op: "delete", name: draft.name, content: "", revision: draft.revision });
+    };
+    const load = async () => {
+      view.showPending(null);
+      view.setStatus("Loading templates...", "is-loading");
+      const result = await reloadInto(deps.fetch, view);
+      if (result) {
+        view.setStatus(...listSummary(result));
+      }
+    };
+    elements.list.addEventListener("click", (event) => {
+      const name2 = clickedTemplate(event);
+      if (name2 !== "" && !writer.busy()) {
+        writer.cancel();
+        void openInto(deps.fetch, view, name2);
+      }
+    });
+    elements.save?.addEventListener("click", requestSave);
+    elements.remove?.addEventListener("click", requestDelete);
+    elements.create?.addEventListener("click", () => {
+      writer.cancel();
+      view.showDraft(newTemplateDraft("", ""));
+      view.setStatus("Name the new template and save it.", "");
+      view.focusName();
+    });
+    elements.confirm?.addEventListener("click", () => void writer.confirm());
+    elements.cancel?.addEventListener("click", () => writer.cancel());
+    elements.refresh?.addEventListener("click", () => void load());
+    view.showPending(null);
+    view.showDraft(emptyTemplateDraft());
+    return { load, draft: view.draft, pending: () => writer.pending() };
+  };
+
+  // internal/web/static_src/settings.ts
+  var initSettings = (doc2 = document) => {
+    const settingsRoot = queryElement(doc2, "[data-settings-panel]", HTMLElement);
+    if (settingsRoot) {
+      const panel = createSettingsPanel({
+        root: settingsRoot,
+        fetch: (input, init) => window.fetch(input, init),
+        token: settingsRoot.getAttribute("data-settings-csrf") || ""
+      });
+      void panel?.load();
+    }
+    const templatesRoot = queryElement(doc2, "[data-templates-panel]", HTMLElement);
+    if (templatesRoot) {
+      const panel = createTemplatesPanel({
+        root: templatesRoot,
+        fetch: (input, init) => window.fetch(input, init),
+        token: templatesRoot.getAttribute("data-templates-csrf") || ""
+      });
+      void panel?.load();
+    }
+  };
+
   // internal/web/static_src/source-format.ts
   var INLINE_MARKERS = {
     bold: "**",
@@ -13161,17 +14083,17 @@ var BrainNotesApp = (() => {
       rendered = content2;
       options.sink.pending();
       options.render(content2).then(
-        (html2) => finish2(sequence, () => options.sink.render(html2), "", false),
+        (html2) => finish3(sequence, () => options.sink.render(html2), "", false),
         (error) => {
           if (rendered === content2) {
             rendered = null;
           }
-          finish2(sequence, () => {
+          finish3(sequence, () => {
           }, previewErrorMessage(error), true);
         }
       );
     };
-    const finish2 = (sequence, apply, message, failed) => {
+    const finish3 = (sequence, apply, message, failed) => {
       if (disposed || sequence <= applied) {
         return;
       }
@@ -13248,8 +14170,8 @@ var BrainNotesApp = (() => {
     }
     return normalizeSourceDocument(payload);
   };
-  var previewSource = async (post, endpoint, content2, token) => {
-    const { response, payload } = await post(endpoint, buildSourcePreviewForm({ content: content2, token }));
+  var previewSource = async (post2, endpoint, content2, token) => {
+    const { response, payload } = await post2(endpoint, buildSourcePreviewForm({ content: content2, token }));
     if (foreignAnswer(response, payload)) {
       throw new Error(signInMessage);
     }
@@ -13264,7 +14186,7 @@ var BrainNotesApp = (() => {
   };
   var createSourceClient = (options) => {
     const fetcher = options.fetch || fetch;
-    const post = async (url, body) => {
+    const post2 = async (url, body) => {
       const response = await fetcher(url, {
         method: "POST",
         headers: {
@@ -13277,7 +14199,7 @@ var BrainNotesApp = (() => {
       return { response, payload: await readJSON(response) };
     };
     const postSave = async (url, body) => {
-      const { response, payload } = await post(url, body);
+      const { response, payload } = await post2(url, body);
       if (foreignAnswer(response, payload)) {
         return {
           ok: false,
@@ -13293,7 +14215,7 @@ var BrainNotesApp = (() => {
     };
     return {
       read: () => readSource(fetcher, options.endpoints.read, options.key),
-      preview: (content2) => previewSource(post, options.endpoints.preview, content2, options.token),
+      preview: (content2) => previewSource(post2, options.endpoints.preview, content2, options.token),
       // save never throws on a refusal. Every arm of the envelope is a fact the
       // editor has to act on — a stale revision offers a merge, a snapshot
       // failure means the bytes landed — and an exception would flatten all of
@@ -16210,24 +17132,24 @@ var BrainNotesApp = (() => {
     In cases where your value depends only on a single field, you'll
     want to use the [`from`](https://codemirror.net/6/docs/ref/#state.Facet.from) method instead.
     */
-    compute(deps, get) {
+    compute(deps, get2) {
       if (this.isStatic)
         throw new Error("Can't compute a static facet");
-      return new FacetProvider(deps, this, 1, get);
+      return new FacetProvider(deps, this, 1, get2);
     }
     /**
     Create an extension that computes zero or more values for this
     facet from a state.
     */
-    computeN(deps, get) {
+    computeN(deps, get2) {
       if (this.isStatic)
         throw new Error("Can't compute a static facet");
-      return new FacetProvider(deps, this, 2, get);
+      return new FacetProvider(deps, this, 2, get2);
     }
-    from(field, get) {
-      if (!get)
-        get = (x) => x;
-      return this.compute([field], (state) => get(state.field(field)));
+    from(field, get2) {
+      if (!get2)
+        get2 = (x) => x;
+      return this.compute([field], (state) => get2(state.field(field)));
     }
   };
   function sameArray(a, b) {
@@ -16312,7 +17234,7 @@ var BrainNotesApp = (() => {
     let providerTypes = providers.map((p) => p.type);
     let dynamic = providerAddrs.filter((p) => !(p & 1));
     let idx = addresses[facet.id] >> 1;
-    function get(state) {
+    function get2(state) {
       let values2 = [];
       for (let i = 0; i < providerAddrs.length; i++) {
         let value = getAddr(state, providerAddrs[i]);
@@ -16328,13 +17250,13 @@ var BrainNotesApp = (() => {
       create(state) {
         for (let addr of providerAddrs)
           ensureAddr(state, addr);
-        state.values[idx] = get(state);
+        state.values[idx] = get2(state);
         return 1;
       },
       update(state, tr) {
         if (!ensureAll(state, dynamic))
           return 0;
-        let value = get(state);
+        let value = get2(state);
         if (facet.compare(value, state.values[idx]))
           return 0;
         state.values[idx] = value;
@@ -16347,7 +17269,7 @@ var BrainNotesApp = (() => {
           state.values[idx] = oldValue;
           return 0;
         }
-        let value = get(state);
+        let value = get2(state);
         if (facet.compare(value, oldValue)) {
           state.values[idx] = oldValue;
           return 0;
@@ -18178,7 +19100,7 @@ var BrainNotesApp = (() => {
     // selectors (after `&` expansion) to compute the final selector.
     constructor(spec, options) {
       this.rules = [];
-      let { finish: finish2 } = options || {};
+      let { finish: finish3 } = options || {};
       function splitSelector(selector) {
         return /^@/.test(selector) ? [selector] : selector.split(/,\s*/);
       }
@@ -18201,7 +19123,7 @@ var BrainNotesApp = (() => {
           }
         }
         if (local.length || keyframes) {
-          target.push((finish2 && !isAt && !isKeyframes ? selectors.map(finish2) : selectors).join(", ") + " {" + local.join(" ") + "}");
+          target.push((finish3 && !isAt && !isKeyframes ? selectors.map(finish3) : selectors).join(", ") + " {" + local.join(" ") + "}");
         }
       }
       for (let prop in spec) render(splitSelector(prop), spec[prop], this.rules);
@@ -34960,9 +35882,9 @@ var BrainNotesApp = (() => {
       if (this.stage == -1)
         return false;
       let content2 = leaf.content + "\n" + line.scrub();
-      let finish2 = this.advance(content2);
-      if (finish2 > -1 && finish2 < content2.length)
-        return this.complete(cx, leaf, finish2);
+      let finish3 = this.advance(content2);
+      if (finish3 > -1 && finish3 < content2.length)
+        return this.complete(cx, leaf, finish3);
       return false;
     }
     finish(cx, leaf) {
@@ -42047,7 +42969,7 @@ var BrainNotesApp = (() => {
       },
       body: request.body.toString()
     });
-    const payload = await readPayload5(response);
+    const payload = await readPayload6(response);
     return readManageOutcome(response.status, response.ok, payload);
   };
   var readManageOutcome = (status, ok, payload) => {
@@ -42074,7 +42996,7 @@ var BrainNotesApp = (() => {
     };
   };
   var editorURLForKey = (editorPath, key) => `${editorPath}?key=${encodeURIComponent(key)}`;
-  var readPayload5 = async (response) => {
+  var readPayload6 = async (response) => {
     const contentType = response.headers?.get("Content-Type") || "";
     try {
       return contentType.includes("application/json") ? await response.json() : await response.text();
@@ -44454,6 +45376,7 @@ ${candidate.markdown}`;
       initBrokenCreateActions();
       initHistoryPanel();
       initSynthesize();
+      initSettings();
       initSourceEditor();
     }
     initFacets();

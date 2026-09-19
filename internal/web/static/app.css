@@ -7189,6 +7189,285 @@ code {
   color: var(--bn-accent-subtle-text);
   font-weight: 600;
 }
+/* internal/web/static_src/css/settings.css */
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.15rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0 0.65rem;
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.settings-button:hover:not(:disabled) {
+  border-color: var(--bn-border-strong);
+  background: var(--bn-hover);
+}
+
+.settings-button:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.settings-button:disabled {
+  color: var(--bn-faint);
+  background: var(--bn-sunken);
+  cursor: default;
+}
+
+.settings-button-primary {
+  border-color: var(--bn-accent-subtle-border);
+  color: var(--bn-accent-subtle-text);
+  background: var(--bn-accent-subtle-bg);
+}
+
+.settings-danger {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
+
+.settings-status {
+  min-height: 1.2rem;
+  margin: 0.75rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.settings-status.is-error {
+  color: var(--bn-danger);
+}
+
+.settings-status.is-success {
+  color: var(--bn-success);
+}
+
+.settings-status.is-warning {
+  color: var(--bn-warning);
+}
+
+/*
+ * The pending-change block is always a question: both write classes on this page
+ * stop on their rendered patch, so a visible diff always has a confirm button
+ * beside it.
+ */
+.settings-diff {
+  margin: 0.6rem 0 0;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  color: var(--bn-code-text);
+  background: var(--bn-code-bg);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.settings-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.settings-list {
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.settings-row {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  padding: 0.7rem;
+  background: var(--bn-sunken);
+}
+
+.settings-row-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.settings-key {
+  color: var(--bn-text-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+}
+
+.settings-kind,
+.settings-origin {
+  border: 1px solid var(--bn-border);
+  border-radius: 0.3rem;
+  padding: 0 0.35rem;
+  color: var(--bn-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.settings-origin[data-settings-origin="local"] {
+  border-color: var(--bn-warning-border);
+  color: var(--bn-warning);
+  background: var(--bn-warning-bg);
+}
+
+.settings-summary {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--bn-muted);
+  font-size: 0.82rem;
+}
+
+.settings-current {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--bn-text-subtle);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.settings-control-label {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--bn-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.settings-control {
+  min-height: 2.15rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.5rem;
+  color: var(--bn-text);
+  background: var(--bn-surface);
+  font-size: 0.9rem;
+}
+
+.settings-control:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 1px;
+}
+
+.settings-control-text,
+.settings-control-list {
+  width: 100%;
+}
+
+.settings-control-check {
+  min-height: 0;
+  width: auto;
+}
+
+.settings-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+/*
+ * A shadowed portable key is disabled rather than hidden: it still decides what
+ * the vault does, and the reason it cannot be edited here is the thing worth
+ * seeing.
+ */
+.settings-row.is-shadowed {
+  border-color: var(--bn-warning-border);
+}
+
+.settings-shadowed {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--bn-warning);
+  font-size: 0.82rem;
+}
+
+.templates-notice {
+  margin: 0.5rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.82rem;
+}
+
+.templates-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 18rem) 1fr;
+  gap: 1rem;
+  margin-top: 0.8rem;
+  align-items: start;
+}
+
+.templates-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.templates-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.templates-open {
+  border: 0;
+  padding: 0.2rem 0;
+  color: var(--bn-link);
+  background: none;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.templates-open:hover {
+  color: var(--bn-link-hover);
+}
+
+.templates-open:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.templates-open.is-selected {
+  color: var(--bn-text-strong);
+  font-weight: 600;
+}
+
+.templates-size {
+  color: var(--bn-faint);
+  font-size: 0.75rem;
+}
+
+.templates-content {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.templates-hint {
+  margin: 0.4rem 0 0;
+  color: var(--bn-muted);
+  font-size: 0.78rem;
+}
 /* internal/web/static_src/css/motion.css */
 @media (prefers-reduced-motion: reduce) {
   .brief-slot,
@@ -7209,6 +7488,10 @@ code {
 /* internal/web/static_src/css/responsive.css */
 @media (max-width: 960px) {
   .synthesize-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .templates-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 

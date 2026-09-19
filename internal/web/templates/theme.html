@@ -59,6 +59,12 @@
     <a href="/properties">Properties</a>
     <a href="/graph">Graph</a>
     <a href="/health">Health</a>
+    {{/*
+      /settings is not in the read-only replica's route allowlist, so linking it
+      there would be a nav entry that refuses. Hosted mode keeps it: it can write
+      configuration, it only cannot start a process.
+    */}}
+    {{if not readOnly}}<a href="/settings">Settings</a>{{end}}
     <div class="saved-views-nav" data-saved-views-nav role="group" aria-label="Saved views"></div>
   </nav>
 {{end}}

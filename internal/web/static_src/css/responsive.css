@@ -3,6 +3,10 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .templates-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .brief-slot-grid {
     grid-template-columns: 1fr;
   }
