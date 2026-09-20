@@ -2,14 +2,54 @@ package vaultsyncd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
+
+func coverOutgoing(t *testing.T, root string) {
+	t.Helper()
+	packages, err := listPackages(vaultsync.OutgoingDir(root))
+	if err != nil {
+		t.Fatalf("list packages for backup coverage: %v", err)
+	}
+	coverage := vaultsync.BackupCoverage{
+		Format:     vaultsync.BackupCoverageFormat,
+		BackupID:   "test-verified-backup",
+		VerifiedAt: time.Date(2026, time.September, 19, 12, 0, 0, 0, time.UTC),
+	}
+	for _, pkg := range packages {
+		manifest, err := vaultsync.ReadManifest(pkg.dir)
+		if err != nil {
+			t.Fatalf("read package for backup coverage: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(pkg.dir, vaultsync.ManifestName))
+		if err != nil {
+			t.Fatalf("read manifest for backup coverage: %v", err)
+		}
+		coverage.Packages = append(coverage.Packages, vaultsync.BackupCoveredPackage{
+			PackageID:      manifest.PackageID,
+			ManifestSHA256: vaultsync.HashBytes(data),
+		})
+	}
+	data, err := json.MarshalIndent(coverage, "", "  ")
+	if err != nil {
+		t.Fatalf("encode backup coverage: %v", err)
+	}
+	coveragePath := vaultsync.BackupCoveragePath(root)
+	if err := os.MkdirAll(filepath.Dir(coveragePath), 0o755); err != nil {
+		t.Fatalf("create backup coverage directory: %v", err)
+	}
+	if err := os.WriteFile(coveragePath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write backup coverage: %v", err)
+	}
+}
 
 // world is the two-replica arrangement every test here needs: two Git-backed
 // vaults, a real enrollment between them, and a controlled clock.

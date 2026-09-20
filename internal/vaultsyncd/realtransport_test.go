@@ -51,9 +51,10 @@ func TestRealTransportCarriesAnEditIntoThePeerVault(t *testing.T) {
 	if got := w.receipts(vaultsync.OutgoingDir(w.peerRoot())); !contains(got, published) {
 		t.Fatalf("the peer published receipts %v, want one for %s", got, published)
 	}
+	coverOutgoing(t, w.root())
 
-	// The receipt crosses back on the same transport, and only then does the
-	// sender have grounds to remove the package.
+	// The receipt crosses back on the same transport. With independently
+	// verified backup coverage, the sender then has grounds to remove the package.
 	retiring := l.settle(w.root(), "the sender to retire "+published, func() bool {
 		return !contains(w.channel(vaultsync.OutgoingDir(w.root())), published)
 	})

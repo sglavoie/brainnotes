@@ -80,6 +80,12 @@ type RetireOutcome struct {
 	// kept, which is the safe direction and also the silent one — so they are
 	// named here.
 	Rejected []ReceiptProblem `json:"rejected,omitempty"`
+	// Uncovered packages have a verified peer receipt but are not named by the
+	// latest verified private backup. Required packages are backup-covered and
+	// acknowledged, but a still-published package depends on their position.
+	// Both are retained.
+	Uncovered int `json:"uncovered"`
+	Required  int `json:"required"`
 }
 
 // runImport drains the incoming channel.
@@ -180,9 +186,11 @@ func runExport(ctx context.Context, root string, opts Options) (*ExportOutcome, 
 // Two removals, and every one of them is a file this device wrote into its own
 // outgoing channel:
 //
-//   - A published package whose receipt has arrived and verifies. The peer has
-//     the change durably, backed by a named recovery entry of its own, so this
-//     copy has no reader left.
+//   - A published package whose receipt has arrived and verifies, whose exact
+//     manifest is covered by a verified private backup, and whose origin
+//     position no still-published package depends on. The peer has the change
+//     durably, the backup retains the sender's recovery copy, and the remaining
+//     channel no longer needs this dependency.
 //   - A receipt for a peer package that has left this vault's incoming channel.
 //     The peer removes its copy only after reading that receipt, so its
 //     disappearance is the acknowledgment of the acknowledgment. If it turns out
@@ -199,9 +207,9 @@ func runExport(ctx context.Context, root string, opts Options) (*ExportOutcome, 
 // invariant trivially true for this unit. It is safe without one because the
 // exporter creates package directories under fresh identities and never
 // enumerates the channel, so there is no listing for a removal to invalidate,
-// and because every removal is of something already acknowledged. A concurrent
-// remover is tolerated: os.RemoveAll reports a path that is already gone as
-// success.
+// and because every removal is of something already acknowledged and backed up.
+// A concurrent remover is tolerated: os.RemoveAll reports a path that is already
+// gone as success.
 func runRetire(root string) (*RetireOutcome, error) {
 	barrier, err := checkpoint.Join(root)
 	if err != nil {
@@ -216,10 +224,15 @@ func runRetire(root string) (*RetireOutcome, error) {
 	if err != nil {
 		return nil, err
 	}
+	coverage, err := vaultsync.LoadBackupCoverage(root)
+	if err != nil {
+		return nil, err
+	}
+	required, completeGraph := requiredPackages(published, local.DeviceID)
 	outcome := &RetireOutcome{}
 	reserved := reservedPackage(root)
 	for _, pkg := range published {
-		if err := outcome.consider(root, local, pkg, reserved); err != nil {
+		if err := outcome.consider(root, local, pkg, reserved, coverage, !completeGraph || required[pkg.name]); err != nil {
 			return outcome, err
 		}
 	}
@@ -261,7 +274,14 @@ func reservedPackage(root string) string {
 // the safe direction — the count it belongs to is the one that keeps it — and it
 // costs the sequence gap its explanation for exactly as long as the reservation
 // lasts, which is until the next export resolves it.
-func (o *RetireOutcome) consider(root string, local *vaultsync.Enrollment, pkg pkgEntry, reserved string) error {
+func (o *RetireOutcome) consider(
+	root string,
+	local *vaultsync.Enrollment,
+	pkg pkgEntry,
+	reserved string,
+	coverage *vaultsync.BackupCoverage,
+	required bool,
+) error {
 	if pkg.name == reserved {
 		o.Awaiting++
 		return nil
@@ -280,11 +300,59 @@ func (o *RetireOutcome) consider(root string, local *vaultsync.Enrollment, pkg p
 		o.Awaiting++
 		return nil
 	}
+	covered, err := coverage.Covers(pkg.dir, manifest)
+	if err != nil {
+		return err
+	}
+	if !covered {
+		o.Uncovered++
+		return nil
+	}
+	if required {
+		o.Required++
+		return nil
+	}
 	if err := discard(root, pkg.dir); err != nil {
 		return err
 	}
 	o.Retired = append(o.Retired, pkg.name)
 	return nil
+}
+
+// requiredPackages maps an origin position to its package identity, then marks
+// every local package a still-published manifest depends on. The boolean says
+// whether every manifest was readable. One unreadable directory makes the
+// graph incomplete, so the caller retains every package for this sweep rather
+// than guessing that an unknown manifest has no dependencies.
+func requiredPackages(published []pkgEntry, localDevice string) (map[string]bool, bool) {
+	bySequence := make(map[uint64][]string, len(published))
+	manifests := make([]*vaultsync.Manifest, 0, len(published))
+	complete := true
+	for _, pkg := range published {
+		manifest, err := vaultsync.ReadManifest(pkg.dir)
+		if err != nil {
+			complete = false
+			continue
+		}
+		manifests = append(manifests, manifest)
+		if manifest.OriginDevice == localDevice {
+			bySequence[manifest.Sequence] = append(bySequence[manifest.Sequence], manifest.PackageID)
+		}
+	}
+	required := make(map[string]bool)
+	for _, manifest := range manifests {
+		for _, dependency := range manifest.Requires {
+			if dependency.OriginDevice != localDevice {
+				continue
+			}
+			for _, packageID := range bySequence[dependency.Sequence] {
+				if packageID != manifest.PackageID {
+					required[packageID] = true
+				}
+			}
+		}
+	}
+	return required, complete
 }
 
 // release drops receipts whose packages have left the incoming channel. See

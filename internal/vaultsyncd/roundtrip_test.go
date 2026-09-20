@@ -57,13 +57,14 @@ func TestDeliveryIsNotApplicationUntilAReceiptSaysSo(t *testing.T) {
 	requireStates(t, w.status(w.root()), StateTransportPending)
 }
 
-// TestAVerifiedReceiptRetiresThePackageAndItsRemovalReleasesTheReceipt is the
+// TestCoveredAcknowledgedPackageRetiresAndItsRemovalReleasesTheReceipt is the
 // second half of the handshake: what each device removes, and on whose evidence.
-func TestAVerifiedReceiptRetiresThePackageAndItsRemovalReleasesTheReceipt(t *testing.T) {
+func TestCoveredAcknowledgedPackageRetiresAndItsRemovalReleasesTheReceipt(t *testing.T) {
 	w := enroll(t)
 	published := exchange(t, w)
 
-	// The acknowledgment is here, so the sender's copy has no reader left.
+	// The acknowledgment is here and exchange recorded verified backup coverage,
+	// so the sender's copy has no reader left and is not the only recovery copy.
 	pass := w.once(w.root())
 	if retired := pass.retired(t).Retired; !contains(retired, published) {
 		t.Fatalf("retired %v, want %s among them", retired, published)
@@ -171,5 +172,6 @@ func exchange(t *testing.T, w *world) string {
 	w.transport(w.root(), w.peerRoot())
 	w.once(w.peerRoot())
 	w.transport(w.peerRoot(), w.root())
+	coverOutgoing(t, w.root())
 	return published[0]
 }

@@ -405,7 +405,7 @@ func (c *companion) reportRetire(outcome *RetireOutcome) {
 		c.emit(Event{
 			Kind:     EventRetired,
 			Worker:   WorkerRetire,
-			Message:  "acknowledged packages were removed from the outgoing channel",
+			Message:  "acknowledged and backup-covered packages were removed from the outgoing channel",
 			Packages: removed,
 			Awaiting: outcome.Awaiting,
 		})

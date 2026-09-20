@@ -3,6 +3,8 @@ package vaultsyncd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -110,6 +112,139 @@ func TestRetirementLeavesTheExportersReservationAlone(t *testing.T) {
 	if !contains(resolved.Retired, published) {
 		t.Fatalf("retired %v, want %s among them", resolved.Retired, published)
 	}
+}
+
+func TestRetirementKeepsAcknowledgedPackageUntilAVerifiedBackupCoversIt(t *testing.T) {
+	w := enroll(t)
+	published := exchange(t, w)
+	if err := os.Remove(vaultsync.BackupCoveragePath(w.root())); err != nil {
+		t.Fatalf("remove backup coverage: %v", err)
+	}
+
+	outcome, err := runRetire(w.root())
+	if err != nil {
+		t.Fatalf("retire without backup coverage: %v", err)
+	}
+	if contains(outcome.Retired, published) || outcome.Uncovered != 1 {
+		t.Fatalf("retirement without coverage = %+v, want one retained as uncovered", outcome)
+	}
+	if got := w.channel(vaultsync.OutgoingDir(w.root())); !contains(got, published) {
+		t.Fatalf("outgoing channel %v lost the only locally recoverable package", got)
+	}
+
+	coverOutgoing(t, w.root())
+	covered, err := runRetire(w.root())
+	if err != nil {
+		t.Fatalf("retire with backup coverage: %v", err)
+	}
+	if !contains(covered.Retired, published) {
+		t.Fatalf("retired %v, want covered package %s", covered.Retired, published)
+	}
+}
+
+func TestRetirementRefusesMalformedBackupCoverage(t *testing.T) {
+	w := enroll(t)
+	exchange(t, w)
+	if err := os.WriteFile(vaultsync.BackupCoveragePath(w.root()), []byte("not json\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runRetire(w.root()); err == nil {
+		t.Fatal("retirement accepted malformed backup coverage")
+	}
+}
+
+func TestRetirementKeepsCoveredPackagesWhenTheDependencyGraphIsUnreadable(t *testing.T) {
+	w := enroll(t)
+	published := exchange(t, w)
+	incomplete := filepath.Join(vaultsync.OutgoingDir(w.root()), "pkg-"+strings.Repeat("f", 32))
+	if err := os.Mkdir(incomplete, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := runRetire(w.root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(outcome.Retired, published) || outcome.Required != 1 || outcome.Incomplete != 1 {
+		t.Fatalf("retirement against unreadable dependency graph = %+v", outcome)
+	}
+}
+
+func TestRetirementKeepsABackupCoveredDependencyUntilItsDependentLeaves(t *testing.T) {
+	w := enroll(t)
+	first := exchange(t, w)
+	if err := os.Remove(vaultsync.BackupCoveragePath(w.root())); err != nil {
+		t.Fatal(err)
+	}
+
+	second := publishDependent(t, w, first)
+	w.transport(w.root(), w.peerRoot())
+	w.once(w.peerRoot())
+	w.transport(w.peerRoot(), w.root())
+	coverOutgoing(t, w.root())
+
+	firstSweep, err := runRetire(w.root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(firstSweep.Retired, second) {
+		t.Fatalf("first sweep did not retire dependent %s: %+v", second, firstSweep)
+	}
+	if !contains(w.channel(vaultsync.OutgoingDir(w.root())), first) || firstSweep.Required != 1 {
+		t.Fatalf("dependency %s was not retained by the initial graph: %+v", first, firstSweep)
+	}
+
+	secondSweep, err := runRetire(w.root())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(secondSweep.Retired, first) {
+		t.Fatalf("dependency was not retired after its dependent left: %+v", secondSweep)
+	}
+}
+
+// publishDependent adds a second exported package and states an explicit
+// dependency on first. Exporters ordinarily derive Requires from imported
+// origins; retirement's decision is solely about the manifests on disk, so the
+// fixture writes that valid edge directly rather than constructing a third
+// replica just to make the producer derive it.
+func publishDependent(t *testing.T, w *world, first string) string {
+	t.Helper()
+	w.write(w.root(), localNote, "written again on the mac\n")
+	w.once(w.root())
+	packages := w.channel(vaultsync.OutgoingDir(w.root()))
+	if len(packages) != 2 {
+		t.Fatalf("published packages = %v, want dependency and dependent", packages)
+	}
+	second := packages[0]
+	if second == first {
+		second = packages[1]
+	}
+	outgoing := vaultsync.OutgoingDir(w.root())
+	firstManifest := readRetirementManifest(t, filepath.Join(outgoing, first))
+	secondDir := filepath.Join(outgoing, second)
+	secondManifest := readRetirementManifest(t, secondDir)
+	secondManifest.Requires = append(secondManifest.Requires, vaultsync.Dependency{
+		OriginDevice: firstManifest.OriginDevice,
+		Sequence:     firstManifest.Sequence,
+	})
+	data, err := json.MarshalIndent(secondManifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secondDir, vaultsync.ManifestName), append(data, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return second
+}
+
+func readRetirementManifest(t *testing.T, dir string) *vaultsync.Manifest {
+	t.Helper()
+	manifest, err := vaultsync.ReadManifest(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manifest
 }
 
 // TestAnIncomingChannelThatIsNotThereReleasesNoReceipt. A receipt is released on
