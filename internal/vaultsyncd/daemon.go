@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
 // DefaultInterval paces the loop.
@@ -23,14 +24,14 @@ const DefaultInterval = 15 * time.Second
 // companion's coordination file can never become a pending change the content
 // history would try to commit, and can never become a file the exporter would
 // try to send.
-const LockRelPath = ".bnotes/locks/vault-sync.lock"
+const LockRelPath = vaultsync.CompanionLockRelPath
 
 // ErrAlreadyRunning is the refusal a second companion on one vault gets.
 var ErrAlreadyRunning = errors.New("vaultsyncd: another companion already holds this vault")
 
 // LockPath reports where the single-instance lock for root lives.
 func LockPath(root string) string {
-	return filepath.Join(root, filepath.FromSlash(LockRelPath))
+	return vaultsync.CompanionLockPath(root)
 }
 
 // Options configure a companion. The zero value is usable and is what the

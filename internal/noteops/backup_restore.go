@@ -2,12 +2,17 @@ package noteops
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/backup"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
 var restoreCrashHook func(point string)
@@ -62,7 +67,19 @@ func SetRestoreCrashHookForTest(hook func(point string)) func() {
 // other caller is a test with no history to protect; this is the production
 // door, and it is the layer that already owns the operation's boundaries.
 func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (*backup.RestoreResult, error) {
-	held, err := checkpoint.Hold(vaultRoot, checkpoint.Options{Reason: "backup restore", AllowRestoreRecovery: true})
+	resolvedRoot, err := filepath.EvalSymlinks(vaultRoot)
+	if err != nil {
+		return nil, fmt.Errorf("backup restore: resolve vault: %w", err)
+	}
+	releaseCompanion, acquired, err := vault.TryLockPath(vaultsync.CompanionLockPath(resolvedRoot))
+	if err != nil {
+		return nil, fmt.Errorf("backup restore: lock synchronization companion: %w", err)
+	}
+	if !acquired {
+		return nil, fmt.Errorf("backup restore: stop the synchronization companion before restoring")
+	}
+	defer releaseCompanion()
+	held, err := checkpoint.Hold(resolvedRoot, checkpoint.Options{Reason: "backup restore", AllowRestoreRecovery: true})
 	if err != nil {
 		return nil, classifyBarrierError(err)
 	}
@@ -86,10 +103,23 @@ func restoreBackupHeld(ctx context.Context, root, archivePath string, opts backu
 		}
 	}
 	restoreCrash(restoreCrashHistory)
+	// Restoring an enrolled vault also restores its old acknowledgments, export
+	// cursor, origin sequence, and peer identity. Quarantine those bytes before
+	// the outer restore intent is cleared: a process death either leaves the
+	// restore resumable or leaves synchronization visibly awaiting review, never
+	// an apparently ordinary companion allowed to replay stale causal state.
+	if _, err := vaultsync.PrepareRestoreReviewContext(ctx, root, restoreOperationID(intent), nil); err != nil {
+		return nil, fmt.Errorf("backup restore: prepare synchronization review: %w", err)
+	}
 	if err := restorestate.Clear(root); err != nil {
 		return nil, fmt.Errorf("backup restore: clear completed recovery record: %w", err)
 	}
 	return result, nil
+}
+
+func restoreOperationID(intent *restorestate.Intent) string {
+	identity := intent.Source + "\x00" + intent.Started.UTC().Format(time.RFC3339Nano)
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(identity)))
 }
 
 func prepareRestore(ctx context.Context, root, archivePath string, opts backup.RestoreOptions) (*restorestate.Intent, Safety, bool, error) {

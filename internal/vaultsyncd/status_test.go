@@ -13,6 +13,24 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
+func TestRestoredVaultIsQuarantinedBeforeAnyWorkerRuns(t *testing.T) {
+	w := enroll(t)
+	review, err := vaultsync.PrepareRestoreReviewContext(context.Background(), w.root(), strings.Repeat("a", 64), w.clock.Tick)
+	if err != nil {
+		t.Fatalf("PrepareRestoreReviewContext: %v", err)
+	}
+	pass := w.once(w.root())
+	if len(pass.Units) != 0 {
+		t.Fatalf("workers ran against restored causal state: %+v", pass.Units)
+	}
+	if !pass.Status.Is(StateRestoreReview) || !pass.Status.NeedsPerson() {
+		t.Fatalf("restore review status = %+v", pass.Status)
+	}
+	if pass.Status.RestoreReview == nil || pass.Status.RestoreReview.ProposedDeviceID != review.ProposedDeviceID {
+		t.Fatalf("restore review detail = %+v", pass.Status.RestoreReview)
+	}
+}
+
 // TestABlockedHistoryStopsApplyingAndIsNeverSilent covers the failure that looks
 // most like idleness. A blocked vault records nothing, so it produces nothing to
 // export and no error to see, and a status model that reported only what the

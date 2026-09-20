@@ -86,6 +86,11 @@ func (c *companion) pass(ctx context.Context) *Pass {
 		pass.Status, pass.FinishedAt = before, c.opts.now()
 		return pass
 	}
+	if before.Is(StateRestoreReview) {
+		c.announce(EventStatus, StateRestoreReview, headlineMessage(StateRestoreReview))
+		pass.Status, pass.FinishedAt = before, c.opts.now()
+		return pass
+	}
 
 	record, loadErr := LoadRecord(c.root)
 	if loadErr != nil {
@@ -450,6 +455,7 @@ func burnedDetail(burned []uint64) string {
 // closed vocabulary rather than a format string, so nothing a vault contains can
 // reach a log line through it.
 var headlines = map[State]string{
+	StateRestoreReview:    "synchronization is quarantined until restored peers are reviewed and re-enrolled",
 	StateUnenrolled:       "the vault is not enrolled in synchronization",
 	StateIdle:             "both replicas are up to date as far as this device can tell",
 	StateLocalSaved:       "edits are on disk and not yet in the content history",

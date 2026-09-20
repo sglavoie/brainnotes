@@ -82,6 +82,10 @@ const (
 	// moment the worker succeeds, and also the moment it is due and finds nothing
 	// to do — so a transient failure shows for one backoff and no longer.
 	StateFailing State = "failing"
+	// StateRestoreReview is a restored causal state that has not yet been
+	// compared with its peer and explicitly accepted into a new enrollment.
+	// No worker may run while it holds.
+	StateRestoreReview State = "restore-review"
 )
 
 // DefaultDisconnectedAfter is how long an unacknowledged package and a silent
@@ -234,6 +238,9 @@ type Status struct {
 	Enrolled   bool      `json:"enrolled"`
 	VaultID    string    `json:"vault_id,omitempty"`
 	DeviceID   string    `json:"device_id,omitempty"`
+	// RestoreReview is present while synchronization is quarantined after a
+	// restore. It carries identities and generations only, never note content.
+	RestoreReview *vaultsync.RestoreReview `json:"restore_review,omitempty"`
 	// States is every state that holds, in the fixed order below.
 	States    []State         `json:"states"`
 	Local     LocalStatus     `json:"local"`
@@ -255,6 +262,7 @@ type Status struct {
 // follows because it is the other state only a person can clear. Then the
 // failures, then the ordinary work in the direction it flows.
 var stateOrder = []State{
+	StateRestoreReview,
 	StateBlocked,
 	StateConflict,
 	StateFailing,
@@ -295,7 +303,7 @@ func (s *Status) Is(state State) bool {
 // the remedy.
 func (s *Status) NeedsPerson() bool {
 	switch {
-	case s.Is(StateBlocked), s.Is(StateConflict), s.Is(StateFailing), s.Is(StateDisconnected):
+	case s.Is(StateRestoreReview), s.Is(StateBlocked), s.Is(StateConflict), s.Is(StateFailing), s.Is(StateDisconnected):
 		return true
 	case len(s.Problems) > 0, len(s.Transport.Rejected) > 0:
 		return true
@@ -352,6 +360,15 @@ func Read(ctx context.Context, root string, opts ReadOptions) (*Status, error) {
 		return nil, err
 	}
 	status.Enrolled, status.VaultID, status.DeviceID = true, local.VaultID, local.DeviceID
+	review, err := vaultsync.LoadRestoreReview(root)
+	if err != nil {
+		return nil, err
+	}
+	if review != nil {
+		status.RestoreReview = review
+		status.States = []State{StateRestoreReview}
+		return status, nil
+	}
 
 	status.readHistory(ctx, local, opts)
 	status.readExport(root)

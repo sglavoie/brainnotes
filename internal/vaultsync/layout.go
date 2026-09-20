@@ -29,6 +29,9 @@ const (
 	// PayloadsName is the directory inside a published package holding the
 	// committed bytes its inventory lists.
 	PayloadsName = "payloads"
+	// CompanionLockRelPath serializes a companion pass with restore review and
+	// restore operations that must begin while no pass is already in flight.
+	CompanionLockRelPath = ".bnotes/locks/vault-sync.lock"
 )
 
 // StateDir returns the vault-relative synchronization directory, derived from
@@ -39,6 +42,10 @@ func StateDir() string { return syncStateDir }
 // vault at root.
 func EnrollmentPath(root string) string {
 	return filepath.Join(root, filepath.FromSlash(config.EnrollmentMarker))
+}
+
+func CompanionLockPath(root string) string {
+	return filepath.Join(root, filepath.FromSlash(CompanionLockRelPath))
 }
 
 // OutgoingDir returns the absolute path of the channel this device publishes

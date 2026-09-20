@@ -8,11 +8,15 @@
 // installed. They share no state, run on different schedules, and take different
 // locks.
 //
-// Three modes, and the same work under all of them:
+// Three ordinary modes, and the same work under all of them:
 //
 //	bn-vault-sync           run until stopped, one bounded pass every interval
 //	bn-vault-sync -once     run one bounded pass, print it as JSON, exit
 //	bn-vault-sync -check    print where synchronization has got to, exit
+//
+// The explicit -inventory, -restore-prepare, -review and -accept-review modes
+// are the offline recovery boundary documented in
+// docs/internals/restore-reenrollment.md. They never run a companion worker.
 //
 // `-check` is the one an operator or a health script runs, and its exit status
 // is the answer: 0 when the vault will make progress on its own, 1 when it needs
@@ -49,6 +53,9 @@ import (
 	"syscall"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultrecovery"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsyncd"
 )
 
@@ -75,11 +82,37 @@ func main() {
 	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 
+type modeOptions struct {
+	check          bool
+	once           bool
+	inventory      bool
+	prepareRestore bool
+	reviewPath     string
+	acceptPath     string
+}
+
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	options, code, proceed := parseModeOptions(args, stderr)
+	if !proceed {
+		return code
+	}
+	cfg, err := config.Load(config.LoadOptions{})
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	return options.run(ctx, cfg.Vault, stdout, stderr)
+}
+
+func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) {
 	flags := flag.NewFlagSet("bn-vault-sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	check := flags.Bool("check", false, "report where synchronization has got to and exit")
 	once := flags.Bool("once", false, "run one bounded pass and exit")
+	inventory := flags.Bool("inventory", false, "print a portable restore-review inventory and exit")
+	prepareRestore := flags.Bool("restore-prepare", false, "quarantine restored synchronization state under a fresh restore identity and print its inventory")
+	reviewPath := flags.String("review", "", "compare this vault with a peer inventory file and print a review plan")
+	acceptPath := flags.String("accept-review", "", "apply an explicitly reviewed plan while both peer services are stopped")
 	if err := flags.Parse(args); err != nil {
 		// `-h` is a question this command can answer, and the flag set has already
 		// answered it — on stderr, because SetOutput above sends every refusal
@@ -88,28 +121,141 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		// produced" would put a 2 in a health script's log for somebody who asked
 		// for the usage.
 		if errors.Is(err, flag.ErrHelp) {
-			return exitOK
+			return modeOptions{}, exitOK, false
 		}
-		return exitUnreadable
+		return modeOptions{}, exitUnreadable, false
 	}
-	if *check && *once {
-		fmt.Fprintln(stderr, "bn-vault-sync: -check and -once ask different questions; pass one of them")
-		return exitUnreadable
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "bn-vault-sync: unexpected positional arguments")
+		return modeOptions{}, exitUnreadable, false
 	}
+	options := modeOptions{
+		check:          *check,
+		once:           *once,
+		inventory:      *inventory,
+		prepareRestore: *prepareRestore,
+		reviewPath:     *reviewPath,
+		acceptPath:     *acceptPath,
+	}
+	if options.selectedCount() > 1 {
+		fmt.Fprintln(stderr, "bn-vault-sync: pass only one mode")
+		return modeOptions{}, exitUnreadable, false
+	}
+	return options, exitOK, true
+}
 
-	cfg, err := config.Load(config.LoadOptions{})
+func (o modeOptions) selectedCount() int {
+	count := 0
+	for _, selected := range []bool{o.check, o.once, o.inventory, o.prepareRestore, o.reviewPath != "", o.acceptPath != ""} {
+		if selected {
+			count++
+		}
+	}
+	return count
+}
+
+func (o modeOptions) run(ctx context.Context, root string, stdout, stderr io.Writer) int {
+	switch {
+	case o.check:
+		return runCheck(ctx, root, stdout, stderr)
+	case o.once:
+		return runOnce(ctx, root, stdout, stderr)
+	case o.inventory:
+		return runInventory(root, stdout, stderr)
+	case o.prepareRestore:
+		return runPrepareRestore(ctx, root, stdout, stderr)
+	case o.reviewPath != "":
+		return runReview(root, o.reviewPath, stdout, stderr)
+	case o.acceptPath != "":
+		return runAcceptReview(root, o.acceptPath, stdout, stderr)
+	}
+	return runLoop(ctx, root, stdout, stderr)
+}
+
+func runInventory(root string, stdout, stderr io.Writer) int {
+	inventory, err := vaultrecovery.BuildInventory(root)
 	if err != nil {
 		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
 		return exitUnreadable
 	}
-
-	switch {
-	case *check:
-		return runCheck(ctx, cfg.Vault, stdout, stderr)
-	case *once:
-		return runOnce(ctx, cfg.Vault, stdout, stderr)
+	if err := writeJSON(stdout, inventory); err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
 	}
-	return runLoop(ctx, cfg.Vault, stdout, stderr)
+	return exitOK
+}
+
+func runPrepareRestore(ctx context.Context, root string, stdout, stderr io.Writer) int {
+	release, acquired, err := vault.TryLockPath(vaultsyncd.LockPath(root))
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	if !acquired {
+		fmt.Fprintln(stderr, "bn-vault-sync: stop the synchronization companion before preparing a restore review")
+		return exitNeedsPerson
+	}
+	defer release()
+	operationID, err := vaultsync.NewRestoreOperationID()
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitNeedsPerson
+	}
+	if _, err := vaultsync.PrepareRestoreReviewContext(ctx, root, operationID, nil); err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitNeedsPerson
+	}
+	return runInventory(root, stdout, stderr)
+}
+
+func runReview(root, path string, stdout, stderr io.Writer) int {
+	peer, err := vaultrecovery.ReadInventory(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	plan, err := vaultrecovery.BuildPlan(root, peer, nil)
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitNeedsPerson
+	}
+	if err := writeJSON(stdout, plan); err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	return exitOK
+}
+
+func runAcceptReview(root, path string, stdout, stderr io.Writer) int {
+	plan, err := vaultrecovery.ReadPlan(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	release, acquired, err := vault.TryLockPath(vaultsyncd.LockPath(root))
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	if !acquired {
+		fmt.Fprintln(stderr, "bn-vault-sync: stop the synchronization companion before accepting a restore review")
+		return exitNeedsPerson
+	}
+	defer release()
+	if err := vaultrecovery.ApplyPlan(root, plan, nil); err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitNeedsPerson
+	}
+	result, err := vaultrecovery.BuildInventory(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	if err := writeJSON(stdout, result); err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	return exitOK
 }
 
 // runCheck answers the operator's question and says nothing else.

@@ -11,6 +11,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultrecovery"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsyncd"
 )
@@ -123,6 +124,104 @@ func TestOnceRefusesWhileACompanionHoldsTheVault(t *testing.T) {
 	}
 }
 
+func TestRestoreReviewModesQuarantineCompareAndAccept(t *testing.T) {
+	pair := enrolledPair(t)
+	restored := prepareRestoreCLI(t)
+	assertCheckNeedsReview(t)
+	peer, err := vaultrecovery.BuildInventory(pair.Peer.Root)
+	if err != nil {
+		t.Fatalf("peer inventory: %v", err)
+	}
+	plan := reviewCLI(t, writeJSONFixture(t, "peer.json", peer))
+	if len(plan.Differences) != 0 || plan.TargetEpoch <= restored.Epoch {
+		t.Fatalf("review plan = %+v", plan)
+	}
+	accepted := acceptReviewCLI(t, writeJSONFixture(t, "review.json", plan))
+	if accepted.Restored || accepted.DeviceID != restored.EffectiveDeviceID || accepted.Epoch != plan.TargetEpoch {
+		t.Fatalf("accepted inventory = %+v", accepted)
+	}
+}
+
+func prepareRestoreCLI(t *testing.T) vaultrecovery.Inventory {
+	t.Helper()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := run(context.Background(), []string{"-restore-prepare"}, stdout, stderr); code != exitOK {
+		t.Fatalf("-restore-prepare exited %d: %s", code, stderr)
+	}
+	var restored vaultrecovery.Inventory
+	if err := json.Unmarshal(stdout.Bytes(), &restored); err != nil {
+		t.Fatalf("decode restored inventory: %v", err)
+	}
+	if !restored.Restored || restored.DeviceID == restored.EffectiveDeviceID {
+		t.Fatalf("restored inventory = %+v", restored)
+	}
+	return restored
+}
+
+func TestRestorePrepareRefusesWhileCompanionHoldsTheVault(t *testing.T) {
+	pair := enrolledPair(t)
+	release, acquired, err := vault.TryLockPath(vaultsyncd.LockPath(pair.Local.Root))
+	if err != nil || !acquired {
+		t.Fatalf("take companion lock: acquired=%v err=%v", acquired, err)
+	}
+	defer release()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	args := []string{"-restore-prepare"}
+	if code := run(context.Background(), args, stdout, stderr); code != exitNeedsPerson {
+		t.Fatalf("-restore-prepare against a held vault exited %d: %s", code, stderr)
+	}
+	if review, err := vaultsync.LoadRestoreReview(pair.Local.Root); err != nil || review != nil {
+		t.Fatalf("refused preparation wrote marker %+v: %v", review, err)
+	}
+}
+
+func assertCheckNeedsReview(t *testing.T) {
+	t.Helper()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := run(context.Background(), []string{"-check"}, stdout, stderr); code != exitNeedsPerson {
+		t.Fatalf("-check during review exited %d, want %d: %s", code, exitNeedsPerson, stderr)
+	}
+}
+
+func writeJSONFixture(t *testing.T, name string, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("encode %s: %v", name, err)
+	}
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+	return path
+}
+
+func reviewCLI(t *testing.T, peerPath string) vaultrecovery.Plan {
+	t.Helper()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := run(context.Background(), []string{"-review", peerPath}, stdout, stderr); code != exitOK {
+		t.Fatalf("-review exited %d: %s", code, stderr)
+	}
+	var plan vaultrecovery.Plan
+	if err := json.Unmarshal(stdout.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan: %v", err)
+	}
+	return plan
+}
+
+func acceptReviewCLI(t *testing.T, planPath string) vaultrecovery.Inventory {
+	t.Helper()
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := run(context.Background(), []string{"-accept-review", planPath}, stdout, stderr); code != exitOK {
+		t.Fatalf("-accept-review exited %d: %s", code, stderr)
+	}
+	var accepted vaultrecovery.Inventory
+	if err := json.Unmarshal(stdout.Bytes(), &accepted); err != nil {
+		t.Fatalf("decode accepted inventory: %v", err)
+	}
+	return accepted
+}
+
 // TestTheModesAreNotAskedForTogether: they answer different questions, and
 // guessing which one was meant is worse than saying so.
 func TestTheModesAreNotAskedForTogether(t *testing.T) {
@@ -133,6 +232,14 @@ func TestTheModesAreNotAskedForTogether(t *testing.T) {
 	}
 	if stderr.Len() == 0 {
 		t.Fatal("the refusal explained nothing")
+	}
+}
+
+func TestRestorePrepareRefusesCallerSuppliedIdentity(t *testing.T) {
+	vaultfixture.ScrubEnv(t)
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := run(context.Background(), []string{"-restore-prepare", "caller-token"}, stdout, stderr); code != exitUnreadable {
+		t.Fatalf("positional restore identity exited %d: %s", code, stderr)
 	}
 }
 

@@ -1,6 +1,7 @@
 package vaultimport
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
@@ -508,4 +510,26 @@ func LoadState(root string) (*State, error) {
 		return nil, err
 	}
 	return record.clone(), nil
+}
+
+// ResetAfterReviewContext starts an empty consumer ledger under the reviewed
+// enrollment. Restored acknowledgments and applied high-water marks are never
+// carried across this boundary; doing so would let a peer mistake a position in
+// the old device stream for one in the newly reviewed stream.
+func ResetAfterReviewContext(ctx context.Context, root string) error {
+	local, err := vaultsync.Load(root)
+	if err != nil {
+		return err
+	}
+	_, barrier, err := checkpoint.JoinContext(ctx, root)
+	if err != nil {
+		return fmt.Errorf("vaultimport: %w", err)
+	}
+	defer barrier()
+	release, err := vault.LockPaths(root, StatePath(root))
+	if err != nil {
+		return fmt.Errorf("vaultimport: lock import state: %w", err)
+	}
+	defer release()
+	return saveState(root, newState(local))
 }

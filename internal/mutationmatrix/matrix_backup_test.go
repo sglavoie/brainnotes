@@ -15,7 +15,9 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
 const (
@@ -272,6 +274,52 @@ func TestBackupRestoreIsPreflightedAndSnapshotted(t *testing.T) {
 	}
 	if got := h.tree(); !reflect.DeepEqual(got, blockedTree) {
 		t.Fatalf("a refused restore changed the vault:\nbefore %v\nafter  %v", blockedTree, got)
+	}
+}
+
+func TestBackupRestoreQuarantinesRestoredSynchronizationState(t *testing.T) {
+	h := newHarness(t, nil)
+	local, err := vaultsync.Establish(h.root, vaultsync.Options{Label: "mac"})
+	if err != nil {
+		t.Fatalf("Establish: %v", err)
+	}
+	peerID, err := vaultsync.NewDeviceID()
+	if err != nil {
+		t.Fatalf("NewDeviceID: %v", err)
+	}
+	if _, err := vaultsync.RecordPeer(h.root, vaultsync.Peer{DeviceID: peerID, Label: "pi"}); err != nil {
+		t.Fatalf("RecordPeer: %v", err)
+	}
+	archive := createBackup(t, h)
+	h.writeFile("Alpha.md", "changed after archive\n")
+	h.rawGit("add", "Alpha.md")
+	h.rawGit("commit", "-q", "-m", "newer content")
+	if _, err := noteops.RestoreBackup(h.root, archive, backupRestoreOptions()); err != nil {
+		t.Fatalf("RestoreBackup: %v", err)
+	}
+	review, err := vaultsync.LoadRestoreReview(h.root)
+	if err != nil {
+		t.Fatalf("LoadRestoreReview: %v", err)
+	}
+	if review == nil || !review.Restored || review.PreviousDeviceID != local.DeviceID || review.ProposedDeviceID == local.DeviceID {
+		t.Fatalf("restore review = %+v", review)
+	}
+}
+
+func TestBackupRestoreRefusesWhileCompanionPassIsRunning(t *testing.T) {
+	h := newHarness(t, nil)
+	archive := createBackup(t, h)
+	release, acquired, err := vault.TryLockPath(vaultsync.CompanionLockPath(h.root))
+	if err != nil || !acquired {
+		t.Fatalf("take companion lock: acquired=%v err=%v", acquired, err)
+	}
+	defer release()
+	before := h.tree()
+	if _, err := noteops.RestoreBackup(h.root, archive, backupRestoreOptions()); err == nil {
+		t.Fatal("restore ran while companion lock was held")
+	}
+	if after := h.tree(); !reflect.DeepEqual(after, before) {
+		t.Fatalf("refused restore changed vault: before=%v after=%v", before, after)
 	}
 }
 

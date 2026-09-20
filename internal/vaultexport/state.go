@@ -448,6 +448,31 @@ func Reset(root string) error {
 	return saveState(root, next)
 }
 
+// RebaselineAfterReviewContext writes a fresh producer ledger for a reviewed
+// enrollment. sequence is retained only when this device retained its identity;
+// a restored device rotates identity and safely starts the new stream at zero.
+// The old ledger and channels must have been archived by the review coordinator
+// before this is called.
+func RebaselineAfterReviewContext(ctx context.Context, root string, sequence uint64) error {
+	local, err := vaultsync.Load(root)
+	if err != nil {
+		return err
+	}
+	_, barrier, err := joinBarrierContext(ctx, root)
+	if err != nil {
+		return err
+	}
+	defer barrier()
+	release, err := vault.LockPaths(root, StatePath(root))
+	if err != nil {
+		return fmt.Errorf("vaultexport: lock export state: %w", err)
+	}
+	defer release()
+	next := newState(local)
+	next.Sequence = sequence
+	return saveState(root, next)
+}
+
 // hexObjectName reports whether s is a full lowercase hex Git object name.
 // Restated here rather than reached for across the package boundary: this is a
 // check on bytes read back off a disk, and it has to hold whether or not
