@@ -2,8 +2,10 @@ package checkpoint
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -26,10 +28,43 @@ const (
 	envReady       = "BN_CKPT_READY"
 	envRelease     = "BN_CKPT_RELEASE"
 	envMode        = "BN_CKPT_MODE"
+	envExecParent  = "BN_CKPT_EXEC_PARENT"
+	envExecChild   = "BN_CKPT_EXEC_CHILD"
 
 	writerDies     = "die"
 	writerFinishes = "finish"
 )
+
+// TestCheckpointExecParentHelper models `bn checkpoint run`: it holds the
+// checkpoint, passes both lock descriptors to a child, then dies without
+// releasing. The child is deliberately independent of its parent.
+func TestCheckpointExecParentHelper(t *testing.T) {
+	if os.Getenv(envExecParent) != "1" {
+		t.Skip("subprocess helper")
+	}
+	held, err := Hold(os.Getenv(envRoot), Options{Reason: "exec inheritance", Drain: 10 * time.Second})
+	if err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	child := helper(t, "TestCheckpointExecChildHelper", envExecChild+"=1", envRelease+"="+os.Getenv(envRelease))
+	child.ExtraFiles = held.InheritanceFiles()
+	if err := child.Start(); err != nil {
+		t.Fatalf("start inherited child: %v", err)
+	}
+	if err := os.WriteFile(os.Getenv(envReady), []byte(fmt.Sprintf("%d", child.Process.Pid)), 0o644); err != nil {
+		t.Fatalf("write child pid: %v", err)
+	}
+	os.Exit(clientCrashExit)
+}
+
+func TestCheckpointExecChildHelper(t *testing.T) {
+	if os.Getenv(envExecChild) != "1" {
+		t.Skip("subprocess helper")
+	}
+	if !waitForFile(os.Getenv(envRelease), helperBudget) {
+		t.Fatalf("the parent never released inherited child")
+	}
+}
 
 // helperPoll paces a helper's wait for the parent's signal file. The parent and
 // the child share no channel, so a file is the whole protocol.
@@ -170,6 +205,51 @@ func TestACheckpointClientDeathLeavesTheVaultWritable(t *testing.T) {
 				t.Fatal("the recovering checkpoint left its own announcement behind")
 			}
 		})
+	}
+}
+
+func TestCheckpointClientDeathKeepsManagedVaultStatusClean(t *testing.T) {
+	root := newBarrierVault(t)
+	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	runToDeath(t, helper(t, "TestCheckpointClientCrashHelper",
+		envClientCrash+"=1", envRoot+"="+root, envPoint+"="+crashAnnounced), clientCrashExit)
+	output, err := exec.Command("git", "-C", root, "status", "--porcelain").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git status: %v: %s", err, output)
+	}
+	if len(output) != 0 {
+		t.Fatalf("killed checkpoint dirtied managed vault: %q", output)
+	}
+}
+
+func TestExecChildKeepsCheckpointAfterWrapperDeath(t *testing.T) {
+	root := newBarrierVault(t)
+	dir := t.TempDir()
+	ready := filepath.Join(dir, "ready")
+	releaseChild := filepath.Join(dir, "release")
+	runToDeath(t, helper(t, "TestCheckpointExecParentHelper",
+		envExecParent+"=1", envRoot+"="+root, envReady+"="+ready, envRelease+"="+releaseChild), clientCrashExit)
+
+	release, err := JoinWithin(root, shortWait)
+	if !errors.Is(err, ErrBarrierHeld) {
+		t.Fatalf("JoinWithin while inherited child lives = %v, want ErrBarrierHeld", err)
+	}
+	release()
+	if err := os.WriteFile(releaseChild, nil, 0o644); err != nil {
+		t.Fatalf("release inherited child: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		release, err = JoinWithin(root, shortWait)
+		if err == nil {
+			release()
+			break
+		}
+		if !errors.Is(err, ErrBarrierHeld) || !time.Now().Before(deadline) {
+			t.Fatalf("JoinWithin after inherited child exit = %v", err)
+		}
 	}
 }
 

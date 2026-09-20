@@ -81,6 +81,39 @@ func TestWriteFromCommitsTheSourceBytesAndLeavesTheSourceAlone(t *testing.T) {
 	}
 }
 
+func TestRemoveStreamedStagesLargePreimageOutsideMemory(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "large.bin")
+	data := make([]byte, 8<<20)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := HashBytes(data)
+	data = nil
+
+	txn, err := NewFileTxn(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.RemoveStreamed(path, ExpectHash(digest)); err != nil {
+		t.Fatal(err)
+	}
+	change := txn.changes[txn.order[0]]
+	if err := txn.stageChange(change); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(txn.cleanupStaged)
+	if len(change.priorData) != 0 || change.priorSource == "" {
+		t.Fatalf("streamed removal retained %d bytes in memory and priorSource=%q", len(change.priorData), change.priorSource)
+	}
+	if got, _, err := HashFile(change.priorSource); err != nil || got != digest {
+		t.Fatalf("staged preimage digest=%q err=%v, want %q", got, err, digest)
+	}
+}
+
 func TestWriteFromRefusesASourceThatIsNotWhatTheCallerMeasured(t *testing.T) {
 	root := txnTestRoot(t, nil)
 	source, digest, size := streamedSource(t, 2048)
@@ -175,6 +208,125 @@ func TestARolledBackStreamedCreateTakesItsFileBackOut(t *testing.T) {
 	}
 	if _, err := os.Stat(note); !os.IsNotExist(err) {
 		t.Fatalf("the failed note should not exist, stat = %v", err)
+	}
+}
+
+func TestStreamedRemovalRollbackConflictPreservesPreimage(t *testing.T) {
+	root := txnTestRoot(t, map[string]string{"a.md": "old-a\n", "z.md": "old-z\n"})
+	txn, err := NewFileTxn(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.RemoveStreamed(filepath.Join(root, "a.md"), ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.Write(filepath.Join(root, "z.md"), []byte("new-z\n"), 0, ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	txn.hooks.beforeCommit = func(path string) error {
+		if filepath.Base(path) == "z.md" {
+			return errors.New("stop after streamed remove")
+		}
+		return nil
+	}
+	txn.hooks.beforeRestore = func(path string) error {
+		return os.WriteFile(path, []byte("foreign\n"), 0o644)
+	}
+	err = txn.Commit(nil)
+	assertStreamedRecoveryCopy(t, err, "old-a\n")
+}
+
+func TestStreamedOverwriteRollbackConflictPreservesPreimage(t *testing.T) {
+	root := txnTestRoot(t, map[string]string{"a.md": "old-a\n", "z.md": "old-z\n"})
+	source, digest, size := streamedSource(t, 4096)
+	txn, err := NewFileTxn(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.ReplaceFrom(filepath.Join(root, "a.md"), source, size, digest, 0o644, ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.Write(filepath.Join(root, "z.md"), []byte("new-z\n"), 0, ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	txn.hooks.beforeCommit = func(path string) error {
+		if filepath.Base(path) == "z.md" {
+			return errors.New("stop after streamed overwrite")
+		}
+		return nil
+	}
+	txn.hooks.beforeRestore = func(path string) error {
+		return os.WriteFile(path, []byte("foreign\n"), 0o644)
+	}
+	err = txn.Commit(nil)
+	assertStreamedRecoveryCopy(t, err, "old-a\n")
+}
+
+func TestStreamedOverwriteRollbackStrandPreservesForeignBytes(t *testing.T) {
+	root := txnTestRoot(t, map[string]string{"a.md": "old-a\n", "z.md": "old-z\n"})
+	source, digest, size := streamedSource(t, 4096)
+	txn, err := NewFileTxn(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.ReplaceFrom(filepath.Join(root, "a.md"), source, size, digest, 0o644, ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.Write(filepath.Join(root, "z.md"), []byte("new-z\n"), 0, ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	txn.hooks.beforeCommit = func(path string) error {
+		if filepath.Base(path) == "z.md" {
+			return errors.New("stop after streamed overwrite")
+		}
+		return nil
+	}
+	txn.hooks.beforeRestore = func(path string) error {
+		return os.WriteFile(path, []byte("foreign\n"), 0o644)
+	}
+	txn.hooks.beforeConflictRestore = func(string) error {
+		return errors.New("cannot swap foreign bytes back")
+	}
+	err = txn.Commit(nil)
+	recovery := assertStrandedForeignRecovery(t, err)
+	if got := readFileString(t, recovery.RecoveryPath); got != "foreign\n" {
+		t.Fatalf("foreign recovery copy = %q", got)
+	}
+	if got := readFileString(t, filepath.Join(root, "a.md")); got != "old-a\n" {
+		t.Fatalf("destination after stranded rollback = %q, want old preimage", got)
+	}
+}
+
+func assertStrandedForeignRecovery(t *testing.T, err error) *TxnRecoveryError {
+	t.Helper()
+	var rollback *TxnRollbackError
+	if !errors.As(err, &rollback) || len(rollback.RollbackErrs) != 1 {
+		t.Fatalf("Commit = %v, want one rollback error", err)
+	}
+	var recovery *TxnRecoveryError
+	if !errors.As(rollback.RollbackErrs[0], &recovery) || !recovery.Foreign {
+		t.Fatalf("rollback error = %v, want stranded foreign recovery", rollback.RollbackErrs[0])
+	}
+	return recovery
+}
+
+func assertStreamedRecoveryCopy(t *testing.T, err error, want string) {
+	t.Helper()
+	var rollback *TxnRollbackError
+	if !errors.As(err, &rollback) {
+		t.Fatalf("Commit = %v, want a rollback failure", err)
+	}
+	var recovery *TxnRecoveryError
+	for _, rollbackErr := range rollback.RollbackErrs {
+		if errors.As(rollbackErr, &recovery) {
+			break
+		}
+	}
+	if recovery == nil || recovery.RecoveryPath == "" {
+		t.Fatalf("Commit = %v, want a named streamed recovery copy", err)
+	}
+	if got := readFileString(t, recovery.RecoveryPath); got != want {
+		t.Fatalf("recovery copy = %q, want %q", got, want)
 	}
 }
 
@@ -317,6 +469,8 @@ func TestTheStreamedPathNeverHoldsTheFileItIsMoving(t *testing.T) {
 		t.Fatalf("committing a %d byte attachment allocated %d bytes, want under %d", size, commit, ceiling)
 	}
 
+	assertBoundedStreamedOverwrite(t, root, dest, digest, ceiling)
+
 	// Recovery judges the destination and the staged copy by digest, so it is
 	// bounded too — and it is the path that runs on every Open, including the
 	// read-only commands.
@@ -338,5 +492,39 @@ func TestTheStreamedPathNeverHoldsTheFileItIsMoving(t *testing.T) {
 	})
 	if recover > ceiling {
 		t.Fatalf("recovering a %d byte attachment allocated %d bytes, want under %d", size, recover, ceiling)
+	}
+}
+
+func assertBoundedStreamedOverwrite(t *testing.T, root, dest, priorDigest string, ceiling uint64) {
+	t.Helper()
+	replacement, replacementDigest, replacementSize := streamedSource(t, streamedBoundBytes)
+	replacementFile, err := os.OpenFile(replacement, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatalf("open replacement source: %v", err)
+	}
+	if _, err := replacementFile.WriteAt([]byte{0xff}, 0); err != nil {
+		t.Fatalf("change replacement source: %v", err)
+	}
+	if err := replacementFile.Close(); err != nil {
+		t.Fatalf("close replacement source: %v", err)
+	}
+	replacementDigest, replacementSize, err = HashFile(replacement)
+	if err != nil {
+		t.Fatalf("hash replacement source: %v", err)
+	}
+	overwrite := allocatedDuring(t, func() {
+		txn, err := NewFileTxn(root)
+		if err != nil {
+			t.Fatalf("new overwrite txn: %v", err)
+		}
+		if err := txn.ReplaceFrom(dest, replacement, replacementSize, replacementDigest, 0o644, ExpectHash(priorDigest)); err != nil {
+			t.Fatalf("plan overwrite: %v", err)
+		}
+		if err := txn.Commit(nil); err != nil {
+			t.Fatalf("commit overwrite: %v", err)
+		}
+	})
+	if overwrite > ceiling {
+		t.Fatalf("overwriting a %d byte attachment allocated %d bytes, want under %d", replacementSize, overwrite, ceiling)
 	}
 }

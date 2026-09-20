@@ -1,12 +1,16 @@
 package checkpoint
 
 import (
+	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // shortWait is the budget a test gives a writer it expects to be refused. It is
@@ -78,18 +82,22 @@ func recordExists(t *testing.T, root string) bool {
 	}
 }
 
-// A join is counted rather than nested, so the shared flock is taken once per
-// process per vault however many writers this process is running. The count is
-// what bn serve depends on: two concurrent request handlers writing to one vault
-// must not deadlock the first checkpoint that arrives.
-func TestJoinIsCountedPerVaultRoot(t *testing.T) {
+// A context identifies true logical nesting, so an inner durable writer can use
+// the outer admission without trying to take the barrier again.
+func TestJoinContextIsNestedPerVaultRoot(t *testing.T) {
 	root := newBarrierVault(t)
 
-	outer := mustJoin(t, root)
+	ctx, outer, err := JoinContextWithin(context.Background(), root, shortWait)
+	if err != nil {
+		t.Fatalf("JoinContextWithin(%q): %v", root, err)
+	}
 	if !Joined(root) {
 		t.Fatal("Joined reports false inside a join")
 	}
-	inner := mustJoin(t, root)
+	_, inner, err := JoinContextWithin(ctx, root, shortWait)
+	if err != nil {
+		t.Fatalf("nested JoinContextWithin(%q): %v", root, err)
+	}
 
 	inner()
 	if !Joined(root) {
@@ -111,6 +119,66 @@ func TestJoinIsCountedPerVaultRoot(t *testing.T) {
 	if err := held.Release(); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
+}
+
+func TestReleasedContextCannotBypassLaterCheckpoint(t *testing.T) {
+	root := newBarrierVault(t)
+	ctx, release, err := JoinContextWithin(context.Background(), root, shortWait)
+	if err != nil {
+		t.Fatalf("JoinContextWithin: %v", err)
+	}
+	release()
+	held := mustHold(t, root, "after context release")
+	defer held.Release()
+	_, nested, err := JoinContextWithin(ctx, root, shortWait)
+	if !errors.Is(err, ErrBarrierHeld) {
+		t.Fatalf("JoinContextWithin with released context = %v, want ErrBarrierHeld", err)
+	}
+	nested()
+}
+
+// A fresh logical writer in this process is not nesting merely because another
+// goroutine owns the shared flock. Once a checkpoint announces, fresh work must
+// wait while explicitly nested work may finish so the older writer can drain.
+func TestAnnouncementStopsFreshInProcessWriterButNotNestedWork(t *testing.T) {
+	root := newBarrierVault(t)
+	ctx, outer, err := JoinContextWithin(context.Background(), root, shortWait)
+	if err != nil {
+		t.Fatalf("JoinContextWithin: %v", err)
+	}
+	defer outer()
+
+	paths, err := resolve(root)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	claim, acquired, err := vault.TryLockPathHandle(paths.claim)
+	if err != nil || !acquired {
+		t.Fatalf("claim checkpoint: acquired=%v err=%v", acquired, err)
+	}
+	defer claim.Release()
+	rec, err := intent(Options{Reason: "wait for older writer"})
+	if err != nil {
+		t.Fatalf("intent: %v", err)
+	}
+	if err := writeRecord(paths.record, rec); err != nil {
+		t.Fatalf("writeRecord: %v", err)
+	}
+	defer clearRecord(paths.record)
+
+	_, nested, err := JoinContextWithin(ctx, root, shortWait)
+	if err != nil {
+		t.Fatalf("nested writer under announced checkpoint: %v", err)
+	}
+	nested()
+
+	fresh, err := JoinWithin(root, shortWait)
+	if !errors.Is(err, ErrBarrierHeld) {
+		t.Fatalf("fresh in-process writer = %v, want ErrBarrierHeld", err)
+	}
+	fresh()
+
+	outer()
 }
 
 // Two vaults are two barriers. A process writing to one must not be refused a
@@ -386,6 +454,21 @@ func TestTheRecordLivesOutsideWhatIsCommittedOrSent(t *testing.T) {
 		t.Fatalf("RecordPath: %v", err)
 	}
 	if want := filepath.Join(root, filepath.FromSlash(RecordRel)); path != want {
+		t.Fatalf("RecordPath = %q, want %q", path, want)
+	}
+}
+
+func TestManagedVaultRecordLivesInGitPrivateStorage(t *testing.T) {
+	root := newBarrierVault(t)
+	if output, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	path, err := RecordPath(root)
+	if err != nil {
+		t.Fatalf("RecordPath: %v", err)
+	}
+	want := filepath.Join(root, ".git", "brainnotes-safety", "checkpoint-locks", "checkpoint.json")
+	if path != want {
 		t.Fatalf("RecordPath = %q, want %q", path, want)
 	}
 }

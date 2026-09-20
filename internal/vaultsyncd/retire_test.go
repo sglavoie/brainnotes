@@ -4,10 +4,66 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
+
+func TestRetirementWaitsForCheckpoint(t *testing.T) {
+	w := enroll(t)
+	held, err := checkpoint.Hold(w.root(), checkpoint.Options{Reason: "test retirement", Drain: time.Second})
+	if err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, retireErr := runRetire(w.root())
+		done <- retireErr
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("retirement completed during checkpoint: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := held.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("retirement after checkpoint: %v", err)
+	}
+}
+
+func TestWorkerTransitionWaitsForCheckpointBeforePublishingSchedule(t *testing.T) {
+	w := enroll(t)
+	root := w.root()
+	record := &Record{Workers: map[WorkerName]WorkerRecord{WorkerImport: {Failures: 2}}}
+	held, err := checkpoint.Hold(root, checkpoint.Options{Reason: "worker transition", Drain: time.Second})
+	if err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- record.save(root) }()
+	select {
+	case err := <-done:
+		t.Fatalf("worker record completed during checkpoint: %v", err)
+	case <-time.After(75 * time.Millisecond):
+	}
+	if _, err := os.Stat(RecordPath(root)); !os.IsNotExist(err) {
+		t.Fatalf("worker record appeared during checkpoint: %v", err)
+	}
+	if err := held.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("worker transition after checkpoint: %v", err)
+	}
+	loaded, err := LoadRecord(root)
+	if err != nil || loaded.worker(WorkerImport).Failures != 2 {
+		t.Fatalf("loaded transition = %+v, err=%v", loaded, err)
+	}
+}
 
 // TestRetirementLeavesTheExportersReservationAlone covers the one package a
 // verified receipt is not enough to remove.

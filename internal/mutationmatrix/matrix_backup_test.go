@@ -1,14 +1,217 @@
 package mutationmatrix
 
 import (
+	"archive/tar"
+	"compress/gzip"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/backup"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
 )
+
+const (
+	restoreCrashRootEnv    = "BN_TEST_RESTORE_CRASH_ROOT"
+	restoreCrashArchiveEnv = "BN_TEST_RESTORE_CRASH_ARCHIVE"
+	restoreCrashPointEnv   = "BN_TEST_RESTORE_CRASH_POINT"
+	restoreCrashWipeEnv    = "BN_TEST_RESTORE_CRASH_WIPE"
+)
+
+func TestBackupRestoreCrashHelper(t *testing.T) {
+	root, archive, point := os.Getenv(restoreCrashRootEnv), os.Getenv(restoreCrashArchiveEnv), os.Getenv(restoreCrashPointEnv)
+	if root == "" || archive == "" || point == "" {
+		t.Skip("helper")
+	}
+	noteops.SetRestoreCrashHookForTest(func(got string) {
+		if got == point {
+			os.Exit(23)
+		}
+	})
+	wipe := os.Getenv(restoreCrashWipeEnv) != "0"
+	if _, err := noteops.RestoreBackup(root, archive, backup.RestoreOptions{Wipe: wipe}); err != nil {
+		t.Fatalf("RestoreBackup helper: %v", err)
+	}
+	t.Fatal("restore did not reach crash point")
+}
+
+func TestBackupRestoreRecoversProcessDeathAcrossContentAndHistory(t *testing.T) {
+	for _, point := range []string{"content", "history"} {
+		t.Run(point, func(t *testing.T) { assertRestoreCrashRecovery(t, point) })
+	}
+}
+
+func TestBackupRestoreResumesAfterRestrictiveModesBeforeHistoryPhase(t *testing.T) {
+	for _, wipe := range []bool{false, true} {
+		t.Run(restoreModeName(wipe), func(t *testing.T) {
+			assertRestrictiveRestoreRecovery(t, wipe)
+		})
+	}
+}
+
+func assertRestrictiveRestoreRecovery(t *testing.T, wipe bool) {
+	t.Helper()
+	h := newHarness(t, nil)
+	archive := createRestrictiveRestoreArchive(t)
+	h.writeFile("Alpha.md", "changed after archive\n")
+	h.rawGit("add", "Alpha.md")
+	h.rawGit("commit", "-q", "-m", "newer content")
+	before := h.commitCount()
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestBackupRestoreCrashHelper$")
+	cmd.Env = append(os.Environ(), restoreCrashRootEnv+"="+h.root, restoreCrashArchiveEnv+"="+archive, restoreCrashPointEnv+"=content-applied", restoreCrashWipeEnv+"="+restoreWipeValue(wipe))
+	assertRestoreHelperExit(t, cmd.Run(), "content-applied")
+	locked := filepath.Join(h.root, "Locked")
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	if info, err := os.Stat(locked); err != nil || info.Mode().Perm() != 0 {
+		t.Fatalf("mode after interrupted restore = %v, err=%v", info, err)
+	}
+	assertPartialRestoreRefusesCheckpoint(t, h.root)
+	assertRestrictiveRestoreResume(t, h, archive, locked, before, wipe)
+}
+
+func restoreModeName(wipe bool) string {
+	if wipe {
+		return "wipe"
+	}
+	return "overlay"
+}
+
+func restoreWipeValue(wipe bool) string {
+	if wipe {
+		return "1"
+	}
+	return "0"
+}
+
+func assertRestrictiveRestoreResume(t *testing.T, h *harness, archive, locked string, before int, wipe bool) {
+	t.Helper()
+	result, err := noteops.RestoreBackup(h.root, archive, backup.RestoreOptions{Wipe: wipe})
+	if err != nil {
+		t.Fatalf("resume restrictive restore: %v", err)
+	}
+	if result == nil || result.ArchivePath != archive {
+		t.Fatalf("resume result = %+v", result)
+	}
+	if got := h.readFile("Alpha.md"); got != baseFiles["Alpha.md"] {
+		t.Fatalf("resumed content = %q", got)
+	}
+	if got := h.commitCount(); got != before+1 {
+		t.Fatalf("commit count %d -> %d, want one restore receipt", before, got)
+	}
+	if pending, err := restorestate.Pending(h.root); err != nil || pending {
+		t.Fatalf("pending restore after recovery = %v, err=%v", pending, err)
+	}
+	if info, err := os.Stat(locked); err != nil || info.Mode().Perm() != 0 {
+		t.Fatalf("final restrictive mode = %v, err=%v", info, err)
+	}
+}
+
+func createRestrictiveRestoreArchive(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "restrictive.tar.gz")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(file)
+	tw := tar.NewWriter(gz)
+	entries := []struct {
+		header tar.Header
+		body   string
+	}{
+		{header: tar.Header{Name: "Alpha.md", Mode: 0o644, Size: int64(len(baseFiles["Alpha.md"])), Typeflag: tar.TypeReg}, body: baseFiles["Alpha.md"]},
+		{header: tar.Header{Name: "Locked/", Mode: 0o000, Typeflag: tar.TypeDir}},
+		{header: tar.Header{Name: "Locked/inside.md", Mode: 0o644, Size: int64(len("inside\n")), Typeflag: tar.TypeReg}, body: "inside\n"},
+	}
+	for index := range entries {
+		if err := tw.WriteHeader(&entries[index].header); err != nil {
+			t.Fatal(err)
+		}
+		if entries[index].body != "" {
+			if _, err := tw.Write([]byte(entries[index].body)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func assertRestoreCrashRecovery(t *testing.T, point string) {
+	h := newHarness(t, nil)
+	archive := createBackup(t, h)
+	h.writeFile("Alpha.md", "changed after archive\n")
+	h.rawGit("add", "Alpha.md")
+	h.rawGit("commit", "-q", "-m", "newer content")
+	before := h.commitCount()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestBackupRestoreCrashHelper$")
+	cmd.Env = append(os.Environ(), restoreCrashRootEnv+"="+h.root, restoreCrashArchiveEnv+"="+archive, restoreCrashPointEnv+"="+point)
+	assertRestoreHelperExit(t, cmd.Run(), point)
+	assertPartialRestoreRefusesCheckpoint(t, h.root)
+	assertPartialRestoreRefusesWriter(t, h)
+	result, err := noteops.RestoreBackup(h.root, archive, backup.RestoreOptions{Wipe: true})
+	if err != nil {
+		t.Fatalf("resume restore: %v", err)
+	}
+	if result == nil || result.ArchivePath != archive {
+		t.Fatalf("resume result = %+v", result)
+	}
+	if got := h.readFile("Alpha.md"); got != baseFiles["Alpha.md"] {
+		t.Fatalf("resumed content = %q", got)
+	}
+	if got := h.commitCount(); got != before+1 {
+		t.Fatalf("commit count %d -> %d, want one restore receipt", before, got)
+	}
+	if pending, err := restorestate.Pending(h.root); err != nil || pending {
+		t.Fatalf("pending restore after recovery = %v, err=%v", pending, err)
+	}
+}
+
+func assertPartialRestoreRefusesWriter(t *testing.T, h *harness) {
+	beforeContent, beforeHead := h.readFile("Alpha.md"), h.head()
+	if err := setStatus(t, h, "Alpha.md", "done"); err == nil {
+		t.Fatal("ordinary writer entered a pending restore")
+	}
+	if got := h.readFile("Alpha.md"); got != beforeContent {
+		t.Fatalf("refused writer changed content: %q", got)
+	}
+	if got := h.head(); got != beforeHead {
+		t.Fatalf("refused writer changed history: %s -> %s", beforeHead, got)
+	}
+}
+
+func assertRestoreHelperExit(t *testing.T, err error, point string) {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 23 {
+		t.Fatalf("restore helper at %s = %v, want exit 23", point, err)
+	}
+}
+
+func assertPartialRestoreRefusesCheckpoint(t *testing.T, root string) {
+	held, err := checkpoint.Hold(root, checkpoint.Options{Reason: "must refuse partial restore"})
+	if held != nil {
+		_ = held.Release()
+	}
+	if !errors.Is(err, checkpoint.ErrRestorePending) {
+		t.Fatalf("ordinary checkpoint after death = %v, want ErrRestorePending", err)
+	}
+}
 
 // TestBackupRestoreIsPreflightedAndSnapshotted covers the one writer the matrix
 // cannot describe in its own terms.

@@ -72,7 +72,10 @@ func (t *FileTxn) restore(change *txnChange) error {
 // straight back in, and rollback reports the path as mixed rather than
 // destroying that edit.
 func (t *FileTxn) restoreOverwritten(change *txnChange) error {
-	staged, err := stageTempFile(change.path, change.priorData, change.priorMode)
+	if change.priorSource != "" {
+		return t.restoreStreamedOverwrite(change)
+	}
+	staged, err := t.stageOwnedTempFile(change.path, change.priorData, change.priorMode)
 	if err != nil {
 		return err
 	}
@@ -84,6 +87,42 @@ func (t *FileTxn) restoreOverwritten(change *txnChange) error {
 	}
 	t.noteCleanupFailure(outcome.cleanup)
 	return err
+}
+
+func (t *FileTxn) restoreStreamedOverwrite(change *txnChange) error {
+	recovery, err := t.stagePreservedTempFileFrom(
+		change.priorSource, change.priorSize, change.priorDigest, change.priorMode)
+	if err != nil {
+		t.preserveIntentCleanup(change.priorSource)
+		if recovery == "" {
+			recovery = change.priorSource
+		}
+		return &TxnRecoveryError{Path: change.path, RecoveryPath: recovery, Err: err}
+	}
+	outcome, err := compareAndSwap(&t.hooks, change.priorSource, change.path, ExpectHash(change.contentDigest()))
+	if outcome.sourceConsumed {
+		change.priorSource = ""
+	}
+	if err != nil {
+		var stranded *TxnRecoveryError
+		if errors.As(err, &stranded) && stranded.Foreign {
+			// The first swap restored the old preimage at the destination but the
+			// foreign bytes could not be swapped back. Their displaced path is now
+			// the unique recovery artifact; keep intent cleanup away from it and
+			// discard only the redundant duplicate of the old preimage.
+			t.preserveIntentCleanup(stranded.RecoveryPath)
+			return errors.Join(err, removeSuperseded(change.path, recovery))
+		}
+		return &TxnRecoveryError{
+			Path: change.path, RecoveryPath: recovery,
+			Displaced: IsTxnConflict(err), Err: err,
+		}
+	}
+	if cleanupErr := removeSuperseded(change.path, recovery); cleanupErr != nil {
+		return cleanupErr
+	}
+	t.noteCleanupFailure(outcome.cleanup)
+	return nil
 }
 
 // restoreCreated removes a path this transaction created. Custody makes the
@@ -103,10 +142,25 @@ func (t *FileTxn) restoreCreated(change *txnChange) error {
 // failed placement preserves and names the temp copy because it is the durable
 // pre-transaction version needed for manual recovery after Commit returns.
 func (t *FileTxn) restoreRemoved(change *txnChange) error {
-	staged, err := stageTempFile(change.path, change.priorData, change.priorMode)
+	if change.priorSource != "" {
+		if err := placeNew(&t.hooks, change.priorSource, change.path); err != nil {
+			t.preserveIntentCleanup(change.priorSource)
+			return &TxnRecoveryError{
+				Path: change.path, RecoveryPath: change.priorSource,
+				Displaced: IsTxnConflict(err), Err: err,
+			}
+		}
+		change.priorSource = ""
+		return nil
+	}
+	staged, err := t.stagePreservedTempFile(change.priorData, change.priorMode)
 	if err != nil {
+		if staged != "" {
+			return &TxnRecoveryError{Path: change.path, RecoveryPath: staged, Err: err}
+		}
 		return err
 	}
+	txnCrash(txnCrashRollbackPreserved)
 	if err := placeNew(&t.hooks, staged, change.path); err != nil {
 		return &TxnRecoveryError{
 			Path:         change.path,
@@ -116,6 +170,19 @@ func (t *FileTxn) restoreRemoved(change *txnChange) error {
 		}
 	}
 	return nil
+}
+
+func (t *FileTxn) preserveIntentCleanup(path string) {
+	if t.intent == nil {
+		return
+	}
+	kept := t.intent.cleanup[:0]
+	for _, cleanup := range t.intent.cleanup {
+		if cleanup != path {
+			kept = append(kept, cleanup)
+		}
+	}
+	t.intent.cleanup = kept
 }
 
 // takeVerifiedCustody moves path aside and requires the custody file to hold

@@ -84,6 +84,7 @@ type txnIntentChange struct {
 	PriorSize   int64  `json:"prior_size"`
 	NewSHA256   string `json:"new_sha256,omitempty"`
 	NewSize     int64  `json:"new_size"`
+	PriorStaged string `json:"prior_staged,omitempty"`
 }
 
 // txnIntentRecord is the versioned on-disk record.
@@ -149,15 +150,30 @@ const (
 	txnCrashStaged = "staged"
 	// txnCrashIntent fires once the record is durable and before the first rename.
 	txnCrashIntent = "intent"
+	// txnCrashHandoff fires after the main intent is durable but before the
+	// pre-intent staged-file owner publishes its transfer marker.
+	txnCrashHandoff = "handoff"
+	// txnCrashRollbackPreserved fires after rollback durably creates an
+	// old-content recovery copy and before it tries to replace the destination.
+	txnCrashRollbackPreserved = "rollback-preserved"
 	// txnCrashSynced fires once every destination and parent directory is durable
 	// and before the record is cleared.
 	txnCrashSynced = "synced"
+	// txnCrashIntentRemoved fires after all recovery sources are durably gone and
+	// the intent has been unlinked, but before that unlink is directory-synced.
+	txnCrashIntentRemoved = "intent-removed"
 )
 
 // txnCrashApplied names the point just after the change at index reached its
 // destination. Each one is a durable state transition of its own.
 func txnCrashApplied(index int) string {
 	return fmt.Sprintf("applied:%d", index)
+}
+
+// txnCrashCleanup names the point after one recovery source has been unlinked
+// and before the owner directory has been synced.
+func txnCrashCleanup(index int) string {
+	return fmt.Sprintf("cleanup:%d", index)
 }
 
 func txnCrash(point string) {
@@ -171,10 +187,11 @@ func txnCrash(point string) {
 // recovering process can tell an in-flight transaction from an abandoned one
 // without a heartbeat, a PID, or a timeout.
 type txnIntent struct {
-	dir  string
-	path string
-	file *os.File
-	done bool
+	dir     string
+	path    string
+	file    *os.File
+	done    bool
+	cleanup []string
 }
 
 // writeIntent records the transaction's prepared state. It runs after staging
@@ -191,8 +208,14 @@ func (t *FileTxn) writeIntent() (*txnIntent, error) {
 			PriorExists: change.priorExists,
 		}
 		if change.priorExists {
-			record.PriorSHA256 = HashBytes(change.priorData)
-			record.PriorSize = int64(len(change.priorData))
+			if change.priorSource != "" {
+				record.PriorSHA256 = change.priorDigest
+				record.PriorSize = change.priorSize
+				record.PriorStaged = change.priorSource
+			} else {
+				record.PriorSHA256 = HashBytes(change.priorData)
+				record.PriorSize = int64(len(change.priorData))
+			}
 		}
 		if !change.remove {
 			record.NewSHA256 = change.contentDigest()
@@ -200,33 +223,26 @@ func (t *FileTxn) writeIntent() (*txnIntent, error) {
 		}
 		changes = append(changes, record)
 	}
-	return writeTxnIntent(t.root, changes)
-}
-
-func writeTxnIntent(root string, changes []txnIntentChange) (*txnIntent, error) {
-	realRoot, dir, err := txnIntentPaths(root)
+	intent, err := writeTxnIntent(t.root, changes)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	for _, path := range t.order {
+		if prior := t.changes[path].priorSource; prior != "" {
+			intent.cleanup = append(intent.cleanup, prior)
+		}
+	}
+	return intent, nil
+}
+
+func writeTxnIntent(root string, changes []txnIntentChange) (*txnIntent, error) {
+	realRoot, dir, err := durableTxnIntentPaths(root)
+	if err != nil {
 		return nil, fmt.Errorf("vault: create intent directory %q: %w", dir, err)
 	}
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return nil, fmt.Errorf("vault: intent identifier: %w", err)
-	}
-	record := txnIntentRecord{
-		Version:    txnIntentVersion,
-		ID:         hex.EncodeToString(raw[:]),
-		Root:       realRoot,
-		Phase:      txnPhasePrepared,
-		ObservedAt: time.Now().UTC(),
-		Recovery:   txnIntentRecovery,
-		Changes:    changes,
-	}
-	data, err := json.Marshal(record)
+	record, data, err := encodeTxnIntentRecord(realRoot, changes)
 	if err != nil {
-		return nil, fmt.Errorf("vault: encode intent: %w", err)
+		return nil, err
 	}
 
 	path := filepath.Join(dir, record.ID+txnIntentSuffix)
@@ -266,24 +282,87 @@ func writeTxnIntent(root string, changes []txnIntentChange) (*txnIntent, error) 
 	return intent, nil
 }
 
+func durableTxnIntentPaths(root string) (string, string, error) {
+	realRoot, dir, err := txnIntentPaths(root)
+	if err != nil {
+		return "", "", err
+	}
+	if err := EnsureDirDurable(dir, 0o755); err != nil {
+		return "", dir, err
+	}
+	return realRoot, dir, nil
+}
+
+func encodeTxnIntentRecord(realRoot string, changes []txnIntentChange) (txnIntentRecord, []byte, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return txnIntentRecord{}, nil, fmt.Errorf("vault: intent identifier: %w", err)
+	}
+	record := txnIntentRecord{Version: txnIntentVersion, ID: hex.EncodeToString(raw[:]), Root: realRoot, Phase: txnPhasePrepared, ObservedAt: time.Now().UTC(), Recovery: txnIntentRecovery, Changes: changes}
+	data, err := json.Marshal(record)
+	if err != nil {
+		return txnIntentRecord{}, nil, fmt.Errorf("vault: encode intent: %w", err)
+	}
+	return record, data, nil
+}
+
 // clear removes the record and makes its absence durable. It is idempotent and
 // safe to defer: the commit calls it explicitly once every destination is
 // durable, and the deferred call then does nothing.
 //
-// The record is unlinked before the flock is released, so a recovering process
-// never sees a lockable record for a transaction that already finished.
+// Recovery sources are unlinked and their directories synced before the intent
+// is removed. A kill can therefore leave either a record that retries cleanup,
+// or no record and no unowned large preimages; it cannot leave the inverse.
 func (i *txnIntent) clear() error {
 	if i == nil || i.done {
 		return nil
 	}
-	i.done = true
-	var removeErr error
-	if err := os.Remove(i.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		removeErr = fmt.Errorf("vault: remove intent %q: %w", i.path, err)
+	if err := removeAndSyncTxnTemps(i.cleanup); err != nil {
+		return err
 	}
-	syncErr := syncDir(i.dir)
+	if err := os.Remove(i.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("vault: remove intent %q: %w", i.path, err)
+	}
+	txnCrash(txnCrashIntentRemoved)
+	if err := syncDir(i.dir); err != nil {
+		return err
+	}
+	i.done = true
 	i.close()
-	return errors.Join(removeErr, syncErr)
+	return nil
+}
+
+func removeAndSyncTxnTemps(paths []string) error {
+	dirs := make(map[string]struct{})
+	for index, path := range paths {
+		err := os.Remove(path)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("vault: remove transaction recovery source %q: %w", path, err)
+		}
+		if err == nil {
+			txnCrash(txnCrashCleanup(index))
+		}
+		dirs[filepath.Dir(path)] = struct{}{}
+	}
+	for dir := range dirs {
+		if err := syncDir(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// retain releases this process's liveness lock but leaves the durable record
+// and every recovery source in place. It is used when destination changes
+// landed but their directory fsync failed: the caller receives an error and the
+// next checkpoint must re-judge, sync, and clear the operation rather than
+// treating an uncertain persistence boundary as complete.
+func (i *txnIntent) retain() {
+	if i == nil || i.done {
+		return
+	}
+	i.done = true
+	i.close()
 }
 
 // abandon drops a record that was never completed. It is only reachable while

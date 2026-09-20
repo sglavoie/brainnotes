@@ -12,8 +12,35 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
 )
+
+func TestStageWaitsForCheckpointBeforePublishingAnyUploadState(t *testing.T) {
+	store := newTestStore(t, 1<<20)
+	held, err := checkpoint.Hold(store.root, checkpoint.Options{Reason: "upload consistency", Drain: time.Second})
+	if err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, stageErr := store.Stage(StageRequest{Owner: "draft", Filename: "photo.png"}, bytes.NewReader([]byte("payload")), time.Time{})
+		done <- stageErr
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("Stage completed during checkpoint: %v", err)
+	case <-time.After(75 * time.Millisecond):
+	}
+	assertStagingHolds(t, store, 0)
+	if err := held.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Stage after checkpoint: %v", err)
+	}
+	assertStagingHolds(t, store, 1)
+}
 
 // newTestStore builds a store over a disposable vault. Every test here writes,
 // so the vault is a real fixture rather than a t.TempDir: the isolation refusals

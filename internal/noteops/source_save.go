@@ -110,9 +110,6 @@ func SaveSource(vaultRoot string, cfg *config.Config, req SaveSourceRequest, opt
 			return replay, nil
 		}
 	}
-	if result != nil && plan.ledger != nil {
-		pruneSourceSaveLedger(filepath.Dir(plan.ledger.destination.AbsPath))
-	}
 	return result, err
 }
 
@@ -385,6 +382,7 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 		Created:     plan.created,
 		Attachments: plan.attachments.saved,
 	}
+	prunePlannedSourceLedger(plan)
 	entry, err := j.Finalize()
 	if err != nil {
 		// The bytes are on disk and the history does not cover them. The result
@@ -395,6 +393,16 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 	}
 	result.Journal = entry
 	return result, nil
+}
+
+func prunePlannedSourceLedger(plan sourceSavePlan) {
+	if plan.ledger == nil {
+		return
+	}
+	// The operation still owns its checkpoint admission here. Ledger pruning is
+	// receipt housekeeping, but it is nevertheless a durable mutation and must
+	// not be allowed to trail the note/history boundary.
+	pruneSourceSaveLedger(filepath.Dir(plan.ledger.destination.AbsPath))
 }
 
 // classifySourceSaveTxnError turns the transaction's verdict into this API's.

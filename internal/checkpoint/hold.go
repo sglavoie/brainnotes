@@ -1,12 +1,15 @@
 package checkpoint
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -30,6 +33,9 @@ var (
 	ErrDrainTimeout = errors.New("checkpoint: writers did not drain")
 	// ErrCheckpointActive means another live client already holds this vault.
 	ErrCheckpointActive = errors.New("checkpoint: another checkpoint is already running")
+	// ErrRestorePending means a killed restore still has content/history work to
+	// finish. Only RestoreBackup may reacquire the barrier to resume it.
+	ErrRestorePending = errors.New("checkpoint: an interrupted backup restore must be resumed")
 	// ErrNested means the calling process is inside a Join of the same vault.
 	// Proceeding would wait out the drain budget against the process's own shared
 	// hold, so it is refused immediately and named for what it is.
@@ -47,6 +53,11 @@ type Options struct {
 	Lease time.Duration
 	// Now overrides the clock, for tests.
 	Now func() time.Time
+	// AllowRestoreRecovery is reserved for noteops.RestoreBackup. Ordinary
+	// checkpoints fail closed while an interrupted content/history restore is
+	// pending; the restore entry point uses this to reacquire the barrier and
+	// finish the recorded operation.
+	AllowRestoreRecovery bool
 }
 
 func (o Options) drain() time.Duration {
@@ -76,10 +87,11 @@ type Held struct {
 	paths    vaultPaths
 	id       string
 	deadline time.Time
-	barrier  func()
-	claim    func()
+	barrier  *vault.FileLock
+	claim    *vault.FileLock
 	once     sync.Once
 	err      error
+	active   *atomic.Bool
 }
 
 // ID reports the checkpoint's identity, which is what a copy taken under it
@@ -93,6 +105,33 @@ func (h *Held) Root() string { return h.paths.root }
 // be finished by. It is advisory; nothing expires the hold but the client
 // releasing or dying.
 func (h *Held) Deadline() time.Time { return h.deadline }
+
+// Context marks ctx as covered by this exclusive hold. It is for recovery and
+// restore work that must call ordinary durable writers while the vault is held;
+// those nested writers must not try to join the barrier they are already under.
+func (h *Held) Context(ctx context.Context) context.Context {
+	if h == nil {
+		return ctx
+	}
+	return markContext(ctx, h.paths.root, h.active)
+}
+
+// InheritanceFiles returns the lock descriptors an exec child must inherit so
+// killing the wrapper cannot release the checkpoint while that child continues
+// copying. The caller must not close them; Release retains ownership.
+func (h *Held) InheritanceFiles() []*os.File {
+	if h == nil {
+		return nil
+	}
+	files := make([]*os.File, 0, 2)
+	if h.claim != nil && h.claim.File() != nil {
+		files = append(files, h.claim.File())
+	}
+	if h.barrier != nil && h.barrier.File() != nil {
+		files = append(files, h.barrier.File())
+	}
+	return files
+}
 
 // Hold drains the vault and holds the checkpoint barrier.
 //
@@ -112,7 +151,7 @@ func Hold(root string, opts Options) (*Held, error) {
 	// Wait-free, because a second client has nothing to add: the vault can only be
 	// quiet for one checkpoint at a time, and a caller told to come back later can
 	// decide that for itself.
-	claim, acquired, err := vault.TryLockPath(paths.claim)
+	claim, acquired, err := vault.TryLockPathHandle(paths.claim)
 	if err != nil {
 		return nil, fmt.Errorf("checkpoint: claim vault: %w", err)
 	}
@@ -121,7 +160,7 @@ func Hold(root string, opts Options) (*Held, error) {
 	}
 	held, err := announce(paths, claim, opts)
 	if err != nil {
-		claim()
+		_ = claim.Release()
 		return nil, err
 	}
 	return held, nil
@@ -135,7 +174,7 @@ func Hold(root string, opts Options) (*Held, error) {
 // because a transaction rolled forward while writers could still start would not
 // stay rolled forward. Every failure after the announcement clears it, so a
 // refused Hold leaves the vault exactly as it found it.
-func announce(paths vaultPaths, claim func(), opts Options) (*Held, error) {
+func announce(paths vaultPaths, claim *vault.FileLock, opts Options) (*Held, error) {
 	rec, err := intent(opts)
 	if err != nil {
 		return nil, err
@@ -150,8 +189,10 @@ func announce(paths vaultPaths, claim func(), opts Options) (*Held, error) {
 		return nil, err
 	}
 	checkpointCrash(crashDrained)
-	held := &Held{paths: paths, id: rec.ID, deadline: rec.Deadline, barrier: barrier, claim: claim}
-	if err := promote(paths, rec); err != nil {
+	active := &atomic.Bool{}
+	active.Store(true)
+	held := &Held{paths: paths, id: rec.ID, deadline: rec.Deadline, barrier: barrier, claim: claim, active: active}
+	if err := promote(paths, rec, opts.AllowRestoreRecovery); err != nil {
 		_ = held.Release()
 		return nil, err
 	}
@@ -183,8 +224,8 @@ func intent(opts Options) (*record, error) {
 // finished. A budget that runs out is not a failure of the vault: it means the
 // vault is busier than the caller was willing to wait for, and the caller may
 // simply try again.
-func drain(paths vaultPaths, budget time.Duration) (func(), error) {
-	barrier, err := vault.LockFile(paths.barrier, true, budget)
+func drain(paths vaultPaths, budget time.Duration) (*vault.FileLock, error) {
+	barrier, err := vault.LockFileHandle(paths.barrier, true, budget)
 	if err == nil {
 		return barrier, nil
 	}
@@ -195,9 +236,16 @@ func drain(paths vaultPaths, budget time.Duration) (func(), error) {
 }
 
 // promote runs the settle pass and rewrites the record as held.
-func promote(paths vaultPaths, rec *record) error {
+func promote(paths vaultPaths, rec *record, allowRestoreRecovery bool) error {
 	if err := settle(paths.root); err != nil {
 		return err
+	}
+	pending, err := restorestate.Pending(paths.root)
+	if err != nil {
+		return fmt.Errorf("checkpoint: inspect pending restore: %w", err)
+	}
+	if pending && !allowRestoreRecovery {
+		return ErrRestorePending
 	}
 	rec.Phase = PhaseHeld
 	return writeRecord(paths.record, rec)
@@ -239,13 +287,16 @@ func (h *Held) Release() error {
 		return nil
 	}
 	h.once.Do(func() {
+		if h.active != nil {
+			h.active.Store(false)
+		}
 		if h.barrier != nil {
-			h.barrier()
+			_ = h.barrier.Release()
 		}
 		h.err = clearRecord(h.paths.record)
 		checkpointCrash(crashReleased)
 		if h.claim != nil {
-			h.claim()
+			_ = h.claim.Release()
 		}
 	})
 	return h.err

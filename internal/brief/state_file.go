@@ -167,7 +167,7 @@ func cloneCard(card Card) Card {
 
 func (store *FileStateStore) saveLocked(state briefStateFile) error {
 	state.Version = briefStateVersion
-	root, err := store.persistenceRoot()
+	vaultRoot, err := store.rootPath()
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (store *FileStateStore) saveLocked(state briefStateFile) error {
 		return fmt.Errorf("brief: encode state: %w", err)
 	}
 	data = append(data, '\n')
-	if err := store.writeState(root, statePath, data); err != nil {
+	if err := store.writeState(vaultRoot, statePath, data); err != nil {
 		return err
 	}
 	snapshot := cloneBriefState(state)
@@ -319,16 +319,16 @@ func writeBriefStateAtomic(vaultRoot, statePath string, data []byte, permissions
 // together, and the pair is only consistent if a checkpoint excludes writes to
 // both. The in-vault route below reaches the same barrier through
 // vaultstate.Save; this one has to say so itself.
-func (store *FileStateStore) writeState(root, path string, data []byte) error {
+func (store *FileStateStore) writeState(vaultRoot, path string, data []byte) error {
 	if store.storageRoot == "" {
-		return writeBriefStateAtomic(root, path, data, 0o644)
+		return writeBriefStateAtomic(vaultRoot, path, data, 0o644)
 	}
-	barrier, err := checkpoint.Join(root)
+	barrier, err := checkpoint.Join(vaultRoot)
 	if err != nil {
 		return fmt.Errorf("brief: %w", err)
 	}
 	defer barrier()
-	if err := vault.GuardMutation(root, path); err != nil {
+	if err := vault.GuardMutation(vaultRoot, path); err != nil {
 		return err
 	}
 	//bn:direct-write external activity directory after location preflight; server validates it is outside the vault.

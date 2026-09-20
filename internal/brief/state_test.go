@@ -174,6 +174,39 @@ func TestFileStateStoreSaveReplaceAndExposureQueries(t *testing.T) {
 
 	reloaded := NewFileStateStore(root, WithClock(func() time.Time { return now }))
 	saved, ok, err := reloaded.ReadDailySelection(date)
+	assertSavedBriefSelection(t, saved, ok, err)
+
+	assertBriefExposure(t, reloaded, now, "Rediscover.md", "Continue-A.md", "Connect-A.md")
+
+	replaced, err := reloaded.ReplaceDailySelection(date, []Card{
+		makeCard(t, date, SlotContinue, "Continue-B.md", ""),
+		makeCard(t, date, SlotConnect, "Continue-B.md", "Connect-B.md"),
+	})
+	assertReplacedBriefSelection(t, replaced, err)
+
+	assertBriefPairExposure(t, reloaded, now, "Continue-B.md", "Connect-B.md")
+	assertPersistedBriefState(t, root)
+}
+
+func assertBriefExposure(t *testing.T, store *FileStateStore, now time.Time, note, source, candidate string) {
+	t.Helper()
+	lastNote, ok, err := store.LastNoteExposure(note)
+	if err != nil || !ok || !lastNote.Equal(now) {
+		t.Fatalf("LastNoteExposure = (%v, %v, %v), want (%v, true, nil)", lastNote, ok, err, now)
+	}
+	assertBriefPairExposure(t, store, now, source, candidate)
+}
+
+func assertBriefPairExposure(t *testing.T, store *FileStateStore, now time.Time, source, candidate string) {
+	t.Helper()
+	lastPair, ok, err := store.LastPairExposure(source, candidate)
+	if err != nil || !ok || !lastPair.Equal(now) {
+		t.Fatalf("LastPairExposure = (%v, %v, %v), want (%v, true, nil)", lastPair, ok, err, now)
+	}
+}
+
+func assertSavedBriefSelection(t *testing.T, saved DailySelection, ok bool, err error) {
+	t.Helper()
 	if err != nil {
 		t.Fatalf("ReadDailySelection after save: %v", err)
 	}
@@ -183,27 +216,14 @@ func TestFileStateStoreSaveReplaceAndExposureQueries(t *testing.T) {
 	if got, want := len(saved.Cards), 3; got != want {
 		t.Fatalf("saved selection card count = %d, want %d", got, want)
 	}
-	if got, want := []SlotKind{saved.Cards[0].Slot, saved.Cards[1].Slot, saved.Cards[2].Slot}, []SlotKind{
-		SlotContinue,
-		SlotRediscover,
-		SlotConnect,
-	}; !reflect.DeepEqual(got, want) {
+	want := []SlotKind{SlotContinue, SlotRediscover, SlotConnect}
+	if got := []SlotKind{saved.Cards[0].Slot, saved.Cards[1].Slot, saved.Cards[2].Slot}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("saved slot order = %v, want %v", got, want)
 	}
+}
 
-	lastNote, ok, err := reloaded.LastNoteExposure("Rediscover.md")
-	if err != nil || !ok || !lastNote.Equal(now) {
-		t.Fatalf("LastNoteExposure = (%v, %v, %v), want (%v, true, nil)", lastNote, ok, err, now)
-	}
-	lastPair, ok, err := reloaded.LastPairExposure("Continue-A.md", "Connect-A.md")
-	if err != nil || !ok || !lastPair.Equal(now) {
-		t.Fatalf("LastPairExposure initial = (%v, %v, %v), want (%v, true, nil)", lastPair, ok, err, now)
-	}
-
-	replaced, err := reloaded.ReplaceDailySelection(date, []Card{
-		makeCard(t, date, SlotContinue, "Continue-B.md", ""),
-		makeCard(t, date, SlotConnect, "Continue-B.md", "Connect-B.md"),
-	})
+func assertReplacedBriefSelection(t *testing.T, replaced DailySelection, err error) {
+	t.Helper()
 	if err != nil {
 		t.Fatalf("ReplaceDailySelection: %v", err)
 	}
@@ -219,12 +239,10 @@ func TestFileStateStoreSaveReplaceAndExposureQueries(t *testing.T) {
 	if replaced.Cards[2].Candidate == nil || replaced.Cards[2].Candidate.RelPath != "Connect-B.md" {
 		t.Fatalf("connect replacement candidate = %#v, want Connect-B.md", replaced.Cards[2].Candidate)
 	}
+}
 
-	lastPair, ok, err = reloaded.LastPairExposure("Continue-B.md", "Connect-B.md")
-	if err != nil || !ok || !lastPair.Equal(now) {
-		t.Fatalf("LastPairExposure replacement = (%v, %v, %v), want (%v, true, nil)", lastPair, ok, err, now)
-	}
-
+func assertPersistedBriefState(t *testing.T, root string) {
+	t.Helper()
 	data, state := readBriefState(t, root)
 	if state.Version != briefStateVersion {
 		t.Fatalf("state version = %d, want %d", state.Version, briefStateVersion)
@@ -236,7 +254,7 @@ func TestFileStateStoreSaveReplaceAndExposureQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read .bnotes: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "brief.json" {
+	if len(entries) != 2 || entries[0].Name() != "brief.json" || entries[1].Name() != "locks" || !entries[1].IsDir() {
 		t.Fatalf(".bnotes contains leftover atomic-write files: %v", entries)
 	}
 }

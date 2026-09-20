@@ -15,6 +15,19 @@ func (t *FileTxn) cleanupStaged() {
 			change.staged = ""
 		}
 	}
+	t.cleanupPriorSources()
+	t.abandonTempOwners()
+}
+
+func (t *FileTxn) cleanupPriorSources() {
+	for _, path := range t.order {
+		change := t.changes[path]
+		if change == nil || change.priorSource == "" {
+			continue
+		}
+		_ = os.Remove(change.priorSource)
+		change.priorSource = ""
+	}
 }
 
 // cleanupStagedAfter drops the temp files for paths at or after the failed one;
@@ -31,6 +44,10 @@ func (t *FileTxn) cleanupStagedAfter(failedPath string) {
 		if change := t.changes[path]; change != nil && change.staged != "" {
 			_ = os.Remove(change.staged)
 			change.staged = ""
+		}
+		if change := t.changes[path]; change != nil && change.priorSource != "" && !change.applied {
+			_ = os.Remove(change.priorSource)
+			change.priorSource = ""
 		}
 	}
 }
@@ -178,6 +195,14 @@ func stageTempFile(dest string, data []byte, mode os.FileMode) (string, error) {
 // became durable describes nothing a later step could finish.
 func finishTempFile(tmp *os.File, tmpPath string, mode os.FileMode) (string, error) {
 	cleanup := func() { _ = os.Remove(tmpPath) }
+	if mode == 0 {
+		mode = 0o644
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return "", fmt.Errorf("vault: chmod %q: %w", tmpPath, err)
+	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		cleanup()
@@ -187,27 +212,34 @@ func finishTempFile(tmp *os.File, tmpPath string, mode os.FileMode) (string, err
 		cleanup()
 		return "", fmt.Errorf("vault: close %q: %w", tmpPath, err)
 	}
-	if mode == 0 {
-		mode = 0o644
-	}
-	if err := os.Chmod(tmpPath, mode); err != nil {
-		cleanup()
-		return "", fmt.Errorf("vault: chmod %q: %w", tmpPath, err)
-	}
 	return tmpPath, nil
 }
 
-func syncParentDirs(paths []string) {
+func syncParentDirs(root string, paths []string) error {
 	synced := make(map[string]struct{}, len(paths))
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("vault: resolve transaction root for directory sync: %w", err)
+	}
+	root = filepath.Clean(resolvedRoot)
 	for _, path := range paths {
 		dir := filepath.Dir(path)
-		if _, ok := synced[dir]; ok {
-			continue
-		}
-		synced[dir] = struct{}{}
-		if f, err := os.Open(dir); err == nil {
-			_ = f.Sync()
-			_ = f.Close()
+		for {
+			if _, ok := synced[dir]; !ok {
+				synced[dir] = struct{}{}
+				if err := SyncDir(dir); err != nil {
+					return fmt.Errorf("vault: sync directory %q: %w", dir, err)
+				}
+			}
+			if filepath.Clean(dir) == root {
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				return fmt.Errorf("vault: directory %q is outside transaction root %q", dir, root)
+			}
+			dir = parent
 		}
 	}
+	return nil
 }

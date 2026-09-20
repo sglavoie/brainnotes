@@ -49,13 +49,20 @@ import (
 // the new state; saying otherwise would invite a caller to retry a write that
 // already happened.
 func Save(vaultRoot, operation, path string, data []byte, perm os.FileMode) error {
+	return SaveContext(context.Background(), vaultRoot, operation, path, data, perm)
+}
+
+// SaveContext is Save for a caller that may already own the vault's checkpoint
+// admission. The context is also passed into Git safety because opening or
+// committing the engine can itself perform durable recovery work.
+func SaveContext(ctx context.Context, vaultRoot, operation, path string, data []byte, perm os.FileMode) error {
 	// Ahead of everything, including the refusals: joining the checkpoint barrier
 	// is what puts this write inside the window a checkpoint waits for, and a
 	// write that joined after it took a lock would have inverted the one ordering
 	// the barrier depends on. The join covers the snapshot as well as the bytes,
 	// because a copy taken between them holds sidecar state the content history
 	// does not explain.
-	barrier, err := checkpoint.Join(vaultRoot)
+	joinedCtx, barrier, err := checkpoint.JoinContext(ctx, vaultRoot)
 	if err != nil {
 		return fmt.Errorf("vaultstate: %w", err)
 	}
@@ -65,12 +72,12 @@ func Save(vaultRoot, operation, path string, data []byte, perm os.FileMode) erro
 	if err := vault.GuardMutation(vaultRoot, path); err != nil {
 		return err
 	}
-	safety, err := managerFor(vaultRoot)
+	safety, err := managerFor(joinedCtx, vaultRoot)
 	if err != nil {
 		return err
 	}
 	if safety != nil {
-		if err := safety.Preflight(context.Background()); err != nil {
+		if err := safety.Preflight(joinedCtx); err != nil {
 			return fmt.Errorf("vaultstate: git safety preflight: %w", err)
 		}
 	}
@@ -80,18 +87,18 @@ func Save(vaultRoot, operation, path string, data []byte, perm os.FileMode) erro
 	if err := vault.WriteStateFile(path, data, perm); err != nil {
 		return err
 	}
-	return snapshotState(safety, operation, path)
+	return snapshotState(joinedCtx, safety, operation, path)
 }
 
 // snapshotState records the state file that has just landed in the vault's
 // content history. It runs after the bytes are durable, which is why every
 // failure it reports is a *vaultgit.SnapshotError: the write happened and a
 // caller must not be invited to repeat it.
-func snapshotState(safety *vaultgit.Manager, operation, path string) error {
+func snapshotState(ctx context.Context, safety *vaultgit.Manager, operation, path string) error {
 	if safety == nil {
 		return nil
 	}
-	result, err := safety.CommitPaths(context.Background(), operation, []string{path})
+	result, err := safety.CommitPaths(ctx, operation, []string{path})
 	if err != nil {
 		return &vaultgit.SnapshotError{
 			Operation: operation,
@@ -114,8 +121,8 @@ func snapshotState(safety *vaultgit.Manager, operation, path string) error {
 
 // managerFor resolves the engine, treating a vault with no Git history as
 // "nothing to snapshot" rather than as a failure.
-func managerFor(vaultRoot string) (*vaultgit.Manager, error) {
-	manager, err := vaultgit.Shared(context.Background(), vaultRoot, vaultgit.Options{})
+func managerFor(ctx context.Context, vaultRoot string) (*vaultgit.Manager, error) {
+	manager, err := vaultgit.Shared(ctx, vaultRoot, vaultgit.Options{})
 	if err != nil {
 		if errors.Is(err, vaultgit.ErrUnmanaged) {
 			return nil, nil

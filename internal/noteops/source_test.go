@@ -2,16 +2,44 @@ package noteops
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
+
+func TestSourceLedgerPruningRemainsInsideCheckpointAdmission(t *testing.T) {
+	root, cfg := sourceTestVault(t)
+	dir := filepath.Join(root, ".bnotes", "source-saves")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < sourceSaveLedgerCap; i++ {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("old-%03d.json", i)), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	joined := false
+	sourceLedgerPruneHook = func() { joined = checkpoint.Joined(root) }
+	t.Cleanup(func() { sourceLedgerPruneHook = nil })
+	_, err := SaveSource(root, cfg, SaveSourceRequest{
+		RelPath: "Alpha.md", Content: sourceEdit,
+		BaseRevision: vault.HashBytes([]byte(sourceFixture)), SaveID: "checkpoint-prune",
+	})
+	if err != nil {
+		t.Fatalf("SaveSource: %v", err)
+	}
+	if !joined {
+		t.Fatal("source receipt pruning ran after the operation released its checkpoint admission")
+	}
+}
 
 // sourceFixture is deliberately ugly. The keys are in the order somebody typed
 // them rather than alphabetical, the body carries trailing spaces, one CRLF line

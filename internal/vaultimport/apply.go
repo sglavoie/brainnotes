@@ -1,6 +1,7 @@
 package vaultimport
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -43,6 +44,9 @@ type Options struct {
 	// checked against the vault and recorded durably, and an application forced
 	// over a conflict by anything else would be one nobody decided.
 	resolving *Plan
+	// checkpointContext identifies the import-wide barrier admission to nested
+	// journal, Git, and export-state writers. Only this package sets it.
+	checkpointContext context.Context
 }
 
 // forResolution is the application a resolution asks for: the same package, with
@@ -170,7 +174,7 @@ type Result struct {
 // that pass had to drop is reported on Result.AbandonedResolutions, because
 // dropping one is not a failure of this import and must not refuse it.
 func Apply(root, packageDir string, opts Options) (*Result, error) {
-	release, acquired, err := lockImports(root)
+	ctx, release, acquired, err := lockImports(root)
 	if err != nil {
 		return nil, err
 	}
@@ -178,6 +182,7 @@ func Apply(root, packageDir string, opts Options) (*Result, error) {
 	if !acquired {
 		return nil, fmt.Errorf("%w: %q was not applied", ErrImportBusy, packageDir)
 	}
+	opts.checkpointContext = ctx
 	recovery, err := recoverLocked(root, opts)
 	if err != nil {
 		return nil, err
@@ -484,7 +489,7 @@ func (a *applier) apply() (*journal.Entry, error) {
 		return nil, fmt.Errorf("vaultimport: mint recovery entry identity for %s: %w",
 			a.manifest.PackageID, err)
 	}
-	operation, err := noteops.BeginOperation(a.root, operationToken, a.opts.command(),
+	operation, err := noteops.BeginOperationContext(a.opts.checkpointContext, a.root, operationToken, a.opts.command(),
 		a.targets(), a.opts.recorderOptions(entryID)...)
 	if err != nil {
 		return nil, err
@@ -989,7 +994,7 @@ func (a *applier) recordProvenance(operation *noteops.Journal) error {
 	if entryID == "" {
 		return fmt.Errorf("vaultimport: applying %s captured no recovery entry", a.manifest.PackageID)
 	}
-	err := vaultexport.RecordImport(a.root, entryID, vaultexport.Import{
+	err := vaultexport.RecordImportContext(a.opts.checkpointContext, a.root, entryID, vaultexport.Import{
 		OperationID:  a.operation.OperationID,
 		OriginDevice: a.manifest.OriginDevice,
 	})

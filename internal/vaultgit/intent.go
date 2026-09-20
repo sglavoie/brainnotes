@@ -211,7 +211,7 @@ func (m *Manager) recoverIntentOnOpen(ctx context.Context) {
 	if _, present, _ := m.state.LoadIntent(); !present {
 		return
 	}
-	release, err := m.acquire(safetyLockName, "open")
+	release, err := m.acquire(safetyLockName, "open", ctx)
 	if err != nil {
 		return
 	}

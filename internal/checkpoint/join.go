@@ -1,11 +1,14 @@
 package checkpoint
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -34,32 +37,119 @@ var ErrBarrierHeld = errors.New("checkpoint: a checkpoint is holding this vault"
 // barrier on every error return, and in bn serve a leaked join blocks every
 // later checkpoint in the process for as long as it runs.
 //
-// It is re-entrant per vault root within one process. A nested join is counted,
-// not taken again.
+// Join starts a new logical write. Code that calls another durable writer while
+// already joined must use JoinContext and pass the returned context through to
+// that writer. Keeping logical nesting explicit is what lets a checkpoint stop
+// a new request in this process while an older request is still draining.
 func Join(root string) (func(), error) { return JoinWithin(root, DefaultWriterWait) }
 
 // JoinWithin is Join with an explicit wait budget. A non-positive wait means
 // DefaultWriterWait.
 func JoinWithin(root string, wait time.Duration) (func(), error) {
+	_, release, err := JoinContextWithin(context.Background(), root, wait)
+	return release, err
+}
+
+// JoinContext enlists a logical write and marks the returned context as covered
+// by that join. Passing the context to a nested durable writer makes its join a
+// no-op; using a fresh context starts a fresh admission even when another
+// goroutine in this process is already writing the same vault.
+func JoinContext(ctx context.Context, root string) (context.Context, func(), error) {
+	return JoinContextWithin(ctx, root, DefaultWriterWait)
+}
+
+// JoinContextWithin is JoinContext with an explicit wait budget.
+func JoinContextWithin(ctx context.Context, root string, wait time.Duration) (context.Context, func(), error) {
 	noop := func() {}
 	paths, err := resolve(root)
 	if err != nil {
-		return noop, err
+		return ctx, noop, err
 	}
+	if contextCovers(ctx, paths.root) {
+		return ctx, noop, nil
+	}
+	if wait <= 0 {
+		wait = DefaultWriterWait
+	}
+	deadline := time.Now().Add(wait)
 	refs := slotFor(paths.root)
-	refs.mu.Lock()
-	defer refs.mu.Unlock()
-	if refs.depth > 0 {
-		refs.depth++
-		return refs.handle(), nil
+	for {
+		refs.mu.Lock()
+		if refs.depth == 0 {
+			release, acquireErr := acquireShared(paths, remaining(deadline))
+			if acquireErr != nil {
+				refs.mu.Unlock()
+				return ctx, noop, acquireErr
+			}
+			refs.depth = 1
+			refs.release = release
+			handle := refs.handle()
+			refs.mu.Unlock()
+			return markActiveContext(ctx, paths.root, handle)
+		}
+
+		// The process already owns the shared flock. It is safe to count this
+		// admission only while no checkpoint has announced. Once announced, this
+		// is a new writer and must stand aside just like a writer in another
+		// process; true nested work has been identified by contextCovers above.
+		blocked, announceErr := announced(paths)
+		if announceErr != nil {
+			refs.mu.Unlock()
+			return ctx, noop, announceErr
+		}
+		if !blocked {
+			refs.depth++
+			handle := refs.handle()
+			refs.mu.Unlock()
+			return markActiveContext(ctx, paths.root, handle)
+		}
+		refs.mu.Unlock()
+		if !time.Now().Before(deadline) {
+			return ctx, noop, fmt.Errorf("%w: it is copying the vault; retry once it finishes", ErrBarrierHeld)
+		}
+		time.Sleep(joinPollInterval)
 	}
-	release, err := acquireShared(paths, wait)
-	if err != nil {
-		return noop, err
+}
+
+type joinedContext struct {
+	root   string
+	parent *joinedContext
+	active *atomic.Bool
+}
+
+type joinedContextKey struct{}
+
+func contextCovers(ctx context.Context, root string) bool {
+	if ctx == nil {
+		return false
 	}
-	refs.depth = 1
-	refs.release = release
-	return refs.handle(), nil
+	for joined, _ := ctx.Value(joinedContextKey{}).(*joinedContext); joined != nil; joined = joined.parent {
+		if joined.root == root && joined.active != nil && joined.active.Load() {
+			return true
+		}
+	}
+	return false
+}
+
+func markContext(ctx context.Context, root string, active *atomic.Bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	parent, _ := ctx.Value(joinedContextKey{}).(*joinedContext)
+	return context.WithValue(ctx, joinedContextKey{}, &joinedContext{root: root, parent: parent, active: active})
+}
+
+func markActiveContext(ctx context.Context, root string, release func()) (context.Context, func(), error) {
+	active := &atomic.Bool{}
+	active.Store(true)
+	var once sync.Once
+	wrapped := func() {
+		once.Do(func() {
+			active.Store(false)
+			release()
+		})
+	}
+	return markContext(ctx, root, active), wrapped, nil
 }
 
 // Joined reports whether this process is currently inside a join of the vault at
@@ -92,6 +182,13 @@ func acquireShared(paths vaultPaths, wait time.Duration) (func(), error) {
 	}
 	deadline := time.Now().Add(wait)
 	for {
+		pending, err := restorestate.Pending(paths.root)
+		if err != nil {
+			return nil, fmt.Errorf("checkpoint: inspect pending restore before write: %w", err)
+		}
+		if pending {
+			return nil, ErrRestorePending
+		}
 		blocked, err := announced(paths)
 		if err != nil {
 			return nil, err

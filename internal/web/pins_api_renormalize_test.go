@@ -68,14 +68,20 @@ func assertReorderRenormalizesWholeList(t *testing.T, count, lockEscalation int)
 	if n := countJournalEntries(t, root); n != 1 {
 		t.Fatalf("journal entries = %d, want 1 undoable action", n)
 	}
-	if lockEscalation > 0 {
-		locks, err := transactionLockNames(root)
-		if err != nil {
-			t.Fatalf("read transaction locks: %v", err)
-		}
-		if len(locks) != 1 || locks[0] != "vault.lock" {
-			t.Fatalf("transaction locks = %v, want only escalated vault.lock", locks)
-		}
+	assertEscalatedTransactionLock(t, root, lockEscalation)
+}
+
+func assertEscalatedTransactionLock(t *testing.T, root string, lockEscalation int) {
+	t.Helper()
+	if lockEscalation <= 0 {
+		return
+	}
+	locks, err := transactionLockNames(root)
+	if err != nil {
+		t.Fatalf("read transaction locks: %v", err)
+	}
+	if len(locks) != 1 || locks[0] != "vault.lock" {
+		t.Fatalf("transaction locks = %v, want only escalated vault.lock", locks)
 	}
 }
 

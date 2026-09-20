@@ -13,9 +13,13 @@ import (
 // decides what a package *is*, who a vault accepts one from, and what a receipt
 // means, and it does that out of the protocol alone.
 //
-// The three allowed dependencies are the ones the decisions are actually made
+// The four allowed dependencies are the ones the decisions are actually made
 // of — config for the vault marker and the enrollment path, vault for the
-// mutation guard and the fsync primitives, textnorm for the collision key.
+// mutation guard and the fsync primitives, textnorm for the collision key, and
+// checkpoint for the storage-wide durability barrier every persistent writer
+// participates in. checkpoint depends only on vault and makes no protocol or
+// portability decisions, so admitting it does not turn this leaf back toward
+// journal, Git, import, or export policy.
 //
 // What must stay out is the point. Importing vaultgit, journal, noteops or index
 // would make "may this travel?" a question about what *this machine* happens to
@@ -31,9 +35,10 @@ import (
 // imports vaultsync.
 func TestPackageLayering(t *testing.T) {
 	allowed := map[string]bool{
-		"config":   true,
-		"vault":    true,
-		"textnorm": true,
+		"checkpoint": true,
+		"config":     true,
+		"vault":      true,
+		"textnorm":   true,
 	}
 
 	deps := internalDeps(t)

@@ -1,6 +1,7 @@
 package vaultimport
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -53,18 +54,18 @@ const lockFileName = "import.lock"
 //
 // A released import drops the barrier as well, so a caller that already defers
 // release owes nothing new.
-func lockImports(root string) (release func(), acquired bool, err error) {
+func lockImports(root string) (ctx context.Context, release func(), acquired bool, err error) {
 	noop := func() {}
-	barrier, err := checkpoint.Join(root)
+	joinedCtx, barrier, err := checkpoint.JoinContext(context.Background(), root)
 	if err != nil {
-		return noop, false, fmt.Errorf("vaultimport: %w", err)
+		return context.Background(), noop, false, fmt.Errorf("vaultimport: %w", err)
 	}
 	guard, acquired, err := vault.TryLockPath(lockPath(root))
 	if err != nil || !acquired {
 		barrier()
-		return noop, acquired, err
+		return context.Background(), noop, acquired, err
 	}
-	return func() { guard(); barrier() }, true, nil
+	return joinedCtx, func() { guard(); barrier() }, true, nil
 }
 
 // lockPath is the guard's absolute path, derived from vaultsync.StateDir for the

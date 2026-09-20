@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -112,20 +113,59 @@ func LockPaths(root string, paths ...string) (func(), error) {
 // so two goroutines inside one bn process would not contend and the skip would
 // silently never happen.
 func TryLockPath(lockPath string) (release func(), acquired bool, err error) {
-	noop := func() {}
+	lock, acquired, err := TryLockPathHandle(lockPath)
+	if err != nil || !acquired {
+		return func() {}, acquired, err
+	}
+	return func() { _ = lock.Release() }, true, nil
+}
+
+// FileLock is a held named flock. File exposes the descriptor only for passing
+// the same open file description across exec; ordinary callers should retain
+// the handle and call Release.
+type FileLock struct {
+	file *os.File
+	once sync.Once
+	err  error
+}
+
+func (l *FileLock) File() *os.File {
+	if l == nil {
+		return nil
+	}
+	return l.file
+}
+
+func (l *FileLock) Release() error {
+	if l == nil {
+		return nil
+	}
+	l.once.Do(func() {
+		// Closing, rather than explicitly unlocking, is load-bearing for exec
+		// inheritance: a duplicated descriptor in the child keeps the same flock
+		// until the last process closes it. LOCK_UN here would drop that shared
+		// open-file-description lock out from under a still-running descendant.
+		l.err = l.file.Close()
+	})
+	return l.err
+}
+
+// TryLockPathHandle is TryLockPath with a descriptor-bearing result for the
+// checkpoint client that must let an exec child inherit lock ownership.
+func TryLockPathHandle(lockPath string) (lock *FileLock, acquired bool, err error) {
 	if lockPath == "" {
-		return noop, false, errors.New("vault: try lock: empty lock path")
+		return nil, false, errors.New("vault: try lock: empty lock path")
 	}
 	// A lock file is an artifact like any other, so the location policy decides
 	// before one can exist. Callers of this entry point treat every failure as
 	// "skip the optional work", which is the right answer here too: a refusal
 	// means the cache this lock guards is simply never written.
 	if err := GuardMutation("", lockPath); err != nil {
-		return noop, false, err
+		return nil, false, err
 	}
 	if dir := filepath.Dir(lockPath); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return noop, false, fmt.Errorf("vault: create lock directory %q: %w", dir, err)
+			return nil, false, fmt.Errorf("vault: create lock directory %q: %w", dir, err)
 		}
 	}
 	// A negative budget puts lockOne's deadline strictly in the past, so its loop
@@ -138,12 +178,11 @@ func TryLockPath(lockPath string) (release func(), acquired bool, err error) {
 	file, err := lockOne(lockPath, lockPath, true, -1)
 	if err != nil {
 		if IsTxnLockBusy(err) {
-			return noop, false, nil
+			return nil, false, nil
 		}
-		return noop, false, err
+		return nil, false, err
 	}
-	locks := &pathLocks{files: []*os.File{file}}
-	return locks.release, true, nil
+	return &FileLock{file: file}, true, nil
 }
 
 // LockDir returns the vault's lock directory without creating it.
@@ -187,18 +226,27 @@ func LockDir(root string) (string, error) {
 // goroutines inside one bn process would not contend and a barrier built on it
 // would exclude nothing.
 func LockFile(lockPath string, exclusive bool, wait time.Duration) (func(), error) {
-	noop := func() {}
+	lock, err := LockFileHandle(lockPath, exclusive, wait)
+	if err != nil {
+		return func() {}, err
+	}
+	return func() { _ = lock.Release() }, nil
+}
+
+// LockFileHandle is LockFile with access to the held descriptor for exec
+// inheritance. It otherwise has identical acquisition semantics.
+func LockFileHandle(lockPath string, exclusive bool, wait time.Duration) (*FileLock, error) {
 	if lockPath == "" {
-		return noop, errors.New("vault: lock file: empty lock path")
+		return nil, errors.New("vault: lock file: empty lock path")
 	}
 	// A lock file is an artifact like any other, so the location policy decides
 	// before one can exist.
 	if err := GuardMutation("", lockPath); err != nil {
-		return noop, err
+		return nil, err
 	}
 	if dir := filepath.Dir(lockPath); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return noop, fmt.Errorf("vault: create lock directory %q: %w", dir, err)
+			return nil, fmt.Errorf("vault: create lock directory %q: %w", dir, err)
 		}
 	}
 	if wait == 0 {
@@ -206,10 +254,9 @@ func LockFile(lockPath string, exclusive bool, wait time.Duration) (func(), erro
 	}
 	file, err := lockOne(lockPath, lockPath, exclusive, wait)
 	if err != nil {
-		return noop, err
+		return nil, err
 	}
-	locks := &pathLocks{files: []*os.File{file}}
-	return locks.release, nil
+	return &FileLock{file: file}, nil
 }
 
 // pathLocks is a set of held exclusive path locks.

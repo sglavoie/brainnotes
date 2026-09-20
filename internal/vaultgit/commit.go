@@ -30,12 +30,15 @@ import (
 // failure-prone as the least reliable link in the user's setup.
 func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	const op = "commit-pending"
-	release, err := m.acquire(safetyLockName, op)
+	release, err := m.acquire(safetyLockName, op, ctx)
 	if err != nil {
 		return CommitResult{}, err
 	}
 	defer release()
+	return m.commitPendingLocked(ctx, op)
+}
 
+func (m *Manager) commitPendingLocked(ctx context.Context, op string) (CommitResult, error) {
 	if err := m.checkBlocked(op); err != nil {
 		return CommitResult{}, err
 	}
@@ -60,47 +63,7 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	// first of those has a marker of its own to retire.
 	var anchoredAt time.Time
 	result, err := m.withCAS(ctx, op, func(head string) (*commitPlan, error) {
-		set, err := m.scanPending(ctx, head, op)
-		if err != nil {
-			return nil, err
-		}
-		if set.empty() {
-			return nil, nil
-		}
-		// Write-ahead the floor's first marker before anything below can produce a
-		// commit. Once the ref lands, the still-live recovery intent is updated with
-		// that observed bound and remains until NoteCommit publishes it. Thus a
-		// lost completion write leaves a recoverable landed intent rather than a
-		// shortened floor.
-		//
-		// Its failure stops the attempt, exactly as a failed intent record does and
-		// for a sibling reason — a snapshot that cannot say when it happened is one
-		// the next burst would be free to repeat inside the vault's own interval.
-		// Nothing has been written to the repository at this point, the burst stays
-		// open, and the next poll retries.
-		at := m.now()
-		if _, err := m.state.BeginExternalCommit(m.policy(), at); err != nil {
-			return nil, safetyErrorf(KindRepositoryState, op,
-				"the external autosave floor could not be anchored, so no snapshot was attempted: %s", agent.SanitizedDiagnostic(err))
-		}
-		anchoredAt = at
-		plan := &commitPlan{
-			// External autosaves deliberately retain their write-ahead timestamp.
-			// Explicit mutations leave at zero and choose theirs at commit creation.
-			// The floor itself is anchored later, at the observed ref landing; see
-			// stageAndCommit and recoverIntentLocked.
-			at:           at,
-			add:          append(append([]string{}, set.added...), set.modified...),
-			remove:       set.deleted,
-			proofEntries: set.proofEntries,
-			message:      autosaveMessage(at),
-			// The external scan is the one entry point whose additions are
-			// discovered rather than named, so it is the one that may skip an
-			// addition the engine cannot read.
-			externalAdditions: true,
-		}
-		sort.Strings(plan.add)
-		return plan, nil
+		return m.planExternalCommit(ctx, head, op, &anchoredAt)
 	})
 	if err != nil {
 		// The marker stays. An attempt that failed on the way to the repository may
@@ -136,6 +99,29 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	return result, nil
 }
 
+func (m *Manager) planExternalCommit(ctx context.Context, head, op string, anchoredAt *time.Time) (*commitPlan, error) {
+	set, err := m.scanPending(ctx, head, op)
+	if err != nil || set.empty() {
+		return nil, err
+	}
+	at := m.now()
+	if _, err := m.state.BeginExternalCommit(m.policy(), at); err != nil {
+		return nil, safetyErrorf(KindRepositoryState, op,
+			"the external autosave floor could not be anchored, so no snapshot was attempted: %s", agent.SanitizedDiagnostic(err))
+	}
+	*anchoredAt = at
+	plan := &commitPlan{
+		at:                at,
+		add:               append(append([]string{}, set.added...), set.modified...),
+		remove:            set.deleted,
+		proofEntries:      set.proofEntries,
+		message:           autosaveMessage(at),
+		externalAdditions: true,
+	}
+	sort.Strings(plan.add)
+	return plan, nil
+}
+
 // CommitJournalEntry records one finalized BrainNotes mutation.
 //
 // It stages exactly the paths the journal entry names plus the entry's own
@@ -163,7 +149,7 @@ func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation str
 	if err := validEntryID(entryID); err != nil {
 		return CommitResult{}, safetyErrorf(KindStaleRequest, op, "%s", err.Error())
 	}
-	release, err := m.acquire(safetyLockName, op)
+	release, err := m.acquire(safetyLockName, op, ctx)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -330,7 +316,7 @@ func (m *Manager) CommitPaths(ctx context.Context, operation string, paths []str
 		return CommitResult{}, nil
 	}
 
-	release, err := m.acquire(safetyLockName, op)
+	release, err := m.acquire(safetyLockName, op, ctx)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -400,7 +386,7 @@ func (m *Manager) relativeExistingPaths(paths []string) ([]string, error) {
 // entry point demands journal proof again exactly as before.
 func (m *Manager) CommitRestore(ctx context.Context, operation string) (CommitResult, error) {
 	const op = "commit-restore"
-	release, err := m.acquire(safetyLockName, op)
+	release, err := m.acquire(safetyLockName, op, ctx)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -418,33 +404,37 @@ func (m *Manager) CommitRestore(ctx context.Context, operation string) (CommitRe
 
 	message := journalMessage(operation, "restore")
 	return m.withCAS(ctx, op, func(head string) (*commitPlan, error) {
-		entries, err := m.git.status(ctx, m.indexPath)
-		if err != nil {
-			return nil, safetyErrorf(KindRepositoryState, op, "the working tree could not be inspected: %s", agent.SanitizedDiagnostic(err))
-		}
-		changes, err := classifyPending(entries)
-		if err != nil {
-			return nil, m.latch(withOp(err, op))
-		}
-		plan := &commitPlan{message: message}
-		for _, change := range changes {
-			if !inTrackedScope(change) {
-				continue
-			}
-			switch change.kind {
-			case changeAdded, changeModified:
-				plan.add = append(plan.add, change.path)
-			case changeDeleted:
-				plan.remove = append(plan.remove, change.path)
-			}
-		}
-		if len(plan.add) == 0 && len(plan.remove) == 0 {
-			return nil, nil
-		}
-		sort.Strings(plan.add)
-		sort.Strings(plan.remove)
-		return plan, nil
+		return m.planRestore(ctx, op, message)
 	})
+}
+
+func (m *Manager) planRestore(ctx context.Context, op, message string) (*commitPlan, error) {
+	entries, err := m.git.status(ctx, m.indexPath)
+	if err != nil {
+		return nil, safetyErrorf(KindRepositoryState, op, "the working tree could not be inspected: %s", agent.SanitizedDiagnostic(err))
+	}
+	changes, err := classifyPending(entries)
+	if err != nil {
+		return nil, m.latch(withOp(err, op))
+	}
+	plan := &commitPlan{message: message}
+	for _, change := range changes {
+		if !inTrackedScope(change) {
+			continue
+		}
+		switch change.kind {
+		case changeAdded, changeModified:
+			plan.add = append(plan.add, change.path)
+		case changeDeleted:
+			plan.remove = append(plan.remove, change.path)
+		}
+	}
+	if len(plan.add) == 0 && len(plan.remove) == 0 {
+		return nil, nil
+	}
+	sort.Strings(plan.add)
+	sort.Strings(plan.remove)
+	return plan, nil
 }
 
 // matchesWorktree reports whether the working tree currently holds what a

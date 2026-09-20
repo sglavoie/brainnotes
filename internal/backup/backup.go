@@ -48,6 +48,53 @@ type RestoreResult struct {
 	Mode        string
 }
 
+// ValidateRestore fully parses an archive and checks its destination conflicts
+// without changing vault content. Production restore uses it before publishing
+// the outer recovery intent, so a malformed archive cannot strand the vault in
+// a permanently pending operation.
+func ValidateRestore(vaultRoot, archivePath string, opts RestoreOptions) (string, error) {
+	result, err := InspectRestore(vaultRoot, archivePath, opts)
+	if err != nil {
+		return "", err
+	}
+	return result.ArchivePath, nil
+}
+
+// InspectRestore validates and describes a restore without changing the vault.
+func InspectRestore(vaultRoot, archivePath string, opts RestoreOptions) (*RestoreResult, error) {
+	return inspectRestore(vaultRoot, archivePath, opts, true)
+}
+
+// InspectValidatedRestore describes a durably staged archive from an existing
+// outer restore intent without rechecking destination conflicts. Content has
+// already completed in this phase, and a restored mode-000 directory may make
+// descendant destination inspection impossible by design.
+func InspectValidatedRestore(vaultRoot, archivePath string, opts RestoreOptions) (*RestoreResult, error) {
+	return inspectRestore(vaultRoot, archivePath, opts, false)
+}
+
+func inspectRestore(vaultRoot, archivePath string, opts RestoreOptions, preflight bool) (*RestoreResult, error) {
+	root, err := resolveVaultRoot(vaultRoot)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := resolveArchivePath(root, archivePath)
+	if err != nil {
+		return nil, err
+	}
+	stageDir, entries, err := extractArchive(resolved)
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(stageDir)
+	if preflight {
+		if err := preflightRestore(root, entries, opts.Wipe); err != nil {
+			return nil, err
+		}
+	}
+	return &RestoreResult{ArchivePath: resolved, Files: restoredFileCount(entries), Mode: restoreMode(opts.Wipe)}, nil
+}
+
 type entryKind string
 
 const (
@@ -118,7 +165,7 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 // the archive: `backups/` is excluded from the walk, so the bytes this writes
 // are never bytes it also reads.
 func createArchive(root, backupsDir string, now func() time.Time) (*CreateResult, error) {
-	if err := os.MkdirAll(backupsDir, 0o755); err != nil {
+	if err := vault.EnsureDirDurable(backupsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("backup: create backups directory: %w", err)
 	}
 
@@ -158,12 +205,25 @@ func createArchive(root, backupsDir string, now func() time.Time) (*CreateResult
 		return nil, closeErr
 	}
 
-	if err := os.Rename(tmp.Name(), archivePath); err != nil {
-		return nil, fmt.Errorf("backup: finalize archive %s: %w", archivePath, err)
+	if err := publishArchive(tmp.Name(), archivePath, backupsDir); err != nil {
+		return nil, err
 	}
 
 	committed = true
 	return result, nil
+}
+
+func publishArchive(tempPath, archivePath, backupsDir string) error {
+	if err := os.Rename(tempPath, archivePath); err != nil {
+		return fmt.Errorf("backup: finalize archive %s: %w", archivePath, err)
+	}
+	if err := vault.SyncDir(backupsDir); err != nil {
+		return fmt.Errorf("backup: sync backups directory: %w", err)
+	}
+	if err := vault.SyncDir(filepath.Dir(backupsDir)); err != nil {
+		return fmt.Errorf("backup: sync vault root after publishing backups directory: %w", err)
+	}
+	return nil
 }
 
 // archiveTree walks the vault and hands every eligible entry to archiveOne.
@@ -267,6 +327,18 @@ func copyArchiveFile(tw *tar.Writer, current string) error {
 // Git safety preflight ahead of the extraction and the snapshot after it. Call
 // this directly only from a test with no vault history to protect.
 func Restore(vaultRoot, archivePath string, opts RestoreOptions) (*RestoreResult, error) {
+	return restore(vaultRoot, archivePath, opts, false)
+}
+
+// ResumeRestore continues a restore whose outer intent already durably records
+// a fully validated archive. Unlike a first attempt, recovery may make archived
+// ancestors traversable before overlay preflight: a previous process can die
+// after applying a final mode such as 000 but before advancing the outer phase.
+func ResumeRestore(vaultRoot, archivePath string, opts RestoreOptions) (*RestoreResult, error) {
+	return restore(vaultRoot, archivePath, opts, true)
+}
+
+func restore(vaultRoot, archivePath string, opts RestoreOptions, recovery bool) (*RestoreResult, error) {
 	root, err := resolveVaultRoot(vaultRoot)
 	if err != nil {
 		return nil, err
@@ -290,35 +362,48 @@ func Restore(vaultRoot, archivePath string, opts RestoreOptions) (*RestoreResult
 	}
 	defer os.RemoveAll(stageDir)
 
-	if opts.Wipe {
-		if err := wipeVault(root); err != nil {
+	if recovery {
+		if err := enableExistingRestoreAncestors(root, entries); err != nil {
 			return nil, err
 		}
-	} else if err := preflightOverlay(root, entries); err != nil {
+	}
+	if err := preflightRestore(root, entries, opts.Wipe); err != nil {
 		return nil, err
 	}
 
-	if err := applyStage(root, stageDir, entries); err != nil {
+	if err := applyTransactionalRestore(root, stageDir, entries, opts.Wipe); err != nil {
 		return nil, err
 	}
 
-	mode := "overlay"
-	if opts.Wipe {
-		mode = "wipe"
-	}
+	return &RestoreResult{
+		ArchivePath: resolvedArchivePath,
+		Files:       restoredFileCount(entries),
+		Mode:        restoreMode(opts.Wipe),
+	}, nil
+}
 
+func preflightRestore(root string, entries []archiveEntry, wipe bool) error {
+	if wipe {
+		return nil
+	}
+	return preflightOverlay(root, entries)
+}
+
+func restoreMode(wipe bool) string {
+	if wipe {
+		return "wipe"
+	}
+	return "overlay"
+}
+
+func restoredFileCount(entries []archiveEntry) int {
 	files := 0
 	for _, entry := range entries {
 		if entry.Kind == entryFile {
 			files++
 		}
 	}
-
-	return &RestoreResult{
-		ArchivePath: resolvedArchivePath,
-		Files:       files,
-		Mode:        mode,
-	}, nil
+	return files
 }
 
 func extractArchive(archivePath string) (string, []archiveEntry, error) {
@@ -366,20 +451,8 @@ func extractArchive(archivePath string) (string, []archiveEntry, error) {
 			return "", nil, err
 		}
 
-		stagePath := filepath.Join(stageDir, filepath.FromSlash(entry.Path))
-		switch entry.Kind {
-		case entryDir:
-			if err := os.MkdirAll(stagePath, normalizeDirMode(entry.Mode)); err != nil {
-				return "", nil, fmt.Errorf("backup restore: create staged directory %s: %w", stagePath, err)
-			}
-			if err := os.Chmod(stagePath, normalizeDirMode(entry.Mode)); err != nil {
-				return "", nil, fmt.Errorf("backup restore: chmod staged directory %s: %w", stagePath, err)
-			}
-
-		case entryFile:
-			if err := writeReaderAtomic(stagePath, reader, normalizeFileMode(entry.Mode)); err != nil {
-				return "", nil, fmt.Errorf("backup restore: extract %s: %w", entry.Path, err)
-			}
+		if err := extractArchiveEntry(stageDir, entry, reader); err != nil {
+			return "", nil, err
 		}
 
 		entries = append(entries, entry)
@@ -389,35 +462,35 @@ func extractArchive(archivePath string) (string, []archiveEntry, error) {
 	return stageDir, entries, nil
 }
 
-func normalizeArchiveEntry(header *tar.Header, seen map[string]entryKind) (archiveEntry, error) {
-	name := strings.ReplaceAll(header.Name, "\\", "/")
-	if name == "" {
-		return archiveEntry{}, fmt.Errorf("backup restore: archive contains an empty path")
+func extractArchiveEntry(stageDir string, entry archiveEntry, reader io.Reader) error {
+	stagePath := filepath.Join(stageDir, filepath.FromSlash(entry.Path))
+	if entry.Kind == entryDir {
+		// Staging directories remain owner-writable until every descendant has
+		// been extracted. Archived directory modes are applied only after all
+		// content has reached the live destination.
+		if err := os.MkdirAll(stagePath, 0o700); err != nil {
+			return fmt.Errorf("backup restore: create staged directory %s: %w", stagePath, err)
+		}
+		return nil
 	}
-	if path.IsAbs(name) || hasWindowsVolumePrefix(name) {
-		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q is absolute", header.Name)
+	if err := writeReaderAtomic(stagePath, reader, normalizeFileMode(entry.Mode)); err != nil {
+		return fmt.Errorf("backup restore: extract %s: %w", entry.Path, err)
 	}
-	if hasDotDotSegment(name) {
-		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q escapes the vault", header.Name)
-	}
+	return nil
+}
 
-	cleaned := path.Clean(name)
-	if cleaned == "." || cleaned == "" {
-		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q resolves to the vault root", header.Name)
-	}
-	if strings.HasPrefix(cleaned, "../") || cleaned == ".." {
-		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q escapes the vault", header.Name)
-	}
-	if hasWindowsVolumePrefix(cleaned) {
-		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q has a volume prefix", header.Name)
-	}
-	if targetsBackupDirectory(cleaned) {
-		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q targets %s/", header.Name, backupDirName)
+func normalizeArchiveEntry(header *tar.Header, seen map[string]entryKind) (archiveEntry, error) {
+	cleaned, err := normalizeArchivePath(header.Name)
+	if err != nil {
+		return archiveEntry{}, err
 	}
 
 	kind, err := entryKindFromHeader(header)
 	if err != nil {
 		return archiveEntry{}, err
+	}
+	if strings.EqualFold(cleaned, ".bnotes") && kind != entryDir {
+		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q cannot replace the live sidecar directory", header.Name)
 	}
 
 	key := strings.ToLower(cleaned)
@@ -426,9 +499,30 @@ func normalizeArchiveEntry(header *tar.Header, seen map[string]entryKind) (archi
 	}
 	seen[key] = kind
 
-	return archiveEntry{
-		Path: cleaned,
-		Kind: kind,
-		Mode: header.FileInfo().Mode(),
-	}, nil
+	return archiveEntry{Path: cleaned, Kind: kind, Mode: header.FileInfo().Mode()}, nil
+}
+
+func normalizeArchivePath(headerName string) (string, error) {
+	name := strings.ReplaceAll(headerName, "\\", "/")
+	if name == "" {
+		return "", fmt.Errorf("backup restore: archive contains an empty path")
+	}
+	if path.IsAbs(name) || hasWindowsVolumePrefix(name) {
+		return "", fmt.Errorf("backup restore: archive entry %q is absolute", headerName)
+	}
+	if hasDotDotSegment(name) {
+		return "", fmt.Errorf("backup restore: archive entry %q escapes the vault", headerName)
+	}
+
+	cleaned := path.Clean(name)
+	if cleaned == "." || cleaned == "" {
+		return "", fmt.Errorf("backup restore: archive entry %q resolves to the vault root", headerName)
+	}
+	if hasWindowsVolumePrefix(cleaned) {
+		return "", fmt.Errorf("backup restore: archive entry %q has a volume prefix", headerName)
+	}
+	if isRootExcluded(cleaned) {
+		return "", fmt.Errorf("backup restore: archive entry %q targets reserved machine-local state", headerName)
+	}
+	return cleaned, nil
 }

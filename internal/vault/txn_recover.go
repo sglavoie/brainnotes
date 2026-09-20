@@ -52,75 +52,48 @@ func recoverTxnIntents(root string) error {
 			failures = append(failures, err)
 		}
 	}
+	failures = appendTempOwnerFailureWhenSafe(realRoot, failures)
 	return errors.Join(failures...)
 }
 
+func appendTempOwnerFailureWhenSafe(root string, failures []error) []error {
+	if len(failures) != 0 {
+		return failures
+	}
+	return appendTempOwnerFailure(root, failures)
+}
+
+func appendTempOwnerFailure(root string, failures []error) []error {
+	if err := recoverTempOwners(root); err != nil {
+		return append(failures, err)
+	}
+	return failures
+}
+
 func recoverTxnIntent(root, realRoot, dir, path string) error {
-	file, err := os.OpenFile(path, os.O_RDWR, 0o600)
+	file, active, release, err := openIntentForRecovery(path)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("vault: open intent %q: %w", path, err)
+		return err
 	}
-	defer file.Close()
-	if lockingSupported {
-		held, lockErr := tryLock(file, true)
-		if lockErr != nil {
-			return fmt.Errorf("vault: lock intent %q: %w", path, lockErr)
-		}
-		if !held {
-			// Another process is committing this transaction right now.
-			return nil
-		}
-		defer func() { _ = unlockFile(file) }()
-		// The owner may have finished and unlinked the record between the open and
-		// the lock, in which case this descriptor names a file nothing will read
-		// again and the transaction it described is already complete.
-		if !sameOpenFile(file, path) {
-			return nil
-		}
+	defer release()
+	if !active {
+		return nil
+	}
+	record, proceed, err := readIntentRecord(file, dir, path)
+	if err != nil || !proceed {
+		return err
 	}
 
-	data, err := io.ReadAll(file)
+	paths, err := validateIntentPaths(path, realRoot, record.Changes)
 	if err != nil {
-		return fmt.Errorf("vault: read intent %q: %w", path, err)
+		return err
 	}
-	var record txnIntentRecord
-	if err := json.Unmarshal(data, &record); err != nil {
-		// The record and its directory entry are both fsynced before the first
-		// destructive step runs, so a record that cannot be decoded proves the
-		// crash happened while it was still being written and nothing was applied.
-		// Discarding it is therefore safe, and self-healing beats wedging the vault
-		// on litter that describes no work.
-		return discardTxnIntent(dir, path)
-	}
-	if record.Version == 0 {
-		return discardTxnIntent(dir, path)
-	}
-	if record.Version != txnIntentVersion {
-		return &TxnIntentError{
-			IntentPath: path,
-			Err: fmt.Errorf("record version %d, this build understands %d",
-				record.Version, txnIntentVersion),
-		}
-	}
-
-	paths := make([]string, 0, len(record.Changes))
-	for _, change := range record.Changes {
-		if !containedIn(realRoot, change.Path) {
-			return &TxnIntentError{
-				IntentPath: path,
-				Err:        fmt.Errorf("change %q resolves outside vault root %q", change.Path, realRoot),
-			}
-		}
-		if change.Staged != "" && !containedIn(realRoot, change.Staged) {
-			return &TxnIntentError{
-				IntentPath: path,
-				Err:        fmt.Errorf("staged file %q resolves outside vault root %q", change.Staged, realRoot),
-			}
-		}
-		paths = append(paths, change.Path)
+	// A process can die after this intent becomes durable and before its earlier
+	// staged-file owner record publishes the transfer marker. Correlate exact
+	// staged paths before applying: an undecidable foreign edit deliberately
+	// leaves its staged bytes alone, and the later owner pass must do the same.
+	if err := transferTempOwnersForIntent(realRoot, record.Changes); err != nil {
+		return &TxnIntentError{IntentPath: path, Paths: paths, Err: err}
 	}
 
 	// Recovery mutates the same paths ordinary writers do, so it takes the same
@@ -133,21 +106,95 @@ func recoverTxnIntent(root, realRoot, dir, path string) error {
 	}
 	defer locks.release()
 
+	cleanup, err := recoverIntentChanges(path, record.Changes)
+	if err != nil {
+		return err
+	}
+	return finishRecoveredIntent(root, dir, path, paths, cleanup)
+}
+
+func finishRecoveredIntent(root, dir, path string, paths, cleanup []string) error {
+	// Same ordering the forward path uses: every destination is durable before the
+	// recovery sources or the record that describes it stop existing.
+	if err := syncParentDirs(root, paths); err != nil {
+		return &TxnIntentError{IntentPath: path, Paths: paths, Err: err}
+	}
+	if err := removeAndSyncTxnTemps(cleanup); err != nil {
+		return &TxnIntentError{IntentPath: path, Err: err}
+	}
+	return discardTxnIntent(dir, path)
+}
+
+func openIntentForRecovery(path string) (*os.File, bool, func(), error) {
+	file, err := os.OpenFile(path, os.O_RDWR, 0o600)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, false, func() {}, nil
+		}
+		return nil, false, func() {}, fmt.Errorf("vault: open intent %q: %w", path, err)
+	}
+	release := func() { _ = file.Close() }
+	if !lockingSupported {
+		return file, true, release, nil
+	}
+	held, err := tryLock(file, true)
+	if err != nil {
+		_ = file.Close()
+		return nil, false, func() {}, fmt.Errorf("vault: lock intent %q: %w", path, err)
+	}
+	release = func() { _ = unlockFile(file); _ = file.Close() }
+	return file, held && sameOpenFile(file, path), release, nil
+}
+
+func readIntentRecord(file *os.File, dir, path string) (txnIntentRecord, bool, error) {
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return txnIntentRecord{}, false, fmt.Errorf("vault: read intent %q: %w", path, err)
+	}
+	var record txnIntentRecord
+	if err := json.Unmarshal(data, &record); err != nil || record.Version == 0 {
+		return txnIntentRecord{}, false, discardTxnIntent(dir, path)
+	}
+	if record.Version != txnIntentVersion {
+		return txnIntentRecord{}, false, &TxnIntentError{IntentPath: path, Err: fmt.Errorf("record version %d, this build understands %d", record.Version, txnIntentVersion)}
+	}
+	return record, true, nil
+}
+
+func recoverIntentChanges(intentPath string, changes []txnIntentChange) ([]string, error) {
 	var unresolved []string
 	var failures []error
-	for _, change := range record.Changes {
-		if err := recoverTxnIntentChange(change); err != nil {
+	var cleanup []string
+	for _, change := range changes {
+		paths, err := recoverTxnIntentChangeWithCleanup(change)
+		if err != nil {
 			unresolved = append(unresolved, change.Path)
 			failures = append(failures, err)
+			continue
 		}
+		cleanup = append(cleanup, paths...)
 	}
-	if len(failures) > 0 {
-		return &TxnIntentError{IntentPath: path, Paths: unresolved, Err: errors.Join(failures...)}
+	if len(failures) != 0 {
+		return nil, &TxnIntentError{IntentPath: intentPath, Paths: unresolved, Err: errors.Join(failures...)}
 	}
-	// Same ordering the forward path uses: every destination is durable before the
-	// record that describes it stops existing.
-	syncParentDirs(paths)
-	return discardTxnIntent(dir, path)
+	return cleanup, nil
+}
+
+func validateIntentPaths(intentPath, root string, changes []txnIntentChange) ([]string, error) {
+	paths := make([]string, 0, len(changes))
+	for _, change := range changes {
+		if !containedIn(root, change.Path) {
+			return nil, &TxnIntentError{IntentPath: intentPath, Err: fmt.Errorf("change %q resolves outside vault root %q", change.Path, root)}
+		}
+		if change.Staged != "" && !containedIn(root, change.Staged) {
+			return nil, &TxnIntentError{IntentPath: intentPath, Err: fmt.Errorf("staged file %q resolves outside vault root %q", change.Staged, root)}
+		}
+		if change.PriorStaged != "" && !containedIn(root, change.PriorStaged) {
+			return nil, &TxnIntentError{IntentPath: intentPath, Err: fmt.Errorf("prior staged file %q resolves outside vault root %q", change.PriorStaged, root)}
+		}
+		paths = append(paths, change.Path)
+	}
+	return paths, nil
 }
 
 // recoverTxnIntentChange brings one planned change to a decided state. It
@@ -155,6 +202,14 @@ func recoverTxnIntent(root, realRoot, dir, path string) error {
 // has taken over is decided, not failed, because there is nothing this process
 // may do about it that would not destroy that writer's work.
 func recoverTxnIntentChange(change txnIntentChange) error {
+	paths, err := recoverTxnIntentChangeWithCleanup(change)
+	if err != nil {
+		return err
+	}
+	return removeAndSyncTxnTemps(paths)
+}
+
+func recoverTxnIntentChangeWithCleanup(change txnIntentChange) ([]string, error) {
 	// The destination is judged by digest rather than by content: an intent
 	// records the prior and planned hashes, so nothing here needs the bytes, and
 	// a streamed create's destination is the one file this must not hold.
@@ -163,19 +218,16 @@ func recoverTxnIntentChange(change txnIntentChange) error {
 		if IsTxnConflict(err) {
 			// Something that is not a regular file occupies the destination. Only
 			// a person can decide what that means.
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 	if txnIntentReached(change, digest, exists) {
 		// The staged file, if it is still there, holds bytes the destination has
 		// already superseded — either the replacement that landed, or the content
 		// the swap pushed out. Unlinking it is exactly what the forward path's
 		// housekeeping would have done.
-		if change.Staged != "" {
-			_ = os.Remove(change.Staged)
-		}
-		return nil
+		return intentChangeTemps(change), nil
 	}
 	if !txnIntentPrior(change, digest, exists) {
 		// The destination holds neither what staging read nor what the transaction
@@ -183,7 +235,7 @@ func recoverTxnIntentChange(change txnIntentChange) error {
 		// staged file is left alone: it holds bytes that exist nowhere else, and
 		// deleting it would be the destructive answer to a conflict a person still
 		// has to judge.
-		return nil
+		return nil, nil
 	}
 	if change.Remove {
 		return completeTxnIntentRemoval(change)
@@ -215,25 +267,25 @@ func txnIntentPrior(change txnIntentChange, digest string, exists bool) bool {
 // completeTxnIntentRemoval finishes a delete the crash interrupted. Custody makes
 // it a compare-and-swap, so a writer that recreated the path between the read
 // above and the rename keeps its file.
-func completeTxnIntentRemoval(change txnIntentChange) error {
+func completeTxnIntentRemoval(change txnIntentChange) ([]string, error) {
 	custody, err := takeVerifiedCustody(nil, change.Path, ExpectHash(change.PriorSHA256))
 	if err != nil {
 		if IsTxnConflict(err) {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
-	// A custody file that cannot be unlinked is housekeeping, not a failed delete:
-	// the destination is gone, which is what the transaction asked for.
-	_ = removeSuperseded(change.Path, custody)
-	return nil
+	if err := removeSuperseded(change.Path, custody); err != nil {
+		return nil, err
+	}
+	return intentChangeTemps(change), nil
 }
 
 // completeTxnIntentWrite finishes a write the crash interrupted, from the staged
 // replacement the record names.
-func completeTxnIntentWrite(change txnIntentChange) error {
+func completeTxnIntentWrite(change txnIntentChange) ([]string, error) {
 	if change.Staged == "" {
-		return nil
+		return intentChangeTemps(change), nil
 	}
 	// Streamed through a hasher rather than read: the staged file is a full copy
 	// of the replacement, and for an attachment that is the whole 25 MiB.
@@ -243,27 +295,41 @@ func completeTxnIntentWrite(change txnIntentChange) error {
 		// exactly what staging read, which is a consistent state: the write simply
 		// never happened, and reporting it as a recovery failure would wedge the
 		// vault over work that cannot be completed by anyone.
-		return nil
+		return intentChangeTemps(change), nil
+	}
+	if err := EnsureDirDurable(filepath.Dir(change.Path), 0o755); err != nil {
+		return nil, err
 	}
 	if !change.PriorExists {
 		if err := placeNew(nil, change.Staged, change.Path); err != nil {
 			if IsTxnConflict(err) {
-				return nil
+				return nil, nil
 			}
-			return err
+			return nil, err
 		}
-		return nil
+		return intentChangeTemps(change), nil
 	}
 	// The destination exists, so the replacement is a path-preserving
 	// compare-and-swap against the bytes staging read — never an evacuate and
 	// place, for the same reason the forward path never uses one.
 	if _, err := compareAndSwap(nil, change.Staged, change.Path, ExpectHash(change.PriorSHA256)); err != nil {
 		if IsTxnConflict(err) {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
-	return nil
+	return intentChangeTemps(change), nil
+}
+
+func intentChangeTemps(change txnIntentChange) []string {
+	paths := make([]string, 0, 2)
+	if change.Staged != "" {
+		paths = append(paths, change.Staged)
+	}
+	if change.PriorStaged != "" {
+		paths = append(paths, change.PriorStaged)
+	}
+	return paths
 }
 
 func discardTxnIntent(dir, path string) error {

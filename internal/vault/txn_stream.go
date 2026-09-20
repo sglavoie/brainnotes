@@ -25,13 +25,11 @@ import (
 // path plus the digest and size the caller measured while writing it, and every
 // later step that would have hashed the slice pins the digest instead.
 //
-// It is deliberately create-only. An overwrite has to capture the bytes it
-// displaces — that capture is what makes the compare-and-swap and the
-// compensating rollback possible — and capturing them means reading them, which
-// would put back exactly the residency this exists to remove. A destination that
-// must be absent has nothing to capture, so the whole path stays bounded: stage
-// copies source to a sibling temp file through a hasher, apply places that temp
-// file exclusively, and a rollback removes what it placed.
+// An overwrite also has to capture the bytes it displaces. ReplaceFrom keeps
+// that preimage in a second durable sibling file rather than in memory, so the
+// compare-and-swap, compensating rollback, and process-death roll-forward remain
+// bounded for large attachments. WriteFrom is the create-only convenience: a
+// destination that must be absent needs no preimage at all.
 //
 // The digest is not decoration. Staging verifies the copy against it, so a
 // staging file another writer truncated, replaced, or left half-written is
@@ -47,9 +45,20 @@ import (
 // does have to be on the same volume as path, because staging copies it into a
 // sibling temp file of the destination and that temp file is what gets installed.
 //
-// The destination must be absent. See this file's leading comment for why an
-// overwrite cannot be streamed.
+// The destination must be absent. Use ReplaceFrom for a bounded overwrite.
 func (t *FileTxn) WriteFrom(path, sourcePath string, size int64, sha256Hex string, mode os.FileMode) error {
+	return t.writeFrom(path, sourcePath, size, sha256Hex, mode, ExpectMissing())
+}
+
+// ReplaceFrom plans a bounded-memory create or overwrite from sourcePath. When
+// expect names an existing destination, staging keeps its prior bytes in a
+// durable sibling file so rollback and process-death recovery do not retain a
+// potentially large attachment in memory.
+func (t *FileTxn) ReplaceFrom(path, sourcePath string, size int64, sha256Hex string, mode os.FileMode, expect FileExpectation) error {
+	return t.writeFrom(path, sourcePath, size, sha256Hex, mode, expect)
+}
+
+func (t *FileTxn) writeFrom(path, sourcePath string, size int64, sha256Hex string, mode os.FileMode, expect FileExpectation) error {
 	if t == nil {
 		return errors.New("vault: nil transaction")
 	}
@@ -73,7 +82,7 @@ func (t *FileTxn) WriteFrom(path, sourcePath string, size int64, sha256Hex strin
 		digest: digest,
 		size:   size,
 		mode:   mode,
-		expect: ExpectMissing(),
+		expect: expect,
 	})
 }
 
@@ -120,20 +129,62 @@ func HashFile(path string) (string, int64, error) {
 // file another writer dropped at the destination gets read in full only to be
 // refused.
 func (t *FileTxn) stageStreamedChange(change *txnChange) error {
-	if err := verifyAbsent(change.path); err != nil {
+	if change.expect.Exists {
+		if err := t.stageStreamedPrior(change); err != nil {
+			return err
+		}
+	} else if err := verifyAbsent(change.path); err != nil {
 		return err
 	}
-	wantMode, err := stagedMode(change.path, change.mode, 0, false)
+	wantMode, err := stagedMode(t.root, change.path, change.mode, change.priorMode, change.priorExists)
 	if err != nil {
+		_ = os.Remove(change.priorSource)
+		change.priorSource = ""
 		return err
 	}
-	staged, err := stageTempFileFrom(change.path, change.source, change.size, change.digest, wantMode)
+	staged, err := t.stageOwnedTempFileFrom(change.path, change.source, change.size, change.digest, wantMode)
 	if err != nil {
+		_ = os.Remove(change.priorSource)
+		change.priorSource = ""
 		return err
 	}
 	change.staged = staged
 	change.mode = wantMode
 	return nil
+}
+
+func (t *FileTxn) stageStreamedPrior(change *txnChange) error {
+	info, err := os.Lstat(change.path)
+	if err != nil {
+		return verifyFileDigest(change.path, change.expect)
+	}
+	if !info.Mode().IsRegular() {
+		return &TxnConflictError{Path: change.path, Expected: change.expect.describe(), Actual: nonRegularLabel(info)}
+	}
+	digest, size, err := HashFile(change.path)
+	if err != nil {
+		return classifyStateReadError(change.path, err)
+	}
+	if change.expect.SHA256 != "" && change.expect.SHA256 != digest {
+		return &TxnConflictError{Path: change.path, Expected: change.expect.describe(), Actual: "file(sha256=" + digest + ")"}
+	}
+	prior, err := t.stageOwnedTempFileFrom(change.path, change.path, size, digest, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	change.priorExists = true
+	change.priorMode = info.Mode().Perm()
+	change.priorSource = prior
+	change.priorDigest = digest
+	change.priorSize = size
+	return nil
+}
+
+func (t *FileTxn) stageStreamedRemoval(change *txnChange) error {
+	if !change.expect.Exists {
+		return fmt.Errorf("vault: streamed removal of %q requires an existing-file expectation", change.path)
+	}
+	return t.stageStreamedPrior(change)
 }
 
 // stageTempFileFrom copies source into a sibling temp file of dest with the

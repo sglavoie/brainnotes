@@ -1,6 +1,7 @@
 package vaultexport
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -347,6 +348,12 @@ func LoadState(root string) (*State, error) {
 // error when it does not, so a retried apply is safe and a confused one is not
 // silently overwritten.
 func RecordImport(root, journalEntryID string, record Import) error {
+	return RecordImportContext(context.Background(), root, journalEntryID, record)
+}
+
+// RecordImportContext is RecordImport for an import that already owns the
+// vault-wide checkpoint admission.
+func RecordImportContext(ctx context.Context, root, journalEntryID string, record Import) error {
 	if strings.TrimSpace(journalEntryID) == "" {
 		return fmt.Errorf("vaultexport: journal entry identity is required")
 	}
@@ -357,7 +364,7 @@ func RecordImport(root, journalEntryID string, record Import) error {
 	if err != nil {
 		return err
 	}
-	barrier, err := joinBarrier(root)
+	_, barrier, err := joinBarrierContext(ctx, root)
 	if err != nil {
 		return err
 	}
@@ -464,9 +471,14 @@ func hexObjectName(s string) bool {
 // that joined after a vault lock would close a cycle against a checkpoint's
 // settle pass.
 func joinBarrier(root string) (func(), error) {
-	release, err := checkpoint.Join(root)
+	_, release, err := joinBarrierContext(context.Background(), root)
+	return release, err
+}
+
+func joinBarrierContext(ctx context.Context, root string) (context.Context, func(), error) {
+	joinedCtx, release, err := checkpoint.JoinContext(ctx, root)
 	if err != nil {
-		return nil, fmt.Errorf("vaultexport: %w", err)
+		return ctx, nil, fmt.Errorf("vaultexport: %w", err)
 	}
-	return release, nil
+	return joinedCtx, release, nil
 }

@@ -43,8 +43,8 @@
 //
 // So barrierDoors names every door, with a sentence saying what would be caught
 // half-done without it, and the check runs in both directions: every listed door
-// must still reach the barrier, and every production call to checkpoint.Join or
-// checkpoint.Hold must be inside a listed door. A new writer package is
+// must still reach the barrier, and every production call to checkpoint.Join,
+// checkpoint.JoinContext, or checkpoint.Hold must be inside a listed door. A new writer package is
 // therefore a prompt to write that sentence rather than a silent gap.
 //
 // # The journal handoff annotation

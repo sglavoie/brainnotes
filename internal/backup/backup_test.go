@@ -39,27 +39,7 @@ func TestCreateArchivesVaultExcludingBackupsAndGit(t *testing.T) {
 	}
 
 	entries := readArchiveEntries(t, result.ArchivePath)
-	if _, ok := entries["Daily.md"]; !ok {
-		t.Fatalf("archive missing note: %#v", entries)
-	}
-	if _, ok := entries["Attachments/image.png"]; !ok {
-		t.Fatalf("archive missing attachment: %#v", entries)
-	}
-	if _, ok := entries["Templates/note.md"]; !ok {
-		t.Fatalf("archive missing template: %#v", entries)
-	}
-	if _, ok := entries[".obsidian/workspace.json"]; !ok {
-		t.Fatalf("archive missing .obsidian data: %#v", entries)
-	}
-	if _, ok := entries[".bnotes/state.json"]; !ok {
-		t.Fatalf("archive missing .bnotes data: %#v", entries)
-	}
-	if _, ok := entries[".git/config"]; ok {
-		t.Fatalf("archive should exclude .git contents: %#v", entries)
-	}
-	if _, ok := entries["backups/old.tar.gz"]; ok {
-		t.Fatalf("archive should exclude backups contents: %#v", entries)
-	}
+	assertBackupArchiveContents(t, entries)
 
 	if result.Files != 5 {
 		t.Fatalf("Files = %d, want 5", result.Files)
@@ -68,6 +48,28 @@ func TestCreateArchivesVaultExcludingBackupsAndGit(t *testing.T) {
 	wantBytes := int64(len("# Daily\n") + len("png-bytes") + len("---\ntitle: Template\n---\n") + len("{\"foo\":true}") + len("{\"cursor\":1}"))
 	if result.Bytes != wantBytes {
 		t.Fatalf("Bytes = %d, want %d", result.Bytes, wantBytes)
+	}
+}
+
+func assertBackupArchiveContents(t *testing.T, entries map[string]tar.Header) {
+	t.Helper()
+	for _, name := range []string{
+		"Daily.md", "Attachments/image.png", "Templates/note.md",
+		".obsidian/workspace.json", ".bnotes/state.json",
+	} {
+		if _, ok := entries[name]; !ok {
+			t.Errorf("archive missing %s: %#v", name, entries)
+		}
+	}
+	for _, name := range []string{".git/config", "backups/old.tar.gz", ".bnotes/checkpoint.json"} {
+		if _, ok := entries[name]; ok {
+			t.Errorf("archive should exclude %s: %#v", name, entries)
+		}
+	}
+	for name := range entries {
+		if strings.HasPrefix(name, ".bnotes/locks/") {
+			t.Errorf("archive should exclude machine-local lock %s: %#v", name, entries)
+		}
 	}
 }
 
@@ -119,6 +121,9 @@ func TestRestoreWipeRemovesOtherFilesAndPreservesBackupsAndGit(t *testing.T) {
 		"Daily.md":                "old\n",
 		".git/config":             "git data\n",
 		"Scratch/keep.txt":        "wipe me\n",
+		".bnotes/locks/live.lock": "held inode\n",
+		".bnotes/checkpoint.json": "live announcement\n",
+		".bnotes/state.json":      "wipe sidecar\n",
 		"backups/existing.tar.gz": "existing-backup",
 		"backups/wipe.tar.gz":     "",
 	})
@@ -149,6 +154,11 @@ func TestRestoreWipeRemovesOtherFilesAndPreservesBackupsAndGit(t *testing.T) {
 		t.Fatalf("Scratch/keep.txt should be removed, stat err = %v", err)
 	}
 	assertFileContent(t, filepath.Join(vaultRoot, ".git", "config"), "git data\n")
+	assertFileContent(t, filepath.Join(vaultRoot, ".bnotes", "locks", "live.lock"), "held inode\n")
+	assertFileContent(t, filepath.Join(vaultRoot, ".bnotes", "checkpoint.json"), "live announcement\n")
+	if _, err := os.Stat(filepath.Join(vaultRoot, ".bnotes", "state.json")); !os.IsNotExist(err) {
+		t.Fatalf("portable sidecar should be removed during wipe, stat err = %v", err)
+	}
 	if _, err := os.Stat(archivePath); err != nil {
 		t.Fatalf("source archive in backups should remain, stat err = %v", err)
 	}
@@ -157,11 +167,41 @@ func TestRestoreWipeRemovesOtherFilesAndPreservesBackupsAndGit(t *testing.T) {
 func TestRestoreRejectsUnsafeArchiveEntries(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		entries []archiveFixtureEntry
-		wantErr string
-	}{
+	for _, test := range unsafeArchiveCases() {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			vaultRoot := t.TempDir()
+			writeFiles(t, vaultRoot, map[string]string{
+				"Marker.md":             "unchanged\n",
+				"backups/unsafe.tar.gz": "",
+			})
+
+			archivePath := filepath.Join(vaultRoot, "backups", "unsafe.tar.gz")
+			writeArchive(t, archivePath, test.entries)
+
+			_, err := Restore(vaultRoot, "backups/unsafe.tar.gz", RestoreOptions{})
+			if err == nil {
+				t.Fatalf("Restore returned nil error")
+			}
+			if !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("Restore error = %q, want substring %q", err, test.wantErr)
+			}
+
+			assertFileContent(t, filepath.Join(vaultRoot, "Marker.md"), "unchanged\n")
+		})
+	}
+}
+
+type unsafeArchiveCase struct {
+	name    string
+	entries []archiveFixtureEntry
+	wantErr string
+}
+
+func unsafeArchiveCases() []unsafeArchiveCase {
+	return []unsafeArchiveCase{
 		{
 			name: "absolute path",
 			entries: []archiveFixtureEntry{
@@ -181,7 +221,28 @@ func TestRestoreRejectsUnsafeArchiveEntries(t *testing.T) {
 			entries: []archiveFixtureEntry{
 				{name: "backups/evil.md", body: "nope"},
 			},
-			wantErr: "targets backups/",
+			wantErr: "reserved machine-local state",
+		},
+		{
+			name: "git target",
+			entries: []archiveFixtureEntry{
+				{name: ".Git/config", body: "nope"},
+			},
+			wantErr: "reserved machine-local state",
+		},
+		{
+			name: "checkpoint lock target",
+			entries: []archiveFixtureEntry{
+				{name: ".bnotes/LOCKS/checkpoint.lock", body: "nope"},
+			},
+			wantErr: "reserved machine-local state",
+		},
+		{
+			name: "checkpoint record target",
+			entries: []archiveFixtureEntry{
+				{name: ".bnotes/CHECKPOINT.json", body: "nope"},
+			},
+			wantErr: "reserved machine-local state",
 		},
 		{
 			name: "duplicate entry",
@@ -212,32 +273,6 @@ func TestRestoreRejectsUnsafeArchiveEntries(t *testing.T) {
 			},
 			wantErr: "unsupported type",
 		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			vaultRoot := t.TempDir()
-			writeFiles(t, vaultRoot, map[string]string{
-				"Marker.md":             "unchanged\n",
-				"backups/unsafe.tar.gz": "",
-			})
-
-			archivePath := filepath.Join(vaultRoot, "backups", "unsafe.tar.gz")
-			writeArchive(t, archivePath, test.entries)
-
-			_, err := Restore(vaultRoot, "backups/unsafe.tar.gz", RestoreOptions{})
-			if err == nil {
-				t.Fatalf("Restore returned nil error")
-			}
-			if !strings.Contains(err.Error(), test.wantErr) {
-				t.Fatalf("Restore error = %q, want substring %q", err, test.wantErr)
-			}
-
-			assertFileContent(t, filepath.Join(vaultRoot, "Marker.md"), "unchanged\n")
-		})
 	}
 }
 
@@ -271,11 +306,117 @@ func TestRestoreOverlayRejectsDestinationConflictsBeforeWriting(t *testing.T) {
 	}
 }
 
+func TestRestoreWipeReplacesConflictingShapesAndKeepsArchivedEmptyDirectories(t *testing.T) {
+	vaultRoot := t.TempDir()
+	writeFiles(t, vaultRoot, map[string]string{
+		"AsDirectory/old.md": "old\n",
+		"AsFile":             "blocks directory\n",
+		"Deep":               "blocks several directories\n",
+	})
+	if err := os.MkdirAll(filepath.Join(vaultRoot, "Restricted", "stale-empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFiles(t, vaultRoot, map[string]string{
+		"Restricted/stale-locked/child.md": "stale\n",
+	})
+	if err := os.Chmod(filepath.Join(vaultRoot, "Restricted", "stale-locked"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(vaultRoot, "Restricted"), 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(filepath.Join(vaultRoot, "Restricted"), 0o700)
+		_ = os.Chmod(filepath.Join(vaultRoot, "Restricted", "stale-locked"), 0o700)
+	})
+	if err := os.Symlink("AsFile", filepath.Join(vaultRoot, "AsSymlink")); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(vaultRoot, "backups", "shapes.tar.gz")
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeArchive(t, archivePath, []archiveFixtureEntry{
+		{name: "AsDirectory", body: "now a file\n"},
+		{name: "AsFile/child.md", body: "nested\n"},
+		{name: "AsSymlink", body: "regular\n"},
+		{name: "Deep/A/B/C.md", body: "deep\n"},
+		{name: "Empty/", kind: tar.TypeDir},
+		{name: "Restricted/", kind: tar.TypeDir, mode: 0o500},
+		{name: "Restricted/keep.md", body: "kept\n"},
+		{name: "LockedZero/", kind: tar.TypeDir, modeSet: true, mode: 0o000},
+		{name: "LockedZero/inside.md", body: "zero mode\n"},
+		{name: "SearchOnly/", kind: tar.TypeDir, mode: 0o100},
+		{name: "SearchOnly/inside.md", body: "search only\n"},
+	})
+	if _, err := Restore(vaultRoot, archivePath, RestoreOptions{Wipe: true}); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	assertRestoredConflictingShapes(t, vaultRoot)
+}
+
+func assertRestoredConflictingShapes(t *testing.T, vaultRoot string) {
+	t.Helper()
+	assertFileContent(t, filepath.Join(vaultRoot, "AsDirectory"), "now a file\n")
+	assertFileContent(t, filepath.Join(vaultRoot, "AsFile", "child.md"), "nested\n")
+	assertFileContent(t, filepath.Join(vaultRoot, "AsSymlink"), "regular\n")
+	assertFileContent(t, filepath.Join(vaultRoot, "Deep", "A", "B", "C.md"), "deep\n")
+	assertFileContent(t, filepath.Join(vaultRoot, "Restricted", "keep.md"), "kept\n")
+	if _, err := os.Stat(filepath.Join(vaultRoot, "Restricted", "stale-empty")); !os.IsNotExist(err) {
+		t.Fatalf("stale restricted child survived: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(vaultRoot, "Restricted", "stale-locked")); !os.IsNotExist(err) {
+		t.Fatalf("stale mode-000 subtree survived: %v", err)
+	}
+	if info, err := os.Stat(filepath.Join(vaultRoot, "Empty")); err != nil || !info.IsDir() {
+		t.Fatalf("archived empty directory was not preserved: info=%v err=%v", info, err)
+	}
+	assertRestrictiveRestoredDir(t, vaultRoot, "LockedZero", 0o000, "zero mode\n")
+	assertRestrictiveRestoredDir(t, vaultRoot, "SearchOnly", 0o100, "search only\n")
+}
+
+func assertRestrictiveRestoredDir(t *testing.T, root, name string, mode os.FileMode, body string) {
+	t.Helper()
+	path := filepath.Join(root, name)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat restrictive directory %s: %v", name, err)
+	}
+	if got := info.Mode().Perm(); got != mode {
+		t.Fatalf("%s mode = %o, want %o", name, got, mode)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("reopen restrictive directory %s: %v", name, err)
+	}
+	assertFileContent(t, filepath.Join(path, "inside.md"), body)
+}
+
+func TestRestoreKeepsBnotesContainerOwnerAccessible(t *testing.T) {
+	vaultRoot := t.TempDir()
+	archivePath := filepath.Join(vaultRoot, "backups", "sidecar.tar.gz")
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeArchive(t, archivePath, []archiveFixtureEntry{{name: ".bnotes/", kind: tar.TypeDir, mode: 0o400}})
+	if _, err := Restore(vaultRoot, archivePath, RestoreOptions{}); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(vaultRoot, ".bnotes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o700 != 0o700 {
+		t.Fatalf(".bnotes mode = %o, want owner rwx", info.Mode().Perm())
+	}
+}
+
 type archiveFixtureEntry struct {
 	name     string
 	body     string
 	kind     byte
 	linkname string
+	mode     int64
+	modeSet  bool
 }
 
 func writeFiles(t *testing.T, root string, files map[string]string) {
@@ -304,32 +445,7 @@ func writeArchive(t *testing.T, archivePath string, entries []archiveFixtureEntr
 	tw := tar.NewWriter(gzw)
 
 	for _, entry := range entries {
-		kind := entry.kind
-		if kind == 0 {
-			kind = tar.TypeReg
-		}
-
-		header := &tar.Header{
-			Name:     entry.name,
-			Typeflag: kind,
-			Mode:     0o644,
-			Linkname: entry.linkname,
-		}
-		if kind == tar.TypeDir {
-			header.Mode = 0o755
-		}
-		if kind == tar.TypeReg || kind == tar.TypeRegA {
-			header.Size = int64(len(entry.body))
-		}
-
-		if err := tw.WriteHeader(header); err != nil {
-			t.Fatalf("WriteHeader(%q): %v", entry.name, err)
-		}
-		if kind == tar.TypeReg || kind == tar.TypeRegA {
-			if _, err := io.WriteString(tw, entry.body); err != nil {
-				t.Fatalf("Write(%q): %v", entry.name, err)
-			}
-		}
+		writeArchiveFixtureEntry(t, tw, entry)
 	}
 
 	if err := tw.Close(); err != nil {
@@ -341,6 +457,35 @@ func writeArchive(t *testing.T, archivePath string, entries []archiveFixtureEntr
 	if err := file.Close(); err != nil {
 		t.Fatalf("file.Close(): %v", err)
 	}
+}
+
+func writeArchiveFixtureEntry(t *testing.T, tw *tar.Writer, entry archiveFixtureEntry) {
+	kind := entry.kind
+	if kind == 0 {
+		kind = tar.TypeReg
+	}
+	header := &tar.Header{Name: entry.name, Typeflag: kind, Mode: fixtureMode(entry), Linkname: entry.linkname}
+	if kind == tar.TypeReg || kind == tar.TypeRegA {
+		header.Size = int64(len(entry.body))
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		t.Fatalf("WriteHeader(%q): %v", entry.name, err)
+	}
+	if kind == tar.TypeReg || kind == tar.TypeRegA {
+		if _, err := io.WriteString(tw, entry.body); err != nil {
+			t.Fatalf("Write(%q): %v", entry.name, err)
+		}
+	}
+}
+
+func fixtureMode(entry archiveFixtureEntry) int64 {
+	if entry.modeSet || entry.mode != 0 {
+		return entry.mode
+	}
+	if entry.kind == tar.TypeDir {
+		return 0o755
+	}
+	return 0o644
 }
 
 func readArchiveEntries(t *testing.T, archivePath string) map[string]tar.Header {

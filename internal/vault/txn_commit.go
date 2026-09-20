@@ -25,44 +25,98 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 		return err
 	}
 	defer t.unlockPaths()
-	if err := t.stage(); err != nil {
-		t.cleanupStaged()
-		return err
-	}
-	if journaler != nil {
-		for _, path := range t.order {
-			if err := journaler.Capture(path); err != nil {
-				t.cleanupStaged()
-				return err
-			}
-		}
-	}
-
-	// Staging fsyncs each temp file but not the directory entry that names it, so
-	// the parents are synced here: the intent written next refers to those files
-	// by path, and a record pointing at a name that did not survive the crash
-	// would describe work nothing can finish.
-	syncParentDirs(t.order)
-	txnCrash(txnCrashStaged)
-
-	// Everything the transaction needs is now durable and nothing observable has
-	// changed yet. The intent is the statement that makes the next few renames
-	// recoverable; a transaction that cannot write one does not start, because an
-	// unrecorded partial application is precisely the state this protocol exists
-	// to remove.
-	intent, err := t.writeIntent()
+	intent, err := t.prepareCommit(journaler)
 	if err != nil {
-		t.cleanupStaged()
 		return err
 	}
+	t.intent = intent
 	// Clearing is idempotent. The success path calls it explicitly once every
 	// destination is durable; every failure path falls through to this deferred
 	// call, which is correct because Commit is returning to a caller that has
 	// already been told the outcome — the record only ever needs to outlive a
 	// process that never returns.
-	defer func() { _ = intent.clear() }()
+	retainIntent := false
+	defer func() {
+		t.intent = nil
+		t.abandonTempOwners()
+		if retainIntent {
+			intent.retain()
+		} else {
+			_ = intent.clear()
+		}
+	}()
 	txnCrash(txnCrashIntent)
 
+	if err := t.applyPrepared(); err != nil {
+		return err
+	}
+	if err := syncParentDirs(t.root, t.order); err != nil {
+		retainIntent = true
+		return fmt.Errorf("vault: sync committed transaction: %w", err)
+	}
+	txnCrash(txnCrashSynced)
+	// Durable completion, so recovery sources and then the intent may go. Cleanup
+	// failures are reported and leave the record for the next recovery pass;
+	// otherwise a large streamed preimage could become an unowned permanent leak.
+	if err := intent.clear(); err != nil {
+		retainIntent = true
+		return fmt.Errorf("vault: clear committed transaction: %w", err)
+	}
+	// Every mutation landed. A temp file that could not be unlinked afterwards
+	// is reported here rather than through the rollback path, because undoing a
+	// committed exchange over a housekeeping failure would be the destructive
+	// answer to the harmless problem.
+	return t.cleanupFailure()
+}
+
+func (t *FileTxn) prepareCommit(journaler TxnJournal) (*txnIntent, error) {
+	if err := t.stage(); err != nil {
+		t.cleanupStaged()
+		return nil, err
+	}
+	if journaler != nil {
+		for _, path := range t.order {
+			if err := journaler.Capture(path); err != nil {
+				t.cleanupStaged()
+				return nil, err
+			}
+		}
+	}
+	// Staged names must be durable before the intent refers to them. Replacements
+	// now live in the private transaction directory, so syncing destination
+	// parents would neither publish these entries nor be possible for a new
+	// nested destination whose parents intentionally do not exist yet.
+	if err := t.syncTempOwnerDir(); err != nil {
+		t.cleanupStaged()
+		return nil, err
+	}
+	txnCrash(txnCrashStaged)
+	intent, err := t.writeIntent()
+	if err != nil {
+		t.cleanupStaged()
+		return nil, err
+	}
+	txnCrash(txnCrashHandoff)
+	// The durable transaction intent now owns every staged name. Publish that
+	// transfer before releasing the owner liveness lock, so a surviving owner
+	// record can never race the live intent and delete its recovery material.
+	if err := t.handoffTempOwner(); err != nil {
+		// The main intent is already durable, so an uncertain handoff is itself a
+		// recovery state. Leave both records and their staged bytes in place, but
+		// release liveness so the next open can roll the intent forward before it
+		// processes the untransferred owner record.
+		intent.retain()
+		t.retainTempOwner()
+		return nil, &TxnIntentError{
+			IntentPath: intent.path,
+			Paths:      append([]string(nil), t.order...),
+			Err:        fmt.Errorf("hand off staged files to transaction intent: %w", err),
+		}
+	}
+	return intent, nil
+}
+
+func (t *FileTxn) applyPrepared() error {
 	applied := make([]*txnChange, 0, len(t.order))
 	for i, path := range t.order {
 		change := t.changes[path]
@@ -76,17 +130,7 @@ func (t *FileTxn) Commit(journaler TxnJournal) error {
 		}
 		txnCrash(txnCrashApplied(i))
 	}
-	syncParentDirs(t.order)
-	txnCrash(txnCrashSynced)
-	// Durable completion, so the intent may go. A record that outlives this call
-	// costs nothing but a no-op recovery pass, which is why the failure is not
-	// worth turning a landed commit into an error over.
-	_ = intent.clear()
-	// Every mutation landed. A temp file that could not be unlinked afterwards
-	// is reported here rather than through the rollback path, because undoing a
-	// committed exchange over a housekeeping failure would be the destructive
-	// answer to the harmless problem.
-	return t.cleanupFailure()
+	return nil
 }
 
 // lockPaths takes one exclusive lock per planned path and holds it for the whole
@@ -130,9 +174,9 @@ func (t *FileTxn) unlockPaths() {
 	t.locks = nil
 }
 
-// stage verifies every precondition and writes every replacement to a temp file
-// beside its destination. Nothing observable changes until apply renames them,
-// so a failure here leaves the vault untouched.
+// stage verifies every precondition and writes every replacement to the private
+// transaction area on the vault filesystem. Nothing observable changes until
+// apply renames them, so a failure here leaves vault content untouched.
 func (t *FileTxn) stage() error {
 	if err := t.verifyRequirements(); err != nil {
 		return err
@@ -145,8 +189,11 @@ func (t *FileTxn) stage() error {
 	return nil
 }
 
-// stageChange validates one planned path and writes its replacement beside it.
+// stageChange validates one planned path and writes its replacement privately.
 func (t *FileTxn) stageChange(change *txnChange) error {
+	if change.remove && change.streamPrior {
+		return t.stageStreamedRemoval(change)
+	}
 	if change.source != "" {
 		return t.stageStreamedChange(change)
 	}
@@ -165,11 +212,11 @@ func (t *FileTxn) stageChange(change *txnChange) error {
 	if change.remove {
 		return nil
 	}
-	wantMode, err := stagedMode(path, change.mode, mode, exists)
+	wantMode, err := stagedMode(t.root, path, change.mode, mode, exists)
 	if err != nil {
 		return err
 	}
-	staged, err := stageTempFile(path, change.data, wantMode)
+	staged, err := t.stageOwnedTempFile(path, change.data, wantMode)
 	if err != nil {
 		return err
 	}
@@ -181,7 +228,7 @@ func (t *FileTxn) stageChange(change *txnChange) error {
 // stagedMode resolves the mode a staged replacement is written with. A zero
 // planned mode preserves an existing destination's mode, or derives a new file's
 // from the process umask.
-func stagedMode(path string, planned, current os.FileMode, exists bool) (os.FileMode, error) {
+func stagedMode(root, path string, planned, current os.FileMode, exists bool) (os.FileMode, error) {
 	if planned != 0 {
 		return planned, nil
 	}
@@ -191,16 +238,20 @@ func stagedMode(path string, planned, current os.FileMode, exists bool) (os.File
 	// The probe creates a real file to read the umask off, so the parent has to
 	// exist first. Staging creates it anyway; doing it here is what lets a
 	// transaction write into a folder the vault does not have yet.
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return 0, fmt.Errorf("vault: mkdir %q: %w", dir, err)
-	}
-	return defaultNewFileMode(dir)
+	return defaultNewFileMode(root)
 }
 
 func (t *FileTxn) apply(change *txnChange) error {
 	if err := t.verifyRequirements(); err != nil {
 		return err
+	}
+	// Parent directories are created only after the recovery intent is durable.
+	// A killed pre-intent transaction therefore has no content-tree artifacts,
+	// while a killed apply is completed by intent recovery.
+	if !change.remove {
+		if err := EnsureDirDurable(filepath.Dir(change.path), 0o755); err != nil {
+			return err
+		}
 	}
 	if err := t.verifyUnchangedSinceStage(change); err != nil {
 		return err
@@ -264,7 +315,11 @@ func (t *FileTxn) claimCreate(change *txnChange) error {
 // the concurrent writer's version in place and reports a conflict. The
 // destination name exists continuously in both outcomes.
 func (t *FileTxn) claimOverwrite(change *txnChange) error {
-	outcome, err := compareAndSwap(&t.hooks, change.staged, change.path, ExpectContent(change.priorData))
+	expect := ExpectContent(change.priorData)
+	if change.priorSource != "" {
+		expect = ExpectHash(change.priorDigest)
+	}
+	outcome, err := compareAndSwap(&t.hooks, change.staged, change.path, expect)
 	if outcome.sourceConsumed {
 		change.staged = ""
 	}
@@ -283,7 +338,11 @@ func (t *FileTxn) claimRemoval(change *txnChange) error {
 		change.applied = true
 		return nil
 	}
-	custody, err := takeVerifiedCustody(&t.hooks, change.path, ExpectContent(change.priorData))
+	expect := ExpectContent(change.priorData)
+	if change.priorSource != "" {
+		expect = ExpectHash(change.priorDigest)
+	}
+	custody, err := takeVerifiedCustody(&t.hooks, change.path, expect)
 	if err != nil {
 		return err
 	}
@@ -318,10 +377,10 @@ func (t *FileTxn) verifyRequirements() error {
 // It is a pre-check only: claim re-judges the same expectation once it owns the
 // destination, which is what covers the window this check cannot.
 func (t *FileTxn) verifyUnchangedSinceStage(change *txnChange) error {
-	if change.source != "" {
-		// A streamed create judges its destination by stat, so a file another
-		// writer dropped there is refused without being read — which is the same
-		// reason this change never held its own bytes either.
+	if change.source != "" || change.streamPrior {
+		if change.priorExists {
+			return verifyFileDigest(change.path, ExpectHash(change.priorDigest))
+		}
 		return verifyAbsent(change.path)
 	}
 	expect := ExpectMissing()

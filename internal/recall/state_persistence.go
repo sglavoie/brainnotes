@@ -1,6 +1,7 @@
 package recall
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +34,7 @@ func (store *StateStore) mutateLocked(
 	// is the nested one that costs nothing — and a join taken only down there
 	// would be a writer asking for the barrier while holding a vault lock, which
 	// is the one ordering internal/checkpoint says closes a cycle.
-	barrier, err := checkpoint.Join(root)
+	joinedCtx, barrier, err := checkpoint.JoinContext(context.Background(), root)
 	if err != nil {
 		return fmt.Errorf("recall: %w", err)
 	}
@@ -51,7 +52,7 @@ func (store *StateStore) mutateLocked(
 	if err := mutate(&state, paths); err != nil {
 		return err
 	}
-	return store.saveLocked(state)
+	return store.saveLocked(joinedCtx, state)
 }
 
 func (store *StateStore) prepareWriteLocked(now time.Time) (recallStateFile, map[string]struct{}, error) {
@@ -216,7 +217,7 @@ func cloneRecallState(state recallStateFile) recallStateFile {
 	return clone
 }
 
-func (store *StateStore) saveLocked(state recallStateFile) error {
+func (store *StateStore) saveLocked(ctx context.Context, state recallStateFile) error {
 	state.Version = recallStateVersion
 	if state.Records == nil {
 		state.Records = map[string]recallStateRecord{}
@@ -234,7 +235,7 @@ func (store *StateStore) saveLocked(state recallStateFile) error {
 		return fmt.Errorf("recall: encode state: %w", err)
 	}
 	data = append(data, '\n')
-	if err := writeRecallStateAtomic(root, statePath, data, 0o644); err != nil {
+	if err := writeRecallStateAtomic(ctx, root, statePath, data, 0o644); err != nil {
 		return err
 	}
 	snapshot := cloneRecallState(state)
@@ -361,6 +362,6 @@ func (store *StateStore) currentTime() time.Time {
 // which owns the location refusal, the path-continuous replacement, and the
 // exact-path snapshot. Reads are untouched: recall still ranks and returns
 // context under a refused root, it just cannot record there.
-func writeRecallStateAtomic(vaultRoot, statePath string, data []byte, permissions os.FileMode) error {
-	return vaultstate.Save(vaultRoot, "recall-state", statePath, data, permissions)
+func writeRecallStateAtomic(ctx context.Context, vaultRoot, statePath string, data []byte, permissions os.FileMode) error {
+	return vaultstate.SaveContext(ctx, vaultRoot, "recall-state", statePath, data, permissions)
 }

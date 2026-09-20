@@ -35,7 +35,10 @@ type barrierDoor struct {
 }
 
 var (
-	joinsBarrier   = []string{"checkpoint.Join", "checkpoint.JoinWithin"}
+	joinsBarrier = []string{
+		"checkpoint.Join", "checkpoint.JoinWithin",
+		"checkpoint.JoinContext", "checkpoint.JoinContextWithin",
+	}
 	holdsBarrier   = []string{"checkpoint.Hold"}
 	joinsViaHelper = []string{"joinBarrier"}
 )
@@ -51,26 +54,44 @@ var barrierDoors = []barrierDoor{
 	{
 		file:  "internal/noteops/journal.go",
 		fn:    "BeginOperation",
-		calls: joinsBarrier,
+		calls: []string{"BeginOperationContext"},
 		why:   "every journaled note mutation begins here, and the join must precede the first vault lock",
 	},
 	{
 		file:  "internal/noteops/journal.go",
-		fn:    "SnapshotEntry",
+		fn:    "BeginOperationContext",
 		calls: joinsBarrier,
+		why:   "the context-aware implementation owns the admission and passes its nesting token through Git finalization",
+	},
+	{
+		file:  "internal/noteops/journal.go",
+		fn:    "SnapshotEntry",
+		calls: []string{"SnapshotEntryContext"},
 		why:   "re-snapshotting a finalized entry writes the content history outside BeginOperation",
+	},
+	{
+		file:  "internal/noteops/journal.go",
+		fn:    "SnapshotEntryContext",
+		calls: joinsBarrier,
+		why:   "import recovery reuses its outer admission while a top-level recovery starts a fresh one",
 	},
 	{
 		file:  "internal/noteops/backup_restore.go",
 		fn:    "RestoreBackup",
-		calls: joinsBarrier,
+		calls: holdsBarrier,
 		why:   "--wipe empties the vault before it writes anything back, so the window holds a vault with no notes in it",
 	},
 	{
 		file:  "internal/vaultstate/vaultstate.go",
 		fn:    "Save",
-		calls: joinsBarrier,
+		calls: []string{"SaveContext"},
 		why:   "the one write path for brief.json, cockpit.json and recall.json, each of which is also snapshotted",
+	},
+	{
+		file:  "internal/vaultstate/vaultstate.go",
+		fn:    "SaveContext",
+		calls: joinsBarrier,
+		why:   "the context-aware sidecar writer owns the admission through its exact-path Git snapshot",
 	},
 	{
 		file:  "internal/vaultgit/preflight.go",
@@ -80,6 +101,20 @@ var barrierDoors = []barrierDoor{
 		why:   "the autosave watcher commits the content history on its own schedule, with no joined caller above it",
 	},
 	{
+		file:  "internal/vaultgit/manager.go",
+		recv:  "Manager",
+		fn:    "checkpointMutation",
+		calls: joinsBarrier,
+		why:   "block, watch, and push retry records mutate operational Git state outside the safety lock",
+	},
+	{
+		file:  "internal/vaultgit/manager.go",
+		recv:  "Manager",
+		fn:    "ExternalCommitDue",
+		calls: joinsBarrier,
+		why:   "polling conditionally republishes the persisted watch schedule",
+	},
+	{
 		file:  "internal/vaultimport/lock.go",
 		fn:    "lockImports",
 		calls: joinsBarrier,
@@ -87,8 +122,14 @@ var barrierDoors = []barrierDoor{
 	},
 	{
 		file:  "internal/vaultexport/state.go",
-		fn:    "joinBarrier",
+		fn:    "joinBarrierContext",
 		calls: joinsBarrier,
+		why:   "the context-aware helper supports both fresh export writes and provenance nested under an import",
+	},
+	{
+		file:  "internal/vaultexport/state.go",
+		fn:    "joinBarrier",
+		calls: []string{"joinBarrierContext"},
 		why:   "the helper the three export state writers route through",
 	},
 	{
@@ -99,8 +140,14 @@ var barrierDoors = []barrierDoor{
 	},
 	{
 		file:  "internal/vaultexport/state.go",
+		fn:    "RecordImportContext",
+		calls: []string{"joinBarrierContext"},
+		why:   "the context-aware provenance writer keeps the import-wide admission through ledger publication",
+	},
+	{
+		file:  "internal/vaultexport/state.go",
 		fn:    "RecordImport",
-		calls: joinsViaHelper,
+		calls: []string{"RecordImportContext"},
 		why:   "provenance written between a copy's start and its end would let the peer's change echo back",
 	},
 	{
@@ -133,6 +180,12 @@ var barrierDoors = []barrierDoor{
 		fn:    "save",
 		calls: joinsBarrier,
 		why:   "a worker transition is what a restored vault resumes its schedule from",
+	},
+	{
+		file:  "internal/vaultsyncd/worker.go",
+		fn:    "runRetire",
+		calls: joinsBarrier,
+		why:   "package and receipt retirement is a separately durable sync transition",
 	},
 	{
 		file:  "internal/attachments/store.go",
@@ -232,8 +285,8 @@ func TestEveryWriterJoinsTheBarrier(t *testing.T) {
 // The table above proves every listed door still joins. It cannot prove the
 // table lists every door, because a new writer package is invisible to a list
 // that does not mention it. So this asks the source instead: every production
-// call to checkpoint.Join or checkpoint.Hold must be inside a function the table
-// names.
+// call to checkpoint.Join, checkpoint.JoinContext, or checkpoint.Hold must be
+// inside a function the table names.
 //
 // A new join is therefore not an error — it is a prompt to add the row, with the
 // sentence saying what it protects. That sentence is the part a future reader
@@ -373,8 +426,8 @@ func callName(expr ast.Expr) string {
 	return ""
 }
 
-// barrierCallSites reports the enclosing functions of every checkpoint.Join or
-// checkpoint.Hold call in one file, in barrierDoor.String() form.
+// barrierCallSites reports the enclosing functions of every checkpoint join or
+// hold call in one file, in barrierDoor.String() form.
 func barrierCallSites(path, rel string) ([]string, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, 0)

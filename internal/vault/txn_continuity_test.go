@@ -290,7 +290,6 @@ func TestFileTxnReportsCleanupFailureWithoutUndoingTheWrite(t *testing.T) {
 		t.Skip("root bypasses directory permissions")
 	}
 	root := txnTestRoot(t, map[string]string{"a.md": "old-a\n"})
-	t.Cleanup(func() { _ = os.Chmod(root, 0o755) })
 	txn, err := NewFileTxn(root)
 	if err != nil {
 		t.Fatalf("new txn: %v", err)
@@ -300,11 +299,14 @@ func TestFileTxnReportsCleanupFailureWithoutUndoingTheWrite(t *testing.T) {
 	}
 	// The directory becomes read-only once the exchange has landed, so the
 	// displaced copy can still be read and judged but no longer unlinked.
-	txn.hooks.afterExchange = func(destination, displaced string) error {
-		return os.Chmod(root, 0o555)
-	}
+	forceTxnCleanupFailure(t, txn, root)
 
 	err = txn.Commit(&captureRecorder{})
+	assertTxnCleanupFailure(t, err, root)
+}
+
+func assertTxnCleanupFailure(t *testing.T, err error, root string) {
+	t.Helper()
 	if !IsTxnCleanupFailure(err) {
 		t.Fatalf("commit = %v, want a cleanup failure", err)
 	}
@@ -320,5 +322,20 @@ func TestFileTxnReportsCleanupFailureWithoutUndoingTheWrite(t *testing.T) {
 	}
 	if got := readFileString(t, cleanup.LeftoverPath); got != "old-a\n" {
 		t.Fatalf("the named artifact must still hold the displaced content, got %q", got)
+	}
+}
+
+func forceTxnCleanupFailure(t *testing.T, txn *FileTxn, root string) {
+	t.Helper()
+	var stagedDir string
+	t.Cleanup(func() {
+		_ = os.Chmod(root, 0o755)
+		if stagedDir != "" {
+			_ = os.Chmod(stagedDir, 0o700)
+		}
+	})
+	txn.hooks.afterExchange = func(_ string, displaced string) error {
+		stagedDir = filepath.Dir(displaced)
+		return os.Chmod(stagedDir, 0o500)
 	}
 }

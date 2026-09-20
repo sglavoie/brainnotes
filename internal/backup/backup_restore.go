@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func checkArchiveConflicts(pathKey string, kind entryKind, seen map[string]entryKind) error {
@@ -166,6 +169,443 @@ func applyStage(root, stageDir string, entries []archiveEntry) error {
 	return nil
 }
 
+// applyTransactionalRestore plans every regular-file replacement and wipe
+// removal in one recoverable vault transaction. Its intent is durable before
+// the first destination changes, so a killed restore is rolled forward by the
+// next checkpoint settle pass instead of becoming a copyable half-restore.
+func applyTransactionalRestore(root, stageDir string, entries []archiveEntry, wipe bool) error {
+	desired := desiredRestorePaths(root, entries)
+	if err := enableExistingRestoreAncestors(root, entries); err != nil {
+		return err
+	}
+	if wipe {
+		if err := prepareWipeShapes(root, entries); err != nil {
+			return err
+		}
+	}
+	txn, cleanup, err := planRestoreTransaction(root, stageDir, entries, desired, wipe)
+	if err != nil {
+		return err
+	}
+	if err := txn.Commit(nil); err != nil {
+		return fmt.Errorf("backup restore: commit transaction: %w", err)
+	}
+	dirs := restoredDirectories(entries)
+	if err := materializeRestoreDirs(root, dirs); err != nil {
+		return err
+	}
+	if wipe {
+		if err := cleanupWipedPaths(root, cleanup); err != nil {
+			return err
+		}
+	}
+	return applyRestoreDirModes(root, dirs)
+}
+
+func enableRestoreParents(root string, entries []archiveEntry) error {
+	for _, entry := range entries {
+		dest := filepath.Join(root, filepath.FromSlash(entry.Path))
+		if entry.Kind == entryFile {
+			dest = filepath.Dir(dest)
+		}
+		if err := vault.EnsureDirDurable(dest, 0o755); err != nil {
+			return err
+		}
+		for current := dest; current != root; current = filepath.Dir(current) {
+			info, err := os.Stat(current)
+			if err != nil {
+				return err
+			}
+			if err := os.Chmod(current, info.Mode().Perm()|0o700); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func enableExistingRestoreAncestors(root string, entries []archiveEntry) error {
+	// A previous restore may have died after publishing an archived restrictive
+	// mode but before advancing the outer restore phase. Make every existing
+	// ancestor traversable from the root down before inspecting descendants or
+	// removing wipe conflicts. Missing and non-directory components are handled
+	// by the ordinary materialization/shape pass below.
+	for _, entry := range entries {
+		dest := filepath.Join(root, filepath.FromSlash(entry.Path))
+		if entry.Kind == entryFile {
+			dest = filepath.Dir(dest)
+		}
+		if err := enableExistingRestorePath(root, dest); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func enableExistingRestorePath(root, dest string) error {
+	rel, err := filepath.Rel(root, dest)
+	if err != nil {
+		return err
+	}
+	current := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		if part == "." || part == "" {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("backup restore: inspect recoverable parent %s: %w", current, err)
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		if err := os.Chmod(current, info.Mode().Perm()|0o700); err != nil {
+			return fmt.Errorf("backup restore: make parent %s recoverable: %w", current, err)
+		}
+	}
+	return nil
+}
+
+func planRestoreTransaction(root, stageDir string, entries []archiveEntry, desired map[string]struct{}, wipe bool) (*vault.FileTxn, []string, error) {
+	txn, err := vault.NewFileTxn(root)
+	if err != nil {
+		return nil, nil, fmt.Errorf("backup restore: create transaction: %w", err)
+	}
+	if _, err := planRestoredFiles(root, stageDir, entries, txn); err != nil {
+		return nil, nil, err
+	}
+	if !wipe {
+		return txn, nil, nil
+	}
+	cleanup, err := planWipe(root, txn, desired)
+	if err != nil {
+		return nil, nil, err
+	}
+	return txn, cleanup, nil
+}
+
+func desiredRestorePaths(root string, entries []archiveEntry) map[string]struct{} {
+	desired := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		path := filepath.Join(root, filepath.FromSlash(entry.Path))
+		for path != root {
+			desired[filepath.Clean(path)] = struct{}{}
+			path = filepath.Dir(path)
+		}
+	}
+	return desired
+}
+
+// prepareWipeShapes removes only type conflicts needed to materialize the
+// archive (file->directory, directory/symlink->file). The outer restore intent
+// makes every step resumable; each mutation is synced before the next begins.
+func prepareWipeShapes(root string, entries []archiveEntry) error {
+	ordered := append([]archiveEntry(nil), entries...)
+	sort.Slice(ordered, func(i, j int) bool {
+		return strings.Count(ordered[i].Path, "/") < strings.Count(ordered[j].Path, "/")
+	})
+	for _, entry := range ordered {
+		if err := prepareWipeShape(root, entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func prepareWipeShape(root string, entry archiveEntry) error {
+	dest := filepath.Join(root, filepath.FromSlash(entry.Path))
+	if err := removeConflictingParents(root, filepath.Dir(dest)); err != nil {
+		return err
+	}
+	info, err := os.Lstat(dest)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("backup restore: inspect destination %s: %w", dest, err)
+	}
+	if entry.Kind == entryFile && !info.Mode().IsRegular() || entry.Kind == entryDir && !info.IsDir() {
+		return removeAndSync(dest)
+	}
+	return nil
+}
+
+func removeConflictingParents(root, start string) error {
+	rel, err := filepath.Rel(root, start)
+	if err != nil {
+		return err
+	}
+	current := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("backup restore: inspect parent %s: %w", current, err)
+		}
+		if !info.IsDir() {
+			if err := removeAndSync(current); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+func removeAndSync(path string) error {
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("backup restore: remove conflicting path %s: %w", path, err)
+	}
+	if err := vault.SyncDir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("backup restore: sync removal of %s: %w", path, err)
+	}
+	return nil
+}
+
+func planRestoredFiles(root, stageDir string, entries []archiveEntry, txn *vault.FileTxn) (map[string]struct{}, error) {
+	restored := make(map[string]struct{})
+	for _, entry := range entries {
+		if entry.Kind != entryFile {
+			continue
+		}
+		src := filepath.Join(stageDir, filepath.FromSlash(entry.Path))
+		dest := filepath.Join(root, filepath.FromSlash(entry.Path))
+		digest, size, err := vault.HashFile(src)
+		if err != nil {
+			return nil, fmt.Errorf("backup restore: hash staged file %s: %w", src, err)
+		}
+		expect, err := currentExpectation(dest)
+		if err != nil {
+			return nil, err
+		}
+		if err := txn.ReplaceFrom(dest, src, size, digest, normalizeFileMode(entry.Mode), expect); err != nil {
+			return nil, fmt.Errorf("backup restore: plan %s: %w", entry.Path, err)
+		}
+		restored[filepath.Clean(dest)] = struct{}{}
+	}
+	return restored, nil
+}
+
+func currentExpectation(path string) (vault.FileExpectation, error) {
+	info, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return vault.ExpectMissing(), nil
+	case err != nil:
+		return vault.FileExpectation{}, fmt.Errorf("backup restore: inspect destination %s: %w", path, err)
+	case !info.Mode().IsRegular():
+		return vault.FileExpectation{}, fmt.Errorf("backup restore: destination %s has unsupported type", path)
+	}
+	digest, _, err := vault.HashFile(path)
+	if err != nil {
+		return vault.FileExpectation{}, fmt.Errorf("backup restore: hash destination %s: %w", path, err)
+	}
+	return vault.ExpectHash(digest), nil
+}
+
+func planWipe(root string, txn *vault.FileTxn, restored map[string]struct{}) ([]string, error) {
+	planner := &wipePlanner{root: root, txn: txn, restored: restored}
+	err := filepath.WalkDir(root, planner.visit)
+	if err != nil {
+		return nil, fmt.Errorf("backup restore: plan wipe: %w", err)
+	}
+	sort.Slice(planner.cleanup, func(i, j int) bool {
+		return strings.Count(planner.cleanup[i], string(filepath.Separator)) > strings.Count(planner.cleanup[j], string(filepath.Separator))
+	})
+	return planner.cleanup, nil
+}
+
+type wipePlanner struct {
+	root     string
+	txn      *vault.FileTxn
+	restored map[string]struct{}
+	cleanup  []string
+}
+
+func (p *wipePlanner) visit(current string, entry fs.DirEntry, walkErr error) error {
+	if walkErr != nil || current == p.root {
+		return walkErr
+	}
+	rel, err := filepath.Rel(p.root, current)
+	if err != nil {
+		return err
+	}
+	if isRootExcluded(filepath.ToSlash(rel)) {
+		return skipExcludedEntry(entry)
+	}
+	if entry.IsDir() {
+		if err := enableWipeTraversal(current); err != nil {
+			return err
+		}
+	}
+	if _, ok := p.restored[filepath.Clean(current)]; ok {
+		return nil
+	}
+	if entry.IsDir() {
+		return p.visitDir(current, rel)
+	}
+	return p.visitLeaf(current, entry)
+}
+
+func enableWipeTraversal(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("backup restore: inspect wipe directory %s: %w", dir, err)
+	}
+	mode := info.Mode().Perm()
+	if mode&0o700 == 0o700 {
+		return nil
+	}
+	if err := os.Chmod(dir, mode|0o700); err != nil {
+		return fmt.Errorf("backup restore: make wipe directory traversable %s: %w", dir, err)
+	}
+	if err := vault.SyncDir(dir); err != nil {
+		return fmt.Errorf("backup restore: sync traversable wipe directory %s: %w", dir, err)
+	}
+	return nil
+}
+
+func (p *wipePlanner) visitDir(current, rel string) error {
+	if !strings.EqualFold(filepath.ToSlash(rel), ".bnotes") {
+		p.cleanup = append(p.cleanup, current)
+	}
+	return nil
+}
+
+func (p *wipePlanner) visitLeaf(current string, entry fs.DirEntry) error {
+	info, err := entry.Info()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		p.cleanup = append(p.cleanup, current)
+		return nil
+	}
+	digest, _, err := vault.HashFile(current)
+	if err != nil {
+		return err
+	}
+	return p.txn.RemoveStreamed(current, vault.ExpectHash(digest))
+}
+
+func skipExcludedEntry(entry fs.DirEntry) error {
+	if entry.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+func applyRestoredDirectories(root string, entries []archiveEntry) error {
+	dirs := restoredDirectories(entries)
+	if err := materializeRestoreDirs(root, dirs); err != nil {
+		return err
+	}
+	return applyRestoreDirModes(root, dirs)
+}
+
+func restoredDirectories(entries []archiveEntry) []archiveEntry {
+	dirs := make([]archiveEntry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Kind == entryDir {
+			dirs = append(dirs, entry)
+		}
+	}
+	return dirs
+}
+
+func applyRestoreDirModes(root string, dirs []archiveEntry) error {
+	sort.Slice(dirs, func(i, j int) bool {
+		return strings.Count(dirs[i].Path, "/") > strings.Count(dirs[j].Path, "/")
+	})
+	for _, entry := range dirs {
+		if err := applyRestoreDirMode(root, entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func materializeRestoreDirs(root string, dirs []archiveEntry) error {
+	for _, entry := range dirs {
+		dest := filepath.Join(root, filepath.FromSlash(entry.Path))
+		if err := vault.EnsureDirDurable(dest, 0o755); err != nil {
+			return fmt.Errorf("backup restore: create directory %s: %w", dest, err)
+		}
+		if err := vault.SyncDir(filepath.Dir(dest)); err != nil {
+			return fmt.Errorf("backup restore: sync parent of %s: %w", dest, err)
+		}
+		info, err := os.Stat(dest)
+		if err != nil {
+			return fmt.Errorf("backup restore: stat directory %s: %w", dest, err)
+		}
+		if err := os.Chmod(dest, info.Mode().Perm()|0o700); err != nil {
+			return fmt.Errorf("backup restore: make directory %s recoverable: %w", dest, err)
+		}
+	}
+	return nil
+}
+
+func applyRestoreDirMode(root string, entry archiveEntry) error {
+	dest := filepath.Join(root, filepath.FromSlash(entry.Path))
+	mode := normalizeDirMode(entry.Mode)
+	if strings.EqualFold(entry.Path, ".bnotes") {
+		mode |= 0o700
+	}
+	handle, err := os.Open(dest)
+	if err != nil {
+		return fmt.Errorf("backup restore: open directory %s for final mode: %w", dest, err)
+	}
+	if err := handle.Chmod(mode); err != nil {
+		_ = handle.Close()
+		return fmt.Errorf("backup restore: chmod directory %s: %w", dest, err)
+	}
+	if err := handle.Sync(); err != nil {
+		_ = handle.Close()
+		return fmt.Errorf("backup restore: sync directory %s: %w", dest, err)
+	}
+	if err := handle.Close(); err != nil {
+		return fmt.Errorf("backup restore: close directory %s: %w", dest, err)
+	}
+	if err := vault.SyncDir(filepath.Dir(dest)); err != nil {
+		return fmt.Errorf("backup restore: sync parent of %s: %w", dest, err)
+	}
+	return nil
+}
+
+func cleanupWipedPaths(root string, paths []string) error {
+	for _, candidate := range paths {
+		if err := cleanupWipedPath(candidate); err != nil {
+			return err
+		}
+	}
+	return vault.SyncDir(root)
+}
+
+func cleanupWipedPath(candidate string) error {
+	info, err := os.Lstat(candidate)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("backup restore: inspect stale path %s: %w", candidate, err)
+	}
+	if err := os.Remove(candidate); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		kind := "path"
+		if info.IsDir() {
+			kind = "directory"
+		}
+		return fmt.Errorf("backup restore: remove stale %s %s: %w", kind, candidate, err)
+	}
+	return vault.SyncDir(filepath.Dir(candidate))
+}
+
 // wipeVault empties the vault of everything a restore is able to put back.
 //
 // What it skips is not a list of conveniences, it is exactly isRootExcluded —
@@ -186,13 +626,46 @@ func wipeVault(root string) error {
 		if isRootExcluded(entry.Name()) {
 			continue
 		}
+		if strings.EqualFold(entry.Name(), ".bnotes") && entry.IsDir() {
+			if err := wipeBnotes(filepath.Join(root, entry.Name())); err != nil {
+				return err
+			}
+			continue
+		}
 
 		target := filepath.Join(root, entry.Name())
 		if err := os.RemoveAll(target); err != nil {
 			return fmt.Errorf("backup restore: remove %s during wipe: %w", target, err)
 		}
 	}
+	if err := vault.SyncDir(root); err != nil {
+		return fmt.Errorf("backup restore: sync wiped vault root: %w", err)
+	}
+	return nil
+}
 
+// wipeBnotes removes portable sidecar state while retaining the live checkpoint
+// record and lock inodes. Replacing a held lock path would let another process
+// enter the same critical section while the original holder still believes it
+// owns it.
+func wipeBnotes(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("backup restore: read sidecar directory %s: %w", dir, err)
+	}
+	for _, entry := range entries {
+		rel := ".bnotes/" + entry.Name()
+		if isRootExcluded(rel) {
+			continue
+		}
+		target := filepath.Join(dir, entry.Name())
+		if err := os.RemoveAll(target); err != nil {
+			return fmt.Errorf("backup restore: remove %s during wipe: %w", target, err)
+		}
+	}
+	if err := vault.SyncDir(dir); err != nil {
+		return fmt.Errorf("backup restore: sync sidecar directory: %w", err)
+	}
 	return nil
 }
 
@@ -279,6 +752,22 @@ func isWithinRoot(root, candidate string) bool {
 }
 
 func isRootExcluded(relPath string) bool {
+	// Checkpoint artifacts describe a live process on this machine, not vault
+	// state. Copying the announcement would restore a dead client's identity,
+	// and copying lock files would make the archive's file/byte accounting depend
+	// on whether the vault happened to have been written before the backup.
+	// Preserve the lock directory during a wipe for the same reason .git is
+	// preserved: a running process may still hold one of its inodes.
+	if strings.EqualFold(relPath, checkpoint.RecordRel) ||
+		strings.EqualFold(relPath, ".bnotes/locks") ||
+		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/locks/") ||
+		strings.EqualFold(relPath, ".bnotes/txn") ||
+		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/txn/") ||
+		strings.EqualFold(relPath, ".bnotes/restore") ||
+		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/restore/") {
+		return true
+	}
+
 	firstSegment := relPath
 	if index := strings.IndexByte(relPath, '/'); index >= 0 {
 		firstSegment = relPath[:index]
@@ -324,11 +813,10 @@ func normalizeFileMode(mode fs.FileMode) fs.FileMode {
 }
 
 func normalizeDirMode(mode fs.FileMode) fs.FileMode {
-	if perm := mode.Perm(); perm != 0 {
-		return perm
-	}
-
-	return 0o755
+	// A mode of zero is a real archived permission set, not a missing value.
+	// Restore materializes directories as owner-accessible first and applies this
+	// exact final mode only after their descendants are durable.
+	return mode.Perm()
 }
 
 func writeReaderAtomic(dest string, reader io.Reader, mode fs.FileMode) error {
@@ -366,6 +854,9 @@ func writeReaderAtomic(dest string, reader io.Reader, mode fs.FileMode) error {
 	}
 	if err := os.Rename(tmp.Name(), dest); err != nil {
 		return fmt.Errorf("rename temp file into %s: %w", dest, err)
+	}
+	if err := vault.SyncDir(parent); err != nil {
+		return fmt.Errorf("sync parent directory for %s: %w", dest, err)
 	}
 
 	committed = true

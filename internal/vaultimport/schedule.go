@@ -162,7 +162,7 @@ type Drained struct {
 // make a partial drain indistinguishable from one that did nothing, and the
 // difference is what the peer has already been told.
 func Drain(root string, opts Options) (*Drained, error) {
-	release, acquired, err := lockImports(root)
+	ctx, release, acquired, err := lockImports(root)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +170,7 @@ func Drain(root string, opts Options) (*Drained, error) {
 	if !acquired {
 		return nil, fmt.Errorf("%w: no package was applied", ErrImportBusy)
 	}
+	opts.checkpointContext = ctx
 	recovery, err := recoverLocked(root, opts)
 	if err != nil {
 		return nil, err

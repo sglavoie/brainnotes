@@ -87,11 +87,12 @@ func judgeDisplaced(destination, displaced string, preimage FileExpectation) err
 	if preimage.Exists && preimage.SHA256 == "" {
 		return nil
 	}
-	current, err := os.ReadFile(displaced)
-	if err != nil {
-		return classifyStateReadError(displaced, err)
+	err := verifyFileDigest(displaced, preimage)
+	var conflict *TxnConflictError
+	if errors.As(err, &conflict) {
+		conflict.Path = destination
 	}
-	return verifyExpectation(destination, preimage, current, true)
+	return err
 }
 
 // strandDisplaced reports the one mixed state a path-preserving replacement can

@@ -22,12 +22,13 @@
 // The barrier is one flock that writers hold shared and a checkpoint holds
 // exclusive. flock has no writer preference, so on a busy vault the exclusive
 // acquisition could be starved indefinitely by a stream of overlapping shared
-// holders. The durable record at .bnotes/checkpoint.json is what closes that:
-// a checkpoint announces its intent there first, and a writer that has not yet
-// joined waits for the announcement to clear before it tries the flock. Writers
-// already inside finish, the shared holders drain to zero, and the exclusive
-// acquisition completes. Correctness comes from the flock; liveness comes from
-// the record.
+// holders. The durable record beside the protocol locks is what closes that: a
+// checkpoint announces its intent there first, and a writer that has not yet
+// joined waits for the announcement to clear before it tries the flock. Managed
+// Git vaults keep the record under .git/brainnotes-safety/checkpoint-locks;
+// unmanaged vaults use .bnotes/checkpoint.json. Writers already inside finish,
+// the shared holders drain to zero, and the exclusive acquisition completes.
+// Correctness comes from the flock; liveness comes from the record.
 //
 // # Why there is a second lock
 //
@@ -35,7 +36,10 @@
 // and try-locking the barrier cannot tell "a checkpoint holds it exclusively"
 // apart from "another writer holds it shared". So a checkpoint client also holds
 // checkpoint.claim.lock exclusively for its whole life, and writers only ever
-// try-lock it. A record beside a free claim lock is the leavings of a dead
+// try-lock it. Managed Git vaults keep the locks and record under
+// .git/brainnotes-safety/checkpoint-locks so their machine-local files never
+// dirty the working tree; unmanaged vaults use .bnotes. A record beside a free
+// claim lock is the leavings of a dead
 // client: writers ignore it and proceed, and the next Hold — which owns the
 // claim lock and is therefore the only authority on the matter — overwrites it.
 // This is the same shape internal/vaultimport uses for import.lock and
@@ -56,15 +60,19 @@
 // locks during its settle pass, and a writer holding vault.lock exclusively
 // while waiting on the barrier would close the cycle.
 //
-// # Re-entrancy
+// # Logical nesting
 //
-// Joining is re-entrant per vault root within one process, counted rather than
-// nested: bn serve runs concurrent writers in one process, and an import calls
-// through noteops.BeginOperation from inside a join it already holds. The first
-// joiner takes the shared flock and the last releaser drops it. Hold refuses
-// with ErrNested when the calling process is already inside a join, because the
-// exclusive acquisition would otherwise wait out its drain budget against its
-// own shared holder.
+// One process holds one shared flock per vault and reference-counts admitted
+// work, but process membership is not nesting: two bn serve requests are two
+// writers, and a request arriving after an announcement must stand aside even
+// while an older request still owns the process's shared flock. JoinContext
+// returns an explicit context token for the different case, where one admitted
+// operation calls another durable writer as part of the same lifecycle. That
+// nested writer reuses the outer admission. The first admitted writer takes the
+// shared flock and the last releaser drops it. Hold refuses with ErrNested when
+// the calling process is already inside a join, because the exclusive
+// acquisition would otherwise wait out its drain budget against its own shared
+// holder.
 //
 // # What participates
 //
@@ -73,7 +81,8 @@
 // activity sidecars (vaultstate.Save), upload staging (internal/attachments),
 // content history written by the autosave watcher (vaultgit.CommitPending),
 // synchronization state (vaultexport, vaultsync enrollment, vaultsyncd worker
-// records), and imports (vaultimport). TestEveryWriterJoinsTheBarrier is what
+// records and retirement), and imports (vaultimport). Git block, watch, and
+// push-retry records participate as well. TestEveryWriterJoinsTheBarrier is what
 // keeps that list from silently losing a member.
 //
 // A synchronization pass is deliberately not one join. A pass is import, then

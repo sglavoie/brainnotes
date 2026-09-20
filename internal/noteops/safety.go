@@ -28,8 +28,8 @@ type Safety interface {
 // safetyResolver is how every mutation path finds its engine. It is a variable
 // so a test can install a stub for a vault it did not `git init`; nothing in
 // production replaces it.
-var safetyResolver = func(vaultRoot string) (Safety, error) {
-	manager, err := vaultgit.Shared(context.Background(), vaultRoot, vaultgit.Options{})
+var safetyResolver = func(ctx context.Context, vaultRoot string) (Safety, error) {
+	manager, err := vaultgit.Shared(ctx, vaultRoot, vaultgit.Options{})
 	if err != nil {
 		return nil, err
 	}
@@ -45,11 +45,17 @@ var safetyResolverMu sync.RWMutex
 // must read it as "there is nothing to snapshot", not as a failure. Anything
 // else is a real refusal and is returned classified.
 func SafetyFor(vaultRoot string) (Safety, error) {
+	return SafetyForContext(context.Background(), vaultRoot)
+}
+
+// SafetyForContext resolves the engine without discarding an enclosing
+// checkpoint admission used by recovery during Open.
+func SafetyForContext(ctx context.Context, vaultRoot string) (Safety, error) {
 	safetyResolverMu.RLock()
 	resolve := safetyResolver
 	safetyResolverMu.RUnlock()
 
-	safety, err := resolve(vaultRoot)
+	safety, err := resolve(ctx, vaultRoot)
 	if err != nil {
 		if vaultgit.IsUnmanaged(err) {
 			return nil, nil
@@ -64,7 +70,7 @@ func SafetyFor(vaultRoot string) (Safety, error) {
 func SetSafetyResolverForTest(resolve func(vaultRoot string) (Safety, error)) func() {
 	safetyResolverMu.Lock()
 	previous := safetyResolver
-	safetyResolver = resolve
+	safetyResolver = func(_ context.Context, vaultRoot string) (Safety, error) { return resolve(vaultRoot) }
 	safetyResolverMu.Unlock()
 	return func() {
 		safetyResolverMu.Lock()

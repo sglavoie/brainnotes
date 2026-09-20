@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/spf13/cobra"
@@ -48,7 +49,7 @@ func runCheckpointRun(cmd *cobra.Command, vaultRoot string, argv []string, opts 
 		return fmt.Errorf("checkpoint run: %w", err)
 	}
 
-	runErr := checkpointRunner(cmd, argv)
+	runErr := checkpointRunner(cmd, argv, held.InheritanceFiles())
 	if releaseErr := held.Release(); releaseErr != nil && runErr == nil {
 		return fmt.Errorf("checkpoint run: release the checkpoint: %w", releaseErr)
 	}
@@ -73,11 +74,12 @@ func (opts *checkpointOptions) holdReason(argv []string) string {
 // An *exec.ExitError is returned unwrapped, because cmd/bn turns exactly that
 // into this process's exit status — wrapping it would still propagate the code
 // and would prefix the child's failure with a sentence about bn.
-func runCheckpointChild(cmd *cobra.Command, argv []string) error {
+func runCheckpointChild(cmd *cobra.Command, argv []string, inherited []*os.File) error {
 	child := exec.CommandContext(cmd.Context(), argv[0], argv[1:]...)
 	child.Stdin = cmd.InOrStdin()
 	child.Stdout = cmd.OutOrStdout()
 	child.Stderr = cmd.ErrOrStderr()
+	child.ExtraFiles = inherited
 
 	var exitErr *exec.ExitError
 	switch err := child.Run(); {

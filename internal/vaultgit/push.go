@@ -38,7 +38,7 @@ type PushResult struct {
 // local history is complete whether or not the remote ever answers.
 func (m *Manager) Push(ctx context.Context) (PushResult, error) {
 	const op = "push"
-	release, err := m.acquire(pushLockName, op)
+	release, err := m.acquire(pushLockName, op, ctx)
 	if err != nil {
 		return PushResult{}, err
 	}
@@ -69,7 +69,7 @@ func (m *Manager) Push(ctx context.Context) (PushResult, error) {
 	result.Attempted = true
 	if err := m.git.pushBranch(ctx, m.remote, ref); err != nil {
 		detail := agent.SanitizedDiagnostic(err)
-		state, saveErr := m.state.RecordPushFailure(m.now(), detail)
+		state, saveErr := m.recordPushFailure(m.now(), detail)
 		result.Retry = state
 		return result, &SafetyError{
 			Kind:   KindPushFailed,
@@ -78,7 +78,7 @@ func (m *Manager) Push(ctx context.Context) (PushResult, error) {
 			Err:    errors.Join(errors.New(detail), saveErr),
 		}
 	}
-	if err := m.state.ClearPushState(); err != nil {
+	if err := m.clearPushState(); err != nil {
 		// Failing to forget a resolved failure only costs a delayed next attempt.
 		_ = err
 	}

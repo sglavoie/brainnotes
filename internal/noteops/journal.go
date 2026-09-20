@@ -46,6 +46,7 @@ func NewRecorder(vaultRoot, command string, opts ...journal.RecorderOption) (*jo
 // mutates a vault outside this type except the low-level persistence packages
 // listed in TestNoUnannotatedDirectWrites.
 type Journal struct {
+	ctx       context.Context
 	vaultRoot string
 	// operation is the short token that names what kind of change this is —
 	// "rename", "capture", "undo". It is what reaches the commit message, and it
@@ -94,11 +95,20 @@ type Journal struct {
 // snapshot that makes the change part of the history is inside the window a
 // checkpoint must not cut.
 func BeginOperation(vaultRoot, operation, command string, targets []string, opts ...journal.RecorderOption) (*Journal, error) {
-	barrier, err := checkpoint.Join(vaultRoot)
+	return BeginOperationContext(context.Background(), vaultRoot, operation, command, targets, opts...)
+}
+
+// BeginOperationContext is BeginOperation for a caller that may already own a
+// checkpoint admission. The returned context token is kept by the Journal and
+// passed to Git safety, so its nested durable work cannot deadlock a checkpoint
+// that is waiting for this operation to finish.
+func BeginOperationContext(ctx context.Context, vaultRoot, operation, command string, targets []string, opts ...journal.RecorderOption) (*Journal, error) {
+	joinedCtx, barrier, err := checkpoint.JoinContext(ctx, vaultRoot)
 	if err != nil {
 		return nil, classifyBarrierError(err)
 	}
 	j := &Journal{
+		ctx:       joinedCtx,
 		vaultRoot: vaultRoot,
 		operation: strings.TrimSpace(operation),
 		command:   strings.TrimSpace(command),
@@ -118,12 +128,12 @@ func (j *Journal) begin(targets []string) error {
 	if err := guardMutation(j.vaultRoot, targets...); err != nil {
 		return err
 	}
-	safety, err := SafetyFor(j.vaultRoot)
+	safety, err := SafetyForContext(j.ctx, j.vaultRoot)
 	if err != nil {
 		return err
 	}
 	if safety != nil {
-		if err := safety.Preflight(context.Background()); err != nil {
+		if err := safety.Preflight(j.ctx); err != nil {
 			return classifySafetyError("git safety preflight", err)
 		}
 	}
@@ -236,7 +246,7 @@ func (j *Journal) snapshot(entry *journal.Entry) error {
 	if j == nil || j.safety == nil || entry == nil {
 		return nil
 	}
-	result, err := j.safety.CommitJournalEntry(context.Background(), entry.ID, j.operation)
+	result, err := j.safety.CommitJournalEntry(j.ctx, entry.ID, j.operation)
 	if err != nil {
 		return &SnapshotError{
 			Operation: j.operation,
@@ -274,20 +284,26 @@ func (j *Journal) snapshot(entry *journal.Entry) error {
 // A vault with no content history has no engine and nothing to record, which is
 // the same nil answer Finalize gives it.
 func SnapshotEntry(vaultRoot, entryID, operation string) error {
+	return SnapshotEntryContext(context.Background(), vaultRoot, entryID, operation)
+}
+
+// SnapshotEntryContext is SnapshotEntry with an explicit checkpoint nesting
+// context for import recovery and other already-admitted callers.
+func SnapshotEntryContext(ctx context.Context, vaultRoot, entryID, operation string) error {
 	// A snapshot is a durable change to the content history, so it joins the
 	// barrier like any other write. Its callers are recovery passes that have
 	// usually joined already, and a nested join is counted rather than taken, so
 	// this costs them nothing and covers the one that has not.
-	barrier, err := checkpoint.Join(vaultRoot)
+	joinedCtx, barrier, err := checkpoint.JoinContext(ctx, vaultRoot)
 	if err != nil {
 		return classifyBarrierError(err)
 	}
 	defer barrier()
-	safety, err := SafetyFor(vaultRoot)
+	safety, err := SafetyForContext(joinedCtx, vaultRoot)
 	if err != nil {
 		return err
 	}
-	j := &Journal{vaultRoot: vaultRoot, operation: strings.TrimSpace(operation), safety: safety}
+	j := &Journal{ctx: joinedCtx, vaultRoot: vaultRoot, operation: strings.TrimSpace(operation), safety: safety}
 	return j.snapshot(&journal.Entry{ID: entryID})
 }
 

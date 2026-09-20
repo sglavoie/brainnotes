@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
@@ -202,6 +203,11 @@ func runExport(ctx context.Context, root string, opts Options) (*ExportOutcome, 
 // remover is tolerated: os.RemoveAll reports a path that is already gone as
 // success.
 func runRetire(root string) (*RetireOutcome, error) {
+	barrier, err := checkpoint.Join(root)
+	if err != nil {
+		return nil, fmt.Errorf("vaultsyncd: retire: %w", err)
+	}
+	defer barrier()
 	local, err := vaultsync.Load(root)
 	if err != nil {
 		return nil, err

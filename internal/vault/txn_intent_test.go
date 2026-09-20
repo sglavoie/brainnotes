@@ -22,17 +22,49 @@ import (
 // create, an overwrite, and a delete — because they use three different
 // primitives and each one has its own half-finished state.
 const (
-	txnCrashExitCode = 3
-	txnCrashPriorB   = "original\n"
-	txnCrashNewA     = "created\n"
-	txnCrashNewB     = "modified\n"
-	txnCrashPriorC   = "doomed\n"
+	txnCrashExitCode       = 3
+	txnCrashPriorB         = "original\n"
+	txnCrashNewA           = "created\n"
+	txnCrashNewB           = "modified\n"
+	txnCrashPriorC         = "doomed\n"
+	txnRollbackPreserveEnv = "BN_TXN_ROLLBACK_PRESERVE_HELPER"
 )
+
+func TestTxnRollbackPreserveCrashHelper(t *testing.T) {
+	if os.Getenv(txnRollbackPreserveEnv) != "1" {
+		t.Skip("subprocess helper")
+	}
+	root := os.Getenv("BN_TXN_CRASH_ROOT")
+	txnCrashHook = func(point string) {
+		if point == txnCrashRollbackPreserved {
+			os.Exit(txnCrashExitCode)
+		}
+	}
+	txn, err := NewFileTxn(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.Remove(filepath.Join(root, "a.md"), ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	if err := txn.Write(filepath.Join(root, "z.md"), []byte("new-z\n"), 0, ExpectAnyContent()); err != nil {
+		t.Fatal(err)
+	}
+	txn.hooks.beforeCommit = func(path string) error {
+		if filepath.Base(path) == "z.md" {
+			return errors.New("force rollback")
+		}
+		return nil
+	}
+	if err := txn.Commit(nil); err == nil {
+		t.Fatal("Commit unexpectedly succeeded")
+	}
+}
 
 // txnCrashPaths are the transaction's destinations in commit order, which is
 // sorted path order, so applied:0 is the create, applied:1 the overwrite, and
 // applied:2 the delete.
-var txnCrashPaths = []string{"a-create.md", "b-modify.md", "c-delete.md"}
+var txnCrashPaths = []string{"Nested/a-create.md", "b-modify.md", "c-delete.md"}
 
 // TestTxnCrashHelper is the child process. It plans one fixed transaction and
 // terminates at the named durable state transition.
@@ -52,10 +84,18 @@ func TestTxnCrashHelper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileTxn: %v", err)
 	}
-	if err := txn.Write(filepath.Join(root, "a-create.md"), []byte(txnCrashNewA), 0o644, ExpectMissing()); err != nil {
+	if err := txn.Write(filepath.Join(root, "Nested", "a-create.md"), []byte(txnCrashNewA), 0o644, ExpectMissing()); err != nil {
 		t.Fatalf("plan create: %v", err)
 	}
-	if err := txn.Write(filepath.Join(root, "b-modify.md"), []byte(txnCrashNewB), 0o644, ExpectContent([]byte(txnCrashPriorB))); err != nil {
+	source := filepath.Join(root, ".streamed-replacement")
+	if err := os.WriteFile(source, []byte(txnCrashNewB), 0o600); err != nil {
+		t.Fatalf("write replacement source: %v", err)
+	}
+	digest, size, err := HashFile(source)
+	if err != nil {
+		t.Fatalf("hash replacement source: %v", err)
+	}
+	if err := txn.ReplaceFrom(filepath.Join(root, "b-modify.md"), source, size, digest, 0o644, ExpectContent([]byte(txnCrashPriorB))); err != nil {
 		t.Fatalf("plan overwrite: %v", err)
 	}
 	if err := txn.Remove(filepath.Join(root, "c-delete.md"), ExpectContent([]byte(txnCrashPriorC))); err != nil {
@@ -147,14 +187,14 @@ func sameState(a, b map[string]string) bool {
 
 var (
 	txnCrashBefore = map[string]string{
-		"a-create.md": "<missing>",
-		"b-modify.md": txnCrashPriorB,
-		"c-delete.md": txnCrashPriorC,
+		"Nested/a-create.md": "<missing>",
+		"b-modify.md":        txnCrashPriorB,
+		"c-delete.md":        txnCrashPriorC,
 	}
 	txnCrashAfter = map[string]string{
-		"a-create.md": txnCrashNewA,
-		"b-modify.md": txnCrashNewB,
-		"c-delete.md": "<missing>",
+		"Nested/a-create.md": txnCrashNewA,
+		"b-modify.md":        txnCrashNewB,
+		"c-delete.md":        "<missing>",
 	}
 )
 
@@ -175,44 +215,64 @@ func TestFileTxnRecoversFromEveryDurableTransition(t *testing.T) {
 		// The record is durable and no destination has been touched: recovery
 		// rolls all three forward.
 		{point: txnCrashIntent, recorded: true, want: txnCrashAfter},
+		{point: txnCrashHandoff, recorded: true, want: txnCrashAfter},
 		{point: txnCrashApplied(0), recorded: true, want: txnCrashAfter},
 		{point: txnCrashApplied(1), recorded: true, want: txnCrashAfter},
 		{point: txnCrashApplied(2), recorded: true, want: txnCrashAfter},
 		// Everything landed and is durable; only the record is left to clear.
 		{point: txnCrashSynced, recorded: true, want: txnCrashAfter},
+		// Cleanup is ordered before intent removal, so recovery can retry an
+		// unlink that was not yet directory-synced without leaking the preimage.
+		{point: txnCrashCleanup(0), recorded: true, want: txnCrashAfter},
+		// Once the intent is unlinked, every owned recovery source is durably gone.
+		{point: txnCrashIntentRemoved, recorded: false, want: txnCrashAfter},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.point, func(t *testing.T) {
-			root := newTxnCrashVault(t)
-			runTxnCrashHelper(t, root, tc.point)
-
-			records := intentRecords(t, root)
-			if tc.recorded != (len(records) == 1) {
-				t.Fatalf("intent records after %q = %v, want recorded=%v", tc.point, records, tc.recorded)
-			}
-
-			if err := recoverTxnIntents(root); err != nil {
-				t.Fatalf("recoverTxnIntents: %v", err)
-			}
-			got := vaultState(t, root)
-			if !sameState(got, tc.want) {
-				t.Fatalf("state after recovery = %v, want %v", got, tc.want)
-			}
-			if left := intentRecords(t, root); len(left) != 0 {
-				t.Fatalf("recovery left %v behind", left)
-			}
-
-			// Idempotence: a second pass has nothing to decide and must change
-			// nothing, which is what makes recovery safe to run on every open and
-			// every write.
-			if err := recoverTxnIntents(root); err != nil {
-				t.Fatalf("second recoverTxnIntents: %v", err)
-			}
-			if again := vaultState(t, root); !sameState(again, got) {
-				t.Fatalf("a second recovery pass changed the vault: %v -> %v", got, again)
-			}
+			assertTxnCrashTransition(t, tc.point, tc.recorded, tc.want)
 		})
+	}
+}
+
+func assertTxnCrashTransition(t *testing.T, point string, recorded bool, want map[string]string) {
+	t.Helper()
+	root := newTxnCrashVault(t)
+	runTxnCrashHelper(t, root, point)
+	records := intentRecords(t, root)
+	if recorded != (len(records) == 1) {
+		t.Fatalf("intent records after %q = %v, want recorded=%v", point, records, recorded)
+	}
+	if err := recoverTxnIntents(root); err != nil {
+		t.Fatalf("recoverTxnIntents: %v", err)
+	}
+	assertPreIntentDirectoryCleaned(t, root, point)
+	got := vaultState(t, root)
+	if !sameState(got, want) {
+		t.Fatalf("state after recovery = %v, want %v", got, want)
+	}
+	if left := intentRecords(t, root); len(left) != 0 {
+		t.Fatalf("recovery left %v behind", left)
+	}
+	if leftovers := stagedTempFiles(t, root); len(leftovers) != 0 {
+		t.Fatalf("recovery left unowned transaction temps: %v", leftovers)
+	}
+	// Idempotence: a second pass has nothing to decide and must change nothing.
+	if err := recoverTxnIntents(root); err != nil {
+		t.Fatalf("second recoverTxnIntents: %v", err)
+	}
+	if again := vaultState(t, root); !sameState(again, got) {
+		t.Fatalf("a second recovery pass changed the vault: %v -> %v", got, again)
+	}
+}
+
+func assertPreIntentDirectoryCleaned(t *testing.T, root, point string) {
+	t.Helper()
+	if point != txnCrashStaged {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(root, "Nested")); !os.IsNotExist(err) {
+		t.Fatalf("pre-intent directory survived recovery: %v", err)
 	}
 }
 
@@ -220,7 +280,7 @@ func TestFileTxnRecoversFromEveryDurableTransition(t *testing.T) {
 // the one every command goes through.
 func TestVaultOpenRecoversAnInterruptedTransaction(t *testing.T) {
 	root := newTxnCrashVault(t)
-	runTxnCrashHelper(t, root, txnCrashIntent)
+	runTxnCrashHelper(t, root, txnCrashHandoff)
 
 	if _, err := Open(&config.Config{Vault: root}); err != nil {
 		t.Fatalf("Open: %v", err)
@@ -304,13 +364,16 @@ func TestIntentRecordHoldsNoNoteContent(t *testing.T) {
 // decided outcome rather than a permanent block.
 func TestRecoveryLeavesAForeignEditAlone(t *testing.T) {
 	root := newTxnCrashVault(t)
-	runTxnCrashHelper(t, root, txnCrashIntent)
+	runTxnCrashHelper(t, root, txnCrashHandoff)
 
 	external := "someone else saved this\n"
 	if err := os.WriteFile(filepath.Join(root, "b-modify.md"), []byte(external), 0o644); err != nil {
 		t.Fatalf("external write: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "a-create.md"), []byte(external), 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "Nested"), 0o755); err != nil {
+		t.Fatalf("external mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "Nested", "a-create.md"), []byte(external), 0o644); err != nil {
 		t.Fatalf("external write: %v", err)
 	}
 
@@ -321,15 +384,42 @@ func TestRecoveryLeavesAForeignEditAlone(t *testing.T) {
 	if got["b-modify.md"] != external {
 		t.Fatalf("recovery overwrote a foreign edit: %q", got["b-modify.md"])
 	}
-	if got["a-create.md"] != external {
-		t.Fatalf("recovery overwrote a file that appeared at the created path: %q", got["a-create.md"])
+	if got["Nested/a-create.md"] != external {
+		t.Fatalf("recovery overwrote a file that appeared at the created path: %q", got["Nested/a-create.md"])
 	}
 	// The delete was untouched by the external writer, so it still completes.
 	if got["c-delete.md"] != "<missing>" {
 		t.Fatalf("the interrupted delete was not completed: %q", got["c-delete.md"])
 	}
+	if leftovers := stagedTempFiles(t, root); len(leftovers) != 3 {
+		t.Fatalf("foreign edits must preserve every undecidable staged and prior copy, got %v", leftovers)
+	}
 	if left := intentRecords(t, root); len(left) != 0 {
 		t.Fatalf("recovery left %v behind", left)
+	}
+}
+
+func TestRecoveryPreservesRollbackCopyAcrossProcessDeath(t *testing.T) {
+	root := txnTestRoot(t, map[string]string{"a.md": "old-a\n", "z.md": "old-z\n"})
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTxnRollbackPreserveCrashHelper$", "-test.timeout=120s")
+	cmd.Env = append(os.Environ(), txnRollbackPreserveEnv+"=1", "BN_TXN_CRASH_ROOT="+root)
+	output, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != txnCrashExitCode {
+		t.Fatalf("rollback helper = %v, want exit %d\n%s", err, txnCrashExitCode, output)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("foreign\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := recoverTxnIntents(root); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFileString(t, filepath.Join(root, "a.md")); got != "foreign\n" {
+		t.Fatalf("foreign destination = %q", got)
+	}
+	paths := stagedTempPaths(t, root)
+	if len(paths) != 1 || readFileString(t, paths[0]) != "old-a\n" {
+		t.Fatalf("preserved rollback copies = %v, want one old-content copy", paths)
 	}
 }
 

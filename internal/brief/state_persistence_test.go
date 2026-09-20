@@ -9,7 +9,38 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 )
+
+func TestExternalStateWriteJoinsVaultCheckpoint(t *testing.T) {
+	root := t.TempDir()
+	external := t.TempDir()
+	store := NewFileStateStore(root, WithStateRoot(external))
+	statePath := filepath.Join(external, filepath.FromSlash(briefStateRelPath))
+
+	held, err := checkpoint.Hold(root, checkpoint.Options{Reason: "test external activity", Drain: time.Second})
+	if err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- store.writeState(root, statePath, []byte("{}\n")) }()
+
+	select {
+	case err := <-done:
+		t.Fatalf("external state write completed during checkpoint: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
+		t.Fatalf("external state appeared during checkpoint: %v", err)
+	}
+	if err := held.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("external state write after checkpoint: %v", err)
+	}
+}
 
 func TestFileStateStoreCorruptAndUnsupportedStateAreNeverOverwritten(t *testing.T) {
 	t.Parallel()

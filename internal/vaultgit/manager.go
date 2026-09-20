@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
@@ -283,7 +284,9 @@ func (m *Manager) Blocked() (BlockRecord, bool) {
 // one that is still here is a refusal only a person can lift, and leaving it
 // behind would make clearing the marker appear to do nothing.
 func (m *Manager) ClearBlock() error {
-	return errors.Join(m.state.ClearBlock(), m.state.ClearIntent())
+	return m.checkpointMutation("clear block", func() error {
+		return errors.Join(m.state.ClearBlock(), m.state.ClearIntent())
+	})
 }
 
 // Interrupted reports a surviving recovery intent, if any. Like Blocked it takes
@@ -332,8 +335,10 @@ func (m *Manager) SetAutosavePolicy(policy config.AutosavePolicy) error {
 	m.autosaveMu.Lock()
 	m.autosave = resolved
 	m.autosaveMu.Unlock()
-	_, err := m.state.RefreshWatchState(resolved)
-	return err
+	return m.checkpointMutation("publish autosave policy", func() error {
+		_, err := m.state.RefreshWatchState(resolved)
+		return err
+	})
 }
 
 // ResetExternalBurst forgets the open debounce burst without claiming a snapshot
@@ -348,8 +353,10 @@ func (m *Manager) SetAutosavePolicy(policy config.AutosavePolicy) error {
 // re-enabling does not entitle a vault to an immediate commit, so the previous
 // external snapshot stays the floor's anchor.
 func (m *Manager) ResetExternalBurst() error {
-	_, err := m.state.NoteSettled(m.policy())
-	return err
+	return m.checkpointMutation("reset external burst", func() error {
+		_, err := m.state.NoteSettled(m.policy())
+		return err
+	})
 }
 
 // WatchStatus reports the persisted external-change schedule without changing
@@ -360,14 +367,24 @@ func (m *Manager) WatchStatus() WatchState { return m.state.LoadWatchState() }
 // NoteExternalChange records that the working tree changed, opening a debounce
 // burst if none is open, and republishes the due time the change implies.
 func (m *Manager) NoteExternalChange() (WatchState, error) {
-	return m.state.NoteChange(m.policy(), m.now())
+	var state WatchState
+	err := m.checkpointMutation("record external change", func() error {
+		var err error
+		state, err = m.state.NoteChange(m.policy(), m.now())
+		return err
+	})
+	return state, err
 }
 
 // NoteExternalSettled closes an open debounce burst whose changes are no longer
 // there to commit, so a burst that resolved itself does not stay due forever.
 // It reports whether there was one to close.
 func (m *Manager) NoteExternalSettled() (closed bool, err error) {
-	return m.state.NoteSettled(m.policy())
+	err = m.checkpointMutation("settle external change", func() error {
+		closed, err = m.state.NoteSettled(m.policy())
+		return err
+	})
+	return closed, err
 }
 
 // ExternalCommitDue reports whether an open debounce burst has reached both its
@@ -386,8 +403,37 @@ func (m *Manager) NoteExternalSettled() (closed bool, err error) {
 // unwritable record costs a stale published field and never a wrong answer here.
 func (m *Manager) ExternalCommitDue() bool {
 	policy := m.policy()
+	release, err := checkpoint.JoinWithin(m.root, time.Millisecond)
+	if err != nil {
+		return m.state.LoadWatchState().DueAt(policy, m.now())
+	}
+	defer release()
 	state, _ := m.state.RefreshWatchState(policy)
 	return state.DueAt(policy, m.now())
+}
+
+// checkpointMutation brackets operational Git state that is not already under
+// the safety lock. These writes are small and local; network push work stays
+// outside and joins only to publish its result.
+func (m *Manager) checkpointMutation(op string, mutate func() error) error {
+	release, err := checkpoint.Join(m.root)
+	if err != nil {
+		return safetyErrorf(KindBusy, op, "a checkpoint is copying this vault; try again shortly")
+	}
+	defer release()
+	return mutate()
+}
+
+func (m *Manager) recordPushFailure(now time.Time, detail string) (state PushState, err error) {
+	err = m.checkpointMutation("record push failure", func() error {
+		state, err = m.state.RecordPushFailure(now, detail)
+		return err
+	})
+	return state, err
+}
+
+func (m *Manager) clearPushState() error {
+	return m.checkpointMutation("clear push retry", m.state.ClearPushState)
 }
 
 // PushDue reports whether a retry is worth attempting now. A vault with no

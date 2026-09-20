@@ -6,8 +6,33 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
+
+func TestWatchStateMutationWaitsForCheckpoint(t *testing.T) {
+	h := newHarness(t)
+	held, err := checkpoint.Hold(h.root, checkpoint.Options{Reason: "test watch state", Drain: time.Second})
+	if err != nil {
+		t.Fatalf("Hold: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, writeErr := h.mgr.NoteExternalChange()
+		done <- writeErr
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("watch state write completed during checkpoint: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := held.Release(); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("watch state write after checkpoint: %v", err)
+	}
+}
 
 // testPolicy resolves a floor the way `brainnotes.toml` would.
 func testPolicy(t *testing.T, spelling string) config.AutosavePolicy {

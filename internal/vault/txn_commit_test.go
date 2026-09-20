@@ -143,6 +143,9 @@ func TestFileTxnJournalFailureBeforeCommitWritesNothing(t *testing.T) {
 	if err := txn.Write(filepath.Join(root, "a.md"), []byte("new-a\n"), 0, ExpectAnyContent()); err != nil {
 		t.Fatalf("plan a: %v", err)
 	}
+	if err := txn.Write(filepath.Join(root, "Nested", "new.md"), []byte("new\n"), 0, ExpectMissing()); err != nil {
+		t.Fatalf("plan nested: %v", err)
+	}
 
 	sentinel := errors.New("journal unavailable")
 	if err := txn.Commit(&captureRecorder{err: sentinel}); !errors.Is(err, sentinel) {
@@ -153,6 +156,10 @@ func TestFileTxnJournalFailureBeforeCommitWritesNothing(t *testing.T) {
 	}
 	if leftovers := stagedTempFiles(t, root); len(leftovers) > 0 {
 		t.Fatalf("staged temp files left behind: %v", leftovers)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Nested")); !os.IsNotExist(err) {
+		entries, _ := os.ReadDir(filepath.Join(root, "Nested"))
+		t.Fatalf("staging failure left a newly created directory: %v (%v)", err, entries)
 	}
 }
 

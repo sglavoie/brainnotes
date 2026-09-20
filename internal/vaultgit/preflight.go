@@ -21,7 +21,7 @@ import (
 // BrainNotes, the next `bn` mutation would otherwise snapshot the working tree
 // and make that disappearance permanent.
 func (m *Manager) Preflight(ctx context.Context) error {
-	release, err := m.acquire(safetyLockName, "preflight")
+	release, err := m.acquire(safetyLockName, "preflight", ctx)
 	if err != nil {
 		return err
 	}
@@ -112,18 +112,23 @@ func (m *Manager) checkRepositoryState(op string) error {
 // The push lock is deliberately excluded. A push is a network round trip that
 // changes nothing on this disk, and holding the barrier across it would let an
 // unreachable remote exhaust every checkpoint's drain budget.
-func (m *Manager) acquire(name, op string) (func(), error) {
-	if err := m.state.ensureDir(); err != nil {
-		return nil, err
+func (m *Manager) acquire(name, op string, contexts ...context.Context) (func(), error) {
+	ctx := context.Background()
+	if len(contexts) > 0 && contexts[0] != nil {
+		ctx = contexts[0]
 	}
 	barrier := func() {}
 	if name == safetyLockName {
-		joined, err := checkpoint.Join(m.root)
+		_, joined, err := checkpoint.JoinContext(ctx, m.root)
 		if err != nil {
 			return nil, safetyErrorf(KindBusy, op,
 				"a checkpoint is copying this vault, so the %s was not taken; try again shortly", name)
 		}
 		barrier = joined
+	}
+	if err := m.state.ensureDir(); err != nil {
+		barrier()
+		return nil, err
 	}
 	release, acquired, err := vault.TryLockPath(m.state.path(name))
 	if err != nil {

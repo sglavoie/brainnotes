@@ -97,7 +97,7 @@ func (p PendingSummary) Count() int {
 // reason the guard polls at all.
 func (m *Manager) ScanPending(ctx context.Context) (PendingSummary, error) {
 	const op = "scan-pending"
-	release, err := m.acquire(safetyLockName, op)
+	release, err := m.acquire(safetyLockName, op, ctx)
 	if err != nil {
 		return PendingSummary{}, err
 	}

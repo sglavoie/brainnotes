@@ -33,15 +33,28 @@ func readFileString(t *testing.T, path string) string {
 
 func stagedTempFiles(t *testing.T, dir string) []string {
 	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read dir %s: %v", dir, err)
-	}
+	paths := stagedTempPaths(t, dir)
 	var leftovers []string
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".txn-") {
-			leftovers = append(leftovers, entry.Name())
+	for _, path := range paths {
+		leftovers = append(leftovers, filepath.Base(path))
+	}
+	return leftovers
+}
+
+func stagedTempPaths(t *testing.T, dir string) []string {
+	t.Helper()
+	var leftovers []string
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".txn-") {
+			leftovers = append(leftovers, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk dir %s: %v", dir, err)
 	}
 	return leftovers
 }

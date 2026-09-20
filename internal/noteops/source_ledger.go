@@ -277,9 +277,16 @@ func pruneSourceSaveLedger(dir string) {
 	if len(aging) <= sourceSaveLedgerCap {
 		return
 	}
+	if sourceLedgerPruneHook != nil {
+		sourceLedgerPruneHook()
+	}
 	sort.Slice(aging, func(i, j int) bool { return aging[i].at.Before(aging[j].at) })
 	for i := 0; i+sourceSaveLedgerCap < len(aging); i++ {
 		//bn:direct-write removes one of this package's own expired idempotency records, matched by the .json name it wrote, under a .bnotes/ directory no note may be created in; the file holds digests rather than note content, is out of the content history's scope, and its loss costs a replay rather than a note
 		_ = os.Remove(filepath.Join(dir, aging[i].name))
 	}
 }
+
+// sourceLedgerPruneHook is a test seam for proving pruning remains inside the
+// operation's checkpoint admission. Production leaves it nil.
+var sourceLedgerPruneHook func()

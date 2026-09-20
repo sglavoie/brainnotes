@@ -3,6 +3,7 @@ package checkpoint
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -19,7 +20,8 @@ const (
 	// is what makes "is the client that wrote this record still alive" a question
 	// the kernel answers.
 	claimLockName = "checkpoint.claim.lock"
-	// RecordRel is the vault-relative path of the checkpoint record.
+	// RecordRel is the vault-relative path of an unmanaged vault's checkpoint
+	// record. Managed vaults keep the record with the locks under .git instead.
 	//
 	// It is under .bnotes and so is out of the content history's scope, out of
 	// what synchronization considers portable, and skipped by the vault walk. That
@@ -46,20 +48,41 @@ func resolve(root string) (vaultPaths, error) {
 	if strings.TrimSpace(root) == "" {
 		return vaultPaths{}, errors.New("checkpoint: empty vault root")
 	}
-	dir, err := vault.LockDir(root)
-	if err != nil {
-		return vaultPaths{}, fmt.Errorf("checkpoint: locate vault locks: %w", err)
-	}
 	realRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return vaultPaths{}, fmt.Errorf("checkpoint: resolve vault root %q: %w", root, err)
+	}
+	dir, err := checkpointLockDir(realRoot)
+	if err != nil {
+		return vaultPaths{}, err
+	}
+	record := filepath.Join(realRoot, filepath.FromSlash(RecordRel))
+	if strings.HasPrefix(dir, filepath.Join(realRoot, ".git")+string(filepath.Separator)) {
+		record = filepath.Join(dir, "checkpoint.json")
 	}
 	return vaultPaths{
 		root:    realRoot,
 		barrier: filepath.Join(dir, barrierLockName),
 		claim:   filepath.Join(dir, claimLockName),
-		record:  filepath.Join(realRoot, filepath.FromSlash(RecordRel)),
+		record:  record,
 	}, nil
+}
+
+// checkpointLockDir keeps protocol locks in Git-private storage for managed
+// vaults, where their mere existence cannot dirty the working tree. Unmanaged
+// vaults retain the common lock directory used by the rest of internal/vault.
+func checkpointLockDir(root string) (string, error) {
+	gitDir := filepath.Join(root, ".git")
+	if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
+		return filepath.Join(gitDir, "brainnotes-safety", "checkpoint-locks"), nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("checkpoint: inspect Git directory: %w", err)
+	}
+	dir, err := vault.LockDir(root)
+	if err != nil {
+		return "", fmt.Errorf("checkpoint: locate vault locks: %w", err)
+	}
+	return dir, nil
 }
 
 // RecordPath returns the absolute path of the vault's checkpoint record.

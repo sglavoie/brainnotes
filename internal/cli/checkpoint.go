@@ -124,9 +124,9 @@ another checkpoint already holds this vault, or if writers that were already
 running do not finish inside --drain, nothing is held and the command is not
 run.
 
-The vault is released when the child exits. A child that outlives this process
-does not keep the vault held: the barrier is an open file, so the kernel drops
-it when this process dies, and the next checkpoint clears what is left.`,
+The child inherits the checkpoint lock descriptors. If this wrapper dies first,
+the vault remains held until the child exits; the kernel then releases the
+inherited locks and later writers can proceed safely.`,
 		Example: `  bn checkpoint run -- tar czf /backups/vault.tar.gz .
   bn checkpoint run --reason "nightly deployment snapshot" --drain 2m -- ./snapshot.sh`,
 		Args:          cobra.ArbitraryArgs,

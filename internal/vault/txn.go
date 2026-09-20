@@ -294,9 +294,13 @@ type txnRequirement struct {
 type txnChange struct {
 	path   string
 	remove bool
-	data   []byte
-	mode   os.FileMode
-	expect FileExpectation
+	// streamPrior keeps a removed file's preimage in a durable sibling instead
+	// of memory. It is used by bulk wipe operations where total deleted bytes are
+	// deliberately unbounded.
+	streamPrior bool
+	data        []byte
+	mode        os.FileMode
+	expect      FileExpectation
 
 	// source names a file holding the replacement bytes, for a change planned
 	// through WriteFrom rather than Write. When it is set, data is always nil and
@@ -318,6 +322,12 @@ type txnChange struct {
 	priorExists bool
 	priorData   []byte
 	priorMode   os.FileMode
+	// priorSource is a durable staged copy of a large destination replaced by a
+	// source-backed change. It keeps rollback bounded without retaining the old
+	// attachment in memory.
+	priorSource string
+	priorDigest string
+	priorSize   int64
 }
 
 // contentDigest and contentSize describe the bytes the change writes. A
@@ -349,12 +359,14 @@ func (c *txnChange) contentSize() int64 {
 // compensating write fails or is refused that way, Commit returns a
 // *TxnRollbackError naming exactly which paths were left mixed.
 type FileTxn struct {
-	root     string
-	changes  map[string]*txnChange
-	order    []string
-	requires []txnRequirement
-	hooks    txnHooks
-	locks    *pathLocks
+	root      string
+	changes   map[string]*txnChange
+	order     []string
+	requires  []txnRequirement
+	hooks     txnHooks
+	locks     *pathLocks
+	tempOwner *txnTempOwner
+	intent    *txnIntent
 	// cleanupFailures collects temp files that survived mutations which landed.
 	// They are reported after the commit rather than rolled back, because the
 	// vault already holds what the caller asked for.
@@ -397,6 +409,12 @@ func (t *FileTxn) Write(path string, data []byte, mode os.FileMode, expect FileE
 // Remove plans deleting path.
 func (t *FileTxn) Remove(path string, expect FileExpectation) error {
 	return t.plan(&txnChange{path: path, remove: true, expect: expect})
+}
+
+// RemoveStreamed plans a bounded-memory deletion. The existing regular file is
+// copied to a durable sibling for rollback/recovery instead of read into RAM.
+func (t *FileTxn) RemoveStreamed(path string, expect FileExpectation) error {
+	return t.plan(&txnChange{path: path, remove: true, streamPrior: true, expect: expect})
 }
 
 // Require pins a file the transaction depends on but never writes, such as the

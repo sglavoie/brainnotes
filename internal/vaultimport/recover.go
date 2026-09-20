@@ -141,7 +141,7 @@ type Recovery struct {
 // packages never needs it. It is exported for the caller that wants to resolve a
 // vault without applying anything else to it.
 func Recover(root string, opts Options) (*Recovery, error) {
-	release, acquired, err := lockImports(root)
+	ctx, release, acquired, err := lockImports(root)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +149,7 @@ func Recover(root string, opts Options) (*Recovery, error) {
 	if !acquired {
 		return nil, fmt.Errorf("%w: recovery did not run", ErrImportBusy)
 	}
+	opts.checkpointContext = ctx
 	return recoverLocked(root, opts)
 }
 
@@ -297,7 +298,7 @@ func (r *resolver) complete() (*Recovery, error) {
 	if err := r.recordProvenance(entryID); err != nil {
 		return nil, err
 	}
-	if err := ensureSnapshot(r.root, entryID, operationToken); err != nil {
+	if err := ensureSnapshotContext(r.opts.checkpointContext, r.root, entryID, operationToken); err != nil {
 		return nil, err
 	}
 	entry, err := journal.LoadEntry(noteops.JournalRoot(r.root), entryID)
@@ -333,7 +334,7 @@ func (r *resolver) complete() (*Recovery, error) {
 // have reached it. See vaultexport.RecordImport: recording the same entry twice
 // is a no-op when the operation matches and an error when it does not.
 func (r *resolver) recordProvenance(entryID string) error {
-	err := vaultexport.RecordImport(r.root, entryID, vaultexport.Import{
+	err := vaultexport.RecordImportContext(r.opts.checkpointContext, r.root, entryID, vaultexport.Import{
 		OperationID:  r.operation.OperationID,
 		OriginDevice: r.manifest.OriginDevice,
 	})
@@ -663,6 +664,10 @@ func resultExpectation(change vaultsync.Change) vault.FileExpectation {
 // resolution's revision are different acts and reach the commit message as
 // different words, so the token is passed in rather than assumed.
 func ensureSnapshot(root, entryID, token string) error {
+	return ensureSnapshotContext(context.Background(), root, entryID, token)
+}
+
+func ensureSnapshotContext(ctx context.Context, root, entryID, token string) error {
 	needed, err := snapshotNeeded(root, entryID)
 	if err != nil {
 		return err
@@ -670,7 +675,7 @@ func ensureSnapshot(root, entryID, token string) error {
 	if !needed {
 		return nil
 	}
-	return noteops.SnapshotEntry(root, entryID, token)
+	return noteops.SnapshotEntryContext(ctx, root, entryID, token)
 }
 
 // snapshotNeeded asks the content history whether the entry's manifest is at the

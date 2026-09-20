@@ -147,7 +147,7 @@ func Resolve(root, packageDir string, plan *Plan, opts Options) (*Resolution, er
 	if opts.Command == "" {
 		opts.Command = defaultResolveCommand
 	}
-	release, acquired, err := lockImports(root)
+	ctx, release, acquired, err := lockImports(root)
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +155,7 @@ func Resolve(root, packageDir string, plan *Plan, opts Options) (*Resolution, er
 	if !acquired {
 		return nil, fmt.Errorf("%w: %s was not resolved", ErrImportBusy, plan.PackageID)
 	}
+	opts.checkpointContext = ctx
 	recovery, err := recoverLocked(root, opts)
 	if err != nil {
 		return nil, err
@@ -393,7 +394,7 @@ func (r *revision) commit() (string, error) {
 		return "", err
 	}
 	if finalized {
-		return r.record.JournalEntry, ensureSnapshot(r.root, r.record.JournalEntry, resolveToken)
+		return r.record.JournalEntry, ensureSnapshotContext(r.opts.checkpointContext, r.root, r.record.JournalEntry, resolveToken)
 	}
 	if err := r.unwind(journalRoot); err != nil {
 		return "", err
@@ -625,7 +626,7 @@ func (r *revision) putBack(txn *vault.FileTxn, journalRoot string, step Step) er
 
 // write is the revision as one journaled, snapshotted operation.
 func (r *revision) write(pending []Step) error {
-	operation, err := noteops.BeginOperation(r.root, resolveToken, r.opts.command(),
+	operation, err := noteops.BeginOperationContext(r.opts.checkpointContext, r.root, resolveToken, r.opts.command(),
 		r.targets(pending), r.opts.recorderOptions(r.record.JournalEntry)...)
 	if err != nil {
 		return err
