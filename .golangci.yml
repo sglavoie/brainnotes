@@ -14,15 +14,16 @@ version: "2"
 
 # The build tags whose files would otherwise be invisible to every linter here.
 #
-# `synctransport` guards the real two-process Syncthing scenarios in
-# internal/vaultsyncd, which `just ci` does not run and `just test-sync-transport`
-# does. A gate that judged a function's complexity only when a tag happened to be
-# set would be a gate that stopped applying the moment somebody moved code behind
-# one, so the ratchet reads them the same as everything else. The harness those
-# tests drive carries no tag at all, and is covered without this.
+# `synctransport` guards the real two-process Syncthing scenarios and
+# `syncrecovery` guards the long seeded delivery schedules. Their dedicated
+# recipes run outside `just ci`. A gate that judged a function's complexity only
+# when a tag happened to be set would stop applying the moment somebody moved
+# code behind one, so the ratchet reads both the same as everything else. The
+# transport harness itself carries no tag and is covered without this.
 run:
   build-tags:
     - synctransport
+    - syncrecovery
 
 linters:
   default: none
@@ -73,9 +74,9 @@ issues:
 
   # Left at the default, and stated so it is a decision rather than a default.
   # cyclop and gocognit both report on a function's declaration line, so a
-  # function over both thresholds collapses to one issue here. That is why the
-  # whole-tree total is 552 rather than the sum of the raw per-linter runs, and
-  # it is what docs/internals/refactor-baseline.md and the ephemeral config in
+  # function over both thresholds collapses to one issue here. That is why a
+  # whole-tree total can be lower than the sum of raw per-linter runs. This is
+  # what docs/internals/refactor-baseline.md and the ephemeral config in
   # scripts/metrics_complexity.py both measure. It cannot weaken the gate:
-  # collapsing needs two issues on one line, so one of them is always reported.
+  # collapsing needs two issues on one line, so one is always reported.
   uniq-by-line: true

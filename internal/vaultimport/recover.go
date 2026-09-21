@@ -453,7 +453,7 @@ func (r *resolver) rollBack() ([]string, error) {
 func (r *resolver) markRestored(paths []string) error {
 	next := r.state.clone()
 	next.Pending.Restored = &Rollback{Paths: paths}
-	if err := saveState(r.root, next); err != nil {
+	if err := saveStateWith(r.root, next, r.opts.writeState); err != nil {
 		return err
 	}
 	r.state = next
@@ -582,7 +582,7 @@ func (r *resolver) settle(record *Record) error {
 		_, released = next.Conflicts[r.manifest.PackageID]
 		delete(next.Conflicts, r.manifest.PackageID)
 	}
-	if err := saveState(r.root, next); err != nil {
+	if err := saveStateWith(r.root, next, r.opts.writeState); err != nil {
 		return err
 	}
 	if released {

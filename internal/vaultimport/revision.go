@@ -182,7 +182,7 @@ func resolveLocked(root, packageDir string, plan *Plan, opts Options) (*Resoluti
 	if err != nil {
 		return nil, err
 	}
-	if err := declareResolution(root, state, held, record); err != nil {
+	if err := declareResolution(root, state, held, record, opts); err != nil {
 		return nil, err
 	}
 	applied, applyErr := applyLocked(root, packageDir, opts.forResolution(record))
@@ -195,7 +195,7 @@ func resolveLocked(root, packageDir string, plan *Plan, opts Options) (*Resoluti
 	// rather than replacing it: the caller asked about the resolution, and a hold
 	// that is still a hold is the answer.
 	if applied == nil {
-		return nil, errors.Join(applyErr, abandonUnlessLanded(root, record))
+		return nil, errors.Join(applyErr, abandonUnlessLanded(root, record, opts))
 	}
 	resolution := &Resolution{
 		PackageID:    record.PackageID,
@@ -331,7 +331,7 @@ func (p *Plan) commitment(opts Options) (*Plan, error) {
 // so an interruption anywhere in it leaves either a package that was not
 // applied — which is still held, and still resolvable — or one that was, which
 // is the complete and correct outcome of accepting it.
-func declareResolution(root string, state *State, held *ConflictRecord, record *Plan) error {
+func declareResolution(root string, state *State, held *ConflictRecord, record *Plan, opts Options) error {
 	if !record.Revises() {
 		return nil
 	}
@@ -340,7 +340,7 @@ func declareResolution(root string, state *State, held *ConflictRecord, record *
 	}
 	next := state.clone()
 	next.Resolutions[record.PackageID] = record
-	if err := saveState(root, next); err != nil {
+	if err := saveStateWith(root, next, opts.writeState); err != nil {
 		return err
 	}
 	return pruneStaged(root, record)
@@ -359,7 +359,7 @@ func reviseResolution(root string, record *Plan, opts Options, resolution *Resol
 	}
 	resolution.JournalEntry = entryID
 	resolution.Paths = stepPaths(record.steps())
-	if err := clearResolution(root, record.PackageID); err != nil {
+	if err := clearResolution(root, record.PackageID, opts); err != nil {
 		return err
 	}
 	resolution.Cleanup = errors.Join(resolution.Cleanup, discardStaged(root, record.PackageID))
@@ -875,7 +875,7 @@ func finishResolution(root string, state *State, record *Plan, opts Options) (do
 		return false, nil, fmt.Errorf("%w: a promised resolution names no plan", ErrCorruptState)
 	}
 	if _, applied := state.Applied[record.PackageID]; !applied {
-		cleared, clearErr := abandonResolution(root, record)
+		cleared, clearErr := abandonResolution(root, record, opts)
 		return false, abandonmentOf(cleared, errApplicationNeverLanded), clearErr
 	}
 	err = reviseResolution(root, record, opts, &Resolution{PackageID: record.PackageID})
@@ -884,7 +884,7 @@ func finishResolution(root string, state *State, record *Plan, opts Options) (do
 		// was newer" and "this vault's staged copy of your merge is damaged" are
 		// both abandonments and are not remotely the same news, and a package name
 		// on a list cannot tell them apart.
-		cleared, clearErr := abandonResolution(root, record)
+		cleared, clearErr := abandonResolution(root, record, opts)
 		return false, abandonmentOf(cleared, err), clearErr
 	}
 	return err == nil, nil, err
@@ -973,7 +973,7 @@ func IsUnrecordableDecision(err error) bool { return unkeepable(err) }
 // application's own in-process recovery can do on its way out — and still
 // pending, where the next pass decides the direction and finishResolution then
 // asks this same question of an answer instead of a guess.
-func abandonUnlessLanded(root string, record *Plan) error {
+func abandonUnlessLanded(root string, record *Plan, opts Options) error {
 	local, err := vaultsync.Load(root)
 	if err != nil {
 		return err
@@ -1001,7 +1001,7 @@ func abandonUnlessLanded(root string, record *Plan) error {
 	// control gets back here the state no longer names the package and
 	// clearResolution is a no-op. Both orders are correct and neither caller may
 	// assume the other ran, which is why this asks rather than checks.
-	_, err = abandonResolution(root, record)
+	_, err = abandonResolution(root, record, opts)
 	return err
 }
 
@@ -1019,11 +1019,11 @@ func abandonUnlessLanded(root string, record *Plan) error {
 // A plan that revises nothing is never written to the state file at all — see
 // declareResolution — so there is nothing to clear and the promise is vacuously
 // gone.
-func abandonResolution(root string, record *Plan) (cleared bool, err error) {
+func abandonResolution(root string, record *Plan, opts Options) (cleared bool, err error) {
 	if !record.Revises() {
 		return true, nil
 	}
-	if err := clearResolution(root, record.PackageID); err != nil {
+	if err := clearResolution(root, record.PackageID, opts); err != nil {
 		return false, err
 	}
 	return true, discardStaged(root, record.PackageID)
@@ -1033,7 +1033,7 @@ func abandonResolution(root string, record *Plan) (cleared bool, err error) {
 // the staged content is removed, the ordering every store in this package is
 // written under: a record naming content that is gone is a promise nothing can
 // keep, where content nothing names is removable at leisure.
-func clearResolution(root, packageID string) error {
+func clearResolution(root, packageID string, opts Options) error {
 	local, err := vaultsync.Load(root)
 	if err != nil {
 		return err
@@ -1047,7 +1047,7 @@ func clearResolution(root, packageID string) error {
 	}
 	next := state.clone()
 	delete(next.Resolutions, packageID)
-	if err := saveState(root, next); err != nil {
+	if err := saveStateWith(root, next, opts.writeState); err != nil {
 		return err
 	}
 	return nil

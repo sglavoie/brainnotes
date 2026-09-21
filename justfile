@@ -170,6 +170,22 @@ test-sync-transport:
     echo "syncthing: ${BNOTES_SYNCTHING_BIN}"
     go test -tags synctransport -count=1 -timeout 1800s -run '^TestRealTransport' ./internal/vaultsyncd/
 
+# The repeatable distributed recovery gate. The first run composes all focused
+# synchronization package tests, including the seeded
+# randomized offline schedule with exact capacity failure, dependent conflict,
+# competing resolution, rewritten history, anti-echo, and real child-process
+# death boundaries. The second run keeps the transport honest with two actual
+# Syncthing processes, including disconnect, restart, corruption, and incomplete
+# delivery scenarios. That transport half fails rather than skipping when the
+# pinned Syncthing binary is unavailable.
+
+# Run repeatable distributed synchronization and recovery fault scenarios
+test-sync-recovery:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    go test -tags syncrecovery -count=1 -timeout 1800s ./internal/vaultsyncd/ ./internal/vaultimport/ ./internal/vaultexport/ ./internal/vaultsync/
+    just test-sync-transport
+
 # Build the browser JavaScript bundle and the stylesheet
 web-build:
     npm run build:web

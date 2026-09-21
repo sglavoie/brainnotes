@@ -344,7 +344,10 @@ func TestRealTransportCleanupIsSenderOwned(t *testing.T) {
 	})
 
 	// The sender holds the receipt by now, so this pass retires on evidence, and
-	// that removal is the one the receiver honours.
+	// that removal is the one the receiver honours. Retirement also requires the
+	// exact package to be in a verified private backup; without this coverage the
+	// safe result is to retain the sender's last local recovery copy.
+	coverOutgoing(t, w.root())
 	l.settle(w.root(), "the sender to retire "+published, func() bool {
 		return !contains(w.channel(vaultsync.OutgoingDir(w.root())), published)
 	})

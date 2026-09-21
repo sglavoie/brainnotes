@@ -372,7 +372,7 @@ func (d *drain) sweep() error {
 		}
 	}
 	if len(next.Conflicts) != len(state.Conflicts) {
-		if err := saveState(d.root, next); err != nil {
+		if err := saveStateWith(d.root, next, d.opts.writeState); err != nil {
 			return err
 		}
 	}

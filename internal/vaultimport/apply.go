@@ -39,6 +39,9 @@ type Options struct {
 	// RecorderOptions customize the undo entry's clock and identity generation.
 	// They exist for tests; production callers pass none.
 	RecorderOptions []journal.RecorderOption
+	// writeState replaces the durable import-state writer for one application.
+	// It is an unexported qualification seam; production callers always use nil.
+	writeState func(string, []byte, fs.FileMode) error
 	// resolving is the resolution this application is the first half of, and is
 	// unexported because it is not a caller's to set: it is a plan this package
 	// checked against the vault and recorded durably, and an application forced
@@ -71,6 +74,10 @@ func (o Options) now() time.Time {
 		return time.Now().UTC()
 	}
 	return o.Now().UTC()
+}
+
+func (a *applier) saveState(record *State) error {
+	return saveStateWith(a.root, record, a.opts.writeState)
 }
 
 // Result is what one applied package left behind here.
@@ -361,7 +368,7 @@ func (a *applier) converge() (*Result, error) {
 		Converged:    true,
 	}
 	released := a.release(next)
-	if err := saveState(a.root, next); err != nil {
+	if err := a.saveState(next); err != nil {
 		return nil, err
 	}
 	a.state = next
@@ -549,7 +556,7 @@ func (a *applier) declare(entryID string) error {
 		Manifest:     a.manifest,
 		Converged:    a.convergedPaths(),
 	}
-	if err := saveState(a.root, next); err != nil {
+	if err := a.saveState(next); err != nil {
 		return err
 	}
 	a.state = next
@@ -587,7 +594,7 @@ func (a *applier) settle(entryID string, receipt *vaultsync.Receipt) error {
 	// by editing the note, the next pass finds the expectation met, and the hold
 	// and its retained branches go with the application.
 	released := a.release(next)
-	if err := saveState(a.root, next); err != nil {
+	if err := a.saveState(next); err != nil {
 		return err
 	}
 	a.state = next

@@ -32,8 +32,9 @@ Two details that look incidental and are not:
   `.gitignore` does not cover — only a user's *global* gitignore does, which is
   precisely the hazard that `.gitignore`'s own comment warns about.
 
-**The number being ratcheted is 281** — source-level complexity violations.
-Test-file violations (271) are tracked but explicitly out of scope: they buy
+**The initial number being ratcheted was 281** — source-level complexity
+violations at this baseline. Test-file violations (271) were tracked but
+explicitly out of scope: they buy
 the 1.32 Go test ratio that makes the rest of the work safe.
 
 ---
@@ -385,8 +386,9 @@ The assumption largely holds. The safety-critical packages are well covered:
 ## 4. How later sessions use this file
 
 1. Re-run `just metrics` and diff against the tables above.
-2. **The ratchet number is 281** (source complexity violations). It must fall,
-   never rise. 271 test-file violations are out of scope by decision.
+2. **The initial ratchet number is 281** (source complexity violations). It
+   must fall, never rise. The initial 271 test-file violations are out of scope
+   by decision.
 3. Record measured deltas here as sessions land, rather than asserting
    improvement. Sessions S02 and S03 append their gate numbers to this file.
 4. Where a number diverges from the source audit, this file wins — the audit
@@ -409,24 +411,35 @@ and `internal/web/static/` excluded by path as well as by header.
 | `just lint-full`  | Reports the whole-tree count, exit 0        | no — a report |
 | `just install-lint` | Installs the pinned golangci-lint         | no — CI calls it |
 
-### The ratchet floor
+### The ratchet floor (initial S02 measurement)
 
-**281 source-level violations and 271 test-file violations, 552 total.** These
+**The initial floor was 281 source-level violations and 271 test-file
+violations, 552 total.** These
 are the §2.4 numbers, re-measured through the committed `.golangci.yml` rather
 than the ephemeral one `scripts/metrics.py` writes; both produce 552 with the
 same per-linter split (cyclop 346, gocognit 165, nestif 35, funlen 6), which is
 what makes the gate and the metrics report comparable.
 
-552 is a count of *reported* issues, and both configs report with
+The initial 552 is a count of *reported* issues, and both configs report with
 `uniq-by-line` on. cyclop and gocognit both anchor to a function's declaration
 line, so a function over both thresholds contributes one issue, not two —
 `NewSearchCmd` is cyclop 80 *and* gocognit 231 and counts once. The gate is
 unaffected either way: collapsing requires two issues on one line, so one of
 them is always still reported and the run still fails.
 
-**281 must fall and never rise.** The gate does not enforce that directly — it
-enforces the stronger local property that no *new* code violates the
-thresholds. Read the floor with `just lint-full`.
+**The initial 281 must fall and never rise.** The gate does not enforce that
+directly — it enforces the stronger local property that no *new* code violates
+the thresholds. Read the current report with `just lint-full`.
+
+### Current report (session 27, 2026-09-21)
+
+`just lint-full` and `just metrics` both report **443 total Go complexity
+violations: 180 source and 263 test**. Their per-linter split also agrees:
+cyclop 297, gocognit 124, nestif 18, funlen 4. The current report includes the
+`synctransport` and `syncrecovery` tagged test files in both configurations;
+`just lint-new` reports no violation in a changed function. The earlier tables
+remain the source audit and S02 historical measurements rather than being
+rewritten as though they had been captured from this tree.
 
 ### The unit of judgement is the function, not the line
 
@@ -724,8 +737,8 @@ and **`flatted` ships a Go port of itself** at
 `node_modules`** — so from the moment `npm ci` ran, every Go tool in this repo
 treated that third-party package as ours:
 
-| Measurement                     | Contaminated | Correct |
-| ------------------------------- | ------------ | ------- |
+| S03 measurement                 | Contaminated | Corrected |
+| ------------------------------- | ------------ | --------- |
 | §5 complexity floor (`lint-full`) | 555 / 284 source | **552 / 281** |
 | `gocyclo -over 10` cross-check    | 495          | **493** |
 | `deadcode ./...`                  | 88           | **81**  |
@@ -751,8 +764,11 @@ The fix is one decision applied in four places, all of which name each other:
 for the same reason.
 
 **Any future npm dependency can do this again.** The check is cheap: after
-adding one, run `just lint-full` and `just metrics` and confirm the Go numbers
-above are unchanged.
+adding one, compare `just lint-full` and `just metrics` before and after the
+dependency installation on the same Go source tree. Their Go issue totals must
+agree with each other and must not move merely because `node_modules` changed.
+The table above remains the historical S03 reading; the current result is under
+"Current report" in §5.
 
 ### Denominator drift caused by this session
 

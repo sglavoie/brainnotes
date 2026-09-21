@@ -477,6 +477,13 @@ func loadState(root string, local *vaultsync.Enrollment) (*State, error) {
 // It is also what keeps this package out of internal/audit's approved list: no
 // production file here opens, creates, renames, or removes anything.
 func saveState(root string, record *State) error {
+	return saveStateWith(root, record, nil)
+}
+
+// saveStateWith permits one application to replace the durable state writer.
+// Production passes nil. The recovery qualification uses it to force ENOSPC at
+// an exact state transition without a mutable package-global test seam.
+func saveStateWith(root string, record *State, write func(string, []byte, fs.FileMode) error) error {
 	if err := record.validate(); err != nil {
 		return err
 	}
@@ -491,7 +498,10 @@ func saveState(root string, record *State) error {
 	if err := vault.GuardMutation(root, statePath); err != nil {
 		return err
 	}
-	if err := vault.WriteStateFile(statePath, data, statePerm); err != nil {
+	if write == nil {
+		write = vault.WriteStateFile
+	}
+	if err := write(statePath, data, statePerm); err != nil {
 		return fmt.Errorf("vaultimport: write import state: %w", err)
 	}
 	return nil

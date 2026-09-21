@@ -564,7 +564,7 @@ func (a *applier) hold(found *disposition) error {
 		DetectedAt:   a.opts.now(),
 		Paths:        paths,
 	}
-	if err := saveState(a.root, next); err != nil {
+	if err := a.saveState(next); err != nil {
 		return err
 	}
 	a.state = next
