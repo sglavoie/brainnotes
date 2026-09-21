@@ -9,14 +9,15 @@
 // lives here is what needs a browser and a server to be true at once.
 //
 // `just ci` does NOT run it. The Go and Vitest gates need no browser binary;
-// this one needs a ~100 MB Chromium that `npm run test:e2e:install` downloads,
-// and a gate that silently skips when its engine is absent enforces nothing. It
+// this one needs browser binaries that `npm run test:e2e:install` downloads,
+// and a gate that silently skips when an engine is absent enforces nothing. It
 // is its own command so the requirement is visible.
 //
-// Chromium only. The vault is written from a desktop browser on a Mac; the
-// deployment repository's companion dashboard tests both engines because that
-// one is also read from an iPhone, and stating the reason here keeps this from
-// looking like an oversight.
+// The long local regression journey stays on Chromium desktop. The release
+// qualification is a separate, bounded spec run in Chromium, Firefox and
+// WebKit at both desktop and mobile layout widths. Keeping those projects on an
+// independent hosted vault means each engine exercises real writes without
+// multiplying every destructive regression spec six times.
 //
 // package.json is `"type": "module"`, so this file is ESM.
 
@@ -26,14 +27,68 @@ import { readManifest } from "./internal/web/e2e/manifest.mjs";
 
 const manifest = readManifest();
 
+const qualificationSpec = /qualification\.spec\.js$/;
+const readOnlySpec = /read-only\.spec\.js$/;
+
+const mobileLayout = (device) => ({
+  ...device,
+  viewport: { width: 390, height: 844 },
+  hasTouch: true,
+});
+
+const qualificationProject = (name, device) => ({
+  name,
+  testMatch: qualificationSpec,
+  use: { ...device, baseURL: manifest.hostedBaseURL },
+});
+
+const serverEnvironment = {
+  HOME: manifest.home,
+  XDG_CONFIG_HOME: `${manifest.home}/.config`,
+  GIT_CONFIG_GLOBAL: `${manifest.home}/.gitconfig`,
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_TERMINAL_PROMPT: "0",
+};
+
+// Every profile is launched through the sanctioned vault sandbox, from the
+// disposable fixture root and under an isolated Git/HOME environment. The
+// sandbox passes --vault explicitly and verifies the resolved root before it
+// starts the server. /api/ready then proves this run's process loaded notes;
+// reuseExistingServer stays false so a listener left by another run is never
+// adopted as the fixture.
+const fixtureServer = (vault, port, baseURL, profileArgs = []) => ({
+  command: [
+    "python3",
+    `${manifest.repoRoot}/scripts/vault_sandbox.py`,
+    "--bn",
+    manifest.bn,
+    "--sandbox",
+    vault,
+    "--",
+    "serve",
+    "--addr",
+    `${manifest.host}:${port}`,
+    "--no-open",
+    ...profileArgs,
+  ]
+    .map(quote)
+    .join(" "),
+  cwd: manifest.fixtureRoot,
+  env: serverEnvironment,
+  url: `${baseURL}/api/ready`,
+  reuseExistingServer: false,
+  timeout: 60000,
+  stdout: "ignore",
+  stderr: "pipe",
+});
+
 export default defineConfig({
   testDir: "./internal/web/e2e",
   testMatch: /.*\.spec\.js$/,
   outputDir: "./internal/web/e2e/.artifacts/results",
   globalTeardown: "./internal/web/e2e/cleanup.mjs",
-  // One server, one vault pair, and several specs that write to it and then
-  // assert on its Git state. Concurrency here would buy seconds and cost
-  // determinism.
+  // Three servers and several specs write to their own vaults and then assert
+  // on Git state. Concurrency here would buy seconds and cost determinism.
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
@@ -49,64 +104,34 @@ export default defineConfig({
     video: "off",
   },
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-
-  webServer: {
-    // Launched through scripts/vault_sandbox.py rather than directly. That
-    // script is the sanctioned way to point a `bn` process at a vault during
-    // verification: it removes $BNOTES_VAULT from the child, passes --vault
-    // explicitly, asks `bn config` which root it *actually* resolved, and
-    // refuses with exit 2 unless that root is the sandbox named here. Running
-    // `bn serve` directly would mean this harness deciding for itself that it
-    // is isolated, which is what the incident behind that script looked like.
-    command: [
-      "python3",
-      quote(`${manifest.repoRoot}/scripts/vault_sandbox.py`),
-      "--bn",
-      quote(manifest.bn),
-      "--sandbox",
-      quote(manifest.localVault),
-      "--",
-      "serve",
-      "--addr",
-      `${manifest.host}:${manifest.port}`,
-      "--no-open",
-    ].join(" "),
-    // The fixture directory, not the checkout. `serveWebProjectRoot` walks
-    // *every* ancestor of its working directory looking for a web project root,
-    // so a `bn serve` started inside this repository finds it, rebuilds
-    // app.js/app.css into the working tree, and serves those — the suite would
-    // then be testing assets it had just generated and would have modified
-    // tracked files to do it. prepare.mjs refuses a fixture root under the
-    // checkout for exactly this reason (a repo-local $TMPDIR is a normal CI
-    // arrangement), so by the time this runs the ancestor walk has nothing to
-    // find.
-    cwd: manifest.fixtureRoot,
-    // The server's own environment, not the developer's. vault_sandbox.py
-    // scrubs $BNOTES_VAULT and nothing else, so without this `bn serve` — and
-    // every vaultgit snapshot it takes — runs under the real HOME and the real
-    // global git config. A global core.excludesFile matching *.md would then
-    // produce a server whose snapshots silently omit notes, while the specs'
-    // own `git status` (which already runs under manifest.home) reports the
-    // same vault clean. internal/vaultfixture.Isolate treats this as
-    // load-bearing for Go fixtures; the browser fixture gets it too.
-    env: {
-      HOME: manifest.home,
-      XDG_CONFIG_HOME: `${manifest.home}/.config`,
-      GIT_CONFIG_GLOBAL: `${manifest.home}/.gitconfig`,
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_TERMINAL_PROMPT: "0",
+  projects: [
+    {
+      name: "local-chromium-regression",
+      testIgnore: [qualificationSpec, readOnlySpec],
+      use: { ...devices["Desktop Chrome"] },
     },
-    // /api/ready reports 200 only once a snapshot with notes exists, so waiting
-    // on it means the first spec sees a loaded vault rather than a cold one.
-    url: `${manifest.baseURL}/api/ready`,
-    // Never adopt a server this run did not start: an already-listening process
-    // on this port is by definition not the isolated fixture.
-    reuseExistingServer: false,
-    timeout: 60000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+    qualificationProject("hosted-chromium-desktop", devices["Desktop Chrome"]),
+    qualificationProject("hosted-firefox-desktop", devices["Desktop Firefox"]),
+    qualificationProject("hosted-webkit-desktop", devices["Desktop Safari"]),
+    qualificationProject("hosted-chromium-mobile", mobileLayout(devices["Desktop Chrome"])),
+    qualificationProject("hosted-firefox-mobile", mobileLayout(devices["Desktop Firefox"])),
+    qualificationProject("hosted-webkit-mobile", mobileLayout(devices["Desktop Safari"])),
+    {
+      name: "read-only-chromium-regression",
+      testMatch: readOnlySpec,
+      use: { ...devices["Desktop Chrome"], baseURL: manifest.readOnlyBaseURL },
+    },
+  ],
+
+  webServer: [
+    fixtureServer(manifest.localVault, manifest.port, manifest.baseURL),
+    fixtureServer(manifest.hostedVault, manifest.hostedPort, manifest.hostedBaseURL, ["--hosted"]),
+    fixtureServer(manifest.peerVault, manifest.readOnlyPort, manifest.readOnlyBaseURL, [
+      "--read-only",
+      "--state-dir",
+      manifest.readOnlyState,
+    ]),
+  ],
 });
 
 // quote wraps a path for the shell Playwright runs `command` through. Fixture

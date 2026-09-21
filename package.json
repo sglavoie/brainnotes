@@ -6,7 +6,7 @@
     "typecheck:web": "tsc --project tsconfig.web.json --noEmit",
     "test:web": "vitest run internal/web/static_src",
     "test:e2e": "npm run lint:e2e && node internal/web/e2e/prepare.mjs && playwright test",
-    "test:e2e:install": "playwright install chromium",
+    "test:e2e:install": "playwright install chromium firefox webkit",
     "lint:e2e": "eslint --no-error-on-unmatched-pattern internal/web/e2e playwright.config.js",
     "lint:web": "node scripts/lint_web.mjs",
     "lint:web:full": "node scripts/lint_web.mjs --full"

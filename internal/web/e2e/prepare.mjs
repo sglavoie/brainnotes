@@ -58,6 +58,17 @@ const CAPTURE_HEADING = "## Captured";
 // vault matched on content — which is most of what the search is for.
 const FIELDWORK_NOTE = "Notes/Fieldwork.md";
 
+// ACTIVE_MEDIA are deliberately hostile same-origin attachments. The hosted
+// qualification asks the running server for these exact bytes and proves the
+// response forces a download under a sandbox instead of letting either format
+// execute with the vault page's authority.
+const ACTIVE_MEDIA = {
+  "attachments/active.html":
+    "<!doctype html><script>window.parent.document.body.dataset.mediaExecuted = 'html'</script>\n",
+  "attachments/active.svg":
+    '<svg xmlns="http://www.w3.org/2000/svg" onload="window.parent.document.body.dataset.mediaExecuted=\'svg\'"></svg>\n',
+};
+
 const SEED_NOTES = {
   "Alpha.md": "---\nstatus: draft\ntitle: Alpha\n---\n\nAlpha body, see [[Beta]].\n",
   "Beta.md": "---\nstatus: draft\ntitle: Beta\n---\n\nBeta body.\n",
@@ -123,7 +134,12 @@ function gitEnv(home) {
 
 function buildVault(root, name, home, marker, files) {
   mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, ".gitignore"), "brainnotes.local.toml\n");
   writeFileSync(join(root, "brainnotes.toml"), vaultConfig(marker));
+  writeFileSync(
+    join(root, "brainnotes.local.toml"),
+    `[open]\neditor = "private-${name}-${marker}"\n`,
+  );
   for (const [rel, body] of Object.entries(files)) {
     const path = join(root, rel);
     mkdirSync(dirname(path), { recursive: true });
@@ -254,15 +270,25 @@ export async function prepare() {
   const marker = fixtureRoot.split("/").pop();
   const localVault = join(fixtureRoot, "local");
   const peerVault = join(fixtureRoot, "peer");
-  buildVault(localVault, "local", home, `local ${marker}`, SEED_NOTES);
+  const hostedVault = join(fixtureRoot, "hosted");
+  buildVault(localVault, "local", home, `local ${marker}`, { ...SEED_NOTES, ...ACTIVE_MEDIA });
   buildVault(peerVault, "peer", home, `peer ${marker}`, {
     ...SEED_NOTES,
+    ...ACTIVE_MEDIA,
     [PEER_ONLY_NOTE]: "---\ntitle: PeerOnly\n---\n\nOnly the peer device has this note.\n",
+  });
+  buildVault(hostedVault, "hosted", home, `hosted ${marker}`, {
+    ...SEED_NOTES,
+    ...ACTIVE_MEDIA,
   });
 
   const sync = seedSync(fixtureRoot, localVault, peerVault, home);
 
   const port = await reservePort();
+  const hostedPort = await reservePort();
+  const readOnlyPort = await reservePort();
+  const readOnlyState = join(fixtureRoot, "read-only-state");
+  mkdirSync(readOnlyState, { recursive: true });
   const manifest = {
     repoRoot: REPO_ROOT,
     fixtureRoot,
@@ -270,9 +296,16 @@ export async function prepare() {
     bn,
     localVault,
     peerVault,
+    hostedVault,
+    readOnlyState,
     host: "127.0.0.1",
     port,
+    hostedPort,
+    readOnlyPort,
     baseURL: `http://127.0.0.1:${port}`,
+    hostedBaseURL: `http://127.0.0.1:${hostedPort}`,
+    readOnlyBaseURL: `http://127.0.0.1:${readOnlyPort}`,
+    activeMedia: Object.keys(ACTIVE_MEDIA),
     unrelatedNote: UNRELATED_NOTE,
     peerOnlyNote: PEER_ONLY_NOTE,
     inboxNote: INBOX_NOTE,
