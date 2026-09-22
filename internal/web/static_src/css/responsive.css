@@ -321,6 +321,7 @@
   .frontmatter-button,
   .create-note-button,
   .copy-button,
+  .source-editor-launch,
   .synthesize-launch {
     flex: 1 1 11rem;
   }
