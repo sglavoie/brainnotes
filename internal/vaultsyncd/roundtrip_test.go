@@ -1,6 +1,7 @@
 package vaultsyncd
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
@@ -62,6 +63,7 @@ func TestDeliveryIsNotApplicationUntilAReceiptSaysSo(t *testing.T) {
 func TestCoveredAcknowledgedPackageRetiresAndItsRemovalReleasesTheReceipt(t *testing.T) {
 	w := enroll(t)
 	published := exchange(t, w)
+	manifest := readRetirementManifest(t, filepath.Join(vaultsync.OutgoingDir(w.root()), published))
 
 	// The acknowledgment is here and exchange recorded verified backup coverage,
 	// so the sender's copy has no reader left and is not the only recovery copy.
@@ -71,6 +73,10 @@ func TestCoveredAcknowledgedPackageRetiresAndItsRemovalReleasesTheReceipt(t *tes
 	}
 	if got := w.channel(vaultsync.OutgoingDir(w.root())); contains(got, published) {
 		t.Fatalf("the acknowledged package is still published: %v", got)
+	}
+	retirement, err := vaultsync.ReadRetirement(vaultsync.OutgoingDir(w.root()))
+	if err != nil || retirement == nil || retirement.Through < manifest.Sequence {
+		t.Fatalf("sender retirement = %+v, %v; want sequence %d covered", retirement, err, manifest.Sequence)
 	}
 	requireStates(t, w.status(w.root()), StateIdle)
 
@@ -89,6 +95,9 @@ func TestCoveredAcknowledgedPackageRetiresAndItsRemovalReleasesTheReceipt(t *tes
 	}
 	if got := w.receipts(vaultsync.OutgoingDir(w.peerRoot())); contains(got, published) {
 		t.Fatalf("the peer is still holding a receipt for a package nobody has: %v", got)
+	}
+	if peerPass.Status.Peer.Applied != 0 {
+		t.Fatalf("the peer still retains %d retired applied-package records", peerPass.Status.Peer.Applied)
 	}
 }
 

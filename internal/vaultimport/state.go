@@ -88,6 +88,18 @@ type State struct {
 	// what makes a redelivery idempotent: the transport may deliver one package
 	// any number of times, and every delivery after the first must answer from
 	// this map instead of touching the vault again.
+	//
+	// Entries are retained until two independent facts hold: the package is gone
+	// from the incoming channel, and the sender-authored retirement high-water
+	// mark covers its origin sequence. The second fact is the safety boundary. A
+	// locally missing package alone may be restored by the receive-only transport,
+	// while the watermark is written only after the sender has retired its owned
+	// package and can no longer redeliver it. Requiring absence as well handles
+	// transport reordering where that watermark arrives before the deletion.
+	// The watermark is one monotonically advancing record rather than a tombstone
+	// per package, and it names only the sender's still-redeliverable exceptions,
+	// so both it and this map remain bounded by outstanding work rather than by
+	// vault lifetime.
 	Applied map[string]Record `json:"applied"`
 	// Conflicts maps a package identity to the hold placed on it: the contested
 	// paths, and where every version of each was kept.

@@ -216,8 +216,8 @@ type PeerStatus struct {
 	// Incomplete is the subset of those that cannot be read yet: a package the
 	// transport is still copying in, or one that arrived damaged.
 	Incomplete int `json:"incomplete"`
-	// Applied is how many packages the import ledger remembers, across the whole
-	// history of this enrollment rather than only what is in the channel.
+	// Applied is how many packages the import ledger still remembers because the
+	// peer may redeliver them. Sender retirement evidence prunes older records.
 	Applied int `json:"applied"`
 	// Pending reports an application that was interrupted and whose outcome is
 	// not yet resolved. The next drain resolves it before anything else.

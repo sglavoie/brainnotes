@@ -236,7 +236,11 @@ func copyTree(t *testing.T, from, to string) {
 func copyFile(t *testing.T, from, to string, mode os.FileMode) {
 	t.Helper()
 	if _, err := os.Stat(to); err == nil {
-		return
+		// Packages and receipts are immutable; the one channel record designed to
+		// advance in place is the retirement high-water mark.
+		if filepath.Base(to) != vaultsync.RetirementName {
+			return
+		}
 	}
 	data, err := os.ReadFile(from)
 	if err != nil {

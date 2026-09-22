@@ -236,7 +236,53 @@ func runRetire(root string) (*RetireOutcome, error) {
 			return outcome, err
 		}
 	}
+	if err := publishRetirement(root, local); err != nil {
+		return outcome, err
+	}
 	return outcome, outcome.release(root)
+}
+
+// publishRetirement advances the bounded sender-owned evidence a receiver uses
+// to prune its applied-package ledger. The export sequence is the upper bound:
+// every position at or below it has been consumed and will never be reused. Any
+// package still published is named as an exception. An unreadable export record
+// or package leaves the existing watermark alone, which retains receiver history
+// in the safe direction.
+func publishRetirement(root string, local *vaultsync.Enrollment) error {
+	state, err := vaultexport.LoadState(root)
+	if err != nil || state.Sequence == 0 {
+		return nil
+	}
+	through := state.Sequence
+	published, err := listPackages(vaultsync.OutgoingDir(root))
+	if err != nil {
+		return err
+	}
+	retained := make([]vaultsync.RetainedPackage, 0, len(published))
+	for _, pkg := range published {
+		manifest, err := vaultsync.ReadManifest(pkg.dir)
+		if err != nil {
+			return nil
+		}
+		if manifest.OriginDevice != local.DeviceID || manifest.Epoch != local.Epoch {
+			continue
+		}
+		if manifest.Sequence <= through {
+			retained = append(retained, vaultsync.RetainedPackage{
+				PackageID: manifest.PackageID,
+				Sequence:  manifest.Sequence,
+			})
+		}
+	}
+	_, err = vaultsync.PublishRetirement(vaultsync.OutgoingDir(root), &vaultsync.Retirement{
+		Format:       vaultsync.Format,
+		VaultID:      local.VaultID,
+		OriginDevice: local.DeviceID,
+		Epoch:        local.Epoch,
+		Through:      through,
+		Retained:     retained,
+	})
+	return err
 }
 
 // reservedPackage names the package internal/vaultexport is in the middle of

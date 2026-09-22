@@ -12,6 +12,7 @@ import (
 //	enrollment.json      this replica's identity, epoch, and accepted peers
 //	outgoing/            this device's channel; it publishes here, the peer reads
 //	outgoing/receipts/   acknowledgments this device owes the peer
+//	outgoing/retirement.json  bounded high-water evidence for retired packages
 //	incoming/            the peer's channel, delivered by the transport
 //	incoming/receipts/   acknowledgments the peer owes this device
 //

@@ -371,7 +371,10 @@ func (d *drain) sweep() error {
 			delete(next.Conflicts, packageID)
 		}
 	}
-	if len(next.Conflicts) != len(state.Conflicts) {
+	if err := d.pruneApplied(next, present); err != nil {
+		return err
+	}
+	if len(next.Conflicts) != len(state.Conflicts) || len(next.Applied) != len(state.Applied) {
 		if err := saveStateWith(d.root, next, d.opts.writeState); err != nil {
 			return err
 		}
@@ -379,6 +382,37 @@ func (d *drain) sweep() error {
 	// A directory that could not be collected is not a reason to refuse every
 	// import in the vault — see Drained.Cleanup.
 	d.cleanup = errors.Join(d.cleanup, collectRetained(d.root, next.Conflicts))
+	return nil
+}
+
+// pruneApplied removes only records the sending peer has made impossible to
+// redeliver. Incoming absence is necessary but insufficient: a person may have
+// removed a receive-only copy which the transport will restore. The peer's
+// retirement watermark is the durable sender-owned promise, and the presence
+// check keeps a watermark delivered ahead of its deletion from making this pass
+// treat the still-visible package as new.
+func (d *drain) pruneApplied(next *State, present map[string]struct{}) error {
+	retirement, err := vaultsync.ReadRetirement(vaultsync.IncomingDir(d.root))
+	if err != nil || retirement == nil {
+		return err
+	}
+	local, err := vaultsync.Load(d.root)
+	if err != nil {
+		return err
+	}
+	if err := retirement.VerifyFor(local); err != nil {
+		return err
+	}
+	for packageID, record := range next.Applied {
+		if record.OriginDevice != retirement.OriginDevice || record.Sequence > retirement.Through ||
+			retirement.Retains(packageID) {
+			continue
+		}
+		if _, stillDelivered := present[packageID]; stillDelivered {
+			continue
+		}
+		delete(next.Applied, packageID)
+	}
 	return nil
 }
 
