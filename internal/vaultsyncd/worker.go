@@ -38,8 +38,9 @@ type ImportOutcome struct {
 	// in.
 	Recovered bool `json:"recovered,omitempty"`
 	// Unfinished and Cleanup are the two failures a drain reports without
-	// refusing: content that landed whose bookkeeping did not, and files nothing
-	// points at that could not be removed. They are carried as sanitized text
+	// refusing: content that landed whose bookkeeping did not, and housekeeping
+	// that could not finish safely, such as removing unreferenced files or pruning
+	// from an unreadable peer retirement record. They are carried as sanitized text
 	// because they must reach a log line even though the pass succeeded.
 	Unfinished string `json:"unfinished,omitempty"`
 	Cleanup    string `json:"cleanup,omitempty"`

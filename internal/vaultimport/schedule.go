@@ -98,8 +98,9 @@ type Drained struct {
 	Held []Held
 	// Cleanup is a housekeeping failure that left the vault correct, the same
 	// judgement Result.Cleanup encodes: a retained-branch directory belonging to no
-	// hold that could not be removed. Refusing every import over a directory that
-	// is safe to delete would be the wrong trade, and saying nothing about it would
+	// hold that could not be removed, or an unusable peer retirement record that
+	// prevented pruning old applied-ledger entries. Refusing every import over
+	// either condition would be the wrong trade, and saying nothing about it would
 	// be the other wrong one.
 	Cleanup error
 	// Unfinished names the packages whose content landed and whose bookkeeping did
@@ -107,8 +108,9 @@ type Drained struct {
 	//
 	// Apply returns the Result *with* the error in that case, and a drain records
 	// the package as applied because it is. The error has nowhere else to go: the
-	// package is not held, Cleanup is about files nothing points at, and the
-	// consequence is neither of those. There are two shapes and the message
+	// package is not held, Cleanup is about housekeeping that left durable content
+	// correct, and the consequence is neither of those. There are two shapes and
+	// the message
 	// distinguishes them, because they point at different things to look at — the
 	// receipt could not be minted or published, so the peer never learns the
 	// package arrived and redelivers forever; or the receipt is out and the import
@@ -357,7 +359,14 @@ func (d *drain) sweep() error {
 	if !d.channel {
 		return nil
 	}
-	state, err := d.load()
+	// Load the enrollment once here because the same identity validates both the
+	// import state and the peer retirement promise. Failure to load local state is
+	// still a vault failure; only the peer-owned record degrades to housekeeping.
+	local, err := vaultsync.Load(d.root)
+	if err != nil {
+		return err
+	}
+	state, err := loadState(d.root, local)
 	if err != nil {
 		return err
 	}
@@ -371,9 +380,12 @@ func (d *drain) sweep() error {
 			delete(next.Conflicts, packageID)
 		}
 	}
-	if err := d.pruneApplied(next, present); err != nil {
-		return err
-	}
+	// Pruning is an optimisation over already-durable application evidence. An
+	// unreadable or unverifiable peer-owned retirement record cannot make it safe
+	// to forget any of that evidence, but it cannot make an unrelated package
+	// unsafe to apply either. Keep the ledger intact and report the problem through
+	// the drain's existing non-fatal housekeeping channel.
+	d.pruneApplied(next, present, local)
 	if len(next.Conflicts) != len(state.Conflicts) || len(next.Applied) != len(state.Applied) {
 		if err := saveStateWith(d.root, next, d.opts.writeState); err != nil {
 			return err
@@ -391,17 +403,18 @@ func (d *drain) sweep() error {
 // retirement watermark is the durable sender-owned promise, and the presence
 // check keeps a watermark delivered ahead of its deletion from making this pass
 // treat the still-visible package as new.
-func (d *drain) pruneApplied(next *State, present map[string]struct{}) error {
+func (d *drain) pruneApplied(next *State, present map[string]struct{}, local *vaultsync.Enrollment) {
 	retirement, err := vaultsync.ReadRetirement(vaultsync.IncomingDir(d.root))
-	if err != nil || retirement == nil {
-		return err
-	}
-	local, err := vaultsync.Load(d.root)
 	if err != nil {
-		return err
+		d.cleanup = errors.Join(d.cleanup, fmt.Errorf("vaultimport: prune applied ledger: %w", err))
+		return
+	}
+	if retirement == nil {
+		return
 	}
 	if err := retirement.VerifyFor(local); err != nil {
-		return err
+		d.cleanup = errors.Join(d.cleanup, fmt.Errorf("vaultimport: prune applied ledger: %w", err))
+		return
 	}
 	for packageID, record := range next.Applied {
 		if record.OriginDevice != retirement.OriginDevice || record.Sequence > retirement.Through ||
@@ -413,7 +426,6 @@ func (d *drain) pruneApplied(next *State, present map[string]struct{}) error {
 		}
 		delete(next.Applied, packageID)
 	}
-	return nil
 }
 
 // passes applies what it can, repeatedly, until a pass changes nothing.
