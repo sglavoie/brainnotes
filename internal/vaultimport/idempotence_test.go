@@ -185,6 +185,64 @@ func TestALegacyUnpublishedReceiptIsRecoveredAfterALaterPackage(t *testing.T) {
 	}
 }
 
+// A legacy convergence record is itself the durable proof that every package
+// result was observed: rememberConvergence is reached only after the receipt was
+// minted, and old builds discarded that receipt when channel publication failed.
+// A later package may move the path on before the old package is redelivered, so
+// today's bytes cannot be used to recreate the earlier statement.
+func TestALegacyUnpublishedConvergenceReceiptIsRecoveredAfterALaterPackage(t *testing.T) {
+	r := enroll(t)
+	packaged := r.believes(t, "Alpha.md")
+	r.pair.Local.Write(t, "Alpha.md", alphaBody)
+	firstManifest, firstDir := r.deliver(t, func(b *vaultsync.Builder) {
+		b.Write("Alpha.md", []byte(alphaBody), packaged)
+	})
+	requireLegacyUnpublishedConvergence(t, r, firstManifest.PackageID, firstDir)
+
+	const laterBody = "---\nstatus: done\ntitle: Alpha\n---\n\nA later package moved Alpha on.\n"
+	_, laterDir := r.deliver(t, func(b *vaultsync.Builder) {
+		b.Write("Alpha.md", []byte(laterBody), vaultsync.Existing(vaultsync.HashBytes([]byte(alphaBody))))
+	})
+	r.mustApply(t, laterDir)
+
+	retried := r.mustApply(t, firstDir)
+	if !retried.Duplicate || !retried.Converged || retried.Receipt == nil {
+		t.Fatalf("legacy convergence redelivery returned %+v", retried)
+	}
+	if got := r.pair.Local.Read(t, "Alpha.md"); got != laterBody {
+		t.Fatalf("recovering the convergence receipt moved the live note back to %q", got)
+	}
+	if got, want := retried.Receipt.Applied[0].SHA256, vaultsync.HashBytes([]byte(alphaBody)); got != want {
+		t.Fatalf("recovered convergence receipt hash = %s, want original observation %s", got, want)
+	}
+	stored := importState(t, r).Applied[firstManifest.PackageID]
+	if stored.Receipt == nil || stored.Receipt.Applied[0].SHA256 != retried.Receipt.Applied[0].SHA256 {
+		t.Fatalf("the recovered convergence receipt was not retained: %+v", stored)
+	}
+}
+
+func requireLegacyUnpublishedConvergence(t *testing.T, r *replicas, packageID, packageDir string) {
+	t.Helper()
+	blockOutgoingChannel(t, r.root())
+	result, err := r.apply(t, packageDir)
+	if err == nil || result == nil || !result.Converged || result.Receipt == nil {
+		t.Fatalf("blocked convergence returned result %+v and error %v", result, err)
+	}
+	if err := os.Remove(vaultsync.OutgoingDir(r.root())); err != nil {
+		t.Fatalf("unblock outgoing channel: %v", err)
+	}
+
+	// Reproduce the record written by the old build: convergence was proven, but
+	// the receipt minted before publication failed was not retained.
+	state := importState(t, r)
+	record := state.Applied[packageID]
+	record.Receipt = nil
+	state.Applied[packageID] = record
+	if err := saveState(r.root(), state); err != nil {
+		t.Fatalf("save legacy convergence state: %v", err)
+	}
+}
+
 // publishedBytes reads the receipt for packageID as the peer would: the bytes of
 // the file in the channel, not the decoded record. "The same receipt" is a claim
 // about what the peer reads, so the file is what the test has to compare.

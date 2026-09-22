@@ -754,12 +754,14 @@ func (a *applier) retryAcknowledge(record Record) (*Result, error) {
 	return result, ackErr
 }
 
-// retryConvergedAcknowledge answers a redelivery whose first convergence
-// acknowledgment could not be published. It re-observes every package path,
-// so a later edit refuses the new claim instead of being described as the state
-// the package originally found.
+// retryConvergedAcknowledge answers a legacy redelivery whose first convergence
+// acknowledgment could not be published and was not retained. A convergence
+// record is written only after mintConvergence proved every package result, so
+// the record plus the accepted immutable manifest are the durable evidence for
+// that earlier observation. Reading today's paths would strand the package once
+// a later valid package moved one of them on.
 func (a *applier) retryConvergedAcknowledge(record Record) (*Result, error) {
-	result, acknowledged, ackErr := a.acknowledgeConvergence()
+	result, acknowledged, ackErr := a.acknowledgeConvergenceWith(a.mintRecordedConvergence)
 	result.Duplicate = true
 	if !acknowledged || result.Receipt == nil {
 		return result, ackErr
@@ -1163,6 +1165,10 @@ func (a *applier) acknowledgeWith(entry *journal.Entry, appliedPaths func() ([]v
 // it is held to the same read-back and exact-coverage checks as an application
 // that wrote the package.
 func (a *applier) acknowledgeConvergence() (*Result, bool, error) {
+	return a.acknowledgeConvergenceWith(a.mintConvergence)
+}
+
+func (a *applier) acknowledgeConvergenceWith(mint func() (*vaultsync.Receipt, error)) (*Result, bool, error) {
 	result := &Result{
 		PackageID:    a.manifest.PackageID,
 		OperationID:  a.operation.OperationID,
@@ -1175,7 +1181,7 @@ func (a *applier) acknowledgeConvergence() (*Result, bool, error) {
 		// A blocked or damaged channel does not erase the fact that every package
 		// result is already present. Prove that fact independently before returning
 		// the same applied-with-bookkeeping-error shape an ordinary import uses.
-		receipt, proofErr := a.mintConvergence()
+		receipt, proofErr := mint()
 		if proofErr != nil {
 			return result, false, errors.Join(err, proofErr)
 		}
@@ -1187,7 +1193,7 @@ func (a *applier) acknowledgeConvergence() (*Result, bool, error) {
 		result.ReceiptPath = path
 		return result, true, nil
 	}
-	receipt, err := a.mintConvergence()
+	receipt, err := mint()
 	if err != nil {
 		return result, false, err
 	}
@@ -1204,6 +1210,27 @@ func (a *applier) mintConvergence() (*vaultsync.Receipt, error) {
 	applied, err := a.observe()
 	if err != nil {
 		return nil, err
+	}
+	return vaultsync.Acknowledge(a.local, a.manifest, vaultsync.Application{
+		Converged: true,
+		Applied:   applied,
+		Now:       a.opts.Now,
+	})
+}
+
+// mintRecordedConvergence reconstructs the statement an old build proved and
+// then lost when publication failed. rememberConvergence could only have written
+// this ledger shape after mintConvergence succeeded, so the manifest results are
+// evidence already checked at that time rather than claims being trusted now.
+func (a *applier) mintRecordedConvergence() (*vaultsync.Receipt, error) {
+	applied := make([]vaultsync.AppliedPath, 0, len(a.changes))
+	for _, planned := range a.changes {
+		change := planned.change
+		entry := vaultsync.AppliedPath{Path: change.Path, Action: change.Action}
+		if change.Action != vaultsync.ActionDelete {
+			entry.SHA256 = change.ResultSHA256
+		}
+		applied = append(applied, entry)
 	}
 	return vaultsync.Acknowledge(a.local, a.manifest, vaultsync.Application{
 		Converged: true,
