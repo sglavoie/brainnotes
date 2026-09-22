@@ -336,10 +336,10 @@ func classifyPropertyTxnError(message string, err error) error {
 		return noteops.WrapError(noteops.CodeForbidden, err.Error(), err)
 	case vault.IsTxnRecoveryNeeded(err):
 		return noteops.WrapError(noteops.CodeInternal, err.Error(), err)
-	case vault.IsTxnConflict(err):
-		return noteops.WrapError(noteops.CodeConflict, noteops.MessageOf(err), err)
 	case vault.IsTxnRollbackFailure(err):
 		return noteops.WrapError(noteops.CodeInternal, err.Error(), err)
+	case vault.IsTxnConflict(err):
+		return noteops.WrapError(noteops.CodeConflict, noteops.MessageOf(err), err)
 	default:
 		return noteops.WrapError(noteops.CodeInternal, message, err)
 	}

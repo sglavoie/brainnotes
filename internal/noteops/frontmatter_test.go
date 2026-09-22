@@ -393,6 +393,32 @@ func TestClassifyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) {
 	}
 }
 
+func TestClassifyTxnErrorTreatsFailedRollbackOverConflictAsInternal(t *testing.T) {
+	t.Parallel()
+
+	err := &vault.TxnRollbackError{
+		Path: "/vault/Source.md",
+		Err: &vault.TxnConflictError{
+			Path:     "/vault/Source.md",
+			Expected: "old hash",
+			Actual:   "new hash",
+		},
+		Failed:       []string{"/vault/Other.md"},
+		RollbackErrs: []error{errors.New("permission denied")},
+	}
+
+	classified := classifyTxnError("frontmatter: save note", err)
+	if got := CodeOf(classified); got != CodeInternal {
+		t.Fatalf("code = %q, want %q", got, CodeInternal)
+	}
+	if got := HTTPStatusForError(classified); got != 500 {
+		t.Fatalf("status = %d, want 500", got)
+	}
+	if message := MessageOf(classified); !strings.Contains(message, "inspect 'git diff' to recover") {
+		t.Fatalf("message must preserve rollback recovery guidance, got %q", message)
+	}
+}
+
 // A volume whose replacement semantics could not be proved, and a Windows
 // replacement that stopped half-way, both carry the only sentence that tells a
 // person what happened and what to do about it. Neither is a conflict — retrying

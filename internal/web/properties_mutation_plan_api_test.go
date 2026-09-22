@@ -344,3 +344,27 @@ func TestClassifyPropertyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) 
 		})
 	}
 }
+
+func TestClassifyPropertyTxnErrorTreatsFailedRollbackOverConflictAsInternal(t *testing.T) {
+	err := &vault.TxnRollbackError{
+		Path: "/vault/Alpha.md",
+		Err: &vault.TxnConflictError{
+			Path:     "/vault/Alpha.md",
+			Expected: "old hash",
+			Actual:   "new hash",
+		},
+		Failed:       []string{"/vault/Beta.md"},
+		RollbackErrs: []error{errors.New("permission denied")},
+	}
+
+	classified := classifyPropertyTxnError("properties: write", err)
+	if got := noteops.CodeOf(classified); got != noteops.CodeInternal {
+		t.Fatalf("code = %q, want %q", got, noteops.CodeInternal)
+	}
+	if got := noteops.HTTPStatusForError(classified); got != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", got, http.StatusInternalServerError)
+	}
+	if message := noteops.MessageOf(classified); !strings.Contains(message, "inspect 'git diff' to recover") {
+		t.Fatalf("message must preserve rollback recovery guidance, got %q", message)
+	}
+}

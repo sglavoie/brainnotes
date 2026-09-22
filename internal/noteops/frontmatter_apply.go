@@ -183,10 +183,10 @@ func classifyTxnError(message string, err error) error {
 		return WrapError(CodeForbidden, err.Error(), err)
 	case vault.IsTxnRecoveryNeeded(err):
 		return WrapError(CodeInternal, err.Error(), err)
-	case vault.IsTxnLockBusy(err), vault.IsTxnConflict(err):
-		return WrapError(CodeConflict, MessageOf(err), err)
 	case vault.IsTxnRollbackFailure(err):
 		return WrapError(CodeInternal, err.Error(), err)
+	case vault.IsTxnLockBusy(err), vault.IsTxnConflict(err):
+		return WrapError(CodeConflict, MessageOf(err), err)
 	case vault.IsPartialReplacement(err), vault.IsUnsafeReplacement(err):
 		return WrapError(CodeInternal, err.Error(), err)
 	default:
