@@ -325,7 +325,15 @@ func (store *FileStateStore) writeState(vaultRoot, path string, data []byte) err
 	}
 	barrier, err := checkpoint.Join(vaultRoot)
 	if err != nil {
-		return fmt.Errorf("brief: %w", err)
+		// A read-only, unmanaged replica has nowhere to keep a checkpoint
+		// lock. Its external activity is still safe to write: no checkpoint can
+		// be running against a vault whose lock directory cannot be created.
+		// Keep every other checkpoint refusal, including a live checkpoint,
+		// because those are evidence that the vault does have a working barrier.
+		if !errors.Is(err, os.ErrPermission) {
+			return fmt.Errorf("brief: %w", err)
+		}
+		barrier = func() {}
 	}
 	defer barrier()
 	if err := vault.GuardMutation(vaultRoot, path); err != nil {

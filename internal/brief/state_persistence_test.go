@@ -42,6 +42,29 @@ func TestExternalStateWriteJoinsVaultCheckpoint(t *testing.T) {
 	}
 }
 
+func TestExternalStateWriteDoesNotNeedAReadOnlyUnmanagedVaultLock(t *testing.T) {
+	root := t.TempDir()
+	external := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "Note.md"), []byte("# Note\n"), 0o444); err != nil {
+		t.Fatalf("seed vault: %v", err)
+	}
+	if err := os.Chmod(root, 0o555); err != nil {
+		t.Fatalf("make vault read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0o700) })
+
+	store := NewFileStateStore(root, WithStateRoot(external))
+	if _, err := store.RecordVisit(LocalDate("2026-09-22"), time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("record visit against read-only unmanaged vault: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".bnotes")); !os.IsNotExist(err) {
+		t.Fatalf("read-only vault gained checkpoint state: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(external, filepath.FromSlash(briefStateRelPath))); err != nil {
+		t.Fatalf("external activity was not written: %v", err)
+	}
+}
+
 func TestFileStateStoreCorruptAndUnsupportedStateAreNeverOverwritten(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
