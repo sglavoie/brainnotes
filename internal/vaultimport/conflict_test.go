@@ -886,9 +886,7 @@ func requireConvergedResult(t *testing.T, r *replicas, manifest *vaultsync.Manif
 	if !result.Converged {
 		t.Fatal("a package this vault had already applied was not reported as converged")
 	}
-	if result.Receipt == nil || !result.Receipt.Converged || result.Receipt.RecoveryEntry != "" {
-		t.Fatalf("a converged package returned receipt %+v, want an explicit convergence acknowledgment", result.Receipt)
-	}
+	requireConvergedReceipt(t, result.Receipt)
 	if result.ReceiptPath == "" {
 		t.Fatal("the convergence acknowledgment was not published")
 	}
@@ -899,6 +897,18 @@ func requireConvergedResult(t *testing.T, r *replicas, manifest *vaultsync.Manif
 	if !applied {
 		t.Fatal("a converged package was not recorded as applied, so a dependent would wait on it forever")
 	}
+	requireConvergedRecord(t, record)
+}
+
+func requireConvergedReceipt(t *testing.T, receipt *vaultsync.Receipt) {
+	t.Helper()
+	if receipt == nil || !receipt.Converged || receipt.RecoveryEntry != "" {
+		t.Fatalf("a converged package returned receipt %+v, want an explicit convergence acknowledgment", receipt)
+	}
+}
+
+func requireConvergedRecord(t *testing.T, record Record) {
+	t.Helper()
 	if !record.Converged || record.JournalEntry != "" || record.Receipt == nil || !record.Receipt.Converged {
 		t.Fatalf("the record is %+v, want a converged one naming no entry and holding its receipt", record)
 	}

@@ -195,6 +195,25 @@ func (r *Receipt) Validate() error {
 	if r.Format != Format {
 		return fmt.Errorf("%w: got %q want %q", ErrUnsupportedFormat, r.Format, Format)
 	}
+	if err := validateReceiptIdentities(r); err != nil {
+		return err
+	}
+	if r.OriginSequence == 0 || r.Epoch == 0 {
+		return fmt.Errorf("%w: origin_sequence and epoch must be at least 1", ErrReceiptMismatch)
+	}
+	if r.Device == r.OriginDevice {
+		return fmt.Errorf("%w: a device cannot acknowledge its own package", ErrReceiptMismatch)
+	}
+	if err := validateReceiptRecovery(r); err != nil {
+		return err
+	}
+	if r.AppliedAt.IsZero() {
+		return fmt.Errorf("%w: applied_at is unset", ErrReceiptMismatch)
+	}
+	return nil
+}
+
+func validateReceiptIdentities(r *Receipt) error {
 	for _, field := range []struct{ name, prefix, value string }{
 		{"vault_id", vaultPrefix, r.VaultID},
 		{"package_id", packagePrefix, r.PackageID},
@@ -205,21 +224,16 @@ func (r *Receipt) Validate() error {
 			return err
 		}
 	}
-	if r.OriginSequence == 0 || r.Epoch == 0 {
-		return fmt.Errorf("%w: origin_sequence and epoch must be at least 1", ErrReceiptMismatch)
-	}
-	if r.Device == r.OriginDevice {
-		return fmt.Errorf("%w: a device cannot acknowledge its own package", ErrReceiptMismatch)
-	}
+	return nil
+}
+
+func validateReceiptRecovery(r *Receipt) error {
 	switch {
 	case r.Converged && strings.TrimSpace(r.RecoveryEntry) != "":
 		return fmt.Errorf("%w: converged package %s names recovery entry %s",
 			ErrReceiptMismatch, r.PackageID, r.RecoveryEntry)
 	case !r.Converged && strings.TrimSpace(r.RecoveryEntry) == "":
 		return fmt.Errorf("%w: package %s", ErrNoRecoveryEntry, r.PackageID)
-	}
-	if r.AppliedAt.IsZero() {
-		return fmt.Errorf("%w: applied_at is unset", ErrReceiptMismatch)
 	}
 	return nil
 }

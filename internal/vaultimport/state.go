@@ -396,15 +396,28 @@ func (r Record) validate(packageID string) error {
 // These are not independent fields that happen to agree: reading a contradictory
 // record would answer a redelivery with a promise the vault cannot keep.
 func (r Record) validateConvergence(packageID string) error {
-	switch {
-	case r.Converged && strings.TrimSpace(r.JournalEntry) != "":
+	if r.Converged {
+		return r.validateConvergedRecord(packageID)
+	}
+	return r.validateAppliedRecord(packageID)
+}
+
+func (r Record) validateConvergedRecord(packageID string) error {
+	if strings.TrimSpace(r.JournalEntry) != "" {
 		return fmt.Errorf("%w: package %s converged and names journal entry %s",
 			ErrCorruptState, packageID, r.JournalEntry)
-	case r.Converged && r.Receipt != nil && !r.Receipt.Converged:
+	}
+	if r.Receipt != nil && !r.Receipt.Converged {
 		return fmt.Errorf("%w: package %s converged and holds an ordinary receipt", ErrCorruptState, packageID)
-	case !r.Converged && strings.TrimSpace(r.JournalEntry) == "":
+	}
+	return nil
+}
+
+func (r Record) validateAppliedRecord(packageID string) error {
+	if strings.TrimSpace(r.JournalEntry) == "" {
 		return fmt.Errorf("%w: applied package %s names no journal entry", ErrCorruptState, packageID)
-	case !r.Converged && r.Receipt != nil && r.Receipt.Converged:
+	}
+	if r.Receipt != nil && r.Receipt.Converged {
 		return fmt.Errorf("%w: applied package %s holds a converged receipt", ErrCorruptState, packageID)
 	}
 	return nil

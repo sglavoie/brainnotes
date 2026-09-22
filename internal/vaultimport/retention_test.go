@@ -113,6 +113,23 @@ func requireDrainSurvivesRetirementProblem(
 	plant func(*testing.T, *replicas, uint64),
 ) {
 	t.Helper()
+	r, before, retiredPackageID, prior := prepareDrainWithRetirementProblem(t, plant)
+	arriving, _ := r.deliver(t, func(b *vaultsync.Builder) {
+		b.Write("Notes/Arriving.md", []byte("arrived\n"), vaultsync.Absent())
+	})
+	drained, err := Drain(r.root(), Options{Now: r.clock.Now})
+	if err != nil {
+		t.Fatalf("Drain with unusable retirement record: %v", err)
+	}
+	requireRetirementProblemResult(t, r, drained, arriving.PackageID, wantProblem)
+	requireRetirementLedgerPreserved(t, r, before, retiredPackageID, prior, arriving.PackageID)
+}
+
+func prepareDrainWithRetirementProblem(
+	t *testing.T,
+	plant func(*testing.T, *replicas, uint64),
+) (*replicas, *State, string, Record) {
+	t.Helper()
 	r := enroll(t)
 	retired, retiredDir := r.deliver(t, func(b *vaultsync.Builder) {
 		b.Write("Notes/AlreadyApplied.md", []byte("already applied\n"), vaultsync.Absent())
@@ -130,16 +147,19 @@ func requireDrainSurvivesRetirementProblem(
 		t.Fatalf("applied ledger lost prior record for %s before the retirement test", retired.PackageID)
 	}
 	plant(t, r, retired.Sequence)
+	return r, before, retired.PackageID, prior
+}
 
-	arriving, _ := r.deliver(t, func(b *vaultsync.Builder) {
-		b.Write("Notes/Arriving.md", []byte("arrived\n"), vaultsync.Absent())
-	})
-	drained, err := Drain(r.root(), Options{Now: r.clock.Now})
-	if err != nil {
-		t.Fatalf("Drain with unusable retirement record: %v", err)
-	}
-	if len(drained.Applied) != 1 || drained.Applied[0].PackageID != arriving.PackageID {
-		t.Fatalf("applied packages = %v, want only %s", appliedIDs(drained), arriving.PackageID)
+func requireRetirementProblemResult(
+	t *testing.T,
+	r *replicas,
+	drained *Drained,
+	arrivingPackageID string,
+	wantProblem error,
+) {
+	t.Helper()
+	if len(drained.Applied) != 1 || drained.Applied[0].PackageID != arrivingPackageID {
+		t.Fatalf("applied packages = %v, want only %s", appliedIDs(drained), arrivingPackageID)
 	}
 	if len(drained.Held) != 0 {
 		t.Fatalf("held packages = %v, want none", heldIDs(drained))
@@ -150,7 +170,17 @@ func requireDrainSurvivesRetirementProblem(
 	if got := r.pair.Local.Read(t, "Notes/Arriving.md"); got != "arrived\n" {
 		t.Fatalf("arriving note = %q, want delivered content", got)
 	}
+}
 
+func requireRetirementLedgerPreserved(
+	t *testing.T,
+	r *replicas,
+	before *State,
+	retiredPackageID string,
+	prior Record,
+	arrivingPackageID string,
+) {
+	t.Helper()
 	after, err := LoadState(r.root())
 	if err != nil {
 		t.Fatalf("LoadState after drain: %v", err)
@@ -158,10 +188,10 @@ func requireDrainSurvivesRetirementProblem(
 	if len(after.Applied) != len(before.Applied)+1 {
 		t.Fatalf("applied ledger has %d records, want %d", len(after.Applied), len(before.Applied)+1)
 	}
-	if !reflect.DeepEqual(after.Applied[retired.PackageID], prior) {
-		t.Fatalf("unusable retirement record changed prior applied evidence for %s", retired.PackageID)
+	if !reflect.DeepEqual(after.Applied[retiredPackageID], prior) {
+		t.Fatalf("unusable retirement record changed prior applied evidence for %s", retiredPackageID)
 	}
-	requireAppliedRecord(t, r, arriving.PackageID, true)
+	requireAppliedRecord(t, r, arrivingPackageID, true)
 }
 
 func publishPeerRetirement(t *testing.T, r *replicas, through uint64, retained ...vaultsync.RetainedPackage) {
