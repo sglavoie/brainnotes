@@ -135,6 +135,56 @@ func TestARedeliveryRepublishesTheReceiptThatWentMissing(t *testing.T) {
 	}
 }
 
+// Records written before unpublished receipts were retained have only the
+// recovery entry to prove what the application wrote. A later valid package may
+// have moved the live path on, so retrying from today's bytes would strand the
+// old package forever. The recovery entry's post-command hash is the durable
+// evidence for that older application.
+func TestALegacyUnpublishedReceiptIsRecoveredAfterALaterPackage(t *testing.T) {
+	r := enroll(t)
+	firstManifest, firstDir := r.deliver(t, func(b *vaultsync.Builder) {
+		b.Write("Alpha.md", []byte(alphaBody), r.believes(t, "Alpha.md"))
+	})
+	blockOutgoingChannel(t, r.root())
+
+	requireUnpublishedApplication(t, r, firstDir)
+	if err := os.Remove(vaultsync.OutgoingDir(r.root())); err != nil {
+		t.Fatalf("unblock outgoing channel: %v", err)
+	}
+
+	// Reproduce the legacy ledger shape already present on an upgraded device:
+	// the application and entry were recorded, but the unpublished receipt was
+	// discarded.
+	state := importState(t, r)
+	record := state.Applied[firstManifest.PackageID]
+	record.Receipt = nil
+	state.Applied[firstManifest.PackageID] = record
+	if err := saveState(r.root(), state); err != nil {
+		t.Fatalf("save legacy import state: %v", err)
+	}
+
+	const laterBody = "---\nstatus: done\ntitle: Alpha\n---\n\nA later package moved Alpha on.\n"
+	_, laterDir := r.deliver(t, func(b *vaultsync.Builder) {
+		b.Write("Alpha.md", []byte(laterBody), vaultsync.Existing(vaultsync.HashBytes([]byte(alphaBody))))
+	})
+	r.mustApply(t, laterDir)
+
+	retried := r.mustApply(t, firstDir)
+	if !retried.Duplicate || retried.Receipt == nil {
+		t.Fatalf("legacy redelivery returned %+v", retried)
+	}
+	if got := r.pair.Local.Read(t, "Alpha.md"); got != laterBody {
+		t.Fatalf("recovering the old receipt moved the live note back to %q", got)
+	}
+	if got, want := retried.Receipt.Applied[0].SHA256, vaultsync.HashBytes([]byte(alphaBody)); got != want {
+		t.Fatalf("recovered receipt hash = %s, want original application %s", got, want)
+	}
+	stored := importState(t, r).Applied[firstManifest.PackageID]
+	if stored.Receipt == nil || stored.Receipt.Applied[0].SHA256 != retried.Receipt.Applied[0].SHA256 {
+		t.Fatalf("the recovered receipt was not retained: %+v", stored)
+	}
+}
+
 // publishedBytes reads the receipt for packageID as the peer would: the bytes of
 // the file in the channel, not the decoded record. "The same receipt" is a claim
 // about what the peer reads, so the file is what the test has to compare.

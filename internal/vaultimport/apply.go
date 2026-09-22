@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -154,10 +155,11 @@ type Result struct {
 // A non-nil Result returned *with* a non-nil error means exactly one thing and
 // only ever arises from the last step: the package is applied, committed and
 // undoable, and the acknowledgment the peer is owed could not be minted or
-// published. Result.JournalEntry is what undoes it and Result.Receipt is nil. A
-// caller that treats every error as "nothing happened" will strand a real
-// change; a caller that ignores the error will tell a peer about a receipt that
-// was never published.
+// published. Result.JournalEntry is what undoes it. Result.Receipt is set when
+// minting succeeded, while an empty Result.ReceiptPath says the receipt never
+// reached the channel. A caller that treats every error as "nothing happened"
+// will strand a real change; a caller that ignores the error will tell a peer
+// about a receipt that was never published.
 //
 // Earlier failures that also leave the change on disk return a nil Result, and
 // the two worth naming carry the entry identity in the error instead:
@@ -685,12 +687,10 @@ func (a *applier) answer(record Record) (*Result, error) {
 // channel.
 //
 // A receipt is immutable and published under a name that can only be taken once,
-// so the name already being taken is not a failure here: it is the state
-// publishing was trying to reach. Anywhere else that would be ErrPackageExists,
-// and it stays that everywhere else — a *first* publication meeting an occupied
-// name means two different receipts for one package, which is a real problem. The
-// difference is that this caller knows the receipt in the channel is its own,
-// because the bytes it is publishing came out of the record that published them.
+// so an identical receipt already occupying the name is the state this call was
+// trying to reach. The stored receipt may have been minted during a publication
+// failure, though, so an occupied name is read back and compared rather than
+// assumed to be this record's own.
 func (a *applier) republish(record Record) (*Result, error) {
 	result := a.duplicate(record)
 	// Carried before the publication rather than after it, because the receipt is a
@@ -703,32 +703,41 @@ func (a *applier) republish(record Record) (*Result, error) {
 	result.Receipt = record.Receipt
 	channel := vaultsync.OutgoingDir(a.root)
 	path, err := vaultsync.PublishReceipt(channel, record.Receipt)
+	result.ReceiptPath = path
 	if errors.Is(err, vaultsync.ErrPackageExists) {
+		existing, readErr := vaultsync.ReadReceipt(channel, a.manifest.PackageID)
+		if readErr != nil {
+			return result, readErr
+		}
+		if !reflect.DeepEqual(existing, record.Receipt) {
+			return result, fmt.Errorf("%w: the receipt already published for %s differs from the retained acknowledgment",
+				vaultsync.ErrReceiptMismatch, a.manifest.PackageID)
+		}
 		path, err = vaultsync.ReceiptPath(channel, a.manifest.PackageID)
+		result.ReceiptPath = path
 	}
 	if err != nil {
 		return result, err
 	}
-	result.ReceiptPath = path
 	return result, nil
 }
 
-// retryAcknowledge answers a redelivery of a package that was applied and never
-// successfully acknowledged, by minting the receipt that attempt could not.
+// retryAcknowledge answers a legacy redelivery of a package that was applied
+// before unpublished minted receipts were retained.
 //
 // Minting now is honest in this one case and only this one: no receipt was ever
-// published, so there is no earlier statement for a new one to contradict. It is
-// held to exactly the checks a first acknowledgment is held to — the recovery
-// entry is read back off the disk, and every hash comes from what the paths hold
-// now — so a vault whose content has moved on since is refused rather than
-// described.
+// retained, so there is no earlier statement for a new one to contradict. The
+// recovery entry proves the paths that application wrote before later packages
+// moved them on. Any package path absent from the entry was converged rather
+// than written and is still read from the live vault, so missing evidence fails
+// closed rather than being filled from the package's own claim.
 func (a *applier) retryAcknowledge(record Record) (*Result, error) {
 	entry, err := journal.LoadEntry(noteops.JournalRoot(a.root), record.JournalEntry)
 	if err != nil {
 		return a.duplicate(record), fmt.Errorf("%w: %s names %s: %v",
 			vaultsync.ErrNoRecoveryEntry, a.manifest.PackageID, record.JournalEntry, err)
 	}
-	result, ackErr := a.acknowledge(entry)
+	result, ackErr := a.acknowledgeRecorded(entry)
 	result.Duplicate = true
 	if result.Receipt == nil {
 		return result, ackErr
@@ -1083,8 +1092,9 @@ func (a *applier) finalize(operation *noteops.Journal) (*journal.Entry, error) {
 // honest shape past this point. The package is applied, committed and undoable
 // by the time this runs; failing with a bare error would tell a caller that
 // nothing happened, and would withhold the entry identity — the one thing that
-// makes what did happen reversible. The receipt is the part that did not happen,
-// and Receipt being nil is what says so.
+// makes what did happen reversible. Receipt being non-nil with an empty
+// ReceiptPath says the statement was minted and retained but not published;
+// Receipt being nil says it could not be minted at all.
 //
 // A receipt already in the channel is adopted rather than replaced, and that
 // short-circuit is checked first, ahead of reading the paths back. It is what
@@ -1095,6 +1105,22 @@ func (a *applier) finalize(operation *noteops.Journal) (*journal.Entry, error) {
 // describe paths a person has edited since — which is a question this vault has
 // already answered and must not answer twice.
 func (a *applier) acknowledge(entry *journal.Entry) (*Result, error) {
+	return a.acknowledgeWith(entry, a.observe)
+}
+
+// acknowledgeRecorded completes an old applied record whose first attempt did
+// not retain the receipt it minted. Paths the application actually wrote are
+// proven by the finalized recovery entry, whose post-command states predate any
+// later package. A path absent from that entry was already converged and was not
+// written, so the only proof an old record retains for it is the live vault; it
+// is observed again and a later edit still refuses the acknowledgment.
+func (a *applier) acknowledgeRecorded(entry *journal.Entry) (*Result, error) {
+	return a.acknowledgeWith(entry, func() ([]vaultsync.AppliedPath, error) {
+		return a.recordedApplication(entry)
+	})
+}
+
+func (a *applier) acknowledgeWith(entry *journal.Entry, appliedPaths func() ([]vaultsync.AppliedPath, error)) (*Result, error) {
 	result := &Result{
 		PackageID:    a.manifest.PackageID,
 		OperationID:  a.operation.OperationID,
@@ -1102,18 +1128,15 @@ func (a *applier) acknowledge(entry *journal.Entry) (*Result, error) {
 		JournalEntry: entry.ID,
 		Cleanup:      a.cleanup,
 	}
-	published, path, err := a.adopt(entry)
-	if err != nil {
-		return result, err
-	}
+	published, path, channelErr := a.adopt(entry)
 	if published != nil {
 		result.Receipt = published
 		result.ReceiptPath = path
 		return result, nil
 	}
-	applied, err := a.observe()
+	applied, err := appliedPaths()
 	if err != nil {
-		return result, err
+		return result, errors.Join(channelErr, err)
 	}
 	receipt, err := vaultsync.Acknowledge(a.local, a.manifest, vaultsync.Application{
 		RecoveryEntry: entry.ID,
@@ -1121,14 +1144,17 @@ func (a *applier) acknowledge(entry *journal.Entry) (*Result, error) {
 		Now:           a.opts.Now,
 	})
 	if err != nil {
-		return result, err
+		return result, errors.Join(channelErr, err)
+	}
+	result.Receipt = receipt
+	if channelErr != nil {
+		return result, channelErr
 	}
 	path, err = vaultsync.PublishReceipt(vaultsync.OutgoingDir(a.root), receipt)
+	result.ReceiptPath = path
 	if err != nil {
 		return result, err
 	}
-	result.Receipt = receipt
-	result.ReceiptPath = path
 	return result, nil
 }
 
@@ -1149,9 +1175,11 @@ func (a *applier) acknowledgeConvergence() (*Result, bool, error) {
 		// A blocked or damaged channel does not erase the fact that every package
 		// result is already present. Prove that fact independently before returning
 		// the same applied-with-bookkeeping-error shape an ordinary import uses.
-		if _, proofErr := a.mintConvergence(); proofErr != nil {
+		receipt, proofErr := a.mintConvergence()
+		if proofErr != nil {
 			return result, false, errors.Join(err, proofErr)
 		}
+		result.Receipt = receipt
 		return result, true, err
 	}
 	if published != nil {
@@ -1163,12 +1191,12 @@ func (a *applier) acknowledgeConvergence() (*Result, bool, error) {
 	if err != nil {
 		return result, false, err
 	}
+	result.Receipt = receipt
 	path, err = vaultsync.PublishReceipt(vaultsync.OutgoingDir(a.root), receipt)
+	result.ReceiptPath = path
 	if err != nil {
 		return result, true, err
 	}
-	result.Receipt = receipt
-	result.ReceiptPath = path
 	return result, true, nil
 }
 
@@ -1266,23 +1294,99 @@ func (a *applier) adoptConvergence() (*vaultsync.Receipt, string, error) {
 func (a *applier) observe() ([]vaultsync.AppliedPath, error) {
 	applied := make([]vaultsync.AppliedPath, 0, len(a.changes))
 	for _, planned := range a.changes {
-		change := planned.change
-		entry := vaultsync.AppliedPath{Path: change.Path, Action: change.Action}
-		if change.Action == vaultsync.ActionDelete {
-			if err := requireAbsent(a.abs(change.Path)); err != nil {
-				return nil, err
-			}
-			applied = append(applied, entry)
-			continue
-		}
-		data, err := os.ReadFile(a.abs(change.Path))
+		entry, err := a.observeChange(planned.change)
 		if err != nil {
-			return nil, fmt.Errorf("vaultimport: read back %q: %w", change.Path, err)
+			return nil, err
 		}
-		entry.SHA256 = vaultsync.HashBytes(data)
 		applied = append(applied, entry)
 	}
 	return applied, nil
+}
+
+func (a *applier) observeChange(change vaultsync.Change) (vaultsync.AppliedPath, error) {
+	entry := vaultsync.AppliedPath{Path: change.Path, Action: change.Action}
+	if change.Action == vaultsync.ActionDelete {
+		if err := requireAbsent(a.abs(change.Path)); err != nil {
+			return vaultsync.AppliedPath{}, err
+		}
+		return entry, nil
+	}
+	data, err := os.ReadFile(a.abs(change.Path))
+	if err != nil {
+		return vaultsync.AppliedPath{}, fmt.Errorf("vaultimport: read back %q: %w", change.Path, err)
+	}
+	entry.SHA256 = vaultsync.HashBytes(data)
+	return entry, nil
+}
+
+// recordedApplication reconstructs the proof an older nil-receipt record did
+// not keep. The recovery entry is allowed to cover a subset of the package: a
+// partially converged import journals only the paths it writes. Every journaled
+// path must belong to this package and occur once. Unjournaled paths are read
+// from the live vault, preserving the old fail-closed behavior for evidence the
+// record never retained.
+func (a *applier) recordedApplication(entry *journal.Entry) ([]vaultsync.AppliedPath, error) {
+	changed := make(map[string]vaultsync.Change, len(a.changes))
+	for _, planned := range a.changes {
+		changed[planned.change.Path] = planned.change
+	}
+	recorded, err := recordedStates(entry, a.manifest.PackageID, changed)
+	if err != nil {
+		return nil, err
+	}
+
+	applied := make([]vaultsync.AppliedPath, 0, len(a.changes))
+	for _, planned := range a.changes {
+		change := planned.change
+		after, found := recorded[change.Path]
+		if !found {
+			observed, err := a.observeChange(change)
+			if err != nil {
+				return nil, err
+			}
+			applied = append(applied, observed)
+			continue
+		}
+		outcome, err := recordedOutcome(entry.ID, change, after)
+		if err != nil {
+			return nil, err
+		}
+		applied = append(applied, outcome)
+	}
+	return applied, nil
+}
+
+func recordedStates(entry *journal.Entry, packageID string, changed map[string]vaultsync.Change) (map[string]journal.FileState, error) {
+	recorded := make(map[string]journal.FileState, len(entry.Files))
+	for _, file := range entry.Files {
+		if _, belongs := changed[file.Path]; !belongs {
+			return nil, fmt.Errorf("%w: recovery entry %s includes %q, which package %s did not change",
+				vaultsync.ErrIncompleteApplication, entry.ID, file.Path, packageID)
+		}
+		if _, duplicate := recorded[file.Path]; duplicate {
+			return nil, fmt.Errorf("%w: recovery entry %s records %q twice",
+				vaultsync.ErrIncompleteApplication, entry.ID, file.Path)
+		}
+		recorded[file.Path] = file.After
+	}
+	return recorded, nil
+}
+
+func recordedOutcome(entryID string, change vaultsync.Change, after journal.FileState) (vaultsync.AppliedPath, error) {
+	outcome := vaultsync.AppliedPath{Path: change.Path, Action: change.Action}
+	if change.Action == vaultsync.ActionDelete {
+		if after.Kind != journal.KindMissing {
+			return vaultsync.AppliedPath{}, fmt.Errorf("%w: recovery entry %s says %q ended as %s after deletion",
+				vaultsync.ErrIncompleteApplication, entryID, change.Path, after.Kind)
+		}
+		return outcome, nil
+	}
+	if after.Kind != journal.KindFile {
+		return vaultsync.AppliedPath{}, fmt.Errorf("%w: recovery entry %s says %q ended as %s after a write",
+			vaultsync.ErrIncompleteApplication, entryID, change.Path, after.Kind)
+	}
+	outcome.SHA256 = after.SHA256
+	return outcome, nil
 }
 
 // requireAbsent reports whether a tombstoned path is really gone. Lstat rather

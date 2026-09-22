@@ -493,11 +493,11 @@ func TestAConvergedPackageRetriesAnUnpublishedAcknowledgment(t *testing.T) {
 	if err == nil || result == nil || !result.Converged {
 		t.Fatalf("blocked convergence returned result %+v and error %v", result, err)
 	}
-	if result.Receipt != nil || result.ReceiptPath != "" {
-		t.Fatalf("an unpublished convergence receipt is reported as %v at %q", result.Receipt, result.ReceiptPath)
+	if result.Receipt == nil || result.ReceiptPath != "" {
+		t.Fatalf("the unpublished convergence receipt is reported as %v at %q", result.Receipt, result.ReceiptPath)
 	}
 	record := importState(t, r).Applied[manifest.PackageID]
-	if !record.Converged || record.Receipt != nil {
+	if !record.Converged || record.Receipt == nil {
 		t.Fatalf("the blocked convergence record is %+v", record)
 	}
 	if err := os.Remove(vaultsync.OutgoingDir(r.root())); err != nil {

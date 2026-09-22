@@ -634,8 +634,8 @@ func TestDrainReportsAPackageThatLandedEvenWhenItsOwnChannelIsUnreadable(t *test
 		t.Fatalf("the drain reported %q, want it to name %s as unacknowledged",
 			drained.Unfinished, landing.PackageID)
 	}
-	if result := drained.Applied[0]; result.Receipt != nil {
-		t.Fatalf("the result carries a receipt %+v, want none minted", result.Receipt)
+	if result := drained.Applied[0]; result.Receipt == nil || result.ReceiptPath != "" {
+		t.Fatalf("the result reports the unpublished receipt as %+v at %q", result.Receipt, result.ReceiptPath)
 	}
 }
 
@@ -728,18 +728,17 @@ func TestUnfinishedWorkSaysWhichStepDidNotHappen(t *testing.T) {
 		},
 		{
 			name:   "the receipt is published and the record is not saved",
-			result: &Result{PackageID: "pkg-unrecorded", Receipt: &vaultsync.Receipt{PackageID: "pkg-unrecorded"}},
+			result: &Result{PackageID: "pkg-unrecorded", Receipt: &vaultsync.Receipt{PackageID: "pkg-unrecorded"}, ReceiptPath: "/outgoing/pkg-unrecorded.json"},
 			cause:  errors.New("write import state: no space left on device"),
 			want:   "pkg-unrecorded " + acknowledged,
 		},
 		{
-			// A redelivery whose receipt this vault already holds and could not put
-			// back in the channel. It has an acknowledgment; what failed is handing it
-			// over, which is why republish carries the receipt onto its failure too.
+			// A redelivery whose retained receipt could not be put back in the
+			// channel. The statement exists locally, but the peer still cannot read it.
 			name:   "the receipt exists and could not be republished",
 			result: &Result{PackageID: "pkg-unpublished", Duplicate: true, Receipt: &vaultsync.Receipt{PackageID: "pkg-unpublished"}},
 			cause:  errors.New("publish receipt: read-only file system"),
-			want:   "pkg-unpublished " + acknowledged,
+			want:   "pkg-unpublished was applied and not acknowledged",
 		},
 	}
 	for _, tc := range cases {

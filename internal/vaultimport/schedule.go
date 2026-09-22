@@ -553,19 +553,16 @@ func rejected(err error) bool {
 //
 // The identity is added because the error comes from the receipt and state
 // machinery and says nothing about which of the pass's packages it was about.
-// Which of the two shapes it is, is read from the receipt rather than guessed
-// from the error: a Result carries a Receipt exactly when this vault has an
-// acknowledgment for the package, whether it minted it now or is answering a
-// redelivery from one it minted before. So a Result carrying one has a failure
-// somewhere after the acknowledgment — the import record, or putting the
-// acknowledgment back in the channel — and the error itself says which. Calling
-// that one unacknowledged would send a person looking for a receipt that
-// already exists, and away from the step that actually failed.
+// Which of the two shapes it is, is read from ReceiptPath rather than guessed
+// from the error. Receipt may contain a statement retained after publication
+// failed; ReceiptPath is set only once the peer's channel actually holds it. A
+// failure after that point belongs to later bookkeeping, while an empty path
+// still sends the operator to the channel the peer reads.
 func unfinishedWork(result *Result, err error) error {
 	if err == nil {
 		return nil
 	}
-	if result.Receipt != nil {
+	if result.ReceiptPath != "" {
 		return fmt.Errorf("vaultimport: %s was applied and acknowledged and the work after that did not finish: %w",
 			result.PackageID, err)
 	}

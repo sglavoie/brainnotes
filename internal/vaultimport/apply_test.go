@@ -428,9 +428,10 @@ func TestApplyRefusesAPackageIntoAnUnenrolledVault(t *testing.T) {
 // Publishing the receipt is the last step, and by the time it runs the peer's
 // change is on this disk, in this vault's history, and undoable. Reporting only
 // an error would tell the caller nothing happened and would withhold the entry
-// identity, which is the single thing that makes what did happen reversible. The
-// missing receipt is what the nil Receipt says, and it is not a disaster: the
-// peer keeps its own copy and will send the package again.
+// identity, which is the single thing that makes what did happen reversible. An
+// empty ReceiptPath says publication failed. The minted receipt is retained in
+// the import ledger, so a later delivery can publish the same statement even if
+// another package has moved the note on by then.
 func TestApplyReportsAnAppliedImportItCouldNotAcknowledge(t *testing.T) {
 	r := enroll(t)
 	_, dir := r.deliver(t, func(b *vaultsync.Builder) {
@@ -438,15 +439,13 @@ func TestApplyReportsAnAppliedImportItCouldNotAcknowledge(t *testing.T) {
 	})
 	blockOutgoingChannel(t, r.root())
 
-	result, err := r.apply(t, dir)
-	if err == nil {
-		t.Fatal("publishing a receipt into a blocked channel was reported as a success")
+	result := requireUnpublishedApplication(t, r, dir)
+	record := importState(t, r).Applied[result.PackageID]
+	if record.Receipt == nil || record.Receipt.PackageID != result.PackageID {
+		t.Fatalf("the import ledger did not retain the unpublished receipt: %+v", record)
 	}
-	if result == nil {
-		t.Fatalf("an applied import was reported as if nothing had happened: %v", err)
-	}
-	if result.Receipt != nil || result.ReceiptPath != "" {
-		t.Fatalf("a receipt that was never published is reported as %v at %q", result.Receipt, result.ReceiptPath)
+	if receipt, err := vaultsync.ReadReceipt(vaultsync.OutgoingDir(r.root()), result.PackageID); err == nil || receipt != nil {
+		t.Fatalf("the peer can read a receipt whose publication failed: %v, %+v", err, receipt)
 	}
 
 	// Everything the receipt would have promised is true anyway, which is why
@@ -460,6 +459,24 @@ func TestApplyReportsAnAppliedImportItCouldNotAcknowledge(t *testing.T) {
 	entryCovers(t, r, result.JournalEntry, "Alpha.md")
 	requireProvenance(t, r, result.JournalEntry, result.OperationID)
 	requireEqual(t, contentPaths(commitPaths(t, r.pair.Local, "HEAD")), []string{"Alpha.md"}, "the applying commit carries")
+}
+
+func requireUnpublishedApplication(t *testing.T, r *replicas, dir string) *Result {
+	t.Helper()
+	result, err := r.apply(t, dir)
+	if err == nil {
+		t.Fatal("publishing a receipt into a blocked channel was reported as a success")
+	}
+	if result == nil {
+		t.Fatalf("an applied import was reported as if nothing had happened: %v", err)
+	}
+	if result.Receipt == nil {
+		t.Fatal("the applied import retained no receipt")
+	}
+	if result.ReceiptPath != "" {
+		t.Fatalf("the unpublished receipt is reported at %q", result.ReceiptPath)
+	}
+	return result
 }
 
 // blockOutgoingChannel puts a regular file where the outgoing channel directory

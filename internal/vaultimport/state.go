@@ -227,8 +227,10 @@ type Record struct {
 	// reply is answered by republishing the same bytes, whatever has happened to
 	// the vault since.
 	//
-	// Nil means the package was applied and never successfully acknowledged,
-	// which is the state a redelivery or a recovery pass completes.
+	// Nil means the package was applied but no acknowledgment could be minted.
+	// A non-nil receipt may still be waiting for publication; retaining the minted
+	// statement is what lets a redelivery publish it after later work moves the
+	// live paths on.
 	Receipt *vaultsync.Receipt `json:"receipt,omitempty"`
 }
 
