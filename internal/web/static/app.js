@@ -16656,16 +16656,16 @@ var BrainNotesApp = (() => {
     }
     return {
       root,
-      status: queryElement(root, "[data-source-manage-status]", HTMLElement),
+      status: queryElement(panel, "[data-source-manage-status]", HTMLElement),
       gate: {
-        panel: queryElement(root, "[data-source-gate]", HTMLElement),
-        message: queryElement(root, "[data-source-gate-message]", HTMLElement),
-        save: queryElement(root, "[data-source-gate-save]", HTMLButtonElement),
-        proceed: queryElement(root, "[data-source-gate-proceed]", HTMLButtonElement),
-        cancel: queryElement(root, "[data-source-gate-cancel]", HTMLButtonElement)
+        panel: queryElement(panel, "[data-source-gate]", HTMLElement),
+        message: queryElement(panel, "[data-source-gate-message]", HTMLElement),
+        save: queryElement(panel, "[data-source-gate-save]", HTMLButtonElement),
+        proceed: queryElement(panel, "[data-source-gate-proceed]", HTMLButtonElement),
+        cancel: queryElement(panel, "[data-source-gate-cancel]", HTMLButtonElement)
       },
-      rename: queryElement(root, "[data-source-rename]", HTMLButtonElement),
-      renameTitle: queryElement(root, "[data-source-rename-title]", HTMLInputElement),
+      rename: queryElement(panel, "[data-source-rename]", HTMLButtonElement),
+      renameTitle: queryElement(panel, "[data-source-rename-title]", HTMLInputElement),
       move: queryElement(root, "[data-source-move]", HTMLButtonElement),
       moveFolder: queryElement(root, "[data-source-move-folder]", HTMLInputElement),
       trash: queryElement(root, "[data-source-trash]", HTMLButtonElement),
@@ -43981,6 +43981,7 @@ var BrainNotesApp = (() => {
       if (elements.panel) {
         elements.panel.hidden = false;
       }
+      elements.save?.focus();
     };
     const take = (action) => {
       hide();

@@ -58,6 +58,31 @@
         <code class="source-editor-path">{{ .RelPath }}</code>
       </div>
 
+      <div class="source-editor-title">
+        <label class="source-editor-manage-field" for="source-editor-rename-title">Note title</label>
+        <div class="source-editor-title-controls">
+          <input type="text" id="source-editor-rename-title" class="source-editor-manage-input" data-source-rename-title value="{{ .NoteTitle }}" autocomplete="off" aria-describedby="source-editor-title-hint">
+          <button type="button" class="source-editor-manage-action" data-source-rename>Rename</button>
+        </div>
+        <p id="source-editor-title-hint" class="source-editor-manage-hint">Rename changes the filename and updates incoming wikilinks.</p>
+        <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
+
+        <!--
+          The gate. It is hidden until an action is asked for over unsaved text,
+          and it is the only thing between that text and an operation that would
+          move the note out from under it.
+        -->
+        <section class="source-editor-gate" data-source-gate hidden aria-labelledby="source-editor-gate-heading">
+          <h3 id="source-editor-gate-heading">There is unsaved text in this editor</h3>
+          <p class="source-editor-gate-message" data-source-gate-message></p>
+          <div class="source-editor-gate-actions">
+            <button type="button" class="source-editor-gate-save" data-source-gate-save>Save first, then continue</button>
+            <button type="button" class="source-editor-gate-proceed" data-source-gate-proceed hidden>Continue anyway</button>
+            <button type="button" class="source-editor-gate-cancel" data-source-gate-cancel>Cancel</button>
+          </div>
+        </section>
+      </div>
+
       <div class="source-editor-toolbar" role="toolbar" aria-label="Formatting">
         <div class="source-editor-commands">
           <button type="button" class="source-editor-command" data-source-command="bold" title="Bold (Ctrl/⌘ + B)" aria-keyshortcuts="Control+B Meta+B">Bold</button>
@@ -147,35 +172,14 @@
       <!--
         The note's own management, in the editor rather than on the note page,
         so that renaming a note you are editing is not a trip away from unsaved
-        text. Every control here goes through the gate below first.
+        text. These controls share the unsaved-text gate beside the title above.
       -->
       <details class="source-editor-manage" data-source-manage>
         <summary>This note and this vault</summary>
 
-        <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
-
-        <!--
-          The gate. It is hidden until an action is asked for over unsaved text,
-          and it is the only thing between that text and an operation that would
-          move the note out from under it.
-        -->
-        <section class="source-editor-gate" data-source-gate hidden aria-labelledby="source-editor-gate-heading">
-          <h3 id="source-editor-gate-heading">There is unsaved text in this editor</h3>
-          <p class="source-editor-gate-message" data-source-gate-message></p>
-          <div class="source-editor-gate-actions">
-            <button type="button" class="source-editor-gate-save" data-source-gate-save>Save first, then continue</button>
-            <button type="button" class="source-editor-gate-proceed" data-source-gate-proceed hidden>Continue anyway</button>
-            <button type="button" class="source-editor-gate-cancel" data-source-gate-cancel>Cancel</button>
-          </div>
-        </section>
-
         <div class="source-editor-manage-groups">
           <div class="source-editor-manage-group">
             <h4>Where this note lives</h4>
-            <label class="source-editor-manage-field" for="source-editor-rename-title">New title</label>
-            <input type="text" id="source-editor-rename-title" class="source-editor-manage-input" data-source-rename-title autocomplete="off">
-            <button type="button" class="source-editor-manage-action" data-source-rename>Rename</button>
-
             <label class="source-editor-manage-field" for="source-editor-move-folder">Folder</label>
             <input type="text" id="source-editor-move-folder" class="source-editor-manage-input" data-source-move-folder autocomplete="off">
             <button type="button" class="source-editor-manage-action" data-source-move>Move</button>

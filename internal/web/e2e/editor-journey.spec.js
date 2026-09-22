@@ -77,7 +77,7 @@ function openBeta(page) {
 // fixture built from a string can have.
 async function openManage(page) {
   await page.locator("[data-source-manage] > summary").click();
-  await expect(page.locator("[data-source-rename]")).toBeVisible();
+  await expect(page.locator("[data-source-move]")).toBeVisible();
 }
 
 async function createNote(page, title) {
@@ -331,8 +331,11 @@ test("unsaved text holds a rename until it is saved, and nothing is left under t
   await page.keyboard.type(phrase);
   await expect.poll(() => keptDrafts(page)).toHaveLength(1);
 
-  await openManage(page);
-  await page.locator("[data-source-rename-title]").fill(renamed);
+  // Renaming is available above the editor without opening management.
+  await expect(page.locator("[data-source-manage]")).not.toHaveAttribute("open");
+  await expect(page.getByLabel("Note title", { exact: true })).toHaveValue(title);
+  await expect(page.locator("[data-source-rename]")).toBeInViewport();
+  await page.getByLabel("Note title", { exact: true }).fill(renamed);
   await page.locator("[data-source-rename]").click();
 
   // A rename changes where the note lives, which is where the unsaved text is
@@ -357,6 +360,7 @@ test("unsaved text holds a rename until it is saved, and nothing is left under t
   await page.locator("[data-source-gate-save]").click();
 
   await expectEditorKey(page, renamed);
+  await expect(page.getByLabel("Note title", { exact: true })).toHaveValue(renamed);
   expect(existsSync(vaultPath(`${title}.md`)), "the old note is still there").toBe(false);
   expect(readFileSync(vaultPath(`${renamed}.md`), "utf8")).toContain(phrase);
   // The draft was for a note that no longer exists. A save clears it, which is

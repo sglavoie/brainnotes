@@ -74,6 +74,8 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
     if (elements.panel) {
       elements.panel.hidden = false;
     }
+    // The shared prompt may be above the control that requested this action.
+    elements.save?.focus();
   };
 
   const take = (action: GuardedAction): void => {

@@ -5,6 +5,12 @@ Three of the larger web surfaces have their own pages: the
 [Synthesis workbench](web-synthesis.md), and
 [Health, Daily Fixes, and properties](web-health.md).
 
+On the **Edit source** page, change the **Note title** field above the formatting
+toolbar and click **Rename**. This renames the file in its current folder and
+updates incoming wikilinks. If the editor has unsaved text, save it first using
+the prompt or cancel the rename. The **Save** button saves the source text;
+**Rename** applies the title change.
+
 ## Command reference
 
 ### `bn serve` — run the local vault browser

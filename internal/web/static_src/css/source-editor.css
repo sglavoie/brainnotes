@@ -21,6 +21,30 @@
   gap: 0.6rem;
 }
 
+.source-editor-title {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.source-editor-title-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.source-editor-title-controls input {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-editor-title-controls button {
+  flex-shrink: 0;
+}
+
+.source-editor-manage-status:empty {
+  display: none;
+}
+
 .source-editor-path {
   color: var(--bn-muted);
   font-size: 0.85rem;
