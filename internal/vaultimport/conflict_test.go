@@ -476,6 +476,41 @@ func TestApplyConvergesOnAPackageThisVaultHasAlreadyApplied(t *testing.T) {
 	}
 }
 
+// TestAConvergedPackageRetriesAnUnpublishedAcknowledgment keeps the no-write
+// path under the same delivery guarantee as an ordinary application: a blocked
+// channel is recorded without inventing a recovery entry, and a redelivery
+// publishes the acknowledgment once the channel is writable again.
+func TestAConvergedPackageRetriesAnUnpublishedAcknowledgment(t *testing.T) {
+	r := enroll(t)
+	packaged := r.believes(t, "Alpha.md")
+	r.pair.Local.Write(t, "Alpha.md", alphaBody)
+	manifest, dir := r.deliver(t, func(b *vaultsync.Builder) {
+		b.Write("Alpha.md", []byte(alphaBody), packaged)
+	})
+	blockOutgoingChannel(t, r.root())
+
+	result, err := r.apply(t, dir)
+	if err == nil || result == nil || !result.Converged {
+		t.Fatalf("blocked convergence returned result %+v and error %v", result, err)
+	}
+	if result.Receipt != nil || result.ReceiptPath != "" {
+		t.Fatalf("an unpublished convergence receipt is reported as %v at %q", result.Receipt, result.ReceiptPath)
+	}
+	record := importState(t, r).Applied[manifest.PackageID]
+	if !record.Converged || record.Receipt != nil {
+		t.Fatalf("the blocked convergence record is %+v", record)
+	}
+	if err := os.Remove(vaultsync.OutgoingDir(r.root())); err != nil {
+		t.Fatalf("unblock outgoing channel: %v", err)
+	}
+
+	retried := r.mustApply(t, dir)
+	requireConvergedResult(t, r, manifest, retried)
+	if !retried.Duplicate {
+		t.Fatal("the retried convergence was not answered from the import ledger")
+	}
+}
+
 // TestApplyAppliesOnlyWhatThisVaultHasNotAlreadyDone is the partial case, and it
 // is where convergence has to be more than an early exit. One path of the
 // package is already at its result and the other is not: the transaction must
@@ -844,16 +879,18 @@ func requireHeldQuietly(t *testing.T, r *replicas, head string, commits int) {
 }
 
 // requireConvergedResult asserts the shape of an application that had nothing to
-// do: recorded as applied so a dependent can proceed, and deliberately without a
-// receipt, because an acknowledgment promises a local recovery entry that an
-// application writing nothing never produced.
+// do: recorded as applied so a dependent can proceed, and acknowledged as
+// convergence without claiming a recovery entry for content it never wrote.
 func requireConvergedResult(t *testing.T, r *replicas, manifest *vaultsync.Manifest, result *Result) {
 	t.Helper()
 	if !result.Converged {
 		t.Fatal("a package this vault had already applied was not reported as converged")
 	}
-	if result.Receipt != nil {
-		t.Fatal("a converged package minted a receipt, which would promise a recovery entry that does not exist")
+	if result.Receipt == nil || !result.Receipt.Converged || result.Receipt.RecoveryEntry != "" {
+		t.Fatalf("a converged package returned receipt %+v, want an explicit convergence acknowledgment", result.Receipt)
+	}
+	if result.ReceiptPath == "" {
+		t.Fatal("the convergence acknowledgment was not published")
 	}
 	if result.PackageID != manifest.PackageID {
 		t.Fatalf("the result names %s, want %s", result.PackageID, manifest.PackageID)
@@ -862,8 +899,8 @@ func requireConvergedResult(t *testing.T, r *replicas, manifest *vaultsync.Manif
 	if !applied {
 		t.Fatal("a converged package was not recorded as applied, so a dependent would wait on it forever")
 	}
-	if !record.Converged || record.JournalEntry != "" || record.Receipt != nil {
-		t.Fatalf("the record is %+v, want a converged one naming no entry and no receipt", record)
+	if !record.Converged || record.JournalEntry != "" || record.Receipt == nil || !record.Receipt.Converged {
+		t.Fatalf("the record is %+v, want a converged one naming no entry and holding its receipt", record)
 	}
 }
 

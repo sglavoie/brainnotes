@@ -123,11 +123,11 @@ func TestAnEditOnEachSideMeetsInTheMiddle(t *testing.T) {
 	}
 }
 
-// TestAConvergedPackageIsAppliedAndNeverAcknowledged pins the gap this package's
-// documentation names, so that it stays a decision rather than becoming a
-// surprise: a package whose every path the peer already held is applied, is
-// never acknowledged, and is therefore never retired.
-func TestAConvergedPackageIsAppliedAndNeverAcknowledged(t *testing.T) {
+// TestAConvergedPackageIsAcknowledgedAndRetired drives the nothing-changed case
+// through the same complete handshake as a package that wrote content. The
+// receipt claims convergence rather than a recovery entry, and still gives the
+// sender the verified evidence it needs to retire the package.
+func TestAConvergedPackageIsAcknowledgedAndRetired(t *testing.T) {
 	w := enroll(t)
 	// No local edit. The two replicas were seeded identically, so the baseline
 	// describes a vault the peer already has.
@@ -142,18 +142,19 @@ func TestAConvergedPackageIsAppliedAndNeverAcknowledged(t *testing.T) {
 	if applied.Answered != 1 || applied.Changed != 0 {
 		t.Fatalf("the peer's drain: %+v", applied)
 	}
-	if got := w.receipts(vaultsync.OutgoingDir(w.peerRoot())); len(got) != 0 {
-		t.Fatalf("the peer published %v; internal/vaultimport mints no receipt for a package that wrote nothing", got)
+	if got := w.receipts(vaultsync.OutgoingDir(w.peerRoot())); !contains(got, published[0]) {
+		t.Fatalf("the peer published receipts %v, want one for converged package %s", got, published[0])
 	}
 
-	// The documented consequence: the sender keeps the package and goes on
-	// counting it as unacknowledged, which is true and is not the whole truth.
+	// The convergence acknowledgment returns through the ordinary channel and is
+	// enough to retire the package once backup coverage is present.
 	w.transport(w.peerRoot(), w.root())
+	coverOutgoing(t, w.root())
 	pass := w.once(w.root())
-	if retired := pass.retired(t).Retired; len(retired) != 0 {
-		t.Fatalf("retired %v, want nothing: no receipt exists", retired)
+	if retired := pass.retired(t).Retired; !contains(retired, published[0]) {
+		t.Fatalf("retired %v, want converged package %s", retired, published[0])
 	}
-	if pass.Status.Transport.AwaitingReceipt != 1 {
+	if pass.Status.Transport.AwaitingReceipt != 0 {
 		t.Fatalf("after the peer converged: %+v", pass.Status.Transport)
 	}
 }

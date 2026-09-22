@@ -51,6 +51,32 @@ func TestAcknowledgeNamesWhatWasApplied(t *testing.T) {
 	}
 }
 
+// TestAcknowledgeNamesConvergenceInsteadOfARecoveryEntry covers the other
+// honest receipt shape: every packaged result was already on disk, so there is
+// no application to undo and no recovery entry to name. The complete Applied
+// list is still required and is what lets the producer verify the claim.
+func TestAcknowledgeNamesConvergenceInsteadOfARecoveryEntry(t *testing.T) {
+	r := enroll(t)
+	manifest, _ := r.draft(t, func(b *Builder) {
+		b.Write("Alpha.md", []byte("alpha body\n"), Absent())
+		b.Delete("Beta.md", Existing(HashBytes([]byte("beta\n"))))
+	})
+	application := applicationOf(r, manifest)
+	application.RecoveryEntry = ""
+	application.Converged = true
+
+	receipt, err := Acknowledge(r.local, manifest, application)
+	if err != nil {
+		t.Fatalf("Acknowledge: %v", err)
+	}
+	if !receipt.Converged || receipt.RecoveryEntry != "" {
+		t.Fatalf("converged receipt is %+v, want no recovery entry", receipt)
+	}
+	if err := receipt.VerifyAgainst(manifest, r.peer); err != nil {
+		t.Fatalf("the producer did not recognize the converged receipt: %v", err)
+	}
+}
+
 // TestAcknowledgeRoundTrip is the receipt's whole purpose in one flow: the
 // receiver publishes what it owes, and the producer reads that answer back and
 // recognizes it as its own.
@@ -115,6 +141,13 @@ func TestAcknowledgeRefusesAClaimItCannotStandBehind(t *testing.T) {
 			want: ErrNoRecoveryEntry,
 			mutate: func(a *Application) {
 				a.RecoveryEntry = "   "
+			},
+		},
+		{
+			name: "a converged application that names a recovery entry",
+			want: ErrReceiptMismatch,
+			mutate: func(a *Application) {
+				a.Converged = true
 			},
 		},
 		{
@@ -260,6 +293,13 @@ func TestVerifyAgainstRefusesAReceiptThatIsNotEvidence(t *testing.T) {
 			want: ErrNoRecoveryEntry,
 			mutate: func(receipt *Receipt) {
 				receipt.RecoveryEntry = ""
+			},
+		},
+		{
+			name: "a converged receipt that names a recovery entry",
+			want: ErrReceiptMismatch,
+			mutate: func(receipt *Receipt) {
+				receipt.Converged = true
 			},
 		},
 		{

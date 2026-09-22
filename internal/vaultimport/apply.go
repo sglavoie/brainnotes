@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -100,8 +101,8 @@ type Result struct {
 	// here, or — for a redelivery — the one it minted the first time. It is set
 	// whenever an acknowledgment exists, including when publishing it failed, so
 	// "this vault never acknowledged the package" and "the acknowledgment could not
-	// be put where the peer reads it" stay distinguishable. Nil for a converged
-	// package, which has no recovery entry for a receipt to name.
+	// be put where the peer reads it" stay distinguishable. A converged receipt
+	// names no recovery entry because this vault wrote nothing.
 	Receipt *vaultsync.Receipt
 	// ReceiptPath is where it was published in this device's outgoing channel, and
 	// is empty when the publication itself failed.
@@ -121,10 +122,10 @@ type Result struct {
 	// a peer saying it never got the first reply.
 	Duplicate bool
 	// Converged reports that this vault already held every change the package
-	// carried, so nothing was written, no recovery entry exists, and no receipt
-	// could honestly be minted. See Record.Converged. JournalEntry is empty and
-	// Receipt is nil; the package is remembered as applied all the same, so a
-	// redelivery is answered rather than re-inspected.
+	// carried, so nothing was written and no recovery entry exists. See
+	// Record.Converged. JournalEntry is empty and Receipt carries the explicit
+	// convergence acknowledgment; the package is remembered as applied so a
+	// redelivery republishes that same receipt rather than re-inspecting the vault.
 	Converged bool
 	// AbandonedResolutions names the conflict decisions this call's recovery pass
 	// dropped on the way in, with the reason for each — see
@@ -348,38 +349,42 @@ func (a *applier) mark(found *disposition) {
 	}
 }
 
-// converge remembers a package this vault had already applied the whole of,
-// without applying anything.
+// converge acknowledges and remembers a package this vault had already applied
+// the whole of, without applying anything.
 //
 // It is recorded as applied because that is what it is: every path the package
-// names holds exactly what the package would have installed. What it does not
-// get is a receipt. An acknowledgment promises the peer a local recovery entry
-// that can undo the application, and an application that wrote nothing produced
-// none — noteops creates no entry for an operation that captures nothing, and
-// minting one would mean committing the vault's own content back over itself to
-// have something to name. So the peer keeps its copy and redelivers, which costs
-// a redelivery and loses nothing: this answers the second one from the ledger.
+// names holds exactly what the package would have installed. Its receipt says
+// Converged instead of naming a recovery entry, because noteops correctly made
+// no entry for an operation that captured nothing. The path observations still
+// have to cover the package exactly before that receipt can be published.
 func (a *applier) converge() (*Result, error) {
+	result, acknowledged, ackErr := a.acknowledgeConvergence()
+	if !acknowledged {
+		return nil, ackErr
+	}
+	if err := a.rememberConvergence(result.Receipt); err != nil {
+		return result, errors.Join(ackErr, err)
+	}
+	result.Cleanup = a.cleanup
+	return result, ackErr
+}
+
+func (a *applier) rememberConvergence(receipt *vaultsync.Receipt) error {
 	next := a.state.clone()
 	next.Applied[a.manifest.PackageID] = Record{
 		OperationID:  a.operation.OperationID,
 		OriginDevice: a.manifest.OriginDevice,
 		Sequence:     a.manifest.Sequence,
 		Converged:    true,
+		Receipt:      receipt,
 	}
 	released := a.release(next)
 	if err := a.saveState(next); err != nil {
-		return nil, err
+		return err
 	}
 	a.state = next
 	a.discard(released)
-	return &Result{
-		PackageID:    a.manifest.PackageID,
-		OperationID:  a.operation.OperationID,
-		OriginDevice: a.manifest.OriginDevice,
-		Converged:    true,
-		Cleanup:      a.cleanup,
-	}, nil
+	return nil
 }
 
 // applier is one package's journey through this vault, from accepted manifest to
@@ -664,15 +669,11 @@ func (a *applier) answer(record Record) (*Result, error) {
 			ErrCorruptState, a.manifest.PackageID, record.OperationID, a.operation.OperationID)
 	}
 	a.withoutPayloads()
-	// A converged application has no receipt and never will: there is no recovery
-	// entry for one to name. Minting one now would be worse than saying nothing,
-	// because it would have to name some *other* operation's entry. So the
-	// redelivery is answered with the convergence itself, which is the honest
-	// statement — nothing here changed, and nothing here will.
 	if record.Converged {
-		result := a.duplicate(record)
-		result.Converged = true
-		return result, nil
+		if record.Receipt != nil {
+			return a.republish(record)
+		}
+		return a.retryConvergedAcknowledge(record)
 	}
 	if record.Receipt != nil {
 		return a.republish(record)
@@ -744,6 +745,23 @@ func (a *applier) retryAcknowledge(record Record) (*Result, error) {
 	return result, ackErr
 }
 
+// retryConvergedAcknowledge answers a redelivery whose first convergence
+// acknowledgment could not be published. It re-observes every package path,
+// so a later edit refuses the new claim instead of being described as the state
+// the package originally found.
+func (a *applier) retryConvergedAcknowledge(record Record) (*Result, error) {
+	result, acknowledged, ackErr := a.acknowledgeConvergence()
+	result.Duplicate = true
+	if !acknowledged || result.Receipt == nil {
+		return result, ackErr
+	}
+	if err := a.rememberConvergence(result.Receipt); err != nil {
+		return result, errors.Join(ackErr, err)
+	}
+	result.Cleanup = a.cleanup
+	return result, ackErr
+}
+
 // duplicate is the Result a redelivery reports before anything is said about the
 // receipt.
 func (a *applier) duplicate(record Record) *Result {
@@ -753,6 +771,7 @@ func (a *applier) duplicate(record Record) *Result {
 		OriginDevice: a.manifest.OriginDevice,
 		JournalEntry: record.JournalEntry,
 		Duplicate:    true,
+		Converged:    record.Converged,
 	}
 }
 
@@ -1113,6 +1132,58 @@ func (a *applier) acknowledge(entry *journal.Entry) (*Result, error) {
 	return result, nil
 }
 
+// acknowledgeConvergence publishes the distinct receipt for a package whose
+// complete result was already present. It makes no recovery-entry promise, but
+// it is held to the same read-back and exact-coverage checks as an application
+// that wrote the package.
+func (a *applier) acknowledgeConvergence() (*Result, bool, error) {
+	result := &Result{
+		PackageID:    a.manifest.PackageID,
+		OperationID:  a.operation.OperationID,
+		OriginDevice: a.manifest.OriginDevice,
+		Converged:    true,
+		Cleanup:      a.cleanup,
+	}
+	published, path, err := a.adoptConvergence()
+	if err != nil {
+		// A blocked or damaged channel does not erase the fact that every package
+		// result is already present. Prove that fact independently before returning
+		// the same applied-with-bookkeeping-error shape an ordinary import uses.
+		if _, proofErr := a.mintConvergence(); proofErr != nil {
+			return result, false, errors.Join(err, proofErr)
+		}
+		return result, true, err
+	}
+	if published != nil {
+		result.Receipt = published
+		result.ReceiptPath = path
+		return result, true, nil
+	}
+	receipt, err := a.mintConvergence()
+	if err != nil {
+		return result, false, err
+	}
+	path, err = vaultsync.PublishReceipt(vaultsync.OutgoingDir(a.root), receipt)
+	if err != nil {
+		return result, true, err
+	}
+	result.Receipt = receipt
+	result.ReceiptPath = path
+	return result, true, nil
+}
+
+func (a *applier) mintConvergence() (*vaultsync.Receipt, error) {
+	applied, err := a.observe()
+	if err != nil {
+		return nil, err
+	}
+	return vaultsync.Acknowledge(a.local, a.manifest, vaultsync.Application{
+		Converged: true,
+		Applied:   applied,
+		Now:       a.opts.Now,
+	})
+}
+
 // adopt returns the receipt this device has already published for the package,
 // with the path it sits at, or nil when the channel holds none.
 //
@@ -1144,6 +1215,34 @@ func (a *applier) adopt(entry *journal.Entry) (*vaultsync.Receipt, string, error
 	if receipt.RecoveryEntry != entry.ID {
 		return nil, "", fmt.Errorf("%w: %s was acknowledged under recovery entry %s and is now %s",
 			vaultsync.ErrReceiptMismatch, a.manifest.PackageID, receipt.RecoveryEntry, entry.ID)
+	}
+	path, err := vaultsync.ReceiptPath(channel, a.manifest.PackageID)
+	if err != nil {
+		return nil, "", err
+	}
+	return receipt, path, nil
+}
+
+// adoptConvergence is the crash-recovery half of acknowledgeConvergence. A
+// receipt may be durable before the import ledger remembers it, so a repeated
+// pass must adopt that exact statement rather than try to replace its immutable
+// channel name.
+func (a *applier) adoptConvergence() (*vaultsync.Receipt, string, error) {
+	channel := vaultsync.OutgoingDir(a.root)
+	receipt, err := vaultsync.ReadReceipt(channel, a.manifest.PackageID)
+	if errors.Is(err, vaultsync.ErrIncompletePackage) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if receipt.Device != a.local.DeviceID {
+		return nil, "", fmt.Errorf("%w: the receipt for %s in this vault's own channel was published by %s",
+			vaultsync.ErrReceiptMismatch, a.manifest.PackageID, receipt.Device)
+	}
+	if !receipt.Converged || strings.TrimSpace(receipt.RecoveryEntry) != "" {
+		return nil, "", fmt.Errorf("%w: %s converged but its receipt names recovery entry %s",
+			vaultsync.ErrReceiptMismatch, a.manifest.PackageID, receipt.RecoveryEntry)
 	}
 	path, err := vaultsync.ReceiptPath(channel, a.manifest.PackageID)
 	if err != nil {

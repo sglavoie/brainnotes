@@ -62,10 +62,11 @@ func TestLoadStateRefusesAPackageRecordedAsBothAppliedAndHeld(t *testing.T) {
 
 // TestLoadStateRefusesAnAppliedRecordThatContradictsItself covers the pairing
 // convergence is defined by. It is not two fields that happen to agree: a
-// converged application wrote nothing, so it has no recovery entry and no
-// receipt, and an ordinary one has an entry it can be undone from. A record that
-// claims otherwise did not come out of this package, and reading it would answer
-// a redelivery with a promise the vault cannot keep.
+// converged application wrote nothing, so it has no recovery entry and only a
+// converged receipt; an ordinary one has an entry it can be undone from and only
+// an ordinary receipt. A record that claims otherwise did not come out of this
+// package, and reading it would answer a redelivery with a promise the vault
+// cannot keep.
 func TestLoadStateRefusesAnAppliedRecordThatContradictsItself(t *testing.T) {
 	packageID := mustPackageID(t)
 	cases := []struct {
@@ -77,7 +78,7 @@ func TestLoadStateRefusesAnAppliedRecordThatContradictsItself(t *testing.T) {
 			record: Record{Converged: true, JournalEntry: "2026-01-01T00-00-00Z-entry"},
 		},
 		{
-			name:   "converged and holding an acknowledgment",
+			name:   "converged and holding an ordinary acknowledgment",
 			record: Record{Converged: true, Receipt: &vaultsync.Receipt{PackageID: packageID}},
 		},
 		{
@@ -87,6 +88,10 @@ func TestLoadStateRefusesAnAppliedRecordThatContradictsItself(t *testing.T) {
 		{
 			name:   "holding a receipt for some other package",
 			record: Record{JournalEntry: "2026-01-01T00-00-00Z-entry", Receipt: &vaultsync.Receipt{PackageID: mustPackageID(t)}},
+		},
+		{
+			name:   "applied and holding a converged acknowledgment",
+			record: Record{JournalEntry: "2026-01-01T00-00-00Z-entry", Receipt: &vaultsync.Receipt{PackageID: packageID, Converged: true}},
 		},
 	}
 	for _, tc := range cases {

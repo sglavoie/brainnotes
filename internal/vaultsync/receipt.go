@@ -16,17 +16,21 @@ import (
 // receiptSuffix is the extension of a published receipt.
 const receiptSuffix = ".json"
 
-// Receipt is one device's acknowledgment that it durably applied a package.
+// Receipt is one device's acknowledgment that it durably holds a package's
+// result.
 //
 // It is the only statement in this protocol that a change has actually landed.
 // A file transfer completing says a byte sequence reached a disk; a package
 // directory appearing says a publication finished; neither says a note in a
 // live vault changed, and the producer must not drop its own copy of a change
-// on either. A receipt does say that, and it says it with the identity of the
-// local recovery-history entry that can undo it, so the claim is answerable
-// rather than merely asserted — by an operator, and by the layer that owns the
-// recovery history. Not by this package: it cannot import internal/journal, so
-// it checks that the entry is named and never that it exists.
+// on either. A receipt does say that. When the package changed the vault, the
+// receipt names the local recovery-history entry that can undo it, so the claim
+// is answerable rather than merely asserted — by an operator, and by the layer
+// that owns the recovery history. When the vault already held every result, the
+// receipt instead says Converged and names no entry because there was nothing to
+// undo. In both cases Applied proves the package's complete result is present.
+// This package cannot import internal/journal, so it checks the ordinary entry
+// is named and never that it exists.
 type Receipt struct {
 	// Format is the wire format token, always Format.
 	Format string `json:"format"`
@@ -50,10 +54,12 @@ type Receipt struct {
 	// AppliedAt is when the application became durable here.
 	AppliedAt time.Time `json:"applied_at"`
 	// RecoveryEntry is the identity of the local recovery-history entry that
-	// can undo the application. It is required: an acknowledgment is a promise
-	// the peer acts on, and it is only honest once the change is both durable
-	// and undoable on this side.
-	RecoveryEntry string `json:"recovery_entry"`
+	// can undo the application. It is required unless Converged is true.
+	RecoveryEntry string `json:"recovery_entry,omitempty"`
+	// Converged reports that this vault already held every result the package
+	// describes, so the acknowledgment needs no recovery entry: no package byte
+	// was written and there is nothing to undo.
+	Converged bool `json:"converged,omitempty"`
 	// Applied is what landed, one entry per path the package changed.
 	Applied []AppliedPath `json:"applied"`
 }
@@ -74,8 +80,11 @@ type AppliedPath struct {
 // receipt for it.
 type Application struct {
 	// RecoveryEntry identifies the local recovery-history entry that can undo
-	// the application.
+	// the application. It is empty only when Converged is true.
 	RecoveryEntry string
+	// Converged reports that the vault already held every package result and the
+	// application therefore wrote nothing.
+	Converged bool
 	// Applied is the per-path outcome, which must cover the package exactly.
 	Applied []AppliedPath
 	// Now is the clock seam.
@@ -89,13 +98,14 @@ func (a Application) now() time.Time {
 	return a.Now().UTC()
 }
 
-// Acknowledge mints the receipt local owes for having applied m.
+// Acknowledge mints the receipt local owes for durably holding m's result.
 //
 // It refuses three things, and each one is a way an acknowledgment could be a
 // lie the peer would act on by discarding its only copy of a change: a package
 // this vault could not have accepted in the first place, an application with no
-// recovery entry behind it, and an application that does not cover every path
-// the package changed with the bytes the package said those paths would hold.
+// recovery entry behind it unless it explicitly converged, and an application
+// that does not cover every path the package changed with the bytes the package
+// said those paths would hold.
 func Acknowledge(local *Enrollment, m *Manifest, applied Application) (*Receipt, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
@@ -103,7 +113,11 @@ func Acknowledge(local *Enrollment, m *Manifest, applied Application) (*Receipt,
 	if err := m.CheckEnrollment(local); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(applied.RecoveryEntry) == "" {
+	switch {
+	case applied.Converged && strings.TrimSpace(applied.RecoveryEntry) != "":
+		return nil, fmt.Errorf("%w: converged package %s names recovery entry %s",
+			ErrReceiptMismatch, m.PackageID, applied.RecoveryEntry)
+	case !applied.Converged && strings.TrimSpace(applied.RecoveryEntry) == "":
 		return nil, fmt.Errorf("%w: package %s", ErrNoRecoveryEntry, m.PackageID)
 	}
 	if err := coversPackage(m, applied.Applied); err != nil {
@@ -119,6 +133,7 @@ func Acknowledge(local *Enrollment, m *Manifest, applied Application) (*Receipt,
 		Epoch:          local.Epoch,
 		AppliedAt:      applied.now(),
 		RecoveryEntry:  applied.RecoveryEntry,
+		Converged:      applied.Converged,
 		Applied:        append([]AppliedPath(nil), applied.Applied...),
 	}
 	if err := receipt.Validate(); err != nil {
@@ -196,7 +211,11 @@ func (r *Receipt) Validate() error {
 	if r.Device == r.OriginDevice {
 		return fmt.Errorf("%w: a device cannot acknowledge its own package", ErrReceiptMismatch)
 	}
-	if strings.TrimSpace(r.RecoveryEntry) == "" {
+	switch {
+	case r.Converged && strings.TrimSpace(r.RecoveryEntry) != "":
+		return fmt.Errorf("%w: converged package %s names recovery entry %s",
+			ErrReceiptMismatch, r.PackageID, r.RecoveryEntry)
+	case !r.Converged && strings.TrimSpace(r.RecoveryEntry) == "":
 		return fmt.Errorf("%w: package %s", ErrNoRecoveryEntry, r.PackageID)
 	}
 	if r.AppliedAt.IsZero() {

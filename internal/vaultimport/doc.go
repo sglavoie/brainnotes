@@ -79,16 +79,19 @@
 // operation, and the origin device, which is every argument the repairing
 // RecordImport call needs.
 //
-// An acknowledgment is only ever minted for a durable, undoable change. The
-// receipt's recovery entry is read back from disk with journal.LoadEntry before
-// the receipt exists, which is the check vaultsync documents that it cannot make
-// itself — it is a leaf and cannot import internal/journal, so it verifies that
-// an entry is named and never that one exists. Each acknowledged hash is
-// computed from what this disk holds now rather than copied from the package's
-// claim, and a tombstone is acknowledged only once the path is really gone.
-// Failing to mint or publish one does not unmake the change it would have
-// described, so Apply returns the Result alongside the error in that case, with
-// the journal entry named and the receipt nil.
+// An ordinary acknowledgment is only ever minted for a durable, undoable
+// change. The receipt's recovery entry is read back from disk with
+// journal.LoadEntry before the receipt exists, which is the check vaultsync
+// documents that it cannot make itself — it is a leaf and cannot import
+// internal/journal, so it verifies that an entry is named and never that one
+// exists. A wholly converged package is the distinct honest case: it wrote
+// nothing, so its receipt explicitly says convergence and names no recovery
+// entry. Each acknowledged hash is computed from what this disk holds now rather
+// than copied from the package's claim, and a tombstone is acknowledged only
+// once the path is really gone. Failing to mint or publish one does not unmake
+// the change it would have described, so Apply returns the Result alongside the
+// error in that case, with the journal entry named for ordinary applications and
+// the receipt nil.
 //
 // An interruption resolves to "never happened" or "happened completely", and
 // never to anything else. An import is six durable events — the peer's bytes,

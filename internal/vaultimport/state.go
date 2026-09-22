@@ -193,18 +193,17 @@ type Record struct {
 	// consumed the position another package requires.
 	Sequence uint64 `json:"sequence"`
 	// JournalEntry is the local recovery entry that can undo it. Empty only when
-	// Converged, which is the one application that produced none.
+	// Converged, which is the one application that wrote nothing.
 	JournalEntry string `json:"journal_entry"`
 	// Converged reports a package this vault had already made every change of
 	// before it arrived — two replicas that reached the same content
 	// independently, which is ordinary when both are edited from one source.
 	//
-	// It applied nothing, so there is no recovery entry and no receipt: an
-	// acknowledgment names a local entry that can undo the application, and there
-	// is no honest entry to name. The peer therefore keeps its copy and redelivers,
-	// which is the protocol's safe direction — every redelivery converges again
-	// and changes nothing. It is recorded rather than left unrecorded so a
-	// redelivery is answered from here instead of being inspected again.
+	// It applied nothing, so there is no recovery entry. Its receipt explicitly
+	// records convergence instead: every package result was observed on disk and
+	// there is no package write to undo. It is recorded rather than left
+	// unrecorded so a redelivery republishes the same receipt instead of being
+	// inspected again.
 	Converged bool `json:"converged,omitempty"`
 	// Receipt is the acknowledgment minted for the peer, kept whole.
 	//
@@ -379,21 +378,22 @@ func (r Record) validate(packageID string) error {
 // validateConvergence checks the pairing that separates a converged record from
 // an ordinary applied one.
 //
-// Convergence is exactly the application that produced no recovery entry and no
-// receipt, because there was nothing to undo and nothing honest to acknowledge.
-// So the two are not independent fields that happen to agree: a record claiming
-// convergence *and* an entry, or claiming neither, did not come out of this
-// package, and reading it either way would answer a redelivery with a promise
-// the vault cannot keep.
+// Convergence is exactly the application that produced no recovery entry,
+// because there was nothing to undo. A receipt is allowed only when it carries
+// the matching convergence claim; an ordinary receipt still requires an entry.
+// These are not independent fields that happen to agree: reading a contradictory
+// record would answer a redelivery with a promise the vault cannot keep.
 func (r Record) validateConvergence(packageID string) error {
 	switch {
 	case r.Converged && strings.TrimSpace(r.JournalEntry) != "":
 		return fmt.Errorf("%w: package %s converged and names journal entry %s",
 			ErrCorruptState, packageID, r.JournalEntry)
-	case r.Converged && r.Receipt != nil:
-		return fmt.Errorf("%w: package %s converged and holds a receipt", ErrCorruptState, packageID)
+	case r.Converged && r.Receipt != nil && !r.Receipt.Converged:
+		return fmt.Errorf("%w: package %s converged and holds an ordinary receipt", ErrCorruptState, packageID)
 	case !r.Converged && strings.TrimSpace(r.JournalEntry) == "":
 		return fmt.Errorf("%w: applied package %s names no journal entry", ErrCorruptState, packageID)
+	case !r.Converged && r.Receipt != nil && r.Receipt.Converged:
+		return fmt.Errorf("%w: applied package %s holds a converged receipt", ErrCorruptState, packageID)
 	}
 	return nil
 }

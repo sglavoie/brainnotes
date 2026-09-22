@@ -37,33 +37,28 @@
 //
 // The status model refuses to conflate two facts that look alike from here. A
 // package this device published and copied into the channel has been *delivered*
-// at most; only a receipt in the peer's channel says the peer applied it durably
-// against a named local recovery entry. So [StateTransportPending] covers
-// everything from "not copied yet" to "copied and being applied right now", and
-// nothing but a verified receipt retires a package or advances anything.
+// at most; only a receipt in the peer's channel says the peer durably holds every
+// result. A receipt names the recovery entry for content the peer wrote, or says
+// the peer had already converged and therefore wrote nothing. So
+// [StateTransportPending] covers everything from "not copied yet" to "copied and
+// being applied right now", and nothing but a verified receipt retires a package
+// or advances anything.
 //
 // The same distinction holds in the other direction: a package sitting in this
 // vault's incoming channel is delivered, and [StatePeerApplication] says it is
 // waiting for this device to apply it. Packages counted there are not changes
 // this vault holds.
 //
-// # A converged package is never acknowledged, and therefore never retired
+// # A converged package still completes the handshake
 //
-// internal/vaultimport mints no receipt for a package whose every path this
-// vault already held: an acknowledgment promises a local recovery entry that can
-// undo the application, and an application that wrote nothing produced none. It
-// records the package as applied-and-converged and expects the sender to keep
-// its copy and redeliver.
-//
-// That is a deliberate decision there, and it has a consequence here that this
-// package can report but not fix: such a package stays in the sender's outgoing
-// channel forever, counted in [TransportStatus.AwaitingReceipt], and a pair that
-// is quiet for long enough afterwards reaches [StateDisconnected] on a transport
-// that is working. The status is not wrong about the facts it states — no
-// receipt has arrived, and nothing has been heard — but the headline names the
-// wrong cause. Fixing it needs the protocol to carry a "this changed nothing"
-// acknowledgment, which is internal/vaultsync's decision and not this package's.
-// It is stated here rather than left to be discovered.
+// internal/vaultimport publishes a convergence receipt for a package whose every
+// path this vault already held. It names no recovery entry because the package
+// wrote nothing and produced nothing to undo; instead, its complete per-path
+// observations prove the package result is present. The sender verifies that
+// receipt against the immutable manifest exactly as it does an ordinary
+// application receipt, then retires the package. A healthy quiet pair therefore
+// returns [TransportStatus.AwaitingReceipt] to zero rather than eventually
+// reporting [StateDisconnected] for a package the peer already had.
 //
 // # Nothing here hides a failure
 //
