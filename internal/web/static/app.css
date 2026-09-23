@@ -1268,8 +1268,9 @@ code {
 }
 
 .brief-insight-prompt {
+  box-sizing: border-box;
   width: 100%;
-  min-width: 300px;
+  min-width: min(300px, 100%);
   min-height: 3.7rem;
   resize: vertical;
   border: 1px solid var(--bn-border);
@@ -1327,6 +1328,7 @@ code {
 }
 
 .capture-input {
+  box-sizing: border-box;
   width: 100%;
   min-height: 3.7rem;
   resize: vertical;
@@ -6019,6 +6021,7 @@ code {
 }
 
 .properties-control-textarea {
+  box-sizing: border-box;
   width: 100%;
   padding: 0.4rem 0.5rem;
   font-family: inherit;
@@ -7383,6 +7386,7 @@ code {
 }
 
 .source-editor-manage-input {
+  box-sizing: border-box;
   width: 100%;
   padding: 0.3rem 0.45rem;
   border: 1px solid var(--bn-border);
@@ -8241,6 +8245,7 @@ dt.sync-fact {
 }
 
 .sync-merge-host {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
   border: 1px solid var(--bn-border);

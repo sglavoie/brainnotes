@@ -474,6 +474,7 @@ dt.sync-fact {
 }
 
 .sync-merge-host {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
   border: 1px solid var(--bn-border);

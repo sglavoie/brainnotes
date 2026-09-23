@@ -98,8 +98,9 @@
 }
 
 .brief-insight-prompt {
+  box-sizing: border-box;
   width: 100%;
-  min-width: 300px;
+  min-width: min(300px, 100%);
   min-height: 3.7rem;
   resize: vertical;
   border: 1px solid var(--bn-border);
