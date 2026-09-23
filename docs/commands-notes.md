@@ -166,6 +166,37 @@ bn unpin "Reading List"
 bn unpin --dry-run "Reading List"
 ```
 
+### `bn remove` — move a selected note to Trash
+
+```sh
+bn remove [--yes]
+```
+
+Opens the normal single-note `fzf` picker. Selecting a note asks for
+confirmation:
+
+```text
+Move Projects/Ideas.md to Trash? [y/N]
+```
+
+Only `y` or `yes` confirms; blank input, `n`, or EOF prints `canceled` and
+leaves the vault unchanged. `--yes` skips that prompt. An empty vault or a
+dismissed picker is a successful no-op.
+
+Removal is recoverable: the note moves to `<vault>/Trash/`, retaining its
+vault-relative folder (for example, `Projects/Ideas.md` becomes
+`Trash/Projects/Ideas.md`). Existing files at that destination get a
+collision-safe suffix. Backlinks are deliberately not rewritten. The command
+prints the source, Trash destination, journal ID, and a `bn undo <id>` recovery
+command.
+
+```sh
+bn remove
+bn remove --yes
+# restore the printed journal entry:
+bn undo 20260817T093000.000000000Z-1a2b3c4d
+```
+
 ### `bn open` — pick a note with fzf and edit it
 
 ```sh
@@ -196,5 +227,4 @@ Exec-replaces with the configured editor opened on the vault root
 (`[open].editor` in config, or `$EDITOR` as fallback). Useful for
 launching the vault as a project/workspace in editors that treat a
 directory argument as a session root (`nvim`, `code`, `subl`, etc.).
-
 

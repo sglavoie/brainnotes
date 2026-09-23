@@ -133,6 +133,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewPinCmd())
 	cmd.AddCommand(NewRenameCmd())
 	cmd.AddCommand(NewRenameKeyCmd())
+	cmd.AddCommand(NewRemoveCmd())
 	cmd.AddCommand(NewRepairCmd())
 	cmd.AddCommand(NewRelinkCmd())
 	cmd.AddCommand(NewRelatedCmd())
