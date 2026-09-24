@@ -153,9 +153,9 @@ func (m *Manager) headState(ctx context.Context, op string) (head, ref string, e
 	if ref == "" {
 		return "", "", safetyErrorf(KindRepositoryState, op, "the repository HEAD is detached, so there is no branch to record snapshots on")
 	}
-	head, err = m.git.revParse(ctx, ref)
+	head, err = m.git.resolveBranch(ctx, ref)
 	if err != nil {
-		return "", ref, nil
+		return "", "", safetyErrorf(KindRepositoryState, op, "the branch %s could not be resolved: %s", ref, agent.SanitizedDiagnostic(err))
 	}
 	return head, ref, nil
 }

@@ -29,6 +29,35 @@ func (g *gitExec) revParse(ctx context.Context, rev string) (string, error) {
 	return oid, nil
 }
 
+// resolveBranch reports the commit a branch points at, or an empty string when
+// the branch is unborn.
+//
+// Unborn is decided narrowly, because the answer seeds the private index: an
+// unborn reading compares the working tree against an empty index, so every
+// tracked path looks staged for deletion and classification latches a block
+// naming the whole vault. Only exit 1 from `rev-parse --verify --quiet` means
+// "does not resolve"; any other failure is a lookup that did not happen. Even
+// exit 1 is not trusted for a branch that has a reflog, since an unborn branch
+// has never been written and cannot have one — a logged branch that does not
+// resolve is a read that raced a writer or a ref that was damaged, and both
+// deserve an error the next pass can retry rather than a verdict.
+func (g *gitExec) resolveBranch(ctx context.Context, ref string) (string, error) {
+	oid, err := g.revParse(ctx, ref)
+	if err == nil {
+		return oid, nil
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		return "", err
+	}
+	if _, logErr := g.run(ctx, gitCall{args: []string{"reflog", "exists", ref}}); logErr == nil {
+		return "", fmt.Errorf("git rev-parse: %q has a reflog but does not resolve", ref)
+	} else if !errors.As(logErr, &exit) || exit.ExitCode() != 1 {
+		return "", logErr
+	}
+	return "", nil
+}
+
 // isAncestor reports whether commit is reachable from tip.
 //
 // This is how the engine proves, after a restart, that an interrupted snapshot

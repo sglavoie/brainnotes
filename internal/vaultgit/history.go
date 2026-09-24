@@ -136,16 +136,12 @@ func (h *History) Branch() string { return h.branch }
 // Tip resolves the branch to its current commit, reporting ErrUnbornBranch when
 // the branch has no commits yet.
 func (h *History) Tip(ctx context.Context) (string, error) {
-	oid, err := h.git.revParse(ctx, h.branch)
+	oid, err := h.git.resolveBranch(ctx, h.branch)
 	if err != nil {
-		// revParse used --verify --quiet, so an unborn branch and a genuinely
-		// broken repository both arrive here. Distinguishing them by asking whether
-		// the ref file exists would race; asking git whether the repository is
-		// otherwise readable does not.
-		if _, headErr := h.git.symbolicHead(ctx); headErr == nil {
-			return "", fmt.Errorf("%w: %s", ErrUnbornBranch, h.branch)
-		}
 		return "", fmt.Errorf("vaultgit: resolve %s: %w", h.branch, err)
+	}
+	if oid == "" {
+		return "", fmt.Errorf("%w: %s", ErrUnbornBranch, h.branch)
 	}
 	return oid, nil
 }
