@@ -54,6 +54,11 @@ type Options struct {
 	MaxPackages int
 	// DisconnectedAfter overrides DefaultDisconnectedAfter.
 	DisconnectedAfter time.Duration
+	// AuthorizeDeletions names commits whose deletions a person has approved
+	// despite carrying no journal record, passed straight to internal/vaultexport.
+	// Only a one-shot pass sets it: the approval is for one commit, once, and a
+	// loop holding it would keep approving whatever it meets later.
+	AuthorizeDeletions []string
 	// Observe receives every event. A nil Observe discards them, which is only
 	// ever right in a test.
 	Observe func(Event)

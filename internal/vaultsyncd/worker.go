@@ -161,6 +161,8 @@ func runExport(ctx context.Context, root string, opts Options) (*ExportOutcome, 
 		GitExecutable: opts.GitExecutable,
 		Now:           opts.Now,
 		MaxPackages:   opts.MaxPackages,
+
+		AuthorizeDeletions: opts.AuthorizeDeletions,
 	})
 	if result == nil {
 		return nil, err

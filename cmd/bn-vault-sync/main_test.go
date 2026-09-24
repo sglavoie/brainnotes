@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -98,6 +99,62 @@ func TestOnceRunsOneBoundedPassAndPrintsWhatItDid(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(vaultsync.OutgoingDir(pair.Local.Root)); err != nil || len(entries) == 0 {
 		t.Fatalf("-once published nothing: %v %v", entries, err)
+	}
+}
+
+// TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized is the recovery the
+// vault-safety block procedure leads to: a person accepts a deletion with
+// `git rm`, which writes no journal record, so the exporter refuses to publish
+// it until that exact commit is approved for one pass.
+func TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized(t *testing.T) {
+	for _, authorize := range []bool{false, true} {
+		pair := enrolledPair(t)
+		// The first export is a baseline of the whole tree, which carries no
+		// deletions at all; only a commit replayed after it is judged.
+		if code := run(context.Background(), []string{"-once"}, &bytes.Buffer{}, &bytes.Buffer{}); code != exitOK {
+			t.Fatalf("authorize=%v: the baseline pass exited %d", authorize, code)
+		}
+		pair.Local.Git(t, "rm", "-q", "--", "Alpha.md")
+		pair.Local.Git(t, "commit", "-q", "-m", "remove Alpha.md after review")
+		args := []string{"-once"}
+		if authorize {
+			args = append(args, "-authorize-deletion", strings.TrimSpace(pair.Local.Git(t, "rev-parse", "HEAD")))
+		}
+
+		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+		code := run(context.Background(), args, stdout, stderr)
+		var pass vaultsyncd.Pass
+		if err := json.Unmarshal(stdout.Bytes(), &pass); err != nil {
+			t.Fatalf("authorize=%v: decode the pass: %v\n%s", authorize, err, stdout)
+		}
+		if authorize && (code != exitOK || pass.Failed()) {
+			t.Fatalf("an approved deletion exited %d: %+v %s", code, pass, stderr)
+		}
+		if !authorize && (code != exitNeedsPerson || !pass.Failed()) {
+			t.Fatalf("an unapproved deletion exited %d, want %d: %+v", code, exitNeedsPerson, pass)
+		}
+	}
+}
+
+// TestAuthorizeDeletionIsRefusedOutsideAOneShotFullCommitPass. The approval must
+// not outlive a pass a person is watching, and an abbreviated ID would match
+// nothing in the exporter and approve nothing, silently.
+func TestAuthorizeDeletionIsRefusedOutsideAOneShotFullCommitPass(t *testing.T) {
+	vaultfixture.ScrubEnv(t)
+	full := strings.Repeat("a", 40)
+	for _, args := range [][]string{
+		{"-authorize-deletion", full},
+		{"-check", "-authorize-deletion", full},
+		{"-once", "-authorize-deletion", "aaaaaaa"},
+		{"-once", "-authorize-deletion", strings.ToUpper(full)},
+	} {
+		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+		if code := run(context.Background(), args, stdout, stderr); code != exitUnreadable {
+			t.Fatalf("%v exited %d, want %d", args, code, exitUnreadable)
+		}
+		if stderr.Len() == 0 {
+			t.Fatalf("%v refused silently", args)
+		}
 	}
 }
 

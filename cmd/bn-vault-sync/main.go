@@ -50,6 +50,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -89,7 +90,16 @@ type modeOptions struct {
 	prepareRestore bool
 	reviewPath     string
 	acceptPath     string
+	// authorizeDeletion is a commit whose journal-less deletions a person has
+	// reviewed and approved, typically one committed by hand with `git rm` while
+	// recovering from an unexplained-deletion block. See runOnce.
+	authorizeDeletion string
 }
+
+// fullCommitID is a complete SHA-1 or SHA-256 object name. The exporter matches
+// the approval against the commit it is publishing byte for byte, so an
+// abbreviation would approve nothing and fail exactly as before, silently.
+var fullCommitID = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	options, code, proceed := parseModeOptions(args, stderr)
@@ -113,6 +123,7 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 	prepareRestore := flags.Bool("restore-prepare", false, "quarantine restored synchronization state under a fresh restore identity and print its inventory")
 	reviewPath := flags.String("review", "", "compare this vault with a peer inventory file and print a review plan")
 	acceptPath := flags.String("accept-review", "", "apply an explicitly reviewed plan while both peer services are stopped")
+	authorizeDeletion := flags.String("authorize-deletion", "", "with -once, publish this full commit's deletions even though no journal record proves them")
 	if err := flags.Parse(args); err != nil {
 		// `-h` is a question this command can answer, and the flag set has already
 		// answered it — on stderr, because SetOutput above sends every refusal
@@ -136,10 +147,22 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 		prepareRestore: *prepareRestore,
 		reviewPath:     *reviewPath,
 		acceptPath:     *acceptPath,
+
+		authorizeDeletion: *authorizeDeletion,
 	}
 	if options.selectedCount() > 1 {
 		fmt.Fprintln(stderr, "bn-vault-sync: pass only one mode")
 		return modeOptions{}, exitUnreadable, false
+	}
+	if options.authorizeDeletion != "" {
+		if !options.once {
+			fmt.Fprintln(stderr, "bn-vault-sync: -authorize-deletion is only accepted with -once")
+			return modeOptions{}, exitUnreadable, false
+		}
+		if !fullCommitID.MatchString(options.authorizeDeletion) {
+			fmt.Fprintln(stderr, "bn-vault-sync: -authorize-deletion needs a full lowercase commit ID (git rev-parse <commit>)")
+			return modeOptions{}, exitUnreadable, false
+		}
 	}
 	return options, exitOK, true
 }
@@ -159,7 +182,7 @@ func (o modeOptions) run(ctx context.Context, root string, stdout, stderr io.Wri
 	case o.check:
 		return runCheck(ctx, root, stdout, stderr)
 	case o.once:
-		return runOnce(ctx, root, stdout, stderr)
+		return runOnce(ctx, root, o.authorizeDeletion, stdout, stderr)
 	case o.inventory:
 		return runInventory(root, stdout, stderr)
 	case o.prepareRestore:
@@ -283,8 +306,16 @@ func runCheck(ctx context.Context, root string, stdout, stderr io.Writer) int {
 //
 // A worker that failed is reported as a failure of the run, because somebody is
 // watching this one: the whole point of running it by hand is to find out.
-func runOnce(ctx context.Context, root string, stdout, stderr io.Writer) int {
-	pass, err := vaultsyncd.Once(ctx, root, vaultsyncd.Options{})
+//
+// authorizeDeletion, when set, is the one place a person can approve a commit
+// whose deletions carry no journal record. It lives here and nowhere else so the
+// approval covers exactly this pass and is never persisted.
+func runOnce(ctx context.Context, root, authorizeDeletion string, stdout, stderr io.Writer) int {
+	opts := vaultsyncd.Options{}
+	if authorizeDeletion != "" {
+		opts.AuthorizeDeletions = []string{authorizeDeletion}
+	}
+	pass, err := vaultsyncd.Once(ctx, root, opts)
 	if err != nil {
 		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
 		if errors.Is(err, vaultsyncd.ErrAlreadyRunning) {
