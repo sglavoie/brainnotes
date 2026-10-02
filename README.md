@@ -13,12 +13,8 @@ thing at the terminal and in the browser.
 ## Install
 
 ```sh
-go install github.com/sglavoie/brainnotes/cmd/bn@latest
-```
-
-Or, from a local clone:
-
-```sh
+git clone https://github.com/sglavoie/brainnotes.git
+cd brainnotes
 just install
 ```
 

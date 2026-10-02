@@ -6,6 +6,26 @@ import { dispatchFiltersChange } from "./filters";
 import { initSearch, nextSearchActiveIndex } from "./search";
 import { searchResult, setURL } from "./search-test-helpers";
 
+const renderSearch = (): { input: HTMLInputElement; results: HTMLElement; feedback: HTMLElement } => {
+  document.body.innerHTML = `
+    <section data-search-box>
+      <input id="search-input" aria-expanded="false" />
+      <ul id="search-results" hidden></ul>
+      <p data-search-feedback hidden></p>
+    </section>
+  `;
+  return {
+    input: document.getElementById("search-input") as HTMLInputElement,
+    results: document.getElementById("search-results") as HTMLElement,
+    feedback: document.querySelector("[data-search-feedback]") as HTMLElement,
+  };
+};
+
+const typeQuery = (input: HTMLInputElement, query: string): void => {
+  input.value = query;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -74,4 +94,102 @@ describe("search keyboard and filter-change behavior", () => {
     expect(input.getAttribute("aria-expanded")).toBe("false");
     expect(input.hasAttribute("aria-activedescendant")).toBe(false);
   });
+});
+
+describe("search feedback", () => {
+  it("explains empty results and failed requests without opening an empty listbox", async () => {
+    vi.useFakeTimers();
+    const { input, results, feedback } = renderSearch();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: false });
+    vi.stubGlobal("fetch", fetchMock);
+    initSearch();
+
+    typeQuery(input, "missing");
+    expect(feedback.textContent).toBe("Searching...");
+    await vi.runAllTimersAsync();
+    expect(feedback.textContent).toBe("No matching notes.");
+    expect(feedback.hidden).toBe(false);
+    expect(results.hidden).toBe(true);
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+
+    typeQuery(input, "broken");
+    await vi.runAllTimersAsync();
+    expect(feedback.textContent).toBe("Search unavailable. Try again.");
+    expect(results.hidden).toBe(true);
+
+    typeQuery(input, "");
+    expect(feedback.hidden).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes old results as soon as the query changes", async () => {
+    vi.useFakeTimers();
+    const { input, results, feedback } = renderSearch();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [searchResult()] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
+    vi.stubGlobal("fetch", fetchMock);
+    initSearch();
+
+    typeQuery(input, "note");
+    await vi.runAllTimersAsync();
+    expect(results.hidden).toBe(false);
+
+    typeQuery(input, "other");
+    expect(results.hidden).toBe(true);
+    expect(results.childElementCount).toBe(0);
+    expect(feedback.textContent).toBe("Searching...");
+    await vi.runAllTimersAsync();
+    expect(feedback.textContent).toBe("No matching notes.");
+  });
+});
+
+describe("search dismissal", () => {
+  it("cancels a search dismissed during the debounce", async () => {
+    vi.useFakeTimers();
+    const { input, feedback } = renderSearch();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    initSearch();
+
+    typeQuery(input, "note");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await vi.runAllTimersAsync();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(feedback.hidden).toBe(true);
+  });
+
+  it.each(["Escape", "outside click", "focus leaving"])(
+    "keeps a pending search dismissed after %s",
+    async (dismissal) => {
+      vi.useFakeTimers();
+      const { input, results, feedback } = renderSearch();
+      let resolveResponse: ((response: unknown) => void) | undefined;
+      vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => {
+        resolveResponse = resolve;
+      })));
+      initSearch();
+
+      typeQuery(input, "note");
+      await vi.runAllTimersAsync();
+      if (dismissal === "Escape") {
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      } else if (dismissal === "outside click") {
+        document.body.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      } else {
+        input.dispatchEvent(new FocusEvent("focusout", {
+          bubbles: true,
+          relatedTarget: document.body,
+        }));
+      }
+      expect(feedback.hidden).toBe(true);
+      resolveResponse?.({ ok: true, json: async () => [searchResult()] });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(results.hidden).toBe(true);
+      expect(feedback.hidden).toBe(true);
+    }
+  );
 });

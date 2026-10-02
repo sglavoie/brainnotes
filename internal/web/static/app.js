@@ -14085,6 +14085,155 @@ var BrainNotesApp = (() => {
     item.appendChild(button);
     return item;
   };
+  var HeaderSearch = class {
+    constructor(input, resultsEl, feedbackEl, syncSearchURL) {
+      this.input = input;
+      this.resultsEl = resultsEl;
+      this.feedbackEl = feedbackEl;
+      this.syncSearchURL = syncSearchURL;
+    }
+    input;
+    resultsEl;
+    feedbackEl;
+    syncSearchURL;
+    debounceToken = 0;
+    requestToken = 0;
+    results = [];
+    activeIndex = -1;
+    hasActiveSearchFilters() {
+      return this.syncSearchURL && hasActiveFilters();
+    }
+    hasResults() {
+      return this.results.length > 0;
+    }
+    setActive(nextIndex) {
+      this.activeIndex = nextIndex;
+      for (const option of this.resultsEl.querySelectorAll("[data-search-index]")) {
+        const active = Number(option.getAttribute("data-search-index")) === nextIndex;
+        option.classList.toggle("is-active", active);
+        option.setAttribute("aria-selected", active ? "true" : "false");
+        if (active) {
+          this.input.setAttribute("aria-activedescendant", option.id);
+        }
+      }
+      if (nextIndex < 0) {
+        this.input.removeAttribute("aria-activedescendant");
+      }
+    }
+    clearResults() {
+      this.results = [];
+      this.resultsEl.textContent = "";
+      this.resultsEl.hidden = true;
+      this.input.setAttribute("aria-expanded", "false");
+      this.setActive(-1);
+      if (this.feedbackEl) {
+        this.feedbackEl.textContent = "";
+        this.feedbackEl.hidden = true;
+      }
+    }
+    showFeedback(message) {
+      this.clearResults();
+      if (this.feedbackEl) {
+        this.feedbackEl.textContent = message;
+        this.feedbackEl.hidden = false;
+      }
+    }
+    dismiss() {
+      window.clearTimeout(this.debounceToken);
+      this.requestToken += 1;
+      this.clearResults();
+    }
+    navigateToResult(index) {
+      const result = this.results[index];
+      if (!result) {
+        return;
+      }
+      const path = searchResultPath(result);
+      if (path) {
+        window.location.assign(path);
+      }
+    }
+    renderResults(results) {
+      this.results = results;
+      if (results.length === 0) {
+        this.showFeedback(this.input.value.trim() ? "No matching notes." : "No notes match the active filters.");
+        return;
+      }
+      this.resultsEl.textContent = "";
+      if (this.feedbackEl) {
+        this.feedbackEl.textContent = "";
+        this.feedbackEl.hidden = true;
+      }
+      results.forEach((result, index) => {
+        this.resultsEl.appendChild(renderSearchResultOption(document, result, index, {
+          activate: (nextIndex) => this.setActive(nextIndex),
+          choose: (nextIndex) => this.navigateToResult(nextIndex)
+        }));
+      });
+      this.resultsEl.hidden = false;
+      this.input.setAttribute("aria-expanded", "true");
+      this.setActive(-1);
+    }
+    scheduleSearch(delay) {
+      const query = this.input.value.trim();
+      window.clearTimeout(this.debounceToken);
+      if (this.syncSearchURL) {
+        syncPageQueryParam(query);
+      }
+      const localToken = ++this.requestToken;
+      if (query === "" && !this.hasActiveSearchFilters()) {
+        this.clearResults();
+        return;
+      }
+      this.showFeedback("Searching...");
+      this.debounceToken = window.setTimeout(() => {
+        void this.fetchResults(query, localToken);
+      }, delay);
+    }
+    async fetchResults(query, localToken) {
+      try {
+        const resp = await fetch(buildSearchAPIURL(query, this.syncSearchURL), {
+          headers: { Accept: "application/json" }
+        });
+        if (localToken !== this.requestToken) {
+          return;
+        }
+        if (!resp.ok) {
+          this.showFeedback("Search unavailable. Try again.");
+          return;
+        }
+        const payload = await resp.json();
+        if (localToken === this.requestToken) {
+          this.renderResults(normalizeSearchResults(payload));
+        }
+      } catch {
+        if (localToken === this.requestToken) {
+          this.showFeedback("Search unavailable. Try again.");
+        }
+      }
+    }
+    onKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.dismiss();
+        return;
+      }
+      if (!this.hasResults()) {
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        this.setActive(nextSearchActiveIndex(
+          this.activeIndex,
+          this.results.length,
+          event.key === "ArrowDown" ? "next" : "previous"
+        ));
+      } else if (event.key === "Enter" && this.activeIndex >= 0) {
+        event.preventDefault();
+        this.navigateToResult(this.activeIndex);
+      }
+    }
+  };
   var initSearch = () => {
     const searchBox = queryElement(document, "[data-search-box]", HTMLElement);
     const input = getElementByID("search-input", HTMLInputElement);
@@ -14092,148 +14241,38 @@ var BrainNotesApp = (() => {
     if (!searchBox || !input || !resultsEl) {
       return;
     }
+    const feedbackEl = queryElement(searchBox, "[data-search-feedback]", HTMLElement);
     const syncSearchURL = Boolean(
       queryElement(document, '[data-facet-controls][data-facet-mode="search"]', HTMLElement)
     );
-    let debounceToken = 0;
-    let requestToken = 0;
-    let results = [];
-    let activeIndex = -1;
-    const setExpanded = (expanded) => {
-      input.setAttribute("aria-expanded", expanded ? "true" : "false");
-    };
-    const setActive2 = (nextIndex) => {
-      activeIndex = nextIndex;
-      const options = resultsEl.querySelectorAll("[data-search-index]");
-      for (const option of options) {
-        const index = Number(option.getAttribute("data-search-index"));
-        const active = index === activeIndex;
-        option.classList.toggle("is-active", active);
-        option.setAttribute("aria-selected", active ? "true" : "false");
-        if (active) {
-          input.setAttribute("aria-activedescendant", option.id);
-        }
-      }
-      if (activeIndex < 0) {
-        input.removeAttribute("aria-activedescendant");
-      }
-    };
-    const clearResults = () => {
-      results = [];
-      resultsEl.textContent = "";
-      resultsEl.hidden = true;
-      setExpanded(false);
-      setActive2(-1);
-    };
-    const hasActiveSearchFilters = () => syncSearchURL && hasActiveFilters();
-    const navigateToResult = (index) => {
-      if (index < 0 || index >= results.length) {
-        return;
-      }
-      const result = results[index];
-      const path = searchResultPath(result);
-      if (!path) {
-        return;
-      }
-      window.location.assign(path);
-    };
-    const renderResults = () => {
-      resultsEl.textContent = "";
-      if (results.length === 0) {
-        clearResults();
-        return;
-      }
-      results.forEach((result, index) => {
-        resultsEl.appendChild(
-          renderSearchResultOption(document, result, index, {
-            activate: setActive2,
-            choose: navigateToResult
-          })
-        );
-      });
-      resultsEl.hidden = false;
-      setExpanded(true);
-      setActive2(-1);
-    };
-    const scheduleSearch = (delay) => {
-      const query = input.value.trim();
-      window.clearTimeout(debounceToken);
-      if (syncSearchURL) {
-        syncPageQueryParam(query);
-      }
-      if (query === "" && !hasActiveSearchFilters()) {
-        requestToken += 1;
-        clearResults();
-        return;
-      }
-      const localToken = ++requestToken;
-      debounceToken = window.setTimeout(async () => {
-        try {
-          const resp = await fetch(buildSearchAPIURL(query, syncSearchURL), {
-            headers: { Accept: "application/json" }
-          });
-          if (!resp.ok || localToken !== requestToken) {
-            return;
-          }
-          const payload = await resp.json();
-          if (localToken !== requestToken) {
-            return;
-          }
-          results = normalizeSearchResults(payload);
-          renderResults();
-        } catch {
-          if (localToken === requestToken) {
-            clearResults();
-          }
-        }
-      }, delay);
-    };
+    const search = new HeaderSearch(input, resultsEl, feedbackEl, syncSearchURL);
     if (syncSearchURL) {
       input.value = readPageQuery();
-      if (input.value.trim() !== "" || hasActiveSearchFilters()) {
-        scheduleSearch(0);
+      if (input.value.trim() !== "" || search.hasActiveSearchFilters()) {
+        search.scheduleSearch(0);
       }
       window.addEventListener(filterChangeEventName, (event) => {
-        if (!shouldHandleFilterChangeForMode(event, "search")) {
-          return;
+        if (shouldHandleFilterChangeForMode(event, "search")) {
+          search.scheduleSearch(0);
         }
-        scheduleSearch(0);
       });
     }
-    input.addEventListener("input", () => {
-      scheduleSearch(150);
+    input.addEventListener("input", () => search.scheduleSearch(150));
+    input.addEventListener("focus", () => {
+      if (input.value.trim() !== "" || search.hasActiveSearchFilters()) {
+        search.scheduleSearch(0);
+      }
     });
-    input.addEventListener("keydown", (event) => {
-      if (results.length === 0) {
-        if (event.key === "Escape") {
-          clearResults();
-        }
-        return;
-      }
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setActive2(nextSearchActiveIndex(activeIndex, results.length, "next"));
-        return;
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setActive2(nextSearchActiveIndex(activeIndex, results.length, "previous"));
-        return;
-      }
-      if (event.key === "Enter" && activeIndex >= 0) {
-        event.preventDefault();
-        navigateToResult(activeIndex);
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        clearResults();
+    input.addEventListener("keydown", (event) => search.onKeyDown(event));
+    searchBox.addEventListener("focusout", (event) => {
+      if (!(event.relatedTarget instanceof Node) || !searchBox.contains(event.relatedTarget)) {
+        search.dismiss();
       }
     });
     document.addEventListener("click", (event) => {
       const target = event.target;
       if (target instanceof Node && !searchBox.contains(target)) {
-        clearResults();
+        search.dismiss();
       }
     });
   };

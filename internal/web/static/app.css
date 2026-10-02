@@ -654,6 +654,21 @@ a:hover {
   box-shadow: var(--bn-shadow-popover);
 }
 
+.search-feedback {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  left: 0;
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.45rem;
+  background: var(--bn-sunken);
+  color: var(--bn-muted);
+  box-shadow: var(--bn-shadow-popover);
+}
+
 .search-result {
   width: 100%;
   border: 0;
@@ -691,7 +706,6 @@ a:hover {
   font-size: 0.85rem;
   word-break: break-word;
 }
-
 /* internal/web/static_src/css/query-bar.css */
 .query-bar {
   margin-bottom: 1rem;

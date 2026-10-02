@@ -33,6 +33,9 @@ func TestServer_PagesIncludeSearchUI(t *testing.T) {
 		if !strings.Contains(body, `id="search-results"`) {
 			t.Fatalf("missing search result list on %s, got %q", path, body)
 		}
+		if !strings.Contains(body, `id="search-feedback"`) || !strings.Contains(body, `aria-live="polite"`) {
+			t.Fatalf("missing accessible search feedback on %s, got %q", path, body)
+		}
 		if !strings.Contains(body, `/static/app.js`) {
 			t.Fatalf("missing app.js asset on %s, got %q", path, body)
 		}
