@@ -1,5 +1,6 @@
 import { normalizeSearchResults, searchResultPath, type SearchResult } from "./api";
 import { getElementByID, queryElement } from "./dom";
+import { bindSearchShortcut } from "./search-shortcut";
 import {
   buildSearchAPIURL,
   filterChangeEventName,
@@ -13,7 +14,6 @@ export type SearchNavigationDirection = "next" | "previous";
 
 export type SearchResultOptionHandlers = {
   activate: (index: number) => void;
-  choose: (index: number) => void;
 };
 
 export const searchResultTitle = (result: SearchResult): string =>
@@ -43,39 +43,36 @@ export const renderSearchResultOption = (
   handlers: SearchResultOptionHandlers
 ): HTMLLIElement => {
   const item = doc.createElement("li");
-  const button = doc.createElement("button");
-  button.type = "button";
-  button.id = `search-option-${index}`;
-  button.className = "search-result";
-  button.setAttribute("role", "option");
-  button.setAttribute("aria-selected", "false");
-  button.setAttribute("data-search-index", String(index));
+  const link = doc.createElement("a");
+  link.href = searchResultPath(result);
+  link.id = `search-option-${index}`;
+  link.className = "search-result";
+  link.setAttribute("role", "option");
+  link.setAttribute("aria-selected", "false");
+  link.setAttribute("data-search-index", String(index));
 
   const title = doc.createElement("span");
   title.className = "search-result-title";
   title.textContent = searchResultTitle(result);
-  button.appendChild(title);
+  link.appendChild(title);
 
   const folder = doc.createElement("span");
   folder.className = "search-result-folder";
   folder.textContent = searchResultFolderLabel(result);
-  button.appendChild(folder);
+  link.appendChild(folder);
 
   if (result.snippet) {
     const snippet = doc.createElement("p");
     snippet.className = "search-result-snippet";
     snippet.innerHTML = result.snippet;
-    button.appendChild(snippet);
+    link.appendChild(snippet);
   }
 
-  button.addEventListener("mouseenter", () => {
+  link.addEventListener("mouseenter", () => {
     handlers.activate(index);
   });
-  button.addEventListener("click", () => {
-    handlers.choose(index);
-  });
 
-  item.appendChild(button);
+  item.appendChild(link);
   return item;
 };
 
@@ -142,14 +139,7 @@ class HeaderSearch {
   }
 
   navigateToResult(index: number): void {
-    const result = this.results[index];
-    if (!result) {
-      return;
-    }
-    const path = searchResultPath(result);
-    if (path) {
-      window.location.assign(path);
-    }
+    this.resultsEl.querySelector<HTMLAnchorElement>(`[data-search-index="${index}"]`)?.click();
   }
 
   renderResults(results: SearchResult[]): void {
@@ -166,7 +156,6 @@ class HeaderSearch {
     results.forEach((result, index) => {
       this.resultsEl.appendChild(renderSearchResultOption(document, result, index, {
         activate: (nextIndex) => this.setActive(nextIndex),
-        choose: (nextIndex) => this.navigateToResult(nextIndex),
       }));
     });
     this.resultsEl.hidden = false;
@@ -215,6 +204,9 @@ class HeaderSearch {
   }
 
   onKeyDown(event: KeyboardEvent): void {
+    if (event.isComposing) {
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       this.dismiss();
@@ -249,6 +241,7 @@ export const initSearch = (): void => {
     queryElement(document, '[data-facet-controls][data-facet-mode="search"]', HTMLElement)
   );
   const search = new HeaderSearch(input, resultsEl, feedbackEl, syncSearchURL);
+  bindSearchShortcut(input);
 
   if (syncSearchURL) {
     input.value = readPageQuery();

@@ -77,6 +77,14 @@ same whole-note caveat as the CLI. When `[capture].inbox_note` or `[capture].hea
 configured, the panel still renders but is disabled and names the two keys to
 set, so an unconfigured vault does not look like the feature is missing.
 
+An unfinished capture is kept in this tab's session storage, separately for
+each vault, inbox path, and heading. Reloading or navigating away and back
+restores the text without submitting it. A confirmed capture or manually clearing
+the box clears the draft; a failed request keeps it. If browser storage is
+unavailable, capture still works and the box explains that recovery is unavailable.
+The displayed destination links to the inbox when it exists, and successful
+captures offer **View inbox**, including after the first capture creates it.
+
 `POST /api/capture` is unpreviewed, like `POST /api/properties/value` and the
 single-note frontmatter routes, but qualifies from the other direction: one
 note, strictly additive, so it cannot destroy existing bytes, and a confirm step
@@ -154,6 +162,11 @@ No telemetry, background schedulers, reminders, or analytics pipelines are
 introduced: activity metrics are local-only and computed from the brief sidecar.
 
 ## The query bar and saved views
+
+Press `/` outside an editable field to focus the header search. The shortcut
+leaves editors and open dialogs alone. Search suggestions are links: middle-click
+or Ctrl/⌘-click to open a note in another tab, or use the arrow keys and Enter
+to open it in the current tab.
 
 `/library` and `/graph` carry the same query bar, which takes the same
 expression language as `bn find -q` — see
@@ -235,6 +248,13 @@ silently dropped ordering.
 `limit = 500` does not become a way to serialize the whole vault. Neither `sort`
 nor `limit` is a filter — a request carrying one and no actual filter still
 selects nothing rather than returning the vault ordered.
+
+The Library reports the full match count before either limit, for example
+“Showing 50 of 137 matching notes.” It identifies a requested query limit
+separately from the server's 50-note display cap. Bulk actions affect only
+selected displayed notes. The search API keeps its JSON array response and adds
+`X-BN-Search-Total` (matches before limits), `X-BN-Search-Limit` (requested limit,
+zero when unlimited), and `X-BN-Search-Cap` (server display cap) response headers.
 
 ## Note actions, Trash, and rendering
 

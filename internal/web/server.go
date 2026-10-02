@@ -284,8 +284,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.CSRFToken = s.csrfToken
-	cfg := s.config()
-	data.CaptureRelPath, data.CaptureHeading, data.CaptureConfigured = captureDestination(cfg.Capture.InboxNote, cfg.Capture.Heading)
+	s.configureCapturePage(&data, snapshot)
 	if err := s.templates.ExecuteTemplate(w, "index", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}

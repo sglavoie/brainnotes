@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
@@ -187,8 +188,11 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("X-BN-Search-Total", strconv.Itoa(payload.Total))
+	w.Header().Set("X-BN-Search-Limit", strconv.Itoa(shape.Limit))
+	w.Header().Set("X-BN-Search-Cap", strconv.Itoa(searchResultLimit))
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
+	if err := json.NewEncoder(w).Encode(payload.Results); err != nil {
 		http.Error(w, "encode error", http.StatusInternalServerError)
 	}
 }

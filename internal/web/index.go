@@ -48,6 +48,8 @@ type rootPageData struct {
 	EditorStatusMsg      string
 	InsightConfigured    bool
 	InsightStatusMsg     string
+	VaultID              string
+	CapturePath          string
 	// CaptureConfigured reports only that an inbox note and heading are
 	// configured. The note itself is bootstrapped by the first capture, so the
 	// box renders whether or not the file exists yet.

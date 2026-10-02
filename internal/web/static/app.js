@@ -1152,6 +1152,7 @@ var BrainNotesApp = (() => {
     const record = asRecord(payload) || {};
     return {
       ok: base2.ok,
+      path: base2.ok ? base2.path : void 0,
       code: base2.ok ? void 0 : base2.code,
       message: base2.message || "",
       detail: normalizeParamValue(readRecordValue(record, ["detail", "Detail"])),
@@ -2714,10 +2715,143 @@ var BrainNotesApp = (() => {
     }
   };
 
+  // internal/web/static_src/capture-draft.ts
+  var bindCaptureDraft = (root, input) => {
+    const vault = root.dataset.captureVault;
+    if (!vault) {
+      return () => {
+      };
+    }
+    const key = `bn.capture-draft.v1:${JSON.stringify([
+      vault,
+      root.dataset.captureTarget,
+      root.dataset.captureHeading
+    ])}`;
+    const status = root.querySelector("[data-capture-draft-status]");
+    const report = (message) => {
+      if (status) {
+        status.textContent = message;
+        status.hidden = message === "";
+      }
+    };
+    const save = () => {
+      try {
+        if (input.value === "") {
+          window.sessionStorage.removeItem(key);
+        } else {
+          window.sessionStorage.setItem(key, input.value);
+        }
+        report("");
+      } catch {
+        report(input.value === "" ? "The browser could not clear the old capture draft. It may reappear after a reload." : "The browser could not keep this draft. Keep this page open until you capture it.");
+      }
+    };
+    try {
+      const draft = window.sessionStorage.getItem(key);
+      if (draft && input.value === "") {
+        input.value = draft;
+        report("Unfinished capture restored in this tab.");
+      }
+    } catch {
+      report("Draft recovery is unavailable in this browser.");
+    }
+    input.addEventListener("input", save);
+    return save;
+  };
+
   // internal/web/static_src/capture.ts
-  var captureEndpoint = "/api/capture";
-  var recentLimit = 5;
-  var unconfiguredMessage = "Quick capture is not configured. Set capture.inbox_note and capture.heading in brainnotes.toml.";
+  var Capture = class {
+    constructor(root, input, submit, status, recent, fetcher) {
+      this.root = root;
+      this.input = input;
+      this.submit = submit;
+      this.status = status;
+      this.recent = recent;
+      this.fetcher = fetcher;
+      this.csrfToken = root.dataset.captureCsrf || "";
+      this.saveDraft = bindCaptureDraft(root, input);
+      submit.addEventListener("click", () => {
+        void this.run();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || !event.ctrlKey && !event.metaKey || event.isComposing) {
+          return;
+        }
+        event.preventDefault();
+        void this.run();
+      });
+    }
+    root;
+    input;
+    submit;
+    status;
+    recent;
+    fetcher;
+    saveDraft;
+    csrfToken;
+    setStatus(message, kind) {
+      setStatusText(this.status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
+    }
+    captured(result) {
+      this.input.value = "";
+      this.saveDraft();
+      if (result.detail) {
+        const item = document.createElement("li");
+        item.className = "capture-recent-item";
+        item.textContent = result.detail;
+        this.recent.prepend(item);
+        while (this.recent.children.length > 5) {
+          this.recent.lastElementChild?.remove();
+        }
+      }
+      const link = queryElement(this.root, "[data-capture-view-inbox]", HTMLAnchorElement);
+      if (link && result.path?.startsWith("/n/")) {
+        link.href = result.path;
+        link.hidden = false;
+      }
+      this.setStatus(result.message || `Captured to ${this.root.dataset.captureTarget}.`, "is-success");
+      window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
+    }
+    async run() {
+      if (this.submit.disabled) {
+        return;
+      }
+      this.saveDraft();
+      const text3 = this.input.value;
+      if (text3.trim() === "") {
+        this.setStatus("Type something to capture.", "is-error");
+        return;
+      }
+      if (this.csrfToken === "") {
+        this.setStatus("Quick capture is unavailable.", "is-error");
+        return;
+      }
+      this.input.disabled = true;
+      this.submit.disabled = true;
+      this.setStatus("Capturing...", "is-loading");
+      try {
+        const body = buildCaptureForm({ text: text3, token: this.csrfToken }).toString();
+        const response = await this.fetcher("/api/capture", jsonPostRequest(this.csrfToken, body));
+        const payload = await readResponsePayload(response);
+        if (!response.ok) {
+          this.setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeCaptureResponse(payload);
+        if (!result.ok) {
+          this.setStatus(result.message || "Capture failed.", "is-error");
+          return;
+        }
+        this.captured(result);
+      } catch {
+        this.setStatus("Capture failed.", "is-error");
+      } finally {
+        this.input.disabled = false;
+        this.submit.disabled = false;
+        this.input.focus();
+      }
+    }
+  };
   var initCapture = (deps = {}) => {
     const root = queryElement(document, "[data-capture-root]", HTMLElement);
     if (!root) {
@@ -2730,78 +2864,18 @@ var BrainNotesApp = (() => {
     if (!input || !submit || !status || !recent) {
       return;
     }
-    const csrfToken = root.getAttribute("data-capture-csrf") || "";
-    const target = root.getAttribute("data-capture-target") || "";
-    const configured = (root.getAttribute("data-capture-configured") || "").toLowerCase() === "true";
-    const setStatus2 = (message, kind = "") => {
-      setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
-    };
-    if (!configured) {
+    if (root.dataset.captureConfigured?.toLowerCase() !== "true") {
       input.disabled = true;
       submit.disabled = true;
-      setStatus2(unconfiguredMessage, "is-error");
+      setStatusText(
+        status,
+        "Quick capture is not configured. Set capture.inbox_note and capture.heading in brainnotes.toml.",
+        "is-error",
+        ["is-success", "is-error", "is-loading"]
+      );
       return;
     }
-    const fetcher = deps.fetch || fetch;
-    const prependRecent = (line) => {
-      const item = document.createElement("li");
-      item.className = "capture-recent-item";
-      item.textContent = line;
-      recent.prepend(item);
-      while (recent.children.length > recentLimit) {
-        recent.lastElementChild?.remove();
-      }
-    };
-    const run = async () => {
-      const text3 = input.value;
-      if (text3.trim() === "") {
-        setStatus2("Type something to capture.", "is-error");
-        return;
-      }
-      if (csrfToken === "") {
-        setStatus2("Quick capture is unavailable.", "is-error");
-        return;
-      }
-      input.disabled = true;
-      submit.disabled = true;
-      setStatus2("Capturing...", "is-loading");
-      try {
-        const body = buildCaptureForm({ text: text3, token: csrfToken }).toString();
-        const response = await fetcher(captureEndpoint, jsonPostRequest(csrfToken, body));
-        const payload = await readResponsePayload(response);
-        if (!response.ok) {
-          setStatus2(normalizeManagementErrorMessage(response.status, payload), "is-error");
-          return;
-        }
-        const result = normalizeCaptureResponse(payload);
-        if (!result.ok) {
-          setStatus2(result.message || "Capture failed.", "is-error");
-          return;
-        }
-        input.value = "";
-        if (result.detail) {
-          prependRecent(result.detail);
-        }
-        setStatus2(result.message || `Captured to ${target}.`, "is-success");
-        window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
-      } catch {
-        setStatus2("Capture failed.", "is-error");
-      } finally {
-        input.disabled = false;
-        submit.disabled = false;
-        input.focus();
-      }
-    };
-    submit.addEventListener("click", () => {
-      void run();
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" || !event.ctrlKey && !event.metaKey || submit.disabled) {
-        return;
-      }
-      event.preventDefault();
-      void run();
-    });
+    new Capture(root, input, submit, status, recent, deps.fetch || fetch);
   };
 
   // internal/web/static_src/clipboard.ts
@@ -8937,156 +9011,169 @@ var BrainNotesApp = (() => {
     return { resp, payload: await readBulkResponsePayload(resp) };
   };
 
-  // internal/web/static_src/overview-search.ts
-  var initOverviewSearchResults = (deps = {}) => {
-    const els = resolveOverviewSearchElements();
-    if (!els) {
-      return;
+  // internal/web/static_src/search-summary.ts
+  var readSearchCounts = (response) => {
+    const values2 = ["Total", "Limit", "Cap"].map((name2) => response.headers?.get(`X-BN-Search-${name2}`));
+    if (values2.some((value) => value == null || !/^\d+$/.test(value))) {
+      return null;
     }
-    const {
-      root,
-      input,
-      statusEl,
-      listEl,
-      bulkRoot,
-      selectedCountEl,
-      bulkStatusEl,
-      previewApplyButton,
-      previewClearButton,
-      csrfToken,
-      trashButton,
-      moveForm,
-      moveButton,
-      setForm,
-      setButton,
-      unsetForm,
-      unsetButton
-    } = els;
-    const fetcher = deps.fetch || fetch;
-    const selectedKeys = /* @__PURE__ */ new Map();
-    let bulkBusy = false;
-    let previewState = null;
-    let debounceToken = 0;
-    let ignoreNextManagementMutationClear = false;
-    let requestToken = 0;
-    const setStatus2 = (message, kind = "") => {
-      setStatusText(statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
+    const [total, limit, cap] = values2.map(Number);
+    if (![total, limit, cap].every(Number.isSafeInteger) || cap <= 0) {
+      return null;
+    }
+    return { total, limit, cap };
+  };
+  var searchSummary = (shown, query, counts) => {
+    const scope = query ? ` for "${query}"` : "";
+    if (!counts || counts.total <= shown) {
+      return `${shown} matching ${shown === 1 ? "note" : "notes"}${scope}.`;
+    }
+    const reason = counts.limit > 0 && counts.limit <= counts.cap ? `Query limit: ${counts.limit}.` : `Display cap: ${counts.cap}. Narrow your search to see other matches.`;
+    return `Showing ${shown} of ${counts.total} matching notes${scope}. ${reason} Bulk actions apply only to selected notes.`;
+  };
+
+  // internal/web/static_src/overview-search.ts
+  var OverviewSearch = class {
+    constructor(els, deps) {
+      this.els = els;
+      this.fetcher = deps.fetch || fetch;
+      this.bindSearchEvents();
+      this.bindBulkEvents();
+      this.bindPreviewInvalidation(els.moveForm);
+      this.bindPreviewInvalidation(els.setForm);
+      this.bindPreviewInvalidation(els.unsetForm);
+      this.updateBulkControls();
+      this.scheduleSearch(0);
+    }
+    els;
+    fetcher;
+    selectedKeys = /* @__PURE__ */ new Map();
+    bulkBusy = false;
+    previewState = null;
+    debounceToken = 0;
+    ignoreNextManagementMutationClear = false;
+    requestToken = 0;
+    setStatus = (message, kind = "") => {
+      setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
     };
-    const setBulkStatus = (message, kind = "") => {
-      setStatusText(bulkStatusEl, message || " ", kind, [
+    setBulkStatus = (message, kind = "") => {
+      setStatusText(this.els.bulkStatusEl, message || " ", kind, [
         "is-success",
         "is-error",
         "is-loading"
       ]);
     };
-    const previewMatches = (action, fields, keys = selectedOverviewKeys(selectedKeys)) => Boolean(
-      previewState && previewState.previewID && previewState.fingerprint === previewFingerprint(action, fields, keys)
+    previewMatches = (action, fields, keys = selectedOverviewKeys(this.selectedKeys)) => Boolean(
+      this.previewState && this.previewState.previewID && this.previewState.fingerprint === previewFingerprint(action, fields, keys)
     );
-    const readFieldsForAction = (action) => {
+    readFieldsForAction = (action) => {
       switch (action) {
         case "move":
-          return readMoveFields(moveForm);
+          return readMoveFields(this.els.moveForm);
         case "frontmatter_set":
-          return readSetFields(setForm);
+          return readSetFields(this.els.setForm);
         case "frontmatter_unset":
-          return readUnsetFields(unsetForm);
+          return readUnsetFields(this.els.unsetForm);
         default:
           return {};
       }
     };
-    const updateBulkControls = () => {
-      if (!bulkRoot) {
-        return;
-      }
-      const count4 = selectedKeys.size;
-      bulkRoot.hidden = count4 === 0;
-      if (selectedCountEl) {
-        selectedCountEl.textContent = count4 === 1 ? "1 selected" : `${count4} selected`;
-      }
-      for (const control of queryAllElements(bulkRoot, "button, input, select", HTMLElement)) {
+    disableBulkControls = (root, disabled) => {
+      for (const control of queryAllElements(root, "button, input, select", HTMLElement)) {
         if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
-          control.disabled = bulkBusy || count4 === 0;
+          control.disabled = disabled;
         }
       }
-      syncOverviewActionButton(trashButton, "trash", previewMatches("trash", {}));
-      syncOverviewActionButton(moveButton, "move", previewMatches("move", readMoveFields(moveForm)));
-      syncOverviewActionButton(setButton, "frontmatter_set", previewMatches("frontmatter_set", readSetFields(setForm)));
-      syncOverviewActionButton(unsetButton, "frontmatter_unset", previewMatches("frontmatter_unset", readUnsetFields(unsetForm)));
-      if (previewApplyButton) {
-        previewApplyButton.disabled = bulkBusy || count4 === 0 || previewState === null;
-      }
-      if (previewClearButton) {
-        previewClearButton.disabled = bulkBusy || previewState === null;
-      }
-      renderPreviewPanel(els, previewState);
     };
-    const clearPreviewState = ({ clearStatus = false } = {}) => {
-      const hadPreview = previewState !== null;
-      previewState = null;
-      syncPreviewAttributes(bulkRoot, previewState);
-      updateBulkControls();
+    updateBulkControls = () => {
+      if (!this.els.bulkRoot) {
+        return;
+      }
+      const count4 = this.selectedKeys.size;
+      this.els.bulkRoot.hidden = count4 === 0;
+      if (this.els.selectedCountEl) {
+        this.els.selectedCountEl.textContent = count4 === 1 ? "1 selected" : `${count4} selected`;
+      }
+      this.disableBulkControls(this.els.bulkRoot, this.bulkBusy || count4 === 0);
+      syncOverviewActionButton(this.els.trashButton, "trash", this.previewMatches("trash", {}));
+      syncOverviewActionButton(this.els.moveButton, "move", this.previewMatches("move", readMoveFields(this.els.moveForm)));
+      syncOverviewActionButton(this.els.setButton, "frontmatter_set", this.previewMatches("frontmatter_set", readSetFields(this.els.setForm)));
+      syncOverviewActionButton(this.els.unsetButton, "frontmatter_unset", this.previewMatches("frontmatter_unset", readUnsetFields(this.els.unsetForm)));
+      if (this.els.previewApplyButton) {
+        this.els.previewApplyButton.disabled = this.bulkBusy || count4 === 0 || this.previewState === null;
+      }
+      if (this.els.previewClearButton) {
+        this.els.previewClearButton.disabled = this.bulkBusy || this.previewState === null;
+      }
+      renderPreviewPanel(this.els, this.previewState);
+    };
+    clearPreviewState = ({ clearStatus = false } = {}) => {
+      const hadPreview = this.previewState !== null;
+      this.previewState = null;
+      syncPreviewAttributes(this.els.bulkRoot, this.previewState);
+      this.updateBulkControls();
       if (clearStatus && hadPreview) {
-        setBulkStatus("");
+        this.setBulkStatus("");
       }
     };
-    const setPreviewState = (action, fields, result) => {
-      previewState = {
+    setPreviewState = (action, fields, result) => {
+      this.previewState = {
         action,
-        fingerprint: previewFingerprint(action, fields, selectedOverviewKeys(selectedKeys)),
+        fingerprint: previewFingerprint(action, fields, selectedOverviewKeys(this.selectedKeys)),
         previewID: result.preview_id || "",
         expiresAt: result.expires_at,
         result
       };
-      syncPreviewAttributes(bulkRoot, previewState);
-      updateBulkControls();
+      syncPreviewAttributes(this.els.bulkRoot, this.previewState);
+      this.updateBulkControls();
     };
-    const setBulkBusy = (busy) => {
-      bulkBusy = busy;
-      updateBulkControls();
+    setBulkBusy = (busy) => {
+      this.bulkBusy = busy;
+      this.updateBulkControls();
     };
-    const setSelected = (result, selected) => {
+    setSelected = (result, selected) => {
       const key = normalizeBulkNoteKeys([result.key])[0] || "";
       if (key === "") {
         return;
       }
-      clearPreviewState({ clearStatus: true });
+      this.clearPreviewState({ clearStatus: true });
       if (selected) {
-        selectedKeys.set(key, result.title || key);
+        this.selectedKeys.set(key, result.title || key);
       } else {
-        selectedKeys.delete(key);
+        this.selectedKeys.delete(key);
       }
-      updateBulkControls();
+      this.updateBulkControls();
     };
-    const pruneSelectionToRenderedKeys = (visibleKeys) => {
+    pruneSelectionToRenderedKeys = (visibleKeys) => {
       let changed = false;
-      for (const key of selectedKeys.keys()) {
+      for (const key of this.selectedKeys.keys()) {
         if (!visibleKeys.has(key)) {
-          selectedKeys.delete(key);
+          this.selectedKeys.delete(key);
           changed = true;
         }
       }
       if (changed) {
-        clearPreviewState({ clearStatus: true });
+        this.clearPreviewState({ clearStatus: true });
       }
-      updateBulkControls();
+      this.updateBulkControls();
     };
-    const clearResults = (message, kind) => {
-      listEl.textContent = "";
-      listEl.hidden = true;
-      selectedKeys.clear();
-      clearPreviewState({ clearStatus: true });
-      setStatus2(message, kind);
+    clearResults = (message, kind) => {
+      this.els.listEl.textContent = "";
+      this.els.listEl.hidden = true;
+      this.selectedKeys.clear();
+      this.clearPreviewState({ clearStatus: true });
+      this.setStatus(message, kind);
     };
-    const renderResults = (payload, query) => {
+    renderResults = (payload, query, counts) => {
       const results = normalizeSearchResults(payload);
-      listEl.textContent = "";
+      this.els.listEl.textContent = "";
       let renderedCount = 0;
       const visibleKeys = /* @__PURE__ */ new Set();
       for (const result of results) {
         const key = normalizeBulkNoteKeys([result.key])[0] || "";
-        if (renderOverviewSearchResult(listEl, result, {
-          selected: key !== "" && selectedKeys.has(key),
-          onSelectionChange: setSelected
+        if (renderOverviewSearchResult(this.els.listEl, result, {
+          selected: key !== "" && this.selectedKeys.has(key),
+          onSelectionChange: this.setSelected
         })) {
           renderedCount += 1;
           if (key !== "") {
@@ -9094,231 +9181,235 @@ var BrainNotesApp = (() => {
           }
         }
       }
-      pruneSelectionToRenderedKeys(visibleKeys);
+      this.pruneSelectionToRenderedKeys(visibleKeys);
       if (renderedCount === 0) {
-        clearResults(overviewSearchEmptyMessage(query), "is-empty");
+        this.clearResults(overviewSearchEmptyMessage(query), "is-empty");
         return;
       }
-      listEl.hidden = false;
-      const noun = renderedCount === 1 ? "note" : "notes";
-      const scope = query ? ` for "${query}"` : "";
-      setStatus2(`${renderedCount} matching ${noun}${scope}.`, "");
+      this.els.listEl.hidden = false;
+      this.setStatus(searchSummary(renderedCount, query, counts), "");
     };
-    const scheduleSearch = (delay) => {
-      const query = overviewSearchQuery(input);
-      window.clearTimeout(debounceToken);
+    scheduleSearch = (delay) => {
+      const query = overviewSearchQuery(this.els.input);
+      window.clearTimeout(this.debounceToken);
       syncPageQueryParam(query);
-      clearPreviewState({ clearStatus: true });
+      this.clearPreviewState({ clearStatus: true });
       if (query === "" && !hasActiveFilters()) {
-        requestToken += 1;
-        setOverviewBusy(root, false);
-        clearResults("No query or filters selected.", "is-empty");
+        this.requestToken += 1;
+        setOverviewBusy(this.els.root, false);
+        this.clearResults("No query or filters selected.", "is-empty");
         return;
       }
-      const localToken = ++requestToken;
-      setOverviewBusy(root, true);
-      setStatus2("Loading matching notes...", "is-loading");
-      debounceToken = window.setTimeout(async () => {
+      const localToken = ++this.requestToken;
+      setOverviewBusy(this.els.root, true);
+      this.setStatus("Loading matching notes...", "is-loading");
+      this.debounceToken = window.setTimeout(async () => {
         try {
-          const resp = await fetcher(buildSearchAPIURL(query, true), {
+          const resp = await this.fetcher(buildSearchAPIURL(query, true), {
             headers: { Accept: "application/json" }
           });
           if (!resp.ok) {
             throw new Error("search request failed");
           }
           const payload = await resp.json();
-          if (localToken !== requestToken) {
+          if (localToken !== this.requestToken) {
             return;
           }
-          renderResults(payload, query);
+          this.renderResults(payload, query, readSearchCounts(resp));
         } catch {
-          if (localToken === requestToken) {
-            clearResults("Search unavailable.", "is-error");
+          if (localToken === this.requestToken) {
+            this.clearResults("Search unavailable.", "is-error");
           }
         } finally {
-          if (localToken === requestToken) {
-            setOverviewBusy(root, false);
+          if (localToken === this.requestToken) {
+            setOverviewBusy(this.els.root, false);
           }
         }
       }, delay);
     };
-    if (input instanceof HTMLInputElement) {
-      input.value = readPageQuery();
-      input.addEventListener("input", () => {
-        scheduleSearch(150);
-      });
-    }
-    window.addEventListener(filterChangeEventName, (event) => {
-      if (!shouldHandleFilterChangeForMode(event, "search")) {
-        return;
-      }
-      scheduleSearch(0);
-    });
-    window.addEventListener(managementMutationEventName, () => {
-      if (ignoreNextManagementMutationClear) {
-        ignoreNextManagementMutationClear = false;
-        return;
-      }
-      clearPreviewState({ clearStatus: true });
-    });
-    const runBulkPreview = async (action, fields, fallbackMessage) => {
-      const keys = selectedOverviewKeys(selectedKeys);
-      if (!bulkRoot || csrfToken.trim() === "") {
-        setBulkStatus("Bulk action unavailable.", "is-error");
-        return;
+    canRunBulk = (keys) => {
+      if (!this.els.bulkRoot || this.els.csrfToken.trim() === "") {
+        this.setBulkStatus("Bulk action unavailable.", "is-error");
+        return false;
       }
       if (keys.length === 0) {
-        setBulkStatus("Select one or more notes.", "is-error");
+        this.setBulkStatus("Select one or more notes.", "is-error");
+        return false;
+      }
+      return true;
+    };
+    runBulkPreview = async (action, fields, fallbackMessage) => {
+      const keys = selectedOverviewKeys(this.selectedKeys);
+      if (!this.canRunBulk(keys)) {
         return;
       }
-      setBulkBusy(true);
-      setBulkStatus("Previewing bulk action...", "is-loading");
+      this.setBulkBusy(true);
+      this.setBulkStatus("Previewing bulk action...", "is-loading");
       try {
         const { resp, payload } = await postBulkPreview(
-          fetcher,
-          csrfToken,
+          this.fetcher,
+          this.els.csrfToken,
           action,
           keys,
           fields
         );
         if (!resp.ok) {
-          clearPreviewState();
-          setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          this.clearPreviewState();
+          this.setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         const result = normalizeBulkPreviewManagementResult(payload);
         if (!result.ok || !result.preview_id) {
-          clearPreviewState();
-          setBulkStatus(result.message || "Bulk preview failed.", "is-error");
+          this.clearPreviewState();
+          this.setBulkStatus(result.message || "Bulk preview failed.", "is-error");
           return;
         }
-        setPreviewState(action, fields, result);
+        this.setPreviewState(action, fields, result);
         const failures = Array.isArray(result.failures) ? result.failures : [];
-        setBulkStatus(
+        this.setBulkStatus(
           bulkStatusMessage(result, fallbackMessage),
           failures.length > 0 ? "is-error" : "is-success"
         );
       } catch {
-        clearPreviewState();
-        setBulkStatus("Bulk preview failed.", "is-error");
+        this.clearPreviewState();
+        this.setBulkStatus("Bulk preview failed.", "is-error");
       } finally {
-        setBulkBusy(false);
+        this.setBulkBusy(false);
       }
     };
-    const runBulkApply = async (action, fields, fallbackMessage) => {
-      const keys = selectedOverviewKeys(selectedKeys);
-      if (!bulkRoot || csrfToken.trim() === "") {
-        setBulkStatus("Bulk action unavailable.", "is-error");
+    runBulkApply = async (action, fields, fallbackMessage) => {
+      const keys = selectedOverviewKeys(this.selectedKeys);
+      if (!this.canRunBulk(keys)) {
         return;
       }
-      if (keys.length === 0) {
-        setBulkStatus("Select one or more notes.", "is-error");
+      if (!this.previewState || !this.previewMatches(action, fields, keys)) {
+        this.clearPreviewState();
+        this.setBulkStatus("Preview the bulk action before applying it.", "is-error");
         return;
       }
-      if (!previewState || !previewMatches(action, fields, keys)) {
-        clearPreviewState();
-        setBulkStatus("Preview the bulk action before applying it.", "is-error");
-        return;
-      }
-      setBulkBusy(true);
-      setBulkStatus("Applying bulk action...", "is-loading");
+      this.setBulkBusy(true);
+      this.setBulkStatus("Applying bulk action...", "is-loading");
       try {
         const { resp, payload } = await postBulkApply(
-          fetcher,
-          csrfToken,
+          this.fetcher,
+          this.els.csrfToken,
           action,
           keys,
           fields,
-          previewState.previewID
+          this.previewState.previewID
         );
         if (!resp.ok) {
-          clearPreviewState();
-          setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          this.clearPreviewState();
+          this.setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
         const result = normalizeBulkManagementResult(payload);
         const failures = Array.isArray(result.failures) ? result.failures : [];
-        setBulkStatus(
+        this.setBulkStatus(
           bulkStatusMessage(result, fallbackMessage),
           failures.length > 0 ? "is-error" : "is-success"
         );
-        clearPreviewState();
-        selectedKeys.clear();
-        updateBulkControls();
-        ignoreNextManagementMutationClear = true;
+        this.clearPreviewState();
+        this.selectedKeys.clear();
+        this.updateBulkControls();
+        this.ignoreNextManagementMutationClear = true;
         window.dispatchEvent(new CustomEvent(managementMutationEventName, {
           detail: result
         }));
-        scheduleSearch(0);
+        this.scheduleSearch(0);
       } catch {
-        clearPreviewState();
-        setBulkStatus("Bulk action failed.", "is-error");
+        this.clearPreviewState();
+        this.setBulkStatus("Bulk action failed.", "is-error");
       } finally {
-        setBulkBusy(false);
+        this.setBulkBusy(false);
       }
     };
-    const runBulkAction = async (action, fields, fallbackMessage) => {
-      if (previewMatches(action, fields)) {
-        await runBulkApply(action, fields, fallbackMessage);
+    runBulkAction = async (action, fields, fallbackMessage) => {
+      if (this.previewMatches(action, fields)) {
+        await this.runBulkApply(action, fields, fallbackMessage);
         return;
       }
-      await runBulkPreview(action, fields, fallbackMessage);
+      await this.runBulkPreview(action, fields, fallbackMessage);
     };
-    trashButton?.addEventListener("click", () => {
-      void runBulkAction("trash", {}, bulkApplyFallbackMessage("trash"));
-    });
-    moveForm?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      void runBulkAction("move", readMoveFields(moveForm), bulkApplyFallbackMessage("move"));
-    });
-    setForm?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const fields = readSetFields(setForm);
-      if (!fields.property) {
-        setBulkStatus("Property is required.", "is-error");
-        return;
-      }
-      void runBulkAction("frontmatter_set", fields, bulkApplyFallbackMessage("frontmatter_set"));
-    });
-    unsetForm?.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const fields = readUnsetFields(unsetForm);
-      if (!fields.property) {
-        setBulkStatus("Property is required.", "is-error");
-        return;
-      }
-      void runBulkAction("frontmatter_unset", fields, bulkApplyFallbackMessage("frontmatter_unset"));
-    });
-    previewApplyButton?.addEventListener("click", () => {
-      if (!previewState) {
-        setBulkStatus("Preview the bulk action before applying it.", "is-error");
-        return;
-      }
-      void runBulkApply(
-        previewState.action,
-        readFieldsForAction(previewState.action),
-        bulkApplyFallbackMessage(previewState.action)
-      );
-    });
-    previewClearButton?.addEventListener("click", () => {
-      clearPreviewState({ clearStatus: true });
-    });
-    const bindPreviewInvalidation = (form) => {
+    bindPreviewInvalidation = (form) => {
       if (!form) {
         return;
       }
       form.addEventListener("input", () => {
-        clearPreviewState({ clearStatus: true });
+        this.clearPreviewState({ clearStatus: true });
       });
       form.addEventListener("change", () => {
-        clearPreviewState({ clearStatus: true });
+        this.clearPreviewState({ clearStatus: true });
       });
     };
-    bindPreviewInvalidation(moveForm);
-    bindPreviewInvalidation(setForm);
-    bindPreviewInvalidation(unsetForm);
-    updateBulkControls();
-    scheduleSearch(0);
+    bindSearchEvents = () => {
+      if (this.els.input instanceof HTMLInputElement) {
+        this.els.input.value = readPageQuery();
+        this.els.input.addEventListener("input", () => {
+          this.scheduleSearch(150);
+        });
+      }
+      window.addEventListener(filterChangeEventName, (event) => {
+        if (!shouldHandleFilterChangeForMode(event, "search")) {
+          return;
+        }
+        this.scheduleSearch(0);
+      });
+      window.addEventListener(managementMutationEventName, () => {
+        if (this.ignoreNextManagementMutationClear) {
+          this.ignoreNextManagementMutationClear = false;
+          return;
+        }
+        this.clearPreviewState({ clearStatus: true });
+      });
+    };
+    bindBulkEvents = () => {
+      this.els.trashButton?.addEventListener("click", () => {
+        void this.runBulkAction("trash", {}, bulkApplyFallbackMessage("trash"));
+      });
+      this.els.moveForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void this.runBulkAction("move", readMoveFields(this.els.moveForm), bulkApplyFallbackMessage("move"));
+      });
+      this.els.setForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const fields = readSetFields(this.els.setForm);
+        if (!fields.property) {
+          this.setBulkStatus("Property is required.", "is-error");
+          return;
+        }
+        void this.runBulkAction("frontmatter_set", fields, bulkApplyFallbackMessage("frontmatter_set"));
+      });
+      this.els.unsetForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const fields = readUnsetFields(this.els.unsetForm);
+        if (!fields.property) {
+          this.setBulkStatus("Property is required.", "is-error");
+          return;
+        }
+        void this.runBulkAction("frontmatter_unset", fields, bulkApplyFallbackMessage("frontmatter_unset"));
+      });
+      this.els.previewApplyButton?.addEventListener("click", () => {
+        if (!this.previewState) {
+          this.setBulkStatus("Preview the bulk action before applying it.", "is-error");
+          return;
+        }
+        void this.runBulkApply(
+          this.previewState.action,
+          this.readFieldsForAction(this.previewState.action),
+          bulkApplyFallbackMessage(this.previewState.action)
+        );
+      });
+      this.els.previewClearButton?.addEventListener("click", () => {
+        this.clearPreviewState({ clearStatus: true });
+      });
+    };
+  };
+  var initOverviewSearchResults = (deps = {}) => {
+    const els = resolveOverviewSearchElements();
+    if (els) {
+      new OverviewSearch(els, deps);
+    }
   };
 
   // internal/web/static_src/pinned-list.ts
@@ -14041,6 +14132,27 @@ var BrainNotesApp = (() => {
     initSavedViewsSave(deps, nav2);
   };
 
+  // internal/web/static_src/search-shortcut.ts
+  var editableSelector = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
+  var dialogSelector = 'dialog[open], [role="dialog"]:not([hidden]), [role="alertdialog"]:not([hidden])';
+  var isSearchShortcut = (event) => event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing && !event.defaultPrevented && !event.repeat;
+  var bindSearchShortcut = (input) => {
+    const doc2 = input.ownerDocument;
+    const onKeyDown = (event) => {
+      if (!isSearchShortcut(event) || !input.isConnected || input.disabled || doc2.querySelector(dialogSelector)) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof Element && target.closest(editableSelector)) {
+        return;
+      }
+      event.preventDefault();
+      input.focus();
+    };
+    doc2.addEventListener("keydown", onKeyDown);
+    return () => doc2.removeEventListener("keydown", onKeyDown);
+  };
+
   // internal/web/static_src/search.ts
   var searchResultTitle = (result) => result.title || result.key || "Untitled";
   var searchResultFolderLabel = (result) => result.folder ? `Folder: ${result.folder}` : "Folder: /";
@@ -14055,34 +14167,31 @@ var BrainNotesApp = (() => {
   };
   var renderSearchResultOption = (doc2, result, index, handlers2) => {
     const item = doc2.createElement("li");
-    const button = doc2.createElement("button");
-    button.type = "button";
-    button.id = `search-option-${index}`;
-    button.className = "search-result";
-    button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", "false");
-    button.setAttribute("data-search-index", String(index));
+    const link = doc2.createElement("a");
+    link.href = searchResultPath(result);
+    link.id = `search-option-${index}`;
+    link.className = "search-result";
+    link.setAttribute("role", "option");
+    link.setAttribute("aria-selected", "false");
+    link.setAttribute("data-search-index", String(index));
     const title = doc2.createElement("span");
     title.className = "search-result-title";
     title.textContent = searchResultTitle(result);
-    button.appendChild(title);
+    link.appendChild(title);
     const folder = doc2.createElement("span");
     folder.className = "search-result-folder";
     folder.textContent = searchResultFolderLabel(result);
-    button.appendChild(folder);
+    link.appendChild(folder);
     if (result.snippet) {
       const snippet2 = doc2.createElement("p");
       snippet2.className = "search-result-snippet";
       snippet2.innerHTML = result.snippet;
-      button.appendChild(snippet2);
+      link.appendChild(snippet2);
     }
-    button.addEventListener("mouseenter", () => {
+    link.addEventListener("mouseenter", () => {
       handlers2.activate(index);
     });
-    button.addEventListener("click", () => {
-      handlers2.choose(index);
-    });
-    item.appendChild(button);
+    item.appendChild(link);
     return item;
   };
   var HeaderSearch = class {
@@ -14144,14 +14253,7 @@ var BrainNotesApp = (() => {
       this.clearResults();
     }
     navigateToResult(index) {
-      const result = this.results[index];
-      if (!result) {
-        return;
-      }
-      const path = searchResultPath(result);
-      if (path) {
-        window.location.assign(path);
-      }
+      this.resultsEl.querySelector(`[data-search-index="${index}"]`)?.click();
     }
     renderResults(results) {
       this.results = results;
@@ -14166,8 +14268,7 @@ var BrainNotesApp = (() => {
       }
       results.forEach((result, index) => {
         this.resultsEl.appendChild(renderSearchResultOption(document, result, index, {
-          activate: (nextIndex) => this.setActive(nextIndex),
-          choose: (nextIndex) => this.navigateToResult(nextIndex)
+          activate: (nextIndex) => this.setActive(nextIndex)
         }));
       });
       this.resultsEl.hidden = false;
@@ -14213,6 +14314,9 @@ var BrainNotesApp = (() => {
       }
     }
     onKeyDown(event) {
+      if (event.isComposing) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         this.dismiss();
@@ -14246,6 +14350,7 @@ var BrainNotesApp = (() => {
       queryElement(document, '[data-facet-controls][data-facet-mode="search"]', HTMLElement)
     );
     const search = new HeaderSearch(input, resultsEl, feedbackEl, syncSearchURL);
+    bindSearchShortcut(input);
     if (syncSearchURL) {
       input.value = readPageQuery();
       if (input.value.trim() !== "" || search.hasActiveSearchFilters()) {

@@ -93,6 +93,7 @@ export const normalizeCaptureResponse = (payload: unknown): CaptureResult => {
   const record = asRecord(payload) || {};
   return {
     ok: base.ok,
+    path: base.ok ? base.path : undefined,
     code: base.ok ? undefined : base.code,
     message: base.message || "",
     detail: normalizeParamValue(readRecordValue(record, ["detail", "Detail"])),

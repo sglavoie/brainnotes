@@ -51,21 +51,26 @@ type searchIssuePredicate struct {
 	match query.Predicate
 }
 
-func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilters, shape resultShape, rank searchRelevanceFunc) ([]searchResult, error) {
+type searchResponse struct {
+	Results []searchResult
+	Total   int
+}
+
+func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilters, shape resultShape, rank searchRelevanceFunc) (searchResponse, error) {
 	if snapshot.graph == nil {
-		return nil, errorsf("nil graph")
+		return searchResponse{}, errorsf("nil graph")
 	}
 	if strings.TrimSpace(root) == "" {
-		return nil, errorsf("empty vault root")
+		return searchResponse{}, errorsf("empty vault root")
 	}
 
 	if filters.foldedQuery == "" && !filters.hasNonTextFilters() {
-		return []searchResult{}, nil
+		return searchResponse{Results: []searchResult{}}, nil
 	}
 
 	candidates, err := collectSearchCandidates(snapshot, root, filters)
 	if err != nil {
-		return nil, err
+		return searchResponse{}, err
 	}
 
 	// Best-match-first is the ranking a *search* wants, so it stays the default.
@@ -75,19 +80,19 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 	// -modified`.
 	rankSearchCandidates(candidates)
 	if shape.ordered() {
-		candidates, err := orderSearchCandidates(candidates, shape, query.OrderInput{
+		candidates, err = orderSearchCandidates(candidates, shape, query.OrderInput{
 			Root:  root,
 			Notes: snapshot.notes,
 			Graph: snapshot.graph,
 		}, rank)
 		if err != nil {
-			return nil, err
+			return searchResponse{}, err
 		}
-		return searchResults(limitSearchCandidates(candidates, shape)), nil
 	}
-	candidates = limitSearchCandidates(candidates, shape)
-
-	return searchResults(candidates), nil
+	return searchResponse{
+		Results: searchResults(limitSearchCandidates(candidates, shape)),
+		Total:   len(candidates),
+	}, nil
 }
 
 // collectSearchCandidates builds one row per note the filters admit, paired

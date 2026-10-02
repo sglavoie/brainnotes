@@ -1,10 +1,11 @@
 {{define "headerSearch"}}
   <section class="search-box" data-search-box>
-    <label class="search-label" for="search-input">Search notes</label>
+    <label class="search-label" for="search-input">Search notes <span class="search-shortcut-hint">(<kbd>/</kbd> to focus)</span></label>
     <input
       id="search-input"
       class="search-input"
       type="search"
+      aria-keyshortcuts="/"
       placeholder="Search title or body..."
       autocomplete="off"
       spellcheck="false"

@@ -3,7 +3,9 @@ import {
   managementMutationEventName,
   normalizeCaptureResponse,
   normalizeManagementErrorMessage,
+  type CaptureResult,
 } from "./api";
+import { bindCaptureDraft } from "./capture-draft";
 import { jsonPostRequest, readResponsePayload } from "./daily-brief-http";
 import { queryElement } from "./dom";
 import { setStatusText } from "./status";
@@ -15,10 +17,95 @@ export type CaptureDeps = {
   fetch?: FetchLike;
 };
 
-const captureEndpoint = "/api/capture";
-const recentLimit = 5;
-const unconfiguredMessage =
-  "Quick capture is not configured. Set capture.inbox_note and capture.heading in brainnotes.toml.";
+class Capture {
+  private readonly saveDraft: () => void;
+  private readonly csrfToken: string;
+
+  constructor(
+    private readonly root: HTMLElement,
+    private readonly input: HTMLTextAreaElement,
+    private readonly submit: HTMLButtonElement,
+    private readonly status: HTMLElement,
+    private readonly recent: HTMLElement,
+    private readonly fetcher: FetchLike
+  ) {
+    this.csrfToken = root.dataset.captureCsrf || "";
+    this.saveDraft = bindCaptureDraft(root, input);
+    submit.addEventListener("click", () => { void this.run(); });
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || event.isComposing) {
+        return;
+      }
+      event.preventDefault();
+      void this.run();
+    });
+  }
+
+  private setStatus(message: string, kind: CaptureStatusKind): void {
+    setStatusText(this.status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
+  }
+
+  private captured(result: CaptureResult): void {
+    this.input.value = "";
+    this.saveDraft();
+    if (result.detail) {
+      const item = document.createElement("li");
+      item.className = "capture-recent-item";
+      item.textContent = result.detail;
+      this.recent.prepend(item);
+      while (this.recent.children.length > 5) {
+        this.recent.lastElementChild?.remove();
+      }
+    }
+    const link = queryElement(this.root, "[data-capture-view-inbox]", HTMLAnchorElement);
+    if (link && result.path?.startsWith("/n/")) {
+      link.href = result.path;
+      link.hidden = false;
+    }
+    this.setStatus(result.message || `Captured to ${this.root.dataset.captureTarget}.`, "is-success");
+    window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
+  }
+
+  private async run(): Promise<void> {
+    if (this.submit.disabled) {
+      return;
+    }
+    this.saveDraft();
+    const text = this.input.value;
+    if (text.trim() === "") {
+      this.setStatus("Type something to capture.", "is-error");
+      return;
+    }
+    if (this.csrfToken === "") {
+      this.setStatus("Quick capture is unavailable.", "is-error");
+      return;
+    }
+    this.input.disabled = true;
+    this.submit.disabled = true;
+    this.setStatus("Capturing...", "is-loading");
+    try {
+      const body = buildCaptureForm({ text, token: this.csrfToken }).toString();
+      const response = await this.fetcher("/api/capture", jsonPostRequest(this.csrfToken, body));
+      const payload = await readResponsePayload(response);
+      if (!response.ok) {
+        this.setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+        return;
+      }
+      const result = normalizeCaptureResponse(payload);
+      if (!result.ok) {
+        this.setStatus(result.message || "Capture failed.", "is-error");
+        return;
+      }
+      this.captured(result);
+    } catch {
+      this.setStatus("Capture failed.", "is-error");
+    } finally {
+      this.input.disabled = false;
+      this.submit.disabled = false;
+      this.input.focus();
+    }
+  }
+}
 
 export const initCapture = (deps: CaptureDeps = {}): void => {
   const root = queryElement(document, "[data-capture-root]", HTMLElement);
@@ -32,86 +119,13 @@ export const initCapture = (deps: CaptureDeps = {}): void => {
   if (!input || !submit || !status || !recent) {
     return;
   }
-
-  const csrfToken = root.getAttribute("data-capture-csrf") || "";
-  const target = root.getAttribute("data-capture-target") || "";
-  const configured =
-    (root.getAttribute("data-capture-configured") || "").toLowerCase() === "true";
-
-  const setStatus = (message: string, kind: CaptureStatusKind = ""): void => {
-    setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
-  };
-
-  if (!configured) {
+  if (root.dataset.captureConfigured?.toLowerCase() !== "true") {
     input.disabled = true;
     submit.disabled = true;
-    setStatus(unconfiguredMessage, "is-error");
+    setStatusText(status,
+      "Quick capture is not configured. Set capture.inbox_note and capture.heading in brainnotes.toml.",
+      "is-error", ["is-success", "is-error", "is-loading"]);
     return;
   }
-
-  const fetcher = deps.fetch || fetch;
-
-  const prependRecent = (line: string): void => {
-    const item = document.createElement("li");
-    item.className = "capture-recent-item";
-    item.textContent = line;
-    recent.prepend(item);
-    while (recent.children.length > recentLimit) {
-      recent.lastElementChild?.remove();
-    }
-  };
-
-  const run = async (): Promise<void> => {
-    const text = input.value;
-    if (text.trim() === "") {
-      setStatus("Type something to capture.", "is-error");
-      return;
-    }
-    if (csrfToken === "") {
-      setStatus("Quick capture is unavailable.", "is-error");
-      return;
-    }
-
-    input.disabled = true;
-    submit.disabled = true;
-    setStatus("Capturing...", "is-loading");
-    try {
-      const body = buildCaptureForm({ text, token: csrfToken }).toString();
-      const response = await fetcher(captureEndpoint, jsonPostRequest(csrfToken, body));
-      const payload = await readResponsePayload(response);
-      if (!response.ok) {
-        setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
-        return;
-      }
-      const result = normalizeCaptureResponse(payload);
-      if (!result.ok) {
-        setStatus(result.message || "Capture failed.", "is-error");
-        return;
-      }
-
-      input.value = "";
-      if (result.detail) {
-        prependRecent(result.detail);
-      }
-      setStatus(result.message || `Captured to ${target}.`, "is-success");
-      window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
-    } catch {
-      setStatus("Capture failed.", "is-error");
-    } finally {
-      input.disabled = false;
-      submit.disabled = false;
-      input.focus();
-    }
-  };
-
-  submit.addEventListener("click", () => {
-    void run();
-  });
-  input.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || submit.disabled) {
-      return;
-    }
-    event.preventDefault();
-    void run();
-  });
+  new Capture(root, input, submit, status, recent, deps.fetch || fetch);
 };

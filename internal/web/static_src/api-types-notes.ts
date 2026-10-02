@@ -44,6 +44,7 @@ export type CaptureRequest = {
 };
 
 export type CaptureResult = {
+  path?: string;
   ok: boolean;
   code?: string;
   message: string;

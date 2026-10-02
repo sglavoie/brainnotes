@@ -60,6 +60,9 @@
 }
 
 .search-result {
+  display: block;
+  box-sizing: border-box;
+  text-decoration: none;
   width: 100%;
   border: 0;
   border-radius: 0.35rem;
@@ -95,4 +98,13 @@
   color: var(--bn-text-subtle);
   font-size: 0.85rem;
   word-break: break-word;
+}
+
+.search-shortcut-hint {
+  font-size: 0.8rem;
+}
+
+.search-result:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: -2px;
 }
