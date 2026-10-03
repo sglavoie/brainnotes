@@ -21,6 +21,22 @@ export const hasWritableClipboard = (
 ): clipboard is WritableClipboard =>
   Boolean(clipboard && typeof clipboard.writeText === "function");
 
+const showCopyFallback = (root: HTMLElement, payload: CopyPayload): void => {
+  let field = root.querySelector<HTMLTextAreaElement>("[data-copy-fallback]");
+  if (!field) {
+    field = document.createElement("textarea");
+    field.dataset.copyFallback = "";
+    field.className = "copy-fallback";
+    field.readOnly = true;
+    field.rows = 2;
+    root.appendChild(field);
+  }
+  field.setAttribute("aria-label", `${payload.label} — copy manually`);
+  field.value = payload.text;
+  field.focus();
+  field.select();
+};
+
 export const initCopyControls = (): void => {
   const roots = queryAllElements(document, "[data-copy-controls]", HTMLElement);
   if (roots.length === 0) {
@@ -49,16 +65,19 @@ export const initCopyControls = (): void => {
           return;
         }
         if (!canWriteClipboard) {
-          setStatus("Clipboard unavailable.", "is-error");
+          setStatus("Clipboard unavailable. Copy the selected text below.", "is-error");
+          showCopyFallback(root, payload);
           return;
         }
 
         button.disabled = true;
         try {
           await clipboard.writeText(payload.text);
+          root.querySelector("[data-copy-fallback]")?.remove();
           setStatus(copySuccessMessage(payload.label), "is-success");
         } catch {
-          setStatus("Copy failed.", "is-error");
+          setStatus("Copy failed. Copy the selected text below.", "is-error");
+          showCopyFallback(root, payload);
         } finally {
           button.disabled = false;
         }

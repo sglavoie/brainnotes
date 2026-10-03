@@ -5,6 +5,7 @@ import {
 } from "./api";
 import { queryElement } from "./dom";
 import { setStatusText } from "./status";
+import { rememberTrashUndo, showTrashUndo } from "./note-trash-undo";
 
 type TrashNoteStatusKind = "" | "is-success" | "is-error";
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -52,6 +53,25 @@ export const buildTrashNoteFetchRequest = (
   };
 };
 
+const keepUndoNoticeOnPage = (
+  container: HTMLElement,
+  token: string,
+  result: ManagementResult,
+  deps: TrashNoteActionDeps
+): boolean => {
+  if (!result?.ok || !result.journal_id?.trim()) {
+    return false;
+  }
+  const notice = { token, journalID: result.journal_id, path: window.location.pathname };
+  if (rememberTrashUndo(notice)) {
+    return false;
+  }
+  // Storage may be disabled. Keep the receipt and its Undo control on this
+  // page instead of losing them in the redirect.
+  showTrashUndo(container, notice, deps);
+  return true;
+};
+
 export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
   const container = queryElement(document, "[data-trash-note]", HTMLElement);
   if (!container) {
@@ -96,6 +116,10 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
 
       const result = payload as ManagementResult;
       const message = result && result.ok && result.message ? result.message : "Moved note to Trash.";
+      if (keepUndoNoticeOnPage(container, config.csrfToken, result, { fetch: fetcher, redirect })) {
+        setStatus(message, "is-success");
+        return;
+      }
       setStatus(`${message} Redirecting...`, "is-success");
       redirect(config.redirectPath);
     } catch {

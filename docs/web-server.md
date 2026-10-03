@@ -274,6 +274,17 @@ there, chooses a non-conflicting destination name, and leaves `Trash/` ignored b
 default so trashed notes do not continue to appear in search, graph, or
 diagnostics.
 
+After trashing a note from its note page, the Daily Brief shows an Undo notice
+for that specific change. Undo restores the note and returns to it; conflicts
+remain visible with a link to History. The notice survives the redirect in
+this tab only and is scoped to the current server session. If browser storage
+is unavailable, the note page stays open with the same Undo control.
+
+Copy controls on note pages offer selected, read-only text for manual copying
+when clipboard access is unavailable or refused. Keyboard navigation in header
+search keeps the selected result visible within the dropdown without scrolling
+the page.
+
 Rendered note pages syntax-highlight fenced code blocks that include a language
 info string, such as `go`, `sh`, or `json`, on the server. Unlabeled fences
 remain plain escaped code blocks. Note bodies also auto-link GFM-style bare URLs

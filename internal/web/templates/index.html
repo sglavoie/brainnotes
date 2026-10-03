@@ -22,6 +22,9 @@
       </div>
     </header>
     {{template "siteNav" .}}
+    {{if not readOnly}}
+      <div data-trash-undo-host data-trash-undo-csrf="{{.CSRFToken}}"></div>
+    {{end}}
 
     <section
       class="panel capture-panel"

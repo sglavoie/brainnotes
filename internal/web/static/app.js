@@ -2885,6 +2885,21 @@ var BrainNotesApp = (() => {
   });
   var copySuccessMessage = (label) => `${label || "Value"} copied.`;
   var hasWritableClipboard = (clipboard) => Boolean(clipboard && typeof clipboard.writeText === "function");
+  var showCopyFallback = (root, payload) => {
+    let field = root.querySelector("[data-copy-fallback]");
+    if (!field) {
+      field = document.createElement("textarea");
+      field.dataset.copyFallback = "";
+      field.className = "copy-fallback";
+      field.readOnly = true;
+      field.rows = 2;
+      root.appendChild(field);
+    }
+    field.setAttribute("aria-label", `${payload.label} \u2014 copy manually`);
+    field.value = payload.text;
+    field.focus();
+    field.select();
+  };
   var initCopyControls = () => {
     const roots = queryAllElements(document, "[data-copy-controls]", HTMLElement);
     if (roots.length === 0) {
@@ -2909,15 +2924,18 @@ var BrainNotesApp = (() => {
             return;
           }
           if (!canWriteClipboard) {
-            setStatus2("Clipboard unavailable.", "is-error");
+            setStatus2("Clipboard unavailable. Copy the selected text below.", "is-error");
+            showCopyFallback(root, payload);
             return;
           }
           button.disabled = true;
           try {
             await clipboard.writeText(payload.text);
+            root.querySelector("[data-copy-fallback]")?.remove();
             setStatus2(copySuccessMessage(payload.label), "is-success");
           } catch {
-            setStatus2("Copy failed.", "is-error");
+            setStatus2("Copy failed. Copy the selected text below.", "is-error");
+            showCopyFallback(root, payload);
           } finally {
             button.disabled = false;
           }
@@ -8427,6 +8445,177 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/properties-toast.ts
+  var createUndoToast = (doc2, host, deps) => {
+    const element3 = doc2.createElement("div");
+    element3.className = "properties-toast";
+    element3.setAttribute("data-property-toast", "");
+    element3.setAttribute("role", "status");
+    element3.setAttribute("aria-live", "polite");
+    element3.hidden = true;
+    const message = doc2.createElement("p");
+    message.className = "properties-toast-message";
+    message.setAttribute("data-property-toast-message", "");
+    element3.appendChild(message);
+    const actions = doc2.createElement("div");
+    actions.className = "properties-toast-actions";
+    const undo2 = doc2.createElement("button");
+    undo2.type = "button";
+    undo2.className = "properties-button properties-toast-undo";
+    undo2.setAttribute("data-property-toast-undo", "");
+    undo2.textContent = "Undo";
+    actions.appendChild(undo2);
+    const history2 = doc2.createElement("a");
+    history2.className = "properties-toast-history";
+    history2.setAttribute("data-property-toast-history", "");
+    history2.textContent = "View in history";
+    actions.appendChild(history2);
+    const dismiss = doc2.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "properties-button properties-toast-dismiss";
+    dismiss.setAttribute("data-property-toast-dismiss", "");
+    dismiss.textContent = "Dismiss";
+    actions.appendChild(dismiss);
+    element3.appendChild(actions);
+    host.appendChild(element3);
+    let entryID = "";
+    const hide = () => {
+      entryID = "";
+      element3.hidden = true;
+      message.textContent = "";
+    };
+    undo2.addEventListener("click", () => {
+      const pending = entryID;
+      if (pending === "") {
+        return;
+      }
+      hide();
+      deps.onUndo(pending);
+    });
+    dismiss.addEventListener("click", hide);
+    return {
+      element: element3,
+      show: (options) => {
+        entryID = options.journalID;
+        message.textContent = options.message;
+        history2.href = options.historyHref;
+        undo2.hidden = options.journalID === "";
+        element3.hidden = false;
+      },
+      hide,
+      journalID: () => entryID
+    };
+  };
+
+  // internal/web/static_src/properties-workbench-requests.ts
+  var readPayload2 = async (resp) => {
+    try {
+      return await resp.json();
+    } catch {
+      return null;
+    }
+  };
+  var postProperty = async (fetcher, endpoint, token, body) => {
+    try {
+      const resp = await fetcher(endpoint, buildPropertyRequestInit(token, body));
+      const payload = await readPayload2(resp);
+      if (!resp.ok) {
+        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+      }
+      const result = normalizePropertyMutationResponse(payload);
+      if (!result.ok) {
+        return { ok: false, message: result.message || "The change was refused." };
+      }
+      return { ok: true, result };
+    } catch {
+      return { ok: false, message: "The server did not answer." };
+    }
+  };
+  var previewPropertyMutation = (fetcher, token, body) => postProperty(fetcher, PROPERTY_PREVIEW_ENDPOINT, token, body);
+  var applyPropertyMutation = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_APPLY_ENDPOINT, token, {
+    preview_id: previewID
+  });
+  var savePropertyValue = (fetcher, token, body) => postProperty(fetcher, PROPERTY_VALUE_ENDPOINT, token, body);
+  var previewPropertySchema = (fetcher, token, body) => postProperty(fetcher, PROPERTY_SCHEMA_PREVIEW_ENDPOINT, token, body);
+  var applyPropertySchema = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_SCHEMA_APPLY_ENDPOINT, token, {
+    preview_id: previewID
+  });
+  var undoJournalEntry = async (fetcher, token, entryID) => {
+    try {
+      const resp = await fetcher("/api/undo", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-BN-CSRF": token
+        },
+        body: buildUndoForm({ token, entryID }).toString()
+      });
+      const payload = await readPayload2(resp);
+      if (!resp.ok) {
+        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
+      }
+      return { ok: true, message: "Change undone." };
+    } catch {
+      return { ok: false, message: "Undo failed." };
+    }
+  };
+
+  // internal/web/static_src/note-trash-undo.ts
+  var storageKey = "bn.trash-undo.v1";
+  var rememberTrashUndo = (notice) => {
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(notice));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  var readTrashUndo = (token) => {
+    try {
+      const raw = window.sessionStorage.getItem(storageKey);
+      window.sessionStorage.removeItem(storageKey);
+      const value = JSON.parse(raw || "null");
+      if (!value || value.token !== token || typeof value.journalID !== "string" || !value.journalID.trim()) {
+        return null;
+      }
+      return { token, journalID: value.journalID.trim(), path: notePath(value.path) };
+    } catch {
+      return null;
+    }
+  };
+  var notePath = (path) => typeof path === "string" && path.startsWith("/n/") && !/[\\\r\n]/.test(path) ? path : "/";
+  var showTrashUndo = (host, notice, deps = {}) => {
+    const fetcher = deps.fetch || fetch;
+    const redirect = deps.redirect || ((path) => window.location.assign(path));
+    const historyHref = "/history";
+    const toast = createUndoToast(document, host, {
+      onUndo: (journalID) => {
+        toast.show({ message: "Restoring note...", journalID: "", historyHref });
+        void undoJournalEntry(fetcher, notice.token, journalID).then((outcome) => {
+          if (outcome.ok) {
+            redirect(notePath(notice.path));
+            return;
+          }
+          toast.show({ message: outcome.message, journalID: "", historyHref });
+        });
+      }
+    });
+    toast.element.dataset.trashUndoToast = "";
+    toast.show({ message: "Moved note to Trash.", journalID: notice.journalID, historyHref });
+  };
+  var initTrashUndo = (deps = {}) => {
+    const host = document.querySelector("[data-trash-undo-host]");
+    const token = host?.dataset.trashUndoCsrf;
+    if (!host || !token) {
+      return;
+    }
+    const notice = readTrashUndo(token);
+    if (notice) {
+      showTrashUndo(host, notice, deps);
+    }
+  };
+
   // internal/web/static_src/note-trash.ts
   var readTrashNoteConfig = (container) => ({
     key: container.getAttribute("data-trash-key") || "",
@@ -8448,6 +8637,17 @@ var BrainNotesApp = (() => {
         body: body.toString()
       }
     };
+  };
+  var keepUndoNoticeOnPage = (container, token, result, deps) => {
+    if (!result?.ok || !result.journal_id?.trim()) {
+      return false;
+    }
+    const notice = { token, journalID: result.journal_id, path: window.location.pathname };
+    if (rememberTrashUndo(notice)) {
+      return false;
+    }
+    showTrashUndo(container, notice, deps);
+    return true;
   };
   var initTrashNoteAction = (deps = {}) => {
     const container = queryElement(document, "[data-trash-note]", HTMLElement);
@@ -8487,6 +8687,10 @@ var BrainNotesApp = (() => {
         }
         const result = payload;
         const message = result && result.ok && result.message ? result.message : "Moved note to Trash.";
+        if (keepUndoNoticeOnPage(container, config2.csrfToken, result, { fetch: fetcher, redirect })) {
+          setStatus2(message, "is-success");
+          return;
+        }
         setStatus2(`${message} Redirecting...`, "is-success");
         redirect(config2.redirectPath);
       } catch {
@@ -10270,60 +10474,6 @@ var BrainNotesApp = (() => {
     };
   };
 
-  // internal/web/static_src/properties-workbench-requests.ts
-  var readPayload2 = async (resp) => {
-    try {
-      return await resp.json();
-    } catch {
-      return null;
-    }
-  };
-  var postProperty = async (fetcher, endpoint, token, body) => {
-    try {
-      const resp = await fetcher(endpoint, buildPropertyRequestInit(token, body));
-      const payload = await readPayload2(resp);
-      if (!resp.ok) {
-        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-      }
-      const result = normalizePropertyMutationResponse(payload);
-      if (!result.ok) {
-        return { ok: false, message: result.message || "The change was refused." };
-      }
-      return { ok: true, result };
-    } catch {
-      return { ok: false, message: "The server did not answer." };
-    }
-  };
-  var previewPropertyMutation = (fetcher, token, body) => postProperty(fetcher, PROPERTY_PREVIEW_ENDPOINT, token, body);
-  var applyPropertyMutation = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_APPLY_ENDPOINT, token, {
-    preview_id: previewID
-  });
-  var savePropertyValue = (fetcher, token, body) => postProperty(fetcher, PROPERTY_VALUE_ENDPOINT, token, body);
-  var previewPropertySchema = (fetcher, token, body) => postProperty(fetcher, PROPERTY_SCHEMA_PREVIEW_ENDPOINT, token, body);
-  var applyPropertySchema = (fetcher, token, previewID) => postProperty(fetcher, PROPERTY_SCHEMA_APPLY_ENDPOINT, token, {
-    preview_id: previewID
-  });
-  var undoJournalEntry = async (fetcher, token, entryID) => {
-    try {
-      const resp = await fetcher("/api/undo", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-BN-CSRF": token
-        },
-        body: buildUndoForm({ token, entryID }).toString()
-      });
-      const payload = await readPayload2(resp);
-      if (!resp.ok) {
-        return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-      }
-      return { ok: true, message: "Change undone." };
-    } catch {
-      return { ok: false, message: "Undo failed." };
-    }
-  };
-
   // internal/web/static_src/properties-value-control.ts
   var PROPERTY_SCALAR_KINDS = [
     "string",
@@ -11020,68 +11170,6 @@ var BrainNotesApp = (() => {
           adoptEl.hidden = proposed === null;
         }
       }
-    };
-  };
-
-  // internal/web/static_src/properties-toast.ts
-  var createUndoToast = (doc2, host, deps) => {
-    const element3 = doc2.createElement("div");
-    element3.className = "properties-toast";
-    element3.setAttribute("data-property-toast", "");
-    element3.setAttribute("role", "status");
-    element3.setAttribute("aria-live", "polite");
-    element3.hidden = true;
-    const message = doc2.createElement("p");
-    message.className = "properties-toast-message";
-    message.setAttribute("data-property-toast-message", "");
-    element3.appendChild(message);
-    const actions = doc2.createElement("div");
-    actions.className = "properties-toast-actions";
-    const undo2 = doc2.createElement("button");
-    undo2.type = "button";
-    undo2.className = "properties-button properties-toast-undo";
-    undo2.setAttribute("data-property-toast-undo", "");
-    undo2.textContent = "Undo";
-    actions.appendChild(undo2);
-    const history2 = doc2.createElement("a");
-    history2.className = "properties-toast-history";
-    history2.setAttribute("data-property-toast-history", "");
-    history2.textContent = "View in history";
-    actions.appendChild(history2);
-    const dismiss = doc2.createElement("button");
-    dismiss.type = "button";
-    dismiss.className = "properties-button properties-toast-dismiss";
-    dismiss.setAttribute("data-property-toast-dismiss", "");
-    dismiss.textContent = "Dismiss";
-    actions.appendChild(dismiss);
-    element3.appendChild(actions);
-    host.appendChild(element3);
-    let entryID = "";
-    const hide = () => {
-      entryID = "";
-      element3.hidden = true;
-      message.textContent = "";
-    };
-    undo2.addEventListener("click", () => {
-      const pending = entryID;
-      if (pending === "") {
-        return;
-      }
-      hide();
-      deps.onUndo(pending);
-    });
-    dismiss.addEventListener("click", hide);
-    return {
-      element: element3,
-      show: (options) => {
-        entryID = options.journalID;
-        message.textContent = options.message;
-        history2.href = options.historyHref;
-        undo2.hidden = options.journalID === "";
-        element3.hidden = false;
-      },
-      hide,
-      journalID: () => entryID
     };
   };
 
@@ -14255,6 +14343,21 @@ var BrainNotesApp = (() => {
     navigateToResult(index) {
       this.resultsEl.querySelector(`[data-search-index="${index}"]`)?.click();
     }
+    keepActiveVisible() {
+      const option = this.resultsEl.querySelector(`[data-search-index="${this.activeIndex}"]`);
+      if (!option) {
+        return;
+      }
+      const viewport = this.resultsEl.getBoundingClientRect();
+      const row = option.getBoundingClientRect();
+      const top2 = viewport.top + this.resultsEl.clientTop;
+      const bottom = top2 + this.resultsEl.clientHeight;
+      if (row.top < top2) {
+        this.resultsEl.scrollTop += row.top - top2;
+      } else if (row.bottom > bottom) {
+        this.resultsEl.scrollTop += Math.min(row.top - top2, row.bottom - bottom);
+      }
+    }
     renderResults(results) {
       this.results = results;
       if (results.length === 0) {
@@ -14332,6 +14435,7 @@ var BrainNotesApp = (() => {
           this.results.length,
           event.key === "ArrowDown" ? "next" : "previous"
         ));
+        this.keepActiveVisible();
       } else if (event.key === "Enter" && this.activeIndex >= 0) {
         event.preventDefault();
         this.navigateToResult(this.activeIndex);
@@ -46819,7 +46923,7 @@ var BrainNotesApp = (() => {
     const model = createSynthesisModel(config2);
     const view = createSynthesisView(mount, config2);
     const storage = deps.storage === void 0 ? safeSynthesisStorage(root.ownerDocument.defaultView) : deps.storage;
-    const storageKey = synthesisStorageKey(config2.vaultID, config2.anchor.key);
+    const storageKey2 = synthesisStorageKey(config2.vaultID, config2.anchor.key);
     const statusEl = queryElement(root, "[data-synthesize-status]", HTMLElement);
     const fallback = queryElement(root, "[data-synthesize-fallback]", HTMLElement);
     if (fallback) {
@@ -46845,7 +46949,7 @@ var BrainNotesApp = (() => {
         setStatusText(statusEl, message, kind);
       },
       persist: () => {
-        if (writeSynthesisState(storage, storageKey, synthesisStateFromModel(model))) {
+        if (writeSynthesisState(storage, storageKey2, synthesisStateFromModel(model))) {
           return;
         }
         if (storage === null || storageWarned) {
@@ -46859,8 +46963,8 @@ var BrainNotesApp = (() => {
       },
       // An absent storage never held anything, so only a refused removeItem leaves
       // saved work behind for a later visit to restore.
-      clearSaved: () => clearSynthesisState(storage, storageKey) || storage === null,
-      readSaved: () => readSynthesisState(storage, storageKey),
+      clearSaved: () => clearSynthesisState(storage, storageKey2) || storage === null,
+      readSaved: () => readSynthesisState(storage, storageKey2),
       rememberCandidates: (entries) => {
         for (const entry of entries) {
           runtime.candidates.set(entry.key, entry);
@@ -47880,6 +47984,7 @@ ${candidate.markdown}`;
       initOpenInEditor();
       initNotePinAction();
       initTrashNoteAction();
+      initTrashUndo();
       initPinnedList();
       initNoteInsight();
       initFrontmatterEditing();

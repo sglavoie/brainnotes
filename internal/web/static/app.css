@@ -3429,6 +3429,20 @@ code {
   color: var(--bn-danger);
 }
 
+.copy-fallback {
+  order: 3;
+  flex: 0 0 100%;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 0.5rem;
+  color: var(--bn-text);
+  background: var(--bn-sunken);
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+}
 /* internal/web/static_src/css/note-layout.css */
 .note-main {
   width: 100%;

@@ -142,6 +142,23 @@ class HeaderSearch {
     this.resultsEl.querySelector<HTMLAnchorElement>(`[data-search-index="${index}"]`)?.click();
   }
 
+  keepActiveVisible(): void {
+    const option = this.resultsEl.querySelector<HTMLElement>(`[data-search-index="${this.activeIndex}"]`);
+    if (!option) {
+      return;
+    }
+    const viewport = this.resultsEl.getBoundingClientRect();
+    const row = option.getBoundingClientRect();
+    const top = viewport.top + this.resultsEl.clientTop;
+    const bottom = top + this.resultsEl.clientHeight;
+    // Scroll only the popup, leaving the page and input focus in place.
+    if (row.top < top) {
+      this.resultsEl.scrollTop += row.top - top;
+    } else if (row.bottom > bottom) {
+      this.resultsEl.scrollTop += Math.min(row.top - top, row.bottom - bottom);
+    }
+  }
+
   renderResults(results: SearchResult[]): void {
     this.results = results;
     if (results.length === 0) {
@@ -222,6 +239,7 @@ class HeaderSearch {
         this.results.length,
         event.key === "ArrowDown" ? "next" : "previous"
       ));
+      this.keepActiveVisible();
     } else if (event.key === "Enter" && this.activeIndex >= 0) {
       event.preventDefault();
       this.navigateToResult(this.activeIndex);
