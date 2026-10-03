@@ -8887,6 +8887,75 @@ var BrainNotesApp = (() => {
     button.setAttribute("data-bulk-phase", phase);
   };
 
+  // internal/web/static_src/overview-search-pin.ts
+  var overviewCSRFToken = (doc2) => queryElement(doc2, "[data-overview-csrf]", HTMLElement)?.dataset.overviewCsrf;
+  var renderOverviewPin = (doc2, result) => {
+    const button = doc2.createElement("button");
+    button.type = "button";
+    button.className = "pin-button overview-result-pin";
+    button.setAttribute("data-pin-button", "");
+    const feedback = doc2.createElement("div");
+    feedback.className = "overview-pin-feedback";
+    feedback.hidden = true;
+    const status = doc2.createElement("p");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    const retry2 = doc2.createElement("button");
+    retry2.type = "button";
+    retry2.className = "overview-bulk-button";
+    retry2.textContent = "Retry";
+    retry2.setAttribute("aria-label", `Retry pin action for ${result.title || result.key}`);
+    retry2.addEventListener("click", () => button.click());
+    feedback.append(status, retry2);
+    const applyState = (pinned) => {
+      const label = pinned ? "Unpin" : "Pin";
+      button.setAttribute("aria-pressed", String(pinned));
+      button.textContent = label;
+      button.setAttribute("aria-label", `${label} ${result.title || result.key}`);
+    };
+    const report = (message) => {
+      status.textContent = message;
+      feedback.hidden = message === "";
+    };
+    applyState(Boolean(result.pinned));
+    button.addEventListener("click", async () => {
+      const pinned = button.getAttribute("aria-pressed") === "true";
+      const token = overviewCSRFToken(doc2);
+      if (!token) {
+        report("Pin action unavailable. Reload the page and try again.");
+        return;
+      }
+      const retryFocused = doc2.activeElement === retry2;
+      button.disabled = true;
+      retry2.disabled = true;
+      applyState(!pinned);
+      if (!feedback.hidden) {
+        report(pinned ? "Unpinning note..." : "Pinning note...");
+      }
+      try {
+        const request = pinned ? buildNotePinRemoveFetchRequest({ key: result.key, token }) : buildNotePinSetFetchRequest({ key: result.key, token });
+        const resp = await fetch(request.url, request.init);
+        if (!resp.ok) {
+          const payload = await readNotePinResponsePayload(resp);
+          report(normalizeManagementErrorMessage(resp.status, payload));
+          applyState(pinned);
+        } else {
+          report("");
+        }
+      } catch {
+        report(pinned ? "Unpin failed. Try again." : "Pin failed. Try again.");
+        applyState(pinned);
+      } finally {
+        button.disabled = false;
+        retry2.disabled = false;
+        if (retryFocused && feedback.hidden) {
+          button.focus();
+        }
+      }
+    });
+    return { button, feedback };
+  };
+
   // internal/web/static_src/overview-search-render.ts
   var formatPreviewValue = (value) => {
     if (!value.present) {
@@ -8914,6 +8983,11 @@ var BrainNotesApp = (() => {
     item.textContent = `${change.key}: ${formatPreviewValue(change.before)} -> ${formatPreviewValue(change.after)}`;
     listEl.appendChild(item);
   };
+  var previewPath = (result) => {
+    const sourcePath = result.source.rel_path || result.rel_path || result.key;
+    const destinationPath = result.destination?.rel_path || result.rel_path;
+    return destinationPath && destinationPath !== sourcePath ? `${sourcePath} -> ${destinationPath}` : sourcePath;
+  };
   var renderPreviewResultRow = (listEl, result) => {
     const doc2 = listEl.ownerDocument;
     const item = doc2.createElement("li");
@@ -8925,9 +8999,7 @@ var BrainNotesApp = (() => {
     header.className = "overview-bulk-preview-result-header";
     const path = doc2.createElement("p");
     path.className = "overview-bulk-preview-path";
-    const sourcePath = result.source.rel_path || result.rel_path || result.key;
-    const destinationPath = result.destination?.rel_path || result.rel_path;
-    path.textContent = destinationPath && destinationPath !== sourcePath ? `${sourcePath} -> ${destinationPath}` : sourcePath;
+    path.textContent = previewPath(result);
     header.appendChild(path);
     const status = doc2.createElement("span");
     status.className = "overview-bulk-preview-result-state";
@@ -8980,6 +9052,35 @@ var BrainNotesApp = (() => {
       previewCountsEl.appendChild(row);
     }
   };
+  var clearPreviewContent = ({
+    previewCountsEl,
+    previewResultsEl,
+    previewFailuresEl,
+    previewApplyButton
+  }) => {
+    if (previewCountsEl) {
+      previewCountsEl.textContent = "";
+    }
+    if (previewResultsEl) {
+      previewResultsEl.textContent = "";
+    }
+    if (previewFailuresEl) {
+      previewFailuresEl.textContent = "";
+    }
+    if (previewApplyButton) {
+      previewApplyButton.textContent = "Apply";
+    }
+  };
+  var renderPreviewFailures = (previewFailuresEl, result) => {
+    if (previewFailuresEl) {
+      previewFailuresEl.textContent = "";
+      const failures = result.failures || [];
+      previewFailuresEl.hidden = failures.length === 0;
+      for (const failure2 of failures) {
+        renderPreviewFailureItem(previewFailuresEl, failure2);
+      }
+    }
+  };
   var renderPreviewPanel = (els, previewState) => {
     const {
       previewPanel,
@@ -8995,18 +9096,7 @@ var BrainNotesApp = (() => {
     }
     if (!previewState) {
       previewPanel.hidden = true;
-      if (previewCountsEl) {
-        previewCountsEl.textContent = "";
-      }
-      if (previewResultsEl) {
-        previewResultsEl.textContent = "";
-      }
-      if (previewFailuresEl) {
-        previewFailuresEl.textContent = "";
-      }
-      if (previewApplyButton) {
-        previewApplyButton.textContent = "Apply";
-      }
+      clearPreviewContent(els);
       return;
     }
     previewPanel.hidden = false;
@@ -9023,14 +9113,7 @@ var BrainNotesApp = (() => {
         renderPreviewResultRow(previewResultsEl, result);
       }
     }
-    if (previewFailuresEl) {
-      previewFailuresEl.textContent = "";
-      const failures = previewState.result.failures || [];
-      previewFailuresEl.hidden = failures.length === 0;
-      for (const failure2 of failures) {
-        renderPreviewFailureItem(previewFailuresEl, failure2);
-      }
-    }
+    renderPreviewFailures(previewFailuresEl, previewState.result);
     if (previewApplyButton) {
       previewApplyButton.textContent = bulkActionLabel(previewState.action, "apply");
     }
@@ -9055,59 +9138,28 @@ var BrainNotesApp = (() => {
       bulkRoot.removeAttribute("data-overview-preview-expires-at");
     }
   };
-  var overviewCSRFToken = (doc2) => queryElement(doc2, "[data-overview-csrf]", HTMLElement)?.getAttribute("data-overview-csrf") || "";
-  var renderOverviewResultPinButton = (doc2, result) => {
-    const button = doc2.createElement("button");
-    button.type = "button";
-    button.className = "pin-button overview-result-pin";
-    button.setAttribute("data-pin-button", "");
-    const applyState = (pinned) => {
-      const label = pinned ? "Unpin" : "Pin";
-      button.setAttribute("aria-pressed", pinned ? "true" : "false");
-      button.textContent = label;
-      button.setAttribute("aria-label", `${label} ${result.title || result.key}`);
-    };
-    applyState(Boolean(result.pinned));
-    button.addEventListener("click", async () => {
-      const pinned = button.getAttribute("aria-pressed") === "true";
-      const token = overviewCSRFToken(doc2);
-      if (!token) {
-        button.title = "Pin action unavailable.";
-        return;
-      }
-      button.disabled = true;
-      button.title = "";
-      applyState(!pinned);
-      try {
-        const request = pinned ? buildNotePinRemoveFetchRequest({ key: result.key, token }) : buildNotePinSetFetchRequest({ key: result.key, token });
-        const resp = await fetch(request.url, request.init);
-        if (!resp.ok) {
-          const payload = await readNotePinResponsePayload(resp);
-          button.title = normalizeManagementErrorMessage(resp.status, payload);
-          applyState(pinned);
-        }
-      } catch {
-        button.title = pinned ? "Unpin failed." : "Pin failed.";
-        applyState(pinned);
-      } finally {
-        button.disabled = false;
-      }
-    });
-    return button;
+  var renderResultMetadata = (doc2, result) => {
+    const meta2 = doc2.createElement("span");
+    meta2.className = "overview-result-meta";
+    const folder = doc2.createElement("span");
+    folder.textContent = result.folder ? `Folder: ${result.folder}` : "Folder: /";
+    meta2.appendChild(folder);
+    if (result.matched_fields.length > 0) {
+      const fields = doc2.createElement("span");
+      fields.className = "overview-result-badge";
+      fields.textContent = `Matched: ${result.matched_fields.join(", ")}`;
+      meta2.appendChild(fields);
+    }
+    for (const issue of result.issues) {
+      const badge = doc2.createElement("span");
+      badge.className = "overview-result-badge is-issue";
+      badge.textContent = issue.replace(/_/g, " ");
+      meta2.appendChild(badge);
+    }
+    return meta2;
   };
-  var renderOverviewSearchResult = (listEl, result, options = {}) => {
-    const path = searchResultPath(result);
-    if (!path) {
-      return false;
-    }
-    const doc2 = listEl.ownerDocument;
-    const item = doc2.createElement("li");
-    item.className = "overview-result-item";
-    if (result.key) {
-      item.setAttribute("data-overview-result-key", result.key);
-    }
-    const row = doc2.createElement("div");
-    row.className = "overview-result-row";
+  var renderResultSelection = (row, result, options) => {
+    const doc2 = row.ownerDocument;
     if (result.key) {
       row.classList.add("has-selection");
       const selectWrap = doc2.createElement("label");
@@ -9128,6 +9180,21 @@ var BrainNotesApp = (() => {
       selectWrap.appendChild(checkbox);
       row.appendChild(selectWrap);
     }
+  };
+  var renderOverviewSearchResult = (listEl, result, options = {}) => {
+    const path = searchResultPath(result);
+    if (!path) {
+      return false;
+    }
+    const doc2 = listEl.ownerDocument;
+    const item = doc2.createElement("li");
+    item.className = "overview-result-item";
+    if (result.key) {
+      item.setAttribute("data-overview-result-key", result.key);
+    }
+    const row = doc2.createElement("div");
+    row.className = "overview-result-row";
+    renderResultSelection(row, result, options);
     const link = doc2.createElement("a");
     link.className = "overview-result-link";
     link.setAttribute("href", path);
@@ -9135,24 +9202,7 @@ var BrainNotesApp = (() => {
     title.className = "overview-result-title";
     title.textContent = result.title || result.key || "Untitled";
     link.appendChild(title);
-    const meta2 = doc2.createElement("span");
-    meta2.className = "overview-result-meta";
-    const folder = doc2.createElement("span");
-    folder.textContent = result.folder ? `Folder: ${result.folder}` : "Folder: /";
-    meta2.appendChild(folder);
-    if (result.matched_fields.length > 0) {
-      const fields = doc2.createElement("span");
-      fields.className = "overview-result-badge";
-      fields.textContent = `Matched: ${result.matched_fields.join(", ")}`;
-      meta2.appendChild(fields);
-    }
-    for (const issue of result.issues) {
-      const badge = doc2.createElement("span");
-      badge.className = "overview-result-badge is-issue";
-      badge.textContent = issue.replace(/_/g, " ");
-      meta2.appendChild(badge);
-    }
-    link.appendChild(meta2);
+    link.appendChild(renderResultMetadata(doc2, result));
     if (result.snippet) {
       const snippet2 = doc2.createElement("p");
       snippet2.className = "overview-result-snippet";
@@ -9161,9 +9211,11 @@ var BrainNotesApp = (() => {
     }
     row.appendChild(link);
     if (result.key) {
-      row.appendChild(renderOverviewResultPinButton(doc2, result));
+      const pin = renderOverviewPin(doc2, result);
+      row.appendChild(pin.button);
+      item.appendChild(pin.feedback);
     }
-    item.appendChild(row);
+    item.prepend(row);
     listEl.appendChild(item);
     return true;
   };
@@ -9238,6 +9290,27 @@ var BrainNotesApp = (() => {
     return `Showing ${shown} of ${counts.total} matching notes${scope}. ${reason} Bulk actions apply only to selected notes.`;
   };
 
+  // internal/web/static_src/overview-search-selection.ts
+  var overviewSelectionInputs = (list) => queryAllElements(list, ".overview-result-select input", HTMLInputElement);
+  var syncOverviewSelectionControls = (root, list, selectedCount, busy) => {
+    const inputs = overviewSelectionInputs(list);
+    const controls = queryElement(root, "[data-overview-selection]", HTMLElement);
+    if (controls) {
+      controls.hidden = inputs.length === 0;
+    }
+    const select = queryElement(root, "[data-overview-select-displayed]", HTMLButtonElement);
+    const clear2 = queryElement(root, "[data-overview-clear-selection]", HTMLButtonElement);
+    if (select) {
+      select.disabled = busy || inputs.length === 0 || inputs.every((input) => input.checked);
+    }
+    if (clear2) {
+      clear2.disabled = busy || selectedCount === 0;
+    }
+    for (const input of inputs) {
+      input.disabled = busy;
+    }
+  };
+
   // internal/web/static_src/overview-search.ts
   var OverviewSearch = class {
     constructor(els, deps) {
@@ -9245,6 +9318,7 @@ var BrainNotesApp = (() => {
       this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
       this.bindSearchEvents();
       this.bindBulkEvents();
+      this.bindSelectionEvents();
       this.bindPreviewInvalidation(els.moveForm);
       this.bindPreviewInvalidation(els.setForm);
       this.bindPreviewInvalidation(els.unsetForm);
@@ -9291,7 +9365,14 @@ var BrainNotesApp = (() => {
         }
       }
     };
+    selectionBusy = () => this.bulkBusy || this.els.root.getAttribute("aria-busy") === "true";
     updateBulkControls = () => {
+      syncOverviewSelectionControls(
+        this.els.root,
+        this.els.listEl,
+        this.selectedKeys.size,
+        this.selectionBusy()
+      );
       if (!this.els.bulkRoot) {
         return;
       }
@@ -9349,6 +9430,27 @@ var BrainNotesApp = (() => {
         this.selectedKeys.delete(key);
       }
       this.updateBulkControls();
+    };
+    selectDisplayed = (selected) => {
+      if (this.selectionBusy()) {
+        return;
+      }
+      this.selectedKeys.clear();
+      for (const input of overviewSelectionInputs(this.els.listEl)) {
+        input.checked = selected;
+        if (selected) {
+          this.selectedKeys.set(input.value, input.value);
+        }
+      }
+      this.clearPreviewState({ clearStatus: true });
+    };
+    bindSelectionEvents = () => {
+      this.els.root.querySelector("[data-overview-select-displayed]")?.addEventListener("click", () => {
+        this.selectDisplayed(true);
+      });
+      this.els.root.querySelector("[data-overview-clear-selection]")?.addEventListener("click", () => {
+        this.selectDisplayed(false);
+      });
     };
     pruneSelectionToRenderedKeys = (visibleKeys) => {
       let changed = false;
@@ -9408,6 +9510,7 @@ var BrainNotesApp = (() => {
       }
       const localToken = ++this.requestToken;
       setOverviewBusy(this.els.root, true);
+      this.updateBulkControls();
       this.setStatus("Loading matching notes...", "is-loading");
       this.debounceToken = window.setTimeout(async () => {
         try {
@@ -9429,6 +9532,7 @@ var BrainNotesApp = (() => {
         } finally {
           if (localToken === this.requestToken) {
             setOverviewBusy(this.els.root, false);
+            this.updateBulkControls();
           }
         }
       }, delay);

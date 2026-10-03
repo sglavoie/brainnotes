@@ -44,7 +44,7 @@ func TestPropertiesPage_AppearsInSiteNav(t *testing.T) {
 			t.Fatalf("GET %s: %v", path, err)
 		}
 		body := readResponseBody(t, resp)
-		if !strings.Contains(body, `<a href="/properties">Properties</a>`) {
+		if !strings.Contains(body, `<a href="/properties">`) && !strings.Contains(body, `<a href="/properties" aria-current="page">`) {
 			t.Fatalf("%s is missing the Properties navigation link", path)
 		}
 	}

@@ -193,7 +193,7 @@ func TestSettingsPage_ReadOnlyReplicaRefusesIt(t *testing.T) {
 // of the refusal above: a mode that answers 403 must not render a link to it.
 func TestSettingsPage_LinkedFromTheNavOnlyWhereItIsServed(t *testing.T) {
 	files := map[string][]byte{"Notes/Alpha.md": []byte("---\ntitle: Alpha\n---\nBody\n")}
-	link := `<a href="/settings">Settings</a>`
+	link := `<a href="/settings"`
 
 	writable, _ := newHTTPServerForFiles(t, files)
 	for _, path := range []string{"/", libraryRoutePath, healthRoutePath, settingsRoutePath} {

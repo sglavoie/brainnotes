@@ -21,7 +21,7 @@
         {{template "headerSearch" .}}
       </div>
     </header>
-    {{template "siteNav" .}}
+    {{template "siteNav" "brief"}}
     {{if not readOnly}}
       <div data-trash-undo-host data-trash-undo-csrf="{{.CSRFToken}}"></div>
     {{end}}

@@ -117,8 +117,10 @@ func TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized(t *testing.T) {
 		pair.Local.Git(t, "rm", "-q", "--", "Alpha.md")
 		pair.Local.Git(t, "commit", "-q", "-m", "remove Alpha.md after review")
 		args := []string{"-once"}
+		wantCode := exitNeedsPerson
 		if authorize {
 			args = append(args, "-authorize-deletion", strings.TrimSpace(pair.Local.Git(t, "rev-parse", "HEAD")))
+			wantCode = exitOK
 		}
 
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
@@ -127,11 +129,11 @@ func TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized(t *testing.T) {
 		if err := json.Unmarshal(stdout.Bytes(), &pass); err != nil {
 			t.Fatalf("authorize=%v: decode the pass: %v\n%s", authorize, err, stdout)
 		}
-		if authorize && (code != exitOK || pass.Failed()) {
-			t.Fatalf("an approved deletion exited %d: %+v %s", code, pass, stderr)
+		if code != wantCode {
+			t.Fatalf("authorize=%v: deletion exited %d, want %d: %+v %s", authorize, code, wantCode, pass, stderr)
 		}
-		if !authorize && (code != exitNeedsPerson || !pass.Failed()) {
-			t.Fatalf("an unapproved deletion exited %d, want %d: %+v", code, exitNeedsPerson, pass)
+		if pass.Failed() != !authorize {
+			t.Fatalf("authorize=%v: pass failure = %v, want %v: %+v", authorize, pass.Failed(), !authorize, pass)
 		}
 	}
 }

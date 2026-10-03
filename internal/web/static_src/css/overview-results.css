@@ -28,6 +28,26 @@
   justify-self: end;
 }
 
+.overview-pin-feedback,
+.overview-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.overview-pin-feedback[hidden],
+.overview-selection[hidden] {
+  display: none;
+}
+
+.overview-pin-feedback p {
+  margin: 0;
+  color: var(--bn-danger);
+  overflow-wrap: anywhere;
+}
+
 .overview-result-select {
   display: flex;
   align-items: flex-start;
@@ -115,4 +135,3 @@
   font-weight: 700;
   color: var(--bn-text-strong);
 }
-

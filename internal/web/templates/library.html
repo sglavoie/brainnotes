@@ -49,7 +49,7 @@
         </div>
       </div>
     </header>
-    {{template "siteNav" .}}
+    {{template "siteNav" "library"}}
 
     {{template "queryBar" "panel"}}
 
@@ -72,6 +72,12 @@
         role="status"
         aria-live="polite"
       >No query or filters selected.</p>
+      {{if not readOnly}}
+      <div class="overview-selection" data-overview-selection hidden>
+        <button class="overview-bulk-button" type="button" data-overview-select-displayed>Select displayed</button>
+        <button class="overview-bulk-button" type="button" data-overview-clear-selection disabled>Clear selection</button>
+      </div>
+      {{end}}
       <div
         class="overview-bulk-actions"
         data-overview-bulk

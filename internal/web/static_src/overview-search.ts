@@ -46,6 +46,7 @@ import {
 import { postBulkApply, postBulkPreview } from "./overview-search-requests";
 import { setStatusText, type StatusKind } from "./status";
 import { readSearchCounts, searchSummary, type SearchCounts } from "./search-summary";
+import { overviewSelectionInputs, syncOverviewSelectionControls } from "./overview-search-selection";
 
 export {
   overviewSearchEmptyMessage,
@@ -67,6 +68,7 @@ class OverviewSearch {
     this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
     this.bindSearchEvents();
     this.bindBulkEvents();
+    this.bindSelectionEvents();
     this.bindPreviewInvalidation(els.moveForm);
     this.bindPreviewInvalidation(els.setForm);
     this.bindPreviewInvalidation(els.unsetForm);
@@ -122,7 +124,12 @@ class OverviewSearch {
     }
   };
 
+  private selectionBusy = (): boolean =>
+    this.bulkBusy || this.els.root.getAttribute("aria-busy") === "true";
+
   private updateBulkControls = (): void => {
+    syncOverviewSelectionControls(this.els.root, this.els.listEl, this.selectedKeys.size,
+      this.selectionBusy());
     if (!this.els.bulkRoot) {
       return;
     }
@@ -188,6 +195,29 @@ class OverviewSearch {
       this.selectedKeys.delete(key);
     }
     this.updateBulkControls();
+  };
+
+  private selectDisplayed = (selected: boolean): void => {
+    if (this.selectionBusy()) {
+      return;
+    }
+    this.selectedKeys.clear();
+    for (const input of overviewSelectionInputs(this.els.listEl)) {
+      input.checked = selected;
+      if (selected) {
+        this.selectedKeys.set(input.value, input.value);
+      }
+    }
+    this.clearPreviewState({ clearStatus: true });
+  };
+
+  private bindSelectionEvents = (): void => {
+    this.els.root.querySelector("[data-overview-select-displayed]")?.addEventListener("click", () => {
+      this.selectDisplayed(true);
+    });
+    this.els.root.querySelector("[data-overview-clear-selection]")?.addEventListener("click", () => {
+      this.selectDisplayed(false);
+    });
   };
 
   private pruneSelectionToRenderedKeys = (visibleKeys: Set<string>): void => {
@@ -256,6 +286,7 @@ class OverviewSearch {
 
     const localToken = ++this.requestToken;
     setOverviewBusy(this.els.root, true);
+    this.updateBulkControls();
     this.setStatus("Loading matching notes...", "is-loading");
     this.debounceToken = window.setTimeout(async () => {
       try {
@@ -277,6 +308,7 @@ class OverviewSearch {
       } finally {
         if (localToken === this.requestToken) {
           setOverviewBusy(this.els.root, false);
+          this.updateBulkControls();
         }
       }
     }, delay);

@@ -100,6 +100,9 @@ toggle on every note page, and the same toggle on `/library` search rows. State
 is the `pinned` frontmatter rank `bn pin` writes, so the CLI, Obsidian, and the
 web UI always see the same list.
 
+If a Library Pin/Unpin action fails, its row displays the error and a **Retry**
+button. The toggle returns to its previous state until a retry succeeds.
+
 Reordering is web-only. Drag a row's handle on `/pinned`, or focus a handle and
 press `Up`/`Down` for the same move from the keyboard. The browser posts note
 keys, never ranks — the server takes the midpoint of the two neighbouring ranks
@@ -162,6 +165,11 @@ No telemetry, background schedulers, reminders, or analytics pipelines are
 introduced: activity metrics are local-only and computed from the brief sidecar.
 
 ## The query bar and saved views
+
+The primary navigation highlights the current page. In Library results,
+**Select displayed** selects only the notes currently shown, even when the
+match total is larger. **Clear selection** unchecks them all. Changing the
+selection clears any bulk preview, so the next action previews the new selection.
 
 Press `/` outside an editable field to focus the header search. The shortcut
 leaves editors and open dialogs alone. Search suggestions are links: middle-click

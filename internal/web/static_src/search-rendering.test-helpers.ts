@@ -5,6 +5,10 @@ export const renderOverviewBulkFixture = (): void => {
     <input id="search-input" />
     <section data-overview-search-results aria-busy="false">
       <p data-overview-search-status></p>
+      <div data-overview-selection hidden>
+        <button type="button" data-overview-select-displayed>Select displayed</button>
+        <button type="button" data-overview-clear-selection disabled>Clear selection</button>
+      </div>
       <div data-overview-bulk data-overview-csrf="csrf-token" hidden>
         <p data-overview-selected-count></p>
         <button type="button" data-bulk-trash>Trash</button>

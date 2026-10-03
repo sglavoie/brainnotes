@@ -343,6 +343,12 @@ a:hover {
   text-decoration: none;
 }
 
+.site-nav a[aria-current='page'] {
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  box-shadow: inset 0 -2px var(--bn-accent);
+}
+
 /*
  * The saved-views strip is filled by initSavedViewsNav() after the page paints,
  * so its row height is reserved here: without min-height the nav grows when the
@@ -2603,6 +2609,26 @@ code {
   justify-self: end;
 }
 
+.overview-pin-feedback,
+.overview-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.overview-pin-feedback[hidden],
+.overview-selection[hidden] {
+  display: none;
+}
+
+.overview-pin-feedback p {
+  margin: 0;
+  color: var(--bn-danger);
+  overflow-wrap: anywhere;
+}
+
 .overview-result-select {
   display: flex;
   align-items: flex-start;
@@ -2690,7 +2716,6 @@ code {
   font-weight: 700;
   color: var(--bn-text-strong);
 }
-
 /* internal/web/static_src/css/review.css */
 .review-panel {
   display: grid;
