@@ -11,6 +11,11 @@ updates incoming wikilinks. If the editor has unsaved text, save it first using
 the prompt or cancel the rename. The **Save** button saves the source text;
 **Rename** applies the title change.
 
+Rendered notes show the body before Ask AI. The Contents list highlights the
+current section as you scroll, without changing the URL or keyboard focus.
+Code blocks offer **Copy code**, preserving whitespace; if the browser refuses
+clipboard access, a selected text field lets you copy manually.
+
 ## Command reference
 
 ### `bn serve` — run the local vault browser
@@ -165,6 +170,16 @@ No telemetry, background schedulers, reminders, or analytics pipelines are
 introduced: activity metrics are local-only and computed from the brief sidecar.
 
 ## The query bar and saved views
+
+Library's **Sort** control offers default order, recently modified, and title
+in either direction. It preserves the search text, filters, and result limit;
+the URL and saved-view form carry the chosen ordering. Other orderings loaded
+from a saved view appear as **Current order**. Choosing a standard ordering
+removes any relevance anchor; choosing the original ordering again restores it.
+
+**Query help** below the expression field expands examples and explains how
+text search, facets, and expressions combine. Press `Ctrl` + `Space` in the
+expression field to request field and value suggestions.
 
 The primary navigation highlights the current page. In Library results,
 **Retry search** reruns a failed request with the current query and filters.

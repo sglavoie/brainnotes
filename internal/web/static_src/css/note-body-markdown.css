@@ -87,3 +87,20 @@
   text-decoration: none;
 }
 
+
+.note-code-block {
+  min-width: 0;
+  margin: 1rem 0;
+}
+
+.note-code-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.note-code-block pre {
+  margin-top: 0.5rem;
+}

@@ -265,3 +265,10 @@
   margin-left: 1.1rem;
 }
 
+
+.note-toc-list a[aria-current="location"] {
+  color: var(--bn-link);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}

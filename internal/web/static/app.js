@@ -8053,6 +8053,108 @@ var BrainNotesApp = (() => {
   };
   var restoreFailureMessage = (message, stale) => stale ? `${message} Preview it again to see what changed.` : message;
 
+  // internal/web/static_src/library-sort.ts
+  var initLibrarySort = () => {
+    const select = document.querySelector("[data-library-sort]");
+    if (!select) return;
+    const initial = new URLSearchParams(window.location.search);
+    const current = initial.get("sort") || "";
+    const anchor = initial.get("relative_to");
+    if (!Array.from(select.options).some((option) => option.value === current)) {
+      select.add(new Option(`Current order: ${current}`, current));
+    }
+    select.value = current;
+    select.addEventListener("change", () => {
+      const params = new URLSearchParams(window.location.search);
+      if (select.value) params.set("sort", select.value);
+      else params.delete("sort");
+      if (select.value === current && anchor) params.set("relative_to", anchor);
+      else params.delete("relative_to");
+      updateBrowserQuery(params);
+      dispatchFiltersChange(window, { mode: "search", params });
+    });
+  };
+
+  // internal/web/static_src/note-reading.ts
+  var noteSections = (body) => {
+    const sections = [];
+    for (const link of document.querySelectorAll(".note-toc-list a")) {
+      let id2;
+      try {
+        id2 = decodeURIComponent(new URL(link.href).hash.slice(1));
+      } catch {
+        continue;
+      }
+      const heading2 = document.getElementById(id2);
+      if (heading2 && body.contains(heading2)) sections.push({ link, heading: heading2 });
+    }
+    return sections;
+  };
+  var trackNoteSection = (body) => {
+    const sections = noteSections(body);
+    if (!sections.length) return () => {
+    };
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let active = sections[0];
+      for (const section of sections) {
+        if (section.heading.getBoundingClientRect().top <= 96) active = section;
+      }
+      for (const section of sections) {
+        if (section === active) section.link.setAttribute("aria-current", "location");
+        else section.link.removeAttribute("aria-current");
+      }
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    window.addEventListener("hashchange", schedule);
+    body.addEventListener("load", schedule, true);
+    update();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("hashchange", schedule);
+      body.removeEventListener("load", schedule, true);
+    };
+  };
+  var addCodeCopyControls = (body) => {
+    for (const pre of body.querySelectorAll("pre")) {
+      const code = pre.querySelector("code");
+      if (!code || pre.parentElement?.hasAttribute("data-code-copy")) continue;
+      const wrapper = document.createElement("div");
+      wrapper.className = "note-code-block";
+      wrapper.dataset.codeCopy = "";
+      const controls = document.createElement("div");
+      controls.className = "note-code-copy";
+      controls.dataset.copyControls = "";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "copy-button";
+      button.textContent = "Copy code";
+      button.dataset.copyText = code.textContent || "";
+      button.dataset.copyLabel = "Code";
+      const status = document.createElement("span");
+      status.className = "copy-status";
+      status.dataset.copyStatus = "";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      controls.append(button, status);
+      pre.before(wrapper);
+      wrapper.append(controls, pre);
+    }
+  };
+  var initNoteReading = () => {
+    const body = document.querySelector("[data-note-body]");
+    if (!body) return;
+    addCodeCopyControls(body);
+    trackNoteSection(body);
+  };
+
   // internal/web/static_src/note-layout.ts
   var NOTE_META_VISIBLE_STORAGE_KEY = "bn.note-meta-sidebar.visible";
   var NOTE_META_WIDTH_STORAGE_KEY = "bn.note-meta-sidebar.width";
@@ -34053,7 +34155,7 @@ var BrainNotesApp = (() => {
       return source(context);
     };
   }
-  var Option = class {
+  var Option2 = class {
     constructor(completion, source, match, score2) {
       this.completion = completion;
       this.source = source;
@@ -34638,7 +34740,7 @@ var BrainNotesApp = (() => {
         let getMatch = a.result.getMatch;
         if (a.result.filter === false) {
           for (let option of a.result.options) {
-            addOption(new Option(option, a.source, getMatch ? getMatch(option) : [], 1e9 - options.length));
+            addOption(new Option2(option, a.source, getMatch ? getMatch(option) : [], 1e9 - options.length));
           }
         } else {
           let pattern = state.sliceDoc(a.from, a.to), match;
@@ -34647,7 +34749,7 @@ var BrainNotesApp = (() => {
             if (match = matcher.match(option.label)) {
               let matched = !option.displayLabel ? match.matched : getMatch ? getMatch(option, match.matched) : [];
               let score2 = match.score + (option.boost || 0);
-              addOption(new Option(option, a.source, matched, score2));
+              addOption(new Option2(option, a.source, matched, score2));
               if (typeof option.section == "object" && option.section.rank === "dynamic") {
                 let { name: name2 } = option.section;
                 if (!dynamicSectionScore)
@@ -48176,6 +48278,7 @@ ${candidate.markdown}`;
     initSyncLine();
     initFacets();
     initNoteLayout();
+    initNoteReading();
     initCopyControls();
     initDailyBrief();
     initRelatedNotes();
@@ -48183,6 +48286,7 @@ ${candidate.markdown}`;
     initSearch();
     initQueryBar();
     initSavedViews();
+    initLibrarySort();
     initOverviewSearchResults();
     initDailyFixes();
     initProperties();

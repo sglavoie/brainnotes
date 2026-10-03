@@ -184,3 +184,18 @@
   color: var(--bn-warning);
 }
 
+
+.query-help {
+  margin-top: 0.75rem;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+}
+
+.query-help summary {
+  cursor: pointer;
+  color: var(--bn-link);
+}
+
+.query-help code {
+  overflow-wrap: anywhere;
+}

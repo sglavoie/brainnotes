@@ -41,7 +41,7 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 		`data-related-item-endpoint="/api/related/item"`,
 		`data-note-insight-prompt`,
 		`maxlength="2000"`,
-		`<div class="note-body">`,
+		`<div class="note-body" data-note-body>`,
 		`href="https://www.merakialive.com"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -53,8 +53,8 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	}
 	insightIndex := strings.Index(body, `data-note-insight`)
 	bodyIndex := strings.Index(body, `<h2>Body</h2>`)
-	if insightIndex < 0 || bodyIndex < 0 || insightIndex >= bodyIndex {
-		t.Fatalf("Ask AI panel must render above note body: insight=%d body=%d", insightIndex, bodyIndex)
+	if insightIndex < 0 || bodyIndex < 0 || insightIndex <= bodyIndex {
+		t.Fatalf("Ask AI panel must render below note body: insight=%d body=%d", insightIndex, bodyIndex)
 	}
 
 	missingResp, err := http.Get(ts.URL + "/n/does-not-exist") // #nosec G107 -- test-only local URL

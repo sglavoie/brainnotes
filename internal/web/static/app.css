@@ -952,6 +952,21 @@ a:hover {
   color: var(--bn-warning);
 }
 
+
+.query-help {
+  margin-top: 0.75rem;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+}
+
+.query-help summary {
+  cursor: pointer;
+  color: var(--bn-link);
+}
+
+.query-help code {
+  overflow-wrap: anywhere;
+}
 /* internal/web/static_src/css/facets.css */
 .facet-controls {
   position: relative;
@@ -2716,6 +2731,23 @@ code {
   font-weight: 700;
   color: var(--bn-text-strong);
 }
+
+.library-sort {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.library-sort select {
+  max-width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+}
 /* internal/web/static_src/css/review.css */
 .review-panel {
   display: grid;
@@ -3777,6 +3809,13 @@ code {
   margin-left: 1.1rem;
 }
 
+
+.note-toc-list a[aria-current="location"] {
+  color: var(--bn-link);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
 /* internal/web/static_src/css/note-insight.css */
 .note-insight {
   display: grid;
@@ -4866,6 +4905,23 @@ code {
   text-decoration: none;
 }
 
+
+.note-code-block {
+  min-width: 0;
+  margin: 1rem 0;
+}
+
+.note-code-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.note-code-block pre {
+  margin-top: 0.5rem;
+}
 /* internal/web/static_src/css/frontmatter.css */
 .frontmatter-anchors a {
   margin-left: 0;

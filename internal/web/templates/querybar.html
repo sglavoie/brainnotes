@@ -34,6 +34,17 @@
     </div>
     <button class="query-bar-button" type="button" data-query-bar-clear>Clear</button>
   </div>
+  <details class="query-help">
+    <summary>Query help</summary>
+    <p>Text search, facet filters, and the expression all apply together. A note must match all three.</p>
+    <ul>
+      <li><code>tag:focus</code> — notes tagged focus</li>
+      <li><code>status:wip and not folder:Archive</code> — work in progress outside Archive</li>
+      <li><code>(tag:work or tag:personal) and status:wip</code> — either tag, with work-in-progress status</li>
+      <li><code>near:[[Deep Work]]&lt;=2</code> — notes within two link hops of Deep Work; substitute your own note title</li>
+    </ul>
+    <p>Press <kbd>Ctrl</kbd> + <kbd>Space</kbd> in the expression field for suggestions, including fields and values from your vault.</p>
+  </details>
   <div class="query-bar-error" data-query-bar-error hidden>
     <p class="query-bar-error-message" data-query-bar-error-message></p>
     <pre class="query-bar-error-strip" aria-hidden="true"><code class="query-bar-error-query" data-query-bar-error-query></code>

@@ -70,6 +70,10 @@ const ACTIVE_MEDIA = {
 };
 
 const SEED_NOTES = {
+  "Reading.md": "---\nstatus: draft\ntitle: Reading\n---\n\n## First section\n\n" +
+    "A paragraph for scrolling through this note.\n\n".repeat(35) +
+    "## Second section\n\n```go\npackage main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n```\n\n" +
+    "Another paragraph below the code.\n\n".repeat(25),
   "Alpha.md": "---\nstatus: draft\ntitle: Alpha\n---\n\nAlpha body, see [[Beta]].\n",
   "Beta.md": "---\nstatus: draft\ntitle: Beta\n---\n\nBeta body.\n",
   "Notes/Gamma.md": "---\nstatus: draft\ntitle: Gamma\n---\n\nGamma body.\n",

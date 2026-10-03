@@ -135,3 +135,20 @@
   font-weight: 700;
   color: var(--bn-text-strong);
 }
+
+.library-sort {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.library-sort select {
+  max-width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+}
