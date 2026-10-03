@@ -27,6 +27,8 @@
             aria-expanded="false"
           >Save as view</button>
           <form class="saved-views-save-form" data-saved-views-form hidden>
+            <pre class="saved-views-save-scope" data-saved-views-scope aria-live="polite"></pre>
+            <p class="saved-views-save-status is-warning" data-saved-views-excluded role="status" hidden></p>
             <label class="saved-views-save-label" for="saved-view-name">Name</label>
             <input id="saved-view-name" name="name" type="text" autocomplete="off" data-saved-views-name>
             <label class="saved-views-save-label" for="saved-view-description">Description</label>

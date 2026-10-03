@@ -14,6 +14,7 @@ import {
   savedViewSaveError,
 } from "./saved-views-model";
 import { initSavedViewsNav, initSavedViewsSave } from "./saved-views";
+import { dispatchFiltersChange } from "./filters";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -165,16 +166,27 @@ describe("saved views nav", () => {
       expect(navItems(container)).toHaveLength(3);
     });
 
-    const rotted = navItems(container)[2];
-    expect(rotted?.tagName).toBe("SPAN");
+    const rotted = navItems(container)[2]!;
+    expect(rotted.tagName).toBe("SUMMARY");
     expect(rotted).not.toBeInstanceOf(HTMLAnchorElement);
-    expect(rotted?.classList.contains("is-disabled")).toBe(true);
-    expect(rotted?.getAttribute("aria-disabled")).toBe("true");
-    expect(rotted?.getAttribute("data-saved-view-detail")).toBe(rottedDetail);
-    expect(rotted?.title).toContain('unknown field "statuz"');
-    expect(rotted?.title).toContain("did you mean: status");
+    expect(rotted.classList.contains("is-disabled")).toBe(true);
+    expect(rotted.hasAttribute("aria-disabled")).toBe(false);
+    const disclosure = rotted.parentElement as HTMLDetailsElement;
+    expect(disclosure.tagName).toBe("DETAILS");
+    expect(disclosure.open).toBe(false);
+    rotted.click();
+    expect(disclosure.open).toBe(true);
+    expect(disclosure.querySelector("pre")?.textContent).toBe(rottedDetail);
+    expect(disclosure.querySelector("a")).toBeNull();
+    rotted.click();
+    expect(disclosure.open).toBe(false);
+    expect(rotted.getAttribute("data-saved-view-detail")).toBe(rottedDetail);
+    expect(rotted.title).toContain('unknown field "statuz"');
+    expect(rotted.title).toContain("did you mean: status");
   });
+});
 
+describe("saved views nav lifecycle", () => {
   it("keeps a saved view on the graph when the graph is the current page", async () => {
     setLocation("/graph");
     const container = mountNav();
@@ -242,6 +254,8 @@ const mountSave = (): void => {
     <div class="saved-views-save" data-saved-views-save data-saved-views-csrf="csrf-token">
       <button type="button" data-saved-views-open aria-expanded="false">Save as view</button>
       <form data-saved-views-form hidden>
+        <pre data-saved-views-scope></pre>
+        <p data-saved-views-excluded hidden></p>
         <input type="text" data-saved-views-name>
         <input type="text" data-saved-views-description>
         <button type="submit">Save</button>
@@ -275,6 +289,34 @@ const submitSave = async (name: string): Promise<void> => {
  * overwrite renders its diff as a question with the confirm button showing,
  * while a creation renders the same diff as a receipt with nothing to click.
  */
+describe("saved views save scope", () => {
+  it("shows the saved shape and updates excluded filters while the form is open", () => {
+    mountSave();
+    setLocation("/library?expr=tag:focus&sort=-modified&limit=10&q=words&tag=work&tag=books");
+    initSavedViewsSave();
+    saveElement("[data-saved-views-open]", HTMLButtonElement).click();
+    const scope = saveElement("[data-saved-views-scope]", HTMLElement);
+    const warning = saveElement("[data-saved-views-excluded]", HTMLElement);
+    expect(scope.textContent).toBe("This view will save:\nQuery: tag:focus\nSort: -modified\nLimit: 10");
+    expect(warning.hidden).toBe(false);
+    expect(warning.textContent).toContain("Text search: words; tag: work; tag: books");
+
+    setLocation("/library?expr=tag:focus");
+    dispatchFiltersChange(window, { mode: "search", params: new URLSearchParams("expr=tag:focus") });
+    expect(warning.hidden).toBe(true);
+    expect(warning.textContent).toBe("");
+    expect(scope.textContent).toContain("Sort: default\nLimit: none");
+
+    setLocation("/library?q=%3Cb%3Etext%3C%2Fb%3E");
+    document.body.insertAdjacentHTML("beforeend", '<input id="search-input">');
+    document.querySelector("#search-input")?.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(warning.hidden).toBe(false);
+    expect(warning.textContent).toContain("<b>text</b>");
+    expect(warning.querySelector("b")).toBeNull();
+    expect(scope.textContent).toContain("write a query expression first");
+  });
+});
+
 describe("saved views save form", () => {
   it("renders the creation diff as a non-actionable receipt after the auto-applied write", async () => {
     mountSave();
@@ -413,6 +455,9 @@ describe("saved views model", () => {
     expect(savedViewTitle(view)).toBe("near:[[Hub]]<=2");
   });
 
+});
+
+describe("saved view definitions", () => {
   it("reads the query shape a save stores from the URL", () => {
     const params = new URLSearchParams(
       "?expr=tag%3Afocus&sort=-modified&relative_to=areas%2Fhub&tag=other&q=text"

@@ -112,9 +112,9 @@ var BrainNotesApp = (() => {
     const queryString = params.toString();
     return queryString ? `${path}?${queryString}` : path;
   };
-  var buildSearchAPIURL = (query, includeSharedFilters) => {
+  var buildSearchURL = (path, query, includeSharedFilters) => {
     if (includeSharedFilters) {
-      return buildFilteredAPIURL("/api/search", query);
+      return buildFilteredAPIURL(path, query);
     }
     const params = new URLSearchParams();
     const normalized = normalizeParamValue(query);
@@ -122,8 +122,10 @@ var BrainNotesApp = (() => {
       params.set("q", normalized);
     }
     const queryString = params.toString();
-    return queryString ? `/api/search?${queryString}` : "/api/search";
+    return queryString ? `${path}?${queryString}` : path;
   };
+  var buildSearchAPIURL = (query, includeSharedFilters) => buildSearchURL("/api/search", query, includeSharedFilters);
+  var buildLibrarySearchURL = (query, includeSharedFilters) => buildSearchURL("/library", query, includeSharedFilters);
   var dispatchFiltersChange = (target, detail) => {
     target.dispatchEvent(new CustomEvent(filterChangeEventName, { detail }));
   };
@@ -9240,7 +9242,7 @@ var BrainNotesApp = (() => {
   var OverviewSearch = class {
     constructor(els, deps) {
       this.els = els;
-      this.fetcher = deps.fetch || fetch;
+      this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
       this.bindSearchEvents();
       this.bindBulkEvents();
       this.bindPreviewInvalidation(els.moveForm);
@@ -14070,14 +14072,19 @@ var BrainNotesApp = (() => {
         container.appendChild(link);
         continue;
       }
-      const item = doc2.createElement("span");
+      const details = doc2.createElement("details");
+      details.className = "saved-view-error";
+      const item = doc2.createElement("summary");
       item.className = "saved-views-nav-item is-disabled";
       item.title = savedViewTitle(view);
-      item.textContent = view.name;
+      item.textContent = `${view.name} (unavailable)`;
       item.setAttribute("data-saved-view", view.name);
       item.setAttribute("data-saved-view-detail", view.detail);
-      item.setAttribute("aria-disabled", "true");
-      container.appendChild(item);
+      const error = doc2.createElement("pre");
+      error.className = "saved-view-error-detail";
+      error.textContent = savedViewTitle(view);
+      details.append(item, error);
+      container.appendChild(details);
     }
     return views.length;
   };
@@ -14100,6 +14107,37 @@ var BrainNotesApp = (() => {
   };
   var renderSavedViewReceipt = (block, receipt) => {
     renderDiffBlock(block, receipt ? receipt.diff : [], "receipt");
+  };
+
+  // internal/web/static_src/saved-views-scope.ts
+  var bindSavedViewScope = (form) => {
+    const scope = queryElement(form, "[data-saved-views-scope]", HTMLElement);
+    const warning = queryElement(form, "[data-saved-views-excluded]", HTMLElement);
+    const refresh = () => {
+      const params = new URLSearchParams(window.location.search);
+      const input = savedViewInputFromParams(params, { name: "", description: "" });
+      if (scope) {
+        scope.textContent = [
+          "This view will save:",
+          `Query: ${input.query || "(write a query expression first)"}`,
+          `Sort: ${input.sort || "default"}`,
+          ...input.relativeTo ? [`Relative to: ${input.relativeTo}`] : [],
+          `Limit: ${input.limit || "none"}`
+        ].join("\n");
+      }
+      if (warning) {
+        const excluded = ["q", ...sharedFilterParamKeys].flatMap((key) => params.getAll(key).map(normalizeParamValue).filter(Boolean).map((value) => `${key === "q" ? "Text search" : key}: ${value}`));
+        warning.hidden = excluded.length === 0;
+        warning.textContent = excluded.length ? `Not saved \u2014 these filters only affect the current results: ${excluded.join("; ")}.` : "";
+      }
+    };
+    window.addEventListener(filterChangeEventName, refresh);
+    form.ownerDocument.addEventListener("input", (event) => {
+      if (event.target instanceof HTMLElement && event.target.id === "search-input") {
+        refresh();
+      }
+    });
+    return refresh;
   };
 
   // internal/web/static_src/saved-views.ts
@@ -14149,6 +14187,7 @@ var BrainNotesApp = (() => {
     if (!els) {
       return null;
     }
+    const refreshScope = bindSavedViewScope(els.form);
     const fetcher = deps.fetch || ((input, init) => fetch(input, init));
     const setStatus2 = (message, kind = "") => {
       setStatusText(els.statusEl, message, kind);
@@ -14185,6 +14224,7 @@ var BrainNotesApp = (() => {
       els.form.hidden = !open;
       els.openButton.setAttribute("aria-expanded", open ? "true" : "false");
       if (open) {
+        refreshScope();
         els.nameInput.focus();
       }
     };
@@ -14197,6 +14237,7 @@ var BrainNotesApp = (() => {
     });
     els.form.addEventListener("submit", (event) => {
       event.preventDefault();
+      refreshScope();
       void saver.save(
         savedViewInputFromParams(new URLSearchParams(window.location.search), {
           name: els.nameInput.value,
@@ -14283,15 +14324,17 @@ var BrainNotesApp = (() => {
     return item;
   };
   var HeaderSearch = class {
-    constructor(input, resultsEl, feedbackEl, syncSearchURL) {
+    constructor(input, resultsEl, feedbackEl, libraryLink, syncSearchURL) {
       this.input = input;
       this.resultsEl = resultsEl;
       this.feedbackEl = feedbackEl;
+      this.libraryLink = libraryLink;
       this.syncSearchURL = syncSearchURL;
     }
     input;
     resultsEl;
     feedbackEl;
+    libraryLink;
     syncSearchURL;
     debounceToken = 0;
     requestToken = 0;
@@ -14339,6 +14382,15 @@ var BrainNotesApp = (() => {
       window.clearTimeout(this.debounceToken);
       this.requestToken += 1;
       this.clearResults();
+      if (this.libraryLink) {
+        this.libraryLink.hidden = true;
+      }
+    }
+    updateLibraryLink(query) {
+      if (this.libraryLink) {
+        this.libraryLink.href = buildLibrarySearchURL(query, this.syncSearchURL);
+        this.libraryLink.hidden = query === "" && !this.hasActiveSearchFilters();
+      }
     }
     navigateToResult(index) {
       this.resultsEl.querySelector(`[data-search-index="${index}"]`)?.click();
@@ -14385,6 +14437,7 @@ var BrainNotesApp = (() => {
         syncPageQueryParam(query);
       }
       const localToken = ++this.requestToken;
+      this.updateLibraryLink(query);
       if (query === "" && !this.hasActiveSearchFilters()) {
         this.clearResults();
         return;
@@ -14416,6 +14469,14 @@ var BrainNotesApp = (() => {
         }
       }
     }
+    openLibrary(event) {
+      if (event.key !== "Enter" || this.activeIndex >= 0 || !this.libraryLink || this.libraryLink.hidden) {
+        return false;
+      }
+      event.preventDefault();
+      this.libraryLink.click();
+      return true;
+    }
     onKeyDown(event) {
       if (event.isComposing) {
         return;
@@ -14425,7 +14486,7 @@ var BrainNotesApp = (() => {
         this.dismiss();
         return;
       }
-      if (!this.hasResults()) {
+      if (this.openLibrary(event) || !this.hasResults()) {
         return;
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -14450,19 +14511,22 @@ var BrainNotesApp = (() => {
       return;
     }
     const feedbackEl = queryElement(searchBox, "[data-search-feedback]", HTMLElement);
+    const libraryLink = queryElement(searchBox, "[data-search-library]", HTMLAnchorElement);
     const syncSearchURL = Boolean(
       queryElement(document, '[data-facet-controls][data-facet-mode="search"]', HTMLElement)
     );
-    const search = new HeaderSearch(input, resultsEl, feedbackEl, syncSearchURL);
+    const search = new HeaderSearch(input, resultsEl, feedbackEl, libraryLink, syncSearchURL);
     bindSearchShortcut(input);
     if (syncSearchURL) {
       input.value = readPageQuery();
-      if (input.value.trim() !== "" || search.hasActiveSearchFilters()) {
-        search.scheduleSearch(0);
-      }
+      search.updateLibraryLink(input.value.trim());
       window.addEventListener(filterChangeEventName, (event) => {
         if (shouldHandleFilterChangeForMode(event, "search")) {
-          search.scheduleSearch(0);
+          search.dismiss();
+          search.updateLibraryLink(input.value.trim());
+          if (document.activeElement === input) {
+            search.scheduleSearch(0);
+          }
         }
       });
     }

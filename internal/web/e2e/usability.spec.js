@@ -15,6 +15,9 @@ test("search shortcut, native new-tab links, and keyboard navigation", async ({ 
   await expect(popup.locator("h1")).toHaveText("Beta");
   await popup.close();
   await expect(page).toHaveURL(/\/n\/Alpha$/);
+  // Reopening the dropdown under a stationary pointer can hover-select a row
+  // before ArrowDown; this part of the journey exercises keyboard selection.
+  await page.mouse.move(0, 0);
   await search.focus();
   await expect(result).toBeVisible();
   await search.press("ArrowDown");

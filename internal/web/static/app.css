@@ -377,8 +377,35 @@ a:hover {
 
 .saved-views-nav-item.is-disabled {
   color: var(--bn-muted);
-  cursor: not-allowed;
-  text-decoration: line-through;
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.saved-view-error {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.saved-view-error summary {
+  display: list-item;
+  list-style-position: inside;
+}
+
+.saved-view-error summary:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
+.saved-view-error-detail,
+.saved-views-save-scope {
+  margin: 0;
+  padding: 0.5rem;
+  background: var(--bn-sunken);
+  border-radius: 0.35rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
 }
 
 .saved-views-save {
@@ -606,7 +633,6 @@ a:hover {
   margin-top: 0.4rem;
   color: var(--bn-muted);
 }
-
 /* internal/web/static_src/css/search.css */
 .search-box {
   position: relative;
@@ -635,6 +661,21 @@ a:hover {
 .search-input:focus {
   outline: 2px solid var(--bn-focus);
   outline-offset: 1px;
+}
+
+.search-library-link {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.search-library-link[hidden] {
+  display: none;
+}
+
+.search-library-link:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
 }
 
 .search-results {

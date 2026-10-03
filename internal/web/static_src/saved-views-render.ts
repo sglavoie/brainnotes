@@ -10,10 +10,8 @@ import {
 /**
  * Fills the nav strip.
  *
- * An enabled view is an anchor, so it is shareable, middle-clickable and
- * keyboard reachable like every other nav entry. A disabled view is a plain
- * span carrying its parse error: it is shown, never dropped and never
- * followable, which is the session 11 contract rendered.
+ * Enabled views are ordinary anchors. Unavailable views disclose their error
+ * through native details/summary, accessible to keyboard and touch users.
  */
 export const renderSavedViewsNav = (
   container: HTMLElement,
@@ -33,14 +31,19 @@ export const renderSavedViewsNav = (
       container.appendChild(link);
       continue;
     }
-    const item = doc.createElement("span");
+    const details = doc.createElement("details");
+    details.className = "saved-view-error";
+    const item = doc.createElement("summary");
     item.className = "saved-views-nav-item is-disabled";
     item.title = savedViewTitle(view);
-    item.textContent = view.name;
+    item.textContent = `${view.name} (unavailable)`;
     item.setAttribute("data-saved-view", view.name);
     item.setAttribute("data-saved-view-detail", view.detail);
-    item.setAttribute("aria-disabled", "true");
-    container.appendChild(item);
+    const error = doc.createElement("pre");
+    error.className = "saved-view-error-detail";
+    error.textContent = savedViewTitle(view);
+    details.append(item, error);
+    container.appendChild(details);
   }
   return views.length;
 };

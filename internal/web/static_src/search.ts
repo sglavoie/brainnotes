@@ -3,6 +3,7 @@ import { getElementByID, queryElement } from "./dom";
 import { bindSearchShortcut } from "./search-shortcut";
 import {
   buildSearchAPIURL,
+  buildLibrarySearchURL,
   filterChangeEventName,
   hasActiveFilters,
   readPageQuery,
@@ -86,6 +87,7 @@ class HeaderSearch {
     private readonly input: HTMLInputElement,
     private readonly resultsEl: HTMLElement,
     private readonly feedbackEl: HTMLElement | null,
+    private readonly libraryLink: HTMLAnchorElement | null,
     private readonly syncSearchURL: boolean
   ) {}
 
@@ -136,6 +138,16 @@ class HeaderSearch {
     window.clearTimeout(this.debounceToken);
     this.requestToken += 1;
     this.clearResults();
+    if (this.libraryLink) {
+      this.libraryLink.hidden = true;
+    }
+  }
+
+  updateLibraryLink(query: string): void {
+    if (this.libraryLink) {
+      this.libraryLink.href = buildLibrarySearchURL(query, this.syncSearchURL);
+      this.libraryLink.hidden = query === "" && !this.hasActiveSearchFilters();
+    }
   }
 
   navigateToResult(index: number): void {
@@ -187,6 +199,7 @@ class HeaderSearch {
       syncPageQueryParam(query);
     }
     const localToken = ++this.requestToken;
+    this.updateLibraryLink(query);
     if (query === "" && !this.hasActiveSearchFilters()) {
       this.clearResults();
       return;
@@ -220,6 +233,15 @@ class HeaderSearch {
     }
   }
 
+  openLibrary(event: KeyboardEvent): boolean {
+    if (event.key !== "Enter" || this.activeIndex >= 0 || !this.libraryLink || this.libraryLink.hidden) {
+      return false;
+    }
+    event.preventDefault();
+    this.libraryLink.click();
+    return true;
+  }
+
   onKeyDown(event: KeyboardEvent): void {
     if (event.isComposing) {
       return;
@@ -229,7 +251,7 @@ class HeaderSearch {
       this.dismiss();
       return;
     }
-    if (!this.hasResults()) {
+    if (this.openLibrary(event) || !this.hasResults()) {
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -255,20 +277,25 @@ export const initSearch = (): void => {
     return;
   }
   const feedbackEl = queryElement(searchBox, "[data-search-feedback]", HTMLElement);
+  const libraryLink = queryElement(searchBox, "[data-search-library]", HTMLAnchorElement);
   const syncSearchURL = Boolean(
     queryElement(document, '[data-facet-controls][data-facet-mode="search"]', HTMLElement)
   );
-  const search = new HeaderSearch(input, resultsEl, feedbackEl, syncSearchURL);
+  const search = new HeaderSearch(input, resultsEl, feedbackEl, libraryLink, syncSearchURL);
   bindSearchShortcut(input);
 
   if (syncSearchURL) {
     input.value = readPageQuery();
-    if (input.value.trim() !== "" || search.hasActiveSearchFilters()) {
-      search.scheduleSearch(0);
-    }
+    // The Library loads its own results. Keep header suggestions closed until
+    // search is focused so a restored URL cannot cover the Save as view button.
+    search.updateLibraryLink(input.value.trim());
     window.addEventListener(filterChangeEventName, (event) => {
       if (shouldHandleFilterChangeForMode(event, "search")) {
-        search.scheduleSearch(0);
+        search.dismiss();
+        search.updateLibraryLink(input.value.trim());
+        if (document.activeElement === input) {
+          search.scheduleSearch(0);
+        }
       }
     });
   }

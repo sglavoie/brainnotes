@@ -65,6 +65,7 @@ describe("search keyboard and filter-change behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     initSearch();
+    document.getElementById("search-input")?.focus();
     setURL("/?tag=work");
     dispatchFiltersChange(window, {
       mode: "search",

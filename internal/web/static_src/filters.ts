@@ -202,9 +202,9 @@ export const buildFilteredAPIURL = (path: string, query: unknown): string => {
   return queryString ? `${path}?${queryString}` : path;
 };
 
-export const buildSearchAPIURL = (query: unknown, includeSharedFilters: boolean): string => {
+const buildSearchURL = (path: string, query: unknown, includeSharedFilters: boolean): string => {
   if (includeSharedFilters) {
-    return buildFilteredAPIURL("/api/search", query);
+    return buildFilteredAPIURL(path, query);
   }
   const params = new URLSearchParams();
   const normalized = normalizeParamValue(query);
@@ -212,8 +212,14 @@ export const buildSearchAPIURL = (query: unknown, includeSharedFilters: boolean)
     params.set("q", normalized);
   }
   const queryString = params.toString();
-  return queryString ? `/api/search?${queryString}` : "/api/search";
+  return queryString ? `${path}?${queryString}` : path;
 };
+
+export const buildSearchAPIURL = (query: unknown, includeSharedFilters: boolean): string =>
+  buildSearchURL("/api/search", query, includeSharedFilters);
+
+export const buildLibrarySearchURL = (query: unknown, includeSharedFilters: boolean): string =>
+  buildSearchURL("/library", query, includeSharedFilters);
 
 export const dispatchFiltersChange = (target: Window, detail: FiltersChangeDetail): void => {
   target.dispatchEvent(new CustomEvent(filterChangeEventName, { detail }));

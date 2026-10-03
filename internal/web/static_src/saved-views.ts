@@ -14,6 +14,7 @@ import {
   renderSavedViewsNav,
 } from "./saved-views-render";
 import { fetchSavedViews } from "./saved-views-requests";
+import { bindSavedViewScope } from "./saved-views-scope";
 import { setStatusText, type StatusKind } from "./status";
 
 export type { SavedViewsDeps } from "./saved-views-model";
@@ -96,9 +97,8 @@ const resolveSaveElements = (doc: Document): SavedViewsSaveElements | null => {
 /**
  * Wires the "Save as view" control in the Library header.
  *
- * What gets saved is the query shape carried by the URL — `expr`, `sort` and
- * `relative_to` — so the button saves exactly what the page is showing, with no
- * second source of truth to drift from the query bar.
+ * Saves the URL's expression, ordering and cap. The scope summary explicitly
+ * identifies text search and facet chips that are excluded from that shape.
  */
 export const initSavedViewsSave = (
   deps: SavedViewsDeps = {},
@@ -108,6 +108,7 @@ export const initSavedViewsSave = (
   if (!els) {
     return null;
   }
+  const refreshScope = bindSavedViewScope(els.form);
   const fetcher = deps.fetch || ((input, init) => fetch(input, init));
 
   const setStatus = (message: string, kind: StatusKind = ""): void => {
@@ -152,6 +153,7 @@ export const initSavedViewsSave = (
     els.form.hidden = !open;
     els.openButton.setAttribute("aria-expanded", open ? "true" : "false");
     if (open) {
+      refreshScope();
       els.nameInput.focus();
     }
   };
@@ -166,6 +168,7 @@ export const initSavedViewsSave = (
 
   els.form.addEventListener("submit", (event) => {
     event.preventDefault();
+    refreshScope();
     void saver.save(
       savedViewInputFromParams(new URLSearchParams(window.location.search), {
         name: els.nameInput.value,

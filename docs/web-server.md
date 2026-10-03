@@ -166,7 +166,11 @@ introduced: activity metrics are local-only and computed from the brief sidecar.
 Press `/` outside an editable field to focus the header search. The shortcut
 leaves editors and open dialogs alone. Search suggestions are links: middle-click
 or Ctrl/⌘-click to open a note in another tab, or use the arrow keys and Enter
-to open it in the current tab.
+to open it in the current tab. **Open results in Library** carries the typed
+search to the Library; Enter does the same when no suggestion is selected,
+including while suggestions are loading or unavailable. On the Library it
+preserves the active filters, ordering, and limit. On other pages header search
+searches the whole vault, so the link carries only the typed text.
 
 `/library` and `/graph` carry the same query bar, which takes the same
 expression language as `bn find -q` — see
@@ -204,13 +208,18 @@ currently selected, so following one is
 shareable and middle-clickable like any other nav link; it stays on the current
 page when that page hosts a query bar and lands on `/library` otherwise, so
 following a view from the graph keeps you on the graph. A view whose query no
-longer compiles renders as a disabled item carrying its error instead of
-vanishing, matching `bn views` and `bn views check`. If the listing itself
-fails, the strip is simply empty — the primary navigation never renders an
-error row.
+longer compiles renders as an unavailable item instead of vanishing. Click or
+tap it, or focus it and press Enter or Space, to expand its error; it never
+opens the invalid query. This matches `bn views` and `bn views check`. If the
+listing itself fails, the strip is simply empty — the primary navigation never
+renders an error row.
 
-The Library header can save the current query as a view. That is a
-configuration write, so it goes through `POST /api/views/preview` then
+The Library header can save the current query expression as a view. The save
+form shows the expression, ordering, relevance anchor (if any), and limit it
+will store. Text search and facet chips are separate filters and are **not
+saved**; the form lists any active exclusions before saving. With no expression,
+write one in the query bar first. Saving a view is a configuration write, so it
+goes through `POST /api/views/preview` then
 `POST /api/views/apply` with the same one-use receipt every other config change
 uses, and the preview returns the exact `brainnotes.toml` diff. Creating a view
 that does not exist yet auto-chains preview into apply; overwriting an existing

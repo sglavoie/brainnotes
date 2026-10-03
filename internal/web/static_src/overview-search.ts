@@ -64,7 +64,7 @@ class OverviewSearch {
   private requestToken = 0;
 
   constructor(private readonly els: OverviewSearchElements, deps: OverviewSearchDeps) {
-    this.fetcher = deps.fetch || fetch;
+    this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
     this.bindSearchEvents();
     this.bindBulkEvents();
     this.bindPreviewInvalidation(els.moveForm);

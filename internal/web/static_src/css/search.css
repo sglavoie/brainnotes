@@ -27,6 +27,21 @@
   outline-offset: 1px;
 }
 
+.search-library-link {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.search-library-link[hidden] {
+  display: none;
+}
+
+.search-library-link:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
 .search-results {
   position: absolute;
   z-index: 30;
