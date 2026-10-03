@@ -9,7 +9,7 @@ import {
   type BulkPreviewManagementResult,
   type SearchResult,
 } from "./api";
-import { queryAllElements } from "./dom";
+import { queryAllElements, queryElement } from "./dom";
 import {
   buildSearchAPIURL,
   filterChangeEventName,
@@ -78,6 +78,14 @@ class OverviewSearch {
 
   private setStatus = (message: string, kind: StatusKind = ""): void => {
     setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
+    const retry = queryElement(this.els.root, "[data-overview-search-retry]", HTMLButtonElement);
+    if (retry) {
+      retry.disabled = kind === "is-loading";
+      retry.hidden = kind !== "is-error" && !(kind === "is-loading" && !retry.hidden);
+      if (retry.hidden && document.activeElement === retry) {
+        this.els.input?.focus();
+      }
+    }
   };
 
   private setBulkStatus = (message: string, kind: BulkStatusKind = ""): void => {
@@ -449,6 +457,7 @@ class OverviewSearch {
   };
 
   private bindSearchEvents = (): void => {
+    this.els.root.querySelector("[data-overview-search-retry]")?.addEventListener("click", () => this.scheduleSearch(0));
     if (this.els.input instanceof HTMLInputElement) {
       this.els.input.value = readPageQuery();
       this.els.input.addEventListener("input", () => {

@@ -72,6 +72,10 @@
         role="status"
         aria-live="polite"
       >No query or filters selected.</p>
+      <div class="overview-selection">
+        <button class="overview-bulk-button" type="button" data-overview-search-retry hidden>Retry search</button>
+        <a href="/library" data-overview-search-reset>Reset search</a>
+      </div>
       {{if not readOnly}}
       <div class="overview-selection" data-overview-selection hidden>
         <button class="overview-bulk-button" type="button" data-overview-select-displayed>Select displayed</button>

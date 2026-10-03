@@ -189,18 +189,39 @@ func TestServer_IndexRendersDegradedBriefStates(t *testing.T) {
 }
 
 func TestServer_IndexRendersEmptyVaultState(t *testing.T) {
-	ts, _ := newHTTPServerForFiles(t, map[string][]byte{})
-
-	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
-	if err != nil {
-		t.Fatalf("GET /: %v", err)
-	}
-	body := readResponseBody(t, resp)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
-	}
-	if !strings.Contains(body, `data-brief-empty-vault`) {
-		t.Fatalf("empty-vault state missing on index page: %q", body)
+	for _, tc := range []struct {
+		name    string
+		capture bool
+		opts    Options
+		want    string
+	}{
+		{"capture", true, Options{}, `<a href="#capture-input">Capture your first thought</a>`},
+		{"unconfigured", false, Options{}, "Create a Markdown file in your vault using your editor"},
+		{"hosted", true, Options{Hosted: true}, `<a href="#capture-input">Capture your first thought</a>`},
+		{"replica", true, Options{ReadOnly: true, StateDir: t.TempDir()}, "Add a Markdown note to the source vault and sync it to this replica"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, _ := newHTTPServerForFilesWithOptions(t, nil, func(cfg *config.Config) {
+				cfg.Capture.InboxNote, cfg.Capture.Heading = "", ""
+				if tc.capture {
+					cfg.Capture.InboxNote, cfg.Capture.Heading = "Inbox.md", "## Captures"
+				}
+			}, tc.opts)
+			resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+			if err != nil {
+				t.Fatalf("GET /: %v", err)
+			}
+			body := readResponseBody(t, resp)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+			}
+			if !strings.Contains(body, `data-brief-empty-vault`) || !strings.Contains(body, tc.want) {
+				t.Fatalf("empty-vault guidance missing %q: %q", tc.want, body)
+			}
+			if strings.Contains(body, "Create your first note in") {
+				t.Fatal("empty-vault guidance still points to Library")
+			}
+		})
 	}
 }
 

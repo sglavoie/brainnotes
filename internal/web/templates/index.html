@@ -112,7 +112,16 @@
         <p class="review-warning" role="status" data-brief-agent-unconfigured>{{.InsightStatusMsg}}</p>
       {{end}}
       {{if .IsEmptyVault}}
-        <p role="status" data-brief-empty-vault>No notes are available yet. Create your first note in <a href="{{.LibraryPath}}">Library</a>.</p>
+        <p role="status" data-brief-empty-vault>
+          No notes are available yet.
+          {{if readOnly}}
+            Add a Markdown note to the source vault and sync it to this replica.
+          {{else if .CaptureConfigured}}
+            <a href="#capture-input">Capture your first thought</a> to create your inbox note.
+          {{else}}
+            Create a Markdown file in your vault using your editor, then refresh this page.
+          {{end}}
+        </p>
       {{end}}
 
       <article class="panel brief-slot brief-slot-primary" data-brief-slot="{{.Continue.Slot}}">

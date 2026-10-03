@@ -9335,6 +9335,14 @@ var BrainNotesApp = (() => {
     requestToken = 0;
     setStatus = (message, kind = "") => {
       setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
+      const retry2 = queryElement(this.els.root, "[data-overview-search-retry]", HTMLButtonElement);
+      if (retry2) {
+        retry2.disabled = kind === "is-loading";
+        retry2.hidden = kind !== "is-error" && !(kind === "is-loading" && !retry2.hidden);
+        if (retry2.hidden && document.activeElement === retry2) {
+          this.els.input?.focus();
+        }
+      }
     };
     setBulkStatus = (message, kind = "") => {
       setStatusText(this.els.bulkStatusEl, message || " ", kind, [
@@ -9653,6 +9661,7 @@ var BrainNotesApp = (() => {
       });
     };
     bindSearchEvents = () => {
+      this.els.root.querySelector("[data-overview-search-retry]")?.addEventListener("click", () => this.scheduleSearch(0));
       if (this.els.input instanceof HTMLInputElement) {
         this.els.input.value = readPageQuery();
         this.els.input.addEventListener("input", () => {

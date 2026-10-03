@@ -1,5 +1,46 @@
 import { expect, test } from "./fixture.js";
 
+test("Library retries a failed search without changing its query settings", async ({ page }) => {
+  let fail = true;
+  const requests = [];
+  await page.route("**/api/search?**", (route) => {
+    requests.push(new URL(route.request().url()).search);
+    return fail ? route.fulfill({ status: 503, body: "Unavailable" }) : route.continue();
+  });
+  const path = "/library?q=Beta&folder=Notes&sort=-modified&limit=2";
+  await page.goto(path);
+  const retry = page.getByRole("button", { name: "Retry search", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(page.locator("[data-overview-search-status]")).toHaveText("Search unavailable.");
+  fail = false;
+  await retry.click();
+  await expect(retry).toBeHidden();
+  await expect(page.locator("[data-overview-search-results]")).toHaveAttribute("aria-busy", "false");
+  expect(requests.length).toBeGreaterThanOrEqual(2);
+  expect(new Set(requests).size).toBe(1);
+  await expect(page).toHaveURL(new RegExp(`${path.replaceAll("?", "\\?")}$`));
+});
+
+test("Reset search clears query settings, pending expression text, and selection", async ({ page }) => {
+  await page.goto("/library?q=Beta&sort=relevance&limit=2&relative_to=alpha");
+  await page.getByRole("button", { name: "Select displayed", exact: true }).click();
+  await expect(page.locator("[data-overview-bulk]")).toBeVisible();
+  await page.locator("[data-query-bar-input]").fill("tag:");
+  await page.getByRole("link", { name: "Reset search", exact: true }).click();
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(page.locator("#search-input")).toHaveValue("");
+  await expect(page.locator("[data-query-bar-input]")).toHaveValue("");
+  await expect(page.locator("[data-overview-search-status]")).toHaveText("No query or filters selected.");
+  await expect(page.locator("[data-overview-bulk]")).toBeHidden();
+  await expect(page.locator("[data-overview-search-list]")).toBeHidden();
+
+  await page.goto("/library?q=missing&tag=work&category=Books&expr=tag:focus");
+  await page.getByRole("link", { name: "Reset search", exact: true }).click();
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(page.locator("[data-facet-chips]")).toBeHidden();
+  await expect(page.locator("[data-query-bar-input]")).toHaveValue("");
+});
+
 test.describe("navigation before scripts load", () => {
   test.use({ javaScriptEnabled: false });
 

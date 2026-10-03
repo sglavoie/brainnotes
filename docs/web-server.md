@@ -167,6 +167,11 @@ introduced: activity metrics are local-only and computed from the brief sidecar.
 ## The query bar and saved views
 
 The primary navigation highlights the current page. In Library results,
+**Retry search** reruns a failed request with the current query and filters.
+**Reset search** opens a clean Library page, clearing the text, facet filters,
+query expression, ordering, relative-note context, and limit, along with any
+selection or bulk preview.
+
 **Select displayed** selects only the notes currently shown, even when the
 match total is larger. **Clear selection** unchecks them all. Changing the
 selection clears any bulk preview, so the next action previews the new selection.
