@@ -93,12 +93,17 @@
   margin: 1rem 0;
 }
 
-.note-code-copy {
+.note-code-copy,
+.note-section-copy {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
+}
+
+.note-section-copy {
+  margin: -0.25rem 0 0.75rem;
 }
 
 .note-code-block pre {

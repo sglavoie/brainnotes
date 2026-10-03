@@ -1,4 +1,5 @@
 export const filterChangeEventName = "bn:filterschange";
+export const browserQueryChangeEventName = "bn:querychange";
 
 export type FiltersChangeDetail = {
   mode: string;
@@ -177,6 +178,7 @@ export const updateBrowserQuery = (params: URLSearchParams): void => {
   const currentURL = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (nextURL !== currentURL) {
     window.history.replaceState(null, "", nextURL);
+    window.dispatchEvent(new Event(browserQueryChangeEventName));
   }
 };
 

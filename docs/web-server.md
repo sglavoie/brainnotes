@@ -15,6 +15,8 @@ Rendered notes show the body before Ask AI. The Contents list highlights the
 current section as you scroll, without changing the URL or keyboard focus.
 Code blocks offer **Copy code**, preserving whitespace; if the browser refuses
 clipboard access, a selected text field lets you copy manually.
+Headings also offer **Copy section link**, which copies the full note URL with
+that heading's existing anchor and uses the same manual-copy fallback.
 
 ## Command reference
 
@@ -242,8 +244,13 @@ opens the invalid query. This matches `bn views` and `bn views check`. If the
 listing itself fails, the strip is simply empty — the primary navigation never
 renders an error row.
 
-The Library header can save the current query expression as a view. The save
-form shows the expression, ordering, relevance anchor (if any), and limit it
+On Library and Graph, saved views are highlighted when their complete query
+matches the page, with no additional text search or facets. Changing the query,
+sort, or filters updates the highlight without navigating away.
+
+The Library header can save the current query expression as a view. Cancelling
+the form with **Cancel** or Escape returns focus to **Save as view**. The form
+shows the expression, ordering, relevance anchor (if any), and limit it
 will store. Text search and facet chips are separate filters and are **not
 saved**; the form lists any active exclusions before saving. With no expression,
 write one in the query bar first. Saving a view is a configuration write, so it

@@ -343,7 +343,8 @@ a:hover {
   text-decoration: none;
 }
 
-.site-nav a[aria-current='page'] {
+.site-nav a[aria-current='page'],
+.saved-views-nav-item[aria-current='true'] {
   background: var(--bn-accent-subtle-bg);
   color: var(--bn-accent-subtle-text);
   box-shadow: inset 0 -2px var(--bn-accent);
@@ -4911,12 +4912,17 @@ code {
   margin: 1rem 0;
 }
 
-.note-code-copy {
+.note-code-copy,
+.note-section-copy {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
+}
+
+.note-section-copy {
+  margin: -0.25rem 0 0.75rem;
 }
 
 .note-code-block pre {

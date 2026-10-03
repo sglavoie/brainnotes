@@ -30,6 +30,34 @@ test("save form shows its expression and warns about excluded filters before sav
   await expect(page.locator("[data-saved-views-excluded]")).toContainText("Text search: Beta; tag: work");
   await page.locator("#search-input").fill("Alpha");
   await expect(page.locator("[data-saved-views-excluded]")).toContainText("Text search: Alpha");
+  const name = page.locator("[data-saved-views-name]");
+  await name.focus();
+  await name.press("Escape");
+  await expect(page.locator("[data-saved-views-form]")).toBeHidden();
+  await expect(page.locator("[data-saved-views-open]")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(name).toBeFocused();
+  await page.locator("[data-saved-views-cancel]").click();
+  await expect(page.locator("[data-saved-views-open]")).toBeFocused();
+});
+
+test("saved view highlighting follows live search and sorting", async ({ page }) => {
+  await page.route("**/api/views", (route) => route.fulfill({
+    json: { ok: true, views: [{ name: "Drafts", enabled: true, query: "status:draft", sort: "title" }] },
+  }));
+  await page.goto("/library?expr=status:draft&sort=title");
+  const view = page.locator('a[data-saved-view="Drafts"]');
+  await expect(view).toHaveAttribute("aria-current", "true");
+  await page.locator("#search-input").fill("Alpha");
+  await expect(view).not.toHaveAttribute("aria-current");
+  await page.locator("#search-input").fill("");
+  await expect(view).toHaveAttribute("aria-current", "true");
+  await page.locator("#search-input").press("Escape");
+  await page.getByRole("combobox", { name: "Sort results" }).focus();
+  await page.getByRole("combobox", { name: "Sort results" }).selectOption("-title");
+  await expect(view).not.toHaveAttribute("aria-current");
+  await view.click();
+  await expect(view).toHaveAttribute("aria-current", "true");
 });
 
 test("unavailable saved views disclose their error with keyboard and touch", async ({ page }) => {

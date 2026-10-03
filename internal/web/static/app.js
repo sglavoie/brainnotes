@@ -1,6 +1,7 @@
 var BrainNotesApp = (() => {
   // internal/web/static_src/filters.ts
   var filterChangeEventName = "bn:filterschange";
+  var browserQueryChangeEventName = "bn:querychange";
   var sharedFilterParamKeys = [
     "tag",
     "category",
@@ -90,6 +91,7 @@ var BrainNotesApp = (() => {
     const currentURL = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (nextURL !== currentURL) {
       window.history.replaceState(null, "", nextURL);
+      window.dispatchEvent(new Event(browserQueryChangeEventName));
     }
   };
   var syncPageQueryParam = (query) => {
@@ -8148,10 +8150,37 @@ var BrainNotesApp = (() => {
       wrapper.append(controls, pre);
     }
   };
+  var addSectionCopyControls = (body) => {
+    for (const heading2 of body.querySelectorAll("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]")) {
+      if (!heading2.id || heading2.nextElementSibling?.hasAttribute("data-section-copy")) continue;
+      const url = new URL(window.location.href);
+      url.search = "";
+      url.hash = encodeURIComponent(heading2.id);
+      const controls = document.createElement("div");
+      controls.className = "note-section-copy";
+      controls.dataset.sectionCopy = "";
+      controls.dataset.copyControls = "";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "copy-button";
+      button.textContent = "Copy section link";
+      button.setAttribute("aria-describedby", heading2.id);
+      button.dataset.copyText = url.href;
+      button.dataset.copyLabel = "Section link";
+      const status = document.createElement("span");
+      status.className = "copy-status";
+      status.dataset.copyStatus = "";
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      controls.append(button, status);
+      heading2.after(controls);
+    }
+  };
   var initNoteReading = () => {
     const body = document.querySelector("[data-note-body]");
     if (!body) return;
     addCodeCopyControls(body);
+    addSectionCopyControls(body);
     trackNoteSection(body);
   };
 
@@ -14115,6 +14144,32 @@ var BrainNotesApp = (() => {
     return `${marker} ${line.text}`;
   }).join("\n");
 
+  // internal/web/static_src/saved-views-current.ts
+  var savedViewIsCurrent = (view, url) => {
+    if (!view.enabled || !savedViewsQueryPages.some((page) => page === url.pathname.replace(/\/+$/, ""))) {
+      return false;
+    }
+    const params = url.searchParams;
+    if (normalizeParamValue(params.get("q")) || hasActiveSharedFilters(params)) return false;
+    const expected = savedViewParams(view);
+    return queryShapeParamKeys.every((key) => {
+      const actual = normalizeParamValue(params.get(key));
+      if (key === "expr") {
+        return actual !== "" && (actual === expected.get(key) || actual === normalizeParamValue(view.normalized));
+      }
+      if (key === "limit" && (actual === "" || actual === "0")) return !expected.has(key);
+      return actual === (expected.get(key) || "");
+    });
+  };
+  var syncCurrentSavedView = (container, views) => {
+    const url = new URL(window.location.href);
+    for (const link of container.querySelectorAll("a[data-saved-view]")) {
+      const view = views.find((view2) => view2.name === link.dataset.savedView);
+      if (view && savedViewIsCurrent(view, url)) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    }
+  };
+
   // internal/web/static_src/saved-views-requests.ts
   var readPayload5 = async (resp) => {
     try {
@@ -14363,9 +14418,15 @@ var BrainNotesApp = (() => {
     }
     const fetcher = deps.fetch || ((input, init) => fetch(input, init));
     const basePath = savedViewsNavBasePath(window.location.pathname);
+    let currentViews = [];
+    const refreshCurrent = () => syncCurrentSavedView(container, currentViews);
     const render = (views) => {
+      currentViews = views;
       renderSavedViewsNav(container, views, basePath);
+      refreshCurrent();
     };
+    window.addEventListener(browserQueryChangeEventName, refreshCurrent);
+    window.addEventListener("popstate", refreshCurrent);
     void fetchSavedViews(fetcher).then((outcome) => {
       if (outcome.ok) {
         render(outcome.result.views);
@@ -14396,6 +14457,38 @@ var BrainNotesApp = (() => {
       statusEl: queryElement(root, "[data-saved-views-status]", HTMLElement),
       token: root.getAttribute("data-saved-views-csrf") || ""
     };
+  };
+  var bindSaveVisibility = (els, refreshScope, saver) => {
+    const setOpen = (open) => {
+      const wasOpen = !els.form.hidden;
+      els.form.hidden = !open;
+      els.openButton.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        refreshScope();
+        els.nameInput.focus();
+      } else if (wasOpen) {
+        els.openButton.focus();
+      }
+    };
+    els.openButton.addEventListener("click", () => {
+      const open = Boolean(els.form.hidden);
+      setOpen(open);
+      if (!open) {
+        saver.cancel();
+      }
+    });
+    const cancel = () => {
+      saver.cancel();
+      setOpen(false);
+    };
+    els.cancelButton?.addEventListener("click", cancel);
+    els.form.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || els.form.hidden) return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
+    });
+    setOpen(false);
   };
   var initSavedViewsSave = (deps = {}, nav2 = null) => {
     const els = resolveSaveElements(document);
@@ -14435,21 +14528,7 @@ var BrainNotesApp = (() => {
         }
       }
     });
-    const setOpen = (open) => {
-      els.form.hidden = !open;
-      els.openButton.setAttribute("aria-expanded", open ? "true" : "false");
-      if (open) {
-        refreshScope();
-        els.nameInput.focus();
-      }
-    };
-    els.openButton.addEventListener("click", () => {
-      const open = Boolean(els.form.hidden);
-      setOpen(open);
-      if (!open) {
-        saver.cancel();
-      }
-    });
+    bindSaveVisibility(els, refreshScope, saver);
     els.form.addEventListener("submit", (event) => {
       event.preventDefault();
       refreshScope();
@@ -14463,12 +14542,7 @@ var BrainNotesApp = (() => {
     els.confirmButton?.addEventListener("click", () => {
       void saver.confirm();
     });
-    els.cancelButton?.addEventListener("click", () => {
-      saver.cancel();
-      setOpen(false);
-    });
     showPending(null);
-    setOpen(false);
     return saver;
   };
   var initSavedViews = (deps = {}) => {

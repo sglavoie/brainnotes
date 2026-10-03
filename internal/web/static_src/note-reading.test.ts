@@ -1,9 +1,31 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { addCodeCopyControls, trackNoteSection } from "./note-reading";
+import { addCodeCopyControls, addSectionCopyControls, trackNoteSection } from "./note-reading";
 import { initCopyControls } from "./clipboard";
 
 afterEach(() => { document.body.innerHTML = ""; vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it("copies each existing heading ID, including Unicode, with a manual fallback", async () => {
+  history.replaceState(null, "", "/n/Folder/Reading?unused=value#old");
+  const copy = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText: copy } });
+  document.body.innerHTML = '<article><h2 id="café">Café</h2><h2 id="café-1">Café</h2><h3>No anchor</h3></article>';
+  const body = document.querySelector("article")!;
+  addSectionCopyControls(body);
+  addSectionCopyControls(body);
+  initCopyControls();
+  const buttons = body.querySelectorAll("button");
+  expect(buttons).toHaveLength(2);
+  buttons[0].click();
+  await vi.waitFor(() => expect(buttons[0].disabled).toBe(false));
+  expect(copy).toHaveBeenCalledWith(`${location.origin}/n/Folder/Reading#caf%C3%A9`);
+  copy.mockRejectedValueOnce(new Error("refused"));
+  buttons[1].click();
+  await vi.waitFor(() => expect(body.querySelector("textarea")).not.toBeNull());
+  expect(body.querySelector("textarea")!.value).toBe(`${location.origin}/n/Folder/Reading#caf%C3%A9-1`);
+  expect(Array.from(body.querySelectorAll("h2"), (heading) => heading.textContent)).toEqual(["Café", "Café"]);
+  expect(location.hash).toBe("#old");
+});
 
 it("copies highlighted code exactly and offers the existing fallback on refusal", async () => {
   const copy = vi.fn().mockResolvedValue(undefined);

@@ -58,3 +58,26 @@ test("syntax-highlighted code copies without labels and falls back to selected t
   await expect(fallback).toHaveValue(expected);
   expect(await fallback.evaluate((field) => field.value.slice(field.selectionStart, field.selectionEnd))).toBe(expected);
 });
+
+test("section links navigate to the same heading and fit on narrow screens", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true,
+      value: { writeText: (text) => { window.copiedSection = text; return Promise.resolve(); } } });
+  });
+  await page.goto("/n/Reading");
+  const button = page.locator('#second-section + [data-section-copy] button');
+  await button.focus();
+  await button.press("Enter");
+  await expect(page.locator('#second-section + [data-section-copy] [data-copy-status]')).toHaveText("Section link copied.");
+  const url = await page.evaluate(() => window.copiedSection);
+  expect(url).toBe(`${new URL(page.url()).origin}/n/Reading#second-section`);
+  await page.goto(url);
+  await expect(page.locator('.note-toc-list a').nth(1)).toHaveAttribute("aria-current", "location");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => { navigator.clipboard.writeText = () => Promise.reject(new Error("refused")); });
+  await button.click();
+  const fallback = page.locator('[data-section-copy] [data-copy-fallback]');
+  await expect(fallback).toBeFocused();
+  await expect(fallback).toHaveValue(url);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

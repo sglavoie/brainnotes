@@ -14,7 +14,8 @@ import {
   savedViewSaveError,
 } from "./saved-views-model";
 import { initSavedViewsNav, initSavedViewsSave } from "./saved-views";
-import { dispatchFiltersChange } from "./filters";
+import { dispatchFiltersChange, updateBrowserQuery } from "./filters";
+import { savedViewIsCurrent } from "./saved-views-current";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -187,6 +188,30 @@ describe("saved views nav", () => {
 });
 
 describe("saved views nav lifecycle", () => {
+  it("updates the current view after query changes without replacing focused links", async () => {
+    const view = normalizeSavedViewsResponse(viewsPayload()).views[1]!;
+    setLocation(savedViewHref(view, "/library"));
+    const container = mountNav();
+    const handle = initSavedViewsNav({ fetch: async () => jsonResponse(viewsPayload()) });
+    await waitForExpect(() => expect(navItems(container)).toHaveLength(3));
+    const link = navItems(container)[1]!;
+    expect(link.getAttribute("aria-current")).toBe("true");
+    link.focus();
+    const params = savedViewParams(view);
+    params.set("q", "extra text");
+    updateBrowserQuery(params);
+    expect(link.hasAttribute("aria-current")).toBe(false);
+    expect(document.activeElement).toBe(link);
+    params.delete("q");
+    updateBrowserQuery(params);
+    expect(link.getAttribute("aria-current")).toBe("true");
+    handle?.render([{ ...view, limit: 10 }]);
+    expect(container.querySelector("[aria-current]")).toBeNull();
+    setLocation(savedViewHref({ ...view, limit: 10 }, "/library"));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(container.querySelector("[aria-current]")?.textContent).toBe(view.name);
+  });
+
   it("keeps a saved view on the graph when the graph is the current page", async () => {
     setLocation("/graph");
     const container = mountNav();
@@ -403,6 +428,25 @@ describe("saved views save form", () => {
 });
 
 describe("saved views model", () => {
+  it("matches the complete view only on query pages, accepting canonical expressions", () => {
+    const view = normalizeSavedViewsResponse(viewsPayload()).views[1]!;
+    const url = new URL(savedViewHref(view, "/graph"), location.origin);
+    expect(savedViewIsCurrent(view, url)).toBe(true);
+    for (const [key, value] of [["tag", "extra"], ["q", "words"], ["sort", "title"],
+      ["relative_to", "Other"], ["limit", "10"], ["expr", "tag:other"]]) {
+      const changed = new URL(url);
+      changed.searchParams.set(key, value);
+      expect(savedViewIsCurrent(view, changed)).toBe(false);
+    }
+    url.pathname = "/n/Hub";
+    expect(savedViewIsCurrent(view, url)).toBe(false);
+    url.pathname = "/library";
+    expect(savedViewIsCurrent({ ...view, enabled: false }, url)).toBe(false);
+    expect(savedViewIsCurrent({ ...view, query: "different spelling" }, url)).toBe(true);
+    url.searchParams.delete("expr");
+    expect(savedViewIsCurrent({ ...view, normalized: "" }, url)).toBe(false);
+  });
+
   it("drops a summary with no name and defaults every missing field", () => {
     const result = normalizeSavedViewsResponse({
       ok: true,

@@ -72,9 +72,39 @@ export const addCodeCopyControls = (body: HTMLElement): void => {
   }
 };
 
+export const addSectionCopyControls = (body: HTMLElement): void => {
+  for (const heading of body.querySelectorAll<HTMLElement>("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]")) {
+    if (!heading.id || heading.nextElementSibling?.hasAttribute("data-section-copy")) continue;
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = encodeURIComponent(heading.id);
+    // Keep controls outside the heading so its accessible name and text stay
+    // intact, including after a failed copy adds a manual-copy field.
+    const controls = document.createElement("div");
+    controls.className = "note-section-copy";
+    controls.dataset.sectionCopy = "";
+    controls.dataset.copyControls = "";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "copy-button";
+    button.textContent = "Copy section link";
+    button.setAttribute("aria-describedby", heading.id);
+    button.dataset.copyText = url.href;
+    button.dataset.copyLabel = "Section link";
+    const status = document.createElement("span");
+    status.className = "copy-status";
+    status.dataset.copyStatus = "";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    controls.append(button, status);
+    heading.after(controls);
+  }
+};
+
 export const initNoteReading = (): void => {
   const body = document.querySelector<HTMLElement>("[data-note-body]");
   if (!body) return;
   addCodeCopyControls(body);
+  addSectionCopyControls(body);
   trackNoteSection(body);
 };

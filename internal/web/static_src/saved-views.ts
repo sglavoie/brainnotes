@@ -1,5 +1,7 @@
 import type { SavedViewSummary } from "./api-types";
 import { queryElement } from "./dom";
+import { browserQueryChangeEventName } from "./filters";
+import { syncCurrentSavedView } from "./saved-views-current";
 import { createSavedViewSaver, type SavedViewSaver } from "./saved-views-actions";
 import {
   savedViewInputFromParams,
@@ -40,9 +42,15 @@ export const initSavedViewsNav = (deps: SavedViewsDeps = {}): SavedViewsNavHandl
   }
   const fetcher = deps.fetch || ((input, init) => fetch(input, init));
   const basePath = savedViewsNavBasePath(window.location.pathname);
+  let currentViews: SavedViewSummary[] = [];
+  const refreshCurrent = (): void => syncCurrentSavedView(container, currentViews);
   const render = (views: SavedViewSummary[]): void => {
+    currentViews = views;
     renderSavedViewsNav(container, views, basePath);
+    refreshCurrent();
   };
+  window.addEventListener(browserQueryChangeEventName, refreshCurrent);
+  window.addEventListener("popstate", refreshCurrent);
 
   void fetchSavedViews(fetcher).then((outcome) => {
     // A listing failure leaves the strip empty rather than reporting into the
@@ -92,6 +100,45 @@ const resolveSaveElements = (doc: Document): SavedViewsSaveElements | null => {
     statusEl: queryElement(root, "[data-saved-views-status]", HTMLElement),
     token: root.getAttribute("data-saved-views-csrf") || "",
   };
+};
+
+const bindSaveVisibility = (
+  els: SavedViewsSaveElements, refreshScope: () => void, saver: SavedViewSaver
+): void => {
+  const setOpen = (open: boolean): void => {
+    const wasOpen = !els.form.hidden;
+    els.form.hidden = !open;
+    els.openButton.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      refreshScope();
+      els.nameInput.focus();
+    } else if (wasOpen) {
+      els.openButton.focus();
+    }
+  };
+
+  els.openButton.addEventListener("click", () => {
+    const open = Boolean(els.form.hidden);
+    setOpen(open);
+    if (!open) {
+      saver.cancel();
+    }
+  });
+
+  const cancel = (): void => {
+    saver.cancel();
+    setOpen(false);
+  };
+  els.cancelButton?.addEventListener("click", cancel);
+
+  els.form.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || els.form.hidden) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancel();
+  });
+
+  setOpen(false);
 };
 
 /**
@@ -149,22 +196,7 @@ export const initSavedViewsSave = (
     },
   });
 
-  const setOpen = (open: boolean): void => {
-    els.form.hidden = !open;
-    els.openButton.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) {
-      refreshScope();
-      els.nameInput.focus();
-    }
-  };
-
-  els.openButton.addEventListener("click", () => {
-    const open = Boolean(els.form.hidden);
-    setOpen(open);
-    if (!open) {
-      saver.cancel();
-    }
-  });
+  bindSaveVisibility(els, refreshScope, saver);
 
   els.form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -181,13 +213,7 @@ export const initSavedViewsSave = (
     void saver.confirm();
   });
 
-  els.cancelButton?.addEventListener("click", () => {
-    saver.cancel();
-    setOpen(false);
-  });
-
   showPending(null);
-  setOpen(false);
   return saver;
 };
 
