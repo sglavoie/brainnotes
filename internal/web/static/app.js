@@ -2765,6 +2765,20 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/capture.ts
+  var captureFocusReturn = (input, submit) => {
+    const doc2 = input.ownerDocument;
+    let movedAway = false;
+    const observe = (event) => {
+      if (event.target !== input && event.target !== submit) movedAway = true;
+    };
+    doc2.addEventListener("focusin", observe, true);
+    doc2.addEventListener("pointerdown", observe, true);
+    return () => {
+      doc2.removeEventListener("focusin", observe, true);
+      doc2.removeEventListener("pointerdown", observe, true);
+      if (!movedAway && input.isConnected) input.focus();
+    };
+  };
   var Capture = class {
     constructor(root, input, submit, status, recent, fetcher) {
       this.root = root;
@@ -2842,6 +2856,7 @@ var BrainNotesApp = (() => {
       }
       this.input.disabled = true;
       this.submit.disabled = true;
+      const returnFocus = captureFocusReturn(this.input, this.submit);
       this.setStatus("Capturing...", "is-loading");
       try {
         const body = buildCaptureForm({ text: text3, token: this.csrfToken }).toString();
@@ -2862,7 +2877,7 @@ var BrainNotesApp = (() => {
       } finally {
         this.input.disabled = false;
         this.submit.disabled = false;
-        this.input.focus();
+        returnFocus();
       }
     }
   };
@@ -2889,7 +2904,7 @@ var BrainNotesApp = (() => {
       );
       return;
     }
-    new Capture(root, input, submit, status, recent, deps.fetch || fetch);
+    new Capture(root, input, submit, status, recent, deps.fetch || fetch.bind(window));
   };
 
   // internal/web/static_src/clipboard.ts
@@ -9706,6 +9721,7 @@ var BrainNotesApp = (() => {
     const summary = document.createElement("span");
     summary.textContent = `Searching with: ${constraints.join(", ")}.`;
     help.replaceChildren(summary);
+    if (readPageQuery()) addLink(help, params, ["q"], "Remove search text");
     if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");
     if (expression) addLink(help, params, ["expr"], "Remove expression");
     help.hidden = false;

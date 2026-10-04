@@ -13,6 +13,9 @@ the prompt or cancel the rename. The **Save** button saves the source text;
 
 Rendered notes show the body before Ask AI. The Contents list highlights the
 current section as you scroll, without changing the URL or keyboard focus.
+The first Tab stop is **Skip to note**: press Enter to move directly to the
+rendered body, bypassing navigation and metadata controls. It also works with
+JavaScript disabled and stays out of printed notes.
 Code blocks offer **Copy code**, preserving whitespace; if the browser refuses
 clipboard access, a selected text field lets you copy manually.
 Ask AI responses and Daily Brief insights offer the same manual-copy fallback
@@ -36,6 +39,9 @@ renaming, or moving the note preserves this context.
 
 If header search fails, **Retry search** repeats the current query and filters
 without retyping. Dismissing search also dismisses the retry action.
+When Library has no matches, **Remove search text** clears only the text query,
+preserving filters, the expression, sort order, and result limit. **Reset search**
+still clears the whole search.
 If the filter picker cannot load, **Retry filters** reloads its choices without
 changing the search, selected filters, ordering, or result limit. The error stays
 visible until loading succeeds, and selected filters can still be removed.
@@ -119,6 +125,8 @@ the box clears the draft; a failed request keeps it. If browser storage is
 unavailable, capture still works and the box explains that recovery is unavailable.
 The displayed destination links to the inbox when it exists, and successful
 captures offer **View inbox**, including after the first capture creates it.
+After a capture finishes, focus returns to the capture box unless you moved to
+another control or clicked elsewhere while waiting. This applies to failures too.
 
 `POST /api/capture` is unpreviewed, like `POST /api/properties/value` and the
 single-note frontmatter routes, but qualifies from the other direction: one

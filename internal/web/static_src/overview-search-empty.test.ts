@@ -29,19 +29,22 @@ it("explains active constraints and removes only the chosen kind, preserving rep
   expect(help.hidden).toBe(false);
   expect(help.textContent).toContain("Searching with: text, filters, expression.");
   const links = Array.from(help.querySelectorAll("a"));
-  expect(links.map((link) => link.textContent)).toEqual(["Remove filters", "Remove expression"]);
+  expect(links.map((link) => link.textContent)).toEqual(["Remove search text", "Remove filters", "Remove expression"]);
+  const withoutText = new URLSearchParams(params);
+  withoutText.delete("q");
+  expect(new URL(links[0].href).searchParams.toString()).toBe(withoutText.toString());
   const withoutFilters = new URLSearchParams(params);
   withoutFilters.delete("tag");
   withoutFilters.delete("folder");
-  expect(new URL(links[0].href).searchParams.toString()).toBe(withoutFilters.toString());
+  expect(new URL(links[1].href).searchParams.toString()).toBe(withoutFilters.toString());
   const withoutExpression = new URLSearchParams(params);
   withoutExpression.delete("expr");
-  expect(new URL(links[1].href).searchParams.toString()).toBe(withoutExpression.toString());
+  expect(new URL(links[2].href).searchParams.toString()).toBe(withoutExpression.toString());
   expect(links.every((link) => new URL(link.href).pathname === "/library")).toBe(true);
 });
 
 it.each([
-  ["?q=missing", "text", []],
+  ["?q=missing", "text", ["Remove search text"]],
   ["?tag=missing", "filters", ["Remove filters"]],
   ["?expr=status:missing", "expression", ["Remove expression"]],
 ] as const)("offers only applicable actions for %s", async (query, summary, labels) => {
@@ -50,6 +53,12 @@ it.each([
   expect(help.textContent).toContain(`Searching with: ${summary}.`);
   expect(Array.from(help.querySelectorAll("a"), (link) => link.textContent)).toEqual(labels);
   if (labels.length) expect(help.querySelector("a")?.getAttribute("href")).toBe("/library");
+});
+
+it("does not offer to remove whitespace-only search text", async () => {
+  const { help } = await setup("?q=%20%20&tag=missing");
+  expect(help.textContent).toContain("Searching with: filters.");
+  expect(Array.from(help.querySelectorAll("a"), (link) => link.textContent)).toEqual(["Remove filters"]);
 });
 
 it.each(["blank", "error", "matches"])("does not offer empty-result help for %s", async (state) => {

@@ -13,6 +13,7 @@ export const renderOverviewEmptyHelp = (root: HTMLElement): void => {
   const summary = document.createElement("span");
   summary.textContent = `Searching with: ${constraints.join(", ")}.`;
   help.replaceChildren(summary);
+  if (readPageQuery()) addLink(help, params, ["q"], "Remove search text");
   if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");
   if (expression) addLink(help, params, ["expr"], "Remove expression");
   help.hidden = false;

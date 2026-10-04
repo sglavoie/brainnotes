@@ -17,6 +17,23 @@ export type CaptureDeps = {
   fetch?: FetchLike;
 };
 
+// Disabling the input can blur it. Only subsequent interaction outside the
+// capture controls cancels the normal return, including a click on plain text.
+const captureFocusReturn = (input: HTMLTextAreaElement, submit: HTMLButtonElement): (() => void) => {
+  const doc = input.ownerDocument;
+  let movedAway = false;
+  const observe = (event: Event): void => {
+    if (event.target !== input && event.target !== submit) movedAway = true;
+  };
+  doc.addEventListener("focusin", observe, true);
+  doc.addEventListener("pointerdown", observe, true);
+  return () => {
+    doc.removeEventListener("focusin", observe, true);
+    doc.removeEventListener("pointerdown", observe, true);
+    if (!movedAway && input.isConnected) input.focus();
+  };
+};
+
 class Capture {
   private readonly saveDraft: () => void;
   private readonly csrfToken: string;
@@ -93,6 +110,7 @@ class Capture {
     }
     this.input.disabled = true;
     this.submit.disabled = true;
+    const returnFocus = captureFocusReturn(this.input, this.submit);
     this.setStatus("Capturing...", "is-loading");
     try {
       const body = buildCaptureForm({ text, token: this.csrfToken }).toString();
@@ -113,7 +131,7 @@ class Capture {
     } finally {
       this.input.disabled = false;
       this.submit.disabled = false;
-      this.input.focus();
+      returnFocus();
     }
   }
 }
@@ -138,5 +156,5 @@ export const initCapture = (deps: CaptureDeps = {}): void => {
       "is-error", ["is-success", "is-error", "is-loading"]);
     return;
   }
-  new Capture(root, input, submit, status, recent, deps.fetch || fetch);
+  new Capture(root, input, submit, status, recent, deps.fetch || fetch.bind(window));
 };

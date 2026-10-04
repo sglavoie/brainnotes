@@ -59,7 +59,69 @@ describe("capture request construction", () => {
   });
 });
 
-describe("capture widget", () => {
+describe("capture focus", () => {
+  it.each(["success", "refused", "offline"])("preserves outside focus after delayed %s and cleans up tracking", async (outcome) => {
+    renderPanel();
+    const search = document.createElement("input");
+    document.body.append(search);
+    let finish!: (response: Response) => void;
+    let fail!: (error: Error) => void;
+    const pending = new Promise<Response>((resolve, reject) => { finish = resolve; fail = reject; });
+    const fetcher = vi.fn().mockReturnValueOnce(pending).mockResolvedValue(jsonResponse({ ok: true }));
+    initCapture({ fetch: fetcher });
+    const { input, submit, status } = elements();
+    input.value = "Keep this thought";
+    input.focus();
+    submit.click();
+    search.focus();
+    if (outcome === "offline") fail(new Error("offline"));
+    else finish(jsonResponse({ ok: outcome === "success" }, outcome === "success" ? 200 : 409));
+    await waitForExpect(() => expect(submit.disabled).toBe(false));
+    expect(document.activeElement).toBe(search);
+    expect(status.classList.contains(outcome === "success" ? "is-success" : "is-error")).toBe(true);
+    if (outcome !== "success") expect(input.value).toBe("Keep this thought");
+
+    // Interaction between requests must not cancel the next request's return.
+    search.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    input.value = "Next thought";
+    input.focus();
+    submit.click();
+    await waitForExpect(() => expect(submit.disabled).toBe(false));
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not return focus after a pointer gesture on non-focusable content", async () => {
+    renderPanel();
+    let finish!: (response: Response) => void;
+    initCapture({ fetch: vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })) });
+    const { input, submit, status } = elements();
+    input.value = "Thought";
+    input.focus();
+    submit.click();
+    const focus = vi.spyOn(input, "focus");
+    status.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    finish(jsonResponse({ ok: true }));
+    await waitForExpect(() => expect(submit.disabled).toBe(false));
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it("returns focus after a delayed failure when the user stays in capture", async () => {
+    renderPanel();
+    let finish!: (response: Response) => void;
+    initCapture({ fetch: vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })) });
+    const { input, submit } = elements();
+    input.value = "Keep this thought";
+    input.focus();
+    submit.click();
+    finish(jsonResponse({ ok: false }, 409));
+    await waitForExpect(() => expect(submit.disabled).toBe(false));
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("Keep this thought");
+  });
+
+});
+
+describe("capture success", () => {
   it("posts the capture, clears the box, and echoes the server bullet", async () => {
     renderPanel();
     const fetchMock = vi.fn(async () =>
@@ -129,6 +191,9 @@ describe("capture widget", () => {
     ]);
   });
 
+});
+
+describe("capture errors and keyboard", () => {
   it("keeps the typed text and reports the server error", async () => {
     renderPanel();
     const fetchMock = vi.fn(async () =>
@@ -199,6 +264,9 @@ describe("capture widget", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+});
+
+describe("capture configuration", () => {
   it("disables the box when data-capture-configured is absent", () => {
     renderPanel("");
     const fetchMock = vi.fn(async () => jsonResponse({ ok: true }));

@@ -15,6 +15,7 @@
     margin: 0;
   }
 
+  .note-page .note-skip-link,
   .note-page .note-main > :not(.site-header, .note-layout),
   .note-page .site-header > :not(h1),
   .note-page .note-layout > :not(.note-content),

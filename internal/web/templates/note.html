@@ -51,6 +51,7 @@
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body class="note-page">
+    <a class="note-skip-link" href="#bn:note-body">Skip to note</a>
     <main class="note-main">
       <a href="/library" data-note-back-results hidden>Back to results</a>
       {{if .Breadcrumbs}}
@@ -274,7 +275,8 @@
         <div class="note-content">
           <section class="panel note-print-body">
             <h2>Body</h2>
-            <div class="note-body" data-note-body data-note-context-links>{{.BodyHTML}}</div>
+            {{/* The colon cannot occur in Goldmark's generated heading IDs. */}}
+            <div id="bn:note-body" class="note-body" tabindex="-1" data-note-body data-note-context-links>{{.BodyHTML}}</div>
           </section>
 
           <section

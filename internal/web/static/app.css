@@ -3966,6 +3966,27 @@ code {
 }
 
 /* internal/web/static_src/css/note-body.css */
+.note-skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  background: var(--bn-surface);
+  transform: translateY(calc(-100% - 1rem));
+}
+
+.note-skip-link:focus {
+  transform: none;
+}
+
+.note-body:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
 .note-body > :first-child {
   margin-top: 0;
 }
@@ -3998,7 +4019,6 @@ code {
   word-break: normal;
   overflow-wrap: normal;
 }
-
 /* internal/web/static_src/css/chroma.css */
 /* Markdown code highlighting (Chroma classes). Light = github, dark =
    nord. Mirrors the theme-token architecture above: the light palette is
@@ -8585,6 +8605,7 @@ dt.sync-fact {
     margin: 0;
   }
 
+  .note-page .note-skip-link,
   .note-page .note-main > :not(.site-header, .note-layout),
   .note-page .site-header > :not(h1),
   .note-page .note-layout > :not(.note-content),

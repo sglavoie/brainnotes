@@ -1,3 +1,24 @@
+.note-skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  background: var(--bn-surface);
+  transform: translateY(calc(-100% - 1rem));
+}
+
+.note-skip-link:focus {
+  transform: none;
+}
+
+.note-body:focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 2px;
+}
+
 .note-body > :first-child {
   margin-top: 0;
 }
@@ -30,4 +51,3 @@
   word-break: normal;
   overflow-wrap: normal;
 }
-
