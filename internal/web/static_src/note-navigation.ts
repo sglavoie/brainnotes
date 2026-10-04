@@ -18,22 +18,34 @@ const libraryReturnPath = (): string | null => {
   }
 };
 
-const carryLibraryContext = (path: string): void => {
-  for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-note-context-links] a[href]")) {
-    if (link.getAttribute("href")?.startsWith("#")) continue;
-    try {
-      const url = new URL(link.href, window.location.origin);
-      if (url.origin !== window.location.origin || !url.pathname.startsWith("/n/") || url.username || url.password) continue;
-      url.searchParams.set("return_to", path);
-      link.href = url.pathname + url.search + url.hash;
-    } catch { /* Leave malformed links unchanged. */ }
+// Only propagate a validated Library destination to local note/editor routes.
+const isContextDestination = (url: URL, allowEditor: boolean): boolean =>
+  url.origin === window.location.origin && !url.username && !url.password &&
+  (url.pathname.startsWith("/n/") || (allowEditor && url.pathname === "/edit"));
+
+export const withLibraryContext = (target: string, allowEditor = false): string => {
+  const path = libraryReturnPath();
+  if (!path || target.startsWith("#")) return target;
+  try {
+    const url = new URL(target, window.location.origin);
+    if (!isContextDestination(url, allowEditor)) return target;
+    url.searchParams.set("return_to", path);
+    return url.pathname + url.search + url.hash;
+  } catch { return target; }
+};
+
+const carryLibraryContext = (): void => {
+  const selector = "[data-note-context-links] a[href], a[data-source-editor-launch], a[data-source-note-return]";
+  for (const link of document.querySelectorAll<HTMLAnchorElement>(selector)) {
+    const target = link.getAttribute("href");
+    if (target) link.setAttribute("href", withLibraryContext(target, link.hasAttribute("data-source-editor-launch")));
   }
 };
 
 export const initNoteNavigation = (): void => {
   const back = document.querySelector<HTMLAnchorElement>("[data-note-back-results]");
   const path = libraryReturnPath();
-  if (path) carryLibraryContext(path);
+  if (path) carryLibraryContext();
   if (back && path) {
     back.href = path;
     back.hidden = false;

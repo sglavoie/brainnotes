@@ -975,6 +975,15 @@ a:hover {
   margin: 0 0 1rem;
 }
 
+[data-facet-status]:empty {
+  display: none;
+}
+
+[data-facet-retry][aria-disabled='true'] {
+  opacity: 0.65;
+  cursor: progress;
+}
+
 .index-main > .facet-controls {
   width: 100%;
 }
@@ -1011,7 +1020,6 @@ a:hover {
   color: var(--bn-text);
   box-sizing: border-box;
 }
-
 /* internal/web/static_src/css/focus.css */
 a:focus-visible,
 .search-input:focus-visible,

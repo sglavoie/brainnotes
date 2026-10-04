@@ -4,6 +4,15 @@
   margin: 0 0 1rem;
 }
 
+[data-facet-status]:empty {
+  display: none;
+}
+
+[data-facet-retry][aria-disabled='true'] {
+  opacity: 0.65;
+  cursor: progress;
+}
+
 .index-main > .facet-controls {
   width: 100%;
 }
@@ -40,4 +49,3 @@
   color: var(--bn-text);
   box-sizing: border-box;
 }
-

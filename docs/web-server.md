@@ -26,9 +26,15 @@ tab. **Copy note URL** copies the full note address without that search context
 or a section anchor, with the same manual-copy fallback.
 Following body links, backlinks, or outgoing links to other notes carries that
 same Library context along, so **Back to results** remains available as you explore.
+**Edit source** carries it into the editor too: use the note title link to return
+to the note, then **Back to results** to resume browsing. Reloading the editor,
+renaming, or moving the note preserves this context.
 
 If header search fails, **Retry search** repeats the current query and filters
 without retyping. Dismissing search also dismisses the retry action.
+If the filter picker cannot load, **Retry filters** reloads its choices without
+changing the search, selected filters, ordering, or result limit. The error stays
+visible until loading succeeds, and selected filters can still be removed.
 
 On screens up to 960 pixels wide, **Metadata** and **Contents** start collapsed
 and expand independently. Desktop sidebars keep their existing layout and

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { initNoteNavigation, libraryResultPath } from "./note-navigation";
+import { initNoteNavigation, libraryResultPath, withLibraryContext } from "./note-navigation";
 import { initCopyControls } from "./clipboard";
 
 afterEach(() => {
@@ -84,3 +84,36 @@ it("copies a clean absolute note URL and uses the manual fallback when copying f
   await vi.waitFor(() => expect(document.querySelector("textarea")).not.toBeNull());
   expect(document.querySelector("textarea")!.value).toBe(`${location.origin}/n/Caf%C3%A9`);
 });
+
+it("keeps Library context through the editor and its return link, including a renamed note", () => {
+  const library = "/library?q=caf%C3%A9&tag=one&tag=two&sort=-modified&limit=10#results";
+  history.replaceState(null, "", `/n/Alpha?return_to=${encodeURIComponent(library)}`);
+  document.body.innerHTML = '<a href="/edit?key=Alpha" data-source-editor-launch>Edit source</a>';
+  initNoteNavigation();
+  const edit = document.querySelector("a")!;
+  expect(new URL(edit.href).searchParams.get("key")).toBe("Alpha");
+  expect(new URL(edit.href).searchParams.get("return_to")).toBe(library);
+  history.replaceState(null, "", edit.href);
+  const renamed = withLibraryContext("/edit?key=Renamed", true);
+  history.replaceState(null, "", renamed);
+  document.body.innerHTML = '<a href="/n/Renamed" data-source-note-return>Renamed</a>';
+  initNoteNavigation();
+  history.replaceState(null, "", document.querySelector("a")!.href);
+  document.body.innerHTML = '<a data-note-back-results hidden></a>';
+  initNoteNavigation();
+  expect(document.querySelector("a")!.getAttribute("href")).toBe(library);
+});
+
+it.each(["/", "/settings", "https://example.com/edit?key=Alpha", "//example.com/n/Alpha", "#section"])(
+  "does not attach editor context to unrelated destinations: %s", (target) => {
+    history.replaceState(null, "", "/edit?key=Alpha&return_to=%2Flibrary%3Fq%3Dbody");
+    expect(withLibraryContext(target, true)).toBe(target);
+  }
+);
+
+it.each(["https://example.com/library", "/settings", "//example.com/library"])(
+  "does not pass an unsafe return URL into the editor: %s", (target) => {
+    history.replaceState(null, "", `/n/Alpha?return_to=${encodeURIComponent(target)}`);
+    expect(withLibraryContext("/edit?key=Alpha", true)).toBe("/edit?key=Alpha");
+  }
+);

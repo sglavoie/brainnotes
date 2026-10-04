@@ -1,3 +1,4 @@
+import { withLibraryContext } from "./note-navigation";
 import { normalizeSearchResults } from "./api";
 import { queryElement } from "./dom";
 import { setStatusText } from "./status";
@@ -180,7 +181,7 @@ const initManagement = (
       reload: async () => {
         await current()?.load();
       },
-      navigate: (url) => window.location.assign(url),
+      navigate: (url) => window.location.assign(withLibraryContext(url, true)),
       save: async () => {
         await current()?.save();
       },

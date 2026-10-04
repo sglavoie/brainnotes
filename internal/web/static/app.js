@@ -4528,7 +4528,7 @@ var BrainNotesApp = (() => {
     });
   };
 
-  // internal/web/static_src/facets.ts
+  // internal/web/static_src/facet-model.ts
   var facetOptionKey = (option) => `${option.param}\0${option.value}`;
   var facetOptionMatchesQuery = (option, query) => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -4578,254 +4578,257 @@ var BrainNotesApp = (() => {
     }
     return params;
   };
-  var initFacets = () => {
-    const roots = queryAllElements(document, "[data-facet-controls]", HTMLElement);
-    if (roots.length === 0) {
-      return;
+
+  // internal/web/static_src/facet-render.ts
+  var renderFacetChip = (option, remove4) => {
+    const chip = document.createElement("span");
+    chip.className = "facet-chip";
+    const text3 = document.createElement("span");
+    text3.className = "facet-chip-text";
+    text3.textContent = `${option.groupLabel}: ${option.label}`;
+    chip.append(text3);
+    if (option.count > 0) {
+      const count4 = document.createElement("span");
+      count4.className = "facet-chip-count";
+      count4.textContent = `(${option.count})`;
+      chip.append(count4);
     }
-    roots.forEach((root) => {
-      const input = queryElement(root, ".facet-input", HTMLInputElement);
-      const optionsEl = queryElement(root, ".facet-options", HTMLElement);
-      const chipsEl = queryElement(root, "[data-facet-chips]", HTMLElement);
-      const inputClear = queryElement(root, "[data-facet-input-clear]", HTMLButtonElement);
-      const clearAll = queryElement(root, "[data-facet-clear-all]", HTMLButtonElement);
-      if (!input || !optionsEl || !chipsEl) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "facet-chip-remove";
+    button.textContent = "x";
+    button.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
+    button.addEventListener("click", remove4);
+    chip.append(button);
+    return chip;
+  };
+  var renderFacetOption = (view) => {
+    const { option } = view;
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = `${view.inputID}-option-${view.index}`;
+    button.className = "facet-option";
+    button.setAttribute("role", "option");
+    button.setAttribute("aria-selected", String(view.selected));
+    button.dataset.facetIndex = String(view.index);
+    const main = document.createElement("span");
+    main.className = "facet-option-main";
+    const label = document.createElement("span");
+    label.className = "facet-option-label";
+    label.textContent = option.label;
+    const group = document.createElement("span");
+    group.className = "facet-option-group";
+    group.textContent = option.groupLabel;
+    main.append(label, group);
+    const count4 = document.createElement("span");
+    count4.className = "facet-option-count";
+    count4.textContent = String(option.count);
+    button.append(main, count4);
+    button.addEventListener("mouseenter", view.activate);
+    button.addEventListener("click", view.toggle);
+    item.append(button);
+    return item;
+  };
+
+  // internal/web/static_src/facet-controller.ts
+  var FacetController = class {
+    constructor(root, input, options, chips) {
+      this.root = root;
+      this.input = input;
+      this.options = options;
+      this.chips = chips;
+      this.inputClear = root.querySelector("[data-facet-input-clear]");
+      this.clearAll = root.querySelector("[data-facet-clear-all]");
+      this.retry = root.querySelector("[data-facet-retry]");
+      this.status = root.querySelector("[data-facet-status]");
+    }
+    root;
+    input;
+    options;
+    chips;
+    allOptions = [];
+    filteredOptions = [];
+    activeIndex = -1;
+    state = "loading";
+    inFlight = false;
+    selected = facetSelectionFromParams(new URLSearchParams(window.location.search));
+    inputClear;
+    clearAll;
+    retry;
+    status;
+    init() {
+      this.input.addEventListener("focus", () => this.showOptions());
+      this.input.addEventListener("input", () => {
+        this.setActive(-1);
+        this.showOptions();
+      });
+      this.input.addEventListener("keydown", (event) => this.onKeyDown(event));
+      this.inputClear?.addEventListener("click", () => {
+        this.input.value = "";
+        this.showOptions();
+        this.input.focus();
+      });
+      this.clearAll?.addEventListener("click", () => {
+        this.selected.clear();
+        this.selectionChanged();
+      });
+      this.retry?.addEventListener("click", () => {
+        void this.load(true);
+      });
+      document.addEventListener("click", (event) => {
+        if (event.target instanceof Node && !this.root.contains(event.target)) {
+          this.setExpanded(false);
+          this.setActive(-1);
+        }
+      });
+      this.renderChips();
+      void this.load();
+    }
+    async load(retrying = false) {
+      if (this.inFlight) return;
+      this.inFlight = true;
+      this.state = "loading";
+      this.setLoadFeedback(retrying ? "Loading filters\u2026" : "", retrying, true);
+      this.renderOptions();
+      try {
+        const response = await fetch("/api/facets", { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error("facets request failed");
+        this.allOptions = normalizeFacetOptions(await response.json());
+        this.selected = hydrateFacetSelection(this.selected, this.allOptions);
+        this.state = "ready";
+        this.renderChips();
+        if (retrying && document.activeElement === this.retry) this.input.focus();
+        this.setLoadFeedback(retrying ? "Filters loaded." : "", false, false);
+      } catch {
+        this.state = "error";
+        this.setLoadFeedback("Filters unavailable. Your selected filters are still applied.", true, false);
+      } finally {
+        this.inFlight = false;
+        this.renderOptions();
+      }
+    }
+    setLoadFeedback(message, showRetry, disabled) {
+      if (this.status) this.status.textContent = message;
+      if (this.retry) {
+        this.retry.hidden = !showRetry;
+        this.retry.setAttribute("aria-disabled", String(disabled));
+      }
+    }
+    setExpanded(expanded) {
+      this.input.setAttribute("aria-expanded", String(expanded));
+      this.options.hidden = !expanded;
+    }
+    showOptions() {
+      this.setExpanded(true);
+      this.renderOptions();
+    }
+    setActive(index) {
+      this.activeIndex = index;
+      this.input.removeAttribute("aria-activedescendant");
+      for (const option of this.options.querySelectorAll("[data-facet-index]")) {
+        const active = Number(option.dataset.facetIndex) === index;
+        option.classList.toggle("is-active", active);
+        if (active) this.input.setAttribute("aria-activedescendant", option.id);
+      }
+    }
+    renderChips() {
+      this.chips.replaceChildren();
+      this.chips.hidden = this.selected.size === 0;
+      if (this.clearAll) this.clearAll.hidden = this.selected.size === 0;
+      for (const option of this.selected.values()) {
+        this.chips.append(renderFacetChip(option, () => {
+          this.selected.delete(facetOptionKey(option));
+          this.selectionChanged();
+        }));
+      }
+    }
+    renderEmpty(message) {
+      const item = document.createElement("li");
+      item.className = "facet-option-empty";
+      item.textContent = message;
+      this.options.replaceChildren(item);
+      this.filteredOptions = [];
+      this.setActive(-1);
+    }
+    renderOptions() {
+      if (this.inputClear) this.inputClear.hidden = this.input.value.trim() === "";
+      if (this.state !== "ready") {
+        this.renderEmpty(this.state === "error" ? "Facets unavailable." : "Loading facets...");
         return;
       }
-      let allOptions = [];
-      let filteredOptions = [];
-      let activeIndex = -1;
-      let loaded = false;
-      let selected = facetSelectionFromParams(new URLSearchParams(window.location.search));
-      const setExpanded = (expanded) => {
-        input.setAttribute("aria-expanded", expanded ? "true" : "false");
-        optionsEl.hidden = !expanded;
-      };
-      const setActive2 = (nextIndex) => {
-        activeIndex = nextIndex;
-        const options = optionsEl.querySelectorAll("[data-facet-index]");
-        for (const option of options) {
-          const index = Number(option.getAttribute("data-facet-index"));
-          const active = index === activeIndex;
-          option.classList.toggle("is-active", active);
-          if (active) {
-            input.setAttribute("aria-activedescendant", option.id);
-          }
-        }
-        if (activeIndex < 0) {
-          input.removeAttribute("aria-activedescendant");
-        }
-      };
-      const currentFilterParams = () => paramsForFacetSelection(selected);
-      const renderChips = () => {
-        chipsEl.textContent = "";
-        const options = Array.from(selected.values());
-        chipsEl.hidden = options.length === 0;
-        if (clearAll) {
-          clearAll.hidden = options.length === 0;
-        }
-        for (const option of options) {
-          const chip = document.createElement("span");
-          chip.className = "facet-chip";
-          const text3 = document.createElement("span");
-          text3.className = "facet-chip-text";
-          text3.textContent = `${option.groupLabel}: ${option.label}`;
-          chip.appendChild(text3);
-          if (option.count > 0) {
-            const count4 = document.createElement("span");
-            count4.className = "facet-chip-count";
-            count4.textContent = `(${option.count})`;
-            chip.appendChild(count4);
-          }
-          const remove4 = document.createElement("button");
-          remove4.type = "button";
-          remove4.className = "facet-chip-remove";
-          remove4.textContent = "x";
-          remove4.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
-          remove4.addEventListener("click", () => {
-            selected.delete(facetOptionKey(option));
-            renderChips();
-            renderOptions();
-            emitChange();
-            input.focus();
-          });
-          chip.appendChild(remove4);
-          chipsEl.appendChild(chip);
-        }
-      };
-      const renderEmptyOption = (message) => {
-        optionsEl.textContent = "";
-        const item = document.createElement("li");
-        item.className = "facet-option-empty";
-        item.textContent = message;
-        optionsEl.appendChild(item);
-        setActive2(-1);
-      };
-      const renderOptions = () => {
-        if (inputClear) {
-          inputClear.hidden = input.value.trim() === "";
-        }
-        if (!loaded) {
-          renderEmptyOption("Loading facets...");
-          return;
-        }
-        const query = input.value.trim().toLowerCase();
-        filteredOptions = allOptions.filter((option) => facetOptionMatchesQuery(option, query)).slice(0, 80);
-        optionsEl.textContent = "";
-        if (filteredOptions.length === 0) {
-          renderEmptyOption("No matching facets.");
-          return;
-        }
-        filteredOptions.forEach((option, index) => {
-          const item = document.createElement("li");
-          const button = document.createElement("button");
-          const selectedOption = selected.has(facetOptionKey(option));
-          button.type = "button";
-          button.id = `${input.id || "facet"}-option-${index}`;
-          button.className = "facet-option";
-          button.setAttribute("role", "option");
-          button.setAttribute("aria-selected", selectedOption ? "true" : "false");
-          button.setAttribute("data-facet-index", String(index));
-          const main = document.createElement("span");
-          main.className = "facet-option-main";
-          const label = document.createElement("span");
-          label.className = "facet-option-label";
-          label.textContent = option.label;
-          main.appendChild(label);
-          const group = document.createElement("span");
-          group.className = "facet-option-group";
-          group.textContent = option.groupLabel;
-          main.appendChild(group);
-          button.appendChild(main);
-          const count4 = document.createElement("span");
-          count4.className = "facet-option-count";
-          count4.textContent = String(option.count);
-          button.appendChild(count4);
-          button.addEventListener("mouseenter", () => {
-            setActive2(index);
-          });
-          button.addEventListener("click", () => {
-            toggleOption(option);
-          });
-          item.appendChild(button);
-          optionsEl.appendChild(item);
-        });
-        setActive2(
-          filteredOptions.length > 0 ? Math.min(Math.max(activeIndex, -1), filteredOptions.length - 1) : -1
-        );
-      };
-      const writeFiltersToURL = () => {
-        const params = new URLSearchParams(window.location.search);
-        for (const key of sharedFilterParamKeys) {
-          params.delete(key);
-        }
-        for (const [key, value] of currentFilterParams()) {
-          params.append(key, value);
-        }
-        updateBrowserQuery(params);
-      };
-      function emitChange() {
-        writeFiltersToURL();
-        dispatchFiltersChange(window, {
-          mode: root.getAttribute("data-facet-mode") || "",
-          params: currentFilterParams()
-        });
+      this.filteredOptions = this.allOptions.filter((option) => facetOptionMatchesQuery(option, this.input.value)).slice(0, 80);
+      if (!this.filteredOptions.length) {
+        this.renderEmpty("No matching facets.");
+        return;
       }
-      function toggleOption(option) {
-        const key = facetOptionKey(option);
-        if (selected.has(key)) {
-          selected.delete(key);
-        } else {
-          selected = withFacetOptionSelected(selected, option);
-        }
-        input.value = "";
-        setExpanded(true);
-        renderChips();
-        renderOptions();
-        emitChange();
+      this.options.replaceChildren();
+      this.filteredOptions.forEach((option, index) => {
+        this.options.append(renderFacetOption({
+          option,
+          index,
+          inputID: this.input.id || "facet",
+          selected: this.selected.has(facetOptionKey(option)),
+          activate: () => this.setActive(index),
+          toggle: () => this.toggleOption(option)
+        }));
+      });
+      this.setActive(Math.min(Math.max(this.activeIndex, -1), this.filteredOptions.length - 1));
+    }
+    selectionChanged() {
+      this.renderChips();
+      this.renderOptions();
+      const selectedParams = paramsForFacetSelection(this.selected);
+      const params = new URLSearchParams(window.location.search);
+      for (const key of sharedFilterParamKeys) params.delete(key);
+      for (const [key, value] of selectedParams) params.append(key, value);
+      updateBrowserQuery(params);
+      dispatchFiltersChange(window, {
+        mode: this.root.getAttribute("data-facet-mode") || "",
+        params: selectedParams
+      });
+      this.input.focus();
+    }
+    toggleOption(option) {
+      const key = facetOptionKey(option);
+      if (this.selected.has(key)) this.selected.delete(key);
+      else this.selected = withFacetOptionSelected(this.selected, option);
+      this.input.value = "";
+      this.setExpanded(true);
+      this.selectionChanged();
+    }
+    moveActive(direction) {
+      const count4 = this.filteredOptions.length;
+      const index = this.activeIndex + direction;
+      this.setActive(count4 ? (index + count4) % count4 : -1);
+    }
+    onKeyDown(event) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        this.setExpanded(true);
+        if (event.key === "ArrowUp" && this.activeIndex < 0) this.setActive(this.filteredOptions.length - 1);
+        else this.moveActive(event.key === "ArrowDown" ? 1 : -1);
+      } else if (event.key === "Enter" && this.activeIndex >= 0) {
+        event.preventDefault();
+        this.toggleOption(this.filteredOptions[this.activeIndex]);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        this.input.value = "";
+        this.setExpanded(false);
+        this.setActive(-1);
+        this.renderOptions();
       }
-      input.addEventListener("focus", () => {
-        setExpanded(true);
-        renderOptions();
-      });
-      input.addEventListener("input", () => {
-        setExpanded(true);
-        setActive2(-1);
-        renderOptions();
-      });
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowDown") {
-          event.preventDefault();
-          setExpanded(true);
-          const next = activeIndex < filteredOptions.length - 1 ? activeIndex + 1 : 0;
-          setActive2(filteredOptions.length > 0 ? next : -1);
-          return;
-        }
-        if (event.key === "ArrowUp") {
-          event.preventDefault();
-          setExpanded(true);
-          const next = activeIndex > 0 ? activeIndex - 1 : filteredOptions.length - 1;
-          setActive2(filteredOptions.length > 0 ? next : -1);
-          return;
-        }
-        if (event.key === "Enter" && activeIndex >= 0 && activeIndex < filteredOptions.length) {
-          event.preventDefault();
-          toggleOption(filteredOptions[activeIndex]);
-          return;
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          input.value = "";
-          setExpanded(false);
-          setActive2(-1);
-          renderOptions();
-        }
-      });
-      if (inputClear) {
-        inputClear.addEventListener("click", () => {
-          input.value = "";
-          setExpanded(true);
-          renderOptions();
-          input.focus();
-        });
-      }
-      if (clearAll) {
-        clearAll.addEventListener("click", () => {
-          selected.clear();
-          renderChips();
-          renderOptions();
-          emitChange();
-          input.focus();
-        });
-      }
-      document.addEventListener("click", (event) => {
-        const target = event.target;
-        if (target instanceof Node && !root.contains(target)) {
-          setExpanded(false);
-          setActive2(-1);
-        }
-      });
-      renderChips();
-      renderOptions();
-      fetch("/api/facets", {
-        headers: { Accept: "application/json" }
-      }).then((resp) => {
-        if (!resp.ok) {
-          throw new Error("facets request failed");
-        }
-        return resp.json();
-      }).then((payload) => {
-        allOptions = normalizeFacetOptions(payload);
-        loaded = true;
-        selected = hydrateFacetSelection(selected, allOptions);
-        renderChips();
-        renderOptions();
-      }).catch(() => {
-        loaded = true;
-        allOptions = [];
-        renderEmptyOption("Facets unavailable.");
-      });
-    });
+    }
+  };
+
+  // internal/web/static_src/facets.ts
+  var initFacets = () => {
+    for (const root of queryAllElements(document, "[data-facet-controls]", HTMLElement)) {
+      const input = queryElement(root, ".facet-input", HTMLInputElement);
+      const options = queryElement(root, ".facet-options", HTMLElement);
+      const chips = queryElement(root, "[data-facet-chips]", HTMLElement);
+      if (input && options && chips) new FacetController(root, input, options, chips).init();
+    }
   };
 
   // internal/web/static_src/frontmatter-edit.ts
@@ -8226,22 +8229,30 @@ var BrainNotesApp = (() => {
       return null;
     }
   };
-  var carryLibraryContext = (path) => {
-    for (const link of document.querySelectorAll("[data-note-context-links] a[href]")) {
-      if (link.getAttribute("href")?.startsWith("#")) continue;
-      try {
-        const url = new URL(link.href, window.location.origin);
-        if (url.origin !== window.location.origin || !url.pathname.startsWith("/n/") || url.username || url.password) continue;
-        url.searchParams.set("return_to", path);
-        link.href = url.pathname + url.search + url.hash;
-      } catch {
-      }
+  var isContextDestination = (url, allowEditor) => url.origin === window.location.origin && !url.username && !url.password && (url.pathname.startsWith("/n/") || allowEditor && url.pathname === "/edit");
+  var withLibraryContext = (target, allowEditor = false) => {
+    const path = libraryReturnPath();
+    if (!path || target.startsWith("#")) return target;
+    try {
+      const url = new URL(target, window.location.origin);
+      if (!isContextDestination(url, allowEditor)) return target;
+      url.searchParams.set("return_to", path);
+      return url.pathname + url.search + url.hash;
+    } catch {
+      return target;
+    }
+  };
+  var carryLibraryContext = () => {
+    const selector = "[data-note-context-links] a[href], a[data-source-editor-launch], a[data-source-note-return]";
+    for (const link of document.querySelectorAll(selector)) {
+      const target = link.getAttribute("href");
+      if (target) link.setAttribute("href", withLibraryContext(target, link.hasAttribute("data-source-editor-launch")));
     }
   };
   var initNoteNavigation = () => {
     const back = document.querySelector("[data-note-back-results]");
     const path = libraryReturnPath();
-    if (path) carryLibraryContext(path);
+    if (path) carryLibraryContext();
     if (back && path) {
       back.href = path;
       back.hidden = false;
@@ -45159,7 +45170,7 @@ var BrainNotesApp = (() => {
         reload: async () => {
           await current()?.load();
         },
-        navigate: (url) => window.location.assign(url),
+        navigate: (url) => window.location.assign(withLibraryContext(url, true)),
         save: async () => {
           await current()?.save();
         },
