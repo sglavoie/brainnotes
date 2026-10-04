@@ -50,7 +50,7 @@
     </script>
     <link rel="stylesheet" href="/static/app.css" />
   </head>
-  <body>
+  <body class="note-page">
     <main class="note-main">
       <a href="/library" data-note-back-results hidden>Back to results</a>
       {{if .Breadcrumbs}}
@@ -272,7 +272,7 @@
         {{end}}
 
         <div class="note-content">
-          <section class="panel">
+          <section class="panel note-print-body">
             <h2>Body</h2>
             <div class="note-body" data-note-body data-note-context-links>{{.BodyHTML}}</div>
           </section>

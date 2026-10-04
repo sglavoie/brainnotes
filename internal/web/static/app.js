@@ -14935,7 +14935,25 @@ var BrainNotesApp = (() => {
   var isSearchShortcut = (event) => event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing && !event.defaultPrevented && !event.repeat;
   var bindSearchShortcut = (input) => {
     const doc2 = input.ownerDocument;
+    const scope = input.closest("[data-search-box]") || input;
+    let returnTarget = null;
+    const returnFocus = () => {
+      const target = returnTarget;
+      returnTarget = null;
+      if (target?.isConnected && !target.closest("[hidden], [inert], :disabled")) {
+        target.focus({ preventScroll: true });
+      }
+    };
+    const onFocusOut = (event) => {
+      if (!(event.relatedTarget instanceof Node) || !scope.contains(event.relatedTarget)) {
+        returnTarget = null;
+      }
+    };
     const onKeyDown = (event) => {
+      if (isSearchEscape(event, scope)) {
+        returnFocus();
+        return;
+      }
       if (!isSearchShortcut(event) || !input.isConnected || input.disabled || doc2.querySelector(dialogSelector)) {
         return;
       }
@@ -14944,11 +14962,18 @@ var BrainNotesApp = (() => {
         return;
       }
       event.preventDefault();
+      returnTarget = doc2.activeElement instanceof HTMLElement && doc2.activeElement !== doc2.body ? doc2.activeElement : null;
       input.focus();
     };
     doc2.addEventListener("keydown", onKeyDown);
-    return () => doc2.removeEventListener("keydown", onKeyDown);
+    scope.addEventListener("focusout", onFocusOut);
+    return () => {
+      doc2.removeEventListener("keydown", onKeyDown);
+      scope.removeEventListener("focusout", onFocusOut);
+      returnTarget = null;
+    };
   };
+  var isSearchEscape = (event, scope) => event.key === "Escape" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && !event.isComposing && event.target instanceof Node && scope.contains(event.target);
 
   // internal/web/static_src/search.ts
   var searchResultTitle = (result) => result.title || result.key || "Untitled";
@@ -16017,6 +16042,22 @@ var BrainNotesApp = (() => {
       });
       void panel?.load();
     }
+  };
+
+  // internal/web/static_src/source-editor-title.ts
+  var createEditorTitle = (doc2) => {
+    const original = doc2.title;
+    let disposed = false;
+    return {
+      update(pending) {
+        if (!disposed) doc2.title = pending ? `\u2022 ${original}` : original;
+      },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        doc2.title = original;
+      }
+    };
   };
 
   // internal/web/static_src/source-format.ts
@@ -17246,6 +17287,7 @@ var BrainNotesApp = (() => {
   var createSourceEditorController = (deps) => {
     const { elements, client } = deps;
     const ownerDocument = deps.doc ?? elements.panel.ownerDocument;
+    const title = createEditorTitle(ownerDocument);
     const panes = initSourcePanes(elements);
     const state = {
       surface: null,
@@ -17260,6 +17302,7 @@ var BrainNotesApp = (() => {
     const preview = createPreview(elements, client, deps.previewDelayMs);
     const dirty = () => state.surface !== null && state.surface.getValue() !== state.savedContent;
     const refreshSaveButton = () => {
+      title.update(dirty() || state.pendingSave !== null);
       if (elements.save) {
         elements.save.disabled = state.saving || !dirty() && state.pendingSave === null;
       }
@@ -17296,6 +17339,7 @@ var BrainNotesApp = (() => {
         state.surface?.destroy();
         state.surface = null;
         unbind?.();
+        title.dispose();
       }
     };
     unbind = wireEditor(ownerDocument, elements, state, controller, ctx);

@@ -250,7 +250,10 @@ The selected count sits beside these controls and remains visible in read-only
 mode, where selections can still be copied as wikilinks.
 
 Press `/` outside an editable field to focus the header search. The shortcut
-leaves editors and open dialogs alone. Search suggestions are links: middle-click
+leaves editors and open dialogs alone. Escape closes the suggestions and returns
+focus to the control you came from without scrolling, provided it is still
+available. Leaving search normally clears that return target.
+Search suggestions are links: middle-click
 or Ctrl/⌘-click to open a note in another tab, or use the arrow keys and Enter
 to open it in the current tab. **Open results in Library** carries the typed
 search to the Library; Enter does the same when no suggestion is selected,
@@ -397,6 +400,14 @@ note bodies) — plus footnotes, definition lists, and typographic punctuation
 `...` an ellipsis). Wide tables scroll horizontally so they stay readable on
 narrow viewports, and wikilinks resolve inside table cells just as they do in
 body text. Inline and fenced code are left untouched by these transforms.
+
+Printing a rendered note with the browser's Print / Save as PDF command includes
+its title and body, with dark text on white in either theme. Navigation, sidebars,
+copy controls, and AI/related panels are omitted; long code lines wrap to fit.
+
+In the browser source editor, a `•` before the tab title indicates unsaved edits
+or a save whose outcome is still unconfirmed. It clears when the current text is
+confirmed saved or you return to the saved text with no outstanding save.
 
 Editor opens from note pages and Daily Brief cards use the same editor resolution as CLI open
 commands (`[open].editor`, then `$EDITOR`). Successful opens are asynchronous;

@@ -44,6 +44,7 @@ const mount = (
   claims: AttachmentClaims | null = null
 ): Harness => {
   document.body.innerHTML = editorMarkup();
+  document.title = "Edit Alpha - bn serve";
   const panel = document.querySelector<HTMLElement>("[data-source-editor]");
   if (!panel) {
     throw new Error("fixture is missing the editor panel");
@@ -150,6 +151,7 @@ describe("loading", () => {
     expect(harness.controller.dirty()).toBe(false);
     expect(harness.saveButton().disabled).toBe(true);
     expect(harness.status()).toContain("Alpha.md");
+    expect(document.title).toBe("Edit Alpha - bn serve");
   });
 
   it("renders a preview of the loaded source without waiting for a keystroke", async () => {
@@ -178,12 +180,14 @@ describe("dirtiness", () => {
     harness.surface().type(`${LOADED}more\n`);
     expect(harness.controller.dirty()).toBe(true);
     expect(harness.saveButton().disabled).toBe(false);
+    expect(document.title).toBe("• Edit Alpha - bn serve");
 
     // Undoing back to the loaded text is clean, which a boolean flag set on the
     // first keystroke would get wrong.
     harness.surface().type(LOADED);
     expect(harness.controller.dirty()).toBe(false);
     expect(harness.saveButton().disabled).toBe(true);
+    expect(document.title).toBe("Edit Alpha - bn serve");
   });
 
   // Undoing is also the natural reaction to a save that did not answer, and
@@ -203,6 +207,7 @@ describe("dirtiness", () => {
     harness.surface().type(LOADED);
     expect(harness.controller.dirty()).toBe(false);
     expect(harness.saveButton().disabled).toBe(false);
+    expect(document.title).toBe("• Edit Alpha - bn serve");
 
     harness.saveButton().click();
     await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
@@ -220,6 +225,7 @@ describe("saving", () => {
     expect(harness.client.save.mock.calls[0][0]).toMatchObject({ content: "edited\n", revision: "r1" });
     expect(harness.controller.dirty()).toBe(false);
     expect(harness.status()).toBe("Saved Alpha.md.");
+    expect(document.title).toBe("Edit Alpha - bn serve");
 
     harness.surface().type("edited twice\n");
     await harness.controller.save();
@@ -374,6 +380,36 @@ const deferred = <T,>(): { promise: Promise<T>; resolve: (value: T) => void } =>
   return { promise, resolve };
 };
 
+it("keeps the tab marked when typing continues during a save", async () => {
+  const answer = deferred<SourceSaveResponse>();
+  const save = vi.fn().mockReturnValueOnce(answer.promise).mockResolvedValue(saveSuccess());
+  const harness = mount({ save });
+  await harness.controller.load();
+  harness.surface().type("first edit");
+  const saving = harness.controller.save();
+  harness.surface().type("second edit");
+  answer.resolve(saveSuccess());
+  await saving;
+  expect(document.title).toBe("• Edit Alpha - bn serve");
+  await harness.controller.save();
+  expect(document.title).toBe("Edit Alpha - bn serve");
+});
+
+it("restores the title on teardown and ignores a late save failure", async () => {
+  const answer = deferred<SourceSaveResponse>();
+  const harness = mount({ save: vi.fn().mockReturnValue(answer.promise) });
+  await harness.controller.load();
+  harness.surface().type("edited");
+  const saving = harness.controller.save();
+  expect(document.title).toBe("• Edit Alpha - bn serve");
+  harness.controller.destroy();
+  expect(document.title).toBe("Edit Alpha - bn serve");
+  document.title = "Another page";
+  answer.resolve(saveFailure({ ok: false }));
+  await saving;
+  expect(document.title).toBe("Another page");
+});
+
 // savingOverAConflict is the overlap the two conflict buttons have to survive:
 // the panel is up, and a *later* save is in flight and has not answered. The
 // second response is a promise this test resolves by hand, because nothing else
@@ -464,10 +500,12 @@ describe("resolving a conflict", () => {
   // accepted.
   it("leaves nothing unsaved after a discard", async () => {
     const harness = await inConflict();
+    expect(document.title).toBe("• Edit Alpha - bn serve");
 
     harness.elements.conflictDiscard?.click();
     expect(harness.saveButton().disabled).toBe(true);
     expect(harness.elements.conflict?.hasAttribute("data-source-conflict-revision")).toBe(false);
+    expect(document.title).toBe("Edit Alpha - bn serve");
   });
 
 });

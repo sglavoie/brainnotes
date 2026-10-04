@@ -8567,6 +8567,75 @@ dt.sync-fact {
   }
 }
 
+/* internal/web/static_src/css/note-print.css */
+/* Print only the title and Markdown body, using the native Print / PDF action. */
+@media print {
+  body.note-page,
+  .note-page .note-main,
+  .note-page .note-main * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body.note-page {
+    background: #fff !important;
+    color-scheme: light;
+    margin: 0;
+  }
+
+  .note-page .note-main > :not(.site-header, .note-layout),
+  .note-page .site-header > :not(h1),
+  .note-page .note-layout > :not(.note-content),
+  .note-page .note-content > :not(.note-print-body),
+  .note-page .note-print-body > h2,
+  .note-page [data-copy-controls],
+  .note-page .heading-anchor {
+    display: none !important;
+  }
+
+  .note-page .note-main,
+  .note-page .site-header,
+  .note-page .note-layout,
+  .note-page .note-content,
+  .note-page .note-print-body {
+    display: block;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .note-page .note-body pre,
+  .note-page .note-body pre code {
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: visible;
+  }
+
+  .note-page .note-body table {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    overflow: visible;
+  }
+
+  .note-page .note-body :is(th, td) {
+    overflow-wrap: anywhere;
+  }
+
+  .note-page .note-body img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .note-page :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+  }
+}
 /* internal/web/static_src/css/responsive.css */
 @media (max-width: 960px) {
   .synthesize-columns {

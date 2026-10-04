@@ -1,4 +1,5 @@
 import { setStatusText, type StatusKind } from "./status";
+import { createEditorTitle } from "./source-editor-title";
 import { formatSource, type SourceFormatCommand, type SourceFormatOptions } from "./source-format";
 import { createPreviewScheduler, type PreviewScheduler } from "./source-preview";
 import {
@@ -89,6 +90,7 @@ export const createSourceEditorController = (
 ): SourceEditorController => {
   const { elements, client } = deps;
   const ownerDocument = deps.doc ?? elements.panel.ownerDocument;
+  const title = createEditorTitle(ownerDocument);
   const panes = initSourcePanes(elements);
   const state: EditorState = {
     surface: null,
@@ -114,6 +116,7 @@ export const createSourceEditorController = (
   // and a button that disabled itself there would say "nothing unsaved" over an
   // attempt whose fate nobody knows, leaving Ctrl/⌘+S as the only way to settle it.
   const refreshSaveButton = (): void => {
+    title.update(dirty() || state.pendingSave !== null);
     if (elements.save) {
       elements.save.disabled = state.saving || (!dirty() && state.pendingSave === null);
     }
@@ -169,6 +172,7 @@ export const createSourceEditorController = (
       state.surface?.destroy();
       state.surface = null;
       unbind?.();
+      title.dispose();
     },
   };
 

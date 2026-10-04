@@ -39,8 +39,10 @@ test("a note typed in the browser is saved by Ctrl/⌘ + S and lands in the fixt
 
   const phrase = phraseFor("source edit");
   await openEditor(page);
+  const cleanTitle = await page.title();
   await caretToEnd(page);
   await page.keyboard.type(`## ${phrase}`);
+  await expect(page).toHaveTitle(`• ${cleanTitle}`);
 
   // Dirtiness is computed from the document, so a Save that is still disabled
   // means the keystrokes never reached CodeMirror's state.
@@ -57,6 +59,7 @@ test("a note typed in the browser is saved by Ctrl/⌘ + S and lands in the fixt
   // Saved text is clean text: the button going back to disabled is the editor
   // re-pinning to the revision the server answered with.
   await expect(page.locator("[data-source-save]")).toBeDisabled();
+  await expect(page).toHaveTitle(cleanTitle);
 
   const after = readFileSync(notePath, "utf8");
   expect(after, "the browser reported success but the note on disk is unchanged").not.toBe(before);

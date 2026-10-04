@@ -477,15 +477,18 @@ describe("answering an offer of kept text", () => {
   });
 
   it("puts the text back in the editor on the button, and still writes nothing", async () => {
+    document.title = "Edit Alpha - bn serve";
     const storage = memoryDraftStorage();
     seedResume(storage);
     const harness = mount({ storage });
     await harness.controller.load();
+    const cleanTitle = document.title;
 
     harness.elements.recoveryRestore?.click();
 
     expect(harness.surface().getValue()).toBe(EDITED);
     expect(harness.controller.dirty()).toBe(true);
+    expect(document.title).toBe(`• ${cleanTitle}`);
     expect(harness.recovery().hidden).toBe(true);
     expect(harness.draftStatus()).toContain("still not in the vault");
     expect(harness.client.save).not.toHaveBeenCalled();
