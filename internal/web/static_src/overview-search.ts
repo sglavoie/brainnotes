@@ -46,7 +46,7 @@ import {
 import { postBulkApply, postBulkPreview } from "./overview-search-requests";
 import { setStatusText, type StatusKind } from "./status";
 import { readSearchCounts, searchSummary, type SearchCounts } from "./search-summary";
-import { overviewSelectionInputs, syncOverviewSelectionControls } from "./overview-search-selection";
+import { bindOverviewRangeSelection, overviewSelectionInputs, syncOverviewSelectionControls } from "./overview-search-selection";
 import { bindLibraryPosition } from "./library-position";
 
 export {
@@ -57,6 +57,7 @@ export {
 export { renderOverviewSearchResult } from "./overview-search-render";
 
 class OverviewSearch {
+  private readonly resetRangeSelection: () => void;
   private readonly restorePosition: () => void;
   private readonly fetcher: typeof fetch;
   private readonly selectedKeys = new Map<string, string>();
@@ -67,6 +68,7 @@ class OverviewSearch {
   private requestToken = 0;
 
   constructor(private readonly els: OverviewSearchElements, deps: OverviewSearchDeps) {
+    this.resetRangeSelection = bindOverviewRangeSelection(els.listEl);
     this.restorePosition = bindLibraryPosition(els.listEl);
     this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
     this.bindSearchEvents();
@@ -212,6 +214,7 @@ class OverviewSearch {
     if (this.selectionBusy()) {
       return;
     }
+    this.resetRangeSelection();
     this.selectedKeys.clear();
     for (const input of overviewSelectionInputs(this.els.listEl)) {
       input.checked = selected;
@@ -285,6 +288,7 @@ class OverviewSearch {
   };
 
   private scheduleSearch = (delay: number): void => {
+    this.resetRangeSelection();
     const query = overviewSearchQuery(this.els.input);
     window.clearTimeout(this.debounceToken);
     syncPageQueryParam(query);

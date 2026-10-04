@@ -3,6 +3,29 @@ import { queryAllElements, queryElement } from "./dom";
 export const overviewSelectionInputs = (list: HTMLElement): HTMLInputElement[] =>
   queryAllElements(list, ".overview-result-select input", HTMLInputElement);
 
+export const bindOverviewRangeSelection = (list: HTMLElement): (() => void) => {
+  let anchor: HTMLInputElement | null = null;
+  list.addEventListener("click", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.disabled ||
+      !input.matches(".overview-result-select input")) return;
+    const inputs = overviewSelectionInputs(list);
+    const start = inputs.findIndex((candidate) => candidate === anchor);
+    const end = inputs.indexOf(input);
+    if (event.shiftKey && start >= 0) {
+      // A checkbox click has already toggled its checked state. Apply that
+      // state through the ordinary change handlers, including preview clearing.
+      for (const sibling of inputs.slice(Math.min(start, end), Math.max(start, end) + 1)) {
+        if (sibling.disabled || sibling === input || sibling.checked === input.checked) continue;
+        sibling.checked = input.checked;
+        sibling.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+    anchor = input;
+  });
+  return () => { anchor = null; };
+};
+
 const syncCopySelection = (root: HTMLElement, inputs: HTMLInputElement[], busy: boolean): void => {
   const button = root.querySelector<HTMLButtonElement>("[data-overview-copy-wikilinks]");
   if (!button) return;

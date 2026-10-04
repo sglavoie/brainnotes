@@ -36,58 +36,56 @@ export const pinnedNeighborKeys = (
   after: pinnedItemKey(item.nextElementSibling),
 });
 
-export const initPinnedList = (deps: PinnedListDeps = {}): void => {
-  const root = queryElement(document, "[data-pinned-root]", HTMLElement);
-  if (!root) {
-    return;
-  }
-  const list = queryElement(root, "[data-pinned-list]", HTMLElement);
-  const statusEl = queryElement(root, "[data-pinned-status]", HTMLElement);
-  if (!list || !statusEl) {
-    return;
+class PinnedList {
+  private readonly csrfToken: string;
+  private readonly fetcher: FetchLike;
+  private readonly reload: () => void;
+  private cancelDrag: ((announce?: boolean) => void) | null = null;
+
+  constructor(root: HTMLElement, private readonly list: HTMLElement,
+    private readonly statusEl: HTMLElement, deps: PinnedListDeps) {
+    this.csrfToken = root.getAttribute("data-pinned-csrf") || "";
+    this.fetcher = deps.fetch || fetch;
+    this.reload = deps.reload || ((): void => window.location.reload());
   }
 
-  const csrfToken = root.getAttribute("data-pinned-csrf") || "";
-  const fetcher = deps.fetch || fetch;
-  const reload = deps.reload || ((): void => window.location.reload());
-
-  const setStatus = (message: string, kind: PinnedListStatusKind = ""): void => {
-    setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+  private setStatus = (message: string, kind: PinnedListStatusKind = ""): void => {
+    setStatusText(this.statusEl, message || " ", kind, ["is-success", "is-error"]);
   };
 
-  const rows = (): HTMLElement[] => queryAllElements(list, "[data-pinned-item]", HTMLElement);
+  private rows = (): HTMLElement[] => queryAllElements(this.list, "[data-pinned-item]", HTMLElement);
 
-  const post = async (request: NotePinFetchRequest, fallback: string): Promise<boolean> => {
+  private post = async (request: NotePinFetchRequest, fallback: string): Promise<boolean> => {
     try {
-      const resp = await fetcher(request.url, request.init);
+      const resp = await this.fetcher(request.url, request.init);
       const payload = await readNotePinResponsePayload(resp);
       if (!resp.ok) {
-        setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+        this.setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
         return false;
       }
       const result = payload as ManagementResult;
-      setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
+      this.setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
       return true;
     } catch {
-      setStatus("Pin request failed.", "is-error");
+      this.setStatus("Pin request failed.", "is-error");
       return false;
     }
   };
 
-  let moveQueue: Promise<void> = Promise.resolve();
-  let queuedMoves = 0;
-  let resyncing = false;
+  private moveQueue: Promise<void> = Promise.resolve();
+  private queuedMoves = 0;
+  private resyncing = false;
 
-  const sendMove = async (move: PendingPinnedMove): Promise<boolean> => {
-    if (!move.key || !csrfToken) {
-      setStatus("Reorder unavailable.", "is-error");
+  private sendMove = async (move: PendingPinnedMove): Promise<boolean> => {
+    if (!move.key || !this.csrfToken) {
+      this.setStatus("Reorder unavailable.", "is-error");
       return false;
     }
-    setStatus("Saving pin order...");
-    return post(
+    this.setStatus("Saving pin order...");
+    return this.post(
       buildNotePinReorderFetchRequest({
         key: move.key,
-        token: csrfToken,
+        token: this.csrfToken,
         before: move.before,
         after: move.after,
       }),
@@ -104,66 +102,70 @@ export const initPinnedList = (deps: PinnedListDeps = {}): void => {
   // scramble it, and the server-rendered page becomes the only truth left.
   // The rank badges are not updated: the request names neighbours rather than
   // ranks, so a stale badge costs nothing until the next page load.
-  const enqueueMove = (item: HTMLElement, restore: Element | null): void => {
-    queuedMoves += 1;
-    const sequence = queuedMoves;
+  private enqueueMove = (item: HTMLElement, restore: Element | null): void => {
+    this.queuedMoves += 1;
+    const sequence = this.queuedMoves;
     const neighbors = pinnedNeighborKeys(item);
     const move: PendingPinnedMove = {
       key: pinnedItemKey(item),
       before: neighbors.before,
       after: neighbors.after,
     };
-    setStatus("Saving pin order...");
-    moveQueue = moveQueue.then(async () => {
-      if (resyncing) {
+    this.setStatus("Saving pin order...");
+    this.moveQueue = this.moveQueue.then(async () => {
+      if (this.resyncing) {
         return;
       }
-      if (await sendMove(move)) {
+      if (await this.sendMove(move)) {
         return;
       }
-      if (sequence === queuedMoves) {
-        list.insertBefore(item, restore);
+      this.cancelDrag?.(false);
+      if (sequence === this.queuedMoves) {
+        this.list.insertBefore(item, restore);
         return;
       }
-      resyncing = true;
-      reload();
+      this.resyncing = true;
+      this.reload();
     });
   };
 
-  const moveByKeyboard = (item: HTMLElement, direction: -1 | 1): void => {
+  private moveByKeyboard = (item: HTMLElement, direction: -1 | 1): void => {
+    this.cancelDrag?.();
     const restore = item.nextElementSibling;
     if (direction < 0) {
       const previous = item.previousElementSibling;
       if (!previous) {
         return;
       }
-      list.insertBefore(item, previous);
+      this.list.insertBefore(item, previous);
     } else {
       const next = item.nextElementSibling;
       if (!next) {
         return;
       }
-      list.insertBefore(item, next.nextElementSibling);
+      this.list.insertBefore(item, next.nextElementSibling);
     }
-    enqueueMove(item, restore);
+    this.enqueueMove(item, restore);
   };
 
-  const startDrag = (item: HTMLElement, event: PointerEvent): void => {
+  private startDrag = (item: HTMLElement, event: PointerEvent): void => {
     if (event.button !== 0) {
       return;
     }
     event.preventDefault();
+    this.cancelDrag?.();
     const restore = item.nextElementSibling;
     item.classList.add(draggingClass);
 
     const clearDropTarget = (): void => {
-      for (const row of rows()) {
+      for (const row of this.rows()) {
         row.classList.remove(dropTargetClass);
       }
     };
 
     const onPointerMove = (moveEvent: PointerEvent): void => {
-      const next = rows().find((row) => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      const next = this.rows().find((row) => {
         if (row === item) {
           return false;
         }
@@ -173,68 +175,101 @@ export const initPinnedList = (deps: PinnedListDeps = {}): void => {
       clearDropTarget();
       if (next) {
         next.classList.add(dropTargetClass);
-        list.insertBefore(item, next);
+        this.list.insertBefore(item, next);
       } else {
-        list.appendChild(item);
+        this.list.appendChild(item);
       }
     };
 
-    const finishDrag = (): void => {
+    const finishDrag = (cancelled: boolean, announce = true): void => {
       item.classList.remove(draggingClass);
       clearDropTarget();
       window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", finishDrag);
-      window.removeEventListener("pointercancel", finishDrag);
+      window.removeEventListener("pointerup", releaseDrag);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onKeyDown);
+      this.cancelDrag = null;
+      if (cancelled) {
+        this.list.insertBefore(item, restore);
+        if (announce) this.setStatus("Pin reorder cancelled.");
+        return;
+      }
       if (item.nextElementSibling === restore) {
         return;
       }
-      enqueueMove(item, restore);
+      this.enqueueMove(item, restore);
     };
 
+    const releaseDrag = (upEvent: PointerEvent): void => {
+      if (upEvent.pointerId === event.pointerId) finishDrag(false);
+    };
+    const cancelDrag = (announce = true): void => finishDrag(true, announce);
+    const onPointerCancel = (cancelEvent: PointerEvent): void => {
+      if (cancelEvent.pointerId === event.pointerId) cancelDrag();
+    };
+    const onKeyDown = (keyEvent: KeyboardEvent): void => {
+      if (keyEvent.key !== "Escape") return;
+      keyEvent.preventDefault();
+      cancelDrag();
+    };
+    this.cancelDrag = cancelDrag;
+    window.addEventListener("keydown", onKeyDown);
     window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", finishDrag, { once: true });
-    window.addEventListener("pointercancel", finishDrag, { once: true });
+    window.addEventListener("pointerup", releaseDrag);
+    window.addEventListener("pointercancel", onPointerCancel);
   };
 
   // A row that leaves the list changes nothing about the remaining ranks, but
   // the page is server-rendered, so a reload is what restores the empty state
   // and the numbering.
-  const unpin = async (item: HTMLElement, button: HTMLButtonElement): Promise<void> => {
+  private unpin = async (item: HTMLElement, button: HTMLButtonElement): Promise<void> => {
+    this.cancelDrag?.();
     const key = pinnedItemKey(item);
-    if (!key || !csrfToken) {
-      setStatus("Unpin unavailable.", "is-error");
+    if (!key || !this.csrfToken) {
+      this.setStatus("Unpin unavailable.", "is-error");
       return;
     }
     button.disabled = true;
-    setStatus("Unpinning note...");
-    const ok = await post(
-      buildNotePinRemoveFetchRequest({ key, token: csrfToken }),
+    this.setStatus("Unpinning note...");
+    const ok = await this.post(
+      buildNotePinRemoveFetchRequest({ key, token: this.csrfToken }),
       "Unpinned note."
     );
     button.disabled = false;
     if (ok) {
-      reload();
+      this.reload();
     }
   };
 
-  for (const item of rows()) {
-    const handle = queryElement(item, "[data-pinned-handle]", HTMLButtonElement);
-    if (handle) {
-      handle.addEventListener("pointerdown", (event) => startDrag(item, event));
-      handle.addEventListener("keydown", (event) => {
-        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
-          return;
-        }
-        event.preventDefault();
-        moveByKeyboard(item, event.key === "ArrowUp" ? -1 : 1);
-      });
-    }
+  bind(): void {
+    for (const item of this.rows()) {
+      const handle = queryElement(item, "[data-pinned-handle]", HTMLButtonElement);
+      if (handle) {
+        handle.addEventListener("pointerdown", (event) => this.startDrag(item, event));
+        handle.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+            return;
+          }
+          event.preventDefault();
+          this.moveByKeyboard(item, event.key === "ArrowUp" ? -1 : 1);
+        });
+      }
 
-    const pinButton = queryElement(item, "[data-pin-button]", HTMLButtonElement);
-    if (pinButton) {
-      pinButton.addEventListener("click", () => {
-        void unpin(item, pinButton);
-      });
+      const pinButton = queryElement(item, "[data-pin-button]", HTMLButtonElement);
+      if (pinButton) {
+        pinButton.addEventListener("click", () => {
+          void this.unpin(item, pinButton);
+        });
+      }
     }
   }
+}
+
+export const initPinnedList = (deps: PinnedListDeps = {}): void => {
+  const root = queryElement(document, "[data-pinned-root]", HTMLElement);
+  if (!root) return;
+  const list = queryElement(root, "[data-pinned-list]", HTMLElement);
+  const statusEl = queryElement(root, "[data-pinned-status]", HTMLElement);
+  if (!list || !statusEl) return;
+  new PinnedList(root, list, statusEl, deps).bind();
 };

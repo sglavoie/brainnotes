@@ -9639,6 +9639,27 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/overview-search-selection.ts
   var overviewSelectionInputs = (list) => queryAllElements(list, ".overview-result-select input", HTMLInputElement);
+  var bindOverviewRangeSelection = (list) => {
+    let anchor = null;
+    list.addEventListener("click", (event) => {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement) || input.disabled || !input.matches(".overview-result-select input")) return;
+      const inputs = overviewSelectionInputs(list);
+      const start = inputs.findIndex((candidate) => candidate === anchor);
+      const end = inputs.indexOf(input);
+      if (event.shiftKey && start >= 0) {
+        for (const sibling of inputs.slice(Math.min(start, end), Math.max(start, end) + 1)) {
+          if (sibling.disabled || sibling === input || sibling.checked === input.checked) continue;
+          sibling.checked = input.checked;
+          sibling.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+      anchor = input;
+    });
+    return () => {
+      anchor = null;
+    };
+  };
   var syncCopySelection = (root, inputs, busy) => {
     const button = root.querySelector("[data-overview-copy-wikilinks]");
     if (!button) return;
@@ -9676,6 +9697,7 @@ var BrainNotesApp = (() => {
   var OverviewSearch = class {
     constructor(els, deps) {
       this.els = els;
+      this.resetRangeSelection = bindOverviewRangeSelection(els.listEl);
       this.restorePosition = bindLibraryPosition(els.listEl);
       this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
       this.bindSearchEvents();
@@ -9688,6 +9710,7 @@ var BrainNotesApp = (() => {
       this.scheduleSearch(0);
     }
     els;
+    resetRangeSelection;
     restorePosition;
     fetcher;
     selectedKeys = /* @__PURE__ */ new Map();
@@ -9806,6 +9829,7 @@ var BrainNotesApp = (() => {
       if (this.selectionBusy()) {
         return;
       }
+      this.resetRangeSelection();
       this.selectedKeys.clear();
       for (const input of overviewSelectionInputs(this.els.listEl)) {
         input.checked = selected;
@@ -9871,6 +9895,7 @@ var BrainNotesApp = (() => {
       this.restorePosition();
     };
     scheduleSearch = (delay) => {
+      this.resetRangeSelection();
       const query = overviewSearchQuery(this.els.input);
       window.clearTimeout(this.debounceToken);
       syncPageQueryParam(query);
@@ -10104,114 +10129,128 @@ var BrainNotesApp = (() => {
     before: pinnedItemKey(item.previousElementSibling),
     after: pinnedItemKey(item.nextElementSibling)
   });
-  var initPinnedList = (deps = {}) => {
-    const root = queryElement(document, "[data-pinned-root]", HTMLElement);
-    if (!root) {
-      return;
+  var PinnedList = class {
+    constructor(root, list, statusEl, deps) {
+      this.list = list;
+      this.statusEl = statusEl;
+      this.csrfToken = root.getAttribute("data-pinned-csrf") || "";
+      this.fetcher = deps.fetch || fetch;
+      this.reload = deps.reload || (() => window.location.reload());
     }
-    const list = queryElement(root, "[data-pinned-list]", HTMLElement);
-    const statusEl = queryElement(root, "[data-pinned-status]", HTMLElement);
-    if (!list || !statusEl) {
-      return;
-    }
-    const csrfToken = root.getAttribute("data-pinned-csrf") || "";
-    const fetcher = deps.fetch || fetch;
-    const reload = deps.reload || (() => window.location.reload());
-    const setStatus2 = (message, kind = "") => {
-      setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+    list;
+    statusEl;
+    csrfToken;
+    fetcher;
+    reload;
+    cancelDrag = null;
+    setStatus = (message, kind = "") => {
+      setStatusText(this.statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
-    const rows = () => queryAllElements(list, "[data-pinned-item]", HTMLElement);
-    const post3 = async (request, fallback) => {
+    rows = () => queryAllElements(this.list, "[data-pinned-item]", HTMLElement);
+    post = async (request, fallback) => {
       try {
-        const resp = await fetcher(request.url, request.init);
+        const resp = await this.fetcher(request.url, request.init);
         const payload = await readNotePinResponsePayload(resp);
         if (!resp.ok) {
-          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          this.setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return false;
         }
         const result = payload;
-        setStatus2(result && result.ok && result.message ? result.message : fallback, "is-success");
+        this.setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
         return true;
       } catch {
-        setStatus2("Pin request failed.", "is-error");
+        this.setStatus("Pin request failed.", "is-error");
         return false;
       }
     };
-    let moveQueue = Promise.resolve();
-    let queuedMoves = 0;
-    let resyncing = false;
-    const sendMove = async (move) => {
-      if (!move.key || !csrfToken) {
-        setStatus2("Reorder unavailable.", "is-error");
+    moveQueue = Promise.resolve();
+    queuedMoves = 0;
+    resyncing = false;
+    sendMove = async (move) => {
+      if (!move.key || !this.csrfToken) {
+        this.setStatus("Reorder unavailable.", "is-error");
         return false;
       }
-      setStatus2("Saving pin order...");
-      return post3(
+      this.setStatus("Saving pin order...");
+      return this.post(
         buildNotePinReorderFetchRequest({
           key: move.key,
-          token: csrfToken,
+          token: this.csrfToken,
           before: move.before,
           after: move.after
         }),
         "Reordered pins."
       );
     };
-    const enqueueMove = (item, restore) => {
-      queuedMoves += 1;
-      const sequence = queuedMoves;
+    // Moves run one at a time so the server applies them in the order the user
+    // made them, which is also what keeps each request's neighbours valid: they
+    // were read against the list state the previous request leaves on disk.
+    // restore is the sibling the row sat in front of before it moved, and a
+    // refused move may only use it while it is the last move queued — a later
+    // move has already rewritten the list, so undoing an older one would
+    // scramble it, and the server-rendered page becomes the only truth left.
+    // The rank badges are not updated: the request names neighbours rather than
+    // ranks, so a stale badge costs nothing until the next page load.
+    enqueueMove = (item, restore) => {
+      this.queuedMoves += 1;
+      const sequence = this.queuedMoves;
       const neighbors = pinnedNeighborKeys(item);
       const move = {
         key: pinnedItemKey(item),
         before: neighbors.before,
         after: neighbors.after
       };
-      setStatus2("Saving pin order...");
-      moveQueue = moveQueue.then(async () => {
-        if (resyncing) {
+      this.setStatus("Saving pin order...");
+      this.moveQueue = this.moveQueue.then(async () => {
+        if (this.resyncing) {
           return;
         }
-        if (await sendMove(move)) {
+        if (await this.sendMove(move)) {
           return;
         }
-        if (sequence === queuedMoves) {
-          list.insertBefore(item, restore);
+        this.cancelDrag?.(false);
+        if (sequence === this.queuedMoves) {
+          this.list.insertBefore(item, restore);
           return;
         }
-        resyncing = true;
-        reload();
+        this.resyncing = true;
+        this.reload();
       });
     };
-    const moveByKeyboard = (item, direction) => {
+    moveByKeyboard = (item, direction) => {
+      this.cancelDrag?.();
       const restore = item.nextElementSibling;
       if (direction < 0) {
         const previous = item.previousElementSibling;
         if (!previous) {
           return;
         }
-        list.insertBefore(item, previous);
+        this.list.insertBefore(item, previous);
       } else {
         const next = item.nextElementSibling;
         if (!next) {
           return;
         }
-        list.insertBefore(item, next.nextElementSibling);
+        this.list.insertBefore(item, next.nextElementSibling);
       }
-      enqueueMove(item, restore);
+      this.enqueueMove(item, restore);
     };
-    const startDrag = (item, event) => {
+    startDrag = (item, event) => {
       if (event.button !== 0) {
         return;
       }
       event.preventDefault();
+      this.cancelDrag?.();
       const restore = item.nextElementSibling;
       item.classList.add(draggingClass);
       const clearDropTarget = () => {
-        for (const row of rows()) {
+        for (const row of this.rows()) {
           row.classList.remove(dropTargetClass);
         }
       };
       const onPointerMove = (moveEvent) => {
-        const next = rows().find((row) => {
+        if (moveEvent.pointerId !== event.pointerId) return;
+        const next = this.rows().find((row) => {
           if (row === item) {
             return false;
           }
@@ -10221,62 +10260,97 @@ var BrainNotesApp = (() => {
         clearDropTarget();
         if (next) {
           next.classList.add(dropTargetClass);
-          list.insertBefore(item, next);
+          this.list.insertBefore(item, next);
         } else {
-          list.appendChild(item);
+          this.list.appendChild(item);
         }
       };
-      const finishDrag = () => {
+      const finishDrag = (cancelled, announce = true) => {
         item.classList.remove(draggingClass);
         clearDropTarget();
         window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", finishDrag);
-        window.removeEventListener("pointercancel", finishDrag);
+        window.removeEventListener("pointerup", releaseDrag);
+        window.removeEventListener("pointercancel", onPointerCancel);
+        window.removeEventListener("keydown", onKeyDown);
+        this.cancelDrag = null;
+        if (cancelled) {
+          this.list.insertBefore(item, restore);
+          if (announce) this.setStatus("Pin reorder cancelled.");
+          return;
+        }
         if (item.nextElementSibling === restore) {
           return;
         }
-        enqueueMove(item, restore);
+        this.enqueueMove(item, restore);
       };
+      const releaseDrag = (upEvent) => {
+        if (upEvent.pointerId === event.pointerId) finishDrag(false);
+      };
+      const cancelDrag = (announce = true) => finishDrag(true, announce);
+      const onPointerCancel = (cancelEvent) => {
+        if (cancelEvent.pointerId === event.pointerId) cancelDrag();
+      };
+      const onKeyDown = (keyEvent) => {
+        if (keyEvent.key !== "Escape") return;
+        keyEvent.preventDefault();
+        cancelDrag();
+      };
+      this.cancelDrag = cancelDrag;
+      window.addEventListener("keydown", onKeyDown);
       window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", finishDrag, { once: true });
-      window.addEventListener("pointercancel", finishDrag, { once: true });
+      window.addEventListener("pointerup", releaseDrag);
+      window.addEventListener("pointercancel", onPointerCancel);
     };
-    const unpin = async (item, button) => {
+    // A row that leaves the list changes nothing about the remaining ranks, but
+    // the page is server-rendered, so a reload is what restores the empty state
+    // and the numbering.
+    unpin = async (item, button) => {
+      this.cancelDrag?.();
       const key = pinnedItemKey(item);
-      if (!key || !csrfToken) {
-        setStatus2("Unpin unavailable.", "is-error");
+      if (!key || !this.csrfToken) {
+        this.setStatus("Unpin unavailable.", "is-error");
         return;
       }
       button.disabled = true;
-      setStatus2("Unpinning note...");
-      const ok = await post3(
-        buildNotePinRemoveFetchRequest({ key, token: csrfToken }),
+      this.setStatus("Unpinning note...");
+      const ok = await this.post(
+        buildNotePinRemoveFetchRequest({ key, token: this.csrfToken }),
         "Unpinned note."
       );
       button.disabled = false;
       if (ok) {
-        reload();
+        this.reload();
       }
     };
-    for (const item of rows()) {
-      const handle = queryElement(item, "[data-pinned-handle]", HTMLButtonElement);
-      if (handle) {
-        handle.addEventListener("pointerdown", (event) => startDrag(item, event));
-        handle.addEventListener("keydown", (event) => {
-          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
-            return;
-          }
-          event.preventDefault();
-          moveByKeyboard(item, event.key === "ArrowUp" ? -1 : 1);
-        });
-      }
-      const pinButton = queryElement(item, "[data-pin-button]", HTMLButtonElement);
-      if (pinButton) {
-        pinButton.addEventListener("click", () => {
-          void unpin(item, pinButton);
-        });
+    bind() {
+      for (const item of this.rows()) {
+        const handle = queryElement(item, "[data-pinned-handle]", HTMLButtonElement);
+        if (handle) {
+          handle.addEventListener("pointerdown", (event) => this.startDrag(item, event));
+          handle.addEventListener("keydown", (event) => {
+            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+              return;
+            }
+            event.preventDefault();
+            this.moveByKeyboard(item, event.key === "ArrowUp" ? -1 : 1);
+          });
+        }
+        const pinButton = queryElement(item, "[data-pin-button]", HTMLButtonElement);
+        if (pinButton) {
+          pinButton.addEventListener("click", () => {
+            void this.unpin(item, pinButton);
+          });
+        }
       }
     }
+  };
+  var initPinnedList = (deps = {}) => {
+    const root = queryElement(document, "[data-pinned-root]", HTMLElement);
+    if (!root) return;
+    const list = queryElement(root, "[data-pinned-list]", HTMLElement);
+    const statusEl = queryElement(root, "[data-pinned-status]", HTMLElement);
+    if (!list || !statusEl) return;
+    new PinnedList(root, list, statusEl, deps).bind();
   };
 
   // internal/web/static_src/properties-model.ts

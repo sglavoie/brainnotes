@@ -34,7 +34,7 @@
         <h2 id="pinned-heading">Pinned notes</h2>
       </div>
       {{if .Pinned}}
-        <p class="pinned-hint">Drag a handle to reorder, or focus one and press Up or Down.</p>
+        <p class="pinned-hint">Drag a handle to reorder, or focus one and press Up or Down. Press Escape to cancel a drag.</p>
         <ol class="pinned-list" data-pinned-list>
           {{range .Pinned}}
             <li class="pinned-list-item" data-pinned-item data-pinned-key="{{.Key}}">

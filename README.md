@@ -1,9 +1,15 @@
 # bnotes (`bn`)
 
-Brain Notes is a small, fast Go CLI for editing and querying a plain-Markdown
-notes vault. It complements an editor (VS Code, Neovim) by handling the
-operations editors do poorly: frontmatter-aware queries, wikilink-aware file
-operations, and templated note creation.
+Brain Notes is a Go CLI and browser workspace for a plain-Markdown notes vault.
+Use it alongside an editor such as VS Code or Neovim, or run `bn serve` to
+browse and edit your notes in the browser.
+
+## What you can do
+
+- **Capture and create:** send a thought to your inbox or create a note from a template.
+- **Find and connect:** search Library, save views, explore related notes, and follow the link graph.
+- **Read and edit:** read rendered Markdown, edit source, manage properties, and pin notes you return to often.
+- **Review and recover:** inspect change history, preview bulk edits, and undo journaled changes.
 
 One query language spans all three surfaces it can be typed into — `bn find -q`,
 the `/library` query bar, and the `/graph` filter — with the same syntax, the
@@ -48,6 +54,9 @@ bn init /path/to/vault
 
 # Run from inside the vault, or point bn at it explicitly.
 export BNOTES_VAULT=/path/to/vault
+
+# Open the browser workspace.
+bn serve
 
 # Find every book note that's still 'To Read'.
 bn find --category Books --status "To Read"

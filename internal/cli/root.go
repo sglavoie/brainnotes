@@ -89,8 +89,8 @@ func NewRootCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "bn",
-		Short:         "Brain Notes: a CLI for plain-markdown vaults",
-		Long:          "Brain Notes (bn) is a small, fast CLI for editing and querying a plain-Markdown notes vault. Use --dry-run previews where available, inspect with 'git diff', and use 'bn history' / 'bn undo' for short-term rollback.",
+		Short:         "Brain Notes: tools for plain-Markdown vaults",
+		Long:          "Brain Notes (bn) helps you capture, find, edit, and maintain a plain-Markdown notes vault. Run 'bn serve' to open the browser workspace. Use --dry-run previews where available, inspect with 'git diff', and use 'bn history' / 'bn undo' for short-term rollback.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -113,43 +113,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "path to vault root (overrides BNOTES_VAULT and the upward search)")
 	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 
-	cmd.AddCommand(NewBackupCmd())
-	cmd.AddCommand(NewBacklinksCmd())
-	cmd.AddCommand(NewCaptureCmd())
-	cmd.AddCommand(NewCheckpointCmd())
-	cmd.AddCommand(NewConfigCmd())
-	cmd.AddCommand(NewContextCmd())
-	cmd.AddCommand(NewDoctorCmd())
-	cmd.AddCommand(NewFindCmd())
-	cmd.AddCommand(NewGraphCmd())
-	cmd.AddCommand(NewHistoryCmd())
-	cmd.AddCommand(NewIndexCmd())
-	cmd.AddCommand(NewInitCmd())
-	cmd.AddCommand(NewLintCmd())
-	cmd.AddCommand(NewLinksCmd())
-	cmd.AddCommand(NewMoveCmd())
-	cmd.AddCommand(NewNewCmd())
-	cmd.AddCommand(NewOpenCmd())
-	cmd.AddCommand(NewPinCmd())
-	cmd.AddCommand(NewRenameCmd())
-	cmd.AddCommand(NewRenameKeyCmd())
-	cmd.AddCommand(NewRemoveCmd())
-	cmd.AddCommand(NewRepairCmd())
-	cmd.AddCommand(NewRelinkCmd())
-	cmd.AddCommand(NewRelatedCmd())
-	cmd.AddCommand(NewReplaceCmd())
-	cmd.AddCommand(NewRestoreCmd())
-	cmd.AddCommand(NewSchemaCmd())
-	cmd.AddCommand(NewSearchCmd())
-	cmd.AddCommand(NewServeCmd())
-	cmd.AddCommand(NewSetCmd())
-	cmd.AddCommand(NewTagsCmd())
-	cmd.AddCommand(NewUndoCmd())
-	cmd.AddCommand(NewUnpinCmd())
-	cmd.AddCommand(NewUnsetCmd())
-	cmd.AddCommand(NewValuesCmd())
-	cmd.AddCommand(NewViewsCmd())
-	cmd.AddCommand(NewVaultCmd())
+	addRootCommandGroups(cmd)
 
 	return cmd
 }

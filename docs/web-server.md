@@ -144,10 +144,11 @@ before choosing Undo.
 
 Reordering is web-only. Drag a row's handle on `/pinned`, or focus a handle and
 press `Up`/`Down` for the same move from the keyboard. The browser posts note
-keys, never ranks — the server takes the midpoint of the two neighbouring ranks
-as they are on disk, so a stale page cannot write an order it computed against a
-list that has since moved. A move normally rewrites exactly one note; in the
-rare case where the float gap between two ranks is exhausted, the server
+keys, never ranks. Press `Escape` to cancel a drag; an interrupted pointer gesture
+also restores the original position without saving. The server takes the midpoint
+of the two neighbouring ranks as they are on disk, so a stale page cannot write
+an order it computed against a list that has since moved. A move normally rewrites
+exactly one note; in the rare case where the float gap between two ranks is exhausted, the server
 renumbers the whole pinned list in one transaction instead, so that one reorder
 can rewrite more than one note. The pinned list is uncapped and so is that
 renumber: however long the list is, it commits as one action that `bn undo`
@@ -214,6 +215,11 @@ Select Library results and choose **Copy wikilinks** to copy one `[[target]]`
 per line in displayed order. This uses the notes' exact-case vault targets and
 copies only the selected, displayed results. It also works in read-only mode
 and offers manual copying if clipboard access is unavailable.
+
+Shift-click a result checkbox to select or clear the range from the last clicked
+checkbox, using the clicked checkbox's new state. Only displayed results are
+included. A new search, **Select displayed**, or **Clear selection** resets the
+range anchor; changing selection clears any pending bulk-action preview.
 
 Library's **Sort** control offers default order, recently modified, and title
 in either direction. It preserves the search text, filters, and result limit;
