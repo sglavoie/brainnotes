@@ -1,6 +1,7 @@
 import { normalizeSearchResults, searchResultPath, type SearchResult } from "./api";
 import { getElementByID, queryElement } from "./dom";
 import { bindSearchShortcut } from "./search-shortcut";
+import { libraryResultPath } from "./note-navigation";
 import {
   buildSearchAPIURL,
   buildLibrarySearchURL,
@@ -45,7 +46,7 @@ export const renderSearchResultOption = (
 ): HTMLLIElement => {
   const item = doc.createElement("li");
   const link = doc.createElement("a");
-  link.href = searchResultPath(result);
+  link.href = libraryResultPath(searchResultPath(result));
   link.id = `search-option-${index}`;
   link.className = "search-result";
   link.setAttribute("role", "option");

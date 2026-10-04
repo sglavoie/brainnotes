@@ -8,7 +8,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
 
-func TestServer_NoteView200AndUnknown404(t *testing.T) {
+func TestServer_NoteView200(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Source.md": []byte("---\nmeta: \"[[Target]]\"\n---\nBody [[Target]]\nhttps://www.merakialive.com\n<script>alert(1)</script>\n"),
 		"Target.md": []byte("---\ntitle: Target\n---\nTarget body\n"),
@@ -22,14 +22,13 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
 	}
-	if !strings.Contains(body, "<h1>Source</h1>") {
-		t.Fatalf("note title missing, got %q", body)
-	}
-	if !strings.Contains(body, `href="/n/target"`) {
-		t.Fatalf("resolved note link missing, got %q", body)
-	}
 	for _, want := range []string{
+		`<h1>Source</h1>`,
+		`href="/n/target"`,
 		`<main class="note-main">`,
+		`data-note-back-results hidden>Back to results</a>`,
+		`data-copy-note-url`,
+		`data-note-sidebar-details open>`,
 		`<div class="note-content">`,
 		`data-note-insight`,
 		`data-note-insight-endpoint="/api/note/insight"`,
@@ -56,7 +55,12 @@ func TestServer_NoteView200AndUnknown404(t *testing.T) {
 	if insightIndex < 0 || bodyIndex < 0 || insightIndex <= bodyIndex {
 		t.Fatalf("Ask AI panel must render below note body: insight=%d body=%d", insightIndex, bodyIndex)
 	}
+}
 
+func TestServer_NoteViewUnknown404(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
+		"Source.md": []byte("Source body\n"),
+	})
 	missingResp, err := http.Get(ts.URL + "/n/does-not-exist") // #nosec G107 -- test-only local URL
 	if err != nil {
 		t.Fatalf("GET missing note: %v", err)

@@ -1,4 +1,5 @@
 import { renderOverviewPin } from "./overview-search-pin";
+import { libraryResultPath } from "./note-navigation";
 import {
   type BulkFrontmatterChange,
   searchResultPath,
@@ -320,7 +321,7 @@ export const renderOverviewSearchResult = (
 
   const link = doc.createElement("a");
   link.className = "overview-result-link";
-  link.setAttribute("href", path);
+  link.setAttribute("href", libraryResultPath(path));
 
   const title = doc.createElement("span");
   title.className = "overview-result-title";

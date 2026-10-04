@@ -124,6 +124,56 @@ const setStoredTOCWidth = (
   persistSidebarWidth(storage, NOTE_TOC_WIDTH_STORAGE_KEY, width);
 };
 
+const bindMetadataResize = (
+  doc: Document,
+  view: Window,
+  layout: HTMLElement,
+  metadata: HTMLElement,
+  resizeHandle: HTMLElement | null,
+  storage: StorageLike | null,
+  getPreferredWidth: () => number | null,
+  updateWidth: (width: number, persist: boolean) => void
+): void => {
+  if (!resizeHandle) return;
+  resizeHandle.addEventListener("pointerdown", (event) => {
+    if (!isDesktop(view) || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    doc.documentElement.classList.add("is-resizing-note-sidebar");
+
+    const onPointerMove = (moveEvent: PointerEvent): void => {
+      const layoutLeft = layout.getBoundingClientRect().left;
+      updateWidth(moveEvent.clientX - layoutLeft, false);
+    };
+    const finishResize = (): void => {
+      doc.documentElement.classList.remove("is-resizing-note-sidebar");
+      const width = getPreferredWidth();
+      if (width !== null) {
+        persistSidebarWidth(storage, NOTE_META_WIDTH_STORAGE_KEY, width);
+      }
+      view.removeEventListener("pointermove", onPointerMove);
+      view.removeEventListener("pointerup", finishResize);
+      view.removeEventListener("pointercancel", finishResize);
+    };
+
+    view.addEventListener("pointermove", onPointerMove);
+    view.addEventListener("pointerup", finishResize, { once: true });
+    view.addEventListener("pointercancel", finishResize, { once: true });
+  });
+
+  resizeHandle.addEventListener("keydown", (event) => {
+    if (!isDesktop(view) || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) {
+      return;
+    }
+    event.preventDefault();
+    const current =
+      getPreferredWidth() ?? Math.round(metadata.getBoundingClientRect().width);
+    const step = event.shiftKey ? FAST_RESIZE_STEP_PX : RESIZE_STEP_PX;
+    updateWidth(current + (event.key === "ArrowRight" ? step : -step), true);
+  });
+};
+
 export const initNoteLayout = (options: InitNoteLayoutOptions = {}): void => {
   const doc = options.document ?? (typeof document !== "undefined" ? document : null);
   if (!doc) {
@@ -178,7 +228,7 @@ export const initNoteLayout = (options: InitNoteLayoutOptions = {}): void => {
 
   const applyVisibility = (): void => {
     layout.classList.toggle("is-metadata-hidden", !visible);
-    metadata.hidden = !visible;
+    metadata.hidden = !visible && isDesktop(view);
     toggle.setAttribute("aria-expanded", String(visible));
     const label = visible ? "Hide sidebar" : "Show sidebar";
     toggle.setAttribute("aria-label", label);
@@ -210,44 +260,11 @@ export const initNoteLayout = (options: InitNoteLayoutOptions = {}): void => {
     applyVisibility();
   });
 
-  if (resizeHandle) {
-    resizeHandle.addEventListener("pointerdown", (event) => {
-      if (!isDesktop(view) || event.button !== 0) {
-        return;
-      }
-      event.preventDefault();
-      doc.documentElement.classList.add("is-resizing-note-sidebar");
+  bindMetadataResize(doc, view, layout, metadata, resizeHandle, storage,
+    () => preferredWidth, updateWidth);
 
-      const onPointerMove = (moveEvent: PointerEvent): void => {
-        const layoutLeft = layout.getBoundingClientRect().left;
-        updateWidth(moveEvent.clientX - layoutLeft, false);
-      };
-      const finishResize = (): void => {
-        doc.documentElement.classList.remove("is-resizing-note-sidebar");
-        if (preferredWidth !== null) {
-          persistSidebarWidth(storage, NOTE_META_WIDTH_STORAGE_KEY, preferredWidth);
-        }
-        view.removeEventListener("pointermove", onPointerMove);
-        view.removeEventListener("pointerup", finishResize);
-        view.removeEventListener("pointercancel", finishResize);
-      };
-
-      view.addEventListener("pointermove", onPointerMove);
-      view.addEventListener("pointerup", finishResize, { once: true });
-      view.addEventListener("pointercancel", finishResize, { once: true });
-    });
-
-    resizeHandle.addEventListener("keydown", (event) => {
-      if (!isDesktop(view) || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) {
-        return;
-      }
-      event.preventDefault();
-      const current =
-        preferredWidth ?? Math.round(metadata.getBoundingClientRect().width) ?? MIN_META_WIDTH_PX;
-      const step = event.shiftKey ? FAST_RESIZE_STEP_PX : RESIZE_STEP_PX;
-      updateWidth(current + (event.key === "ArrowRight" ? step : -step), true);
-    });
-  }
-
-  view.addEventListener("resize", () => applyWidth(preferredWidth));
+  view.addEventListener("resize", () => {
+    applyWidth(preferredWidth);
+    applyVisibility();
+  });
 };

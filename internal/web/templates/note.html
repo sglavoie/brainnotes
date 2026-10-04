@@ -52,6 +52,7 @@
   </head>
   <body>
     <main class="note-main">
+      <a href="/library" data-note-back-results hidden>Back to results</a>
       {{if .Breadcrumbs}}
         <nav class="note-breadcrumbs" aria-label="Breadcrumb">
           <ol>
@@ -105,6 +106,7 @@
 
         {{if .Copy.Wikilink}}
           <div class="note-action-group note-copy-actions" data-copy-controls>
+            <button type="button" class="copy-button" data-copy-note-url data-copy-text="" data-copy-label="Note URL" hidden>Copy note URL</button>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
@@ -126,6 +128,9 @@
       <div class="note-layout{{if .TOC}} note-layout-with-toc{{end}}" data-note-layout>
         <aside id="note-metadata-sidebar" class="note-meta-sidebar" aria-label="Note metadata">
           <div class="note-meta-resize-handle" data-note-meta-resize role="separator" aria-orientation="vertical" aria-label="Resize metadata sidebar" aria-valuemin="216" aria-valuemax="500" aria-valuenow="352" tabindex="0"></div>
+          <details class="note-sidebar-details" data-note-sidebar-details open>
+            <summary>Metadata</summary>
+            <div class="note-sidebar-content">
           <section class="panel frontmatter-panel" data-frontmatter-panel data-frontmatter-key="{{.Key}}" data-frontmatter-csrf="{{.CSRFToken}}">
             <div class="frontmatter-panel-header">
               <h2>Frontmatter</h2>
@@ -246,10 +251,14 @@
               <p>None.</p>
             {{end}}
           </section>
+            </div>
+          </details>
         </aside>
 
         {{if .TOC}}
           <aside class="note-toc-sidebar" aria-label="Table of contents">
+            <details class="note-sidebar-details" data-note-sidebar-details open>
+              <summary>Contents</summary>
             <section class="panel note-toc" aria-labelledby="note-toc-heading">
               <h2 id="note-toc-heading">Contents</h2>
               <ol class="note-toc-list">
@@ -258,6 +267,7 @@
                 {{end}}
               </ol>
             </section>
+            </details>
           </aside>
         {{end}}
 

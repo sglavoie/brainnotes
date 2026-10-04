@@ -117,23 +117,23 @@ describe("initNoteLayout", () => {
 
     initNoteLayout({ storage });
 
-    const layout = document.querySelector<HTMLElement>("[data-note-layout]");
-    const metadata = document.querySelector<HTMLElement>(".note-meta-sidebar");
-    const toggle = document.querySelector<HTMLButtonElement>("[data-note-sidebar-toggle]");
-    expect(layout?.classList.contains("is-metadata-hidden")).toBe(true);
-    expect(layout?.style.getPropertyValue("--bn-note-meta-width")).toBe("384px");
-    expect(metadata?.hidden).toBe(true);
-    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle?.getAttribute("aria-label")).toBe("Show sidebar");
-    expect(toggle?.getAttribute("title")).toBe("Show sidebar");
-    expect(toggle?.querySelector(".note-sidebar-toggle-icon")).not.toBeNull();
+    const layout = document.querySelector<HTMLElement>("[data-note-layout]")!;
+    const metadata = document.querySelector<HTMLElement>(".note-meta-sidebar")!;
+    const toggle = document.querySelector<HTMLButtonElement>("[data-note-sidebar-toggle]")!;
+    expect(layout.classList.contains("is-metadata-hidden")).toBe(true);
+    expect(layout.style.getPropertyValue("--bn-note-meta-width")).toBe("384px");
+    expect(metadata.hidden).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-label")).toBe("Show sidebar");
+    expect(toggle.getAttribute("title")).toBe("Show sidebar");
+    expect(toggle.querySelector(".note-sidebar-toggle-icon")).not.toBeNull();
 
-    toggle?.click();
+    toggle.click();
 
-    expect(metadata?.hidden).toBe(false);
-    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
-    expect(toggle?.getAttribute("aria-label")).toBe("Hide sidebar");
-    expect(toggle?.querySelector(".note-sidebar-toggle-icon")).not.toBeNull();
+    expect(metadata.hidden).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.getAttribute("aria-label")).toBe("Hide sidebar");
+    expect(toggle.querySelector(".note-sidebar-toggle-icon")).not.toBeNull();
     expect(storage.map.has(NOTE_META_VISIBLE_STORAGE_KEY)).toBe(false);
   });
 
@@ -177,20 +177,22 @@ describe("initNoteLayout", () => {
     expect(handle?.getAttribute("aria-valuenow")).toBe("416");
   });
 
-  it("keeps the visibility toggle working but does not apply resizing on narrow screens", () => {
+  it("keeps mobile metadata available regardless of the desktop preference and does not resize", () => {
     setViewportWidth(960);
     document.body.innerHTML = layoutFixture();
-    const storage = makeStorage();
+    const storage = makeStorage({ [NOTE_META_VISIBLE_STORAGE_KEY]: "hidden" });
 
     initNoteLayout({ storage });
-    const toggle = document.querySelector<HTMLButtonElement>("[data-note-sidebar-toggle]");
     const layout = document.querySelector<HTMLElement>("[data-note-layout]");
     const handle = document.querySelector<HTMLElement>("[data-note-meta-resize]");
-    toggle?.click();
     handle?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 440 }));
 
-    expect(document.querySelector<HTMLElement>(".note-meta-sidebar")?.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>(".note-meta-sidebar")?.hidden).toBe(false);
     expect(layout?.style.getPropertyValue("--bn-note-meta-width")).toBe("");
     expect(document.documentElement.classList.contains("is-resizing-note-sidebar")).toBe(false);
+    setViewportWidth(1200);
+    window.dispatchEvent(new Event("resize"));
+    expect(document.querySelector<HTMLElement>(".note-meta-sidebar")?.hidden).toBe(true);
+    expect(storage.map.get(NOTE_META_VISIBLE_STORAGE_KEY)).toBe("hidden");
   });
 });

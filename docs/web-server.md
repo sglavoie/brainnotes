@@ -18,6 +18,15 @@ clipboard access, a selected text field lets you copy manually.
 Headings also offer **Copy section link**, which copies the full note URL with
 that heading's existing anchor and uses the same manual-copy fallback.
 
+Opening a Library search result offers **Back to results** on the note, preserving
+the search text, filters, and sort order even after a reload or opening in a new
+tab. **Copy note URL** copies the full note address without that search context
+or a section anchor, with the same manual-copy fallback.
+
+On screens up to 960 pixels wide, **Metadata** and **Contents** start collapsed
+and expand independently. Desktop sidebars keep their existing layout and
+visibility preference; expanding mobile metadata does not change that preference.
+
 ## Command reference
 
 ### `bn serve` — run the local vault browser

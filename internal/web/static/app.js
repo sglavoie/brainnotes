@@ -8184,6 +8184,60 @@ var BrainNotesApp = (() => {
     trackNoteSection(body);
   };
 
+  // internal/web/static_src/note-navigation.ts
+  var libraryResultPath = (path) => {
+    if (window.location.pathname !== "/library" || !path.startsWith("/n/")) return path;
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("return_to", window.location.pathname + window.location.search + window.location.hash);
+    return url.pathname + url.search + url.hash;
+  };
+  var libraryReturnPath = () => {
+    const value = new URLSearchParams(window.location.search).get("return_to");
+    if (!value?.startsWith("/")) return null;
+    try {
+      const url = new URL(value, window.location.origin);
+      if (url.origin !== window.location.origin || url.pathname !== "/library" || url.username || url.password) return null;
+      return url.pathname + url.search + url.hash;
+    } catch {
+      return null;
+    }
+  };
+  var initNoteNavigation = () => {
+    const back = document.querySelector("[data-note-back-results]");
+    const path = libraryReturnPath();
+    if (back && path) {
+      back.href = path;
+      back.hidden = false;
+    }
+    const copy = document.querySelector("[data-copy-note-url]");
+    if (copy) {
+      const url = new URL(window.location.href);
+      url.search = "";
+      url.hash = "";
+      copy.dataset.copyText = url.href;
+      copy.hidden = false;
+    }
+  };
+
+  // internal/web/static_src/note-mobile-sidebars.ts
+  var initNoteMobileSidebars = () => {
+    const sidebars = document.querySelectorAll("[data-note-sidebar-details]");
+    if (!sidebars.length) return;
+    const mobile = window.matchMedia("(max-width: 960px)");
+    for (const sidebar of sidebars) {
+      let mobileOpen = false;
+      sidebar.open = !mobile.matches;
+      mobile.addEventListener("change", () => {
+        if (mobile.matches) {
+          sidebar.open = mobileOpen;
+        } else {
+          mobileOpen = sidebar.open;
+          sidebar.open = true;
+        }
+      });
+    }
+  };
+
   // internal/web/static_src/note-layout.ts
   var NOTE_META_VISIBLE_STORAGE_KEY = "bn.note-meta-sidebar.visible";
   var NOTE_META_WIDTH_STORAGE_KEY = "bn.note-meta-sidebar.width";
@@ -8267,6 +8321,42 @@ var BrainNotesApp = (() => {
     doc2.documentElement.style.setProperty("--bn-note-toc-sidebar-width", `${width}px`);
     persistSidebarWidth(storage, NOTE_TOC_WIDTH_STORAGE_KEY, width);
   };
+  var bindMetadataResize = (doc2, view, layout, metadata, resizeHandle, storage, getPreferredWidth, updateWidth) => {
+    if (!resizeHandle) return;
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      if (!isDesktop(view) || event.button !== 0) {
+        return;
+      }
+      event.preventDefault();
+      doc2.documentElement.classList.add("is-resizing-note-sidebar");
+      const onPointerMove = (moveEvent) => {
+        const layoutLeft = layout.getBoundingClientRect().left;
+        updateWidth(moveEvent.clientX - layoutLeft, false);
+      };
+      const finishResize = () => {
+        doc2.documentElement.classList.remove("is-resizing-note-sidebar");
+        const width = getPreferredWidth();
+        if (width !== null) {
+          persistSidebarWidth(storage, NOTE_META_WIDTH_STORAGE_KEY, width);
+        }
+        view.removeEventListener("pointermove", onPointerMove);
+        view.removeEventListener("pointerup", finishResize);
+        view.removeEventListener("pointercancel", finishResize);
+      };
+      view.addEventListener("pointermove", onPointerMove);
+      view.addEventListener("pointerup", finishResize, { once: true });
+      view.addEventListener("pointercancel", finishResize, { once: true });
+    });
+    resizeHandle.addEventListener("keydown", (event) => {
+      if (!isDesktop(view) || event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+      event.preventDefault();
+      const current = getPreferredWidth() ?? Math.round(metadata.getBoundingClientRect().width);
+      const step = event.shiftKey ? FAST_RESIZE_STEP_PX : RESIZE_STEP_PX;
+      updateWidth(current + (event.key === "ArrowRight" ? step : -step), true);
+    });
+  };
   var initNoteLayout = (options = {}) => {
     const doc2 = options.document ?? (typeof document !== "undefined" ? document : null);
     if (!doc2) {
@@ -8316,7 +8406,7 @@ var BrainNotesApp = (() => {
     };
     const applyVisibility = () => {
       layout.classList.toggle("is-metadata-hidden", !visible);
-      metadata.hidden = !visible;
+      metadata.hidden = !visible && isDesktop(view);
       toggle2.setAttribute("aria-expanded", String(visible));
       const label = visible ? "Hide sidebar" : "Show sidebar";
       toggle2.setAttribute("aria-label", label);
@@ -8344,41 +8434,20 @@ var BrainNotesApp = (() => {
       persistMetaSidebarVisible(storage, visible);
       applyVisibility();
     });
-    if (resizeHandle) {
-      resizeHandle.addEventListener("pointerdown", (event) => {
-        if (!isDesktop(view) || event.button !== 0) {
-          return;
-        }
-        event.preventDefault();
-        doc2.documentElement.classList.add("is-resizing-note-sidebar");
-        const onPointerMove = (moveEvent) => {
-          const layoutLeft = layout.getBoundingClientRect().left;
-          updateWidth(moveEvent.clientX - layoutLeft, false);
-        };
-        const finishResize = () => {
-          doc2.documentElement.classList.remove("is-resizing-note-sidebar");
-          if (preferredWidth !== null) {
-            persistSidebarWidth(storage, NOTE_META_WIDTH_STORAGE_KEY, preferredWidth);
-          }
-          view.removeEventListener("pointermove", onPointerMove);
-          view.removeEventListener("pointerup", finishResize);
-          view.removeEventListener("pointercancel", finishResize);
-        };
-        view.addEventListener("pointermove", onPointerMove);
-        view.addEventListener("pointerup", finishResize, { once: true });
-        view.addEventListener("pointercancel", finishResize, { once: true });
-      });
-      resizeHandle.addEventListener("keydown", (event) => {
-        if (!isDesktop(view) || event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-          return;
-        }
-        event.preventDefault();
-        const current = preferredWidth ?? Math.round(metadata.getBoundingClientRect().width) ?? MIN_META_WIDTH_PX;
-        const step = event.shiftKey ? FAST_RESIZE_STEP_PX : RESIZE_STEP_PX;
-        updateWidth(current + (event.key === "ArrowRight" ? step : -step), true);
-      });
-    }
-    view.addEventListener("resize", () => applyWidth(preferredWidth));
+    bindMetadataResize(
+      doc2,
+      view,
+      layout,
+      metadata,
+      resizeHandle,
+      storage,
+      () => preferredWidth,
+      updateWidth
+    );
+    view.addEventListener("resize", () => {
+      applyWidth(preferredWidth);
+      applyVisibility();
+    });
   };
 
   // internal/web/static_src/note-insight.ts
@@ -9328,7 +9397,7 @@ var BrainNotesApp = (() => {
     renderResultSelection(row, result, options);
     const link = doc2.createElement("a");
     link.className = "overview-result-link";
-    link.setAttribute("href", path);
+    link.setAttribute("href", libraryResultPath(path));
     const title = doc2.createElement("span");
     title.className = "overview-result-title";
     title.textContent = result.title || result.key || "Untitled";
@@ -14586,7 +14655,7 @@ var BrainNotesApp = (() => {
   var renderSearchResultOption = (doc2, result, index, handlers2) => {
     const item = doc2.createElement("li");
     const link = doc2.createElement("a");
-    link.href = searchResultPath(result);
+    link.href = libraryResultPath(searchResultPath(result));
     link.id = `search-option-${index}`;
     link.className = "search-result";
     link.setAttribute("role", "option");
@@ -48352,6 +48421,8 @@ ${candidate.markdown}`;
     initSyncLine();
     initFacets();
     initNoteLayout();
+    initNoteMobileSidebars();
+    initNoteNavigation();
     initNoteReading();
     initCopyControls();
     initDailyBrief();
