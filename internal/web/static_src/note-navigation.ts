@@ -18,9 +18,22 @@ const libraryReturnPath = (): string | null => {
   }
 };
 
+const carryLibraryContext = (path: string): void => {
+  for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-note-context-links] a[href]")) {
+    if (link.getAttribute("href")?.startsWith("#")) continue;
+    try {
+      const url = new URL(link.href, window.location.origin);
+      if (url.origin !== window.location.origin || !url.pathname.startsWith("/n/") || url.username || url.password) continue;
+      url.searchParams.set("return_to", path);
+      link.href = url.pathname + url.search + url.hash;
+    } catch { /* Leave malformed links unchanged. */ }
+  }
+};
+
 export const initNoteNavigation = (): void => {
   const back = document.querySelector<HTMLAnchorElement>("[data-note-back-results]");
   const path = libraryReturnPath();
+  if (path) carryLibraryContext(path);
   if (back && path) {
     back.href = path;
     back.hidden = false;

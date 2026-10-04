@@ -2774,6 +2774,8 @@ var BrainNotesApp = (() => {
       this.fetcher = fetcher;
       this.csrfToken = root.dataset.captureCsrf || "";
       this.saveDraft = bindCaptureDraft(root, input);
+      this.updateCount();
+      input.addEventListener("input", () => this.updateCount());
       submit.addEventListener("click", () => {
         void this.run();
       });
@@ -2793,11 +2795,18 @@ var BrainNotesApp = (() => {
     fetcher;
     saveDraft;
     csrfToken;
+    updateCount() {
+      const count4 = this.root.querySelector("[data-capture-count]");
+      if (count4 && this.input.maxLength >= 0) {
+        count4.textContent = `${this.input.value.length} / ${this.input.maxLength} characters`;
+      }
+    }
     setStatus(message, kind) {
       setStatusText(this.status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
     }
     captured(result) {
       this.input.value = "";
+      this.updateCount();
       this.saveDraft();
       if (result.detail) {
         const item = document.createElement("li");
@@ -8202,9 +8211,22 @@ var BrainNotesApp = (() => {
       return null;
     }
   };
+  var carryLibraryContext = (path) => {
+    for (const link of document.querySelectorAll("[data-note-context-links] a[href]")) {
+      if (link.getAttribute("href")?.startsWith("#")) continue;
+      try {
+        const url = new URL(link.href, window.location.origin);
+        if (url.origin !== window.location.origin || !url.pathname.startsWith("/n/") || url.username || url.password) continue;
+        url.searchParams.set("return_to", path);
+        link.href = url.pathname + url.search + url.hash;
+      } catch {
+      }
+    }
+  };
   var initNoteNavigation = () => {
     const back = document.querySelector("[data-note-back-results]");
     const path = libraryReturnPath();
+    if (path) carryLibraryContext(path);
     if (back && path) {
       back.href = path;
       back.hidden = false;
@@ -14688,6 +14710,18 @@ var BrainNotesApp = (() => {
       this.feedbackEl = feedbackEl;
       this.libraryLink = libraryLink;
       this.syncSearchURL = syncSearchURL;
+      this.feedbackMessage = feedbackEl?.querySelector("[data-search-feedback-message]") || feedbackEl;
+      this.retryButton = feedbackEl?.querySelector("[data-search-retry]") || null;
+      this.retryButton?.addEventListener("click", () => {
+        this.input.focus();
+        this.scheduleSearch(0);
+      });
+      this.retryButton?.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        this.input.focus();
+        this.dismiss();
+      });
     }
     input;
     resultsEl;
@@ -14698,6 +14732,8 @@ var BrainNotesApp = (() => {
     requestToken = 0;
     results = [];
     activeIndex = -1;
+    retryButton;
+    feedbackMessage;
     hasActiveSearchFilters() {
       return this.syncSearchURL && hasActiveFilters();
     }
@@ -14725,16 +14761,21 @@ var BrainNotesApp = (() => {
       this.input.setAttribute("aria-expanded", "false");
       this.setActive(-1);
       if (this.feedbackEl) {
-        this.feedbackEl.textContent = "";
+        if (this.feedbackMessage) this.feedbackMessage.textContent = "";
         this.feedbackEl.hidden = true;
       }
+      if (this.retryButton) this.retryButton.hidden = true;
     }
     showFeedback(message) {
       this.clearResults();
       if (this.feedbackEl) {
-        this.feedbackEl.textContent = message;
+        if (this.feedbackMessage) this.feedbackMessage.textContent = message;
         this.feedbackEl.hidden = false;
       }
+    }
+    showFailure() {
+      this.showFeedback("Search unavailable. Try again.");
+      if (this.retryButton) this.retryButton.hidden = false;
     }
     dismiss() {
       window.clearTimeout(this.debounceToken);
@@ -14776,9 +14817,10 @@ var BrainNotesApp = (() => {
       }
       this.resultsEl.textContent = "";
       if (this.feedbackEl) {
-        this.feedbackEl.textContent = "";
+        if (this.feedbackMessage) this.feedbackMessage.textContent = "";
         this.feedbackEl.hidden = true;
       }
+      if (this.retryButton) this.retryButton.hidden = true;
       results.forEach((result, index) => {
         this.resultsEl.appendChild(renderSearchResultOption(document, result, index, {
           activate: (nextIndex) => this.setActive(nextIndex)
@@ -14814,7 +14856,7 @@ var BrainNotesApp = (() => {
           return;
         }
         if (!resp.ok) {
-          this.showFeedback("Search unavailable. Try again.");
+          this.showFailure();
           return;
         }
         const payload = await resp.json();
@@ -14823,7 +14865,7 @@ var BrainNotesApp = (() => {
         }
       } catch {
         if (localToken === this.requestToken) {
-          this.showFeedback("Search unavailable. Try again.");
+          this.showFailure();
         }
       }
     }

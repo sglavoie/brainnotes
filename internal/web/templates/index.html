@@ -50,6 +50,7 @@
             class="capture-input"
             rows="2"
             maxlength="2000"
+            aria-describedby="capture-hint capture-count"
             placeholder="A passing thought. Wikilinks pass through untouched."
             data-capture-input
             {{if not .CaptureConfigured}}disabled{{end}}
@@ -61,7 +62,8 @@
             {{if not .CaptureConfigured}}disabled{{end}}
           >Capture</button>
         </div>
-        <span class="capture-hint">Press Ctrl/⌘ + Enter to capture.</span>
+        <span class="capture-hint" id="capture-hint">Press Ctrl/⌘ + Enter to capture.</span>
+        <span class="capture-hint" id="capture-count" data-capture-count>0 / 2000 characters</span>
       </div>
       <p class="review-status capture-status" data-capture-status role="status" aria-live="polite"></p>
       <p class="capture-hint" data-capture-draft-status role="status" hidden></p>

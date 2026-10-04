@@ -23,6 +23,33 @@ test("Library results retain search context in a new tab and after reload", asyn
   expect(foreignRequests).toEqual([]);
 });
 
+test("Library context survives body links, backlinks and outgoing links in a new tab", async ({ page, context, foreignRequests }) => {
+  const library = "/library?q=Alpha&status=draft&sort=title";
+  await page.goto(library);
+  await page.locator(".overview-result-link", { hasText: "Alpha" }).click();
+  const bodyLink = page.locator("[data-note-body] a", { hasText: "Beta" });
+  await expect(bodyLink).toHaveAttribute("href", /return_to=/);
+  const note = await context.newPage();
+  await note.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (isFixtureOrigin(url, new URL(page.url()).origin)) return route.continue();
+    foreignRequests.push(url);
+    return route.abort("blockedbyclient");
+  });
+  await note.goto(await bodyLink.getAttribute("href"));
+  await note.reload();
+  await expect(note.locator("[data-note-back-results]")).toHaveAttribute("href", library);
+  await note.locator(".backlink-summary a", { hasText: "Alpha" }).click();
+  await expect(note.locator("[data-note-back-results]")).toHaveAttribute("href", library);
+  await note.locator("[data-note-context-links].link-list a", { hasText: "Beta" }).click();
+  await note.getByRole("link", { name: "Back to results", exact: true }).click();
+  await expect(note).toHaveURL(new URL(library, page.url()).href);
+  await expect(note.locator("#search-input")).toHaveValue("Alpha");
+  await expect(note.locator("[data-library-sort]")).toHaveValue("title");
+  await note.close();
+  expect(foreignRequests).toEqual([]);
+});
+
 test("mobile sidebars collapse independently and preserve the desktop preference", async ({ page }) => {
   await page.goto("/n/Reading");
   await page.locator("[data-note-sidebar-toggle]").click();

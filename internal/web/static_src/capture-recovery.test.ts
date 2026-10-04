@@ -5,7 +5,8 @@ import { initCapture } from "./capture";
 const panel = (vault = "vault-a", target = "Inbox.md", heading = "## Captures") => {
   document.body.innerHTML = `
     <section data-capture-root data-capture-configured="true" data-capture-csrf="token">
-      <textarea data-capture-input></textarea><button data-capture-submit>Capture</button>
+      <textarea data-capture-input maxlength="2000"></textarea><button data-capture-submit>Capture</button>
+      <span data-capture-count></span>
       <p data-capture-status></p><p data-capture-draft-status hidden></p>
       <a data-capture-view-inbox hidden>View inbox</a><ul data-capture-recent></ul>
     </section>`;
@@ -16,6 +17,7 @@ const panel = (vault = "vault-a", target = "Inbox.md", heading = "## Captures") 
     submit: root.querySelector("button")!,
     link: root.querySelector("a")!,
     draftStatus: root.querySelector<HTMLElement>("[data-capture-draft-status]")!,
+    count: root.querySelector<HTMLElement>("[data-capture-count]")!,
   };
 };
 const type = (input: HTMLTextAreaElement, text: string): void => {
@@ -33,10 +35,12 @@ it("restores unfinished text after navigation without submitting it", () => {
   const fetcher = vi.fn();
   let view = panel();
   initCapture({ fetch: fetcher });
+  expect(view.count.textContent).toBe("0 / 2000 characters");
   type(view.input, "ask [[Bob]]\nabout the plan");
   view = panel();
   initCapture({ fetch: fetcher });
   expect(view.input.value).toBe("ask [[Bob]]\nabout the plan");
+  expect(view.count.textContent).toBe(`${view.input.value.length} / 2000 characters`);
   expect(view.draftStatus.textContent).toContain("restored");
   expect(fetcher).not.toHaveBeenCalled();
 });
@@ -68,6 +72,7 @@ it("clears the draft and exposes the server's inbox link only after success", as
   await vi.waitFor(() => expect(view.submit.disabled).toBe(false));
   expect(view.link.hidden).toBe(false);
   expect(view.link.getAttribute("href")).toBe("/n/nested/inbox%20%23");
+  expect(view.count.textContent).toBe("0 / 2000 characters");
   const restored = panel();
   initCapture();
   expect(restored.input.value).toBe("");
@@ -83,9 +88,21 @@ it.each(["refused", "network"])("retains the draft after a %s failure", async (f
   view.submit.click();
   await vi.waitFor(() => expect(view.submit.disabled).toBe(false));
   expect(view.link.hidden).toBe(true);
+  expect(view.count.textContent).toBe("9 / 2000 characters");
   const restored = panel();
   initCapture();
   expect(restored.input.value).toBe("keep this");
+});
+
+it("counts the same UTF-16 units as maxlength and updates when cleared", () => {
+  const view = panel();
+  initCapture();
+  type(view.input, "a😀");
+  expect(view.count.textContent).toBe("3 / 2000 characters");
+  type(view.input, "😀".repeat(1000));
+  expect(view.count.textContent).toBe("2000 / 2000 characters");
+  type(view.input, "");
+  expect(view.count.textContent).toBe("0 / 2000 characters");
 });
 
 it("remembers an explicitly cleared draft", () => {

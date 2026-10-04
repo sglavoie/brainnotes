@@ -27,11 +27,45 @@ it.each([null, "https://example.com/library", "//example.com/library", "/setting
   "omits the return link for a missing or invalid destination: %s", (value) => {
     const query = value === null ? "" : `?return_to=${encodeURIComponent(value)}`;
     history.replaceState(null, "", `/n/Note${query}`);
-    document.body.innerHTML = '<a data-note-back-results href="/library" hidden>Back to results</a>';
+    document.body.innerHTML = '<a data-note-back-results href="/library" hidden>Back to results</a><div data-note-context-links><a href="/n/Other">Other</a></div>';
     initNoteNavigation();
     expect(document.querySelector("a")!.hidden).toBe(true);
+    expect(document.querySelector("div a")!.getAttribute("href")).toBe("/n/Other");
   }
 );
+
+it("carries search context through note links while preserving anchors and other parameters", () => {
+  const library = "/library?q=body&tag=work&sort=-modified#results";
+  history.replaceState(null, "", `/n/Alpha?return_to=${encodeURIComponent(library)}`);
+  document.body.innerHTML = `
+    <div data-note-context-links><a href="/n/Beta?mode=read#section">Body</a></div>
+    <ul data-note-context-links><li><a href="/n/Backlink">Backlink</a></li></ul>
+    <ul data-note-context-links><li><a href="/n/Outgoing?return_to=%2Flibrary%3Fq%3Dold">Outgoing</a></li></ul>`;
+  initNoteNavigation();
+  const links = [...document.querySelectorAll("a")];
+  for (const link of links) expect(new URL(link.href).searchParams.get("return_to")).toBe(library);
+  const bodyURL = new URL(links[0].href);
+  expect(bodyURL.hash).toBe("#section");
+  expect(bodyURL.searchParams.get("mode")).toBe("read");
+  history.replaceState(null, "", links[0].href);
+  document.body.innerHTML = '<a data-note-back-results hidden></a>';
+  initNoteNavigation();
+  expect(document.querySelector("a")!.getAttribute("href")).toBe(library);
+});
+
+it("leaves external, credentialed, download, same-page and unrelated navigation links alone", () => {
+  history.replaceState(null, "", "/n/Alpha?return_to=%2Flibrary%3Fq%3Dbody");
+  const paths = ["https://example.com/n/Beta", "//example.com/n/Beta", "#section", "/media/file.pdf", "/editor?key=Alpha", "http://[invalid", `http://user@${location.host}/n/Beta`];
+  document.body.innerHTML = '<div data-note-context-links></div><a href="/n/Unrelated">Unrelated</a>';
+  for (const path of paths) {
+    const link = document.createElement("a");
+    link.setAttribute("href", path);
+    document.querySelector("div")!.append(link);
+  }
+  initNoteNavigation();
+  expect([...document.querySelectorAll("div a")].map((link) => link.getAttribute("href"))).toEqual(paths);
+  expect(document.querySelector("body > a")!.getAttribute("href")).toBe("/n/Unrelated");
+});
 
 it("copies a clean absolute note URL and uses the manual fallback when copying fails", async () => {
   history.replaceState(null, "", "/n/Caf%C3%A9?return_to=%2Flibrary%3Fq%3Dprivate#section");

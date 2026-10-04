@@ -210,7 +210,7 @@
           <section class="panel">
             <h2>Backlinks</h2>
             {{if .Backlinks}}
-              <ul class="link-list">
+              <ul class="link-list" data-note-context-links>
                 {{range .Backlinks}}
                   <li class="backlink-item">
                     <div class="backlink-summary">
@@ -242,7 +242,7 @@
           <section class="panel">
             <h2>Outgoing links</h2>
             {{if .Outgoing}}
-              <ul class="link-list">
+              <ul class="link-list" data-note-context-links>
                 {{range .Outgoing}}
                   <li><a href="{{.Path}}">{{.Title}}</a></li>
                 {{end}}
@@ -274,7 +274,7 @@
         <div class="note-content">
           <section class="panel">
             <h2>Body</h2>
-            <div class="note-body" data-note-body>{{.BodyHTML}}</div>
+            <div class="note-body" data-note-body data-note-context-links>{{.BodyHTML}}</div>
           </section>
 
           <section

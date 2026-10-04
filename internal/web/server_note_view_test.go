@@ -40,7 +40,7 @@ func TestServer_NoteView200(t *testing.T) {
 		`data-related-item-endpoint="/api/related/item"`,
 		`data-note-insight-prompt`,
 		`maxlength="2000"`,
-		`<div class="note-body" data-note-body>`,
+		`<div class="note-body" data-note-body data-note-context-links>`,
 		`href="https://www.merakialive.com"`,
 	} {
 		if !strings.Contains(body, want) {

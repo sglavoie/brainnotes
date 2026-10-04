@@ -83,6 +83,8 @@ class HeaderSearch {
   private requestToken = 0;
   private results: SearchResult[] = [];
   private activeIndex = -1;
+  private readonly retryButton: HTMLButtonElement | null;
+  private readonly feedbackMessage: HTMLElement | null;
 
   constructor(
     private readonly input: HTMLInputElement,
@@ -90,7 +92,20 @@ class HeaderSearch {
     private readonly feedbackEl: HTMLElement | null,
     private readonly libraryLink: HTMLAnchorElement | null,
     private readonly syncSearchURL: boolean
-  ) {}
+  ) {
+    this.feedbackMessage = feedbackEl?.querySelector<HTMLElement>("[data-search-feedback-message]") || feedbackEl;
+    this.retryButton = feedbackEl?.querySelector<HTMLButtonElement>("[data-search-retry]") || null;
+    this.retryButton?.addEventListener("click", () => {
+      this.input.focus();
+      this.scheduleSearch(0);
+    });
+    this.retryButton?.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      this.input.focus();
+      this.dismiss();
+    });
+  }
 
   hasActiveSearchFilters(): boolean {
     return this.syncSearchURL && hasActiveFilters();
@@ -122,17 +137,23 @@ class HeaderSearch {
     this.input.setAttribute("aria-expanded", "false");
     this.setActive(-1);
     if (this.feedbackEl) {
-      this.feedbackEl.textContent = "";
+      if (this.feedbackMessage) this.feedbackMessage.textContent = "";
       this.feedbackEl.hidden = true;
     }
+    if (this.retryButton) this.retryButton.hidden = true;
   }
 
   showFeedback(message: string): void {
     this.clearResults();
     if (this.feedbackEl) {
-      this.feedbackEl.textContent = message;
+      if (this.feedbackMessage) this.feedbackMessage.textContent = message;
       this.feedbackEl.hidden = false;
     }
+  }
+
+  showFailure(): void {
+    this.showFeedback("Search unavailable. Try again.");
+    if (this.retryButton) this.retryButton.hidden = false;
   }
 
   dismiss(): void {
@@ -180,9 +201,10 @@ class HeaderSearch {
     }
     this.resultsEl.textContent = "";
     if (this.feedbackEl) {
-      this.feedbackEl.textContent = "";
+      if (this.feedbackMessage) this.feedbackMessage.textContent = "";
       this.feedbackEl.hidden = true;
     }
+    if (this.retryButton) this.retryButton.hidden = true;
     results.forEach((result, index) => {
       this.resultsEl.appendChild(renderSearchResultOption(document, result, index, {
         activate: (nextIndex) => this.setActive(nextIndex),
@@ -220,7 +242,7 @@ class HeaderSearch {
         return;
       }
       if (!resp.ok) {
-        this.showFeedback("Search unavailable. Try again.");
+        this.showFailure();
         return;
       }
       const payload = await resp.json();
@@ -229,7 +251,7 @@ class HeaderSearch {
       }
     } catch {
       if (localToken === this.requestToken) {
-        this.showFeedback("Search unavailable. Try again.");
+        this.showFailure();
       }
     }
   }

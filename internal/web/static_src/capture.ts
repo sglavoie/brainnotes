@@ -31,6 +31,8 @@ class Capture {
   ) {
     this.csrfToken = root.dataset.captureCsrf || "";
     this.saveDraft = bindCaptureDraft(root, input);
+    this.updateCount();
+    input.addEventListener("input", () => this.updateCount());
     submit.addEventListener("click", () => { void this.run(); });
     input.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || event.isComposing) {
@@ -41,12 +43,21 @@ class Capture {
     });
   }
 
+  private updateCount(): void {
+    const count = this.root.querySelector<HTMLElement>("[data-capture-count]");
+    if (count && this.input.maxLength >= 0) {
+      // Match the browser's maxlength units, including surrogate pairs.
+      count.textContent = `${this.input.value.length} / ${this.input.maxLength} characters`;
+    }
+  }
+
   private setStatus(message: string, kind: CaptureStatusKind): void {
     setStatusText(this.status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
   }
 
   private captured(result: CaptureResult): void {
     this.input.value = "";
+    this.updateCount();
     this.saveDraft();
     if (result.detail) {
       const item = document.createElement("li");

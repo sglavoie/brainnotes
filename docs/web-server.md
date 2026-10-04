@@ -22,6 +22,11 @@ Opening a Library search result offers **Back to results** on the note, preservi
 the search text, filters, and sort order even after a reload or opening in a new
 tab. **Copy note URL** copies the full note address without that search context
 or a section anchor, with the same manual-copy fallback.
+Following body links, backlinks, or outgoing links to other notes carries that
+same Library context along, so **Back to results** remains available as you explore.
+
+If header search fails, **Retry search** repeats the current query and filters
+without retyping. Dismissing search also dismisses the retry action.
 
 On screens up to 960 pixels wide, **Metadata** and **Contents** start collapsed
 and expand independently. Desktop sidebars keep their existing layout and
@@ -81,7 +86,9 @@ full-vault loading semantics and read every note without a per-note timeout.
 The home page opens with a **Quick capture** panel above Today's brief: the
 configured destination (`Inbox.md · ## Captures`), a two-row text box capped at
 2,000 characters, a Capture button, and `Ctrl`/`⌘` + `Enter` as the keyboard
-submit. It writes through the
+submit. A counter shows the current length using the browser's input-limit
+units (some emoji count as two), including after restoring an unfinished draft.
+It writes through the
 same primitive as `bn capture`, so the CLI and the browser produce identical
 lines. The server owns the clock and echoes the exact bullet it wrote back to
 the browser, which renders that string verbatim — there is no client-side

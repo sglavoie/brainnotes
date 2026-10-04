@@ -16,6 +16,9 @@
     />
     <a class="search-library-link" data-search-library href="/library" hidden>Open results in Library</a>
     <ul id="search-results" class="search-results" role="listbox" hidden></ul>
-    <p id="search-feedback" class="search-feedback" data-search-feedback role="status" aria-live="polite" hidden></p>
+    <div id="search-feedback" class="search-feedback" data-search-feedback hidden>
+      <span data-search-feedback-message role="status" aria-live="polite"></span>
+      <button type="button" data-search-retry hidden>Retry search</button>
+    </div>
   </section>
 {{end}}
