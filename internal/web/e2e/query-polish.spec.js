@@ -2,6 +2,28 @@ import { expect, test } from "./fixture.js";
 
 test.use({ hasTouch: true });
 
+test("saved-view retry works by keyboard without losing focus on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let fail = true;
+  await page.route("**/api/views", (route) => fail
+    ? route.fulfill({ status: 503, json: { ok: false } })
+    : route.fulfill({ json: { ok: true, views: [
+      { name: "Drafts", enabled: true, query: "status:draft", sort: "title" },
+    ] } }));
+  await page.goto("/library?expr=status:draft&sort=title");
+  const retry = page.getByRole("button", { name: "Retry saved views", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(page.locator(".saved-views-feedback")).toContainText("Saved views unavailable");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  fail = false;
+  await retry.focus();
+  await page.keyboard.press("Enter");
+  const view = page.locator('a[data-saved-view="Drafts"]');
+  await expect(view).toHaveAttribute("aria-current", "true");
+  await expect(view).toBeFocused();
+  await expect(retry).toHaveCount(0);
+});
+
 test("header search hands its query to the Library with Enter or a link", async ({ page }) => {
   await page.goto("/n/Alpha");
   const search = page.locator("#search-input");

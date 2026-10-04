@@ -90,4 +90,8 @@ it("supports range copying when bulk write controls are absent", async () => {
   click(0);
   click(2, true);
   expect(control("overview-copy-wikilinks").dataset.copyText).toBe("[[a]]\n[[b]]\n[[c]]");
+  expect(document.querySelector("[data-overview-selected-count]")!.textContent).toBe("3 selected");
+  control("overview-clear-selection").click();
+  expect(document.querySelector("[data-overview-selected-count]")!.textContent).toBe("0 selected");
+  expect(control("overview-copy-wikilinks").disabled).toBe(true);
 });

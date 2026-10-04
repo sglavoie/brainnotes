@@ -30,11 +30,19 @@ test("the read-only Brief browses notes while every document-write door stays cl
     Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
   });
   await page.goto("/library?q=Reading");
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Select displayed", exact: true }).click();
+  const count = page.locator("[data-overview-selected-count]");
+  await expect(count).toBeVisible();
+  await expect(count).toHaveText("1 selected");
   await page.getByRole("button", { name: "Copy wikilinks", exact: true }).click();
   await expect(page.locator("[data-copy-fallback]")).toHaveValue("[[Reading]]");
   await expect(page.locator("[data-overview-bulk]")).toBeHidden();
   await expect(page.locator("[data-pin-button]")).toBeHidden();
+  await page.getByRole("button", { name: "Clear selection", exact: true }).click();
+  await expect(count).toHaveText("0 selected");
+  await expect(page.getByRole("button", { name: "Copy wikilinks", exact: true })).toBeDisabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   const editor = await request.get("/edit?key=Alpha");
   expect(editor.status()).toBe(403);

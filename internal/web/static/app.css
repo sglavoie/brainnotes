@@ -389,6 +389,15 @@ a:hover {
   overflow-wrap: anywhere;
 }
 
+.saved-views-feedback {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  color: var(--bn-muted);
+  font-size: 0.9rem;
+}
+
 .saved-view-error {
   min-width: 0;
   max-width: 100%;

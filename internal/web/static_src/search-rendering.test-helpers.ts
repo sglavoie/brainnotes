@@ -5,14 +5,15 @@ export const renderOverviewBulkFixture = (): void => {
     <input id="search-input" />
     <section data-overview-search-results aria-busy="false">
       <p data-overview-search-status></p>
+      <div data-overview-empty-help hidden></div>
       <div data-overview-selection data-copy-controls hidden>
+        <span data-overview-selected-count role="status"></span>
         <button type="button" data-overview-select-displayed>Select displayed</button>
         <button type="button" data-overview-clear-selection disabled>Clear selection</button>
         <button type="button" data-overview-copy-wikilinks data-copy-text="" data-copy-label="Wikilinks" disabled>Copy wikilinks</button>
         <span data-copy-status role="status"></span>
       </div>
       <div data-overview-bulk data-overview-csrf="csrf-token" hidden>
-        <p data-overview-selected-count></p>
         <button type="button" data-bulk-trash>Trash</button>
         <form data-bulk-move>
           <input name="folder" type="text" />

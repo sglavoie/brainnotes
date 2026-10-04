@@ -237,9 +237,17 @@ The primary navigation highlights the current page. In Library results,
 query expression, ordering, relative-note context, and limit, along with any
 selection or bulk preview.
 
+When a search succeeds with no matches, Library names the active constraints:
+text, filters, and/or expression. **Remove filters** and **Remove expression**
+appear when applicable and remove only that kind of constraint, preserving the
+remaining search, ordering, and result limit. **Reset search** still clears all
+search settings.
+
 **Select displayed** selects only the notes currently shown, even when the
 match total is larger. **Clear selection** unchecks them all. Changing the
 selection clears any bulk preview, so the next action previews the new selection.
+The selected count sits beside these controls and remains visible in read-only
+mode, where selections can still be copied as wikilinks.
 
 Press `/` outside an editable field to focus the header search. The shortcut
 leaves editors and open dialogs alone. Search suggestions are links: middle-click
@@ -289,8 +297,9 @@ following a view from the graph keeps you on the graph. A view whose query no
 longer compiles renders as an unavailable item instead of vanishing. Click or
 tap it, or focus it and press Enter or Space, to expand its error; it never
 opens the invalid query. This matches `bn views` and `bn views check`. If the
-listing itself fails, the strip is simply empty — the primary navigation never
-renders an error row.
+listing itself fails, a compact **Saved views unavailable** message offers
+**Retry**. Retry stays disabled while loading; a successful empty listing leaves
+the strip empty. A delayed listing cannot replace newer views returned by a save.
 
 On Library and Graph, saved views are highlighted when their complete query
 matches the page, with no additional text search or facets. Changing the query,

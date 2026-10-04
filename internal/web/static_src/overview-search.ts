@@ -48,6 +48,7 @@ import { setStatusText, type StatusKind } from "./status";
 import { readSearchCounts, searchSummary, type SearchCounts } from "./search-summary";
 import { bindOverviewRangeSelection, overviewSelectionInputs, syncOverviewSelectionControls } from "./overview-search-selection";
 import { bindLibraryPosition } from "./library-position";
+import { renderOverviewEmptyHelp } from "./overview-search-empty";
 
 export {
   overviewSearchEmptyMessage,
@@ -82,6 +83,8 @@ class OverviewSearch {
   }
 
   private setStatus = (message: string, kind: StatusKind = ""): void => {
+    const emptyHelp = this.els.root.querySelector<HTMLElement>("[data-overview-empty-help]");
+    if (emptyHelp) emptyHelp.hidden = true;
     setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
     const retry = queryElement(this.els.root, "[data-overview-search-retry]", HTMLButtonElement);
     if (retry) {
@@ -148,9 +151,6 @@ class OverviewSearch {
     }
     const count = this.selectedKeys.size;
     this.els.bulkRoot.hidden = count === 0;
-    if (this.els.selectedCountEl) {
-      this.els.selectedCountEl.textContent = count === 1 ? "1 selected" : `${count} selected`;
-    }
     this.disableBulkControls(this.els.bulkRoot, this.bulkBusy || count === 0);
     syncOverviewActionButton(this.els.trashButton, "trash", this.previewMatches("trash", {}));
     syncOverviewActionButton(this.els.moveButton, "move", this.previewMatches("move", readMoveFields(this.els.moveForm)));
@@ -278,6 +278,7 @@ class OverviewSearch {
 
     if (renderedCount === 0) {
       this.clearResults(overviewSearchEmptyMessage(query), "is-empty");
+      renderOverviewEmptyHelp(this.els.root);
       this.restorePosition();
       return;
     }

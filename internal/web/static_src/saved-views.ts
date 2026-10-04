@@ -42,26 +42,71 @@ export const initSavedViewsNav = (deps: SavedViewsDeps = {}): SavedViewsNavHandl
   }
   const fetcher = deps.fetch || ((input, init) => fetch(input, init));
   const basePath = savedViewsNavBasePath(window.location.pathname);
+  const feedback = savedViewsFeedback();
+  let generation = 0;
+  let loading = false;
   let currentViews: SavedViewSummary[] = [];
   const refreshCurrent = (): void => syncCurrentSavedView(container, currentViews);
   const render = (views: SavedViewSummary[]): void => {
+    // A save supplies a newer list; any outstanding listing is now obsolete.
+    generation += 1;
+    loading = false;
+    const restoreFocus = document.activeElement === feedback.retry || document.activeElement === feedback.root;
     currentViews = views;
     renderSavedViewsNav(container, views, basePath);
     refreshCurrent();
+    if (restoreFocus) {
+      const target = container.querySelector<HTMLElement>("a, summary")
+        || container.closest("nav")?.querySelector<HTMLElement>("a");
+      target?.focus();
+    }
   };
   window.addEventListener(browserQueryChangeEventName, refreshCurrent);
   window.addEventListener("popstate", refreshCurrent);
 
-  void fetchSavedViews(fetcher).then((outcome) => {
-    // A listing failure leaves the strip empty rather than reporting into the
-    // nav: nothing else on the page depends on it, and an error row in the
-    // primary navigation would be louder than the feature is important.
-    if (outcome.ok) {
-      render(outcome.result.views);
+  const load = async (): Promise<void> => {
+    if (loading) return;
+    loading = true;
+    const token = ++generation;
+    const wasFocused = document.activeElement === feedback.retry;
+    feedback.retry.disabled = true;
+    // Browsers can blur a disabled button after this event finishes. Park
+    // focus on the feedback until its replacement is ready, without stealing
+    // it back if the person moves elsewhere while the request is pending.
+    if (wasFocused) feedback.root.focus();
+    feedback.message.textContent = "Loading saved views…";
+    const outcome = await fetchSavedViews(fetcher);
+    if (token !== generation) return;
+    loading = false;
+    if (outcome.ok) render(outcome.result.views);
+    else {
+      feedback.message.textContent = "Saved views unavailable";
+      feedback.retry.disabled = false;
+      if (!container.contains(feedback.root)) container.appendChild(feedback.root);
+      if (document.activeElement === feedback.root) feedback.retry.focus();
     }
-  });
+  };
+  feedback.retry.addEventListener("click", () => { void load(); });
+  void load();
 
   return { render };
+};
+
+const savedViewsFeedback = (): { root: HTMLElement; message: HTMLElement; retry: HTMLButtonElement } => {
+  const root = document.createElement("span");
+  root.className = "saved-views-feedback";
+  root.tabIndex = -1;
+  const message = document.createElement("span");
+  message.setAttribute("role", "status");
+  message.setAttribute("aria-live", "polite");
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "saved-views-save-button";
+  retry.dataset.savedViewsRetry = "";
+  retry.textContent = "Retry";
+  retry.setAttribute("aria-label", "Retry saved views");
+  root.append(message, retry);
+  return { root, message, retry };
 };
 
 type SavedViewsSaveElements = {

@@ -231,7 +231,7 @@ describe("saved views nav lifecycle", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("leaves the strip empty when the listing fails", async () => {
+  it("offers a retry when the listing fails", async () => {
     const container = mountNav();
     initSavedViewsNav({
       fetch: async () => jsonResponse({ ok: false, message: "nope" }, 500),
@@ -239,7 +239,8 @@ describe("saved views nav lifecycle", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(navItems(container)).toHaveLength(0);
-    expect(container.textContent).toBe("");
+    expect(container.textContent).toContain("Saved views unavailable");
+    expect(container.querySelector<HTMLButtonElement>("[data-saved-views-retry]")!.disabled).toBe(false);
   });
 
   it("re-renders from a list handed back after a save", async () => {
@@ -556,4 +557,84 @@ describe("saved view definitions", () => {
     expect(savedViewSaveError({ ...base, name: "" })).toContain("Name the view");
     expect(savedViewSaveError({ ...base, query: "" })).toContain("query expression");
   });
+});
+
+describe("saved-view listing recovery", () => {
+  it("retries once while loading and restores focus and current-view highlighting", async () => {
+    setLocation("/library?expr=tag%3Afocus+and+not+folder%3AArchive&sort=-modified");
+    const container = mountNav();
+    let resolve: (response: Response) => void = () => {};
+    const fetcher = vi.fn().mockRejectedValueOnce(new Error("offline"))
+      .mockImplementationOnce(() => new Promise<Response>((done) => { resolve = done; }));
+    initSavedViewsNav({ fetch: fetcher });
+    await vi.waitFor(() => expect(container.textContent).toContain("Saved views unavailable"));
+    const retry = container.querySelector<HTMLButtonElement>("[data-saved-views-retry]")!;
+    retry.focus();
+    retry.click();
+    retry.click();
+    expect(retry.disabled).toBe(true);
+    expect(document.activeElement).toBe(container.querySelector(".saved-views-feedback"));
+    expect(container.textContent).toContain("Loading saved views");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    resolve(jsonResponse(viewsPayload()));
+    await vi.waitFor(() => expect(navItems(container)).toHaveLength(3));
+    expect(container.querySelector("[data-saved-views-retry]")).toBeNull();
+    const current = container.querySelector('[data-saved-view="Focus"]');
+    expect(current?.getAttribute("aria-current")).toBe("true");
+    expect(document.activeElement).toBe(current);
+  });
+
+  it("keeps retry available after another failure and clears it for a successful empty list", async () => {
+    const container = mountNav();
+    const fetcher = vi.fn().mockResolvedValueOnce(jsonResponse({}, 503))
+      .mockResolvedValueOnce(jsonResponse({}, 500))
+      .mockResolvedValueOnce(jsonResponse({ ...viewsPayload(), views: [] }));
+    initSavedViewsNav({ fetch: fetcher });
+    await vi.waitFor(() => expect(container.textContent).toContain("Saved views unavailable"));
+    const retry = container.querySelector<HTMLButtonElement>("[data-saved-views-retry]")!;
+    retry.focus();
+    retry.click();
+    await vi.waitFor(() => expect(retry.disabled).toBe(false));
+    expect(document.activeElement).toBe(retry);
+    expect(container.textContent).toContain("Saved views unavailable");
+    retry.focus();
+    retry.click();
+    await vi.waitFor(() => expect(container.textContent).toBe(""));
+    expect(document.activeElement?.textContent).toBe("Brief");
+  });
+
+  it.each(["initial", "retry"])("ignores a late %s response after a save supplies newer views", async (phase) => {
+    const container = mountNav();
+    let resolve: (response: Response) => void = () => {};
+    const fetcher = vi.fn();
+    if (phase === "retry") fetcher.mockRejectedValueOnce(new Error("offline"));
+    fetcher.mockImplementationOnce(() => new Promise<Response>((done) => { resolve = done; }));
+    const handle = initSavedViewsNav({ fetch: fetcher })!;
+    if (phase === "retry") {
+      await vi.waitFor(() => expect(container.textContent).toContain("Saved views unavailable"));
+      container.querySelector<HTMLButtonElement>("[data-saved-views-retry]")!.click();
+    }
+    handle.render([{ ...viewsPayload().views[0], name: "New view" }]);
+    resolve(phase === "initial" ? jsonResponse(viewsPayload()) : jsonResponse({}, 503));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(container.textContent).toBe("New view");
+  });
+
+  it("does not reclaim focus when the person moves away during a retry", async () => {
+    const container = mountNav();
+    let resolve: (response: Response) => void = () => {};
+    const fetcher = vi.fn().mockRejectedValueOnce(new Error("offline"))
+      .mockImplementationOnce(() => new Promise<Response>((done) => { resolve = done; }));
+    initSavedViewsNav({ fetch: fetcher });
+    await vi.waitFor(() => expect(container.textContent).toContain("Saved views unavailable"));
+    const retry = container.querySelector<HTMLButtonElement>("[data-saved-views-retry]")!;
+    retry.focus();
+    retry.click();
+    const other = document.querySelector<HTMLAnchorElement>('a[href="/library"]')!;
+    other.focus();
+    resolve(jsonResponse(viewsPayload()));
+    await vi.waitFor(() => expect(navItems(container)).toHaveLength(3));
+    expect(document.activeElement).toBe(other);
+  });
+
 });

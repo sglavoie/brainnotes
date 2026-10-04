@@ -49,6 +49,7 @@ it("selects only displayed matches and invalidates a preview when clearing selec
   button("overview-clear-selection").click();
   expect(document.querySelector("[data-overview-bulk]")!.hasAttribute("data-overview-preview-id")).toBe(false);
   expect(document.querySelectorAll(".overview-result-select input:checked")).toHaveLength(0);
+  expect(document.querySelector("[data-overview-selected-count]")!.textContent).toBe("0 selected");
   expect(button("overview-clear-selection").disabled).toBe(true);
   expect(button("overview-select-displayed").disabled).toBe(false);
   expect(fetcher.mock.calls.filter(([url]) => String(url) === "/api/notes/bulk")).toHaveLength(0);
@@ -60,4 +61,25 @@ it("selects only displayed matches and invalidates a preview when clearing selec
   expect(button("overview-select-displayed").disabled).toBe(true);
   await vi.runAllTimersAsync();
   expect(controls.hidden).toBe(true);
+});
+
+it("updates the count and copied links when refreshed results drop a selected note", async () => {
+  vi.useFakeTimers();
+  renderOverviewBulkFixture();
+  document.querySelector("[data-overview-bulk]")!.remove();
+  setURL("/library?q=note");
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify([
+    searchResult({ key: "one", wikilink: "One" }), searchResult({ key: "two", wikilink: "Two" }),
+  ]))).mockResolvedValueOnce(new Response(JSON.stringify([searchResult({ key: "two", wikilink: "Two" })])));
+  initOverviewSearchResults({ fetch: fetcher });
+  await vi.runAllTimersAsync();
+  button("overview-select-displayed").click();
+  const count = document.querySelector("[data-overview-selected-count]")!;
+  expect(count.textContent).toBe("2 selected");
+  const input = document.querySelector<HTMLInputElement>("#search-input")!;
+  input.value = "two";
+  input.dispatchEvent(new Event("input"));
+  await vi.runAllTimersAsync();
+  expect(count.textContent).toBe("1 selected");
+  expect(button("overview-copy-wikilinks").dataset.copyText).toBe("[[Two]]");
 });

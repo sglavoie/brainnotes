@@ -1,5 +1,27 @@
 import { expect, test } from "./fixture.js";
 
+test("empty-result links loosen one constraint with keyboard navigation on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/library?q=Reading&tag=absent&expr=tag:absent&sort=title&limit=2");
+  const help = page.locator("[data-overview-empty-help]");
+  await expect(help).toContainText("Searching with: text, filters, expression.");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const removeFilters = help.getByRole("link", { name: "Remove filters", exact: true });
+  await removeFilters.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#search-input")).toHaveValue("Reading");
+  await expect(page.locator("[data-query-bar-input]")).toHaveValue("tag:absent");
+  await expect(page.locator("[data-facet-chips]")).toBeHidden();
+  await expect(help).toContainText("Searching with: text, expression.");
+  await expect(help.getByRole("link", { name: "Remove filters", exact: true })).toHaveCount(0);
+  await help.getByRole("link", { name: "Remove expression", exact: true }).click();
+  await expect(help).toBeHidden();
+  await expect(page.locator(".overview-result-title")).toHaveText(["Reading"]);
+  const params = new URL(page.url()).searchParams;
+  expect(Object.fromEntries(params)).toEqual({ q: "Reading", sort: "title", limit: "2" });
+  await expect(page.getByRole("combobox", { name: "Sort results" })).toHaveValue("title");
+});
+
 test("Library retries a failed search without changing its query settings", async ({ page }) => {
   let fail = true;
   const requests = [];

@@ -80,11 +80,13 @@
         role="status"
         aria-live="polite"
       >No query or filters selected.</p>
+      <div class="overview-selection" data-overview-empty-help role="status" aria-live="polite" hidden></div>
       <div class="overview-selection">
         <button class="overview-bulk-button" type="button" data-overview-search-retry hidden>Retry search</button>
         <a href="/library" data-overview-search-reset>Reset search</a>
       </div>
       <div class="overview-selection" data-overview-selection data-copy-controls hidden>
+        <span class="overview-selected-count" data-overview-selected-count role="status" aria-live="polite">0 selected</span>
         <button class="overview-bulk-button" type="button" data-overview-select-displayed>Select displayed</button>
         <button class="overview-bulk-button" type="button" data-overview-clear-selection disabled>Clear selection</button>
         <span>Shift-click a checkbox to select or clear a range.</span>
@@ -98,7 +100,6 @@
         hidden
       >
         <div class="overview-bulk-row">
-          <p class="overview-selected-count" data-overview-selected-count>0 selected</p>
           <button class="overview-bulk-button overview-bulk-danger" type="button" data-bulk-trash aria-label="Move selected notes to Trash">Trash</button>
         </div>
         <div class="overview-bulk-row">

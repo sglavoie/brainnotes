@@ -50,6 +50,8 @@ export const syncOverviewSelectionControls = (
   busy: boolean
 ): void => {
   const inputs = overviewSelectionInputs(list);
+  const count = root.querySelector<HTMLElement>("[data-overview-selected-count]");
+  if (count) count.textContent = `${selectedCount} selected`;
   syncCopySelection(root, inputs, busy);
   const controls = queryElement(root, "[data-overview-selection]", HTMLElement);
   if (controls) {

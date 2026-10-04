@@ -9017,36 +9017,36 @@ var BrainNotesApp = (() => {
       return null;
     }
     const bulkRoot = queryElement(root, "[data-overview-bulk]", HTMLElement);
-    const previewPanel = bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement) : null;
-    const moveForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement) : null;
-    const setForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement) : null;
-    const unsetForm = bulkRoot ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement) : null;
+    const previewPanel = optionalElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement);
+    const moveForm = optionalElement(bulkRoot, "[data-bulk-move]", HTMLFormElement);
+    const setForm = optionalElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement);
+    const unsetForm = optionalElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement);
     return {
       root,
       input,
       statusEl,
       listEl,
       bulkRoot,
-      selectedCountEl: bulkRoot ? queryElement(bulkRoot, "[data-overview-selected-count]", HTMLElement) : null,
-      bulkStatusEl: bulkRoot ? queryElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement) : null,
+      bulkStatusEl: optionalElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement),
       previewPanel,
-      previewTitleEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement) : null,
-      previewMessageEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement) : null,
-      previewCountsEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement) : null,
-      previewResultsEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement) : null,
-      previewFailuresEl: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement) : null,
-      previewApplyButton: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement) : null,
-      previewClearButton: previewPanel ? queryElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement) : null,
+      previewTitleEl: optionalElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement),
+      previewMessageEl: optionalElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement),
+      previewCountsEl: optionalElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement),
+      previewResultsEl: optionalElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement),
+      previewFailuresEl: optionalElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement),
+      previewApplyButton: optionalElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement),
+      previewClearButton: optionalElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement),
       csrfToken: bulkRoot?.getAttribute("data-overview-csrf") || "",
-      trashButton: bulkRoot ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement) : null,
+      trashButton: optionalElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement),
       moveForm,
-      moveButton: moveForm ? queryElement(moveForm, 'button[type="submit"]', HTMLButtonElement) : null,
+      moveButton: optionalElement(moveForm, 'button[type="submit"]', HTMLButtonElement),
       setForm,
-      setButton: setForm ? queryElement(setForm, 'button[type="submit"]', HTMLButtonElement) : null,
+      setButton: optionalElement(setForm, 'button[type="submit"]', HTMLButtonElement),
       unsetForm,
-      unsetButton: unsetForm ? queryElement(unsetForm, 'button[type="submit"]', HTMLButtonElement) : null
+      unsetButton: optionalElement(unsetForm, 'button[type="submit"]', HTMLButtonElement)
     };
   };
+  var optionalElement = (root, selector, constructor) => root ? queryElement(root, selector, constructor) : null;
 
   // internal/web/static_src/overview-search-model.ts
   var overviewSearchEmptyMessage = (query) => query ? `No notes match "${query}".` : "No notes match the active filters.";
@@ -9675,6 +9675,8 @@ var BrainNotesApp = (() => {
   };
   var syncOverviewSelectionControls = (root, list, selectedCount, busy) => {
     const inputs = overviewSelectionInputs(list);
+    const count4 = root.querySelector("[data-overview-selected-count]");
+    if (count4) count4.textContent = `${selectedCount} selected`;
     syncCopySelection(root, inputs, busy);
     const controls = queryElement(root, "[data-overview-selection]", HTMLElement);
     if (controls) {
@@ -9691,6 +9693,31 @@ var BrainNotesApp = (() => {
     for (const input of inputs) {
       input.disabled = busy;
     }
+  };
+
+  // internal/web/static_src/overview-search-empty.ts
+  var renderOverviewEmptyHelp = (root) => {
+    const help = root.querySelector("[data-overview-empty-help]");
+    if (!help) return;
+    const params = new URLSearchParams(window.location.search);
+    const facets = hasActiveSharedFilters(params);
+    const expression = readExprParam(params) !== "";
+    const constraints = [readPageQuery() ? "text" : "", facets ? "filters" : "", expression ? "expression" : ""].filter(Boolean);
+    const summary = document.createElement("span");
+    summary.textContent = `Searching with: ${constraints.join(", ")}.`;
+    help.replaceChildren(summary);
+    if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");
+    if (expression) addLink(help, params, ["expr"], "Remove expression");
+    help.hidden = false;
+  };
+  var addLink = (help, params, keys, label) => {
+    const next = new URLSearchParams(params);
+    for (const key of keys) next.delete(key);
+    const link = document.createElement("a");
+    const query = next.toString();
+    link.href = query ? `/library?${query}` : "/library";
+    link.textContent = label;
+    help.appendChild(link);
   };
 
   // internal/web/static_src/overview-search.ts
@@ -9720,6 +9747,8 @@ var BrainNotesApp = (() => {
     ignoreNextManagementMutationClear = false;
     requestToken = 0;
     setStatus = (message, kind = "") => {
+      const emptyHelp = this.els.root.querySelector("[data-overview-empty-help]");
+      if (emptyHelp) emptyHelp.hidden = true;
       setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
       const retry2 = queryElement(this.els.root, "[data-overview-search-retry]", HTMLButtonElement);
       if (retry2) {
@@ -9772,9 +9801,6 @@ var BrainNotesApp = (() => {
       }
       const count4 = this.selectedKeys.size;
       this.els.bulkRoot.hidden = count4 === 0;
-      if (this.els.selectedCountEl) {
-        this.els.selectedCountEl.textContent = count4 === 1 ? "1 selected" : `${count4} selected`;
-      }
       this.disableBulkControls(this.els.bulkRoot, this.bulkBusy || count4 === 0);
       syncOverviewActionButton(this.els.trashButton, "trash", this.previewMatches("trash", {}));
       syncOverviewActionButton(this.els.moveButton, "move", this.previewMatches("move", readMoveFields(this.els.moveForm)));
@@ -9887,6 +9913,7 @@ var BrainNotesApp = (() => {
       this.pruneSelectionToRenderedKeys(visibleKeys);
       if (renderedCount === 0) {
         this.clearResults(overviewSearchEmptyMessage(query), "is-empty");
+        renderOverviewEmptyHelp(this.els.root);
         this.restorePosition();
         return;
       }
@@ -14726,21 +14753,65 @@ var BrainNotesApp = (() => {
     }
     const fetcher = deps.fetch || ((input, init) => fetch(input, init));
     const basePath = savedViewsNavBasePath(window.location.pathname);
+    const feedback = savedViewsFeedback();
+    let generation = 0;
+    let loading = false;
     let currentViews = [];
     const refreshCurrent = () => syncCurrentSavedView(container, currentViews);
     const render = (views) => {
+      generation += 1;
+      loading = false;
+      const restoreFocus = document.activeElement === feedback.retry || document.activeElement === feedback.root;
       currentViews = views;
       renderSavedViewsNav(container, views, basePath);
       refreshCurrent();
+      if (restoreFocus) {
+        const target = container.querySelector("a, summary") || container.closest("nav")?.querySelector("a");
+        target?.focus();
+      }
     };
     window.addEventListener(browserQueryChangeEventName, refreshCurrent);
     window.addEventListener("popstate", refreshCurrent);
-    void fetchSavedViews(fetcher).then((outcome) => {
-      if (outcome.ok) {
-        render(outcome.result.views);
+    const load = async () => {
+      if (loading) return;
+      loading = true;
+      const token = ++generation;
+      const wasFocused = document.activeElement === feedback.retry;
+      feedback.retry.disabled = true;
+      if (wasFocused) feedback.root.focus();
+      feedback.message.textContent = "Loading saved views\u2026";
+      const outcome = await fetchSavedViews(fetcher);
+      if (token !== generation) return;
+      loading = false;
+      if (outcome.ok) render(outcome.result.views);
+      else {
+        feedback.message.textContent = "Saved views unavailable";
+        feedback.retry.disabled = false;
+        if (!container.contains(feedback.root)) container.appendChild(feedback.root);
+        if (document.activeElement === feedback.root) feedback.retry.focus();
       }
+    };
+    feedback.retry.addEventListener("click", () => {
+      void load();
     });
+    void load();
     return { render };
+  };
+  var savedViewsFeedback = () => {
+    const root = document.createElement("span");
+    root.className = "saved-views-feedback";
+    root.tabIndex = -1;
+    const message = document.createElement("span");
+    message.setAttribute("role", "status");
+    message.setAttribute("aria-live", "polite");
+    const retry2 = document.createElement("button");
+    retry2.type = "button";
+    retry2.className = "saved-views-save-button";
+    retry2.dataset.savedViewsRetry = "";
+    retry2.textContent = "Retry";
+    retry2.setAttribute("aria-label", "Retry saved views");
+    root.append(message, retry2);
+    return { root, message, retry: retry2 };
   };
   var resolveSaveElements = (doc2) => {
     const root = queryElement(doc2, "[data-saved-views-save]", HTMLElement);

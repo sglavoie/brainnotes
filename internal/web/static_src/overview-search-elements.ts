@@ -6,7 +6,6 @@ export type OverviewSearchElements = {
   statusEl: HTMLElement;
   listEl: HTMLElement;
   bulkRoot: HTMLElement | null;
-  selectedCountEl: HTMLElement | null;
   bulkStatusEl: HTMLElement | null;
   previewPanel: HTMLElement | null;
   previewTitleEl: HTMLElement | null;
@@ -44,18 +43,10 @@ export const resolveOverviewSearchElements = (): OverviewSearchElements | null =
   }
 
   const bulkRoot = queryElement(root, "[data-overview-bulk]", HTMLElement);
-  const previewPanel = bulkRoot
-    ? queryElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement)
-    : null;
-  const moveForm = bulkRoot
-    ? queryElement(bulkRoot, "[data-bulk-move]", HTMLFormElement)
-    : null;
-  const setForm = bulkRoot
-    ? queryElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement)
-    : null;
-  const unsetForm = bulkRoot
-    ? queryElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement)
-    : null;
+  const previewPanel = optionalElement(bulkRoot, "[data-overview-bulk-preview]", HTMLElement);
+  const moveForm = optionalElement(bulkRoot, "[data-bulk-move]", HTMLFormElement);
+  const setForm = optionalElement(bulkRoot, "[data-bulk-frontmatter-set]", HTMLFormElement);
+  const unsetForm = optionalElement(bulkRoot, "[data-bulk-frontmatter-unset]", HTMLFormElement);
 
   return {
     root,
@@ -63,49 +54,26 @@ export const resolveOverviewSearchElements = (): OverviewSearchElements | null =
     statusEl,
     listEl,
     bulkRoot,
-    selectedCountEl: bulkRoot
-      ? queryElement(bulkRoot, "[data-overview-selected-count]", HTMLElement)
-      : null,
-    bulkStatusEl: bulkRoot
-      ? queryElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement)
-      : null,
+    bulkStatusEl: optionalElement(bulkRoot, "[data-overview-bulk-status]", HTMLElement),
     previewPanel,
-    previewTitleEl: previewPanel
-      ? queryElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement)
-      : null,
-    previewMessageEl: previewPanel
-      ? queryElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement)
-      : null,
-    previewCountsEl: previewPanel
-      ? queryElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement)
-      : null,
-    previewResultsEl: previewPanel
-      ? queryElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement)
-      : null,
-    previewFailuresEl: previewPanel
-      ? queryElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement)
-      : null,
-    previewApplyButton: previewPanel
-      ? queryElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement)
-      : null,
-    previewClearButton: previewPanel
-      ? queryElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement)
-      : null,
+    previewTitleEl: optionalElement(previewPanel, "[data-overview-bulk-preview-title]", HTMLElement),
+    previewMessageEl: optionalElement(previewPanel, "[data-overview-bulk-preview-message]", HTMLElement),
+    previewCountsEl: optionalElement(previewPanel, "[data-overview-bulk-preview-counts]", HTMLElement),
+    previewResultsEl: optionalElement(previewPanel, "[data-overview-bulk-preview-results]", HTMLElement),
+    previewFailuresEl: optionalElement(previewPanel, "[data-overview-bulk-preview-failures]", HTMLElement),
+    previewApplyButton: optionalElement(previewPanel, "[data-overview-bulk-preview-apply]", HTMLButtonElement),
+    previewClearButton: optionalElement(previewPanel, "[data-overview-bulk-preview-clear]", HTMLButtonElement),
     csrfToken: bulkRoot?.getAttribute("data-overview-csrf") || "",
-    trashButton: bulkRoot
-      ? queryElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement)
-      : null,
+    trashButton: optionalElement(bulkRoot, "[data-bulk-trash]", HTMLButtonElement),
     moveForm,
-    moveButton: moveForm
-      ? queryElement(moveForm, "button[type=\"submit\"]", HTMLButtonElement)
-      : null,
+    moveButton: optionalElement(moveForm, "button[type=\"submit\"]", HTMLButtonElement),
     setForm,
-    setButton: setForm
-      ? queryElement(setForm, "button[type=\"submit\"]", HTMLButtonElement)
-      : null,
+    setButton: optionalElement(setForm, "button[type=\"submit\"]", HTMLButtonElement),
     unsetForm,
-    unsetButton: unsetForm
-      ? queryElement(unsetForm, "button[type=\"submit\"]", HTMLButtonElement)
-      : null,
+    unsetButton: optionalElement(unsetForm, "button[type=\"submit\"]", HTMLButtonElement),
   };
 };
+
+const optionalElement = <T extends Element>(
+  root: ParentNode | null, selector: string, constructor: { new (): T }
+): T | null => root ? queryElement(root, selector, constructor) : null;
