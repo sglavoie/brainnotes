@@ -1751,6 +1751,7 @@ var BrainNotesApp = (() => {
           title: normalizeParamValue(record.title),
           wikilink: normalizeParamValue(record.wikilink),
           folder: normalizeParamValue(record.folder),
+          modified: normalizeParamValue(record.modified),
           matched_fields: normalizeStringArray(record.matched_fields),
           issues: normalizeStringArray(record.issues),
           snippet: normalizeParamValue(record.snippet),
@@ -2913,6 +2914,23 @@ var BrainNotesApp = (() => {
     field.focus();
     field.select();
   };
+  var copyWithFallback = async (root, payload, write, isCurrent = () => true) => {
+    if (!payload.text) return { message: "Nothing to copy.", kind: "is-error" };
+    let message = "Clipboard unavailable. Copy the selected text below.";
+    if (write) {
+      try {
+        await write(payload.text);
+        if (!isCurrent()) return { message: "", kind: "" };
+        root.querySelector("[data-copy-fallback]")?.remove();
+        return { message: copySuccessMessage(payload.label), kind: "is-success" };
+      } catch {
+        message = "Copy failed. Copy the selected text below.";
+      }
+    }
+    if (!isCurrent()) return { message: "", kind: "" };
+    showCopyFallback(root, payload);
+    return { message, kind: "is-error" };
+  };
   var initCopyControls = () => {
     const roots = queryAllElements(document, "[data-copy-controls]", HTMLElement);
     if (roots.length === 0) {
@@ -2932,25 +2950,18 @@ var BrainNotesApp = (() => {
       buttons.forEach((button) => {
         button.addEventListener("click", async () => {
           const payload = readCopyPayload(button);
-          if (!payload.text) {
-            setStatus2("Nothing to copy.", "is-error");
-            return;
-          }
-          if (!canWriteClipboard) {
-            setStatus2("Clipboard unavailable. Copy the selected text below.", "is-error");
-            showCopyFallback(root, payload);
-            return;
-          }
+          const isCurrent = () => button.isConnected && readCopyPayload(button).text === payload.text;
           button.disabled = true;
           try {
-            await clipboard.writeText(payload.text);
-            root.querySelector("[data-copy-fallback]")?.remove();
-            setStatus2(copySuccessMessage(payload.label), "is-success");
-          } catch {
-            setStatus2("Copy failed. Copy the selected text below.", "is-error");
-            showCopyFallback(root, payload);
+            const feedback = await copyWithFallback(
+              root,
+              payload,
+              canWriteClipboard ? (text3) => clipboard.writeText(text3) : void 0,
+              isCurrent
+            );
+            if (isCurrent()) setStatus2(feedback.message, feedback.kind);
           } finally {
-            button.disabled = false;
+            button.disabled = !readCopyPayload(button).text;
           }
         });
       });
@@ -3342,6 +3353,9 @@ var BrainNotesApp = (() => {
       ctx.setSlotsBusy(busySlots, false);
     }
   };
+  var clearInsightCopyFallback = (root, slot) => {
+    findSlotElement(root, slot)?.querySelector("[data-copy-fallback]")?.remove();
+  };
   var runInsight = async (ctx, button) => {
     const slot = readButtonSlot(button);
     const cardID = readButtonCardID(button);
@@ -3372,6 +3386,7 @@ var BrainNotesApp = (() => {
       }
       const result = normalizeBriefInsightResponse(payload);
       if (!validInsightResult(ctx, slot, cardID, result)) return;
+      clearInsightCopyFallback(ctx.root, slot);
       renderInsight(ctx.root, slot, cardID, result.rendered_html, result.output);
       ctx.setSlotStatus(slot, "Insight ready.", "is-success");
     } catch {
@@ -3395,16 +3410,16 @@ var BrainNotesApp = (() => {
       ctx.setSlotStatus(slot, "Nothing to copy.", "is-error");
       return;
     }
-    if (!ctx.clipboardWrite) {
-      ctx.setSlotStatus(slot, "Clipboard unavailable.", "is-error");
-      return;
-    }
+    const panel = button.closest("[data-brief-insight-panel]");
+    if (!panel) return;
     button.disabled = true;
     try {
-      await ctx.clipboardWrite(payload);
-      ctx.setSlotStatus(slot, "Insight markdown copied.", "is-success");
-    } catch {
-      ctx.setSlotStatus(slot, "Copy failed.", "is-error");
+      const feedback = await copyWithFallback(
+        panel,
+        { text: payload, label: "Insight markdown" },
+        ctx.clipboardWrite
+      );
+      ctx.setSlotStatus(slot, feedback.message, feedback.kind);
     } finally {
       button.disabled = false;
     }
@@ -8502,112 +8517,127 @@ var BrainNotesApp = (() => {
     }
     return "Ask AI failed.";
   };
-  var initNoteInsight = (deps = {}) => {
+  var resolveInsightElements = () => {
     const root = queryElement(document, "[data-note-insight]", HTMLElement);
-    if (!root) {
-      return;
-    }
-    const endpoint = root.getAttribute("data-note-insight-endpoint") || "/api/note/insight";
-    const key = root.getAttribute("data-note-insight-key") || "";
-    const csrfToken = root.getAttribute("data-note-insight-csrf") || "";
-    const enabled = (root.getAttribute("data-note-insight-enabled") || "").toLowerCase() === "true";
+    if (!root) return null;
     const prompt = queryElement(root, "[data-note-insight-prompt]", HTMLTextAreaElement);
     const submit = queryElement(root, "[data-note-insight-submit]", HTMLButtonElement);
     const status = queryElement(root, "[data-note-insight-status]", HTMLElement);
     const result = queryElement(root, "[data-note-insight-result]", HTMLElement);
     const body = queryElement(root, "[data-note-insight-body]", HTMLElement);
     const copy = queryElement(root, "[data-note-insight-copy]", HTMLButtonElement);
-    if (!prompt || !submit || !status || !result || !body || !copy) {
-      return;
+    return prompt && submit && status && result && body && copy ? { root, prompt, submit, status, result, body, copy } : null;
+  };
+  var NoteInsight = class {
+    constructor(els, deps) {
+      this.els = els;
+      this.endpoint = els.root.dataset.noteInsightEndpoint || "/api/note/insight";
+      this.key = els.root.dataset.noteInsightKey || "";
+      this.csrfToken = els.root.dataset.noteInsightCsrf || "";
+      this.enabled = els.root.dataset.noteInsightEnabled?.toLowerCase() === "true";
+      this.fetcher = deps.fetch || fetch;
+      this.confirmer = deps.confirm || ((message) => window.confirm(message));
+      this.clipboardWrite = deps.writeClipboard || (navigator.clipboard?.writeText ? (text3) => navigator.clipboard.writeText(text3) : void 0);
+      els.submit.addEventListener("click", () => {
+        void this.run();
+      });
+      els.prompt.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || !event.ctrlKey && !event.metaKey || els.submit.disabled) return;
+        event.preventDefault();
+        void this.run();
+      });
+      els.copy.addEventListener("click", () => {
+        void this.copy();
+      });
     }
-    const fetcher = deps.fetch || fetch;
-    const confirmer = deps.confirm || ((message) => window.confirm(message));
-    const clipboardWrite = deps.writeClipboard || (navigator.clipboard && typeof navigator.clipboard.writeText === "function" ? (text3) => navigator.clipboard.writeText(text3) : void 0);
-    let disclosureAccepted = false;
-    let output = "";
-    const setStatus2 = (message, kind = "") => {
-      setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
-    };
-    const setBusy = (busy) => {
-      root.setAttribute("aria-busy", String(busy));
-      prompt.disabled = busy || !enabled;
-      submit.disabled = busy || !enabled;
-      copy.disabled = busy || output.trim() === "";
-    };
-    const run = async () => {
-      if (!enabled || key === "" || csrfToken === "") {
-        setStatus2("Ask AI is unavailable.", "is-error");
+    els;
+    endpoint;
+    key;
+    csrfToken;
+    enabled;
+    fetcher;
+    confirmer;
+    clipboardWrite;
+    disclosureAccepted = false;
+    output = "";
+    setStatus(message, kind = "") {
+      setStatusText(this.els.status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
+    }
+    setBusy(busy) {
+      this.els.root.setAttribute("aria-busy", String(busy));
+      this.els.prompt.disabled = busy || !this.enabled;
+      this.els.submit.disabled = busy || !this.enabled;
+      this.els.copy.disabled = busy || this.output.trim() === "";
+    }
+    canRun() {
+      if (!this.enabled || !this.key || !this.csrfToken) {
+        this.setStatus("Ask AI is unavailable.", "is-error");
+        return false;
+      }
+      if (!this.disclosureAccepted) this.disclosureAccepted = this.confirmer(disclosureMessage);
+      if (!this.disclosureAccepted) this.setStatus("Ask AI canceled.");
+      return this.disclosureAccepted;
+    }
+    showResponse(payload) {
+      const normalized = normalizeNoteInsightResponse(payload);
+      if (!normalized.ok || !normalized.enabled) {
+        this.setStatus(normalized.message || "Ask AI is unavailable.", "is-error");
         return;
       }
-      if (!disclosureAccepted) {
-        disclosureAccepted = confirmer(disclosureMessage);
-        if (!disclosureAccepted) {
-          setStatus2("Ask AI canceled.");
-          return;
-        }
+      if (normalized.key && normalized.key !== this.key) {
+        this.setStatus("Note changed while the response was running. Try again.", "is-error");
+        return;
       }
-      setBusy(true);
-      setStatus2("Generating response...", "is-loading");
+      this.output = normalized.output;
+      this.els.result.querySelector("[data-copy-fallback]")?.remove();
+      this.els.body.innerHTML = normalized.rendered_html;
+      this.els.result.hidden = false;
+      this.setStatus("Response ready.", "is-success");
+    }
+    async run() {
+      if (!this.canRun()) return;
+      this.setBusy(true);
+      this.setStatus("Generating response...", "is-loading");
       try {
         const requestBody = buildNoteInsightForm({
-          key,
-          prompt: prompt.value,
-          token: csrfToken
+          key: this.key,
+          prompt: this.els.prompt.value,
+          token: this.csrfToken
         }).toString();
-        const response = await fetcher(endpoint, postRequest(csrfToken, requestBody));
+        const response = await this.fetcher(this.endpoint, postRequest(this.csrfToken, requestBody));
         const payload = await readResponsePayload3(response);
         if (!response.ok) {
-          setStatus2(normalizeManagementErrorMessage(response.status, payload), "is-error");
+          this.setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
           return;
         }
-        const normalized = normalizeNoteInsightResponse(payload);
-        if (!normalized.ok || !normalized.enabled) {
-          setStatus2(normalized.message || "Ask AI is unavailable.", "is-error");
-          return;
-        }
-        if (normalized.key && normalized.key !== key) {
-          setStatus2("Note changed while the response was running. Try again.", "is-error");
-          return;
-        }
-        output = normalized.output;
-        body.innerHTML = normalized.rendered_html;
-        result.hidden = false;
-        setStatus2("Response ready.", "is-success");
+        this.showResponse(payload);
       } catch (error) {
-        setStatus2(describeClientError(error), "is-error");
+        this.setStatus(describeClientError(error), "is-error");
       } finally {
-        setBusy(false);
+        this.setBusy(false);
       }
-    };
-    submit.addEventListener("click", () => {
-      void run();
-    });
-    prompt.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" || !event.ctrlKey && !event.metaKey || submit.disabled) {
+    }
+    async copy() {
+      if (!this.output.trim()) {
+        this.setStatus("Nothing to copy.", "is-error");
         return;
       }
-      event.preventDefault();
-      void run();
-    });
-    copy.addEventListener("click", async () => {
-      if (output.trim() === "") {
-        setStatus2("Nothing to copy.", "is-error");
-        return;
-      }
-      if (!clipboardWrite) {
-        setStatus2("Clipboard unavailable.", "is-error");
-        return;
-      }
-      copy.disabled = true;
+      this.els.copy.disabled = true;
       try {
-        await clipboardWrite(output);
-        setStatus2("Response markdown copied.", "is-success");
-      } catch {
-        setStatus2("Copy failed.", "is-error");
+        const feedback = await copyWithFallback(
+          this.els.result,
+          { text: this.output, label: "Response markdown" },
+          this.clipboardWrite
+        );
+        this.setStatus(feedback.message, feedback.kind);
       } finally {
-        copy.disabled = false;
+        this.els.copy.disabled = false;
       }
-    });
+    }
+  };
+  var initNoteInsight = (deps = {}) => {
+    const els = resolveInsightElements();
+    if (els) new NoteInsight(els, deps);
   };
 
   // internal/web/static_src/note-pin.ts
@@ -9178,6 +9208,19 @@ var BrainNotesApp = (() => {
     return { button, feedback };
   };
 
+  // internal/web/static_src/search-modified.ts
+  var renderSearchModified = (meta2, value) => {
+    if (!value) return;
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return;
+    const time = meta2.ownerDocument.createElement("time");
+    time.dateTime = value;
+    time.title = `Modified: ${value}`;
+    const label = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : date.toLocaleString();
+    time.textContent = `Modified ${label}`;
+    meta2.appendChild(time);
+  };
+
   // internal/web/static_src/overview-search-render.ts
   var formatPreviewValue = (value) => {
     if (!value.present) {
@@ -9366,6 +9409,7 @@ var BrainNotesApp = (() => {
     const folder = doc2.createElement("span");
     folder.textContent = result.folder ? `Folder: ${result.folder}` : "Folder: /";
     meta2.appendChild(folder);
+    renderSearchModified(meta2, result.modified);
     if (result.matched_fields.length > 0) {
       const fields = doc2.createElement("span");
       fields.className = "overview-result-badge";
@@ -9389,6 +9433,7 @@ var BrainNotesApp = (() => {
       const checkbox = doc2.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = result.key;
+      checkbox.dataset.wikilink = result.wikilink;
       checkbox.checked = Boolean(options.selected);
       checkbox.setAttribute(
         "aria-label",
@@ -9514,8 +9559,22 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/overview-search-selection.ts
   var overviewSelectionInputs = (list) => queryAllElements(list, ".overview-result-select input", HTMLInputElement);
+  var syncCopySelection = (root, inputs, busy) => {
+    const button = root.querySelector("[data-overview-copy-wikilinks]");
+    if (!button) return;
+    const text3 = inputs.filter((input) => input.checked && input.dataset.wikilink).map((input) => `[[${input.dataset.wikilink}]]`).join("\n");
+    if (button.dataset.copyText !== text3 || busy) {
+      const controls = button.closest("[data-copy-controls]");
+      controls?.querySelector("[data-copy-fallback]")?.remove();
+      const status = controls?.querySelector("[data-copy-status]");
+      if (status) status.textContent = "";
+    }
+    button.dataset.copyText = busy ? "" : text3;
+    button.disabled = busy || !text3;
+  };
   var syncOverviewSelectionControls = (root, list, selectedCount, busy) => {
     const inputs = overviewSelectionInputs(list);
+    syncCopySelection(root, inputs, busy);
     const controls = queryElement(root, "[data-overview-selection]", HTMLElement);
     if (controls) {
       controls.hidden = inputs.length === 0;

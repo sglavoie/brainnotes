@@ -15,6 +15,8 @@ Rendered notes show the body before Ask AI. The Contents list highlights the
 current section as you scroll, without changing the URL or keyboard focus.
 Code blocks offer **Copy code**, preserving whitespace; if the browser refuses
 clipboard access, a selected text field lets you copy manually.
+Ask AI responses and Daily Brief insights offer the same manual-copy fallback
+for their original Markdown.
 Headings also offer **Copy section link**, which copies the full note URL with
 that heading's existing anchor and uses the same manual-copy fallback.
 
@@ -188,6 +190,16 @@ No telemetry, background schedulers, reminders, or analytics pipelines are
 introduced: activity metrics are local-only and computed from the brief sidecar.
 
 ## The query bar and saved views
+
+Library results show **Modified** using the note's `last` frontmatter timestamp,
+the same value used by recently-modified sorting. Missing or invalid timestamps
+are omitted. Date-only values keep their calendar date; full timestamps display
+in the browser's local time, with the original value available on hover.
+
+Select Library results and choose **Copy wikilinks** to copy one `[[target]]`
+per line in displayed order. This uses the notes' exact-case vault targets and
+copies only the selected, displayed results. It also works in read-only mode
+and offers manual copying if clipboard access is unavailable.
 
 Library's **Sort** control offers default order, recently modified, and title
 in either direction. It preserves the search text, filters, and result limit;

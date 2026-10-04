@@ -70,7 +70,7 @@ const ACTIVE_MEDIA = {
 };
 
 const SEED_NOTES = {
-  "Reading.md": "---\nstatus: draft\ntitle: Reading\n---\n\n## First section\n\n" +
+  "Reading.md": "---\nstatus: draft\ntitle: Reading\nlast: 2026-10-03\n---\n\n## First section\n\n" +
     "A paragraph for scrolling through this note.\n\n".repeat(35) +
     "## Second section\n\n```go\npackage main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n```\n\n" +
     "Another paragraph below the code.\n\n".repeat(25),

@@ -32,6 +32,7 @@ type searchResult struct {
 	Path          string   `json:"path"`
 	Snippet       string   `json:"snippet"`
 	Pinned        bool     `json:"pinned"`
+	Modified      string   `json:"modified,omitempty"`
 	MatchedFields []string `json:"matched_fields,omitempty"`
 	Issues        []string `json:"issues,omitempty"`
 }
@@ -146,6 +147,7 @@ func collectSearchCandidates(snapshot vaultSnapshot, root string, filters noteFi
 				Path:          path,
 				Snippet:       html.EscapeString(makeSearchSnippet(match.Body, match.BodyMatchIndex)),
 				Pinned:        pinned(note),
+				Modified:      searchModified(note),
 				MatchedFields: searchMatchedFields(match, filters.foldedQuery != ""),
 				Issues:        searchIssueFlags(note, issuePredicates),
 			},

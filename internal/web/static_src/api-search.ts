@@ -18,6 +18,7 @@ export const normalizeSearchResults = (payload: unknown): SearchResult[] => {
         title: normalizeParamValue(record.title),
         wikilink: normalizeParamValue(record.wikilink),
         folder: normalizeParamValue(record.folder),
+        modified: normalizeParamValue(record.modified),
         matched_fields: normalizeStringArray(record.matched_fields),
         issues: normalizeStringArray(record.issues),
         snippet: normalizeParamValue(record.snippet),

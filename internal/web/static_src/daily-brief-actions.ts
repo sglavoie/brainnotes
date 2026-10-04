@@ -24,6 +24,7 @@ import {
 } from "./daily-brief-model";
 import { findSlotElement, renderInsight } from "./daily-brief-render";
 import { queryElement } from "./dom";
+import { copyWithFallback } from "./clipboard";
 import { type StatusKind } from "./status";
 
 // BriefActionContext is the mutable state and collaborator set the brief
@@ -134,6 +135,10 @@ export const runAnother = async (
   }
 };
 
+const clearInsightCopyFallback = (root: HTMLElement, slot: BriefSlotKind): void => {
+  findSlotElement(root, slot)?.querySelector("[data-copy-fallback]")?.remove();
+};
+
 export const runInsight = async (
   ctx: BriefActionContext,
   button: HTMLButtonElement
@@ -171,6 +176,7 @@ export const runInsight = async (
     const result = normalizeBriefInsightResponse(payload);
     if (!validInsightResult(ctx, slot, cardID, result)) return;
 
+    clearInsightCopyFallback(ctx.root, slot);
     renderInsight(ctx.root, slot, cardID, result.rendered_html, result.output);
     ctx.setSlotStatus(slot, "Insight ready.", "is-success");
   } catch {
@@ -198,16 +204,13 @@ export const runCopyInsight = async (
     ctx.setSlotStatus(slot, "Nothing to copy.", "is-error");
     return;
   }
-  if (!ctx.clipboardWrite) {
-    ctx.setSlotStatus(slot, "Clipboard unavailable.", "is-error");
-    return;
-  }
+  const panel = button.closest<HTMLElement>("[data-brief-insight-panel]");
+  if (!panel) return;
   button.disabled = true;
   try {
-    await ctx.clipboardWrite(payload);
-    ctx.setSlotStatus(slot, "Insight markdown copied.", "is-success");
-  } catch {
-    ctx.setSlotStatus(slot, "Copy failed.", "is-error");
+    const feedback = await copyWithFallback(panel,
+      { text: payload, label: "Insight markdown" }, ctx.clipboardWrite);
+    ctx.setSlotStatus(slot, feedback.message, feedback.kind);
   } finally {
     button.disabled = false;
   }

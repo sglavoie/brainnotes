@@ -4,6 +4,7 @@ import {
   normalizeNoteInsightResponse,
 } from "./api";
 import { queryElement } from "./dom";
+import { copyWithFallback } from "./clipboard";
 import { setStatusText } from "./status";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -49,122 +50,135 @@ const describeClientError = (error: unknown): string => {
   return "Ask AI failed.";
 };
 
-export const initNoteInsight = (deps: NoteInsightDeps = {}): void => {
-  const root = queryElement(document, "[data-note-insight]", HTMLElement);
-  if (!root) {
-    return;
-  }
+type InsightElements = {
+  root: HTMLElement;
+  prompt: HTMLTextAreaElement;
+  submit: HTMLButtonElement;
+  status: HTMLElement;
+  result: HTMLElement;
+  body: HTMLElement;
+  copy: HTMLButtonElement;
+};
 
-  const endpoint = root.getAttribute("data-note-insight-endpoint") || "/api/note/insight";
-  const key = root.getAttribute("data-note-insight-key") || "";
-  const csrfToken = root.getAttribute("data-note-insight-csrf") || "";
-  const enabled = (root.getAttribute("data-note-insight-enabled") || "").toLowerCase() === "true";
+const resolveInsightElements = (): InsightElements | null => {
+  const root = queryElement(document, "[data-note-insight]", HTMLElement);
+  if (!root) return null;
   const prompt = queryElement(root, "[data-note-insight-prompt]", HTMLTextAreaElement);
   const submit = queryElement(root, "[data-note-insight-submit]", HTMLButtonElement);
   const status = queryElement(root, "[data-note-insight-status]", HTMLElement);
   const result = queryElement(root, "[data-note-insight-result]", HTMLElement);
   const body = queryElement(root, "[data-note-insight-body]", HTMLElement);
   const copy = queryElement(root, "[data-note-insight-copy]", HTMLButtonElement);
-  if (!prompt || !submit || !status || !result || !body || !copy) {
-    return;
+  return prompt && submit && status && result && body && copy
+    ? { root, prompt, submit, status, result, body, copy } : null;
+};
+
+class NoteInsight {
+  private readonly endpoint: string;
+  private readonly key: string;
+  private readonly csrfToken: string;
+  private readonly enabled: boolean;
+  private readonly fetcher: FetchLike;
+  private readonly confirmer: ConfirmLike;
+  private readonly clipboardWrite: ClipboardWriter | undefined;
+  private disclosureAccepted = false;
+  private output = "";
+
+  constructor(private readonly els: InsightElements, deps: NoteInsightDeps) {
+    this.endpoint = els.root.dataset.noteInsightEndpoint || "/api/note/insight";
+    this.key = els.root.dataset.noteInsightKey || "";
+    this.csrfToken = els.root.dataset.noteInsightCsrf || "";
+    this.enabled = els.root.dataset.noteInsightEnabled?.toLowerCase() === "true";
+    this.fetcher = deps.fetch || fetch;
+    this.confirmer = deps.confirm || ((message) => window.confirm(message));
+    this.clipboardWrite = deps.writeClipboard || (navigator.clipboard?.writeText
+      ? (text) => navigator.clipboard.writeText(text) : undefined);
+    els.submit.addEventListener("click", () => { void this.run(); });
+    els.prompt.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || els.submit.disabled) return;
+      event.preventDefault();
+      void this.run();
+    });
+    els.copy.addEventListener("click", () => { void this.copy(); });
   }
 
-  const fetcher = deps.fetch || fetch;
-  const confirmer = deps.confirm || ((message: string) => window.confirm(message));
-  const clipboardWrite =
-    deps.writeClipboard ||
-    (navigator.clipboard && typeof navigator.clipboard.writeText === "function"
-      ? (text: string) => navigator.clipboard.writeText(text)
-      : undefined);
-  let disclosureAccepted = false;
-  let output = "";
+  private setStatus(message: string, kind: "" | "is-success" | "is-error" | "is-loading" = ""): void {
+    setStatusText(this.els.status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
+  }
 
-  const setStatus = (message: string, kind: "" | "is-success" | "is-error" | "is-loading" = ""): void => {
-    setStatusText(status, message || " ", kind, ["is-success", "is-error", "is-loading"]);
-  };
+  private setBusy(busy: boolean): void {
+    this.els.root.setAttribute("aria-busy", String(busy));
+    this.els.prompt.disabled = busy || !this.enabled;
+    this.els.submit.disabled = busy || !this.enabled;
+    this.els.copy.disabled = busy || this.output.trim() === "";
+  }
 
-  const setBusy = (busy: boolean): void => {
-    root.setAttribute("aria-busy", String(busy));
-    prompt.disabled = busy || !enabled;
-    submit.disabled = busy || !enabled;
-    copy.disabled = busy || output.trim() === "";
-  };
+  private canRun(): boolean {
+    if (!this.enabled || !this.key || !this.csrfToken) {
+      this.setStatus("Ask AI is unavailable.", "is-error");
+      return false;
+    }
+    if (!this.disclosureAccepted) this.disclosureAccepted = this.confirmer(disclosureMessage);
+    if (!this.disclosureAccepted) this.setStatus("Ask AI canceled.");
+    return this.disclosureAccepted;
+  }
 
-  const run = async (): Promise<void> => {
-    if (!enabled || key === "" || csrfToken === "") {
-      setStatus("Ask AI is unavailable.", "is-error");
+  private showResponse(payload: unknown): void {
+    const normalized = normalizeNoteInsightResponse(payload);
+    if (!normalized.ok || !normalized.enabled) {
+      this.setStatus(normalized.message || "Ask AI is unavailable.", "is-error");
       return;
     }
-    if (!disclosureAccepted) {
-      disclosureAccepted = confirmer(disclosureMessage);
-      if (!disclosureAccepted) {
-        setStatus("Ask AI canceled.");
-        return;
-      }
+    if (normalized.key && normalized.key !== this.key) {
+      this.setStatus("Note changed while the response was running. Try again.", "is-error");
+      return;
     }
+    this.output = normalized.output;
+    this.els.result.querySelector("[data-copy-fallback]")?.remove();
+    this.els.body.innerHTML = normalized.rendered_html;
+    this.els.result.hidden = false;
+    this.setStatus("Response ready.", "is-success");
+  }
 
-    setBusy(true);
-    setStatus("Generating response...", "is-loading");
+  private async run(): Promise<void> {
+    if (!this.canRun()) return;
+    this.setBusy(true);
+    this.setStatus("Generating response...", "is-loading");
     try {
       const requestBody = buildNoteInsightForm({
-        key,
-        prompt: prompt.value,
-        token: csrfToken,
+        key: this.key, prompt: this.els.prompt.value, token: this.csrfToken,
       }).toString();
-      const response = await fetcher(endpoint, postRequest(csrfToken, requestBody));
+      const response = await this.fetcher(this.endpoint, postRequest(this.csrfToken, requestBody));
       const payload = await readResponsePayload(response);
       if (!response.ok) {
-        setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+        this.setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
         return;
       }
-      const normalized = normalizeNoteInsightResponse(payload);
-      if (!normalized.ok || !normalized.enabled) {
-        setStatus(normalized.message || "Ask AI is unavailable.", "is-error");
-        return;
-      }
-      if (normalized.key && normalized.key !== key) {
-        setStatus("Note changed while the response was running. Try again.", "is-error");
-        return;
-      }
-
-      output = normalized.output;
-      body.innerHTML = normalized.rendered_html;
-      result.hidden = false;
-      setStatus("Response ready.", "is-success");
+      this.showResponse(payload);
     } catch (error) {
-      setStatus(describeClientError(error), "is-error");
+      this.setStatus(describeClientError(error), "is-error");
     } finally {
-      setBusy(false);
+      this.setBusy(false);
     }
-  };
+  }
 
-  submit.addEventListener("click", () => {
-    void run();
-  });
-  prompt.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || submit.disabled) {
+  private async copy(): Promise<void> {
+    if (!this.output.trim()) {
+      this.setStatus("Nothing to copy.", "is-error");
       return;
     }
-    event.preventDefault();
-    void run();
-  });
-  copy.addEventListener("click", async () => {
-    if (output.trim() === "") {
-      setStatus("Nothing to copy.", "is-error");
-      return;
-    }
-    if (!clipboardWrite) {
-      setStatus("Clipboard unavailable.", "is-error");
-      return;
-    }
-    copy.disabled = true;
+    this.els.copy.disabled = true;
     try {
-      await clipboardWrite(output);
-      setStatus("Response markdown copied.", "is-success");
-    } catch {
-      setStatus("Copy failed.", "is-error");
+      const feedback = await copyWithFallback(this.els.result,
+        { text: this.output, label: "Response markdown" }, this.clipboardWrite);
+      this.setStatus(feedback.message, feedback.kind);
     } finally {
-      copy.disabled = false;
+      this.els.copy.disabled = false;
     }
-  });
+  }
+}
+
+export const initNoteInsight = (deps: NoteInsightDeps = {}): void => {
+  const els = resolveInsightElements();
+  if (els) new NoteInsight(els, deps);
 };

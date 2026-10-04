@@ -29,7 +29,7 @@ html[data-read-only] :is(
  [data-property-selection-count], [data-property-editor],
  [data-bulk-trash], [data-bulk-move], [data-bulk-frontmatter-set], [data-bulk-frontmatter-unset],
  [data-fixes-fix-action], [data-fixes-item-action], [data-fixes-button],
- [data-overview-bulk], .overview-result-select,
+ [data-overview-bulk],
  [data-property-row-select], [data-property-schema],
  [data-related-action], [data-related-later-control], [data-related-feedback-drawer],
  .frontmatter-controls,

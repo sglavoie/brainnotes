@@ -1,5 +1,6 @@
 import { renderOverviewPin } from "./overview-search-pin";
 import { libraryResultPath } from "./note-navigation";
+import { renderSearchModified } from "./search-modified";
 import {
   type BulkFrontmatterChange,
   searchResultPath,
@@ -253,6 +254,7 @@ const renderResultMetadata = (doc: Document, result: SearchResult): HTMLElement 
   const folder = doc.createElement("span");
   folder.textContent = result.folder ? `Folder: ${result.folder}` : "Folder: /";
   meta.appendChild(folder);
+  renderSearchModified(meta, result.modified);
 
   if (result.matched_fields.length > 0) {
     const fields = doc.createElement("span");
@@ -282,6 +284,7 @@ const renderResultSelection = (
     const checkbox = doc.createElement("input");
     checkbox.type = "checkbox";
     checkbox.value = result.key;
+    checkbox.dataset.wikilink = result.wikilink;
     checkbox.checked = Boolean(options.selected);
     checkbox.setAttribute(
       "aria-label",

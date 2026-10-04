@@ -9,6 +9,8 @@ export type SearchResult = {
   // editor's `[[` completion is what needs it.
   wikilink: string;
   folder: string;
+  // The same frontmatter `last` timestamp used by sort=modified, when valid.
+  modified?: string;
   matched_fields: string[];
   issues: string[];
   snippet: string;
