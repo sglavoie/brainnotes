@@ -24,6 +24,10 @@ Opening a Library search result offers **Back to results** on the note, preservi
 the search text, filters, and sort order even after a reload or opening in a new
 tab. **Copy note URL** copies the full note address without that search context
 or a section anchor, with the same manual-copy fallback.
+**Back to results** also brings the opened result into view and restores keyboard
+focus after results load. Browser Back remembers the result too. If that note no
+longer matches, the search still loads normally; interacting while results load
+cancels the automatic jump.
 Following body links, backlinks, or outgoing links to other notes carries that
 same Library context along, so **Back to results** remains available as you explore.
 **Edit source** carries it into the editor too: use the note title link to return
@@ -133,6 +137,10 @@ web UI always see the same list.
 
 If a Library Pin/Unpin action fails, its row displays the error and a **Retry**
 button. The toggle returns to its previous state until a retry succeeds.
+
+Library change-history entries show the first three affected paths below each
+command, with an expandable list for the remainder, so you can identify a change
+before choosing Undo.
 
 Reordering is web-only. Drag a row's handle on `/pinned`, or focus a handle and
 press `Up`/`Down` for the same move from the keyboard. The browser posts note

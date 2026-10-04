@@ -2332,6 +2332,23 @@ code {
   justify-self: end;
 }
 
+.history-paths {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+  color: var(--bn-muted);
+  font-size: 0.83rem;
+}
+
+.history-more-paths {
+  margin-top: 0.35rem;
+  font-size: 0.83rem;
+}
+
+.history-more-paths > summary {
+  cursor: pointer;
+}
 /* internal/web/static_src/css/history-workspace.css */
 /*
  * The /history page. It reuses .history-button and .history-status from

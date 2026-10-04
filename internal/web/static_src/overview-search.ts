@@ -47,6 +47,7 @@ import { postBulkApply, postBulkPreview } from "./overview-search-requests";
 import { setStatusText, type StatusKind } from "./status";
 import { readSearchCounts, searchSummary, type SearchCounts } from "./search-summary";
 import { overviewSelectionInputs, syncOverviewSelectionControls } from "./overview-search-selection";
+import { bindLibraryPosition } from "./library-position";
 
 export {
   overviewSearchEmptyMessage,
@@ -56,6 +57,7 @@ export {
 export { renderOverviewSearchResult } from "./overview-search-render";
 
 class OverviewSearch {
+  private readonly restorePosition: () => void;
   private readonly fetcher: typeof fetch;
   private readonly selectedKeys = new Map<string, string>();
   private bulkBusy = false;
@@ -65,6 +67,7 @@ class OverviewSearch {
   private requestToken = 0;
 
   constructor(private readonly els: OverviewSearchElements, deps: OverviewSearchDeps) {
+    this.restorePosition = bindLibraryPosition(els.listEl);
     this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
     this.bindSearchEvents();
     this.bindBulkEvents();
@@ -272,11 +275,13 @@ class OverviewSearch {
 
     if (renderedCount === 0) {
       this.clearResults(overviewSearchEmptyMessage(query), "is-empty");
+      this.restorePosition();
       return;
     }
 
     this.els.listEl.hidden = false;
     this.setStatus(searchSummary(renderedCount, query, counts), "");
+    this.restorePosition();
   };
 
   private scheduleSearch = (delay: number): void => {

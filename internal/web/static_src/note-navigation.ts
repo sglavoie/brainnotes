@@ -1,8 +1,10 @@
 // Carry the Library URL in the link itself so reloads and new tabs retain it.
-export const libraryResultPath = (path: string): string => {
+export const libraryResultPath = (path: string, resultID?: string): string => {
   if (window.location.pathname !== "/library" || !path.startsWith("/n/")) return path;
   const url = new URL(path, window.location.origin);
-  url.searchParams.set("return_to", window.location.pathname + window.location.search + window.location.hash);
+  const returnURL = new URL(window.location.href);
+  if (resultID) returnURL.hash = resultID;
+  url.searchParams.set("return_to", returnURL.pathname + returnURL.search + returnURL.hash);
   return url.pathname + url.search + url.hash;
 };
 

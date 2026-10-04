@@ -7,12 +7,12 @@ test("Library context survives the editor, a reload, and the note return link", 
   await page.locator(".overview-result-link", { hasText: "Reading" }).click();
   await page.locator("[data-source-editor-launch]").click();
   await expect(page.locator(SURFACE)).toBeVisible();
-  expect(new URL(page.url()).searchParams.get("return_to")).toBe(library);
+  expect(new URL(page.url()).searchParams.get("return_to")).toBe(library + "#library-result-reading");
   await page.reload();
   await expect(page.locator(SURFACE)).toBeVisible();
   await page.locator("[data-source-note-return]").click();
   await page.getByRole("link", { name: "Back to results", exact: true }).click();
-  await expect(page).toHaveURL(new URL(library, page.url()).href);
+  await expect(page).toHaveURL(new URL(library + "#library-result-reading", page.url()).href);
   await expect(page.locator("#search-input")).toHaveValue("Reading");
   await expect(page.locator("[data-library-sort]")).toHaveValue("-modified");
   await expect(page.locator(".facet-chip")).toContainText("draft");

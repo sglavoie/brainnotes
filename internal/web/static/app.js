@@ -7400,6 +7400,30 @@ var BrainNotesApp = (() => {
       elements.force.disabled = busy || !forceReady;
     }
   };
+  var historyPaths = (paths) => {
+    const list = document.createElement("ul");
+    list.className = "history-paths";
+    list.setAttribute("aria-label", "Affected paths");
+    for (const path of paths) {
+      const item = document.createElement("li");
+      item.textContent = path;
+      list.append(item);
+    }
+    return list;
+  };
+  var appendHistoryPaths = (main, entry) => {
+    const paths = entry.files.map((file) => file.path);
+    if (!paths.length) return;
+    main.append(historyPaths(paths.slice(0, 3)));
+    if (paths.length <= 3) return;
+    const details = document.createElement("details");
+    details.className = "history-more-paths";
+    const summary = document.createElement("summary");
+    const remaining = paths.length - 3;
+    summary.textContent = `${remaining} more ${remaining === 1 ? "path" : "paths"}`;
+    details.append(summary, historyPaths(paths.slice(3)));
+    main.append(details);
+  };
   var historyEntryRow = (entry, onUndo) => {
     const item = document.createElement("li");
     item.className = "history-item";
@@ -7415,6 +7439,7 @@ var BrainNotesApp = (() => {
     const count4 = historyFileCountLabel(entry.file_count || entry.files.length);
     meta2.textContent = time ? `${time} - ${count4}` : count4;
     main.appendChild(meta2);
+    appendHistoryPaths(main, entry);
     const undoButton = document.createElement("button");
     undoButton.className = "history-button history-danger";
     undoButton.type = "button";
@@ -8212,10 +8237,12 @@ var BrainNotesApp = (() => {
   };
 
   // internal/web/static_src/note-navigation.ts
-  var libraryResultPath = (path) => {
+  var libraryResultPath = (path, resultID) => {
     if (window.location.pathname !== "/library" || !path.startsWith("/n/")) return path;
     const url = new URL(path, window.location.origin);
-    url.searchParams.set("return_to", window.location.pathname + window.location.search + window.location.hash);
+    const returnURL = new URL(window.location.href);
+    if (resultID) returnURL.hash = resultID;
+    url.searchParams.set("return_to", returnURL.pathname + returnURL.search + returnURL.hash);
     return url.pathname + url.search + url.hash;
   };
   var libraryReturnPath = () => {
@@ -9219,6 +9246,47 @@ var BrainNotesApp = (() => {
     return { button, feedback };
   };
 
+  // internal/web/static_src/library-position.ts
+  var resultPrefix = "library-result-";
+  var libraryResultID = (key) => resultPrefix + encodeURIComponent(key);
+  var opensInSameTab = (event) => event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+  var bindLibraryPosition = (list) => {
+    if (window.location.pathname !== "/library") return () => {
+    };
+    const initialURL = window.location.href;
+    const initialHash = window.location.hash.slice(1);
+    let pending = initialHash.startsWith(resultPrefix);
+    const cancel = () => {
+      pending = false;
+    };
+    const events = ["pointerdown", "keydown", "wheel", "touchstart"];
+    if (pending) {
+      for (const event of events) document.addEventListener(event, cancel, { once: true, passive: true });
+    }
+    list.addEventListener("click", (event) => {
+      if (!opensInSameTab(event)) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest(".overview-result-link");
+      const row = link?.closest("[data-overview-result-key]");
+      if (!row?.id || !list.contains(row)) return;
+      const url = new URL(window.location.href);
+      url.hash = row.id;
+      window.history.replaceState(window.history.state, "", url);
+    });
+    return () => {
+      for (const event of events) document.removeEventListener(event, cancel);
+      const shouldRestore = pending && window.location.href === initialURL;
+      pending = false;
+      if (!shouldRestore) return;
+      const row = Array.from(list.children).find((item) => item.id === initialHash);
+      const link = row?.querySelector(".overview-result-link");
+      if (!link) return;
+      link.focus({ preventScroll: true });
+      link.scrollIntoView({ block: "center", behavior: "instant" });
+    };
+  };
+
   // internal/web/static_src/search-modified.ts
   var renderSearchModified = (meta2, value) => {
     if (!value) return;
@@ -9469,13 +9537,14 @@ var BrainNotesApp = (() => {
     item.className = "overview-result-item";
     if (result.key) {
       item.setAttribute("data-overview-result-key", result.key);
+      item.id = libraryResultID(result.key);
     }
     const row = doc2.createElement("div");
     row.className = "overview-result-row";
     renderResultSelection(row, result, options);
     const link = doc2.createElement("a");
     link.className = "overview-result-link";
-    link.setAttribute("href", libraryResultPath(path));
+    link.setAttribute("href", libraryResultPath(path, item.id));
     const title = doc2.createElement("span");
     title.className = "overview-result-title";
     title.textContent = result.title || result.key || "Untitled";
@@ -9607,6 +9676,7 @@ var BrainNotesApp = (() => {
   var OverviewSearch = class {
     constructor(els, deps) {
       this.els = els;
+      this.restorePosition = bindLibraryPosition(els.listEl);
       this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
       this.bindSearchEvents();
       this.bindBulkEvents();
@@ -9618,6 +9688,7 @@ var BrainNotesApp = (() => {
       this.scheduleSearch(0);
     }
     els;
+    restorePosition;
     fetcher;
     selectedKeys = /* @__PURE__ */ new Map();
     bulkBusy = false;
@@ -9792,10 +9863,12 @@ var BrainNotesApp = (() => {
       this.pruneSelectionToRenderedKeys(visibleKeys);
       if (renderedCount === 0) {
         this.clearResults(overviewSearchEmptyMessage(query), "is-empty");
+        this.restorePosition();
         return;
       }
       this.els.listEl.hidden = false;
       this.setStatus(searchSummary(renderedCount, query, counts), "");
+      this.restorePosition();
     };
     scheduleSearch = (delay) => {
       const query = overviewSearchQuery(this.els.input);

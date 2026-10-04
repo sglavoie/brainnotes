@@ -1,5 +1,6 @@
 import { renderOverviewPin } from "./overview-search-pin";
 import { libraryResultPath } from "./note-navigation";
+import { libraryResultID } from "./library-position";
 import { renderSearchModified } from "./search-modified";
 import {
   type BulkFrontmatterChange,
@@ -315,6 +316,7 @@ export const renderOverviewSearchResult = (
   item.className = "overview-result-item";
   if (result.key) {
     item.setAttribute("data-overview-result-key", result.key);
+    item.id = libraryResultID(result.key);
   }
 
   const row = doc.createElement("div");
@@ -324,7 +326,7 @@ export const renderOverviewSearchResult = (
 
   const link = doc.createElement("a");
   link.className = "overview-result-link";
-  link.setAttribute("href", libraryResultPath(path));
+  link.setAttribute("href", libraryResultPath(path, item.id));
 
   const title = doc.createElement("span");
   title.className = "overview-result-title";

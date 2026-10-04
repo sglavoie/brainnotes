@@ -112,6 +112,32 @@ export const setHistoryPanelBusy = (
   }
 };
 
+const historyPaths = (paths: string[]): HTMLUListElement => {
+  const list = document.createElement("ul");
+  list.className = "history-paths";
+  list.setAttribute("aria-label", "Affected paths");
+  for (const path of paths) {
+    const item = document.createElement("li");
+    item.textContent = path;
+    list.append(item);
+  }
+  return list;
+};
+
+const appendHistoryPaths = (main: HTMLElement, entry: HistoryEntry): void => {
+  const paths = entry.files.map((file) => file.path);
+  if (!paths.length) return;
+  main.append(historyPaths(paths.slice(0, 3)));
+  if (paths.length <= 3) return;
+  const details = document.createElement("details");
+  details.className = "history-more-paths";
+  const summary = document.createElement("summary");
+  const remaining = paths.length - 3;
+  summary.textContent = `${remaining} more ${remaining === 1 ? "path" : "paths"}`;
+  details.append(summary, historyPaths(paths.slice(3)));
+  main.append(details);
+};
+
 const historyEntryRow = (entry: HistoryEntry, onUndo: (entryID: string) => void): HTMLLIElement => {
   const item = document.createElement("li");
   item.className = "history-item";
@@ -130,6 +156,7 @@ const historyEntryRow = (entry: HistoryEntry, onUndo: (entryID: string) => void)
   const count = historyFileCountLabel(entry.file_count || entry.files.length);
   meta.textContent = time ? `${time} - ${count}` : count;
   main.appendChild(meta);
+  appendHistoryPaths(main, entry);
 
   const undoButton = document.createElement("button");
   undoButton.className = "history-button history-danger";
