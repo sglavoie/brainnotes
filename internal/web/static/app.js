@@ -7814,7 +7814,7 @@ var BrainNotesApp = (() => {
     restore.setAttribute("aria-label", `Preview restoring ${entry.command || entry.id}`);
     restore.textContent = "Restore...";
     restore.addEventListener("click", () => {
-      onRestore(entry.id);
+      onRestore(entry.id, restore);
     });
     item.appendChild(head);
     item.appendChild(meta2);
@@ -7830,7 +7830,7 @@ var BrainNotesApp = (() => {
   };
   var historyRangeLabel = (offset, shown, total) => {
     if (total === 0) {
-      return "No entries match.";
+      return "0 entries";
     }
     if (shown === 0) {
       return `No entries at this position of ${total}.`;
@@ -7849,6 +7849,25 @@ var BrainNotesApp = (() => {
     if (elements.next) {
       elements.next.disabled = !result.has_more;
     }
+  };
+  var renderHistoryEmptyStatus = (elements, query, warningCount) => {
+    const filtered = Boolean(query.path || query.origins?.length || query.classes?.length);
+    const unfiltered = warningCount > 0 ? "No readable changes to show. See the history warnings below." : "No changes have been recorded yet. Changes made through Brain Notes will appear here.";
+    setStatusText(
+      elements.status,
+      filtered ? "No recorded change matches these filters." : unfiltered,
+      "is-empty"
+    );
+    if (!filtered) return;
+    const clear2 = elements.status.ownerDocument.createElement("button");
+    clear2.type = "button";
+    clear2.className = "history-button";
+    clear2.textContent = "Clear filters";
+    clear2.addEventListener("click", () => {
+      elements.clearFilters?.focus();
+      elements.clearFilters?.click();
+    });
+    elements.status.append(" ", clear2);
   };
 
   // internal/web/static_src/history-workspace-restore.ts
@@ -7929,6 +7948,7 @@ var BrainNotesApp = (() => {
     renderRestoreConflicts(elements, conflicts);
     if (elements.restore) {
       elements.restore.hidden = false;
+      elements.restore.setAttribute("aria-busy", "false");
     }
     syncHistoryRestoreConsent(elements, conflicts.length > 0);
   };
@@ -7942,6 +7962,7 @@ var BrainNotesApp = (() => {
   var hideHistoryRestorePanel = (elements) => {
     if (elements.restore) {
       elements.restore.hidden = true;
+      elements.restore.setAttribute("aria-busy", "false");
     }
     if (elements.restoreConflicts) {
       elements.restoreConflicts.hidden = true;
@@ -7953,6 +7974,23 @@ var BrainNotesApp = (() => {
       elements.restoreConfirm.disabled = false;
       elements.restoreConfirm.textContent = "Restore";
     }
+  };
+  var showHistoryPreviewPending = (elements) => {
+    for (const container of [elements.restoreFacts, elements.restoreChanges, elements.restoreConflictList]) {
+      if (container) container.textContent = "";
+    }
+    if (elements.restoreSummary) {
+      elements.restoreSummary.textContent = "Checking what restoring this would do...";
+      elements.restoreSummary.classList.remove("is-warning");
+    }
+    if (elements.restoreConfirm) elements.restoreConfirm.disabled = true;
+    if (elements.restore) {
+      elements.restore.hidden = false;
+      elements.restore.setAttribute("aria-busy", "true");
+    }
+  };
+  var focusHistoryPreview = (elements) => {
+    elements.restore?.querySelector("[data-history-restore-heading]")?.focus();
   };
 
   // internal/web/static_src/history-workspace-url.ts
@@ -8000,7 +8038,7 @@ var BrainNotesApp = (() => {
     const ctx = {
       elements,
       fetcher: (input, init) => baseFetch(input, init),
-      state: { offset: 0, preview: null, vocabularyRendered: false, urlFilters: null, issued: 0, success: "" },
+      state: { offset: 0, previewIssue: 0, previewTrigger: null, restoring: false, preview: null, vocabularyRendered: false, urlFilters: null, issued: 0, success: "" },
       setStatus: (message, kind = "") => {
         setStatusText(elements.status, message, kind);
       }
@@ -8023,7 +8061,8 @@ var BrainNotesApp = (() => {
       event.preventDefault();
       reload(0);
     });
-    elements.filters?.addEventListener("change", () => {
+    elements.filters?.addEventListener("change", (event) => {
+      if (event.target === elements.path) return;
       reload(0);
     });
     bindHistoryNavigation(ctx, () => window.clearTimeout(pending), () => {
@@ -8054,8 +8093,7 @@ var BrainNotesApp = (() => {
       void applyHistoryRestore(ctx);
     });
     elements.restoreCancel?.addEventListener("click", () => {
-      state.preview = null;
-      hideHistoryRestorePanel(elements);
+      dismissHistoryPreview(ctx, true);
       ctx.setStatus("Restore canceled. Nothing was changed.");
     });
   };
@@ -8063,14 +8101,14 @@ var BrainNotesApp = (() => {
     ctx.elements.path?.addEventListener("input", () => {
       cancel();
       ctx.state.issued += 1;
+      dismissHistoryPreview(ctx);
       schedule();
     });
     window.addEventListener("popstate", () => {
       if (!ctx.elements.root.isConnected) return;
       cancel();
       hydrateHistoryURL(ctx);
-      ctx.state.preview = null;
-      hideHistoryRestorePanel(ctx.elements);
+      dismissHistoryPreview(ctx);
       void loadHistoryPage(ctx);
     });
   };
@@ -8096,6 +8134,7 @@ var BrainNotesApp = (() => {
     if (success !== "") {
       state.success = success;
     }
+    dismissHistoryPreview(ctx);
     const issue = ++state.issued;
     elements.root.setAttribute("aria-busy", "true");
     ctx.setStatus("Reading the history...", "is-loading");
@@ -8121,9 +8160,9 @@ var BrainNotesApp = (() => {
     writeHistoryURL({ ...query, offset: state.offset }, "replace");
     renderVocabularyOnce(ctx, result, query.origins || [], query.classes || []);
     renderHistoryWarnings(elements.warnings, result.warnings || [], result.warning_count || 0);
-    renderHistoryEntryList(elements.list, entries, (entryID) => void openHistoryPreview(ctx, entryID));
+    renderHistoryEntryList(elements.list, entries, (entryID, trigger) => void openHistoryPreview(ctx, entryID, trigger));
     updateHistoryPager(elements, result, entries.length);
-    reportPageStatus(ctx, result, entries.length, reporting);
+    reportPageStatus(ctx, result, entries.length, reporting, query);
   };
   var renderVocabularyOnce = (ctx, result, origins, classes) => {
     if (ctx.state.vocabularyRendered) {
@@ -8133,29 +8172,45 @@ var BrainNotesApp = (() => {
     renderHistoryFilterGroup(ctx.elements.classFilters, "class", result.classes || [], classes);
     ctx.state.vocabularyRendered = true;
   };
-  var reportPageStatus = (ctx, result, shown, success) => {
+  var reportPageStatus = (ctx, result, shown, success, query) => {
     if (success !== "") {
       ctx.setStatus(success, "is-success");
       return;
     }
     const total = result.total || 0;
     if (total === 0) {
-      ctx.setStatus("No recorded change matches this view.", "is-empty");
+      renderHistoryEmptyStatus(ctx.elements, query, result.warning_count || 0);
       return;
     }
     ctx.setStatus(`Showing ${shown} of ${total} recorded changes.`);
   };
-  var openHistoryPreview = async (ctx, entryID) => {
+  var dismissHistoryPreview = (ctx, returnFocus = false) => {
+    const trigger = ctx.state.previewTrigger;
+    ctx.state.previewIssue += 1;
+    ctx.state.preview = null;
+    ctx.state.previewTrigger = null;
+    hideHistoryRestorePanel(ctx.elements);
+    if (returnFocus) {
+      (trigger?.isConnected ? trigger : ctx.elements.refresh)?.focus();
+    }
+  };
+  var openHistoryPreview = async (ctx, entryID, trigger) => {
     const { elements, state } = ctx;
+    if (state.restoring) return;
     if (elements.token.trim() === "") {
       ctx.setStatus("This server does not accept restores.", "is-error");
       return;
     }
+    dismissHistoryPreview(ctx);
+    const issue = state.previewIssue;
+    state.previewTrigger = trigger;
+    showHistoryPreviewPending(elements);
+    focusHistoryPreview(elements);
     ctx.setStatus("Checking what restoring this would do...", "is-loading");
     const outcome = await previewHistoryRestore(ctx.fetcher, elements.previewEndpoint, elements.token, entryID);
+    if (issue !== state.previewIssue || !elements.root.isConnected) return;
     if (!outcome.ok) {
-      state.preview = null;
-      hideHistoryRestorePanel(elements);
+      dismissHistoryPreview(ctx, true);
       ctx.setStatus(outcome.message, "is-error");
       return;
     }
@@ -8168,6 +8223,7 @@ var BrainNotesApp = (() => {
   };
   var applyHistoryRestore = async (ctx) => {
     const { elements, state } = ctx;
+    if (state.restoring) return;
     const preview = state.preview;
     if (!preview) {
       ctx.setStatus("Preview a change before restoring it.", "is-error");
@@ -8178,6 +8234,8 @@ var BrainNotesApp = (() => {
       ctx.setStatus("Confirm you understand what this replaces before restoring.", "is-error");
       return;
     }
+    state.restoring = true;
+    dismissHistoryPreview(ctx, true);
     ctx.setStatus("Restoring...", "is-loading");
     const outcome = await restoreHistoryEntry(ctx.fetcher, elements.undoEndpoint, {
       token: elements.token,
@@ -8186,8 +8244,7 @@ var BrainNotesApp = (() => {
       confirmForce: forced,
       previewID: preview.preview_id
     });
-    state.preview = null;
-    hideHistoryRestorePanel(elements);
+    state.restoring = false;
     state.offset = 0;
     if (!outcome.ok) {
       await loadHistoryPage(ctx);

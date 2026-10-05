@@ -77,3 +77,26 @@ test("the daily brief page renders for a vault with notes", async ({ page }) => 
   await expect(page.locator("[data-brief-empty-vault]")).toHaveCount(0);
   await expect(page.locator("[data-brief-root]")).toBeVisible();
 });
+
+test("note copy options expand with the keyboard and retain manual copying", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+  });
+  await page.goto("/n/Alpha");
+  const controls = page.locator(".note-copy-actions");
+  await expect(controls.getByRole("button", { name: "Copy wikilink", exact: true })).toBeVisible();
+  await expect(controls.getByRole("button", { name: "Copy note URL", exact: true })).toBeVisible();
+  const path = controls.getByRole("button", { name: "Copy vault path", exact: true });
+  await expect(path).toBeHidden();
+  const summary = controls.locator("summary");
+  await summary.focus();
+  await summary.press("Enter");
+  await expect(path).toBeVisible();
+  await path.click();
+  await expect(controls.locator("[data-copy-fallback]")).toHaveValue("Alpha.md");
+  await expect(controls.locator("[data-copy-fallback]")).toBeFocused();
+  await summary.focus();
+  await summary.press("Enter");
+  await expect(path).toBeHidden();
+});

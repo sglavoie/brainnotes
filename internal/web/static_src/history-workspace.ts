@@ -19,11 +19,14 @@ import {
   renderHistoryEntryList,
   renderHistoryWarnings,
   updateHistoryPager,
+  renderHistoryEmptyStatus,
 } from "./history-workspace-list";
 import {
   hideHistoryRestorePanel,
   renderHistoryRestorePreview,
   syncHistoryRestoreConsent,
+  showHistoryPreviewPending,
+  focusHistoryPreview,
 } from "./history-workspace-restore";
 import { setStatusText, type StatusKind } from "./status";
 import { restoreHistoryURL, writeHistoryURL } from "./history-workspace-url";
@@ -36,6 +39,9 @@ export type HistoryWorkspaceDeps = {
 
 type WorkspaceState = {
   offset: number;
+  previewIssue: number;
+  previewTrigger: HTMLButtonElement | null;
+  restoring: boolean;
   preview: HistoryPreviewResult | null;
   vocabularyRendered: boolean;
   urlFilters: HistoryQuery | null;
@@ -90,7 +96,7 @@ export const initHistoryWorkspace = (deps: HistoryWorkspaceDeps = {}): void => {
   const ctx: WorkspaceContext = {
     elements,
     fetcher: (input, init) => baseFetch(input, init),
-    state: { offset: 0, preview: null, vocabularyRendered: false, urlFilters: null, issued: 0, success: "" },
+    state: { offset: 0, previewIssue: 0, previewTrigger: null, restoring: false, preview: null, vocabularyRendered: false, urlFilters: null, issued: 0, success: "" },
     setStatus: (message: string, kind: StatusKind = ""): void => {
       setStatusText(elements.status, message, kind);
     },
@@ -115,7 +121,10 @@ const bindHistoryWorkspace = (ctx: WorkspaceContext): void => {
     event.preventDefault();
     reload(0);
   });
-  elements.filters?.addEventListener("change", () => {
+  elements.filters?.addEventListener("change", (event) => {
+    // Path input already schedules a reload. Its blur-time change would remove
+    // the empty-state action between pointerdown and click.
+    if (event.target === elements.path) return;
     reload(0);
   });
   bindHistoryNavigation(ctx, () => window.clearTimeout(pending), () => {
@@ -146,8 +155,7 @@ const bindHistoryWorkspace = (ctx: WorkspaceContext): void => {
     void applyHistoryRestore(ctx);
   });
   elements.restoreCancel?.addEventListener("click", () => {
-    state.preview = null;
-    hideHistoryRestorePanel(elements);
+    dismissHistoryPreview(ctx, true);
     ctx.setStatus("Restore canceled. Nothing was changed.");
   });
 };
@@ -156,14 +164,14 @@ const bindHistoryNavigation = (ctx: WorkspaceContext, cancel: () => void, schedu
   ctx.elements.path?.addEventListener("input", () => {
     cancel();
     ctx.state.issued += 1;
+    dismissHistoryPreview(ctx);
     schedule();
   });
   window.addEventListener("popstate", () => {
     if (!ctx.elements.root.isConnected) return;
     cancel();
     hydrateHistoryURL(ctx);
-    ctx.state.preview = null;
-    hideHistoryRestorePanel(ctx.elements);
+    dismissHistoryPreview(ctx);
     void loadHistoryPage(ctx);
   });
 };
@@ -195,6 +203,7 @@ const loadHistoryPage = async (ctx: WorkspaceContext, success = ""): Promise<voi
   if (success !== "") {
     state.success = success;
   }
+  dismissHistoryPreview(ctx);
   const issue = ++state.issued;
   elements.root.setAttribute("aria-busy", "true");
   ctx.setStatus("Reading the history...", "is-loading");
@@ -239,9 +248,9 @@ const renderHistoryPage = (
   writeHistoryURL({ ...query, offset: state.offset }, "replace");
   renderVocabularyOnce(ctx, result, query.origins || [], query.classes || []);
   renderHistoryWarnings(elements.warnings, result.warnings || [], result.warning_count || 0);
-  renderHistoryEntryList(elements.list, entries, (entryID) => void openHistoryPreview(ctx, entryID));
+  renderHistoryEntryList(elements.list, entries, (entryID, trigger) => void openHistoryPreview(ctx, entryID, trigger));
   updateHistoryPager(elements, result, entries.length);
-  reportPageStatus(ctx, result, entries.length, reporting);
+  reportPageStatus(ctx, result, entries.length, reporting, query);
 };
 
 /** The filter vocabulary is rendered once. Re-rendering it on every page would
@@ -264,7 +273,8 @@ const reportPageStatus = (
   ctx: WorkspaceContext,
   result: HistoryResult,
   shown: number,
-  success: string
+  success: string,
+  query: HistoryQuery
 ): void => {
   if (success !== "") {
     ctx.setStatus(success, "is-success");
@@ -272,28 +282,44 @@ const reportPageStatus = (
   }
   const total = result.total || 0;
   if (total === 0) {
-    ctx.setStatus("No recorded change matches this view.", "is-empty");
+    renderHistoryEmptyStatus(ctx.elements, query, result.warning_count || 0);
     return;
   }
   ctx.setStatus(`Showing ${shown} of ${total} recorded changes.`);
 };
 
-/**
- * Restoring always starts here. The receipt this takes is what the server
- * requires before it will replace newer work, and it is one-use, so every
- * restore is answered against a reading somebody actually saw.
- */
-const openHistoryPreview = async (ctx: WorkspaceContext, entryID: string): Promise<void> => {
+// Invalidate the receipt and any pending response together: neither a later
+// response nor an old confirm control may revive a dismissed selection.
+const dismissHistoryPreview = (ctx: WorkspaceContext, returnFocus = false): void => {
+  const trigger = ctx.state.previewTrigger;
+  ctx.state.previewIssue += 1;
+  ctx.state.preview = null;
+  ctx.state.previewTrigger = null;
+  hideHistoryRestorePanel(ctx.elements);
+  if (returnFocus) {
+    (trigger?.isConnected ? trigger : ctx.elements.refresh)?.focus();
+  }
+};
+
+const openHistoryPreview = async (
+  ctx: WorkspaceContext, entryID: string, trigger: HTMLButtonElement
+): Promise<void> => {
   const { elements, state } = ctx;
+  if (state.restoring) return;
   if (elements.token.trim() === "") {
     ctx.setStatus("This server does not accept restores.", "is-error");
     return;
   }
+  dismissHistoryPreview(ctx);
+  const issue = state.previewIssue;
+  state.previewTrigger = trigger;
+  showHistoryPreviewPending(elements);
+  focusHistoryPreview(elements);
   ctx.setStatus("Checking what restoring this would do...", "is-loading");
   const outcome = await previewHistoryRestore(ctx.fetcher, elements.previewEndpoint, elements.token, entryID);
+  if (issue !== state.previewIssue || !elements.root.isConnected) return;
   if (!outcome.ok) {
-    state.preview = null;
-    hideHistoryRestorePanel(elements);
+    dismissHistoryPreview(ctx, true);
     ctx.setStatus(outcome.message, "is-error");
     return;
   }
@@ -309,6 +335,7 @@ const openHistoryPreview = async (ctx: WorkspaceContext, entryID: string): Promi
 
 const applyHistoryRestore = async (ctx: WorkspaceContext): Promise<void> => {
   const { elements, state } = ctx;
+  if (state.restoring) return;
   const preview = state.preview;
   if (!preview) {
     ctx.setStatus("Preview a change before restoring it.", "is-error");
@@ -319,6 +346,9 @@ const applyHistoryRestore = async (ctx: WorkspaceContext): Promise<void> => {
     ctx.setStatus("Confirm you understand what this replaces before restoring.", "is-error");
     return;
   }
+  // Consume the local receipt before awaiting the write, preventing repeat clicks.
+  state.restoring = true;
+  dismissHistoryPreview(ctx, true);
   ctx.setStatus("Restoring...", "is-loading");
   const outcome = await restoreHistoryEntry(ctx.fetcher, elements.undoEndpoint, {
     token: elements.token,
@@ -327,11 +357,7 @@ const applyHistoryRestore = async (ctx: WorkspaceContext): Promise<void> => {
     confirmForce: forced,
     previewID: preview.preview_id,
   });
-  // The receipt is spent either way, so the panel closes on both answers: a
-  // second click on a preview the server has already consumed would be refused,
-  // and leaving the button there would be offering that refusal.
-  state.preview = null;
-  hideHistoryRestorePanel(elements);
+  state.restoring = false;
   state.offset = 0;
   if (!outcome.ok) {
     // Re-read on a refusal too. A restore error is not proof that nothing

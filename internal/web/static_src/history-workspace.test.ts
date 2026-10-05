@@ -67,6 +67,7 @@ const renderWorkspace = (): void => {
         </nav>
       </section>
       <section data-history-restore hidden>
+        <h2 data-history-restore-heading tabindex="-1">Restore this change</h2>
         <button type="button" data-history-restore-cancel>Cancel</button>
         <p data-history-restore-summary></p>
         <dl data-history-restore-facts></dl>
@@ -79,6 +80,11 @@ const renderWorkspace = (): void => {
       </section>
     </div>
   `;
+};
+
+const expectReadyPreview = (): void => {
+  expect(document.querySelector<HTMLElement>("[data-history-restore]")?.hidden).toBe(false);
+  expect(document.querySelector("[data-history-restore]")?.getAttribute("aria-busy")).toBe("false");
 };
 
 const ORIGINS = [
@@ -163,7 +169,7 @@ const contestedPreview = (): unknown => previewBody({
 type Call = { url: string; body: string };
 
 const startWorkspace = (
-  answer: (url: string, init?: RequestInit) => Response
+  answer: (url: string, init?: RequestInit) => Response | Promise<Response>
 ): Call[] => {
   const calls: Call[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -287,19 +293,20 @@ describe("history workspace rendering", () => {
   });
 
   it("says a filtered view is empty rather than calling the journal empty", async () => {
+    window.history.replaceState(null, "", "/history?path=Missing");
     renderWorkspace();
     startWorkspace(listOnly(listBody({ entries: [], total: 0 })));
 
     await waitForExpect(() => {
-      expect(document.querySelector("[data-history-status]")?.textContent).toBe(
-        "No recorded change matches this view."
+      expect(document.querySelector("[data-history-status]")?.textContent).toContain(
+        "No recorded change matches these filters."
       );
     });
-    expect(document.querySelector("[data-history-range]")?.textContent).toBe("No entries match.");
+    expect(document.querySelector("[data-history-range]")?.textContent).toBe("0 entries");
   });
 
   it("labels a window rather than a page count", () => {
-    expect(historyRangeLabel(0, 0, 0)).toBe("No entries match.");
+    expect(historyRangeLabel(0, 0, 0)).toBe("0 entries");
     expect(historyRangeLabel(40, 0, 12)).toBe("No entries at this position of 12.");
     expect(historyRangeLabel(20, 20, 51)).toBe("21-40 of 51");
   });
@@ -429,7 +436,7 @@ describe("history workspace restoring", () => {
 
     document.querySelector<HTMLButtonElement>("[data-history-preview-entry]")?.click();
     await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-restore]")?.hidden).toBe(false);
+      expectReadyPreview();
     });
     expect(document.querySelector("[data-history-restore-facts]")?.textContent).toContain("Browser");
     expect(document.querySelector("[data-history-restore-changes]")?.textContent).toContain(
@@ -536,7 +543,7 @@ describe("history workspace restore refusals", () => {
 
     document.querySelector<HTMLButtonElement>("[data-history-preview-entry]")?.click();
     await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-restore]")?.hidden).toBe(false);
+      expectReadyPreview();
     });
     document.querySelector<HTMLButtonElement>("[data-history-restore-cancel]")?.click();
 
@@ -578,7 +585,7 @@ describe("history workspace restore refusals", () => {
 
     document.querySelector<HTMLButtonElement>("[data-history-preview-entry]")?.click();
     await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-restore]")?.hidden).toBe(false);
+      expectReadyPreview();
     });
     document.querySelector<HTMLButtonElement>("[data-history-restore-confirm]")?.click();
 
@@ -704,7 +711,7 @@ const restoreWithDeferredReads = async (): Promise<ListAnswer[]> => {
   });
   document.querySelector<HTMLButtonElement>("[data-history-preview-entry]")?.click();
   await waitForExpect(() => {
-    expect(document.querySelector<HTMLElement>("[data-history-restore]")?.hidden).toBe(false);
+    expectReadyPreview();
   });
   document.querySelector<HTMLButtonElement>("[data-history-restore-confirm]")?.click();
   await waitForExpect(() => {
@@ -775,4 +782,112 @@ describe("history workspace write outcomes", () => {
       expect(statusText()).toBe("Undo restored 1 path.");
     });
   });
+});
+
+const deferredPreviewWorkspace = async () => {
+  renderWorkspace();
+  const pending: Array<(body: unknown) => void> = [];
+  const calls = startWorkspace((url) => {
+    if (url === "/api/history/preview") {
+      return new Promise<Response>((resolve) => pending.push((body) => resolve(jsonResponse(body))));
+    }
+    return jsonResponse(listBody({ entries: [entry("entry-1"), entry("entry-2")] }));
+  });
+  await waitForExpect(() => expect(document.querySelectorAll("[data-history-preview-entry]")).toHaveLength(2));
+  const buttons = document.querySelectorAll<HTMLButtonElement>("[data-history-preview-entry]");
+  return { pending, calls, buttons };
+};
+
+const settlePreview = async (resolve: (body: unknown) => void, body: unknown): Promise<void> => {
+  resolve(body);
+  await new Promise((done) => setTimeout(done, 0));
+};
+
+it("keeps the last selected preview when earlier success or failure arrives late", async () => {
+  const { pending, buttons } = await deferredPreviewWorkspace();
+  buttons[0].click();
+  buttons[0].click();
+  buttons[1].click();
+  expect(document.activeElement).toBe(document.querySelector("[data-history-restore-heading]"));
+  expect(document.querySelector<HTMLButtonElement>("[data-history-restore-confirm]")?.disabled).toBe(true);
+  await settlePreview(pending[2], previewBody({ entry_id: "entry-2", preview_id: "preview-2" }));
+  await settlePreview(pending[0], previewBody());
+  await settlePreview(pending[1], { ok: false, message: "Old failure" });
+  expect(document.querySelector("[data-history-restore-facts]")?.textContent).toContain("entry-2");
+  expect(document.querySelector("[data-history-status]")?.textContent).toBe("Previewed. Nothing has changed yet.");
+});
+
+it("cancels a pending preview, returns focus, and ignores its late response", async () => {
+  const { pending, buttons, calls } = await deferredPreviewWorkspace();
+  buttons[0].click();
+  document.querySelector<HTMLButtonElement>("[data-history-restore-cancel]")!.click();
+  expect(document.activeElement).toBe(buttons[0]);
+  await settlePreview(pending[0], previewBody());
+  expect(document.querySelector<HTMLElement>("[data-history-restore]")?.hidden).toBe(true);
+  expect(document.querySelector("[data-history-status]")?.textContent).toBe("Restore canceled. Nothing was changed.");
+  expect(calls.some((call) => call.url === "/api/undo")).toBe(false);
+});
+
+it("invalidates pending previews when the history list changes", async () => {
+  const { pending, buttons } = await deferredPreviewWorkspace();
+  buttons[0].click();
+  document.querySelector<HTMLButtonElement>("[data-history-refresh]")!.click();
+  await settlePreview(pending[0], previewBody());
+  expect(document.querySelector<HTMLElement>("[data-history-restore]")?.hidden).toBe(true);
+  expect(document.querySelector("[data-history-status]")?.textContent).toContain("Showing");
+});
+
+it("disables the old receipt while a replacement preview is pending", async () => {
+  const { pending, buttons, calls } = await deferredPreviewWorkspace();
+  buttons[0].click();
+  await settlePreview(pending[0], previewBody());
+  buttons[1].click();
+  const confirm = document.querySelector<HTMLButtonElement>("[data-history-restore-confirm]")!;
+  expect(confirm.disabled).toBe(true);
+  expect(document.querySelector("[data-history-restore-facts]")?.textContent).toBe("");
+  confirm.click();
+  expect(calls.some((call) => call.url === "/api/undo")).toBe(false);
+});
+
+it("explains a history with no recorded changes", async () => {
+  renderWorkspace();
+  startWorkspace(listOnly(listBody({ entries: [], total: 0 })));
+  await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent)
+    .toContain("No changes have been recorded yet."));
+  expect(document.querySelector("[data-history-status] button")).toBeNull();
+});
+
+it("does not describe unreadable history as never recorded", async () => {
+  renderWorkspace();
+  startWorkspace(listOnly(listBody({ entries: [], total: 0, warning_count: 1,
+    warnings: [{ id: "broken", message: "Cannot read entry" }] })));
+  await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent)
+    .toContain("No readable changes to show."));
+});
+
+it("clears an empty filtered view from its nearby action", async () => {
+  window.history.replaceState(null, "", "/history?path=Missing&origin=import&class=attachment&offset=20");
+  renderWorkspace();
+  const calls = startWorkspace((url) => jsonResponse(url.includes("path=")
+    ? listBody({ entries: [], total: 0 }) : listBody()));
+  await waitForExpect(() => expect(document.querySelector("[data-history-status] button")?.textContent).toBe("Clear filters"));
+  document.querySelector<HTMLButtonElement>("[data-history-status] button")!.click();
+  await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toContain("Showing"));
+  expect(calls[1].url).toBe("/api/history?limit=20");
+  expect(window.location.search).toBe("?limit=20");
+  expect(document.activeElement).toBe(document.querySelector("[data-history-clear-filters]"));
+});
+
+it("keeps the empty-state action mounted when the path field loses focus", async () => {
+  window.history.replaceState(null, "", "/history?path=Missing");
+  renderWorkspace();
+  const calls = startWorkspace(listOnly(listBody({ entries: [], total: 0 })));
+  await waitForExpect(() => expect(document.querySelector("[data-history-status] button")).not.toBeNull());
+  const action = document.querySelector<HTMLButtonElement>("[data-history-status] button")!;
+  document.querySelector("[data-history-path]")!.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(action.isConnected).toBe(true);
+  expect(calls).toHaveLength(1);
+  action.click();
+  expect(calls).toHaveLength(2);
+  expect(calls[1].url).toBe("/api/history?limit=20");
 });

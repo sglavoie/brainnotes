@@ -112,9 +112,14 @@
           <div class="note-action-group note-copy-actions" data-copy-controls>
             <button type="button" class="copy-button" data-copy-note-url data-copy-text="" data-copy-label="Note URL" hidden>Copy note URL</button>
             <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
-            <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
-            <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
-            <button type="button" class="copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
+            <details class="note-copy-more">
+              <summary class="copy-button">More copy options</summary>
+              <div class="note-copy-options">
+                <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
+                <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
+                <button type="button" class="copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
+              </div>
+            </details>
             <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
           </div>
         {{end}}

@@ -161,7 +161,14 @@ filter, so it can also include paths containing that filename. The link is
 available in local and hosted modes. History keeps its path, origin, and file
 class filters, page size, and position in the URL, preserving the view across
 reloads, bookmarks, and browser Back/Forward. Changing a filter starts at the
-first page; **Clear filters** keeps the selected page size.
+first page; **Clear filters** keeps the selected page size. Empty filtered
+results offer that action beside the message; a history with no recorded changes
+explains where future entries will appear. Unreadable entries retain their warnings.
+
+Choosing **Restore...** brings focus to the preview heading. While loading, the
+preview can be canceled but cannot be applied. Only the latest selection can
+populate it; canceling or changing the History view dismisses pending previews.
+**Cancel** returns focus to the selected entry's Restore button.
 
 Reordering is web-only. Drag a row's handle on `/pinned`, or focus a handle and
 press `Up`/`Down` for the same move from the keyboard. The browser posts note
@@ -405,7 +412,9 @@ remain visible with a link to History. The notice survives the redirect in
 this tab only and is scoped to the current server session. If browser storage
 is unavailable, the note page stays open with the same Undo control.
 
-Copy controls on note pages offer selected, read-only text for manual copying
+Note pages keep **Copy wikilink** and **Copy note URL** visible, with vault path,
+route, and Markdown link under **More copy options**. Copy controls offer
+selected, read-only text for manual copying
 when clipboard access is unavailable or refused. Keyboard navigation in header
 search keeps the selected result visible within the dropdown without scrolling
 the page.

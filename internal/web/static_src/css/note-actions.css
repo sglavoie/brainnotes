@@ -147,3 +147,14 @@
   border: 1px solid var(--bn-border);
   border-radius: 0.4rem;
 }
+
+.note-copy-more {
+  order: 1;
+}
+
+.note-copy-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

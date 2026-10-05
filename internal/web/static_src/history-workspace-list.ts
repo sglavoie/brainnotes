@@ -1,4 +1,5 @@
-import type { HistoryEntry, HistoryResult, HistoryWarning } from "./api";
+import { setStatusText } from "./status";
+import type { HistoryEntry, HistoryQuery, HistoryResult, HistoryWarning } from "./api";
 import { appendHistoryPaths, formatHistoryTimestamp, historyFileCountLabel } from "./history-panel-view";
 import type { HistoryWorkspaceElements } from "./history-workspace-elements";
 
@@ -44,7 +45,7 @@ const historyClassSummary = (entry: HistoryEntry): string =>
 
 const historyEntryCard = (
   entry: HistoryEntry,
-  onRestore: (entryID: string) => void
+  onRestore: (entryID: string, trigger: HTMLButtonElement) => void
 ): HTMLLIElement => {
   const item = document.createElement("li");
   item.className = "history-entry";
@@ -83,7 +84,7 @@ const historyEntryCard = (
   restore.setAttribute("aria-label", `Preview restoring ${entry.command || entry.id}`);
   restore.textContent = "Restore...";
   restore.addEventListener("click", () => {
-    onRestore(entry.id);
+    onRestore(entry.id, restore);
   });
 
   item.appendChild(head);
@@ -96,7 +97,7 @@ const historyEntryCard = (
 export const renderHistoryEntryList = (
   container: HTMLElement,
   entries: HistoryEntry[],
-  onRestore: (entryID: string) => void
+  onRestore: (entryID: string, trigger: HTMLButtonElement) => void
 ): void => {
   container.textContent = "";
   for (const entry of entries) {
@@ -108,7 +109,7 @@ export const renderHistoryEntryList = (
  * cannot be mistaken for the whole journal. */
 export const historyRangeLabel = (offset: number, shown: number, total: number): string => {
   if (total === 0) {
-    return "No entries match.";
+    return "0 entries";
   }
   if (shown === 0) {
     return `No entries at this position of ${total}.`;
@@ -132,4 +133,25 @@ export const updateHistoryPager = (
   if (elements.next) {
     elements.next.disabled = !result.has_more;
   }
+};
+
+export const renderHistoryEmptyStatus = (
+  elements: HistoryWorkspaceElements, query: HistoryQuery, warningCount: number
+): void => {
+  const filtered = Boolean(query.path || query.origins?.length || query.classes?.length);
+  const unfiltered = warningCount > 0
+    ? "No readable changes to show. See the history warnings below."
+    : "No changes have been recorded yet. Changes made through Brain Notes will appear here.";
+  setStatusText(elements.status,
+    filtered ? "No recorded change matches these filters." : unfiltered, "is-empty");
+  if (!filtered) return;
+  const clear = elements.status.ownerDocument.createElement("button");
+  clear.type = "button";
+  clear.className = "history-button";
+  clear.textContent = "Clear filters";
+  clear.addEventListener("click", () => {
+    elements.clearFilters?.focus();
+    elements.clearFilters?.click();
+  });
+  elements.status.append(" ", clear);
 };

@@ -120,6 +120,7 @@ export const renderHistoryRestorePreview = (
   renderRestoreConflicts(elements, conflicts);
   if (elements.restore) {
     elements.restore.hidden = false;
+    elements.restore.setAttribute("aria-busy", "false");
   }
   syncHistoryRestoreConsent(elements, conflicts.length > 0);
 };
@@ -140,6 +141,7 @@ export const syncHistoryRestoreConsent = (
 export const hideHistoryRestorePanel = (elements: HistoryWorkspaceElements): void => {
   if (elements.restore) {
     elements.restore.hidden = true;
+    elements.restore.setAttribute("aria-busy", "false");
   }
   if (elements.restoreConflicts) {
     elements.restoreConflicts.hidden = true;
@@ -151,4 +153,23 @@ export const hideHistoryRestorePanel = (elements: HistoryWorkspaceElements): voi
     elements.restoreConfirm.disabled = false;
     elements.restoreConfirm.textContent = "Restore";
   }
+};
+
+export const showHistoryPreviewPending = (elements: HistoryWorkspaceElements): void => {
+  for (const container of [elements.restoreFacts, elements.restoreChanges, elements.restoreConflictList]) {
+    if (container) container.textContent = "";
+  }
+  if (elements.restoreSummary) {
+    elements.restoreSummary.textContent = "Checking what restoring this would do...";
+    elements.restoreSummary.classList.remove("is-warning");
+  }
+  if (elements.restoreConfirm) elements.restoreConfirm.disabled = true;
+  if (elements.restore) {
+    elements.restore.hidden = false;
+    elements.restore.setAttribute("aria-busy", "true");
+  }
+};
+
+export const focusHistoryPreview = (elements: HistoryWorkspaceElements): void => {
+  elements.restore?.querySelector<HTMLElement>("[data-history-restore-heading]")?.focus();
 };

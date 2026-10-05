@@ -120,8 +120,10 @@ test("the history workspace names where each change came from and filters by it"
   // path that matches it would pass whether or not the filter did anything.
   await page.locator("[data-history-path]").fill("No/Such/Directory/");
   await expect(page.locator("[data-history-status]")).toHaveText(
-    "No recorded change matches this view.",
+    "No recorded change matches these filters. Clear filters",
   );
+  await page.locator("[data-history-status]").getByRole("button", { name: "Clear filters" }).click();
+  await expect(page.locator("[data-history-path]")).toHaveValue("");
   await page.locator("[data-history-path]").fill("Templates/");
   await expect(page.locator("[data-history-entry]", { hasText: SAVE_COMMAND }).first()).toBeVisible();
 
@@ -165,6 +167,11 @@ test("a restore is previewed, puts the earlier bytes back, and is recorded as a 
   // confirmation a formality.
   const panel = page.locator("[data-history-restore]");
   await expect(panel).toBeVisible();
+  await expect(page.locator("[data-history-restore-heading]")).toBeFocused();
+  await expect(page.locator("[data-history-restore-heading]")).toBeInViewport();
+  await page.locator("[data-history-restore-cancel]").click();
+  await expect(entry.locator("[data-history-preview-entry]")).toBeFocused();
+  await entry.locator("[data-history-preview-entry]").press("Enter");
   await expect(page.locator("[data-history-status]")).toHaveText(
     "Previewed. Nothing has changed yet.",
   );
