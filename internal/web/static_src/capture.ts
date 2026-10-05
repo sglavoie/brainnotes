@@ -94,6 +94,12 @@ class Capture {
     window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
   }
 
+  private unconfirmed(): void {
+    this.setStatus("Couldn't confirm capture. Check your inbox before retrying.", "is-error");
+    const link = queryElement(this.root, "[data-capture-view-inbox]", HTMLAnchorElement);
+    if (link?.getAttribute("href")?.startsWith("/n/")) link.hidden = false;
+  }
+
   private async run(): Promise<void> {
     if (this.submit.disabled) {
       return;
@@ -122,12 +128,13 @@ class Capture {
       }
       const result = normalizeCaptureResponse(payload);
       if (!result.ok) {
-        this.setStatus(result.message || "Capture failed.", "is-error");
+        if (result.message) this.setStatus(result.message, "is-error");
+        else this.unconfirmed();
         return;
       }
       this.captured(result);
     } catch {
-      this.setStatus("Capture failed.", "is-error");
+      this.unconfirmed();
     } finally {
       this.input.disabled = false;
       this.submit.disabled = false;

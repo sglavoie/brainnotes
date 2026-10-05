@@ -39,6 +39,11 @@ renaming, or moving the note preserves this context.
 
 If header search fails, **Retry search** repeats the current query and filters
 without retyping. Dismissing search also dismisses the retry action.
+Library's **Copy search link** copies the current text search, filters, query
+expression, sort order, and limit, with a manual-copy fallback if needed. Unlike
+saved views, it includes text search and facet filters. The link omits the
+result-position anchor. Library's Sort menu also offers **Oldest modified first**
+and **Vault path**.
 When Library has no matches, **Remove search text** clears only the text query,
 preserving filters, the expression, sort order, and result limit. **Reset search**
 still clears the whole search.
@@ -128,6 +133,9 @@ The displayed destination links to the inbox when it exists, and successful
 captures offer **View inbox**, including after the first capture creates it.
 After a capture finishes, focus returns to the capture box unless you moved to
 another control or clicked elsewhere while waiting. This applies to failures too.
+If the response is lost or a successful response cannot be confirmed, capture
+keeps the draft and asks you to check the inbox before retrying: the write may
+already have succeeded. **View inbox** is available when its address is known.
 
 `POST /api/capture` is unpreviewed, like `POST /api/properties/value` and the
 single-note frontmatter routes, but qualifies from the other direction: one

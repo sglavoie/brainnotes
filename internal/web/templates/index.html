@@ -70,7 +70,7 @@
       </div>
       <p class="review-status capture-status" data-capture-status role="status" aria-live="polite"></p>
       <p class="capture-hint" data-capture-draft-status role="status" hidden></p>
-      <a data-capture-view-inbox hidden>View inbox</a>
+      <a data-capture-view-inbox {{if .CapturePath}}href="{{.CapturePath}}"{{end}} hidden>View inbox</a>
       <ul class="capture-recent" data-capture-recent aria-label="Captured in this session"></ul>
     </section>
 

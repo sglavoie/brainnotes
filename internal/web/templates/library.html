@@ -19,6 +19,10 @@
       <div class="site-header-tools">
         {{template "themeControl" .}}
         {{template "headerSearch" .}}
+        <div data-copy-controls>
+          <button class="copy-button" type="button" data-copy-search-link data-copy-text="" data-copy-label="Search link" hidden>Copy search link</button>
+          <span class="copy-status" data-copy-status role="status" aria-live="polite"></span>
+        </div>
         <div class="saved-views-save" data-saved-views-save data-saved-views-csrf="{{.CSRFToken}}">
           <button
             class="saved-views-save-button"
@@ -68,6 +72,8 @@
           <select data-library-sort aria-label="Sort results">
             <option value="">Default order</option>
             <option value="-modified">Recently modified</option>
+            <option value="modified">Oldest modified first</option>
+            <option value="path">Vault path</option>
             <option value="title">Title (A–Z)</option>
             <option value="-title">Title (Z–A)</option>
           </select>

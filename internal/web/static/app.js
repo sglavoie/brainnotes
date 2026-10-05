@@ -2852,6 +2852,11 @@ var BrainNotesApp = (() => {
       this.setStatus(result.message || `Captured to ${this.root.dataset.captureTarget}.`, "is-success");
       window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
     }
+    unconfirmed() {
+      this.setStatus("Couldn't confirm capture. Check your inbox before retrying.", "is-error");
+      const link = queryElement(this.root, "[data-capture-view-inbox]", HTMLAnchorElement);
+      if (link?.getAttribute("href")?.startsWith("/n/")) link.hidden = false;
+    }
     async run() {
       if (this.submit.disabled) {
         return;
@@ -2880,12 +2885,13 @@ var BrainNotesApp = (() => {
         }
         const result = normalizeCaptureResponse(payload);
         if (!result.ok) {
-          this.setStatus(result.message || "Capture failed.", "is-error");
+          if (result.message) this.setStatus(result.message, "is-error");
+          else this.unconfirmed();
           return;
         }
         this.captured(result);
       } catch {
-        this.setStatus("Capture failed.", "is-error");
+        this.unconfirmed();
       } finally {
         this.input.disabled = false;
         this.submit.disabled = false;
@@ -8275,6 +8281,26 @@ var BrainNotesApp = (() => {
       updateBrowserQuery(params);
       dispatchFiltersChange(window, { mode: "search", params });
     });
+  };
+
+  // internal/web/static_src/library-search-link.ts
+  var initLibrarySearchLink = () => {
+    const button = document.querySelector("[data-copy-search-link]");
+    if (!button) return;
+    const refresh = () => {
+      const text3 = new URL(buildLibrarySearchURL(readPageQuery(), true), window.location.origin).href;
+      if (button.dataset.copyText === text3) return;
+      button.dataset.copyText = text3;
+      const root = button.closest("[data-copy-controls]");
+      root?.querySelector("[data-copy-fallback]")?.remove();
+      const status = root?.querySelector("[data-copy-status]");
+      if (status) status.textContent = "";
+    };
+    refresh();
+    button.hidden = false;
+    button.addEventListener("click", refresh);
+    window.addEventListener(browserQueryChangeEventName, refresh);
+    window.addEventListener("popstate", refresh);
   };
 
   // internal/web/static_src/note-reading.ts
@@ -48993,6 +49019,7 @@ ${candidate.markdown}`;
     initNoteMobileSidebars();
     initNoteNavigation();
     initNoteReading();
+    initLibrarySearchLink();
     initCopyControls();
     initDailyBrief();
     initRelatedNotes();

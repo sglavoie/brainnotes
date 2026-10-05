@@ -194,6 +194,26 @@ describe("capture success", () => {
 });
 
 describe("capture errors and keyboard", () => {
+  it.each(["lost response", "unreadable response"])("preserves the draft and offers the inbox after an %s", async (outcome) => {
+    renderPanel();
+    document.querySelector("[data-capture-root]")!.insertAdjacentHTML("beforeend",
+      '<a data-capture-view-inbox href="/n/inbox" hidden>View inbox</a>');
+    const fetcher = vi.fn(async () => {
+      if (outcome === "lost response") throw new Error("offline");
+      return new Response("{", { headers: { "Content-Type": "application/json" } });
+    });
+    initCapture({ fetch: fetcher });
+    const { input, submit, status, recent } = elements();
+    input.value = "Possibly already captured";
+    submit.click();
+    await waitForExpect(() => expect(submit.disabled).toBe(false));
+    expect(input.value).toBe("Possibly already captured");
+    expect(status.textContent).toBe("Couldn't confirm capture. Check your inbox before retrying.");
+    expect(document.querySelector<HTMLAnchorElement>("[data-capture-view-inbox]")!.hidden).toBe(false);
+    expect(recent.children).toHaveLength(0);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("keeps the typed text and reports the server error", async () => {
     renderPanel();
     const fetchMock = vi.fn(async () =>
