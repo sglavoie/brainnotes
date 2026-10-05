@@ -1,5 +1,5 @@
 import type { HistoryEntry, HistoryResult, HistoryWarning } from "./api";
-import { formatHistoryTimestamp, historyFileCountLabel } from "./history-panel-view";
+import { appendHistoryPaths, formatHistoryTimestamp, historyFileCountLabel } from "./history-panel-view";
 import type { HistoryWorkspaceElements } from "./history-workspace-elements";
 
 /**
@@ -88,6 +88,7 @@ const historyEntryCard = (
 
   item.appendChild(head);
   item.appendChild(meta);
+  appendHistoryPaths(item, entry);
   item.appendChild(restore);
   return item;
 };

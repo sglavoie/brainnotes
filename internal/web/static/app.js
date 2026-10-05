@@ -2666,6 +2666,16 @@ var BrainNotesApp = (() => {
       }
     };
   };
+  var showCreatedNote = (button, path) => {
+    button.textContent = "Created";
+    if (!path?.startsWith("/n/") || /[\\\r\n]/.test(path)) return;
+    const link = document.createElement("a");
+    link.href = path;
+    link.textContent = "Open note";
+    const hadFocus = document.activeElement === button;
+    button.replaceWith(link);
+    if (hadFocus) link.focus();
+  };
   var initBrokenCreateActions = (deps = {}) => {
     const containers = queryAllElements(document, "[data-create-note]", HTMLElement);
     if (containers.length === 0) {
@@ -2688,22 +2698,24 @@ var BrainNotesApp = (() => {
           return;
         }
         button.disabled = true;
+        let created = false;
         setStatus2("Creating note...");
         try {
           const request = buildCreateNoteFetchRequest(config2);
           const resp = await fetcher(request.url, request.init);
           const payload = await readCreateResponsePayload(resp);
-          if (!resp.ok) {
+          const result = normalizeManagementResult(payload);
+          if (!resp.ok || !result.ok) {
             setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
             return;
           }
-          const result = payload;
-          const message = result && result.ok && result.message ? result.message : "Created note.";
-          setStatus2(message, "is-success");
+          created = true;
+          setStatus2(result.message || "Created note.", "is-success");
+          showCreatedNote(button, result.path);
         } catch {
           setStatus2("Create failed.", "is-error");
         } finally {
-          button.disabled = false;
+          button.disabled = created;
         }
       });
     }
@@ -7806,6 +7818,7 @@ var BrainNotesApp = (() => {
     });
     item.appendChild(head);
     item.appendChild(meta2);
+    appendHistoryPaths(item, entry);
     item.appendChild(restore);
     return item;
   };

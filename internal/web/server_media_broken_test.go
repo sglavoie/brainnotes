@@ -92,6 +92,11 @@ func TestServer_BrokenPageEscapesQuery(t *testing.T) {
 	if !strings.Contains(body, "&lt;script&gt;alert(1)&lt;/script&gt;") {
 		t.Fatalf("escaped query not found in response: %q", body)
 	}
+	if !strings.Contains(body, "No broken links match this filter.") ||
+		!strings.Contains(body, `href="/broken">Clear filter</a>`) ||
+		strings.Contains(body, "No broken links found.") {
+		t.Fatalf("filtered empty state should explain the filter and offer to clear it: %q", body)
+	}
 }
 
 func TestServer_BrokenPageIncludesCreateControls(t *testing.T) {

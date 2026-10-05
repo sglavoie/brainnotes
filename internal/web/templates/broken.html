@@ -65,7 +65,11 @@
             </table>
           </div>
         {{else}}
+          {{if .HasQuery}}
+          <p>No broken links match this filter. <a href="/broken">Clear filter</a></p>
+          {{else}}
           <p>No broken links found.</p>
+          {{end}}
         {{end}}
       </section>
     </main>

@@ -68,7 +68,7 @@ describe("broken create request construction", () => {
 });
 
 describe("broken create DOM behavior", () => {
-  it("posts the configured request and shows success", async () => {
+  it("posts the configured request and replaces Create with the new note link", async () => {
     document.body.innerHTML = `
       <div data-create-note data-create-source-key="folder/source" data-create-target="Missing Note" data-create-csrf="csrf-token">
         <button type="button" data-create-button>Create note</button>
@@ -88,9 +88,14 @@ describe("broken create DOM behavior", () => {
     expect(status?.textContent).toBe("Creating note...");
 
     await waitForExpect(() => {
-      expect(button?.disabled).toBe(false);
+      expect(document.querySelector("[data-create-note] a")?.textContent).toBe("Open note");
     });
 
+    expect(document.querySelector("[data-create-note] a")?.getAttribute("href")).toBe("/n/folder/missing%20note");
+    expect(button?.isConnected).toBe(false);
+    expect(button?.disabled).toBe(true);
+    button?.click();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/notes/create");
     expect(init).toMatchObject({

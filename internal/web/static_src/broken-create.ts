@@ -1,8 +1,8 @@
 import {
   buildCreateNoteForm,
   normalizeManagementErrorMessage,
-  type ManagementResult,
 } from "./api";
+import { normalizeManagementResult } from "./api-internal";
 import { queryAllElements, queryElement } from "./dom";
 import { setStatusText } from "./status";
 
@@ -52,6 +52,17 @@ export const buildCreateNoteFetchRequest = (
   };
 };
 
+const showCreatedNote = (button: HTMLButtonElement, path: string | undefined): void => {
+  button.textContent = "Created";
+  if (!path?.startsWith("/n/") || /[\\\r\n]/.test(path)) return;
+  const link = document.createElement("a");
+  link.href = path;
+  link.textContent = "Open note";
+  const hadFocus = document.activeElement === button;
+  button.replaceWith(link);
+  if (hadFocus) link.focus();
+};
+
 export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void => {
   const containers = queryAllElements(document, "[data-create-note]", HTMLElement);
   if (containers.length === 0) {
@@ -78,24 +89,26 @@ export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void =
       }
 
       button.disabled = true;
+      let created = false;
       setStatus("Creating note...");
 
       try {
         const request = buildCreateNoteFetchRequest(config);
         const resp = await fetcher(request.url, request.init);
         const payload = await readCreateResponsePayload(resp);
-        if (!resp.ok) {
+        const result = normalizeManagementResult(payload);
+        if (!resp.ok || !result.ok) {
           setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
           return;
         }
 
-        const result = payload as ManagementResult;
-        const message = result && result.ok && result.message ? result.message : "Created note.";
-        setStatus(message, "is-success");
+        created = true;
+        setStatus(result.message || "Created note.", "is-success");
+        showCreatedNote(button, result.path);
       } catch {
         setStatus("Create failed.", "is-error");
       } finally {
-        button.disabled = false;
+        button.disabled = created;
       }
     });
   }

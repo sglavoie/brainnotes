@@ -146,9 +146,14 @@ web UI always see the same list.
 If a Library Pin/Unpin action fails, its row displays the error and a **Retry**
 button. The toggle returns to its previous state until a retry succeeds.
 
-Library change-history entries show the first three affected paths below each
-command, with an expandable list for the remainder, so you can identify a change
-before choosing Undo.
+Library change-history entries and the History workspace show the first three
+affected paths below each command, with an expandable list for the remainder,
+so you can identify a change before choosing Undo or previewing a restore.
+
+After **Create note** succeeds for a broken link, **Open note** takes you to the
+new note. A failed creation keeps the Create action available for retry.
+On the Broken links page, an empty filtered result offers **Clear filter** to
+return to the full list.
 
 On a note, **History for this note** opens the History workspace with its
 vault-relative filename in **Path contains**. This uses the existing substring

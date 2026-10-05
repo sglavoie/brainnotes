@@ -126,7 +126,9 @@
   font-weight: 400;
 }
 
-.history-entry .history-meta {
+.history-entry .history-meta,
+.history-entry > .history-paths,
+.history-entry > .history-more-paths {
   grid-column: 1;
   margin: 0;
 }

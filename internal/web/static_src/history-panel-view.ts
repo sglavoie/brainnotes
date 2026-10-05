@@ -124,7 +124,7 @@ const historyPaths = (paths: string[]): HTMLUListElement => {
   return list;
 };
 
-const appendHistoryPaths = (main: HTMLElement, entry: HistoryEntry): void => {
+export const appendHistoryPaths = (main: HTMLElement, entry: HistoryEntry): void => {
   const paths = entry.files.map((file) => file.path);
   if (!paths.length) return;
   main.append(historyPaths(paths.slice(0, 3)));
