@@ -135,7 +135,7 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 	assertHealthMetric("Broken targets", "1")
 	assertHealthMetric("Orphans", "2")
 
-	recentStart := strings.Index(body, "<h2>Recent notes</h2>")
+	recentStart := strings.Index(body, "<h2>Recently modified</h2>")
 	if recentStart < 0 {
 		t.Fatalf("recent notes section missing, got %q", body)
 	}
@@ -198,7 +198,9 @@ func TestServer_IndexRendersEmptyVaultState(t *testing.T) {
 		{"capture", true, Options{}, `<a href="#capture-input">Capture your first thought</a>`},
 		{"unconfigured", false, Options{}, "Create a Markdown file in your vault using your editor"},
 		{"hosted", true, Options{Hosted: true}, `<a href="#capture-input">Capture your first thought</a>`},
+		{"hosted-unconfigured", false, Options{Hosted: true}, "Configure capture"},
 		{"replica", true, Options{ReadOnly: true, StateDir: t.TempDir()}, "Add a Markdown note to the source vault and sync it to this replica"},
+		{"replica-unconfigured", false, Options{ReadOnly: true, StateDir: t.TempDir()}, "Add a Markdown note to the source vault and sync it to this replica"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ts, _ := newHTTPServerForFilesWithOptions(t, nil, func(cfg *config.Config) {
@@ -220,6 +222,10 @@ func TestServer_IndexRendersEmptyVaultState(t *testing.T) {
 			}
 			if strings.Contains(body, "Create your first note in") {
 				t.Fatal("empty-vault guidance still points to Library")
+			}
+			setupLink := strings.Contains(body, `href="/settings#setting-capture-inbox_note"`)
+			if setupLink != (!tc.capture && !tc.opts.ReadOnly) {
+				t.Fatalf("capture setup link present = %v", setupLink)
 			}
 		})
 	}

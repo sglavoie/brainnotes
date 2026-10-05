@@ -2910,7 +2910,7 @@ var BrainNotesApp = (() => {
       submit.disabled = true;
       setStatusText(
         status,
-        "Quick capture is not configured. Set capture.inbox_note and capture.heading in brainnotes.toml.",
+        "Quick capture is not configured. Set the inbox note and heading in Settings.",
         "is-error",
         ["is-success", "is-error", "is-loading"]
       );
@@ -15787,6 +15787,16 @@ var BrainNotesApp = (() => {
     `${count4} portable settings. Machine-local settings stay in brainnotes.local.toml and are not editable here.`,
     ""
   ];
+  var focusLinkedSetting = (root) => {
+    const doc2 = root.ownerDocument;
+    if (doc2.activeElement !== doc2.body) return;
+    const id2 = doc2.defaultView?.location.hash.slice(1);
+    if (!id2) return;
+    const target = doc2.getElementById(id2);
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) || !root.contains(target)) return;
+    if (target.disabled) target.closest("[data-settings-row]")?.scrollIntoView({ block: "center" });
+    else target.focus();
+  };
   var bindRow = (row, summary, writer, refuse) => {
     if (settingBlockedReason(summary) !== "") {
       return;
@@ -15838,6 +15848,7 @@ var BrainNotesApp = (() => {
         onSaved: (result) => render(result.settings)
       }
     });
+    let linkedSettingVisited = false;
     const load = async () => {
       showPending(null);
       setStatus2("Loading settings...", "is-loading");
@@ -15848,6 +15859,10 @@ var BrainNotesApp = (() => {
       }
       render(outcome.result.settings);
       setStatus2(...summarize(outcome.result.settings.length));
+      if (!linkedSettingVisited) {
+        linkedSettingVisited = true;
+        focusLinkedSetting(deps.root);
+      }
     };
     elements.confirm?.addEventListener("click", () => void writer.confirm());
     elements.cancel?.addEventListener("click", () => writer.cancel());

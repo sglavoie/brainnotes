@@ -121,6 +121,33 @@ const waitForExpect = async (assertion: () => void): Promise<void> => {
 
 beforeEach(() => {
   document.body.innerHTML = "";
+  window.history.replaceState(null, "", "/settings");
+});
+
+describe("settings panel: direct links", () => {
+  it("focuses a linked setting after loading, only on the first successful load", async () => {
+    window.history.replaceState(null, "", "/settings#setting-capture-inbox_note");
+    const mounted = mount({
+      "/api/settings": () => jsonResponse(listPayload([setting({ key: "capture.inbox_note" })])),
+    });
+    await mounted.panel.load();
+    expect(document.activeElement).toBe(control(rowFor(mounted.root, "capture.inbox_note")));
+
+    await mounted.panel.load();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("keeps the user's focus when a linked setting finishes loading", async () => {
+    window.history.replaceState(null, "", "/settings#setting-capture-inbox_note");
+    const mounted = mount({
+      "/api/settings": () => jsonResponse(listPayload([setting({ key: "capture.inbox_note" })])),
+    });
+    const loading = mounted.panel.load();
+    const refresh = button(mounted.root, "data-settings-refresh");
+    refresh.focus();
+    await loading;
+    expect(document.activeElement).toBe(refresh);
+  });
 });
 
 describe("settings panel: rendering", () => {

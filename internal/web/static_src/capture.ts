@@ -152,7 +152,7 @@ export const initCapture = (deps: CaptureDeps = {}): void => {
     input.disabled = true;
     submit.disabled = true;
     setStatusText(status,
-      "Quick capture is not configured. Set capture.inbox_note and capture.heading in brainnotes.toml.",
+      "Quick capture is not configured. Set the inbox note and heading in Settings.",
       "is-error", ["is-success", "is-error", "is-loading"]);
     return;
   }

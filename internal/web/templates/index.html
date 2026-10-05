@@ -42,6 +42,9 @@
           <p class="capture-destination">{{if .CapturePath}}<a href="{{.CapturePath}}"><code>{{.CaptureRelPath}}</code></a>{{else}}<code>{{.CaptureRelPath}}</code>{{end}} · <code>{{.CaptureHeading}}</code></p>
         {{end}}
       </div>
+      {{if and (not .CaptureConfigured) (not readOnly)}}
+        <p class="capture-hint"><a href="/settings#setting-capture-inbox_note">Configure capture</a> by setting the inbox note and heading in Settings.</p>
+      {{end}}
       <div class="capture-field">
         <label class="capture-label" for="capture-input">Capture a thought</label>
         <div class="capture-controls">
@@ -423,7 +426,7 @@
 
     <section class="panel">
       <div class="panel-header">
-        <h2>Recent notes</h2>
+        <h2>Recently modified</h2>
       </div>
       {{if .Recent}}
         <ul class="recent-list">

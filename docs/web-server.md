@@ -115,8 +115,9 @@ the box (session-scoped, capped at five entries, empty again after a reload), an
 each one writes an undo journal entry named `bn web capture` — undoable with
 `bn undo <journal_id>` or from the change-history panel on `/library`, with the
 same whole-note caveat as the CLI. When `[capture].inbox_note` or `[capture].heading` is not
-configured, the panel still renders but is disabled and names the two keys to
-set, so an unconfigured vault does not look like the feature is missing.
+configured, the panel still renders but is disabled. **Configure capture** opens Settings at
+the inbox-note field, with the heading field alongside it. Set both values,
+then return to Brief to capture a thought. The setup link is hidden on read-only replicas.
 
 An unfinished capture is kept in this tab's session storage, separately for
 each vault, inbox path, and heading. Reloading or navigating away and back
@@ -136,6 +137,9 @@ safety comes from the append transaction being pinned to the revision it planned
 against rather than from a client-echoed note hash — the box never loaded the
 note and has no hash to send. A conflict that survives the primitive's three
 internal replans returns `409`; resubmitting is always safe.
+
+The **Recently modified** lists on Brief and Library are ordered by file
+modification time.
 
 **Pinned notes.** Four surfaces share one list: a section on `/` showing the
 first seven pins with a link to the rest, the full `/pinned` page, a Pin/Unpin

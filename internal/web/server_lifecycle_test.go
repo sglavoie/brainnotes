@@ -67,7 +67,7 @@ func TestServerRun_RandomPortAndGracefulShutdown(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
 	}
-	if !strings.Contains(string(body), "Recent notes") {
+	if !strings.Contains(string(body), "Recently modified") {
 		t.Fatalf("index response missing recent notes section; got %q", string(body))
 	}
 	if !strings.Contains(string(body), `href="/n/note"`) {

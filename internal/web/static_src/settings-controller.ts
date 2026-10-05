@@ -63,6 +63,19 @@ const summarize = (count: number): [string, StatusKind] =>
         "",
       ];
 
+// Settings arrive after the browser's initial fragment navigation. Honor a
+// direct link once they exist, without taking focus from someone already typing.
+const focusLinkedSetting = (root: HTMLElement): void => {
+  const doc = root.ownerDocument;
+  if (doc.activeElement !== doc.body) return;
+  const id = doc.defaultView?.location.hash.slice(1);
+  if (!id) return;
+  const target = doc.getElementById(id);
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) || !root.contains(target)) return;
+  if (target.disabled) target.closest("[data-settings-row]")?.scrollIntoView({ block: "center" });
+  else target.focus();
+};
+
 /**
  * Binds one rendered row to the writer.
  *
@@ -139,6 +152,7 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     },
   });
 
+  let linkedSettingVisited = false;
   const load = async (): Promise<void> => {
     showPending(null);
     setStatus("Loading settings...", "is-loading");
@@ -149,6 +163,10 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     }
     render(outcome.result.settings);
     setStatus(...summarize(outcome.result.settings.length));
+    if (!linkedSettingVisited) {
+      linkedSettingVisited = true;
+      focusLinkedSetting(deps.root);
+    }
   };
 
   elements.confirm?.addEventListener("click", () => void writer.confirm());
