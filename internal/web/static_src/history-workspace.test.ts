@@ -184,7 +184,64 @@ const listOnly = (body: unknown) => (url: string): Response => {
 
 afterEach(() => {
   document.body.innerHTML = "";
+  window.history.replaceState(null, "", "/history");
   vi.useRealTimers();
+});
+
+describe("history URL navigation", () => {
+  it("loads bookmarked filters before their vocabulary arrives and retains the page", async () => {
+    window.history.replaceState(null, "", "/history?path=Folder%2FA+%26+B%23.md&origin=import&origin=browser&class=note&limit=50&offset=100");
+    renderWorkspace();
+    const calls = startWorkspace(listOnly(listBody({ offset: 100, limit: 50, total: 150 })));
+    await waitForExpect(() => expect(document.querySelectorAll("[data-history-entry]")).toHaveLength(1));
+    expect(calls[0]?.url).toBe("/api/history?limit=50&offset=100&origin=import&origin=browser&class=note&path=Folder%2FA+%26+B%23.md");
+    expect(document.querySelector<HTMLInputElement>("[data-history-path]")?.value).toBe("Folder/A & B#.md");
+    expect(document.querySelectorAll("[data-history-origin-filters] input:checked")).toHaveLength(2);
+    expect(document.querySelector<HTMLSelectElement>("[data-history-page-size-select]")?.value).toBe("50");
+    expect(new URLSearchParams(window.location.search).get("offset")).toBe("100");
+  });
+
+  it("restores controls and requests on browser Back and Forward", async () => {
+    window.history.replaceState(null, "", "/history?path=Source.md");
+    renderWorkspace();
+    const calls = startWorkspace(listOnly(listBody()));
+    await waitForExpect(() => expect(document.querySelectorAll("[data-history-entry]")).toHaveLength(1));
+    document.querySelector<HTMLButtonElement>("[data-history-clear-filters]")?.click();
+    await waitForExpect(() => expect(calls).toHaveLength(2));
+    expect(new URLSearchParams(window.location.search).has("path")).toBe(false);
+    window.history.back();
+    await waitForExpect(() => expect(calls).toHaveLength(3));
+    expect(calls[2]?.url).toBe("/api/history?limit=20&path=Source.md");
+    expect(document.querySelector<HTMLInputElement>("[data-history-path]")?.value).toBe("Source.md");
+    window.history.forward();
+    await waitForExpect(() => expect(calls).toHaveLength(4));
+    expect(document.querySelector<HTMLInputElement>("[data-history-path]")?.value).toBe("");
+  });
+
+  it("normalizes invalid pagination without dropping the note filter", async () => {
+    window.history.replaceState(null, "", "/history?path=Source.md&limit=999999&offset=-1");
+    renderWorkspace();
+    const calls = startWorkspace(listOnly(listBody()));
+    await waitForExpect(() => expect(document.querySelectorAll("[data-history-entry]")).toHaveLength(1));
+    expect(calls[0]?.url).toBe("/api/history?limit=20&path=Source.md");
+    expect(window.location.search).toBe("?limit=20&path=Source.md");
+  });
+
+  it("cancels pending typing when browser navigation restores another view", async () => {
+    renderWorkspace();
+    const calls = startWorkspace(listOnly(listBody()));
+    await waitForExpect(() => expect(document.querySelectorAll("[data-history-entry]")).toHaveLength(1));
+    vi.useFakeTimers();
+    const path = document.querySelector<HTMLInputElement>("[data-history-path]")!;
+    path.value = "unfinished";
+    path.dispatchEvent(new Event("input", { bubbles: true }));
+    window.history.replaceState(null, "", "/history?path=Source.md&offset=20");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.url).toBe("/api/history?limit=20&offset=20&path=Source.md");
+    expect(path.value).toBe("Source.md");
+  });
 });
 
 describe("history workspace rendering", () => {

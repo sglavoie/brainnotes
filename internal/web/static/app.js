@@ -7942,6 +7942,41 @@ var BrainNotesApp = (() => {
     }
   };
 
+  // internal/web/static_src/history-workspace-url.ts
+  var filterValues = (params, key) => [...new Set(params.getAll(key).map((value) => value.trim()).filter(Boolean))];
+  var urlOffset = (value) => {
+    const offset = Number(value);
+    return Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+  };
+  var restoreHistoryURL = (elements) => {
+    const params = new URLSearchParams(window.location.search);
+    const select = elements.pageSizeSelect;
+    const requested = params.get("limit") || String(elements.pageSize);
+    if (select) {
+      const supported = [...select.options].some((option) => option.value === requested && Number(option.value) <= elements.maxPageSize);
+      select.value = supported ? requested : String(elements.pageSize);
+    }
+    if (elements.path) elements.path.value = params.get("path") || "";
+    const origins = filterValues(params, "origin");
+    const classes = filterValues(params, "class");
+    restoreChecks(elements.originFilters, origins);
+    restoreChecks(elements.classFilters, classes);
+    return { origins, classes, offset: urlOffset(params.get("offset")) };
+  };
+  var restoreChecks = (root, values2) => {
+    for (const input of root?.querySelectorAll('input[type="checkbox"]') || []) {
+      input.checked = values2.includes(input.value);
+    }
+  };
+  var writeHistoryURL = (query, mode) => {
+    const url = new URL(window.location.href);
+    for (const key of ["limit", "offset", "origin", "class", "path"]) url.searchParams.delete(key);
+    for (const [key, value] of buildHistoryQuery(query)) url.searchParams.append(key, value);
+    if (url.href === window.location.href) return;
+    if (mode === "push") window.history.pushState(null, "", url);
+    else window.history.replaceState(window.history.state, "", url);
+  };
+
   // internal/web/static_src/history-workspace.ts
   var initHistoryWorkspace = (deps = {}) => {
     const elements = findHistoryWorkspaceElements(document);
@@ -7952,19 +7987,23 @@ var BrainNotesApp = (() => {
     const ctx = {
       elements,
       fetcher: (input, init) => baseFetch(input, init),
-      state: { offset: 0, preview: null, vocabularyRendered: false, issued: 0, success: "" },
+      state: { offset: 0, preview: null, vocabularyRendered: false, urlFilters: null, issued: 0, success: "" },
       setStatus: (message, kind = "") => {
         setStatusText(elements.status, message, kind);
       }
     };
+    hydrateHistoryURL(ctx);
     hideHistoryRestorePanel(elements);
     bindHistoryWorkspace(ctx);
     void loadHistoryPage(ctx);
   };
   var bindHistoryWorkspace = (ctx) => {
     const { elements, state } = ctx;
+    let pending = 0;
     const reload = (offset) => {
+      window.clearTimeout(pending);
       state.offset = Math.max(0, offset);
+      writeHistoryURL(workspaceQuery(ctx), "push");
       void loadHistoryPage(ctx);
     };
     elements.filters?.addEventListener("submit", (event) => {
@@ -7974,11 +8013,14 @@ var BrainNotesApp = (() => {
     elements.filters?.addEventListener("change", () => {
       reload(0);
     });
-    bindPathInput(ctx, reload);
+    bindHistoryNavigation(ctx, () => window.clearTimeout(pending), () => {
+      pending = window.setTimeout(() => reload(0), 300);
+    });
     elements.refresh?.addEventListener("click", () => {
       reload(state.offset);
     });
     elements.clearFilters?.addEventListener("click", () => {
+      state.urlFilters = null;
       if (elements.path) {
         elements.path.value = "";
       }
@@ -8004,14 +8046,33 @@ var BrainNotesApp = (() => {
       ctx.setStatus("Restore canceled. Nothing was changed.");
     });
   };
-  var bindPathInput = (ctx, reload) => {
-    let pending = 0;
+  var bindHistoryNavigation = (ctx, cancel, schedule) => {
     ctx.elements.path?.addEventListener("input", () => {
-      window.clearTimeout(pending);
-      pending = window.setTimeout(() => {
-        reload(0);
-      }, 300);
+      cancel();
+      ctx.state.issued += 1;
+      schedule();
     });
+    window.addEventListener("popstate", () => {
+      if (!ctx.elements.root.isConnected) return;
+      cancel();
+      hydrateHistoryURL(ctx);
+      ctx.state.preview = null;
+      hideHistoryRestorePanel(ctx.elements);
+      void loadHistoryPage(ctx);
+    });
+  };
+  var hydrateHistoryURL = (ctx) => {
+    const query = restoreHistoryURL(ctx.elements);
+    ctx.state.offset = query.offset || 0;
+    ctx.state.urlFilters = query;
+  };
+  var workspaceQuery = (ctx) => {
+    const query = readHistoryQuery(ctx.elements, ctx.state.offset);
+    if (!ctx.state.vocabularyRendered && ctx.state.urlFilters) {
+      query.origins = ctx.state.urlFilters.origins;
+      query.classes = ctx.state.urlFilters.classes;
+    }
+    return query;
   };
   var pageStep = (ctx) => {
     const limit = readHistoryQuery(ctx.elements, 0).limit;
@@ -8025,7 +8086,8 @@ var BrainNotesApp = (() => {
     const issue = ++state.issued;
     elements.root.setAttribute("aria-busy", "true");
     ctx.setStatus("Reading the history...", "is-loading");
-    const query = readHistoryQuery(elements, state.offset);
+    const query = workspaceQuery(ctx);
+    writeHistoryURL(query, "replace");
     const outcome = await fetchHistoryPage(ctx.fetcher, elements.listEndpoint, query);
     if (issue !== state.issued) {
       return;
@@ -8043,6 +8105,7 @@ var BrainNotesApp = (() => {
     const { elements, state } = ctx;
     const entries = result.entries || [];
     state.offset = result.offset || 0;
+    writeHistoryURL({ ...query, offset: state.offset }, "replace");
     renderVocabularyOnce(ctx, result, query.origins || [], query.classes || []);
     renderHistoryWarnings(elements.warnings, result.warnings || [], result.warning_count || 0);
     renderHistoryEntryList(elements.list, entries, (entryID) => void openHistoryPreview(ctx, entryID));

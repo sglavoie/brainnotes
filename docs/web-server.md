@@ -150,6 +150,14 @@ Library change-history entries show the first three affected paths below each
 command, with an expandable list for the remainder, so you can identify a change
 before choosing Undo.
 
+On a note, **History for this note** opens the History workspace with its
+vault-relative filename in **Path contains**. This uses the existing substring
+filter, so it can also include paths containing that filename. The link is
+available in local and hosted modes. History keeps its path, origin, and file
+class filters, page size, and position in the URL, preserving the view across
+reloads, bookmarks, and browser Back/Forward. Changing a filter starts at the
+first page; **Clear filters** keeps the selected page size.
+
 Reordering is web-only. Drag a row's handle on `/pinned`, or focus a handle and
 press `Up`/`Down` for the same move from the keyboard. The browser posts note
 keys, never ranks. Press `Escape` to cancel a drag; an interrupted pointer gesture

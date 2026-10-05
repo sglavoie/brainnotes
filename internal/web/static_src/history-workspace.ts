@@ -26,6 +26,7 @@ import {
   syncHistoryRestoreConsent,
 } from "./history-workspace-restore";
 import { setStatusText, type StatusKind } from "./status";
+import { restoreHistoryURL, writeHistoryURL } from "./history-workspace-url";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -37,6 +38,7 @@ type WorkspaceState = {
   offset: number;
   preview: HistoryPreviewResult | null;
   vocabularyRendered: boolean;
+  urlFilters: HistoryQuery | null;
   /**
    * issued counts the page requests this workspace has started. A reply is
    * rendered only if it belongs to the newest one.
@@ -88,11 +90,12 @@ export const initHistoryWorkspace = (deps: HistoryWorkspaceDeps = {}): void => {
   const ctx: WorkspaceContext = {
     elements,
     fetcher: (input, init) => baseFetch(input, init),
-    state: { offset: 0, preview: null, vocabularyRendered: false, issued: 0, success: "" },
+    state: { offset: 0, preview: null, vocabularyRendered: false, urlFilters: null, issued: 0, success: "" },
     setStatus: (message: string, kind: StatusKind = ""): void => {
       setStatusText(elements.status, message, kind);
     },
   };
+  hydrateHistoryURL(ctx);
   hideHistoryRestorePanel(elements);
   bindHistoryWorkspace(ctx);
   void loadHistoryPage(ctx);
@@ -100,8 +103,11 @@ export const initHistoryWorkspace = (deps: HistoryWorkspaceDeps = {}): void => {
 
 const bindHistoryWorkspace = (ctx: WorkspaceContext): void => {
   const { elements, state } = ctx;
+  let pending = 0;
   const reload = (offset: number): void => {
+    window.clearTimeout(pending);
     state.offset = Math.max(0, offset);
+    writeHistoryURL(workspaceQuery(ctx), "push");
     void loadHistoryPage(ctx);
   };
 
@@ -112,11 +118,14 @@ const bindHistoryWorkspace = (ctx: WorkspaceContext): void => {
   elements.filters?.addEventListener("change", () => {
     reload(0);
   });
-  bindPathInput(ctx, reload);
+  bindHistoryNavigation(ctx, () => window.clearTimeout(pending), () => {
+    pending = window.setTimeout(() => reload(0), 300);
+  });
   elements.refresh?.addEventListener("click", () => {
     reload(state.offset);
   });
   elements.clearFilters?.addEventListener("click", () => {
+    state.urlFilters = null;
     if (elements.path) {
       elements.path.value = "";
     }
@@ -143,16 +152,37 @@ const bindHistoryWorkspace = (ctx: WorkspaceContext): void => {
   });
 };
 
-/** The path filter is typed rather than chosen, so it is debounced: one request
- * per keystroke would put the page's own answers in a race with each other. */
-const bindPathInput = (ctx: WorkspaceContext, reload: (offset: number) => void): void => {
-  let pending = 0;
+const bindHistoryNavigation = (ctx: WorkspaceContext, cancel: () => void, schedule: () => void): void => {
   ctx.elements.path?.addEventListener("input", () => {
-    window.clearTimeout(pending);
-    pending = window.setTimeout(() => {
-      reload(0);
-    }, 300);
+    cancel();
+    ctx.state.issued += 1;
+    schedule();
   });
+  window.addEventListener("popstate", () => {
+    if (!ctx.elements.root.isConnected) return;
+    cancel();
+    hydrateHistoryURL(ctx);
+    ctx.state.preview = null;
+    hideHistoryRestorePanel(ctx.elements);
+    void loadHistoryPage(ctx);
+  });
+};
+
+const hydrateHistoryURL = (ctx: WorkspaceContext): void => {
+  const query = restoreHistoryURL(ctx.elements);
+  ctx.state.offset = query.offset || 0;
+  ctx.state.urlFilters = query;
+};
+
+const workspaceQuery = (ctx: WorkspaceContext): HistoryQuery => {
+  const query = readHistoryQuery(ctx.elements, ctx.state.offset);
+  // The first request needs the URL selections before the server has supplied
+  // the vocabulary from which we can render checkboxes.
+  if (!ctx.state.vocabularyRendered && ctx.state.urlFilters) {
+    query.origins = ctx.state.urlFilters.origins;
+    query.classes = ctx.state.urlFilters.classes;
+  }
+  return query;
 };
 
 const pageStep = (ctx: WorkspaceContext): number => {
@@ -168,7 +198,8 @@ const loadHistoryPage = async (ctx: WorkspaceContext, success = ""): Promise<voi
   const issue = ++state.issued;
   elements.root.setAttribute("aria-busy", "true");
   ctx.setStatus("Reading the history...", "is-loading");
-  const query = readHistoryQuery(elements, state.offset);
+  const query = workspaceQuery(ctx);
+  writeHistoryURL(query, "replace");
   const outcome = await fetchHistoryPage(ctx.fetcher, elements.listEndpoint, query);
   // Superseded: a newer request is the one the page is waiting on, so this reply
   // is dropped entirely — including the busy flag and the status line, which
@@ -205,6 +236,7 @@ const renderHistoryPage = (
   // what this prevents — has_more is; a page past the end comes back empty with
   // Next disabled, and this keeps the offset saying where that empty page was.
   state.offset = result.offset || 0;
+  writeHistoryURL({ ...query, offset: state.offset }, "replace");
   renderVocabularyOnce(ctx, result, query.origins || [], query.classes || []);
   renderHistoryWarnings(elements.warnings, result.warnings || [], result.warning_count || 0);
   renderHistoryEntryList(elements.list, entries, (entryID) => void openHistoryPreview(ctx, entryID));

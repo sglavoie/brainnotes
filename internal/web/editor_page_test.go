@@ -399,11 +399,17 @@ func TestNotePage_LinksToTheEditorOnlyWhereWritesAreAvailable(t *testing.T) {
 	if !strings.Contains(body, `href="/edit?key=alpha" data-source-editor-launch`) {
 		t.Fatal("writable note page does not link to the editor")
 	}
+	if !strings.Contains(body, `href="/history?path=Alpha.md" data-note-history`) {
+		t.Fatal("writable note page does not link to its history")
+	}
 
 	replica, _, _ := newSourceTestServer(t, Options{ReadOnly: true, StateDir: t.TempDir()})
 	_, replicaBody := getNotePage(t, replica.URL, "/n/alpha")
 	if strings.Contains(replicaBody, "/edit?key=") {
 		t.Fatal("read-only note page links to an editor it refuses")
+	}
+	if strings.Contains(replicaBody, "data-note-history") {
+		t.Fatal("read-only note page links to history it refuses")
 	}
 }
 
