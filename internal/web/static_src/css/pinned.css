@@ -83,14 +83,6 @@
   white-space: nowrap;
 }
 
-.pinned-rank {
-  font-variant-numeric: tabular-nums;
-}
-
-.pinned-rank-unranked {
-  color: var(--bn-danger);
-}
-
 .pin-button[aria-pressed='true'] {
   border-color: var(--bn-accent-subtle-border);
   color: var(--bn-accent-subtle-text);

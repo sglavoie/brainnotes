@@ -37,6 +37,8 @@ const renderPinnedFixture = (): void => {
     .join("");
   document.body.innerHTML = `
     <section data-pinned-root data-pinned-csrf="csrf-token">
+      <p data-pinned-hint>Reorder pins</p>
+      <p data-pinned-empty hidden>No pins. <a href="/library">Library</a></p>
       <ol data-pinned-list>${rows}</ol>
       <p data-pinned-status> </p>
     </section>
@@ -139,7 +141,7 @@ describe("pinned list keyboard reorder", () => {
 
     expect(renderedKeys()).toEqual(["b.md", "a.md", "c.md"]);
     await waitForExpect(() => {
-      expect(document.querySelector("[data-pinned-status]")?.textContent).toBe("Reordered pins.");
+      expect(document.querySelector("[data-pinned-status]")?.textContent).toBe("Moved a.md to position 2 of 3.");
     });
 
     const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -222,7 +224,7 @@ describe("pinned list reorder sequencing", () => {
     await settle(1, { ok: true, message: "Reordered pins." });
     expect(renderedKeys()).toEqual(["b.md", "c.md", "a.md"]);
     await waitForExpect(() => {
-      expect(document.querySelector("[data-pinned-status]")?.textContent).toBe("Reordered pins.");
+      expect(document.querySelector("[data-pinned-status]")?.textContent).toBe("Moved a.md to position 3 of 3.");
     });
   });
 
@@ -308,20 +310,40 @@ describe("pinned list drag reorder", () => {
 });
 
 describe("pinned list unpin", () => {
-  it("posts the remove route and reloads the server-rendered page", async () => {
+  it("removes a row without reloading and focuses the next unpin button", async () => {
     renderPinnedFixture();
     const fetchMock = vi.fn(async () => pinResponse({ ok: true, message: "Unpinned note." }));
     const reloadMock = vi.fn();
 
     initPinnedList({ fetch: fetchMock as typeof fetch, reload: reloadMock });
-    rowFor("b.md").querySelector<HTMLButtonElement>("[data-pin-button]")?.click();
+    const button = rowFor("b.md").querySelector<HTMLButtonElement>("[data-pin-button]")!;
+    button.focus();
+    button.click();
 
     await waitForExpect(() => {
-      expect(reloadMock).toHaveBeenCalledTimes(1);
+      expect(renderedKeys()).toEqual(["a.md", "c.md"]);
     });
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(rowFor("c.md").querySelector("[data-pin-button]"));
     const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/pins/remove");
     expect(requestBody(fetchMock.mock.calls[0])).toBe("key=b.md&token=csrf-token");
+  });
+
+  it("waits for pending moves before unpinning and blocks further moves", async () => {
+    renderPinnedFixture();
+    const { mock, settle } = deferredFetch();
+    initPinnedList({ fetch: mock as unknown as typeof fetch });
+    arrowDown("a.md");
+    rowFor("b.md").querySelector<HTMLButtonElement>("[data-pin-button]")!.click();
+    arrowDown("a.md");
+    await flushMicrotasks();
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(renderedKeys()).toEqual(["b.md", "a.md", "c.md"]);
+    await settle(0, { ok: true });
+    expect((mock.mock.calls[1] as unknown as [string])[0]).toBe("/api/pins/remove");
+    await settle(1, { ok: true });
+    expect(renderedKeys()).toEqual(["a.md", "c.md"]);
   });
 
   it("keeps the page when the unpin fails", async () => {

@@ -685,6 +685,7 @@ a:hover {
   font-size: 0.85rem;
 }
 
+.search-label[hidden],
 .search-library-link[hidden] {
   display: none;
 }
@@ -3408,14 +3409,6 @@ code {
   color: var(--bn-muted);
   font-size: 0.85rem;
   white-space: nowrap;
-}
-
-.pinned-rank {
-  font-variant-numeric: tabular-nums;
-}
-
-.pinned-rank-unranked {
-  color: var(--bn-danger);
 }
 
 .pin-button[aria-pressed='true'] {

@@ -174,6 +174,18 @@ preview can be canceled but cannot be applied. Only the latest selection can
 populate it; canceling or changing the History view dismisses pending previews.
 **Cancel** returns focus to the selected entry's Restore button.
 
+The editor labels its recovery action **Undo latest vault change**, since it can
+undo a change to any note, not only the note being edited.
+
+Pinned lists show their order without internal rank values. Unpinning removes
+the row without reloading; keyboard focus moves to the next Unpin button (or
+the previous one at the end), and to Library when the list becomes empty. Focus
+that moved elsewhere while waiting stays there. Successful reorders announce
+the note title and its new position.
+
+Header search shows a keyboard hint with results. Enter opens the selected note,
+or opens Library when no note is selected; Escape dismisses the results.
+
 Reordering is web-only. Drag a row's handle on `/pinned`, or focus a handle and
 press `Up`/`Down` for the same move from the keyboard. The browser posts note
 keys, never ranks. Press `Escape` to cancel a drag; an interrupted pointer gesture

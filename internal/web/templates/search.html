@@ -12,9 +12,11 @@
       role="combobox"
       aria-autocomplete="list"
       aria-controls="search-results"
+      aria-describedby="search-keyboard-hint"
       aria-expanded="false"
     />
-    <a class="search-library-link" data-search-library href="/library" hidden>Open results in Library</a>
+    <a class="search-library-link" data-search-library href="/library" hidden>Open results in Library (Enter when no note is selected)</a>
+    <p id="search-keyboard-hint" class="search-label" data-search-keyboard-hint hidden>↑↓ select · Enter open · Esc dismiss</p>
     <ul id="search-results" class="search-results" role="listbox" hidden></ul>
     <div id="search-feedback" class="search-feedback" data-search-feedback hidden>
       <span data-search-feedback-message role="status" aria-live="polite"></span>

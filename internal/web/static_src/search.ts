@@ -130,10 +130,16 @@ class HeaderSearch {
     }
   }
 
+  private setKeyboardHint(visible: boolean): void {
+    const hint = this.input.closest("[data-search-box]")?.querySelector<HTMLElement>("[data-search-keyboard-hint]");
+    if (hint) hint.hidden = !visible;
+  }
+
   clearResults(): void {
     this.results = [];
     this.resultsEl.textContent = "";
     this.resultsEl.hidden = true;
+    this.setKeyboardHint(false);
     this.input.setAttribute("aria-expanded", "false");
     this.setActive(-1);
     if (this.feedbackEl) {
@@ -211,6 +217,7 @@ class HeaderSearch {
       }));
     });
     this.resultsEl.hidden = false;
+    this.setKeyboardHint(true);
     this.input.setAttribute("aria-expanded", "true");
     this.setActive(-1);
   }

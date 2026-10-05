@@ -10,6 +10,7 @@ const renderSearch = (): { input: HTMLInputElement; results: HTMLElement; feedba
   document.body.innerHTML = `
     <section data-search-box>
       <input id="search-input" aria-expanded="false" />
+      <p data-search-keyboard-hint hidden>Keyboard help</p>
       <ul id="search-results" hidden></ul>
       <p data-search-feedback hidden></p>
     </section>
@@ -31,6 +32,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
   setURL("/");
+});
+
+it("shows keyboard help with results and hides it on dismissal", async () => {
+  vi.useFakeTimers();
+  const { input } = renderSearch();
+  vi.stubGlobal("fetch", vi.fn(async () => ({
+    ok: true, json: async () => [searchResult()],
+  })));
+  initSearch();
+  input.focus();
+  typeQuery(input, "note");
+  await vi.runAllTimersAsync();
+  const hint = document.querySelector<HTMLElement>("[data-search-keyboard-hint]")!;
+  expect(hint.hidden).toBe(false);
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  expect(hint.hidden).toBe(true);
 });
 
 describe("search keyboard and filter-change behavior", () => {

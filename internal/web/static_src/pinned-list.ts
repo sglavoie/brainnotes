@@ -42,7 +42,7 @@ class PinnedList {
   private readonly reload: () => void;
   private cancelDrag: ((announce?: boolean) => void) | null = null;
 
-  constructor(root: HTMLElement, private readonly list: HTMLElement,
+  constructor(private readonly root: HTMLElement, private readonly list: HTMLElement,
     private readonly statusEl: HTMLElement, deps: PinnedListDeps) {
     this.csrfToken = root.getAttribute("data-pinned-csrf") || "";
     this.fetcher = deps.fetch || fetch;
@@ -75,6 +75,7 @@ class PinnedList {
   private moveQueue: Promise<void> = Promise.resolve();
   private queuedMoves = 0;
   private resyncing = false;
+  private unpinning = false;
 
   private sendMove = async (move: PendingPinnedMove): Promise<boolean> => {
     if (!move.key || !this.csrfToken) {
@@ -100,8 +101,6 @@ class PinnedList {
   // refused move may only use it while it is the last move queued — a later
   // move has already rewritten the list, so undoing an older one would
   // scramble it, and the server-rendered page becomes the only truth left.
-  // The rank badges are not updated: the request names neighbours rather than
-  // ranks, so a stale badge costs nothing until the next page load.
   private enqueueMove = (item: HTMLElement, restore: Element | null): void => {
     this.queuedMoves += 1;
     const sequence = this.queuedMoves;
@@ -111,12 +110,16 @@ class PinnedList {
       before: neighbors.before,
       after: neighbors.after,
     };
+    const position = this.rows().indexOf(item) + 1;
+    const title = item.querySelector("a")?.textContent || move.key;
+    const message = `Moved ${title} to position ${position} of ${this.rows().length}.`;
     this.setStatus("Saving pin order...");
     this.moveQueue = this.moveQueue.then(async () => {
       if (this.resyncing) {
         return;
       }
       if (await this.sendMove(move)) {
+        this.setStatus(message, "is-success");
         return;
       }
       this.cancelDrag?.(false);
@@ -130,6 +133,7 @@ class PinnedList {
   };
 
   private moveByKeyboard = (item: HTMLElement, direction: -1 | 1): void => {
+    if (this.unpinning || this.resyncing) return;
     this.cancelDrag?.();
     const restore = item.nextElementSibling;
     if (direction < 0) {
@@ -149,7 +153,7 @@ class PinnedList {
   };
 
   private startDrag = (item: HTMLElement, event: PointerEvent): void => {
-    if (event.button !== 0) {
+    if (event.button !== 0 || this.unpinning || this.resyncing) {
       return;
     }
     event.preventDefault();
@@ -219,25 +223,47 @@ class PinnedList {
     window.addEventListener("pointercancel", onPointerCancel);
   };
 
-  // A row that leaves the list changes nothing about the remaining ranks, but
-  // the page is server-rendered, so a reload is what restores the empty state
-  // and the numbering.
-  private unpin = async (item: HTMLElement, button: HTMLButtonElement): Promise<void> => {
+  private removeRow = (item: HTMLElement): void => {
+    const restoreFocus = item.contains(document.activeElement);
+    const neighbor = item.nextElementSibling || item.previousElementSibling;
+    item.remove();
+    const empty = this.rows().length === 0;
+    this.list.hidden = empty;
+    const hint = this.root.querySelector<HTMLElement>("[data-pinned-hint]");
+    const emptyMessage = this.root.querySelector<HTMLElement>("[data-pinned-empty]");
+    if (hint) hint.hidden = empty;
+    if (emptyMessage) emptyMessage.hidden = !empty;
+    if (restoreFocus) {
+      const target = neighbor?.querySelector<HTMLElement>("[data-pin-button]")
+        || emptyMessage?.querySelector<HTMLElement>("a");
+      target?.focus();
+    }
+  };
+
+  private unpin = async (item: HTMLElement): Promise<void> => {
+    if (this.unpinning || this.resyncing) return;
     this.cancelDrag?.();
     const key = pinnedItemKey(item);
     if (!key || !this.csrfToken) {
       this.setStatus("Unpin unavailable.", "is-error");
       return;
     }
-    button.disabled = true;
-    this.setStatus("Unpinning note...");
-    const ok = await this.post(
-      buildNotePinRemoveFetchRequest({ key, token: this.csrfToken }),
-      "Unpinned note."
-    );
-    button.disabled = false;
-    if (ok) {
-      this.reload();
+    this.unpinning = true;
+    const controls = queryAllElements(this.list, "button", HTMLButtonElement);
+    controls.forEach((control) => control.setAttribute("aria-disabled", "true"));
+    try {
+      // Let already queued moves settle before removing one of their neighbors.
+      await this.moveQueue;
+      if (this.resyncing) return;
+      this.setStatus("Unpinning note...");
+      const ok = await this.post(
+        buildNotePinRemoveFetchRequest({ key, token: this.csrfToken }),
+        "Unpinned note."
+      );
+      if (ok) this.removeRow(item);
+    } finally {
+      this.unpinning = false;
+      controls.forEach((control) => control.removeAttribute("aria-disabled"));
     }
   };
 
@@ -258,7 +284,7 @@ class PinnedList {
       const pinButton = queryElement(item, "[data-pin-button]", HTMLButtonElement);
       if (pinButton) {
         pinButton.addEventListener("click", () => {
-          void this.unpin(item, pinButton);
+          void this.unpin(item);
         });
       }
     }

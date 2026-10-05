@@ -34,7 +34,7 @@
         <h2 id="pinned-heading">Pinned notes</h2>
       </div>
       {{if .Pinned}}
-        <p class="pinned-hint">Drag a handle to reorder, or focus one and press Up or Down. Press Escape to cancel a drag.</p>
+        <p class="pinned-hint" data-pinned-hint>Drag a handle to reorder, or focus one and press Up or Down. Press Escape to cancel a drag.</p>
         <ol class="pinned-list" data-pinned-list>
           {{range .Pinned}}
             <li class="pinned-list-item" data-pinned-item data-pinned-key="{{.Key}}">
@@ -48,11 +48,6 @@
               <a class="pinned-note-title" href="{{.Path}}">{{.Title}}</a>
               <span class="pinned-note-meta">
                 <span class="pinned-note-folder">{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
-                {{if .Unranked}}
-                  <span class="pinned-rank pinned-rank-unranked" title="No numeric rank yet; sorts last until reordered">unranked</span>
-                {{else}}
-                  <span class="pinned-rank">{{.Rank}}</span>
-                {{end}}
               </span>
               <button
                 type="button"
@@ -63,9 +58,8 @@
             </li>
           {{end}}
         </ol>
-      {{else}}
-        <p class="pinned-empty">No pinned notes yet. Pin one from a note page or a <a href="{{ .LibraryPath }}">Library</a> search result.</p>
       {{end}}
+      <p class="pinned-empty" data-pinned-empty {{if .Pinned}}hidden{{end}}>No pinned notes yet. Pin one from a note page or a <a href="{{ .LibraryPath }}">Library</a> search result.</p>
       <p id="pinned-status" class="pinned-status" data-pinned-status role="status" aria-live="polite"></p>
     </section>
   </main>

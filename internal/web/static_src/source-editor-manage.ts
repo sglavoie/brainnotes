@@ -227,7 +227,7 @@ const contentActions = (deps: SourceManageDeps, ctx: ActionContext): ManageActio
     },
     {
       button: elements.undo,
-      label: "Undo the last change",
+      label: "Undo latest vault change",
       allowDirty: true,
       plan: () =>
         host.confirm("Undo the most recent change to this vault?")

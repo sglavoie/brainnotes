@@ -34,7 +34,7 @@ func TestPinnedPage_RendersListInPinOrder(t *testing.T) {
 		"data-pinned-list",
 		`data-pinned-key="notes/beta"`,
 		"data-pinned-handle",
-		"pinned-rank-unranked",
+		"data-pinned-empty",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("pinned page missing %q", want)
