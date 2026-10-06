@@ -87,4 +87,5 @@ export const readHistoryQuery = (
   origins: readHistoryFilterGroup(elements.originFilters),
   classes: readHistoryFilterGroup(elements.classFilters),
   path: elements.path?.value || "",
+  pathMatch: elements.pathMatch?.value === "exact" ? "exact" : "contains",
 });

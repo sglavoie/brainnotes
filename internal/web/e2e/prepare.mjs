@@ -76,7 +76,8 @@ const SEED_NOTES = {
     "Another paragraph below the code.\n\n".repeat(25),
   "Alpha.md": "---\nstatus: draft\ntitle: Alpha\n---\n\nAlpha body, see [[Beta]].\n",
   "Beta.md": "---\nstatus: draft\ntitle: Beta\n---\n\nBeta body.\n",
-  "Notes/Gamma.md": "---\nstatus: draft\ntitle: Gamma\n---\n\nGamma body.\n",
+  "Notes/Gamma.md": "---\nstatus: draft\ntitle: Gamma\n---\n\nGamma body.\n" +
+    "First [[Beta]] mention.\n\nSecond [[Beta]] mention.\n\nThird [[Beta]] mention.\n\nFourth [[Beta]] mention.\n\n[[Unwritten Example]]\n",
   [FIELDWORK_NOTE]: "---\nstatus: draft\ntitle: Fieldwork\n---\n\nCartographer notes live here.\n",
   [INBOX_NOTE]: `---\nstatus: draft\ntitle: Inbox\n---\n\n${CAPTURE_HEADING}\n`,
   [UNRELATED_NOTE]: "---\nstatus: draft\ntitle: Unrelated\n---\n\nNobody under test writes this.\n",

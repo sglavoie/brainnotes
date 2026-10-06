@@ -56,6 +56,7 @@
       <div class="panel-header source-editor-header">
         <h2 id="source-editor-heading"><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h2>
         <code class="source-editor-path">{{ .RelPath }}</code>
+        <a href="/history?path={{ .RelPath }}&amp;path_match=exact" data-note-history>History for this note</a>
       </div>
 
       <div class="source-editor-title">

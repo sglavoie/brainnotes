@@ -104,10 +104,10 @@ type historyQuery struct {
 	// touched an attachment".
 	Origins []historyOrigin
 	Classes []historyPathClass
-	// Path is a case-folded substring of a recorded path. It is a substring rather
-	// than a prefix because the thing somebody remembers about a note they want
-	// back is usually its title, not the folder it was filed in.
-	Path string
+	// Path is case-folded for contains searches and preserved for exact matches
+	// against the recorded vault-relative filename.
+	Path      string
+	PathMatch string
 }
 
 // parseHistoryQuery reads the window and the filters, refusing anything it does
@@ -131,7 +131,15 @@ func parseHistoryQuery(r *http.Request) (historyQuery, error) {
 	if query.Classes, err = parseHistoryFilter(values["class"], parseHistoryPathClass, "file class"); err != nil {
 		return historyQuery{}, err
 	}
-	query.Path = strings.ToLower(strings.TrimSpace(values.Get("path")))
+	query.PathMatch = values.Get("path_match")
+	switch query.PathMatch {
+	case "", "contains":
+		query.Path = strings.ToLower(strings.TrimSpace(values.Get("path")))
+	case "exact":
+		query.Path = values.Get("path")
+	default:
+		return historyQuery{}, noteops.Errorf(noteops.CodeInvalidRequest, "history: unknown path_match %q", query.PathMatch)
+	}
 	return query, nil
 }
 
@@ -211,7 +219,7 @@ func historyEntryMatches(entry journal.Entry, query historyQuery, classifier his
 	if len(query.Classes) > 0 && !historyEntryHasClass(entry, query.Classes, classifier) {
 		return false
 	}
-	if query.Path != "" && !historyEntryHasPath(entry, query.Path) {
+	if query.Path != "" && !historyEntryHasPath(entry, query.Path, query.PathMatch) {
 		return false
 	}
 	return true
@@ -226,9 +234,13 @@ func historyEntryHasClass(entry journal.Entry, classes []historyPathClass, class
 	return false
 }
 
-func historyEntryHasPath(entry journal.Entry, needle string) bool {
+func historyEntryHasPath(entry journal.Entry, needle, mode string) bool {
 	for _, file := range entry.Files {
-		if strings.Contains(strings.ToLower(file.Path), needle) {
+		if mode == "exact" {
+			if file.Path == needle {
+				return true
+			}
+		} else if strings.Contains(strings.ToLower(file.Path), needle) {
 			return true
 		}
 	}

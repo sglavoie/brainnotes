@@ -334,6 +334,7 @@ func TestServer_HistoryAPI_RefusesUnusableQueries(t *testing.T) {
 		{"origin": {"not-an-origin"}},
 		{"origin": {"browser", "not-an-origin"}},
 		{"class": {"notes"}},
+		{"path_match": {"prefix"}},
 	} {
 		resp := getHistoryResponse(t, baseURL, query)
 		body := readResponseBody(t, resp)
@@ -350,6 +351,38 @@ func TestServer_HistoryAPI_RefusesUnusableQueries(t *testing.T) {
 	// the page and asks for exactly that is not refused by an off-by-one.
 	if payload := getHistory(t, baseURL, url.Values{"limit": {"200"}}); payload.Limit != historyEntryMaxLimit {
 		t.Fatalf("limit at the ceiling = %d, want %d", payload.Limit, historyEntryMaxLimit)
+	}
+}
+
+func TestServer_HistoryAPI_ExactRecordedPath(t *testing.T) {
+	ts, root := newHTTPServerForFiles(t, map[string][]byte{"Alpha.md": []byte("alpha\n")})
+	base := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	paths := []string{"Alpha.md", "Old Alpha.md", "Archive/Alpha.md", "Folder/雪 & A#.md"}
+	for i, path := range paths {
+		recordHistoryEntry(t, root, "bn web source save", base.Add(time.Duration(i)*time.Minute), path)
+	}
+	cases := []struct {
+		path, mode string
+		want       int
+	}{
+		{"Alpha.md", "exact", 1},
+		{"alpha.md", "exact", 0},
+		{"Archive/Alpha.md", "exact", 1},
+		{"Folder/雪 & A#.md", "exact", 1},
+		{"雪 & A#.md", "exact", 0},
+		{"ALPHA.MD", "", 3},
+		{"ALPHA.MD", "contains", 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path+"/"+tc.mode, func(t *testing.T) {
+			payload := getHistory(t, ts.URL, url.Values{"path": {tc.path}, "path_match": {tc.mode}})
+			if payload.Total != tc.want {
+				t.Fatalf("total = %d, want %d", payload.Total, tc.want)
+			}
+			if tc.mode == "exact" && tc.want == 1 && payload.Entries[0].Files[0].Path != tc.path {
+				t.Fatalf("matched %q, want %q", payload.Entries[0].Files[0].Path, tc.path)
+			}
+		})
 	}
 }
 

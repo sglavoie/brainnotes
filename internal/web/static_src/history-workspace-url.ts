@@ -19,6 +19,7 @@ export const restoreHistoryURL = (elements: HistoryWorkspaceElements): HistoryQu
     select.value = supported ? requested : String(elements.pageSize);
   }
   if (elements.path) elements.path.value = params.get("path") || "";
+  if (elements.pathMatch) elements.pathMatch.value = params.get("path_match") === "exact" ? "exact" : "contains";
   const origins = filterValues(params, "origin");
   const classes = filterValues(params, "class");
   restoreChecks(elements.originFilters, origins);
@@ -34,7 +35,7 @@ const restoreChecks = (root: HTMLElement | null, values: string[]): void => {
 
 export const writeHistoryURL = (query: HistoryQuery, mode: "push" | "replace"): void => {
   const url = new URL(window.location.href);
-  for (const key of ["limit", "offset", "origin", "class", "path"]) url.searchParams.delete(key);
+  for (const key of ["limit", "offset", "origin", "class", "path", "path_match"]) url.searchParams.delete(key);
   for (const [key, value] of buildHistoryQuery(query)) url.searchParams.append(key, value);
   if (url.href === window.location.href) return;
   if (mode === "push") window.history.pushState(null, "", url);

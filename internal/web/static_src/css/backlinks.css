@@ -52,3 +52,12 @@
   overflow-wrap: anywhere;
 }
 
+.backlink-more {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.backlink-more summary {
+  color: var(--bn-muted);
+  cursor: pointer;
+}

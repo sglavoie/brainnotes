@@ -49,8 +49,15 @@
         </div>
         <form class="history-filters" data-history-filters>
           <label class="history-filter-field">
-            <span>Path contains</span>
+            <span>Path</span>
             <input type="search" name="path" data-history-path autocomplete="off" placeholder="part of a note or attachment path">
+          </label>
+          <label class="history-filter-field">
+            <span>Path matching</span>
+            <select name="path_match" data-history-path-match>
+              <option value="contains">Contains</option>
+              <option value="exact">Exact path</option>
+            </select>
           </label>
           <fieldset class="history-filter-group" data-history-origin-filters>
             <legend>Where it came from</legend>

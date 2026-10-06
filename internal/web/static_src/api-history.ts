@@ -60,10 +60,11 @@ export const buildHistoryQuery = (query: HistoryQuery): URLSearchParams => {
   setPositiveInt(params, "offset", query.offset);
   appendNames(params, "origin", query.origins);
   appendNames(params, "class", query.classes);
-  const path = (query.path || "").trim();
+  const path = query.pathMatch === "exact" ? query.path || "" : (query.path || "").trim();
   if (path !== "") {
     params.set("path", path);
   }
+  if (query.pathMatch === "exact") params.set("path_match", "exact");
   return params;
 };
 

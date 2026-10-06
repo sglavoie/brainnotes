@@ -85,6 +85,7 @@ export type HistoryQuery = {
   origins?: string[];
   classes?: string[];
   path?: string;
+  pathMatch?: "contains" | "exact";
 };
 
 export type UndoChange = {

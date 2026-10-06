@@ -43,8 +43,14 @@ const renderWorkspace = (): void => {
         <button type="button" data-history-refresh>Refresh</button>
         <button type="button" data-history-clear-filters>Clear filters</button>
         <form data-history-filters>
-          <label><span>Path contains</span>
+          <label><span>Path</span>
             <input type="search" name="path" data-history-path>
+          </label>
+          <label><span>Path matching</span>
+            <select data-history-path-match>
+              <option value="contains">Contains</option>
+              <option value="exact">Exact path</option>
+            </select>
           </label>
           <fieldset data-history-origin-filters><legend>Where it came from</legend></fieldset>
           <fieldset data-history-class-filters><legend>What it touched</legend></fieldset>
@@ -195,6 +201,33 @@ afterEach(() => {
 });
 
 describe("history URL navigation", () => {
+  it("preserves exact paths across reload and pagination, and resets the page when matching changes", async () => {
+    const path = "Folder/雪 & A#.md";
+    window.history.replaceState(null, "", `/history?${new URLSearchParams({ path, path_match: "exact", offset: "20" })}`);
+    renderWorkspace();
+    const calls = startWorkspace((url) => {
+      const offset = Number(new URL(url, window.location.origin).searchParams.get("offset"));
+      return jsonResponse(listBody({ offset, total: 60, has_more: offset < 40 }));
+    });
+    await waitForExpect(() => expect(document.querySelectorAll("[data-history-entry]")).toHaveLength(1));
+    expect(new URL(calls[0].url, window.location.origin).searchParams.get("path")).toBe(path);
+    const mode = document.querySelector<HTMLSelectElement>("[data-history-path-match]")!;
+    expect(mode.value).toBe("exact");
+    document.querySelector<HTMLButtonElement>("[data-history-next]")!.click();
+    await waitForExpect(() => expect(calls).toHaveLength(2));
+    const next = new URL(calls[1].url, window.location.origin).searchParams;
+    expect(next.get("offset")).toBe("40");
+    expect(next.get("path_match")).toBe("exact");
+    expect(new URLSearchParams(window.location.search).get("path_match")).toBe("exact");
+    mode.value = "contains";
+    mode.dispatchEvent(new Event("change", { bubbles: true }));
+    await waitForExpect(() => expect(calls).toHaveLength(3));
+    const changed = new URL(calls[2].url, window.location.origin).searchParams;
+    expect(changed.has("offset")).toBe(false);
+    expect(changed.has("path_match")).toBe(false);
+    expect(changed.get("path")).toBe(path);
+  });
+
   it("loads bookmarked filters before their vocabulary arrives and retains the page", async () => {
     window.history.replaceState(null, "", "/history?path=Folder%2FA+%26+B%23.md&origin=import&origin=browser&class=note&limit=50&offset=100");
     renderWorkspace();
@@ -209,7 +242,7 @@ describe("history URL navigation", () => {
   });
 
   it("restores controls and requests on browser Back and Forward", async () => {
-    window.history.replaceState(null, "", "/history?path=Source.md");
+    window.history.replaceState(null, "", "/history?path=Source.md&path_match=exact");
     renderWorkspace();
     const calls = startWorkspace(listOnly(listBody()));
     await waitForExpect(() => expect(document.querySelectorAll("[data-history-entry]")).toHaveLength(1));
@@ -218,11 +251,13 @@ describe("history URL navigation", () => {
     expect(new URLSearchParams(window.location.search).has("path")).toBe(false);
     window.history.back();
     await waitForExpect(() => expect(calls).toHaveLength(3));
-    expect(calls[2]?.url).toBe("/api/history?limit=20&path=Source.md");
+    expect(calls[2]?.url).toBe("/api/history?limit=20&path=Source.md&path_match=exact");
+    expect(document.querySelector<HTMLSelectElement>("[data-history-path-match]")?.value).toBe("exact");
     expect(document.querySelector<HTMLInputElement>("[data-history-path]")?.value).toBe("Source.md");
     window.history.forward();
     await waitForExpect(() => expect(calls).toHaveLength(4));
     expect(document.querySelector<HTMLInputElement>("[data-history-path]")?.value).toBe("");
+    expect(document.querySelector<HTMLSelectElement>("[data-history-path-match]")?.value).toBe("contains");
   });
 
   it("normalizes invalid pagination without dropping the note filter", async () => {

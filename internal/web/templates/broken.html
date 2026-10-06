@@ -28,6 +28,7 @@
           <label for="q">Filter target</label>
           <input id="q" name="q" value="{{.Query}}" />
           <button type="submit">Filter</button>
+          {{if .HasQuery}}<a href="/broken">Clear filter</a>{{end}}
         </form>
       </section>
       {{if .HasQuery}}
@@ -66,7 +67,7 @@
           </div>
         {{else}}
           {{if .HasQuery}}
-          <p>No broken links match this filter. <a href="/broken">Clear filter</a></p>
+          <p>No broken links match this filter.</p>
           {{else}}
           <p>No broken links found.</p>
           {{end}}

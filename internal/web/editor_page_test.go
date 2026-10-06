@@ -399,7 +399,7 @@ func TestNotePage_LinksToTheEditorOnlyWhereWritesAreAvailable(t *testing.T) {
 	if !strings.Contains(body, `href="/edit?key=alpha" data-source-editor-launch`) {
 		t.Fatal("writable note page does not link to the editor")
 	}
-	if !strings.Contains(body, `href="/history?path=Alpha.md" data-note-history`) {
+	if !strings.Contains(body, `href="/history?path=Alpha.md&amp;path_match=exact" data-note-history`) {
 		t.Fatal("writable note page does not link to its history")
 	}
 

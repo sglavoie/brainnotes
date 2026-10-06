@@ -164,13 +164,15 @@ so you can identify a change before choosing Undo or previewing a restore.
 
 After **Create note** succeeds for a broken link, **Open note** takes you to the
 new note. A failed creation keeps the Create action available for retry.
-On the Broken links page, an empty filtered result offers **Clear filter** to
-return to the full list.
+On the Broken links page, **Clear filter** appears beside the filter controls
+whenever a filter is active, whether or not it matches any links.
 
-On a note, **History for this note** opens the History workspace with its
-vault-relative filename in **Path contains**. This uses the existing substring
-filter, so it can also include paths containing that filename. The link is
-available in local and hosted modes. History keeps its path, origin, and file
+On a note or in the source editor, **History for this note** opens the History
+workspace with its vault-relative filename and **Exact path** matching. This
+matches the recorded path, including case, without including similarly named
+files or following earlier renames. For a broader search, switch **Path matching**
+to **Contains**, the default case-insensitive substring search. The link is
+available in local and hosted modes. History keeps its path, matching mode, origin, and file
 class filters, page size, and position in the URL, preserving the view across
 reloads, bookmarks, and browser Back/Forward. Changing a filter starts at the
 first page; **Clear filters** keeps the selected page size. Empty filtered
@@ -181,6 +183,14 @@ Choosing **Restore...** brings focus to the preview heading. While loading, the
 preview can be canceled but cannot be applied. Only the latest selection can
 populate it; canceling or changing the History view dismisses pending previews.
 **Cancel** returns focus to the selected entry's Restore button.
+
+The History API and browser URL accept `path_match=exact|contains` alongside
+`path`; omitting the mode keeps substring matching. **Clear filters** resets it
+to **Contains**.
+
+Backlinks show the first two occurrence snippets per source note, with
+**Show N more mentions** expanding the rest. The source link and total mention
+count remain visible, and the disclosure works without JavaScript.
 
 The editor labels its recovery action **Undo latest vault change**, since it can
 undo a change to any note, not only the note being edited.

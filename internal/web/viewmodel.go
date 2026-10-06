@@ -23,6 +23,14 @@ type noteLinkView struct {
 	Occurrences []backlinkOccurrence
 }
 
+func (link noteLinkView) PreviewOccurrences() []backlinkOccurrence {
+	return link.Occurrences[:min(2, len(link.Occurrences))]
+}
+
+func (link noteLinkView) RemainingOccurrences() []backlinkOccurrence {
+	return link.Occurrences[min(2, len(link.Occurrences)):]
+}
+
 type breadcrumbItem struct {
 	Label   string
 	Path    string

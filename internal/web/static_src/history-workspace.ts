@@ -138,6 +138,7 @@ const bindHistoryWorkspace = (ctx: WorkspaceContext): void => {
     if (elements.path) {
       elements.path.value = "";
     }
+    if (elements.pathMatch) elements.pathMatch.value = "contains";
     clearHistoryFilterGroup(elements.originFilters);
     clearHistoryFilterGroup(elements.classFilters);
     reload(0);

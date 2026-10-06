@@ -921,10 +921,11 @@ var BrainNotesApp = (() => {
     setPositiveInt(params, "offset", query.offset);
     appendNames(params, "origin", query.origins);
     appendNames(params, "class", query.classes);
-    const path = (query.path || "").trim();
+    const path = query.pathMatch === "exact" ? query.path || "" : (query.path || "").trim();
     if (path !== "") {
       params.set("path", path);
     }
+    if (query.pathMatch === "exact") params.set("path_match", "exact");
     return params;
   };
   var setPositiveInt = (params, name2, value) => {
@@ -7687,6 +7688,7 @@ var BrainNotesApp = (() => {
       maxPageSize: readSize(root, "data-history-max-page-size", pageSize),
       filters: queryElement(root, "[data-history-filters]", HTMLFormElement),
       path: queryElement(root, "[data-history-path]", HTMLInputElement),
+      pathMatch: queryElement(root, "[data-history-path-match]", HTMLSelectElement),
       originFilters: queryElement(root, "[data-history-origin-filters]", HTMLElement),
       classFilters: queryElement(root, "[data-history-class-filters]", HTMLElement),
       pageSizeSelect: queryElement(root, "[data-history-page-size-select]", HTMLSelectElement),
@@ -7766,7 +7768,8 @@ var BrainNotesApp = (() => {
     offset: Math.max(0, offset),
     origins: readHistoryFilterGroup(elements.originFilters),
     classes: readHistoryFilterGroup(elements.classFilters),
-    path: elements.path?.value || ""
+    path: elements.path?.value || "",
+    pathMatch: elements.pathMatch?.value === "exact" ? "exact" : "contains"
   });
 
   // internal/web/static_src/history-workspace-list.ts
@@ -8014,6 +8017,7 @@ var BrainNotesApp = (() => {
       select.value = supported ? requested : String(elements.pageSize);
     }
     if (elements.path) elements.path.value = params.get("path") || "";
+    if (elements.pathMatch) elements.pathMatch.value = params.get("path_match") === "exact" ? "exact" : "contains";
     const origins = filterValues(params, "origin");
     const classes = filterValues(params, "class");
     restoreChecks(elements.originFilters, origins);
@@ -8027,7 +8031,7 @@ var BrainNotesApp = (() => {
   };
   var writeHistoryURL = (query, mode) => {
     const url = new URL(window.location.href);
-    for (const key of ["limit", "offset", "origin", "class", "path"]) url.searchParams.delete(key);
+    for (const key of ["limit", "offset", "origin", "class", "path", "path_match"]) url.searchParams.delete(key);
     for (const [key, value] of buildHistoryQuery(query)) url.searchParams.append(key, value);
     if (url.href === window.location.href) return;
     if (mode === "push") window.history.pushState(null, "", url);
@@ -8082,6 +8086,7 @@ var BrainNotesApp = (() => {
       if (elements.path) {
         elements.path.value = "";
       }
+      if (elements.pathMatch) elements.pathMatch.value = "contains";
       clearHistoryFilterGroup(elements.originFilters);
       clearHistoryFilterGroup(elements.classFilters);
       reload(0);

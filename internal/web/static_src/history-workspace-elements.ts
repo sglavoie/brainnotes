@@ -19,6 +19,7 @@ export type HistoryWorkspaceElements = {
 
   filters: HTMLFormElement | null;
   path: HTMLInputElement | null;
+  pathMatch: HTMLSelectElement | null;
   originFilters: HTMLElement | null;
   classFilters: HTMLElement | null;
   pageSizeSelect: HTMLSelectElement | null;
@@ -74,6 +75,7 @@ export const findHistoryWorkspaceElements = (
 
     filters: queryElement(root, "[data-history-filters]", HTMLFormElement),
     path: queryElement(root, "[data-history-path]", HTMLInputElement),
+    pathMatch: queryElement(root, "[data-history-path-match]", HTMLSelectElement),
     originFilters: queryElement(root, "[data-history-origin-filters]", HTMLElement),
     classFilters: queryElement(root, "[data-history-class-filters]", HTMLElement),
     pageSizeSelect: queryElement(root, "[data-history-page-size-select]", HTMLSelectElement),

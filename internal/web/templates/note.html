@@ -100,7 +100,7 @@
             <a class="source-editor-launch" href="{{.EditSourcePath}}" data-source-editor-launch>Edit source</a>
           </div>
           <div class="note-action-group">
-            <a class="source-editor-launch" href="/history?path={{.Copy.VaultPath}}" data-note-history>History for this note</a>
+            <a class="source-editor-launch" href="/history?path={{.Copy.VaultPath}}&amp;path_match=exact" data-note-history>History for this note</a>
           </div>
         {{end}}
 
@@ -231,14 +231,13 @@
                       {{end}}
                     </div>
                     {{if .Occurrences}}
-                      <ul class="backlink-occurrences">
-                        {{range .Occurrences}}
-                          <li>
-                            {{if .Location}}<span class="backlink-location">{{.Location}}</span>{{end}}
-                            {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
-                          </li>
-                        {{end}}
-                      </ul>
+                      {{template "backlinkOccurrences" .PreviewOccurrences}}
+                      {{with .RemainingOccurrences}}
+                        <details class="backlink-more">
+                          <summary>Show {{len .}} more {{if eq (len .) 1}}mention{{else}}mentions{{end}}</summary>
+                          {{template "backlinkOccurrences" .}}
+                        </details>
+                      {{end}}
                     {{end}}
                   </li>
                 {{end}}
@@ -359,4 +358,15 @@
     <script src="/static/app.js" defer></script>
   </body>
 </html>
+{{end}}
+
+{{define "backlinkOccurrences"}}
+<ul class="backlink-occurrences">
+  {{range .}}
+    <li>
+      {{if .Location}}<span class="backlink-location">{{.Location}}</span>{{end}}
+      {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
+    </li>
+  {{end}}
+</ul>
 {{end}}
