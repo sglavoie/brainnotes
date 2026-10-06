@@ -12,6 +12,10 @@ hard cap of twenty. Cards show the candidate path, a bounded prose-first excerpt
 relationship, optional bridge, and up to three human reasons. Numeric scores and
 ranking weights are intentionally not sent to or rendered by the browser.
 
+If a load fails, **Retry related notes** repeats that mode's failed request,
+including the requested number of results after **Show more**. Existing results
+stay visible while retrying. Switching tabs keeps each mode's recovery separate.
+
 Feedback is directed from the note being viewed to the candidate. **Useful**
 adds a positive ranking signal. **Dismiss** and **Later** suppress that pair in
 all three modes; Later offers tomorrow, next week, or a strict future local date

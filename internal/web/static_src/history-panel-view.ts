@@ -1,4 +1,5 @@
 import type { HistoryEntry, UndoConflict } from "./api";
+import { buildHistoryQuery } from "./api-history";
 import { queryAllElements, queryElement } from "./dom";
 import { setStatusText, type StatusKind } from "./status";
 
@@ -118,7 +119,13 @@ const historyPaths = (paths: string[]): HTMLUListElement => {
   list.setAttribute("aria-label", "Affected paths");
   for (const path of paths) {
     const item = document.createElement("li");
-    item.textContent = path;
+    const filename = document.createElement("span");
+    filename.textContent = path;
+    const link = document.createElement("a");
+    link.href = `/history?${buildHistoryQuery({ path, pathMatch: "exact" })}`;
+    link.textContent = "History for this path";
+    link.setAttribute("aria-label", `History for ${path}`);
+    item.append(filename, " ", link);
     list.append(item);
   }
   return list;

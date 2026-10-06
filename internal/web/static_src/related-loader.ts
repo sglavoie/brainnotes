@@ -4,6 +4,7 @@ import {
   createRelatedView,
   renderRelatedFeedback,
   renderRelatedResponse,
+  renderRelatedRetry,
   setRelatedModeBusy,
   type RelatedView,
 } from "./related-render";
@@ -44,6 +45,7 @@ const applyResponse = (
   state.limit = limit;
   state.loaded = true;
   state.stale = false;
+  state.failedLimit = undefined;
   state.response = response;
   model.feedback = response.feedback;
   model.serverDate = response.serverDate;
@@ -90,6 +92,8 @@ export const createRelatedLoader = (
     }
     const [message, kind] = statusForMode(model, mode);
     setStatus(message, kind);
+    const state = model.modes[mode];
+    renderRelatedRetry(view, state.failedLimit !== undefined, state.loading);
   };
 
   const load = (mode: RelatedMode, requestedLimit: number): Promise<boolean> => {
@@ -123,6 +127,7 @@ export const createRelatedLoader = (
           return false;
         }
         state.error = relatedErrorMessage(error);
+        state.failedLimit = requestedLimit;
       } finally {
         if (requestIDs[mode] === requestID) {
           state.loading = false;

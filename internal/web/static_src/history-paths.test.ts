@@ -20,11 +20,11 @@ const render = (paths: string[]): ReturnType<typeof vi.fn> => {
 it("shows the first three full paths and expands the remainder using native details", () => {
   render(["Folder/Old.md", "Folder/New.md", "Backlink.md", "Fourth.md", "Fifth.md"]);
   const main = document.querySelector(".history-item-main")!;
-  expect([...main.querySelectorAll(":scope > .history-paths li")].map((el) => el.textContent))
+  expect([...main.querySelectorAll(":scope > .history-paths li > span")].map((el) => el.textContent))
     .toEqual(["Folder/Old.md", "Folder/New.md", "Backlink.md"]);
   expect(main.querySelector("summary")!.textContent).toBe("2 more paths");
   expect(main.querySelector("details")!.open).toBe(false);
-  expect([...main.querySelectorAll("details li")].map((el) => el.textContent)).toEqual(["Fourth.md", "Fifth.md"]);
+  expect([...main.querySelectorAll("details li > span")].map((el) => el.textContent)).toEqual(["Fourth.md", "Fifth.md"]);
 });
 
 it.each([0, 1, 3])("needs no expander for %i paths and preserves undo identity", (count) => {
@@ -38,6 +38,20 @@ it.each([0, 1, 3])("needs no expander for %i paths and preserves undo identity",
 it("renders filenames as literal text and labels a single remaining path", () => {
   render(['<img src=x onerror="alert(1)">.md', "Café.md", "Three.md", "Four.md"]);
   expect(document.querySelector("img")).toBeNull();
-  expect(document.querySelector(".history-paths li")!.textContent).toBe('<img src=x onerror="alert(1)">.md');
+  expect(document.querySelector(".history-paths li > span")!.textContent).toBe('<img src=x onerror="alert(1)">.md');
   expect(document.querySelector("summary")!.textContent).toBe("1 more path");
+});
+
+it("links every recorded path to its complete exact history, including collapsed and missing paths", () => {
+  const paths = ["Notes/Plan.md", "Notes/plan.md", "deleted.md", "attachments/Café #1 & 2?.png", " spaced.md "];
+  render(paths);
+  const links = [...document.querySelectorAll<HTMLAnchorElement>(".history-paths a")];
+  expect(links).toHaveLength(paths.length);
+  links.forEach((link, index) => {
+    const url = new URL(link.href);
+    expect(url.pathname).toBe("/history");
+    expect([...url.searchParams]).toEqual([["path", paths[index]], ["path_match", "exact"]]);
+    expect(link.getAttribute("aria-label")).toBe(`History for ${paths[index]}`);
+    expect(link.textContent).toBe("History for this path");
+  });
 });

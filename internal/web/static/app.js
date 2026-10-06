@@ -7440,7 +7440,13 @@ var BrainNotesApp = (() => {
     list.setAttribute("aria-label", "Affected paths");
     for (const path of paths) {
       const item = document.createElement("li");
-      item.textContent = path;
+      const filename = document.createElement("span");
+      filename.textContent = path;
+      const link = document.createElement("a");
+      link.href = `/history?${buildHistoryQuery({ path, pathMatch: "exact" })}`;
+      link.textContent = "History for this path";
+      link.setAttribute("aria-label", `History for ${path}`);
+      item.append(filename, " ", link);
       list.append(item);
     }
     return list;
@@ -13931,6 +13937,20 @@ var BrainNotesApp = (() => {
 
   // internal/web/static_src/related-render.ts
   var relatedID = (kind, mode) => `related-${kind}-${mode}`;
+  var createRetryButton = (doc2) => {
+    const retry2 = doc2.createElement("button");
+    retry2.type = "button";
+    retry2.className = "related-card-action";
+    retry2.dataset.relatedRetry = "";
+    retry2.textContent = "Retry related notes";
+    retry2.hidden = true;
+    return retry2;
+  };
+  var renderRelatedRetry = (view, available, busy) => {
+    if ((busy || !available) && view.retry.ownerDocument.activeElement === view.retry) view.status.focus();
+    view.retry.hidden = !available;
+    view.retry.disabled = busy;
+  };
   var createModePanel = (doc2, mode, description) => {
     const panel = doc2.createElement("section");
     panel.id = relatedID("panel", mode);
@@ -13957,6 +13977,7 @@ var BrainNotesApp = (() => {
   };
   var createRelatedView = (root) => {
     const doc2 = root.ownerDocument;
+    const retry2 = createRetryButton(doc2);
     const heading2 = root.querySelector("h2");
     const status = root.querySelector("[data-related-status]") || doc2.createElement("p");
     status.className = "related-status";
@@ -14024,8 +14045,8 @@ var BrainNotesApp = (() => {
       fallbackHeading.textContent = "Related Notes";
       root.appendChild(fallbackHeading);
     }
-    root.append(intro, tablist, status, feedbackDrawer, panelsContainer);
-    return { status, tabs, panels, results, moreButtons, feedbackDrawer, feedbackSummary, feedbackList };
+    root.append(intro, tablist, status, retry2, feedbackDrawer, panelsContainer);
+    return { status, retry: retry2, tabs, panels, results, moreButtons, feedbackDrawer, feedbackSummary, feedbackList };
   };
   var selectRelatedModeView = (view, activeMode) => {
     for (const definition of relatedModeDefinitions) {
@@ -14232,6 +14253,7 @@ var BrainNotesApp = (() => {
     state.limit = limit;
     state.loaded = true;
     state.stale = false;
+    state.failedLimit = void 0;
     state.response = response;
     model.feedback = response.feedback;
     model.serverDate = response.serverDate;
@@ -14256,6 +14278,8 @@ var BrainNotesApp = (() => {
       }
       const [message, kind] = statusForMode(model, mode);
       setStatus2(message, kind);
+      const state = model.modes[mode];
+      renderRelatedRetry(view, state.failedLimit !== void 0, state.loading);
     };
     const load = (mode, requestedLimit) => {
       const state = model.modes[mode];
@@ -14288,6 +14312,7 @@ var BrainNotesApp = (() => {
             return false;
           }
           state.error = relatedErrorMessage(error);
+          state.failedLimit = requestedLimit;
         } finally {
           if (requestIDs[mode] === requestID) {
             state.loading = false;
@@ -14581,6 +14606,11 @@ var BrainNotesApp = (() => {
       }
     };
     wireModeTabs(loader, selectMode);
+    view.retry.addEventListener("click", () => {
+      const mode = model.activeMode;
+      const state = model.modes[mode];
+      if (!state.loading && state.failedLimit !== void 0) void loader.load(mode, state.failedLimit);
+    });
     wireRootEvents(root, config2, fetcher, defaultBeacon(deps), createRelatedMutation(loader, config2, fetcher));
     if (config2.source === "") {
       model.modes.balanced.error = "Related notes are unavailable for this page.";

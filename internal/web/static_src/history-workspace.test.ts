@@ -238,7 +238,9 @@ describe("history URL navigation", () => {
     expect(document.querySelectorAll("[data-history-origin-filters] input:checked")).toHaveLength(2);
     expect(document.querySelector<HTMLSelectElement>("[data-history-page-size-select]")?.value).toBe("50");
     expect(new URLSearchParams(window.location.search).get("offset")).toBe("100");
-    expect(document.querySelector("[data-history-entry] .history-paths")?.textContent).toBe("Source.md");
+    expect(document.querySelector("[data-history-entry] .history-paths li > span")?.textContent).toBe("Source.md");
+    expect(document.querySelector("[data-history-entry] .history-paths a")?.getAttribute("href"))
+      .toBe("/history?path=Source.md&path_match=exact");
   });
 
   it("restores controls and requests on browser Back and Forward", async () => {

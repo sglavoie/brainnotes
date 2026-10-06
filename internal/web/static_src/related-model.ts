@@ -34,6 +34,7 @@ export type RelatedModeState = {
   loading: boolean;
   response?: RelatedResponse;
   error: string;
+  failedLimit?: number;
   stale: boolean;
 };
 

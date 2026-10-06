@@ -9,6 +9,7 @@ import type { RelatedFeedback, RelatedMode, RelatedResponse, RelatedResult } fro
 
 export type RelatedView = {
   status: HTMLElement;
+  retry: HTMLButtonElement;
   tabs: Record<RelatedMode, HTMLButtonElement>;
   panels: Record<RelatedMode, HTMLElement>;
   results: Record<RelatedMode, HTMLElement>;
@@ -19,6 +20,24 @@ export type RelatedView = {
 };
 
 const relatedID = (kind: "tab" | "panel", mode: RelatedMode): string => `related-${kind}-${mode}`;
+
+const createRetryButton = (doc: Document): HTMLButtonElement => {
+  const retry = doc.createElement("button");
+  retry.type = "button";
+  retry.className = "related-card-action";
+  retry.dataset.relatedRetry = "";
+  retry.textContent = "Retry related notes";
+  retry.hidden = true;
+  return retry;
+};
+
+export const renderRelatedRetry = (view: RelatedView, available: boolean, busy: boolean): void => {
+  // Browsers drop focus when disabling a button. Move it to the status before
+  // retry starts, and never steal it back if the user moves elsewhere afterward.
+  if ((busy || !available) && view.retry.ownerDocument.activeElement === view.retry) view.status.focus();
+  view.retry.hidden = !available;
+  view.retry.disabled = busy;
+};
 
 const createModePanel = (
   doc: Document,
@@ -52,6 +71,7 @@ const createModePanel = (
 
 export const createRelatedView = (root: HTMLElement): RelatedView => {
   const doc = root.ownerDocument;
+  const retry = createRetryButton(doc);
   const heading = root.querySelector("h2");
   const status = root.querySelector<HTMLElement>("[data-related-status]") || doc.createElement("p");
   status.className = "related-status";
@@ -125,8 +145,8 @@ export const createRelatedView = (root: HTMLElement): RelatedView => {
     fallbackHeading.textContent = "Related Notes";
     root.appendChild(fallbackHeading);
   }
-  root.append(intro, tablist, status, feedbackDrawer, panelsContainer);
-  return { status, tabs, panels, results, moreButtons, feedbackDrawer, feedbackSummary, feedbackList };
+  root.append(intro, tablist, status, retry, feedbackDrawer, panelsContainer);
+  return { status, retry, tabs, panels, results, moreButtons, feedbackDrawer, feedbackSummary, feedbackList };
 };
 
 export const selectRelatedModeView = (view: RelatedView, activeMode: RelatedMode): void => {

@@ -189,6 +189,11 @@ export const createRelatedController = (
   };
 
   wireModeTabs(loader, selectMode);
+  view.retry.addEventListener("click", () => {
+    const mode = model.activeMode;
+    const state = model.modes[mode];
+    if (!state.loading && state.failedLimit !== undefined) void loader.load(mode, state.failedLimit);
+  });
   wireRootEvents(root, config, fetcher, defaultBeacon(deps), createRelatedMutation(loader, config, fetcher));
 
   if (config.source === "") {

@@ -161,6 +161,10 @@ button. The toggle returns to its previous state until a retry succeeds.
 Library change-history entries and the History workspace show the first three
 affected paths below each command, with an expandable list for the remainder,
 so you can identify a change before choosing Undo or previewing a restore.
+Each affected filename offers **History for this path**, opening all recorded
+changes for that exact path without carrying over other filters or pagination.
+This also works for attachments and paths that have since been deleted or renamed;
+it searches the recorded filename rather than following renames.
 
 After **Create note** succeeds for a broken link, **Open note** takes you to the
 new note. A failed creation keeps the Create action available for retry.
