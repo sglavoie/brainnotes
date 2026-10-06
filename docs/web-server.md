@@ -109,7 +109,10 @@ full-vault loading semantics and read every note without a per-note timeout.
 The home page opens with a **Quick capture** panel above Today's brief: the
 configured destination (`Inbox.md · ## Captures`), a two-row text box capped at
 2,000 characters, a Capture button, and `Ctrl`/`⌘` + `Enter` as the keyboard
-submit. A counter shows the current length using the browser's input-limit
+submit. Type `[[` to search for note targets, use Up/Down and Enter to insert
+a suggestion, or tap one. Escape dismisses suggestions; Ctrl/⌘ + Enter still
+captures the text. Completion preserves the rest of the draft, closes the link,
+and respects the character limit. A counter shows the current length using the browser's input-limit
 units (some emoji count as two), including after restoring an unfinished draft.
 It writes through the
 same primitive as `bn capture`, so the CLI and the browser produce identical

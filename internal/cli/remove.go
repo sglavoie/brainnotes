@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -23,14 +24,15 @@ func NewRemoveCmd() *cobra.Command {
 	opts := &removeOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "remove",
+		Use:   "remove [note]",
 		Short: "Move a selected note to the recoverable Trash folder",
-		Long: `Remove opens an fzf picker, then moves the selected note to Trash/ without
+		Long: `Remove accepts a note title (case-insensitive) or path, or opens an fzf
+picker when no note is supplied, then moves the selected note to Trash/ without
 rewriting backlinks. The original vault-relative folder is preserved below Trash/.
 The operation is journaled, so 'bn undo <id>' restores the note.
 
 Use --yes to skip the confirmation prompt.`,
-		Args:          cobra.NoArgs,
+		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -52,7 +54,7 @@ func runRemove(cmd *cobra.Command, args []string, opts *removeOptions) error {
 		return err
 	}
 
-	selected, err := pickNotes(v, cfg, false)
+	selected, err := removeSelection(v, cfg, args)
 	if err != nil {
 		return err
 	}
@@ -83,6 +85,17 @@ func runRemove(cmd *cobra.Command, args []string, opts *removeOptions) error {
 	_, err = fmt.Fprintf(out, "removed: %s -> %s\njournal_id: %s\nrecover with: bn undo %s\n",
 		result.Source.RelPath, result.Destination.RelPath, result.Journal.ID, result.Journal.ID)
 	return err
+}
+
+func removeSelection(v *vault.Vault, cfg *config.Config, args []string) ([]string, error) {
+	if len(args) == 0 {
+		return pickNotes(v, cfg, false)
+	}
+	note, err := resolveNoteTarget(v, args[0])
+	if err != nil {
+		return nil, err
+	}
+	return []string{note.Path}, nil
 }
 
 // selectedNoteRel translates the picker’s absolute note path into the

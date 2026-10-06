@@ -2777,6 +2777,194 @@ var BrainNotesApp = (() => {
     return save;
   };
 
+  // internal/web/static_src/source-wikilink.ts
+  var wikilinkContextAt = (doc2, pos) => {
+    const caret = Math.min(Math.max(0, pos), doc2.length);
+    const lineStart = doc2.lastIndexOf("\n", caret - 1) + 1;
+    const line = doc2.slice(lineStart, caret);
+    const open = line.lastIndexOf("[[");
+    if (open === -1) {
+      return null;
+    }
+    const query = line.slice(open + 2);
+    if (query.includes("]") || query.includes("[")) {
+      return null;
+    }
+    return { from: lineStart + open + 2, query };
+  };
+  var wikilinkOptions = (results) => {
+    const seen = /* @__PURE__ */ new Set();
+    return results.flatMap((result) => {
+      const label = (result.wikilink || "").trim();
+      if (label === "" || seen.has(label)) {
+        return [];
+      }
+      seen.add(label);
+      return [{ label, detail: wikilinkDetail(label, result.title) }];
+    });
+  };
+  var wikilinkDetail = (label, title) => {
+    const trimmed = (title || "").trim();
+    if (trimmed === "") {
+      return "";
+    }
+    const lastSegment = label.slice(label.lastIndexOf("/") + 1);
+    return trimmed === lastSegment ? "" : trimmed;
+  };
+  var wikilinkSearchURL = (endpoint, query, limit = 12) => {
+    const params = new URLSearchParams();
+    params.set("q", query);
+    params.set("limit", String(limit));
+    return `${endpoint}?${params.toString()}`;
+  };
+
+  // internal/web/static_src/capture-wikilink.ts
+  var modifiedKey = (event) => event.isComposing || event.ctrlKey || event.metaKey || event.altKey;
+  var CaptureWikilinks = class {
+    constructor(input, fetcher) {
+      this.input = input;
+      this.fetcher = fetcher;
+      this.list = input.ownerDocument.createElement("ul");
+      this.list.id = "capture-wikilinks";
+      this.list.className = "capture-wikilinks";
+      this.list.setAttribute("role", "listbox");
+      this.list.setAttribute("aria-label", "Note suggestions");
+      this.list.hidden = true;
+      (input.closest(".capture-controls") || input).after(this.list);
+      input.setAttribute("aria-autocomplete", "list");
+      input.setAttribute("aria-controls", this.list.id);
+      input.setAttribute("aria-haspopup", "listbox");
+      input.addEventListener("input", () => this.schedule());
+      input.addEventListener("click", () => this.schedule());
+      input.addEventListener("keyup", (event) => {
+        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) this.schedule();
+      });
+      input.addEventListener("blur", () => this.close());
+      input.addEventListener("compositionstart", () => {
+        this.composing = true;
+        this.close();
+      });
+      input.addEventListener("compositionend", () => {
+        this.composing = false;
+        this.schedule();
+      });
+      input.addEventListener("keydown", (event) => this.keydown(event));
+      this.list.addEventListener("mousedown", (event) => event.preventDefault());
+    }
+    input;
+    fetcher;
+    list;
+    options = [];
+    active = 0;
+    generation = 0;
+    timer;
+    request;
+    composing = false;
+    close() {
+      this.generation += 1;
+      clearTimeout(this.timer);
+      this.request?.abort();
+      this.list.hidden = true;
+      this.options = [];
+      this.input.removeAttribute("aria-activedescendant");
+    }
+    context() {
+      if (this.composing || this.input.disabled || this.input.selectionStart !== this.input.selectionEnd) return null;
+      const context = wikilinkContextAt(this.input.value, this.input.selectionStart);
+      return context && !/[#|]/.test(context.query) ? context : null;
+    }
+    schedule() {
+      this.close();
+      if (!this.context()) return;
+      const generation = this.generation;
+      this.timer = setTimeout(() => {
+        void this.search(generation);
+      }, 150);
+    }
+    async search(generation) {
+      const context = this.context();
+      if (!context) return;
+      const text3 = this.input.value;
+      const caret = this.input.selectionStart;
+      this.request = new AbortController();
+      try {
+        const response = await this.fetcher(wikilinkSearchURL("/api/search", context.query), {
+          headers: { Accept: "application/json" },
+          signal: this.request.signal
+        });
+        if (!response.ok || response.redirected) return;
+        const matches = wikilinkOptions(normalizeSearchResults(await response.json()));
+        if (!this.isCurrent(generation, text3, caret)) return;
+        this.options = matches;
+        this.active = 0;
+        this.render();
+      } catch {
+        if (generation === this.generation) this.close();
+      }
+    }
+    isCurrent(generation, text3, caret) {
+      return generation === this.generation && this.input.isConnected && !this.input.disabled && this.input.value === text3 && this.input.selectionStart === caret && this.context() !== null;
+    }
+    render() {
+      this.list.replaceChildren();
+      this.list.hidden = this.options.length === 0;
+      this.options.forEach((option, index) => {
+        const row = this.input.ownerDocument.createElement("li");
+        row.id = `${this.list.id}-${index}`;
+        row.setAttribute("role", "option");
+        row.textContent = option.detail ? `${option.label} \u2014 ${option.detail}` : option.label;
+        row.addEventListener("click", () => this.choose(index));
+        this.list.append(row);
+      });
+      this.highlight();
+    }
+    highlight() {
+      Array.from(this.list.children).forEach((row2, index) => {
+        row2.setAttribute("aria-selected", String(index === this.active));
+      });
+      const row = this.list.children[this.active];
+      if (row) {
+        this.input.setAttribute("aria-activedescendant", row.id);
+        row.scrollIntoView?.({ block: "nearest" });
+      }
+    }
+    keydown(event) {
+      if (modifiedKey(event)) return;
+      if (event.key === "Escape") {
+        this.close();
+        return;
+      }
+      if (this.list.hidden) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.choose(this.active);
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const direction = event.key === "ArrowDown" ? 1 : -1;
+        this.active = (this.active + direction + this.options.length) % this.options.length;
+        this.highlight();
+      } else if (event.key === "Tab") this.close();
+    }
+    choose(index) {
+      const context = this.context();
+      const option = this.options[index];
+      if (!context || !option) return;
+      const caret = this.input.selectionStart;
+      const closed = this.input.value.slice(caret, caret + 2) === "]]";
+      const insertion = option.label + (closed ? "" : "]]");
+      const length = this.input.value.length - (caret - context.from) + insertion.length;
+      if (this.input.maxLength >= 0 && length > this.input.maxLength) {
+        this.close();
+        return;
+      }
+      this.input.setRangeText(insertion, context.from, caret, "end");
+      if (closed) this.input.setSelectionRange(this.input.selectionStart + 2, this.input.selectionStart + 2);
+      this.close();
+      this.input.focus();
+      this.input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  };
+
   // internal/web/static_src/capture.ts
   var captureFocusReturn = (input, submit) => {
     const doc2 = input.ownerDocument;
@@ -2802,6 +2990,7 @@ var BrainNotesApp = (() => {
       this.fetcher = fetcher;
       this.csrfToken = root.dataset.captureCsrf || "";
       this.saveDraft = bindCaptureDraft(root, input);
+      this.wikilinks = new CaptureWikilinks(input, fetcher);
       this.updateCount();
       input.addEventListener("input", () => this.updateCount());
       submit.addEventListener("click", () => {
@@ -2823,6 +3012,7 @@ var BrainNotesApp = (() => {
     fetcher;
     saveDraft;
     csrfToken;
+    wikilinks;
     updateCount() {
       const count4 = this.root.querySelector("[data-capture-count]");
       if (count4 && this.input.maxLength >= 0) {
@@ -2872,6 +3062,7 @@ var BrainNotesApp = (() => {
         this.setStatus("Quick capture is unavailable.", "is-error");
         return;
       }
+      this.wikilinks.close();
       this.input.disabled = true;
       this.submit.disabled = true;
       const returnFocus = captureFocusReturn(this.input, this.submit);
@@ -44636,47 +44827,6 @@ var BrainNotesApp = (() => {
       return true;
     }
   });
-
-  // internal/web/static_src/source-wikilink.ts
-  var wikilinkContextAt = (doc2, pos) => {
-    const caret = Math.min(Math.max(0, pos), doc2.length);
-    const lineStart = doc2.lastIndexOf("\n", caret - 1) + 1;
-    const line = doc2.slice(lineStart, caret);
-    const open = line.lastIndexOf("[[");
-    if (open === -1) {
-      return null;
-    }
-    const query = line.slice(open + 2);
-    if (query.includes("]") || query.includes("[")) {
-      return null;
-    }
-    return { from: lineStart + open + 2, query };
-  };
-  var wikilinkOptions = (results) => {
-    const seen = /* @__PURE__ */ new Set();
-    return results.flatMap((result) => {
-      const label = (result.wikilink || "").trim();
-      if (label === "" || seen.has(label)) {
-        return [];
-      }
-      seen.add(label);
-      return [{ label, detail: wikilinkDetail(label, result.title) }];
-    });
-  };
-  var wikilinkDetail = (label, title) => {
-    const trimmed = (title || "").trim();
-    if (trimmed === "") {
-      return "";
-    }
-    const lastSegment = label.slice(label.lastIndexOf("/") + 1);
-    return trimmed === lastSegment ? "" : trimmed;
-  };
-  var wikilinkSearchURL = (endpoint, query, limit = 12) => {
-    const params = new URLSearchParams();
-    params.set("q", query);
-    params.set("limit", String(limit));
-    return `${endpoint}?${params.toString()}`;
-  };
 
   // internal/web/static_src/source-editor-view.ts
   var programmaticChange = Annotation.define();

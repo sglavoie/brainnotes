@@ -166,14 +166,14 @@ bn unpin "Reading List"
 bn unpin --dry-run "Reading List"
 ```
 
-### `bn remove` — move a selected note to Trash
+### `bn remove` — move a note to Trash
 
 ```sh
-bn remove [--yes]
+bn remove [note] [--yes]
 ```
 
-Opens the normal single-note `fzf` picker. Selecting a note asks for
-confirmation:
+Accepts a note title (case-insensitive) or path. Without a note argument, opens
+the normal single-note `fzf` picker. Both forms ask for confirmation:
 
 ```text
 Move Projects/Ideas.md to Trash? [y/N]
@@ -192,6 +192,8 @@ command.
 
 ```sh
 bn remove
+bn remove "Remove me"
+bn remove Projects/Ideas.md --yes
 bn remove --yes
 # restore the printed journal entry:
 bn undo 20260817T093000.000000000Z-1a2b3c4d

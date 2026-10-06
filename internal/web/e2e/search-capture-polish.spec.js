@@ -40,3 +40,22 @@ test("capture count follows restored drafts and native emoji length enforcement"
   await expect(count).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test("capture completes body-matched wikilinks and keeps the completed draft on reload", async ({ page }) => {
+  await page.goto("/");
+  const input = page.locator("[data-capture-input]");
+  await input.fill("Remember [[Cartographer");
+  const suggestion = page.getByRole("option", { name: "Notes/Fieldwork", exact: true });
+  await expect(suggestion).toBeVisible();
+  await input.press("Enter");
+  await expect(input).toHaveValue("Remember [[Notes/Fieldwork]]");
+  await expect(page.locator("[data-capture-count]")).toHaveText("28 / 2000 characters");
+  await page.reload();
+  await expect(input).toHaveValue("Remember [[Notes/Fieldwork]]");
+  await input.fill("[[Cartographer");
+  await expect(suggestion).toBeVisible();
+  await suggestion.click();
+  await expect(input).toHaveValue("[[Notes/Fieldwork]]");
+  await expect(input).toBeFocused();
+  await expect(suggestion).toBeHidden();
+});

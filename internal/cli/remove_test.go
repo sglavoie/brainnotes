@@ -151,14 +151,14 @@ func TestRemove_EmptyOrDismissedPickerIsNoOp(t *testing.T) {
 	})
 }
 
-func TestRemove_RejectsPositionalArguments(t *testing.T) {
-	root := buildRemoveFixture(t)
+func TestRemove_RejectsMultipleArguments(t *testing.T) {
+	buildRemoveFixture(t)
 
-	_, err := runCLI(t, "", "remove", filepath.Join(root, "Projects", "Nested", "Remove me.md"))
+	_, err := runCLI(t, "", "remove", "one", "two")
 	if err == nil {
-		t.Fatal("remove should reject positional arguments")
+		t.Fatal("remove should reject multiple arguments")
 	}
-	if !strings.Contains(err.Error(), "unknown command") && !strings.Contains(err.Error(), "accepts 0 arg(s)") {
+	if !strings.Contains(err.Error(), "unknown command") && !strings.Contains(err.Error(), "accepts at most 1 arg(s)") {
 		t.Fatalf("unexpected argument error: %v", err)
 	}
 }
@@ -180,5 +180,72 @@ func TestRemove_PropagatesTrashFailureWithoutArtifacts(t *testing.T) {
 	}
 	if got := len(loadJournalEntries(t, root)); got != 0 {
 		t.Fatalf("journal entry count = %d, want 0", got)
+	}
+}
+
+func TestRemove_ExplicitTargetSkipsPickerAndCanBeUndone(t *testing.T) {
+	for _, target := range []string{"remove ME", "Projects/Nested/Remove me.md"} {
+		t.Run(target, func(t *testing.T) {
+			root := buildRemoveFixture(t)
+			original := notePicker
+			t.Cleanup(func() { notePicker = original })
+			notePicker = func(items []string, extraArgs []string) ([]string, error) {
+				t.Fatal("explicit target must not open picker")
+				return nil, nil
+			}
+			out, err := runCLI(t, "yes\n", "remove", target)
+			if err != nil {
+				t.Fatalf("remove: %v\n%s", err, out)
+			}
+			if !strings.Contains(out, "Move Projects/Nested/Remove me.md to Trash? [y/N]") {
+				t.Fatalf("missing confirmation: %s", out)
+			}
+			entries := loadJournalEntries(t, root)
+			if len(entries) != 1 {
+				t.Fatalf("journal entries = %d", len(entries))
+			}
+			if _, err := os.Stat(filepath.Join(root, "Trash/Projects/Nested/Remove me.md")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := runCLI(t, "", "undo", entries[0].ID); err != nil {
+				t.Fatalf("undo: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(root, "Projects/Nested/Remove me.md")); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestRemove_ExplicitTargetDeclined(t *testing.T) {
+	root := buildRemoveFixture(t)
+	if _, err := runCLI(t, "n\n", "remove", "Remove me"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Projects/Nested/Remove me.md")); err != nil {
+		t.Fatal(err)
+	}
+	if len(loadJournalEntries(t, root)) != 0 {
+		t.Fatal("declining created a journal entry")
+	}
+}
+
+func TestRemove_ExplicitInvalidTargetsDoNotWrite(t *testing.T) {
+	for _, target := range []string{"missing.md", "../outside.md", "Remove me"} {
+		t.Run(target, func(t *testing.T) {
+			root := buildRemoveFixture(t)
+			if err := os.WriteFile(filepath.Join(root, "Remove me.md"), []byte("duplicate"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := runCLI(t, "", "remove", target, "--yes"); err == nil {
+				t.Fatal("invalid or ambiguous target accepted")
+			}
+			if _, err := os.Stat(filepath.Join(root, "Projects/Nested/Remove me.md")); err != nil {
+				t.Fatal(err)
+			}
+			if len(loadJournalEntries(t, root)) != 0 {
+				t.Fatal("invalid target created a journal entry")
+			}
+		})
 	}
 }

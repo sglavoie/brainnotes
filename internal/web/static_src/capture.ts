@@ -6,6 +6,7 @@ import {
   type CaptureResult,
 } from "./api";
 import { bindCaptureDraft } from "./capture-draft";
+import { CaptureWikilinks } from "./capture-wikilink";
 import { jsonPostRequest, readResponsePayload } from "./daily-brief-http";
 import { queryElement } from "./dom";
 import { setStatusText } from "./status";
@@ -37,6 +38,7 @@ const captureFocusReturn = (input: HTMLTextAreaElement, submit: HTMLButtonElemen
 class Capture {
   private readonly saveDraft: () => void;
   private readonly csrfToken: string;
+  private readonly wikilinks: CaptureWikilinks;
 
   constructor(
     private readonly root: HTMLElement,
@@ -48,6 +50,7 @@ class Capture {
   ) {
     this.csrfToken = root.dataset.captureCsrf || "";
     this.saveDraft = bindCaptureDraft(root, input);
+    this.wikilinks = new CaptureWikilinks(input, fetcher);
     this.updateCount();
     input.addEventListener("input", () => this.updateCount());
     submit.addEventListener("click", () => { void this.run(); });
@@ -114,6 +117,7 @@ class Capture {
       this.setStatus("Quick capture is unavailable.", "is-error");
       return;
     }
+    this.wikilinks.close();
     this.input.disabled = true;
     this.submit.disabled = true;
     const returnFocus = captureFocusReturn(this.input, this.submit);

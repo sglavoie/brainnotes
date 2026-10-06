@@ -1470,6 +1470,28 @@ code {
   margin-top: 0.4rem;
 }
 
+.capture-wikilinks {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  background: var(--bn-raised);
+}
+
+.capture-wikilinks [role="option"] {
+  padding: 0.5rem;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.capture-wikilinks [aria-selected="true"] {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: -2px;
+}
+
 .capture-recent {
   margin: 0.2rem 0 0;
   padding: 0;
@@ -1484,7 +1506,6 @@ code {
   font-size: 0.82rem;
   overflow-wrap: anywhere;
 }
-
 /* internal/web/static_src/css/brief-actions.css */
 .brief-action-button,
 .brief-insight-copy {
