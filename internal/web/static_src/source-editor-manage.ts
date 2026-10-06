@@ -56,6 +56,7 @@ type ManageAction = {
   allowDirty: boolean;
   plan(): PlannedRequest | string;
   after(outcome: ManageOutcome): void;
+  confirmed?(outcome: ManageOutcome): boolean;
   refused?(outcome: ManageOutcome): string | null;
 };
 
@@ -63,22 +64,37 @@ type PlannedRequest = { url: string; body: URLSearchParams };
 
 export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
   const { elements, config, host } = deps;
+  let status = elements.status;
+  let busy = false;
+  let disabled = new Map<HTMLButtonElement, boolean>();
   const setStatus = (message: string, kind: StatusKind = ""): void =>
-    setStatusText(elements.status, message, kind);
+    setStatusText(status, message, kind);
+  const setBusy = (value: boolean): void => {
+    busy = value;
+    if (value) {
+      disabled = disableActions(actions, elements);
+    } else {
+      for (const [button, wasDisabled] of disabled) button.disabled = wasDisabled;
+      disabled.clear();
+    }
+  };
 
   const gate = createDirtyGate({
     elements: elements.gate,
     dirty: host.dirty,
     save: host.save,
     setStatus,
+    setBusy,
   });
 
   const run = async (action: ManageAction): Promise<void> => {
+    if (busy) return;
     const planned = action.plan();
     if (typeof planned === "string") {
       setStatus(planned, "is-error");
       return;
     }
+    setBusy(true);
     setStatus(`${action.label}…`, "is-loading");
     try {
       const outcome = await postManagement({
@@ -87,13 +103,17 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
         token: config.token,
         fetch: deps.fetch,
       });
-      if (!outcome.ok) {
+      if (isUnconfirmed(action, outcome)) {
+        setStatus(unconfirmedAction(action), "is-error");
+      } else if (!outcome.ok) {
         setStatus(action.refused?.(outcome) ?? outcome.message, "is-error");
-        return;
+      } else {
+        action.after(outcome);
       }
-      action.after(outcome);
     } catch {
-      setStatus(`${action.label} could not be sent. Nothing was changed.`, "is-error");
+      setStatus(unconfirmedAction(action), "is-error");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -114,28 +134,56 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
   };
 
   const actions = buildActions(deps, { setStatus, settle });
-  const unbinds = actions.map((action) => bindAction(action, gate, run));
+  const select = (action: ManageAction): boolean => {
+    if (busy) return false;
+    status = action.button?.closest("[data-source-manage-feedback]")
+      ?.querySelector<HTMLElement>("[data-source-manage-status]") ?? elements.status;
+    return true;
+  };
+  const unbinds = actions.map((action) => bindAction(action, gate, run, select));
   return (): void => {
     for (const unbind of unbinds) {
       unbind();
     }
     gate.dispose();
+    setBusy(false);
   };
 };
 
 const bindAction = (
   action: ManageAction,
   gate: DirtyGate,
-  run: (action: ManageAction) => Promise<void>
+  run: (action: ManageAction) => Promise<void>,
+  select: (action: ManageAction) => boolean
 ): (() => void) => {
-  const onClick = (): void =>
+  const onClick = (): void => {
+    if (!select(action)) return;
     gate.guard({
       label: action.label,
       allowDirty: action.allowDirty,
       run: () => run(action),
     });
+  };
   action.button?.addEventListener("click", onClick);
   return (): void => action.button?.removeEventListener("click", onClick);
+};
+
+const isUnconfirmed = (action: ManageAction, outcome: ManageOutcome): boolean =>
+  outcome.unconfirmed || (outcome.ok && action.confirmed?.(outcome) === false);
+
+const unconfirmedAction = (action: ManageAction): string => {
+  const destination = action.button?.hasAttribute("data-source-capture") ? "your inbox" : "the note or History";
+  return `Couldn't confirm: ${action.label}. Check ${destination} before retrying; the action may already have succeeded. Your inputs are still here.`;
+};
+
+const disableActions = (actions: ManageAction[], elements: SourceManageElements): Map<HTMLButtonElement, boolean> => {
+  const disabled = new Map<HTMLButtonElement, boolean>();
+  for (const button of [...actions.map((action) => action.button), elements.gate.save, elements.gate.proceed]) {
+    if (!button) continue;
+    disabled.set(button, button.disabled);
+    button.disabled = true;
+  }
+  return disabled;
 };
 
 type ActionContext = {
@@ -166,6 +214,7 @@ const identityActions = (deps: SourceManageDeps): ManageAction[] => {
           body: withField(buildNoteKeyMutationForm(keyed(config, host)), "title", title),
         })),
       after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key)),
+      confirmed: (outcome) => outcome.key !== "",
     },
     {
       button: elements.move,
@@ -177,6 +226,7 @@ const identityActions = (deps: SourceManageDeps): ManageAction[] => {
           body: withField(buildNoteKeyMutationForm(keyed(config, host)), "folder", folder),
         })),
       after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key)),
+      confirmed: (outcome) => outcome.key !== "",
     },
     {
       button: elements.trash,

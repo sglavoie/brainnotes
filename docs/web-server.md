@@ -11,6 +11,14 @@ updates incoming wikilinks. If the editor has unsaved text, save it first using
 the prompt or cancel the rename. The **Save** button saves the source text;
 **Rename** applies the title change.
 
+Editor management actions show progress and results beside their controls.
+While an action or its **Save first** step is running, other management actions
+are disabled to prevent repeated submissions. Canceling during **Save first**
+cancels the follow-up action; the save itself can still finish.
+If a response is lost or cannot confirm success, the editor keeps the action's
+inputs and asks you to check the inbox, note, or History before retrying. It does
+not retry automatically or navigate to an unconfirmed rename/move destination.
+
 **Find** opens search and replacement within the source editor, including text
 outside the visible portion of long notes. Ctrl/⌘ + F opens it while editing;
 Enter and Shift + Enter in its Find field move between matches. Escape closes

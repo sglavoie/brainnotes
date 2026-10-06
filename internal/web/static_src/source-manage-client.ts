@@ -14,6 +14,7 @@ import { normalizeParamValue } from "./filters";
 
 export type ManageOutcome = {
   ok: boolean;
+  unconfirmed: boolean;
   status: number;
   message: string;
   // key and relPath are the note the operation *ended* at, which is not the one
@@ -56,6 +57,7 @@ export const readManageOutcome = (
   if (!ok || record.ok === false) {
     return {
       ok: false,
+      unconfirmed: false,
       status,
       message: normalizeManagementErrorMessage(status, payload),
       key: "",
@@ -65,7 +67,8 @@ export const readManageOutcome = (
     };
   }
   return {
-    ok: true,
+    ok: record.ok === true,
+    unconfirmed: record.ok !== true,
     status,
     message: normalizeParamValue(record.message) || "Done.",
     key: normalizeParamValue(record.key),

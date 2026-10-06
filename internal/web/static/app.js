@@ -46743,6 +46743,7 @@ var BrainNotesApp = (() => {
   var createDirtyGate = (options) => {
     const { elements } = options;
     let held = null;
+    let saving = false;
     const hide = () => {
       held = null;
       if (elements.panel) {
@@ -46770,34 +46771,40 @@ var BrainNotesApp = (() => {
       hide();
       void action.run();
     };
-    const onSave = () => {
+    const onSave = async () => {
       const action = held;
-      if (!action) {
+      if (!action || saving) return;
+      saving = true;
+      options.setBusy?.(true);
+      try {
+        await options.save();
+      } catch {
+        if (held === action) options.setStatus("Couldn't confirm the save. Check the editor's save status before continuing.", "is-error");
+        return;
+      } finally {
+        saving = false;
+        options.setBusy?.(false);
+      }
+      if (held !== action) return;
+      if (options.dirty()) {
+        options.setStatus(
+          `The note was not saved, so ${lowerFirst(action.label)} has not been done.`,
+          "is-error"
+        );
         return;
       }
-      void options.save().then(() => {
-        if (options.dirty()) {
-          options.setStatus(
-            `The note was not saved, so ${lowerFirst(action.label)} has not been done.`,
-            "is-error"
-          );
-          return;
-        }
-        take(action);
-      });
+      take(action);
     };
     const onProceed = () => {
       const action = held;
-      if (action?.allowDirty) {
+      if (!saving && action?.allowDirty) {
         take(action);
       }
     };
     const onCancel = () => {
       const action = held;
       hide();
-      if (action) {
-        options.setStatus(`${action.label}: canceled. Nothing was changed.`, "");
-      }
+      if (action) options.setStatus(cancellationMessage(action, saving), "");
     };
     elements.save?.addEventListener("click", onSave);
     elements.proceed?.addEventListener("click", onProceed);
@@ -46805,6 +46812,7 @@ var BrainNotesApp = (() => {
     hide();
     return {
       guard(action) {
+        if (saving) return;
         if (!options.dirty()) {
           take(action);
           return;
@@ -46813,12 +46821,14 @@ var BrainNotesApp = (() => {
       },
       pending: () => held,
       dispose() {
+        held = null;
         elements.save?.removeEventListener("click", onSave);
         elements.proceed?.removeEventListener("click", onProceed);
         elements.cancel?.removeEventListener("click", onCancel);
       }
     };
   };
+  var cancellationMessage = (action, saving) => saving ? `${action.label}: canceled. The save is still in progress; this action will not run.` : `${action.label}: canceled. Nothing was changed.`;
   var gateMessage = (action) => {
     const opening = `${action.label} has not been done. This editor is holding text that is not in the vault.`;
     return action.allowDirty ? `${opening} Saving first keeps both; going ahead anyway leaves your text here, and the note on disk will have moved on.` : `${opening} This one changes where the note lives, which is where your unsaved text is filed too \u2014 so it has to be saved first, or not done.`;
@@ -46844,6 +46854,7 @@ var BrainNotesApp = (() => {
     if (!ok || record.ok === false) {
       return {
         ok: false,
+        unconfirmed: false,
         status,
         message: normalizeManagementErrorMessage(status, payload),
         key: "",
@@ -46853,7 +46864,8 @@ var BrainNotesApp = (() => {
       };
     }
     return {
-      ok: true,
+      ok: record.ok === true,
+      unconfirmed: record.ok !== true,
       status,
       message: normalizeParamValue(record.message) || "Done.",
       key: normalizeParamValue(record.key),
@@ -46875,19 +46887,34 @@ var BrainNotesApp = (() => {
   // internal/web/static_src/source-editor-manage.ts
   var initSourceManage = (deps) => {
     const { elements, config: config2, host } = deps;
-    const setStatus2 = (message, kind = "") => setStatusText(elements.status, message, kind);
+    let status = elements.status;
+    let busy = false;
+    let disabled = /* @__PURE__ */ new Map();
+    const setStatus2 = (message, kind = "") => setStatusText(status, message, kind);
+    const setBusy = (value) => {
+      busy = value;
+      if (value) {
+        disabled = disableActions(actions, elements);
+      } else {
+        for (const [button, wasDisabled] of disabled) button.disabled = wasDisabled;
+        disabled.clear();
+      }
+    };
     const gate = createDirtyGate({
       elements: elements.gate,
       dirty: host.dirty,
       save: host.save,
-      setStatus: setStatus2
+      setStatus: setStatus2,
+      setBusy
     });
     const run = async (action) => {
+      if (busy) return;
       const planned = action.plan();
       if (typeof planned === "string") {
         setStatus2(planned, "is-error");
         return;
       }
+      setBusy(true);
       setStatus2(`${action.label}\u2026`, "is-loading");
       try {
         const outcome = await postManagement({
@@ -46896,13 +46923,17 @@ var BrainNotesApp = (() => {
           token: config2.token,
           fetch: deps.fetch
         });
-        if (!outcome.ok) {
+        if (isUnconfirmed(action, outcome)) {
+          setStatus2(unconfirmedAction(action), "is-error");
+        } else if (!outcome.ok) {
           setStatus2(action.refused?.(outcome) ?? outcome.message, "is-error");
-          return;
+        } else {
+          action.after(outcome);
         }
-        action.after(outcome);
       } catch {
-        setStatus2(`${action.label} could not be sent. Nothing was changed.`, "is-error");
+        setStatus2(unconfirmedAction(action), "is-error");
+      } finally {
+        setBusy(false);
       }
     };
     const settle = (message) => {
@@ -46917,22 +46948,45 @@ var BrainNotesApp = (() => {
       void host.reload();
     };
     const actions = buildActions(deps, { setStatus: setStatus2, settle });
-    const unbinds = actions.map((action) => bindAction(action, gate, run));
+    const select = (action) => {
+      if (busy) return false;
+      status = action.button?.closest("[data-source-manage-feedback]")?.querySelector("[data-source-manage-status]") ?? elements.status;
+      return true;
+    };
+    const unbinds = actions.map((action) => bindAction(action, gate, run, select));
     return () => {
       for (const unbind of unbinds) {
         unbind();
       }
       gate.dispose();
+      setBusy(false);
     };
   };
-  var bindAction = (action, gate, run) => {
-    const onClick = () => gate.guard({
-      label: action.label,
-      allowDirty: action.allowDirty,
-      run: () => run(action)
-    });
+  var bindAction = (action, gate, run, select) => {
+    const onClick = () => {
+      if (!select(action)) return;
+      gate.guard({
+        label: action.label,
+        allowDirty: action.allowDirty,
+        run: () => run(action)
+      });
+    };
     action.button?.addEventListener("click", onClick);
     return () => action.button?.removeEventListener("click", onClick);
+  };
+  var isUnconfirmed = (action, outcome) => outcome.unconfirmed || outcome.ok && action.confirmed?.(outcome) === false;
+  var unconfirmedAction = (action) => {
+    const destination = action.button?.hasAttribute("data-source-capture") ? "your inbox" : "the note or History";
+    return `Couldn't confirm: ${action.label}. Check ${destination} before retrying; the action may already have succeeded. Your inputs are still here.`;
+  };
+  var disableActions = (actions, elements) => {
+    const disabled = /* @__PURE__ */ new Map();
+    for (const button of [...actions.map((action) => action.button), elements.gate.save, elements.gate.proceed]) {
+      if (!button) continue;
+      disabled.set(button, button.disabled);
+      button.disabled = true;
+    }
+    return disabled;
   };
   var buildActions = (deps, ctx) => [
     ...identityActions(deps),
@@ -46951,7 +47005,8 @@ var BrainNotesApp = (() => {
           url: endpoints.rename,
           body: withField(buildNoteKeyMutationForm(keyed(config2, host)), "title", title)
         })),
-        after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key))
+        after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key)),
+        confirmed: (outcome) => outcome.key !== ""
       },
       {
         button: elements.move,
@@ -46961,7 +47016,8 @@ var BrainNotesApp = (() => {
           url: endpoints.move,
           body: withField(buildNoteKeyMutationForm(keyed(config2, host)), "folder", folder)
         })),
-        after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key))
+        after: (outcome) => host.navigate(editorURLForKey(endpoints.editor, outcome.key)),
+        confirmed: (outcome) => outcome.key !== ""
       },
       {
         button: elements.trash,

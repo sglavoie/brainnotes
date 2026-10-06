@@ -32,6 +32,7 @@ export type DirtyGateOptions = {
   dirty(): boolean;
   save(): Promise<void>;
   setStatus(message: string, kind: StatusKind): void;
+  setBusy?(busy: boolean): void;
 };
 
 export type GuardedAction = {
@@ -51,6 +52,7 @@ export type DirtyGate = {
 export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
   const { elements } = options;
   let held: GuardedAction | null = null;
+  let saving = false;
 
   const hide = (): void => {
     held = null;
@@ -83,30 +85,35 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
     void action.run();
   };
 
-  const onSave = (): void => {
+  const onSave = async (): Promise<void> => {
     const action = held;
-    if (!action) {
+    if (!action || saving) return;
+    saving = true;
+    options.setBusy?.(true);
+    try {
+      await options.save();
+    } catch {
+      if (held === action) options.setStatus("Couldn't confirm the save. Check the editor's save status before continuing.", "is-error");
+      return;
+    } finally {
+      saving = false;
+      options.setBusy?.(false);
+    }
+    // Cancel or disposal invalidates the continuation, even if saving succeeded.
+    if (held !== action) return;
+    if (options.dirty()) {
+      options.setStatus(
+        `The note was not saved, so ${lowerFirst(action.label)} has not been done.`,
+        "is-error"
+      );
       return;
     }
-    void options.save().then(() => {
-      // Re-asked rather than assumed. A save can be refused — a stale revision,
-      // a note that is gone, an answer nobody got — and taking the action on the
-      // strength of having *tried* to save is how the text this gate exists to
-      // protect gets left behind.
-      if (options.dirty()) {
-        options.setStatus(
-          `The note was not saved, so ${lowerFirst(action.label)} has not been done.`,
-          "is-error"
-        );
-        return;
-      }
-      take(action);
-    });
+    take(action);
   };
 
   const onProceed = (): void => {
     const action = held;
-    if (action?.allowDirty) {
+    if (!saving && action?.allowDirty) {
       take(action);
     }
   };
@@ -114,9 +121,7 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
   const onCancel = (): void => {
     const action = held;
     hide();
-    if (action) {
-      options.setStatus(`${action.label}: canceled. Nothing was changed.`, "");
-    }
+    if (action) options.setStatus(cancellationMessage(action, saving), "");
   };
 
   elements.save?.addEventListener("click", onSave);
@@ -126,6 +131,7 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
 
   return {
     guard(action): void {
+      if (saving) return;
       if (!options.dirty()) {
         take(action);
         return;
@@ -134,12 +140,17 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
     },
     pending: (): GuardedAction | null => held,
     dispose(): void {
+      held = null;
       elements.save?.removeEventListener("click", onSave);
       elements.proceed?.removeEventListener("click", onProceed);
       elements.cancel?.removeEventListener("click", onCancel);
     },
   };
 };
+
+const cancellationMessage = (action: GuardedAction, saving: boolean): string => saving
+  ? `${action.label}: canceled. The save is still in progress; this action will not run.`
+  : `${action.label}: canceled. Nothing was changed.`;
 
 // gateMessage says what has *not* happened first, then what the choice is. The
 // order matters: somebody who has just pressed a button they now suspect was

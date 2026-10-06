@@ -86,7 +86,7 @@ async function createNote(page, title) {
   await page.locator("[data-source-note-create]").click();
   // The status echoes the path the *server* filed the note at, so asserting it
   // and then the disk is asserting the page did not invent either.
-  await expect(page.locator("[data-source-manage-status]")).toContainText(`${title}.md`);
+  await expect(page.locator('[data-source-manage-feedback="create"] [data-source-manage-status]')).toContainText(`${title}.md`);
   expect(existsSync(vaultPath(`${title}.md`)), "the created note is not in the vault").toBe(true);
 }
 
@@ -350,7 +350,7 @@ test("unsaved text holds a rename until it is saved, and nothing is left under t
 
   await page.locator("[data-source-gate-cancel]").click();
   await expect(gate).toBeHidden();
-  await expect(page.locator("[data-source-manage-status]")).toContainText(
+  await expect(page.locator('[data-source-manage-feedback="rename"] [data-source-manage-status]')).toContainText(
     "Rename this note: canceled.",
   );
   expect(existsSync(vaultPath(`${title}.md`))).toBe(true);
@@ -398,7 +398,7 @@ test("a note created from the editor survives a property, a pin, a move, a trash
   // the next action from arriving while this one still holds the Git safety
   // lock, which is taken without waiting and answers a 409 rather than queueing
   // (the mechanism is spelled out where the pin and unpin are paired, below).
-  await expect(page.locator("[data-source-manage-status]")).toHaveText("Pinned note.");
+  await expect(page.locator('[data-source-manage-feedback="pins"] [data-source-manage-status]')).toHaveText("Pinned note.");
   // A pin does not touch this note's bytes as far as the editor is concerned, so
   // it does not reload: the file is the only witness.
   expect(readFileSync(vaultPath(`${title}.md`), "utf8")).toContain("pinned:");
@@ -418,7 +418,7 @@ test("a note created from the editor survives a property, a pin, a move, a trash
   await openBeta(page);
   await openManage(page);
   await page.locator("[data-source-undo]").click();
-  await expect(page.locator("[data-source-manage-status]")).toHaveClass(/is-success/);
+  await expect(page.locator('[data-source-manage-feedback="undo"] [data-source-manage-status]')).toHaveClass(/is-success/);
 
   await expect.poll(() => existsSync(vaultPath("Notes", `${title}.md`))).toBe(true);
   const restored = readFileSync(vaultPath("Notes", `${title}.md`), "utf8");
@@ -463,10 +463,10 @@ test("a property removed, a pin lifted, and a line captured over unsaved text", 
   // and the browser gets a 409. Unwaited-for, that is a test that removes
   // nothing and says so only in the file it reads back.
   await page.locator("[data-source-pin]").click();
-  await expect(page.locator("[data-source-manage-status]")).toHaveText("Pinned note.");
+  await expect(page.locator('[data-source-manage-feedback="pins"] [data-source-manage-status]')).toHaveText("Pinned note.");
   expect(readFileSync(notePath, "utf8")).toContain("pinned:");
   await page.locator("[data-source-unpin]").click();
-  await expect(page.locator("[data-source-manage-status]")).toHaveText("Unpinned note.");
+  await expect(page.locator('[data-source-manage-feedback="pins"] [data-source-manage-status]')).toHaveText("Unpinned note.");
   expect(readFileSync(notePath, "utf8")).not.toContain("pinned:");
 
   await caretToEnd(page);
@@ -492,7 +492,7 @@ test("a property removed, a pin lifted, and a line captured over unsaved text", 
   // emptiness is the answer having arrived — a class this element already had is
   // not.
   await expect(page.locator("[data-source-capture-text]")).toHaveValue("");
-  await expect(page.locator("[data-source-manage-status]")).toHaveClass(/is-success/);
+  await expect(page.locator('[data-source-manage-feedback="capture"] [data-source-manage-status]')).toHaveClass(/is-success/);
   expect(readFileSync(inbox, "utf8")).toContain(captured);
 
   // Proceeding is not saving. The text the gate asked about is still unsaved,

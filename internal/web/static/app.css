@@ -7790,6 +7790,13 @@ code {
   color: var(--bn-accent-subtle-text);
   font-weight: 600;
 }
+
+.source-editor-manage-action:disabled,
+.source-editor-gate-save:disabled,
+.source-editor-gate-proceed:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 /* internal/web/static_src/css/settings.css */
 .settings-actions {
   display: flex;

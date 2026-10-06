@@ -59,7 +59,7 @@
         <a href="/history?path={{ .RelPath }}&amp;path_match=exact" data-note-history>History for this note</a>
       </div>
 
-      <div class="source-editor-title">
+      <div class="source-editor-title" data-source-manage-feedback="rename">
         <label class="source-editor-manage-field" for="source-editor-rename-title">Note title</label>
         <div class="source-editor-title-controls">
           <input type="text" id="source-editor-rename-title" class="source-editor-manage-input" data-source-rename-title value="{{ .NoteTitle }}" autocomplete="off" aria-describedby="source-editor-title-hint">
@@ -180,16 +180,17 @@
         <summary>This note and this vault</summary>
 
         <div class="source-editor-manage-groups">
-          <div class="source-editor-manage-group">
+          <div class="source-editor-manage-group" data-source-manage-feedback="location">
             <h4>Where this note lives</h4>
             <label class="source-editor-manage-field" for="source-editor-move-folder">Folder</label>
             <input type="text" id="source-editor-move-folder" class="source-editor-manage-input" data-source-move-folder autocomplete="off">
             <button type="button" class="source-editor-manage-action" data-source-move>Move</button>
 
             <button type="button" class="source-editor-manage-action is-destructive" data-source-trash>Move to Trash</button>
+            <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
           </div>
 
-          <div class="source-editor-manage-group">
+          <div class="source-editor-manage-group" data-source-manage-feedback="properties">
             <h4>Properties</h4>
             <label class="source-editor-manage-field" for="source-editor-property-name">Property</label>
             <input type="text" id="source-editor-property-name" class="source-editor-manage-input" data-source-property-name autocomplete="off">
@@ -197,32 +198,37 @@
             <input type="text" id="source-editor-property-value" class="source-editor-manage-input" data-source-property-value autocomplete="off">
             <button type="button" class="source-editor-manage-action" data-source-property-set>Set</button>
             <button type="button" class="source-editor-manage-action" data-source-property-unset>Remove</button>
+            <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
           </div>
 
-          <div class="source-editor-manage-group">
+          <div class="source-editor-manage-group" data-source-manage-feedback="pins">
             <h4>Pins</h4>
             <button type="button" class="source-editor-manage-action" data-source-pin>Pin this note</button>
             <button type="button" class="source-editor-manage-action" data-source-unpin>Unpin this note</button>
+            <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
           </div>
 
-          <div class="source-editor-manage-group">
+          <div class="source-editor-manage-group" data-source-manage-feedback="capture">
             <h4>Capture</h4>
             <label class="source-editor-manage-field" for="source-editor-capture-text">Line to capture</label>
             <textarea id="source-editor-capture-text" class="source-editor-manage-input" data-source-capture-text rows="2"></textarea>
             <button type="button" class="source-editor-manage-action" data-source-capture>Capture</button>
+            <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
           </div>
 
-          <div class="source-editor-manage-group">
+          <div class="source-editor-manage-group" data-source-manage-feedback="create">
             <h4>Create a note</h4>
             <label class="source-editor-manage-field" for="source-editor-note-create-target">Title or path</label>
             <input type="text" id="source-editor-note-create-target" class="source-editor-manage-input" data-source-note-create-target autocomplete="off">
             <button type="button" class="source-editor-manage-action" data-source-note-create>Create</button>
+            <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
           </div>
 
-          <div class="source-editor-manage-group">
+          <div class="source-editor-manage-group" data-source-manage-feedback="undo">
             <h4>Undo</h4>
             <p class="source-editor-manage-hint">Undoes the most recent change to this vault, whatever it was — including a rename or a trash from this page.</p>
             <button type="button" class="source-editor-manage-action" data-source-undo>Undo latest vault change</button>
+            <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
           </div>
         </div>
       </details>
