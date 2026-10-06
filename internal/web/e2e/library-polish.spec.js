@@ -114,3 +114,21 @@ test("pin errors and retry remain visible on a narrow screen", async ({ page }) 
   await expect(retry).toBeEnabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("an unconfirmed pin offers refresh without repeating the write", async ({ page }) => {
+  let writes = 0;
+  await page.route("**/api/pins/set", route => {
+    writes += 1;
+    return route.fulfill({ status: 200, contentType: "text/html", body: "Unexpected response" });
+  });
+  await page.goto("/library?q=Reading");
+  const row = page.locator("[data-overview-search-list] li").filter({ hasText: "Reading" }).first();
+  const pin = row.locator("[data-pin-button]");
+  await pin.click();
+  await expect(pin).toHaveAttribute("aria-pressed", "false");
+  await expect(row).toContainText("Couldn't confirm");
+  await row.getByRole("link", { name: "Refresh to check" }).click();
+  await expect(pin).toBeVisible();
+  await expect(pin).toHaveAttribute("aria-pressed", "false");
+  expect(writes).toBe(1);
+});

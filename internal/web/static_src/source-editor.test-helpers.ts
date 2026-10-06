@@ -64,8 +64,9 @@ export const editorMarkup = (): string => `
     <div class="source-editor-pane source-editor-pane-edit" data-source-pane="edit">
       <div data-source-surface></div>
     </div>
-    <div class="source-editor-pane source-editor-pane-preview" data-source-pane="preview">
+    <div class="source-editor-pane source-editor-pane-preview" tabindex="0" data-source-pane="preview">
       <p data-source-preview-status></p>
+      <button type="button" data-source-preview-retry hidden>Retry preview</button>
       <div class="note-body" data-source-preview></div>
     </div>
   </div>

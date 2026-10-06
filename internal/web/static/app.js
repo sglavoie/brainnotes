@@ -9071,6 +9071,32 @@ var BrainNotesApp = (() => {
     if (els) new NoteInsight(els, deps);
   };
 
+  // internal/web/static_src/pin-outcome.ts
+  var unconfirmedPin = () => ({
+    kind: "unconfirmed",
+    message: "Couldn't confirm the pin change. Refresh to check before trying again."
+  });
+  var readPinOutcome = async (response) => {
+    const payload = await readNotePinResponsePayload(response);
+    if (!response.ok) return { kind: "failure", message: normalizeManagementErrorMessage(response.status, payload) };
+    const record = asRecord(payload);
+    const message = typeof record?.message === "string" ? record.message : "";
+    if (record?.ok === true) return { kind: "success", message };
+    if (record?.ok === false) return { kind: "failure", message: message || "The pin change was refused." };
+    return unconfirmedPin();
+  };
+  var addPinRefresh = (status) => {
+    const link = status.ownerDocument.createElement("a");
+    link.href = window.location.href;
+    link.textContent = "Refresh to check";
+    link.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      window.location.reload();
+    });
+    status.append(" ", link);
+  };
+
   // internal/web/static_src/note-pin.ts
   var readNotePinConfig = (container) => ({
     key: container.getAttribute("data-pin-key") || "",
@@ -9113,17 +9139,18 @@ var BrainNotesApp = (() => {
       try {
         const request = buildNotePinToggleRequest(config2);
         const resp = await fetcher(request.url, request.init);
-        const payload = await readNotePinResponsePayload(resp);
-        if (!resp.ok) {
-          setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+        const result = await readPinOutcome(resp);
+        if (result.kind !== "success") {
+          setStatus2(result.message, "is-error");
+          if (result.kind === "unconfirmed") addPinRefresh(statusEl);
           return;
         }
-        const result = payload;
         applyState(pinning);
         const fallback = pinning ? "Pinned note." : "Unpinned note.";
-        setStatus2(result && result.ok && result.message ? result.message : fallback, "is-success");
+        setStatus2(result.message || fallback, "is-success");
       } catch {
-        setStatus2(pinning ? "Pin failed." : "Unpin failed.", "is-error");
+        setStatus2(unconfirmedPin().message, "is-error");
+        addPinRefresh(statusEl);
       } finally {
         button.disabled = false;
       }
@@ -9600,6 +9627,11 @@ var BrainNotesApp = (() => {
       status.textContent = message;
       feedback.hidden = message === "";
     };
+    const reportFailure = (outcome) => {
+      report(outcome.message);
+      retry2.hidden = outcome.kind === "unconfirmed";
+      if (retry2.hidden) addPinRefresh(status);
+    };
     applyState(Boolean(result.pinned));
     button.addEventListener("click", async () => {
       const pinned = button.getAttribute("aria-pressed") === "true";
@@ -9611,23 +9643,22 @@ var BrainNotesApp = (() => {
       const retryFocused = doc2.activeElement === retry2;
       button.disabled = true;
       retry2.disabled = true;
-      applyState(!pinned);
+      retry2.hidden = false;
       if (!feedback.hidden) {
         report(pinned ? "Unpinning note..." : "Pinning note...");
       }
       try {
         const request = pinned ? buildNotePinRemoveFetchRequest({ key: result.key, token }) : buildNotePinSetFetchRequest({ key: result.key, token });
         const resp = await fetch(request.url, request.init);
-        if (!resp.ok) {
-          const payload = await readNotePinResponsePayload(resp);
-          report(normalizeManagementErrorMessage(resp.status, payload));
-          applyState(pinned);
-        } else {
+        const outcome = await readPinOutcome(resp);
+        if (outcome.kind === "success") {
+          applyState(!pinned);
           report("");
+        } else {
+          reportFailure(outcome);
         }
       } catch {
-        report(pinned ? "Unpin failed. Try again." : "Pin failed. Try again.");
-        applyState(pinned);
+        reportFailure(unconfirmedPin());
       } finally {
         button.disabled = false;
         retry2.disabled = false;
@@ -10573,18 +10604,24 @@ var BrainNotesApp = (() => {
     post = async (request, fallback) => {
       try {
         const resp = await this.fetcher(request.url, request.init);
-        const payload = await readNotePinResponsePayload(resp);
-        if (!resp.ok) {
-          this.setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return false;
-        }
-        const result = payload;
-        this.setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
-        return true;
+        return this.reportOutcome(await readPinOutcome(resp), fallback);
       } catch {
-        this.setStatus("Pin request failed.", "is-error");
-        return false;
+        return this.reportOutcome(unconfirmedPin(), fallback);
       }
+    };
+    reportOutcome = (result, fallback) => {
+      if (result.kind === "success") {
+        this.setStatus(result.message || fallback, "is-success");
+        return true;
+      }
+      this.setStatus(result.message, "is-error");
+      if (result.kind === "unconfirmed") {
+        this.resyncing = true;
+        queryAllElements(this.list, "button", HTMLButtonElement).forEach((control) => control.setAttribute("aria-disabled", "true"));
+        this.cancelDrag?.(false);
+        addPinRefresh(this.statusEl);
+      }
+      return false;
     };
     moveQueue = Promise.resolve();
     queuedMoves = 0;
@@ -10634,6 +10671,7 @@ var BrainNotesApp = (() => {
           this.setStatus(message, "is-success");
           return;
         }
+        if (this.resyncing) return;
         this.cancelDrag?.(false);
         if (sequence === this.queuedMoves) {
           this.list.insertBefore(item, restore);
@@ -10765,7 +10803,7 @@ var BrainNotesApp = (() => {
         if (ok) this.removeRow(item);
       } finally {
         this.unpinning = false;
-        controls.forEach((control) => control.removeAttribute("aria-disabled"));
+        if (!this.resyncing) controls.forEach((control) => control.removeAttribute("aria-disabled"));
       }
     };
     bind() {
@@ -16731,6 +16769,47 @@ var BrainNotesApp = (() => {
     return "The preview could not be rendered.";
   };
 
+  // internal/web/static_src/source-preview-panel.ts
+  var createPreviewPanel = (elements, render, content2, delayMs) => {
+    const retry2 = elements.panel.querySelector("[data-source-preview-retry]");
+    let hasPreview = false;
+    const scheduler = createPreviewScheduler({
+      delayMs,
+      render,
+      sink: {
+        render: (html2) => {
+          if (elements.preview) elements.preview.innerHTML = html2;
+          hasPreview = true;
+        },
+        pending: () => {
+          retry2?.setAttribute("aria-disabled", "true");
+          setStatusText(elements.previewStatus, "Rendering\u2026", "is-loading");
+        },
+        settled: (message, failed) => {
+          setStatusText(elements.previewStatus, failed ? `${message} ${hasPreview ? "The previous preview is outdated." : "No preview is available."}` : "Preview of the unsaved text.", failed ? "is-error" : "");
+          if (!retry2) return;
+          if (!failed && retry2.ownerDocument.activeElement === retry2) {
+            retry2.closest('[data-source-pane="preview"]')?.focus();
+          }
+          retry2.hidden = !failed;
+          retry2.removeAttribute("aria-disabled");
+        }
+      }
+    });
+    const onRetry = () => {
+      if (retry2?.getAttribute("aria-disabled") !== "true") scheduler.flush(content2());
+    };
+    retry2?.addEventListener("click", onRetry);
+    return {
+      schedule: scheduler.schedule,
+      flush: scheduler.flush,
+      dispose: () => {
+        retry2?.removeEventListener("click", onRetry);
+        scheduler.dispose();
+      }
+    };
+  };
+
   // internal/web/static_src/source-save.ts
   var SourceReadError = class extends Error {
     code;
@@ -17768,7 +17847,12 @@ var BrainNotesApp = (() => {
     const setStatus2 = (message, kind = "") => {
       setStatusText(elements.status, message, kind);
     };
-    const preview = createPreview(elements, client, deps.previewDelayMs);
+    const preview = createPreviewPanel(
+      elements,
+      (text3) => client.preview(text3),
+      () => state.surface?.getValue() ?? "",
+      deps.previewDelayMs
+    );
     const dirty = () => state.surface !== null && state.surface.getValue() !== state.savedContent;
     const refreshSaveButton = () => {
       title.update(dirty() || state.pendingSave !== null);
@@ -17873,23 +17957,6 @@ var BrainNotesApp = (() => {
       claims: deps.claims
     });
   };
-  var createPreview = (elements, client, delayMs) => createPreviewScheduler({
-    delayMs,
-    render: (content2) => client.preview(content2),
-    sink: {
-      render: (html2) => {
-        if (elements.preview) {
-          elements.preview.innerHTML = html2;
-        }
-      },
-      pending: () => setStatusText(elements.previewStatus, "Rendering\u2026", "is-loading"),
-      settled: (message, failed) => setStatusText(
-        elements.previewStatus,
-        failed ? message : "Preview of the unsaved text.",
-        failed ? "is-error" : ""
-      )
-    }
-  });
   var bindGlobalKeys = (ownerDocument, controller) => {
     const onKeyDown = (event) => {
       if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {

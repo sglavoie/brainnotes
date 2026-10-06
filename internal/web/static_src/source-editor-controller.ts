@@ -1,7 +1,8 @@
 import { setStatusText, type StatusKind } from "./status";
 import { createEditorTitle } from "./source-editor-title";
 import { formatSource, type SourceFormatCommand, type SourceFormatOptions } from "./source-format";
-import { createPreviewScheduler, type PreviewScheduler } from "./source-preview";
+import type { PreviewScheduler } from "./source-preview";
+import { createPreviewPanel } from "./source-preview-panel";
 import {
   SourceReadError,
   classifySaveResponse,
@@ -105,7 +106,8 @@ export const createSourceEditorController = (
     setStatusText(elements.status, message, kind);
   };
 
-  const preview = createPreview(elements, client, deps.previewDelayMs);
+  const preview = createPreviewPanel(elements, (text) => client.preview(text),
+    () => state.surface?.getValue() ?? "", deps.previewDelayMs);
 
   const dirty = (): boolean =>
     state.surface !== null && state.surface.getValue() !== state.savedContent;
@@ -275,30 +277,6 @@ const createKeeper = (
     claims: deps.claims,
   });
 };
-
-const createPreview = (
-  elements: SourceEditorElements,
-  client: SourceClient,
-  delayMs: number | undefined
-): PreviewScheduler =>
-  createPreviewScheduler({
-    delayMs,
-    render: (content) => client.preview(content),
-    sink: {
-      render: (html) => {
-        if (elements.preview) {
-          elements.preview.innerHTML = html;
-        }
-      },
-      pending: () => setStatusText(elements.previewStatus, "Rendering…", "is-loading"),
-      settled: (message, failed) =>
-        setStatusText(
-          elements.previewStatus,
-          failed ? message : "Preview of the unsaved text.",
-          failed ? "is-error" : ""
-        ),
-    },
-  });
 
 // The save shortcut is bound on the document rather than only in the editor's
 // keymap, because the toolbar, the tabs and the conflict buttons are all

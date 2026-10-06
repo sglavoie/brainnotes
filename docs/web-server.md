@@ -26,6 +26,12 @@ the panel and returns to editing. Replacements can be undone and stay in the
 draft until you click **Save**. On narrow screens, Find switches from Preview to
 Edit automatically.
 
+If the editor preview fails, **Retry preview** renders the current draft without
+saving or changing the source. Any previous preview is labeled outdated until
+rendering succeeds. Retrying disables the button while rendering and returns
+keyboard focus to the preview pane when the button disappears, unless you moved
+to another control while waiting.
+
 If creating a missing note loses its response or receives an unreadable success
 response, the browser says it couldn't confirm creation. **Refresh to check**
 reloads the current page so you can see whether the link is still broken before
@@ -178,8 +184,14 @@ toggle on every note page, and the same toggle on `/library` search rows. State
 is the `pinned` frontmatter rank `bn pin` writes, so the CLI, Obsidian, and the
 web UI always see the same list.
 
-If a Library Pin/Unpin action fails, its row displays the error and a **Retry**
-button. The toggle returns to its previous state until a retry succeeds.
+If the server refuses a Library Pin/Unpin action, its row displays the error and
+a **Retry** button. The toggle keeps its previous state until a retry succeeds.
+
+Pin/unpin controls and pin reordering require a confirmed success response.
+If the response is lost or unreadable, **Refresh to check** reloads the page to
+check the actual state before another attempt. Library and note toggles keep
+their previous state, and the pinned list keeps its rows and stops queued moves
+until refreshed. A server refusal still displays its error and allows retry.
 
 Library change-history entries and the History workspace show the first three
 affected paths below each command, with an expandable list for the remainder,

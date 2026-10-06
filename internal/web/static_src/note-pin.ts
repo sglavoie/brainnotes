@@ -1,9 +1,7 @@
+import { addPinRefresh, readPinOutcome, unconfirmedPin } from "./pin-outcome";
 import {
   buildNotePinRemoveFetchRequest,
   buildNotePinSetFetchRequest,
-  normalizeManagementErrorMessage,
-  readNotePinResponsePayload,
-  type ManagementResult,
   type NotePinFetchRequest,
 } from "./api";
 import { queryElement } from "./dom";
@@ -73,18 +71,19 @@ export const initNotePinAction = (deps: NotePinActionDeps = {}): void => {
     try {
       const request = buildNotePinToggleRequest(config);
       const resp = await fetcher(request.url, request.init);
-      const payload = await readNotePinResponsePayload(resp);
-      if (!resp.ok) {
-        setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+      const result = await readPinOutcome(resp);
+      if (result.kind !== "success") {
+        setStatus(result.message, "is-error");
+        if (result.kind === "unconfirmed") addPinRefresh(statusEl);
         return;
       }
 
-      const result = payload as ManagementResult;
       applyState(pinning);
       const fallback = pinning ? "Pinned note." : "Unpinned note.";
-      setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
+      setStatus(result.message || fallback, "is-success");
     } catch {
-      setStatus(pinning ? "Pin failed." : "Unpin failed.", "is-error");
+      setStatus(unconfirmedPin().message, "is-error");
+      addPinRefresh(statusEl);
     } finally {
       button.disabled = false;
     }

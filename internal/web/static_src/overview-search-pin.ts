@@ -1,8 +1,7 @@
+import { addPinRefresh, readPinOutcome, unconfirmedPin, type PinOutcome } from "./pin-outcome";
 import {
   buildNotePinRemoveFetchRequest,
   buildNotePinSetFetchRequest,
-  normalizeManagementErrorMessage,
-  readNotePinResponsePayload,
   type SearchResult,
 } from "./api";
 import { queryElement } from "./dom";
@@ -43,6 +42,11 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
     status.textContent = message;
     feedback.hidden = message === "";
   };
+  const reportFailure = (outcome: PinOutcome): void => {
+    report(outcome.message);
+    retry.hidden = outcome.kind === "unconfirmed";
+    if (retry.hidden) addPinRefresh(status);
+  };
   applyState(Boolean(result.pinned));
 
   button.addEventListener("click", async () => {
@@ -56,7 +60,7 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
     const retryFocused = doc.activeElement === retry;
     button.disabled = true;
     retry.disabled = true;
-    applyState(!pinned);
+    retry.hidden = false;
     if (!feedback.hidden) {
       report(pinned ? "Unpinning note..." : "Pinning note...");
     }
@@ -65,16 +69,15 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
         ? buildNotePinRemoveFetchRequest({ key: result.key, token })
         : buildNotePinSetFetchRequest({ key: result.key, token });
       const resp = await fetch(request.url, request.init);
-      if (!resp.ok) {
-        const payload = await readNotePinResponsePayload(resp);
-        report(normalizeManagementErrorMessage(resp.status, payload));
-        applyState(pinned);
-      } else {
+      const outcome = await readPinOutcome(resp);
+      if (outcome.kind === "success") {
+        applyState(!pinned);
         report("");
+      } else {
+        reportFailure(outcome);
       }
     } catch {
-      report(pinned ? "Unpin failed. Try again." : "Pin failed. Try again.");
-      applyState(pinned);
+      reportFailure(unconfirmedPin());
     } finally {
       button.disabled = false;
       retry.disabled = false;

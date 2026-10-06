@@ -171,10 +171,10 @@ it("renders a pin toggle on Library rows outside the result link", async () => {
   expect(button!.getAttribute("aria-label")).toBe("Pin Note Title");
 
   button!.click();
-  expect(button!.getAttribute("aria-pressed")).toBe("true");
+  expect(button!.getAttribute("aria-pressed")).toBe("false");
 
   await waitForExpect(() => {
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(button!.getAttribute("aria-pressed")).toBe("true");
   });
   const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
   expect(url).toBe("/api/pins/set");
@@ -202,17 +202,17 @@ it("renders a pinned Library row as pressed and reverts a refused unpin", async 
   expect(button!.textContent).toBe("Unpin");
 
   button!.click();
-  expect(button!.getAttribute("aria-pressed")).toBe("false");
+  expect(button!.getAttribute("aria-pressed")).toBe("true");
 
   await waitForExpect(() => {
-    expect(button!.getAttribute("aria-pressed")).toBe("true");
+    expect(button!.disabled).toBe(false);
   });
   const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
   expect(url).toBe("/api/pins/remove");
   expect(list.querySelector('[role="status"]')!.textContent).toBe("note moved");
   expect(list.querySelector<HTMLElement>(".overview-pin-feedback")!.hidden).toBe(false);
 
-  fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ ok: true })));
+  fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } }));
   const retry = list.querySelector<HTMLButtonElement>(".overview-pin-feedback button")!;
   retry.focus();
   retry.click();

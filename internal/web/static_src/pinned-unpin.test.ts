@@ -25,7 +25,7 @@ const setup = () => {
   button.click();
   return { button, fetcher, reload, settle: async (status = 200) => {
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-    resolve(new Response(JSON.stringify({ ok: status === 200 }), { status }));
+    resolve(new Response(JSON.stringify({ ok: status === 200 }), { status, headers: { "Content-Type": "application/json" } }));
     await vi.waitFor(() => expect(button.hasAttribute("aria-disabled")).toBe(false));
   } };
 };

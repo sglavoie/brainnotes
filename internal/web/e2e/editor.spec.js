@@ -446,3 +446,24 @@ test.describe("on a narrow window", () => {
     expect(gitStatus(manifest.localVault), "switching panes wrote to the vault").toBe("");
   });
 });
+
+test("Retry preview recovers the current draft and returns keyboard focus", async ({ page }) => {
+  await openEditor(page);
+  const preview = page.locator("[data-source-preview]");
+  await expect(preview).toContainText("Alpha body");
+  await page.route("**/api/source/preview", route => route.fulfill({ status: 503, body: "Offline" }));
+  const phrase = phraseFor("preview retry");
+  await caretToEnd(page);
+  await page.keyboard.insertText(`\n\n${phrase}\n`);
+  const retry = page.getByRole("button", { name: "Retry preview", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(page.locator("[data-source-preview-status]")).toContainText("previous preview is outdated");
+  await page.unroute("**/api/source/preview");
+  await retry.focus();
+  await page.keyboard.press("Enter");
+  await expect(retry).toBeHidden();
+  await expect(preview).toContainText(phrase);
+  await expect(page.locator('[data-source-pane="preview"]')).toBeFocused();
+  await expect(page.locator("[data-source-save]")).toBeEnabled();
+  expect(readFileSync(join(manifest.localVault, NOTE), "utf8")).not.toContain(phrase);
+});

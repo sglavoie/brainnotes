@@ -1,9 +1,7 @@
+import { addPinRefresh, readPinOutcome, unconfirmedPin, type PinOutcome } from "./pin-outcome";
 import {
   buildNotePinRemoveFetchRequest,
   buildNotePinReorderFetchRequest,
-  normalizeManagementErrorMessage,
-  readNotePinResponsePayload,
-  type ManagementResult,
   type NotePinFetchRequest,
 } from "./api";
 import { narrowElement, queryAllElements, queryElement } from "./dom";
@@ -58,18 +56,26 @@ class PinnedList {
   private post = async (request: NotePinFetchRequest, fallback: string): Promise<boolean> => {
     try {
       const resp = await this.fetcher(request.url, request.init);
-      const payload = await readNotePinResponsePayload(resp);
-      if (!resp.ok) {
-        this.setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-        return false;
-      }
-      const result = payload as ManagementResult;
-      this.setStatus(result && result.ok && result.message ? result.message : fallback, "is-success");
-      return true;
+      return this.reportOutcome(await readPinOutcome(resp), fallback);
     } catch {
-      this.setStatus("Pin request failed.", "is-error");
-      return false;
+      return this.reportOutcome(unconfirmedPin(), fallback);
     }
+  };
+
+  private reportOutcome = (result: PinOutcome, fallback: string): boolean => {
+    if (result.kind === "success") {
+      this.setStatus(result.message || fallback, "is-success");
+      return true;
+    }
+    this.setStatus(result.message, "is-error");
+    if (result.kind === "unconfirmed") {
+      this.resyncing = true;
+      queryAllElements(this.list, "button", HTMLButtonElement)
+        .forEach((control) => control.setAttribute("aria-disabled", "true"));
+      this.cancelDrag?.(false);
+      addPinRefresh(this.statusEl);
+    }
+    return false;
   };
 
   private moveQueue: Promise<void> = Promise.resolve();
@@ -122,6 +128,7 @@ class PinnedList {
         this.setStatus(message, "is-success");
         return;
       }
+      if (this.resyncing) return;
       this.cancelDrag?.(false);
       if (sequence === this.queuedMoves) {
         this.list.insertBefore(item, restore);
@@ -263,7 +270,7 @@ class PinnedList {
       if (ok) this.removeRow(item);
     } finally {
       this.unpinning = false;
-      controls.forEach((control) => control.removeAttribute("aria-disabled"));
+      if (!this.resyncing) controls.forEach((control) => control.removeAttribute("aria-disabled"));
     }
   };
 

@@ -53,6 +53,7 @@ func TestEditorPage_RendersTheEndpointsAndIdentityTheEditorNeeds(t *testing.T) {
 		`data-source-preview`,
 		`data-source-status`,
 		`data-source-preview-status`,
+		`data-source-preview-retry`,
 		`data-source-panes`,
 		`data-source-tab="edit"`,
 		`data-source-tab="preview"`,
