@@ -3,9 +3,8 @@ import {
   buildFrontmatterUnsetForm,
   normalizeManagementErrorMessage,
   type FrontmatterSetRequest,
-  type FrontmatterUnsetRequest,
-  type ManagementResult,
 } from "./api";
+import { asRecord } from "./api-internal";
 import { queryAllElements, queryElement } from "./dom";
 import { setStatusText } from "./status";
 
@@ -106,63 +105,70 @@ export const initFrontmatterEditing = (deps: FrontmatterActionDeps = {}): void =
     setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
   };
 
-  for (const form of queryAllElements(panel, "[data-frontmatter-set]", HTMLFormElement)) {
+  let pending = false;
+  const forms = queryAllElements(panel, "[data-frontmatter-set], [data-frontmatter-unset]", HTMLFormElement);
+  for (const form of forms) {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const config = readFrontmatterSetConfig(form);
-      if (!validFrontmatterBaseConfig(config)) {
+      if (pending) return;
+      const action = readFrontmatterAction(form);
+      if (!action) {
         setStatus("Frontmatter action unavailable.", "is-error");
         return;
       }
-
-      setFormDisabled(form, true);
+      pending = true;
+      const restore = disablePanel(panel);
       setStatus("Updating frontmatter...");
       try {
-        const request = buildFrontmatterSetFetchRequest(config);
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readFrontmatterResponsePayload(resp);
-        if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = payload as ManagementResult;
-        setStatus(result && result.ok && result.message ? result.message : "Updated frontmatter.", "is-success");
+        const resp = await fetcher(action.request.url, action.request.init);
+        const outcome = await readFrontmatterOutcome(resp, action.message);
+        setStatus(outcome.message, outcome.kind);
+        if (outcome.refresh && statusEl) addFrontmatterRefresh(statusEl, outcome.refresh);
       } catch {
-        setStatus("Frontmatter update failed.", "is-error");
+        setStatus(unconfirmedMessage, "is-error");
+        if (statusEl) addFrontmatterRefresh(statusEl, "Refresh to check");
       } finally {
-        setFormDisabled(form, false);
+        restore();
+        pending = false;
       }
     });
   }
+};
 
-  for (const form of queryAllElements(panel, "[data-frontmatter-unset]", HTMLFormElement)) {
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const config = readFrontmatterUnsetConfig(form);
-      if (!validFrontmatterBaseConfig(config)) {
-        setStatus("Frontmatter action unavailable.", "is-error");
-        return;
-      }
-
-      setFormDisabled(form, true);
-      setStatus("Updating frontmatter...");
-      try {
-        const request = buildFrontmatterUnsetFetchRequest(config);
-        const resp = await fetcher(request.url, request.init);
-        const payload = await readFrontmatterResponsePayload(resp);
-        if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = payload as ManagementResult;
-        setStatus(result && result.ok && result.message ? result.message : "Unset frontmatter.", "is-success");
-      } catch {
-        setStatus("Frontmatter update failed.", "is-error");
-      } finally {
-        setFormDisabled(form, false);
-      }
-    });
+const readFrontmatterAction = (form: HTMLFormElement): { request: FrontmatterFetchRequest; message: string } | null => {
+  if (form.hasAttribute("data-frontmatter-set")) {
+    const config = readFrontmatterSetConfig(form);
+    return validFrontmatterBaseConfig(config)
+      ? { request: buildFrontmatterSetFetchRequest(config), message: "Updated frontmatter." } : null;
   }
+  const config = readFrontmatterUnsetConfig(form);
+  return validFrontmatterBaseConfig(config)
+    ? { request: buildFrontmatterUnsetFetchRequest(config), message: "Unset frontmatter." } : null;
+};
+
+const unconfirmedMessage = "Couldn't confirm the change. Refresh to check before trying again.";
+type FrontmatterOutcome = { message: string; kind: FrontmatterStatusKind; refresh?: string };
+
+const readFrontmatterOutcome = async (resp: Response, fallback: string): Promise<FrontmatterOutcome> => {
+  const payload = await readFrontmatterResponsePayload(resp);
+  if (!resp.ok) return { message: normalizeManagementErrorMessage(resp.status, payload), kind: "is-error" };
+  const record = asRecord(payload);
+  const message = typeof record?.message === "string" ? record.message : "";
+  if (record?.ok === true) return { message: message || fallback, kind: "is-success", refresh: "Refresh properties" };
+  if (record?.ok === false) return { message: message || "The property change was refused.", kind: "is-error" };
+  return { message: unconfirmedMessage, kind: "is-error", refresh: "Refresh to check" };
+};
+
+const addFrontmatterRefresh = (status: HTMLElement, label: string): void => {
+  const link = status.ownerDocument.createElement("a");
+  link.href = window.location.href;
+  link.textContent = label;
+  link.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    window.location.reload();
+  });
+  status.append(" ", link);
 };
 
 const normalizeFrontmatterOp = (value: string | null): FrontmatterOp => {
@@ -196,15 +202,13 @@ const frontmatterFetchRequest = (
   },
 });
 
-const setFormDisabled = (form: HTMLFormElement, disabled: boolean): void => {
-  for (const control of queryAllElements(form, "button, input", HTMLElement)) {
-    if (
-      control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement
-    ) {
-      control.disabled = disabled;
-    }
-  }
+const disablePanel = (panel: HTMLElement): (() => void) => {
+  const controls = Array.from(panel.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement | HTMLTextAreaElement>(
+    "button, input, select, textarea"
+  ));
+  const previous = controls.map((control) => control.disabled);
+  controls.forEach((control) => { control.disabled = true; });
+  return () => controls.forEach((control, index) => { control.disabled = previous[index]; });
 };
 
 const readFrontmatterResponsePayload = async (resp: Response): Promise<unknown> => {

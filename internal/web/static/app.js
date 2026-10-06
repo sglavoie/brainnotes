@@ -5127,60 +5127,63 @@ var BrainNotesApp = (() => {
     const setStatus2 = (message, kind = "") => {
       setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
     };
-    for (const form of queryAllElements(panel, "[data-frontmatter-set]", HTMLFormElement)) {
+    let pending = false;
+    const forms = queryAllElements(panel, "[data-frontmatter-set], [data-frontmatter-unset]", HTMLFormElement);
+    for (const form of forms) {
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const config2 = readFrontmatterSetConfig(form);
-        if (!validFrontmatterBaseConfig(config2)) {
+        if (pending) return;
+        const action = readFrontmatterAction(form);
+        if (!action) {
           setStatus2("Frontmatter action unavailable.", "is-error");
           return;
         }
-        setFormDisabled(form, true);
+        pending = true;
+        const restore = disablePanel(panel);
         setStatus2("Updating frontmatter...");
         try {
-          const request = buildFrontmatterSetFetchRequest(config2);
-          const resp = await fetcher(request.url, request.init);
-          const payload = await readFrontmatterResponsePayload(resp);
-          if (!resp.ok) {
-            setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-            return;
-          }
-          const result = payload;
-          setStatus2(result && result.ok && result.message ? result.message : "Updated frontmatter.", "is-success");
+          const resp = await fetcher(action.request.url, action.request.init);
+          const outcome = await readFrontmatterOutcome(resp, action.message);
+          setStatus2(outcome.message, outcome.kind);
+          if (outcome.refresh && statusEl) addFrontmatterRefresh(statusEl, outcome.refresh);
         } catch {
-          setStatus2("Frontmatter update failed.", "is-error");
+          setStatus2(unconfirmedMessage, "is-error");
+          if (statusEl) addFrontmatterRefresh(statusEl, "Refresh to check");
         } finally {
-          setFormDisabled(form, false);
+          restore();
+          pending = false;
         }
       });
     }
-    for (const form of queryAllElements(panel, "[data-frontmatter-unset]", HTMLFormElement)) {
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const config2 = readFrontmatterUnsetConfig(form);
-        if (!validFrontmatterBaseConfig(config2)) {
-          setStatus2("Frontmatter action unavailable.", "is-error");
-          return;
-        }
-        setFormDisabled(form, true);
-        setStatus2("Updating frontmatter...");
-        try {
-          const request = buildFrontmatterUnsetFetchRequest(config2);
-          const resp = await fetcher(request.url, request.init);
-          const payload = await readFrontmatterResponsePayload(resp);
-          if (!resp.ok) {
-            setStatus2(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-            return;
-          }
-          const result = payload;
-          setStatus2(result && result.ok && result.message ? result.message : "Unset frontmatter.", "is-success");
-        } catch {
-          setStatus2("Frontmatter update failed.", "is-error");
-        } finally {
-          setFormDisabled(form, false);
-        }
-      });
+  };
+  var readFrontmatterAction = (form) => {
+    if (form.hasAttribute("data-frontmatter-set")) {
+      const config3 = readFrontmatterSetConfig(form);
+      return validFrontmatterBaseConfig(config3) ? { request: buildFrontmatterSetFetchRequest(config3), message: "Updated frontmatter." } : null;
     }
+    const config2 = readFrontmatterUnsetConfig(form);
+    return validFrontmatterBaseConfig(config2) ? { request: buildFrontmatterUnsetFetchRequest(config2), message: "Unset frontmatter." } : null;
+  };
+  var unconfirmedMessage = "Couldn't confirm the change. Refresh to check before trying again.";
+  var readFrontmatterOutcome = async (resp, fallback) => {
+    const payload = await readFrontmatterResponsePayload(resp);
+    if (!resp.ok) return { message: normalizeManagementErrorMessage(resp.status, payload), kind: "is-error" };
+    const record = asRecord(payload);
+    const message = typeof record?.message === "string" ? record.message : "";
+    if (record?.ok === true) return { message: message || fallback, kind: "is-success", refresh: "Refresh properties" };
+    if (record?.ok === false) return { message: message || "The property change was refused.", kind: "is-error" };
+    return { message: unconfirmedMessage, kind: "is-error", refresh: "Refresh to check" };
+  };
+  var addFrontmatterRefresh = (status, label) => {
+    const link = status.ownerDocument.createElement("a");
+    link.href = window.location.href;
+    link.textContent = label;
+    link.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      window.location.reload();
+    });
+    status.append(" ", link);
   };
   var normalizeFrontmatterOp = (value) => {
     if (value === "+=" || value === "-=") {
@@ -5201,12 +5204,17 @@ var BrainNotesApp = (() => {
       body: body.toString()
     }
   });
-  var setFormDisabled = (form, disabled) => {
-    for (const control of queryAllElements(form, "button, input", HTMLElement)) {
-      if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement) {
-        control.disabled = disabled;
-      }
-    }
+  var disablePanel = (panel) => {
+    const controls = Array.from(panel.querySelectorAll(
+      "button, input, select, textarea"
+    ));
+    const previous = controls.map((control) => control.disabled);
+    controls.forEach((control) => {
+      control.disabled = true;
+    });
+    return () => controls.forEach((control, index) => {
+      control.disabled = previous[index];
+    });
   };
   var readFrontmatterResponsePayload = async (resp) => {
     const contentType = resp.headers?.get("Content-Type") || "";
@@ -13491,6 +13499,7 @@ var BrainNotesApp = (() => {
   // internal/web/static_src/query-bar-render.ts
   var completionOptionID = (index) => `query-bar-option-${index}`;
   var renderQueryBarStatus = (els, state) => {
+    if (els.retryButton) els.retryButton.hidden = state.phase !== "unavailable";
     const status = queryBarStatus(state);
     setStatusText(els.statusEl, status.message, status.kind);
     els.root.setAttribute("data-query-bar-phase", state.phase);
@@ -13503,20 +13512,7 @@ var BrainNotesApp = (() => {
     }
     const error = state.phase === "invalid" ? state.error : null;
     if (!error) {
-      errorEl.hidden = true;
-      if (els.errorMessageEl) {
-        els.errorMessageEl.textContent = "";
-      }
-      if (els.errorQueryEl) {
-        els.errorQueryEl.textContent = "";
-      }
-      if (els.errorCaretEl) {
-        els.errorCaretEl.textContent = "";
-      }
-      if (els.suggestionsEl) {
-        els.suggestionsEl.hidden = true;
-        els.suggestionsEl.textContent = "";
-      }
+      clearQueryBarError(els);
       return;
     }
     errorEl.hidden = false;
@@ -13530,11 +13526,19 @@ var BrainNotesApp = (() => {
     if (els.errorCaretEl) {
       els.errorCaretEl.textContent = caret;
     }
-    if (els.suggestionsEl) {
-      const suggestions = error.suggestions;
-      els.suggestionsEl.hidden = suggestions.length === 0;
-      els.suggestionsEl.textContent = suggestions.length === 0 ? "" : `Did you mean: ${suggestions.join(", ")}?`;
+    renderQueryBarSuggestions(els.suggestionsEl, error.suggestions);
+  };
+  var renderQueryBarSuggestions = (element3, suggestions) => {
+    if (!element3) return;
+    element3.hidden = suggestions.length === 0;
+    element3.textContent = suggestions.length === 0 ? "" : `Did you mean: ${suggestions.join(", ")}?`;
+  };
+  var clearQueryBarError = (els) => {
+    if (els.errorEl) els.errorEl.hidden = true;
+    for (const element3 of [els.errorMessageEl, els.errorQueryEl, els.errorCaretEl, els.suggestionsEl]) {
+      if (element3) element3.textContent = "";
     }
+    if (els.suggestionsEl) els.suggestionsEl.hidden = true;
   };
   var renderQueryBarCompletions = (els, completions, options) => {
     const { listEl, input } = els;
@@ -13617,222 +13621,274 @@ var BrainNotesApp = (() => {
       errorCaretEl: errorEl ? queryElement(errorEl, "[data-query-bar-error-caret]", HTMLElement) : null,
       suggestionsEl: errorEl ? queryElement(errorEl, "[data-query-bar-error-suggestions]", HTMLElement) : null,
       listEl: queryElement(root, "[data-query-bar-completions]", HTMLElement),
-      clearButton: queryElement(root, "[data-query-bar-clear]", HTMLButtonElement)
+      clearButton: queryElement(root, "[data-query-bar-clear]", HTMLButtonElement),
+      retryButton: queryElement(root, "[data-query-bar-retry]", HTMLButtonElement)
     };
   };
-  var initQueryBarController = (els, deps = {}) => {
-    const fetcher = deps.fetch || ((input, init) => fetch(input, init));
-    const scheduler = deps.scheduler || windowScheduler(window);
-    const requester = createQueryRequester(fetcher);
-    const validateDebounce = createDebouncer(scheduler);
-    const completionsDebounce = createDebouncer(scheduler);
-    let validation = emptyQueryBarValidation();
-    let completions = [];
-    let activeIndex = -1;
-    let listOpen = false;
-    let published = readExprParam();
-    const renderList = () => {
-      if (!listOpen) {
-        closeQueryBarCompletions(els);
+  var isCompositionKey = (event) => event.isComposing || event.keyCode === 229;
+  var QueryBarController = class {
+    constructor(els, deps) {
+      this.els = els;
+      const fetcher = deps.fetch || ((input, init) => fetch(input, init));
+      const scheduler = deps.scheduler || windowScheduler(window);
+      this.requester = createQueryRequester(fetcher);
+      this.validateDebounce = createDebouncer(scheduler);
+      this.completionsDebounce = createDebouncer(scheduler);
+      this.bindEvents();
+      const initial = readExprParam();
+      if (initial !== "") {
+        els.input.value = initial;
+        this.validation = reduceQueryBar(this.validation, { type: "input", text: initial });
+        this.runValidate(initial);
+      } else {
+        this.renderAll();
+      }
+    }
+    els;
+    requester;
+    validateDebounce;
+    completionsDebounce;
+    validation = emptyQueryBarValidation();
+    completions = [];
+    activeIndex = -1;
+    listOpen = false;
+    published = readExprParam();
+    composing = false;
+    generation = 0;
+    renderList() {
+      if (!this.listOpen) {
+        closeQueryBarCompletions(this.els);
         return;
       }
-      renderQueryBarCompletions(els, completions, {
-        activeIndex,
+      renderQueryBarCompletions(this.els, this.completions, {
+        activeIndex: this.activeIndex,
         onChoose: (completion) => {
-          acceptCompletion2(completion);
+          this.acceptCompletion(completion);
         }
       });
-    };
-    const closeList = () => {
-      listOpen = false;
-      completions = [];
-      activeIndex = -1;
-      completionsDebounce.cancel();
-      renderList();
-    };
-    const renderAll = () => {
-      renderQueryBarStatus(els, validation);
-      renderQueryBarError(els, validation);
-    };
-    const publish = (expr) => {
-      if (expr === published) {
+    }
+    closeList() {
+      this.listOpen = false;
+      this.completions = [];
+      this.activeIndex = -1;
+      this.completionsDebounce.cancel();
+      this.renderList();
+    }
+    renderAll() {
+      renderQueryBarStatus(this.els, this.validation);
+      renderQueryBarError(this.els, this.validation);
+    }
+    /**
+     * Publishes a confirmed expression: the URL gains `expr`, and the dispatch is
+     * what makes every listener on the page — the Library results, the graph —
+     * refetch through `buildFilteredAPIURL`, which carries the parameter.
+     *
+     * `mode: ""` reaches every listener regardless of its facet mode, because the
+     * expression is the page's outermost filter rather than one panel's state.
+     */
+    publish(expr) {
+      if (expr === this.published) {
         return;
       }
-      published = expr;
+      this.published = expr;
       syncExprParam(expr);
       dispatchFiltersChange(window, {
         mode: "",
         params: new URLSearchParams(window.location.search)
       });
-    };
-    const runValidate = (text3) => {
-      validation = reduceQueryBar(validation, { type: "request", text: text3 });
-      renderAll();
-      void requester.validate(text3).then((response) => {
-        if (response === null) {
+    }
+    runValidate(text3) {
+      if (this.composing) return;
+      const generation = this.generation;
+      this.validation = reduceQueryBar(this.validation, { type: "request", text: text3 });
+      this.renderAll();
+      void this.requester.validate(text3).then((response) => {
+        if (response === null || generation !== this.generation) {
           return;
         }
-        validation = reduceQueryBar(validation, { type: "response", text: text3, response });
-        renderAll();
-        const confirmed = publishableQuery(validation);
+        this.validation = reduceQueryBar(this.validation, { type: "response", text: text3, response });
+        this.renderAll();
+        const confirmed = publishableQuery(this.validation);
         if (confirmed !== null) {
-          publish(confirmed);
+          this.publish(confirmed);
         }
       }).catch(() => {
-        validation = reduceQueryBar(validation, { type: "failure", text: text3 });
-        renderAll();
+        if (generation !== this.generation) return;
+        this.validation = reduceQueryBar(this.validation, { type: "failure", text: text3 });
+        this.renderAll();
       });
-    };
-    const applyCompletionsResponse = (context, incoming) => {
-      completions = mergeCompletions([
+    }
+    applyCompletionsResponse(context, incoming) {
+      this.completions = mergeCompletions([
         filterCompletions(incoming, context.prefix),
-        filterCompletions(completions, context.prefix)
+        filterCompletions(this.completions, context.prefix)
       ]);
-      activeIndex = completions.length > 0 ? 0 : -1;
-      listOpen = completions.length > 0;
-      renderList();
-    };
-    const runCompletions = (text3, pos) => {
-      void requester.completions(text3, pos).then((response) => {
-        if (response === null) {
+      this.activeIndex = this.completions.length > 0 ? 0 : -1;
+      this.listOpen = this.completions.length > 0;
+      this.renderList();
+    }
+    runCompletions(text3, pos) {
+      const generation = this.generation;
+      void this.requester.completions(text3, pos).then((response) => {
+        if (response === null || generation !== this.generation) {
           return;
         }
-        const context = completionContextAt(els.input.value, caretPosition());
-        applyCompletionsResponse(context, response.completions);
+        const context = completionContextAt(this.els.input.value, this.caretPosition());
+        this.applyCompletionsResponse(context, response.completions);
       }).catch(() => {
-        closeList();
+        if (generation !== this.generation) return;
+        this.closeList();
       });
-    };
-    const caretPosition = () => {
-      const selection = els.input.selectionStart;
-      return typeof selection === "number" ? selection : els.input.value.length;
-    };
-    const acceptCompletion2 = (completion) => {
-      const text3 = els.input.value;
-      const context = completionContextAt(text3, caretPosition());
+    }
+    caretPosition() {
+      const selection = this.els.input.selectionStart;
+      return typeof selection === "number" ? selection : this.els.input.value.length;
+    }
+    acceptCompletion(completion) {
+      if (this.composing) return;
+      const text3 = this.els.input.value;
+      const context = completionContextAt(text3, this.caretPosition());
       const edit2 = applyCompletion(text3, context.replace, completion.insert);
-      els.input.value = edit2.text;
-      els.input.setSelectionRange(edit2.pos, edit2.pos);
-      els.input.focus();
-      closeList();
-      handleTextChange(edit2.text, {
+      this.els.input.value = edit2.text;
+      this.els.input.setSelectionRange(edit2.pos, edit2.pos);
+      this.els.input.focus();
+      this.closeList();
+      this.handleTextChange(edit2.text, {
         immediate: true,
         completionCause: context.kind === "field" ? "manual" : null
       });
-    };
-    const requestCompletions = (text3, cause) => {
-      const pos = caretPosition();
+    }
+    requestCompletions(text3, cause) {
+      if (this.composing) return;
+      const pos = this.caretPosition();
       if (!shouldRequestCompletions(text3, pos, cause)) {
-        closeList();
+        this.closeList();
         return;
       }
-      if (listOpen) {
+      if (this.listOpen) {
         const context = completionContextAt(text3, pos);
-        completions = filterCompletions(completions, context.prefix);
-        activeIndex = completions.length > 0 ? Math.min(activeIndex, completions.length - 1) : -1;
-        renderList();
+        this.completions = filterCompletions(this.completions, context.prefix);
+        this.activeIndex = this.completions.length > 0 ? Math.min(this.activeIndex, this.completions.length - 1) : -1;
+        this.renderList();
       }
-      completionsDebounce.run(() => {
-        runCompletions(els.input.value, caretPosition());
+      this.completionsDebounce.run(() => {
+        this.runCompletions(this.els.input.value, this.caretPosition());
       }, cause === "manual" ? 0 : completionsDebounceMs);
-    };
-    const handleTextChange = (text3, { immediate = false, completionCause = "input" } = {}) => {
-      validation = reduceQueryBar(validation, { type: "input", text: text3 });
-      renderAll();
+    }
+    handleTextChange(text3, { immediate = false, completionCause = "input" } = {}) {
+      if (this.composing) return;
+      this.validation = reduceQueryBar(this.validation, { type: "input", text: text3 });
+      this.renderAll();
       if (isBlankQuery(text3)) {
-        validateDebounce.cancel();
-        requester.cancel();
-        publish("");
+        this.validateDebounce.cancel();
+        this.requester.cancel();
+        this.publish("");
         if (completionCause === "focus" || completionCause === "manual") {
-          requestCompletions(text3, completionCause);
+          this.requestCompletions(text3, completionCause);
         } else {
-          closeList();
+          this.closeList();
         }
         return;
       }
-      validateDebounce.run(() => {
-        runValidate(els.input.value);
+      this.validateDebounce.run(() => {
+        this.runValidate(this.els.input.value);
       }, immediate ? 0 : validateDebounceMs);
       if (completionCause !== null) {
-        requestCompletions(text3, completionCause);
+        this.requestCompletions(text3, completionCause);
       }
-    };
-    els.input.addEventListener("input", () => {
-      handleTextChange(els.input.value);
-    });
-    els.input.addEventListener("focus", () => {
-      if (els.input.value === "") {
-        requestCompletions("", "focus");
-      }
-    });
-    els.input.addEventListener("blur", () => {
-      closeList();
-    });
-    els.input.addEventListener("keydown", (event) => {
+    }
+    bindEvents() {
+      const { input, clearButton, retryButton } = this.els;
+      input.addEventListener("input", (event) => {
+        if (event.isComposing) {
+          if (!this.composing) this.startComposition();
+          return;
+        }
+        this.handleTextChange(input.value);
+      });
+      input.addEventListener("compositionstart", () => this.startComposition());
+      input.addEventListener("compositionend", () => {
+        this.composing = false;
+        this.handleTextChange(input.value);
+      });
+      input.addEventListener("focus", () => {
+        if (input.value === "") this.requestCompletions("", "focus");
+      });
+      input.addEventListener("blur", () => this.closeList());
+      input.addEventListener("keydown", (event) => this.onKeyDown(event));
+      clearButton?.addEventListener("click", () => this.clear());
+      retryButton?.addEventListener("click", () => {
+        if (this.composing || this.validation.phase !== "unavailable") return;
+        this.validateDebounce.cancel();
+        this.runValidate(input.value);
+        input.focus();
+      });
+    }
+    startComposition() {
+      this.composing = true;
+      this.generation += 1;
+      this.validateDebounce.cancel();
+      this.requester.cancel();
+      this.closeList();
+      this.validation = emptyQueryBarValidation();
+      this.renderAll();
+    }
+    onKeyDown(event) {
+      if (this.composing || isCompositionKey(event)) return;
       if (event.key === " " && event.ctrlKey) {
         event.preventDefault();
-        requestCompletions(els.input.value, "manual");
+        this.requestCompletions(this.els.input.value, "manual");
         return;
       }
       if (event.key === "Escape") {
-        if (listOpen) {
+        if (this.listOpen) {
           event.preventDefault();
-          closeList();
+          this.closeList();
         }
         return;
       }
-      if (!listOpen || completions.length === 0) {
+      if (!this.listOpen || this.completions.length === 0) {
         if (event.key === "Enter") {
           event.preventDefault();
-          validateDebounce.run(() => {
-            runValidate(els.input.value);
-          }, 0);
+          this.validateDebounce.run(() => this.runValidate(this.els.input.value), 0);
         }
         return;
       }
+      this.onCompletionKey(event);
+    }
+    onCompletionKey(event) {
       switch (event.key) {
         case "ArrowDown":
-          event.preventDefault();
-          activeIndex = nextActiveIndex(activeIndex, 1, completions.length);
-          renderList();
-          return;
         case "ArrowUp":
           event.preventDefault();
-          activeIndex = nextActiveIndex(activeIndex, -1, completions.length);
-          renderList();
+          this.activeIndex = nextActiveIndex(this.activeIndex, event.key === "ArrowDown" ? 1 : -1, this.completions.length);
+          this.renderList();
           return;
         case "Enter":
         case "Tab": {
-          const completion = completions[activeIndex];
-          if (!completion) {
-            return;
-          }
+          const completion = this.completions[this.activeIndex];
+          if (!completion) return;
           event.preventDefault();
-          acceptCompletion2(completion);
+          this.acceptCompletion(completion);
           return;
         }
         default:
       }
-    });
-    els.clearButton?.addEventListener("click", () => {
-      els.input.value = "";
-      validateDebounce.cancel();
-      requester.cancel();
-      validation = reduceQueryBar(validation, { type: "reset" });
-      renderAll();
-      closeList();
-      publish("");
-      els.input.focus();
-    });
-    const initial = readExprParam();
-    if (initial !== "") {
-      els.input.value = initial;
-      validation = reduceQueryBar(validation, { type: "input", text: initial });
-      renderAll();
-      runValidate(initial);
-      return;
     }
-    renderAll();
+    clear() {
+      this.els.input.value = "";
+      this.generation += 1;
+      this.validateDebounce.cancel();
+      this.requester.cancel();
+      this.validation = reduceQueryBar(this.validation, { type: "reset" });
+      this.renderAll();
+      this.closeList();
+      this.publish("");
+      this.els.input.focus();
+    }
+  };
+  var initQueryBarController = (els, deps = {}) => {
+    new QueryBarController(els, deps);
   };
 
   // internal/web/static_src/query-bar.ts

@@ -136,6 +136,7 @@ export const queryBarMarkup = `
     <p data-query-bar-error-suggestions hidden></p>
   </div>
   <p id="query-bar-status" data-query-bar-status role="status" aria-live="polite"></p>
+  <button class="query-bar-button" type="button" data-query-bar-retry hidden>Retry check</button>
 </section>
 `;
 

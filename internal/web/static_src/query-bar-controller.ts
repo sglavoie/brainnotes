@@ -73,57 +73,71 @@ export const resolveQueryBarElements = (doc: Document): QueryBarElements | null 
       : null,
     listEl: queryElement(root, "[data-query-bar-completions]", HTMLElement),
     clearButton: queryElement(root, "[data-query-bar-clear]", HTMLButtonElement),
+    retryButton: queryElement(root, "[data-query-bar-retry]", HTMLButtonElement),
   };
 };
 
-/**
- * Wires the query bar to the DOM: validation on a debounce, completions on a
- * shorter one, and keyboard navigation over the listbox.
- *
- * The pure rules all live in query-bar-model.ts and query-bar-completions.ts;
- * what is here is the part that cannot be tested without a document.
- */
-export const initQueryBarController = (
-  els: QueryBarElements,
-  deps: QueryBarDeps = {}
-): void => {
-  const fetcher = deps.fetch || ((input, init) => fetch(input, init));
-  const scheduler = deps.scheduler || windowScheduler(window);
-  const requester = createQueryRequester(fetcher);
-  const validateDebounce = createDebouncer(scheduler);
-  const completionsDebounce = createDebouncer(scheduler);
+const isCompositionKey = (event: KeyboardEvent): boolean => event.isComposing || event.keyCode === 229;
 
-  let validation: QueryBarValidation = emptyQueryBarValidation();
-  let completions: QueryCompletion[] = [];
-  let activeIndex = -1;
-  let listOpen = false;
-  let published = readExprParam();
+type TextChangeOptions = {
+  immediate?: boolean;
+  completionCause?: CompletionCause | null;
+};
 
-  const renderList = (): void => {
-    if (!listOpen) {
-      closeQueryBarCompletions(els);
+class QueryBarController {
+  private requester: ReturnType<typeof createQueryRequester>;
+  private validateDebounce: ReturnType<typeof createDebouncer>;
+  private completionsDebounce: ReturnType<typeof createDebouncer>;
+  private validation: QueryBarValidation = emptyQueryBarValidation();
+  private completions: QueryCompletion[] = [];
+  private activeIndex = -1;
+  private listOpen = false;
+  private published = readExprParam();
+  private composing = false;
+  private generation = 0;
+
+  constructor(private els: QueryBarElements, deps: QueryBarDeps) {
+    const fetcher = deps.fetch || ((input, init) => fetch(input, init));
+    const scheduler = deps.scheduler || windowScheduler(window);
+    this.requester = createQueryRequester(fetcher);
+    this.validateDebounce = createDebouncer(scheduler);
+    this.completionsDebounce = createDebouncer(scheduler);
+    this.bindEvents();
+    const initial = readExprParam();
+    if (initial !== "") {
+      els.input.value = initial;
+      this.validation = reduceQueryBar(this.validation, { type: "input", text: initial });
+      this.runValidate(initial);
+    } else {
+      this.renderAll();
+    }
+  }
+
+  private renderList(): void {
+    if (!this.listOpen) {
+      closeQueryBarCompletions(this.els);
       return;
     }
-    renderQueryBarCompletions(els, completions, {
-      activeIndex,
+    renderQueryBarCompletions(this.els, this.completions, {
+      activeIndex: this.activeIndex,
       onChoose: (completion) => {
-        acceptCompletion(completion);
+        this.acceptCompletion(completion);
       },
     });
-  };
+  }
 
-  const closeList = (): void => {
-    listOpen = false;
-    completions = [];
-    activeIndex = -1;
-    completionsDebounce.cancel();
-    renderList();
-  };
+  private closeList(): void {
+    this.listOpen = false;
+    this.completions = [];
+    this.activeIndex = -1;
+    this.completionsDebounce.cancel();
+    this.renderList();
+  }
 
-  const renderAll = (): void => {
-    renderQueryBarStatus(els, validation);
-    renderQueryBarError(els, validation);
-  };
+  private renderAll(): void {
+    renderQueryBarStatus(this.els, this.validation);
+    renderQueryBarError(this.els, this.validation);
+  }
 
   /**
    * Publishes a confirmed expression: the URL gains `expr`, and the dispatch is
@@ -133,230 +147,246 @@ export const initQueryBarController = (
    * `mode: ""` reaches every listener regardless of its facet mode, because the
    * expression is the page's outermost filter rather than one panel's state.
    */
-  const publish = (expr: string): void => {
-    if (expr === published) {
+  private publish(expr: string): void {
+    if (expr === this.published) {
       return;
     }
-    published = expr;
+    this.published = expr;
     syncExprParam(expr);
     dispatchFiltersChange(window, {
       mode: "",
       params: new URLSearchParams(window.location.search),
     });
-  };
+  }
 
-  const runValidate = (text: string): void => {
-    validation = reduceQueryBar(validation, { type: "request", text });
-    renderAll();
-    void requester
+  private runValidate(text: string): void {
+    if (this.composing) return;
+    const generation = this.generation;
+    this.validation = reduceQueryBar(this.validation, { type: "request", text });
+    this.renderAll();
+    void this.requester
       .validate(text)
       .then((response) => {
-        if (response === null) {
+        if (response === null || generation !== this.generation) {
           return;
         }
-        validation = reduceQueryBar(validation, { type: "response", text, response });
-        renderAll();
-        const confirmed = publishableQuery(validation);
+        this.validation = reduceQueryBar(this.validation, { type: "response", text, response });
+        this.renderAll();
+        const confirmed = publishableQuery(this.validation);
         if (confirmed !== null) {
-          publish(confirmed);
+          this.publish(confirmed);
         }
       })
       .catch(() => {
-        validation = reduceQueryBar(validation, { type: "failure", text });
-        renderAll();
+        if (generation !== this.generation) return;
+        this.validation = reduceQueryBar(this.validation, { type: "failure", text });
+        this.renderAll();
       });
-  };
+  }
 
-  const applyCompletionsResponse = (
+  private applyCompletionsResponse(
     context: QueryCompletionContext,
     incoming: QueryCompletion[]
-  ): void => {
+  ): void {
     // The reply describes the text as it was when the request went out. Both
     // the fresh list and the rows already on screen are narrowed to the token
     // under the caret *now*, so keystrokes that landed in flight narrow the
     // popup instead of resurrecting rows. Merging the two — fresh first — is
     // what keeps the tail populated when the server's 50-row cap trims a
     // broader prefix differently than a narrower one.
-    completions = mergeCompletions([
+    this.completions = mergeCompletions([
       filterCompletions(incoming, context.prefix),
-      filterCompletions(completions, context.prefix),
+      filterCompletions(this.completions, context.prefix),
     ]);
-    activeIndex = completions.length > 0 ? 0 : -1;
-    listOpen = completions.length > 0;
-    renderList();
-  };
+    this.activeIndex = this.completions.length > 0 ? 0 : -1;
+    this.listOpen = this.completions.length > 0;
+    this.renderList();
+  }
 
-  const runCompletions = (text: string, pos: number): void => {
-    void requester
+  private runCompletions(text: string, pos: number): void {
+    const generation = this.generation;
+    void this.requester
       .completions(text, pos)
       .then((response) => {
-        if (response === null) {
+        if (response === null || generation !== this.generation) {
           return;
         }
-        const context = completionContextAt(els.input.value, caretPosition());
-        applyCompletionsResponse(context, response.completions);
+        const context = completionContextAt(this.els.input.value, this.caretPosition());
+        this.applyCompletionsResponse(context, response.completions);
       })
       .catch(() => {
-        closeList();
+        if (generation !== this.generation) return;
+        this.closeList();
       });
-  };
+  }
 
-  const caretPosition = (): number => {
-    const selection = els.input.selectionStart;
-    return typeof selection === "number" ? selection : els.input.value.length;
-  };
+  private caretPosition(): number {
+    const selection = this.els.input.selectionStart;
+    return typeof selection === "number" ? selection : this.els.input.value.length;
+  }
 
-  const acceptCompletion = (completion: QueryCompletion): void => {
-    const text = els.input.value;
-    const context = completionContextAt(text, caretPosition());
+  private acceptCompletion(completion: QueryCompletion): void {
+    if (this.composing) return;
+    const text = this.els.input.value;
+    const context = completionContextAt(text, this.caretPosition());
     const edit = applyCompletion(text, context.replace, completion.insert);
-    els.input.value = edit.text;
-    els.input.setSelectionRange(edit.pos, edit.pos);
-    els.input.focus();
-    closeList();
+    this.els.input.value = edit.text;
+    this.els.input.setSelectionRange(edit.pos, edit.pos);
+    this.els.input.focus();
+    this.closeList();
     // Accepting a field name leaves the caret just past its ":", where the
     // value list is the obvious next thing to show. Accepting a value finishes
     // the token, so the popup stays shut and only the validation runs.
-    handleTextChange(edit.text, {
+    this.handleTextChange(edit.text, {
       immediate: true,
       completionCause: context.kind === "field" ? "manual" : null,
     });
-  };
+  }
 
-  const requestCompletions = (text: string, cause: CompletionCause): void => {
-    const pos = caretPosition();
+  private requestCompletions(text: string, cause: CompletionCause): void {
+    if (this.composing) return;
+    const pos = this.caretPosition();
     if (!shouldRequestCompletions(text, pos, cause)) {
-      closeList();
+      this.closeList();
       return;
     }
     // The rows already on screen narrow immediately, so the popup tracks the
     // keystroke rather than the round trip.
-    if (listOpen) {
+    if (this.listOpen) {
       const context = completionContextAt(text, pos);
-      completions = filterCompletions(completions, context.prefix);
-      activeIndex = completions.length > 0 ? Math.min(activeIndex, completions.length - 1) : -1;
-      renderList();
+      this.completions = filterCompletions(this.completions, context.prefix);
+      this.activeIndex = this.completions.length > 0 ? Math.min(this.activeIndex, this.completions.length - 1) : -1;
+      this.renderList();
     }
-    completionsDebounce.run(() => {
-      runCompletions(els.input.value, caretPosition());
+    this.completionsDebounce.run(() => {
+      this.runCompletions(this.els.input.value, this.caretPosition());
     }, cause === "manual" ? 0 : completionsDebounceMs);
-  };
+  }
 
-  type TextChangeOptions = {
-    immediate?: boolean;
-    /** null suppresses the completion request entirely. */
-    completionCause?: CompletionCause | null;
-  };
-
-  const handleTextChange = (
+  private handleTextChange(
     text: string,
     { immediate = false, completionCause = "input" }: TextChangeOptions = {}
-  ): void => {
-    validation = reduceQueryBar(validation, { type: "input", text });
-    renderAll();
+  ): void {
+    if (this.composing) return;
+    this.validation = reduceQueryBar(this.validation, { type: "input", text });
+    this.renderAll();
 
     if (isBlankQuery(text)) {
-      validateDebounce.cancel();
-      requester.cancel();
-      publish("");
+      this.validateDebounce.cancel();
+      this.requester.cancel();
+      this.publish("");
       if (completionCause === "focus" || completionCause === "manual") {
-        requestCompletions(text, completionCause);
+        this.requestCompletions(text, completionCause);
       } else {
-        closeList();
+        this.closeList();
       }
       return;
     }
 
-    validateDebounce.run(() => {
-      runValidate(els.input.value);
+    this.validateDebounce.run(() => {
+      this.runValidate(this.els.input.value);
     }, immediate ? 0 : validateDebounceMs);
     if (completionCause !== null) {
-      requestCompletions(text, completionCause);
+      this.requestCompletions(text, completionCause);
     }
-  };
+  }
 
-  els.input.addEventListener("input", () => {
-    handleTextChange(els.input.value);
-  });
+  private bindEvents(): void {
+    const { input, clearButton, retryButton } = this.els;
+    input.addEventListener("input", (event) => {
+      if (event.isComposing) {
+        if (!this.composing) this.startComposition();
+        return;
+      }
+      this.handleTextChange(input.value);
+    });
+    input.addEventListener("compositionstart", () => this.startComposition());
+    input.addEventListener("compositionend", () => {
+      this.composing = false;
+      this.handleTextChange(input.value);
+    });
+    input.addEventListener("focus", () => {
+      if (input.value === "") this.requestCompletions("", "focus");
+    });
+    input.addEventListener("blur", () => this.closeList());
+    input.addEventListener("keydown", (event) => this.onKeyDown(event));
+    clearButton?.addEventListener("click", () => this.clear());
+    retryButton?.addEventListener("click", () => {
+      if (this.composing || this.validation.phase !== "unavailable") return;
+      this.validateDebounce.cancel();
+      this.runValidate(input.value);
+      input.focus();
+    });
+  }
 
-  els.input.addEventListener("focus", () => {
-    if (els.input.value === "") {
-      requestCompletions("", "focus");
-    }
-  });
+  private startComposition(): void {
+    this.composing = true;
+    this.generation += 1;
+    this.validateDebounce.cancel();
+    this.requester.cancel();
+    this.closeList();
+    // Clear old diagnostics without publishing intermediate composition text.
+    this.validation = emptyQueryBarValidation();
+    this.renderAll();
+  }
 
-  els.input.addEventListener("blur", () => {
-    closeList();
-  });
-
-  els.input.addEventListener("keydown", (event) => {
+  private onKeyDown(event: KeyboardEvent): void {
+    if (this.composing || isCompositionKey(event)) return;
     if (event.key === " " && event.ctrlKey) {
       event.preventDefault();
-      requestCompletions(els.input.value, "manual");
+      this.requestCompletions(this.els.input.value, "manual");
       return;
     }
     if (event.key === "Escape") {
-      if (listOpen) {
+      if (this.listOpen) {
         event.preventDefault();
-        closeList();
+        this.closeList();
       }
       return;
     }
-    if (!listOpen || completions.length === 0) {
+    if (!this.listOpen || this.completions.length === 0) {
       if (event.key === "Enter") {
         event.preventDefault();
-        validateDebounce.run(() => {
-          runValidate(els.input.value);
-        }, 0);
+        this.validateDebounce.run(() => this.runValidate(this.els.input.value), 0);
       }
       return;
     }
+    this.onCompletionKey(event);
+  }
 
+  private onCompletionKey(event: KeyboardEvent): void {
     switch (event.key) {
       case "ArrowDown":
-        event.preventDefault();
-        activeIndex = nextActiveIndex(activeIndex, 1, completions.length);
-        renderList();
-        return;
       case "ArrowUp":
         event.preventDefault();
-        activeIndex = nextActiveIndex(activeIndex, -1, completions.length);
-        renderList();
+        this.activeIndex = nextActiveIndex(this.activeIndex, event.key === "ArrowDown" ? 1 : -1, this.completions.length);
+        this.renderList();
         return;
       case "Enter":
       case "Tab": {
-        const completion = completions[activeIndex];
-        if (!completion) {
-          return;
-        }
+        const completion = this.completions[this.activeIndex];
+        if (!completion) return;
         event.preventDefault();
-        acceptCompletion(completion);
+        this.acceptCompletion(completion);
         return;
       }
       default:
     }
-  });
-
-  els.clearButton?.addEventListener("click", () => {
-    els.input.value = "";
-    validateDebounce.cancel();
-    requester.cancel();
-    validation = reduceQueryBar(validation, { type: "reset" });
-    renderAll();
-    closeList();
-    publish("");
-    els.input.focus();
-  });
-
-  // A URL that already carries an expression is re-validated on load rather
-  // than trusted, so a hand-edited or stale link reports itself.
-  const initial = readExprParam();
-  if (initial !== "") {
-    els.input.value = initial;
-    validation = reduceQueryBar(validation, { type: "input", text: initial });
-    renderAll();
-    runValidate(initial);
-    return;
   }
-  renderAll();
+
+  private clear(): void {
+    this.els.input.value = "";
+    this.generation += 1;
+    this.validateDebounce.cancel();
+    this.requester.cancel();
+    this.validation = reduceQueryBar(this.validation, { type: "reset" });
+    this.renderAll();
+    this.closeList();
+    this.publish("");
+    this.els.input.focus();
+  }
+}
+
+export const initQueryBarController = (els: QueryBarElements, deps: QueryBarDeps = {}): void => {
+  new QueryBarController(els, deps);
 };

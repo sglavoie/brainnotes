@@ -15,6 +15,7 @@ export type QueryBarElements = {
   suggestionsEl: HTMLElement | null;
   listEl: HTMLElement | null;
   clearButton: HTMLButtonElement | null;
+  retryButton: HTMLButtonElement | null;
 };
 
 export const completionOptionID = (index: number): string => `query-bar-option-${index}`;
@@ -23,6 +24,7 @@ export const renderQueryBarStatus = (
   els: QueryBarElements,
   state: QueryBarValidation
 ): void => {
+  if (els.retryButton) els.retryButton.hidden = state.phase !== "unavailable";
   const status = queryBarStatus(state);
   setStatusText(els.statusEl, status.message, status.kind);
   els.root.setAttribute("data-query-bar-phase", state.phase);
@@ -46,20 +48,7 @@ export const renderQueryBarError = (
   }
   const error = state.phase === "invalid" ? state.error : null;
   if (!error) {
-    errorEl.hidden = true;
-    if (els.errorMessageEl) {
-      els.errorMessageEl.textContent = "";
-    }
-    if (els.errorQueryEl) {
-      els.errorQueryEl.textContent = "";
-    }
-    if (els.errorCaretEl) {
-      els.errorCaretEl.textContent = "";
-    }
-    if (els.suggestionsEl) {
-      els.suggestionsEl.hidden = true;
-      els.suggestionsEl.textContent = "";
-    }
+    clearQueryBarError(els);
     return;
   }
 
@@ -76,12 +65,21 @@ export const renderQueryBarError = (
   if (els.errorCaretEl) {
     els.errorCaretEl.textContent = caret;
   }
-  if (els.suggestionsEl) {
-    const suggestions = error.suggestions;
-    els.suggestionsEl.hidden = suggestions.length === 0;
-    els.suggestionsEl.textContent =
-      suggestions.length === 0 ? "" : `Did you mean: ${suggestions.join(", ")}?`;
+  renderQueryBarSuggestions(els.suggestionsEl, error.suggestions);
+};
+
+const renderQueryBarSuggestions = (element: HTMLElement | null, suggestions: string[]): void => {
+  if (!element) return;
+  element.hidden = suggestions.length === 0;
+  element.textContent = suggestions.length === 0 ? "" : `Did you mean: ${suggestions.join(", ")}?`;
+};
+
+const clearQueryBarError = (els: QueryBarElements): void => {
+  if (els.errorEl) els.errorEl.hidden = true;
+  for (const element of [els.errorMessageEl, els.errorQueryEl, els.errorCaretEl, els.suggestionsEl]) {
+    if (element) element.textContent = "";
   }
+  if (els.suggestionsEl) els.suggestionsEl.hidden = true;
 };
 
 export type CompletionRenderOptions = {

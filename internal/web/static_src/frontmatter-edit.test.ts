@@ -125,7 +125,7 @@ describe("frontmatter DOM behavior", () => {
       method: "POST",
       body: "key=source&token=csrf-token&property=status&op=%3D&value=done",
     });
-    expect(status?.textContent).toBe("Updated frontmatter.");
+    expect(status?.textContent).toBe("Updated frontmatter. Refresh properties");
     expect(status?.classList.contains("is-success")).toBe(true);
   });
 

@@ -373,6 +373,9 @@ The bar validates as you type against `GET /api/query/validate`, which returns
 the canonical spelling of a valid expression, the fields it names, and whether
 it needs the link graph. A rejected expression is shown in place with the
 offending span underlined by a caret rather than silently returning nothing.
+If validation is unavailable, **Retry check** retries the current expression
+without changing the applied search. Validation and suggestions pause during
+text composition and resume after the composed text is committed.
 `GET /api/query/completions` supplies candidates at the caret: field names with
 a one-line hint, and values sourced per field — tags, categories, statuses,
 types and folders from the facet counts, property names and values from the
@@ -473,6 +476,12 @@ Trash, edit frontmatter in place, create a blank note for a broken wikilink
 target, and open the file in the configured editor for body edits. These web
 actions use the same note-management code as the CLI where practical, refresh
 the served vault state after success, and return structured JSON for automation.
+The frontmatter sidebar reports success only after the server confirms it and
+offers **Refresh properties** to update the displayed values. If the outcome
+cannot be confirmed, **Refresh to check** lets you inspect the note before
+trying again. Refresh is explicit and preserves the current URL, including
+Library return context; overlapping property submissions are blocked while a
+request is pending.
 
 Trash is a visible vault-root `Trash/` folder. Trashing a note moves the file
 there, chooses a non-conflicting destination name, and leaves `Trash/` ignored by
