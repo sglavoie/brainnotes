@@ -15461,6 +15461,11 @@ var BrainNotesApp = (() => {
       }
     });
     input.addEventListener("keydown", (event) => search.onKeyDown(event));
+    searchBox.addEventListener("mousedown", (event) => {
+      if (event.button !== 0 || !(event.target instanceof Element)) return;
+      if (!event.target.closest("a[href], button")) return;
+      event.preventDefault();
+    });
     searchBox.addEventListener("focusout", (event) => {
       if (!(event.relatedTarget instanceof Node) || !searchBox.contains(event.relatedTarget)) {
         search.dismiss();

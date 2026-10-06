@@ -337,6 +337,13 @@ export const initSearch = (): void => {
     }
   });
   input.addEventListener("keydown", (event) => search.onKeyDown(event));
+  searchBox.addEventListener("mousedown", (event) => {
+    if (event.button !== 0 || !(event.target instanceof Element)) return;
+    if (!event.target.closest("a[href], button")) return;
+    // Safari can blur the input without focusing a tapped link. Keep focus
+    // here so focusout cannot remove the target before its native click runs.
+    event.preventDefault();
+  });
   searchBox.addEventListener("focusout", (event) => {
     if (!(event.relatedTarget instanceof Node) || !searchBox.contains(event.relatedTarget)) {
       search.dismiss();

@@ -31,6 +31,24 @@ function compositionEvent(surface, type, data) {
   );
 }
 
+for (const path of ["/", "/properties"]) {
+  test(`header search opens a note from ${path} with one click or tap`, async ({ page }, testInfo) => {
+    await page.goto(path);
+    const input = page.locator("#search-input");
+    await input.fill("Alpha");
+    const title = page.locator("#search-results .search-result-title").filter({ hasText: /^Alpha$/ });
+    await expect(title).toBeVisible();
+    await expect(input).toBeFocused();
+    if (testInfo.project.use.hasTouch) {
+      await title.tap();
+    } else {
+      await title.click();
+    }
+    await expect(page).toHaveURL(/\/n\/alpha$/);
+    await expect(page.locator("h1")).toHaveText("Alpha");
+  });
+}
+
 test("hosted browsing, keyboard save, and IME composition form one complete workflow", async ({
   page,
 }, testInfo) => {
