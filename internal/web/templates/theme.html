@@ -71,6 +71,7 @@
     aria-live="polite"
   ></p>
   <nav class="site-nav" aria-label="Primary">
+    {{if not readOnly}}<a href="/new"{{if eq . "new"}} aria-current="page"{{end}}>New note</a>{{end}}
     <a href="/"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
     <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
     <a href="/pinned"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>

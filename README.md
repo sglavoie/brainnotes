@@ -120,6 +120,13 @@ The Pi deployment and verified synchronization tooling live in the sibling
 
 ### Hosted server
 
+To write a new note in the browser, choose **New note** in the navigation,
+enter a title and optional vault-relative folder, then select **Create and write**.
+This saves a title-only note and opens the browser editor; use **Save** to store
+your writing. Leave the folder blank to use the vault root. **Capture** remains
+the quick-thought flow into your configured inbox. Note creation and editing are
+available in local and hosted modes, but not on read-only replicas.
+
 `bn --vault /path/to/vault serve --hosted --no-open` serves the vault itself over
 the network. It is not a read-only replica with writes re-enabled: document
 actions (capture, properties, pins, cockpit fixes, synthesis) stay available,

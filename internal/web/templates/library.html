@@ -200,6 +200,7 @@
         </ul>
       {{else}}
         <p>No notes found.</p>
+        {{if not readOnly}}<p><a href="/new">Create a new note</a>.</p>{{end}}
       {{end}}
     </section>
   </main>

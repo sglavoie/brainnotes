@@ -28,6 +28,7 @@ import { initSavedViews } from "./saved-views";
 import { initSearch } from "./search";
 import { initSettings } from "./settings";
 import { initSourceEditor } from "./source-editor";
+import { initNewNote } from "./new-note";
 import { initSync } from "./sync";
 import { initSyncLine } from "./sync-line";
 import { initSynthesize } from "./synthesize";
@@ -38,6 +39,7 @@ import { initTheme } from "./theme";
   initTheme();
   if (!readOnly) {
     initCapture();
+    initNewNote();
     initOpenInEditor();
     initNotePinAction();
     initTrashNoteAction();

@@ -47359,6 +47359,73 @@ var BrainNotesApp = (() => {
     });
   };
 
+  // internal/web/static_src/new-note.ts
+  var initNewNote = (root = document, deps = {}) => {
+    const form = root.querySelector("[data-new-note]");
+    if (!form) return;
+    const title = form.querySelector('[name="title"]');
+    const folder = form.querySelector('[name="folder"]');
+    const button = form.querySelector('button[type="submit"]');
+    const status = form.querySelector("[data-new-note-status]");
+    const destination = form.querySelector("[data-new-note-destination]");
+    const navigate = deps.navigate ?? ((url) => window.location.assign(url));
+    let pending;
+    let busy = false;
+    let committed = false;
+    const values2 = () => ({
+      title: title.value.trim(),
+      folder: folder.value.trim().replace(/\\/g, "/")
+    });
+    const preview = () => {
+      const value = values2();
+      const name2 = value.title.replace(/\.md$/i, "");
+      destination.textContent = name2 ? `Destination: ${value.folder ? value.folder + "/" : ""}${name2}.md` : "Enter a title to see where your note will be saved.";
+    };
+    form.addEventListener("input", preview);
+    preview();
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (busy || committed || !form.reportValidity()) return;
+      const value = values2();
+      const signature = JSON.stringify(value);
+      if (pending?.signature !== signature) pending = { signature, id: newSaveID() };
+      busy = true;
+      button.disabled = title.disabled = folder.disabled = true;
+      status.textContent = "Creating note\u2026";
+      try {
+        const result = await postManagement({
+          url: form.dataset.createEndpoint,
+          token: form.dataset.csrf,
+          fetch: deps.fetch,
+          body: new URLSearchParams({ ...value, save_id: pending.id })
+        });
+        committed = showOutcome(result, status, form.dataset.editorPath, navigate);
+      } catch {
+        status.textContent = unconfirmedMessage2;
+      } finally {
+        busy = false;
+        button.disabled = title.disabled = folder.disabled = committed;
+      }
+    });
+  };
+  var unconfirmedMessage2 = "Couldn't confirm note creation. Retry with the same title and folder to check safely.";
+  var showOutcome = (result, status, editorPath, navigate) => {
+    if (result.ok && result.key) {
+      navigate(editorURLForKey(editorPath, result.key));
+      return true;
+    }
+    const payload = asRecord(result.payload);
+    const committed = payload?.changed === true;
+    status.textContent = result.unconfirmed || result.ok ? unconfirmedMessage2 : result.message;
+    if (committed && typeof payload?.key === "string") {
+      const link = document.createElement("a");
+      link.href = editorURLForKey(editorPath, payload.key);
+      link.textContent = "Open the created note";
+      status.append(" ", link);
+    }
+    return committed;
+  };
+
   // internal/web/static_src/sync-decisions.ts
   var manualMerge = "manual-merge";
   var choiceIn = (choices, choice) => choices.find((candidate) => candidate.choice === choice) ?? null;
@@ -50695,6 +50762,7 @@ ${candidate.markdown}`;
     initTheme();
     if (!readOnly2) {
       initCapture();
+      initNewNote();
       initOpenInEditor();
       initNotePinAction();
       initTrashNoteAction();

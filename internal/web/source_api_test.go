@@ -46,6 +46,8 @@ type sourceErrorPayload struct {
 	OK       bool   `json:"ok"`
 	Code     string `json:"code"`
 	Message  string `json:"message"`
+	Key      string `json:"key"`
+	RelPath  string `json:"rel_path"`
 	Revision string `json:"revision"`
 	Content  string `json:"content"`
 	Changed  bool   `json:"changed"`
@@ -643,6 +645,9 @@ func TestSourceSaveErrorTellsALandedSaveFromARefusedOne(t *testing.T) {
 	payload := decodeSourceError(t, recorder.Result(), http.StatusInternalServerError, noteops.CodeSnapshotFailed)
 	if payload.Revision != landed.Revision || !payload.Changed {
 		t.Fatalf("payload = %+v, want the landed revision and changed: true", payload)
+	}
+	if payload.Key != "alpha" || payload.RelPath != "Alpha.md" {
+		t.Fatalf("landed save must identify the note: %+v", payload)
 	}
 
 	recorder = httptest.NewRecorder()

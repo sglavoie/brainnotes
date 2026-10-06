@@ -71,6 +71,8 @@ type sourceSaveErrorResponse struct {
 	OK      bool   `json:"ok"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	Key     string `json:"key,omitempty"`
+	RelPath string `json:"rel_path,omitempty"`
 	// Revision is the note's current revision on a stale-revision refusal, and
 	// the new one on a snapshot failure.
 	Revision string `json:"revision,omitempty"`
@@ -308,6 +310,8 @@ func (s *Server) writeSourceSaveError(w http.ResponseWriter, req noteops.SaveSou
 	}
 	switch {
 	case result != nil:
+		payload.Key = managementRouteKeyForRelPath(result.Destination.RelPath)
+		payload.RelPath = result.Destination.RelPath
 		payload.Revision = result.Revision
 		payload.Changed = result.Changed
 		payload.Attachments = result.Attachments

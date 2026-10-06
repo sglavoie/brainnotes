@@ -22,6 +22,9 @@ type SaveSourceRequest struct {
 	SaveID string
 	// Create asks for a note that does not exist yet.
 	Create bool
+	// ExclusiveCreate refuses even identical existing content, except for a
+	// recorded replay of this SaveID. Used by standalone note creation.
+	ExclusiveCreate bool
 	// Attachments are staged uploads this note references and that must land
 	// with it. They are committed in the note's own transaction, under the note's
 	// own journal entry, so a save either stores the note and every file it
@@ -188,6 +191,9 @@ func planSourceSaveWrite(vaultRoot string, cfg *config.Config, req SaveSourceReq
 	current, err := ReadSource(vaultRoot, cfg, target.destination.RelPath)
 	if err != nil {
 		return sourceSavePlan{}, err
+	}
+	if req.Create && req.ExclusiveCreate && current.Exists {
+		return sourceSavePlan{}, newSourceExistsError(current.Destination.RelPath, current.Revision)
 	}
 	settled, err := settledSourceSave(current, target.revision, attachments)
 	if err != nil {

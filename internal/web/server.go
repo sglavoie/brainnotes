@@ -416,6 +416,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 func (srv *Server) registerPageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(synthesizeRoutePath, srv.handleSynthesizePage)
 	mux.HandleFunc(editorRoutePath, srv.handleEditorPage)
+	mux.HandleFunc(newNoteRoutePath, srv.handleNewNotePage)
 	mux.HandleFunc(propertiesRoutePath, srv.handlePropertiesPage)
 	mux.HandleFunc(propertiesRoutePrefix, srv.handlePropertyPage)
 	mux.HandleFunc(pinnedRoutePath, srv.handlePinnedPage)
@@ -500,6 +501,7 @@ func (srv *Server) registerNoteMutationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/capture", srv.handleCapture)
 	mux.HandleFunc("/api/notes/trash", srv.handleNoteTrash)
 	mux.HandleFunc("/api/notes/create", srv.handleNoteCreate)
+	mux.HandleFunc(newNoteAPIRoutePath, srv.handleNewNote)
 	mux.HandleFunc("/api/notes/rename", srv.handleNoteRename)
 	mux.HandleFunc("/api/notes/move", srv.handleNoteMove)
 	mux.HandleFunc("/api/notes/frontmatter/set", srv.handleNoteFrontmatterSet)
