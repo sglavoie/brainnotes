@@ -68,6 +68,30 @@ describe("broken create request construction", () => {
 });
 
 describe("broken create DOM behavior", () => {
+  it.each([
+    ["lost response", () => Promise.reject(new Error("offline"))],
+    ["HTML success response", () => Promise.resolve(new Response("<html>Sign in</html>"))],
+    ["malformed JSON", () => Promise.resolve(new Response("{", { headers: { "Content-Type": "application/json" } }))],
+    ["missing outcome", () => Promise.resolve(createResponse({}))],
+  ])("offers a read-only check after %s, without automatically retrying", async (_name, respond) => {
+    document.body.innerHTML = `
+      <div data-create-note data-create-source-key="source" data-create-target="Missing" data-create-csrf="csrf-token">
+        <button type="button" data-create-button>Create note</button>
+        <span data-create-status> </span>
+      </div>`;
+    const fetchMock = vi.fn(respond);
+    initBrokenCreateActions({ fetch: fetchMock });
+    const button = document.querySelector<HTMLButtonElement>("[data-create-button]")!;
+    button.click();
+    await waitForExpect(() => expect(button.disabled).toBe(false));
+    expect(document.querySelector("[data-create-status]")?.textContent).toContain("Couldn't confirm note creation");
+    const link = document.querySelector<HTMLAnchorElement>("[data-create-status] a")!;
+    expect(link.textContent).toBe("Refresh to check");
+    expect(link.href).toBe(window.location.href);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("[data-create-status]")?.classList.contains("is-error")).toBe(true);
+  });
+
   it("posts the configured request and replaces Create with the new note link", async () => {
     document.body.innerHTML = `
       <div data-create-note data-create-source-key="folder/source" data-create-target="Missing Note" data-create-csrf="csrf-token">

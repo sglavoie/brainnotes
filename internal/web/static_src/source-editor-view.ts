@@ -11,6 +11,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Annotation, EditorState } from "@codemirror/state";
+import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { EditorView, highlightSpecialChars, keymap } from "@codemirror/view";
 
 import { wikilinkContextAt, type WikilinkOption } from "./source-wikilink";
@@ -55,6 +56,7 @@ export const createSourceSurfaceFactory = (
         doc: initialValue,
         extensions: [
           history(),
+          search({ top: true }),
           highlightSpecialChars(),
           bracketMatching(),
           closeBrackets(),
@@ -74,6 +76,7 @@ export const createSourceSurfaceFactory = (
             ...completionKeymap,
             ...historyKeymap,
             ...formattingKeymap(options),
+            ...searchKeymap,
             ...defaultKeymap,
           ]),
           EditorView.updateListener.of((update) => {
@@ -111,6 +114,7 @@ export const createSourceSurfaceFactory = (
         });
       },
       focus: () => view.focus(),
+      openSearch: () => { openSearchPanel(view); },
       onChange(listener: () => void): void {
         listeners.push(listener);
       },

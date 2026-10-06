@@ -11,6 +11,18 @@ updates incoming wikilinks. If the editor has unsaved text, save it first using
 the prompt or cancel the rename. The **Save** button saves the source text;
 **Rename** applies the title change.
 
+**Find** opens search and replacement within the source editor, including text
+outside the visible portion of long notes. Ctrl/⌘ + F opens it while editing;
+Enter and Shift + Enter in its Find field move between matches. Escape closes
+the panel and returns to editing. Replacements can be undone and stay in the
+draft until you click **Save**. On narrow screens, Find switches from Preview to
+Edit automatically.
+
+If creating a missing note loses its response or receives an unreadable success
+response, the browser says it couldn't confirm creation. **Refresh to check**
+reloads the current page so you can see whether the link is still broken before
+retrying; refreshing does not send another create request.
+
 Rendered notes show the body before Ask AI. The Contents list highlights the
 current section as you scroll, without changing the URL or keyboard focus.
 The first Tab stop is **Skip to note**: press Enter to move directly to the

@@ -54,6 +54,7 @@ export type SourceEditorDeps = {
 export type SourceEditorController = {
   load(): Promise<void>;
   save(): Promise<void>;
+  openSearch(): void;
   runCommand(command: SourceFormatCommand, options?: SourceFormatOptions): void;
   // insertText puts text where the cursor is, replacing the selection, and
   // leaves the cursor after it. It is how an attachment's link reaches the note,
@@ -157,6 +158,7 @@ export const createSourceEditorController = (
     load: (): Promise<void> => runLoad(deps, state, ctx),
 
     save: (): Promise<void> => runSave(deps, state, ctx),
+    openSearch: (): void => openEditorSearch(state.surface, panes),
 
     runCommand: (command: SourceFormatCommand, options?: SourceFormatOptions): void =>
       applyCommand(state.surface, command, options),
@@ -179,6 +181,12 @@ export const createSourceEditorController = (
   unbind = wireEditor(ownerDocument, elements, state, controller, ctx);
 
   return controller;
+};
+
+const openEditorSearch = (surface: SourceSurface | null, panes: SourcePanes): void => {
+  if (!surface) return;
+  panes.select("edit");
+  surface.openSearch();
 };
 
 const applyCommand = (
@@ -348,6 +356,7 @@ const mountSurface = (
   const surface = deps.createSurface(deps.elements.surfaceHost, content);
   surface.onChange(onChange);
   state.surface = surface;
+  if (deps.elements.find) deps.elements.find.disabled = false;
 };
 
 type SaveContext = {
@@ -595,6 +604,7 @@ const wireControls = (
     });
   }
   elements.save?.addEventListener("click", () => void controller.save());
+  elements.find?.addEventListener("click", () => controller.openSearch());
 };
 
 const wireConflict = (

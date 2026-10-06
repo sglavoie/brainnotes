@@ -44,6 +44,7 @@ export const editorMarkup = (): string => `
     <button type="button" data-source-command="bold">Bold</button>
     <button type="button" data-source-command="wikilink">Wikilink</button>
     <button type="button" data-source-save disabled>Save</button>
+    <button type="button" data-source-find disabled>Find</button>
   </div>
   <p data-source-status></p>
   <p data-source-draft-status></p>
@@ -151,6 +152,7 @@ export const createFakeSurfaceFactory = (): {
         notify();
       },
       focus: () => {},
+      openSearch: () => {},
       onChange(listener: () => void): void {
         listeners.push(listener);
       },

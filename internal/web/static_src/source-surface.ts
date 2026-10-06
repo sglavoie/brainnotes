@@ -7,13 +7,11 @@ import type { SourceEdit, SourceSelection } from "./source-format";
 // real layout — it needs a viewport, scroll geometry and a font — and under
 // jsdom it either refuses to render or renders something no assertion can trust.
 // Everything that decides *what the editor does* is therefore written against
-// these seven methods and tested in Vitest; only "CodeMirror is wired up
+// this interface and tested in Vitest; only "CodeMirror is wired up
 // correctly" is left to the browser suite, where it is one page load rather
 // than a whole test strategy.
 //
-// Seven is the whole list on purpose. An eighth the controller does not call is
-// a method the fake implements as `() => {}` and no test can ever catch the
-// adapter getting wrong, which is the opposite of what this seam is for.
+// Keep this limited to operations the controller actually calls.
 
 export type SourceSurface = {
   getValue(): string;
@@ -23,6 +21,7 @@ export type SourceSurface = {
   getSelection(): SourceSelection;
   applyEdit(edit: SourceEdit): void;
   focus(): void;
+  openSearch(): void;
   // onChange fires for a user edit. A setValue performed by the controller
   // must not fire it, or loading a note would mark it dirty.
   onChange(listener: () => void): void;

@@ -11,11 +11,51 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect, gitStatus, manifest, test } from "./fixture.js";
-import { caretToEnd, openEditor } from "./editor-helpers.js";
+import { caretToEnd, keptDrafts, openEditor } from "./editor-helpers.js";
 
 const NOTE = "Alpha.md";
 const NOTE_PATH = join(manifest.hostedVault, NOTE);
 const IME_TEXT = "日本語入力";
+
+test("editor Find searches long drafts, replaces, and undoes in either layout", async ({ page }, testInfo) => {
+  const before = readFileSync(NOTE_PATH, "utf8");
+  const surface = await openEditor(page);
+  const needle = "searchneedle";
+  await caretToEnd(page);
+  await page.keyboard.insertText(`\n${needle}\n${"Padding paragraph.\n\n".repeat(160)}${needle}\n`);
+  const previewTab = page.locator('[data-source-tab="preview"]');
+  if (testInfo.project.name.endsWith("mobile")) await previewTab.click();
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  const panel = page.locator(".cm-search");
+  const find = panel.getByRole("textbox", { name: "Find", exact: true });
+  await expect(find).toBeFocused();
+  await expect(surface).toBeVisible();
+  await find.fill(needle);
+  await find.press("Tab");
+  await find.press("Enter");
+  const firstScroll = await page.locator(".cm-scroller").evaluate((node) => node.scrollTop);
+  await find.press("Enter");
+  await expect.poll(() => page.locator(".cm-scroller").evaluate((node) => node.scrollTop)).not.toBe(firstScroll);
+  await find.press("Shift+Enter");
+  await expect(panel.getByRole("button", { name: "previous", exact: true })).toBeVisible();
+
+  await panel.getByRole("textbox", { name: "Replace", exact: true }).fill("replacementneedle");
+  await panel.getByRole("button", { name: "replace all", exact: true }).click();
+  await expect.poll(async () => (await keptDrafts(page))[0]?.content.match(/replacementneedle/g)?.length).toBe(2);
+  expect(readFileSync(NOTE_PATH, "utf8")).toBe(before);
+  await find.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(surface).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(async () => (await keptDrafts(page))[0]?.content.match(/searchneedle/g)?.length).toBe(2);
+  await page.keyboard.press("ControlOrMeta+f");
+  await expect(find).toBeFocused();
+  await find.fill("definitelynomatch");
+  await find.press("Tab");
+  await find.press("Enter");
+  await expect(page.locator(".cm-searchMatch")).toHaveCount(0);
+  expect(readFileSync(NOTE_PATH, "utf8")).toBe(before);
+});
 
 function qualificationPhrase(projectName) {
   return `qualification ${projectName} ${manifest.fixtureRoot.split("/").pop()}`;

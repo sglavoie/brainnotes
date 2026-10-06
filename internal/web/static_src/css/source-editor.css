@@ -234,6 +234,29 @@
   font-style: normal;
 }
 
+.source-editor-surface .cm-panels {
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  border-color: var(--bn-border);
+}
+
+.source-editor-surface .cm-search .cm-textfield,
+.source-editor-surface .cm-search .cm-button {
+  max-width: 100%;
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  border: 1px solid var(--bn-border);
+}
+
+.source-editor-surface .cm-searchMatch {
+  background: var(--bn-accent-subtle-bg);
+  outline: 1px solid var(--bn-border);
+}
+
+.source-editor-surface .cm-searchMatch-selected {
+  outline: 2px solid var(--bn-focus);
+}
+
 .source-editor-preview {
   min-width: 0;
   max-height: 60vh;

@@ -143,6 +143,19 @@ afterEach(() => {
 });
 
 describe("loading", () => {
+  it("opens Find in the edit pane without changing or saving the note", async () => {
+    const harness = mount();
+    expect(harness.elements.find?.disabled).toBe(true);
+    await harness.controller.load();
+    const openSearch = vi.spyOn(harness.surface(), "openSearch");
+    harness.controller.panes.select("preview");
+    harness.elements.find?.click();
+    expect(harness.controller.panes.active()).toBe("edit");
+    expect(openSearch).toHaveBeenCalledOnce();
+    expect(harness.controller.dirty()).toBe(false);
+    expect(harness.client.save).not.toHaveBeenCalled();
+  });
+
   it("puts the note's bytes in the surface and starts clean", async () => {
     const harness = mount();
     await harness.controller.load();

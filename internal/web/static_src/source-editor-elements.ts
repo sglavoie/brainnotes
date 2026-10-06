@@ -91,6 +91,7 @@ export type SourceEditorElements = {
   surfaceHost: HTMLElement;
   status: HTMLElement | null;
   save: HTMLButtonElement | null;
+  find: HTMLButtonElement | null;
   commands: HTMLButtonElement[];
   tabs: HTMLButtonElement[];
   panes: HTMLElement[];
@@ -178,6 +179,7 @@ export const readSourceEditorElements = (panel: HTMLElement): SourceEditorElemen
     surfaceHost,
     status: queryElement(panel, "[data-source-status]", HTMLElement),
     save: queryElement(panel, "[data-source-save]", HTMLButtonElement),
+    find: queryElement(panel, "[data-source-find]", HTMLButtonElement),
     commands: queryAllElements(panel, "[data-source-command]", HTMLButtonElement),
     tabs: queryAllElements(panel, "[data-source-tab]", HTMLButtonElement),
     panes,

@@ -63,6 +63,20 @@ const showCreatedNote = (button: HTMLButtonElement, path: string | undefined): v
   if (hadFocus) link.focus();
 };
 
+const showUnconfirmed = (status: HTMLElement): void => {
+  setStatusText(status, "Couldn't confirm note creation. Refresh to check whether the link is still broken before retrying. ", "is-error");
+  const link = document.createElement("a");
+  link.href = window.location.href;
+  link.textContent = "Refresh to check";
+  // A fragment-only navigation would not refresh the server-rendered links.
+  link.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    window.location.reload();
+  });
+  status.appendChild(link);
+};
+
 export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void => {
   const containers = queryAllElements(document, "[data-create-note]", HTMLElement);
   if (containers.length === 0) {
@@ -97,8 +111,13 @@ export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void =
         const resp = await fetcher(request.url, request.init);
         const payload = await readCreateResponsePayload(resp);
         const result = normalizeManagementResult(payload);
-        if (!resp.ok || !result.ok) {
+        if (!resp.ok) {
           setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        if (!result.ok) {
+          if (result.message) setStatus(result.message, "is-error");
+          else showUnconfirmed(statusEl);
           return;
         }
 
@@ -106,7 +125,7 @@ export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void =
         setStatus(result.message || "Created note.", "is-success");
         showCreatedNote(button, result.path);
       } catch {
-        setStatus("Create failed.", "is-error");
+        showUnconfirmed(statusEl);
       } finally {
         button.disabled = created;
       }
