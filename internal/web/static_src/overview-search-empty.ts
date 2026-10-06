@@ -16,7 +16,18 @@ export const renderOverviewEmptyHelp = (root: HTMLElement): void => {
   if (readPageQuery()) addLink(help, params, ["q"], "Remove search text");
   if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");
   if (expression) addLink(help, params, ["expr"], "Remove expression");
+  addCreateLink(help);
   help.hidden = false;
+};
+
+const addCreateLink = (help: HTMLElement): void => {
+  const title = readPageQuery();
+  if (!title || document.documentElement.dataset.readOnly === "true") return;
+  const link = document.createElement("a");
+  link.href = `/new?${new URLSearchParams({ title })}`;
+  link.textContent = `Create a note titled “${title}”…`;
+  link.dataset.emptyCreateNote = "";
+  help.appendChild(link);
 };
 
 const addLink = (help: HTMLElement, params: URLSearchParams, keys: readonly string[], label: string): void => {

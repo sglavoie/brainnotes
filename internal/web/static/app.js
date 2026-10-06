@@ -5073,6 +5073,43 @@ var BrainNotesApp = (() => {
     }
   };
 
+  // internal/web/static_src/folder-suggestions.ts
+  var initFolderSuggestions = (root = document) => {
+    const inputs = Array.from(root.querySelectorAll("[data-folder-suggestions]"));
+    if (!inputs.length) return;
+    const doc2 = inputs[0].ownerDocument;
+    const list = doc2.createElement("datalist");
+    list.id = "bn-folder-suggestions";
+    doc2.body.append(list);
+    let loaded = false;
+    let loading = false;
+    const load = async () => {
+      if (loaded || loading) return;
+      loading = true;
+      try {
+        const response = await fetch("/api/facets", { headers: { Accept: "application/json" } });
+        if (!response.ok) return;
+        const folders = normalizeFacetOptions(await response.json()).filter((option) => option.param === "folder").sort((a, b) => a.value.localeCompare(b.value));
+        list.replaceChildren(...folders.map((folder) => {
+          const option = doc2.createElement("option");
+          option.value = folder.value;
+          return option;
+        }));
+        loaded = true;
+      } catch {
+      } finally {
+        loading = false;
+      }
+    };
+    for (const input of inputs) {
+      input.setAttribute("list", list.id);
+      input.addEventListener("focus", () => {
+        void load();
+      });
+    }
+    if (inputs.some((input) => input === doc2.activeElement)) void load();
+  };
+
   // internal/web/static_src/frontmatter-edit.ts
   var readFrontmatterPanelConfig = (panel) => ({
     noteKey: panel.getAttribute("data-frontmatter-key") || "",
@@ -10141,7 +10178,17 @@ var BrainNotesApp = (() => {
     if (readPageQuery()) addLink(help, params, ["q"], "Remove search text");
     if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");
     if (expression) addLink(help, params, ["expr"], "Remove expression");
+    addCreateLink(help);
     help.hidden = false;
+  };
+  var addCreateLink = (help) => {
+    const title = readPageQuery();
+    if (!title || document.documentElement.dataset.readOnly === "true") return;
+    const link = document.createElement("a");
+    link.href = `/new?${new URLSearchParams({ title })}`;
+    link.textContent = `Create a note titled \u201C${title}\u201D\u2026`;
+    link.dataset.emptyCreateNote = "";
+    help.appendChild(link);
   };
   var addLink = (help, params, keys, label) => {
     const next = new URLSearchParams(params);
@@ -50761,6 +50808,7 @@ ${candidate.markdown}`;
     const readOnly2 = document.documentElement.dataset.readOnly === "true";
     initTheme();
     if (!readOnly2) {
+      initFolderSuggestions();
       initCapture();
       initNewNote();
       initOpenInEditor();

@@ -41,4 +41,7 @@ test("the filter picker recovers from a failed request without losing search sta
   await expect(page).toHaveURL(new URL(library, page.url()).href);
   await expect(page.locator(".overview-result-title")).toHaveText(["Alpha", "Beta"]);
   expect(requests).toBe(2);
+  await page.getByRole("button", { name: "Select displayed", exact: true }).click();
+  await page.locator("#overview-bulk-folder").focus();
+  await expect(page.locator('#bn-folder-suggestions option[value="Notes"]')).toHaveCount(1);
 });

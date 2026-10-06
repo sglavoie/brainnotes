@@ -184,7 +184,8 @@
           <div class="source-editor-manage-group" data-source-manage-feedback="location">
             <h4>Where this note lives</h4>
             <label class="source-editor-manage-field" for="source-editor-move-folder">Folder</label>
-            <input type="text" id="source-editor-move-folder" class="source-editor-manage-input" data-source-move-folder autocomplete="off">
+            <input type="text" id="source-editor-move-folder" class="source-editor-manage-input" data-source-move-folder data-folder-suggestions autocomplete="off" aria-describedby="source-editor-move-hint">
+            <p id="source-editor-move-hint">Choose an existing folder or type a new path.</p>
             <button type="button" class="source-editor-manage-action" data-source-move>Move</button>
 
             <button type="button" class="source-editor-manage-action is-destructive" data-source-trash>Move to Trash</button>

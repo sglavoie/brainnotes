@@ -1,5 +1,17 @@
 # Local web server
 
+Note pages offer **Edit in browser** and, on local servers, **Open in external
+editor**. **More actions** contains Synthesize and Trash; expand it to use them.
+
+The folder fields in **New note**, the editor's **Move**, and Library's bulk
+**Move** suggest existing note folders as you type. You can still enter a new
+path; suggestions are optional and manual entry works if they cannot load.
+
+When Library has no matches for text search, **Create a note titled…** opens
+New note with that text filled in. Review the title and folder, then choose
+**Create and write**. Opening the form does not create anything. This action is
+unavailable on read-only replicas.
+
 Three of the larger web surfaces have their own pages: the
 [Related Notes explorer](web-related-notes.md), the
 [Synthesis workbench](web-synthesis.md), and
@@ -59,7 +71,7 @@ longer matches, the search still loads normally; interacting while results load
 cancels the automatic jump.
 Following body links, backlinks, or outgoing links to other notes carries that
 same Library context along, so **Back to results** remains available as you explore.
-**Edit source** carries it into the editor too: use the note title link to return
+**Edit in browser** carries it into the editor too: use the note title link to return
 to the note, then **Back to results** to resume browsing. Reloading the editor,
 renaming, or moving the note preserves this context.
 

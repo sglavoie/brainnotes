@@ -34,6 +34,7 @@
   cursor: pointer;
 }
 
+.note-actions .source-editor-launch,
 .note-actions .open-editor-button,
 .note-actions .trash-note-button,
 .note-actions .pin-button,
@@ -153,6 +154,18 @@
 }
 
 .note-copy-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.note-actions-more {
+  order: 1;
+  max-width: 100%;
+}
+
+.note-more-options {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;

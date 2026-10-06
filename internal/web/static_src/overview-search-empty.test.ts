@@ -7,6 +7,7 @@ import { searchResult, setURL } from "./search-test-helpers";
 afterEach(() => {
   vi.useRealTimers();
   document.body.innerHTML = "";
+  delete document.documentElement.dataset.readOnly;
   setURL("/");
 });
 
@@ -28,7 +29,7 @@ it("explains active constraints and removes only the chosen kind, preserving rep
   const { help } = await setup(`?${params}`);
   expect(help.hidden).toBe(false);
   expect(help.textContent).toContain("Searching with: text, filters, expression.");
-  const links = Array.from(help.querySelectorAll("a"));
+  const links = Array.from(help.querySelectorAll<HTMLAnchorElement>("a:not([data-empty-create-note])"));
   expect(links.map((link) => link.textContent)).toEqual(["Remove search text", "Remove filters", "Remove expression"]);
   const withoutText = new URLSearchParams(params);
   withoutText.delete("q");
@@ -51,14 +52,14 @@ it.each([
   const { help } = await setup(query);
   expect(help.hidden).toBe(false);
   expect(help.textContent).toContain(`Searching with: ${summary}.`);
-  expect(Array.from(help.querySelectorAll("a"), (link) => link.textContent)).toEqual(labels);
+  expect(Array.from(help.querySelectorAll("a:not([data-empty-create-note])"), (link) => link.textContent)).toEqual(labels);
   if (labels.length) expect(help.querySelector("a")?.getAttribute("href")).toBe("/library");
 });
 
 it("does not offer to remove whitespace-only search text", async () => {
   const { help } = await setup("?q=%20%20&tag=missing");
   expect(help.textContent).toContain("Searching with: filters.");
-  expect(Array.from(help.querySelectorAll("a"), (link) => link.textContent)).toEqual(["Remove filters"]);
+  expect(Array.from(help.querySelectorAll("a:not([data-empty-create-note])"), (link) => link.textContent)).toEqual(["Remove filters"]);
 });
 
 it.each(["blank", "error", "matches"])("does not offer empty-result help for %s", async (state) => {
@@ -79,4 +80,16 @@ it("hides old help immediately during a new search and keeps it hidden after a f
   expect(help.hidden).toBe(true);
   await vi.runAllTimersAsync();
   expect(help.hidden).toBe(true);
+});
+
+it("offers a reviewable title without carrying filters, and hides creation on replicas", async () => {
+  const title = '雪 & "new idea"';
+  const { help } = await setup(`?${new URLSearchParams({ q: title, folder: "Notes" })}`);
+  const create = help.querySelector<HTMLAnchorElement>("[data-empty-create-note]")!;
+  expect(create.textContent).toBe(`Create a note titled “${title}”…`);
+  expect(new URL(create.href).pathname).toBe("/new");
+  expect(new URL(create.href).searchParams.toString()).toBe(new URLSearchParams({ title }).toString());
+  document.documentElement.dataset.readOnly = "true";
+  const replica = await setup("?q=missing");
+  expect(replica.help.querySelector("[data-empty-create-note]")).toBeNull();
 });

@@ -80,8 +80,13 @@
       {{template "siteNav" ""}}
 
       <div class="note-actions">
+        {{if not readOnly}}
+          <div class="note-action-group">
+            <a class="source-editor-launch" href="{{.EditSourcePath}}" data-source-editor-launch>Edit in browser</a>
+          </div>
+        {{end}}
         <div class="note-action-group" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
-          <button type="button" class="open-editor-button" data-open-button>Open in editor</button>
+          <button type="button" class="open-editor-button" data-open-button>Open in external editor</button>
           <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>
         </div>
 
@@ -90,23 +95,11 @@
           <p class="pin-note-status" data-pin-status role="status" aria-live="polite"></p>
         </div>
 
-        <div class="note-action-group" data-trash-note data-trash-key="{{.Key}}" data-trash-csrf="{{.CSRFToken}}" data-trash-confirm="Move &quot;{{.Title}}&quot; to Trash?" data-trash-redirect="/">
-          <button type="button" class="trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
-          <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
-        </div>
-
         {{if not readOnly}}
-          <div class="note-action-group">
-            <a class="source-editor-launch" href="{{.EditSourcePath}}" data-source-editor-launch>Edit source</a>
-          </div>
           <div class="note-action-group">
             <a class="source-editor-launch" href="/history?path={{.Copy.VaultPath}}&amp;path_match=exact" data-note-history>History for this note</a>
           </div>
         {{end}}
-
-        <div class="note-action-group">
-          <a class="synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
-        </div>
 
         {{if .Copy.Wikilink}}
           <div class="note-action-group note-copy-actions" data-copy-controls>
@@ -122,6 +115,20 @@
             </details>
             <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
           </div>
+        {{end}}
+        {{if not readOnly}}
+          <details class="note-actions-more">
+            <summary class="copy-button">More actions</summary>
+            <div class="note-more-options">
+              <div class="note-action-group">
+                <a class="synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
+              </div>
+              <div class="note-action-group" data-trash-note data-trash-key="{{.Key}}" data-trash-csrf="{{.CSRFToken}}" data-trash-confirm="Move &quot;{{.Title}}&quot; to Trash?" data-trash-redirect="/">
+                <button type="button" class="trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
+                <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
+              </div>
+            </div>
+          </details>
         {{end}}
       </div>
 

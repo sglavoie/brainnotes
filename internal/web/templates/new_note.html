@@ -24,10 +24,10 @@
     {{template "siteNav" "new"}}
     <form class="panel new-note" data-new-note data-create-endpoint="{{.CreatePath}}" data-editor-path="{{.EditorPath}}" data-csrf="{{.CSRFToken}}">
       <label for="new-note-title">Title</label>
-      <input id="new-note-title" name="title" type="text" required autofocus autocomplete="off" aria-describedby="new-note-destination">
+      <input id="new-note-title" name="title" type="text" value="{{.SuggestedTitle}}" required autofocus autocomplete="off" aria-describedby="new-note-destination">
       <label for="new-note-folder">Folder (optional)</label>
-      <input id="new-note-folder" name="folder" type="text" placeholder="e.g. Projects/Ideas" autocomplete="off" aria-describedby="new-note-folder-hint new-note-destination">
-      <p id="new-note-folder-hint">Leave blank to save at the top level of your vault. New folders are created as needed.</p>
+      <input id="new-note-folder" name="folder" type="text" placeholder="e.g. Projects/Ideas" autocomplete="off" data-folder-suggestions aria-describedby="new-note-folder-hint new-note-destination">
+      <p id="new-note-folder-hint">Choose an existing folder or type a new path. Leave blank to save at the top level of your vault. New folders are created as needed.</p>
       <p id="new-note-destination" data-new-note-destination aria-live="polite"></p>
       <div><button type="submit">Create and write</button></div>
       <p data-new-note-status role="status" aria-live="polite"></p>

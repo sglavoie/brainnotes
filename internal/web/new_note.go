@@ -20,7 +20,9 @@ func (s *Server) handleNewNotePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	data := struct{ CSRFToken, CreatePath, EditorPath string }{s.csrfToken, newNoteAPIRoutePath, editorRoutePath}
+	data := struct{ CSRFToken, CreatePath, EditorPath, SuggestedTitle string }{
+		s.csrfToken, newNoteAPIRoutePath, editorRoutePath, r.URL.Query().Get("title"),
+	}
 	if err := s.templates.ExecuteTemplate(w, "new-note", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}

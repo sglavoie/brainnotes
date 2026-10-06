@@ -44,6 +44,10 @@ test("the read-only Brief browses notes while every document-write door stays cl
   await expect(page.getByRole("button", { name: "Copy wikilinks", exact: true })).toBeDisabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
+  await page.goto("/library?q=unwritten-replica-note");
+  await expect(page.locator("[data-overview-empty-help]")).toBeVisible();
+  await expect(page.locator("[data-empty-create-note]")).toHaveCount(0);
+
   const editor = await request.get("/edit?key=Alpha");
   expect(editor.status()).toBe(403);
   const write = await request.post("/api/source/save", {

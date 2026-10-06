@@ -5,6 +5,7 @@ import { initDailyBrief } from "./daily-brief";
 import { initDailyFixes } from "./daily-fixes";
 import { initOpenInEditor } from "./editor-open";
 import { initFacets } from "./facets";
+import { initFolderSuggestions } from "./folder-suggestions";
 import { initFrontmatterEditing } from "./frontmatter-edit";
 import { initGraph } from "./graph-controller";
 import { initHistoryPanel } from "./history-panel";
@@ -38,6 +39,7 @@ import { initTheme } from "./theme";
   const readOnly = document.documentElement.dataset.readOnly === "true";
   initTheme();
   if (!readOnly) {
+    initFolderSuggestions();
     initCapture();
     initNewNote();
     initOpenInEditor();
