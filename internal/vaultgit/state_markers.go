@@ -52,8 +52,8 @@ func corruptMarkerRecovery(path string) []string {
 // SaveBlock persists the marker.
 //
 // Its failure is reported but is not what makes the vault safe. If this write
-// fails, the condition that produced it — a deleted file still missing from the
-// working tree, a ref that still will not advance — is unchanged on disk, and
+// fails, the condition that produced it — an ambiguous filesystem change or a ref
+// that still will not advance — is unchanged on disk, and
 // the next preflight re-derives the same verdict from the same evidence. The
 // marker makes the refusal cheap to explain, not real.
 func (s *safetyState) SaveBlock(record BlockRecord) error {
@@ -62,10 +62,8 @@ func (s *safetyState) SaveBlock(record BlockRecord) error {
 	return s.writeJSON(blockedFileName, record)
 }
 
-// ClearBlock removes the marker. Nothing in this package calls it: clearing a
-// block is a deliberate human act after the content has been recovered, and an
-// engine that could clear its own marker could loop through the same failure
-// forever. It exists for a future `bn` recovery command and for tests.
+// ClearBlock removes the marker. Legacy deletion migration calls it after
+// revalidation; other block kinds require explicit recovery.
 func (s *safetyState) ClearBlock() error { return s.remove(blockedFileName) }
 
 // LoadIntent reports the persisted recovery intent.

@@ -7,22 +7,22 @@ import (
 )
 
 // pendingSet is the classified, in-scope difference between the working tree
-// and a commit, together with the deletions the pending journal records prove.
+// and a commit, together with journal entries associated with pending removals.
 type pendingSet struct {
 	added    []string
 	modified []string
 	deleted  []string
-	// proofEntries are the journal entries whose records authorized the
+	// deletionEntries are the journal entries whose records describe the
 	// deletions above. Their files must not be committed without them.
-	proofEntries map[string]bool
+	deletionEntries map[string]bool
 }
 
 func (p pendingSet) empty() bool {
 	return len(p.added) == 0 && len(p.modified) == 0 && len(p.deleted) == 0
 }
 
-// scanPending classifies the working tree against a seeded index and refuses
-// any deletion nothing explains, latching the block marker when it does.
+// scanPending classifies the working tree against a seeded index, validating
+// removals as absent regular files rather than requiring a journal.
 func (m *Manager) scanPending(ctx context.Context, head, op string) (pendingSet, error) {
 	entries, err := m.git.status(ctx, m.indexPath)
 	if err != nil {
@@ -50,15 +50,10 @@ func (m *Manager) scanPending(ctx context.Context, head, op string) (pendingSet,
 		}
 	}
 
-	authority := collectAuthority(m.journalRoot, inScope)
-	unexplained, provers, err := m.verifyDeletions(ctx, head, set.deleted, authority)
-	if err != nil {
-		return pendingSet{}, safetyErrorf(KindRepositoryState, op, "a pending deletion could not be checked against the history: %s", agent.SanitizedDiagnostic(err))
+	if err := m.validateRemovals(ctx, head, op, set.deleted); err != nil {
+		return pendingSet{}, err
 	}
-	if len(unexplained) > 0 {
-		return pendingSet{}, m.latch(unexplainedDeletionError(op, unexplained))
-	}
-	set.proofEntries = provers
+	set.deletionEntries = deletionJournalEntries(m.journalRoot, inScope)
 	return set, nil
 }
 
@@ -90,11 +85,9 @@ func (p PendingSummary) Count() int {
 // learn that a snapshot is permitted without learning whether there is anything
 // to snapshot.
 //
-// It is read-only in intent but not in effect, and deliberately so: it runs the
-// same interrupted-snapshot recovery and the same deletion verification the
-// mutation path runs, so an unexplained deletion latches the block marker the
-// moment a poll observes it rather than at the next mutation. That is the whole
-// reason the guard polls at all.
+// A scan can recover an interrupted snapshot or migrate a legacy deletion block.
+// Unsupported changes still latch a safety block. Ordinary deletions are returned
+// in the summary so the watcher schedules them like any other external edit.
 func (m *Manager) ScanPending(ctx context.Context) (PendingSummary, error) {
 	const op = "scan-pending"
 	release, err := m.acquire(safetyLockName, op, ctx)
@@ -103,7 +96,7 @@ func (m *Manager) ScanPending(ctx context.Context) (PendingSummary, error) {
 	}
 	defer release()
 
-	if err := m.checkBlocked(op); err != nil {
+	if err := m.checkBlocked(ctx, op); err != nil {
 		return PendingSummary{}, err
 	}
 	if _, err := m.recoverIntentLocked(ctx, op); err != nil {

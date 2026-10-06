@@ -18,7 +18,7 @@ import (
 // It deliberately owns no policy of its own. The debounce deadlines live in the
 // persisted WatchState, the autosave floor lives in the Manager's resolved
 // config.AutosavePolicy, the push backoff lives in the persisted PushState, and
-// the refusal to commit an unexplained deletion lives in the Manager. What the
+// repository validation and removal checks live in the Manager. What the
 // watcher adds is a loop, a poll interval, and the decision to stop asking once
 // the vault has latched a block — none of which changes what a snapshot means.
 //

@@ -212,7 +212,7 @@ func (j *Journal) Capture(path string) error {
 // it. It returns nil when nothing was captured.
 //
 // The order is the contract. The manifest is written and made durable first,
-// because it is the only thing that authorizes committing a deletion; the
+// so the undo bytes are durable before history records the change; the
 // snapshot is taken second, staging exactly the paths that manifest names. An
 // operation is a success only when both have happened, so a snapshot failure is
 // returned as a *SnapshotError rather than swallowed — the change is on disk and

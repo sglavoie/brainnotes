@@ -90,15 +90,11 @@ type modeOptions struct {
 	prepareRestore bool
 	reviewPath     string
 	acceptPath     string
-	// authorizeDeletion is a commit whose journal-less deletions a person has
-	// reviewed and approved, typically one committed by hand with `git rm` while
-	// recovering from an unexplained-deletion block. See runOnce.
+	// authorizeDeletion is a deprecated compatibility option for older scripts.
 	authorizeDeletion string
 }
 
-// fullCommitID is a complete SHA-1 or SHA-256 object name. The exporter matches
-// the approval against the commit it is publishing byte for byte, so an
-// abbreviation would approve nothing and fail exactly as before, silently.
+// fullCommitID retains validation of the legacy one-shot compatibility option.
 var fullCommitID = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -123,7 +119,7 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 	prepareRestore := flags.Bool("restore-prepare", false, "quarantine restored synchronization state under a fresh restore identity and print its inventory")
 	reviewPath := flags.String("review", "", "compare this vault with a peer inventory file and print a review plan")
 	acceptPath := flags.String("accept-review", "", "apply an explicitly reviewed plan while both peer services are stopped")
-	authorizeDeletion := flags.String("authorize-deletion", "", "with -once, publish this full commit's deletions even though no journal record proves them")
+	authorizeDeletion := flags.String("authorize-deletion", "", "deprecated compatibility option; regular-file deletions now publish automatically")
 	if err := flags.Parse(args); err != nil {
 		// `-h` is a question this command can answer, and the flag set has already
 		// answered it — on stderr, because SetOutput above sends every refusal

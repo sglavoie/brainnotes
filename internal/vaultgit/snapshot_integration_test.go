@@ -20,21 +20,16 @@ func TestPreflightCleanVault(t *testing.T) {
 	}
 }
 
-// Preflight is the gate a mutating command calls before touching a note, so it
-// has to refuse a vault with a pending deletion nothing explains — otherwise
-// the next snapshot would make that disappearance permanent.
-func TestPreflightRefusesUnexplainedDeletion(t *testing.T) {
+func TestPreflightAllowsExternalDeletion(t *testing.T) {
 	h := newHarness(t)
-	h.write("Inbox/note.md", "one\n")
+	h.write("Inbox/note.md", "one")
 	h.commitPending()
 	h.remove("Inbox/note.md")
-
-	err := h.mgr.Preflight(context.Background())
-	if !IsUnexplainedDeletion(err) {
-		t.Fatalf("Preflight = %v, want an unexplained-deletion failure", err)
+	if err := h.mgr.Preflight(context.Background()); err != nil {
+		t.Fatal(err)
 	}
-	if _, blocked := h.blockRecord(); !blocked {
-		t.Fatal("Preflight must latch the block marker")
+	if _, blocked := h.blockRecord(); blocked {
+		t.Fatal("external deletion latched a block")
 	}
 }
 

@@ -46,19 +46,16 @@
 //
 // Private state never travels. Every path is filtered through
 // vaultsync.Portable, which excludes `.bnotes/` wholesale — including this
-// package's own cursor, the undo journal that authorizes its deletions, and the
+// package's own cursor, the local undo journal, and the
 // channels themselves. The exporter's state file lives under `.bnotes/sync/` for
 // exactly that reason: it is inside the directory whose exclusion is the
 // portable policy's first rule.
 //
-// Three things halt rather than degrade. A history rewrite — a cursor the branch
-// no longer contains, a branch that changed under the cursor, a merge in a range
-// that has to replay linearly — is refused, because the alternative is telling
-// the peer a story the vault no longer tells. A deletion travels only when the
-// commit that performed it carries the journal entry proving it was intended,
-// which is the same evidence internal/vaultgit demands before it will commit a
-// deletion at all; here it is read back out of the commit rather than off the disk,
-// so the proof and the deletion are the same durable object. And two paths that
+// Unsupported history and path shapes halt rather than degrade. A history
+// rewrite — a cursor the branch no longer contains, a branch that changed under
+// the cursor, a merge in a range that has to replay linearly — is refused.
+// Regular-file deletions travel as tombstones with expected parent content and
+// causal predecessors, whether or not the commit carries a journal. Two paths that
 // are one name on a case-folding or normalizing replica never both travel —
 // whether they are one file there, or one of them a file and the other a
 // directory the second needs. vaultsync refuses both pairs inside one package,

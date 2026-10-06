@@ -13,13 +13,9 @@ import (
 
 // Preflight reports whether a mutation may proceed.
 //
-// It is the gate the mutating CLI paths call before touching a note, and it
-// refuses on four conditions: a persisted block marker, another process already
-// inside a safety operation, a repository state this engine will not write to,
-// and any pending deletion that no uncommitted journal record explains. The
-// last one is the reason preflight exists at all — if a note vanished outside
-// BrainNotes, the next `bn` mutation would otherwise snapshot the working tree
-// and make that disappearance permanent.
+// Mutations refuse unresolved safety failures, concurrent safety operations,
+// interrupted snapshots and unsupported repository states. Missing tracked
+// regular files are ordinary external changes and do not prevent a mutation.
 func (m *Manager) Preflight(ctx context.Context) error {
 	release, err := m.acquire(safetyLockName, "preflight", ctx)
 	if err != nil {
@@ -31,7 +27,7 @@ func (m *Manager) Preflight(ctx context.Context) error {
 
 // preflightLocked runs the checks that require the safety lock already held.
 func (m *Manager) preflightLocked(ctx context.Context, op string) error {
-	if err := m.checkBlocked(op); err != nil {
+	if err := m.checkBlocked(ctx, op); err != nil {
 		return err
 	}
 	// Recovery runs before anything reads the repository. An interrupted snapshot
@@ -61,10 +57,13 @@ func (m *Manager) preflightLocked(ctx context.Context, op string) error {
 }
 
 // checkBlocked converts a persisted marker into a refusal.
-func (m *Manager) checkBlocked(op string) error {
+func (m *Manager) checkBlocked(ctx context.Context, op string) error {
 	record, blocked, readErr := m.state.LoadBlock()
 	if !blocked {
 		return nil
+	}
+	if readErr == nil && record.Kind == KindUnexplainedDeletion {
+		return m.recoverDeletionBlock(ctx, op)
 	}
 	return &SafetyError{
 		Kind:   KindBlocked,
@@ -180,4 +179,26 @@ func (m *Manager) seedIndex(ctx context.Context, head, op string) error {
 		return safetyErrorf(KindRepositoryState, op, "the private Git index could not be seeded from HEAD: %s", agent.SanitizedDiagnostic(err))
 	}
 	return nil
+}
+
+// recoverDeletionBlock migrates only the obsolete deletion policy. Other
+// failures remain blocking, including a recovery intent that cannot be proved.
+func (m *Manager) recoverDeletionBlock(ctx context.Context, op string) error {
+	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
+		return err
+	}
+	if err := m.checkRepositoryState(op); err != nil {
+		return err
+	}
+	head, _, err := m.headState(ctx, op)
+	if err != nil {
+		return err
+	}
+	if err := m.seedIndex(ctx, head, op); err != nil {
+		return err
+	}
+	if _, err := m.scanPending(ctx, head, op); err != nil {
+		return err
+	}
+	return m.state.ClearBlock()
 }

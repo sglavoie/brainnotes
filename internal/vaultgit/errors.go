@@ -34,8 +34,8 @@ const (
 	// KindBusy means another process holds the safety lock. It is retryable and
 	// says nothing about the vault's health.
 	KindBusy Kind = "busy"
-	// KindUnexplainedDeletion means a tracked path is gone from the working tree
-	// and no uncommitted finalized journal record proves the transition.
+	// KindUnexplainedDeletion identifies legacy journal-proof policy blocks.
+	// New operations accept regular-file deletions and do not emit this kind.
 	KindUnexplainedDeletion Kind = "unexplained_deletion"
 	// KindAmbiguousChange means Git reported a pending change this engine will
 	// not classify deterministically — a type change, a rename pair, or an

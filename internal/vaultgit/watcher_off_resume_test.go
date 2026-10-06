@@ -2,6 +2,8 @@ package vaultgit
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -204,6 +206,9 @@ func TestWatcherResumedOffTransitionStaysOnWhenTheSnapshotIsRefused(t *testing.T
 	// running, so the restarted one meets it on the very poll that owes the vault
 	// its final snapshot.
 	h.remove("vanishes.md")
+	if err := os.Mkdir(filepath.Join(h.root, "vanishes.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	h.advance(time.Second)
 	h.mgr = h.open(Options{Autosave: autosavePolicy(t, "off")})
 	rec := &watchRecorder{}
@@ -214,7 +219,7 @@ func TestWatcherResumedOffTransitionStaysOnWhenTheSnapshotIsRefused(t *testing.T
 	requireNoKind(t, rec, WatchEventConfigChanged)
 	requirePolicy(t, h, "5m")
 	if h.head() != baseline {
-		t.Fatal("the resumed transition committed on top of an unexplained deletion")
+		t.Fatal("the resumed transition committed on top of an ambiguous type change")
 	}
 	if !contains(h.tracked(), "vanishes.md") {
 		t.Fatal("the deleted note is no longer in the history")

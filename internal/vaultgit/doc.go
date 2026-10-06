@@ -14,17 +14,14 @@
 //
 // # The six invariants
 //
-//  1. **A deletion is never committed unless something proves it was intended.**
-//     Additions and modifications only ever add content to the history, so they
-//     need no proof. A deletion removes the last copy from the tip, so it needs
-//     one: an *uncommitted* finalized BrainNotes journal record whose `Before`
-//     hash equals the content the deletion would drop and whose `After` state is
-//     `missing`. Anything else — an unexplained delete, a file replaced by a
-//     directory, an unmerged index, a rename Git reported ambiguously — blocks.
-//     See [Manager.CommitPending] and classify.go.
+//  1. **External changes, including deletions, are recoverable in Git.**
+//     Missing tracked regular files are recorded automatically. Older commits
+//     retain their content; no journal is needed to delete from an editor or
+//     another device. Journaled operations additionally preserve pre-mutation
+//     bytes for undo. Type changes and ambiguous repository states still refuse.
 //
-//  2. **A local safety failure is durable and fails closed.** An unexplained
-//     deletion, a classification ambiguity, a ref compare-and-swap that cannot
+//  2. **A local safety failure is durable and fails closed.** A classification
+//     ambiguity, a ref compare-and-swap that cannot
 //     be retried safely, or a failed local commit writes `blocked.json`, and
 //     [Manager.Preflight] refuses every later mutation until a person clears it.
 //     If writing the marker itself fails, the condition that caused it is still

@@ -102,11 +102,9 @@ func TestOnceRunsOneBoundedPassAndPrintsWhatItDid(t *testing.T) {
 	}
 }
 
-// TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized is the recovery the
-// vault-safety block procedure leads to: a person accepts a deletion with
-// `git rm`, which writes no journal record, so the exporter refuses to publish
-// it until that exact commit is approved for one pass.
-func TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized(t *testing.T) {
+// External deletions publish automatically; old scripts may still pass the
+// deprecated approval flag without changing the result.
+func TestOncePublishesAHandCommittedDeletionAutomatically(t *testing.T) {
 	for _, authorize := range []bool{false, true} {
 		pair := enrolledPair(t)
 		// The first export is a baseline of the whole tree, which carries no
@@ -117,10 +115,9 @@ func TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized(t *testing.T) {
 		pair.Local.Git(t, "rm", "-q", "--", "Alpha.md")
 		pair.Local.Git(t, "commit", "-q", "-m", "remove Alpha.md after review")
 		args := []string{"-once"}
-		wantCode := exitNeedsPerson
+		wantCode := exitOK
 		if authorize {
 			args = append(args, "-authorize-deletion", strings.TrimSpace(pair.Local.Git(t, "rev-parse", "HEAD")))
-			wantCode = exitOK
 		}
 
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
@@ -132,8 +129,8 @@ func TestOncePublishesAHandCommittedDeletionOnlyWhenAuthorized(t *testing.T) {
 		if code != wantCode {
 			t.Fatalf("authorize=%v: deletion exited %d, want %d: %+v %s", authorize, code, wantCode, pass, stderr)
 		}
-		if pass.Failed() != !authorize {
-			t.Fatalf("authorize=%v: pass failure = %v, want %v: %+v", authorize, pass.Failed(), !authorize, pass)
+		if pass.Failed() {
+			t.Fatalf("authorize=%v: pass failure = %v, want %v: %+v", authorize, pass.Failed(), false, pass)
 		}
 	}
 }
@@ -364,12 +361,15 @@ func blockHistory(t *testing.T, root string) {
 	if err := os.Remove(filepath.Join(root, "Alpha.md")); err != nil {
 		t.Fatalf("remove a tracked note: %v", err)
 	}
+	if err := os.Mkdir(filepath.Join(root, "Alpha.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	manager, err := vaultgit.Open(context.Background(), root, vaultgit.Options{})
 	if err != nil {
 		t.Fatalf("open the content history: %v", err)
 	}
 	if _, err := manager.CommitPending(context.Background()); err == nil {
-		t.Fatal("an unexplained deletion was committed")
+		t.Fatal("an ambiguous type change was committed")
 	}
 }
 

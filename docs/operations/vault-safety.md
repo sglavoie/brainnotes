@@ -16,8 +16,8 @@ The vault's tracked scope is fixed and is not configurable:
 - Every note in the vault, at its real path.
 - The durable sidecars `.bnotes/brief.json`, `.bnotes/cockpit.json`, and
   `.bnotes/recall.json`.
-- The undo journal under `.bnotes/journal/`, which is what authorizes committing
-  a deletion.
+- The undo journal under `.bnotes/journal/`, which preserves pre-mutation bytes
+  for `bn undo`.
 - `brainnotes.toml` and `.gitignore`.
 
 Deliberately outside it: the note cache under `.bnotes/index/`, the lock files
@@ -79,8 +79,7 @@ Two worked examples, both at the default five-minute floor:
 
 Nothing here is a knob on how much of the vault is recoverable. At *any* floor
 value, including `off`, an explicit BrainNotes mutation still commits before the
-command returns, a deletion is still refused unless a journal record explains it,
-and the history is still pushed on the same schedule. The floor governs one
+command returns, and the history is still pushed on the same schedule. The floor governs one
 thing: how often the guard adds a commit **of its own**. See
 [Configuration](../configuration.md#the-autosave-floor) for the accepted values.
 
@@ -144,22 +143,35 @@ guard resumes it on its first poll, under the outgoing policy, and publishes
 carries no such record and is left alone — restarting the guard never adds a
 commit to it.
 
-The guard keeps watching either way. `off` asks it to stop writing history on its
-own initiative, not to stop looking, so a note deleted by a sync client while
-autosave is off still latches the block marker on the poll that noticed it.
+The guard keeps watching either way. While autosave is off, deletions remain
+pending alongside additions and edits; they do not block other operations.
 
 ## Deletions
 
-The one thing the engine will not do on its own is commit a deletion it cannot
-explain. A deletion is committed only when an *uncommitted* undo-journal record
-proves BrainNotes made it. A tracked file that simply disappears is treated as
-damage: the guard blocks immediately, on the same poll that noticed it, and
-refuses every subsequent mutation until a person resolves it. Nothing is
-committed and nothing is pushed, so the content is still in `HEAD` and still on
-the remote.
+Delete files directly from VS Code, a file manager, or another device whose
+changes arrive in the vault. Missing tracked regular files are recorded with the
+same autosave timing as external edits, then exported as sync tombstones. A
+concurrent edit on a peer still requires conflict resolution.
 
-That is the whole trade. A deletion you meant costs you one command. A deletion
-you did not mean costs you nothing.
+`bn remove` continues to move a note to `Trash/` and record an undo entry.
+`bn undo <id>` restores its pre-removal bytes, including edits newer than the
+last Git snapshot. External deletions do not create Trash copies or undo entries.
+
+Git retains previously committed versions after deletion. Find the deletion
+commit and restore from its parent:
+
+```sh
+git -C <vault> log --diff-filter=D --format='%H %s' -- '<path>'
+git -C <vault> restore --source='<deletion-commit>^' --worktree -- '<path>'
+```
+
+The restored file is recorded on the next autosave. Git cannot recover edits
+that disappeared before any snapshot captured them.
+
+Valid `unexplained_deletion` blocks written by older releases are cleared on the
+next safety operation after repository and interrupted-snapshot checks pass.
+Upgrade the CLI, guard and sync companion together and restart running services.
+Corrupt markers, unsupported versions and other safety failures still refuse.
 
 ## Logs and notifications
 
@@ -237,9 +249,8 @@ one canonical spelling of a duration inside the same inclusive 30s–24h bounds
 and none of them is a floor this vault could be under, so each is reported as
 unreadable rather than obeyed.
 
-A pending *deletion* is a problem at any floor value and is never resolved by
-waiting — the guard commits a deletion only when a journal record authorizes it,
-and refuses otherwise.
+A pending deletion follows the same floor as an external edit. With autosave
+off, it remains pending until autosave resumes or an explicit snapshot records it.
 
 ## Recovering from a refusal
 
@@ -251,7 +262,8 @@ different things:
 - **`intent.json`** — an operation began and never finished. The engine observed
   nothing; the record is the only evidence the attempt happened at all.
 
-Either one on its own refuses every later write, so both need clearing before
+Except for automatically migrated legacy deletion blocks, either one on its own
+refuses every later write, so both need resolving before
 the vault accepts one. There is deliberately no `bn` command that clears either:
 a refusing vault means the engine cannot account for something, and the only
 useful next step is for a person to look.
@@ -262,7 +274,7 @@ useful next step is for a person to look.
 $ cat "$(git -C ~/BrainNotesVault rev-parse --git-dir)/brainnotes-safety/blocked.json"
 {
   "version": 1,
-  "kind": "unexplained-deletion",
+  "kind": "ambiguous_change",
   "reason": "…",
   "operation": "…",
   "observed_at": "…",
@@ -272,24 +284,10 @@ $ cat "$(git -C ~/BrainNotesVault rev-parse --git-dir)/brainnotes-safety/blocked
 ```
 
 `reason` says what happened in one clause and `recovery` says what to do.
-`kind` and `paths` tell you which case you are in. For an unexplained deletion
-there are exactly two right answers.
-
-To put the note back, restore it from the last commit:
-
-```
-$ cd ~/BrainNotesVault
-$ git checkout HEAD -- "<path from the marker>"
-```
-
-To confirm you did mean to delete it, review it first and then commit the
-deletion deliberately:
-
-```
-$ git show "HEAD:<path from the marker>" | less
-$ git rm -- "<path from the marker>"
-$ git commit -m "remove <path from the marker> after review"
-```
+`kind` and `paths` identify the affected paths and failure type. Follow the
+record's recovery instructions before clearing it. Ordinary file deletions no
+longer create block markers; see [Deletions](#deletions) for recovery and upgrade
+behavior.
 
 ### An interrupted snapshot
 

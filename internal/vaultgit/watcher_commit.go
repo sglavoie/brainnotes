@@ -21,20 +21,7 @@ func (w *Watcher) scanAndCommit(ctx context.Context) bool {
 	w.blockAnnounced = false
 
 	if summary.Empty() {
-		w.lastFingerprint = ""
-		// Only worth an event when there was a burst to close. An idle vault has no
-		// open burst, and saying "settled" on every poll of one would drown the log.
-		closed, err := w.mgr.NoteExternalSettled()
-		switch {
-		case err != nil:
-			w.emit(WatchEvent{Kind: WatchEventError, Message: "the debounce clock could not be closed", Detail: agent.SanitizedDiagnostic(err)})
-		case closed:
-			w.emit(WatchEvent{Kind: WatchEventSettled, Message: "the working tree matches the content history again"})
-		}
-		// A clean working tree owes the outgoing policy nothing, so a pending switch
-		// to off takes effect immediately rather than waiting for an edit that may
-		// never come.
-		w.finishOffTransition()
+		w.reportSettled()
 		return false
 	}
 
@@ -42,38 +29,14 @@ func (w *Watcher) scanAndCommit(ctx context.Context) bool {
 	// whichever one each step happens to observe.
 	off := w.mgr.AutosavePolicy().Disabled
 
-	if current := w.fingerprint(summary); current != w.lastFingerprint {
-		w.lastFingerprint = current
-		// The clock is advanced only when there is a snapshot for it to schedule.
-		// While off, opening a burst would leave a readiness deadline behind that
-		// re-enabling would inherit — the working tree may have been dirty for
-		// hours by then, and the first poll under the new policy would commit
-		// instantly instead of waiting out a quiet period.
-		if !off {
-			if _, err := w.mgr.NoteExternalChange(); err != nil {
-				// The clock is a scheduling hint; losing a write to it costs at most one
-				// extra poll before the burst is reopened.
-				w.emit(WatchEvent{Kind: WatchEventError, Message: "the debounce clock could not be advanced", Detail: agent.SanitizedDiagnostic(err)})
-			}
-		}
-		paths := summaryPaths(summary)
-		w.emit(WatchEvent{
-			Kind:      WatchEventPending,
-			Message:   "the working tree differs from the content history",
-			Paths:     capPaths(paths),
-			PathCount: len(paths),
-		})
-	}
+	w.reportPending(summary, off)
 
 	if w.pendingOff {
 		return w.commitTransitionSnapshot(ctx)
 	}
 	if off {
-		// Everything above this line still runs while off — the scan, the deletion
-		// check it performs, the pending event — and everything below it does not.
-		// Turning autosave off asks BrainNotes to stop writing history on its own
-		// initiative; it does not ask it to stop watching, and a note deleted by a
-		// sync client while off must still latch the block marker.
+		// Off still reports pending changes, including deletions, but does not
+		// create external snapshots.
 		return false
 	}
 	if !w.mgr.ExternalCommitDue() {
@@ -103,7 +66,7 @@ func (w *Watcher) scanAndCommit(ctx context.Context) bool {
 // final snapshot is that it bypasses both the quiet period and the floor, so the
 // vault is left whole at the instant the user asked for the guard to stop
 // committing rather than up to a floor's worth of edits behind. Everything else
-// a snapshot checks still applies — the lock, the deletion proof, the block
+// a snapshot checks still applies — the lock, removal validation, the block
 // marker — because leaving the vault whole is exactly what those checks are for.
 //
 // Its failure paths are the reason the transition is deferred rather than
@@ -247,4 +210,47 @@ func (w *Watcher) reportFailure(message string, err error) {
 		return
 	}
 	w.emit(WatchEvent{Kind: WatchEventError, Message: message, Detail: agent.SanitizedDiagnostic(err)})
+}
+
+func (w *Watcher) reportSettled() {
+	w.lastFingerprint = ""
+	// Only worth an event when there was a burst to close. An idle vault has no
+	// open burst, and saying "settled" on every poll of one would drown the log.
+	closed, err := w.mgr.NoteExternalSettled()
+	switch {
+	case err != nil:
+		w.emit(WatchEvent{Kind: WatchEventError, Message: "the debounce clock could not be closed", Detail: agent.SanitizedDiagnostic(err)})
+	case closed:
+		w.emit(WatchEvent{Kind: WatchEventSettled, Message: "the working tree matches the content history again"})
+	}
+	// A clean working tree owes the outgoing policy nothing, so a pending switch
+	// to off takes effect immediately rather than waiting for an edit that may
+	// never come.
+	w.finishOffTransition()
+}
+
+func (w *Watcher) reportPending(summary PendingSummary, off bool) {
+	if current := w.fingerprint(summary); current != w.lastFingerprint {
+		w.lastFingerprint = current
+		// The clock is advanced only when there is a snapshot for it to schedule.
+		// While off, opening a burst would leave a readiness deadline behind that
+		// re-enabling would inherit — the working tree may have been dirty for
+		// hours by then, and the first poll under the new policy would commit
+		// instantly instead of waiting out a quiet period.
+		if !off {
+			if _, err := w.mgr.NoteExternalChange(); err != nil {
+				// The clock is a scheduling hint; losing a write to it costs at most one
+				// extra poll before the burst is reopened.
+				w.emit(WatchEvent{Kind: WatchEventError, Message: "the debounce clock could not be advanced", Detail: agent.SanitizedDiagnostic(err)})
+			}
+		}
+		paths := summaryPaths(summary)
+		w.emit(WatchEvent{
+			Kind:      WatchEventPending,
+			Message:   "the working tree differs from the content history",
+			Paths:     capPaths(paths),
+			PathCount: len(paths),
+		})
+	}
+
 }

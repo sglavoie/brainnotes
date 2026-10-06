@@ -57,10 +57,8 @@ func TestWatcherWhileOffScansAndReportsButDoesNotCommit(t *testing.T) {
 	}
 }
 
-// The protection that matters most is the one that is not a commit. A note that
-// vanishes while autosave is off still latches the block marker, because the
-// scan that finds it is the scan that never stopped running.
-func TestWatcherWhileOffStillBlocksAnUnexplainedDeletion(t *testing.T) {
+// Deletions remain pending while autosave is off, without blocking mutations.
+func TestWatcherWhileOffReportsExternalDeletion(t *testing.T) {
 	h := newHarness(t)
 	h.setAutosave("30s")
 	stub := &stubPolicySource{}
@@ -81,12 +79,12 @@ func TestWatcherWhileOffStillBlocksAnUnexplainedDeletion(t *testing.T) {
 	h.advance(time.Minute)
 	w.tick(ctx)
 
-	event := requireKind(t, rec, WatchEventBlocked)
+	event := requireKind(t, rec, WatchEventPending)
 	if !contains(event.Paths, "vanishes.md") {
 		t.Fatalf("the block event does not name the missing path: %+v", event)
 	}
-	if _, blocked := h.blockRecord(); !blocked {
-		t.Fatal("no block marker was latched while off")
+	if _, blocked := h.blockRecord(); blocked {
+		t.Fatal("deletion latched a block while off")
 	}
 	if h.head() != baseline {
 		t.Fatal("the history moved while autosave was off")

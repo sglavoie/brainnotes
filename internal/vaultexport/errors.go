@@ -56,11 +56,8 @@ var (
 	// replica, so it halts and names the path.
 	ErrUnsupportedEntry = errors.New("vaultexport: tracked path is not a regular file")
 
-	// ErrUnauthorizedDeletion reports a committed deletion with no journal
-	// record in the same commit proving it was intended. internal/vaultgit
-	// refuses to *commit* a deletion without that proof; this refuses to
-	// *publish* one, because a tombstone applied on the peer destroys content
-	// there and a receipt says it was meant.
+	// ErrUnauthorizedDeletion is retained for source compatibility.
+	// Deprecated: regular-file deletions no longer require journal authority.
 	ErrUnauthorizedDeletion = errors.New("vaultexport: committed deletion carries no journal authority")
 
 	// ErrChannelConflict reports a reserved package identity whose directory in

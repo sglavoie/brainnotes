@@ -2,7 +2,7 @@ package vaultgit
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,70 +111,33 @@ func TestCommitPendingHonoursScope(t *testing.T) {
 
 // --- Deletions ---------------------------------------------------------------
 
-// The invariant the whole package exists for: a note that disappeared without a
-// journal record is never committed, never pushed, and latches a durable block.
-func TestUnexplainedDeletionIsNeverCommittedOrPushed(t *testing.T) {
+// External deletion is recorded and published while the parent keeps the bytes.
+func TestExternalDeletionIsCommittedAndRecoverable(t *testing.T) {
 	h := newHarness(t)
 	bare := t.TempDir()
 	rawGit(t, bare, "-c", "init.defaultBranch=main", "init", "--bare", "-q")
 	rawGit(t, h.root, "remote", "add", "origin", bare)
-
-	h.write("Inbox/keep.md", "keep\n")
-	h.write("Inbox/precious.md", "irreplaceable\n")
+	h.write("Inbox/keep.md", "keep")
+	h.write("Inbox/precious.md", "irreplaceable")
 	h.commitPending()
-	if _, err := h.mgr.Push(context.Background()); err != nil {
-		t.Fatalf("Push: %v", err)
-	}
-	safe := h.head()
-
-	// Something outside BrainNotes removed the note: a sync client, a bad
-	// `rm`, a merge gone wrong.
+	parent := h.head()
 	h.remove("Inbox/precious.md")
-	h.write("Inbox/keep.md", "keep, edited\n")
-
-	_, err := h.mgr.CommitPending(context.Background())
-	if !IsUnexplainedDeletion(err) {
-		t.Fatalf("CommitPending = %v, want an unexplained-deletion failure", err)
+	h.write("Inbox/keep.md", "edited")
+	result := h.commitPending()
+	if !result.Committed || !contains(result.Deleted, "Inbox/precious.md") || h.trackedSet()["Inbox/precious.md"] {
+		t.Fatalf("deletion not recorded: %+v", result)
 	}
-	if !strings.Contains(err.Error(), "Inbox/precious.md") {
-		t.Fatalf("the error must name the missing note: %v", err)
+	if got := rawGit(t, h.root, "show", parent+":Inbox/precious.md"); got != "irreplaceable" {
+		t.Fatal(got)
 	}
-	if h.head() != safe {
-		t.Fatal("the branch moved despite an unexplained deletion")
-	}
-	if !h.trackedSet()["Inbox/precious.md"] {
-		t.Fatal("the note left the history")
-	}
-
-	// Nothing new can reach the remote, because nothing new was committed.
 	if _, err := h.mgr.Push(context.Background()); err != nil {
-		t.Fatalf("Push after a refused snapshot: %v", err)
+		t.Fatal(err)
 	}
-	if remoteHead := rawGit(t, bare, "rev-parse", "refs/heads/main"); remoteHead != safe {
-		t.Fatalf("remote head = %s, want %s", remoteHead, safe)
+	if got := rawGit(t, bare, "rev-parse", "refs/heads/main"); got != h.head() {
+		t.Fatal("deletion was not published")
 	}
-
-	record, blocked := h.blockRecord()
-	if !blocked {
-		t.Fatal("an unexplained deletion must latch the block marker")
-	}
-	if record.Kind != KindUnexplainedDeletion || len(record.Recovery) == 0 {
-		t.Fatalf("block record = %+v", record)
-	}
-	if !contains(record.Paths, "Inbox/precious.md") {
-		t.Fatalf("block record paths = %v", record.Paths)
-	}
-	// The marker names paths and instructions, never note contents.
-	for _, step := range record.Recovery {
-		if strings.Contains(step, "irreplaceable") {
-			t.Fatalf("the block record leaked note content: %q", step)
-		}
-	}
-	// The refusal happened while the snapshot was being planned, so no intent was
-	// ever written; and a marker that did land takes the record's place in any
-	// case. Either way nothing is left for recovery to adjudicate.
-	if _, present := h.mgr.Interrupted(); present {
-		t.Fatal("a latched refusal left an intent record behind")
+	if _, blocked := h.blockRecord(); blocked {
+		t.Fatal("external deletion blocked the vault")
 	}
 }
 
@@ -238,33 +201,17 @@ func TestJournalRecordAuthorizesRename(t *testing.T) {
 	}
 }
 
-// A journal record proves a transition once. Once it is in the history it can no
-// longer authorize anything, or deleting a note, restoring it, and deleting it
-// again by hand would pass as intended.
-func TestCommittedJournalRecordCannotAuthorizeALaterDeletion(t *testing.T) {
+func TestRepeatedExternalDeletionNeedsNoNewJournal(t *testing.T) {
 	h := newHarness(t)
-	h.write("Inbox/gone.md", "goodbye\n")
+	h.write("gone.md", "goodbye")
 	h.commitPending()
-
-	h.advance(time.Minute)
-	h.record("bn rm Inbox/gone.md", []string{"Inbox/gone.md"}, func() { h.remove("Inbox/gone.md") })
+	h.record("bn rm", []string{"gone.md"}, func() { h.remove("gone.md") })
 	h.commitPending()
-
-	// The same note comes back with the same content and then vanishes again,
-	// this time with nothing to explain it.
-	h.advance(time.Minute)
-	h.write("Inbox/gone.md", "goodbye\n")
+	h.write("gone.md", "goodbye")
 	h.commitPending()
-	safe := h.head()
-
-	h.advance(time.Minute)
-	h.remove("Inbox/gone.md")
-	_, err := h.mgr.CommitPending(context.Background())
-	if !IsUnexplainedDeletion(err) {
-		t.Fatalf("CommitPending = %v, want an unexplained-deletion failure", err)
-	}
-	if h.head() != safe {
-		t.Fatal("the branch moved on a deletion proven only by an already-committed record")
+	h.remove("gone.md")
+	if result := h.commitPending(); !result.Committed || !contains(result.Deleted, "gone.md") {
+		t.Fatal(result)
 	}
 }
 
@@ -278,72 +225,24 @@ func soleManifest(t *testing.T, h *testHarness) string {
 	return matches[0]
 }
 
-// A journal record whose pre-image hash is not what the history holds proves
-// nothing about the file that is actually being removed. Matching the exact
-// content is what makes the proof specific rather than a blanket permission
-// slip for that path.
-func TestJournalRecordWithWrongHashDoesNotAuthorize(t *testing.T) {
-	h := newHarness(t)
-	h.write("Inbox/gone.md", "version one\n")
-	h.commitPending()
-	safe := h.head()
-
-	h.record("bn rm Inbox/gone.md", []string{"Inbox/gone.md"}, func() { h.remove("Inbox/gone.md") })
-
-	manifest := soleManifest(t, h)
-	data, err := os.ReadFile(manifest)
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("decode manifest: %v", err)
-	}
-	files, ok := doc["files"].([]any)
-	if !ok || len(files) != 1 {
-		t.Fatalf("unexpected manifest shape: %v", doc["files"])
-	}
-	before := files[0].(map[string]any)["before"].(map[string]any)
-	before["sha256"] = strings.Repeat("0", 64)
-	patched, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatalf("encode manifest: %v", err)
-	}
-	if err := os.WriteFile(manifest, patched, 0o644); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
-
-	_, err = h.mgr.CommitPending(context.Background())
-	if !IsUnexplainedDeletion(err) {
-		t.Fatalf("CommitPending = %v, want an unexplained-deletion failure", err)
-	}
-	if h.head() != safe {
-		t.Fatal("the branch moved on a deletion the journal does not prove")
-	}
-	if !h.trackedSet()["Inbox/gone.md"] {
-		t.Fatal("the note left the history")
-	}
-}
-
-// A manifest that does not load — truncated by a crash, half-written — proves
-// nothing, so the deletion it would have explained stays unexplained. The
-// conservative outcome is the one that keeps the note.
-func TestUnreadableJournalRecordDoesNotAuthorize(t *testing.T) {
-	h := newHarness(t)
-	h.write("Inbox/gone.md", "version one\n")
-	h.commitPending()
-
-	h.record("bn rm Inbox/gone.md", []string{"Inbox/gone.md"}, func() { h.remove("Inbox/gone.md") })
-	if err := os.WriteFile(soleManifest(t, h), []byte(`{"id":"trunc`), 0o644); err != nil {
-		t.Fatalf("truncate manifest: %v", err)
-	}
-
-	_, err := h.mgr.CommitPending(context.Background())
-	if !IsUnexplainedDeletion(err) {
-		t.Fatalf("CommitPending = %v, want an unexplained-deletion failure", err)
-	}
-	if !h.trackedSet()["Inbox/gone.md"] {
-		t.Fatal("the note left the history")
+// External changes do not depend on the health or contents of an undo manifest.
+func TestExternalDeletionDoesNotRequireJournalProof(t *testing.T) {
+	for _, malformed := range []bool{false, true} {
+		t.Run(fmt.Sprint(malformed), func(t *testing.T) {
+			h := newHarness(t)
+			h.write("gone.md", "committed version")
+			h.commitPending()
+			h.write("gone.md", "edited since the commit")
+			h.record("bn rm", []string{"gone.md"}, func() { h.remove("gone.md") })
+			if malformed {
+				if err := os.WriteFile(soleManifest(t, h), []byte(`{"id":"trunc`), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if result := h.commitPending(); !result.Committed || !contains(result.Deleted, "gone.md") {
+				t.Fatal(result)
+			}
+		})
 	}
 }
 

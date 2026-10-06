@@ -2,7 +2,6 @@ package vaultexport
 
 import (
 	"encoding/json"
-	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,29 +12,20 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
-// TestDeletionWithoutAuthorityHalts is the deletion-authority requirement. A
-// tombstone is the one change a peer cannot undo by re-reading its own copy, so
-// it travels only on the strength of a record saying the removal was intended.
-func TestDeletionWithoutAuthorityHalts(t *testing.T) {
+func TestDeletionWithoutJournalTravelsAsTombstone(t *testing.T) {
 	f := newFixture(t)
-	f.mustExport(Options{})
-	cursor := f.state().Commit
-
+	baseline := f.mustExport(Options{})
+	body := f.vault.Read(t, "Beta.md")
 	f.remove("Beta.md")
-	f.commit("remove Beta.md by hand")
-
-	_, err := f.export(Options{})
-	if !errors.Is(err, ErrUnauthorizedDeletion) {
-		t.Fatalf("error: got %v, want ErrUnauthorizedDeletion", err)
+	head := f.commit("remove Beta.md by hand")
+	result := f.mustExport(Options{})
+	change := f.changeFor(result, "Beta.md")
+	if !change.Tombstone() || change.ExpectSHA256 != vaultsync.HashBytes([]byte(body)) {
+		t.Fatal(change)
 	}
-	if !strings.Contains(err.Error(), "Beta.md") {
-		t.Fatalf("the refusal must name the path: %v", err)
-	}
-	if got := f.state().Commit; got != cursor {
-		t.Fatalf("the cursor advanced past a refused commit: %q, want %q", got, cursor)
-	}
-	if paths := f.channelPaths(); len(paths) != len(sortedSeed()) {
-		t.Fatalf("the refused commit published something: %v", paths)
+	requirePredecessors(t, change, f.operationFor(baseline, "Beta.md"))
+	if f.state().Commit != head {
+		t.Fatal("cursor did not advance")
 	}
 }
 
@@ -73,10 +63,8 @@ func TestDeletionWithAuthorityTravelsAsATombstone(t *testing.T) {
 	}
 }
 
-// TestAuthorityMustDescribeTheBytesBeingRemoved refuses a record that does not
-// describe the file the deletion actually drops. The hash and the size are both
-// checked, which is internal/vaultgit's rule restated rather than loosened.
-func TestAuthorityMustDescribeTheBytesBeingRemoved(t *testing.T) {
+// A journal may preserve a version newer than the Git parent.
+func TestJournalPreimageMayDifferFromGitParent(t *testing.T) {
 	f := newFixture(t)
 	f.mustExport(Options{})
 
@@ -85,16 +73,13 @@ func TestAuthorityMustDescribeTheBytesBeingRemoved(t *testing.T) {
 	f.remove("Beta.md")
 	f.commit("bn rm Beta.md with a stale record")
 
-	if _, err := f.export(Options{}); !errors.Is(err, ErrUnauthorizedDeletion) {
-		t.Fatalf("error: got %v, want ErrUnauthorizedDeletion", err)
+	if result := f.mustExport(Options{}); !f.changeFor(result, "Beta.md").Tombstone() {
+		t.Fatal("deletion did not travel")
 	}
 }
 
-// TestAuthorityMustBeInTheSameCommit refuses a record already in the history. A
-// manifest that is merely present proves a transition that already happened; it
-// must not explain a different commit's deletion, or a note deleted, recreated,
-// and deleted again by hand passes as intended.
-func TestAuthorityMustBeInTheSameCommit(t *testing.T) {
+// External deletion is independent of previous journal commits.
+func TestExternalDeletionAfterEarlierJournalCommit(t *testing.T) {
 	f := newFixture(t)
 	f.mustExport(Options{})
 	body := f.vault.Read(t, "Beta.md")
@@ -104,47 +89,25 @@ func TestAuthorityMustBeInTheSameCommit(t *testing.T) {
 	f.remove("Beta.md")
 	f.commit("remove the note in a later commit")
 
-	if _, err := f.export(Options{}); !errors.Is(err, ErrUnauthorizedDeletion) {
-		t.Fatalf("error: got %v, want ErrUnauthorizedDeletion", err)
+	if result := f.mustExport(Options{}); !f.changeFor(result, "Beta.md").Tombstone() {
+		t.Fatal("deletion did not travel")
 	}
 }
 
-// TestAuthorizeDeletionsIsTheCallersOverride mirrors vaultgit.CommitRestore's
-// deliberate exception: a restore commits deletions on a person's authority
-// rather than a journal's, so it leaves a commit no record can ever explain.
-func TestAuthorizeDeletionsIsTheCallersOverride(t *testing.T) {
+func TestLegacyDeletionApprovalOptionIsNoLongerRequired(t *testing.T) {
 	f := newFixture(t)
 	f.mustExport(Options{})
 	parent := f.state().Commit
-
 	f.remove("Beta.md")
-	head := f.commit("restore an older state")
-
-	// Another commit's approval is not this one's.
-	if _, err := f.export(Options{AuthorizeDeletions: []string{parent}}); !errors.Is(err, ErrUnauthorizedDeletion) {
-		t.Fatalf("error: got %v, want ErrUnauthorizedDeletion", err)
-	}
-
-	before := f.state().clone()
-	result := f.mustExport(Options{AuthorizeDeletions: []string{head}})
+	f.commit("restore an older state")
+	result := f.mustExport(Options{AuthorizeDeletions: []string{parent}})
 	if !f.changeFor(result, "Beta.md").Tombstone() {
-		t.Fatal("the approved deletion did not travel as a tombstone")
-	}
-
-	// A person approves one commit, once. Rewound to where it started, the same
-	// pass without the option refuses again, which is what "never persisted"
-	// means in the only place it could have been remembered.
-	f.putState(before)
-	if _, err := f.export(Options{}); !errors.Is(err, ErrUnauthorizedDeletion) {
-		t.Fatalf("the approval outlived its pass: got %v, want ErrUnauthorizedDeletion", err)
+		t.Fatal("deletion did not travel")
 	}
 }
 
-// TestUndecodableJournalManifestAuthorizesNothing covers one unreadable record
-// among many. It contributes no proof and is not itself an error: the deletion
-// it would have explained stays unexplained and halts the export, which is the
-// conservative outcome.
-func TestUndecodableJournalManifestAuthorizesNothing(t *testing.T) {
+// A malformed undo record does not prevent ordinary deletion export.
+func TestDeletionWithUndecodableJournalStillExports(t *testing.T) {
 	f := newFixture(t)
 	f.mustExport(Options{})
 
@@ -152,8 +115,8 @@ func TestUndecodableJournalManifestAuthorizesNothing(t *testing.T) {
 	f.remove("Beta.md")
 	f.commit("remove Beta.md with a damaged record")
 
-	if _, err := f.export(Options{}); !errors.Is(err, ErrUnauthorizedDeletion) {
-		t.Fatalf("error: got %v, want ErrUnauthorizedDeletion", err)
+	if result := f.mustExport(Options{}); !f.changeFor(result, "Beta.md").Tombstone() {
+		t.Fatal("deletion did not travel")
 	}
 }
 

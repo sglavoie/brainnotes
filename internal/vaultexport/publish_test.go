@@ -213,12 +213,12 @@ func TestAHaltStillReportsWhatItAlreadySpent(t *testing.T) {
 	f.reserve(&Reservation{Sequence: 2, PackageID: packageID, Commit: head})
 
 	// And then a commit this pass will refuse, after the burn is already durable.
-	f.remove("Beta.md")
-	f.commit("remove Beta.md by hand")
+	addUnsupportedSymlink(t, f.vault.Path("Link.md"))
+	f.commit("add unsupported symlink")
 
 	result, err := f.export(Options{})
-	if !errors.Is(err, ErrUnauthorizedDeletion) {
-		t.Fatalf("error: got %v, want ErrUnauthorizedDeletion", err)
+	if !errors.Is(err, ErrUnsupportedEntry) {
+		t.Fatalf("error: got %v, want ErrUnsupportedEntry", err)
 	}
 	if result == nil {
 		t.Fatal("the halt discarded the report of everything already spent")
@@ -291,4 +291,11 @@ func TestAdoptedBaselineSliceDoesNotAdvanceTheCursor(t *testing.T) {
 	// And the baseline still finishes, carrying every seeded path exactly once.
 	f.mustExport(Options{MaxBaselineBytes: 1})
 	requirePaths(t, f.channelPaths(), sortedSeed())
+}
+
+func addUnsupportedSymlink(t *testing.T, path string) {
+	t.Helper()
+	if err := symlink("Alpha.md", path); err != nil {
+		t.Fatal(err)
+	}
 }

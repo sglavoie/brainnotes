@@ -9,8 +9,8 @@ import (
 // the error to the caller.
 //
 // The marker is a reporting convenience, not the safety mechanism. If this
-// write fails, the condition that produced it is still on disk — the deleted
-// file is still missing, the ref still will not advance — and the next
+// write fails, the condition that produced it is still on disk — the ambiguous
+// change remains, the ref still will not advance — and the next
 // preflight re-derives the same verdict from the same evidence. That is why a
 // marker write failure is joined onto the error rather than replacing it: the
 // caller still learns the real problem first.

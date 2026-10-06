@@ -25,10 +25,10 @@ type commitPlan struct {
 	at     time.Time
 	add    []string
 	remove []string
-	// proofEntries are the journal entry IDs whose records authorize the
-	// removals. If a removal is held back, its proof is held back too.
-	proofEntries map[string]bool
-	message      string
+	// deletionEntries are the journal entry IDs whose records describe the
+	// removals. If a removal is held back, its journal entry is held back too.
+	deletionEntries map[string]bool
+	message         string
 	// externalAdditions marks a plan whose additions were discovered by scanning
 	// the working tree rather than named by a caller. Only such a plan may skip
 	// an addition it cannot read.
@@ -106,124 +106,18 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 		return CommitResult{}, err
 	}
 
-	staged, skipped, stageErr := m.stageAdditions(ctx, plan.add)
-	if stageErr != nil {
-		// Staging failed for a path the engine can read perfectly well, which
-		// makes it a failure of the repository rather than of that path. It would
-		// hit everything else in the pass too, so continuing would build a tree
-		// missing content the working tree holds — the exact shape of loss this
-		// package exists to refuse.
-		return CommitResult{}, m.latch(&SafetyError{
-			Kind:   KindCommitFailed,
-			Op:     op,
-			Reason: "the vault's content could not be staged, so nothing was committed",
-			Err:    stageErr,
-		})
-	}
-	if len(skipped) > 0 && !plan.externalAdditions {
-		// The caller named these paths, so leaving one out is not a smaller
-		// snapshot, it is a wrong one. Refusing here is what lets the caller say
-		// "the change is on disk and the history does not cover it" instead of
-		// reporting a success.
-		return CommitResult{}, m.latch(&SafetyError{
-			Kind:   KindCommitFailed,
-			Op:     op,
-			Reason: "a path this snapshot was required to record could not be staged, so nothing was committed",
-			Paths:  skippedPaths(skipped),
-			Err:    skippedError(skipped),
-		})
-	}
-	if !plan.externalAdditions {
-		// An exact snapshot's promise is that the paths it names are in the tree
-		// it builds *with the content they hold right now*, so it reads the index
-		// back rather than trusting an exit status. Asking only whether the path
-		// has an entry answers yes for every already-tracked path before anything
-		// is staged, because the index is seeded from HEAD — so the comparison is
-		// against the required object and mode, which is the only check that
-		// survives a `git` reporting success without doing the work.
-		wrong, err := m.misstagedAdditions(ctx, staged)
-		if err != nil {
-			return CommitResult{}, m.latch(&SafetyError{
-				Kind:   KindCommitFailed,
-				Op:     op,
-				Reason: "the snapshot could not confirm what it had staged, so nothing was committed",
-				Err:    errors.New(agent.SanitizedDiagnostic(err)),
-			})
-		}
-		if len(wrong) > 0 {
-			return CommitResult{}, m.latch(&SafetyError{
-				Kind:   KindCommitFailed,
-				Op:     op,
-				Reason: "the private index does not hold the content this snapshot was required to record, so nothing was committed",
-				Paths:  wrong,
-			})
-		}
+	staged, skipped, err := m.stagePlanAdditions(ctx, op, plan)
+	if err != nil {
+		return CommitResult{}, err
 	}
 
-	removals := plan.remove
-	if len(skipped) > 0 && len(removals) > 0 {
-		// Something in this pass could not be read, and a rename's new side is
-		// exactly the kind of thing that would be. Committing the delete side of a
-		// pair whose add side was skipped would drop the content from the tip, so
-		// every removal waits for a pass where nothing is skipped.
-		//
-		// The proof has to wait with it. A journal record authorizes a deletion
-		// only while it is uncommitted, so committing the record now and the
-		// deletion later would leave the later pass with an unexplained deletion —
-		// the engine would block the vault over a removal it had already approved.
-		// Unstaging the proving entry's files keeps the two together, which is the
-		// same invariant that makes the proof meaningful in the first place.
-		removals = nil
-		var held []string
-		for _, path := range staged {
-			if id, _ := journalEntryID(path); id != "" && plan.proofEntries[id] {
-				held = append(held, path)
-			}
-		}
-		if len(held) > 0 {
-			if err := m.git.stageRemove(ctx, m.indexPath, held); err != nil {
-				return CommitResult{}, m.latch(&SafetyError{
-					Kind:   KindCommitFailed,
-					Op:     op,
-					Reason: "a deferred deletion's journal record could not be held back, so nothing was committed",
-					Err:    errors.New(agent.SanitizedDiagnostic(err)),
-				})
-			}
-			staged = withoutPaths(staged, held)
-		}
+	staged, removals, err := m.deferSkippedRemovals(ctx, op, plan, staged, skipped)
+	if err != nil {
+		return CommitResult{}, err
 	}
-	if err := m.git.stageRemove(ctx, m.indexPath, removals); err != nil {
-		return CommitResult{}, m.latch(&SafetyError{
-			Kind:   KindCommitFailed,
-			Op:     op,
-			Reason: "a proven deletion could not be staged, so nothing was committed",
-			Paths:  removals,
-			Err:    errors.New(agent.SanitizedDiagnostic(err)),
-		})
-	}
-	if !plan.externalAdditions && len(removals) > 0 {
-		// The same readback for the removal half of an exact plan, and for the same
-		// reason: the index is seeded from HEAD, so a `--force-remove` that reported
-		// success without dropping the entry leaves the tip's copy in the tree. A
-		// plan that removes without adding then writes a tree identical to HEAD and
-		// returns a nil success naming deletions the history never recorded.
-		remaining, err := m.unremovedDeletions(ctx, removals)
-		if err != nil {
-			return CommitResult{}, m.latch(&SafetyError{
-				Kind:   KindCommitFailed,
-				Op:     op,
-				Reason: "the snapshot could not confirm the removals it had staged, so nothing was committed",
-				Err:    errors.New(agent.SanitizedDiagnostic(err)),
-			})
-		}
-		if len(remaining) > 0 {
-			return CommitResult{}, m.latch(&SafetyError{
-				Kind:   KindCommitFailed,
-				Op:     op,
-				Reason: "a path this snapshot was required to remove is still in the index, so nothing was committed",
-				Paths:  remaining,
-			})
-		}
+
+	if err := m.stagePlanRemovals(ctx, op, removals); err != nil {
+		return CommitResult{}, err
 	}
 
 	result := CommitResult{
@@ -245,6 +139,147 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 		return result, nil
 	}
 
+	return m.writeSnapshot(ctx, op, head, ref, plan, intent, result)
+}
+
+func (m *Manager) stagePlanAdditions(ctx context.Context, op string, plan *commitPlan) ([]string, []SkippedPath, error) {
+	staged, skipped, stageErr := m.stageAdditions(ctx, plan.add)
+	if stageErr != nil {
+		// Staging failed for a path the engine can read perfectly well, which
+		// makes it a failure of the repository rather than of that path. It would
+		// hit everything else in the pass too, so continuing would build a tree
+		// missing content the working tree holds — the exact shape of loss this
+		// package exists to refuse.
+		return nil, nil, m.latch(&SafetyError{
+			Kind:   KindCommitFailed,
+			Op:     op,
+			Reason: "the vault's content could not be staged, so nothing was committed",
+			Err:    stageErr,
+		})
+	}
+	if len(skipped) > 0 && !plan.externalAdditions {
+		// The caller named these paths, so leaving one out is not a smaller
+		// snapshot, it is a wrong one. Refusing here is what lets the caller say
+		// "the change is on disk and the history does not cover it" instead of
+		// reporting a success.
+		return nil, nil, m.latch(&SafetyError{
+			Kind:   KindCommitFailed,
+			Op:     op,
+			Reason: "a path this snapshot was required to record could not be staged, so nothing was committed",
+			Paths:  skippedPaths(skipped),
+			Err:    skippedError(skipped),
+		})
+	}
+	if !plan.externalAdditions {
+		// An exact snapshot's promise is that the paths it names are in the tree
+		// it builds *with the content they hold right now*, so it reads the index
+		// back rather than trusting an exit status. Asking only whether the path
+		// has an entry answers yes for every already-tracked path before anything
+		// is staged, because the index is seeded from HEAD — so the comparison is
+		// against the required object and mode, which is the only check that
+		// survives a `git` reporting success without doing the work.
+		wrong, err := m.misstagedAdditions(ctx, staged)
+		if err != nil {
+			return nil, nil, m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "the snapshot could not confirm what it had staged, so nothing was committed",
+				Err:    errors.New(agent.SanitizedDiagnostic(err)),
+			})
+		}
+		if len(wrong) > 0 {
+			return nil, nil, m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "the private index does not hold the content this snapshot was required to record, so nothing was committed",
+				Paths:  wrong,
+			})
+		}
+	}
+
+	return staged, skipped, nil
+}
+
+// deferSkippedRemovals keeps potential rename sources and their journal entries
+// pending when an unreadable destination could not be staged.
+func (m *Manager) deferSkippedRemovals(ctx context.Context, op string, plan *commitPlan, staged []string, skipped []SkippedPath) ([]string, []string, error) {
+	removals := plan.remove
+	if len(skipped) == 0 || len(removals) == 0 {
+		return staged, removals, nil
+	}
+	// Something in this pass could not be read, and a rename's new side is
+	// exactly the kind of thing that would be. Committing the delete side of a
+	// pair whose add side was skipped would drop the content from the tip, so
+	// every removal waits for a pass where nothing is skipped.
+	//
+	// Keep the associated undo manifests with their removals so the commit
+	// does not claim a journaled operation was recorded while its removal waits.
+	removals = nil
+	var held []string
+	for _, path := range staged {
+		if id, _ := journalEntryID(path); id != "" && plan.deletionEntries[id] {
+			held = append(held, path)
+		}
+	}
+	if len(held) > 0 {
+		if err := m.git.stageRemove(ctx, m.indexPath, held); err != nil {
+			return nil, nil, m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "a deferred deletion's journal record could not be held back, so nothing was committed",
+				Err:    errors.New(agent.SanitizedDiagnostic(err)),
+			})
+		}
+		staged = withoutPaths(staged, held)
+	}
+	return staged, removals, nil
+}
+
+func (m *Manager) stagePlanRemovals(ctx context.Context, op string, removals []string) error {
+	if err := m.removalsStillMissing(op, removals); err != nil {
+		if clearErr := m.clearIntent(); clearErr != nil {
+			return errors.Join(err, clearErr)
+		}
+		return err
+	}
+	if err := m.git.stageRemove(ctx, m.indexPath, removals); err != nil {
+		return m.latch(&SafetyError{
+			Kind:   KindCommitFailed,
+			Op:     op,
+			Reason: "a deletion could not be staged, so nothing was committed",
+			Paths:  removals,
+			Err:    errors.New(agent.SanitizedDiagnostic(err)),
+		})
+	}
+	if len(removals) > 0 {
+		// The same readback for the removal half of an exact plan, and for the same
+		// reason: the index is seeded from HEAD, so a `--force-remove` that reported
+		// success without dropping the entry leaves the tip's copy in the tree. A
+		// plan that removes without adding then writes a tree identical to HEAD and
+		// returns a nil success naming deletions the history never recorded.
+		remaining, err := m.unremovedDeletions(ctx, removals)
+		if err != nil {
+			return m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "the snapshot could not confirm the removals it had staged, so nothing was committed",
+				Err:    errors.New(agent.SanitizedDiagnostic(err)),
+			})
+		}
+		if len(remaining) > 0 {
+			return m.latch(&SafetyError{
+				Kind:   KindCommitFailed,
+				Op:     op,
+				Reason: "a path this snapshot was required to remove is still in the index, so nothing was committed",
+				Paths:  remaining,
+			})
+		}
+	}
+
+	return nil
+}
+
+func (m *Manager) writeSnapshot(ctx context.Context, op, head, ref string, plan *commitPlan, intent IntentRecord, result CommitResult) (CommitResult, error) {
 	tree, err := m.git.writeTree(ctx, m.indexPath)
 	if err != nil {
 		return CommitResult{}, m.latch(&SafetyError{
@@ -289,6 +324,10 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 		return CommitResult{}, err
 	}
 
+	return m.landSnapshot(ctx, op, head, ref, commit, plan, intent, result)
+}
+
+func (m *Manager) landSnapshot(ctx context.Context, op, head, ref, commit string, plan *commitPlan, intent IntentRecord, result CommitResult) (CommitResult, error) {
 	if err := m.git.updateRefCAS(ctx, ref, commit, head); err != nil {
 		// Distinguish "someone else got there first" from "this repository is
 		// broken" by asking where the branch is now. Only the second latches.
@@ -337,7 +376,7 @@ func (m *Manager) stageAndCommit(ctx context.Context, op, head, ref string, plan
 
 	result.Committed = true
 	result.Commit = commit
-	m.refreshUserIndex(ctx, head, commit, staged, removals)
+	m.refreshUserIndex(ctx, head, commit, result.Added, result.Deleted)
 	return result, nil
 }
 

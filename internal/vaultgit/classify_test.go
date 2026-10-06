@@ -3,8 +3,6 @@ package vaultgit
 import (
 	"errors"
 	"testing"
-
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 )
 
 func status(x, y byte, path string) statusEntry {
@@ -96,50 +94,5 @@ func TestInTrackedScope(t *testing.T) {
 	untracked := pendingChange{path: "backups/old.md", kind: changeAdded}
 	if inTrackedScope(untracked) {
 		t.Fatal("an untracked out-of-scope addition must not be picked up")
-	}
-}
-
-func TestDeletionAuthority(t *testing.T) {
-	entry := &journal.Entry{
-		ID: "entry-1",
-		Files: []journal.FileRecord{
-			{
-				Path:   "Inbox/gone.md",
-				Before: journal.FileState{Kind: journal.KindFile, SHA256: "aaa", Size: 10},
-				After:  journal.FileState{Kind: journal.KindMissing},
-			},
-			{
-				Path:   "Inbox/kept.md",
-				Before: journal.FileState{Kind: journal.KindFile, SHA256: "bbb", Size: 20},
-				After:  journal.FileState{Kind: journal.KindFile, SHA256: "ccc", Size: 21},
-			},
-			{
-				// A record with no pre-image hash proves nothing.
-				Path:   "Inbox/hashless.md",
-				Before: journal.FileState{Kind: journal.KindFile, Size: 5},
-				After:  journal.FileState{Kind: journal.KindMissing},
-			},
-		},
-	}
-	authority := &deletionAuthority{byPath: map[string][]deletionProof{}}
-	authority.add(entry)
-
-	if id, ok := authority.authorize("Inbox/gone.md", "aaa", 10); !ok || id != "entry-1" {
-		t.Fatalf("authorize(matching) = (%q, %v), want (entry-1, true)", id, ok)
-	}
-	if _, ok := authority.authorize("Inbox/gone.md", "aaa", 11); ok {
-		t.Fatal("a size mismatch must not authorize a deletion")
-	}
-	if _, ok := authority.authorize("Inbox/gone.md", "zzz", 10); ok {
-		t.Fatal("a hash mismatch must not authorize a deletion")
-	}
-	if _, ok := authority.authorize("Inbox/kept.md", "bbb", 20); ok {
-		t.Fatal("a record whose after-state is a file must not authorize a deletion")
-	}
-	if _, ok := authority.authorize("Inbox/hashless.md", "", 5); ok {
-		t.Fatal("a record with no pre-image hash must not authorize a deletion")
-	}
-	if _, ok := authority.authorize("Inbox/never-mentioned.md", "aaa", 10); ok {
-		t.Fatal("an unmentioned path must not be authorized")
 	}
 }

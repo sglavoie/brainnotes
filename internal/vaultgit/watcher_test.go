@@ -197,47 +197,30 @@ func TestWatcherRestartResumesTheBurstWithoutExtendingItsMaximum(t *testing.T) {
 	}
 }
 
-func TestWatcherBlocksOnUnexplainedDeletionWithoutCommittingIt(t *testing.T) {
+func TestWatcherRecordsExternalDeletionAfterRestart(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
-
-	h.write("kept.md", "kept")
 	h.write("vanishes.md", "about to disappear")
 	h.commitPending()
 	baseline := h.head()
-
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
-
-	// A deletion nothing in the journal explains: a sync client, a stray `rm`, or
-	// the File Provider bug this whole plan exists because of.
 	h.remove("vanishes.md")
-	h.advance(DebounceQuiet + time.Second)
 	w.tick(ctx)
-
-	event := requireKind(t, rec, WatchEventBlocked)
-	if !contains(event.Paths, "vanishes.md") {
-		t.Fatalf("the block event does not name the missing path: %+v", event)
-	}
-	requireNoKind(t, rec, WatchEventCommitted)
+	requireKind(t, rec, WatchEventPending)
+	requireNoKind(t, rec, WatchEventBlocked)
 	if h.head() != baseline {
-		t.Fatal("the watcher committed on top of an unexplained deletion")
+		t.Fatal("deletion bypassed autosave timing")
 	}
-	if _, blocked := h.blockRecord(); !blocked {
-		t.Fatal("no block marker was latched")
-	}
-
-	// The block is announced once, not once per poll: a person who is away from
-	// the machine for an hour should come back to one report, not seven hundred.
-	before := rec.count(WatchEventBlocked)
-	h.advance(time.Minute)
+	w = h.newWatcher(rec)
+	h.advance(DebounceMaxLatency + time.Minute)
 	w.tick(ctx)
-	w.tick(ctx)
-	if rec.count(WatchEventBlocked) != before {
-		t.Fatalf("the block was re-announced on every poll: %d events", rec.count(WatchEventBlocked))
+	requireKind(t, rec, WatchEventCommitted)
+	if contains(h.tracked(), "vanishes.md") {
+		t.Fatal("deleted note is still at HEAD")
 	}
-	if !contains(h.tracked(), "vanishes.md") {
-		t.Fatal("the deleted note is no longer in the history")
+	if got := rawGit(t, h.root, "show", baseline+":vanishes.md"); got != "about to disappear" {
+		t.Fatal(got)
 	}
 }
 
@@ -292,6 +275,7 @@ func TestWatcherEventsCarryPathsButNeverNoteBodies(t *testing.T) {
 	h.advance(DebounceQuiet + time.Second)
 	w.tick(ctx)
 	h.remove("doomed.md")
+	h.write("doomed.md/child.md", "replacement directory")
 	h.advance(DebounceQuiet + time.Second)
 	w.tick(ctx)
 	requireKind(t, rec, WatchEventBlocked)

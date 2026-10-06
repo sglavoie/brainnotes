@@ -319,15 +319,18 @@ func blockHistory(t *testing.T, root string) {
 	if err := os.Remove(filepath.Join(root, "Alpha.md")); err != nil {
 		t.Fatalf("remove a tracked note: %v", err)
 	}
+	if err := os.Mkdir(filepath.Join(root, "Alpha.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	manager, err := vaultgit.Open(context.Background(), root, vaultgit.Options{})
 	if err != nil {
 		t.Fatalf("open the content history: %v", err)
 	}
 	if _, err := manager.CommitPending(context.Background()); err == nil {
-		t.Fatal("an unexplained deletion was committed")
+		t.Fatal("an ambiguous type change was committed")
 	}
 	if _, blocked := manager.Blocked(); !blocked {
-		t.Fatal("the unexplained deletion did not latch the block marker")
+		t.Fatal("the ambiguous type change did not latch the block marker")
 	}
 }
 

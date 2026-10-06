@@ -48,10 +48,8 @@ type Options struct {
 	// sent, alone: a vault must not become unexportable because one attachment
 	// is big.
 	MaxBaselineBytes int64
-	// AuthorizeDeletions names commits whose deletions a person has approved
-	// despite carrying no journal record. It is the counterpart of
-	// vaultgit.CommitRestore's deliberate exception and is never persisted: the
-	// approval is this caller's, for this pass.
+	// AuthorizeDeletions is retained for source compatibility.
+	// Deprecated: committed regular-file deletions are exported automatically.
 	AuthorizeDeletions []string
 }
 
@@ -179,7 +177,6 @@ type exporter struct {
 	now         func() time.Time
 	maxPackages int
 	maxBytes    int64
-	authorized  map[string]struct{}
 
 	state  *State
 	result *Result
@@ -198,7 +195,6 @@ func newExporter(root string, local *vaultsync.Enrollment, history *vaultgit.His
 		now:         opts.Now,
 		maxPackages: opts.MaxPackages,
 		maxBytes:    opts.MaxBaselineBytes,
-		authorized:  map[string]struct{}{},
 		state:       state,
 		result:      &Result{},
 	}
@@ -213,9 +209,6 @@ func newExporter(root string, local *vaultsync.Enrollment, history *vaultgit.His
 	}
 	if exp.maxBytes <= 0 {
 		exp.maxBytes = defaultMaxBaselineBytes
-	}
-	for _, commit := range opts.AuthorizeDeletions {
-		exp.authorized[strings.TrimSpace(commit)] = struct{}{}
 	}
 	return exp, nil
 }
@@ -354,9 +347,6 @@ func (e *exporter) exportCommit(ctx context.Context, commit string, info vaultgi
 	}
 	blobs, err := e.history.Blobs(ctx, changedBlobOIDs(portable))
 	if err != nil {
-		return err
-	}
-	if err := checkDeletionAuthority(commit, portable, authority, blobs, e.authorized); err != nil {
 		return err
 	}
 	return e.publishCommit(ctx, commit, info, portable, blobs)

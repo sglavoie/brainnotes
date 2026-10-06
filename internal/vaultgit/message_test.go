@@ -98,7 +98,7 @@ func TestValidEntryID(t *testing.T) {
 }
 
 func TestErrorHelpers(t *testing.T) {
-	deletion := unexplainedDeletionError("commit-pending", []string{"Inbox/gone.md"})
+	deletion := &SafetyError{Kind: KindUnexplainedDeletion, Op: "commit-pending", Paths: []string{"Inbox/gone.md"}}
 	if !IsUnexplainedDeletion(deletion) || !Blocks(deletion) {
 		t.Fatalf("an unexplained deletion must be a blocking failure: %v", deletion)
 	}

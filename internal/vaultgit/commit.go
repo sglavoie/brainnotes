@@ -19,11 +19,8 @@ import (
 // CommitPending records external changes: everything a person did to the vault
 // with an editor, a sync client, or a shell, rather than through `bn`.
 //
-// Additions and modifications are accepted on sight, because recording them can
-// only add content to the history. A deletion is accepted only when an
-// uncommitted finalized journal record proves that exact transition, so a note
-// that vanished for any other reason stops the snapshot instead of being
-// committed. That refusal is the entire reason this package exists.
+// Regular-file deletions are recorded like additions and modifications. Earlier
+// commits retain the removed content; a journal is optional for external edits.
 //
 // It never pushes. The remote is not part of local correctness, and a snapshot
 // that waited on a network round trip would make saving a note as slow and as
@@ -39,7 +36,7 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 }
 
 func (m *Manager) commitPendingLocked(ctx context.Context, op string) (CommitResult, error) {
-	if err := m.checkBlocked(op); err != nil {
+	if err := m.checkBlocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	recoveredExternal, err := m.recoverIntentLocked(ctx, op)
@@ -66,7 +63,8 @@ func (m *Manager) commitPendingLocked(ctx context.Context, op string) (CommitRes
 		return m.planExternalCommit(ctx, head, op, &anchoredAt)
 	})
 	if err != nil {
-		// The marker stays. An attempt that failed on the way to the repository may
+		m.abandonStaleExternalCommit(err, anchoredAt)
+		// For other failures the marker stays. An attempt that failed on the way to the repository may
 		// or may not have left a commit behind — a latched block says the vault is
 		// refused either way, and a floor held for one interval by a snapshot that
 		// never landed is the cheap side of that uncertainty.
@@ -114,7 +112,7 @@ func (m *Manager) planExternalCommit(ctx context.Context, head, op string, ancho
 		at:                at,
 		add:               append(append([]string{}, set.added...), set.modified...),
 		remove:            set.deleted,
-		proofEntries:      set.proofEntries,
+		deletionEntries:   set.deletionEntries,
 		message:           autosaveMessage(at),
 		externalAdditions: true,
 	}
@@ -127,23 +125,15 @@ func (m *Manager) planExternalCommit(ctx context.Context, head, op string, ancho
 // It stages exactly the paths the journal entry names plus the entry's own
 // files, and nothing else — a note the user happened to be editing in another
 // window is not swept into a commit labelled as a rename. Before staging
-// anything it verifies both ends of every record: the working tree must hold
-// what the entry says it produced, and HEAD must hold what the entry says it
-// replaced. A mismatch means the world moved between the mutation and this
+// anything it verifies that the working tree holds what the entry says it
+// produced. The journal preserves pre-mutation bytes even when they differ
+// from HEAD. A mismatch means the world moved between the mutation and this
 // call, which is a stale request rather than damage — nothing is committed,
 // nothing is blocked, and the next pending-change snapshot picks up whatever
 // the vault actually holds now.
 //
-// Recording an entry the history already holds is nothing rather than damage,
-// and the check for it is inside the lock deliberately. An entry that deleted a
-// note proves that deletion with its own uncommitted record, so a second commit
-// of one already committed would meet a path missing from the working tree and
-// missing from HEAD, and refuse it as an unexplained deletion — latching the
-// vault over work that is already done. A caller cannot rule that out for
-// itself: whatever it saw before calling, the watcher may commit the same
-// finalized entry in between, and only the answer read under this lock against
-// the head this commit is built on is the answer that still holds when the
-// commit happens.
+// An entry already present in history is a no-op, checked under the safety lock
+// because the watcher may have committed it since the mutation finished.
 func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation string) (CommitResult, error) {
 	const op = "commit-journal"
 	if err := validEntryID(entryID); err != nil {
@@ -155,7 +145,7 @@ func (m *Manager) CommitJournalEntry(ctx context.Context, entryID, operation str
 	}
 	defer release()
 
-	if err := m.checkBlocked(op); err != nil {
+	if err := m.checkBlocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
@@ -270,24 +260,14 @@ func (m *Manager) journalEntryPaths(op, entryID string, entry *journal.Entry) ([
 	return add, deletions, nil
 }
 
-// authorizeDeletions proves every removal against head and fills them into plan.
-//
-// The deletion proof is this entry itself, and it only counts while it is still
-// uncommitted: the manifest is being staged in this very commit, so the record
-// and the removal it authorizes land together. A deletion nothing explains
-// latches the vault, which is the fail-closed half of invariant 1.
+// authorizeDeletions validates the removed paths without requiring HEAD to match
+// the journal's pre-image. The journal preserves edits made since the last commit.
 func (m *Manager) authorizeDeletions(ctx context.Context, op, head string, entry *journal.Entry, deletions []string, plan *commitPlan) error {
-	authority := &deletionAuthority{byPath: map[string][]deletionProof{}}
-	authority.add(entry)
-	unexplained, provers, err := m.verifyDeletions(ctx, head, deletions, authority)
-	if err != nil {
-		return safetyErrorf(KindRepositoryState, op, "a recorded deletion could not be checked against the history: %s", agent.SanitizedDiagnostic(err))
-	}
-	if len(unexplained) > 0 {
-		return m.latch(unexplainedDeletionError(op, unexplained))
+	if err := m.validateRemovals(ctx, head, op, deletions); err != nil {
+		return err
 	}
 	plan.remove = deletions
-	plan.proofEntries = provers
+	plan.deletionEntries = map[string]bool{entry.ID: true}
 	sort.Strings(plan.remove)
 	return nil
 }
@@ -301,9 +281,8 @@ func (m *Manager) authorizeDeletions(ctx context.Context, op, head string, entry
 // reporting a write it has already completed at a path it named.
 //
 // It can only ever add. A path that no longer exists is dropped rather than
-// staged as a removal, because a state file that vanished is exactly the kind of
-// disappearance CommitPending is supposed to stop and refuse, not something this
-// path may quietly ratify. Out-of-scope paths are dropped for the same reason
+// staged as a removal: CommitPending owns external deletions, while this method
+// records only the writes its caller names. Out-of-scope paths are dropped for the same reason
 // they are dropped everywhere else: the scope policy decides what the engine may
 // add on its own initiative.
 func (m *Manager) CommitPaths(ctx context.Context, operation string, paths []string) (CommitResult, error) {
@@ -322,7 +301,7 @@ func (m *Manager) CommitPaths(ctx context.Context, operation string, paths []str
 	}
 	defer release()
 
-	if err := m.checkBlocked(op); err != nil {
+	if err := m.checkBlocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
@@ -370,20 +349,9 @@ func (m *Manager) relativeExistingPaths(paths []string) ([]string, error) {
 	return out, nil
 }
 
-// CommitRestore records a wholesale archive restore.
-//
-// This is the one place where a deletion is committed without an uncommitted
-// journal record proving it, and the exception is deliberate and narrow. A
-// backup restore is a person naming an archive and saying "make the vault look
-// like this"; every removal it performs is authorized by that sentence, and
-// there is no journal entry to authorize it with because a restore replaces the
-// tree rather than editing notes one at a time. Refusing here would leave the
-// vault blocked immediately after the operation a person reaches for precisely
-// when things have already gone wrong.
-//
-// What it does not do is widen the rule for anything else. The authorization is
-// the caller's, it is not persisted, and the next snapshot through any other
-// entry point demands journal proof again exactly as before.
+// CommitRestore snapshots the full working tree after an explicitly requested
+// backup restore. It records removals without a journal because the archive
+// restoration is a whole-vault operation rather than a note mutation.
 func (m *Manager) CommitRestore(ctx context.Context, operation string) (CommitResult, error) {
 	const op = "commit-restore"
 	release, err := m.acquire(safetyLockName, op, ctx)
@@ -392,7 +360,7 @@ func (m *Manager) CommitRestore(ctx context.Context, operation string) (CommitRe
 	}
 	defer release()
 
-	if err := m.checkBlocked(op); err != nil {
+	if err := m.checkBlocked(ctx, op); err != nil {
 		return CommitResult{}, err
 	}
 	if _, err := m.recoverIntentLocked(ctx, op); err != nil {
@@ -479,4 +447,11 @@ func fileDigest(path string) (string, int64, error) {
 		return "", 0, err
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), size, nil
+}
+
+// A recreated path aborts before commit creation, so that retry owes no floor.
+func (m *Manager) abandonStaleExternalCommit(err error, startedAt time.Time) {
+	if KindOf(err) == KindStaleRequest && !startedAt.IsZero() {
+		_, _ = m.state.AbandonExternalCommit(m.policy(), startedAt)
+	}
 }

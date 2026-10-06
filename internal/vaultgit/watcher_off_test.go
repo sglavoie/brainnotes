@@ -2,6 +2,8 @@ package vaultgit
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -149,6 +151,9 @@ func TestWatcherKeepsAutosaveOnWhenTheFinalSnapshotIsRefused(t *testing.T) {
 	// A deletion nothing in the journal explains, and then the user turns autosave
 	// off. The final snapshot would have to commit that deletion, and it will not.
 	h.remove("vanishes.md")
+	if err := os.Mkdir(filepath.Join(h.root, "vanishes.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	h.advance(time.Second)
 	stub.set(t, "off")
 	w.tick(ctx)
@@ -157,7 +162,7 @@ func TestWatcherKeepsAutosaveOnWhenTheFinalSnapshotIsRefused(t *testing.T) {
 	requireNoKind(t, rec, WatchEventConfigChanged)
 	requirePolicy(t, h, "5m")
 	if h.head() != baseline {
-		t.Fatal("the transition committed on top of an unexplained deletion")
+		t.Fatal("the transition committed on top of an ambiguous type change")
 	}
 	if !contains(h.tracked(), "vanishes.md") {
 		t.Fatal("the deleted note is no longer in the history")
