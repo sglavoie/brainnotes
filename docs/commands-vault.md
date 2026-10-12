@@ -147,9 +147,9 @@ serve.addr: brainnotes.toml -> brainnotes.local.toml
 + 11: addr = "127.0.0.1:8733"
 ```
 
-See [Configuration](configuration.md#the-machine-local-overlay) for which file
+See [Configuration](configuration-overlay.md#the-machine-local-overlay) for which file
 owns which key and
-[Repairing a misplaced configuration](configuration.md#repairing-a-misplaced-configuration)
+[Repairing a misplaced configuration](configuration-overlay.md#repairing-a-misplaced-configuration)
 for when to run this.
 
 ### `bn schema` — show the configured frontmatter property schema
