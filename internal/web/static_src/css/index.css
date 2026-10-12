@@ -61,6 +61,7 @@
 @import "new-note.css";
 @import "settings.css";
 @import "sync.css";
+@import "sync-conflicts.css";
 @import "motion.css";
 @import "note-print.css";
 @import "responsive.css";

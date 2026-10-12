@@ -8414,6 +8414,7 @@ dt.sync-fact {
   font-size: 0.85rem;
 }
 
+/* internal/web/static_src/css/sync-conflicts.css */
 /* The late-arriving-change warning: this vault's version moved after the conflict
    was recorded, and the version on screen is the one the decision applies to.
    That is the page's most easily missed sentence, so it is a bordered block in the

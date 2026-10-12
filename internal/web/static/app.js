@@ -10036,55 +10036,6 @@ var BrainNotesApp = (() => {
     return true;
   };
 
-  // internal/web/static_src/overview-search-requests.ts
-  var readBulkResponsePayload = async (resp) => {
-    const contentType = resp.headers?.get("Content-Type") || "";
-    try {
-      if (contentType.includes("application/json")) {
-        return await resp.json();
-      }
-      return await resp.text();
-    } catch {
-      return "";
-    }
-  };
-  var bulkRequestInit = (csrfToken, body) => ({
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-BN-CSRF": csrfToken
-    },
-    body: body.toString()
-  });
-  var postBulkPreview = async (fetcher, csrfToken, action, keys, fields) => {
-    const body = buildBulkPreviewForm({
-      action,
-      keys,
-      token: csrfToken,
-      folder: fields.folder,
-      property: fields.property,
-      op: normalizeBulkFrontmatterOp(fields.op),
-      value: fields.value
-    });
-    const resp = await fetcher("/api/notes/bulk/preview", bulkRequestInit(csrfToken, body));
-    return { resp, payload: await readBulkResponsePayload(resp) };
-  };
-  var postBulkApply = async (fetcher, csrfToken, action, keys, fields, previewID) => {
-    const body = buildBulkApplyForm({
-      action,
-      keys,
-      token: csrfToken,
-      folder: fields.folder,
-      property: fields.property,
-      op: normalizeBulkFrontmatterOp(fields.op),
-      value: fields.value,
-      previewID
-    });
-    const resp = await fetcher("/api/notes/bulk", bulkRequestInit(csrfToken, body));
-    return { resp, payload: await readBulkResponsePayload(resp) };
-  };
-
   // internal/web/static_src/search-summary.ts
   var readSearchCounts = (response) => {
     const values2 = ["Total", "Limit", "Cap"].map((name2) => response.headers?.get(`X-BN-Search-${name2}`));
@@ -10164,81 +10115,67 @@ var BrainNotesApp = (() => {
     }
   };
 
-  // internal/web/static_src/overview-search-empty.ts
-  var renderOverviewEmptyHelp = (root) => {
-    const help = root.querySelector("[data-overview-empty-help]");
-    if (!help) return;
-    const params = new URLSearchParams(window.location.search);
-    const facets = hasActiveSharedFilters(params);
-    const expression = readExprParam(params) !== "";
-    const constraints = [readPageQuery() ? "text" : "", facets ? "filters" : "", expression ? "expression" : ""].filter(Boolean);
-    const summary = document.createElement("span");
-    summary.textContent = `Searching with: ${constraints.join(", ")}.`;
-    help.replaceChildren(summary);
-    if (readPageQuery()) addLink(help, params, ["q"], "Remove search text");
-    if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");
-    if (expression) addLink(help, params, ["expr"], "Remove expression");
-    addCreateLink(help);
-    help.hidden = false;
+  // internal/web/static_src/overview-search-requests.ts
+  var readBulkResponsePayload = async (resp) => {
+    const contentType = resp.headers?.get("Content-Type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        return await resp.json();
+      }
+      return await resp.text();
+    } catch {
+      return "";
+    }
   };
-  var addCreateLink = (help) => {
-    const title = readPageQuery();
-    if (!title || document.documentElement.dataset.readOnly === "true") return;
-    const link = document.createElement("a");
-    link.href = `/new?${new URLSearchParams({ title })}`;
-    link.textContent = `Create a note titled \u201C${title}\u201D\u2026`;
-    link.dataset.emptyCreateNote = "";
-    help.appendChild(link);
+  var bulkRequestInit = (csrfToken, body) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-BN-CSRF": csrfToken
+    },
+    body: body.toString()
+  });
+  var postBulkPreview = async (fetcher, csrfToken, action, keys, fields) => {
+    const body = buildBulkPreviewForm({
+      action,
+      keys,
+      token: csrfToken,
+      folder: fields.folder,
+      property: fields.property,
+      op: normalizeBulkFrontmatterOp(fields.op),
+      value: fields.value
+    });
+    const resp = await fetcher("/api/notes/bulk/preview", bulkRequestInit(csrfToken, body));
+    return { resp, payload: await readBulkResponsePayload(resp) };
   };
-  var addLink = (help, params, keys, label) => {
-    const next = new URLSearchParams(params);
-    for (const key of keys) next.delete(key);
-    const link = document.createElement("a");
-    const query = next.toString();
-    link.href = query ? `/library?${query}` : "/library";
-    link.textContent = label;
-    help.appendChild(link);
+  var postBulkApply = async (fetcher, csrfToken, action, keys, fields, previewID) => {
+    const body = buildBulkApplyForm({
+      action,
+      keys,
+      token: csrfToken,
+      folder: fields.folder,
+      property: fields.property,
+      op: normalizeBulkFrontmatterOp(fields.op),
+      value: fields.value,
+      previewID
+    });
+    const resp = await fetcher("/api/notes/bulk", bulkRequestInit(csrfToken, body));
+    return { resp, payload: await readBulkResponsePayload(resp) };
   };
 
-  // internal/web/static_src/overview-search.ts
-  var OverviewSearch = class {
+  // internal/web/static_src/overview-search-bulk.ts
+  var OverviewSearchBulk = class {
     constructor(els, deps) {
       this.els = els;
-      this.resetRangeSelection = bindOverviewRangeSelection(els.listEl);
-      this.restorePosition = bindLibraryPosition(els.listEl);
       this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
-      this.bindSearchEvents();
-      this.bindBulkEvents();
-      this.bindSelectionEvents();
-      this.bindPreviewInvalidation(els.moveForm);
-      this.bindPreviewInvalidation(els.setForm);
-      this.bindPreviewInvalidation(els.unsetForm);
-      this.updateBulkControls();
-      this.scheduleSearch(0);
     }
     els;
-    resetRangeSelection;
-    restorePosition;
     fetcher;
     selectedKeys = /* @__PURE__ */ new Map();
     bulkBusy = false;
     previewState = null;
-    debounceToken = 0;
     ignoreNextManagementMutationClear = false;
-    requestToken = 0;
-    setStatus = (message, kind = "") => {
-      const emptyHelp = this.els.root.querySelector("[data-overview-empty-help]");
-      if (emptyHelp) emptyHelp.hidden = true;
-      setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
-      const retry2 = queryElement(this.els.root, "[data-overview-search-retry]", HTMLButtonElement);
-      if (retry2) {
-        retry2.disabled = kind === "is-loading";
-        retry2.hidden = kind !== "is-error" && !(kind === "is-loading" && !retry2.hidden);
-        if (retry2.hidden && document.activeElement === retry2) {
-          this.els.input?.focus();
-        }
-      }
-    };
     setBulkStatus = (message, kind = "") => {
       setStatusText(this.els.bulkStatusEl, message || " ", kind, [
         "is-success",
@@ -10317,6 +10254,232 @@ var BrainNotesApp = (() => {
     setBulkBusy = (busy) => {
       this.bulkBusy = busy;
       this.updateBulkControls();
+    };
+    canRunBulk = (keys) => {
+      if (!this.els.bulkRoot || this.els.csrfToken.trim() === "") {
+        this.setBulkStatus("Bulk action unavailable.", "is-error");
+        return false;
+      }
+      if (keys.length === 0) {
+        this.setBulkStatus("Select one or more notes.", "is-error");
+        return false;
+      }
+      return true;
+    };
+    runBulkPreview = async (action, fields, fallbackMessage) => {
+      const keys = selectedOverviewKeys(this.selectedKeys);
+      if (!this.canRunBulk(keys)) {
+        return;
+      }
+      this.setBulkBusy(true);
+      this.setBulkStatus("Previewing bulk action...", "is-loading");
+      try {
+        const { resp, payload } = await postBulkPreview(
+          this.fetcher,
+          this.els.csrfToken,
+          action,
+          keys,
+          fields
+        );
+        if (!resp.ok) {
+          this.clearPreviewState();
+          this.setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeBulkPreviewManagementResult(payload);
+        if (!result.ok || !result.preview_id) {
+          this.clearPreviewState();
+          this.setBulkStatus(result.message || "Bulk preview failed.", "is-error");
+          return;
+        }
+        this.setPreviewState(action, fields, result);
+        const failures = Array.isArray(result.failures) ? result.failures : [];
+        this.setBulkStatus(
+          bulkStatusMessage(result, fallbackMessage),
+          failures.length > 0 ? "is-error" : "is-success"
+        );
+      } catch {
+        this.clearPreviewState();
+        this.setBulkStatus("Bulk preview failed.", "is-error");
+      } finally {
+        this.setBulkBusy(false);
+      }
+    };
+    runBulkApply = async (action, fields, fallbackMessage) => {
+      const keys = selectedOverviewKeys(this.selectedKeys);
+      if (!this.canRunBulk(keys)) {
+        return;
+      }
+      if (!this.previewState || !this.previewMatches(action, fields, keys)) {
+        this.clearPreviewState();
+        this.setBulkStatus("Preview the bulk action before applying it.", "is-error");
+        return;
+      }
+      this.setBulkBusy(true);
+      this.setBulkStatus("Applying bulk action...", "is-loading");
+      try {
+        const { resp, payload } = await postBulkApply(
+          this.fetcher,
+          this.els.csrfToken,
+          action,
+          keys,
+          fields,
+          this.previewState.previewID
+        );
+        if (!resp.ok) {
+          this.clearPreviewState();
+          this.setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+          return;
+        }
+        const result = normalizeBulkManagementResult(payload);
+        const failures = Array.isArray(result.failures) ? result.failures : [];
+        this.setBulkStatus(
+          bulkStatusMessage(result, fallbackMessage),
+          failures.length > 0 ? "is-error" : "is-success"
+        );
+        this.clearPreviewState();
+        this.selectedKeys.clear();
+        this.updateBulkControls();
+        this.ignoreNextManagementMutationClear = true;
+        window.dispatchEvent(new CustomEvent(managementMutationEventName, {
+          detail: result
+        }));
+        this.scheduleSearch(0);
+      } catch {
+        this.clearPreviewState();
+        this.setBulkStatus("Bulk action failed.", "is-error");
+      } finally {
+        this.setBulkBusy(false);
+      }
+    };
+    runBulkAction = async (action, fields, fallbackMessage) => {
+      if (this.previewMatches(action, fields)) {
+        await this.runBulkApply(action, fields, fallbackMessage);
+        return;
+      }
+      await this.runBulkPreview(action, fields, fallbackMessage);
+    };
+    bindPreviewInvalidation = (form) => {
+      if (!form) {
+        return;
+      }
+      form.addEventListener("input", () => {
+        this.clearPreviewState({ clearStatus: true });
+      });
+      form.addEventListener("change", () => {
+        this.clearPreviewState({ clearStatus: true });
+      });
+    };
+    bindBulkEvents = () => {
+      this.els.trashButton?.addEventListener("click", () => {
+        void this.runBulkAction("trash", {}, bulkApplyFallbackMessage("trash"));
+      });
+      this.els.moveForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void this.runBulkAction("move", readMoveFields(this.els.moveForm), bulkApplyFallbackMessage("move"));
+      });
+      this.els.setForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const fields = readSetFields(this.els.setForm);
+        if (!fields.property) {
+          this.setBulkStatus("Property is required.", "is-error");
+          return;
+        }
+        void this.runBulkAction("frontmatter_set", fields, bulkApplyFallbackMessage("frontmatter_set"));
+      });
+      this.els.unsetForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const fields = readUnsetFields(this.els.unsetForm);
+        if (!fields.property) {
+          this.setBulkStatus("Property is required.", "is-error");
+          return;
+        }
+        void this.runBulkAction("frontmatter_unset", fields, bulkApplyFallbackMessage("frontmatter_unset"));
+      });
+      this.els.previewApplyButton?.addEventListener("click", () => {
+        if (!this.previewState) {
+          this.setBulkStatus("Preview the bulk action before applying it.", "is-error");
+          return;
+        }
+        void this.runBulkApply(
+          this.previewState.action,
+          this.readFieldsForAction(this.previewState.action),
+          bulkApplyFallbackMessage(this.previewState.action)
+        );
+      });
+      this.els.previewClearButton?.addEventListener("click", () => {
+        this.clearPreviewState({ clearStatus: true });
+      });
+    };
+  };
+
+  // internal/web/static_src/overview-search-empty.ts
+  var renderOverviewEmptyHelp = (root) => {
+    const help = root.querySelector("[data-overview-empty-help]");
+    if (!help) return;
+    const params = new URLSearchParams(window.location.search);
+    const facets = hasActiveSharedFilters(params);
+    const expression = readExprParam(params) !== "";
+    const constraints = [readPageQuery() ? "text" : "", facets ? "filters" : "", expression ? "expression" : ""].filter(Boolean);
+    const summary = document.createElement("span");
+    summary.textContent = `Searching with: ${constraints.join(", ")}.`;
+    help.replaceChildren(summary);
+    if (readPageQuery()) addLink(help, params, ["q"], "Remove search text");
+    if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");
+    if (expression) addLink(help, params, ["expr"], "Remove expression");
+    addCreateLink(help);
+    help.hidden = false;
+  };
+  var addCreateLink = (help) => {
+    const title = readPageQuery();
+    if (!title || document.documentElement.dataset.readOnly === "true") return;
+    const link = document.createElement("a");
+    link.href = `/new?${new URLSearchParams({ title })}`;
+    link.textContent = `Create a note titled \u201C${title}\u201D\u2026`;
+    link.dataset.emptyCreateNote = "";
+    help.appendChild(link);
+  };
+  var addLink = (help, params, keys, label) => {
+    const next = new URLSearchParams(params);
+    for (const key of keys) next.delete(key);
+    const link = document.createElement("a");
+    const query = next.toString();
+    link.href = query ? `/library?${query}` : "/library";
+    link.textContent = label;
+    help.appendChild(link);
+  };
+
+  // internal/web/static_src/overview-search.ts
+  var OverviewSearch = class extends OverviewSearchBulk {
+    resetRangeSelection;
+    restorePosition;
+    debounceToken = 0;
+    requestToken = 0;
+    constructor(els, deps) {
+      super(els, deps);
+      this.resetRangeSelection = bindOverviewRangeSelection(els.listEl);
+      this.restorePosition = bindLibraryPosition(els.listEl);
+      this.bindSearchEvents();
+      this.bindBulkEvents();
+      this.bindSelectionEvents();
+      this.bindPreviewInvalidation(els.moveForm);
+      this.bindPreviewInvalidation(els.setForm);
+      this.bindPreviewInvalidation(els.unsetForm);
+      this.updateBulkControls();
+      this.scheduleSearch(0);
+    }
+    setStatus = (message, kind = "") => {
+      const emptyHelp = this.els.root.querySelector("[data-overview-empty-help]");
+      if (emptyHelp) emptyHelp.hidden = true;
+      setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
+      const retry2 = queryElement(this.els.root, "[data-overview-search-retry]", HTMLButtonElement);
+      if (retry2) {
+        retry2.disabled = kind === "is-loading";
+        retry2.hidden = kind !== "is-error" && !(kind === "is-loading" && !retry2.hidden);
+        if (retry2.hidden && document.activeElement === retry2) {
+          this.els.input?.focus();
+        }
+      }
     };
     setSelected = (result, selected) => {
       const key = normalizeBulkNoteKeys([result.key])[0] || "";
@@ -10442,121 +10605,6 @@ var BrainNotesApp = (() => {
         }
       }, delay);
     };
-    canRunBulk = (keys) => {
-      if (!this.els.bulkRoot || this.els.csrfToken.trim() === "") {
-        this.setBulkStatus("Bulk action unavailable.", "is-error");
-        return false;
-      }
-      if (keys.length === 0) {
-        this.setBulkStatus("Select one or more notes.", "is-error");
-        return false;
-      }
-      return true;
-    };
-    runBulkPreview = async (action, fields, fallbackMessage) => {
-      const keys = selectedOverviewKeys(this.selectedKeys);
-      if (!this.canRunBulk(keys)) {
-        return;
-      }
-      this.setBulkBusy(true);
-      this.setBulkStatus("Previewing bulk action...", "is-loading");
-      try {
-        const { resp, payload } = await postBulkPreview(
-          this.fetcher,
-          this.els.csrfToken,
-          action,
-          keys,
-          fields
-        );
-        if (!resp.ok) {
-          this.clearPreviewState();
-          this.setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = normalizeBulkPreviewManagementResult(payload);
-        if (!result.ok || !result.preview_id) {
-          this.clearPreviewState();
-          this.setBulkStatus(result.message || "Bulk preview failed.", "is-error");
-          return;
-        }
-        this.setPreviewState(action, fields, result);
-        const failures = Array.isArray(result.failures) ? result.failures : [];
-        this.setBulkStatus(
-          bulkStatusMessage(result, fallbackMessage),
-          failures.length > 0 ? "is-error" : "is-success"
-        );
-      } catch {
-        this.clearPreviewState();
-        this.setBulkStatus("Bulk preview failed.", "is-error");
-      } finally {
-        this.setBulkBusy(false);
-      }
-    };
-    runBulkApply = async (action, fields, fallbackMessage) => {
-      const keys = selectedOverviewKeys(this.selectedKeys);
-      if (!this.canRunBulk(keys)) {
-        return;
-      }
-      if (!this.previewState || !this.previewMatches(action, fields, keys)) {
-        this.clearPreviewState();
-        this.setBulkStatus("Preview the bulk action before applying it.", "is-error");
-        return;
-      }
-      this.setBulkBusy(true);
-      this.setBulkStatus("Applying bulk action...", "is-loading");
-      try {
-        const { resp, payload } = await postBulkApply(
-          this.fetcher,
-          this.els.csrfToken,
-          action,
-          keys,
-          fields,
-          this.previewState.previewID
-        );
-        if (!resp.ok) {
-          this.clearPreviewState();
-          this.setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        const result = normalizeBulkManagementResult(payload);
-        const failures = Array.isArray(result.failures) ? result.failures : [];
-        this.setBulkStatus(
-          bulkStatusMessage(result, fallbackMessage),
-          failures.length > 0 ? "is-error" : "is-success"
-        );
-        this.clearPreviewState();
-        this.selectedKeys.clear();
-        this.updateBulkControls();
-        this.ignoreNextManagementMutationClear = true;
-        window.dispatchEvent(new CustomEvent(managementMutationEventName, {
-          detail: result
-        }));
-        this.scheduleSearch(0);
-      } catch {
-        this.clearPreviewState();
-        this.setBulkStatus("Bulk action failed.", "is-error");
-      } finally {
-        this.setBulkBusy(false);
-      }
-    };
-    runBulkAction = async (action, fields, fallbackMessage) => {
-      if (this.previewMatches(action, fields)) {
-        await this.runBulkApply(action, fields, fallbackMessage);
-        return;
-      }
-      await this.runBulkPreview(action, fields, fallbackMessage);
-    };
-    bindPreviewInvalidation = (form) => {
-      if (!form) {
-        return;
-      }
-      form.addEventListener("input", () => {
-        this.clearPreviewState({ clearStatus: true });
-      });
-      form.addEventListener("change", () => {
-        this.clearPreviewState({ clearStatus: true });
-      });
-    };
     bindSearchEvents = () => {
       this.els.root.querySelector("[data-overview-search-retry]")?.addEventListener("click", () => this.scheduleSearch(0));
       if (this.els.input instanceof HTMLInputElement) {
@@ -10576,47 +10624,6 @@ var BrainNotesApp = (() => {
           this.ignoreNextManagementMutationClear = false;
           return;
         }
-        this.clearPreviewState({ clearStatus: true });
-      });
-    };
-    bindBulkEvents = () => {
-      this.els.trashButton?.addEventListener("click", () => {
-        void this.runBulkAction("trash", {}, bulkApplyFallbackMessage("trash"));
-      });
-      this.els.moveForm?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        void this.runBulkAction("move", readMoveFields(this.els.moveForm), bulkApplyFallbackMessage("move"));
-      });
-      this.els.setForm?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const fields = readSetFields(this.els.setForm);
-        if (!fields.property) {
-          this.setBulkStatus("Property is required.", "is-error");
-          return;
-        }
-        void this.runBulkAction("frontmatter_set", fields, bulkApplyFallbackMessage("frontmatter_set"));
-      });
-      this.els.unsetForm?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const fields = readUnsetFields(this.els.unsetForm);
-        if (!fields.property) {
-          this.setBulkStatus("Property is required.", "is-error");
-          return;
-        }
-        void this.runBulkAction("frontmatter_unset", fields, bulkApplyFallbackMessage("frontmatter_unset"));
-      });
-      this.els.previewApplyButton?.addEventListener("click", () => {
-        if (!this.previewState) {
-          this.setBulkStatus("Preview the bulk action before applying it.", "is-error");
-          return;
-        }
-        void this.runBulkApply(
-          this.previewState.action,
-          this.readFieldsForAction(this.previewState.action),
-          bulkApplyFallbackMessage(this.previewState.action)
-        );
-      });
-      this.els.previewClearButton?.addEventListener("click", () => {
         this.clearPreviewState({ clearStatus: true });
       });
     };
@@ -17940,6 +17947,134 @@ var BrainNotesApp = (() => {
     };
   };
 
+  // internal/web/static_src/source-editor-conflict.ts
+  var wireConflict = (elements, state, controller, ctx) => {
+    const settled = () => !state.saving;
+    elements.conflictOverwrite?.addEventListener("click", () => {
+      if (!settled()) {
+        return;
+      }
+      state.baseRevision = conflictRevision(elements);
+      hideConflict(elements);
+      void controller.save();
+    });
+    elements.conflictDiscard?.addEventListener("click", () => {
+      if (!settled()) {
+        return;
+      }
+      const incoming = elements.conflictSource?.textContent ?? "";
+      state.surface?.setValue(incoming);
+      ctx.adopt(incoming, conflictRevision(elements));
+      hideConflict(elements);
+      ctx.preview.flush(incoming);
+    });
+  };
+  var showConflict = (elements, content2, revision) => {
+    if (!elements.conflict) {
+      return;
+    }
+    if (elements.conflictSource) {
+      elements.conflictSource.textContent = content2;
+    }
+    elements.conflict.setAttribute("data-source-conflict-revision", revision);
+    elements.conflict.hidden = false;
+  };
+  var hideConflict = (elements) => {
+    if (elements.conflict) {
+      elements.conflict.hidden = true;
+      elements.conflict.removeAttribute("data-source-conflict-revision");
+    }
+  };
+  var conflictRevision = (elements) => elements.conflict?.getAttribute("data-source-conflict-revision") ?? "";
+
+  // internal/web/static_src/source-editor-save.ts
+  var runSave = async (deps, state, ctx) => {
+    const surface = state.surface;
+    if (!surface || state.saving) {
+      return;
+    }
+    const content2 = surface.getValue();
+    if (content2 === state.savedContent && state.pendingSave === null) {
+      return;
+    }
+    const tooLarge = oversizeMessage(content2, deps.config.maxBytes);
+    if (tooLarge !== "") {
+      ctx.setStatus(tooLarge, "is-error");
+      return;
+    }
+    ctx.drafts.flush();
+    state.saving = true;
+    const base2 = state.baseRevision;
+    state.pendingSave = { id: resumableSaveID(state.pendingSave, content2), content: content2 };
+    ctx.refreshSaveButton();
+    ctx.setStatus("Saving\u2026", "is-loading");
+    try {
+      const response = await deps.client.save({
+        content: content2,
+        revision: base2,
+        saveID: state.pendingSave.id,
+        owner: deps.claims?.owner,
+        attachments: deps.claims?.pending()
+      });
+      deps.claims?.committed(response.attachments);
+      applyOutcome(classifySaveResponse(response, base2), content2, state, ctx, deps.elements);
+    } catch (error) {
+      ctx.setStatus(
+        `${errorMessage(error, "The save could not be sent.")} Nothing was re-sent; press Save to retry.`,
+        "is-error"
+      );
+    } finally {
+      state.saving = false;
+      ctx.refreshSaveButton();
+    }
+  };
+  var resumableSaveID = (pending, content2) => pending && pending.content === content2 ? pending.id : newSaveID();
+  var applyOutcome = (outcome, submitted, state, ctx, elements) => {
+    switch (outcome.kind) {
+      case "saved":
+        ctx.adopt(submitted, outcome.revision);
+        hideConflict(elements);
+        ctx.drafts.announce(outcome.revision);
+        ctx.setStatus(outcome.message, "is-success");
+        return;
+      case "landed":
+        ctx.adopt(submitted, outcome.revision);
+        hideConflict(elements);
+        ctx.drafts.announce(outcome.revision);
+        ctx.setStatus(outcome.message, "is-error");
+        return;
+      case "missing":
+        state.pendingSave = null;
+        ctx.setStatus(outcome.message, "is-error");
+        ctx.drafts.offerRecreate(submitted);
+        return;
+      case "conflict":
+        state.pendingSave = null;
+        showConflict(elements, outcome.content, outcome.revision);
+        ctx.panes.select("edit");
+        ctx.setStatus(outcome.message, "is-error");
+        return;
+      case "failed":
+        if (outcome.answered) {
+          state.pendingSave = null;
+        }
+        ctx.setStatus(outcome.message, "is-error");
+    }
+  };
+  var oversizeMessage = (content2, maxBytes) => {
+    if (maxBytes <= 0) {
+      return "";
+    }
+    const bytes = new TextEncoder().encode(content2).length;
+    return bytes > maxBytes ? `This note is ${bytes} bytes, over the ${maxBytes}-byte limit for a source save. Nothing was sent.` : "";
+  };
+  var errorMessage = (error, fallback) => {
+    if (error instanceof Error && error.message.trim() !== "") {
+      return error.message.trim();
+    }
+    return fallback;
+  };
+
   // internal/web/static_src/source-editor-controller.ts
   var createSourceEditorController = (deps) => {
     const { elements, client } = deps;
@@ -18125,79 +18260,6 @@ var BrainNotesApp = (() => {
     ctx.refreshSaveButton();
     ctx.preview.flush(offer.draft.content);
   };
-  var runSave = async (deps, state, ctx) => {
-    const surface = state.surface;
-    if (!surface || state.saving) {
-      return;
-    }
-    const content2 = surface.getValue();
-    if (content2 === state.savedContent && state.pendingSave === null) {
-      return;
-    }
-    const tooLarge = oversizeMessage(content2, deps.config.maxBytes);
-    if (tooLarge !== "") {
-      ctx.setStatus(tooLarge, "is-error");
-      return;
-    }
-    ctx.drafts.flush();
-    state.saving = true;
-    const base2 = state.baseRevision;
-    state.pendingSave = { id: resumableSaveID(state.pendingSave, content2), content: content2 };
-    ctx.refreshSaveButton();
-    ctx.setStatus("Saving\u2026", "is-loading");
-    try {
-      const response = await deps.client.save({
-        content: content2,
-        revision: base2,
-        saveID: state.pendingSave.id,
-        owner: deps.claims?.owner,
-        attachments: deps.claims?.pending()
-      });
-      deps.claims?.committed(response.attachments);
-      applyOutcome(classifySaveResponse(response, base2), content2, state, ctx, deps.elements);
-    } catch (error) {
-      ctx.setStatus(
-        `${errorMessage(error, "The save could not be sent.")} Nothing was re-sent; press Save to retry.`,
-        "is-error"
-      );
-    } finally {
-      state.saving = false;
-      ctx.refreshSaveButton();
-    }
-  };
-  var resumableSaveID = (pending, content2) => pending && pending.content === content2 ? pending.id : newSaveID();
-  var applyOutcome = (outcome, submitted, state, ctx, elements) => {
-    switch (outcome.kind) {
-      case "saved":
-        ctx.adopt(submitted, outcome.revision);
-        hideConflict(elements);
-        ctx.drafts.announce(outcome.revision);
-        ctx.setStatus(outcome.message, "is-success");
-        return;
-      case "landed":
-        ctx.adopt(submitted, outcome.revision);
-        hideConflict(elements);
-        ctx.drafts.announce(outcome.revision);
-        ctx.setStatus(outcome.message, "is-error");
-        return;
-      case "missing":
-        state.pendingSave = null;
-        ctx.setStatus(outcome.message, "is-error");
-        ctx.drafts.offerRecreate(submitted);
-        return;
-      case "conflict":
-        state.pendingSave = null;
-        showConflict(elements, outcome.content, outcome.revision);
-        ctx.panes.select("edit");
-        ctx.setStatus(outcome.message, "is-error");
-        return;
-      case "failed":
-        if (outcome.answered) {
-          state.pendingSave = null;
-        }
-        ctx.setStatus(outcome.message, "is-error");
-    }
-  };
   var wireControls = (elements, controller) => {
     for (const button of elements.commands) {
       button.addEventListener("click", () => {
@@ -18209,57 +18271,6 @@ var BrainNotesApp = (() => {
     }
     elements.save?.addEventListener("click", () => void controller.save());
     elements.find?.addEventListener("click", () => controller.openSearch());
-  };
-  var wireConflict = (elements, state, controller, ctx) => {
-    const settled = () => !state.saving;
-    elements.conflictOverwrite?.addEventListener("click", () => {
-      if (!settled()) {
-        return;
-      }
-      state.baseRevision = conflictRevision(elements);
-      hideConflict(elements);
-      void controller.save();
-    });
-    elements.conflictDiscard?.addEventListener("click", () => {
-      if (!settled()) {
-        return;
-      }
-      const incoming = elements.conflictSource?.textContent ?? "";
-      state.surface?.setValue(incoming);
-      ctx.adopt(incoming, conflictRevision(elements));
-      hideConflict(elements);
-      ctx.preview.flush(incoming);
-    });
-  };
-  var showConflict = (elements, content2, revision) => {
-    if (!elements.conflict) {
-      return;
-    }
-    if (elements.conflictSource) {
-      elements.conflictSource.textContent = content2;
-    }
-    elements.conflict.setAttribute("data-source-conflict-revision", revision);
-    elements.conflict.hidden = false;
-  };
-  var hideConflict = (elements) => {
-    if (elements.conflict) {
-      elements.conflict.hidden = true;
-      elements.conflict.removeAttribute("data-source-conflict-revision");
-    }
-  };
-  var conflictRevision = (elements) => elements.conflict?.getAttribute("data-source-conflict-revision") ?? "";
-  var oversizeMessage = (content2, maxBytes) => {
-    if (maxBytes <= 0) {
-      return "";
-    }
-    const bytes = new TextEncoder().encode(content2).length;
-    return bytes > maxBytes ? `This note is ${bytes} bytes, over the ${maxBytes}-byte limit for a source save. Nothing was sent.` : "";
-  };
-  var errorMessage = (error, fallback) => {
-    if (error instanceof Error && error.message.trim() !== "") {
-      return error.message.trim();
-    }
-    return fallback;
   };
 
   // internal/web/static_src/source-editor-elements.ts
@@ -48081,38 +48092,7 @@ var BrainNotesApp = (() => {
     normalizeSyncResolvedResponse
   );
 
-  // internal/web/static_src/sync-conflicts-panel.ts
-  var readElements2 = (root) => {
-    const status = queryElement(root, "[data-sync-conflicts-status]", HTMLElement);
-    const operations = queryElement(root, "[data-sync-operations]", HTMLElement);
-    return status && operations ? { status, operations } : null;
-  };
-  var mergeEditorFor = (ctx, operation, element3, decisions, invalidate) => {
-    if (!element3.mergeHost || !element3.mergeNotice) {
-      return null;
-    }
-    return createSyncMergeEditor({
-      host: element3.mergeHost,
-      notice: element3.mergeNotice,
-      reset: element3.mergeReset,
-      factory: ctx.surface(),
-      vaultID: ctx.vaultID,
-      packageID: operation.package_id,
-      path: element3.path.path,
-      seed: mergeSeed(element3.path),
-      // This vault's digest, whichever version the seed came from: it is the side that
-      // can move under a merge being composed, and a load that found it changed is the
-      // one a person has to be told about. See baseRevision.
-      baseRevision: element3.path.local.sha256,
-      storage: ctx.storage,
-      draftID: ctx.draftID,
-      onText: (text3) => {
-        decisions.merge(element3.path.path, text3);
-        invalidate();
-      },
-      view: ctx.view
-    });
-  };
+  // internal/web/static_src/sync-conflicts-plan-state.ts
   var createPlanState = (elements, say) => {
     let previewID = "";
     const show = (planned) => {
@@ -48149,6 +48129,86 @@ var BrainNotesApp = (() => {
         }
       }
     };
+  };
+
+  // internal/web/static_src/sync-conflicts-announce.ts
+  var mergeSafetyOf = (editors) => {
+    if (editors.length === 0) {
+      return "none";
+    }
+    let kept = true;
+    for (const editor of editors) {
+      editor.flush();
+      kept = editor.kept() && kept;
+    }
+    return kept ? "kept" : "lost";
+  };
+  var staleAnnouncement = (failure2, merges) => ({
+    message: `${reReadOpening(failure2)} ${mergeClause(merges)}`,
+    kind: "is-warning"
+  });
+  var reReadOpening = (failure2) => failure2.code === "preview_stale" ? "This vault moved on while the decision was being made, so nothing was applied." : "This review is too old to apply, so nothing was applied.";
+  var mergeClause = (merges) => {
+    if (merges === "none") {
+      return "Both versions are being read again.";
+    }
+    if (merges === "kept") {
+      return "Both versions are being read again; any merge you composed is still here.";
+    }
+    return `Both versions are being read again, and a ${lostMergeClause}`;
+  };
+  var lostMergeClause = "merge you composed has to be typed again: this page could not keep a copy of it.";
+  var failureAnnouncement = (message, merges) => ({
+    message: merges === "lost" ? `${ended(message)} A ${lostMergeClause}` : message,
+    kind: "is-error"
+  });
+  var resolvedSentence = (result) => {
+    const parts = [result.summary || "The decision was applied."];
+    if (result.summary === "" && !result.acknowledged) {
+      parts.push(
+        "The other replica has not been told yet, so it still counts this change as waiting."
+      );
+    }
+    for (const abandoned of result.abandoned) {
+      parts.push(`An earlier unfinished resolution of ${abandoned.package_id} was dropped: ${abandoned.reason}`);
+    }
+    return parts.join(" ");
+  };
+  var join = (announced, sentence) => announced === void 0 || announced === "" ? sentence : `${ended(announced)} ${sentence}`;
+  var ended = (text3) => /[.!?…]$/.test(text3) ? text3 : `${text3}.`;
+  var emptyMessage = (count4) => count4 === 0 ? "Nothing is waiting for a decision." : `${count4 === 1 ? "1 change is" : `${count4} changes are`} waiting for a decision.`;
+
+  // internal/web/static_src/sync-conflicts-panel.ts
+  var readElements2 = (root) => {
+    const status = queryElement(root, "[data-sync-conflicts-status]", HTMLElement);
+    const operations = queryElement(root, "[data-sync-operations]", HTMLElement);
+    return status && operations ? { status, operations } : null;
+  };
+  var mergeEditorFor = (ctx, operation, element3, decisions, invalidate) => {
+    if (!element3.mergeHost || !element3.mergeNotice) {
+      return null;
+    }
+    return createSyncMergeEditor({
+      host: element3.mergeHost,
+      notice: element3.mergeNotice,
+      reset: element3.mergeReset,
+      factory: ctx.surface(),
+      vaultID: ctx.vaultID,
+      packageID: operation.package_id,
+      path: element3.path.path,
+      seed: mergeSeed(element3.path),
+      // This vault's digest, whichever version the seed came from: it is the side that
+      // can move under a merge being composed, and a load that found it changed is the
+      // one a person has to be told about. See baseRevision.
+      baseRevision: element3.path.local.sha256,
+      storage: ctx.storage,
+      draftID: ctx.draftID,
+      onText: (text3) => {
+        decisions.merge(element3.path.path, text3);
+        invalidate();
+      },
+      view: ctx.view
+    });
   };
   var reviewResolution = async (scope) => {
     const { decisions, say } = scope;
@@ -48293,51 +48353,6 @@ var BrainNotesApp = (() => {
       }
     };
   };
-  var mergeSafetyOf = (editors) => {
-    if (editors.length === 0) {
-      return "none";
-    }
-    let kept = true;
-    for (const editor of editors) {
-      editor.flush();
-      kept = editor.kept() && kept;
-    }
-    return kept ? "kept" : "lost";
-  };
-  var staleAnnouncement = (failure2, merges) => ({
-    message: `${reReadOpening(failure2)} ${mergeClause(merges)}`,
-    kind: "is-warning"
-  });
-  var reReadOpening = (failure2) => failure2.code === "preview_stale" ? "This vault moved on while the decision was being made, so nothing was applied." : "This review is too old to apply, so nothing was applied.";
-  var mergeClause = (merges) => {
-    if (merges === "none") {
-      return "Both versions are being read again.";
-    }
-    if (merges === "kept") {
-      return "Both versions are being read again; any merge you composed is still here.";
-    }
-    return `Both versions are being read again, and a ${lostMergeClause}`;
-  };
-  var lostMergeClause = "merge you composed has to be typed again: this page could not keep a copy of it.";
-  var failureAnnouncement = (message, merges) => ({
-    message: merges === "lost" ? `${ended(message)} A ${lostMergeClause}` : message,
-    kind: "is-error"
-  });
-  var resolvedSentence = (result) => {
-    const parts = [result.summary || "The decision was applied."];
-    if (result.summary === "" && !result.acknowledged) {
-      parts.push(
-        "The other replica has not been told yet, so it still counts this change as waiting."
-      );
-    }
-    for (const abandoned of result.abandoned) {
-      parts.push(`An earlier unfinished resolution of ${abandoned.package_id} was dropped: ${abandoned.reason}`);
-    }
-    return parts.join(" ");
-  };
-  var join = (announced, sentence) => announced === void 0 || announced === "" ? sentence : `${ended(announced)} ${sentence}`;
-  var ended = (text3) => /[.!?…]$/.test(text3) ? text3 : `${text3}.`;
-  var emptyMessage = (count4) => count4 === 0 ? "Nothing is waiting for a decision." : `${count4 === 1 ? "1 change is" : `${count4} changes are`} waiting for a decision.`;
   var createSyncConflictsPanel = (deps) => {
     const elements = readElements2(deps.root);
     if (!elements) {
