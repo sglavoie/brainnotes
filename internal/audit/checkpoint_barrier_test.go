@@ -217,7 +217,7 @@ var barrierDoors = []barrierDoor{
 		why:   "stale applications and receipts must disappear atomically under the reviewed enrollment",
 	},
 	{
-		file:  "internal/vaultrecovery/review.go",
+		file:  "internal/vaultrecovery/review_apply.go",
 		fn:    "ApplyPlan",
 		calls: holdsBarrier,
 		why:   "archiving channels, replacing enrollment and resetting both causal ledgers is one restore transition",

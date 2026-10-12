@@ -7502,7 +7502,7 @@ code {
 .source-editor-launch:hover {
   background: var(--bn-hover);
 }
-
+/* internal/web/static_src/css/source-editor-attachments.css */
 /*
  * Attachments.
  *
