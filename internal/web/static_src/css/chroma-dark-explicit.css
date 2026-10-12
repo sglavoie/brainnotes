@@ -1,0 +1,253 @@
+
+:root[data-theme='dark'] .chroma .err {
+  color: #bf616a;
+}
+
+:root[data-theme='dark'] .chroma .k {
+  color: #81a1c1;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .kc {
+  color: #81a1c1;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .kd {
+  color: #81a1c1;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .kn {
+  color: #81a1c1;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .kp {
+  color: #81a1c1;
+}
+
+:root[data-theme='dark'] .chroma .kr {
+  color: #81a1c1;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .kt {
+  color: #81a1c1;
+}
+
+:root[data-theme='dark'] .chroma .na {
+  color: #8fbcbb;
+}
+
+:root[data-theme='dark'] .chroma .nb {
+  color: #81a1c1;
+}
+
+:root[data-theme='dark'] .chroma .nc {
+  color: #8fbcbb;
+}
+
+:root[data-theme='dark'] .chroma .no {
+  color: #8fbcbb;
+}
+
+:root[data-theme='dark'] .chroma .nd {
+  color: #d08770;
+}
+
+:root[data-theme='dark'] .chroma .ni {
+  color: #d08770;
+}
+
+:root[data-theme='dark'] .chroma .ne {
+  color: #bf616a;
+}
+
+:root[data-theme='dark'] .chroma .nf {
+  color: #88c0d0;
+}
+
+:root[data-theme='dark'] .chroma .nl {
+  color: #8fbcbb;
+}
+
+:root[data-theme='dark'] .chroma .nn {
+  color: #8fbcbb;
+}
+
+:root[data-theme='dark'] .chroma .nt {
+  color: #81a1c1;
+}
+
+:root[data-theme='dark'] .chroma .s {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .sa {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .sb {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .sc {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .dl {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .sd {
+  color: #616e87;
+}
+
+:root[data-theme='dark'] .chroma .s2 {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .se {
+  color: #ebcb8b;
+}
+
+:root[data-theme='dark'] .chroma .sh {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .si {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .sx {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .sr {
+  color: #ebcb8b;
+}
+
+:root[data-theme='dark'] .chroma .s1 {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .ss {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .m {
+  color: #b48ead;
+}
+
+:root[data-theme='dark'] .chroma .mb {
+  color: #b48ead;
+}
+
+:root[data-theme='dark'] .chroma .mf {
+  color: #b48ead;
+}
+
+:root[data-theme='dark'] .chroma .mh {
+  color: #b48ead;
+}
+
+:root[data-theme='dark'] .chroma .mi {
+  color: #b48ead;
+}
+
+:root[data-theme='dark'] .chroma .il {
+  color: #b48ead;
+}
+
+:root[data-theme='dark'] .chroma .mo {
+  color: #b48ead;
+}
+
+:root[data-theme='dark'] .chroma .o {
+  color: #81a1c1;
+}
+
+:root[data-theme='dark'] .chroma .ow {
+  color: #81a1c1;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .p {
+  color: #eceff4;
+}
+
+:root[data-theme='dark'] .chroma .c {
+  color: #616e87;
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .ch {
+  color: #616e87;
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .cm {
+  color: #616e87;
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .c1 {
+  color: #616e87;
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .cs {
+  color: #616e87;
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .cp {
+  color: #5e81ac;
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .cpf {
+  color: #5e81ac;
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .gd {
+  color: #bf616a;
+}
+
+:root[data-theme='dark'] .chroma .ge {
+  font-style: italic;
+}
+
+:root[data-theme='dark'] .chroma .gr {
+  color: #bf616a;
+}
+
+:root[data-theme='dark'] .chroma .gh {
+  color: #88c0d0;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .gi {
+  color: #a3be8c;
+}
+
+:root[data-theme='dark'] .chroma .gp {
+  color: #4c566a;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .gs {
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .gu {
+  color: #88c0d0;
+  font-weight: bold;
+}
+
+:root[data-theme='dark'] .chroma .gt {
+  color: #bf616a;
+}
+

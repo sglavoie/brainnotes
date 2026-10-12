@@ -40,7 +40,9 @@
 @import "note-layout.css";
 @import "note-insight.css";
 @import "note-body.css";
-@import "chroma.css";
+@import "chroma-light.css";
+@import "chroma-dark-system.css";
+@import "chroma-dark-explicit.css";
 @import "note-body-markdown.css";
 @import "frontmatter.css";
 @import "backlinks.css";

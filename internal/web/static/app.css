@@ -4059,7 +4059,7 @@ code {
   word-break: normal;
   overflow-wrap: normal;
 }
-/* internal/web/static_src/css/chroma.css */
+/* internal/web/static_src/css/chroma-light.css */
 /* Markdown code highlighting (Chroma classes). Light = github, dark =
    nord. Mirrors the theme-token architecture above: the light palette is
    the base (System light + explicit data-theme="light"), System dark comes
@@ -4424,6 +4424,7 @@ code {
   color: #bbbbbb;
 }
 
+/* internal/web/static_src/css/chroma-dark-system.css */
 @media (prefers-color-scheme: dark) {
   .chroma .err {
     color: #bf616a;
@@ -4677,6 +4678,7 @@ code {
     color: #bf616a;
   }
 }
+/* internal/web/static_src/css/chroma-dark-explicit.css */
 
 :root[data-theme='dark'] .chroma .err {
   color: #bf616a;

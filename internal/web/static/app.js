@@ -17548,48 +17548,10 @@ var BrainNotesApp = (() => {
   };
   var encode = (value) => encodeURIComponent(value);
 
-  // internal/web/static_src/source-editor-drafts.ts
+  // internal/web/static_src/source-editor-draft-types.ts
   var defaultDelayMs = 300;
-  var createDraftKeeper = (options) => {
-    const { store, elements, host } = options;
-    const writer = createDraftWriter(options);
-    const presenter = createOfferPresenter(options, writer);
-    const unbind = bindDraftEvents({
-      elements,
-      view: options.view,
-      store,
-      baseRevision: () => host.baseRevision(),
-      onRestore: presenter.onRestore,
-      onRecreate: presenter.onRecreate,
-      onDiscard: presenter.onDiscard,
-      onFlush: writer.flush,
-      onPeerSave: () => {
-        writer.unannounce();
-        setDraftStatus(elements, draftStatusMessages.peerSaved, "is-warning");
-      }
-    });
-    if (!store?.available()) {
-      setDraftStatus(elements, draftStatusMessages.unavailable, "is-warning");
-    }
-    return {
-      kept: () => store?.list() ?? [],
-      keep: writer.keep,
-      flush: writer.flush,
-      adopted(content2, revision) {
-        writer.adopted();
-        presenter.revised(content2, revision);
-      },
-      announce(revision) {
-        store?.announceSaved(revision);
-      },
-      present: presenter.present,
-      offerRecreate: presenter.offerRecreate,
-      dispose() {
-        writer.cancel();
-        unbind();
-      }
-    };
-  };
+
+  // internal/web/static_src/source-editor-draft-writer.ts
   var createDraftWriter = (options) => {
     const delayMs = options.delayMs ?? defaultDelayMs;
     let timer = null;
@@ -17744,6 +17706,22 @@ var BrainNotesApp = (() => {
     }
     panel.show(decision.offer);
   };
+  var reportWriteOutcome = (elements, outcome, announced) => {
+    if (outcome === "refused") {
+      setDraftStatus(elements, draftStatusMessages.refused, "is-error");
+      return false;
+    }
+    if (outcome === "unavailable") {
+      setDraftStatus(elements, draftStatusMessages.unavailable, "is-warning");
+      return false;
+    }
+    if (!announced) {
+      setDraftStatus(elements, draftStatusMessages.kept);
+    }
+    return true;
+  };
+
+  // internal/web/static_src/source-editor-draft-offer.ts
   var createOfferPresenter = (options, writer) => {
     const { store, elements } = options;
     const ownID = store?.draftID ?? "";
@@ -17858,20 +17836,6 @@ var BrainNotesApp = (() => {
       }
     };
   };
-  var reportWriteOutcome = (elements, outcome, announced) => {
-    if (outcome === "refused") {
-      setDraftStatus(elements, draftStatusMessages.refused, "is-error");
-      return false;
-    }
-    if (outcome === "unavailable") {
-      setDraftStatus(elements, draftStatusMessages.unavailable, "is-warning");
-      return false;
-    }
-    if (!announced) {
-      setDraftStatus(elements, draftStatusMessages.kept);
-    }
-    return true;
-  };
   var syntheticDraft = (options, content2) => ({
     version: draftSchemaVersion,
     vaultID: options.config.vaultID,
@@ -17908,6 +17872,48 @@ var BrainNotesApp = (() => {
         "is-error"
       );
     }
+  };
+
+  // internal/web/static_src/source-editor-drafts.ts
+  var createDraftKeeper = (options) => {
+    const { store, elements, host } = options;
+    const writer = createDraftWriter(options);
+    const presenter = createOfferPresenter(options, writer);
+    const unbind = bindDraftEvents({
+      elements,
+      view: options.view,
+      store,
+      baseRevision: () => host.baseRevision(),
+      onRestore: presenter.onRestore,
+      onRecreate: presenter.onRecreate,
+      onDiscard: presenter.onDiscard,
+      onFlush: writer.flush,
+      onPeerSave: () => {
+        writer.unannounce();
+        setDraftStatus(elements, draftStatusMessages.peerSaved, "is-warning");
+      }
+    });
+    if (!store?.available()) {
+      setDraftStatus(elements, draftStatusMessages.unavailable, "is-warning");
+    }
+    return {
+      kept: () => store?.list() ?? [],
+      keep: writer.keep,
+      flush: writer.flush,
+      adopted(content2, revision) {
+        writer.adopted();
+        presenter.revised(content2, revision);
+      },
+      announce(revision) {
+        store?.announceSaved(revision);
+      },
+      present: presenter.present,
+      offerRecreate: presenter.offerRecreate,
+      dispose() {
+        writer.cancel();
+        unbind();
+      }
+    };
   };
   var bindDraftEvents = (options) => {
     const { elements, view } = options;
