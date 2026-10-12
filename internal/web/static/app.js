@@ -12407,6 +12407,278 @@ var BrainNotesApp = (() => {
     };
   };
 
+  // internal/web/static_src/properties-workbench-events.ts
+  var attr = (element3, name2) => element3.getAttribute(name2) || "";
+  var bindRowClicks = (ctx) => {
+    ctx.rowsEl.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const edit2 = target.closest("[data-property-row-edit]");
+      if (edit2 && !edit2.disabled) {
+        ctx.openRowEditor(attr(edit2, "data-property-row-edit"), "replace");
+        return;
+      }
+      const add2 = target.closest("[data-property-row-add]");
+      if (add2 && !add2.disabled) {
+        ctx.openRowEditor(attr(add2, "data-property-row-add"), "list_add");
+        return;
+      }
+      const unset = target.closest("[data-property-row-unset]");
+      if (unset && !unset.disabled) {
+        void ctx.runPreview({
+          action: "unset",
+          property: ctx.property,
+          notes: [attr(unset, "data-property-row-unset")]
+        });
+      }
+    });
+  };
+  var bindRowKeys = (ctx) => {
+    ctx.rowsEl.addEventListener("keydown", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const row = target.closest("[data-property-row]");
+      if (!row) {
+        return;
+      }
+      const index = ctx.view.rowElements().indexOf(row);
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        ctx.view.focusRow(index + 1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        ctx.view.focusRow(index - 1);
+        return;
+      }
+      if (target !== row) {
+        return;
+      }
+      if (event.key === " ") {
+        event.preventDefault();
+        ctx.view.toggleSelection(attr(row, "data-property-row"));
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        ctx.openRowEditor(attr(row, "data-property-row"), "replace");
+      }
+    });
+  };
+  var bindRowSelection = (ctx) => {
+    ctx.rowsEl.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || !target.hasAttribute("data-property-row-select")) {
+        return;
+      }
+      ctx.view.toggleSelection(attr(target, "data-property-row-select"), target.checked);
+    });
+  };
+  var bindToolbar = (ctx) => {
+    const { state, view } = ctx;
+    ctx.root.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const button = target.closest("[data-property-action]");
+      if (!button || button.disabled) {
+        return;
+      }
+      ctx.openActionEditor(attr(button, "data-property-action"));
+    });
+    queryElement(ctx.root, "[data-property-select-all]", HTMLButtonElement)?.addEventListener(
+      "click",
+      () => {
+        for (const row of state.rows) {
+          state.selected.add(row.rel_path);
+        }
+        view.renderSelection();
+      }
+    );
+    queryElement(ctx.root, "[data-property-clear-selection]", HTMLButtonElement)?.addEventListener(
+      "click",
+      () => {
+        state.selected.clear();
+        view.renderSelection();
+      }
+    );
+  };
+  var isTyping = (target) => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+  var bindDocumentKeys = (ctx) => {
+    const searchEl = queryElement(ctx.root, "[data-property-filter-query]", HTMLInputElement);
+    ctx.root.ownerDocument.addEventListener("keydown", (event) => {
+      if (ctx.dialog.isOpen()) {
+        return;
+      }
+      if (event.key === "/" && searchEl) {
+        if (isTyping(event.target)) {
+          return;
+        }
+        event.preventDefault();
+        searchEl.focus();
+        searchEl.select();
+        return;
+      }
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (ctx.editor.isOpen()) {
+        ctx.editor.close();
+        return;
+      }
+      if (ctx.state.selected.size > 0) {
+        ctx.state.selected.clear();
+        ctx.view.renderSelection();
+        ctx.setStatus("Selection cleared.");
+      }
+    });
+  };
+  var bindWorkbenchEvents = (ctx) => {
+    bindRowSelection(ctx);
+    bindRowClicks(ctx);
+    bindRowKeys(ctx);
+    bindToolbar(ctx);
+    bindDocumentKeys(ctx);
+  };
+
+  // internal/web/static_src/properties-workbench-forms.ts
+  var previewTextFor = (value) => value.kind === "list" ? (value.items || []).map((item) => item.text).join(", ") : value.text;
+  var buildValueControl = (ctx, form, current, seed) => {
+    const control = createValueControl(ctx.doc, {
+      kind: editKind(current),
+      items: editItemKind(current),
+      allowed: editAllowed(current),
+      value: seed,
+      id: `property-editor-${ctx.property}`,
+      label: `${ctx.property} value`
+    });
+    form.appendChild(control.element);
+    return control;
+  };
+  var buildItemControl = (ctx, form, current) => {
+    const itemKind = editItemKind(current);
+    const single = createValueControl(ctx.doc, {
+      kind: itemKind,
+      items: itemKind,
+      allowed: editAllowed(current),
+      id: `property-editor-item-${ctx.property}`,
+      label: `${ctx.property} item`
+    });
+    form.appendChild(single.element);
+    return single;
+  };
+  var openRowEditor = (ctx, relPath, op) => {
+    const current = ctx.state.summary;
+    const row = ctx.state.rows.find((candidate) => candidate.rel_path === relPath);
+    const element3 = ctx.rowElements().find((candidate) => candidate.getAttribute("data-property-row") === relPath);
+    if (!row || !element3 || !current) {
+      return;
+    }
+    const seed = op === "replace" ? typedValueFrom(row.value, editKind(current), editItemKind(current)) : void 0;
+    ctx.editor.mount(
+      element3,
+      op === "replace" ? `Edit ${ctx.property}` : `Add to ${ctx.property}`,
+      "Save",
+      (form) => {
+        const control = op === "replace" ? buildValueControl(ctx, form, current, seed) : buildItemControl(ctx, form, current);
+        control.focus();
+        return () => {
+          const message = control.error();
+          if (message !== "") {
+            return message;
+          }
+          const value = control.read();
+          const text3 = op === "replace" ? previewTextFor(value) : `${valueDisplayText(row.value)}, ${value.text}`;
+          void ctx.mutations.runImmediate(relPath, op, value, row.hash, text3);
+          return null;
+        };
+      }
+    );
+  };
+  var buildRenameForm = (ctx, form, notes) => {
+    const input = ctx.doc.createElement("input");
+    input.type = "text";
+    input.className = "properties-control properties-control-input";
+    input.id = "property-editor-new-name";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("aria-label", "New property name");
+    input.setAttribute("data-property-new-name", "");
+    input.value = ctx.property;
+    form.appendChild(input);
+    input.focus();
+    return () => {
+      const newName = input.value.trim();
+      if (newName === "") {
+        return "Enter a new property name.";
+      }
+      if (newName === ctx.property) {
+        return "Enter a name different from the current one.";
+      }
+      void ctx.mutations.runPreview({
+        action: "rename_property",
+        property: ctx.property,
+        new_name: newName,
+        notes
+      });
+      return null;
+    };
+  };
+  var buildValueActionForm = (ctx, form, action, notes, current) => {
+    const control = buildValueControl(ctx, form, current);
+    control.focus();
+    return () => {
+      const message = control.error();
+      if (message !== "") {
+        return message;
+      }
+      const value = control.read();
+      const match = ctx.state.matchValue;
+      if (action !== "replace_value") {
+        void ctx.mutations.runPreview({ action, property: ctx.property, notes, value });
+        return null;
+      }
+      if (!match) {
+        return "Choose the value to replace first.";
+      }
+      void ctx.mutations.runPreview({
+        action,
+        property: ctx.property,
+        notes,
+        match: { kind: match.kind, text: match.text },
+        value
+      });
+      return null;
+    };
+  };
+  var openActionEditor = (ctx, editorEl, action) => {
+    const current = ctx.state.summary;
+    const notes = [...ctx.state.selected];
+    if (notes.length === 0) {
+      ctx.setStatus("Select at least one note first.", "is-error");
+      return;
+    }
+    if (action === "unset" || action === "repair") {
+      void ctx.mutations.runPreview({ action, property: ctx.property, notes });
+      return;
+    }
+    if (!editorEl || !current) {
+      return;
+    }
+    ctx.editor.mount(
+      editorEl,
+      actionTitle(action, ctx.property),
+      "Preview",
+      (form) => action === "rename_property" ? buildRenameForm(ctx, form, notes) : buildValueActionForm(ctx, form, action, notes, current)
+    );
+  };
+
   // internal/web/static_src/properties-workbench-mutations.ts
   var createWorkbenchMutations = (options) => {
     const announce = (outcome) => {
@@ -12547,82 +12819,56 @@ var BrainNotesApp = (() => {
     return { previewSchema, runImmediate, runPreview: runPreview2, runUndo };
   };
 
-  // internal/web/static_src/properties-workbench.ts
-  var createPropertyWorkbench = (host, deps = {}) => {
-    const doc2 = host.root.ownerDocument;
-    const fetcher = deps.fetch || fetch;
-    const now = deps.now || (() => /* @__PURE__ */ new Date());
-    const editorEl = queryElement(host.root, "[data-property-editor]", HTMLElement);
-    const countEl = queryElement(host.root, "[data-property-selection-count]", HTMLElement);
-    const selectAllEl = queryElement(host.root, "[data-property-select-all]", HTMLButtonElement);
+  // internal/web/static_src/properties-workbench-selection.ts
+  var createWorkbenchState = () => ({
+    selected: /* @__PURE__ */ new Set(),
+    summary: null,
+    rows: [],
+    matchValue: null,
+    busy: false
+  });
+  var createSelectionView = (root, rowsEl, state) => {
+    const countEl = queryElement(root, "[data-property-selection-count]", HTMLElement);
     const clearSelectionEl = queryElement(
-      host.root,
+      root,
       "[data-property-clear-selection]",
       HTMLButtonElement
     );
-    const searchEl = queryElement(host.root, "[data-property-filter-query]", HTMLInputElement);
-    const dialogHost = queryElement(host.root, "[data-property-dialog-host]", HTMLElement) || host.root;
-    const toastHost = queryElement(host.root, "[data-property-toast-host]", HTMLElement) || host.root;
-    const dialog = createPreviewDialog(doc2, dialogHost, { now });
-    let runUndo = async (_journalID) => {
-    };
-    const toast = createUndoToast(doc2, toastHost, {
-      onUndo: (journalID) => {
-        void runUndo(journalID);
+    const rowElements = () => queryAllElements(rowsEl, "[data-property-row]", HTMLElement);
+    const renderActions3 = () => {
+      for (const button of queryAllElements(root, "[data-property-action]", HTMLButtonElement)) {
+        const action = button.getAttribute("data-property-action") || "";
+        const needsMatch = action === "replace_value";
+        button.disabled = state.busy || state.selected.size === 0 || needsMatch && state.matchValue === null;
       }
-    });
-    const editor = createWorkbenchEditor(doc2);
-    const selected = /* @__PURE__ */ new Set();
-    let summary = null;
-    let rows = [];
-    let matchValue = null;
-    let busy = false;
-    const setStatus2 = (message, kind = "") => {
-      host.setStatus(message, kind);
     };
-    const rowElements = () => queryAllElements(host.rowsEl, "[data-property-row]", HTMLElement);
     const renderSelection = () => {
       if (countEl) {
-        countEl.textContent = selectionLabel(selected.size);
+        countEl.textContent = selectionLabel(state.selected.size);
       }
       if (clearSelectionEl) {
-        clearSelectionEl.disabled = selected.size === 0;
+        clearSelectionEl.disabled = state.selected.size === 0;
       }
       for (const element3 of rowElements()) {
         const relPath = element3.getAttribute("data-property-row") || "";
-        element3.classList.toggle("is-selected", selected.has(relPath));
+        element3.classList.toggle("is-selected", state.selected.has(relPath));
       }
-      for (const box of queryAllElements(
-        host.rowsEl,
-        "[data-property-row-select]",
-        HTMLInputElement
-      )) {
-        box.checked = selected.has(box.getAttribute("data-property-row-select") || "");
+      for (const box of queryAllElements(rowsEl, "[data-property-row-select]", HTMLInputElement)) {
+        box.checked = state.selected.has(box.getAttribute("data-property-row-select") || "");
       }
       renderActions3();
     };
-    const renderActions3 = () => {
-      for (const button of queryAllElements(
-        host.root,
-        "[data-property-action]",
-        HTMLButtonElement
-      )) {
-        const action = button.getAttribute("data-property-action") || "";
-        const needsMatch = action === "replace_value";
-        button.disabled = busy || selected.size === 0 || needsMatch && matchValue === null;
-      }
-    };
     const setBusy = (next) => {
-      busy = next;
-      host.root.setAttribute("aria-busy", next ? "true" : "false");
+      state.busy = next;
+      root.setAttribute("aria-busy", next ? "true" : "false");
       renderActions3();
     };
     const toggleSelection = (relPath, force) => {
-      const next = force === void 0 ? !selected.has(relPath) : force;
+      const next = force === void 0 ? !state.selected.has(relPath) : force;
       if (next) {
-        selected.add(relPath);
+        state.selected.add(relPath);
       } else {
-        selected.delete(relPath);
+        state.selected.delete(relPath);
       }
       renderSelection();
     };
@@ -12648,285 +12894,101 @@ var BrainNotesApp = (() => {
       value.textContent = text3;
       value.classList.remove("is-missing");
     };
+    return {
+      rowElements,
+      renderSelection,
+      renderActions: renderActions3,
+      setBusy,
+      toggleSelection,
+      focusRow,
+      updateRowText
+    };
+  };
+
+  // internal/web/static_src/properties-workbench.ts
+  var createPropertyWorkbench = (host, deps = {}) => {
+    const doc2 = host.root.ownerDocument;
+    const now = deps.now || (() => /* @__PURE__ */ new Date());
+    const editorEl = queryElement(host.root, "[data-property-editor]", HTMLElement);
+    const dialogHost = queryElement(host.root, "[data-property-dialog-host]", HTMLElement) || host.root;
+    const toastHost = queryElement(host.root, "[data-property-toast-host]", HTMLElement) || host.root;
+    const dialog = createPreviewDialog(doc2, dialogHost, { now });
+    const undo2 = { run: async () => {
+    } };
+    const toast = createUndoToast(doc2, toastHost, {
+      onUndo: (journalID) => {
+        void undo2.run(journalID);
+      }
+    });
+    const editor = createWorkbenchEditor(doc2);
+    const state = createWorkbenchState();
+    const view = createSelectionView(host.root, host.rowsEl, state);
+    const setStatus2 = (message, kind = "") => {
+      host.setStatus(message, kind);
+    };
     const mutations = createWorkbenchMutations({
       clearSelection: () => {
-        selected.clear();
-        renderSelection();
+        state.selected.clear();
+        view.renderSelection();
       },
       closeEditor: editor.close,
       dialog,
       doc: doc2,
-      fetcher,
+      fetcher: deps.fetch || fetch,
       historyHref: host.historyHref,
       property: host.property,
       reload: host.reload,
-      setBusy,
+      setBusy: view.setBusy,
       setStatus: setStatus2,
       toast,
       token: host.token,
-      updateRowText
+      updateRowText: view.updateRowText
     });
-    const { previewSchema, runImmediate, runPreview: runPreview2 } = mutations;
-    runUndo = mutations.runUndo;
-    const buildValueControl = (form, current, seed) => {
-      const control = createValueControl(doc2, {
-        kind: editKind(current),
-        items: editItemKind(current),
-        allowed: editAllowed(current),
-        value: seed,
-        id: `property-editor-${host.property}`,
-        label: `${host.property} value`
-      });
-      form.appendChild(control.element);
-      return control;
+    undo2.run = mutations.runUndo;
+    const formContext = {
+      doc: doc2,
+      property: host.property,
+      state,
+      editor,
+      mutations,
+      rowElements: view.rowElements,
+      setStatus: setStatus2
     };
-    const openRowEditor = (relPath, op) => {
-      const current = summary;
-      const row = rows.find((candidate) => candidate.rel_path === relPath);
-      const element3 = rowElements().find(
-        (candidate) => candidate.getAttribute("data-property-row") === relPath
-      );
-      if (!row || !element3 || !current) {
-        return;
-      }
-      const itemKind = editItemKind(current);
-      const seed = op === "replace" ? typedValueFrom(row.value, editKind(current), itemKind) : void 0;
-      editor.mount(
-        element3,
-        op === "replace" ? `Edit ${host.property}` : `Add to ${host.property}`,
-        "Save",
-        (form) => {
-          const control = op === "replace" ? buildValueControl(form, current, seed) : (() => {
-            const single = createValueControl(doc2, {
-              kind: itemKind,
-              items: itemKind,
-              allowed: editAllowed(current),
-              id: `property-editor-item-${host.property}`,
-              label: `${host.property} item`
-            });
-            form.appendChild(single.element);
-            return single;
-          })();
-          control.focus();
-          return () => {
-            const message = control.error();
-            if (message !== "") {
-              return message;
-            }
-            const value = control.read();
-            const text3 = op === "replace" ? previewTextFor(value) : `${valueDisplayText(row.value)}, ${value.text}`;
-            void runImmediate(relPath, op, value, row.hash, text3);
-            return null;
-          };
-        }
-      );
-    };
-    const previewTextFor = (value) => value.kind === "list" ? (value.items || []).map((item) => item.text).join(", ") : value.text;
-    const openActionEditor = (action) => {
-      const current = summary;
-      const notes = [...selected];
-      if (notes.length === 0) {
-        setStatus2("Select at least one note first.", "is-error");
-        return;
-      }
-      if (action === "unset" || action === "repair") {
-        void runPreview2({ action, property: host.property, notes });
-        return;
-      }
-      if (!editorEl || !current) {
-        return;
-      }
-      editor.mount(editorEl, actionTitle(action, host.property), "Preview", (form) => {
-        if (action === "rename_property") {
-          const input = doc2.createElement("input");
-          input.type = "text";
-          input.className = "properties-control properties-control-input";
-          input.id = "property-editor-new-name";
-          input.autocomplete = "off";
-          input.spellcheck = false;
-          input.setAttribute("aria-label", "New property name");
-          input.setAttribute("data-property-new-name", "");
-          input.value = host.property;
-          form.appendChild(input);
-          input.focus();
-          return () => {
-            const newName = input.value.trim();
-            if (newName === "") {
-              return "Enter a new property name.";
-            }
-            if (newName === host.property) {
-              return "Enter a name different from the current one.";
-            }
-            void runPreview2({
-              action,
-              property: host.property,
-              new_name: newName,
-              notes
-            });
-            return null;
-          };
-        }
-        const control = buildValueControl(form, current);
-        control.focus();
-        return () => {
-          const message = control.error();
-          if (message !== "") {
-            return message;
-          }
-          const value = control.read();
-          if (action === "replace_value") {
-            if (!matchValue) {
-              return "Choose the value to replace first.";
-            }
-            void runPreview2({
-              action,
-              property: host.property,
-              notes,
-              match: { kind: matchValue.kind, text: matchValue.text },
-              value
-            });
-            return null;
-          }
-          void runPreview2({ action, property: host.property, notes, value });
-          return null;
-        };
-      });
-    };
-    host.rowsEl.addEventListener("change", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement) || !target.hasAttribute("data-property-row-select")) {
-        return;
-      }
-      toggleSelection(target.getAttribute("data-property-row-select") || "", target.checked);
-    });
-    host.rowsEl.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      const edit2 = target.closest("[data-property-row-edit]");
-      if (edit2 && !edit2.disabled) {
-        openRowEditor(edit2.getAttribute("data-property-row-edit") || "", "replace");
-        return;
-      }
-      const add2 = target.closest("[data-property-row-add]");
-      if (add2 && !add2.disabled) {
-        openRowEditor(add2.getAttribute("data-property-row-add") || "", "list_add");
-        return;
-      }
-      const unset = target.closest("[data-property-row-unset]");
-      if (unset && !unset.disabled) {
-        void runPreview2({
-          action: "unset",
-          property: host.property,
-          notes: [unset.getAttribute("data-property-row-unset") || ""]
-        });
-      }
-    });
-    host.rowsEl.addEventListener("keydown", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) {
-        return;
-      }
-      const row = target.closest("[data-property-row]");
-      if (!row) {
-        return;
-      }
-      const elements = rowElements();
-      const index = elements.indexOf(row);
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        focusRow(index + 1);
-        return;
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        focusRow(index - 1);
-        return;
-      }
-      if (target !== row) {
-        return;
-      }
-      if (event.key === " ") {
-        event.preventDefault();
-        toggleSelection(row.getAttribute("data-property-row") || "");
-        return;
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        openRowEditor(row.getAttribute("data-property-row") || "", "replace");
-      }
-    });
-    host.root.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      const button = target.closest("[data-property-action]");
-      if (!button || button.disabled) {
-        return;
-      }
-      openActionEditor(button.getAttribute("data-property-action"));
-    });
-    selectAllEl?.addEventListener("click", () => {
-      for (const row of rows) {
-        selected.add(row.rel_path);
-      }
-      renderSelection();
-    });
-    clearSelectionEl?.addEventListener("click", () => {
-      selected.clear();
-      renderSelection();
-    });
-    doc2.addEventListener("keydown", (event) => {
-      if (dialog.isOpen()) {
-        return;
-      }
-      if (event.key === "/" && searchEl) {
-        const target = event.target;
-        const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
-        if (typing) {
-          return;
-        }
-        event.preventDefault();
-        searchEl.focus();
-        searchEl.select();
-        return;
-      }
-      if (event.key === "Escape") {
-        if (editor.isOpen()) {
-          editor.close();
-          return;
-        }
-        if (selected.size > 0) {
-          selected.clear();
-          renderSelection();
-          setStatus2("Selection cleared.");
-        }
-      }
+    bindWorkbenchEvents({
+      root: host.root,
+      rowsEl: host.rowsEl,
+      property: host.property,
+      state,
+      view,
+      editor,
+      dialog,
+      runPreview: mutations.runPreview,
+      openRowEditor: (relPath, op) => openRowEditor(formContext, relPath, op),
+      openActionEditor: (action) => openActionEditor(formContext, editorEl, action),
+      setStatus: setStatus2
     });
     return {
       render: (result) => {
-        summary = result.property;
-        rows = result.rows;
+        state.summary = result.property;
+        state.rows = result.rows;
         const active = result.filter.value || "";
         const match = result.values.find(
           (entry) => entry.value.supported && entry.value.text === active
         );
-        matchValue = match ? { kind: match.value.kind, text: match.value.text } : null;
+        state.matchValue = match ? { kind: match.value.kind, text: match.value.text } : null;
         editor.reset();
         renderRows(host.rowsEl, result.rows, {
-          selected,
+          selected: state.selected,
           listKind: editKind(result.property) === "list"
         });
-        const first = rowElements()[0];
+        const first = view.rowElements()[0];
         if (first) {
           first.tabIndex = 0;
         }
-        renderSelection();
+        view.renderSelection();
       },
-      selection: () => [...selected],
-      previewSchema
+      selection: () => [...state.selected],
+      previewSchema: mutations.previewSchema
     };
   };
 
@@ -18276,37 +18338,37 @@ var BrainNotesApp = (() => {
   // internal/web/static_src/source-editor-elements.ts
   var readSourceEditorConfig = (panel) => {
     const config2 = {
-      key: attr(panel, "data-source-key"),
-      token: attr(panel, "data-source-csrf"),
-      relPath: attr(panel, "data-source-rel-path"),
-      vaultID: attr(panel, "data-source-vault-id"),
-      maxBytes: Number(attr(panel, "data-source-max-bytes")) || 0,
+      key: attr2(panel, "data-source-key"),
+      token: attr2(panel, "data-source-csrf"),
+      relPath: attr2(panel, "data-source-rel-path"),
+      vaultID: attr2(panel, "data-source-vault-id"),
+      maxBytes: Number(attr2(panel, "data-source-max-bytes")) || 0,
       endpoints: {
-        read: attr(panel, "data-source-read-endpoint"),
-        preview: attr(panel, "data-source-preview-endpoint"),
-        save: attr(panel, "data-source-save-endpoint"),
-        create: attr(panel, "data-source-create-endpoint"),
-        search: attr(panel, "data-source-search-endpoint")
+        read: attr2(panel, "data-source-read-endpoint"),
+        preview: attr2(panel, "data-source-preview-endpoint"),
+        save: attr2(panel, "data-source-save-endpoint"),
+        create: attr2(panel, "data-source-create-endpoint"),
+        search: attr2(panel, "data-source-search-endpoint")
       },
       attachments: {
-        upload: attr(panel, "data-source-upload-endpoint"),
-        cancel: attr(panel, "data-source-upload-cancel-endpoint")
+        upload: attr2(panel, "data-source-upload-endpoint"),
+        cancel: attr2(panel, "data-source-upload-cancel-endpoint")
       },
       manage: {
-        editor: attr(panel, "data-source-editor-path"),
-        home: attr(panel, "data-source-home-path"),
-        capture: attr(panel, "data-source-capture-endpoint"),
-        create: attr(panel, "data-source-note-create-endpoint"),
-        rename: attr(panel, "data-source-rename-endpoint"),
-        move: attr(panel, "data-source-move-endpoint"),
-        trash: attr(panel, "data-source-trash-endpoint"),
-        frontmatterSet: attr(panel, "data-source-frontmatter-set-endpoint"),
-        frontmatterUnset: attr(panel, "data-source-frontmatter-unset-endpoint"),
-        pinSet: attr(panel, "data-source-pin-set-endpoint"),
-        pinRemove: attr(panel, "data-source-pin-remove-endpoint"),
-        undo: attr(panel, "data-source-undo-endpoint")
+        editor: attr2(panel, "data-source-editor-path"),
+        home: attr2(panel, "data-source-home-path"),
+        capture: attr2(panel, "data-source-capture-endpoint"),
+        create: attr2(panel, "data-source-note-create-endpoint"),
+        rename: attr2(panel, "data-source-rename-endpoint"),
+        move: attr2(panel, "data-source-move-endpoint"),
+        trash: attr2(panel, "data-source-trash-endpoint"),
+        frontmatterSet: attr2(panel, "data-source-frontmatter-set-endpoint"),
+        frontmatterUnset: attr2(panel, "data-source-frontmatter-unset-endpoint"),
+        pinSet: attr2(panel, "data-source-pin-set-endpoint"),
+        pinRemove: attr2(panel, "data-source-pin-remove-endpoint"),
+        undo: attr2(panel, "data-source-undo-endpoint")
       },
-      maxAttachmentBytes: Number(attr(panel, "data-source-max-attachment-bytes")) || 0
+      maxAttachmentBytes: Number(attr2(panel, "data-source-max-attachment-bytes")) || 0
     };
     const required2 = [
       config2.key,
@@ -18391,7 +18453,7 @@ var BrainNotesApp = (() => {
       undo: queryElement(root, "[data-source-undo]", HTMLButtonElement)
     };
   };
-  var attr = (element3, name2) => (element3.getAttribute(name2) || "").trim();
+  var attr2 = (element3, name2) => (element3.getAttribute(name2) || "").trim();
 
   // node_modules/@marijn/find-cluster-break/src/index.js
   var rangeFrom = [];
@@ -22244,8 +22306,8 @@ var BrainNotesApp = (() => {
   function getAttrs(dom) {
     let attrs = /* @__PURE__ */ Object.create(null);
     for (let i = 0; i < dom.attributes.length; i++) {
-      let attr2 = dom.attributes[i];
-      attrs[attr2.name] = attr2.value;
+      let attr3 = dom.attributes[i];
+      attrs[attr3.name] = attr3.value;
     }
     return attrs;
   }
@@ -42576,7 +42638,7 @@ var BrainNotesApp = (() => {
       array.push(tag);
     }
     let attrs = attributes.length ? /* @__PURE__ */ Object.create(null) : null;
-    for (let attr2 of attributes) (attrs[attr2.name] || (attrs[attr2.name] = [])).push(attr2);
+    for (let attr3 of attributes) (attrs[attr3.name] || (attrs[attr3.name] = [])).push(attr3);
     return parseMixed((node, input) => {
       let id2 = node.type.id;
       if (id2 == ScriptText) return maybeNest(node, input, script);
@@ -42597,15 +42659,15 @@ var BrainNotesApp = (() => {
         let n = node.node, nameNode;
         if (nameNode = n.firstChild) {
           let matches = attrs[input.read(nameNode.from, nameNode.to)];
-          if (matches) for (let attr2 of matches) {
-            if (attr2.tagName && attr2.tagName != findTagName(n.parent, input)) continue;
+          if (matches) for (let attr3 of matches) {
+            if (attr3.tagName && attr3.tagName != findTagName(n.parent, input)) continue;
             let value = n.lastChild;
             if (value.type.id == AttributeValue) {
               let from = value.from + 1;
               let last2 = value.lastChild, to = value.to - (last2 && last2.isError ? 0 : 1);
-              if (to > from) return { parser: attr2.parser, overlay: [{ from, to }], bracketed: true };
+              if (to > from) return { parser: attr3.parser, overlay: [{ from, to }], bracketed: true };
             } else if (value.type.id == UnquotedAttributeValue) {
-              return { parser: attr2.parser, overlay: [{ from: value.from, to: value.to }] };
+              return { parser: attr3.parser, overlay: [{ from: value.from, to: value.to }] };
             }
           }
         }
@@ -48358,14 +48420,14 @@ var BrainNotesApp = (() => {
     if (!elements) {
       return null;
     }
-    const attr2 = (name2) => deps.root.getAttribute(name2) ?? "";
+    const attr3 = (name2) => deps.root.getAttribute(name2) ?? "";
     let controllers = [];
     const ctx = {
-      conflictsEndpoint: attr2("data-sync-conflicts-endpoint"),
-      previewEndpoint: attr2("data-sync-preview-endpoint"),
-      resolveEndpoint: attr2("data-sync-resolve-endpoint"),
-      token: attr2("data-sync-csrf"),
-      vaultID: attr2("data-sync-vault"),
+      conflictsEndpoint: attr3("data-sync-conflicts-endpoint"),
+      previewEndpoint: attr3("data-sync-preview-endpoint"),
+      resolveEndpoint: attr3("data-sync-resolve-endpoint"),
+      token: attr3("data-sync-csrf"),
+      vaultID: attr3("data-sync-vault"),
       fetch: deps.fetch,
       surface: deps.surface,
       // A merge is kept under the vault's own identity or not at all. Guessing a key

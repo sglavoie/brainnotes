@@ -2,7 +2,7 @@ package query
 
 import "github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 
-// Graph-shaped predicate builders. Like Orphan and DeadEnd in filter.go, each
+// Graph-shaped predicate builders. Like Orphan and DeadEnd in filter_structural.go, each
 // returns a closure over an already-built *Graph (and, where structure beyond
 // direct adjacency is needed, an already-built *GraphMetrics); like BrokenLinks
 // in broken.go they live in their own file rather than growing filter.go.
