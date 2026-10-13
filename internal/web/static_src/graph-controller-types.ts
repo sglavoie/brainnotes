@@ -28,6 +28,7 @@ export type GraphState = {
   expandedFolders: Set<string>;
   hoveredNodeID: string;
   selectedNodeID: string;
+  showSelectedNeighborLabels: boolean;
   labelMode: GraphLabelMode;
   searchMode: GraphSearchMode;
   matchIDs: Set<string>;
@@ -37,6 +38,7 @@ export type GraphState = {
 
 export type GraphSelectionOptions = {
   fromCytoscape?: boolean;
+  toggleNeighborLabels?: boolean;
 };
 
 export type GraphLayoutRunOptions = {

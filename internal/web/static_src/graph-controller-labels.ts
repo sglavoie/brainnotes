@@ -60,6 +60,10 @@ export const sortedNodesByImportance = (
     .slice()
     .sort((left, right) => nodeDegree(right) - nodeDegree(left) || left.id().localeCompare(right.id()));
 
+const nodesForIDs = (cy: cytoscape.Core, ids: ReadonlySet<string>): cytoscape.NodeSingular[] =>
+  Array.from(ids, (id) => cyNodeByID(cy, id))
+    .filter((node): node is cytoscape.NodeSingular => node !== null);
+
 export const connectedNodeIDs = (node: cytoscape.NodeSingular | null): Set<string> => {
   const ids = new Set<string>();
   if (!node) {
@@ -220,16 +224,7 @@ export const cullCollidingLabels = (
     }
   }
 
-  const remaining: cytoscape.NodeSingular[] = [];
-  for (const id of candidateIDs) {
-    if (keptIDs.has(id)) {
-      continue;
-    }
-    const node = cyNodeByID(cy, id);
-    if (node) {
-      remaining.push(node);
-    }
-  }
+  const remaining = nodesForIDs(cy, candidateIDs).filter((node) => !keptIDs.has(node.id()));
 
   for (const node of sortedNodesByImportance(remaining)) {
     const box = labelBoxForNode(node, zoom);
@@ -247,6 +242,21 @@ export const cullCollidingLabels = (
   }
 
   return keptIDs;
+};
+
+const addSearchLabels = (
+  cy: cytoscape.Core,
+  matchIDs: ReadonlySet<string>,
+  labelIDs: Set<string>
+): void => {
+  const matchNodes = nodesForIDs(cy, matchIDs);
+  const labeledMatches =
+    matchNodes.length <= labelPolicy.searchMatchLabelLimit
+      ? matchNodes
+      : sortedNodesByImportance(matchNodes).slice(0, labelPolicy.searchMatchLabelLimit);
+  for (const node of labeledMatches) {
+    labelIDs.add(node.id());
+  }
 };
 
 export const labelIDsForCurrentState = (
@@ -287,17 +297,7 @@ export const labelIDsForCurrentState = (
   // Matched nodes are what you searched for, so they always get a label — but a
   // broad query would otherwise carpet the canvas in text, so cap by degree.
   if (matchIDs.size > 0) {
-    const matchNodes = cy
-      .nodes()
-      .filter((node) => matchIDs.has(node.id()))
-      .toArray() as cytoscape.NodeSingular[];
-    const labeledMatches =
-      matchNodes.length <= labelPolicy.searchMatchLabelLimit
-        ? matchNodes
-        : sortedNodesByImportance(matchNodes).slice(0, labelPolicy.searchMatchLabelLimit);
-    for (const node of labeledMatches) {
-      labelIDs.add(node.id());
-    }
+    addSearchLabels(cy, matchIDs, labelIDs);
   }
 
   return labelIDs;
@@ -325,12 +325,8 @@ export const visualFocusState = (
   // edge touching it stay bright.
   const resolvedMatchIDs = new Set<string>();
   const matchNeighborIDs = new Set<string>();
-  if (matchIDs.size > 0) {
-    for (const id of matchIDs) {
-      const matchNode = cyNodeByID(cy, id);
-      if (!matchNode) {
-        continue;
-      }
+  if (cy) {
+    for (const matchNode of nodesForIDs(cy, matchIDs)) {
       resolvedMatchIDs.add(matchNode.id());
       for (const neighborID of connectedNodeIDs(matchNode)) {
         matchNeighborIDs.add(neighborID);
@@ -359,7 +355,8 @@ export const applyGraphVisualClasses = (
   labelMode: GraphLabelMode,
   selectedNodeID: string,
   hoveredNodeID: string,
-  matchIDs: ReadonlySet<string> = new Set<string>()
+  matchIDs: ReadonlySet<string> = new Set<string>(),
+  showSelectedNeighborLabels = false
 ): void => {
   if (!cy) {
     return;
@@ -368,12 +365,14 @@ export const applyGraphVisualClasses = (
   const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID, matchIDs);
   // "all" is the explicit show-me-everything-overlap-included escape hatch, so
   // it bypasses the collision cull entirely.
-  const pinnedLabelIDs = new Set<string>();
-  if (focus.selectedID) {
-    pinnedLabelIDs.add(focus.selectedID);
-  }
-  if (focus.hoveredID) {
-    pinnedLabelIDs.add(focus.hoveredID);
+  const pinnedLabelIDs = new Set([focus.selectedID, focus.hoveredID].filter(Boolean));
+  // An explicit request reveals every selected neighbor, even in a crowded
+  // neighborhood. Pin them so neither the automatic cap nor collisions hide them.
+  if (focus.selectedID && showSelectedNeighborLabels) {
+    for (const id of focus.neighborIDs) {
+      labelIDs.add(id);
+      pinnedLabelIDs.add(id);
+    }
   }
   const visibleLabelIDs =
     labelMode === "all" ? labelIDs : cullCollidingLabels(cy, labelIDs, pinnedLabelIDs);

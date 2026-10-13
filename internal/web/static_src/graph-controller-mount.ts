@@ -47,7 +47,7 @@ export const bindGraphEvents = (runtime: GraphRuntime, instance: cytoscape.Core)
       runtime.toggleFolderExpansion(model.folder);
       return;
     }
-    selectNode(runtime, nodeID);
+    selectNode(runtime, nodeID, { toggleNeighborLabels: true });
   });
 
   instance.on("tap", (event: cytoscape.EventObjectCore) => {
@@ -142,6 +142,9 @@ export const applyGraphElements = (
   }
 
   state.selectedNodeID = graphElements.nodes.some((node) => node.id === selectedNodeID) ? selectedNodeID : "";
+  if (!state.selectedNodeID) {
+    state.showSelectedNeighborLabels = false;
+  }
   syncCytoscapeSelection(runtime, state.selectedNodeID);
   setHoveredNode(runtime, "", null);
 

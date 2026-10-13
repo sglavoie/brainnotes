@@ -19,7 +19,8 @@ export const applyGraphVisualState = (runtime: GraphRuntime): void => {
     runtime.state.labelMode,
     runtime.state.selectedNodeID,
     runtime.state.hoveredNodeID,
-    runtime.displayedMatchIDs
+    runtime.displayedMatchIDs,
+    runtime.state.showSelectedNeighborLabels
   );
 };
 

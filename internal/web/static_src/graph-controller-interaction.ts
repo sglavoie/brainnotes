@@ -52,7 +52,13 @@ export const selectNode = (
   }
   // An aggregate is never a selection: it stands for a group, and every
   // selection-driven affordance (Open note, Isolate) means one note.
-  runtime.state.selectedNodeID = model.isAggregate ? "" : model.id;
+  const selectedNodeID = model.isAggregate ? "" : model.id;
+  if (!selectedNodeID || selectedNodeID !== runtime.state.selectedNodeID) {
+    runtime.state.showSelectedNeighborLabels = false;
+  } else if (options.toggleNeighborLabels) {
+    runtime.state.showSelectedNeighborLabels = !runtime.state.showSelectedNeighborLabels;
+  }
+  runtime.state.selectedNodeID = selectedNodeID;
   if (!options || !options.fromCytoscape) {
     syncCytoscapeSelection(runtime, runtime.state.selectedNodeID);
   }
@@ -66,6 +72,7 @@ export const clearSelectedNode = (
   options: GraphSelectionOptions = {}
 ): void => {
   runtime.state.selectedNodeID = "";
+  runtime.state.showSelectedNeighborLabels = false;
   if (!options || !options.fromCytoscape) {
     syncCytoscapeSelection(runtime, "");
   }
@@ -138,5 +145,5 @@ export const handleGraphKeyDown = (runtime: GraphRuntime, event: KeyboardEvent):
   }
 
   event.preventDefault();
-  selectNode(runtime, nodeID);
+  selectNode(runtime, nodeID, { toggleNeighborLabels: true });
 };

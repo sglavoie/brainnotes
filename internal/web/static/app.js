@@ -5869,6 +5869,7 @@ var BrainNotesApp = (() => {
     return Number.isFinite(degree) && degree > 0 ? degree : 0;
   };
   var sortedNodesByImportance = (nodes) => nodes.slice().sort((left, right) => nodeDegree(right) - nodeDegree(left) || left.id().localeCompare(right.id()));
+  var nodesForIDs = (cy, ids) => Array.from(ids, (id2) => cyNodeByID(cy, id2)).filter((node) => node !== null);
   var connectedNodeIDs = (node) => {
     const ids = /* @__PURE__ */ new Set();
     if (!node) {
@@ -5982,16 +5983,7 @@ var BrainNotesApp = (() => {
         accept(node);
       }
     }
-    const remaining = [];
-    for (const id2 of candidateIDs) {
-      if (keptIDs.has(id2)) {
-        continue;
-      }
-      const node = cyNodeByID(cy, id2);
-      if (node) {
-        remaining.push(node);
-      }
-    }
+    const remaining = nodesForIDs(cy, candidateIDs).filter((node) => !keptIDs.has(node.id()));
     for (const node of sortedNodesByImportance(remaining)) {
       const box = labelBoxForNode(node, zoom);
       if (!box) {
@@ -6005,6 +5997,13 @@ var BrainNotesApp = (() => {
       keptIDs.add(node.id());
     }
     return keptIDs;
+  };
+  var addSearchLabels = (cy, matchIDs, labelIDs) => {
+    const matchNodes = nodesForIDs(cy, matchIDs);
+    const labeledMatches = matchNodes.length <= labelPolicy.searchMatchLabelLimit ? matchNodes : sortedNodesByImportance(matchNodes).slice(0, labelPolicy.searchMatchLabelLimit);
+    for (const node of labeledMatches) {
+      labelIDs.add(node.id());
+    }
   };
   var labelIDsForCurrentState = (cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs = /* @__PURE__ */ new Set()) => {
     const labelIDs = /* @__PURE__ */ new Set();
@@ -6033,11 +6032,7 @@ var BrainNotesApp = (() => {
       labelIDs.add(hoveredNode.id());
     }
     if (matchIDs.size > 0) {
-      const matchNodes = cy.nodes().filter((node) => matchIDs.has(node.id())).toArray();
-      const labeledMatches = matchNodes.length <= labelPolicy.searchMatchLabelLimit ? matchNodes : sortedNodesByImportance(matchNodes).slice(0, labelPolicy.searchMatchLabelLimit);
-      for (const node of labeledMatches) {
-        labelIDs.add(node.id());
-      }
+      addSearchLabels(cy, matchIDs, labelIDs);
     }
     return labelIDs;
   };
@@ -6054,12 +6049,8 @@ var BrainNotesApp = (() => {
     }
     const resolvedMatchIDs = /* @__PURE__ */ new Set();
     const matchNeighborIDs = /* @__PURE__ */ new Set();
-    if (matchIDs.size > 0) {
-      for (const id2 of matchIDs) {
-        const matchNode = cyNodeByID(cy, id2);
-        if (!matchNode) {
-          continue;
-        }
+    if (cy) {
+      for (const matchNode of nodesForIDs(cy, matchIDs)) {
         resolvedMatchIDs.add(matchNode.id());
         for (const neighborID of connectedNodeIDs(matchNode)) {
           matchNeighborIDs.add(neighborID);
@@ -6079,18 +6070,18 @@ var BrainNotesApp = (() => {
       matchNeighborIDs
     };
   };
-  var applyGraphVisualClasses = (cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs = /* @__PURE__ */ new Set()) => {
+  var applyGraphVisualClasses = (cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs = /* @__PURE__ */ new Set(), showSelectedNeighborLabels = false) => {
     if (!cy) {
       return;
     }
     const labelIDs = labelIDsForCurrentState(cy, labelMode, selectedNodeID, hoveredNodeID, matchIDs);
     const focus = visualFocusState(cy, selectedNodeID, hoveredNodeID, matchIDs);
-    const pinnedLabelIDs = /* @__PURE__ */ new Set();
-    if (focus.selectedID) {
-      pinnedLabelIDs.add(focus.selectedID);
-    }
-    if (focus.hoveredID) {
-      pinnedLabelIDs.add(focus.hoveredID);
+    const pinnedLabelIDs = new Set([focus.selectedID, focus.hoveredID].filter(Boolean));
+    if (focus.selectedID && showSelectedNeighborLabels) {
+      for (const id2 of focus.neighborIDs) {
+        labelIDs.add(id2);
+        pinnedLabelIDs.add(id2);
+      }
     }
     const visibleLabelIDs = labelMode === "all" ? labelIDs : cullCollidingLabels(cy, labelIDs, pinnedLabelIDs);
     const hasFocusSource = focus.focusNodeID !== "" || focus.matchIDs.size > 0;
@@ -6402,6 +6393,7 @@ var BrainNotesApp = (() => {
       expandedFolders: /* @__PURE__ */ new Set(),
       hoveredNodeID: "",
       selectedNodeID: "",
+      showSelectedNeighborLabels: false,
       labelMode: readLabelMode(dom.labelModeInputs),
       searchMode: readPageSearchMode(),
       matchIDs: /* @__PURE__ */ new Set(),
@@ -6670,7 +6662,8 @@ var BrainNotesApp = (() => {
       runtime.state.labelMode,
       runtime.state.selectedNodeID,
       runtime.state.hoveredNodeID,
-      runtime.displayedMatchIDs
+      runtime.displayedMatchIDs,
+      runtime.state.showSelectedNeighborLabels
     );
   };
   var setLabelMode = (runtime, nextMode) => {
@@ -6814,7 +6807,13 @@ var BrainNotesApp = (() => {
     if (!model) {
       return;
     }
-    runtime.state.selectedNodeID = model.isAggregate ? "" : model.id;
+    const selectedNodeID = model.isAggregate ? "" : model.id;
+    if (!selectedNodeID || selectedNodeID !== runtime.state.selectedNodeID) {
+      runtime.state.showSelectedNeighborLabels = false;
+    } else if (options.toggleNeighborLabels) {
+      runtime.state.showSelectedNeighborLabels = !runtime.state.showSelectedNeighborLabels;
+    }
+    runtime.state.selectedNodeID = selectedNodeID;
     if (!options || !options.fromCytoscape) {
       syncCytoscapeSelection(runtime, runtime.state.selectedNodeID);
     }
@@ -6824,6 +6823,7 @@ var BrainNotesApp = (() => {
   };
   var clearSelectedNode = (runtime, options = {}) => {
     runtime.state.selectedNodeID = "";
+    runtime.state.showSelectedNeighborLabels = false;
     if (!options || !options.fromCytoscape) {
       syncCytoscapeSelection(runtime, "");
     }
@@ -6869,7 +6869,7 @@ var BrainNotesApp = (() => {
       return;
     }
     event.preventDefault();
-    selectNode(runtime, nodeID);
+    selectNode(runtime, nodeID, { toggleNeighborLabels: true });
   };
 
   // internal/web/static_src/graph-controller-mount.ts
@@ -6884,7 +6884,7 @@ var BrainNotesApp = (() => {
         runtime.toggleFolderExpansion(model.folder);
         return;
       }
-      selectNode(runtime, nodeID);
+      selectNode(runtime, nodeID, { toggleNeighborLabels: true });
     });
     instance.on("tap", (event) => {
       if (event.target === instance) {
@@ -6955,6 +6955,9 @@ var BrainNotesApp = (() => {
       runtime.selectionSyncing = false;
     }
     state.selectedNodeID = graphElements.nodes.some((node) => node.id === selectedNodeID) ? selectedNodeID : "";
+    if (!state.selectedNodeID) {
+      state.showSelectedNeighborLabels = false;
+    }
     syncCytoscapeSelection(runtime, state.selectedNodeID);
     setHoveredNode(runtime, "", null);
     if (instance.nodes().length === 0) {

@@ -115,6 +115,7 @@ export const createGraphRuntime = (
     expandedFolders: new Set<string>(),
     hoveredNodeID: "",
     selectedNodeID: "",
+    showSelectedNeighborLabels: false,
     labelMode: readLabelMode(dom.labelModeInputs),
     searchMode: readPageSearchMode(),
     matchIDs: new Set<string>(),
