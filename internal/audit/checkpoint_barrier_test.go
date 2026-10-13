@@ -118,13 +118,13 @@ var barrierDoors = []barrierDoor{
 		why:   "one import is one join: Apply, Resolve, Recover and Drain all pass through this guard",
 	},
 	{
-		file:  "internal/vaultexport/state.go",
+		file:  "internal/vaultexport/state_reset.go",
 		fn:    "joinBarrierContext",
 		calls: joinsBarrier,
 		why:   "the context-aware helper supports both fresh export writes and provenance nested under an import",
 	},
 	{
-		file:  "internal/vaultexport/state.go",
+		file:  "internal/vaultexport/state_reset.go",
 		fn:    "joinBarrier",
 		calls: []string{"joinBarrierContext"},
 		why:   "the helper the three export state writers route through",
@@ -148,7 +148,7 @@ var barrierDoors = []barrierDoor{
 		why:   "provenance written between a copy's start and its end would let the peer's change echo back",
 	},
 	{
-		file:  "internal/vaultexport/state.go",
+		file:  "internal/vaultexport/state_reset.go",
 		fn:    "Reset",
 		calls: joinsViaHelper,
 		why:   "re-baselining rewrites the whole export record",
@@ -202,13 +202,13 @@ var barrierDoors = []barrierDoor{
 		why:   "the quarantine may disappear only inside the checkpoint that finished resetting causal state",
 	},
 	{
-		file:  "internal/vaultexport/state.go",
+		file:  "internal/vaultexport/state_reset.go",
 		fn:    "RebaselineAfterReviewContext",
 		calls: []string{"joinBarrierContext"},
 		why:   "a reviewed baseline replaces the producer cursor and sequence ledger as one record",
 	},
 	{
-		file:  "internal/vaultimport/state.go",
+		file:  "internal/vaultimport/state_validate.go",
 		fn:    "ResetAfterReviewContext",
 		calls: joinsBarrier,
 		why:   "stale applications and receipts must disappear atomically under the reviewed enrollment",
@@ -240,14 +240,14 @@ var barrierDoors = []barrierDoor{
 		why:   "a staged upload is three durable steps — blob, destination claim, record — and is one join",
 	},
 	{
-		file:  "internal/attachments/store.go",
+		file:  "internal/attachments/store_release.go",
 		recv:  "Store",
 		fn:    "Discard",
 		calls: joinsBarrier,
 		why:   "discarding removes the same three artifacts staging created",
 	},
 	{
-		file:  "internal/attachments/store.go",
+		file:  "internal/attachments/store_release.go",
 		recv:  "Store",
 		fn:    "Forget",
 		calls: joinsBarrier,
