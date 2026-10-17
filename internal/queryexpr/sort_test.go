@@ -140,7 +140,7 @@ func TestSortKeysIsSortedAndComplete(t *testing.T) {
 	if !sort.StringsAreSorted(keys) {
 		t.Fatalf("SortKeys() is not sorted: %v", keys)
 	}
-	want := []string{"backlinks", "created", "degree", "modified", "path", "pinned", "relevance", "title"}
+	want := []string{"backlinks", "created", "degree", "match", "modified", "path", "pinned", "relevance", "title"}
 	if strings.Join(keys, ",") != strings.Join(want, ",") {
 		t.Fatalf("SortKeys() = %v, want %v", keys, want)
 	}

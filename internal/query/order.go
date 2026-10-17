@@ -36,6 +36,7 @@ import (
 // ErrUnsupportedOrder for it, and each caller produces it with the ranker it
 // already holds.
 const (
+	OrderMatch     = "match"
 	OrderPath      = "path"
 	OrderTitle     = "title"
 	OrderModified  = "modified"
@@ -50,6 +51,7 @@ var orderKeys = []string{
 	OrderBacklinks,
 	OrderCreated,
 	OrderDegree,
+	OrderMatch,
 	OrderModified,
 	OrderPath,
 	OrderPinned,
@@ -74,7 +76,8 @@ var ErrUnsupportedOrder = errors.New("query: unsupported order key")
 // graph keys are vault-wide.
 type OrderInput struct {
 	// Root is the vault root, needed by the pinned ordering.
-	Root string
+	Root   string
+	Search string
 	// Notes is the whole vault, used only to build a Graph when one is needed
 	// and none was supplied.
 	Notes []*vault.Note
@@ -99,12 +102,11 @@ func (in OrderInput) linkGraph() *Graph {
 // error wrapping ErrUnsupportedOrder rather than a silently unordered result.
 func OrderNotes(notes []*vault.Note, key string, descending bool, in OrderInput) ([]*vault.Note, error) {
 	out := append([]*vault.Note(nil), notes...)
-	if key == "" {
-		key = OrderPath
-	}
 
 	switch key {
-	case OrderPath:
+	case OrderMatch:
+		return orderTextMatches(out, in.Root, in.Search, descending), nil
+	case "", OrderPath:
 		applyNoteOrder(out, noteOrder{
 			compare: func(a, b *vault.Note) int { return strings.Compare(a.Path, b.Path) },
 		}, descending)

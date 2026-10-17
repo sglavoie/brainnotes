@@ -1,0 +1,30 @@
+name: Browser qualification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * 1"
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Qualify all engines at desktop and mobile widths
+        run: npm run test:e2e -- --project='hosted-*'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-browser-evidence
+          path: internal/web/e2e/.artifacts/results
+          retention-days: 14

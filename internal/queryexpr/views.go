@@ -2,6 +2,7 @@ package queryexpr
 
 import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"strings"
 )
 
 // View is one config.SavedView resolved against the vault: either a compiled
@@ -101,6 +102,15 @@ func ResolveView(saved config.SavedView, env Env) View {
 		view.Err = err
 		return view
 	}
+	if saved.Search != "" {
+		text := &Term{Value: Value{Kind: ValueAtom, Atoms: []Atom{{Text: saved.Search}}}}
+		if strings.TrimSpace(saved.Query) == `""` {
+			plan.Expr = text
+		} else {
+			plan.Expr = &And{Operands: []Expr{plan.Expr, text}}
+		}
+	}
+	spec.Search = saved.Search
 	plan.Sort = spec
 	plan.Limit = saved.Limit
 	view.Plan = plan

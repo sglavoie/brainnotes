@@ -49,11 +49,13 @@ type viewMutationRequest struct {
 
 // viewDefinition is the transport form of one saved view's stored fields.
 type viewDefinition struct {
-	Query       string `json:"query"`
-	Sort        string `json:"sort"`
-	RelativeTo  string `json:"relative_to"`
-	Limit       int    `json:"limit"`
-	Description string `json:"description"`
+	Search       string `json:"search,omitempty"`
+	FilterParams string `json:"filter_params,omitempty"`
+	Query        string `json:"query"`
+	Sort         string `json:"sort"`
+	RelativeTo   string `json:"relative_to"`
+	Limit        int    `json:"limit"`
+	Description  string `json:"description"`
 }
 
 func (d *viewDefinition) savedView(name string) config.SavedView {
@@ -63,6 +65,7 @@ func (d *viewDefinition) savedView(name string) config.SavedView {
 	return config.SavedView{
 		Name:        name,
 		Query:       strings.TrimSpace(d.Query),
+		Search:      strings.TrimSpace(d.Search),
 		Sort:        strings.TrimSpace(d.Sort),
 		RelativeTo:  strings.TrimSpace(d.RelativeTo),
 		Limit:       d.Limit,
@@ -74,6 +77,7 @@ func (d *viewDefinition) savedView(name string) config.SavedView {
 // is reported disabled with its detail rather than dropped — the contract
 // queryexpr.ResolveViews exists to make the default for every consumer.
 type viewSummary struct {
+	Search      string `json:"search,omitempty"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	Query       string `json:"query"`

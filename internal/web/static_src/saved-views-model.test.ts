@@ -116,7 +116,8 @@ describe("saved view definitions", () => {
       query: "tag:focus",
       sort: "-modified",
       relativeTo: "areas/hub",
-      limit: 0,
+      filterParams: "q=text&expr=tag%3Afocus&tag=other",
+      limit: 50,
     });
   });
 
@@ -142,7 +143,7 @@ describe("saved view definitions", () => {
         name: "N",
         description: "",
       }).limit
-    ).toBe(0);
+    ).toBe(50);
   });
 
   it("refuses a save with no name and a save with no expression", () => {
@@ -158,4 +159,21 @@ describe("saved view definitions", () => {
     expect(savedViewSaveError({ ...base, name: "" })).toContain("Name the view");
     expect(savedViewSaveError({ ...base, query: "" })).toContain("query expression");
   });
+});
+
+it("saves the effective Library cap and accepts text-only searches", () => {
+  history.replaceState(null, "", "/library");
+  const input = savedViewInputFromParams(new URLSearchParams("q=Alpha&limit=200"), { name: "Text", description: "" });
+  expect(input.limit).toBe(50);
+  expect(savedViewSaveError(input)).toBe("");
+  const empty = savedViewInputFromParams(new URLSearchParams("q=++&tag="), { name: "Empty", description: "" });
+  expect(savedViewSaveError(empty)).not.toBe("");
+});
+
+it("reopens a text-only view without an artificial expression", () => {
+  const view = normalizeSavedViewsResponse({ views: [{ name: "Text", query: '\"\"', search: "Café", sort: "match", limit: 10, enabled: true }] }).views[0]!;
+  const params = savedViewParams(view);
+  expect(params.get("q")).toBe("Café");
+  expect(params.has("expr")).toBe(false);
+  expect(params.get("sort")).toBe("match");
 });

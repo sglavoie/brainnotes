@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { responseFailure, unansweredRequest, type RequestPurpose } from "./request-outcome";
 import {
   SYNC_CONFLICTS_ENDPOINT,
@@ -70,6 +71,7 @@ const finish = async <T extends { ok: boolean; code?: string; message?: string }
       message: result.message || "The request was refused.",
     };
   }
+  if (purpose === "write") announceConfirmedWrite();
   return { ok: true, result };
 };
 

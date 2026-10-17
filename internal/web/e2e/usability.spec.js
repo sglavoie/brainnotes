@@ -46,5 +46,6 @@ test("capture draft survives reload and navigation without writing a note", asyn
   await expect(capture).toHaveValue("");
   expect(captures).toEqual([]);
   await page.locator(".capture-destination a").click();
-  await expect(page).toHaveURL(/\/n\/inbox$/);
+  await expect(page).toHaveURL((url) => url.pathname === "/n/inbox");
+  await expect(page.getByRole("link", { name: "Back to Brief", exact: true })).toBeVisible();
 });

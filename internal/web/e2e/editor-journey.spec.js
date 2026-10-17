@@ -263,6 +263,9 @@ test("a note created from the editor survives a property, a pin, a move, a trash
   await openBeta(page);
   await openManage(page);
   await page.locator("[data-source-undo]").click();
+  const confirmation = page.getByRole("dialog");
+  await expect(confirmation).toContainText(`${title}.md`);
+  await confirmation.getByRole("button", { name: "Restore note", exact: true }).click();
   await expect(page.locator('[data-source-manage-feedback="undo"] [data-source-manage-status]')).toHaveClass(/is-success/);
 
   await expect.poll(() => existsSync(vaultPath("Notes", `${title}.md`))).toBe(true);
@@ -315,7 +318,10 @@ test("a property removed, a pin lifted, and a line captured over unsaved text", 
   expect(readFileSync(notePath, "utf8")).not.toContain("pinned:");
 
   await caretToEnd(page);
-  await page.keyboard.type(phrase);
+  // This journey checks draft retention across a capture. Insert one text
+  // input so browser selection events cannot interleave rapid synthetic keys.
+  await page.keyboard.insertText(phrase);
+  await expect(page.locator(SURFACE)).toContainText(phrase);
   await expect(page.locator("[data-source-save]")).toBeEnabled();
 
   await page.locator("[data-source-capture-text]").fill(captured);

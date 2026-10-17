@@ -29,30 +29,30 @@ afterEach(() => {
  * while a creation renders the same diff as a receipt with nothing to click.
  */
 describe("saved views save scope", () => {
-  it("shows the saved shape and updates excluded filters while the form is open", () => {
+  it("shows the complete saved selection and updates filters while the form is open", () => {
     mountSave();
     setLocation("/library?expr=tag:focus&sort=-modified&limit=10&q=words&tag=work&tag=books");
     initSavedViewsSave();
     saveElement("[data-saved-views-open]", HTMLButtonElement).click();
     const scope = saveElement("[data-saved-views-scope]", HTMLElement);
     const warning = saveElement("[data-saved-views-excluded]", HTMLElement);
-    expect(scope.textContent).toBe("This view will save:\nQuery: tag:focus\nSort: -modified\nLimit: 10");
-    expect(warning.hidden).toBe(false);
-    expect(warning.textContent).toContain("Text search: words; tag: work; tag: books");
+    expect(scope.textContent).toBe("This view will save:\nQuery: tag:focus\nText search: words\ntag: work\ntag: books\nSort: -modified\nLimit: 10");
+    expect(warning.hidden).toBe(true);
+    expect(warning.textContent).toBe("");
 
     setLocation("/library?expr=tag:focus");
     dispatchFiltersChange(window, { mode: "search", params: new URLSearchParams("expr=tag:focus") });
     expect(warning.hidden).toBe(true);
     expect(warning.textContent).toBe("");
-    expect(scope.textContent).toContain("Sort: default\nLimit: none");
+    expect(scope.textContent).toContain("Sort: best match\nLimit: 50");
 
     setLocation("/library?q=%3Cb%3Etext%3C%2Fb%3E");
     document.body.insertAdjacentHTML("beforeend", '<input id="search-input">');
     document.querySelector("#search-input")?.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(warning.hidden).toBe(false);
-    expect(warning.textContent).toContain("<b>text</b>");
-    expect(warning.querySelector("b")).toBeNull();
-    expect(scope.textContent).toContain("write a query expression first");
+    expect(warning.hidden).toBe(true);
+    expect(scope.textContent).toContain("<b>text</b>");
+    expect(scope.querySelector("b")).toBeNull();
+    expect(scope.textContent).toContain("all matching notes");
   });
 });
 

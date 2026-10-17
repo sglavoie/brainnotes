@@ -8,6 +8,7 @@ import {
   type HistoryEntry,
 } from "./api";
 import {
+  formatHistoryTimestamp,
   historyConflictSummary,
   historyFileCountLabel,
   historyForceConsentMessage,
@@ -67,19 +68,6 @@ const renderPanel = (): void => {
     </section>
   `;
 };
-
-const conflictBody = (): unknown => ({
-  ok: false,
-  code: "conflict",
-  message: "Undo has conflicts.",
-  entry_id: "entry-new",
-  requires_force: true,
-  conflicts: [{
-    path: "Source.md",
-    expected_state: "file(sha256=a,size=1)",
-    current_state: "file(sha256=b,size=1)",
-  }],
-});
 
 const previewBody = (overrides: Record<string, unknown> = {}): unknown => ({
   ok: true,
@@ -187,243 +175,80 @@ describe("history API helpers", () => {
   });
 });
 
-describe("history panel DOM behavior", () => {
-  it("loads history and posts a non-force latest undo", async () => {
-    renderPanel();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === "/api/undo") {
-        expect(String(init?.body)).toBe("token=csrf-token");
-        return jsonResponse({
-          ok: true,
-          message: "Undo restored 1 path.",
-          entry_id: "entry-new",
-          changes: [{ path: "Source.md", current_state: "file", restored_state: "file" }],
-        });
-      }
-      return jsonResponse({ ok: true, entries: [historyEntry()] });
-    });
-    const confirmMock = vi.fn(() => true);
-
-    initHistoryPanel({ fetch: fetchMock as typeof fetch, confirm: confirmMock });
-    await waitForExpect(() => {
-      expect(document.querySelectorAll("[data-history-undo-entry]")).toHaveLength(1);
-    });
-    expect(
-      document.querySelector<HTMLButtonElement>("[data-history-undo-entry]")?.getAttribute("aria-label")
-    ).toBe("Undo bn web frontmatter set");
-
-    const latest = document.querySelector<HTMLButtonElement>("[data-history-undo-latest]");
-    expect(latest?.disabled).toBe(false);
-    latest?.click();
-
-    await waitForExpect(() => {
-      expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo restored 1 path.");
-    });
-    expect(confirmMock).toHaveBeenCalledWith("Undo this change?");
-    expect(fetchMock).toHaveBeenCalledWith("/api/undo", expect.objectContaining({
-      method: "POST",
-    }));
-  });
-
-  it("previews before forcing and sends the receipt back with the force", async () => {
+describe("history panel exact undo", () => {
+  const setup = async (preview: unknown = previewBody({ requires_force: false, conflicts: [] }), confirm = true) => {
     renderPanel();
     const bodies: string[] = [];
-    let undoCalls = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const target = String(input);
       if (target === "/api/history/preview") {
         bodies.push(`preview:${String(init?.body)}`);
-        return jsonResponse(previewBody());
+        return jsonResponse(preview);
       }
       if (target === "/api/undo") {
-        undoCalls += 1;
         bodies.push(`undo:${String(init?.body)}`);
-        if (undoCalls === 1) {
-          return jsonResponse(conflictBody(), 409);
-        }
         return jsonResponse({ ok: true, message: "Undo restored 1 path.", entry_id: "entry-new" });
       }
       return jsonResponse({ ok: true, entries: [historyEntry()] });
     });
-    const confirmMock = vi.fn(() => true);
+    const confirmer = vi.fn(() => confirm);
+    initHistoryPanel({ fetch: fetcher, confirm: confirmer });
+    await waitForExpect(() => expect(document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")?.disabled).toBe(false));
+    return { fetcher, bodies, confirmer };
+  };
 
-    initHistoryPanel({ fetch: fetchMock as typeof fetch, confirm: confirmMock });
-    await waitForExpect(() => {
-      expect(document.querySelectorAll("[data-history-undo-entry]")).toHaveLength(1);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-history-undo-entry]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-conflict]")?.hidden).toBe(false);
-    });
-    expect(document.querySelector("[data-history-conflict-summary]")?.textContent).toContain(
-      "Source.md: expected file(sha256=a,size=1), current file(sha256=b,size=1)"
-    );
-
-    document.querySelector<HTMLButtonElement>("[data-history-force]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo restored 1 path.");
-    });
-
+  it("previews latest, describes its paths and timestamp, and submits its exact identity", async () => {
+    const { bodies, confirmer } = await setup();
+    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")!.click();
+    await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo restored 1 path."));
     expect(bodies).toEqual([
-      "undo:token=csrf-token&id=entry-new",
+      "preview:token=csrf-token",
+      "undo:token=csrf-token&id=entry-new&preview_id=preview-1",
+    ]);
+    expect(confirmer).toHaveBeenCalledWith(expect.stringContaining("bn web frontmatter set"));
+    expect(confirmer).toHaveBeenCalledWith(expect.stringContaining("Source.md"));
+    expect(confirmer).toHaveBeenCalledWith(expect.stringContaining(formatHistoryTimestamp("2026-01-02T03:04:05Z")));
+  });
+
+  it("cancels after reading a preview without sending a write", async () => {
+    const { bodies } = await setup(undefined, false);
+    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")!.click();
+    await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo canceled."));
+    expect(bodies).toEqual(["preview:token=csrf-token"]);
+  });
+
+  it("discovers conflicts before writing and previews the same entry again before forcing", async () => {
+    const { bodies, confirmer } = await setup(previewBody());
+    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")!.click();
+    const force = document.querySelector<HTMLButtonElement>("[data-history-force]")!;
+    await waitForExpect(() => expect(force.disabled).toBe(false));
+    expect(confirmer).not.toHaveBeenCalled();
+    force.click();
+    await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo restored 1 path."));
+    expect(bodies).toEqual([
+      "preview:token=csrf-token",
       "preview:token=csrf-token&id=entry-new",
       "undo:token=csrf-token&id=entry-new&force=1&confirm_force=1&preview_id=preview-1",
     ]);
-    expect(confirmMock).toHaveBeenCalledWith("Undo this change?");
-    expect(confirmMock).toHaveBeenCalledWith(
-      "Restore 1 path and replace newer work in Source.md?"
-    );
-    expect(undoCalls).toBe(2);
+    expect(confirmer).toHaveBeenCalledWith(expect.stringContaining("replaces newer work"));
   });
 
-});
-
-// "Undo latest change" is posted with no identifier — the server resolves it.
-// The refusal is therefore the only thing that says which entry was refused, and
-// forcing has to name that entry: re-posting "the latest" with force would
-// resolve it a second time, against a journal that may have gained an entry in
-// between, and force is exactly the flag that would then overwrite without
-// asking.
-describe("history panel undo-latest conflicts", () => {
-  it("forces the entry the refusal named rather than the shorthand it sent", async () => {
-    renderPanel();
-    const bodies: string[] = [];
-    let undoCalls = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const target = String(input);
-      if (target === "/api/history/preview") {
-        bodies.push(`preview:${String(init?.body)}`);
-        return jsonResponse(previewBody());
-      }
-      if (target === "/api/undo") {
-        undoCalls += 1;
-        bodies.push(`undo:${String(init?.body)}`);
-        if (undoCalls === 1) {
-          return jsonResponse(conflictBody(), 409);
-        }
-        return jsonResponse({ ok: true, message: "Undo restored 1 path.", entry_id: "entry-new" });
-      }
-      return jsonResponse({ ok: true, entries: [historyEntry()] });
-    });
-
-    initHistoryPanel({ fetch: fetchMock as typeof fetch, confirm: vi.fn(() => true) });
-    await waitForExpect(() => {
-      expect(document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")?.disabled).toBe(false);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-conflict]")?.hidden).toBe(false);
-    });
-    const force = document.querySelector<HTMLButtonElement>("[data-history-force]");
-    expect(force?.disabled).toBe(false);
-
-    force?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo restored 1 path.");
-    });
-
-    expect(bodies).toEqual([
-      "undo:token=csrf-token",
-      "preview:token=csrf-token&id=entry-new",
-      "undo:token=csrf-token&id=entry-new&force=1&confirm_force=1&preview_id=preview-1",
-    ]);
-  });
-
-  it("leaves forcing unavailable when the refusal named no entry", async () => {
-    renderPanel();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input) === "/api/undo") {
-        return jsonResponse({ ...(conflictBody() as object), entry_id: "" }, 409);
-      }
-      return jsonResponse({ ok: true, entries: [historyEntry()] });
-    });
-
-    initHistoryPanel({ fetch: fetchMock as typeof fetch, confirm: vi.fn(() => true) });
-    await waitForExpect(() => {
-      expect(document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")?.disabled).toBe(false);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-conflict]")?.hidden).toBe(false);
-    });
+  it("does not write or offer forcing when the preview identifies no entry", async () => {
+    const { bodies, confirmer } = await setup(previewBody({ entry_id: "" }));
+    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")!.click();
+    await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toContain("Couldn't identify"));
+    expect(confirmer).not.toHaveBeenCalled();
     expect(document.querySelector<HTMLButtonElement>("[data-history-force]")?.disabled).toBe(true);
-  });
-});
-
-describe("history panel force refusals", () => {
-  it("refuses to force on a stale receipt instead of retrying without one", async () => {
-    renderPanel();
-    let undoCalls = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const target = String(input);
-      if (target === "/api/history/preview") {
-        return jsonResponse({
-          ok: false,
-          code: "preview_stale",
-          message: "Source.md changed since the preview. Read it again.",
-        }, 409);
-      }
-      if (target === "/api/undo") {
-        undoCalls += 1;
-        return jsonResponse(conflictBody(), 409);
-      }
-      return jsonResponse({ ok: true, entries: [historyEntry()] });
-    });
-    const confirmMock = vi.fn(() => true);
-
-    initHistoryPanel({ fetch: fetchMock as typeof fetch, confirm: confirmMock });
-    await waitForExpect(() => {
-      expect(document.querySelectorAll("[data-history-undo-entry]")).toHaveLength(1);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-history-undo-entry]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-conflict]")?.hidden).toBe(false);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-history-force]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector("[data-history-status]")?.textContent).toBe(
-        "Source.md changed since the preview. Read it again."
-      );
-    });
-    expect(undoCalls).toBe(1);
-    expect(confirmMock).toHaveBeenCalledTimes(1);
+    expect(bodies).toEqual(["preview:token=csrf-token"]);
   });
 
-  it("does not force when the preview is refused at the confirmation", async () => {
-    renderPanel();
-    let undoCalls = 0;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const target = String(input);
-      if (target === "/api/history/preview") {
-        return jsonResponse(previewBody());
-      }
-      if (target === "/api/undo") {
-        undoCalls += 1;
-        return jsonResponse(conflictBody(), 409);
-      }
-      return jsonResponse({ ok: true, entries: [historyEntry()] });
-    });
-    const confirmMock = vi.fn((message: string) => message === "Undo this change?");
-
-    initHistoryPanel({ fetch: fetchMock as typeof fetch, confirm: confirmMock });
-    await waitForExpect(() => {
-      expect(document.querySelectorAll("[data-history-undo-entry]")).toHaveLength(1);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-history-undo-entry]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector<HTMLElement>("[data-history-conflict]")?.hidden).toBe(false);
-    });
-
-    document.querySelector<HTMLButtonElement>("[data-history-force]")?.click();
-    await waitForExpect(() => {
-      expect(document.querySelector("[data-history-status]")?.textContent).toBe("Force undo canceled.");
-    });
-    expect(undoCalls).toBe(1);
+  it("does not reattempt a write when its pinned receipt is stale", async () => {
+    const { fetcher, bodies } = await setup();
+    fetcher.mockResolvedValueOnce(jsonResponse(previewBody({ requires_force: false, conflicts: [] })))
+      .mockResolvedValueOnce(jsonResponse({ ok: false, code: "preview_stale", message: "Preview expired. Read it again." }, 409));
+    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")!.click();
+    await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toContain("Preview expired"));
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(bodies).toEqual([]);
   });
 });

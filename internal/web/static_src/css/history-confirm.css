@@ -1,0 +1,15 @@
+.history-confirm {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  color: var(--bn-text);
+}
+
+.history-confirm::backdrop { background: rgba(0, 0, 0, 0.45); }
+
+.history-confirm-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  line-height: 1.6;
+}

@@ -51,7 +51,7 @@ A saved view is used from any find-scoped command with --view.`,
 					status = "error"
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-					view.Saved.Name, view.Saved.Description, view.Saved.Query, status)
+					view.Saved.Name, view.Saved.Description, displayedViewQuery(view), status)
 			}
 			w.Flush()
 			return nil
@@ -237,4 +237,11 @@ func writeViewsHint(w io.Writer, cmdName, configPath string) {
 
   Then run it with: bn find --view "Active work"
 `)
+}
+
+func displayedViewQuery(view queryexpr.View) string {
+	if view.Plan != nil && view.Saved.Search != "" {
+		return view.Plan.Expr.String()
+	}
+	return view.Saved.Query
 }

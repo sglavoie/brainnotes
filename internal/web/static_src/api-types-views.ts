@@ -10,6 +10,7 @@ export type SavedViewSummary = {
   name: string;
   description: string;
   query: string;
+  search?: string;
   // normalized is the canonical Expr.String() spelling, empty for a disabled
   // view.
   normalized: string;
@@ -26,7 +27,9 @@ export type SavedViewOp = "upsert" | "rename" | "delete";
 // SavedViewDefinition is the stored half of one view. The name travels beside
 // it on the request, so a payload cannot disagree with itself.
 export type SavedViewDefinition = {
+  filter_params?: string;
   query: string;
+  search?: string;
   sort: string;
   relative_to: string;
   limit: number;

@@ -374,15 +374,7 @@ ci:
     # above — a gate wired into only one of the two recipes is half-enforced.
     npm run lint:web
     npm run test:web
-    bundles=(internal/web/static/app.js internal/web/static/editing.js)
-    before=$(git hash-object "${bundles[@]}")
-    npm run build:web
-    after=$(git hash-object "${bundles[@]}")
-    if [ "$before" != "$after" ]; then
-        echo "generated bundle drift: run just web-build and include both bundles"
-        git --no-pager diff -- "${bundles[@]}"
-        exit 1
-    fi
+    npm run check:web-bundles
     echo "CI clean"
 
 # `metrics` is deliberately absent from `just ci` and from `just lint`: it is a

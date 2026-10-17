@@ -67,6 +67,7 @@ func parseResultShape(params url.Values) (resultShape, error) {
 		}
 		shape.Sort = spec
 	}
+	shape.Sort.Search = params.Get("q")
 	shape.Sort.RelativeTo = strings.TrimSpace(params.Get("relative_to"))
 	if shape.Sort.Key == queryexpr.SortRelevance && shape.Sort.RelativeTo == "" {
 		return resultShape{}, fmt.Errorf("sort %q requires relative_to", queryexpr.SortRelevance)
@@ -122,6 +123,7 @@ func orderSearchCandidates(candidates []searchCandidate, shape resultShape, in q
 	if shape.Sort.Key == queryexpr.SortRelevance {
 		ordered, err = orderNotesByRelevance(notes, in.Root, shape.Sort.Descending, rank)
 	} else {
+		in.Search = shape.Sort.Search
 		ordered, err = query.OrderNotes(notes, shape.Sort.Key, shape.Sort.Descending, in)
 	}
 	if err != nil {

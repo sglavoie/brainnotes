@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import {
   buildNoteKeyMutationForm,
   normalizeManagementErrorMessage,
@@ -115,6 +116,7 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
       }
 
       const result = payload as ManagementResult;
+      announceTrashWrite(result);
       const message = result && result.ok && result.message ? result.message : "Moved note to Trash.";
       if (keepUndoNoticeOnPage(container, config.csrfToken, result, { fetch: fetcher, redirect })) {
         setStatus(message, "is-success");
@@ -140,4 +142,8 @@ const readTrashResponsePayload = async (resp: Response): Promise<unknown> => {
   } catch {
     return "";
   }
+};
+
+const announceTrashWrite = (result: ManagementResult): void => {
+  if (result?.ok) announceConfirmedWrite();
 };

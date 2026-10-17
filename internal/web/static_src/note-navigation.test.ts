@@ -4,6 +4,7 @@ import { initNoteNavigation, libraryResultPath, withLibraryContext } from "./not
 import { initCopyControls } from "./clipboard";
 
 afterEach(() => {
+  window.dispatchEvent(new Event("pagehide"));
   document.body.innerHTML = "";
   history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
@@ -115,5 +116,24 @@ it.each(["https://example.com/library", "/settings", "//example.com/library"])(
   "does not pass an unsafe return URL into the editor: %s", (target) => {
     history.replaceState(null, "", `/n/Alpha?return_to=${encodeURIComponent(target)}`);
     expect(withLibraryContext("/edit?key=Alpha", true)).toBe("/edit?key=Alpha");
+  }
+);
+
+it.each([["/pinned", "Pinned"], ["/?day=2026-10-17", "Brief"], ["/graph?q=Alpha&g_isolate=alpha", "Graph"]])(
+  "keeps %s context through dynamically rendered links and editor rename", async (origin, label) => {
+    history.replaceState(null, "", origin);
+    initNoteNavigation();
+    document.body.innerHTML = '<a href="/n/Alpha">Alpha</a>';
+    await vi.waitFor(() => expect(document.querySelector("a")!.href).toContain("return_to="));
+    const note = document.querySelector("a")!.href;
+    window.dispatchEvent(new Event("pagehide"));
+    history.replaceState(null, "", note);
+    document.body.innerHTML = '<a data-note-back-results hidden></a>';
+    initNoteNavigation();
+    expect(document.querySelector("a")!.textContent).toBe(`Back to ${label}`);
+    expect(document.querySelector("a")!.getAttribute("href")).toContain(origin);
+    history.replaceState(null, "", withLibraryContext("/edit?key=Alpha", true));
+    const renamed = withLibraryContext("/edit?key=New", true);
+    expect(new URL(renamed, location.origin).searchParams.get("return_to")).toContain(origin);
   }
 );

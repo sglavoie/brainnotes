@@ -275,7 +275,8 @@ an **array of tables**, not a `[views.<name>]` table: the list is ordered, and
 | --- | --- |
 | `name` | Required. How `--view` and `bn views` address the view, matched case-insensitively and unique under that folding. Unicode letters and digits plus space, `.`, `_`, and `-`, never leading or trailing. |
 | `query` | Required. The query expression, in the syntax `bn find -q` takes. |
-| `sort` | Optional ordering in the spelling `--sort` accepts (`modified`, `-modified`, `title:desc`, …). |
+| `search` | Optional literal text matched against title/body and ANDed with `query`. Browser saves preserve the text box here. |
+| `sort` | Optional ordering in the spelling `--sort` accepts (`modified`, `-modified`, `title:desc`, …). `match` preserves browser best-match ordering using `search`. |
 | `relative_to` | Optional anchor note for a `relevance` sort. It is its own key because a sort spec's text form does not carry it. |
 | `limit` | Optional result cap. `0` (the default) means no cap. |
 | `description` | Optional one-line summary shown by `bn views` and the web nav. |

@@ -27,6 +27,7 @@ const normalizeSavedViewSummary = (input: unknown): SavedViewSummary | null => {
     name,
     description: normalizeParamValue(record.description),
     query: normalizeParamValue(record.query),
+    ...(normalizeParamValue(record.search) ? { search: normalizeParamValue(record.search) } : {}),
     normalized: normalizeParamValue(record.normalized),
     sort: normalizeParamValue(record.sort),
     relative_to: normalizeParamValue(record.relative_to),

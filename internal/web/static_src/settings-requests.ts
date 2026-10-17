@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { responseFailure, unansweredRequest, type RequestPurpose } from "./request-outcome";
 import {
   SETTINGS_APPLY_ENDPOINT,
@@ -42,6 +43,7 @@ const finish = async <T extends { ok: boolean; message?: string }>(
   const failure = responseFailure(resp, payload, purpose);
   if (failure) return failure;
   const result = normalize(payload);
+  if (purpose === "write") announceConfirmedWrite();
   return { ok: true, result };
 };
 

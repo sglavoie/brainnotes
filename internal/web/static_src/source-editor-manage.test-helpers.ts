@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { undoDescription } from "./history-confirm";
 
 import { readSourceManageElements, type SourceEditorConfig } from "./source-editor-elements";
 import { initSourceManage, type ManageHost } from "./source-editor-manage";
@@ -119,6 +120,7 @@ export const harness = (options: { dirty?: boolean; confirm?: boolean } = {}): H
     config,
     host,
     fetch: fetcher as unknown as typeof fetch,
+    confirmUndo: (preview) => host.confirm(undoDescription(preview)),
   });
 
   return {

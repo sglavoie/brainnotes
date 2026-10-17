@@ -1,9 +1,8 @@
 import { queryElement } from "./dom";
-import { filterChangeEventName, normalizeParamValue, sharedFilterParamKeys } from "./filters";
+import { filterChangeEventName, sharedFilterParamKeys } from "./filters";
 import { savedViewInputFromParams } from "./saved-views-model";
 
-// Describe the same URL shape the save action reads; never imply that the
-// independent text search and facet chips are part of the stored expression.
+// Describe the complete selection the save action freezes.
 export const bindSavedViewScope = (form: HTMLFormElement): (() => void) => {
   const scope = queryElement(form, "[data-saved-views-scope]", HTMLElement);
   const warning = queryElement(form, "[data-saved-views-excluded]", HTMLElement);
@@ -13,20 +12,16 @@ export const bindSavedViewScope = (form: HTMLFormElement): (() => void) => {
     if (scope) {
       scope.textContent = [
         "This view will save:",
-        `Query: ${input.query || "(write a query expression first)"}`,
-        `Sort: ${input.sort || "default"}`,
+        `Query: ${input.query || "all matching notes"}`,
+        ...["q", ...sharedFilterParamKeys].flatMap((key) => params.getAll(key).map((value) => `${key === "q" ? "Text search" : key}: ${value}`)),
+        `Sort: ${input.sort || "best match"}`,
         ...(input.relativeTo ? [`Relative to: ${input.relativeTo}`] : []),
         `Limit: ${input.limit || "none"}`,
       ].join("\n");
     }
     if (warning) {
-      const excluded = ["q", ...sharedFilterParamKeys].flatMap((key) =>
-        params.getAll(key).map(normalizeParamValue).filter(Boolean).map((value) =>
-          `${key === "q" ? "Text search" : key}: ${value}`));
-      warning.hidden = excluded.length === 0;
-      warning.textContent = excluded.length
-        ? `Not saved — these filters only affect the current results: ${excluded.join("; ")}.`
-        : "";
+      warning.hidden = true;
+      warning.textContent = "";
     }
   };
   window.addEventListener(filterChangeEventName, refresh);

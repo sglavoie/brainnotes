@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { requestSynthesisApply, requestSynthesisPreview } from "./api";
 import { setStatusText } from "./status";
 import { invalidateSynthesisPreview, synthesisDraftError, synthesisFolderError, synthesisPreviewSignature, synthesisTitleError } from "./synthesize-model";
@@ -108,6 +109,7 @@ export const applySynthesis = async (runtime: SynthesisRuntime): Promise<void> =
       preview_id: receipt.preview_id,
       token: config.csrfToken,
     });
+    announceConfirmedWrite();
     const created = response.rel_path || receipt.destination;
     // Redirecting past a failed deletion would hide the only chance to say the
     // saved work is still there, so the navigation waits behind the warning.

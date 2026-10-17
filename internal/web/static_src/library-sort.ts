@@ -9,7 +9,7 @@ export const initLibrarySort = (): void => {
   // Keep uncommon orderings (including relevance and its anchor) intact until
   // the user explicitly chooses a different ordering.
   if (!Array.from(select.options).some((option) => option.value === current)) {
-    select.add(new Option(`Current order: ${current}`, current));
+    select.add(new Option(current === "match" ? "Best match" : `Current order: ${current}`, current));
   }
   select.value = current;
   select.addEventListener("change", () => {

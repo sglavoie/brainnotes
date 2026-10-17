@@ -32,6 +32,8 @@ type SavedView struct {
 	Name string `toml:"name"`
 	// Query is the saved query expression.
 	Query string `toml:"query"`
+	// Search is literal title/body text, also used for best-match ordering.
+	Search string `toml:"search"`
 	// Sort is the saved ordering, in the spelling `--sort` accepts
 	// (`modified`, `-modified`, `title:desc`, …). Empty means the default.
 	Sort string `toml:"sort"`

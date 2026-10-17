@@ -84,7 +84,8 @@ for (const path of ["/", "/properties"]) {
     } else {
       await title.click();
     }
-    await expect(page).toHaveURL(/\/n\/alpha$/);
+    await expect(page).toHaveURL((url) => url.pathname === "/n/alpha");
+    if (path === "/") await expect(page.getByRole("link", { name: "Back to Brief", exact: true })).toBeVisible();
     await expect(page.locator("h1")).toHaveText("Alpha");
   });
 }

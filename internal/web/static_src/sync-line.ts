@@ -2,6 +2,7 @@ import { queryElement } from "./dom";
 import { fetchSyncStatus, type FetchLike, type SyncOutcome } from "./sync-requests";
 import { syncLineSummary, syncNeedsPerson } from "./sync-status-view";
 import type { SyncStatusResult } from "./api";
+import { bindSyncRefresh } from "./sync-line-refresh";
 
 // The one line every page carries about synchronization.
 //
@@ -12,10 +13,8 @@ import type { SyncStatusResult } from "./api";
 // that publishes a copy — the route answers both, because those are the honest
 // answers for the two modes.
 //
-// It is deliberately not a poller. A timer on every page would ask a question
-// nobody is looking at, and the states this reports move when somebody saves,
-// exports or acknowledges rather than on the second. It reads once and reads again
-// when the tab is looked at again, which is when the answer is being read.
+// Pending work gets a bounded series of follow-up reads while the page is
+// visible. Confirmed mutations and returning to a tab start a fresh series.
 
 export type SyncLineDeps = {
   doc?: Document;
@@ -65,21 +64,20 @@ export const renderSyncLine = (
   renderLine(line, outcome.result, doc);
 };
 
+const bindings = new WeakMap<Document, () => void>();
+
 export const initSyncLine = (deps: SyncLineDeps = {}): void => {
   const doc = deps.doc ?? document;
+  bindings.get(doc)?.();
   const fetcher = deps.fetch ?? ((input, init) => window.fetch(input, init));
   const line = queryElement(doc, "[data-sync-line]", HTMLElement);
   const endpoint = line?.getAttribute("data-sync-status-endpoint") ?? "";
   if (!line || endpoint === "") {
     return;
   }
-  const read = async (): Promise<void> => {
-    renderSyncLine(line, await fetchSyncStatus(fetcher, endpoint), doc);
-  };
-  void read();
-  doc.addEventListener("visibilitychange", () => {
-    if (doc.visibilityState === "visible") {
-      void read();
-    }
-  });
+  bindings.set(doc, bindSyncRefresh({
+    doc, line,
+    read: () => fetchSyncStatus(fetcher, endpoint),
+    render: (outcome) => renderSyncLine(line, outcome, doc),
+  }));
 };

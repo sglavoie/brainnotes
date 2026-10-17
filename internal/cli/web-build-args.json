@@ -1,0 +1,17 @@
+[
+  "app=internal/web/static_src/main.ts",
+  "editing=internal/web/static_src/editing.ts",
+  "library-page=internal/web/static_src/library-page.ts",
+  "graph-page=internal/web/static_src/graph-page.ts",
+  "settings-page=internal/web/static_src/settings-page.ts",
+  "properties-page=internal/web/static_src/properties-page.ts",
+  "synthesize-page=internal/web/static_src/synthesize-page.ts",
+  "brief-page=internal/web/static_src/brief-page.ts",
+  "health-page=internal/web/static_src/health-page.ts",
+  "history-page=internal/web/static_src/history-page.ts",
+  "--bundle",
+  "--minify",
+  "--format=iife",
+  "--global-name=BrainNotesApp",
+  "--outdir=internal/web/static"
+]

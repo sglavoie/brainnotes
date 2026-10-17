@@ -59,18 +59,6 @@ func localEsbuildBinary(root string) (string, bool) {
 	return bin, true
 }
 
-func webBuildArgs() []string {
-	return []string{
-		"app=internal/web/static_src/main.ts",
-		"editing=internal/web/static_src/editing.ts",
-		"--bundle",
-		"--minify",
-		"--format=iife",
-		"--global-name=BrainNotesApp",
-		"--outdir=internal/web/static",
-	}
-}
-
 // sourceCheckoutRoot is stamped by local just build/install recipes so a
 // developer binary can rebuild web assets even when bn is launched elsewhere.
 var sourceCheckoutRoot string

@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { noteNavigationDestination } from "./api-notes";
 import { asRecord, readBoolean } from "./api-internal";
 import { readResponsePayload } from "./daily-brief-http";
@@ -107,6 +108,7 @@ export const requestRelatedItem = async (
   ) {
     throw new Error("Related action returned an invalid response.");
   }
+  if (result.recorded !== false) announceConfirmedWrite();
   return result;
 };
 

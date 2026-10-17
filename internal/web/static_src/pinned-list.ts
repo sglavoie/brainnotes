@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { addPinRefresh, readPinOutcome, unconfirmedPin, type PinOutcome } from "./pin-outcome";
 import {
   buildNotePinRemoveFetchRequest,
@@ -64,6 +65,7 @@ class PinnedList {
 
   private reportOutcome = (result: PinOutcome, fallback: string): boolean => {
     if (result.kind === "success") {
+      announceConfirmedWrite();
       this.setStatus(result.message || fallback, "is-success");
       return true;
     }

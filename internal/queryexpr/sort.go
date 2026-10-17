@@ -15,6 +15,7 @@ import (
 // frontmatter, backlinks and degree read the link graph, pinned reads the
 // pinned list, and relevance reads a recall ranker anchored at RelativeTo.
 const (
+	SortMatch     = "match"
 	SortPath      = "path"
 	SortTitle     = "title"
 	SortModified  = "modified"
@@ -32,6 +33,7 @@ var sortKeys = []string{
 	SortBacklinks,
 	SortCreated,
 	SortDegree,
+	SortMatch,
 	SortModified,
 	SortPath,
 	SortPinned,
@@ -54,6 +56,8 @@ var sortKeys = []string{
 type SortSpec struct {
 	// Key is one of the sort key constants. The empty string means SortPath.
 	Key string
+	// Search is literal text used by match ordering.
+	Search string
 	// Descending reverses the ordering.
 	Descending bool
 	// RelativeTo is the note the relevance ordering is anchored at. It is

@@ -143,6 +143,7 @@ func (s *Server) viewSummaries(cfg *config.Config, views []config.SavedView) []v
 			Name:        view.Saved.Name,
 			Description: view.Saved.Description,
 			Query:       view.Saved.Query,
+			Search:      view.Saved.Search,
 			Sort:        view.Saved.Sort,
 			RelativeTo:  view.Saved.RelativeTo,
 			Limit:       view.Saved.Limit,
@@ -177,21 +178,9 @@ func (s *Server) parseViewMutationRequest(r *http.Request) (viewMutationRequest,
 
 	switch req.Op {
 	case viewOpUpsert:
-		if req.View == nil {
-			return viewMutationRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "views: upsert requires a view")
+		if err := s.normalizeViewUpsert(&req); err != nil {
+			return viewMutationRequest{}, err
 		}
-		normalized := req.View.savedView(req.Name)
-		if normalized.Query == "" {
-			return viewMutationRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "views: query is required")
-		}
-		req.View = &viewDefinition{
-			Query:       normalized.Query,
-			Sort:        normalized.Sort,
-			RelativeTo:  normalized.RelativeTo,
-			Limit:       normalized.Limit,
-			Description: normalized.Description,
-		}
-		req.NewName = ""
 	case viewOpRename:
 		if req.NewName == "" {
 			return viewMutationRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "views: rename requires new_name")
@@ -241,4 +230,27 @@ func viewsWriteError(err error) error {
 			"views: "+config.FileName+" changed, re-check the diff", err)
 	}
 	return err
+}
+
+func (s *Server) normalizeViewUpsert(req *viewMutationRequest) error {
+	if req.View == nil {
+		return noteops.Errorf(noteops.CodeInvalidRequest, "views: upsert requires a view")
+	}
+	if err := s.normalizeViewSearch(req.View); err != nil {
+		return err
+	}
+	normalized := req.View.savedView(req.Name)
+	if normalized.Query == "" {
+		return noteops.Errorf(noteops.CodeInvalidRequest, "views: query is required")
+	}
+	req.View = &viewDefinition{
+		Query:       normalized.Query,
+		Search:      normalized.Search,
+		Sort:        normalized.Sort,
+		RelativeTo:  normalized.RelativeTo,
+		Limit:       normalized.Limit,
+		Description: normalized.Description,
+	}
+	req.NewName = ""
+	return nil
 }

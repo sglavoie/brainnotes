@@ -1,3 +1,5 @@
+import { bindNoteOrigin, noteOrigins } from "./note-origin";
+import { initReadingPosition, carryReadingPosition } from "./note-reading-position";
 // Carry the Library URL in the link itself so reloads and new tabs retain it.
 export const libraryResultPath = (path: string, resultID?: string): string => {
   if (window.location.pathname !== "/library" || !path.startsWith("/n/")) return path;
@@ -13,7 +15,7 @@ const libraryReturnPath = (): string | null => {
   if (!value?.startsWith("/")) return null;
   try {
     const url = new URL(value, window.location.origin);
-    if (url.origin !== window.location.origin || url.pathname !== "/library" || url.username || url.password) return null;
+    if (url.origin !== window.location.origin || !(url.pathname in noteOrigins) || url.username || url.password) return null;
     return url.pathname + url.search + url.hash;
   } catch {
     return null;
@@ -26,6 +28,7 @@ const isContextDestination = (url: URL, allowEditor: boolean): boolean =>
   (url.pathname.startsWith("/n/") || (allowEditor && url.pathname === "/edit"));
 
 export const withLibraryContext = (target: string, allowEditor = false): string => {
+  target = carryReadingPosition(target);
   const path = libraryReturnPath();
   if (!path || target.startsWith("#")) return target;
   try {
@@ -45,13 +48,16 @@ const carryLibraryContext = (): void => {
 };
 
 export const initNoteNavigation = (): void => {
+  bindNoteOrigin();
   const back = document.querySelector<HTMLAnchorElement>("[data-note-back-results]");
   const path = libraryReturnPath();
   if (path) carryLibraryContext();
   if (back && path) {
     back.href = path;
+    back.textContent = `Back to ${noteOrigins[new URL(path, window.location.origin).pathname]}`;
     back.hidden = false;
   }
+  initReadingPosition();
   const copy = document.querySelector<HTMLButtonElement>("[data-copy-note-url]");
   if (copy) {
     const url = new URL(window.location.href);

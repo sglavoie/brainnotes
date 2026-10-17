@@ -1,4 +1,4 @@
-import { queryShapeParamKeys, normalizeParamValue } from "./filters";
+import { queryShapeParamKeys, sharedFilterParamKeys, normalizeParamValue } from "./filters";
 import type {
   PropertyConfigDiffLine,
   SavedViewDefinition,
@@ -41,7 +41,7 @@ export const savedViewLimitParam = (limit: unknown): string => {
 /**
  * The URL parameters one view applies.
  *
- * A view is a complete query shape, so a link carries only its own `expr`,
+ * A view is a complete query shape, so a link carries only its own `q`, `expr`,
  * `sort`, `relative_to` and `limit` and no chips: following a view lands you on
  * exactly what was saved rather than on the view intersected with whatever was
  * already selected.
@@ -54,7 +54,7 @@ export const savedViewLimitParam = (limit: unknown): string => {
 export const savedViewParams = (view: SavedViewSummary): URLSearchParams => {
   const params = new URLSearchParams();
   const values: Record<(typeof queryShapeParamKeys)[number], string> = {
-    expr: normalizeParamValue(view.query),
+    expr: view.search && view.query === '""' ? "" : normalizeParamValue(view.query),
     sort: normalizeParamValue(view.sort),
     relative_to: normalizeParamValue(view.relative_to),
     limit: savedViewLimitParam(view.limit),
@@ -64,6 +64,7 @@ export const savedViewParams = (view: SavedViewSummary): URLSearchParams => {
       params.set(key, values[key]);
     }
   }
+  if (view.search) params.set("q", view.search);
   return params;
 };
 
@@ -88,6 +89,7 @@ export const savedViewTitle = (view: SavedViewSummary): string => {
 };
 
 export type SavedViewSaveInput = {
+  filterParams?: string;
   name: string;
   description: string;
   query: string;
@@ -96,13 +98,8 @@ export type SavedViewSaveInput = {
   limit: number;
 };
 
-/**
- * Reads the query shape a save would store from a URL. `expr` is the view's
- * query; `sort`, `relative_to` and `limit` ride along so a view can carry an
- * ordering and a cap even where the page cannot yet produce one. Reading the
- * cap back is what makes a view round-trip: open a view, edit its chips, save
- * it again, and the cap survives instead of silently resetting to "no cap".
- */
+/** Preserve the complete URL selection; the server compiles facets into the
+ * shared query language before issuing a preview receipt. */
 export const savedViewInputFromParams = (
   params: URLSearchParams,
   fields: { name: string; description: string }
@@ -110,13 +107,15 @@ export const savedViewInputFromParams = (
   name: normalizeParamValue(fields.name),
   description: normalizeParamValue(fields.description),
   query: normalizeParamValue(params.get("expr")),
+  filterParams: savedSearchParams(params),
   sort: normalizeParamValue(params.get("sort")),
   relativeTo: normalizeParamValue(params.get("relative_to")),
-  limit: Number(savedViewLimitParam(params.get("limit")) || 0),
+  limit: savedSearchLimit(params),
 });
 
 export const savedViewDefinition = (input: SavedViewSaveInput): SavedViewDefinition => ({
   query: input.query,
+  ...(input.filterParams ? { filter_params: input.filterParams } : {}),
   sort: input.sort,
   relative_to: input.relativeTo,
   limit: input.limit,
@@ -132,8 +131,8 @@ export const savedViewSaveError = (input: SavedViewSaveInput): string => {
   if (input.name === "") {
     return "Name the view before saving it.";
   }
-  if (input.query === "") {
-    return "Write a query expression before saving it as a view.";
+  if (input.query === "" && !input.filterParams) {
+    return "Choose a text search, filter, or query expression before saving a view.";
   }
   return "";
 };
@@ -206,3 +205,18 @@ export const savedViewDiffText = (diff: PropertyConfigDiffLine[]): string =>
       return `${marker} ${line.text}`;
     })
     .join("\n");
+
+const savedSearchParams = (params: URLSearchParams): string => {
+  const selected = new URLSearchParams();
+  for (const key of ["q", "expr", ...sharedFilterParamKeys]) {
+    for (const value of params.getAll(key)) {
+      if (value.trim() || ["orphan", "broken", "dead_end"].includes(key)) selected.append(key, value);
+    }
+  }
+  return selected.toString();
+};
+
+const savedSearchLimit = (params: URLSearchParams): number => {
+  const requested = Number(savedViewLimitParam(params.get("limit")) || 0);
+  return window.location.pathname === "/library" ? Math.min(requested || 50, 50) : requested;
+};

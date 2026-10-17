@@ -1,3 +1,5 @@
+import { withNoteOrigin } from "./note-origin";
+import { announceConfirmedWrite } from "./write-notice";
 import {
   buildBriefInsightForm,
   buildBriefItemForm,
@@ -77,12 +79,13 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
       ctx.setSlotStatus(slot, result.message || "Open failed.", "is-error");
       return;
     }
+    announceConfirmedWrite();
     ctx.updateActivity(result.activity);
     ctx.openedCards.add(cardID);
     ctx.markCardOpened(slot, cardID);
     const destination = noteNavigationDestination(payload);
     if (destination) {
-      window.location.assign(destination);
+      window.location.assign(withNoteOrigin(destination));
       return;
     }
     ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
@@ -122,6 +125,7 @@ export const runAnother = async (
       return;
     }
 
+    announceConfirmedWrite();
     ctx.updateActivity(result.activity);
     const changedSlots = ctx.applyAnotherPayload(result, slot);
     const statusMessage = anotherStatus(result, slot, changedSlots);
@@ -233,6 +237,7 @@ export const recordView = async (ctx: BriefActionContext): Promise<void> => {
       ctx.setGlobalStatus(result.message || "Brief activity unavailable.", "is-error");
       return;
     }
+    announceConfirmedWrite();
     ctx.updateActivity(result.activity);
   } catch {
     ctx.setGlobalStatus("Brief activity unavailable.", "is-error");

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
@@ -17,7 +18,7 @@ import (
 // interrupted snapshots and unsupported repository states. Missing tracked
 // regular files are ordinary external changes and do not prevent a mutation.
 func (m *Manager) Preflight(ctx context.Context) error {
-	release, err := m.acquire(safetyLockName, "preflight", ctx)
+	release, err := m.acquirePreflight(ctx)
 	if err != nil {
 		return err
 	}
@@ -116,6 +117,10 @@ func (m *Manager) acquire(name, op string, contexts ...context.Context) (func(),
 	if len(contexts) > 0 && contexts[0] != nil {
 		ctx = contexts[0]
 	}
+	return m.acquireWithin(name, op, ctx, 0)
+}
+
+func (m *Manager) acquireWithin(name, op string, ctx context.Context, budget time.Duration) (func(), error) {
 	barrier := func() {}
 	if name == safetyLockName {
 		_, joined, err := checkpoint.JoinContext(ctx, m.root)
@@ -129,14 +134,17 @@ func (m *Manager) acquire(name, op string, contexts ...context.Context) (func(),
 		barrier()
 		return nil, err
 	}
-	release, acquired, err := vault.TryLockPath(m.state.path(name))
+	acquire := func() (func(), error) { return m.tryGitLock(name, op) }
+	var release func()
+	var err error
+	if budget > 0 {
+		release, err = waitForPreflight(ctx, budget, acquire)
+	} else {
+		release, err = acquire()
+	}
 	if err != nil {
 		barrier()
-		return nil, safetyErrorf(KindRepositoryState, op, "the %s could not be taken: %s", name, agent.SanitizedDiagnostic(err))
-	}
-	if !acquired {
-		barrier()
-		return nil, safetyErrorf(KindBusy, op, "another BrainNotes process is already performing a Git safety operation on this vault")
+		return nil, err
 	}
 	return func() { release(); barrier() }, nil
 }
@@ -201,4 +209,15 @@ func (m *Manager) recoverDeletionBlock(ctx context.Context, op string) error {
 		return err
 	}
 	return m.state.ClearBlock()
+}
+
+func (m *Manager) tryGitLock(name, op string) (func(), error) {
+	release, acquired, err := vault.TryLockPath(m.state.path(name))
+	if err != nil {
+		return nil, safetyErrorf(KindRepositoryState, op, "the %s could not be taken: %s", name, agent.SanitizedDiagnostic(err))
+	}
+	if !acquired {
+		return nil, safetyErrorf(KindBusy, op, "another BrainNotes process is already performing a Git safety operation on this vault")
+	}
+	return release, nil
 }

@@ -161,6 +161,7 @@ changes which notes match.
 | --- | --- |
 | `path` | Vault path (the default). |
 | `title` | Note title, case-insensitively. |
+| `match` | Title hits for a saved view’s `search` text first, then title, folder and path. Without saved text, title/folder/path order. |
 | `modified` | The `last` property. |
 | `created` | The `created` property. |
 | `backlinks` | Inbound links from other notes. |

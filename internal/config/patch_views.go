@@ -67,6 +67,9 @@ func RenderViewBlock(view SavedView) []string {
 		"name = " + quoteTOMLString(view.Name),
 		"query = " + quoteTOMLString(view.Query),
 	}
+	if view.Search != "" {
+		lines = append(lines, "search = "+quoteTOMLString(view.Search))
+	}
 	if view.Description != "" {
 		lines = append(lines, "description = "+quoteTOMLString(view.Description))
 	}

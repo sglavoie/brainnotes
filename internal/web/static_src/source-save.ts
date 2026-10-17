@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import {
   buildSourceCreateForm,
   buildSourcePreviewForm,
@@ -220,7 +221,7 @@ export const createSourceClient = (options: SourceClientOptions): SourceClient =
     // its bytes. Nothing here drops them: the tracker clears an upload only on
     // an envelope that names it, so a replay carries the same ids again and the
     // server's own ledger decides whether they were already committed.
-    return normalizeSourceSaveResponse(payload);
+    return confirmedSourceSave(payload);
   };
 
   return {
@@ -443,4 +444,10 @@ const messageFrom = (payload: unknown, fallback: string): string => {
     }
   }
   return fallback;
+};
+
+const confirmedSourceSave = (payload: unknown): SourceSaveResponse => {
+  const result = normalizeSourceSaveResponse(payload);
+  if (result.ok) announceConfirmedWrite();
+  return result;
 };

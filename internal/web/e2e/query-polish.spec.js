@@ -43,15 +43,15 @@ test("header search hands its query to the Library with Enter or a link", async 
   await expect(page).toHaveURL(/\/library\?q=Alpha$/);
 });
 
-test("save form shows its expression and warns about excluded filters before saving", async ({ page }) => {
+test("save form shows all constraints before saving", async ({ page }) => {
   await page.goto("/library?expr=tag:focus&tag=work&q=Beta&sort=-modified&limit=10");
   await page.locator("[data-saved-views-open]").click();
   await expect(page.locator("[data-saved-views-scope]")).toHaveText(
-    "This view will save:\nQuery: tag:focus\nSort: -modified\nLimit: 10"
+    "This view will save:\nQuery: tag:focus\nText search: Beta\ntag: work\nSort: -modified\nLimit: 10"
   );
-  await expect(page.locator("[data-saved-views-excluded]")).toContainText("Text search: Beta; tag: work");
+  await expect(page.locator("[data-saved-views-excluded]")).toBeHidden();
   await page.locator("#search-input").fill("Alpha");
-  await expect(page.locator("[data-saved-views-excluded]")).toContainText("Text search: Alpha");
+  await expect(page.locator("[data-saved-views-scope]")).toContainText("Text search: Alpha");
   const name = page.locator("[data-saved-views-name]");
   await name.focus();
   await name.press("Escape");

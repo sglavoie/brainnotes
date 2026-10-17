@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { responseFailure, unansweredRequest } from "./request-outcome";
 import {
   HISTORY_ENDPOINT,
@@ -198,7 +199,9 @@ export const restoreHistoryEntry = async (
     if (!resp.ok) {
       return failure(resp, payload);
     }
-    return restoredOutcome(resp, payload);
+    const result = restoredOutcome(resp, payload);
+    if (result.ok) announceConfirmedWrite();
+    return result;
   } catch {
     return unreachable(true);
   }

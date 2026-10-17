@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { normalizeManagementErrorMessage } from "./api";
 import { asRecord, readRecordValue } from "./api-internal";
 import { normalizeParamValue } from "./filters";
@@ -45,7 +46,9 @@ export const postManagement = async (request: ManageRequest): Promise<ManageOutc
     body: request.body.toString(),
   });
   const payload = await readPayload(response);
-  return readManageOutcome(response.status, response.ok, payload);
+  const result = readManageOutcome(response.status, response.ok, payload);
+  if (result.ok && !response.redirected) announceConfirmedWrite();
+  return result;
 };
 
 export const readManageOutcome = (

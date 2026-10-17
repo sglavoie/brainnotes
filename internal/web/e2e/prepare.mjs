@@ -92,10 +92,9 @@ function vaultConfig(marker) {
   return `# e2e fixture: ${marker}
 # The background committer is off. \`bn serve\` otherwise polls the working tree
 # every five seconds and snapshots it, taking the same vaultgit safety lock a
-# capture needs; a capture that lands mid-poll fails with "another BrainNotes
-# process is already performing a Git safety operation on this vault". That is
-# correct product behaviour and a real user retries, but in a suite it is a race
-# whose outcome depends on when the click happens. What this suite asserts is
+# capture needs. Preflight now absorbs short contention, but a snapshot that
+# exceeds its bounded wait still refuses. This suite keeps background writes
+# disabled so its disk assertions describe only the action under test. What this suite asserts is
 # where a *user-initiated* write lands, so the autosave timer is removed rather
 # than raced with.
 [autosave]

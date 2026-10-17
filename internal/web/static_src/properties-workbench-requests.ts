@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { responseFailure, unansweredRequest } from "./request-outcome";
 import {
   PROPERTY_APPLY_ENDPOINT,
@@ -42,6 +43,7 @@ const postProperty = async (
     const failure = responseFailure(resp, payload, purpose);
     if (failure) return failure;
     const result = normalizePropertyMutationResponse(payload);
+    if (purpose === "write") announceConfirmedWrite();
     return { ok: true, result };
   } catch {
     return unansweredRequest(purpose);
@@ -109,6 +111,7 @@ export const undoJournalEntry = async (
     const payload = await readPayload(resp);
     const failure = responseFailure(resp, payload, "write");
     if (failure) return failure;
+    announceConfirmedWrite();
     return { ok: true, message: "Change undone." };
   } catch {
     return unansweredRequest("write");

@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { addPinRefresh, readPinOutcome, unconfirmedPin } from "./pin-outcome";
 import {
   buildNotePinRemoveFetchRequest,
@@ -78,6 +79,7 @@ export const initNotePinAction = (deps: NotePinActionDeps = {}): void => {
         return;
       }
 
+      announceConfirmedWrite();
       applyState(pinning);
       const fallback = pinning ? "Pinned note." : "Unpinned note.";
       setStatus(result.message || fallback, "is-success");

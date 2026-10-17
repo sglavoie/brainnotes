@@ -391,3 +391,28 @@ func TestOrderKeyVocabularyMatchesQueryexpr(t *testing.T) {
 		}
 	}
 }
+
+func TestFindSavedTextMatchOrdering(t *testing.T) {
+	root := buildViewExecutionVault(t, `
+[[views]]
+name = "Text matches"
+query = "status:wip"
+search = "Bravo"
+sort = "match"
+limit = 1
+`)
+	// Alpha matches only in the body and sorts earlier alphabetically. A title
+	// hit must win before the cap, exactly as the browser's best-match search.
+	path := filepath.Join(root, "Notes", "Alpha.md")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(content, []byte("Bravo mention.\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := runFindOrdered(t, root, "find", "--view", "Text matches")
+	if !equalStrings(got, []string{"Notes/Bravo.md"}) {
+		t.Fatalf("match order: %v", got)
+	}
+}

@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import {
   buildFrontmatterSetForm,
   buildFrontmatterUnsetForm,
@@ -122,6 +123,7 @@ export const initFrontmatterEditing = (deps: FrontmatterActionDeps = {}): void =
       try {
         const resp = await fetcher(action.request.url, action.request.init);
         const outcome = await readFrontmatterOutcome(resp, action.message);
+        if (outcome.kind === "is-success") announceConfirmedWrite();
         setStatus(outcome.message, outcome.kind);
         if (outcome.refresh && statusEl) addFrontmatterRefresh(statusEl, outcome.refresh);
       } catch {

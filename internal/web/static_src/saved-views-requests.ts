@@ -1,3 +1,4 @@
+import { announceConfirmedWrite } from "./write-notice";
 import { responseFailure, unansweredRequest, type RequestPurpose } from "./request-outcome";
 import {
   SAVED_VIEWS_APPLY_ENDPOINT,
@@ -29,6 +30,7 @@ const finish = async (resp: Response, purpose: RequestPurpose): Promise<SavedVie
   const failure = responseFailure(resp, payload, purpose);
   if (failure) return failure;
   const result = normalizeSavedViewsResponse(payload);
+  if (purpose === "write") announceConfirmedWrite();
   return { ok: true, result };
 };
 

@@ -7,6 +7,7 @@ import {
   buildUndoForm,
   type UndoConflict,
   type UndoResult,
+  type HistoryPreviewResult,
 } from "./api";
 import { asRecord } from "./api-internal";
 import { historyConflictSummary } from "./history-panel";
@@ -15,6 +16,7 @@ import { createDirtyGate, type DirtyGate } from "./source-dirty-gate";
 import { editorURLForKey, postManagement, type ManageOutcome } from "./source-manage-client";
 import type { SourceEditorConfig } from "./source-editor-elements";
 import type { SourceManageElements } from "./source-editor-elements";
+import { confirmUndo, prepareExactUndo } from "./history-confirm";
 
 // The note's own management, reachable from the page that is editing it.
 //
@@ -41,6 +43,7 @@ export type SourceManageDeps = {
   config: SourceEditorConfig;
   host: ManageHost;
   fetch?: typeof fetch;
+  confirmUndo?: (preview: HistoryPreviewResult) => boolean | Promise<boolean>;
 };
 
 // ManageAction is one button. `plan` answers the request to send or a sentence
@@ -54,7 +57,7 @@ type ManageAction = {
   // lives. See source-dirty-gate.ts for why that is not the same refusal as the
   // others.
   allowDirty: boolean;
-  plan(): PlannedRequest | string;
+  plan(): PlannedRequest | string | Promise<PlannedRequest | string>;
   after(outcome: ManageOutcome): void;
   confirmed?(outcome: ManageOutcome): boolean;
   refused?(outcome: ManageOutcome): string | null;
@@ -89,14 +92,15 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
 
   const run = async (action: ManageAction): Promise<void> => {
     if (busy) return;
-    const planned = action.plan();
-    if (typeof planned === "string") {
-      setStatus(planned, "is-error");
-      return;
-    }
     setBusy(true);
     setStatus(`${action.label}…`, "is-loading");
     try {
+      const candidate = action.plan();
+      const planned = candidate instanceof Promise ? await candidate : candidate;
+      if (typeof planned === "string") {
+        setStatus(planned, "is-error");
+        return;
+      }
       const outcome = await postManagement({
         url: planned.url,
         body: planned.body,
@@ -279,10 +283,11 @@ const contentActions = (deps: SourceManageDeps, ctx: ActionContext): ManageActio
       button: elements.undo,
       label: "Undo latest vault change",
       allowDirty: true,
-      plan: () =>
-        host.confirm("Undo the most recent change to this vault?")
-          ? { url: endpoints.undo, body: buildUndoForm({ token: config.token }) }
-          : "Undo: canceled. Nothing was changed.",
+      plan: async () => {
+        const confirm = deps.confirmUndo ?? ((preview: HistoryPreviewResult) => confirmUndo(preview, document, elements.undo));
+        const request = await prepareExactUndo(deps.fetch ?? fetch, config.token, "", confirm);
+        return typeof request === "string" ? request : { url: endpoints.undo, body: buildUndoForm(request) };
+      },
       after: (outcome) => ctx.settle(outcome.message),
       refused: undoRefusal,
     },

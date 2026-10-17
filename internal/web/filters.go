@@ -67,44 +67,8 @@ func parseNoteFilters(
 	graph *query.Graph,
 	frontmatter *config.FrontmatterConfig,
 ) (noteFilters, error) {
-	flags := query.Flags{
-		Tags:         repeatedParam(params, "tag"),
-		Categories:   repeatedParam(params, "category"),
-		Status:       params.Get("status"),
-		Type:         params.Get("type"),
-		Has:          params.Get("has"),
-		Missing:      params.Get("missing"),
-		Age:          params.Get("age"),
-		Created:      params.Get("created"),
-		Folder:       params.Get("folder"),
-		MinBacklinks: -1,
-		MaxBacklinks: -1,
-		MinLinks:     -1,
-		MaxLinks:     -1,
-		Root:         root,
-		Graph:        graph,
-	}
-
-	var err error
-	if flags.Orphan, err = boolParam(params, "orphan"); err != nil {
-		return noteFilters{}, err
-	}
-	if flags.BrokenLinks, err = boolParam(params, "broken"); err != nil {
-		return noteFilters{}, err
-	}
-	if flags.DeadEnd, err = boolParam(params, "dead_end"); err != nil {
-		return noteFilters{}, err
-	}
-	if flags.MinBacklinks, err = intParam(params, "min_backlinks", flags.MinBacklinks); err != nil {
-		return noteFilters{}, err
-	}
-	if flags.MaxBacklinks, err = intParam(params, "max_backlinks", flags.MaxBacklinks); err != nil {
-		return noteFilters{}, err
-	}
-	if flags.MinLinks, err = intParam(params, "min_links", flags.MinLinks); err != nil {
-		return noteFilters{}, err
-	}
-	if flags.MaxLinks, err = intParam(params, "max_links", flags.MaxLinks); err != nil {
+	flags, err := parseFilterFlags(params, root, graph)
+	if err != nil {
 		return noteFilters{}, err
 	}
 
@@ -209,4 +173,49 @@ func firstParam(params url.Values, key string) (string, bool) {
 		return "", true
 	}
 	return values[0], true
+}
+
+func parseFilterFlags(params url.Values, root string, graph *query.Graph) (query.Flags, error) {
+	flags := query.Flags{
+		Tags:         repeatedParam(params, "tag"),
+		Categories:   repeatedParam(params, "category"),
+		Status:       params.Get("status"),
+		Type:         params.Get("type"),
+		Has:          params.Get("has"),
+		Missing:      params.Get("missing"),
+		Age:          params.Get("age"),
+		Created:      params.Get("created"),
+		Folder:       params.Get("folder"),
+		MinBacklinks: -1,
+		MaxBacklinks: -1,
+		MinLinks:     -1,
+		MaxLinks:     -1,
+		Root:         root,
+		Graph:        graph,
+	}
+
+	var err error
+	if flags.Orphan, err = boolParam(params, "orphan"); err != nil {
+		return query.Flags{}, err
+	}
+	if flags.BrokenLinks, err = boolParam(params, "broken"); err != nil {
+		return query.Flags{}, err
+	}
+	if flags.DeadEnd, err = boolParam(params, "dead_end"); err != nil {
+		return query.Flags{}, err
+	}
+	if flags.MinBacklinks, err = intParam(params, "min_backlinks", flags.MinBacklinks); err != nil {
+		return query.Flags{}, err
+	}
+	if flags.MaxBacklinks, err = intParam(params, "max_backlinks", flags.MaxBacklinks); err != nil {
+		return query.Flags{}, err
+	}
+	if flags.MinLinks, err = intParam(params, "min_links", flags.MinLinks); err != nil {
+		return query.Flags{}, err
+	}
+	if flags.MaxLinks, err = intParam(params, "max_links", flags.MaxLinks); err != nil {
+		return query.Flags{}, err
+	}
+
+	return flags, nil
 }

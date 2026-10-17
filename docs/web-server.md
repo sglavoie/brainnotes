@@ -93,13 +93,25 @@ Following body links, backlinks, or outgoing links to other notes carries that
 same Library context along, so **Back to results** remains available as you explore.
 **Edit in browser** carries it into the editor too: use the note title link to return
 to the note, then **Back to results** to resume browsing. Reloading the editor,
-renaming, or moving the note preserves this context.
+renaming, or moving the note preserves this context. Pinned, Brief, and Graph
+links also carry their origin, with a named return link. Editing carries the
+current reading section and offset; returning through the note title restores
+that position, with a proportional fallback if the heading was removed.
+
+Undo first previews the recorded action, time, and affected paths. Its confirmation
+is pinned to that entry and preview, so a newer change cannot silently become
+the target. A stale preview requires a fresh review.
+
+The shared sync line refreshes after confirmed writes and polls pending work for
+up to one minute. It stops while the page is hidden and ignores superseded
+responses. Saves and captures retain their draft while reporting a delayed
+confirmation; they never automatically resend an unanswered write.
 
 If header search fails, **Retry search** repeats the current query and filters
 without retyping. Dismissing search also dismisses the retry action.
 Library's **Copy search link** copies the current text search, filters, query
-expression, sort order, and limit, with a manual-copy fallback if needed. Unlike
-saved views, it includes text search and facet filters. The link omits the
+expression, sort order, and limit, with a manual-copy fallback if needed.
+Saved views also include text search and facet filters. The link omits the
 result-position anchor. Library's Sort menu also offers **Oldest modified first**
 and **Vault path**.
 When Library has no matches, **Remove search text** clears only the text query,

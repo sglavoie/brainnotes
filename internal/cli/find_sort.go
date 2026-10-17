@@ -34,9 +34,10 @@ func sortFindResults(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 		return sortByRelevance(in, spec)
 	}
 	ordered, err := query.OrderNotes(in.matched, spec.Key, spec.Descending, query.OrderInput{
-		Root:  in.vault.Root,
-		Notes: in.notes,
-		Graph: in.graph,
+		Root:   in.vault.Root,
+		Search: spec.Search,
+		Notes:  in.notes,
+		Graph:  in.graph,
 	})
 	if err != nil {
 		// Unreachable while ParseSort guards the flag, but a hand-built SortSpec

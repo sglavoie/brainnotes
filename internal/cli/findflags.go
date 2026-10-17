@@ -137,7 +137,7 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 	}
 	viewQuery := ""
 	if resolved != nil {
-		viewQuery = resolved.Saved.Query
+		viewQuery = resolved.Plan.Expr.String()
 	}
 
 	operands, source, err := compileQuerySources([]string{ff.query, viewQuery}, env, flagsExpr)

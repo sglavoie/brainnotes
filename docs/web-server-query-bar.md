@@ -92,9 +92,8 @@ uses, so a caret cannot drift on accented text.
 **Saved views.** The views defined as `[[views]]` blocks in `brainnotes.toml`
 (see [Configuration](configuration.md#saved-views)) render as a strip in the
 primary navigation on every page, in file order, populated client-side from
-`GET /api/views`. An enabled view is a plain anchor carrying only `expr`, `sort`,
-`relative_to`, and `limit` — its whole stored query shape and never the chips
-currently selected, so following one is
+`GET /api/views`. An enabled view is a plain anchor carrying `q`, `expr`, `sort`,
+`relative_to`, and `limit` — its whole stored selection, so following one is
 shareable and middle-clickable like any other nav link; it stays on the current
 page when that page hosts a query bar and lands on `/library` otherwise, so
 following a view from the graph keeps you on the graph. A view whose query no
@@ -106,15 +105,20 @@ listing itself fails, a compact **Saved views unavailable** message offers
 the strip empty. A delayed listing cannot replace newer views returned by a save.
 
 On Library and Graph, saved views are highlighted when their complete query
-matches the page, with no additional text search or facets. Changing the query,
+matches the page, with no additional constraints. Changing the query,
 sort, or filters updates the highlight without navigating away.
 
-The Library header can save the current query expression as a view. Cancelling
+The Library header saves the complete current selection as a view. Cancelling
 the form with **Cancel** or Escape returns focus to **Save as view**. The form
-shows the expression, ordering, relevance anchor (if any), and limit it
-will store. Text search and facet chips are separate filters and are **not
-saved**; the form lists any active exclusions before saving. With no expression,
-write one in the query bar first. Saving a view is a configuration write, so it
+shows text search, every active facet, the expression, ordering, relevance
+anchor (if any), and result limit. The server combines the facets and expression
+into the saved query and preserves literal text separately as `search`. This
+keeps text matching and snippets intact when reopened. A text-only or facet-only
+search can be saved directly. Default browser ordering is persisted as `match`
+(title hits first, then title/folder/path), and the Library's effective 50-result
+cap is saved when no smaller limit was selected. `bn find --view` applies the
+same text, constraints, ordering and cap. A saved view follows changing vault
+contents; it is not a frozen list of note IDs. Saving is a configuration write and
 goes through `POST /api/views/preview` then
 `POST /api/views/apply` with the same one-use receipt every other config change
 uses, and the preview returns the exact `brainnotes.toml` diff. Creating a view

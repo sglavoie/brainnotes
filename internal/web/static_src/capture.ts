@@ -122,6 +122,8 @@ class Capture {
     this.submit.disabled = true;
     const returnFocus = captureFocusReturn(this.input, this.submit);
     this.setStatus("Capturing...", "is-loading");
+    const waiting = window.setTimeout(() =>
+      this.setStatus("Waiting for capture confirmation… Your text is kept here.", "is-loading"), 500);
     try {
       const body = buildCaptureForm({ text, token: this.csrfToken }).toString();
       const response = await this.fetcher("/api/capture", jsonPostRequest(this.csrfToken, body));
@@ -140,6 +142,7 @@ class Capture {
     } catch {
       this.unconfirmed();
     } finally {
+      window.clearTimeout(waiting);
       this.input.disabled = false;
       this.submit.disabled = false;
       returnFocus();

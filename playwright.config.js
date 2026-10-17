@@ -28,6 +28,7 @@ import { readManifest } from "./internal/web/e2e/manifest.mjs";
 const manifest = readManifest();
 
 const qualificationSpec = /qualification\.spec\.js$/;
+const visualSpec = /visual-polish\.spec\.js$/;
 const readOnlySpec = /read-only\.spec\.js$/;
 
 const mobileLayout = (device) => ({
@@ -106,8 +107,14 @@ export default defineConfig({
 
   projects: [
     {
+      name: "visual-chromium",
+      testMatch: visualSpec,
+      snapshotPathTemplate: "{testDir}/visual-baselines/{arg}{ext}",
+      use: { ...devices["Desktop Chrome"], locale: "en-US", timezoneId: "UTC" },
+    },
+    {
       name: "local-chromium-regression",
-      testIgnore: [qualificationSpec, readOnlySpec],
+      testIgnore: [qualificationSpec, readOnlySpec, visualSpec],
       use: { ...devices["Desktop Chrome"] },
     },
     qualificationProject("hosted-chromium-desktop", devices["Desktop Chrome"]),

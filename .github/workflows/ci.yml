@@ -80,12 +80,35 @@ jobs:
         run: npx playwright install --with-deps chromium
       # Test the committed embedded assets. Rebuilding here would conceal drift.
       - name: Check core journeys and responsive layouts
-        run: npm run test:e2e -- --project=local-chromium-regression smoke.spec.js editor.spec.js workspace-polish.spec.js reading-performance.spec.js settings-feedback.spec.js
+        run: npm run test:e2e -- --project=local-chromium-regression smoke.spec.js editor.spec.js workspace-polish.spec.js reading-performance.spec.js settings-feedback.spec.js polish-continuity.spec.js
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: browser-evidence
+          path: internal/web/e2e/.artifacts/results
+          retention-days: 7
+
+  visual:
+    name: Visual baselines (macOS Chromium)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run test:e2e -- --project=visual-chromium
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-differences
           path: internal/web/e2e/.artifacts/results
           retention-days: 7
 

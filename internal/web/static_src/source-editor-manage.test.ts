@@ -182,11 +182,20 @@ describe("initSourceManage: the vault beyond this note", () => {
 
   it("undoes the last change to the vault after asking", async () => {
     const h = harness();
-    h.fetcher.mockResolvedValue(jsonResponse(200, { ok: true, message: "Undid the rename." }));
+    h.fetcher.mockResolvedValueOnce(jsonResponse(200, {
+      ok: true, entry_id: "chosen-rename", preview_id: "receipt-rename",
+      command: "bn web rename", timestamp: "2026-01-02T03:04:05Z",
+      changes: [{ path: "notes/Alpha.md", current_state: "missing", restored_state: "file" }],
+    })).mockResolvedValueOnce(jsonResponse(200, { ok: true, message: "Undid the rename." }));
     h.click("[data-source-undo]");
 
     await vi.waitFor(() => expect(h.reloads).toBe(1));
-    expect(sent(h.fetcher).url).toBe("/api/undo");
+    expect(sent(h.fetcher).url).toBe("/api/history/preview");
+    expect(sent(h.fetcher, 1).url).toBe("/api/undo");
+    expect(sent(h.fetcher, 1).body.get("id")).toBe("chosen-rename");
+    expect(sent(h.fetcher, 1).body.get("preview_id")).toBe("receipt-rename");
+    expect(h.confirmed[0]).toContain("bn web rename");
+    expect(h.confirmed[0]).toContain("notes/Alpha.md");
     expect(h.status().text).toBe("Undid the rename.");
   });
 
@@ -195,8 +204,8 @@ describe("initSourceManage: the vault beyond this note", () => {
   it("names the conflicting paths when an undo is refused, and where to force it", async () => {
     const h = harness();
     h.fetcher.mockResolvedValue(
-      jsonResponse(409, {
-        ok: false,
+      jsonResponse(200, {
+        ok: true, entry_id: "chosen", preview_id: "receipt",
         message: "conflict",
         requires_force: true,
         conflicts: [
@@ -208,7 +217,8 @@ describe("initSourceManage: the vault beyond this note", () => {
 
     await vi.waitFor(() => expect(h.status().classes).toContain("is-error"));
     expect(h.status().text).toContain("notes/Alpha.md");
-    expect(h.status().text).toContain("the history panel can force it");
+    expect(h.status().text).toContain("Open History");
+    expect(h.fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("reports a refusal in the server's own words", async () => {

@@ -42,6 +42,8 @@ export const runSave = async (
   state.pendingSave = { id: resumableSaveID(state.pendingSave, content), content };
   ctx.refreshSaveButton();
   ctx.setStatus("Saving…", "is-loading");
+  const waiting = window.setTimeout(() =>
+    ctx.setStatus("Waiting for save confirmation… Your draft is kept here.", "is-loading"), 500);
   try {
     const response = await deps.client.save({
       content,
@@ -65,6 +67,7 @@ export const runSave = async (
       "is-error"
     );
   } finally {
+    window.clearTimeout(waiting);
     state.saving = false;
     ctx.refreshSaveButton();
   }

@@ -9,11 +9,12 @@ export const savedViewIsCurrent = (view: SavedViewSummary, url: URL): boolean =>
     return false;
   }
   const params = url.searchParams;
-  if (normalizeParamValue(params.get("q")) || hasActiveSharedFilters(params)) return false;
+  if (normalizeParamValue(params.get("q")) !== normalizeParamValue(view.search) || hasActiveSharedFilters(params)) return false;
   const expected = savedViewParams(view);
   return queryShapeParamKeys.every((key) => {
     const actual = normalizeParamValue(params.get(key));
     if (key === "expr") {
+      if (!expected.has(key)) return actual === "";
       return actual !== "" && (actual === expected.get(key) || actual === normalizeParamValue(view.normalized));
     }
     if (key === "limit" && (actual === "" || actual === "0")) return !expected.has(key);
