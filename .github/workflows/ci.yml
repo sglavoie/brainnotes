@@ -62,6 +62,33 @@ jobs:
       - name: Run CI checks
         run: just ci
 
+  browser:
+    name: Browser polish and shipped assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      # Test the committed embedded assets. Rebuilding here would conceal drift.
+      - name: Check core journeys and responsive layouts
+        run: npm run test:e2e -- --project=local-chromium-regression smoke.spec.js editor.spec.js workspace-polish.spec.js reading-performance.spec.js settings-feedback.spec.js
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence
+          path: internal/web/e2e/.artifacts/results
+          retention-days: 7
+
   # internal/vault replaces an existing note with a native, platform-specific
   # primitive and refuses to write at all where it cannot prove that primitive on
   # the target volume. Cross-compiling only proves the code builds; the semantics

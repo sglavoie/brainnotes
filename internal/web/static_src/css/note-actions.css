@@ -25,12 +25,8 @@
 .note-insight-button,
 .note-insight-copy {
   border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
-  padding: 0.42rem 0.8rem;
   color: var(--bn-text);
   background: var(--bn-raised);
-  font: inherit;
-  font-size: 0.9rem;
   cursor: pointer;
 }
 

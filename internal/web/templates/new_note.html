@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+  {{template "workspaceSkip" .}}
   <main class="index-main">
     <header class="site-header">
       <div class="site-header-copy">
@@ -22,7 +23,7 @@
       </div>
     </header>
     {{template "siteNav" "new"}}
-    <form class="panel new-note" data-new-note data-create-endpoint="{{.CreatePath}}" data-editor-path="{{.EditorPath}}" data-csrf="{{.CSRFToken}}">
+    <form id="workspace-content" tabindex="-1" class="panel new-note" data-new-note data-create-endpoint="{{.CreatePath}}" data-editor-path="{{.EditorPath}}" data-csrf="{{.CSRFToken}}">
       <label for="new-note-title">Title</label>
       <input id="new-note-title" name="title" type="text" value="{{.SuggestedTitle}}" required autofocus autocomplete="off" aria-describedby="new-note-destination">
       <label for="new-note-folder">Folder (optional)</label>

@@ -1,0 +1,33 @@
+/* Shared geometry; each surface retains its own semantic colors and layout. */
+.open-editor-button,
+.trash-note-button,
+.pin-button,
+.note-sidebar-toggle,
+.frontmatter-button,
+.create-note-button,
+.copy-button,
+.synthesize-launch,
+.note-insight-button,
+.note-insight-copy,
+.history-button,
+.query-bar-button,
+.overview-bulk-button,
+.brief-action-button,
+.brief-insight-copy,
+.new-note button,
+.review-action,
+.settings-button,
+.properties-button,
+.saved-views-save-button,
+.source-editor-launch {
+  min-height: var(--bn-control-height);
+  border-radius: var(--bn-control-radius);
+  padding: var(--bn-control-padding);
+  font: inherit;
+  font-size: var(--bn-control-font-size);
+  box-sizing: border-box;
+}
+
+@media (pointer: coarse) {
+  :root { --bn-control-height: 2.75rem; }
+}

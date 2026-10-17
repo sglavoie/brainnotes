@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
+  {{template "workspaceSkip" .}}
     <main>
       <header class="site-header">
         <div class="site-header-copy">
@@ -23,7 +24,7 @@
       </header>
       {{template "siteNav" ""}}
 
-      <section class="panel">
+      <section id="workspace-content" tabindex="-1" class="panel">
         <form class="filter-form" method="get" action="/broken">
           <label for="q">Filter target</label>
           <input id="q" name="q" value="{{.Query}}" />

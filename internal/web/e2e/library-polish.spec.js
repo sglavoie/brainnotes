@@ -47,6 +47,7 @@ test("Reset search clears query settings, pending expression text, and selection
   await page.goto("/library?q=Beta&sort=relevance&limit=2&relative_to=alpha");
   await page.getByRole("button", { name: "Select displayed", exact: true }).click();
   await expect(page.locator("[data-overview-bulk]")).toBeVisible();
+  await page.locator("[data-library-expression] > summary").click();
   await page.locator("[data-query-bar-input]").fill("tag:");
   await page.getByRole("link", { name: "Reset search", exact: true }).click();
   await expect(page).toHaveURL(/\/library$/);

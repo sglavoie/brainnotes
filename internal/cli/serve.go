@@ -61,11 +61,13 @@ func localEsbuildBinary(root string) (string, bool) {
 
 func webBuildArgs() []string {
 	return []string{
-		"internal/web/static_src/main.ts",
+		"app=internal/web/static_src/main.ts",
+		"editing=internal/web/static_src/editing.ts",
 		"--bundle",
+		"--minify",
 		"--format=iife",
 		"--global-name=BrainNotesApp",
-		"--outfile=internal/web/static/app.js",
+		"--outdir=internal/web/static",
 	}
 }
 

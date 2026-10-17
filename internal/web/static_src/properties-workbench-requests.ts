@@ -1,3 +1,4 @@
+import { responseFailure, unansweredRequest } from "./request-outcome";
 import {
   PROPERTY_APPLY_ENDPOINT,
   PROPERTY_PREVIEW_ENDPOINT,
@@ -6,7 +7,6 @@ import {
   PROPERTY_VALUE_ENDPOINT,
   buildPropertyRequestInit,
   buildUndoForm,
-  normalizeManagementErrorMessage,
   normalizePropertyMutationResponse,
   type PropertyApplyRequest,
   type PropertyMutationRequest,
@@ -35,19 +35,16 @@ const postProperty = async (
   token: string,
   body: PropertyRequestBody
 ): Promise<MutationOutcome> => {
+  const purpose = endpoint.endsWith("/preview") ? "preview" : "write";
   try {
     const resp = await fetcher(endpoint, buildPropertyRequestInit(token, body));
     const payload = await readPayload(resp);
-    if (!resp.ok) {
-      return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-    }
+    const failure = responseFailure(resp, payload, purpose);
+    if (failure) return failure;
     const result = normalizePropertyMutationResponse(payload);
-    if (!result.ok) {
-      return { ok: false, message: result.message || "The change was refused." };
-    }
     return { ok: true, result };
   } catch {
-    return { ok: false, message: "The server did not answer." };
+    return unansweredRequest(purpose);
   }
 };
 
@@ -110,11 +107,10 @@ export const undoJournalEntry = async (
       body: buildUndoForm({ token, entryID }).toString(),
     });
     const payload = await readPayload(resp);
-    if (!resp.ok) {
-      return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-    }
+    const failure = responseFailure(resp, payload, "write");
+    if (failure) return failure;
     return { ok: true, message: "Change undone." };
   } catch {
-    return { ok: false, message: "Undo failed." };
+    return unansweredRequest("write");
   }
 };

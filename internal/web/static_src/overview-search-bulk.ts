@@ -1,3 +1,4 @@
+import { responseFailure, unansweredRequest } from "./request-outcome";
 import {
   managementMutationEventName,
   normalizeBulkManagementResult,
@@ -226,6 +227,12 @@ export abstract class OverviewSearchBulk {
         fields,
         this.previewState.previewID
       );
+      const failure = responseFailure(resp, payload, "write");
+      if (failure?.uncertain) {
+        this.clearPreviewState();
+        this.setBulkStatus(failure.message, "is-error");
+        return;
+      }
       if (!resp.ok) {
         this.clearPreviewState();
         this.setBulkStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
@@ -247,7 +254,7 @@ export abstract class OverviewSearchBulk {
       this.scheduleSearch(0);
     } catch {
       this.clearPreviewState();
-      this.setBulkStatus("Bulk action failed.", "is-error");
+      this.setBulkStatus(unansweredRequest("write").message, "is-error");
     } finally {
       this.setBulkBusy(false);
     }

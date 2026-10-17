@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/app.css?v=settings-1">
 </head>
 <body>
+  {{template "workspaceSkip" .}}
   <main class="index-main">
     <header class="site-header">
       <div class="site-header-copy">
@@ -23,7 +24,7 @@
     </header>
     {{template "siteNav" "settings"}}
 
-    <section
+    <section id="workspace-content" tabindex="-1"
       class="panel settings-panel"
       data-settings-panel
       data-settings-endpoint="{{ .SettingsEndpoint }}"
@@ -44,6 +45,7 @@
         role="status"
         aria-live="polite"
       >Loading settings...</p>
+      <a class="write-check-link" href="/history" target="_blank" rel="noopener">Check History in a new tab</a>
       <div class="settings-confirm" data-settings-confirm-block>
         <pre class="settings-diff" data-settings-diff hidden aria-label="Pending brainnotes.toml change"></pre>
         <div class="settings-confirm-actions">
@@ -76,6 +78,7 @@
         role="status"
         aria-live="polite"
       >Loading templates...</p>
+      <a class="write-check-link" href="/history" target="_blank" rel="noopener">Check History in a new tab</a>
       <p class="templates-notice" data-templates-notice></p>
       <div class="templates-layout">
         <ul class="templates-list" data-templates-list aria-label="Templates"></ul>

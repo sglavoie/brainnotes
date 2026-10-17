@@ -1,3 +1,4 @@
+import { unansweredRequest } from "./request-outcome";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -189,7 +190,7 @@ describe("history requests", () => {
       throw new Error("expected a refusal");
     }
     expect(outcome.status).toBe(0);
-    expect(outcome.message).toBe("The server did not answer.");
+    expect(outcome.message).toBe(unansweredRequest("write").message);
     expect(outcome.conflicts).toEqual([]);
   });
 

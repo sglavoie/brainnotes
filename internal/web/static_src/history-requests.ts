@@ -1,3 +1,4 @@
+import { responseFailure, unansweredRequest } from "./request-outcome";
 import {
   HISTORY_ENDPOINT,
   HISTORY_PREVIEW_ENDPOINT,
@@ -106,11 +107,11 @@ const finish = async <T extends { ok: boolean; code?: string; message?: string }
   return { ok: true, result };
 };
 
-const unreachable = (): HistoryFailure => ({
+const unreachable = (write = false): HistoryFailure => ({
   ok: false,
   code: "",
   status: 0,
-  message: "The server did not answer.",
+  message: unansweredRequest(write ? "write" : "read").message,
   conflicts: [],
   entryID: "",
 });
@@ -192,22 +193,28 @@ export const restoreHistoryEntry = async (
   try {
     const resp = await fetcher(endpoint || UNDO_ENDPOINT, formInit(request.token, buildUndoForm(request)));
     const payload = await readPayload(resp);
+    const uncertain = responseFailure(resp, payload, "write");
+    if (uncertain?.uncertain) return unreachable(true);
     if (!resp.ok) {
       return failure(resp, payload);
     }
-    const result = normalizeUndoResult(payload);
-    if (!result.ok) {
-      return {
-        ok: false,
-        code: result.code || "",
-        status: resp.status,
-        message: result.message || "The restore was refused.",
-        conflicts: normalizeUndoConflicts(asRecord(payload)?.conflicts),
-        entryID: result.entry_id || normalizeParamValue(asRecord(payload)?.entry_id),
-      };
-    }
-    return { ok: true, result };
+    return restoredOutcome(resp, payload);
   } catch {
-    return unreachable();
+    return unreachable(true);
   }
+};
+
+const restoredOutcome = (resp: Response, payload: unknown): HistoryOutcome<UndoResult> => {
+  const result = normalizeUndoResult(payload);
+  if (!result.ok) {
+    return {
+      ok: false,
+      code: result.code || "",
+      status: resp.status,
+      message: result.message || "The restore was refused.",
+      conflicts: normalizeUndoConflicts(asRecord(payload)?.conflicts),
+      entryID: result.entry_id || normalizeParamValue(asRecord(payload)?.entry_id),
+    };
+  }
+  return { ok: true, result };
 };

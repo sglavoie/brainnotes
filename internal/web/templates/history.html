@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+  {{template "workspaceSkip" .}}
   <main class="index-main">
     <header class="site-header">
       <div class="site-header-copy">
@@ -39,7 +40,7 @@
       data-history-page-size="{{ .PageSize }}"
       data-history-max-page-size="{{ .MaxPageSize }}"
     >
-      <section class="panel history-filters-panel" aria-labelledby="history-filters-heading">
+      <section id="workspace-content" tabindex="-1" class="panel history-filters-panel" aria-labelledby="history-filters-heading">
         <div class="panel-header">
           <h2 id="history-filters-heading">Find a change</h2>
           <div class="history-actions">

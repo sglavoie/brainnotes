@@ -377,11 +377,11 @@ func TestServer_PagesIncludeSavedViewsNavContainer(t *testing.T) {
 			t.Fatalf("missing saved-views nav container on %s, got %q", path, body)
 		}
 
-		navAt := strings.Index(body, `class="site-nav"`)
+		navAt := strings.Index(body, `class="saved-views-strip"`)
 		containerAt := strings.Index(body, `data-saved-views-nav`)
 		navEndAt := strings.Index(body[navAt:], "</nav>")
 		if navAt < 0 || navEndAt < 0 || containerAt < navAt || containerAt > navAt+navEndAt {
-			t.Fatalf("saved-views container is not inside the primary nav on %s, got %q", path, body)
+			t.Fatalf("saved-views container is not inside its separate navigation on %s, got %q", path, body)
 		}
 	}
 }
@@ -422,8 +422,9 @@ func TestServer_LibraryIncludesSaveAsViewControl(t *testing.T) {
 	}
 
 	controlAt := strings.Index(body, `data-saved-views-save`)
-	headerEndAt := strings.Index(body, "</header>")
-	if headerEndAt < 0 || controlAt > headerEndAt {
-		t.Fatalf("save-as-view control renders outside the library header: control at %d, header ends at %d", controlAt, headerEndAt)
+	searchAt := strings.Index(body, `data-library-search`)
+	resultsAt := strings.Index(body, `data-overview-search-results`)
+	if searchAt < 0 || controlAt < searchAt || controlAt > resultsAt {
+		t.Fatal("save-as-view control must be inside the Library search region")
 	}
 }

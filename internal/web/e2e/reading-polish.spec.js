@@ -15,6 +15,7 @@ test("Library sort preserves the query and cap and changes the actual results", 
   await sort.selectOption("-title");
   await expect(page.locator(".overview-result-title")).toHaveText(["Unrelated", "Gamma"]);
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("[data-library-expression] > summary").click();
   await page.getByText("Query help", { exact: true }).click();
   await expect(page.locator(".query-help")).toContainText("A note must match all three");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

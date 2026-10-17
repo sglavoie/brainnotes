@@ -374,17 +374,13 @@ ci:
     # above — a gate wired into only one of the two recipes is half-enforced.
     npm run lint:web
     npm run test:web
-    bundle=internal/web/static/app.js
-    if [ ! -f "$bundle" ]; then
-        echo "generated bundle missing: $bundle"
-        exit 1
-    fi
-    before=$(git hash-object "$bundle")
+    bundles=(internal/web/static/app.js internal/web/static/editing.js)
+    before=$(git hash-object "${bundles[@]}")
     npm run build:web
-    after=$(git hash-object "$bundle")
+    after=$(git hash-object "${bundles[@]}")
     if [ "$before" != "$after" ]; then
-        echo "generated bundle drift detected in $bundle: the on-disk bundle is not what the current TypeScript source produces"
-        git --no-pager diff -- "$bundle"
+        echo "generated bundle drift: run just web-build and include both bundles"
+        git --no-pager diff -- "${bundles[@]}"
         exit 1
     fi
     echo "CI clean"

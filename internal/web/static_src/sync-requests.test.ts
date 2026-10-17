@@ -1,3 +1,4 @@
+import { unansweredRequest } from "./request-outcome";
 import { expect, it, vi } from "vitest";
 import {
   applySyncResolution,
@@ -99,9 +100,8 @@ it("says the server did not answer rather than throwing at the page", async () =
     message: "The server did not answer.",
   });
   expect(await applySyncResolution(fetcher, "", "csrf-token", "preview-1")).toEqual({
-    ok: false,
-    code: "",
-    message: "The server did not answer.",
+    ...unansweredRequest("write"),
+    code: "unconfirmed",
   });
 });
 

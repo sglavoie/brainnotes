@@ -377,6 +377,7 @@ test("a note renamed under the edit offers the kept text back as a new note", as
     form: { key, title: `Alpha Moved ${phrase}` },
   });
   expect(renamed.ok(), "the out-of-band rename was refused").toBe(true);
+  const renamedNote = await renamed.json();
   expect(existsSync(notePath), "the rename left the original path in place").toBe(false);
 
   await page.locator("[data-source-save]").click();
@@ -401,6 +402,14 @@ test("a note renamed under the edit offers the kept text back as a new note", as
   // Dropped before the navigation: a copy left behind would be offered back
   // later as unsaved text that is, by then, a file.
   await expect.poll(() => keptDrafts(page)).toHaveLength(0);
+  // The recovery is complete. Retire the renamed copy so later Library and
+  // backlink journeys see the original fixture identity only.
+  await page.goto(renamedNote.path);
+  await page.getByText("More actions", { exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator("[data-trash-button]").click();
+  await expect(page).toHaveURL(`${manifest.baseURL}/`);
+  await page.waitForLoadState("networkidle");
   expect(gitStatus(manifest.localVault), "the note was written but never snapshotted").toBe("");
 });
 

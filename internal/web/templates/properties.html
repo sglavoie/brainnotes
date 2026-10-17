@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/app.css?v=properties-workbench-2">
 </head>
 <body>
+  {{template "workspaceSkip" .}}
   <main class="index-main">
     <header class="site-header">
       <div class="site-header-copy">
@@ -23,7 +24,7 @@
     </header>
     {{template "siteNav" "properties"}}
 
-    <section
+    <section id="workspace-content" tabindex="-1"
       class="panel properties-panel"
       data-properties-catalog
       data-properties-endpoint="{{ .Endpoint }}"
@@ -90,6 +91,7 @@
   <link rel="stylesheet" href="/static/app.css?v=properties-workbench-2">
 </head>
 <body>
+  {{template "workspaceSkip" .}}
   <main class="index-main">
     <header class="site-header">
       <div class="site-header-copy">
@@ -106,7 +108,7 @@
     </header>
     {{template "siteNav" "properties"}}
 
-    <section
+    <section id="workspace-content" tabindex="-1"
       class="panel properties-panel"
       data-property-detail
       data-property-name="{{ .Property }}"

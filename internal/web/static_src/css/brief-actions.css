@@ -1,13 +1,8 @@
 .brief-action-button,
 .brief-insight-copy {
-  min-height: 2.1rem;
   border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
-  padding: 0.38rem 0.72rem;
   color: var(--bn-text);
   background: var(--bn-raised);
-  font: inherit;
-  font-size: 0.86rem;
   cursor: pointer;
   transition:
     background-color 120ms ease,

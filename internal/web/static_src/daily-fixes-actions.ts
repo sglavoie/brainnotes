@@ -1,3 +1,4 @@
+import { responseFailure, unansweredRequest } from "./request-outcome";
 import {
   buildOpenNoteForm,
   managementMutationEventName,
@@ -264,7 +265,7 @@ export const runApply = async (
     await completeApply(ctx, id, resp, await readResponsePayload(resp));
   } catch {
     ctx.clearPreview(id);
-    ctx.showError("Fix apply failed.");
+    ctx.showError(unansweredRequest("write").message);
   } finally {
     ctx.setBusy(false);
   }
@@ -278,9 +279,15 @@ export const runApply = async (
 const completeApply = async (
   ctx: DailyFixesContext,
   id: string,
-  resp: { ok: boolean; status: number },
+  resp: { ok: boolean; status: number; redirected?: boolean },
   payload: unknown
 ): Promise<void> => {
+  const failure = responseFailure(resp, payload, "write");
+  if (failure?.uncertain) {
+    ctx.clearPreview(id);
+    ctx.showError(failure.message);
+    return;
+  }
   const result = resp.ok ? normalizeFixApplyResponse(payload) : null;
   if (!result?.ok) {
     ctx.clearPreview(id);

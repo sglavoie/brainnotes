@@ -118,13 +118,9 @@
 }
 
 .saved-views-save-button {
-  min-height: 2.1rem;
-  padding: 0.25rem 0.7rem;
   border: 1px solid var(--bn-border);
-  border-radius: 0.35rem;
   background: var(--bn-surface);
   color: inherit;
-  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;

@@ -4,7 +4,7 @@
  *
  * The order is the cascade, so moving an import moves the rules it names.
  * `tokens.css` stays first because every part below it reads the custom
- * properties it declares, and `responsive.css` stays last because its
+ * properties it declares, and `responsive.css` follows the components because its
  * width-scoped blocks override the components they narrow and only win by
  * coming after them. `focus.css` sits between the two facet parts for the same
  * reason: it is the shared focus ring for controls declared across the whole
@@ -16,6 +16,7 @@
  */
 @import "tokens.css";
 @import "base.css";
+@import "controls.css";
 @import "chrome.css";
 @import "search.css";
 @import "query-bar.css";
@@ -64,4 +65,5 @@
 @import "sync-conflicts.css";
 @import "motion.css";
 @import "note-print.css";
+@import "workspace.css";
 @import "responsive.css";

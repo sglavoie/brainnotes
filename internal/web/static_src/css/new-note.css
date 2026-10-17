@@ -22,12 +22,9 @@
 .new-note p { margin: 0; overflow-wrap: anywhere; }
 
 .new-note button {
-  padding: 0.7rem 1rem;
   color: var(--bn-surface);
   background: var(--bn-accent);
   border: 1px solid var(--bn-accent);
-  border-radius: 6px;
-  font: inherit;
   cursor: pointer;
 }
 

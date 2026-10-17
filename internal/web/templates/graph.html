@@ -15,6 +15,7 @@
     <script src="/static/app.js" defer></script>
   </head>
   <body class="graph-page">
+  {{template "workspaceSkip" .}}
     <main class="graph-main">
       <header class="graph-header">
         <div class="graph-header-copy">
@@ -23,7 +24,7 @@
           {{template "siteNav" "graph"}}
           {{template "themeControl" .}}
         </div>
-        <section class="graph-controls" aria-label="Graph controls">
+        <section id="workspace-content" tabindex="-1" class="graph-controls" aria-label="Graph controls">
           <div class="graph-filter">
             <label class="graph-control-label" for="graph-filter-input">Filter graph</label>
             <input

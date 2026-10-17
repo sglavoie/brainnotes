@@ -2,7 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:web": "esbuild internal/web/static_src/main.ts --bundle --format=iife --global-name=BrainNotesApp --outfile=internal/web/static/app.js",
+    "build:web": "esbuild app=internal/web/static_src/main.ts editing=internal/web/static_src/editing.ts --bundle --minify --format=iife --global-name=BrainNotesApp --outdir=internal/web/static",
     "typecheck:web": "tsc --project tsconfig.web.json --noEmit",
     "test:web": "vitest run internal/web/static_src",
     "test:e2e": "npm run lint:e2e && node internal/web/e2e/prepare.mjs && playwright test",

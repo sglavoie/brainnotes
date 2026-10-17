@@ -1,3 +1,4 @@
+import { unansweredRequest } from "./request-outcome";
 import { describe, expect, it } from "vitest";
 
 import { createSettingsWriter } from "./settings-actions";
@@ -409,7 +410,7 @@ describe("templates writer: refusals", () => {
     expect(writer.pending()).toBeNull();
     expect(writer.busy()).toBe(false);
     expect(statuses[statuses.length - 1]).toEqual({
-      message: "The server did not answer.",
+      message: unansweredRequest("preview").message,
       kind: "is-error",
     });
   });

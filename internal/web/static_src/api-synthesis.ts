@@ -1,3 +1,4 @@
+import { responseFailure, unansweredRequest } from "./request-outcome";
 import { asRecord, normalizeManagementResult, readBoolean, readCount } from "./api-internal";
 import { normalizeManagementErrorMessage } from "./api-notes";
 import { jsonPostRequest, readResponsePayload } from "./daily-brief-http";
@@ -309,17 +310,24 @@ export const requestSynthesisApply = async (
   endpoint: string,
   request: SynthesisApplyRequest
 ): Promise<SynthesisApplyResponse> => {
-  const response = await fetcher(
-    endpoint || synthesisApplyPath,
-    jsonPostRequest(request.token, buildSynthesisApplyForm(request).toString())
-  );
+  let response: Response;
+  try {
+    response = await fetcher(
+      endpoint || synthesisApplyPath,
+      jsonPostRequest(request.token, buildSynthesisApplyForm(request).toString())
+    );
+  } catch {
+    throw new SynthesisRequestError(unansweredRequest("write").message, "unconfirmed");
+  }
   const payload = await readResponsePayload(response);
-  if (!response.ok) {
+  const failure = responseFailure(response, payload, "write");
+  if (failure?.uncertain) throw new SynthesisRequestError(failure.message, "unconfirmed");
+  if (failure) {
     throw synthesisRequestError(response.status, payload);
   }
   const normalized = normalizeSynthesisApplyResponse(payload);
   if (!normalized) {
-    throw new Error("The synthesis apply response did not name the created note.");
+    throw new SynthesisRequestError(unansweredRequest("write").message, "unconfirmed");
   }
   return normalized;
 };

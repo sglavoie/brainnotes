@@ -255,15 +255,10 @@
 }
 
 .review-action {
-  min-height: 2.15rem;
   min-width: 0;
   border: 1px solid var(--bn-border);
-  border-radius: 0.35rem;
-  padding: 0.34rem 0.55rem;
   color: var(--bn-text);
   background: var(--bn-raised);
-  font: inherit;
-  font-size: 0.84rem;
   line-height: 1.2;
   text-align: center;
   overflow-wrap: anywhere;

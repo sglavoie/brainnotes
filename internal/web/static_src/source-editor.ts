@@ -33,9 +33,9 @@ import { wikilinkOptions, wikilinkSearchURL } from "./source-wikilink";
 // The editor's entry point: find the page's panel, build the pieces, load the
 // note.
 //
-// It is the only module main.ts knows about, and it does no work of its own
+// It is the editor module editing.ts knows about, and it does no work of its own
 // beyond assembly. A page without `[data-source-editor]` — which is every page
-// but /edit — returns immediately, so the bundle stays one file.
+// but /edit — returns immediately. The editing bundle is also used by /sync.
 
 // createDraftStore builds the browser-local copy of unsaved text, or nothing.
 //

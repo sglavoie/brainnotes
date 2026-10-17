@@ -70,33 +70,33 @@
     role="status"
     aria-live="polite"
   ></p>
-  <nav class="site-nav" aria-label="Primary">
-    {{if not readOnly}}<a href="/new"{{if eq . "new"}} aria-current="page"{{end}}>New note</a>{{end}}
-    <a href="/"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
-    <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
-    <a href="/pinned"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
-    <a href="/properties"{{if eq . "properties"}} aria-current="page"{{end}}>Properties</a>
-    <a href="/graph"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
-    <a href="/health"{{if eq . "health"}} aria-current="page"{{end}}>Health</a>
-    {{/*
-      /settings is not in the read-only replica's route allowlist, so linking it
-      there would be a nav entry that refuses. Hosted mode keeps it: it can write
-      configuration, it only cannot start a process.
-    */}}
-    {{if not readOnly}}<a href="/settings"{{if eq . "settings"}} aria-current="page"{{end}}>Settings</a>{{end}}
-    {{/*
-      /sync is gated for the same reason and on the same capability: a replica
-      answers the status route and nothing else on that surface, so a link to the
-      page would refuse. Hosted mode keeps it — it can write, so it can resolve.
-    */}}
-    {{if not readOnly}}<a href="/sync"{{if eq . "sync"}} aria-current="page"{{end}}>Sync</a>{{end}}
-    {{/*
-      /history is gated on the same capability and for a reason of its own: a
-      replica's undo journal describes writes it did not make, and restoring one
-      there would reverse somebody else's work in a tree this process does not
-      own. replicaReadPath names neither the page nor its routes.
-    */}}
-    {{if not readOnly}}<a href="/history"{{if eq . "history"}} aria-current="page"{{end}}>History</a>{{end}}
-    <div class="saved-views-nav" data-saved-views-nav role="group" aria-label="Saved views"></div>
+  <div class="workspace-navigation">
+    {{if not readOnly}}<a class="new-note-action" href="/new"{{if eq . "new"}} aria-current="page"{{end}}>New note</a>{{end}}
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
+      <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
+      <a href="/pinned"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
+      <a href="/graph"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
+      <details class="manage-nav"{{if or (eq . "properties") (eq . "health") (eq . "settings") (eq . "sync") (eq . "history")}} open{{end}}>
+        <summary>Manage</summary>
+        <div class="manage-nav-links">
+          <a href="/properties"{{if eq . "properties"}} aria-current="page"{{end}}>Properties</a>
+          <a href="/health"{{if eq . "health"}} aria-current="page"{{end}}>Health</a>
+          {{if not readOnly}}
+            <a href="/settings"{{if eq . "settings"}} aria-current="page"{{end}}>Settings</a>
+            <a href="/sync"{{if eq . "sync"}} aria-current="page"{{end}}>Sync</a>
+            <a href="/history"{{if eq . "history"}} aria-current="page"{{end}}>History</a>
+          {{end}}
+        </div>
+      </details>
+    </nav>
+  </div>
+  <nav class="saved-views-strip" aria-label="Saved views">
+    <span class="saved-views-label">Saved views</span>
+    <div class="saved-views-nav" data-saved-views-nav></div>
   </nav>
+{{end}}
+
+{{define "workspaceSkip"}}
+  <a class="workspace-skip-link" href="#workspace-content">Skip to content</a>
 {{end}}

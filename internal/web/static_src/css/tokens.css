@@ -60,7 +60,11 @@
   --bn-graph-selected-text: #7a5200;
   --bn-graph-broken: #b4233c;
   --bn-graph-orphan: #aebbd0;
-  --bn-header-control-height: 2.4rem;
+  --bn-control-height: 2.4rem;
+  --bn-control-radius: 0.4rem;
+  --bn-control-padding: 0.42rem 0.8rem;
+  --bn-control-font-size: 0.9rem;
+  --bn-header-control-height: var(--bn-control-height);
 }
 
 @media (prefers-color-scheme: dark) {

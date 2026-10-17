@@ -1,3 +1,4 @@
+import { responseFailure, unansweredRequest, type RequestPurpose } from "./request-outcome";
 import {
   SETTINGS_APPLY_ENDPOINT,
   SETTINGS_ENDPOINT,
@@ -6,7 +7,6 @@ import {
   TEMPLATES_ENDPOINT,
   TEMPLATES_PREVIEW_ENDPOINT,
   buildConfigRequestInit,
-  normalizeManagementErrorMessage,
   normalizeSettingsResponse,
   normalizeTemplatesResponse,
   type SettingMutationRequest,
@@ -35,16 +35,13 @@ const readPayload = async (resp: Response): Promise<unknown> => {
 // the same envelope either way.
 const finish = async <T extends { ok: boolean; message?: string }>(
   resp: Response,
-  normalize: (payload: unknown) => T
+  normalize: (payload: unknown) => T,
+  purpose: RequestPurpose
 ): Promise<Outcome<T>> => {
   const payload = await readPayload(resp);
-  if (!resp.ok) {
-    return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-  }
+  const failure = responseFailure(resp, payload, purpose);
+  if (failure) return failure;
   const result = normalize(payload);
-  if (!result.ok) {
-    return { ok: false, message: result.message || "The change was refused." };
-  }
   return { ok: true, result };
 };
 
@@ -55,9 +52,9 @@ const get = async <T extends { ok: boolean; message?: string }>(
 ): Promise<Outcome<T>> => {
   try {
     const resp = await fetcher(endpoint, { headers: { Accept: "application/json" } });
-    return await finish(resp, normalize);
+    return await finish(resp, normalize, "read");
   } catch {
-    return { ok: false, message: "The server did not answer." };
+    return unansweredRequest("read");
   }
 };
 
@@ -68,11 +65,12 @@ const post = async <T extends { ok: boolean; message?: string }>(
   body: SettingsRequestBody | TemplatesRequestBody,
   normalize: (payload: unknown) => T
 ): Promise<Outcome<T>> => {
+  const purpose = endpoint.endsWith("/apply") ? "write" : "preview";
   try {
     const resp = await fetcher(endpoint, buildConfigRequestInit(token, body));
-    return await finish(resp, normalize);
+    return await finish(resp, normalize, purpose);
   } catch {
-    return { ok: false, message: "The server did not answer." };
+    return unansweredRequest(purpose);
   }
 };
 

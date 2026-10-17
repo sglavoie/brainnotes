@@ -26,7 +26,7 @@ export type SavedViewsNavHandle = {
 };
 
 /**
- * Hydrates the saved-views strip inside the primary nav.
+ * Hydrates the saved-views strip below the primary nav.
  *
  * The nav is rendered client-side on purpose: `siteNav` is invoked from eight
  * templates and receives each page's own data dot, so threading a `SavedViews`

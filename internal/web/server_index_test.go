@@ -193,39 +193,45 @@ func TestServer_IndexRendersEmptyVaultState(t *testing.T) {
 		opts    Options
 		want    string
 	}{
-		{"capture", true, Options{}, `<a href="#capture-input">Capture your first thought</a>`},
-		{"unconfigured", false, Options{}, "Create a Markdown file in your vault using your editor"},
-		{"hosted", true, Options{Hosted: true}, `<a href="#capture-input">Capture your first thought</a>`},
+		{"capture", true, Options{}, `href="/new">Create your first note</a>`},
+		{"unconfigured", false, Options{}, "Create your first note"},
+		{"hosted", true, Options{Hosted: true}, `href="/new">Create your first note</a>`},
 		{"hosted-unconfigured", false, Options{Hosted: true}, "Configure capture"},
 		{"replica", true, Options{ReadOnly: true, StateDir: t.TempDir()}, "Add a Markdown note to the source vault and sync it to this replica"},
 		{"replica-unconfigured", false, Options{ReadOnly: true, StateDir: t.TempDir()}, "Add a Markdown note to the source vault and sync it to this replica"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ts, _ := newHTTPServerForFilesWithOptions(t, nil, func(cfg *config.Config) {
-				cfg.Capture.InboxNote, cfg.Capture.Heading = "", ""
-				if tc.capture {
-					cfg.Capture.InboxNote, cfg.Capture.Heading = "Inbox.md", "## Captures"
-				}
-			}, tc.opts)
-			resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
-			if err != nil {
-				t.Fatalf("GET /: %v", err)
-			}
-			body := readResponseBody(t, resp)
-			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
-			}
-			if !strings.Contains(body, `data-brief-empty-vault`) || !strings.Contains(body, tc.want) {
-				t.Fatalf("empty-vault guidance missing %q: %q", tc.want, body)
-			}
-			if strings.Contains(body, "Create your first note in") {
-				t.Fatal("empty-vault guidance still points to Library")
-			}
-			setupLink := strings.Contains(body, `href="/settings#setting-capture-inbox_note"`)
-			if setupLink != (!tc.capture && !tc.opts.ReadOnly) {
-				t.Fatalf("capture setup link present = %v", setupLink)
-			}
+			assertEmptyVaultGuidance(t, tc.capture, tc.opts, tc.want)
+
 		})
+	}
+}
+
+func assertEmptyVaultGuidance(t *testing.T, capture bool, opts Options, want string) {
+	t.Helper()
+	ts, _ := newHTTPServerForFilesWithOptions(t, nil, func(cfg *config.Config) {
+		cfg.Capture.InboxNote, cfg.Capture.Heading = "", ""
+		if capture {
+			cfg.Capture.InboxNote, cfg.Capture.Heading = "Inbox.md", "## Captures"
+		}
+	}, opts)
+	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
+	}
+	if !strings.Contains(body, `data-brief-empty-vault`) || !strings.Contains(body, want) {
+		t.Fatalf("empty-vault guidance missing %q: %q", want, body)
+	}
+	if strings.Contains(body, "Create your first note in") {
+		t.Fatal("empty-vault guidance still points to Library")
+	}
+	setupLink := strings.Contains(body, `href="/settings#setting-capture-inbox_note"`)
+	if setupLink != (!capture && !opts.ReadOnly) {
+		t.Fatalf("capture setup link present = %v", setupLink)
 	}
 }
 
@@ -285,11 +291,11 @@ func TestServer_LibraryIncludesOverviewSearchResultsPanel(t *testing.T) {
 	}
 }
 
-// TestServer_LibraryIncludesQueryBarAboveFacets pins both halves of the query
+// TestServer_LibraryGroupsSearchAndOptionalExpression pins both halves of the query
 // bar contract: the hydration hooks initQueryBar() resolves, and the ordering —
 // the expression bar reads as the outer filter, so it must render above the
 // facet chips rather than below them.
-func TestServer_LibraryIncludesQueryBarAboveFacets(t *testing.T) {
+func TestServer_LibraryGroupsSearchAndOptionalExpression(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
 	})
@@ -334,7 +340,9 @@ func TestServer_LibraryIncludesQueryBarAboveFacets(t *testing.T) {
 	if facetsAt < 0 {
 		t.Fatalf("facet controls missing from library page, got %q", body)
 	}
-	if queryBarAt > facetsAt {
-		t.Fatalf("query bar renders below the facet controls: query bar at %d, facets at %d", queryBarAt, facetsAt)
+	searchAt := strings.Index(body, `data-library-search`)
+	disclosureAt := strings.Index(body, `data-library-expression`)
+	if searchAt < 0 || facetsAt < searchAt || disclosureAt < facetsAt || queryBarAt < disclosureAt {
+		t.Fatal("Library must group search and facets before the optional expression")
 	}
 }

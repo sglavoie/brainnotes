@@ -29,6 +29,10 @@
     </div>
     <p data-facet-status role="status" aria-live="polite"></p>
     <button class="facet-clear-all" type="button" data-facet-retry hidden>Retry filters</button>
+    <div class="active-constraints" role="group" aria-label="Active constraints">
+      <span data-library-text-constraint hidden></span>
     <div id="{{.IDPrefix}}-facet-chips" class="facet-chips" data-facet-chips hidden></div>
+      <span data-library-expr-constraint hidden></span>
+    </div>
   </section>
 {{end}}

@@ -449,13 +449,9 @@
 .source-editor-launch {
   display: inline-flex;
   align-items: center;
-  padding: 0.42rem 0.8rem;
   border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
   background: var(--bn-raised);
   color: var(--bn-text);
-  font: inherit;
-  font-size: 0.9rem;
   text-decoration: none;
 }
 

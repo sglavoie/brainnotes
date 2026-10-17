@@ -10,54 +10,65 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+  {{template "workspaceSkip" .}}
   <main class="index-main">
     <header class="site-header">
       <div class="site-header-copy">
         <h1>{{ .Title }}</h1>
-        <p class="page-subtitle">Faceted search, bulk note operations, change history, and recent notes.</p>
+        <p class="page-subtitle">Find a note, pick up your reading, or organize a selection.</p>
       </div>
       <div class="site-header-tools">
         {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-        <div data-copy-controls>
-          <button class="copy-button" type="button" data-copy-search-link data-copy-text="" data-copy-label="Search link" hidden>Copy search link</button>
-          <span class="copy-status" data-copy-status role="status" aria-live="polite"></span>
-        </div>
-        <div class="saved-views-save" data-saved-views-save data-saved-views-csrf="{{.CSRFToken}}">
-          <button
-            class="saved-views-save-button"
-            type="button"
-            data-saved-views-open
-            aria-expanded="false"
-          >Save as view</button>
-          <form class="saved-views-save-form" data-saved-views-form hidden>
-            <pre class="saved-views-save-scope" data-saved-views-scope aria-live="polite"></pre>
-            <p class="saved-views-save-status is-warning" data-saved-views-excluded role="status" hidden></p>
-            <label class="saved-views-save-label" for="saved-view-name">Name</label>
-            <input id="saved-view-name" name="name" type="text" autocomplete="off" data-saved-views-name>
-            <label class="saved-views-save-label" for="saved-view-description">Description</label>
-            <input id="saved-view-description" name="description" type="text" autocomplete="off" data-saved-views-description>
-            <div class="saved-views-save-actions">
-              <button class="saved-views-save-button" type="submit">Save</button>
-              <button class="saved-views-save-button saved-views-save-confirm" type="button" data-saved-views-confirm hidden>Confirm overwrite</button>
-              <button class="saved-views-save-button" type="button" data-saved-views-cancel>Cancel</button>
-            </div>
-            <pre class="saved-views-save-diff" data-saved-views-diff hidden></pre>
-            <p
-              class="saved-views-save-status"
-              data-saved-views-status
-              role="status"
-              aria-live="polite"
-            ></p>
-          </form>
-        </div>
       </div>
     </header>
     {{template "siteNav" "library"}}
 
-    {{template "queryBar" "panel"}}
-
-    {{template "facetControls" .FacetControls}}
+    <section id="workspace-content" tabindex="-1" class="panel library-search" aria-labelledby="library-search-heading" data-library-search>
+      <div class="panel-header">
+        <h2 id="library-search-heading">Find notes</h2>
+        <div class="library-search-actions">
+          <div data-copy-controls>
+            <button class="copy-button" type="button" data-copy-search-link data-copy-text="" data-copy-label="Search link" hidden>Copy search link</button>
+            <span class="copy-status" data-copy-status role="status" aria-live="polite"></span>
+          </div>
+          <div class="saved-views-save" data-saved-views-save data-saved-views-csrf="{{.CSRFToken}}">
+            <button
+              class="saved-views-save-button"
+              type="button"
+              data-saved-views-open
+              aria-expanded="false"
+            >Save as view</button>
+            <form class="saved-views-save-form" data-saved-views-form hidden>
+              <pre class="saved-views-save-scope" data-saved-views-scope aria-live="polite"></pre>
+              <p class="saved-views-save-status is-warning" data-saved-views-excluded role="status" hidden></p>
+              <label class="saved-views-save-label" for="saved-view-name">Name</label>
+              <input id="saved-view-name" name="name" type="text" autocomplete="off" data-saved-views-name>
+              <label class="saved-views-save-label" for="saved-view-description">Description</label>
+              <input id="saved-view-description" name="description" type="text" autocomplete="off" data-saved-views-description>
+              <div class="saved-views-save-actions">
+                <button class="saved-views-save-button" type="submit">Save</button>
+                <button class="saved-views-save-button saved-views-save-confirm" type="button" data-saved-views-confirm hidden>Confirm overwrite</button>
+                <button class="saved-views-save-button" type="button" data-saved-views-cancel>Cancel</button>
+              </div>
+              <pre class="saved-views-save-diff" data-saved-views-diff hidden></pre>
+              <p
+                class="saved-views-save-status"
+                data-saved-views-status
+                role="status"
+                aria-live="polite"
+              ></p>
+            </form>
+          </div>
+        </div>
+      </div>
+      {{template "headerSearch" .}}
+      <p class="library-search-hint">Search text, filters, and expressions apply together. Notes must match every active constraint.</p>
+      {{template "facetControls" .FacetControls}}
+      <details class="library-expression" data-library-expression>
+        <summary>Query expression <span data-library-expression-indicator></span></summary>
+        {{template "queryBar" ""}}
+      </details>
+    </section>
 
     <section
       class="panel overview-results"

@@ -1,3 +1,4 @@
+import { responseFailure, unansweredRequest, type RequestPurpose } from "./request-outcome";
 import {
   SYNC_CONFLICTS_ENDPOINT,
   SYNC_PREVIEW_ENDPOINT,
@@ -48,9 +49,12 @@ const payloadCode = (payload: unknown): string =>
 
 const finish = async <T extends { ok: boolean; code?: string; message?: string }>(
   resp: Response,
-  normalize: (payload: unknown) => T
+  normalize: (payload: unknown) => T,
+  purpose: RequestPurpose = "read"
 ): Promise<SyncOutcome<T>> => {
   const payload = await readPayload(resp);
+  const failure = responseFailure(resp, payload, purpose);
+  if (failure?.uncertain) return { ...failure, code: "unconfirmed" };
   if (!resp.ok) {
     return {
       ok: false,
@@ -87,13 +91,14 @@ const post = async <T extends { ok: boolean; code?: string; message?: string }>(
   endpoint: string,
   token: string,
   body: SyncRequestBody,
-  normalize: (payload: unknown) => T
+  normalize: (payload: unknown) => T,
+  purpose: RequestPurpose = "preview"
 ): Promise<SyncOutcome<T>> => {
   try {
     const resp = await fetcher(endpoint, buildSyncRequestInit(token, body));
-    return await finish(resp, normalize);
+    return await finish(resp, normalize, purpose);
   } catch {
-    return { ok: false, code: "", message: "The server did not answer." };
+    return { ...unansweredRequest(purpose), code: purpose === "write" ? "unconfirmed" : "" };
   }
 };
 
@@ -145,5 +150,6 @@ export const applySyncResolution = (
     endpoint || SYNC_RESOLVE_ENDPOINT,
     token,
     { preview_id: previewID },
-    normalizeSyncResolvedResponse
+    normalizeSyncResolvedResponse,
+    "write"
   );

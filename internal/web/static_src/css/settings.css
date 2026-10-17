@@ -8,13 +8,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.15rem;
   border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
-  padding: 0 0.65rem;
   color: var(--bn-text);
   background: var(--bn-raised);
-  font-size: 0.85rem;
   cursor: pointer;
 }
 

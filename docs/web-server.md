@@ -1,5 +1,25 @@
 # Local web server
 
+The navigation keeps Brief, Library, Pinned, and Graph together, with **New note**
+as a separate action. **Manage** contains Properties, Health, Settings, Sync, and
+History, subject to the server's capabilities. Saved views have their own row.
+Every workspace includes **Skip to content** before navigation; notes retain
+**Skip to note**. These links and the Manage disclosure work without
+JavaScript.
+
+Library groups text search, filters, and the optional **Query expression** in
+one search area. An expression carried in a URL or saved view opens its editor
+automatically. Active text, filters, and expressions appear together; removing
+one retains the other constraints, result limit, and sort. **Save as view**
+and **Copy search link** sit beside these controls.
+
+When a settings, template, saved-view, property, bulk, fix, restore, synthesis,
+or sync write loses its response, the browser reports that the outcome is
+unconfirmed. Check the current values or History before retrying. Settings
+and Templates offer **Check History in a new tab**, keeping typed inputs on
+the original page. A failed preview is identified separately: it submitted
+no change.
+
 Note pages offer **Edit in browser** and, on local servers, **Open in external
 editor**. **More actions** contains Synthesize and Trash; expand it to use them.
 

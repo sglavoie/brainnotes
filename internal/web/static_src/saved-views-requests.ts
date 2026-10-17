@@ -1,9 +1,9 @@
+import { responseFailure, unansweredRequest, type RequestPurpose } from "./request-outcome";
 import {
   SAVED_VIEWS_APPLY_ENDPOINT,
   SAVED_VIEWS_ENDPOINT,
   SAVED_VIEWS_PREVIEW_ENDPOINT,
   buildSavedViewsRequestInit,
-  normalizeManagementErrorMessage,
   normalizeSavedViewsResponse,
   type SavedViewApplyRequest,
   type SavedViewMutationRequest,
@@ -24,15 +24,11 @@ const readPayload = async (resp: Response): Promise<unknown> => {
   }
 };
 
-const finish = async (resp: Response): Promise<SavedViewsOutcome> => {
+const finish = async (resp: Response, purpose: RequestPurpose): Promise<SavedViewsOutcome> => {
   const payload = await readPayload(resp);
-  if (!resp.ok) {
-    return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
-  }
+  const failure = responseFailure(resp, payload, purpose);
+  if (failure) return failure;
   const result = normalizeSavedViewsResponse(payload);
-  if (!result.ok) {
-    return { ok: false, message: result.message || "The change was refused." };
-  }
   return { ok: true, result };
 };
 
@@ -45,9 +41,9 @@ export const fetchSavedViews = async (fetcher: FetchLike): Promise<SavedViewsOut
     const resp = await fetcher(SAVED_VIEWS_ENDPOINT, {
       headers: { Accept: "application/json" },
     });
-    return await finish(resp);
+    return await finish(resp, "read");
   } catch {
-    return { ok: false, message: "The server did not answer." };
+    return unansweredRequest("read");
   }
 };
 
@@ -57,11 +53,12 @@ const postSavedViews = async (
   token: string,
   body: SavedViewsRequestBody
 ): Promise<SavedViewsOutcome> => {
+  const purpose = endpoint === SAVED_VIEWS_APPLY_ENDPOINT ? "write" : "preview";
   try {
     const resp = await fetcher(endpoint, buildSavedViewsRequestInit(token, body));
-    return await finish(resp);
+    return await finish(resp, purpose);
   } catch {
-    return { ok: false, message: "The server did not answer." };
+    return unansweredRequest(purpose);
   }
 };
 

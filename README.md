@@ -33,12 +33,15 @@ just lint
 ```
 
 Run `npm ci` before frontend work or after package-lock changes. `just web-build`
-regenerates the committed `internal/web/static/app.js` from
-`internal/web/static_src`; `just web-check` type-checks, lints, runs frontend
+regenerates the committed, minified `internal/web/static/app.js` and
+`internal/web/static/editing.js` from `internal/web/static_src`; `just web-check` type-checks, lints, runs frontend
 tests, and rebuilds it. The lint step is `npm run lint:web` — ESLint over the
 TypeScript files changed since the complexity baseline, so existing offenders do
 not block while no new violation can land. The generated JavaScript is committed
-so Go-only builds do not need Node. The stylesheet is generated the same way but by Go: `internal/web/static/app.css`
+so Go-only builds do not need Node. The editor and Sync pages load `editing.js`
+for CodeMirror; reading and searching load only `app.js`. CI checks both bundles
+for source drift. A separate Chromium CI job exercises core journeys and
+responsive layouts against the embedded assets, with screenshots as artifacts. The stylesheet is generated the same way but by Go: `internal/web/static/app.css`
 is the concatenation of the parts under `internal/web/static_src/css/` in the
 order `index.css` lists them, rebuilt by `just web-build` (or
 `go run ./internal/web/cssbuild/gen`) and checked for drift by `go test ./...`,
