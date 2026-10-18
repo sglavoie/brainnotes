@@ -93,7 +93,7 @@ export abstract class OverviewSearchBulk {
 
   protected updateBulkControls = (): void => {
     syncOverviewSelectionControls(this.els.root, this.els.listEl, this.selectedKeys.size,
-      this.selectionBusy());
+      this.selectionBusy(), this.selectedKeys);
     if (!this.els.bulkRoot) {
       return;
     }

@@ -163,14 +163,14 @@ func TestConfigCommands_ReportTheLoadFailureOnAnInvalidConfig(t *testing.T) {
 // The `config` command's own output is the one thing these three children must
 // not disturb: adding subcommands to a command that also runs on its own is
 // exactly how a display command starts behaving like a group.
-func TestConfigCmd_DisplayOutputIsUnchangedByTheNewChildren(t *testing.T) {
+func TestConfigCmd_SummaryStillRunsWithChildren(t *testing.T) {
 	root, cfgPath := configVault(t, testPropertyDefinitions)
 
 	out, _, err := runConfig(t, "config")
 	if err != nil {
 		t.Fatalf("config: %v", err)
 	}
-	want := "Vault:       " + root + "\nConfig:      " + cfgPath + "\nResolved by: $BNOTES_VAULT\n"
+	want := "Vault:       " + root + "\nConfig:      " + cfgPath + "\nOverlay:     none\nResolved by: $BNOTES_VAULT\n"
 	if out != want {
 		t.Fatalf("config output =\n%q\nwant\n%q", out, want)
 	}

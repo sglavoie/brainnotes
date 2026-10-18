@@ -27,6 +27,17 @@ func noteopsMutations() []mutation {
 			journaled: true,
 		},
 		{
+			name: "noteops/keyed-capture",
+			apply: func(t *testing.T, h *harness, _ any) error {
+				_, err := noteops.ApplyCapture(h.root, "Inbox.md", noteops.CaptureRequest{
+					ID: "matrix-capture", Heading: "## Captures", Text: "a keyed thought",
+					At: time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC),
+				}, &h.cfg.Frontmatter)
+				return err
+			},
+			touches: []string{"Inbox.md"}, journaled: true,
+		},
+		{
 			name: "noteops/create",
 			apply: func(t *testing.T, h *harness, _ any) error {
 				_, err := noteops.CreateStubFromBrokenTarget(h.root, "Alpha.md", "Missing Note",

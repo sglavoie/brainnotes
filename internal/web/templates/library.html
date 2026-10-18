@@ -107,7 +107,7 @@
         <span class="overview-selected-count" data-overview-selected-count role="status" aria-live="polite">0 selected</span>
         <button class="overview-bulk-button" type="button" data-overview-select-displayed>Select displayed</button>
         <button class="overview-bulk-button" type="button" data-overview-clear-selection disabled>Clear selection</button>
-        <details class="overview-selection-help" data-selection-help><summary>Selection help</summary><p>Use the checkboxes to select notes. Shift-click a checkbox to select or clear a range. Actions apply only to selected notes.</p></details>
+        <details class="overview-selection-help" data-selection-help><summary>Selection help</summary><p>Use the checkboxes to select notes. Shift-click a checkbox to select or clear a range. Selections stay checked across result pages and clear when the search changes. Actions apply only to selected notes.</p></details>
         <button class="overview-bulk-button" type="button" data-overview-copy-wikilinks data-copy-text="" data-copy-label="Wikilinks" disabled>Copy wikilinks</button>
         <span class="copy-status" data-copy-status role="status" aria-live="polite"></span>
       </div>
@@ -164,8 +164,15 @@
         <p class="overview-bulk-status" data-overview-bulk-status role="status" aria-live="polite"></p>
       </div>
       <ul id="library-results-list" class="overview-result-list" data-overview-search-list hidden></ul>
+      <nav class="library-pagination" aria-label="Search result pages" data-library-pagination hidden>
+        <button type="button" data-library-previous>Previous results</button>
+        <span data-library-page role="status"></span>
+        <button type="button" data-library-next>Next results</button>
+      </nav>
     </section>
 
+    <details class="library-activity" data-library-activity open>
+      <summary>Recent activity</summary>
     <section
       class="panel history-panel"
       data-history-panel
@@ -216,6 +223,7 @@
         {{if not readOnly}}<p><a href="/new">Create a new note</a>.</p>{{end}}
       {{end}}
     </section>
+    </details>
   </main>
   <script src="/static/app.js" defer></script>
   <script src="/static/library-page.js" defer></script>

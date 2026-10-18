@@ -15,23 +15,15 @@ func NewConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "config",
 		Short:         "Show the active vault root and configuration file",
-		Long:          "Print the resolved vault root, the brainnotes.toml that was loaded from it, and which mechanism resolved the vault: the --vault flag, $BNOTES_VAULT, or an upward search from the current directory.",
+		Long:          "Print the resolved vault root, the portable and optional local configuration files loaded from it, and which mechanism resolved the vault: the --vault flag, $BNOTES_VAULT, or an upward search from the current directory.",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("config: no configuration loaded")
-			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(),
-				"Vault:       %s\nConfig:      %s\nResolved by: %s\n",
-				cfg.Vault, cfg.SourcePath, cfg.VaultOrigin)
-			return err
-		},
+		RunE:          func(cmd *cobra.Command, args []string) error { return runConfigSummary(cmd) },
 	}
 
 	cmd.AddCommand(newConfigEditCmd())
+	cmd.AddCommand(newConfigExplainCmd())
 	cmd.AddCommand(newConfigGetCmd())
 	cmd.AddCommand(newConfigMigrateCmd())
 	cmd.AddCommand(newConfigSetCmd())

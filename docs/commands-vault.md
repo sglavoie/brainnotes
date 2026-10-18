@@ -17,18 +17,21 @@ safe to run against a vault you are not sure about.
 
 ```sh
 bn config
+bn config explain KEY
 bn config edit
 ```
 
 `bn config` prints the resolved vault root, the `brainnotes.toml` that was
-loaded, and which of `--vault` / `$BNOTES_VAULT` / the upward search resolved
-it. `bn config edit` opens that same file in `$EDITOR`.
+loaded, the active `brainnotes.local.toml` overlay (or `none`), and which of
+`--vault` / `$BNOTES_VAULT` / the upward search resolved it. `bn config edit` opens the portable file in `$EDITOR`.
 
-Both name the portable file. A `brainnotes.local.toml` sitting next to it is
-loaded on top of it, but it is neither printed here nor what `edit` opens — it
-holds the settings that describe *this machine* rather than the vault, so it is
-not the file you reach for to change how the vault behaves. Open it by path when
-you do need it.
+`bn config explain open.editor` shows the effective value after defaults and
+normalization, the file that supplied it (or built-in default), and the file
+that owns the key. Inspection accepts schema field keys and writes nothing.
+
+The optional `brainnotes.local.toml` overlay holds settings for this machine.
+It is listed when loaded, but `edit` continues to open the portable file.
+Use the source and ownership paths from `explain` to choose the appropriate file.
 
 `bn serve` can edit two parts of that file from the browser: the
 `[frontmatter.properties.<key>]` blocks, through the property workbench, and
@@ -42,6 +45,7 @@ Example:
 $ bn config
 Vault:       /Users/you/vault
 Config:      /Users/you/vault/brainnotes.toml
+Overlay:     none
 Resolved by: upward search
 ```
 

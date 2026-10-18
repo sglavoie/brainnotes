@@ -125,3 +125,31 @@ it("still captures when browser storage is blocked", async () => {
   await vi.waitFor(() => expect(view.submit.disabled).toBe(false));
   expect(view.input.value).toBe("");
 });
+
+it("reuses an unanswered attempt after reload and releases it after confirmation", async () => {
+  let view = panel();
+  const ids: string[] = [];
+  const failed = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+    ids.push(new URLSearchParams(String(init?.body)).get("capture_id")!);
+    throw new Error("response lost");
+  });
+  initCapture({ fetch: failed });
+  type(view.input, "Only once");
+  view.submit.click();
+  await vi.waitFor(() => expect(view.submit.disabled).toBe(false));
+  expect(view.submit.textContent).toBe("Check / retry capture");
+  view = panel();
+  const success = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+    ids.push(new URLSearchParams(String(init?.body)).get("capture_id")!);
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
+  });
+  initCapture({ fetch: success });
+  expect(success).not.toHaveBeenCalled();
+  view.submit.click();
+  await vi.waitFor(() => expect(view.submit.disabled).toBe(false));
+  expect(ids[1]).toBe(ids[0]);
+  type(view.input, "Only once");
+  view.submit.click();
+  await vi.waitFor(() => expect(view.submit.disabled).toBe(false));
+  expect(ids[2]).not.toBe(ids[0]);
+});

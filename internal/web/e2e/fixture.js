@@ -44,6 +44,7 @@ const MACHINE_LOCAL = [
   ".bnotes/index/",
   ".bnotes/locks/",
   ".bnotes/source-saves/",
+  ".bnotes/captures/",
   ".bnotes/sync/",
   ".bnotes/uploads/",
 ];

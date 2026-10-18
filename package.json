@@ -11,8 +11,8 @@
     "lint:web": "node scripts/lint_web.mjs",
     "lint:web:full": "node scripts/lint_web.mjs --full",
     "check:web-bundles": "node scripts/build_web.mjs --check",
-    "test:e2e:pr": "BN_E2E_SUITE=pr npm run test:e2e -- --project=local-chromium-regression --project=read-only-chromium-regression",
-    "test:e2e:weekly": "BN_E2E_SUITE=all npm run test:e2e -- --project=local-chromium-regression --project=read-only-chromium-regression --project='hosted-*'"
+    "test:e2e:pr": "BN_E2E_SUITE=pr npm run test:e2e -- --project=local-chromium-regression --project=read-only-chromium-regression --project='performance-*'",
+    "test:e2e:weekly": "BN_E2E_SUITE=all npm run test:e2e -- --project=local-chromium-regression --project=read-only-chromium-regression --project='hosted-*' --project='performance-*'"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "6.20.3",

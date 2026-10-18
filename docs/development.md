@@ -16,8 +16,8 @@ so Go-only builds do not need Node. The editor and Sync pages load `editing.js`
 for CodeMirror; note reading loads only `app.js`. Each workspace loads its own
 small page bundle. `internal/cli/web-build-args.json` is the shared entry manifest
 for local builds, serve-time refresh, and CI drift checks. `npm run test:e2e:pr`
-runs the declared PR Chromium journeys plus the read-only
-profile. `npm run test:e2e:weekly` runs all local and read-only regressions plus
+runs the declared PR Chromium journeys, the read-only profile, and the dedicated
+performance profiles. `npm run test:e2e:weekly` runs all local and read-only regressions plus
 the hosted cross-browser qualification. The weekly workflow runs that full suite.
 Assign every new spec in `internal/web/e2e/suites.js`: `lint:e2e` rejects missing,
 duplicate, or stale assignments before fixture setup. The Playwright projects
@@ -68,5 +68,21 @@ and with larger system text. Confirm the caret and Save remain reachable while t
 keyboard is open, no toolbar obscures the selected text, and failed saves keep the
 draft. Record the device, OS/browser version, orientation, and result with release
 evidence; never perform this qualification against an ambient personal vault.
+
+## Vault performance
+
+The dedicated `performance-chromium-1000` and `performance-chromium-10000`
+projects use isolated, deterministic vaults with 1,000/10,000 linked research
+notes plus a long writing note. They never seed the ordinary browser fixtures.
+Both PR and weekly browser gates run them. To run just these checks:
+
+```sh
+npm run test:e2e -- '--project=performance-*'
+```
+
+Measurements cover search, expression filtering, and typing into a long source
+note at 4× CPU throttling and 100 ms network latency. Each test attaches JSON
+measurements with corpus size and long tasks. Inspect those artifacts when a
+budget fails; do not raise a ceiling merely to pass a slower run.
 
 [Back to the README](../README.md)

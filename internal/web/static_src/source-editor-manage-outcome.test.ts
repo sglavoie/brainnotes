@@ -70,7 +70,7 @@ describe("editor management confirmation", () => {
     else h.fetcher.mockResolvedValue(jsonResponse(200, {}));
     h.type("[data-source-capture-text]", "Keep this thought");
     h.click("[data-source-capture]");
-    await vi.waitFor(() => expect(h.status().text).toContain("Check your inbox before retrying"));
+    await vi.waitFor(() => expect(h.status().text).toContain("Retry safely with the same text"));
     expect(h.elements.captureText?.value).toBe("Keep this thought");
     expect(h.elements.capture?.disabled).toBe(false);
     expect(h.fetcher).toHaveBeenCalledOnce();

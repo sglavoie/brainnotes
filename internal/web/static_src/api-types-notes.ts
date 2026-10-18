@@ -39,6 +39,7 @@ export type FrontmatterUnsetRequest = NoteKeyMutationRequest & {
 };
 
 export type CaptureRequest = {
+  captureID?: string;
   text: string;
   token: string;
 };

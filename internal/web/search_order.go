@@ -26,31 +26,23 @@ import (
 // an empty search box into a whole-vault fetch, which is why hasNonTextFilters
 // deliberately ignores them.
 
-// resultShape is the ordering and cap one request asks for.
+// resultShape is the ordering, total query limit, and page position.
 type resultShape struct {
 	// Sort is the requested ordering. A zero Key means no ordering was
 	// requested, which is *not* the same as `path`: with no sort parameter the
 	// search path keeps its own best-match-first ranking, and an explicit
 	// `sort=path` overrides that with plain path order.
 	Sort queryexpr.SortSpec
-	// Limit caps the returned results, 0 meaning no request. It can only narrow
-	// the payload: searchResultLimit still applies, so a view saving limit=500
-	// does not make one request serialize the whole vault.
-	Limit int
+	// Limit caps the complete result set, 0 meaning no request. Each page is
+	// independently bounded by searchResultLimit; Offset skips within that set.
+	Limit  int
+	Offset int
 }
 
 // ordered reports whether an ordering was requested.
 func (s resultShape) ordered() bool { return s.Sort.Key != "" }
 
-// effectiveLimit folds the request's cap together with the payload cap.
-func (s resultShape) effectiveLimit() int {
-	if s.Limit > 0 && s.Limit < searchResultLimit {
-		return s.Limit
-	}
-	return searchResultLimit
-}
-
-// parseResultShape reads `sort`, `relative_to`, and `limit` from a request.
+// parseResultShape reads ordering, query limit, and page offset from a request.
 //
 // The sort/relative_to agreement rules are the ones queryexpr.ResolveView
 // enforces on a saved view and validateFindSort enforces on `bn find`'s flags:
@@ -76,15 +68,12 @@ func parseResultShape(params url.Values) (resultShape, error) {
 		return resultShape{}, fmt.Errorf("relative_to requires sort %q", queryexpr.SortRelevance)
 	}
 
-	if raw := strings.TrimSpace(params.Get("limit")); raw != "" {
-		limit, err := strconv.Atoi(raw)
-		if err != nil {
-			return resultShape{}, fmt.Errorf("invalid limit %q", raw)
-		}
-		if limit < 0 {
-			return resultShape{}, fmt.Errorf("invalid limit %d: must not be negative", limit)
-		}
-		shape.Limit = limit
+	var err error
+	if shape.Limit, err = parseSearchBound(params, "limit"); err != nil {
+		return resultShape{}, err
+	}
+	if shape.Offset, err = parseSearchBound(params, "offset"); err != nil {
+		return resultShape{}, err
 	}
 
 	return shape, nil
@@ -250,4 +239,16 @@ func (s *Server) searchRelevanceRanker(snapshot vaultSnapshot, anchor string) (s
 		}
 		return scores, nil
 	}, nil
+}
+
+func parseSearchBound(params url.Values, key string) (int, error) {
+	raw := strings.TrimSpace(params.Get(key))
+	if raw == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("invalid %s %q: must be a non-negative integer", key, raw)
+	}
+	return n, nil
 }

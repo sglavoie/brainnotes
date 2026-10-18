@@ -14,7 +14,8 @@ export const browserSuites = {
     "note-navigation.spec.js",
     "sync.spec.js",
     "new-note.spec.js",
-    "polish-refinement.spec.js"
+    "polish-refinement.spec.js",
+    "workflow-completion.spec.js"
   ],
   "weekly": [
     "browser-tweaks.spec.js",
@@ -42,6 +43,9 @@ export const browserSuites = {
   ],
   "readOnly": [
     "read-only.spec.js"
+  ],
+  "performance": [
+    "vault-performance.spec.js"
   ],
   "visual": [
     "visual-polish.spec.js"

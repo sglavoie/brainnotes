@@ -2,9 +2,10 @@ import {
   buildCaptureForm,
   managementMutationEventName,
   normalizeCaptureResponse,
-  normalizeManagementErrorMessage,
   type CaptureResult,
 } from "./api";
+import { CaptureAttempts } from "./capture-attempts";
+import { responseFailure } from "./request-outcome";
 import { bindCaptureDraft } from "./capture-draft";
 import { CaptureWikilinks } from "./capture-wikilink";
 import { jsonPostRequest, readResponsePayload } from "./daily-brief-http";
@@ -36,6 +37,7 @@ const captureFocusReturn = (input: HTMLTextAreaElement, submit: HTMLButtonElemen
 };
 
 class Capture {
+  private readonly attempts: CaptureAttempts;
   private readonly saveDraft: () => void;
   private readonly csrfToken: string;
   private readonly wikilinks: CaptureWikilinks;
@@ -51,6 +53,8 @@ class Capture {
     this.csrfToken = root.dataset.captureCsrf || "";
     this.saveDraft = bindCaptureDraft(root, input);
     this.wikilinks = new CaptureWikilinks(input, fetcher);
+    this.attempts = new CaptureAttempts(root);
+    if (this.attempts.has(input.value)) this.unconfirmed();
     this.updateCount();
     input.addEventListener("input", () => this.updateCount());
     submit.addEventListener("click", () => { void this.run(); });
@@ -64,6 +68,7 @@ class Capture {
   }
 
   private updateCount(): void {
+    this.submit.textContent = this.attempts.has(this.input.value) ? "Check / retry capture" : "Capture";
     const count = this.root.querySelector<HTMLElement>("[data-capture-count]");
     if (count && this.input.maxLength >= 0) {
       // Match the browser's maxlength units, including surrogate pairs.
@@ -76,9 +81,11 @@ class Capture {
   }
 
   private captured(result: CaptureResult): void {
+    const capturedText = this.input.value;
     this.input.value = "";
     this.updateCount();
     this.saveDraft();
+    this.attempts.settled(capturedText);
     if (result.detail) {
       const item = document.createElement("li");
       item.className = "capture-recent-item";
@@ -98,7 +105,7 @@ class Capture {
   }
 
   private unconfirmed(): void {
-    this.setStatus("Capture not confirmed. Check your inbox before retrying.", "is-error");
+    this.setStatus("Capture not confirmed. Check / retry capture safely: an attempt already recorded will not be added again.", "is-error");
     const link = queryElement(this.root, "[data-capture-view-inbox]", HTMLAnchorElement);
     if (link?.getAttribute("href")?.startsWith("/n/")) link.hidden = false;
   }
@@ -125,11 +132,13 @@ class Capture {
     const waiting = window.setTimeout(() =>
       this.setStatus("Waiting for capture confirmation… Your text is kept here.", "is-loading"), 500);
     try {
-      const body = buildCaptureForm({ text, token: this.csrfToken }).toString();
+      const body = buildCaptureForm({ text, token: this.csrfToken, captureID: this.attempts.start(text) }).toString();
       const response = await this.fetcher("/api/capture", jsonPostRequest(this.csrfToken, body));
       const payload = await readResponsePayload(response);
-      if (!response.ok) {
-        this.setStatus(normalizeManagementErrorMessage(response.status, payload), "is-error");
+      const failure = responseFailure(response, payload, "write");
+      if (failure) {
+        if (failure.uncertain) this.unconfirmed();
+        else this.setStatus(failure.message, "is-error");
         return;
       }
       const result = normalizeCaptureResponse(payload);
@@ -145,6 +154,7 @@ class Capture {
       window.clearTimeout(waiting);
       this.input.disabled = false;
       this.submit.disabled = false;
+      this.updateCount();
       returnFocus();
     }
   }

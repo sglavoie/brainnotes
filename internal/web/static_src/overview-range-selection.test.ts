@@ -73,7 +73,7 @@ it.each(["overview-clear-selection", "overview-select-displayed", "search"])(
     } else control(action).click();
     click(3, true);
     const expected = action === "overview-select-displayed" ? ["a", "b", "c", "e"]
-      : action === "search" ? ["a", "d"] : ["d"];
+      : ["d"];
     expect(checked()).toEqual(expected);
   }
 );

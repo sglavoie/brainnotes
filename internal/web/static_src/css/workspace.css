@@ -132,3 +132,12 @@
 @media (max-width: 700px) {
   .library-search { padding: 0.75rem; }
 }
+
+.library-activity { margin-top: 1.5rem; }
+.library-activity > summary { cursor: pointer; color: var(--bn-muted); padding-block: 0.65rem; }
+.library-activity[open] > summary { color: var(--bn-text-subtle); }
+.library-search + .overview-results { border: 0; background: transparent; padding-inline: 0; }
+.library-results-tools { margin-bottom: 0.65rem; }
+
+.library-pagination { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-block: 1rem; flex-wrap: wrap; }
+.library-pagination[hidden] { display: none; }

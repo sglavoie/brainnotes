@@ -13,8 +13,9 @@ Vault root resolution, in order:
 3. An upward search from the current directory for the nearest `brainnotes.toml`
 
 All three require the directory to actually contain `brainnotes.toml`. Run
-`bn config` to see the resolved vault root, the config path, and which of the
-three resolved it; `bn config edit` opens that file in `$EDITOR`.
+`bn config` to see the resolved vault root, both configuration paths, and which of the
+three resolved it; `bn config edit` opens the portable file in `$EDITOR`.
+Use `bn config explain KEY` to inspect an effective value and its source.
 
 A vault with no `brainnotes.local.toml` is the normal shape, not a degraded
 one — every setting below can be written in `brainnotes.toml` alone and that is

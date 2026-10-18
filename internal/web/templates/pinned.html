@@ -12,17 +12,13 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>Pinned</h1>
-        <p class="page-subtitle">The notes you chose to keep at hand, in the order you put them.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>Pinned</h1>
+      {{template "workspaceMenu" "pinned"}}
     </header>
-    {{template "siteNav" "pinned"}}
+    {{template "siteSync" .}}
+    <p class="page-subtitle">The notes you chose to keep at hand, in the order you put them.</p>
+
 
     <section id="workspace-content" tabindex="-1"
       class="panel pinned-panel"

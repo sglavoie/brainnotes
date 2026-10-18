@@ -63,7 +63,7 @@ it("selects only displayed matches and invalidates a preview when clearing selec
   expect(controls.hidden).toBe(true);
 });
 
-it("updates the count and copied links when refreshed results drop a selected note", async () => {
+it("clears selections and copied links when the search changes", async () => {
   vi.useFakeTimers();
   renderOverviewBulkFixture();
   document.querySelector("[data-overview-bulk]")!.remove();
@@ -80,6 +80,6 @@ it("updates the count and copied links when refreshed results drop a selected no
   input.value = "two";
   input.dispatchEvent(new Event("input"));
   await vi.runAllTimersAsync();
-  expect(count.textContent).toBe("1 selected");
-  expect(button("overview-copy-wikilinks").dataset.copyText).toBe("[[Two]]");
+  expect(count.textContent).toBe("0 selected");
+  expect(button("overview-copy-wikilinks").dataset.copyText).toBe("");
 });

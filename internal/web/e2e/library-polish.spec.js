@@ -74,6 +74,7 @@ test.describe("navigation before scripts load", () => {
     await page.locator(".source-editor-workspace > summary").click();
     await page.locator('.site-nav a[href="/pinned"]').click();
     await expect(current).toHaveText("Pinned");
+    await page.locator(".source-editor-workspace > summary").click();
     await page.locator('.site-nav a[href="/"]').click();
     await expect(current).toHaveText("Brief");
   });

@@ -61,8 +61,22 @@ vault's own Git safety history leaves the overlay out of every snapshot it takes
 on its own initiative. (A file already tracked in that history stays tracked —
 if you committed one before, remove it by hand.)
 
-`bn config` reports the portable file's path and does not yet say whether an
-overlay is in play or which file supplied a given value.
+`bn config` reports the portable file, the active local overlay (or `none`), and
+how the vault root was resolved. `bn config explain KEY` shows the effective
+value after defaults and normalization, its source file (or built-in default),
+and the file that owns the key. For example:
+
+```sh
+bn config explain open.editor
+bn config explain serve.addr
+bn config explain autosave.min_interval
+```
+
+This inspection is read-only and accepts schema field keys, including table
+fields such as `frontmatter.properties`. Ownership describes where a setting
+belongs; source describes where this loaded value was assigned. They can differ
+in unenrolled vaults. `bn config get autosave.min_interval` keeps its existing
+value-only output for scripts.
 
 Once a vault is **enrolled in synchronization**, placement stops being advisory
 and a misplaced key fails the load, naming the file it belongs in. The reason is

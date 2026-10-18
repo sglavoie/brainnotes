@@ -1,7 +1,9 @@
 # Browser workspace
 
 Start with `bn serve`, then choose a task below. Brief, Library, Pinned, and Graph
-are in the main navigation. On Brief, Library, the editor, and management pages, **Workspace** opens navigation and theme controls. **New note** is a separate action. **Manage** contains
+are in the main navigation. On Brief, Library, Pinned, New note, Synthesis, the
+editor, and management pages, **Workspace** opens navigation and theme controls.
+**New note** is a separate action. **Manage** contains
 Properties, Health, Settings, Sync, and History, subject to the server's capabilities.
 Saved views have their own row. In the source editor, **Workspace** opens this
 navigation, search, and theme controls without leaving your draft.
@@ -27,6 +29,9 @@ result-position anchor. Clipboard controls offer a selected text field if direct
 copying is unavailable. Sort choices include **Oldest modified first** and
 **Vault path**.
 
+Recent activity is open on the initial Library screen and collapses when a
+search starts. You can open it during a search; typing keeps that choice.
+
 Results emphasize titles, excerpts, and locations. Excerpts show readable link
 labels, highlight matching text, and finish boundary words where possible.
 Narrow screens show up to three excerpt lines; open the note to read the rest.
@@ -34,11 +39,19 @@ Matching still uses the original note text. **Match details** expands the
 matching fields and structural information such as orphan or dead-end status;
 these are neutral facts. Broken links remain visible as warnings.
 
+Use **Next results** and **Previous results** to browse up to 50 matches per page.
+A saved view's explicit limit still bounds the whole result set. Note links keep
+the page position for **Back to results**; Copy search link and Save as view
+omit that navigation position.
+
 Select notes with their checkboxes or **Select displayed**. The selected count,
 **Clear selection**, and **Copy wikilinks** appear once there is a selection.
 **Selection help** appears alongside the actions once notes are selected and explains range selection: Shift-click a checkbox to select
-or clear the range from the previous checkbox. Bulk actions apply only to the
-selected notes and still require a preview before applying changes.
+or clear the range from the previous checkbox. Selections and copied wikilinks
+include other result pages; the count identifies
+selections outside the current page. Changing the query, filters, or ordering
+clears the selection. Bulk actions apply only to the selected notes and still
+require a preview before applying changes.
 
 When there are no matches, remove just the search text, filters, or expression,
 or use **Reset search** to clear the entire search. **Create a note titled…**
@@ -151,8 +164,13 @@ A failed preview is reported separately because it submitted no change.
 
 If creating a missing note is unconfirmed, **Refresh to check** reloads the page
 to see whether the link is still broken; it does not submit creation again.
-Saves and captures retain their draft during delayed confirmation. **Draft kept
-in this browser** describes a local copy; **Saved to vault** confirms a save.
+Saves and captures retain their draft during delayed confirmation. A slow save
+says **Still saving…**; an unanswered write says **Save not confirmed**.
+Capture offers **Check / retry capture**: retrying checks its recorded receipt
+before appending anything, so a lost response cannot duplicate the thought.
+Unanswered capture IDs survive reloads in the same tab when browser storage is
+available. The editor's capture control uses the same receipt protection.
+**Draft kept in this browser** describes a local copy; **Saved to vault** confirms a save.
 **Save not confirmed** keeps Save available for a safe retry. Other uncertain
 changes point to checking the current values, inbox, or History before retrying.
 

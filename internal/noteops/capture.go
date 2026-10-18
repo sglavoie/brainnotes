@@ -25,6 +25,8 @@ const captureAttempts = 3
 // CaptureRequest is one quick capture: the text to append, the heading it goes
 // under, and the moment it was captured. The caller owns the clock.
 type CaptureRequest struct {
+	// ID identifies a browser submission across retries; empty for unkeyed CLI calls.
+	ID      string
 	Heading string
 	Text    string
 	At      time.Time
@@ -33,6 +35,7 @@ type CaptureRequest struct {
 // CaptureResult reports where a capture landed. Line is the rendered bullet and
 // LineNumber is its 1-based position in the note body.
 type CaptureResult struct {
+	Replayed     bool
 	Destination  PathResolution
 	Line         string
 	LineNumber   int
@@ -81,6 +84,7 @@ func PreviewCapture(vaultRoot, relPath string, req CaptureRequest) (*CaptureResu
 // planned against, so a concurrent edit is a conflict rather than a silent
 // overwrite; the capture then re-reads and replans, up to captureAttempts times.
 func ApplyCapture(vaultRoot, relPath string, req CaptureRequest, fmCfg *config.FrontmatterConfig, opts ...CaptureOption) (*CaptureResult, error) {
+	req.ID = strings.TrimSpace(req.ID)
 	cfg := defaultCaptureOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -93,6 +97,9 @@ func ApplyCapture(vaultRoot, relPath string, req CaptureRequest, fmCfg *config.F
 		err  error
 	)
 	for attempt := 0; attempt < captureAttempts; attempt++ {
+		if replay, err := replayCapture(vaultRoot, req); replay != nil || err != nil {
+			return replay, err
+		}
 		plan, err = planCapture(vaultRoot, relPath, req, fmCfg)
 		if err != nil {
 			return nil, err
@@ -102,7 +109,7 @@ func ApplyCapture(vaultRoot, relPath string, req CaptureRequest, fmCfg *config.F
 			return result, nil
 		}
 		if !captureShouldReplan(commitErr) {
-			return nil, commitErr
+			return result, commitErr
 		}
 		err = commitErr
 	}
@@ -120,6 +127,7 @@ func defaultCaptureOptions() captureOptions {
 // the result and the preview are derived from. PreviewCapture and ApplyCapture
 // share it so the two can never describe different appends.
 type capturePlan struct {
+	request      CaptureRequest
 	destination  PathResolution
 	content      []byte
 	expect       vault.FileExpectation
@@ -178,6 +186,7 @@ func planCapture(vaultRoot, relPath string, req CaptureRequest, fmCfg *config.Fr
 		return capturePlan{}, err
 	}
 	return capturePlan{
+		request:      req,
 		destination:  dest,
 		content:      []byte(source.prefix + body),
 		expect:       source.expect,
@@ -196,6 +205,9 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 	if err := txn.Write(plan.destination.AbsPath, plan.content, 0, plan.expect); err != nil {
 		return nil, classifyTxnError("capture: plan append", err)
 	}
+	if err := stageCaptureReceipt(txn, vaultRoot, plan); err != nil {
+		return nil, err
+	}
 	// A bootstrapping capture journals a file that does not exist yet, so `bn
 	// undo` deletes the note it created.
 	j, err := BeginOperation(vaultRoot, "capture", cfg.command, []string{plan.destination.AbsPath}, cfg.journalOptions...)
@@ -206,11 +218,11 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 	if err := txn.Commit(j); err != nil {
 		return nil, classifyTxnError("capture: append to note", err)
 	}
+	result := plan.result()
 	entry, err := j.Finalize()
 	if err != nil {
-		return nil, err
+		return result, err
 	}
-	result := plan.result()
 	result.Journal = entry
 	return result, nil
 }

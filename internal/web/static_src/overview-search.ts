@@ -28,6 +28,7 @@ import {
 import { setStatusText, type StatusKind } from "./status";
 import { readSearchCounts, searchSummary, type SearchCounts } from "./search-summary";
 import { bindOverviewRangeSelection, overviewSelectionInputs } from "./overview-search-selection";
+import { LibraryPagination } from "./library-pagination";
 import { bindLibraryPosition } from "./library-position";
 import { OverviewSearchBulk } from "./overview-search-bulk";
 import { renderOverviewEmptyHelp } from "./overview-search-empty";
@@ -42,13 +43,16 @@ export { renderOverviewSearchResult } from "./overview-search-render";
 class OverviewSearch extends OverviewSearchBulk {
   private readonly resetRangeSelection: () => void;
   private readonly restorePosition: () => void;
+  private readonly pagination: LibraryPagination;
   private debounceToken = 0;
   private requestToken = 0;
+  private readonly resultOrder = new Map<string, number>();
 
   constructor(els: OverviewSearchElements, deps: OverviewSearchDeps) {
     super(els, deps);
     this.resetRangeSelection = bindOverviewRangeSelection(els.listEl);
     this.restorePosition = bindLibraryPosition(els.listEl);
+    this.pagination = new LibraryPagination(els.root, () => this.scheduleSearch(0), () => this.bulkBusy);
     this.bindSearchEvents();
     this.bindBulkEvents();
     this.bindSelectionEvents();
@@ -81,10 +85,11 @@ class OverviewSearch extends OverviewSearchBulk {
     }
     this.clearPreviewState({ clearStatus: true });
     if (selected) {
-      this.selectedKeys.set(key, result.title || key);
+      this.selectedKeys.set(key, result.wikilink || "");
     } else {
       this.selectedKeys.delete(key);
     }
+    this.orderSelection();
     this.updateBulkControls();
   };
 
@@ -93,13 +98,14 @@ class OverviewSearch extends OverviewSearchBulk {
       return;
     }
     this.resetRangeSelection();
-    this.selectedKeys.clear();
+    if (!selected) this.selectedKeys.clear();
     for (const input of overviewSelectionInputs(this.els.listEl)) {
       input.checked = selected;
       if (selected) {
-        this.selectedKeys.set(input.value, input.value);
+        this.selectedKeys.set(input.value, input.dataset.wikilink || "");
       }
     }
+    this.orderSelection();
     this.clearPreviewState({ clearStatus: true });
   };
 
@@ -112,24 +118,16 @@ class OverviewSearch extends OverviewSearchBulk {
     });
   };
 
-  private pruneSelectionToRenderedKeys = (visibleKeys: Set<string>): void => {
-    let changed = false;
-    for (const key of this.selectedKeys.keys()) {
-      if (!visibleKeys.has(key)) {
-        this.selectedKeys.delete(key);
-        changed = true;
-      }
-    }
-    if (changed) {
-      this.clearPreviewState({ clearStatus: true });
-    }
-    this.updateBulkControls();
+  private orderSelection = (): void => {
+    const ordered = [...this.selectedKeys].sort(([a], [b]) =>
+      (this.resultOrder.get(a) ?? 0) - (this.resultOrder.get(b) ?? 0));
+    this.selectedKeys.clear();
+    for (const [key, target] of ordered) this.selectedKeys.set(key, target);
   };
 
   private clearResults = (message: string, kind: StatusKind): void => {
     this.els.listEl.textContent = "";
     this.els.listEl.hidden = true;
-    this.selectedKeys.clear();
     this.clearPreviewState({ clearStatus: true });
     this.setStatus(message, kind);
   };
@@ -139,30 +137,29 @@ class OverviewSearch extends OverviewSearchBulk {
     this.els.listEl.textContent = "";
 
     let renderedCount = 0;
-    const visibleKeys = new Set<string>();
-    for (const result of results) {
+    for (const [index, result] of results.entries()) {
       const key = normalizeBulkNoteKeys([result.key])[0] || "";
+      this.resultOrder.set(key, this.pagination.offset + index);
       if (renderOverviewSearchResult(this.els.listEl, result, {
         selected: key !== "" && this.selectedKeys.has(key),
         onSelectionChange: this.setSelected,
       })) {
         renderedCount += 1;
-        if (key !== "") {
-          visibleKeys.add(key);
-        }
       }
     }
-    this.pruneSelectionToRenderedKeys(visibleKeys);
+    this.orderSelection();
+    this.updateBulkControls();
+    this.pagination.render(counts, renderedCount);
 
     if (renderedCount === 0) {
-      this.clearResults(overviewSearchEmptyMessage(query), "is-empty");
-      renderOverviewEmptyHelp(this.els.root);
+      this.clearResults(this.pagination.offset ? "No results on this page. Use Previous results to return to the matches." : overviewSearchEmptyMessage(query), "is-empty");
+      if (this.pagination.offset === 0) renderOverviewEmptyHelp(this.els.root);
       this.restorePosition();
       return;
     }
 
     this.els.listEl.hidden = false;
-    this.setStatus(searchSummary(renderedCount, query, counts), "");
+    this.setStatus(searchSummary(renderedCount, query, counts, this.pagination.offset), "");
     this.restorePosition();
   };
 
@@ -171,22 +168,27 @@ class OverviewSearch extends OverviewSearchBulk {
     const query = overviewSearchQuery(this.els.input);
     window.clearTimeout(this.debounceToken);
     syncPageQueryParam(query);
+    syncLibraryActivity(query !== "" || hasActiveFilters());
+    const request = this.pagination.prepare(buildSearchAPIURL(query, true));
+    if (request.changed) { this.selectedKeys.clear(); this.resultOrder.clear(); }
     this.clearPreviewState({ clearStatus: true });
 
     if (query === "" && !hasActiveFilters()) {
       this.requestToken += 1;
       setOverviewBusy(this.els.root, false);
+      this.pagination.render(null, 0);
       this.clearResults("No query or filters selected.", "is-empty");
       return;
     }
 
     const localToken = ++this.requestToken;
     setOverviewBusy(this.els.root, true);
+    this.pagination.busy(true);
     this.updateBulkControls();
     this.setStatus("Loading matching notes...", "is-loading");
     this.debounceToken = window.setTimeout(async () => {
       try {
-        const resp = await this.fetcher(buildSearchAPIURL(query, true), {
+        const resp = await this.fetcher(request.url, {
           headers: { Accept: "application/json" },
         });
         if (!resp.ok) {
@@ -199,12 +201,14 @@ class OverviewSearch extends OverviewSearchBulk {
         this.renderResults(payload, query, readSearchCounts(resp));
       } catch {
         if (localToken === this.requestToken) {
+          this.pagination.failed();
           this.clearResults("Search unavailable.", "is-error");
         }
       } finally {
         if (localToken === this.requestToken) {
           setOverviewBusy(this.els.root, false);
           this.updateBulkControls();
+          this.pagination.busy(false);
         }
       }
     }, delay);
@@ -242,4 +246,13 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
   if (els) {
     new OverviewSearch(els, deps);
   }
+};
+
+// Only a transition between browsing and searching changes the disclosure.
+// Opening activity during a search remains the reader's choice while typing.
+const syncLibraryActivity = (searching: boolean): void => {
+  const activity = document.querySelector<HTMLDetailsElement>("[data-library-activity]");
+  if (!activity || activity.dataset.searching === String(searching)) return;
+  activity.dataset.searching = String(searching);
+  activity.open = !searching;
 };

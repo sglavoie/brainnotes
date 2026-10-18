@@ -148,7 +148,9 @@ func waitForApplicationReady(t *testing.T, cmd *exec.Cmd, ready string, output *
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if data, err := os.ReadFile(ready); err == nil {
+		// WriteFile creates the file before writing the acknowledgement. An
+		// empty file is not yet permission to kill the writer.
+		if data, err := os.ReadFile(ready); err == nil && len(data) > 0 {
 			return string(data)
 		}
 		if time.Now().After(deadline) {

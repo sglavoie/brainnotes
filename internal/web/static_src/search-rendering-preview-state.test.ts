@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { dispatchFiltersChange } from "./filters";
 import { initOverviewSearchResults } from "./overview-search";
@@ -17,7 +17,6 @@ afterEach(() => {
   setURL("/");
 });
 
-describe("search preview state", () => {
   it("clears preview state when search filters refresh", async () => {
     vi.useFakeTimers();
     setURL("/?q=source");
@@ -66,6 +65,7 @@ describe("search preview state", () => {
     expect(trashButton?.textContent).toBe("Preview Trash");
     expect(bulkRoot?.hasAttribute("data-overview-preview-id")).toBe(false);
 
+    selectOverviewResult();
     trashButton?.click();
     await vi.runAllTimersAsync();
 
@@ -133,4 +133,3 @@ describe("search preview state", () => {
     await vi.runAllTimersAsync();
     expect(fetchMock.mock.calls.filter(([input]) => String(input) === "/api/notes/bulk/preview")).toHaveLength(2);
   });
-});

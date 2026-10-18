@@ -26,13 +26,10 @@ export const bindOverviewRangeSelection = (list: HTMLElement): (() => void) => {
   return () => { anchor = null; };
 };
 
-const syncCopySelection = (root: HTMLElement, inputs: HTMLInputElement[], busy: boolean): void => {
+const syncCopySelection = (root: HTMLElement, inputs: HTMLInputElement[], busy: boolean, selected?: ReadonlyMap<string, string>): void => {
   const button = root.querySelector<HTMLButtonElement>("[data-overview-copy-wikilinks]");
   if (!button) return;
-  // The server supplies exact-case targets. Never reconstruct them from folded
-  // keys or display titles; emit only selected, displayed rows in display order.
-  const text = inputs.filter((input) => input.checked && input.dataset.wikilink)
-    .map((input) => `[[${input.dataset.wikilink}]]`).join("\n");
+  const text = selectedWikilinks(inputs, selected);
   if (button.dataset.copyText !== text || busy) {
     const controls = button.closest("[data-copy-controls]");
     controls?.querySelector("[data-copy-fallback]")?.remove();
@@ -47,15 +44,15 @@ export const syncOverviewSelectionControls = (
   root: HTMLElement,
   list: HTMLElement,
   selectedCount: number,
-  busy: boolean
+  busy: boolean,
+  selected?: ReadonlyMap<string, string>
 ): void => {
   const inputs = overviewSelectionInputs(list);
-  const count = root.querySelector<HTMLElement>("[data-overview-selected-count]");
-  if (count) count.textContent = `${selectedCount} selected`;
-  syncCopySelection(root, inputs, busy);
+  syncSelectionCount(root, inputs, selectedCount);
+  syncCopySelection(root, inputs, busy, selected);
   const controls = queryElement(root, "[data-overview-selection]", HTMLElement);
   if (controls) {
-    controls.hidden = inputs.length === 0;
+    controls.hidden = inputs.length === 0 && selectedCount === 0;
     controls.dataset.hasSelection = String(selectedCount > 0);
   }
   const select = queryElement(root, "[data-overview-select-displayed]", HTMLButtonElement);
@@ -69,4 +66,17 @@ export const syncOverviewSelectionControls = (
   for (const input of inputs) {
     input.disabled = busy;
   }
+};
+
+const selectedWikilinks = (inputs: HTMLInputElement[], selected?: ReadonlyMap<string, string>): string => {
+  // Keep exact targets supplied by the server, including selections on other pages.
+  const targets = selected ? [...selected.values()].filter(Boolean)
+    : inputs.filter((input) => input.checked && input.dataset.wikilink).map((input) => input.dataset.wikilink!);
+  return targets.map((target) => `[[${target}]]`).join("\n");
+};
+
+const syncSelectionCount = (root: HTMLElement, inputs: HTMLInputElement[], selectedCount: number): void => {
+  const count = root.querySelector<HTMLElement>("[data-overview-selected-count]");
+  const elsewhere = selectedCount - inputs.filter((input) => input.checked).length;
+  if (count) count.textContent = `${selectedCount} selected${elsewhere > 0 ? ` (${elsewhere} on other pages)` : ""}`;
 };

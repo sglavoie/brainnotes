@@ -43,7 +43,7 @@ export const runSave = async (
   ctx.refreshSaveButton();
   ctx.setStatus("Saving…", "is-loading");
   const waiting = window.setTimeout(() =>
-    ctx.setStatus("Save not confirmed yet. Your text is still in the editor.", "is-loading"), 500);
+    ctx.setStatus("Still saving… Your text is still in the editor.", "is-loading"), 500);
   try {
     const response = await deps.client.save({
       content,

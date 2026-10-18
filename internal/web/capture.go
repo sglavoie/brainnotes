@@ -51,16 +51,22 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 	result, err := noteops.ApplyCapture(
 		s.vault.Root,
 		relPath,
-		noteops.CaptureRequest{Heading: heading, Text: text, At: time.Now()},
+		noteops.CaptureRequest{ID: r.Form.Get("capture_id"), Heading: heading, Text: text, At: time.Now()},
 		&cfg.Frontmatter,
 		noteops.WithCaptureCommand("bn web capture"),
 	)
+	if result != nil {
+		s.state.invalidate()
+	}
 	if err != nil {
 		writeManagementError(w, err)
 		return
 	}
-	s.state.invalidate()
 
+	s.writeCaptureResult(w, result)
+}
+
+func (s *Server) writeCaptureResult(w http.ResponseWriter, result *noteops.CaptureResult) {
 	key := managementRouteKeyForRelPath(result.Destination.RelPath)
 	routePath, err := notePathForKey(key)
 	if err != nil {
@@ -69,7 +75,9 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 	}
 
 	message := "Captured to " + result.Destination.RelPath + "."
-	if result.CreatedNote {
+	if result.Replayed {
+		message = "Capture confirmed in " + result.Destination.RelPath + ". This retry added nothing."
+	} else if result.CreatedNote {
 		message = "Created " + result.Destination.RelPath + " and captured."
 	}
 	payload := noteops.ResultForPath(

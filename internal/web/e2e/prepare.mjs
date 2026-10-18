@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { performanceNotes } from "./performance-seed.mjs";
 // Build the disposable world `npm run test:e2e` runs against, and write the
 // manifest playwright.config.js reads.
 //
@@ -301,7 +302,15 @@ export async function prepare() {
   const readOnlyPort = await reservePort();
   const readOnlyState = join(fixtureRoot, "read-only-state");
   mkdirSync(readOnlyState, { recursive: true });
+  const performance = [];
+  for (const count of [1000, 10000]) {
+    const vault = join(fixtureRoot, `performance-${count}`);
+    buildVault(vault, `performance-${count}`, home, `performance ${count} ${marker}`, performanceNotes(count));
+    const performancePort = await reservePort();
+    performance.push({ count, vault, port: performancePort, baseURL: `http://127.0.0.1:${performancePort}` });
+  }
   const manifest = {
+    performance,
     repoRoot: REPO_ROOT,
     fixtureRoot,
     home,

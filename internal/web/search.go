@@ -36,7 +36,8 @@ type searchResult struct {
 }
 
 type searchCandidate struct {
-	result searchResult
+	snippetBody string
+	result      searchResult
 	// note is the note this row was built from, kept so an ordering can run
 	// over notes and the rows can be permuted to match.
 	note        *vault.Note
@@ -89,7 +90,7 @@ func buildSearchResponse(snapshot vaultSnapshot, root string, filters noteFilter
 		}
 	}
 	return searchResponse{
-		Results: searchResults(limitSearchCandidates(candidates, shape)),
+		Results: searchResults(limitSearchCandidates(candidates, shape), filters.foldedQuery),
 		Total:   len(candidates),
 	}, nil
 }
@@ -136,14 +137,14 @@ func collectSearchCandidates(snapshot vaultSnapshot, root string, filters noteFi
 		}
 
 		candidates = append(candidates, searchCandidate{
-			note: note,
+			snippetBody: match.Body,
+			note:        note,
 			result: searchResult{
 				Key:           key,
 				Title:         title,
 				Wikilink:      wikilinkTargetForNote(root, note),
 				Folder:        folder,
 				Path:          path,
-				Snippet:       makeSearchSnippet(match.Body, filters.foldedQuery),
 				Pinned:        pinned(note),
 				Modified:      searchModified(note),
 				MatchedFields: searchMatchedFields(match, filters.foldedQuery != ""),
@@ -159,10 +160,13 @@ func collectSearchCandidates(snapshot vaultSnapshot, root string, filters noteFi
 }
 
 // searchResults strips the rows out of the candidates, in order.
-func searchResults(candidates []searchCandidate) []searchResult {
+func searchResults(candidates []searchCandidate, query string) []searchResult {
 	results := make([]searchResult, 0, len(candidates))
 	for _, candidate := range candidates {
-		results = append(results, candidate.result)
+		result := candidate.result
+		// Render excerpts only for this page, never for thousands of omitted matches.
+		result.Snippet = makeSearchSnippet(candidate.snippetBody, query)
+		results = append(results, result)
 	}
 	return results
 }
@@ -191,10 +195,13 @@ func rankSearchCandidates(candidates []searchCandidate) {
 // rather than the 50 best matches, and truncating before a view's sort would
 // order 50 arbitrary matches instead of returning the top N the view saved.
 func limitSearchCandidates(candidates []searchCandidate, shape resultShape) []searchCandidate {
-	if limit := shape.effectiveLimit(); len(candidates) > limit {
-		return candidates[:limit]
+	end := len(candidates)
+	if shape.Limit > 0 && shape.Limit < end {
+		end = shape.Limit
 	}
-	return candidates
+	start := min(shape.Offset, end)
+	// Subtract first so even a maximal integer offset cannot overflow.
+	return candidates[start : start+min(searchResultLimit, end-start)]
 }
 
 func searchMatchedFields(match noteTextMatch, hasQuery bool) []string {

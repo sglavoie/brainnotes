@@ -110,6 +110,12 @@ export default defineConfig({
   },
 
   projects: [
+    ...manifest.performance.map((profile) => ({
+      name: `performance-chromium-${profile.count}`,
+      testMatch: browserSuites.performance,
+      use: { ...devices["Desktop Chrome"], baseURL: profile.baseURL },
+      metadata: { noteCount: profile.count + 1 },
+    })),
     {
       name: "visual-chromium",
       testMatch: visualSpec,
@@ -135,6 +141,7 @@ export default defineConfig({
   ],
 
   webServer: [
+    ...manifest.performance.map((profile) => fixtureServer(profile.vault, profile.port, profile.baseURL)),
     fixtureServer(manifest.localVault, manifest.port, manifest.baseURL),
     fixtureServer(manifest.hostedVault, manifest.hostedPort, manifest.hostedBaseURL, ["--hosted"]),
     fixtureServer(manifest.peerVault, manifest.readOnlyPort, manifest.readOnlyBaseURL, [

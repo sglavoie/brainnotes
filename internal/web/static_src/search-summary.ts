@@ -21,14 +21,18 @@ export const readSearchCounts = (response: Response): SearchCounts | null => {
 export const searchSummary = (
   shown: number,
   query: string,
-  counts: SearchCounts | null
+  counts: SearchCounts | null,
+  offset = 0
 ): string => {
   const scope = query ? ` for "${query}"` : "";
-  if (!counts || counts.total <= shown) {
+  if (!counts || counts.total <= shown && offset === 0) {
     return `${shown} matching ${shown === 1 ? "note" : "notes"}${scope}.`;
   }
-  const reason = counts.limit > 0 && counts.limit <= counts.cap
-    ? `Query limit: ${counts.limit}.`
-    : `Display cap: ${counts.cap}. Narrow your search to see other matches.`;
-  return `Showing ${shown} of ${counts.total} matching notes${scope}. ${reason} Bulk actions apply only to selected notes.`;
+  const reason = remainingSearchMessage(counts, offset + shown);
+  return `Showing ${offset ? `${offset + 1}–${offset + shown}` : shown} of ${counts.total} matching notes${scope}. ${reason} Bulk actions apply only to selected notes.`;
+};
+
+const remainingSearchMessage = (counts: SearchCounts, end: number): string => {
+  if (counts.limit > 0 && counts.limit <= end) return `Query limit: ${counts.limit}.`;
+  return end < counts.total ? "Use Next results to see more matches." : "";
 };

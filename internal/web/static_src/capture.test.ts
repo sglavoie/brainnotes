@@ -152,7 +152,8 @@ describe("capture success", () => {
     expect(headers["Content-Type"]).toBe(
       "application/x-www-form-urlencoded; charset=UTF-8"
     );
-    expect(init.body).toBe("text=call+%5B%5BBob%5D%5D+back&token=csrf-token");
+    expect(new URLSearchParams(String(init.body)).get("text")).toBe("call [[Bob]] back");
+    expect(new URLSearchParams(String(init.body)).get("capture_id")).toBeTruthy();
 
     expect(input.value).toBe("");
     expect(document.activeElement).toBe(input);
@@ -208,7 +209,7 @@ describe("capture errors and keyboard", () => {
     submit.click();
     await waitForExpect(() => expect(submit.disabled).toBe(false));
     expect(input.value).toBe("Possibly already captured");
-    expect(status.textContent).toBe("Capture not confirmed. Check your inbox before retrying.");
+    expect(status.textContent).toBe("Capture not confirmed. Check / retry capture safely: an attempt already recorded will not be added again.");
     expect(document.querySelector<HTMLAnchorElement>("[data-capture-view-inbox]")!.hidden).toBe(false);
     expect(recent.children).toHaveLength(0);
     expect(fetcher).toHaveBeenCalledOnce();

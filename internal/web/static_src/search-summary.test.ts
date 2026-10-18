@@ -12,8 +12,8 @@ afterEach(() => {
 });
 
 it.each([
-  [0, "Display cap: 50."], [10, "Query limit: 10."],
-  [50, "Query limit: 50."], [500, "Display cap: 50."],
+  [0, "Use Next results"], [10, "Query limit: 10."],
+  [50, "Query limit: 50."], [500, "Use Next results"],
 ])("explains the effective cap for requested limit %i", (limit, reason) => {
   const shown = Math.min(limit || 50, 50);
   const text = searchSummary(shown, "books", { total: 137, limit, cap: 50 });

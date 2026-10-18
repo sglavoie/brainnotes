@@ -11,7 +11,7 @@ for (const width of [1280, 390]) {
     const group = page.locator('[data-source-manage-feedback="capture"]');
     const input = group.locator("textarea");
     const button = group.getByRole("button", { name: "Capture", exact: true });
-    const status = group.locator('[role="status"]');
+    const status = group.locator("[data-source-manage-status]");
     const thought = `management capture ${width} ${manifest.fixtureRoot.split("/").pop()}`;
     await input.fill(thought);
     await group.scrollIntoViewIfNeeded();
@@ -43,13 +43,20 @@ for (const width of [1280, 390]) {
     } finally {
       release();
     }
-    await expect(status).toContainText("Check your inbox before retrying");
+    await expect(status).toContainText("Retry safely with the same text");
     await expect(status).toBeInViewport();
     await expect(input).toHaveValue(thought);
     await expect(button).toBeEnabled();
     await expect(page.locator("[data-source-rename]")).toBeEnabled();
     await expect(page.locator('[data-source-manage-feedback="rename"] [role="status"]')).toBeEmpty();
     expect(requests).toBe(1);
+    await page.unroute("**/api/capture");
+    await page.reload();
+    await page.locator("[data-source-manage] > summary").click();
+    await expect(input).toHaveValue(thought);
+    await button.click();
+    await expect(status).toContainText("This retry added nothing");
+    await expect(input).toHaveValue("");
     const inbox = readFileSync(join(manifest.localVault, "Inbox.md"), "utf8");
     expect(inbox.split(thought)).toHaveLength(2);
   });

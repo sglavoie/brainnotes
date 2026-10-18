@@ -111,7 +111,7 @@
 
 {{define "workspaceMenu"}}
   <div class="focused-workspace-tools">
-  {{if not readOnly}}<a class="new-note-action" href="/new">New note</a>{{end}}
+  {{if and (not readOnly) (ne . "new")}}<a class="new-note-action" href="/new">New note</a>{{end}}
   <details class="source-editor-workspace">
     <summary>Workspace</summary>
     <div class="source-editor-workspace-content">

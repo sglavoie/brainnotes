@@ -83,6 +83,7 @@ export const buildCaptureForm = (request: CaptureRequest): URLSearchParams => {
   const body = new URLSearchParams();
   body.set("text", request.text);
   body.set("token", request.token);
+  if (request.captureID) body.set("capture_id", request.captureID);
   return body;
 };
 

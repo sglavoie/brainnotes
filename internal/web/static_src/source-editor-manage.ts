@@ -9,6 +9,7 @@ import {
   type UndoResult,
   type HistoryPreviewResult,
 } from "./api";
+import { prepareEditorCapture } from "./source-editor-capture";
 import { asRecord } from "./api-internal";
 import { historyConflictSummary } from "./history-panel";
 import { setStatusText, type StatusKind } from "./status";
@@ -176,8 +177,8 @@ const isUnconfirmed = (action: ManageAction, outcome: ManageOutcome): boolean =>
   outcome.unconfirmed || (outcome.ok && action.confirmed?.(outcome) === false);
 
 const unconfirmedAction = (action: ManageAction): string => {
-  const destination = action.button?.hasAttribute("data-source-capture") ? "your inbox" : "the note or History";
-  return `${action.label} not confirmed. Check ${destination} before retrying. Your inputs are still here.`;
+  if (action.button?.hasAttribute("data-source-capture")) return "Capture not confirmed. Retry safely with the same text; a recorded attempt will not be added again.";
+  return `${action.label} not confirmed. Check the note or History before retrying. Your inputs are still here.`;
 };
 
 const disableActions = (actions: ManageAction[], elements: SourceManageElements): Map<HTMLButtonElement, boolean> => {
@@ -301,6 +302,7 @@ const contentActions = (deps: SourceManageDeps, ctx: ActionContext): ManageActio
 const vaultActions = (deps: SourceManageDeps, ctx: ActionContext): ManageAction[] => {
   const { elements, config, host } = deps;
   const endpoints = config.manage;
+  const capture = prepareEditorCapture(elements.capture, elements.captureText, config.vaultID);
   return [
     {
       button: elements.pin,
@@ -323,10 +325,10 @@ const vaultActions = (deps: SourceManageDeps, ctx: ActionContext): ManageAction[
       plan: () =>
         required(elements.captureText, "Type the line to capture first.", (text) => ({
           url: endpoints.capture,
-          body: buildCaptureForm({ text, token: config.token }),
+          body: buildCaptureForm({ text, token: config.token, captureID: capture.start(text) }),
         })),
       after: (outcome) => {
-        clear(elements.captureText);
+        capture.settled();
         // The captured bullet is echoed rather than reconstructed: the timestamp
         // in it came from the server's clock.
         ctx.setStatus(outcome.detail ? `${outcome.message} ${outcome.detail}` : outcome.message, "is-success");

@@ -12,17 +12,13 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>New note</h1>
-        <p class="page-subtitle">Give your note a title, then start writing in the editor.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>New note</h1>
+      {{template "workspaceMenu" "new"}}
     </header>
-    {{template "siteNav" "new"}}
+    {{template "siteSync" .}}
+    <p class="page-subtitle">Give your note a title, then start writing in the editor.</p>
+
     <form id="workspace-content" tabindex="-1" class="panel new-note" data-new-note data-create-endpoint="{{.CreatePath}}" data-editor-path="{{.EditorPath}}" data-csrf="{{.CSRFToken}}">
       <label for="new-note-title">Title</label>
       <input id="new-note-title" name="title" type="text" value="{{.SuggestedTitle}}" required autofocus autocomplete="off" aria-describedby="new-note-destination">
