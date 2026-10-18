@@ -1,4 +1,5 @@
 import { renderGraphDetails } from "./graph-controller-details";
+import { orderedGraphNodes, renderGraphNoteList } from "./graph-note-list";
 import {
   type GraphRuntime,
   findDisplayedNodeModel,
@@ -17,6 +18,7 @@ export const renderDetailsPanel = (
     ? null
     : findDisplayedNodeModel(runtime, runtime.state.hoveredNodeID) || fallbackHoveredModel || null;
   renderGraphDetails(runtime.detailsRefs, selectedModel, hoveredModel);
+  renderGraphNoteList(runtime);
 };
 
 export const syncCytoscapeSelection = (runtime: GraphRuntime, nodeID: string): void => {
@@ -135,7 +137,14 @@ export const keyboardTargetNodeID = (runtime: GraphRuntime): string => {
 };
 
 export const handleGraphKeyDown = (runtime: GraphRuntime, event: KeyboardEvent): void => {
-  if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    clearSelectedNode(runtime);
+    return;
+  }
+  if (moveKeyboardSelection(runtime, event)) return;
+  if (!["Enter", " ", "Spacebar"].includes(event.key)) {
     return;
   }
 
@@ -146,4 +155,20 @@ export const handleGraphKeyDown = (runtime: GraphRuntime, event: KeyboardEvent):
 
   event.preventDefault();
   selectNode(runtime, nodeID, { toggleNeighborLabels: true });
+};
+
+const moveKeyboardSelection = (runtime: GraphRuntime, event: KeyboardEvent): boolean => {
+  const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
+  if (!keys.includes(event.key)) return false;
+  const nodes = orderedGraphNodes(runtime).filter((node) => !node.isAggregate);
+  if (!nodes.length) return false;
+  const current = nodes.findIndex((node) => node.id === runtime.state.selectedNodeID);
+  const backwards = event.key === "ArrowUp" || event.key === "ArrowLeft";
+  let next = current < 0 ? 0 : (current + (backwards ? -1 : 1) + nodes.length) % nodes.length;
+  if (event.key === "Home") next = 0;
+  if (event.key === "End") next = nodes.length - 1;
+  event.preventDefault();
+  setHoveredNode(runtime, "", null);
+  selectNode(runtime, nodes[next].id);
+  return true;
 };

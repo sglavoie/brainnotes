@@ -30,6 +30,7 @@ type searchResult struct {
 	Path          string   `json:"path"`
 	Snippet       string   `json:"snippet"`
 	Pinned        bool     `json:"pinned"`
+	Position      int      `json:"position,omitempty"` // One-based position when rechecking a selection.
 	Modified      string   `json:"modified,omitempty"`
 	MatchedFields []string `json:"matched_fields,omitempty"`
 	Issues        []string `json:"issues,omitempty"`
@@ -199,9 +200,29 @@ func limitSearchCandidates(candidates []searchCandidate, shape resultShape) []se
 	if shape.Limit > 0 && shape.Limit < end {
 		end = shape.Limit
 	}
+	if len(shape.Selected) > 0 {
+		return selectedSearchCandidates(candidates[:end], shape.Selected)
+	}
 	start := min(shape.Offset, end)
 	// Subtract first so even a maximal integer offset cannot overflow.
 	return candidates[start : start+min(searchResultLimit, end-start)]
+}
+
+// Revalidation respects the query limit before looking up keys, and never
+// expands the search. Its payload stays bounded by the selected-key limit.
+func selectedSearchCandidates(candidates []searchCandidate, keys []string) []searchCandidate {
+	wanted := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		wanted[key] = true
+	}
+	selected := make([]searchCandidate, 0, len(keys))
+	for index, candidate := range candidates {
+		if wanted[candidate.result.Key] {
+			candidate.result.Position = index + 1
+			selected = append(selected, candidate)
+		}
+	}
+	return selected
 }
 
 func searchMatchedFields(match noteTextMatch, hasQuery bool) []string {

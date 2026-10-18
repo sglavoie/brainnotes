@@ -18,13 +18,11 @@
   <body class="graph-page">
   {{template "workspaceSkip" .}}
     <main class="graph-main">
-      <header class="graph-header">
-        <div class="graph-header-copy">
-          <h1>Graph</h1>
-          <p id="graph-status" role="status">Loading graph...</p>
-          {{template "siteNav" "graph"}}
-          {{template "themeControl" .}}
-        </div>
+      <header class="site-header focused-workspace-header">
+        <h1>Graph</h1>
+        {{template "workspaceMenu" "graph"}}
+      </header>
+      {{template "siteSync" .}}
         <section id="workspace-content" tabindex="-1" class="graph-controls" aria-label="Graph controls">
           <div class="graph-filter">
             <label class="graph-control-label" for="graph-filter-input">Filter graph</label>
@@ -50,8 +48,14 @@
               </label>
             </div>
           </fieldset>
-          {{template "queryBar" "graph-query-bar"}}
+          <details class="graph-query-options">
+            <summary>Query expression</summary>
+            {{template "queryBar" "graph-query-bar"}}
+          </details>
           {{template "facetControls" .FacetControls}}
+          <details class="graph-layout-options">
+            <summary>Graph layout</summary>
+            <div class="graph-layout-options-content">
           <div class="graph-spread">
             <div class="graph-spread-header">
               <label class="graph-control-label" for="graph-spread-input">Spread</label>
@@ -123,17 +127,24 @@
               </label>
             </div>
           </fieldset>
+            </div>
+          </details>
         </section>
-      </header>
+      <p id="graph-status" role="status">Loading graph...</p>
       <section class="graph-panel">
-        <div id="graph-canvas" aria-label="Notes graph" tabindex="0"></div>
-        <aside class="graph-hover" aria-live="polite">
+        <div id="graph-canvas" aria-label="Notes graph" tabindex="0" aria-describedby="graph-keyboard-help"></div>
+        <aside class="graph-sidebar">
+          <div class="graph-hover" aria-live="polite">
           <h2>Node details</h2>
-          <p id="graph-hover-title">Hover a node</p>
+          <p id="graph-hover-title">Choose a note</p>
           <p id="graph-hover-folder"></p>
           <p id="graph-hover-degree"></p>
           <ul id="graph-hover-issues" class="graph-issue-list" aria-label="Node issues" hidden></ul>
           <a id="graph-open-note" class="graph-open-note is-disabled" aria-disabled="true" tabindex="-1">Open note</a>
+          </div>
+          <label for="graph-node-list">Notes and folders in this view</label>
+          <select id="graph-node-list" size="6" aria-describedby="graph-keyboard-help"></select>
+          <p id="graph-keyboard-help">Use arrow keys to browse notes, then Open note. On the graph, Home/End select the first/last note; Escape clears selection. Choose a folder in the list to expand it.</p>
         </aside>
       </section>
     </main>

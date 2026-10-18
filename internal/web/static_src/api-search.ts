@@ -23,6 +23,7 @@ export const normalizeSearchResults = (payload: unknown): SearchResult[] => {
         issues: normalizeStringArray(record.issues),
         snippet: normalizeParamValue(record.snippet),
         pinned: readBoolean(record.pinned),
+        ...(Number.isSafeInteger(record.position) && Number(record.position) > 0 ? { position: Number(record.position) } : {}),
       },
     ];
   });

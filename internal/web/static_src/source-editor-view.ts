@@ -95,6 +95,7 @@ export const createSourceSurfaceFactory = (
       })),
     });
 
+    const disposePosition = bindSourcePosition(view, host);
     return {
       getValue: () => view.state.doc.toString(),
       setValue(value: string): void {
@@ -119,7 +120,7 @@ export const createSourceSurfaceFactory = (
       onChange(listener: () => void): void {
         listeners.push(listener);
       },
-      destroy: () => view.destroy(),
+      destroy: () => { disposePosition(); view.destroy(); },
     };
   };
 };
@@ -336,3 +337,4 @@ const frontmatterPlaceholder = (_view: EditorView, unfold: (event: Event) => voi
   button.addEventListener("click", unfold);
   return button;
 };
+import { bindSourcePosition } from "./source-position";

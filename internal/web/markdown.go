@@ -43,7 +43,7 @@ func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
-			parser.WithASTTransformers(util.Prioritized(headingAnchorTransformer{}, 100)),
+			parser.WithASTTransformers(util.Prioritized(headingAnchorTransformer{}, 100), util.Prioritized(sourceLineTransformer{}, 110)),
 		),
 		goldmark.WithExtensions(
 			highlighting.NewHighlighting(

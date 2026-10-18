@@ -17,6 +17,9 @@ Use Library to combine text search, filters, and an optional **Query expression*
 Library shows one results list as you type; Enter moves focus to its heading.
 **Filters** opens the filter picker; active constraints remain visible when it is
 closed. **Search actions** contains Copy search link and Save as view.
+While a search updates, previous results remain visible with an updating treatment;
+a loading announcement appears only if the request takes longer than 350 ms.
+Superseded requests are cancelled. Text composition finishes before a search runs.
 Search on other pages still offers a quick-open popup. **Search help** explains
 how constraints combine when you need it.
 A note must match every active constraint. Expressions from a URL or saved view
@@ -26,8 +29,9 @@ constraints, result limit, and sort order.
 **Save as view** stores text search, facets, and the expression together.
 **Copy search link** copies those constraints, sort order, and limit, without a
 result-position anchor. Clipboard controls offer a selected text field if direct
-copying is unavailable. Sort choices include **Oldest modified first** and
-**Vault path**.
+copying is unavailable. Sort choices include default order, title in either
+direction, newest or oldest modified first, and **Vault path**. A custom saved
+ordering appears as **Current order**.
 
 Recent activity is open on the initial Library screen and collapses when a
 search starts. You can open it during a search; typing keeps that choice.
@@ -46,12 +50,23 @@ omit that navigation position.
 
 Select notes with their checkboxes or **Select displayed**. The selected count,
 **Clear selection**, and **Copy wikilinks** appear once there is a selection.
-**Selection help** appears alongside the actions once notes are selected and explains range selection: Shift-click a checkbox to select
-or clear the range from the previous checkbox. Selections and copied wikilinks
-include other result pages; the count identifies
-selections outside the current page. Changing the query, filters, or ordering
+**Selection help** appears alongside the actions once notes are selected.
+Shift-click a checkbox to select or clear the range from the previous checkbox. Selections and copied wikilinks
+include other result pages; copied links use exact-case vault targets in result
+order, one `[[target]]` per line. Copying also works on read-only replicas. The
+count identifies selections outside the current page. Changing the query, filters, or ordering
 clears the selection. Bulk actions apply only to the selected notes and still
 require a preview before applying changes.
+
+With browser session storage available, selections also survive opening a note,
+**Back to results**, and reloads in the same tab. They are scoped to the vault and
+search. On return, the server rechecks the saved keys against the current search,
+including its total limit; missing or nonmatching notes leave the selection.
+A failed check offers **Retry search** and keeps the saved keys for another try.
+Preview receipts are never restored. Changing the search or clearing selection
+removes its stored selection. **Select displayed** affects the current page only;
+**Clear selection** clears all pages. A selection change invalidates any pending
+bulk preview. Shift-click ranges stay within the displayed page.
 
 When there are no matches, remove just the search text, filters, or expression,
 or use **Reset search** to clear the entire search. **Create a note titled…**
@@ -79,6 +94,12 @@ Contents highlights the current section as you scroll without moving focus or
 changing the URL. At widths up to 960 pixels, **Metadata** and **Contents** start
 collapsed and open independently. Opening mobile metadata does not change your
 desktop sidebar preference.
+
+Prose stays within a 70-character measure on wide screens, including when
+metadata is hidden. Tables, code, and media can use the wider content column.
+**Edit in browser** opens at the passage currently being read. On narrow screens,
+switching Edit/Preview keeps the corresponding passage in view; returning to the
+note retains the reading position.
 
 **Back to results** preserves Library text, filters, and sort through reloads,
 new tabs, and following links between notes. Returning restores the opened
@@ -212,6 +233,20 @@ packaged, acknowledged, and applied facts.
 
 The shared **Sync:** line refreshes after confirmed writes and polls pending work for
 up to one minute. It stops while the page is hidden and ignores superseded replies.
+
+## Explore Graph
+
+Graph uses the same **Workspace** menu as the other pages. Search and its
+Filter/Focus mode stay visible; **Filters** opens the facet picker while active
+constraints stay visible. **Query expression** opens automatically for a
+query loaded from a URL or saved view. **Graph layout** contains spread, minimum
+degree, folder collapsing, isolation, label mode, and viewport controls.
+
+Choose a note in **Notes and folders in this view**, or use arrow keys on the
+graph canvas to move through displayed notes in title order. Home/End select the
+first/last note; Escape clears selection. **Open note** follows the selected
+note. Choosing a collapsed folder in the list expands it. Both the list and
+keyboard navigation respect filtering, isolation, and folder collapsing.
 
 ## Reference
 

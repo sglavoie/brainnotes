@@ -101,3 +101,19 @@ describe("selected node neighbor labels", () => {
     expect(labeled()).toEqual(["hub"]);
   });
 });
+
+it("navigates displayed notes without a pointer and clears selection with Escape", () => {
+  const { runtime } = mountGraph();
+  const key = (key: string) => handleGraphKeyDown(runtime, new KeyboardEvent("keydown", { key }));
+  key("Home");
+  expect(runtime.state.selectedNodeID).not.toBe("");
+  const first = runtime.state.selectedNodeID;
+  key("ArrowDown");
+  expect(runtime.state.selectedNodeID).not.toBe(first);
+  key("ArrowUp");
+  expect(runtime.state.selectedNodeID).toBe(first);
+  key("End");
+  expect(runtime.state.selectedNodeID).not.toBe(first);
+  key("Escape");
+  expect(runtime.state.selectedNodeID).toBe("");
+});

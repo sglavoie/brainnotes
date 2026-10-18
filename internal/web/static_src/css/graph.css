@@ -401,3 +401,37 @@
   pointer-events: none;
 }
 
+
+/* Search and the current note lead; layout tuning stays close at hand. */
+.graph-main > .site-header { width: 100%; }
+.graph-main > .sync-line { margin: 0; }
+.graph-main .graph-controls { width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.graph-controls > .graph-filter { grid-column: 1; }
+.graph-controls > .graph-search-mode { grid-column: 2; }
+.graph-controls > .graph-query-options,
+.graph-controls > .graph-layout-options { grid-column: 1 / -1; min-width: 0; }
+.graph-query-options > summary,
+.graph-layout-options > summary { cursor: pointer; padding-block: 0.5rem; min-height: 2.75rem; box-sizing: border-box; }
+.graph-layout-options-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; padding: 0.75rem; border: 1px solid var(--bn-border); border-radius: 0.5rem; }
+.graph-sidebar { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+#graph-node-list { width: 100%; min-height: 10rem; padding: 0.5rem; font: inherit; color: var(--bn-text); background: var(--bn-surface); border: 1px solid var(--bn-border); border-radius: 0.4rem; }
+#graph-node-list option { padding: 0.35rem; }
+#graph-node-list:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
+#graph-keyboard-help { color: var(--bn-muted); font-size: 0.85rem; }
+.graph-main .graph-open-note,
+.graph-main .graph-control-button { min-height: 2.75rem; }
+@media (max-width: 700px) {
+  .graph-main .graph-panel { display: flex; flex-direction: column; }
+  .graph-main #graph-canvas { height: 45vh; min-height: 16rem; flex: none; }
+  .graph-sidebar { display: contents; }
+  .graph-hover { order: -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 0.75rem; }
+  .graph-hover h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .graph-hover #graph-hover-title { grid-column: 1; grid-row: 1; align-self: center; margin: 0; font-weight: 600; }
+  .graph-hover .graph-open-note { grid-column: 2; grid-row: 1; margin: 0; }
+  .graph-hover #graph-hover-folder,
+  .graph-hover #graph-hover-degree,
+  .graph-hover .graph-issue-list { grid-column: 1 / -1; margin: 0; font-size: 0.85rem; }
+  .graph-hover p:empty { display: none; }
+}
+
+.graph-controls .library-filters > summary { min-height: 2.75rem; padding-block: 0.5rem; box-sizing: border-box; cursor: pointer; }

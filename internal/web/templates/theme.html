@@ -117,7 +117,7 @@
     <div class="source-editor-workspace-content">
       <div class="site-header-tools">
         {{template "themeControl" .}}
-        {{if ne . "library"}}{{template "headerSearch" .}}{{end}}
+        {{if and (ne . "library") (ne . "graph")}}{{template "headerSearch" .}}{{end}}
       </div>
       {{template "workspaceNav" .}}
     </div>

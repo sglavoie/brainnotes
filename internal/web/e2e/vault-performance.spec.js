@@ -85,4 +85,8 @@ test("result pages preserve selections and the return destination", async ({ pag
   await expect(page.locator(".overview-result-title").first()).toHaveText("Record00050");
   await expect(page.locator(".overview-result-link").first()).toBeFocused();
   expect(new URL(page.url()).searchParams.get("offset")).toBe("50");
+  await expect(page.locator(".overview-result-select input").first()).toBeChecked();
+  await expect(page.locator("[data-overview-selected-count]")).toHaveText("2 selected (1 on other pages)");
+  await page.getByRole("button", { name: "Previous results", exact: true }).click();
+  await expect(page.locator(".overview-result-select input").first()).toBeChecked();
 });

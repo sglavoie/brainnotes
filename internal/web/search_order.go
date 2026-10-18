@@ -37,6 +37,8 @@ type resultShape struct {
 	// independently bounded by searchResultLimit; Offset skips within that set.
 	Limit  int
 	Offset int
+	// Selected rechecks a bounded selection against the complete ordered query.
+	Selected []string
 }
 
 // ordered reports whether an ordering was requested.
@@ -74,6 +76,10 @@ func parseResultShape(params url.Values) (resultShape, error) {
 	}
 	if shape.Offset, err = parseSearchBound(params, "offset"); err != nil {
 		return resultShape{}, err
+	}
+	shape.Selected = params["selected"]
+	if len(shape.Selected) > searchResultLimit {
+		return resultShape{}, fmt.Errorf("at most %d selected keys can be checked at once", searchResultLimit)
 	}
 
 	return shape, nil

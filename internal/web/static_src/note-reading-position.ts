@@ -1,4 +1,4 @@
-type ReadingPosition = { heading: string; offset: number; ratio: number };
+type ReadingPosition = { heading: string; offset: number; ratio: number; sourceLine?: number };
 const parameter = "read_at";
 
 const capture = (body: HTMLElement): ReadingPosition => {
@@ -8,7 +8,16 @@ const capture = (body: HTMLElement): ReadingPosition => {
   }
   const height = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
   return { heading: heading?.id || "", offset: heading?.getBoundingClientRect().top || 0,
+    sourceLine: captureSourceLine(body),
     ratio: Math.min(1, Math.max(0, window.scrollY / height)) };
+};
+
+const captureSourceLine = (body: HTMLElement): number | undefined => {
+  let passage = body.querySelector<HTMLElement>("[data-source-line]");
+  for (const candidate of body.querySelectorAll<HTMLElement>("[data-source-line]")) {
+    if (candidate.getBoundingClientRect().top <= 96) passage = candidate;
+  }
+  return Number(passage?.dataset.sourceLine) || undefined;
 };
 
 const parsePosition = (raw: string | null): ReadingPosition | null => {

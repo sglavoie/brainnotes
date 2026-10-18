@@ -3,6 +3,7 @@ export const browserSuites = {
   "pr": [
     "smoke.spec.js",
     "screen-polish.spec.js",
+    "continuity-refinement.spec.js",
     "editor.spec.js",
     "workspace-polish.spec.js",
     "reading-performance.spec.js",

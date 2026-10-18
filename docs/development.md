@@ -95,3 +95,11 @@ measurements with corpus size and long tasks. Inspect those artifacts when a
 budget fails; do not raise a ceiling merely to pass a slower run.
 
 [Back to the README](../README.md)
+
+
+`continuity-refinement.spec.js` covers reading-to-source passage continuity,
+mobile Edit/Preview position, Library selection recovery and revalidation,
+keyboard Graph navigation, and bounded prose at a wide desktop viewport. Graph
+joins the light/dark, desktop/mobile visual matrix; its payload and final node
+positions are fixed for reproducible screenshots, while behavior tests use the
+real graph API.

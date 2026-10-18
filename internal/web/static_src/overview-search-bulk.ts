@@ -39,6 +39,7 @@ export abstract class OverviewSearchBulk {
   protected previewState: BulkPreviewState | null = null;
   protected ignoreNextManagementMutationClear = false;
   protected abstract scheduleSearch: (delay: number) => void;
+  protected selectionChanged(): void {}
 
   constructor(protected readonly els: OverviewSearchElements, deps: OverviewSearchDeps) {
     this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
@@ -92,6 +93,7 @@ export abstract class OverviewSearchBulk {
     this.bulkBusy || this.els.root.getAttribute("aria-busy") === "true";
 
   protected updateBulkControls = (): void => {
+    this.selectionChanged();
     syncOverviewSelectionControls(this.els.root, this.els.listEl, this.selectedKeys.size,
       this.selectionBusy(), this.selectedKeys);
     if (!this.els.bulkRoot) {
@@ -99,13 +101,13 @@ export abstract class OverviewSearchBulk {
     }
     const count = this.selectedKeys.size;
     this.els.bulkRoot.hidden = count === 0;
-    this.disableBulkControls(this.els.bulkRoot, this.bulkBusy || count === 0);
+    this.disableBulkControls(this.els.bulkRoot, this.selectionBusy() || count === 0);
     syncOverviewActionButton(this.els.trashButton, "trash", this.previewMatches("trash", {}));
     syncOverviewActionButton(this.els.moveButton, "move", this.previewMatches("move", readMoveFields(this.els.moveForm)));
     syncOverviewActionButton(this.els.setButton, "frontmatter_set", this.previewMatches("frontmatter_set", readSetFields(this.els.setForm)));
     syncOverviewActionButton(this.els.unsetButton, "frontmatter_unset", this.previewMatches("frontmatter_unset", readUnsetFields(this.els.unsetForm)));
     if (this.els.previewApplyButton) {
-      this.els.previewApplyButton.disabled = this.bulkBusy || count === 0 || this.previewState === null;
+      this.els.previewApplyButton.disabled = this.selectionBusy() || count === 0 || this.previewState === null;
     }
     if (this.els.previewClearButton) {
       this.els.previewClearButton.disabled = this.bulkBusy || this.previewState === null;

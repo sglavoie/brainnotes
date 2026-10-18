@@ -11,7 +11,9 @@ import {
   scheduleDisplayRebuild,
   toggleFolderExpansion,
 } from "./graph-controller-display";
-import { handleGraphKeyDown } from "./graph-controller-interaction";
+import { handleGraphKeyDown, selectNode } from "./graph-controller-interaction";
+import { bindGraphNoteList } from "./graph-note-list";
+import { bindSearchInput } from "./search-input";
 import { normalizeSearchMode } from "./graph-controller-labels";
 import { updateSpreadLabel } from "./graph-controller-layout";
 import { publishFilterChange, scheduleLoad, setSearchMode } from "./graph-controller-load";
@@ -36,7 +38,8 @@ import {
 import { THEME_EVENT } from "./theme";
 
 const bindControls = (runtime: GraphRuntime): void => {
-  const { canvas, dom, state } = runtime;
+  const { canvas, dom } = runtime;
+  bindGraphNoteList(runtime, (id) => selectNode(runtime, id));
   canvas.addEventListener("keydown", (event) => {
     handleGraphKeyDown(runtime, event);
   });
@@ -52,12 +55,16 @@ const bindControls = (runtime: GraphRuntime): void => {
 
   const filterInput = dom.filterInput;
   if (filterInput instanceof HTMLInputElement) {
-    filterInput.addEventListener("input", () => {
+    bindSearchInput(filterInput, () => {
       syncPageQueryParam(filterInput.value.trim());
       publishFilterChange(runtime, graphFilterDebounceMs);
+    }, () => {
+      window.clearTimeout(runtime.publishToken);
+      window.clearTimeout(runtime.debounceToken);
+      runtime.requestToken += 1;
     });
     filterInput.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter") {
+      if (event.key !== "Enter" || event.isComposing) {
         return;
       }
       event.preventDefault();
@@ -65,6 +72,55 @@ const bindControls = (runtime: GraphRuntime): void => {
     });
   }
 
+  bindDisplayControls(runtime);
+
+  if (dom.fitButton instanceof HTMLButtonElement) {
+    dom.fitButton.addEventListener("click", () => {
+      fitCurrentGraph(runtime);
+    });
+  }
+
+  if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
+    dom.zoomMatchesButton.addEventListener("click", () => {
+      zoomToMatches(runtime);
+    });
+  }
+  updateZoomMatchesButton(runtime);
+
+  if (dom.resetLayoutButton instanceof HTMLButtonElement) {
+    dom.resetLayoutButton.addEventListener("click", () => {
+      runLayout(runtime, {
+        fitAfterLayout: true,
+        resetPositions: true,
+      });
+    });
+  }
+
+  for (const input of dom.labelModeInputs) {
+    if (!(input instanceof HTMLInputElement)) {
+      continue;
+    }
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        setLabelMode(runtime, input.value);
+      }
+    });
+  }
+
+  for (const input of dom.searchModeInputs) {
+    if (!(input instanceof HTMLInputElement)) {
+      continue;
+    }
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        setSearchMode(runtime, normalizeSearchMode(input.value));
+      }
+    });
+  }
+};
+
+const bindDisplayControls = (runtime: GraphRuntime): void => {
+  const { dom, state } = runtime;
   updateSpreadLabel(dom.spreadInput, dom.spreadValue);
   if (dom.spreadInput instanceof HTMLInputElement) {
     dom.spreadInput.addEventListener("input", () => {
@@ -135,49 +191,6 @@ const bindControls = (runtime: GraphRuntime): void => {
     });
   }
 
-  if (dom.fitButton instanceof HTMLButtonElement) {
-    dom.fitButton.addEventListener("click", () => {
-      fitCurrentGraph(runtime);
-    });
-  }
-
-  if (dom.zoomMatchesButton instanceof HTMLButtonElement) {
-    dom.zoomMatchesButton.addEventListener("click", () => {
-      zoomToMatches(runtime);
-    });
-  }
-  updateZoomMatchesButton(runtime);
-
-  if (dom.resetLayoutButton instanceof HTMLButtonElement) {
-    dom.resetLayoutButton.addEventListener("click", () => {
-      runLayout(runtime, {
-        fitAfterLayout: true,
-        resetPositions: true,
-      });
-    });
-  }
-
-  for (const input of dom.labelModeInputs) {
-    if (!(input instanceof HTMLInputElement)) {
-      continue;
-    }
-    input.addEventListener("change", () => {
-      if (input.checked) {
-        setLabelMode(runtime, input.value);
-      }
-    });
-  }
-
-  for (const input of dom.searchModeInputs) {
-    if (!(input instanceof HTMLInputElement)) {
-      continue;
-    }
-    input.addEventListener("change", () => {
-      if (input.checked) {
-        setSearchMode(runtime, normalizeSearchMode(input.value));
-      }
-    });
-  }
 };
 
 export const initGraph = (): void => {
@@ -226,6 +239,8 @@ export const initGraph = (): void => {
   };
 
   const initialQuery = readPageQuery();
+  const expression = document.querySelector<HTMLDetailsElement>(".graph-query-options");
+  if (expression && new URLSearchParams(window.location.search).get("expr")) expression.open = true;
   const filterInput = dom.filterInput;
   if (filterInput instanceof HTMLInputElement) {
     filterInput.value = initialQuery;

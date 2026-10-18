@@ -9,43 +9,14 @@ the same value used by recently-modified sorting. Missing or invalid timestamps
 are omitted. Date-only values keep their calendar date; full timestamps display
 in the browser's local time, with the original value available on hover.
 
-Select Library results and choose **Copy wikilinks** to copy one `[[target]]`
-per line in displayed order. This uses the notes' exact-case vault targets and
-copies only the selected, displayed results. It also works in read-only mode
-and offers manual copying if clipboard access is unavailable.
-
-Shift-click a result checkbox to select or clear the range from the last clicked
-checkbox, using the clicked checkbox's new state. Only displayed results are
-included. A new search, **Select displayed**, or **Clear selection** resets the
-range anchor; changing selection clears any pending bulk-action preview.
-
-Library's **Sort** control offers default order, recently modified, and title
-in either direction. It preserves the search text, filters, and result limit;
-the URL and saved-view form carry the chosen ordering. Other orderings loaded
-from a saved view appear as **Current order**. Choosing a standard ordering
-removes any relevance anchor; choosing the original ordering again restores it.
+For result paging, selection, copying wikilinks, sort choices, and recovery,
+see [Find a note](web-server.md#find-a-note), the authoritative guide to Library
+controls. A selection is the checked notes; a saved view stores the search that
+finds notes, independently of those checkboxes.
 
 **Query help** below the expression field expands examples and explains how
 text search, facets, and expressions combine. Press `Ctrl` + `Space` in the
 expression field to request field and value suggestions.
-
-The primary navigation highlights the current page. In Library results,
-**Retry search** reruns a failed request with the current query and filters.
-**Reset search** opens a clean Library page, clearing the text, facet filters,
-query expression, ordering, relative-note context, and limit, along with any
-selection or bulk preview.
-
-When a search succeeds with no matches, Library names the active constraints:
-text, filters, and/or expression. **Remove filters** and **Remove expression**
-appear when applicable and remove only that kind of constraint, preserving the
-remaining search, ordering, and result limit. **Reset search** still clears all
-search settings.
-
-**Select displayed** selects only the notes currently shown, even when the
-match total is larger. **Clear selection** unchecks them all. Changing the
-selection clears any bulk preview, so the next action previews the new selection.
-The selected count sits beside these controls and remains visible in read-only
-mode, where selections can still be copied as wikilinks.
 
 Press `/` outside an editable field to focus the header search. The shortcut
 leaves editors and open dialogs alone. Escape closes the suggestions and returns
@@ -108,7 +79,7 @@ On Library and Graph, saved views are highlighted when their complete query
 matches the page, with no additional constraints. Changing the query,
 sort, or filters updates the highlight without navigating away.
 
-The Library header saves the complete current selection as a view. Cancelling
+The Library header saves the complete current search as a view. Cancelling
 the form with **Cancel** or Escape returns focus to **Save as view**. The form
 shows text search, every active facet, the expression, ordering, relevance
 anchor (if any), and result limit. The server combines the facets and expression
@@ -158,10 +129,17 @@ silently dropped ordering.
 nor `limit` is a filter — a request carrying one and no actual filter still
 selects nothing rather than returning the vault ordered.
 
-The Library reports the full match count before either limit, for example
-“Showing 50 of 137 matching notes.” It identifies a requested query limit
-separately from the server's 50-note display cap. Bulk actions affect only
-selected displayed notes. The search API keeps its JSON array response and adds
+The Library reports the full match count and the current page range. A requested
+query limit bounds the entire ordered result set; the 50-note payload cap bounds
+each page. Bulk actions affect all selected notes, including other result pages.
+The search API keeps its JSON array response and adds
 `X-BN-Search-Total` (matches before limits), `X-BN-Search-Limit` (requested limit,
 zero when unlimited), and `X-BN-Search-Cap` (server display cap) response headers.
 
+Selection recovery uses the same read-only search API with up to 50 repeated
+`selected` keys per request. It checks membership **after** ordering and the total
+query limit, before page offset and payload slicing. This parameter only narrows
+the result; it cannot turn an empty search into a whole-vault query. Recovered
+keys receive current wikilink targets and one-based result positions for copying
+in query order, and bulk actions still require a new
+preview.

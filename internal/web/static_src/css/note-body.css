@@ -56,3 +56,10 @@
 @media (max-width: 700px) {
   .note-print-body { padding: 0.25rem 0; }
 }
+
+/* Keep prose readable even when the metadata column is hidden. Wide tables,
+   code and media retain the space available in the note's content column. */
+.note-print-body .note-body > :is(p, ul, ol, dl, blockquote, .note-section-heading, h1, h2, h3, h4, h5, h6) {
+  max-inline-size: 70ch;
+  box-sizing: border-box;
+}

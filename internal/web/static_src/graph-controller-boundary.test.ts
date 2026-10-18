@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import {
   chainPayload,
@@ -27,7 +27,6 @@ afterEach(resetGraphTest);
 // What the display pipeline excludes must leave Cytoscape, not merely stop being
 // mentioned in the status line: an element that is still mounted is still
 // tappable, hoverable and reachable from the keyboard.
-describe("graph mounted-element boundary", () => {
   it("mounts only the anchor neighborhood while isolated, and the whole source again after", async () => {
     const fetchMock = startGraph("/graph", chainPayload);
     await flush();
@@ -123,7 +122,7 @@ describe("graph mounted-element boundary", () => {
     // The node that owns the hover still ends it.
     fireNodeEvent("mouseout", "beta");
     expect(canvas.classList.contains("is-node-hovered")).toBe(false);
-    expect(detailsTitle()).toBe("Hover a node");
+    expect(detailsTitle()).toBe("Choose a note");
 
     await flush();
     expect(graphRequests(fetchMock)).toHaveLength(1);
@@ -148,7 +147,7 @@ describe("graph mounted-element boundary", () => {
 
     fireNodeEvent("mouseout", "beta");
     expect(canvas.classList.contains("is-node-hovered")).toBe(false);
-    expect(detailsTitle()).toBe("Hover a node");
+    expect(detailsTitle()).toBe("Choose a note");
   });
 
   // A rebuild can take the node under the pointer with it. The hover state goes
@@ -173,13 +172,13 @@ describe("graph mounted-element boundary", () => {
     await vi.advanceTimersByTimeAsync(150);
     expect(mountedNodeIDs()).toEqual(["beta"]);
 
-    expect(detailsTitle()).toBe("Hover a node");
+    expect(detailsTitle()).toBe("Choose a note");
     expect(canvas.classList.contains("is-node-hovered")).toBe(false);
 
     // gamma's mouseout lands afterwards, naming a node the user can no longer
     // see: it is refused, and the cursor it would have cleared is already gone.
     fireNodeEvent("mouseout", "gamma");
-    expect(detailsTitle()).toBe("Hover a node");
+    expect(detailsTitle()).toBe("Choose a note");
     expect(canvas.classList.contains("is-node-hovered")).toBe(false);
 
     // Display state throughout: the exclusion cost no request.
@@ -203,7 +202,7 @@ describe("graph mounted-element boundary", () => {
     // and with nothing hovered or selected the details panel is at rest.
     expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
     expect(mountedEdgeIDs()).toEqual(["e1"]);
-    expect(detailsTitle()).toBe("Hover a node");
+    expect(detailsTitle()).toBe("Choose a note");
     expect(isolateButton.disabled).toBe(true);
     const mountsBefore = mountCount();
 
@@ -214,7 +213,7 @@ describe("graph mounted-element boundary", () => {
     expect(pressCanvasKey("Enter")).toBe(false);
     expect(pressCanvasKey(" ")).toBe(false);
 
-    expect(detailsTitle()).toBe("Hover a node");
+    expect(detailsTitle()).toBe("Choose a note");
     expect(openNote.getAttribute("aria-disabled")).toBe("true");
     expect(openNote.hasAttribute("href")).toBe(false);
     expect(isolateButton.disabled).toBe(true);
@@ -235,7 +234,7 @@ describe("graph mounted-element boundary", () => {
     await flush();
 
     const isolateButton = control<HTMLButtonElement>("graph-isolate-button");
-    expect(detailsTitle()).toBe("Hover a node");
+    expect(detailsTitle()).toBe("Choose a note");
 
     setStaleCytoscapeSelectionID("beta");
 
@@ -245,4 +244,3 @@ describe("graph mounted-element boundary", () => {
     // because there is now a note to re-anchor on.
     expect(isolateButton.disabled).toBe(false);
   });
-});

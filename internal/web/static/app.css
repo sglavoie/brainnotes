@@ -2892,9 +2892,10 @@ code {
 @media (max-width: 700px) {
   .overview-result-row.has-selection { grid-template-columns: 2.75rem minmax(0, 1fr); column-gap: 0.25rem; row-gap: 0; }
   .overview-result-select { grid-column: 1; grid-row: 1; min-height: 2.75rem; box-sizing: border-box; }
-  .overview-result-content { grid-column: 2; grid-row: 1; }
+  .overview-result-content { grid-column: 2; grid-row: 1; padding-bottom: 0.25rem; }
   .overview-result-row .overview-result-pin { min-height: 2.75rem; }
 }
+.overview-result-list[data-updating="true"] { opacity: 0.65; }
 /* internal/web/static_src/css/review.css */
 .review-panel {
   display: grid;
@@ -4142,6 +4143,13 @@ code {
 .note-print-body { min-width: 0; padding: 0.5rem 1rem; }
 @media (max-width: 700px) {
   .note-print-body { padding: 0.25rem 0; }
+}
+
+/* Keep prose readable even when the metadata column is hidden. Wide tables,
+   code and media retain the space available in the note's content column. */
+.note-print-body .note-body > :is(p, ul, ol, dl, blockquote, .note-section-heading, h1, h2, h3, h4, h5, h6) {
+  max-inline-size: 70ch;
+  box-sizing: border-box;
 }
 /* internal/web/static_src/css/chroma-light.css */
 /* Markdown code highlighting (Chroma classes). Light = github, dark =
@@ -5846,6 +5854,40 @@ code {
   pointer-events: none;
 }
 
+
+/* Search and the current note lead; layout tuning stays close at hand. */
+.graph-main > .site-header { width: 100%; }
+.graph-main > .sync-line { margin: 0; }
+.graph-main .graph-controls { width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.graph-controls > .graph-filter { grid-column: 1; }
+.graph-controls > .graph-search-mode { grid-column: 2; }
+.graph-controls > .graph-query-options,
+.graph-controls > .graph-layout-options { grid-column: 1 / -1; min-width: 0; }
+.graph-query-options > summary,
+.graph-layout-options > summary { cursor: pointer; padding-block: 0.5rem; min-height: 2.75rem; box-sizing: border-box; }
+.graph-layout-options-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; padding: 0.75rem; border: 1px solid var(--bn-border); border-radius: 0.5rem; }
+.graph-sidebar { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+#graph-node-list { width: 100%; min-height: 10rem; padding: 0.5rem; font: inherit; color: var(--bn-text); background: var(--bn-surface); border: 1px solid var(--bn-border); border-radius: 0.4rem; }
+#graph-node-list option { padding: 0.35rem; }
+#graph-node-list:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
+#graph-keyboard-help { color: var(--bn-muted); font-size: 0.85rem; }
+.graph-main .graph-open-note,
+.graph-main .graph-control-button { min-height: 2.75rem; }
+@media (max-width: 700px) {
+  .graph-main .graph-panel { display: flex; flex-direction: column; }
+  .graph-main #graph-canvas { height: 45vh; min-height: 16rem; flex: none; }
+  .graph-sidebar { display: contents; }
+  .graph-hover { order: -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 0.75rem; }
+  .graph-hover h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .graph-hover #graph-hover-title { grid-column: 1; grid-row: 1; align-self: center; margin: 0; font-weight: 600; }
+  .graph-hover .graph-open-note { grid-column: 2; grid-row: 1; margin: 0; }
+  .graph-hover #graph-hover-folder,
+  .graph-hover #graph-hover-degree,
+  .graph-hover .graph-issue-list { grid-column: 1 / -1; margin: 0; font-size: 0.85rem; }
+  .graph-hover p:empty { display: none; }
+}
+
+.graph-controls .library-filters > summary { min-height: 2.75rem; padding-block: 0.5rem; box-sizing: border-box; cursor: pointer; }
 /* internal/web/static_src/css/properties.css */
 .properties-panel[aria-busy='true'] {
   border-color: var(--bn-border-strong);

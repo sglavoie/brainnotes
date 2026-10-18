@@ -32,6 +32,8 @@ import { LibraryPagination } from "./library-pagination";
 import { bindLibraryPosition } from "./library-position";
 import { OverviewSearchBulk } from "./overview-search-bulk";
 import { renderOverviewEmptyHelp } from "./overview-search-empty";
+import { LibrarySelectionStore } from "./library-selection-store";
+import { bindSearchInput } from "./search-input";
 
 export {
   overviewSearchEmptyMessage,
@@ -46,10 +48,14 @@ class OverviewSearch extends OverviewSearchBulk {
   private readonly pagination: LibraryPagination;
   private debounceToken = 0;
   private requestToken = 0;
+  private loadingToken = 0;
+  private activeRequest: AbortController | null = null;
+  private readonly selectionStore: LibrarySelectionStore;
   private readonly resultOrder = new Map<string, number>();
 
   constructor(els: OverviewSearchElements, deps: OverviewSearchDeps) {
     super(els, deps);
+    this.selectionStore = new LibrarySelectionStore(els.root.dataset.selectionVault || "");
     this.resetRangeSelection = bindOverviewRangeSelection(els.listEl);
     this.restorePosition = bindLibraryPosition(els.listEl);
     this.pagination = new LibraryPagination(els.root, () => this.scheduleSearch(0), () => this.bulkBusy);
@@ -62,6 +68,16 @@ class OverviewSearch extends OverviewSearchBulk {
     this.updateBulkControls();
     this.scheduleSearch(0);
   }
+
+  protected selectionChanged(): void { this.selectionStore?.save(this.selectedKeys); }
+
+  private cancelSearch = (): void => {
+    window.clearTimeout(this.debounceToken);
+    window.clearTimeout(this.loadingToken);
+    this.activeRequest?.abort();
+    this.requestToken += 1;
+    delete this.els.listEl.dataset.updating;
+  };
 
   private setStatus = (message: string, kind: StatusKind = ""): void => {
     const emptyHelp = this.els.root.querySelector<HTMLElement>("[data-overview-empty-help]");
@@ -166,10 +182,12 @@ class OverviewSearch extends OverviewSearchBulk {
   protected scheduleSearch = (delay: number): void => {
     this.resetRangeSelection();
     const query = overviewSearchQuery(this.els.input);
-    window.clearTimeout(this.debounceToken);
+    this.cancelSearch();
     syncPageQueryParam(query);
     syncLibraryActivity(query !== "" || hasActiveFilters());
-    const request = this.pagination.prepare(buildSearchAPIURL(query, true));
+    const apiURL = buildSearchAPIURL(query, true);
+    this.selectionStore.prepare(apiURL);
+    const request = this.pagination.prepare(apiURL);
     if (request.changed) { this.selectedKeys.clear(); this.resultOrder.clear(); }
     this.clearPreviewState({ clearStatus: true });
 
@@ -182,30 +200,50 @@ class OverviewSearch extends OverviewSearchBulk {
     }
 
     const localToken = ++this.requestToken;
+    const emptyHelp = this.els.root.querySelector<HTMLElement>("[data-overview-empty-help]");
+    if (emptyHelp) emptyHelp.hidden = true;
+    const controller = new AbortController();
+    this.activeRequest = controller;
     setOverviewBusy(this.els.root, true);
     this.pagination.busy(true);
     this.updateBulkControls();
-    this.setStatus("Loading matching notes...", "is-loading");
+    this.els.listEl.dataset.updating = "true";
+    this.loadingToken = window.setTimeout(() => this.setStatus(
+      this.els.listEl.hidden ? "Loading matching notes..." : "Updating results… Previous matches are shown.", "is-loading"
+    ), 350);
     this.debounceToken = window.setTimeout(async () => {
       try {
         const resp = await this.fetcher(request.url, {
           headers: { Accept: "application/json" },
+          signal: controller.signal,
         });
         if (!resp.ok) {
           throw new Error("search request failed");
         }
         const payload = await resp.json();
+        if (localToken !== this.requestToken) return;
+        const restored = await this.selectionStore.restore(this.fetcher, controller.signal);
         if (localToken !== this.requestToken) {
           return;
         }
+        if (restored) {
+          this.selectedKeys.clear();
+          for (const [key, target] of restored.targets) this.selectedKeys.set(key, target);
+          for (const [key, position] of restored.positions) this.resultOrder.set(key, position);
+        }
+        this.selectionStore.restored();
         this.renderResults(payload, query, readSearchCounts(resp));
       } catch {
         if (localToken === this.requestToken) {
+          window.clearTimeout(this.loadingToken);
+          delete this.els.listEl.dataset.updating;
           this.pagination.failed();
           this.clearResults("Search unavailable.", "is-error");
         }
       } finally {
         if (localToken === this.requestToken) {
+          window.clearTimeout(this.loadingToken);
+          delete this.els.listEl.dataset.updating;
           setOverviewBusy(this.els.root, false);
           this.updateBulkControls();
           this.pagination.busy(false);
@@ -218,9 +256,7 @@ class OverviewSearch extends OverviewSearchBulk {
     this.els.root.querySelector("[data-overview-search-retry]")?.addEventListener("click", () => this.scheduleSearch(0));
     if (this.els.input instanceof HTMLInputElement) {
       this.els.input.value = readPageQuery();
-      this.els.input.addEventListener("input", () => {
-        this.scheduleSearch(150);
-      });
+      bindSearchInput(this.els.input, () => this.scheduleSearch(150), this.cancelSearch);
     }
 
     window.addEventListener(filterChangeEventName, (event) => {

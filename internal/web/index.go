@@ -105,6 +105,7 @@ type rootCompactHealthData struct {
 
 type libraryPageData struct {
 	Title         string
+	VaultID       string
 	CSRFToken     string
 	FacetControls facetControlsData
 	Recent        []indexRecentNote

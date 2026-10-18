@@ -5,7 +5,7 @@
     data-facet-mode="{{.Mode}}"
     aria-label="{{.Label}}"
   >
-    {{if eq .Mode "search"}}<details class="library-filters"><summary>Filters</summary>{{end}}
+    {{if or (eq .Mode "search") (eq .Mode "graph")}}<details class="library-filters"><summary>Filters</summary>{{end}}
     <div class="facet-control-row">
       <div class="facet-picker">
         <label class="facet-label" for="{{.IDPrefix}}-facet-input">{{.Label}}</label>
@@ -28,7 +28,7 @@
       </div>
       <button class="facet-clear-all" type="button" data-facet-clear-all hidden>Clear filters</button>
     </div>
-    {{if eq .Mode "search"}}</details>{{end}}
+    {{if or (eq .Mode "search") (eq .Mode "graph")}}</details>{{end}}
     <p data-facet-status role="status" aria-live="polite"></p>
     <button class="facet-clear-all" type="button" data-facet-retry hidden>Retry filters</button>
     <div class="active-constraints" role="group" aria-label="Active constraints">

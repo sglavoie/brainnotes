@@ -312,6 +312,7 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.CSRFToken = s.csrfToken
+	data.VaultID = s.vaultIdentity()
 	if err := s.templates.ExecuteTemplate(w, "library", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)
 	}

@@ -1,4 +1,5 @@
 export type SearchResult = {
+  position?: number;
   key: string;
   path: string;
   title: string;

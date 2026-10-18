@@ -132,8 +132,23 @@ export const renderGraphDetails = (
 ): void => {
   const model = selectedModel || hoveredModel;
 
+  renderDetailText(refs, model);
+  renderIssueDetails(refs.hoverIssues, model);
+  if (refs.detailsPanel) {
+    refs.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
+    refs.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
+    refs.detailsPanel.classList.toggle("is-aggregate", Boolean(model && model.isAggregate));
+  }
+  setOpenNoteTarget(
+    refs.openNote,
+    selectedModel ? selectedModel.id : "",
+    Boolean(selectedModel && selectedModel.isAggregate)
+  );
+};
+
+const renderDetailText = (refs: GraphDetailsRefs, model: GraphNodeModel | null): void => {
   if (refs.hoverTitle) {
-    refs.hoverTitle.textContent = model ? model.title || model.id : "Hover a node";
+    refs.hoverTitle.textContent = model ? model.title || model.id : "Choose a note";
   }
   if (refs.hoverFolder) {
     refs.hoverFolder.textContent = model ? `Folder: ${model.folder || "/"}` : "";
@@ -147,15 +162,4 @@ export const renderGraphDetails = (
         : formatDegreeDetails(model);
     }
   }
-  renderIssueDetails(refs.hoverIssues, model);
-  if (refs.detailsPanel) {
-    refs.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));
-    refs.detailsPanel.classList.toggle("is-transient", !selectedModel && Boolean(hoveredModel));
-    refs.detailsPanel.classList.toggle("is-aggregate", Boolean(model && model.isAggregate));
-  }
-  setOpenNoteTarget(
-    refs.openNote,
-    selectedModel ? selectedModel.id : "",
-    Boolean(selectedModel && selectedModel.isAggregate)
-  );
 };
