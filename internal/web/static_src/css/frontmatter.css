@@ -142,3 +142,19 @@
   overflow-wrap: anywhere;
 }
 
+
+.frontmatter-row dd { position: relative; }
+.frontmatter-editor { margin-top: 0.15rem; }
+.frontmatter-editor > summary,
+.frontmatter-add > summary {
+  cursor: pointer;
+  color: var(--bn-link);
+  font-size: 0.85rem;
+  width: fit-content;
+  min-height: 2rem;
+  padding: 0.25rem 0;
+  box-sizing: border-box;
+}
+.frontmatter-add { margin-top: 0.75rem; }
+.frontmatter-add-form { margin-top: 0; }
+.frontmatter-edit-status:empty { display: none; }

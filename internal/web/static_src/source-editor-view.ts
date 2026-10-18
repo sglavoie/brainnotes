@@ -9,7 +9,7 @@ import {
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, codeFolding, foldEffect, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Annotation, EditorState } from "@codemirror/state";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { EditorView, highlightSpecialChars, keymap } from "@codemirror/view";
@@ -52,10 +52,11 @@ export const createSourceSurfaceFactory = (
 
     const view = new EditorView({
       parent: host,
-      state: EditorState.create({
+      state: initialSourceState(EditorState.create({
         doc: initialValue,
         extensions: [
           history(),
+          codeFolding({ placeholderDOM: frontmatterPlaceholder }),
           search({ top: true }),
           highlightSpecialChars(),
           bracketMatching(),
@@ -91,7 +92,7 @@ export const createSourceSurfaceFactory = (
             }
           }),
         ],
-      }),
+      })),
     });
 
     return {
@@ -317,3 +318,21 @@ const applyWikilink =
       selection: { anchor: from + insert.length + (closed ? 2 : 0) },
     });
   };
+
+// Long metadata stays editable, but does not push the prose out of the first
+// viewport. This changes only the initial view, never the source or selection.
+const initialSourceState = (state: EditorState): EditorState => {
+  const header = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(state.doc.toString());
+  if (!header || header[0].split("\n").length < 9) return state;
+  return state.update({ effects: foldEffect.of({ from: 0, to: header[0].trimEnd().length }) }).state;
+};
+
+const frontmatterPlaceholder = (_view: EditorView, unfold: (event: Event) => void): HTMLElement => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "source-editor-frontmatter";
+  button.textContent = "Show frontmatter";
+  button.setAttribute("aria-label", "Show frontmatter in source editor");
+  button.addEventListener("click", unfold);
+  return button;
+};

@@ -1,3 +1,4 @@
+import { confirmAction } from "./action-confirm";
 import type { HistoryPreviewResult, UndoRequest } from "./api-types";
 import { HISTORY_PREVIEW_ENDPOINT } from "./api-history";
 import { previewHistoryRestore, type HistoryFetch } from "./history-requests";
@@ -22,46 +23,13 @@ export const undoDescription = (preview: HistoryPreviewResult): string => [
     `${change.path}: ${restoreEffect(change.current_state, change.restored_state)}${change.conflict ? " (replaces newer work)" : ""}`),
 ].join("\n");
 
-// A native dialog supplies keyboard containment and Escape. Text is assigned
-// through textContent because paths and commands are vault-authored content.
 export const confirmUndo = (
   preview: HistoryPreviewResult, doc = document, returnFocus: Element | null = doc.activeElement,
-): Promise<boolean> =>
-  new Promise((resolve) => {
-    const dialog = doc.createElement("dialog");
-    dialog.className = "properties-dialog history-confirm";
-    dialog.setAttribute("aria-labelledby", "history-confirm-heading");
-    const heading = doc.createElement("h2");
-    heading.id = "history-confirm-heading";
-    heading.textContent = `${undoActionLabel(preview)}?`;
-    const description = doc.createElement("pre");
-    description.className = "history-confirm-description";
-    description.textContent = undoDescription(preview);
-    const actions = doc.createElement("div");
-    actions.className = "history-actions";
-    const cancel = doc.createElement("button");
-    cancel.className = "history-button";
-    cancel.textContent = "Cancel";
-    cancel.autofocus = true;
-    const confirm = doc.createElement("button");
-    confirm.className = "history-button history-danger";
-    confirm.textContent = preview.requires_force ? "Restore and replace newer work" : undoActionLabel(preview);
-    cancel.addEventListener("click", () => dialog.close("cancel"));
-    confirm.addEventListener("click", () => dialog.close("confirm"));
-    dialog.addEventListener("close", () => {
-      const accepted = dialog.returnValue === "confirm";
-      dialog.remove();
-      resolve(accepted);
-      // Callers re-enable controls when their awaited confirmation settles.
-      doc.defaultView?.setTimeout(() => {
-        if (doc.activeElement === doc.body && returnFocus instanceof HTMLElement && returnFocus.isConnected) returnFocus.focus();
-      }, 0);
-    }, { once: true });
-    actions.append(cancel, confirm);
-    dialog.append(heading, description, actions);
-    doc.body.append(dialog);
-    dialog.showModal();
-  });
+): Promise<boolean> => confirmAction({
+  title: `${undoActionLabel(preview)}?`,
+  description: undoDescription(preview),
+  confirmLabel: preview.requires_force ? "Restore and replace newer work" : undoActionLabel(preview),
+}, doc, returnFocus);
 
 // The identity and receipt both come from the preview. A new journal entry
 // appearing while the dialog is open cannot retarget this confirmation.

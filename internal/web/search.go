@@ -2,10 +2,8 @@ package web
 
 import (
 	"fmt"
-	"html"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -145,7 +143,7 @@ func collectSearchCandidates(snapshot vaultSnapshot, root string, filters noteFi
 				Wikilink:      wikilinkTargetForNote(root, note),
 				Folder:        folder,
 				Path:          path,
-				Snippet:       html.EscapeString(makeSearchSnippet(match.Body, match.BodyMatchIndex)),
+				Snippet:       makeSearchSnippet(match.Body, filters.foldedQuery),
 				Pinned:        pinned(note),
 				Modified:      searchModified(note),
 				MatchedFields: searchMatchedFields(match, filters.foldedQuery != ""),
@@ -221,50 +219,4 @@ func searchIssueFlags(note *vault.Note, issuePredicates []searchIssuePredicate) 
 		}
 	}
 	return issues
-}
-
-func makeSearchSnippet(body string, bodyMatchIndex int) string {
-	body = strings.TrimSpace(body)
-	if body == "" {
-		return ""
-	}
-
-	runes := []rune(body)
-	if len(runes) == 0 {
-		return ""
-	}
-
-	start := 0
-	if bodyMatchIndex > 0 {
-		if bodyMatchIndex > len(body) {
-			bodyMatchIndex = len(body)
-		}
-		matchRuneIndex := utf8.RuneCountInString(body[:bodyMatchIndex])
-		start = matchRuneIndex - (searchSnippetRunes / 2)
-		if start < 0 {
-			start = 0
-		}
-	}
-
-	end := len(runes)
-	if len(runes) > searchSnippetRunes {
-		if start+searchSnippetRunes > len(runes) {
-			start = len(runes) - searchSnippetRunes
-		}
-		end = start + searchSnippetRunes
-	}
-
-	snippet := strings.Join(strings.Fields(string(runes[start:end])), " ")
-	if snippet == "" {
-		return ""
-	}
-
-	if start > 0 {
-		snippet = "..." + snippet
-	}
-	if end < len(runes) {
-		snippet += "..."
-	}
-
-	return snippet
 }

@@ -41,7 +41,7 @@ for (const surface of ["note", "library", "pinned"]) {
     const fetcher = vi.fn(async () => test.response());
     const button = setup(surface, fetcher);
     button.click();
-    await vi.waitFor(() => expect(document.body.textContent).toContain(test.unknown ? "Couldn't confirm" : "Refused."));
+    await vi.waitFor(() => expect(document.body.textContent).toContain(test.unknown ? "not confirmed" : "Refused."));
     expect(button.isConnected).toBe(true);
     expect(button.textContent).toBe("Unpin");
     expect(document.body.textContent).not.toContain("Unpinned note.");

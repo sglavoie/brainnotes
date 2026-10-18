@@ -202,6 +202,12 @@ test("an attachment conflict takes the other replica's bytes behind a confirmati
   await openSync(page);
 
   await planDecision(page, "attachment", "accept-incoming");
+  const apply = operationFor(page, "attachment").locator("[data-sync-apply]");
+  await apply.click();
+  await expect(page.getByRole("dialog")).toContainText(held("attachment").path);
+  await page.keyboard.press("Escape");
+  await expect(apply).toBeFocused();
+  expect(readFileSync(file).equals(before)).toBe(true);
   // Taking the other replica's bytes revises nothing on top of the application, so
   // there is no second commit and the answer must not claim one.
   await applyDecision(page, "attachment", { revised: false });

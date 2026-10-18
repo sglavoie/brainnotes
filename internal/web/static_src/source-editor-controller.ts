@@ -359,6 +359,7 @@ const runLoad = async (
     const loaded = await deps.client.read();
     mountSurface(deps, state, loaded.content, () => {
       ctx.refreshSaveButton();
+      refreshEditStatus(deps.elements, state, ctx);
       // The preview is scheduled on every edit regardless of which pane is
       // showing. On a wide screen both are, so this is simply correct; on a
       // narrow one it costs a debounced request for a hidden pane, and the
@@ -369,7 +370,7 @@ const runLoad = async (
       ctx.drafts.keep();
     });
     ctx.adopt(loaded.content, loaded.revision, false);
-    ctx.setStatus(`${deps.config.relPath} loaded. Nothing is written until you save.`);
+    ctx.setStatus("Ready to edit. Save writes to the vault.");
     ctx.preview.flush(loaded.content);
     ctx.drafts.present(kept, { kind: "loaded", revision: loaded.revision, content: loaded.content });
   } catch (error: unknown) {
@@ -439,4 +440,9 @@ const wireControls = (
   }
   elements.save?.addEventListener("click", () => void controller.save());
   elements.find?.addEventListener("click", () => controller.openSearch());
+};
+
+const refreshEditStatus = (elements: SourceEditorElements, state: EditorState, ctx: SaveContext): void => {
+  if (state.saving || state.pendingSave || elements.status?.matches(".is-error, .is-warning")) return;
+  ctx.setStatus(state.surface?.getValue() === state.savedContent ? "No unsaved changes." : "Unsaved changes.");
 };

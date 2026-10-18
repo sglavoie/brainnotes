@@ -37,6 +37,7 @@ export const bindSearchShortcut = (input: HTMLInputElement): (() => void) => {
     event.preventDefault();
     returnTarget = doc.activeElement instanceof HTMLElement && doc.activeElement !== doc.body
       ? doc.activeElement : null;
+    openSearchAncestors(input);
     input.focus();
   };
   doc.addEventListener("keydown", onKeyDown);
@@ -51,3 +52,15 @@ export const bindSearchShortcut = (input: HTMLInputElement): (() => void) => {
 const isSearchEscape = (event: KeyboardEvent, scope: HTMLElement): boolean =>
   event.key === "Escape" && !event.ctrlKey && !event.metaKey && !event.altKey &&
   !event.shiftKey && !event.isComposing && event.target instanceof Node && scope.contains(event.target);
+
+const ancestors = (input: HTMLElement): HTMLDetailsElement[] => {
+  const details: HTMLDetailsElement[] = [];
+  for (let parent = input.parentElement; parent; parent = parent.parentElement) {
+    if (parent instanceof HTMLDetailsElement) details.push(parent);
+  }
+  return details;
+};
+
+const openSearchAncestors = (input: HTMLElement): void => {
+  for (const disclosure of ancestors(input)) disclosure.open = true;
+};

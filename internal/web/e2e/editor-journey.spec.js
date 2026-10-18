@@ -7,7 +7,7 @@
 // decision: a file chooser the operating system opened, a drop landing on the
 // element CodeMirror installed its own handlers on, a destination the *server*
 // chose arriving back as percent-encoded Markdown in a mounted document, a
-// `window.confirm` in front of a trash, and a `<details>` nothing inside is
+// the application dialog in front of a trash, and a `<details>` nothing inside is
 // clickable until it is open.
 //
 // The line this file holds is ownership: a file is in the vault when a save put
@@ -179,6 +179,9 @@ test("unsaved text holds a rename until it is saved, and nothing is left under t
   // Renaming is available above the editor without opening management.
   await expect(page.locator("[data-source-manage]")).not.toHaveAttribute("open");
   await expect(page.getByLabel("Note title", { exact: true })).toHaveValue(title);
+  await page.locator("[data-source-manage] > summary").click();
+  await page.getByText("Rename note", { exact: true }).click();
+  await page.locator("[data-source-rename]").scrollIntoViewIfNeeded();
   await expect(page.locator("[data-source-rename]")).toBeInViewport();
   await page.getByLabel("Note title", { exact: true }).fill(renamed);
   await page.locator("[data-source-rename]").click();
@@ -218,9 +221,7 @@ test("unsaved text holds a rename until it is saved, and nothing is left under t
 test("a note created from the editor survives a property, a pin, a move, a trash and an undo", async ({
   page,
 }) => {
-  // Trash and undo both ask first, through window.confirm. jsdom's editor tests
-  // inject a fake `confirm`; this is the real one.
-  page.on("dialog", (dialog) => dialog.accept());
+  // Trash and undo use application dialogs before sending any write.
   const title = `Journey ${MARKER}`;
   const moved = `Notes/${title}`;
   expect(gitStatus(manifest.localVault)).toBe("");
@@ -255,6 +256,7 @@ test("a note created from the editor survives a property, a pin, a move, a trash
 
   await openManage(page);
   await page.locator("[data-source-trash]").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Move to Trash", exact: true }).click();
   await expect(page).toHaveURL(`${manifest.baseURL}/`);
   expect(existsSync(vaultPath("Notes", `${title}.md`))).toBe(false);
   expect(existsSync(trashedPath(`${moved}.md`)), "the note is not in Trash/").toBe(true);

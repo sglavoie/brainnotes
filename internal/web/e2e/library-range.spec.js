@@ -11,5 +11,5 @@ test("Shift-click selects a displayed range and clears it through real checkbox 
   await expect(page.locator("[data-overview-selected-count]")).toHaveText("3 selected");
   await checkboxes.first().click({ modifiers: ["Shift"] });
   await expect(page.locator(".overview-result-select input:checked")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Copy wikilinks", exact: true })).toBeDisabled();
+  await expect(page.locator("[data-overview-copy-wikilinks]")).toBeHidden();
 });

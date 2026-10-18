@@ -84,7 +84,7 @@ describe("broken create DOM behavior", () => {
     const button = document.querySelector<HTMLButtonElement>("[data-create-button]")!;
     button.click();
     await waitForExpect(() => expect(button.disabled).toBe(false));
-    expect(document.querySelector("[data-create-status]")?.textContent).toContain("Couldn't confirm note creation");
+    expect(document.querySelector("[data-create-status]")?.textContent).toContain("Creation not confirmed");
     const link = document.querySelector<HTMLAnchorElement>("[data-create-status] a")!;
     expect(link.textContent).toBe("Refresh to check");
     expect(link.href).toBe(window.location.href);

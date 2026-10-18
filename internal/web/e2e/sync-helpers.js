@@ -43,20 +43,19 @@ export function contestedFor(page, label) {
   return operationFor(page, label).locator(`[data-sync-path="${held(label).path}"]`);
 }
 
-// watchDialogs accepts every confirmation and records what it said.
-//
-// Recording is half the assertion: a destructive decision must ask, and a
-// decision that destroys nothing must not — Playwright dismisses an unhandled
-// dialog, so a page that asked when it should not would silently answer "no" and
-// report that nothing was applied.
+const confirmations = new WeakMap();
 export function watchDialogs(page) {
   const asked = [];
-  page.on("dialog", (dialog) => {
-    asked.push(dialog.message());
-    void dialog.accept();
-  });
+  confirmations.set(page, asked);
   return asked;
 }
+
+const acceptDecision = async (page) => {
+  const dialog = page.getByRole("dialog");
+  if (!await dialog.isVisible()) return;
+  confirmations.get(page)?.push(await dialog.locator(".history-confirm-description").innerText());
+  await dialog.getByRole("button", { name: "Apply and discard these versions" }).click();
+};
 
 // planDecision takes the choice and reads the plan, which is the step Apply is
 // not offered without.
@@ -103,6 +102,7 @@ export async function applyDecision(page, label, { revised }) {
       response.request().method() === "POST",
   );
   await operation.locator("[data-sync-apply]").click();
+  await acceptDecision(page);
   const resolved = await (await answered).json();
   expect(resolved.ok, `the resolution was refused: ${resolved.message ?? ""}`).toBe(true);
   expect(resolved.package_id).toBe(held(label).packageId);

@@ -53,7 +53,7 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   });
 };
 
-const unconfirmedMessage = "Couldn't confirm note creation. Retry with the same title and folder to check safely.";
+const unconfirmedMessage = "Creation not confirmed. Retry with the same title and folder to check safely.";
 
 const showOutcome = (
   result: ManageOutcome, status: HTMLElement, editorPath: string, navigate: (url: string) => void,

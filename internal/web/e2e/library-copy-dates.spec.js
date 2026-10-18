@@ -16,5 +16,5 @@ test("Library shows the sort date and copies selected wikilinks on mobile", asyn
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Clear selection", exact: true }).click();
   await expect(fallback).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Copy wikilinks", exact: true })).toBeDisabled();
+  await expect(page.locator("[data-overview-copy-wikilinks]")).toBeHidden();
 });

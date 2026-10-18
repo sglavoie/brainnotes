@@ -92,6 +92,7 @@ test("a toolbar command edits the document and the Save button writes it", async
   // turns a keystroke into them.
   await page.keyboard.press("Shift+Home");
 
+  await page.locator(".source-editor-format > summary").click();
   await page.locator('[data-source-command="bold"]').click();
   await expect(page.locator(SURFACE)).toContainText(`**${phrase}**`);
 
@@ -406,8 +407,8 @@ test("a note renamed under the edit offers the kept text back as a new note", as
   // backlink journeys see the original fixture identity only.
   await page.goto(renamedNote.path);
   await page.getByText("More actions", { exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept());
   await page.locator("[data-trash-button]").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Move to Trash", exact: true }).click();
   await expect(page).toHaveURL(`${manifest.baseURL}/`);
   await page.waitForLoadState("networkidle");
   expect(gitStatus(manifest.localVault), "the note was written but never snapshotted").toBe("");

@@ -62,6 +62,7 @@ test("the shipped bundle loads and drives the page", async ({ page }) => {
   // initTheme() installs turns a click on "Dark" into that attribute. A bundle
   // that parsed but never initialised leaves the page exactly as it arrived.
   expect(await page.evaluate(() => document.documentElement.dataset.theme ?? "")).toBe("");
+  await page.locator(".source-editor-workspace > summary").click();
   await page.locator("[data-theme-control] label", { hasText: "Dark" }).click();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
 

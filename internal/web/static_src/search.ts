@@ -302,6 +302,17 @@ class HeaderSearch {
 export const initSearch = (): void => {
   const searchBox = queryElement(document, "[data-search-box]", HTMLElement);
   const input = getElementByID("search-input", HTMLInputElement);
+  if (input && searchBox?.hasAttribute("data-library-search-input")) {
+    bindSearchShortcut(input);
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      const results = document.getElementById("overview-results-heading");
+      results?.setAttribute("tabindex", "-1");
+      results?.focus();
+    });
+    return;
+  }
   const resultsEl = getElementByID("search-results", HTMLElement);
   if (!searchBox || !input || !resultsEl) {
     return;

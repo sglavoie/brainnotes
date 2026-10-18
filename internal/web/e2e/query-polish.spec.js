@@ -11,6 +11,7 @@ test("saved-view retry works by keyboard without losing focus on mobile", async 
       { name: "Drafts", enabled: true, query: "status:draft", sort: "title" },
     ] } }));
   await page.goto("/library?expr=status:draft&sort=title");
+  await page.locator(".source-editor-workspace > summary").click();
   const retry = page.getByRole("button", { name: "Retry saved views", exact: true });
   await expect(retry).toBeVisible();
   await expect(page.locator(".saved-views-feedback")).toContainText("Saved views unavailable");
@@ -78,6 +79,7 @@ test("saved view highlighting follows live search and sorting", async ({ page })
   await page.getByRole("combobox", { name: "Sort results" }).focus();
   await page.getByRole("combobox", { name: "Sort results" }).selectOption("-title");
   await expect(view).not.toHaveAttribute("aria-current");
+  await page.locator(".source-editor-workspace > summary").click();
   await view.click();
   await expect(view).toHaveAttribute("aria-current", "true");
 });
@@ -88,6 +90,7 @@ test("unavailable saved views disclose their error with keyboard and touch", asy
     json: { ok: true, views: [{ name: "Needs repair", enabled: false, detail: error }] },
   }));
   await page.goto("/library");
+  await page.locator(".source-editor-workspace > summary").click();
   const summary = page.locator('summary[data-saved-view="Needs repair"]');
   const detail = page.locator(".saved-view-error-detail");
   await expect(detail).toBeHidden();

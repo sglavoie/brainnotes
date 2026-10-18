@@ -112,7 +112,7 @@ const signInMessage =
 // knows. The bytes may have reached the vault before the session lapsed, or the
 // request may never have arrived at all, so this must not read as a refusal.
 const foreignSaveMessage =
-  "The vault did not answer — the reply came from somewhere else, which usually means a sign-in has expired, so whether the note was written is unknown. Sign in again and press Save to retry; the same submission cannot be written twice.";
+  "Save not confirmed. Your text is still in the editor. If sign-in expired, sign in again, then press Save to retry safely.";
 
 // foreignAnswer decides whether a response came from this API at all.
 //
@@ -406,7 +406,7 @@ const classifyRefusal = (response: SourceSaveFailure): SaveOutcome => {
       answered: false,
       message:
         response.message ||
-        "The server's answer could not be read, so whether the note was written is unknown. Press Save to retry; the same submission cannot be written twice.",
+        "Save not confirmed. Your text is still in the editor. Press Save to retry safely.",
     };
   }
   return { kind: "failed", answered: true, message: response.message || "The note could not be saved." };

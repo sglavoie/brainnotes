@@ -1,3 +1,4 @@
+import { confirmAction, type ConfirmAction } from "./action-confirm";
 import { queryElement } from "./dom";
 import { setStatusText, type StatusKind } from "./status";
 import { resolveDraftStorage, resolveDraftTabID, type DraftStorage } from "./source-draft";
@@ -83,7 +84,7 @@ export type SyncConflictsPanelDeps = {
   surface: () => SourceSurfaceFactory;
   storage?: DraftStorage | null;
   draftID?: string;
-  confirm?: (message: string) => boolean;
+  confirm?: ConfirmAction;
   // changed is called after anything durable happened, so the status panel re-reads
   // instead of this page deciding what the new status is.
   changed?: () => void;
@@ -109,7 +110,7 @@ type PanelContext = {
   surface: () => SourceSurfaceFactory;
   storage: DraftStorage | null;
   draftID: string;
-  confirm: (message: string) => boolean;
+  confirm: ConfirmAction;
   changed: () => void;
   // merges asks what a re-read can honestly promise about every merge on the page,
   // not just the ones on the card whose request failed. One reload replaces all of
@@ -217,7 +218,7 @@ const applyResolution = async (scope: ResolutionScope): Promise<void> => {
     return;
   }
   const discards = decisions.discards();
-  if (discards.length > 0 && !ctx.confirm(confirmationText(discards))) {
+  if (discards.length > 0 && !await ctx.confirm(confirmationText(discards), scope.elements.apply)) {
     say("Nothing was applied.");
     return;
   }
@@ -396,7 +397,9 @@ export const createSyncConflictsPanel = (
     // The same per-tab identity the editor uses, from the same sessionStorage slot:
     // one tab is one author, whichever of its pages the text was typed on.
     draftID: deps.draftID ?? resolveDraftTabID(() => randomID("tab"), deps.view ?? undefined),
-    confirm: deps.confirm ?? ((message: string) => (deps.view ?? window).confirm(message)),
+    confirm: deps.confirm ?? ((message: string, returnFocus?: Element | null) => confirmAction({
+      title: "Apply this sync decision?", description: message, confirmLabel: "Apply and discard these versions",
+    }, deps.root.ownerDocument, returnFocus)),
     changed: deps.changed ?? ((): void => {}),
     merges: (): MergeSafety =>
       mergeSafetyOf(controllers.flatMap((controller) => controller.editors())),

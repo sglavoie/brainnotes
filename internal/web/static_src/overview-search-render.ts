@@ -257,14 +257,7 @@ const renderResultMetadata = (doc: Document, result: SearchResult): HTMLElement 
   meta.appendChild(folder);
   renderSearchModified(meta, result.modified);
 
-  if (result.matched_fields.length > 0) {
-    const fields = doc.createElement("span");
-    fields.className = "overview-result-badge";
-    fields.textContent = `Matched: ${result.matched_fields.join(", ")}`;
-    meta.appendChild(fields);
-  }
-
-  for (const issue of result.issues) {
+  for (const issue of result.issues.filter((issue) => issue === "broken")) {
     const badge = doc.createElement("span");
     badge.className = "overview-result-badge is-issue";
     badge.textContent = issue.replace(/_/g, " ");
@@ -272,6 +265,21 @@ const renderResultMetadata = (doc: Document, result: SearchResult): HTMLElement 
   }
   return meta;
 
+};
+
+const renderResultDetails = (doc: Document, result: SearchResult): HTMLElement | null => {
+  const facts = result.issues.filter((issue) => issue !== "broken").map((issue) => issue.replace(/_/g, " "));
+  if (result.matched_fields.length) facts.unshift(`Matched: ${result.matched_fields.join(", ")}`);
+  if (!facts.length) return null;
+  const details = doc.createElement("details");
+  details.className = "overview-result-details";
+  const summary = doc.createElement("summary");
+  summary.textContent = "Match details";
+  summary.setAttribute("aria-label", `Match details for ${result.title || result.key}`);
+  const text = doc.createElement("p");
+  text.textContent = facts.join(" · ");
+  details.append(summary, text);
+  return details;
 };
 
 const renderResultSelection = (
@@ -333,8 +341,6 @@ export const renderOverviewSearchResult = (
   title.textContent = result.title || result.key || "Untitled";
   link.appendChild(title);
 
-  link.appendChild(renderResultMetadata(doc, result));
-
   if (result.snippet) {
     const snippet = doc.createElement("p");
     snippet.className = "overview-result-snippet";
@@ -342,7 +348,16 @@ export const renderOverviewSearchResult = (
     link.appendChild(snippet);
   }
 
-  row.appendChild(link);
+  const content = doc.createElement("div");
+  content.className = "overview-result-content";
+  content.appendChild(link);
+  const context = doc.createElement("div");
+  context.className = "overview-result-context";
+  context.appendChild(renderResultMetadata(doc, result));
+  const details = renderResultDetails(doc, result);
+  if (details) context.appendChild(details);
+  content.appendChild(context);
+  row.appendChild(content);
   if (result.key) {
     const pin = renderOverviewPin(doc, result);
     row.appendChild(pin.button);

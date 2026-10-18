@@ -139,7 +139,7 @@ export const applySynthesis = async (runtime: SynthesisRuntime): Promise<void> =
     setStatusText(
       view.previewStatus,
       errorCode(error) === "unconfirmed"
-        ? errorMessage(error, "Couldn't confirm creation. Check History before retrying.")
+        ? errorMessage(error, "Creation not confirmed. Check History before retrying.")
         : `${errorMessage(error, "The note could not be created.")} Preview again to retry; nothing you wrote was lost.`,
       "is-error"
     );

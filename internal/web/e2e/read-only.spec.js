@@ -17,6 +17,7 @@ test("the read-only Brief browses notes while every document-write door stays cl
   const response = await page.goto("/");
   expect(response.status()).toBe(200);
   await expect(page.locator("[data-brief-root]")).toBeVisible();
+  await expect(page.locator(".brief-ai").first()).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.dataset.readOnly)).toBe("true");
   await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
 
@@ -25,6 +26,7 @@ test("the read-only Brief browses notes while every document-write door stays cl
   await open.click();
   await expect(page).toHaveURL(/\/n\//);
   await expect(page.locator("[data-source-editor-launch]")).toBeHidden();
+  await expect(page.locator(".frontmatter-editor, .frontmatter-add")).toHaveCount(0);
 
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
@@ -41,7 +43,7 @@ test("the read-only Brief browses notes while every document-write door stays cl
   await expect(page.locator("[data-pin-button]")).toBeHidden();
   await page.getByRole("button", { name: "Clear selection", exact: true }).click();
   await expect(count).toHaveText("0 selected");
-  await expect(page.getByRole("button", { name: "Copy wikilinks", exact: true })).toBeDisabled();
+  await expect(page.locator("[data-overview-copy-wikilinks]")).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await page.goto("/library?q=unwritten-replica-note");

@@ -80,11 +80,11 @@ describe("initSourceManage: where the note lives", () => {
     expect(sent(h.fetcher).url).toBe("/api/notes/trash");
   });
 
-  it("does nothing at all when the trash confirmation is declined", () => {
+  it("does nothing at all when the trash confirmation is declined", async () => {
     const h = harness({ confirm: false });
     h.click("[data-source-trash]");
     expect(h.fetcher).not.toHaveBeenCalled();
-    expect(h.status().text).toContain("canceled");
+    await vi.waitFor(() => expect(h.status().text).toContain("canceled"));
   });
 
 });
@@ -235,7 +235,7 @@ describe("initSourceManage: the vault beyond this note", () => {
     const h = harness();
     h.fetcher.mockRejectedValue(new Error("offline"));
     h.click("[data-source-pin]");
-    await vi.waitFor(() => expect(h.status().text).toContain("Couldn't confirm"));
+    await vi.waitFor(() => expect(h.status().text).toContain("not confirmed"));
     expect(h.status().text).not.toContain("Nothing was changed");
   });
 

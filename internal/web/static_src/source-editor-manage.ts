@@ -35,7 +35,7 @@ export type ManageHost = {
   reload(): Promise<void>;
   navigate(url: string): void;
   save(): Promise<void>;
-  confirm(message: string): boolean;
+  confirm(message: string): boolean | Promise<boolean>;
 };
 
 export type SourceManageDeps = {
@@ -177,7 +177,7 @@ const isUnconfirmed = (action: ManageAction, outcome: ManageOutcome): boolean =>
 
 const unconfirmedAction = (action: ManageAction): string => {
   const destination = action.button?.hasAttribute("data-source-capture") ? "your inbox" : "the note or History";
-  return `Couldn't confirm: ${action.label}. Check ${destination} before retrying; the action may already have succeeded. Your inputs are still here.`;
+  return `${action.label} not confirmed. Check ${destination} before retrying. Your inputs are still here.`;
 };
 
 const disableActions = (actions: ManageAction[], elements: SourceManageElements): Map<HTMLButtonElement, boolean> => {
@@ -236,8 +236,8 @@ const identityActions = (deps: SourceManageDeps): ManageAction[] => {
       button: elements.trash,
       label: "Move this note to Trash",
       allowDirty: false,
-      plan: () =>
-        host.confirm("Move this note to Trash? It can be restored from the history panel.")
+      plan: async () =>
+        await host.confirm(`Move this note to Trash? ${host.key()}\nIt can be restored from History.`)
           ? { url: endpoints.trash, body: buildNoteKeyMutationForm(keyed(config, host)) }
           : "Move to Trash: canceled. Nothing was changed.",
       after: () => host.navigate(endpoints.home),

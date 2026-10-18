@@ -51,7 +51,7 @@ html[data-no-process-launch] :is(
  [data-properties-config-open],
  [data-note-insight], [data-brief-action-insight], [data-brief-insight-prompt],
  [data-brief-insight-panel], [data-brief-agent-unconfigured],
- .brief-insight-prompt-controls, .brief-insight-prompt-field, .brief-action-hint,
+ .brief-ai, .brief-insight-prompt-controls, .brief-insight-prompt-field, .brief-action-hint,
  .properties-proposals-note
 ) { display: none !important; }
 

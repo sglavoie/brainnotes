@@ -22,7 +22,7 @@
 }
 
 .source-editor-title {
-  display: grid;
+  display: block;
   gap: 0.35rem;
   min-width: 0;
 }
@@ -458,3 +458,62 @@
 .source-editor-launch:hover {
   background: var(--bn-hover);
 }
+
+.source-editor-workspace { position: relative; }
+.source-editor-workspace > summary,
+.source-editor-title > summary {
+  min-height: 2.75rem;
+  padding: 0.5rem 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  color: var(--bn-text-subtle);
+}
+.source-editor-workspace-content {
+  position: absolute;
+  right: 0;
+  z-index: 30;
+  width: min(36rem, calc(100vw - 3rem));
+  max-height: calc(100dvh - 6rem);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 1rem;
+  background: var(--bn-surface);
+  border: 1px solid var(--bn-border);
+  border-radius: var(--bn-control-radius);
+  box-shadow: var(--bn-shadow-popover);
+}
+.source-editor-workspace .site-header-tools { margin-bottom: 1rem; }
+.source-editor-title[open] > summary { margin-bottom: 0.5rem; }
+.source-editor-main > .site-header { align-items: center; }
+.source-editor-main .source-editor-command,
+.source-editor-main .source-editor-save { min-height: var(--bn-control-height); }
+
+/* Formatting is secondary to writing; Save stays outside the disclosure. */
+.source-editor-format { position: relative; }
+.source-editor-format > summary {
+  cursor: pointer;
+  min-height: var(--bn-control-height);
+  box-sizing: border-box;
+  padding: var(--bn-control-padding);
+  border: 1px solid var(--bn-border);
+  border-radius: var(--bn-control-radius);
+}
+.source-editor-format[open] .source-editor-commands {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 20;
+  width: min(24rem, calc(100vw - 4rem));
+  padding: 0.6rem;
+  box-sizing: border-box;
+  border: 1px solid var(--bn-border);
+  border-radius: var(--bn-control-radius);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-popover);
+}
+.source-editor-actions { display: flex; gap: 0.4rem; }
+.source-editor-toolbar { position: sticky; top: 0; z-index: 10; background: var(--bn-surface); padding: 0.4rem 0; }
+.source-editor-format .source-editor-command { min-height: 2.75rem; }
+.source-editor-manage > [data-note-history] { display: inline-block; margin-top: 0.75rem; }
+
+.source-editor-frontmatter { font: inherit; font-size: 0.85rem; color: var(--bn-muted); border: 1px solid var(--bn-border); border-radius: var(--bn-control-radius); background: var(--bn-raised); padding: 0.4rem 0.6rem; cursor: pointer; min-height: 2.75rem; }

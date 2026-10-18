@@ -246,7 +246,7 @@ describe("another tab on the same note", () => {
     harness.surface().type(`${EDITED}more\n`);
     await tick();
 
-    expect(harness.draftStatus()).toContain("kept in this browser only");
+    expect(harness.draftStatus()).toContain("kept in this browser");
     expect(harness.draftStatus()).not.toMatch(/\bsaved\b/i);
   });
 

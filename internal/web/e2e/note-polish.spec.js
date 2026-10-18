@@ -61,8 +61,8 @@ test("trash offers undo after navigation and restores the original file", async 
   await page.getByText("More actions", { exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("link", { name: "Synthesize from this note" })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
   await page.locator("[data-trash-button]").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Move to Trash", exact: true }).click();
   await expect(page).toHaveURL(`${manifest.baseURL}/`);
   expect(existsSync(file)).toBe(false);
   const toast = page.locator("[data-trash-undo-toast]");

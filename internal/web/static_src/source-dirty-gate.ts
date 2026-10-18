@@ -93,7 +93,7 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
     try {
       await options.save();
     } catch {
-      if (held === action) options.setStatus("Couldn't confirm the save. Check the editor's save status before continuing.", "is-error");
+      if (held === action) options.setStatus("Save not confirmed. Check the editor's save status before continuing.", "is-error");
       return;
     } finally {
       saving = false;

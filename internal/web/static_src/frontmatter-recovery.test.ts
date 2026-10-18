@@ -61,7 +61,7 @@ it.each([
   const fetcher = vi.fn(async () => response());
   const ui = mount(fetcher);
   submit(ui.forms[0]);
-  await vi.waitFor(() => expect(ui.status.textContent).toContain("Couldn't confirm the change."));
+  await vi.waitFor(() => expect(ui.status.textContent).toContain("Change not confirmed."));
   expect(ui.status.classList.contains("is-success")).toBe(false);
   expect(ui.status.querySelector("a")?.textContent).toBe("Refresh to check");
   expect(ui.input.value).toBe("done");

@@ -148,7 +148,7 @@ const readFrontmatterAction = (form: HTMLFormElement): { request: FrontmatterFet
     ? { request: buildFrontmatterUnsetFetchRequest(config), message: "Unset frontmatter." } : null;
 };
 
-const unconfirmedMessage = "Couldn't confirm the change. Refresh to check before trying again.";
+const unconfirmedMessage = "Change not confirmed. Refresh to check before retrying.";
 type FrontmatterOutcome = { message: string; kind: FrontmatterStatusKind; refresh?: string };
 
 const readFrontmatterOutcome = async (resp: Response, fallback: string): Promise<FrontmatterOutcome> => {

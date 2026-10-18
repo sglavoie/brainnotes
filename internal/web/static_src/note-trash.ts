@@ -1,7 +1,8 @@
+import { confirmAction, type ConfirmAction } from "./action-confirm";
+import { responseFailure, unansweredRequest } from "./request-outcome";
 import { announceConfirmedWrite } from "./write-notice";
 import {
   buildNoteKeyMutationForm,
-  normalizeManagementErrorMessage,
   type ManagementResult,
 } from "./api";
 import { queryElement } from "./dom";
@@ -25,7 +26,7 @@ export type TrashNoteFetchRequest = {
 
 export type TrashNoteActionDeps = {
   fetch?: FetchLike;
-  confirm?: (message: string) => boolean;
+  confirm?: ConfirmAction;
   redirect?: (path: string) => void;
 };
 
@@ -86,7 +87,10 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
 
   const config = readTrashNoteConfig(container);
   const fetcher = deps.fetch || fetch;
-  const confirmAction = deps.confirm || ((message: string): boolean => window.confirm(message));
+  const confirmTrash = deps.confirm || ((message: string) => confirmAction({
+    title: "Move note to Trash?", description: `${message}\nYou can restore it from History or Undo after moving it.`,
+    confirmLabel: "Move to Trash",
+  }, document, button));
   const redirect = deps.redirect || ((path: string): void => window.location.assign(path));
 
   const setStatus = (message: string, kind: TrashNoteStatusKind = ""): void => {
@@ -98,26 +102,26 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
       setStatus("Trash action unavailable.", "is-error");
       return;
     }
-    if (!confirmAction(config.confirmMessage)) {
-      setStatus("Trash canceled.");
-      return;
-    }
-
+    if (button.disabled) return;
     button.disabled = true;
-    setStatus("Moving note to Trash...");
-
     try {
+      if (!await confirmTrash(config.confirmMessage)) {
+        setStatus("Trash canceled.");
+        return;
+      }
+      setStatus("Moving note to Trash...");
       const request = buildTrashNoteFetchRequest(config);
       const resp = await fetcher(request.url, request.init);
       const payload = await readTrashResponsePayload(resp);
-      if (!resp.ok) {
-        setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
+      const failure = responseFailure(resp, payload, "write");
+      if (failure) {
+        setStatus(failure.message, "is-error");
         return;
       }
 
       const result = payload as ManagementResult;
       announceTrashWrite(result);
-      const message = result && result.ok && result.message ? result.message : "Moved note to Trash.";
+      const message = result.message || "Moved note to Trash.";
       if (keepUndoNoticeOnPage(container, config.csrfToken, result, { fetch: fetcher, redirect })) {
         setStatus(message, "is-success");
         return;
@@ -125,7 +129,7 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
       setStatus(`${message} Redirecting...`, "is-success");
       redirect(config.redirectPath);
     } catch {
-      setStatus("Trash failed.", "is-error");
+      setStatus(unansweredRequest("write").message, "is-error");
     } finally {
       button.disabled = false;
     }

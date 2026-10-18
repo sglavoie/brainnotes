@@ -36,7 +36,7 @@ describe("loading", () => {
     expect(harness.surface().getValue()).toBe(LOADED);
     expect(harness.controller.dirty()).toBe(false);
     expect(harness.saveButton().disabled).toBe(true);
-    expect(harness.status()).toContain("Alpha.md");
+    expect(harness.status()).toContain("Ready to edit");
     expect(document.title).toBe("Edit Alpha - bn serve");
   });
 
@@ -88,7 +88,7 @@ describe("dirtiness", () => {
     harness.surface().type("edited\n");
 
     await harness.controller.save();
-    expect(harness.status()).toContain("press Save to retry");
+    expect(harness.status()).toContain("Press Save to retry");
 
     harness.surface().type(LOADED);
     expect(harness.controller.dirty()).toBe(false);
@@ -110,10 +110,11 @@ describe("saving", () => {
     await harness.controller.save();
     expect(harness.client.save.mock.calls[0][0]).toMatchObject({ content: "edited\n", revision: "r1" });
     expect(harness.controller.dirty()).toBe(false);
-    expect(harness.status()).toBe("Saved Alpha.md.");
+    expect(harness.status()).toBe("Saved to vault.");
     expect(document.title).toBe("Edit Alpha - bn serve");
 
     harness.surface().type("edited twice\n");
+    expect(harness.status()).toBe("Unsaved changes.");
     await harness.controller.save();
     expect(harness.client.save.mock.calls[1][0]).toMatchObject({ revision: "r2" });
   });
@@ -167,7 +168,7 @@ describe("saving", () => {
     harness.surface().type("edited\n");
 
     await harness.controller.save();
-    expect(harness.status()).toContain("press Save to retry");
+    expect(harness.status()).toContain("Press Save to retry");
     expect(harness.controller.dirty()).toBe(true);
 
     await harness.controller.save();
@@ -241,6 +242,7 @@ it("keeps the tab marked when typing continues during a save", async () => {
   answer.resolve(saveSuccess());
   await saving;
   expect(document.title).toBe("• Edit Alpha - bn serve");
+  expect(harness.status()).toBe("Saved to vault. Newer edits are still unsaved.");
   await harness.controller.save();
   expect(document.title).toBe("Edit Alpha - bn serve");
 });

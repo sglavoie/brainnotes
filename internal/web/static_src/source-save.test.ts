@@ -114,7 +114,7 @@ describe("classifySaveResponse", () => {
 
     expect(outcome.kind).toBe("failed");
     expect(outcome).toMatchObject({ answered: false });
-    expect(outcome.message).toContain("whether the note was written is unknown");
+    expect(outcome.message).toContain("Save not confirmed");
   });
 });
 
@@ -378,7 +378,7 @@ describe("createSourceClient on an answer that is not this API's", () => {
     expect(response.code).toBe("");
     const outcome = classifySaveResponse(response, "r1");
     expect(outcome).toMatchObject({ kind: "failed", answered: false });
-    expect(outcome.message).toContain("whether the note was written is unknown");
+    expect(outcome.message).toContain("Save not confirmed");
   });
 
   it("reports a redirected preview rather than rendering the note as empty", async () => {

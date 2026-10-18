@@ -13,16 +13,20 @@
   {{template "workspaceSkip" .}}
   <main class="index-main source-editor-main">
     <header class="site-header">
-      <div class="site-header-copy">
-        <h1>Edit source</h1>
-        <p class="page-subtitle">The whole file, exactly as it is stored. Saving replaces it; nothing is written until you do.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+      <h1>Edit source</h1>
+      <details class="source-editor-workspace">
+        <summary>Workspace</summary>
+        <div class="source-editor-workspace-content">
+          <p class="page-subtitle">Changes are saved only when you choose Save.</p>
+          <div class="site-header-tools">
+            {{template "themeControl" .}}
+            {{template "headerSearch" .}}
+          </div>
+          {{template "workspaceNav" ""}}
+        </div>
+      </details>
     </header>
-    {{template "siteNav" ""}}
+    {{template "siteSync" .}}
 
     <section id="workspace-content" tabindex="-1"
       class="panel source-editor"
@@ -57,44 +61,36 @@
       <div class="panel-header source-editor-header">
         <h2 id="source-editor-heading"><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h2>
         <code class="source-editor-path">{{ .RelPath }}</code>
-        <a href="/history?path={{ .RelPath }}&amp;path_match=exact" data-note-history>History for this note</a>
       </div>
 
-      <div class="source-editor-title" data-source-manage-feedback="rename">
-        <label class="source-editor-manage-field" for="source-editor-rename-title">Note title</label>
-        <div class="source-editor-title-controls">
-          <input type="text" id="source-editor-rename-title" class="source-editor-manage-input" data-source-rename-title value="{{ .NoteTitle }}" autocomplete="off" aria-describedby="source-editor-title-hint">
-          <button type="button" class="source-editor-manage-action" data-source-rename>Rename</button>
+      <!--
+        The gate. It is hidden until an action is asked for over unsaved text,
+        and it is the only thing between that text and an operation that would
+        move the note out from under it.
+      -->
+      <section class="source-editor-gate" data-source-gate hidden aria-labelledby="source-editor-gate-heading">
+        <h3 id="source-editor-gate-heading">There is unsaved text in this editor</h3>
+        <p class="source-editor-gate-message" data-source-gate-message></p>
+        <div class="source-editor-gate-actions">
+          <button type="button" class="source-editor-gate-save" data-source-gate-save>Save first, then continue</button>
+          <button type="button" class="source-editor-gate-proceed" data-source-gate-proceed hidden>Continue anyway</button>
+          <button type="button" class="source-editor-gate-cancel" data-source-gate-cancel>Cancel</button>
         </div>
-        <p id="source-editor-title-hint" class="source-editor-manage-hint">Rename changes the filename and updates incoming wikilinks.</p>
-        <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
-
-        <!--
-          The gate. It is hidden until an action is asked for over unsaved text,
-          and it is the only thing between that text and an operation that would
-          move the note out from under it.
-        -->
-        <section class="source-editor-gate" data-source-gate hidden aria-labelledby="source-editor-gate-heading">
-          <h3 id="source-editor-gate-heading">There is unsaved text in this editor</h3>
-          <p class="source-editor-gate-message" data-source-gate-message></p>
-          <div class="source-editor-gate-actions">
-            <button type="button" class="source-editor-gate-save" data-source-gate-save>Save first, then continue</button>
-            <button type="button" class="source-editor-gate-proceed" data-source-gate-proceed hidden>Continue anyway</button>
-            <button type="button" class="source-editor-gate-cancel" data-source-gate-cancel>Cancel</button>
-          </div>
-        </section>
-      </div>
+      </section>
 
       <div class="source-editor-toolbar" role="toolbar" aria-label="Formatting">
-        <div class="source-editor-commands">
-          <button type="button" class="source-editor-command" data-source-command="bold" title="Bold (Ctrl/⌘ + B)" aria-keyshortcuts="Control+B Meta+B">Bold</button>
-          <button type="button" class="source-editor-command" data-source-command="italic" title="Italic (Ctrl/⌘ + I)" aria-keyshortcuts="Control+I Meta+I">Italic</button>
-          <button type="button" class="source-editor-command" data-source-command="code" title="Inline code (Ctrl/⌘ + E)" aria-keyshortcuts="Control+E Meta+E">Code</button>
-          <button type="button" class="source-editor-command" data-source-command="heading" data-source-heading-level="1" title="Heading (Ctrl/⌘ + Alt + 1)" aria-keyshortcuts="Control+Alt+1 Meta+Alt+1">Heading</button>
-          <button type="button" class="source-editor-command" data-source-command="bullet" title="Bullet list (Ctrl/⌘ + Shift + 8)" aria-keyshortcuts="Control+Shift+8 Meta+Shift+8">List</button>
-          <button type="button" class="source-editor-command" data-source-command="link" title="Markdown link (Ctrl/⌘ + K)" aria-keyshortcuts="Control+K Meta+K">Link</button>
-          <button type="button" class="source-editor-command" data-source-command="wikilink" title="Wikilink (Ctrl/⌘ + Shift + K)" aria-keyshortcuts="Control+Shift+K Meta+Shift+K">Wikilink</button>
-        </div>
+        <details class="source-editor-format">
+          <summary>Format</summary>
+          <div class="source-editor-commands">
+            <button type="button" class="source-editor-command" data-source-command="bold" title="Bold (Ctrl/⌘ + B)" aria-keyshortcuts="Control+B Meta+B">Bold</button>
+            <button type="button" class="source-editor-command" data-source-command="italic" title="Italic (Ctrl/⌘ + I)" aria-keyshortcuts="Control+I Meta+I">Italic</button>
+            <button type="button" class="source-editor-command" data-source-command="code" title="Inline code (Ctrl/⌘ + E)" aria-keyshortcuts="Control+E Meta+E">Code</button>
+            <button type="button" class="source-editor-command" data-source-command="heading" data-source-heading-level="1" title="Heading (Ctrl/⌘ + Alt + 1)" aria-keyshortcuts="Control+Alt+1 Meta+Alt+1">Heading</button>
+            <button type="button" class="source-editor-command" data-source-command="bullet" title="Bullet list (Ctrl/⌘ + Shift + 8)" aria-keyshortcuts="Control+Shift+8 Meta+Shift+8">List</button>
+            <button type="button" class="source-editor-command" data-source-command="link" title="Markdown link (Ctrl/⌘ + K)" aria-keyshortcuts="Control+K Meta+K">Link</button>
+            <button type="button" class="source-editor-command" data-source-command="wikilink" title="Wikilink (Ctrl/⌘ + Shift + K)" aria-keyshortcuts="Control+Shift+K Meta+Shift+K">Wikilink</button>
+          </div>
+        </details>
         <div class="source-editor-actions">
           <button type="button" class="source-editor-command" data-source-find disabled title="Find and replace (Ctrl/⌘ + F in the editor)" aria-keyshortcuts="Control+F Meta+F">Find</button>
           <button type="button" class="source-editor-save" data-source-save disabled aria-keyshortcuts="Control+S Meta+S">Save</button>
@@ -165,7 +161,7 @@
       <div class="source-editor-attach">
         <input type="file" class="source-editor-attachment-input" data-source-attachment-input multiple hidden aria-hidden="true" tabindex="-1">
         <button type="button" class="source-editor-attachment-choose" data-source-attachment-choose>Attach files…</button>
-        <p class="source-editor-attach-hint">You can also paste an image or drop files onto the editor. A file is staged on the server and enters the vault when you save.</p>
+        <p class="source-editor-attach-hint">You can also paste an image or drop files onto the editor. Attachments are added to the note when you save.</p>
       </div>
 
       <section class="source-editor-attachments" data-source-attachments hidden aria-labelledby="source-editor-attachments-heading">
@@ -180,6 +176,18 @@
       -->
       <details class="source-editor-manage" data-source-manage>
         <summary>This note and this vault</summary>
+
+        <a href="/history?path={{ .RelPath }}&amp;path_match=exact" data-note-history>History for this note</a>
+        <details class="source-editor-title" data-source-manage-feedback="rename">
+          <summary>Rename note</summary>
+          <label class="source-editor-manage-field" for="source-editor-rename-title">Note title</label>
+          <div class="source-editor-title-controls">
+            <input type="text" id="source-editor-rename-title" class="source-editor-manage-input" data-source-rename-title value="{{ .NoteTitle }}" autocomplete="off" aria-describedby="source-editor-title-hint">
+            <button type="button" class="source-editor-manage-action" data-source-rename>Rename</button>
+          </div>
+          <p id="source-editor-title-hint" class="source-editor-manage-hint">Rename changes the filename and updates incoming wikilinks.</p>
+          <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
+        </details>
 
         <div class="source-editor-manage-groups">
           <div class="source-editor-manage-group" data-source-manage-feedback="location">

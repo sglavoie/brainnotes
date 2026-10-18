@@ -19,7 +19,7 @@ test("a lost settings reply keeps the input and offers History without claiming 
     await route.fulfill({ status: 200, contentType: "text/html", body: "<html>Sign in</html>" });
   });
   await page.locator("[data-settings-confirm]").click();
-  await expect(page.locator("[data-settings-status]")).toContainText("Couldn't confirm the change");
+  await expect(page.locator("[data-settings-status]")).toContainText("Change not confirmed");
   await expect(input).toHaveValue(value);
   await expect(page.locator("[data-settings-confirm]")).toBeHidden();
   expect(readFileSync(join(manifest.localVault, "brainnotes.toml"), "utf8")).toContain(value);
@@ -52,7 +52,7 @@ test("an unreadable template reply retains the draft and spends the preview", as
   // prove that to the application, so it must preserve the draft either way.
   await page.route("**/api/templates/apply", (route) => route.fulfill({ body: '{"ok":', contentType: "application/json" }));
   await page.locator("[data-templates-confirm]").click();
-  await expect(page.locator("[data-templates-status]")).toContainText("Couldn't confirm the change");
+  await expect(page.locator("[data-templates-status]")).toContainText("Change not confirmed");
   await expect(page.locator("[data-templates-name]")).toHaveValue("UnconfirmedTemplate");
   await expect(page.locator("[data-templates-content]")).toHaveValue("# Keep these exact bytes\n");
   await expect(page.locator("[data-templates-confirm]")).toBeHidden();

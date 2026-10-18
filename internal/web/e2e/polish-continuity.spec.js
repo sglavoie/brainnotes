@@ -62,6 +62,7 @@ test("Save as view preserves text, facets, expression, ordering and limit", asyn
   await page.locator("[data-saved-views-name]").fill("Complete browser selection");
   await page.locator("[data-saved-views-form] button[type=submit]").click();
   const saved = page.locator('a[data-saved-view="Complete browser selection"]');
+  await page.locator(".source-editor-workspace > summary").click();
   await expect(saved).toBeVisible();
   await saved.click();
   await expect(links).toHaveCount(2);

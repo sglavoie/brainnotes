@@ -21,7 +21,7 @@ test("a lost create response can be checked without creating again", async ({ pa
     await route.abort("failed");
   });
   await action.getByRole("button", { name: "Create missing note" }).click();
-  await expect(action.locator("[data-create-status]")).toContainText("Couldn't confirm note creation");
+  await expect(action.locator("[data-create-status]")).toContainText("Creation not confirmed");
   expect(existsSync(join(manifest.localVault, createdPath))).toBe(true);
   await action.getByRole("link", { name: "Refresh to check" }).click();
   await expect(page).toHaveURL(/\/broken\?q=Unwritten%20Example$/);
@@ -30,8 +30,8 @@ test("a lost create response can be checked without creating again", async ({ pa
   // Return the shared fixture to a broken target for later browsing tests.
   await page.goto(createdRoute);
   await page.getByText("More actions", { exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept());
   await page.locator("[data-trash-button]").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Move to Trash", exact: true }).click();
   await expect(page).toHaveURL(`${manifest.baseURL}/`);
   expect(existsSync(join(manifest.localVault, createdPath))).toBe(false);
   await page.waitForLoadState("networkidle");

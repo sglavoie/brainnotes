@@ -47,7 +47,7 @@ describe("new note", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(h.button.disabled).toBe(false));
     expect(h.title.value).toBe("Fresh note");
-    expect(document.querySelector("[data-new-note-status]")?.textContent).toContain("Couldn't confirm");
+    expect(document.querySelector("[data-new-note-status]")?.textContent).toContain("Creation not confirmed");
     h.submit();
     await vi.waitFor(() => expect(h.navigate).toHaveBeenCalled());
     expect(fetcher.mock.calls[0][1].body).toBe(fetcher.mock.calls[1][1].body);

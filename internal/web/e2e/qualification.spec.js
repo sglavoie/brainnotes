@@ -74,6 +74,7 @@ function compositionEvent(surface, type, data) {
 for (const path of ["/", "/properties"]) {
   test(`header search opens a note from ${path} with one click or tap`, async ({ page }, testInfo) => {
     await page.goto(path);
+    if (path === "/") await page.locator(".source-editor-workspace > summary").click();
     const input = page.locator("#search-input");
     await input.fill("Alpha");
     const title = page.locator("#search-results .search-result-title").filter({ hasText: /^Alpha$/ });
@@ -178,8 +179,9 @@ test("an expired sign-in answer keeps the editor dirty and reports an unknown sa
 
   const status = page.locator("[data-source-status]");
   await expect(status).toHaveClass(/is-error/);
-  await expect(status).toContainText("sign-in has expired");
-  await expect(status).toContainText("whether the note was written is unknown");
+  await expect(status).toContainText("Save not confirmed.");
+  await expect(status).toContainText("If sign-in expired, sign in again");
+  await expect(status).toContainText("press Save to retry safely");
   await expect(page.locator("[data-source-save]")).toBeEnabled();
   await expect(surface).toContainText(phrase);
   expect(readFileSync(NOTE_PATH, "utf8"), "the simulated sign-in page wrote the note").toBe(before);

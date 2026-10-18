@@ -265,7 +265,7 @@ describe("an answer that was not this API's", () => {
     harness.surface().type("edited\n");
 
     await harness.controller.save();
-    expect(harness.status()).toContain("whether the note was written is unknown");
+    expect(harness.status()).toContain("Save not confirmed");
     expect(harness.controller.dirty()).toBe(true);
 
     await harness.controller.save();

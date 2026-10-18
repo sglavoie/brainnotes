@@ -86,7 +86,12 @@ export const createInsightPrompt = (
   hint.className = "brief-insight-prompt-hint";
   hint.textContent = "Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.";
   field.append(label, controls, hint);
-  return field;
+  const disclosure = doc.createElement("details");
+  disclosure.className = "brief-ai";
+  const summary = doc.createElement("summary");
+  summary.textContent = "Ask AI";
+  disclosure.append(summary, field);
+  return disclosure;
 };
 
 export const ensureInsightPanel = (cardEl: HTMLElement, slot: BriefSlotKind): HTMLElement => {
@@ -195,6 +200,63 @@ export const renderCard = (
   cardEl.setAttribute("data-brief-card", "");
   cardEl.setAttribute("data-brief-card-id", card.ID);
 
+  appendCardHeading(doc, cardEl, slot, card);
+  appendCardExplanation(doc, cardEl, slot, card);
+  const sourcePath = briefNotePathForRelPath(card.Source.RelPath);
+
+  if (card.Excerpt) {
+    const excerpt = doc.createElement("blockquote");
+    excerpt.className = "brief-card-excerpt";
+    excerpt.textContent = card.Excerpt;
+    cardEl.appendChild(excerpt);
+  }
+
+  const reasons = card.Metadata.Reasons.filter((reason) => reason.trim() !== "" && reason !== card.Explanation);
+  if (reasons.length > 0) {
+    const list = doc.createElement("ul");
+    list.className = "brief-card-reasons";
+    for (const reason of reasons) {
+      const item = doc.createElement("li");
+      item.textContent = reason;
+      list.appendChild(item);
+    }
+    cardEl.appendChild(list);
+  }
+
+  const unavailable = buildUnavailableHint(availability, sourcePath);
+  const actionRow = doc.createElement("div");
+  actionRow.className = "brief-card-actions";
+  actionRow.append(
+    createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
+    createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === "")
+  );
+  cardEl.appendChild(actionRow);
+  cardEl.appendChild(createInsightPrompt(doc, slot, card.ID, unavailable.insight === ""));
+
+  for (const [action, message] of Object.entries(unavailable)) {
+    if (!message) continue;
+    const hint = doc.createElement("p");
+    hint.className = "brief-action-hint";
+    hint.textContent = message;
+    (action === "insight" ? cardEl.querySelector(".brief-ai") : cardEl)?.appendChild(hint);
+  }
+
+  discloseCardReasons(cardEl);
+  ensureInsightPanel(cardEl, slot);
+  return cardEl;
+};
+
+const discloseCardReasons = (card: HTMLElement): void => {
+  const details = card.ownerDocument.createElement("details");
+  details.className = "brief-card-why";
+  const summary = card.ownerDocument.createElement("summary");
+  summary.textContent = "Why this note?";
+  details.append(summary);
+  details.append(...card.querySelectorAll(".brief-card-path, .brief-card-explanation, .brief-card-meta, .brief-card-reasons"));
+  card.querySelector(".brief-ai")?.before(details);
+};
+
+const appendCardHeading = (doc: Document, cardEl: HTMLElement, slot: BriefSlotKind, card: BriefCard): void => {
   const sourceTitle = card.Source.Title || card.Source.RelPath;
   const sourcePath = briefNotePathForRelPath(card.Source.RelPath);
 
@@ -230,6 +292,9 @@ export const renderCard = (
   path.appendChild(pathCode);
   cardEl.appendChild(path);
 
+};
+
+const appendCardExplanation = (doc: Document, cardEl: HTMLElement, slot: BriefSlotKind, card: BriefCard): void => {
   const explanation = doc.createElement("p");
   explanation.className = "brief-card-explanation";
   explanation.textContent = card.Explanation;
@@ -251,54 +316,4 @@ export const renderCard = (
     cardEl.appendChild(bridgeEl);
   }
 
-  if (card.Excerpt) {
-    const excerpt = doc.createElement("blockquote");
-    excerpt.className = "brief-card-excerpt";
-    excerpt.textContent = card.Excerpt;
-    cardEl.appendChild(excerpt);
-  }
-
-  const reasons = card.Metadata.Reasons.filter((reason) => reason.trim() !== "" && reason !== card.Explanation);
-  if (reasons.length > 0) {
-    const list = doc.createElement("ul");
-    list.className = "brief-card-reasons";
-    for (const reason of reasons) {
-      const item = doc.createElement("li");
-      item.textContent = reason;
-      list.appendChild(item);
-    }
-    cardEl.appendChild(list);
-  }
-
-  const unavailable = buildUnavailableHint(availability, sourcePath);
-  const actionRow = doc.createElement("div");
-  actionRow.className = "brief-card-actions";
-  actionRow.append(
-    createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
-    createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === "")
-  );
-  cardEl.appendChild(actionRow);
-  cardEl.appendChild(createInsightPrompt(doc, slot, card.ID, unavailable.insight === ""));
-
-  if (unavailable.open) {
-    const hint = doc.createElement("p");
-    hint.className = "brief-action-hint";
-    hint.textContent = unavailable.open;
-    cardEl.appendChild(hint);
-  }
-  if (unavailable.another) {
-    const hint = doc.createElement("p");
-    hint.className = "brief-action-hint";
-    hint.textContent = unavailable.another;
-    cardEl.appendChild(hint);
-  }
-  if (unavailable.insight) {
-    const hint = doc.createElement("p");
-    hint.className = "brief-action-hint";
-    hint.textContent = unavailable.insight;
-    cardEl.appendChild(hint);
-  }
-
-  ensureInsightPanel(cardEl, slot);
-  return cardEl;
 };

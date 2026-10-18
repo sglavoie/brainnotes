@@ -43,7 +43,7 @@ export const runSave = async (
   ctx.refreshSaveButton();
   ctx.setStatus("Saving…", "is-loading");
   const waiting = window.setTimeout(() =>
-    ctx.setStatus("Waiting for save confirmation… Your draft is kept here.", "is-loading"), 500);
+    ctx.setStatus("Save not confirmed yet. Your text is still in the editor.", "is-loading"), 500);
   try {
     const response = await deps.client.save({
       content,
@@ -57,13 +57,13 @@ export const runSave = async (
     // only thing that entitles this page to stop owing an upload.
     deps.claims?.committed(response.attachments);
     applyOutcome(classifySaveResponse(response, base), content, state, ctx, deps.elements);
-  } catch (error: unknown) {
+  } catch {
     // The request never produced an answer, so whether the bytes landed is
     // unknown. pendingSaveID is deliberately kept: pressing Save again
     // resubmits the same idempotency key, which the server replays rather than
     // writing twice.
     ctx.setStatus(
-      `${errorMessage(error, "The save could not be sent.")} Nothing was re-sent; press Save to retry.`,
+      "Save not confirmed. Your text is still in the editor. Press Save to retry safely.",
       "is-error"
     );
   } finally {
@@ -104,7 +104,8 @@ const applyOutcome = (
       // holding its own unsaved text against its own pinned revision, so this is
       // a notice that the note has moved — never an instruction to adopt it.
       ctx.drafts.announce(outcome.revision);
-      ctx.setStatus(outcome.message, "is-success");
+      ctx.setStatus(state.surface?.getValue() === submitted
+        ? "Saved to vault." : "Saved to vault. Newer edits are still unsaved.", "is-success");
       return;
     case "landed":
       // The bytes are on disk and the content history does not cover them. The

@@ -10,10 +10,10 @@ export const unansweredRequest = (purpose: RequestPurpose): RequestFailure => ({
   ok: false,
   uncertain: purpose === "write",
   message: purpose === "write"
-    ? "Couldn't confirm the change. It may have been saved. Check the current values or History in another tab before trying again. If sign-in expired, sign in again first."
+    ? "Change not confirmed. Check the current values or History in another tab before retrying."
     : purpose === "preview"
-      ? "Couldn't load the preview. No change was submitted. Your inputs are still here; check your connection or sign in again, then retry the preview."
-      : "Couldn't load the current values. Check your connection or sign in again, then refresh to retry.",
+      ? "Preview unavailable. No change was submitted. Your inputs are still here; retry the preview."
+      : "Couldn't load the current values. Check your connection, then refresh. If sign-in expired, sign in again.",
 });
 
 // A redirect, HTML login page, truncated JSON or malformed envelope cannot

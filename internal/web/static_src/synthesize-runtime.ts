@@ -1,3 +1,4 @@
+import { confirmAction, type ConfirmAction } from "./action-confirm";
 import { SynthesisRequestError } from "./api";
 import { queryElement } from "./dom";
 import { hasWritableClipboard } from "./clipboard";
@@ -45,7 +46,7 @@ export type SynthesisDeps = {
   fetch?: SynthesisFetch;
   storage?: SynthesisStorageLike | null;
   clipboard?: WritableClipboard | null;
-  confirm?: (message: string) => boolean;
+  confirm?: ConfirmAction;
   redirect?: (path: string) => void;
 };
 
@@ -91,7 +92,7 @@ export type SynthesisRuntime = {
   readonly view: SynthesisView;
   readonly fetcher: SynthesisFetch;
   readonly clipboard: WritableClipboard | null;
-  readonly confirmer: (message: string) => boolean;
+  readonly confirmer: ConfirmAction;
   readonly redirect: (path: string) => void;
   readonly candidates: Map<string, SynthesisCandidate>;
   suggestionEntries: Record<RelatedMode, SynthesisCandidate[] | null>;
@@ -142,7 +143,12 @@ export const createSynthesisRuntime = (
             ? (navigator.clipboard as WritableClipboard | undefined)
             : undefined) || null
         : deps.clipboard,
-    confirmer: deps.confirm || ((message: string): boolean => window.confirm(message)),
+    confirmer: deps.confirm || ((message: string) => confirmAction({
+      title: message === DISCARD_CONFIRMATION ? "Discard this draft?" : "Send context to Ask AI?",
+      description: message,
+      confirmLabel: message === DISCARD_CONFIRMATION ? "Discard draft and selection" : "Send context",
+      danger: message === DISCARD_CONFIRMATION,
+    }, root.ownerDocument, message === DISCARD_CONFIRMATION ? view.discardButton : view.generateButton)),
     redirect: deps.redirect || ((path: string): void => window.location.assign(path)),
     candidates: new Map<string, SynthesisCandidate>(),
     suggestionEntries: { balanced: null, rediscover: null, connect: null },
@@ -182,54 +188,11 @@ export const createSynthesisRuntime = (
       }
     },
 
-    renderCandidatePanels: (): void => {
-      const selected = synthesisSelectedKeys(model);
-      for (const definition of relatedModeDefinitions) {
-        const entries = runtime.suggestionEntries[definition.mode];
-        if (entries === null) {
-          continue;
-        }
-        renderSynthesisCandidates(
-          view.suggestionResults[definition.mode],
-          entries,
-          selected,
-          config.anchor.key,
-          false,
-          SUGGESTIONS_EMPTY
-        );
-      }
-      if (runtime.searchEntries !== null) {
-        renderSynthesisCandidates(
-          view.searchResults,
-          runtime.searchEntries,
-          selected,
-          config.anchor.key,
-          true,
-          SEARCH_EMPTY
-        );
-      }
-    },
+    renderCandidatePanels: () => renderCandidatePanels(runtime),
 
-    renderFieldErrors: (): void => {
-      const show = runtime.showFieldErrors;
-      setSynthesisFieldError(view.titleError, show ? synthesisTitleError(model.title) : "");
-      setSynthesisFieldError(view.folderError, show ? synthesisFolderError(model.folder) : "");
-      setSynthesisFieldError(view.draftError, show ? synthesisDraftError(model.draft) : "");
-    },
+    renderFieldErrors: () => renderFieldErrors(runtime),
 
-    render: (): void => {
-      renderSynthesisSources(view, model, config);
-      renderSynthesisContext(view, model);
-      renderSynthesisCandidate(view, model);
-      renderSynthesisDestination(view, model);
-      renderSynthesisPreview(view, model);
-      runtime.renderFieldErrors();
-      view.copyButton.disabled = model.context === null || !hasWritableClipboard(runtime.clipboard);
-      view.candidateCopyButton.disabled = !hasWritableClipboard(runtime.clipboard);
-      view.generateButton.disabled = model.context === null || runtime.generating;
-      view.previewButton.disabled = runtime.previewing || runtime.applying;
-      view.applyButton.disabled = model.preview === null || runtime.applying;
-    },
+    render: () => render(runtime),
 
     // A context that the server no longer recognizes cannot produce a candidate
     // or a receipt, but it says nothing about the text the user wrote, so only
@@ -243,4 +206,56 @@ export const createSynthesisRuntime = (
   };
 
   return runtime;
+};
+
+const renderCandidatePanels = (runtime: SynthesisRuntime): void => {
+  const { model, view, config } = runtime;
+  const selected = synthesisSelectedKeys(model);
+  for (const definition of relatedModeDefinitions) {
+    const entries = runtime.suggestionEntries[definition.mode];
+    if (entries === null) {
+      continue;
+    }
+    renderSynthesisCandidates(
+      view.suggestionResults[definition.mode],
+      entries,
+      selected,
+      config.anchor.key,
+      false,
+      SUGGESTIONS_EMPTY
+    );
+  }
+  if (runtime.searchEntries !== null) {
+    renderSynthesisCandidates(
+      view.searchResults,
+      runtime.searchEntries,
+      selected,
+      config.anchor.key,
+      true,
+      SEARCH_EMPTY
+    );
+  }
+};
+
+const renderFieldErrors = (runtime: SynthesisRuntime): void => {
+  const { model, view } = runtime;
+  const show = runtime.showFieldErrors;
+  setSynthesisFieldError(view.titleError, show ? synthesisTitleError(model.title) : "");
+  setSynthesisFieldError(view.folderError, show ? synthesisFolderError(model.folder) : "");
+  setSynthesisFieldError(view.draftError, show ? synthesisDraftError(model.draft) : "");
+};
+
+const render = (runtime: SynthesisRuntime): void => {
+  const { model, view, config } = runtime;
+  renderSynthesisSources(view, model, config);
+  renderSynthesisContext(view, model);
+  renderSynthesisCandidate(view, model);
+  renderSynthesisDestination(view, model);
+  renderSynthesisPreview(view, model);
+  runtime.renderFieldErrors();
+  view.copyButton.disabled = model.context === null || !hasWritableClipboard(runtime.clipboard);
+  view.candidateCopyButton.disabled = !hasWritableClipboard(runtime.clipboard);
+  view.generateButton.disabled = model.context === null || runtime.generating;
+  view.previewButton.disabled = runtime.previewing || runtime.applying;
+  view.applyButton.disabled = model.preview === null || runtime.applying;
 };

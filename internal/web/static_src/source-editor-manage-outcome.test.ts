@@ -82,7 +82,7 @@ describe("editor management confirmation", () => {
     h.fetcher.mockResolvedValue(jsonResponse(200, null));
     h.type("[data-source-note-create-target]", "New thought");
     h.click("[data-source-note-create]");
-    await vi.waitFor(() => expect(h.status().text).toContain("Couldn't confirm"));
+    await vi.waitFor(() => expect(h.status().text).toContain("not confirmed"));
     expect(h.elements.createTarget?.value).toBe("New thought");
   });
 
@@ -91,7 +91,7 @@ describe("editor management confirmation", () => {
     h.type("[data-source-rename-title]", "Beta");
     h.type("[data-source-move-folder]", "Notes");
     h.click(`[data-source-${action}]`);
-    await vi.waitFor(() => expect(h.status().text).toContain("Couldn't confirm"));
+    await vi.waitFor(() => expect(h.status().text).toContain("not confirmed"));
     expect(h.navigated).toEqual([]);
   });
 });
@@ -166,7 +166,7 @@ describe("editor management local feedback", () => {
     expect(status.textContent).toBe("Capture this line…");
     expect(h.status().text).toBe("");
     response.reject(new Error("lost"));
-    await vi.waitFor(() => expect(status.textContent).toContain("Couldn't confirm"));
+    await vi.waitFor(() => expect(status.textContent).toContain("not confirmed"));
     h.fetcher.mockResolvedValueOnce(jsonResponse(200, { ok: true, message: "Captured." }));
     h.click("[data-source-capture]");
     await vi.waitFor(() => expect(status.textContent).toBe("Captured."));

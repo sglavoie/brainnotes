@@ -154,9 +154,12 @@ export const runInsight = async (
     return;
   }
   const prompt = insightPrompt(button);
-  if (!acceptInsightDisclosure(ctx, slot)) return;
-
+  if (button.disabled) return;
   ctx.setSlotsBusy([slot], true);
+  if (!await acceptInsightDisclosure(ctx, slot, button)) {
+    ctx.setSlotsBusy([slot], false);
+    return;
+  }
   ctx.setSlotStatus(slot, "Generating insight...", "is-loading");
   const requestID = ctx.insightCounter + 1;
   ctx.insightCounter = requestID;
@@ -261,9 +264,9 @@ const insightPrompt = (button: HTMLButtonElement): string => {
   return cardEl ? queryElement(cardEl, "[data-brief-insight-prompt]", HTMLTextAreaElement)?.value.trim() || "" : "";
 };
 
-const acceptInsightDisclosure = (ctx: BriefActionContext, slot: BriefSlotKind): boolean => {
+const acceptInsightDisclosure = async (ctx: BriefActionContext, slot: BriefSlotKind, button: HTMLButtonElement): Promise<boolean> => {
   if (ctx.insightDisclosureAccepted) return true;
-  ctx.insightDisclosureAccepted = ctx.confirmer(insightDisclosureMessage);
+  ctx.insightDisclosureAccepted = await ctx.confirmer(insightDisclosureMessage, button);
   if (!ctx.insightDisclosureAccepted) ctx.setSlotStatus(slot, "Ask AI canceled.", "is-empty");
   return ctx.insightDisclosureAccepted;
 };

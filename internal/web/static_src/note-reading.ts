@@ -74,7 +74,7 @@ export const addCodeCopyControls = (body: HTMLElement): void => {
 
 export const addSectionCopyControls = (body: HTMLElement): void => {
   for (const heading of body.querySelectorAll<HTMLElement>("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]")) {
-    if (!heading.id || heading.nextElementSibling?.hasAttribute("data-section-copy")) continue;
+    if (!heading.id || heading.parentElement?.classList.contains("note-section-heading")) continue;
     const url = new URL(window.location.href);
     url.search = "";
     url.hash = encodeURIComponent(heading.id);
@@ -87,7 +87,9 @@ export const addSectionCopyControls = (body: HTMLElement): void => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "copy-button";
-    button.textContent = "Copy section link";
+    button.textContent = "#";
+    button.setAttribute("aria-label", "Copy section link");
+    button.title = "Copy section link";
     button.setAttribute("aria-describedby", heading.id);
     button.dataset.copyText = url.href;
     button.dataset.copyLabel = "Section link";
@@ -97,7 +99,10 @@ export const addSectionCopyControls = (body: HTMLElement): void => {
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
     controls.append(button, status);
-    heading.after(controls);
+    const wrapper = document.createElement("div");
+    wrapper.className = "note-section-heading";
+    heading.before(wrapper);
+    wrapper.append(heading, controls);
   }
 };
 

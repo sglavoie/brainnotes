@@ -56,6 +56,7 @@ export const syncOverviewSelectionControls = (
   const controls = queryElement(root, "[data-overview-selection]", HTMLElement);
   if (controls) {
     controls.hidden = inputs.length === 0;
+    controls.dataset.hasSelection = String(selectedCount > 0);
   }
   const select = queryElement(root, "[data-overview-select-displayed]", HTMLButtonElement);
   const clear = queryElement(root, "[data-overview-clear-selection]", HTMLButtonElement);

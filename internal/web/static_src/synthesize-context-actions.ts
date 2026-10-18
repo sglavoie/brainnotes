@@ -24,89 +24,97 @@ export type SynthesisContextActions = {
   dismissCandidate: () => void;
 };
 
-export const createSynthesisContextActions = (
-  runtime: SynthesisRuntime
-): SynthesisContextActions => {
+export const createSynthesisContextActions = (runtime: SynthesisRuntime): SynthesisContextActions => ({
+  prepareContext: () => prepareContext(runtime),
+  copyContext: () => copyContext(runtime),
+  generate: createGenerationAction(runtime),
+  useCandidate: (mode) => useCandidate(runtime, mode),
+  copyCandidate: () => copyCandidate(runtime),
+  dismissCandidate: () => dismissCandidate(runtime),
+});
+
+const prepareContext = async (runtime: SynthesisRuntime): Promise<void> => {
+  const { config, model, view } = runtime;
+  if (config.csrfToken === "") {
+    setStatusText(view.contextStatus, "Context preparation is unavailable.", "is-error");
+    return;
+  }
+  view.prepareButton.disabled = true;
+  setStatusText(view.contextStatus, "Building context packet…", "is-loading");
+  const requested = synthesisContextSignature(model);
+  const superseded = (): boolean => synthesisContextSignature(model) !== requested;
+  try {
+    const response = await requestSynthesisContext(runtime.fetcher, config.contextEndpoint, {
+      source: config.anchor.key,
+      candidates: synthesisSelectedKeys(model),
+      purpose: model.purpose,
+      prompt: model.prompt,
+      token: config.csrfToken,
+    });
+    if (superseded()) {
+      setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
+      return;
+    }
+    invalidateSynthesisPreview(model);
+    model.context = response;
+    model.contextStale = false;
+    runtime.render();
+    setStatusText(
+      view.contextStatus,
+      `Context ready. It expires at ${response.expires_at || "the server's timeout"}.`,
+      "is-success"
+    );
+  } catch (error) {
+    if (superseded()) {
+      setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
+      return;
+    }
+    invalidateSynthesisContext(model);
+    model.contextStale = true;
+    runtime.render();
+    setStatusText(
+      view.contextStatus,
+      errorMessage(error, "The context packet could not be built."),
+      "is-error"
+    );
+  } finally {
+    view.prepareButton.disabled = false;
+  }
+};
+
+const copyContext = async (runtime: SynthesisRuntime): Promise<void> => {
+  const { model, view } = runtime;
+  const context = model.context;
+  if (!context) {
+    setStatusText(view.contextStatus, "Prepare a context packet first.", "is-error");
+    return;
+  }
+  if (!hasWritableClipboard(runtime.clipboard)) {
+    setStatusText(
+      view.contextStatus,
+      "Clipboard unavailable. Select the packet Markdown below and copy it manually.",
+      "is-error"
+    );
+    return;
+  }
+  view.copyButton.disabled = true;
+  try {
+    await runtime.clipboard.writeText(context.markdown);
+    setStatusText(view.contextStatus, "Context packet copied.", "is-success");
+  } catch {
+    setStatusText(
+      view.contextStatus,
+      "Copy failed. Select the packet Markdown below and copy it manually.",
+      "is-error"
+    );
+  } finally {
+    view.copyButton.disabled = false;
+  }
+};
+
+const createGenerationAction = (runtime: SynthesisRuntime): (() => Promise<void>) => {
   const { config, model, view } = runtime;
   let disclosureAccepted = false;
-
-  const prepareContext = async (): Promise<void> => {
-    if (config.csrfToken === "") {
-      setStatusText(view.contextStatus, "Context preparation is unavailable.", "is-error");
-      return;
-    }
-    view.prepareButton.disabled = true;
-    setStatusText(view.contextStatus, "Building context packet…", "is-loading");
-    const requested = synthesisContextSignature(model);
-    const superseded = (): boolean => synthesisContextSignature(model) !== requested;
-    try {
-      const response = await requestSynthesisContext(runtime.fetcher, config.contextEndpoint, {
-        source: config.anchor.key,
-        candidates: synthesisSelectedKeys(model),
-        purpose: model.purpose,
-        prompt: model.prompt,
-        token: config.csrfToken,
-      });
-      if (superseded()) {
-        setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
-        return;
-      }
-      invalidateSynthesisPreview(model);
-      model.context = response;
-      model.contextStale = false;
-      runtime.render();
-      setStatusText(
-        view.contextStatus,
-        `Context ready. It expires at ${response.expires_at || "the server's timeout"}.`,
-        "is-success"
-      );
-    } catch (error) {
-      if (superseded()) {
-        setStatusText(view.contextStatus, CONTEXT_SUPERSEDED, "");
-        return;
-      }
-      invalidateSynthesisContext(model);
-      model.contextStale = true;
-      runtime.render();
-      setStatusText(
-        view.contextStatus,
-        errorMessage(error, "The context packet could not be built."),
-        "is-error"
-      );
-    } finally {
-      view.prepareButton.disabled = false;
-    }
-  };
-
-  const copyContext = async (): Promise<void> => {
-    const context = model.context;
-    if (!context) {
-      setStatusText(view.contextStatus, "Prepare a context packet first.", "is-error");
-      return;
-    }
-    if (!hasWritableClipboard(runtime.clipboard)) {
-      setStatusText(
-        view.contextStatus,
-        "Clipboard unavailable. Select the packet Markdown below and copy it manually.",
-        "is-error"
-      );
-      return;
-    }
-    view.copyButton.disabled = true;
-    try {
-      await runtime.clipboard.writeText(context.markdown);
-      setStatusText(view.contextStatus, "Context packet copied.", "is-success");
-    } catch {
-      setStatusText(
-        view.contextStatus,
-        "Copy failed. Select the packet Markdown below and copy it manually.",
-        "is-error"
-      );
-    } finally {
-      view.copyButton.disabled = false;
-    }
-  };
-
   const generate = async (): Promise<void> => {
     if (model.context === null) {
       setStatusText(view.generateStatus, "Prepare a context packet first.", "is-error");
@@ -116,7 +124,14 @@ export const createSynthesisContextActions = (
       return;
     }
     if (config.agentEnabled && !disclosureAccepted) {
-      disclosureAccepted = runtime.confirmer(DISCLOSURE);
+      runtime.generating = true;
+      view.generateButton.disabled = true;
+      try {
+        disclosureAccepted = await runtime.confirmer(DISCLOSURE);
+      } finally {
+        runtime.generating = false;
+        view.generateButton.disabled = model.context === null;
+      }
       if (!disclosureAccepted) {
         setStatusText(view.generateStatus, "Generation canceled.", "");
         return;
@@ -164,76 +179,71 @@ export const createSynthesisContextActions = (
       view.generateButton.disabled = model.context === null;
     }
   };
+  return generate;
+};
 
-  const useCandidate = (mode: "replace" | "append"): void => {
-    const candidate = model.candidate;
-    if (candidate === null) {
-      setStatusText(view.generateStatus, "There is no candidate to use.", "is-error");
-      return;
-    }
-    const existing = model.draft.replace(/\s+$/, "");
-    model.draft =
-      mode === "replace" || existing === ""
-        ? candidate.markdown
-        : `${existing}\n\n${candidate.markdown}`;
-    view.draftInput.value = model.draft;
-    invalidateSynthesisPreview(model);
-    runtime.render();
-    runtime.persist();
+const useCandidate = (runtime: SynthesisRuntime, mode: "replace" | "append"): void => {
+  const { model, view } = runtime;
+  const candidate = model.candidate;
+  if (candidate === null) {
+    setStatusText(view.generateStatus, "There is no candidate to use.", "is-error");
+    return;
+  }
+  const existing = model.draft.replace(/\s+$/, "");
+  model.draft =
+    mode === "replace" || existing === ""
+      ? candidate.markdown
+      : `${existing}\n\n${candidate.markdown}`;
+  view.draftInput.value = model.draft;
+  invalidateSynthesisPreview(model);
+  runtime.render();
+  runtime.persist();
+  setStatusText(
+    view.generateStatus,
+    mode === "replace" ? "Draft replaced with the candidate." : "Candidate appended to the draft.",
+    "is-success"
+  );
+  view.draftInput.focus({ preventScroll: true });
+};
+
+const copyCandidate = async (runtime: SynthesisRuntime): Promise<void> => {
+  const { model, view } = runtime;
+  const candidate = model.candidate;
+  if (candidate === null) {
+    setStatusText(view.generateStatus, "There is no candidate to copy.", "is-error");
+    return;
+  }
+  if (!hasWritableClipboard(runtime.clipboard)) {
     setStatusText(
       view.generateStatus,
-      mode === "replace" ? "Draft replaced with the candidate." : "Candidate appended to the draft.",
-      "is-success"
+      "Clipboard unavailable. Select the candidate Markdown above and copy it manually.",
+      "is-error"
     );
-    view.draftInput.focus({ preventScroll: true });
-  };
+    return;
+  }
+  view.candidateCopyButton.disabled = true;
+  try {
+    await runtime.clipboard.writeText(candidate.markdown);
+    setStatusText(view.generateStatus, "Candidate copied.", "is-success");
+  } catch {
+    setStatusText(
+      view.generateStatus,
+      "Copy failed. Select the candidate Markdown above and copy it manually.",
+      "is-error"
+    );
+  } finally {
+    view.candidateCopyButton.disabled = !hasWritableClipboard(runtime.clipboard);
+  }
+};
 
-  const copyCandidate = async (): Promise<void> => {
-    const candidate = model.candidate;
-    if (candidate === null) {
-      setStatusText(view.generateStatus, "There is no candidate to copy.", "is-error");
-      return;
-    }
-    if (!hasWritableClipboard(runtime.clipboard)) {
-      setStatusText(
-        view.generateStatus,
-        "Clipboard unavailable. Select the candidate Markdown above and copy it manually.",
-        "is-error"
-      );
-      return;
-    }
-    view.candidateCopyButton.disabled = true;
-    try {
-      await runtime.clipboard.writeText(candidate.markdown);
-      setStatusText(view.generateStatus, "Candidate copied.", "is-success");
-    } catch {
-      setStatusText(
-        view.generateStatus,
-        "Copy failed. Select the candidate Markdown above and copy it manually.",
-        "is-error"
-      );
-    } finally {
-      view.candidateCopyButton.disabled = !hasWritableClipboard(runtime.clipboard);
-    }
-  };
-
-  const dismissCandidate = (): void => {
-    if (model.candidate === null) {
-      return;
-    }
-    model.candidate = null;
-    runtime.render();
-    runtime.persist();
-    setStatusText(view.generateStatus, "Candidate dismissed. Your draft is unchanged.", "");
-    view.generateButton.focus({ preventScroll: true });
-  };
-
-  return {
-    prepareContext,
-    copyContext,
-    generate,
-    useCandidate,
-    copyCandidate,
-    dismissCandidate,
-  };
+const dismissCandidate = (runtime: SynthesisRuntime): void => {
+  const { model, view } = runtime;
+  if (model.candidate === null) {
+    return;
+  }
+  model.candidate = null;
+  runtime.render();
+  runtime.persist();
+  setStatusText(view.generateStatus, "Candidate dismissed. Your draft is unchanged.", "");
+  view.generateButton.focus({ preventScroll: true });
 };

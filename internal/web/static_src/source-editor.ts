@@ -1,3 +1,4 @@
+import { confirmAction } from "./action-confirm";
 import { withLibraryContext } from "./note-navigation";
 import { normalizeSearchResults } from "./api";
 import { queryElement } from "./dom";
@@ -108,6 +109,7 @@ export const initSourceEditor = (): void => {
     claims: attachmentClaims(tracker, tabID),
   });
   initManagement(panel, config, () => controller);
+  initFormatDisclosure(panel);
   void controller.load();
 };
 
@@ -185,7 +187,21 @@ const initManagement = (
       save: async () => {
         await current()?.save();
       },
-      confirm: (message) => window.confirm(message),
+      confirm: (message) => confirmAction({ title: "Move note to Trash?", description: message, confirmLabel: "Move to Trash" }, panel.ownerDocument, elements.trash),
     },
+  });
+};
+
+const initFormatDisclosure = (panel: HTMLElement): void => {
+  const details = panel.querySelector<HTMLDetailsElement>(".source-editor-format");
+  if (!details) return;
+  details.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("[data-source-command]")) details.open = false;
+  });
+  details.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    details.open = false;
+    details.querySelector("summary")?.focus();
   });
 };

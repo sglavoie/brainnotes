@@ -2,7 +2,7 @@ import { type BriefSlotKind } from "./api";
 import { notePathForKey } from "./filters";
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-export type ConfirmLike = (message: string) => boolean;
+export type ConfirmLike = (message: string, returnFocus?: Element | null) => boolean | Promise<boolean>;
 export type ClipboardWriter = (text: string) => Promise<void>;
 
 export type DailyBriefDeps = {

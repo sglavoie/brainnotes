@@ -17,7 +17,7 @@ for (const width of [1280, 390]) {
         await expect(body).toBeFocused();
         await expect(body).toBeInViewport();
         await page.keyboard.press("Tab");
-        await expect(body.locator("a, button").first()).toBeFocused();
+        await expect(body.locator("a:visible, button:visible").first()).toBeFocused();
         await page.emulateMedia({ media: "print" });
         await expect(skip).toBeHidden();
       });
@@ -38,6 +38,7 @@ for (const status of [200, 409]) {
     await input.fill("A thought while browsing");
     await page.locator("[data-capture-submit]").click();
     await expect(input).toBeDisabled();
+    await page.keyboard.press("/");
     const search = page.locator("#search-input");
     await search.fill("Reading");
     finish();

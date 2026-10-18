@@ -12,17 +12,11 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>{{ .Heading }}</h1>
-        <p class="page-subtitle">A stable daily loop to continue momentum, rediscover context, and connect ideas.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>{{ .Heading }}</h1>
+      {{template "workspaceMenu" "brief"}}
     </header>
-    {{template "siteNav" "brief"}}
+    {{template "siteSync" .}}
     {{if not readOnly}}
       <div data-trash-undo-host data-trash-undo-csrf="{{.CSRFToken}}"></div>
     {{end}}
@@ -46,7 +40,323 @@
     </section>
     {{end}}
 
-    <section {{if and (not readOnly) (not .IsEmptyVault)}}id="workspace-content" tabindex="-1"{{end}}
+    <section {{if not .IsEmptyVault}}id="workspace-content" tabindex="-1"{{end}}
+      class="panel brief-panel"
+      data-brief-root
+      data-brief-date="{{.DateISO}}"
+      data-brief-view-endpoint="{{.BriefViewEndpoint}}"
+      data-brief-item-endpoint="{{.BriefItemEndpoint}}"
+      data-brief-insight-endpoint="{{.BriefInsightEndpoint}}"
+      data-brief-csrf="{{.CSRFToken}}"
+      data-brief-insight-enabled="{{if .InsightConfigured}}true{{else}}false{{end}}"
+      aria-labelledby="brief-heading"
+      aria-describedby="brief-global-status"
+    >
+      <div class="panel-header">
+        <h2 id="brief-heading">Today&rsquo;s brief</h2>
+        <p><time datetime="{{.DateISO}}">{{.DateLabel}}</time></p>
+      </div>
+      <p class="brief-intro">Choose one note to continue, one to rediscover, and one connection to sharpen.</p>
+
+
+      {{if .StateUnreadable}}
+        <p class="review-error" role="alert" data-brief-state-unreadable>{{.StateUnreadableMsg}}</p>
+      {{end}}
+      {{if .HasPartialSnapshot}}
+        <p class="review-warning" role="status" data-brief-partial-state>
+          Snapshot is partial: {{.ParseErrorCount}} frontmatter parse errors and {{.SkippedNoteCount}} skipped notes. <a href="{{.HealthPath}}">Review details in Health.</a>
+        </p>
+      {{end}}
+      <article class="panel brief-slot brief-slot-primary" data-brief-slot="{{.Continue.Slot}}">
+        <div class="panel-header">
+          <h3>{{.Continue.Label}}</h3>
+        </div>
+        {{if .Continue.Card}}
+          <div class="brief-card" data-brief-card data-brief-card-id="{{.Continue.Card.ID}}">
+            <h4 class="brief-card-title">
+              {{if .Continue.Card.SourcePath}}
+                <a href="{{.Continue.Card.SourcePath}}">{{.Continue.Card.SourceTitle}}</a>
+              {{else}}
+                {{.Continue.Card.SourceTitle}}
+              {{end}}
+            </h4>
+            {{if .Continue.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Continue.Card.Excerpt}}</blockquote>{{end}}
+            <div class="brief-card-actions">
+              <button
+                class="brief-action-button"
+                type="button"
+                data-brief-action-open
+                data-brief-action="open"
+                data-brief-card-id="{{.Continue.Card.ID}}"
+                data-brief-slot="{{.Continue.Slot}}"
+                {{if not .Continue.Card.OpenEnabled}}disabled{{end}}
+              >Open</button>
+              <button
+                class="brief-action-button"
+                type="button"
+                data-brief-action-another
+                data-brief-action="another"
+                data-brief-card-id="{{.Continue.Card.ID}}"
+                data-brief-slot="{{.Continue.Slot}}"
+                {{if not .Continue.Card.AnotherEnabled}}disabled{{end}}
+              >Another</button>
+            </div>
+            <details class="brief-card-why">
+              <summary>Why this note?</summary>
+              <p class="brief-card-path"><code>{{.Continue.Card.SourceRelPath}}</code></p>
+              <p class="brief-card-explanation">{{.Continue.Card.Explanation}}</p>
+              {{if .Continue.Card.Reasons}}
+                <ul class="brief-card-reasons">
+                  {{range .Continue.Card.Reasons}}
+                    <li>{{.}}</li>
+                  {{end}}
+                </ul>
+              {{end}}
+            </details>
+            <details class="brief-ai">
+              <summary>Ask AI</summary>
+              <div class="brief-insight-prompt-field">
+                <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Continue.Slot}}-{{.Continue.Card.ID}}">Ask AI about this note</label>
+                <div class="brief-insight-prompt-controls">
+                  <textarea
+                    id="brief-insight-prompt-{{.Continue.Slot}}-{{.Continue.Card.ID}}"
+                    class="brief-insight-prompt"
+                    rows="2"
+                    maxlength="2000"
+                    placeholder="Optional: ask a question or specify the output"
+                    data-brief-insight-prompt
+                    {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
+                  ></textarea>
+                  <button
+                    class="brief-action-button"
+                    type="button"
+                    data-brief-action-insight
+                    data-brief-action="insight"
+                    data-brief-card-id="{{.Continue.Card.ID}}"
+                    data-brief-slot="{{.Continue.Slot}}"
+                    {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
+                  >Ask AI</button>
+                </div>
+                <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
+              </div>
+            </details>
+            {{if and .EditorConfigured .Continue.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Continue.Card.OpenDisabledReason}}</p>{{end}}
+            {{if .Continue.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Continue.Card.AnotherDisabledMsg}}</p>{{end}}
+            {{if and .InsightConfigured .Continue.Card.InsightDisabledMsg}}<p class="brief-action-hint">{{.Continue.Card.InsightDisabledMsg}}</p>{{end}}
+            <p class="review-status brief-slot-status" data-brief-slot-status="{{.Continue.Slot}}" role="status" aria-live="polite"></p>
+          </div>
+        {{else}}
+          <h4>{{.Continue.UnavailableTitle}}</h4>
+          <p class="review-empty brief-slot-empty" data-brief-slot-empty="{{.Continue.Slot}}" role="status">{{.Continue.UnavailableMsg}}</p>
+        {{end}}
+      </article>
+
+      <div class="brief-slot-grid">
+        <article class="panel brief-slot brief-slot-secondary" data-brief-slot="{{.Rediscover.Slot}}">
+          <div class="panel-header">
+            <h3>{{.Rediscover.Label}}</h3>
+          </div>
+          {{if .Rediscover.Card}}
+            <div class="brief-card" data-brief-card data-brief-card-id="{{.Rediscover.Card.ID}}">
+              <h4 class="brief-card-title">
+                {{if .Rediscover.Card.SourcePath}}
+                  <a href="{{.Rediscover.Card.SourcePath}}">{{.Rediscover.Card.SourceTitle}}</a>
+                {{else}}
+                  {{.Rediscover.Card.SourceTitle}}
+                {{end}}
+              </h4>
+              {{if .Rediscover.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Rediscover.Card.Excerpt}}</blockquote>{{end}}
+              <div class="brief-card-actions">
+                <button
+                  class="brief-action-button"
+                  type="button"
+                  data-brief-action-open
+                  data-brief-action="open"
+                  data-brief-card-id="{{.Rediscover.Card.ID}}"
+                  data-brief-slot="{{.Rediscover.Slot}}"
+                  {{if not .Rediscover.Card.OpenEnabled}}disabled{{end}}
+                >Open</button>
+                <button
+                  class="brief-action-button"
+                  type="button"
+                  data-brief-action-another
+                  data-brief-action="another"
+                  data-brief-card-id="{{.Rediscover.Card.ID}}"
+                  data-brief-slot="{{.Rediscover.Slot}}"
+                  {{if not .Rediscover.Card.AnotherEnabled}}disabled{{end}}
+                >Another</button>
+              </div>
+              <details class="brief-card-why">
+                <summary>Why this note?</summary>
+                <p class="brief-card-path"><code>{{.Rediscover.Card.SourceRelPath}}</code></p>
+                <p class="brief-card-explanation">{{.Rediscover.Card.Explanation}}</p>
+                {{if .Rediscover.Card.Reasons}}
+                  <ul class="brief-card-reasons">
+                    {{range .Rediscover.Card.Reasons}}
+                      <li>{{.}}</li>
+                    {{end}}
+                  </ul>
+                {{end}}
+              </details>
+              <details class="brief-ai">
+                <summary>Ask AI</summary>
+                <div class="brief-insight-prompt-field">
+                  <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Rediscover.Slot}}-{{.Rediscover.Card.ID}}">Ask AI about this note</label>
+                  <div class="brief-insight-prompt-controls">
+                    <textarea
+                      id="brief-insight-prompt-{{.Rediscover.Slot}}-{{.Rediscover.Card.ID}}"
+                      class="brief-insight-prompt"
+                      rows="2"
+                      maxlength="2000"
+                      placeholder="Optional: ask a question or specify the output"
+                      data-brief-insight-prompt
+                      {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
+                    ></textarea>
+                    <button
+                      class="brief-action-button"
+                      type="button"
+                      data-brief-action-insight
+                      data-brief-action="insight"
+                      data-brief-card-id="{{.Rediscover.Card.ID}}"
+                      data-brief-slot="{{.Rediscover.Slot}}"
+                      {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
+                    >Ask AI</button>
+                  </div>
+                  <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
+                </div>
+              </details>
+              {{if and .EditorConfigured .Rediscover.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Rediscover.Card.OpenDisabledReason}}</p>{{end}}
+              {{if .Rediscover.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Rediscover.Card.AnotherDisabledMsg}}</p>{{end}}
+              {{if and .InsightConfigured .Rediscover.Card.InsightDisabledMsg}}<p class="brief-action-hint">{{.Rediscover.Card.InsightDisabledMsg}}</p>{{end}}
+              <p class="review-status brief-slot-status" data-brief-slot-status="{{.Rediscover.Slot}}" role="status" aria-live="polite"></p>
+            </div>
+          {{else}}
+            <h4>{{.Rediscover.UnavailableTitle}}</h4>
+            <p class="review-empty brief-slot-empty" data-brief-slot-empty="{{.Rediscover.Slot}}" role="status">{{.Rediscover.UnavailableMsg}}</p>
+          {{end}}
+        </article>
+
+        <article class="panel brief-slot brief-slot-secondary" data-brief-slot="{{.Connect.Slot}}">
+          <div class="panel-header">
+            <h3>{{.Connect.Label}}</h3>
+          </div>
+          {{if .Connect.Card}}
+            <div class="brief-card" data-brief-card data-brief-card-id="{{.Connect.Card.ID}}">
+              <h4 class="brief-card-title">
+                {{if .Connect.Card.CandidatePath}}
+                  <a href="{{.Connect.Card.CandidatePath}}">{{.Connect.Card.CandidateTitle}}</a>
+                {{else if .Connect.Card.CandidateTitle}}
+                  {{.Connect.Card.CandidateTitle}}
+                {{else if .Connect.Card.SourcePath}}
+                  <a href="{{.Connect.Card.SourcePath}}">{{.Connect.Card.SourceTitle}}</a>
+                {{else}}
+                  {{.Connect.Card.SourceTitle}}
+                {{end}}
+              </h4>
+              {{if .Connect.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Connect.Card.Excerpt}}</blockquote>{{end}}
+              <div class="brief-card-actions">
+                <button
+                  class="brief-action-button"
+                  type="button"
+                  data-brief-action-open
+                  data-brief-action="open"
+                  data-brief-card-id="{{.Connect.Card.ID}}"
+                  data-brief-slot="{{.Connect.Slot}}"
+                  {{if not .Connect.Card.OpenEnabled}}disabled{{end}}
+                >Open</button>
+                <button
+                  class="brief-action-button"
+                  type="button"
+                  data-brief-action-another
+                  data-brief-action="another"
+                  data-brief-card-id="{{.Connect.Card.ID}}"
+                  data-brief-slot="{{.Connect.Slot}}"
+                  {{if not .Connect.Card.AnotherEnabled}}disabled{{end}}
+                >Another</button>
+              </div>
+              <details class="brief-card-why">
+                <summary>Why this note?</summary>
+                {{if .Connect.Card.CandidateRelPath}}
+                  <p class="brief-card-path"><code>{{.Connect.Card.CandidateRelPath}}</code></p>
+                {{else}}
+                  <p class="brief-card-path"><code>{{.Connect.Card.SourceRelPath}}</code></p>
+                {{end}}
+                <p class="brief-card-explanation">{{.Connect.Card.Explanation}}</p>
+                {{if .Connect.Card.RelationshipLabel}}<p class="brief-card-meta">Relationship: {{.Connect.Card.RelationshipLabel}}</p>{{end}}
+                {{if .Connect.Card.Bridge}}<p class="brief-card-meta">Bridge: <code>{{.Connect.Card.Bridge}}</code></p>{{end}}
+                {{if .Connect.Card.Reasons}}
+                  <ul class="brief-card-reasons">
+                    {{range .Connect.Card.Reasons}}
+                      <li>{{.}}</li>
+                    {{end}}
+                  </ul>
+                {{end}}
+              </details>
+              <details class="brief-ai">
+                <summary>Ask AI</summary>
+                <div class="brief-insight-prompt-field">
+                  <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Connect.Slot}}-{{.Connect.Card.ID}}">Ask AI about this note</label>
+                  <div class="brief-insight-prompt-controls">
+                    <textarea
+                      id="brief-insight-prompt-{{.Connect.Slot}}-{{.Connect.Card.ID}}"
+                      class="brief-insight-prompt"
+                      rows="2"
+                      maxlength="2000"
+                      placeholder="Optional: ask a question or specify the output"
+                      data-brief-insight-prompt
+                      {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
+                    ></textarea>
+                    <button
+                      class="brief-action-button"
+                      type="button"
+                      data-brief-action-insight
+                      data-brief-action="insight"
+                      data-brief-card-id="{{.Connect.Card.ID}}"
+                      data-brief-slot="{{.Connect.Slot}}"
+                      {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
+                    >Ask AI</button>
+                  </div>
+                  <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
+                </div>
+              </details>
+              {{if and .EditorConfigured .Connect.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Connect.Card.OpenDisabledReason}}</p>{{end}}
+              {{if .Connect.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Connect.Card.AnotherDisabledMsg}}</p>{{end}}
+              {{if and .InsightConfigured .Connect.Card.InsightDisabledMsg}}<p class="brief-action-hint">{{.Connect.Card.InsightDisabledMsg}}</p>{{end}}
+              <p class="review-status brief-slot-status" data-brief-slot-status="{{.Connect.Slot}}" role="status" aria-live="polite"></p>
+            </div>
+          {{else}}
+            <h4>{{.Connect.UnavailableTitle}}</h4>
+            <p class="review-empty brief-slot-empty" data-brief-slot-empty="{{.Connect.Slot}}" role="status">{{.Connect.UnavailableMsg}}</p>
+          {{end}}
+        </article>
+      </div>
+      {{if or (not .EditorConfigured) (not .InsightConfigured)}}
+      <details class="brief-optional-setup">
+        <summary>Optional tools: external editor and AI</summary>
+      {{if not .EditorConfigured}}
+        <p class="review-warning" role="status" data-brief-editor-unconfigured>{{.EditorStatusMsg}}</p>
+      {{end}}
+      {{if not .InsightConfigured}}
+        <p class="review-warning" role="status" data-brief-agent-unconfigured>{{.InsightStatusMsg}}</p>
+      {{end}}
+      </details>
+      {{end}}
+      <details class="brief-activity"><summary>Activity in the last seven days</summary>
+      <dl class="review-counts" aria-label="Last seven days activity">
+        <div class="review-count">
+          <dt>Visit days</dt>
+          <dd data-brief-activity-visit-days>{{.Activity.VisitDays}}</dd>
+        </div>
+        <div class="review-count">
+          <dt>Successful opens</dt>
+          <dd data-brief-activity-open-count>{{.Activity.OpenCount}}</dd>
+        </div>
+      </dl>
+      </details>
+      <p id="brief-global-status" class="review-status brief-global-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section
       class="panel capture-panel"
       data-capture-root
       data-capture-csrf="{{.CSRFToken}}"
@@ -92,301 +402,6 @@
       <p class="capture-hint" data-capture-draft-status role="status" hidden></p>
       <a data-capture-view-inbox {{if .CapturePath}}href="{{.CapturePath}}"{{end}} hidden>View inbox</a>
       <ul class="capture-recent" data-capture-recent aria-label="Captured in this session"></ul>
-    </section>
-
-    <section {{if and readOnly (not .IsEmptyVault)}}id="workspace-content" tabindex="-1"{{end}}
-      class="panel brief-panel"
-      data-brief-root
-      data-brief-date="{{.DateISO}}"
-      data-brief-view-endpoint="{{.BriefViewEndpoint}}"
-      data-brief-item-endpoint="{{.BriefItemEndpoint}}"
-      data-brief-insight-endpoint="{{.BriefInsightEndpoint}}"
-      data-brief-csrf="{{.CSRFToken}}"
-      data-brief-insight-enabled="{{if .InsightConfigured}}true{{else}}false{{end}}"
-      aria-labelledby="brief-heading"
-      aria-describedby="brief-global-status"
-    >
-      <div class="panel-header">
-        <h2 id="brief-heading">Today&rsquo;s brief</h2>
-        <p><time datetime="{{.DateISO}}">{{.DateLabel}}</time></p>
-      </div>
-      <p class="brief-intro">Choose one note to continue, one to rediscover, and one connection to sharpen.</p>
-      <dl class="review-counts" aria-label="Last seven days activity">
-        <div class="review-count">
-          <dt>Visit days</dt>
-          <dd data-brief-activity-visit-days>{{.Activity.VisitDays}}</dd>
-        </div>
-        <div class="review-count">
-          <dt>Successful opens</dt>
-          <dd data-brief-activity-open-count>{{.Activity.OpenCount}}</dd>
-        </div>
-      </dl>
-
-      {{if .StateUnreadable}}
-        <p class="review-error" role="alert" data-brief-state-unreadable>{{.StateUnreadableMsg}}</p>
-      {{end}}
-      {{if .HasPartialSnapshot}}
-        <p class="review-warning" role="status" data-brief-partial-state>
-          Snapshot is partial: {{.ParseErrorCount}} frontmatter parse errors and {{.SkippedNoteCount}} skipped notes. <a href="{{.HealthPath}}">Review details in Health.</a>
-        </p>
-      {{end}}
-      {{if or (not .EditorConfigured) (not .InsightConfigured)}}
-      <details class="brief-optional-setup">
-        <summary>Optional tools: external editor and AI</summary>
-      {{if not .EditorConfigured}}
-        <p class="review-warning" role="status" data-brief-editor-unconfigured>{{.EditorStatusMsg}}</p>
-      {{end}}
-      {{if not .InsightConfigured}}
-        <p class="review-warning" role="status" data-brief-agent-unconfigured>{{.InsightStatusMsg}}</p>
-      {{end}}
-      </details>
-      {{end}}
-      <article class="panel brief-slot brief-slot-primary" data-brief-slot="{{.Continue.Slot}}">
-        <div class="panel-header">
-          <h3>{{.Continue.Label}}</h3>
-        </div>
-        {{if .Continue.Card}}
-          <div class="brief-card" data-brief-card data-brief-card-id="{{.Continue.Card.ID}}">
-            <h4 class="brief-card-title">
-              {{if .Continue.Card.SourcePath}}
-                <a href="{{.Continue.Card.SourcePath}}">{{.Continue.Card.SourceTitle}}</a>
-              {{else}}
-                {{.Continue.Card.SourceTitle}}
-              {{end}}
-            </h4>
-            <p class="brief-card-path"><code>{{.Continue.Card.SourceRelPath}}</code></p>
-            <p class="brief-card-explanation">{{.Continue.Card.Explanation}}</p>
-            {{if .Continue.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Continue.Card.Excerpt}}</blockquote>{{end}}
-            {{if .Continue.Card.Reasons}}
-              <ul class="brief-card-reasons">
-                {{range .Continue.Card.Reasons}}
-                  <li>{{.}}</li>
-                {{end}}
-              </ul>
-            {{end}}
-            <div class="brief-card-actions">
-              <button
-                class="brief-action-button"
-                type="button"
-                data-brief-action-open
-                data-brief-action="open"
-                data-brief-card-id="{{.Continue.Card.ID}}"
-                data-brief-slot="{{.Continue.Slot}}"
-                {{if not .Continue.Card.OpenEnabled}}disabled{{end}}
-              >Open</button>
-              <button
-                class="brief-action-button"
-                type="button"
-                data-brief-action-another
-                data-brief-action="another"
-                data-brief-card-id="{{.Continue.Card.ID}}"
-                data-brief-slot="{{.Continue.Slot}}"
-                {{if not .Continue.Card.AnotherEnabled}}disabled{{end}}
-              >Another</button>
-            </div>
-            <div class="brief-insight-prompt-field">
-              <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Continue.Slot}}-{{.Continue.Card.ID}}">Ask AI about this note</label>
-              <div class="brief-insight-prompt-controls">
-                <textarea
-                  id="brief-insight-prompt-{{.Continue.Slot}}-{{.Continue.Card.ID}}"
-                  class="brief-insight-prompt"
-                  rows="2"
-                  maxlength="2000"
-                  placeholder="Optional: ask a question or specify the output"
-                  data-brief-insight-prompt
-                  {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
-                ></textarea>
-                <button
-                  class="brief-action-button"
-                  type="button"
-                  data-brief-action-insight
-                  data-brief-action="insight"
-                  data-brief-card-id="{{.Continue.Card.ID}}"
-                  data-brief-slot="{{.Continue.Slot}}"
-                  {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
-                >Ask AI</button>
-              </div>
-              <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
-            </div>
-            {{if and .EditorConfigured .Continue.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Continue.Card.OpenDisabledReason}}</p>{{end}}
-            {{if .Continue.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Continue.Card.AnotherDisabledMsg}}</p>{{end}}
-            {{if and .InsightConfigured .Continue.Card.InsightDisabledMsg}}<p class="brief-action-hint">{{.Continue.Card.InsightDisabledMsg}}</p>{{end}}
-            <p class="review-status brief-slot-status" data-brief-slot-status="{{.Continue.Slot}}" role="status" aria-live="polite"></p>
-          </div>
-        {{else}}
-          <h4>{{.Continue.UnavailableTitle}}</h4>
-          <p class="review-empty brief-slot-empty" data-brief-slot-empty="{{.Continue.Slot}}" role="status">{{.Continue.UnavailableMsg}}</p>
-        {{end}}
-      </article>
-
-      <div class="brief-slot-grid">
-        <article class="panel brief-slot brief-slot-secondary" data-brief-slot="{{.Rediscover.Slot}}">
-          <div class="panel-header">
-            <h3>{{.Rediscover.Label}}</h3>
-          </div>
-          {{if .Rediscover.Card}}
-            <div class="brief-card" data-brief-card data-brief-card-id="{{.Rediscover.Card.ID}}">
-              <h4 class="brief-card-title">
-                {{if .Rediscover.Card.SourcePath}}
-                  <a href="{{.Rediscover.Card.SourcePath}}">{{.Rediscover.Card.SourceTitle}}</a>
-                {{else}}
-                  {{.Rediscover.Card.SourceTitle}}
-                {{end}}
-              </h4>
-              <p class="brief-card-path"><code>{{.Rediscover.Card.SourceRelPath}}</code></p>
-              <p class="brief-card-explanation">{{.Rediscover.Card.Explanation}}</p>
-              {{if .Rediscover.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Rediscover.Card.Excerpt}}</blockquote>{{end}}
-              {{if .Rediscover.Card.Reasons}}
-                <ul class="brief-card-reasons">
-                  {{range .Rediscover.Card.Reasons}}
-                    <li>{{.}}</li>
-                  {{end}}
-                </ul>
-              {{end}}
-              <div class="brief-card-actions">
-                <button
-                  class="brief-action-button"
-                  type="button"
-                  data-brief-action-open
-                  data-brief-action="open"
-                  data-brief-card-id="{{.Rediscover.Card.ID}}"
-                  data-brief-slot="{{.Rediscover.Slot}}"
-                  {{if not .Rediscover.Card.OpenEnabled}}disabled{{end}}
-                >Open</button>
-                <button
-                  class="brief-action-button"
-                  type="button"
-                  data-brief-action-another
-                  data-brief-action="another"
-                  data-brief-card-id="{{.Rediscover.Card.ID}}"
-                  data-brief-slot="{{.Rediscover.Slot}}"
-                  {{if not .Rediscover.Card.AnotherEnabled}}disabled{{end}}
-                >Another</button>
-              </div>
-              <div class="brief-insight-prompt-field">
-                <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Rediscover.Slot}}-{{.Rediscover.Card.ID}}">Ask AI about this note</label>
-                <div class="brief-insight-prompt-controls">
-                  <textarea
-                    id="brief-insight-prompt-{{.Rediscover.Slot}}-{{.Rediscover.Card.ID}}"
-                    class="brief-insight-prompt"
-                    rows="2"
-                    maxlength="2000"
-                    placeholder="Optional: ask a question or specify the output"
-                    data-brief-insight-prompt
-                    {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
-                  ></textarea>
-                  <button
-                    class="brief-action-button"
-                    type="button"
-                    data-brief-action-insight
-                    data-brief-action="insight"
-                    data-brief-card-id="{{.Rediscover.Card.ID}}"
-                    data-brief-slot="{{.Rediscover.Slot}}"
-                    {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
-                  >Ask AI</button>
-                </div>
-                <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
-              </div>
-              {{if and .EditorConfigured .Rediscover.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Rediscover.Card.OpenDisabledReason}}</p>{{end}}
-              {{if .Rediscover.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Rediscover.Card.AnotherDisabledMsg}}</p>{{end}}
-              {{if and .InsightConfigured .Rediscover.Card.InsightDisabledMsg}}<p class="brief-action-hint">{{.Rediscover.Card.InsightDisabledMsg}}</p>{{end}}
-              <p class="review-status brief-slot-status" data-brief-slot-status="{{.Rediscover.Slot}}" role="status" aria-live="polite"></p>
-            </div>
-          {{else}}
-            <h4>{{.Rediscover.UnavailableTitle}}</h4>
-            <p class="review-empty brief-slot-empty" data-brief-slot-empty="{{.Rediscover.Slot}}" role="status">{{.Rediscover.UnavailableMsg}}</p>
-          {{end}}
-        </article>
-
-        <article class="panel brief-slot brief-slot-secondary" data-brief-slot="{{.Connect.Slot}}">
-          <div class="panel-header">
-            <h3>{{.Connect.Label}}</h3>
-          </div>
-          {{if .Connect.Card}}
-            <div class="brief-card" data-brief-card data-brief-card-id="{{.Connect.Card.ID}}">
-              <h4 class="brief-card-title">
-                {{if .Connect.Card.CandidatePath}}
-                  <a href="{{.Connect.Card.CandidatePath}}">{{.Connect.Card.CandidateTitle}}</a>
-                {{else if .Connect.Card.CandidateTitle}}
-                  {{.Connect.Card.CandidateTitle}}
-                {{else if .Connect.Card.SourcePath}}
-                  <a href="{{.Connect.Card.SourcePath}}">{{.Connect.Card.SourceTitle}}</a>
-                {{else}}
-                  {{.Connect.Card.SourceTitle}}
-                {{end}}
-              </h4>
-              {{if .Connect.Card.CandidateRelPath}}
-                <p class="brief-card-path"><code>{{.Connect.Card.CandidateRelPath}}</code></p>
-              {{else}}
-                <p class="brief-card-path"><code>{{.Connect.Card.SourceRelPath}}</code></p>
-              {{end}}
-              <p class="brief-card-explanation">{{.Connect.Card.Explanation}}</p>
-              {{if .Connect.Card.RelationshipLabel}}<p class="brief-card-meta">Relationship: {{.Connect.Card.RelationshipLabel}}</p>{{end}}
-              {{if .Connect.Card.Bridge}}<p class="brief-card-meta">Bridge: <code>{{.Connect.Card.Bridge}}</code></p>{{end}}
-              {{if .Connect.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Connect.Card.Excerpt}}</blockquote>{{end}}
-              {{if .Connect.Card.Reasons}}
-                <ul class="brief-card-reasons">
-                  {{range .Connect.Card.Reasons}}
-                    <li>{{.}}</li>
-                  {{end}}
-                </ul>
-              {{end}}
-              <div class="brief-card-actions">
-                <button
-                  class="brief-action-button"
-                  type="button"
-                  data-brief-action-open
-                  data-brief-action="open"
-                  data-brief-card-id="{{.Connect.Card.ID}}"
-                  data-brief-slot="{{.Connect.Slot}}"
-                  {{if not .Connect.Card.OpenEnabled}}disabled{{end}}
-                >Open</button>
-                <button
-                  class="brief-action-button"
-                  type="button"
-                  data-brief-action-another
-                  data-brief-action="another"
-                  data-brief-card-id="{{.Connect.Card.ID}}"
-                  data-brief-slot="{{.Connect.Slot}}"
-                  {{if not .Connect.Card.AnotherEnabled}}disabled{{end}}
-                >Another</button>
-              </div>
-              <div class="brief-insight-prompt-field">
-                <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Connect.Slot}}-{{.Connect.Card.ID}}">Ask AI about this note</label>
-                <div class="brief-insight-prompt-controls">
-                  <textarea
-                    id="brief-insight-prompt-{{.Connect.Slot}}-{{.Connect.Card.ID}}"
-                    class="brief-insight-prompt"
-                    rows="2"
-                    maxlength="2000"
-                    placeholder="Optional: ask a question or specify the output"
-                    data-brief-insight-prompt
-                    {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
-                  ></textarea>
-                  <button
-                    class="brief-action-button"
-                    type="button"
-                    data-brief-action-insight
-                    data-brief-action="insight"
-                    data-brief-card-id="{{.Connect.Card.ID}}"
-                    data-brief-slot="{{.Connect.Slot}}"
-                    {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
-                  >Ask AI</button>
-                </div>
-                <span class="brief-insight-prompt-hint">Leave blank for the suggested insight. Press Ctrl/⌘ + Enter to ask.</span>
-              </div>
-              {{if and .EditorConfigured .Connect.Card.OpenDisabledReason}}<p class="brief-action-hint">{{.Connect.Card.OpenDisabledReason}}</p>{{end}}
-              {{if .Connect.Card.AnotherDisabledMsg}}<p class="brief-action-hint">{{.Connect.Card.AnotherDisabledMsg}}</p>{{end}}
-              {{if and .InsightConfigured .Connect.Card.InsightDisabledMsg}}<p class="brief-action-hint">{{.Connect.Card.InsightDisabledMsg}}</p>{{end}}
-              <p class="review-status brief-slot-status" data-brief-slot-status="{{.Connect.Slot}}" role="status" aria-live="polite"></p>
-            </div>
-          {{else}}
-            <h4>{{.Connect.UnavailableTitle}}</h4>
-            <p class="review-empty brief-slot-empty" data-brief-slot-empty="{{.Connect.Slot}}" role="status">{{.Connect.UnavailableMsg}}</p>
-          {{end}}
-        </article>
-      </div>
-      <p id="brief-global-status" class="review-status brief-global-status" role="status" aria-live="polite"></p>
     </section>
 
     <section class="panel">

@@ -27,11 +27,11 @@ export type DraftPanelElements = {
 // and the distance between "kept" and "saved" is the distance between text that
 // survives the tab closing and text that does not.
 export const draftStatusMessages = {
-  kept: "Unsaved text is being kept in this browser only. It is not in the vault until you save.",
+  kept: "Draft kept in this browser. Save to write it to the vault.",
   unavailable:
-    "This browser will not keep a local copy of unsaved text, so nothing is held outside this tab. Save before you leave the page.",
+    "Draft only in this tab; browser storage is unavailable. Save before leaving.",
   refused:
-    "This browser would not keep a copy of the unsaved text — its storage is full. Nothing is held outside this tab; save before you leave the page.",
+    "Draft only in this tab; browser storage is full. Save before leaving.",
   // There is one slot per tab, and after a reload the recovered text is in it.
   // Text typed on top of an unanswered offer cannot go there as well, and a
   // person typing into a page that is quietly keeping nothing is exactly who

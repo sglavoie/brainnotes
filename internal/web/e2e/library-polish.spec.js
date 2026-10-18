@@ -71,6 +71,7 @@ test.describe("navigation before scripts load", () => {
     await page.goto("/library");
     const current = page.locator('.site-nav [aria-current="page"]');
     await expect(current).toHaveText("Library");
+    await page.locator(".source-editor-workspace > summary").click();
     await page.locator('.site-nav a[href="/pinned"]').click();
     await expect(current).toHaveText("Pinned");
     await page.locator('.site-nav a[href="/"]').click();
@@ -127,7 +128,7 @@ test("an unconfirmed pin offers refresh without repeating the write", async ({ p
   const pin = row.locator("[data-pin-button]");
   await pin.click();
   await expect(pin).toHaveAttribute("aria-pressed", "false");
-  await expect(row).toContainText("Couldn't confirm");
+  await expect(row).toContainText("not confirmed");
   await row.getByRole("link", { name: "Refresh to check" }).click();
   await expect(pin).toBeVisible();
   await expect(pin).toHaveAttribute("aria-pressed", "false");

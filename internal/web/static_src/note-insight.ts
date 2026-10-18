@@ -1,3 +1,4 @@
+import { confirmAction, type ConfirmAction } from "./action-confirm";
 import {
   buildNoteInsightForm,
   normalizeManagementErrorMessage,
@@ -8,7 +9,7 @@ import { copyWithFallback } from "./clipboard";
 import { setStatusText } from "./status";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-type ConfirmLike = (message: string) => boolean;
+type ConfirmLike = ConfirmAction;
 type ClipboardWriter = (text: string) => Promise<void>;
 
 export type NoteInsightDeps = {
@@ -90,7 +91,7 @@ class NoteInsight {
     this.csrfToken = els.root.dataset.noteInsightCsrf || "";
     this.enabled = els.root.dataset.noteInsightEnabled?.toLowerCase() === "true";
     this.fetcher = deps.fetch || fetch;
-    this.confirmer = deps.confirm || ((message) => window.confirm(message));
+    this.confirmer = deps.confirm || ((message) => confirmAction({ title: "Send note to Ask AI?", description: message, confirmLabel: "Send note", danger: false }, els.root.ownerDocument, els.submit));
     this.clipboardWrite = deps.writeClipboard || (navigator.clipboard?.writeText
       ? (text) => navigator.clipboard.writeText(text) : undefined);
     els.submit.addEventListener("click", () => { void this.run(); });
@@ -113,12 +114,12 @@ class NoteInsight {
     this.els.copy.disabled = busy || this.output.trim() === "";
   }
 
-  private canRun(): boolean {
+  private async canRun(): Promise<boolean> {
     if (!this.enabled || !this.key || !this.csrfToken) {
       this.setStatus("Ask AI is unavailable.", "is-error");
       return false;
     }
-    if (!this.disclosureAccepted) this.disclosureAccepted = this.confirmer(disclosureMessage);
+    if (!this.disclosureAccepted) this.disclosureAccepted = await this.confirmer(disclosureMessage);
     if (!this.disclosureAccepted) this.setStatus("Ask AI canceled.");
     return this.disclosureAccepted;
   }
@@ -141,8 +142,9 @@ class NoteInsight {
   }
 
   private async run(): Promise<void> {
-    if (!this.canRun()) return;
+    if (this.els.submit.disabled) return;
     this.setBusy(true);
+    if (!await this.canRun()) { this.setBusy(false); return; }
     this.setStatus("Generating response...", "is-loading");
     try {
       const requestBody = buildNoteInsightForm({

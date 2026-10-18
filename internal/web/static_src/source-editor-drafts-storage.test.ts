@@ -26,18 +26,18 @@ describe("a browser that will not keep a copy", () => {
   it("warns before anything is typed and leaves the editor entirely usable", async () => {
     const harness = mount({ storage: null });
 
-    expect(harness.draftStatus()).toContain("will not keep a local copy");
+    expect(harness.draftStatus()).toContain("browser storage is unavailable");
     await harness.controller.load();
     harness.surface().type(EDITED);
     await tick();
     await harness.controller.save();
 
-    expect(harness.status()).toContain("Saved Alpha.md.");
+    expect(harness.status()).toContain("Saved to vault.");
     expect(harness.client.save).toHaveBeenCalledTimes(1);
     // And it is still said afterwards. Nothing in a load or a save makes this
     // browser start keeping copies, so the line that says so may not be cleared
     // by either — there is no later write to bring it back.
-    expect(harness.draftStatus()).toContain("will not keep a local copy");
+    expect(harness.draftStatus()).toContain("browser storage is unavailable");
   });
 
   it("says storage is full rather than pretending the text is held", async () => {
@@ -116,7 +116,7 @@ describe("a browser that will not keep a copy", () => {
     expect(harness.drafts()).toEqual([
       expect.objectContaining({ draftID: "tab-earlier", content: `${EDITED}newer still\n` }),
     ]);
-    expect(harness.draftStatus()).toContain("kept in this browser only");
+    expect(harness.draftStatus()).toContain("kept in this browser");
   });
 });
 
@@ -230,7 +230,7 @@ describe("an offer standing over a request that never answers", () => {
     expect(harness.drafts()).toEqual([
       expect.objectContaining({ draftID: "tab-earlier", content: `${EDITED}mine\n` }),
     ]);
-    expect(harness.draftStatus()).toContain("kept in this browser only");
+    expect(harness.draftStatus()).toContain("kept in this browser");
   });
 });
 

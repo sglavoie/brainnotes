@@ -12,16 +12,11 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>{{ .Title }}</h1>
-        <p class="page-subtitle">Find a note, pick up your reading, or organize a selection.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>Library</h1>
+      {{template "workspaceMenu" "library"}}
     </header>
-    {{template "siteNav" "library"}}
+    {{template "siteSync" .}}
 
     <section id="workspace-content" tabindex="-1" class="panel library-search" aria-labelledby="library-search-heading" data-library-search>
       <div class="panel-header">
@@ -61,8 +56,8 @@
           </div>
         </div>
       </div>
-      {{template "headerSearch" .}}
-      <p class="library-search-hint">Search text, filters, and expressions apply together. Notes must match every active constraint.</p>
+      {{template "librarySearch" .}}
+      <details class="library-search-help"><summary>Search help</summary><p>Search text, filters, and expressions apply together. Notes must match every active constraint. Press Enter in search to move to the results.</p></details>
       {{template "facetControls" .FacetControls}}
       <details class="library-expression" data-library-expression>
         <summary>Query expression <span data-library-expression-indicator></span></summary>
@@ -106,7 +101,7 @@
         <span class="overview-selected-count" data-overview-selected-count role="status" aria-live="polite">0 selected</span>
         <button class="overview-bulk-button" type="button" data-overview-select-displayed>Select displayed</button>
         <button class="overview-bulk-button" type="button" data-overview-clear-selection disabled>Clear selection</button>
-        <span>Shift-click a checkbox to select or clear a range.</span>
+        <details class="overview-selection-help"><summary>Selection help</summary><p>Use the checkboxes to select notes. Shift-click a checkbox to select or clear a range. Actions apply only to selected notes.</p></details>
         <button class="overview-bulk-button" type="button" data-overview-copy-wikilinks data-copy-text="" data-copy-label="Wikilinks" disabled>Copy wikilinks</button>
         <span class="copy-status" data-copy-status role="status" aria-live="polite"></span>
       </div>
@@ -161,7 +156,7 @@
         </section>
         <p class="overview-bulk-status" data-overview-bulk-status role="status" aria-live="polite"></p>
       </div>
-      <ul class="overview-result-list" data-overview-search-list hidden></ul>
+      <ul id="library-results-list" class="overview-result-list" data-overview-search-list hidden></ul>
     </section>
 
     <section

@@ -64,7 +64,7 @@ describe("keeping unsaved text", () => {
 
     expect(harness.drafts()).toEqual([]);
     expect(harness.draftStatus()).toBe("");
-    expect(harness.status()).toContain("Saved Alpha.md.");
+    expect(harness.status()).toContain("Saved to vault.");
   });
 
   // The interruption this feature is most often answering: the request is in
@@ -105,11 +105,11 @@ describe("keeping unsaved text", () => {
     harness.surface().type(EDITED);
     await tick();
 
-    expect(harness.draftStatus()).toContain("kept in this browser only");
-    expect(harness.draftStatus()).toContain("not in the vault until you save");
+    expect(harness.draftStatus()).toContain("kept in this browser");
+    expect(harness.draftStatus()).toContain("Save to write it to the vault");
     expect(harness.draftStatus()).not.toMatch(/\bsaved\b/i);
-    // The vault's own line is untouched by any of it.
-    expect(harness.status()).toContain("Alpha.md loaded");
+    // Local draft custody and unsaved edits are distinct from a vault save.
+    expect(harness.status()).toBe("Unsaved changes.");
     expect(harness.elements.draftStatus).not.toBe(harness.elements.status);
   });
 });
@@ -200,7 +200,7 @@ describe("the slot an unanswered offer is standing on", () => {
     // something already announced and "the recovered text is still being kept,
     // so what you are typing now is not" would stay on screen over a slot that
     // now holds exactly what they are typing.
-    expect(harness.draftStatus()).toContain("kept in this browser only");
+    expect(harness.draftStatus()).toContain("kept in this browser");
   });
 
   // The same slot, taken the other way. A save is this editor's text reaching
@@ -241,7 +241,7 @@ describe("the slot an unanswered offer is standing on", () => {
 
     expect(harness.drafts()).toHaveLength(1);
     expect(harness.drafts()[0]).toMatchObject({ draftID: "tab-earlier", content: EDITED });
-    expect(harness.draftStatus()).toContain("kept in this browser only");
+    expect(harness.draftStatus()).toContain("kept in this browser");
   });
 
   // The hold is about the slot, not about the panel: another tab's newer draft

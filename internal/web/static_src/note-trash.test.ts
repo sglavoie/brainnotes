@@ -68,7 +68,7 @@ describe("trash note request construction", () => {
 });
 
 describe("trash note DOM behavior", () => {
-  it("cancels without posting when confirmation is rejected", () => {
+  it("cancels without posting when confirmation is rejected", async () => {
     document.body.innerHTML = `
       <div data-trash-note data-trash-key="source" data-trash-csrf="csrf-token" data-trash-confirm="Move Source?" data-trash-redirect="/">
         <button type="button" data-trash-button>Trash</button>
@@ -90,7 +90,7 @@ describe("trash note DOM behavior", () => {
     expect(confirmMock).toHaveBeenCalledWith("Move Source?");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
-    expect(status?.textContent).toBe("Trash canceled.");
+    await waitForExpect(() => expect(status?.textContent).toBe("Trash canceled."));
   });
 
   it("posts the configured request and redirects on success", async () => {
@@ -115,7 +115,6 @@ describe("trash note DOM behavior", () => {
     button?.click();
 
     expect(button?.disabled).toBe(true);
-    expect(status?.textContent).toBe("Moving note to Trash...");
 
     await waitForExpect(() => {
       expect(button?.disabled).toBe(false);

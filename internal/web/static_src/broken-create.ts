@@ -64,7 +64,7 @@ const showCreatedNote = (button: HTMLButtonElement, path: string | undefined): v
 };
 
 const showUnconfirmed = (status: HTMLElement): void => {
-  setStatusText(status, "Couldn't confirm note creation. Refresh to check whether the link is still broken before retrying. ", "is-error");
+  setStatusText(status, "Creation not confirmed. Refresh to check whether the link is still broken before retrying. ", "is-error");
   const link = document.createElement("a");
   link.href = window.location.href;
   link.textContent = "Refresh to check";

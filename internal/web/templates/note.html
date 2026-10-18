@@ -149,7 +149,7 @@
             <div class="note-sidebar-content">
           <section class="panel frontmatter-panel" data-frontmatter-panel data-frontmatter-key="{{.Key}}" data-frontmatter-csrf="{{.CSRFToken}}">
             <div class="frontmatter-panel-header">
-              <h2>Frontmatter</h2>
+              <h2>Properties</h2>
               <p class="frontmatter-edit-status" data-frontmatter-status role="status" aria-live="polite"> </p>
             </div>
             {{if .Frontmatter}}
@@ -159,6 +159,9 @@
                     <dt>{{.Key}}</dt>
                     <dd>
                       {{template "frontmatterValue" .Value}}
+                      {{if not readOnly}}
+                      <details class="frontmatter-editor" name="property-editor">
+                        <summary aria-label="Edit {{.Key}}">Edit</summary>
                       <div class="frontmatter-controls">
                         {{if .CanSet}}
                           <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="=">
@@ -196,6 +199,8 @@
                           </datalist>
                         {{end}}
                       </div>
+                      </details>
+                      {{end}}
                     </dd>
                   </div>
                 {{end}}
@@ -203,6 +208,9 @@
             {{else}}
               <p>No frontmatter.</p>
             {{end}}
+            {{if not readOnly}}
+            <details class="frontmatter-add" name="property-editor">
+              <summary>Add property</summary>
             <form class="frontmatter-add-form" data-frontmatter-set data-frontmatter-op="=">
               <label>
                 <span>Key</span>
@@ -214,6 +222,8 @@
               </label>
               <button type="submit" class="frontmatter-button">Add property</button>
             </form>
+            </details>
+            {{end}}
             {{if .FrontmatterChoices}}
               <datalist id="frontmatter-property-choices">
                 {{range .FrontmatterChoices}}
@@ -223,7 +233,7 @@
             {{end}}
           </section>
 
-          <section class="panel">
+          <section class="panel{{if not .Backlinks}} note-links-empty{{end}}">
             <h2>Backlinks</h2>
             {{if .Backlinks}}
               <ul class="link-list" data-note-context-links>
@@ -254,7 +264,7 @@
             {{end}}
           </section>
 
-          <section class="panel">
+          <section class="panel{{if not .Outgoing}} note-links-empty{{end}}">
             <h2>Outgoing links</h2>
             {{if .Outgoing}}
               <ul class="link-list" data-note-context-links>

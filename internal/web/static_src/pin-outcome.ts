@@ -4,7 +4,7 @@ import { asRecord } from "./api-internal";
 export type PinOutcome = { kind: "success" | "failure" | "unconfirmed"; message: string };
 export const unconfirmedPin = (): PinOutcome => ({
   kind: "unconfirmed",
-  message: "Couldn't confirm the pin change. Refresh to check before trying again.",
+  message: "Pin change not confirmed. Refresh to check before retrying.",
 });
 
 export const readPinOutcome = async (response: Response): Promise<PinOutcome> => {

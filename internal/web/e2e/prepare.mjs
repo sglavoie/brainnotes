@@ -70,6 +70,14 @@ const ACTIVE_MEDIA = {
 };
 
 const SEED_NOTES = {
+  "Notes/A long note title about field observations, unfinished ideas, and a careful return to the work in progress.md":
+    "---\nstatus: reference\n---\n\nField observations from the riverside walk. Compare [[Writing|the journal]] with the earlier survey and record what changed.\n",
+  "Writing.md": "---\nstatus: reference\ntitle: Field journal\n" +
+    Array.from({ length: 14 }, (_, i) => `field_${i}: Observation ${i}\n`).join("") +
+    "---\n\n## Field journal\n\n" +
+    "The morning trail follows the river. Record the changing light, the birds along the bank, and the questions to revisit tomorrow.\n\n".repeat(18) +
+    "## Sketches\n\n[Field sketch](attachments/field-sketch.txt)\n\nA comparison with [[Notes/Fieldwork|earlier observations]] helps explain the seasonal change.\n",
+  "attachments/field-sketch.txt": "River bend: north bank, low water, willow grove.\n",
   "Reading.md": "---\nstatus: draft\ntitle: Reading\nlast: 2026-10-03\n---\n\n## First section\n\n" +
     "A paragraph for scrolling through this note.\n\n".repeat(35) +
     "## Second section\n\n```go\npackage main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n```\n\n" +
@@ -314,7 +322,7 @@ export async function prepare() {
     peerOnlyNote: PEER_ONLY_NOTE,
     inboxNote: INBOX_NOTE,
     captureHeading: CAPTURE_HEADING,
-    seedNotes: Object.keys(SEED_NOTES),
+    seedNotes: Object.keys(SEED_NOTES).filter((path) => path.endsWith(".md")),
     // Deliberately not folded into seedNotes: those are the notes every vault is
     // supposed to serve, and these are one side of a conflict — one of them a note
     // the incoming operation deletes.

@@ -98,7 +98,7 @@ class Capture {
   }
 
   private unconfirmed(): void {
-    this.setStatus("Couldn't confirm capture. Check your inbox before retrying.", "is-error");
+    this.setStatus("Capture not confirmed. Check your inbox before retrying.", "is-error");
     const link = queryElement(this.root, "[data-capture-view-inbox]", HTMLAnchorElement);
     if (link?.getAttribute("href")?.startsWith("/n/")) link.hidden = false;
   }

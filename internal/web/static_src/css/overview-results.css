@@ -152,3 +152,22 @@
   background: var(--bn-surface);
   color: var(--bn-text);
 }
+
+.overview-selection[data-has-selection="false"] [data-overview-selected-count],
+.overview-selection[data-has-selection="false"] [data-overview-clear-selection],
+.overview-selection[data-has-selection="false"] [data-overview-copy-wikilinks] { display: none; }
+.overview-selection-help { color: var(--bn-muted); font-size: 0.85rem; }
+.overview-selection-help summary { cursor: pointer; padding: 0.5rem 0; }
+.overview-selection-help p { max-width: 36rem; }
+.overview-result-content { min-width: 0; padding-bottom: 0.5rem; }
+.overview-result-details { color: var(--bn-muted); font-size: 0.8rem; }
+.overview-result-details summary { cursor: pointer; width: fit-content; padding: 0.25rem 0; }
+.overview-result-details p { margin: 0.25rem 0; text-transform: none; }
+
+.overview-result-context { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 0.75rem; }
+.overview-result-content .overview-result-link { padding-bottom: 0.2rem; }
+
+.library-search-help { font-size: 0.85rem; color: var(--bn-muted); }
+.library-search-help > summary { cursor: pointer; padding-block: 0.35rem; }
+.library-search-help p { margin: 0.4rem 0; }
+.overview-result-snippet mark, .search-result-snippet mark { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); font-weight: 600; }

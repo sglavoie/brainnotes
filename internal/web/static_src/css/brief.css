@@ -131,3 +131,9 @@
   font-size: 0.78rem;
 }
 
+
+.brief-card-why, .brief-ai, .brief-activity { color: var(--bn-text-subtle); font-size: 0.9rem; }
+.brief-card-why > summary, .brief-ai > summary, .brief-activity > summary { cursor: pointer; min-height: 2.75rem; box-sizing: border-box; padding: 0.6rem 0; }
+.brief-card-why[open] > :not(summary), .brief-ai[open] > :not(summary) { margin-top: 0.5rem; }
+.brief-card-actions [data-brief-action-open] { background: var(--bn-accent-subtle-bg); border-color: var(--bn-accent-subtle-border); color: var(--bn-accent-subtle-text); font-weight: 600; }
+.brief-card .brief-slot-status:empty { display: none; }

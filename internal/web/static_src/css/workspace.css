@@ -93,3 +93,13 @@
 
 .write-check-link { display: none; }
 .is-error + .write-check-link { display: inline-block; margin-bottom: 0.75rem; }
+
+.focused-workspace-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
+.focused-workspace-header > h1 { margin: 0; }
+@media (max-width: 600px) {
+  .focused-workspace-header > h1 { font-size: 1.4rem; }
+  .focused-workspace-header { flex-direction: row; }
+}
+
+.focused-workspace-tools { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.focused-workspace-header { flex-wrap: wrap; }

@@ -102,10 +102,30 @@
   font-size: 0.85rem;
 }
 
-.note-section-copy {
-  margin: -0.25rem 0 0.75rem;
+.note-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.35rem;
+  margin: 1.4rem 0 0.6rem;
 }
-
-.note-code-block pre {
-  margin-top: 0.5rem;
+.note-section-heading > :is(h1, h2, h3, h4, h5, h6) { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.note-section-heading .heading-anchor { display: none; }
+.note-section-copy { margin: 0; min-width: 0; max-width: 100%; }
+.note-section-copy > .copy-button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.25rem;
+  background: transparent;
+  border-color: transparent;
+  color: var(--bn-muted);
 }
+.note-section-copy > .copy-button:hover,
+.note-section-copy > .copy-button:focus-visible { color: var(--bn-link); background: var(--bn-raised); }
+.note-code-block { border: 1px solid var(--bn-border); border-radius: 0.5rem; background: var(--bn-code-bg); overflow: hidden; }
+.note-code-copy { justify-content: flex-end; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--bn-border); }
+.note-code-copy .copy-button { background: transparent; border-color: transparent; min-height: 2.75rem; }
+.note-code-block pre { border: 0; border-radius: 0; margin: 0; }
+.note-links-empty { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; padding-block: 0.6rem; }
+.note-links-empty h2 { font-size: 0.9rem; margin: 0; }
+.note-links-empty p { margin: 0; color: var(--bn-muted); font-size: 0.85rem; }

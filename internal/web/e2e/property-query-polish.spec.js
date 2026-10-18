@@ -17,6 +17,7 @@ test("a confirmed property edit appears after explicit refresh, retaining Librar
   const form = panel.locator('[data-frontmatter-set][data-frontmatter-property="status"][data-frontmatter-op="="]');
   const value = panel.locator('.frontmatter-row:has([data-frontmatter-property="status"]) .frontmatter-text');
   await expect(value).toHaveText("draft");
+  await panel.getByLabel("Edit status", { exact: true }).click();
   await form.locator("input").fill("done");
   await form.getByRole("button", { name: "Set", exact: true }).click();
   await expect(panel.locator("[data-frontmatter-status]")).toContainText("Updated frontmatter.");
@@ -27,6 +28,7 @@ test("a confirmed property edit appears after explicit refresh, retaining Librar
   expect(page.url()).toBe(originalURL);
   await expect(page.locator("[data-note-back-results]")).toHaveAttribute("href", "/library?q=Reading");
   await page.waitForLoadState("networkidle");
+  await panel.getByLabel("Edit status", { exact: true }).click();
   await form.locator("input").fill("draft");
   await form.getByRole("button", { name: "Set", exact: true }).click();
   await expect(panel.locator("[data-frontmatter-status]")).toContainText("Updated frontmatter.");

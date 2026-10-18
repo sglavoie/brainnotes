@@ -56,13 +56,13 @@ test("mobile sidebars collapse independently and preserve the desktop preference
   await page.locator("[data-note-sidebar-toggle]").click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  const metadata = page.locator(".note-meta-sidebar details");
+  const metadata = page.locator(".note-meta-sidebar > details");
   const contents = page.locator(".note-toc-sidebar details");
-  await expect(metadata.locator("summary")).toBeVisible();
+  await expect(metadata.locator(":scope > summary")).toBeVisible();
   await expect(metadata.locator(".frontmatter-panel")).toBeHidden();
   await expect(contents.locator(".note-toc-list")).toBeHidden();
   await expect(page.locator("[data-note-body]")).toBeVisible();
-  await metadata.locator("summary").focus();
+  await metadata.locator(":scope > summary").focus();
   await page.keyboard.press("Enter");
   await expect(metadata.locator(".frontmatter-panel")).toBeVisible();
   await expect(contents.locator(".note-toc-list")).toBeHidden();

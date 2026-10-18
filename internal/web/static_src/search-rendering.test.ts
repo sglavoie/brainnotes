@@ -136,10 +136,13 @@ it("renders overview results with metadata, issue badges, and fallback paths", (
   expect(rendered).toBe(true);
   expect(list.querySelector("a")!.getAttribute("href")).toBe("/n/daily/overview.md");
   expect(list.querySelector(".overview-result-title")!.textContent).toBe("Note Title");
-  expect(list.querySelector(".overview-result-meta")!.textContent).toContain(
+  expect(list.querySelector(".overview-result-details")!.textContent).toContain(
     "Matched: title, body"
   );
-  expect(list.querySelector(".overview-result-badge.is-issue")!.textContent).toBe("dead end");
+  expect(list.querySelector(".overview-result-badge.is-issue")).toBeNull();
+  expect(list.querySelector<HTMLDetailsElement>(".overview-result-details")!.open).toBe(false);
+  expect(list.querySelector(".overview-result-details")!.textContent).toContain("dead end");
+  expect(list.querySelector("a details")).toBeNull();
   expect(list.querySelector(".overview-result-snippet")!.innerHTML).toBe(
     "<mark>overview</mark>"
   );

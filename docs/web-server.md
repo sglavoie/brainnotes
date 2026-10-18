@@ -1,135 +1,164 @@
-# Local web server
+# Browser workspace
 
-The navigation keeps Brief, Library, Pinned, and Graph together, with **New note**
-as a separate action. **Manage** contains Properties, Health, Settings, Sync, and
-History, subject to the server's capabilities. Saved views have their own row.
-Every workspace includes **Skip to content** before navigation; notes retain
-**Skip to note**. These links and the Manage disclosure work without
-JavaScript.
+Start with `bn serve`, then choose a task below. Brief, Library, Pinned, and Graph
+are in the main navigation. On Brief, Library, and the editor, **Workspace** opens navigation and theme controls. **New note** is a separate action. **Manage** contains
+Properties, Health, Settings, Sync, and History, subject to the server's capabilities.
+Saved views have their own row. In the source editor, **Workspace** opens this
+navigation, search, and theme controls without leaving your draft.
 
-Library groups text search, filters, and the optional **Query expression** in
-one search area. An expression carried in a URL or saved view opens its editor
-automatically. Active text, filters, and expressions appear together; removing
-one retains the other constraints, result limit, and sort. **Save as view**
-and **Copy search link** sit beside these controls.
+Every workspace has **Skip to content**; note pages have **Skip to note**.
+These links and the navigation disclosures work without JavaScript.
 
-When a settings, template, saved-view, property, bulk, fix, restore, synthesis,
-or sync write loses its response, the browser reports that the outcome is
-unconfirmed. Check the current values or History before retrying. Settings
-and Templates offer **Check History in a new tab**, keeping typed inputs on
-the original page. A failed preview is identified separately: it submitted
-no change.
+## Find a note
 
-Note pages offer **Edit in browser** and, on local servers, **Open in external
-editor**. **More actions** contains Synthesize and Trash; expand it to use them.
+Use Library to combine text search, filters, and an optional **Query expression**.
+Library shows one results list as you type; Enter moves focus to its heading.
+Search on other pages still offers a quick-open popup. **Search help** explains
+how constraints combine when you need it.
+A note must match every active constraint. Expressions from a URL or saved view
+open their editor automatically. Removing one constraint keeps the other
+constraints, result limit, and sort order.
 
-The folder fields in **New note**, the editor's **Move**, and Library's bulk
-**Move** suggest existing note folders as you type. You can still enter a new
-path; suggestions are optional and manual entry works if they cannot load.
+**Save as view** stores text search, facets, and the expression together.
+**Copy search link** copies those constraints, sort order, and limit, without a
+result-position anchor. Clipboard controls offer a selected text field if direct
+copying is unavailable. Sort choices include **Oldest modified first** and
+**Vault path**.
 
-When Library has no matches for text search, **Create a note titled…** opens
-New note with that text filled in. Review the title and folder, then choose
-**Create and write**. Opening the form does not create anything. This action is
-unavailable on read-only replicas.
+Results emphasize titles, excerpts, and locations. Excerpts show readable link
+labels, highlight matching text, and finish boundary words where possible.
+Matching still uses the original note text. **Match details** expands the
+matching fields and structural information such as orphan or dead-end status;
+these are neutral facts. Broken links remain visible as warnings.
 
-Three of the larger web surfaces have their own pages: the
-[Related Notes explorer](web-related-notes.md), the
-[Synthesis workbench](web-synthesis.md), and
-[Health, Daily Fixes, and properties](web-health.md).
+Select notes with their checkboxes or **Select displayed**. The selected count,
+**Clear selection**, and **Copy wikilinks** appear once there is a selection.
+**Selection help** explains range selection: Shift-click a checkbox to select
+or clear the range from the previous checkbox. Bulk actions apply only to the
+selected notes and still require a preview before applying changes.
 
-On the **Edit source** page, change the **Note title** field above the formatting
-toolbar and click **Rename**. This renames the file in its current folder and
-updates incoming wikilinks. If the editor has unsaved text, save it first using
-the prompt or cancel the rename. The **Save** button saves the source text;
-**Rename** applies the title change.
+When there are no matches, remove just the search text, filters, or expression,
+or use **Reset search** to clear the entire search. **Create a note titled…**
+opens New note with the text query filled in; it does not create anything until
+you confirm the title and folder. Creation is unavailable on read-only replicas.
 
-Editor management actions show progress and results beside their controls.
-While an action or its **Save first** step is running, other management actions
-are disabled to prevent repeated submissions. Canceling during **Save first**
-cancels the follow-up action; the save itself can still finish.
-If a response is lost or cannot confirm success, the editor keeps the action's
-inputs and asks you to check the inbox, note, or History before retrying. It does
-not retry automatically or navigate to an unconfirmed rename/move destination.
+**Retry search** repeats a failed search with the current query and filters.
+Dismissing header search dismisses its retry action. **Retry filters** reloads
+filter choices without changing the search, selected filters, sort, or limit;
+selected filters can still be removed while the choices are unavailable.
 
-**Find** opens search and replacement within the source editor, including text
-outside the visible portion of long notes. Ctrl/⌘ + F opens it while editing;
-Enter and Shift + Enter in its Find field move between matches. Escape closes
-the panel and returns to editing. Replacements can be undone and stay in the
-draft until you click **Save**. On narrow screens, Find switches from Preview to
-Edit automatically.
+See [query expressions and saved views](web-server-query-bar.md) for syntax.
 
-If the editor preview fails, **Retry preview** renders the current draft without
-saving or changing the source. Any previous preview is labeled outdated until
-rendering succeeds. Retrying disables the button while rendering and returns
-keyboard focus to the preview pane when the button disappears, unless you moved
-to another control while waiting.
+## Read and follow connections
 
-If creating a missing note loses its response or receives an unreadable success
-response, the browser says it couldn't confirm creation. **Refresh to check**
-reloads the current page so you can see whether the link is still broken before
-retrying; refreshing does not send another create request.
+A note shows its rendered body, properties, backlinks, outgoing links, and
+Contents. Properties initially show their values. Choose **Edit** beside a
+property to reveal its existing Set/Unset and list controls; **Add property**
+opens the new-property form. Read-only replicas show values without edit controls.
 
-Rendered notes show the body before Ask AI. The Contents list highlights the
-current section as you scroll, without changing the URL or keyboard focus.
-The first Tab stop is **Skip to note**: press Enter to move directly to the
-rendered body, bypassing navigation and metadata controls. It also works with
-JavaScript disabled and stays out of printed notes.
-Code blocks offer **Copy code**, preserving whitespace; if the browser refuses
-clipboard access, a selected text field lets you copy manually.
-Ask AI responses and Daily Brief insights offer the same manual-copy fallback
-for their original Markdown.
-Headings also offer **Copy section link**, which copies the full note URL with
-that heading's existing anchor and uses the same manual-copy fallback.
+Contents highlights the current section as you scroll without moving focus or
+changing the URL. At widths up to 960 pixels, **Metadata** and **Contents** start
+collapsed and open independently. Opening mobile metadata does not change your
+desktop sidebar preference.
 
-Opening a Library search result offers **Back to results** on the note, preserving
-the search text, filters, and sort order even after a reload or opening in a new
-tab. **Copy note URL** copies the full note address without that search context
-or a section anchor, with the same manual-copy fallback.
-**Back to results** also brings the opened result into view and restores keyboard
-focus after results load. Browser Back remembers the result too. If that note no
-longer matches, the search still loads normally; interacting while results load
-cancels the automatic jump.
-Following body links, backlinks, or outgoing links to other notes carries that
-same Library context along, so **Back to results** remains available as you explore.
-**Edit in browser** carries it into the editor too: use the note title link to return
-to the note, then **Back to results** to resume browsing. Reloading the editor,
-renaming, or moving the note preserves this context. Pinned, Brief, and Graph
-links also carry their origin, with a named return link. Editing carries the
-current reading section and offset; returning through the note title restores
-that position, with a proportional fallback if the heading was removed.
+**Back to results** preserves Library text, filters, and sort through reloads,
+new tabs, and following links between notes. Returning restores the opened
+result's position and keyboard focus after results load. If it no longer matches,
+the search loads normally; interacting while loading cancels the automatic jump.
+Pinned, Brief, and Graph links also carry a named return destination.
 
-Undo first previews the recorded action, time, and affected paths. Its confirmation
-is pinned to that entry and preview, so a newer change cannot silently become
-the target. A stale preview requires a fresh review.
+Use **Copy code** in a code block’s header, the **#** button beside a heading
+(**Copy section link**), and
+**Copy note URL** for a clean note address without search context or a section
+anchor. Each offers manual copying when the browser refuses clipboard access.
+Ask AI and Daily Brief insights offer the same fallback for their Markdown.
+The body appears before Ask AI, and **Skip to note** bypasses navigation and
+metadata controls. Skip links are omitted from print output.
+
+Explore further with the [Related Notes explorer](web-related-notes.md),
+[Graph](web-server-security.md), or [Synthesis workbench](web-synthesis.md).
+
+## Create and edit
+
+Choose **New note**, enter a title and optional vault-relative folder, and select
+**Create and write**. A blank folder uses the vault root. The new title-only note
+opens in the browser editor; **Save** writes your text. **Capture** sends a quick
+thought to the configured inbox instead.
+
+On a note, choose **Edit in browser**, or **Open in external editor** on local
+servers. The source editor opens with the writing surface visible on a narrow
+screen. Its toolbar keeps **Save** nearby while scrolling; **Format** reveals formatting
+commands and Escape closes them. Long frontmatter starts collapsed; **Show
+frontmatter** expands it without changing the source.
+Below the writing surface, **This note and this vault** contains History and
+**Rename note**, which reveals the title field and Rename button. Rename changes the
+filename and incoming wikilinks; Save changes the source text. The folder fields
+in New note, the editor's Move action, and Library's bulk Move suggest existing
+folders while allowing a new path or manual entry if suggestions cannot load.
+
+When a management action requires saved text, the editor offers **Save first**
+or Cancel. Other management actions are disabled while it runs. Cancel during
+Save first cancels the follow-up action, although the save can still finish.
+The editor keeps inputs and avoids navigating to an unconfirmed rename or move
+destination if the response is lost or unreadable.
+
+**Find**, or Ctrl/⌘ + F while editing, searches and replaces across the whole
+source, including text outside the viewport. Enter and Shift + Enter move
+between matches; Escape closes Find and returns to editing. On narrow screens,
+Find switches from Preview to Edit. Replacements remain in the draft until Save
+and can be undone while editing.
+
+**Retry preview** renders the current draft without saving. If rendering failed,
+the previous preview is labeled outdated. Retrying disables the button and
+returns focus to the preview when it disappears, unless you moved focus elsewhere.
+
+The note title link returns from editing to reading, preserving the originating
+workspace and reading position. This survives reloads, renames, and moves.
+If the section was removed, reading position uses a proportional fallback.
+
+## Recover and resolve uncertain changes
+
+**More actions** on a note contains Synthesize and Trash. Destructive confirmations
+use the same application dialog as Undo: affected content and consequences are
+shown with an explicit action button, Cancel, Escape, and focus restoration.
+Sync decisions retain their preview and one-use receipt requirements.
+
+Undo previews the recorded action, time, and affected paths. Confirmation is
+bound to that entry and preview, so a newer change cannot become the target.
+A stale preview requires another review. Use **History** for recovery, and
+[Health and Daily Fixes](web-health.md) for vault maintenance.
+
+When a write loses its response, the outcome is **unconfirmed**: it may already
+have happened. This includes Trash, which stays on the note until success can be
+established. Check the current note, values, inbox, or History before retrying;
+the browser does not automatically resend an unanswered write. Settings and
+Templates offer **Check History in a new tab**, preserving typed inputs.
+A failed preview is reported separately because it submitted no change.
+
+If creating a missing note is unconfirmed, **Refresh to check** reloads the page
+to see whether the link is still broken; it does not submit creation again.
+Saves and captures retain their draft during delayed confirmation. **Draft kept
+in this browser** describes a local copy; **Saved to vault** confirms a save.
+**Save not confirmed** keeps Save available for a safe retry. Other uncertain
+changes point to checking the current values, inbox, or History before retrying.
 
 The shared sync line refreshes after confirmed writes and polls pending work for
-up to one minute. It stops while the page is hidden and ignores superseded
-responses. Saves and captures retain their draft while reporting a delayed
-confirmation; they never automatically resend an unanswered write.
+up to one minute. It stops while the page is hidden and ignores superseded replies.
 
-If header search fails, **Retry search** repeats the current query and filters
-without retyping. Dismissing search also dismisses the retry action.
-Library's **Copy search link** copies the current text search, filters, query
-expression, sort order, and limit, with a manual-copy fallback if needed.
-Saved views also include text search and facet filters. The link omits the
-result-position anchor. Library's Sort menu also offers **Oldest modified first**
-and **Vault path**.
-When Library has no matches, **Remove search text** clears only the text query,
-preserving filters, the expression, sort order, and result limit. **Reset search**
-still clears the whole search.
-If the filter picker cannot load, **Retry filters** reloads its choices without
-changing the search, selected filters, ordering, or result limit. The error stays
-visible until loading succeeds, and selected filters can still be removed.
+## Reference
 
-On screens up to 960 pixels wide, **Metadata** and **Contents** start collapsed
-and expand independently. Desktop sidebars keep their existing layout and
-visibility preference; expanding mobile metadata does not change that preference.
+- [Server commands](web-server-commands.md)
+- [Rendering, attachments, options, and security](web-server-security.md)
+- [Serving modes and capabilities](internals/serving-modes.md)
+- [Contributor setup and browser verification](development.md)
 
-## Reference sections
+## Daily Brief
 
-- [Command reference](web-server-commands.md)
-- [The query bar and saved views](web-server-query-bar.md)
-- [Note actions, Trash, rendering, filters and graph, options, assets, and security](web-server-security.md)
+Brief leads with the recommended notes, followed by capture and maintenance.
+Each card shows its title, excerpt, and Open/Another actions. **Why this note?**
+reveals its location and recommendation reasons; **Ask AI** expands the prompt.
+Both start closed again when Another loads a replacement. Activity counts and
+optional tool setup follow the recommendations.
 
 ## Daily Brief dogfood readout
 
@@ -137,12 +166,5 @@ Over two weeks, from local state only:
 
 1. Count distinct visit days in the last 14 days from `.bnotes/brief.json` `visits`.
 2. Compute average visits per week as `visit_days / 2`.
-3. Compute open-day rate as `days_with_open / visit_days` (where opens come from `opens` and are grouped by local date).
+3. Compute open-day rate as `days_with_open / visit_days`, grouping `opens` by local date.
 4. Success threshold: at least 4 visits per week and opens on at least 50% of visited days.
-
-## Related documentation
-
-- [Related Notes explorer](web-related-notes.md)
-- [Synthesis workbench](web-synthesis.md)
-- [Health, Daily Fixes, and properties](web-health.md)
-- [Serving modes and capabilities](internals/serving-modes.md) — the internal contract behind the capabilities table in [options, assets, and security](web-server-security.md).

@@ -13,6 +13,7 @@ for (const width of [390, 1280]) {
       await expect(search.locator("[data-facet-chips]")).toContainText("draft");
       await expect(page.locator("[data-overview-search-status]")).toContainText("1");
       await expect(page.getByRole("navigation", { name: "Primary", exact: true }).getByRole("link", { name: "Settings" })).toBeHidden();
+      await page.locator(".source-editor-workspace > summary").click();
       await page.locator(".manage-nav > summary").click();
       await expect(page.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
       await page.locator(".manage-nav > summary").click();
@@ -62,6 +63,7 @@ test.describe("without JavaScript", () => {
     await page.keyboard.press("Tab");
     await page.keyboard.press("Enter");
     await expect(page.locator("#workspace-content")).toBeFocused();
+    await page.locator(".source-editor-workspace > summary").click();
     await page.locator(".manage-nav > summary").click();
     await page.getByRole("link", { name: "Settings", exact: true }).click();
     await expect(page.locator(".manage-nav")).toHaveAttribute("open");
