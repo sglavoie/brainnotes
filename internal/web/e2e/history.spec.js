@@ -110,7 +110,11 @@ test("the history workspace names where each change came from and filters by it"
   // Filtering to the other origins has to make it go away, or the filter is
   // decorative. `browser` and `settings` are different origins by design, so a
   // template save is not in this view.
+  await page.locator("[data-history-advanced] > summary").click();
   await origins.locator('input[value="browser"]').check();
+  await page.locator("[data-history-advanced] > summary").click();
+  await expect(origins).toBeHidden();
+  await expect(page.locator("[data-history-active-filters]")).toContainText("Saved in the browser");
   await expect(page.locator("[data-history-entry]", { hasText: SAVE_COMMAND })).toHaveCount(0);
   await page.locator("[data-history-clear-filters]").click();
   await expect(page.locator("[data-history-entry]", { hasText: SAVE_COMMAND }).first()).toBeVisible();

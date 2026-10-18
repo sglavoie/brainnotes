@@ -7,6 +7,7 @@ test("header search can retry a failed request from the keyboard", async ({ page
     return attempts === 1 ? route.fulfill({ status: 503, body: "Unavailable" }) : route.continue();
   });
   await page.goto("/n/Reading");
+  await page.keyboard.press("/");
   const input = page.locator("#search-input");
   await input.fill("Alpha");
   const retry = page.getByRole("button", { name: "Retry search", exact: true });

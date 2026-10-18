@@ -2666,6 +2666,16 @@ code {
 .history-entry-details .history-command { display: block; margin-top: 0.4rem; }
 
 .history-entry > .history-entry-details { grid-column: 1 / -1; }
+
+.history-filters { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+.history-advanced > summary { cursor: pointer; padding-block: 0.6rem; min-height: 2.75rem; box-sizing: border-box; }
+.history-advanced-fields { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); margin-top: 0.4rem; }
+.history-active-filters { margin: 0; color: var(--bn-muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.history-filters-panel .panel-header { align-items: baseline; }
+@media (max-width: 600px) {
+  .history-filters-panel .history-actions { gap: 0.35rem; }
+  .history-filters-panel .panel-header { flex-wrap: wrap; gap: 0.4rem; }
+}
 /* internal/web/static_src/css/text-comparison.css */
 .text-comparison { margin-block: 0.75rem; border: 1px solid var(--bn-border); border-radius: var(--bn-control-radius); overflow: hidden; }
 .comparison-legend { margin: 0; padding: 0.65rem; color: var(--bn-text-subtle); font-size: 0.85rem; border-bottom: 1px solid var(--bn-border); }
@@ -8003,6 +8013,8 @@ code {
 }
 
 .new-note button:disabled { opacity: 0.6; cursor: default; }
+
+.new-note [data-new-note-draft-status]:empty { display: none; }
 /* internal/web/static_src/css/settings.css */
 .settings-actions {
   display: flex;
@@ -8278,6 +8290,21 @@ code {
   color: var(--bn-muted);
   font-size: 0.78rem;
 }
+
+/* Readable values first; editing and configuration details are local disclosures. */
+.settings-group-list { list-style: none; padding: 0; margin: 0; }
+.settings-group h3 { margin: 1rem 0 0.5rem; font-size: 1rem; }
+.settings-group .settings-row { background: var(--bn-surface); border: 0; border-top: 1px solid var(--bn-border); border-radius: 0; padding: 0.8rem 0; }
+.settings-name { display: block; font-weight: 600; color: var(--bn-text-strong); }
+.settings-editor > summary { cursor: pointer; color: var(--bn-link); padding-block: 0.5rem; width: fit-content; min-height: 2.75rem; box-sizing: border-box; }
+.settings-editor .settings-control { box-sizing: border-box; max-width: 100%; }
+.settings-info { margin-top: 0.6rem; font-size: 0.85rem; color: var(--bn-muted); }
+.settings-info summary { cursor: pointer; padding-block: 0.4rem; }
+.settings-info .settings-row-header { margin-top: 0.4rem; }
+.settings-dirty { color: var(--bn-warning); font-size: 0.85rem; }
+.settings-dirty[hidden], .settings-shadowed[hidden] { display: none; }
+.settings-feedback { scroll-margin-block: 1rem; }
+.settings-editor .settings-feedback { border-left: 2px solid var(--bn-border); padding-left: 0.75rem; margin-top: 0.5rem; }
 /* internal/web/static_src/css/sync.css */
 /*
  * Synchronization: the one line every page carries, and the /sync page where a
@@ -9567,4 +9594,21 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   }
   .source-editor-actions .source-editor-command { padding-inline: 0.45rem; }
   .source-editor-actions .source-editor-save { padding-inline: 0.65rem; }
+}
+
+/* Reading uses the shared Workspace menu; keep note actions compact enough for
+ * opening prose to remain visible on a phone, without shrinking touch targets. */
+@media (max-width: 700px) {
+  .note-page .note-actions { gap: 0.5rem; margin-block: 0.75rem; }
+  .note-page .note-actions :is(.source-editor-launch, .open-editor-button, .copy-button, .pin-button, .synthesize-launch) {
+    flex: 0 1 auto;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .note-page .note-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .note-page .note-content,
+  .note-page .note-meta-sidebar:has(> details[open]),
+  .note-page .note-toc-sidebar:has(details[open]) { grid-column: 1 / -1; }
 }

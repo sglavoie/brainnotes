@@ -70,14 +70,11 @@
         </nav>
       {{end}}
 
-      <header class="site-header">
+      <header class="site-header focused-workspace-header">
         <h1>{{.Title}}</h1>
-        <div class="site-header-tools">
-          {{template "themeControl" .}}
-          {{template "headerSearch" .}}
-        </div>
+        {{template "workspaceMenu" "note"}}
       </header>
-      {{template "siteNav" ""}}
+      {{template "siteSync" .}}
 
       <div class="note-actions">
         {{if not readOnly}}

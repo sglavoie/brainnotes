@@ -8,6 +8,7 @@ test("a lost settings reply keeps the input and offers History without claiming 
   await page.goto("/settings");
   await page.waitForLoadState("networkidle");
   const row = page.locator(`[data-settings-row="${key}"]`);
+  await row.locator("[data-settings-edit]").click();
   const input = row.locator("[data-settings-control]");
   await input.fill(value);
   await row.locator("[data-settings-save]").click();
@@ -69,9 +70,36 @@ test("a refused settings preview offers correction without uncertain-write recov
     ok: false, code: "invalid_request", message: "Choose a valid value.",
   } }));
   const row = page.locator('[data-settings-row="brief.exclude_types"]');
+  await row.locator("[data-settings-edit]").click();
   await row.locator("[data-settings-control]").fill("keep this input");
   await row.locator("[data-settings-save]").click();
   await expect(page.locator("[data-settings-status]")).toHaveText("Choose a valid value.");
   await expect(recovery).toBeHidden();
   await expect(row.locator("[data-settings-control]")).toHaveValue("keep this input");
+});
+
+test("settings keep other edits through a save and refresh, with feedback beside the setting", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/settings");
+  const row = page.locator('[data-settings-row="brief.exclude_types"]');
+  const other = page.locator('[data-settings-row="brief.exclude_folders"]');
+  await expect(row.locator("[data-settings-control]")).toBeHidden();
+  await row.locator("[data-settings-edit]").click();
+  await other.locator("[data-settings-edit]").click();
+  await other.locator("[data-settings-control]").fill("Unfinished folder draft");
+  await row.locator("[data-settings-control]").fill("settings-continuity-fixture");
+  await row.locator("[data-settings-save]").click();
+  await expect(row.locator("[data-settings-confirm]")).toBeFocused();
+  await expect(row.locator("[data-settings-confirm]")).toBeInViewport();
+  await row.locator("[data-settings-confirm]").click();
+  await expect(row.locator("[data-settings-status]")).toContainText('Saved "brief.exclude_types"');
+  await expect(row.locator("[data-settings-save]")).toBeFocused();
+  await expect(other.locator("[data-settings-control]")).toHaveValue("Unfinished folder draft");
+  await page.locator("[data-settings-refresh]").click();
+  await expect(row.locator("[data-settings-status]")).toContainText("portable settings");
+  await expect(other.locator("[data-settings-control]")).toHaveValue("Unfinished folder draft");
+  await row.locator("[data-settings-unset]").click();
+  await row.locator("[data-settings-confirm]").click();
+  await expect(row.locator("[data-settings-status]")).toContainText('Removed "brief.exclude_types"');
+  expect(gitStatus(manifest.localVault)).toBe("");
 });

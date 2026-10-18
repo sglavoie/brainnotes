@@ -51,28 +51,34 @@
             <span>Path</span>
             <input type="search" name="path" data-history-path autocomplete="off" placeholder="part of a note or attachment path">
           </label>
-          <label class="history-filter-field">
-            <span>Path matching</span>
-            <select name="path_match" data-history-path-match>
-              <option value="contains">Contains</option>
-              <option value="exact">Exact path</option>
-            </select>
-          </label>
-          <fieldset class="history-filter-group" data-history-origin-filters>
-            <legend>Where it came from</legend>
-          </fieldset>
-          <fieldset class="history-filter-group" data-history-class-filters>
-            <legend>What it touched</legend>
-          </fieldset>
-          <label class="history-filter-field">
-            <span>Entries per page</span>
-            <select data-history-page-size-select>
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="200">200</option>
-            </select>
-          </label>
+          <details class="history-advanced" data-history-advanced>
+            <summary>More filters</summary>
+            <div class="history-advanced-fields">
+              <label class="history-filter-field">
+                <span>Path matching</span>
+                <select name="path_match" data-history-path-match>
+                  <option value="contains">Contains</option>
+                  <option value="exact">Exact path</option>
+                </select>
+              </label>
+              <fieldset class="history-filter-group" data-history-origin-filters>
+                <legend>Where it came from</legend>
+              </fieldset>
+              <fieldset class="history-filter-group" data-history-class-filters>
+                <legend>What it touched</legend>
+              </fieldset>
+              <label class="history-filter-field">
+                <span>Entries per page</span>
+                <select data-history-page-size-select>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                </select>
+              </label>
+            </div>
+          </details>
+          <p class="history-active-filters" data-history-active-filters hidden role="status"></p>
         </form>
       </section>
 

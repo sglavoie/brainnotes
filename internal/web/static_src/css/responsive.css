@@ -432,3 +432,20 @@
   .source-editor-actions .source-editor-command { padding-inline: 0.45rem; }
   .source-editor-actions .source-editor-save { padding-inline: 0.65rem; }
 }
+
+/* Reading uses the shared Workspace menu; keep note actions compact enough for
+ * opening prose to remain visible on a phone, without shrinking touch targets. */
+@media (max-width: 700px) {
+  .note-page .note-actions { gap: 0.5rem; margin-block: 0.75rem; }
+  .note-page .note-actions :is(.source-editor-launch, .open-editor-button, .copy-button, .pin-button, .synthesize-launch) {
+    flex: 0 1 auto;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .note-page .note-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .note-page .note-content,
+  .note-page .note-meta-sidebar:has(> details[open]),
+  .note-page .note-toc-sidebar:has(details[open]) { grid-column: 1 / -1; }
+}

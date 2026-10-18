@@ -12,6 +12,7 @@ import {
 } from "./history-workspace-elements";
 import {
   clearHistoryFilterGroup,
+  summarizeHistoryFilters,
   readHistoryQuery,
   renderHistoryFilterGroup,
 } from "./history-workspace-filters";
@@ -210,6 +211,7 @@ const loadHistoryPage = async (ctx: WorkspaceContext, success = ""): Promise<voi
   ctx.setStatus("Reading the history...", "is-loading");
   const query = workspaceQuery(ctx);
   writeHistoryURL(query, "replace");
+  summarizeHistoryFilters(elements, query);
   const outcome = await fetchHistoryPage(ctx.fetcher, elements.listEndpoint, query);
   // Superseded: a newer request is the one the page is waiting on, so this reply
   // is dropped entirely — including the busy flag and the status line, which
@@ -248,6 +250,7 @@ const renderHistoryPage = (
   state.offset = result.offset || 0;
   writeHistoryURL({ ...query, offset: state.offset }, "replace");
   renderVocabularyOnce(ctx, result, query.origins || [], query.classes || []);
+  summarizeHistoryFilters(elements, query);
   renderHistoryWarnings(elements.warnings, result.warnings || [], result.warning_count || 0);
   renderHistoryEntryList(elements.list, entries, (entryID, trigger) => void openHistoryPreview(ctx, entryID, trigger));
   updateHistoryPager(elements, result, entries.length);

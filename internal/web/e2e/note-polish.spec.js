@@ -7,6 +7,7 @@ test("arrow-key search navigation scrolls the popup without moving the page", as
     key: `note-${i}`, path: `/n/note-${i}`, title: `Note ${i}`, folder: "Notes", snippet: "A matching passage.",
   })) }));
   await page.goto("/n/Notes/Gamma");
+  await page.keyboard.press("/");
   const input = page.locator("#search-input");
   await input.fill("note");
   await expect(page.locator("[data-search-index]")).toHaveCount(15);

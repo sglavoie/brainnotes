@@ -45,7 +45,9 @@ against an ambient vault. See [architecture](internals/architecture.md) and the
 relevant internal contract before changing persistence or serving behavior.
 
 For layout changes, check the initial viewport as well as screenshots taken
-after scrolling. Library has separate entry and results baselines. The editor
+after scrolling. Library has separate entry and results baselines; reading has entry and scrolled
+baselines. History must show its latest entry and restore action on entry. Settings
+confirmation must remain beside the edited field and visible after preview. The editor
 fixture includes long frontmatter, substantial prose, and an attachment link;
 check that prose and Save fit at 320 × 568 and 390 × 640. The reduced-height
 writing check models keyboard space, but does not emulate an operating system

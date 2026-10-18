@@ -89,3 +89,21 @@ export const readHistoryQuery = (
   path: elements.path?.value || "",
   pathMatch: elements.pathMatch?.value === "exact" ? "exact" : "contains",
 });
+
+// This summary stays visible when the advanced controls are collapsed.
+export const summarizeHistoryFilters = (elements: HistoryWorkspaceElements, query: HistoryQuery): void => {
+  const summary = elements.root.querySelector<HTMLElement>("[data-history-active-filters]");
+  if (!summary) return;
+  const parts: string[] = [];
+  if (query.path) parts.push(`${query.pathMatch === "exact" ? "Exact path" : "Path contains"}: ${query.path}`);
+  for (const group of [elements.originFilters, elements.classFilters]) {
+    parts.push(...selectedHistoryLabels(group));
+  }
+  if (query.limit !== elements.pageSize) parts.push(`${query.limit} entries per page`);
+  summary.textContent = parts.join(" · ");
+  summary.hidden = parts.length === 0;
+};
+
+const selectedHistoryLabels = (group: HTMLElement | null): string[] =>
+  Array.from(group?.querySelectorAll<HTMLInputElement>("input:checked") || [])
+    .map((input) => input.closest("label")?.textContent?.trim() || input.value);

@@ -10,6 +10,7 @@ import {
 import { renderConfigDiff, renderSettingsList, type SettingRow } from "./settings-render";
 import { fetchSettings, type FetchLike } from "./settings-requests";
 import { setStatusText, type StatusKind } from "./status";
+import { controlText, markSettingDraft, updateSettingRow } from "./settings-rows";
 
 export type SettingsPanelDeps = {
   root: HTMLElement;
@@ -47,14 +48,6 @@ const readElements = (root: HTMLElement): SettingsElements | null => {
   };
 };
 
-/** Reads what a control holds as the text the model parses. */
-const controlText = (control: HTMLInputElement | HTMLTextAreaElement): string => {
-  if (control instanceof HTMLInputElement && control.type === "checkbox") {
-    return control.checked ? "true" : "false";
-  }
-  return control.value;
-};
-
 const summarize = (count: number): [string, StatusKind] =>
   count === 0
     ? ["No editable settings.", "is-empty"]
@@ -72,6 +65,8 @@ const focusLinkedSetting = (root: HTMLElement): void => {
   if (!id) return;
   const target = doc.getElementById(id);
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) || !root.contains(target)) return;
+  const editor = target.closest("details");
+  if (editor) editor.open = true;
   if (target.disabled) target.closest("[data-settings-row]")?.scrollIntoView({ block: "center" });
   else target.focus();
 };
@@ -84,25 +79,51 @@ const focusLinkedSetting = (root: HTMLElement): void => {
  * server is certain to refuse.
  */
 const bindRow = (
-  row: SettingRow,
-  summary: SettingSummary,
-  writer: SettingsWriter,
+  row: SettingRow, writer: SettingsWriter,
+  activate: (row: SettingRow) => void,
   refuse: (message: string) => void
 ): void => {
-  if (settingBlockedReason(summary) !== "") {
-    return;
+  const preview = async (op: "set" | "unset"): Promise<void> => {
+    if (writer.busy() || settingBlockedReason(row.summary)) return;
+    activate(row);
+    const raw = controlText(row.control);
+    const parsed = op === "unset"
+      ? { ok: true as const, value: settingValueOf(row.summary.kind, {}) }
+      : parseSettingInput(row.summary.kind, raw);
+    if (!parsed.ok) { refuse(parsed.message); return; }
+    await writer.preview(row.key, op, parsed.value);
+    if (controlText(row.control) !== raw) writer.cancel();
+  };
+  row.save.addEventListener("click", () => void preview("set"));
+  row.unset.addEventListener("click", () => void preview("unset"));
+  row.control.addEventListener("input", () => {
+    markSettingDraft(row);
+    if (writer.pending()?.key === row.key) writer.cancel();
+  });
+};
+
+// Keep a single preview receipt, but move its controls and feedback beside the
+// setting it describes. Existing status/recovery semantics stay together.
+const settingFeedback = (root: HTMLElement, elements: SettingsElements): HTMLElement => {
+  const feedback = root.ownerDocument.createElement("div");
+  feedback.className = "settings-feedback";
+  elements.list.before(feedback);
+  const recovery = root.querySelector(".write-check-link");
+  const controls = root.querySelector("[data-settings-confirm-block]");
+  feedback.appendChild(elements.status);
+  if (recovery) feedback.appendChild(recovery);
+  if (controls) feedback.appendChild(controls);
+  else for (const node of [elements.diff, elements.confirm, elements.cancel]) {
+    if (node) feedback.appendChild(node);
   }
-  row.save.addEventListener("click", () => {
-    const parsed = parseSettingInput(summary.kind, controlText(row.control));
-    if (!parsed.ok) {
-      refuse(parsed.message);
-      return;
-    }
-    void writer.preview(summary.key, "set", parsed.value);
-  });
-  row.unset.addEventListener("click", () => {
-    void writer.preview(summary.key, "unset", settingValueOf(summary.kind, {}));
-  });
+  return feedback;
+};
+
+const focusSettingFeedback = (elements: SettingsElements, row: SettingRow | null, pending: boolean): void => {
+  if (!row) return;
+  const focused = row.element.ownerDocument.activeElement;
+  if (pending && (focused === row.save || focused === row.unset)) elements.confirm?.focus();
+  if (!pending && (focused === elements.confirm || focused === elements.cancel)) row.save.focus();
 };
 
 /**
@@ -118,12 +139,29 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     return null;
   }
 
+  const feedback = settingFeedback(deps.root, elements);
+  let rows: SettingRow[] = [];
+  let active: SettingRow | null = null;
+  let submitted = "";
+  let reading = 0;
+  const activate = (row: SettingRow): void => {
+    reading += 1;
+    active = row;
+    submitted = controlText(row.control);
+    row.editor.appendChild(feedback);
+  };
   const setStatus = (message: string, kind: StatusKind = "", uncertain = false): void => {
     setStatusText(elements.status, message, kind);
     elements.status.dataset.writeUnconfirmed = String(uncertain);
+    // The status text can grow after focus moved to Confirm. Keep the focused
+    // action reachable after that layout change without moving anyone else's focus.
+    if (elements.confirm === deps.root.ownerDocument.activeElement) {
+      elements.confirm?.scrollIntoView?.({ block: "nearest" });
+    }
   };
 
   const showPending = (pending: SettingPendingSave | null): void => {
+    if (!pending) focusSettingFeedback(elements, active, false);
     renderConfigDiff(elements.diff, pending ? pending.diff : []);
     if (elements.confirm) {
       elements.confirm.hidden = pending === null;
@@ -132,16 +170,22 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     if (elements.cancel) {
       elements.cancel.hidden = pending === null;
     }
+    if (pending) focusSettingFeedback(elements, active, true);
   };
 
-  const render = (settings: SettingSummary[]): void => {
-    const rows = renderSettingsList(elements.list, settings);
-    rows.forEach((row, index) => {
-      bindRow(row, settings[index], writer, (message) => {
-        showPending(null);
+  const render = (settings: SettingSummary[], saved = false): void => {
+    if (rows.length === 0) {
+      rows = renderSettingsList(elements.list, settings);
+      rows.forEach((row) => bindRow(row, writer, activate, (message) => {
+        writer.cancel();
         setStatus(message, "is-error");
-      });
-    });
+      }));
+      return;
+    }
+    for (const row of rows) {
+      const summary = settings.find((item) => item.key === row.key);
+      if (summary) updateSettingRow(row, summary, saved && row === active ? submitted : undefined);
+    }
   };
 
   const writer = createSettingsWriter({
@@ -150,15 +194,19 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     hooks: {
       onStatus: setStatus,
       onPending: showPending,
-      onSaved: (result) => render(result.settings),
+      onSaved: (result) => { reading += 1; render(result.settings, true); },
     },
   });
 
   let linkedSettingVisited = false;
   const load = async (): Promise<void> => {
+    if (writer.busy()) return;
+    writer.cancel();
+    const issue = ++reading;
     showPending(null);
     setStatus("Loading settings...", "is-loading");
     const outcome = await fetchSettings(deps.fetch);
+    if (issue !== reading) return;
     if (!outcome.ok) {
       setStatus(outcome.message, "is-error");
       return;

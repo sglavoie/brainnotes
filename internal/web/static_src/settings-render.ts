@@ -1,10 +1,11 @@
 import type { PropertyConfigDiffLine, SettingSummary, TemplateSummary } from "./api";
 import {
-  formatSettingValue,
   settingBlockedReason,
   settingEditorText,
   settingOriginLabel,
 } from "./settings-model";
+
+import { settingDisplayValue, settingGroup, settingName, settingUnit } from "./settings-presentation";
 
 /** Renders a configuration patch as the unified text a person reads. */
 export const configDiffText = (diff: PropertyConfigDiffLine[]): string =>
@@ -88,6 +89,8 @@ export type SettingRow = {
   control: HTMLInputElement | HTMLTextAreaElement;
   save: HTMLButtonElement;
   unset: HTMLButtonElement;
+  editor: HTMLDetailsElement;
+  summary: SettingSummary;
 };
 
 const buildButton = (
@@ -122,25 +125,41 @@ export const renderSettingRow = (doc: Document, summary: SettingSummary): Settin
 
   const header = doc.createElement("div");
   header.className = "settings-row-header";
+  appendLabelled(item, "settings-name", settingName(summary.key));
+  const info = doc.createElement("details");
+  info.className = "settings-info";
+  const infoLabel = doc.createElement("summary");
+  infoLabel.textContent = "Configuration details";
+  info.appendChild(infoLabel);
   appendLabelled(header, "settings-key", summary.key);
   appendLabelled(header, "settings-kind", summary.kind);
   const origin = appendLabelled(header, "settings-origin", settingOriginLabel(summary));
   origin.setAttribute("data-settings-origin", summary.assigned ? summary.layer : "default");
-  item.appendChild(header);
+  info.appendChild(header);
 
   appendLabelled(item, "settings-summary", summary.summary);
-  const current = appendLabelled(item, "settings-current", formatSettingValue(summary.value));
+  const current = appendLabelled(item, "settings-current", settingDisplayValue(summary));
   current.setAttribute("data-settings-current", "");
 
+  const editor = doc.createElement("details");
+  editor.className = "settings-editor";
+  const edit = doc.createElement("summary");
+  edit.textContent = "Edit";
+  edit.setAttribute("data-settings-edit", "");
+  edit.setAttribute("aria-label", `Edit ${settingName(summary.key)}`);
+  editor.appendChild(edit);
+  item.appendChild(editor);
   const control = buildSettingControl(doc, summary);
   control.setAttribute("data-settings-control", "");
   control.id = `setting-${summary.key.replace(/\./g, "-")}`;
   const label = doc.createElement("label");
   label.className = "settings-control-label";
   label.htmlFor = control.id;
-  label.textContent = "Value";
-  item.appendChild(label);
-  item.appendChild(control);
+  const unit = settingUnit(summary.key);
+  label.textContent = unit ? `Value (${unit})` : "Value";
+  control.setAttribute("aria-label", `${settingName(summary.key)}${unit ? ` (${unit})` : ""}`);
+  editor.appendChild(label);
+  editor.appendChild(control);
 
   const actions = doc.createElement("div");
   actions.className = "settings-row-actions";
@@ -149,20 +168,25 @@ export const renderSettingRow = (doc: Document, summary: SettingSummary): Settin
   unset.disabled = !summary.assigned;
   actions.appendChild(save);
   actions.appendChild(unset);
-  item.appendChild(actions);
+  editor.appendChild(actions);
+  editor.appendChild(info);
 
+  const marker = appendLabelled(item, "settings-dirty", "Unsaved changes");
+  marker.setAttribute("data-settings-dirty", "");
+  marker.hidden = true;
   const blocked = settingBlockedReason(summary);
+  const notice = appendLabelled(item, "settings-shadowed", blocked);
+  notice.setAttribute("data-settings-shadowed", "");
+  notice.setAttribute("role", "note");
+  notice.hidden = blocked === "";
   if (blocked !== "") {
     item.classList.add("is-shadowed");
     control.disabled = true;
     save.disabled = true;
     unset.disabled = true;
-    const notice = appendLabelled(item, "settings-shadowed", blocked);
-    notice.setAttribute("data-settings-shadowed", "");
-    notice.setAttribute("role", "note");
   }
 
-  return { key: summary.key, element: item, control, save, unset };
+  return { key: summary.key, element: item, control, save, unset, editor, summary };
 };
 
 export const renderSettingsList = (
@@ -171,9 +195,23 @@ export const renderSettingsList = (
 ): SettingRow[] => {
   const doc = list.ownerDocument;
   list.textContent = "";
+  const groups = new Map<string, HTMLUListElement>();
   return settings.map((summary) => {
+    const group = settingGroup(summary.key);
+    let section = groups.get(group);
+    if (!section) {
+      const item = doc.createElement("li");
+      item.className = "settings-group";
+      const heading = doc.createElement("h3");
+      heading.textContent = group;
+      section = doc.createElement("ul");
+      section.className = "settings-group-list";
+      item.append(heading, section);
+      list.appendChild(item);
+      groups.set(group, section);
+    }
     const row = renderSettingRow(doc, summary);
-    list.appendChild(row.element);
+    section.appendChild(row.element);
     return row;
   });
 };

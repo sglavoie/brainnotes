@@ -272,3 +272,18 @@
   color: var(--bn-muted);
   font-size: 0.78rem;
 }
+
+/* Readable values first; editing and configuration details are local disclosures. */
+.settings-group-list { list-style: none; padding: 0; margin: 0; }
+.settings-group h3 { margin: 1rem 0 0.5rem; font-size: 1rem; }
+.settings-group .settings-row { background: var(--bn-surface); border: 0; border-top: 1px solid var(--bn-border); border-radius: 0; padding: 0.8rem 0; }
+.settings-name { display: block; font-weight: 600; color: var(--bn-text-strong); }
+.settings-editor > summary { cursor: pointer; color: var(--bn-link); padding-block: 0.5rem; width: fit-content; min-height: 2.75rem; box-sizing: border-box; }
+.settings-editor .settings-control { box-sizing: border-box; max-width: 100%; }
+.settings-info { margin-top: 0.6rem; font-size: 0.85rem; color: var(--bn-muted); }
+.settings-info summary { cursor: pointer; padding-block: 0.4rem; }
+.settings-info .settings-row-header { margin-top: 0.4rem; }
+.settings-dirty { color: var(--bn-warning); font-size: 0.85rem; }
+.settings-dirty[hidden], .settings-shadowed[hidden] { display: none; }
+.settings-feedback { scroll-margin-block: 1rem; }
+.settings-editor .settings-feedback { border-left: 2px solid var(--bn-border); padding-left: 0.75rem; margin-top: 0.5rem; }

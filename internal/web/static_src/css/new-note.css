@@ -29,3 +29,5 @@
 }
 
 .new-note button:disabled { opacity: 0.6; cursor: default; }
+
+.new-note [data-new-note-draft-status]:empty { display: none; }

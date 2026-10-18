@@ -2,7 +2,7 @@
 
 Start with `bn serve`, then choose a task below. Brief, Library, Pinned, and Graph
 are in the main navigation. On Brief, Library, Pinned, New note, Synthesis, the
-editor, and management pages, **Workspace** opens navigation and theme controls.
+editor, note reading, and management pages, **Workspace** opens navigation and theme controls.
 **New note** is a separate action. **Manage** contains
 Properties, Health, Settings, Sync, and History, subject to the server's capabilities.
 Saved views have their own row. In the source editor, **Workspace** opens this
@@ -56,7 +56,10 @@ require a preview before applying changes.
 When there are no matches, remove just the search text, filters, or expression,
 or use **Reset search** to clear the entire search. **Create a note titled…**
 opens New note with the text query filled in; it does not create anything until
-you confirm the title and folder. Creation is unavailable on read-only replicas.
+you confirm the title and folder. The originating search travels through
+creation and editing. **Back to results** on the form and reading page returns to
+that exact search, even if the new note does not match it.
+Creation is unavailable on read-only replicas.
 
 **Retry search** repeats a failed search with the current query and filters.
 Dismissing header search dismisses its retry action. **Retry filters** reloads
@@ -101,6 +104,12 @@ Choose **New note**, enter a title and optional vault-relative folder, and selec
 opens in the browser editor; **Save** writes your text. **Capture** sends a quick
 thought to the configured inbox instead.
 
+Unfinished titles and folders are kept in this tab for this vault when browser
+storage is available. If a creation response is lost, **Check creation** safely
+reuses the original request, including after a reload; it never checks or retries
+automatically. Confirmed creation clears those saved details. If browser storage
+is unavailable, keep the form open until creation is confirmed.
+
 On a note, choose **Edit in browser**, or **Open in external editor** on local
 servers. The source editor opens with the writing surface visible on a narrow
 screen. Its toolbar keeps **Save** nearby while scrolling; **Format** reveals formatting
@@ -132,12 +141,29 @@ The note title link returns from editing to reading, preserving the originating
 workspace and reading position. This survives reloads, renames, and moves.
 If the section was removed, reading position uses a proportional fallback.
 
+## Adjust settings
+
+Settings groups portable configuration by purpose and shows readable names and
+current values. Choose **Edit** beside a setting to reveal its controls; size and
+age fields name their units. **Configuration details** contains the exact key,
+type, and source file. Machine-local overrides remain visible as explanations of
+why a setting cannot be edited here.
+
+Save previews the change beside that setting before confirmation. Saving one
+setting or choosing Refresh preserves unsaved edits in other fields, along with
+focus and text selection. **Unsaved changes** identifies values still being edited.
+Changing a value after preview requires another preview before it can be saved.
+
 ## Recover and resolve uncertain changes
 
 **More actions** on a note contains Synthesize and Trash. Destructive confirmations
 use the same application dialog as Undo: affected content and consequences are
 shown with an explicit action button, Cancel, Escape, and focus restoration.
 Sync decisions retain their preview and one-use receipt requirements.
+
+History opens on recent changes with path search visible. **More filters** reveals
+path matching, origin, content type, and page size. Active constraints remain visible
+when those controls are collapsed.
 
 History leads with a readable action summary; **Details** keeps the exact command
 and entry identifier available. Choose **Preview restore** to inspect the change.

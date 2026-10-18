@@ -134,7 +134,7 @@ describe("settings panel: direct links", () => {
     expect(document.activeElement).toBe(control(rowFor(mounted.root, "capture.inbox_note")));
 
     await mounted.panel.load();
-    expect(document.activeElement).toBe(document.body);
+    expect(document.activeElement).toBe(control(rowFor(mounted.root, "capture.inbox_note")));
   });
 
   it("keeps the user's focus when a linked setting finishes loading", async () => {
@@ -429,4 +429,82 @@ describe("settings panel: unset, cancel and refresh", () => {
 
     expect(mounted.calls.map((call) => call.url)).toEqual(["/api/settings", "/api/settings"]);
   });
+});
+
+describe("settings panel: draft continuity", () => {
+  const pair = () => [setting(), setting({ key: "capture.heading", value: { kind: "string", text: "## Captured" } })];
+
+  it("keeps another dirty field, its selection and focus through save and refresh", async () => {
+    const mounted = mount({
+      "/api/settings": () => jsonResponse(listPayload(pair())),
+      "/api/settings/preview": () => jsonResponse(previewPayload()),
+      "/api/settings/apply": () => jsonResponse(listPayload([
+        setting({ value: { kind: "string", text: "New inbox.md" } }), pair()[1],
+      ])),
+    });
+    await mounted.panel.load();
+    const first = rowFor(mounted.root, "capture.file");
+    const second = rowFor(mounted.root, "capture.heading");
+    first.querySelector("details")!.open = true;
+    second.querySelector("details")!.open = true;
+    control(first).value = "New inbox.md";
+    control(second).value = "## Unfinished heading";
+    button(first, "data-settings-save").click();
+    await waitForExpect(() => expect(mounted.panel.pending()).not.toBeNull());
+    expect(first.contains(mounted.root.querySelector("[data-settings-confirm]"))).toBe(true);
+    button(mounted.root, "data-settings-confirm").click();
+    control(second).focus();
+    control(second).setSelectionRange(3, 7);
+    await waitForExpect(() => expect(statusText(mounted.root)).toContain("Saved"));
+    expect(control(first).value).toBe("New inbox.md");
+    expect(control(second).value).toBe("## Unfinished heading");
+    expect(document.activeElement).toBe(control(second));
+    expect(control(second).selectionStart).toBe(3);
+    await mounted.panel.load();
+    expect(control(second).value).toBe("## Unfinished heading");
+    expect(document.activeElement).toBe(control(second));
+    expect(control(second).selectionEnd).toBe(7);
+    expect(second.dataset.dirty).toBe("true");
+  });
+
+  it("invalidates a preview when its input changes and keeps a reversion to the original value during apply", async () => {
+    let finish!: (value: Response) => void;
+    document.body.innerHTML = PANEL_HTML;
+    const root = document.querySelector<HTMLElement>("[data-settings-panel]")!;
+    const panel = createSettingsPanel({ root, token: "csrf", fetch: async (input) => {
+      if (String(input).endsWith("/apply")) return new Promise<Response>((resolve) => { finish = resolve; });
+      return jsonResponse(String(input).endsWith("/preview") ? previewPayload() : listPayload(pair()));
+    } })!;
+    await panel.load();
+    const row = rowFor(root, "capture.file");
+    control(row).value = "First.md";
+    button(row, "data-settings-save").click();
+    await waitForExpect(() => expect(panel.pending()).not.toBeNull());
+    control(row).value = "Second.md";
+    control(row).dispatchEvent(new Event("input"));
+    expect(panel.pending()).toBeNull();
+    button(row, "data-settings-save").click();
+    await waitForExpect(() => expect(panel.pending()).not.toBeNull());
+    button(root, "data-settings-confirm").click();
+    control(row).value = "Inbox.md";
+    control(row).dispatchEvent(new Event("input"));
+    finish(jsonResponse(listPayload([setting({ value: { kind: "string", text: "Second.md" } }), pair()[1]])));
+    await waitForExpect(() => expect(statusText(root)).toContain("Saved"));
+    expect(control(row).value).toBe("Inbox.md");
+    expect(row.querySelector("[data-settings-current]")?.textContent).toBe("Second.md");
+  });
+});
+
+it("can reset an integer setting even while its unsaved input is invalid", async () => {
+  const numberSetting = setting({ key: "cockpit.daily_limit", kind: "int", value: { kind: "int", number: 10 } });
+  const mounted = mount({
+    "/api/settings": () => jsonResponse(listPayload([numberSetting])),
+    "/api/settings/preview": () => jsonResponse({ ...previewPayload(), settings: [numberSetting] }),
+  });
+  await mounted.panel.load();
+  const row = rowFor(mounted.root, "cockpit.daily_limit");
+  control(row).value = "";
+  button(row, "data-settings-unset").click();
+  await waitForExpect(() => expect(mounted.panel.pending()).not.toBeNull());
+  expect(mounted.calls[1].body).toMatchObject({ key: "cockpit.daily_limit", op: "unset" });
 });

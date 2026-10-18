@@ -56,6 +56,7 @@ for (const theme of ["light", "dark"]) {
       expect((await element.boundingBox()).width).toBeLessThanOrEqual((await body.boundingBox()).width);
     }
     await page.emulateMedia({ media: "screen" });
+    await page.getByText("Workspace", { exact: true }).click();
     await expect(page.locator(".site-nav")).toBeVisible();
     await expect(page.locator(".note-print-body > h2")).toBeVisible();
   });

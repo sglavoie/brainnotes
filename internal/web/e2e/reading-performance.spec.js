@@ -32,6 +32,7 @@ test("reading and search stay responsive with a slow CPU and connection", async 
   });
   await page.goto("/n/Reading.md");
   await expect(page.locator("[data-note-body]")).toBeVisible();
+  await page.keyboard.press("/");
   const search = page.locator("#search-input");
   const started = Date.now();
   await search.fill("Reading");

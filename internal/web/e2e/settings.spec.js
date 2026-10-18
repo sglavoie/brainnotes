@@ -116,6 +116,7 @@ test("a portable setting typed in the browser reaches brainnotes.toml and comes 
   const row = page.locator(`[data-settings-row="${SETTING_KEY}"]`);
   await expect(row.locator("[data-settings-origin]")).toHaveText("default");
 
+  await row.locator("[data-settings-edit]").click();
   await row.locator("[data-settings-control]").fill(SETTING_VALUE);
   await row.locator("[data-settings-save]").click();
   await confirmWrite(page, "settings", `Saved "${SETTING_KEY}".`);

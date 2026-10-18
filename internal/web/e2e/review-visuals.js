@@ -40,9 +40,26 @@ export const reviewVisuals = (snapshot) => {
       await page.goto(`/${workspace}`);
       await page.waitForLoadState("networkidle");
       await expect(page.getByText("Workspace", { exact: true })).toBeVisible();
+      if (workspace === "history") {
+        await expect(page.locator("[data-history-entry]").first()).toBeInViewport();
+        await expect(page.getByRole("button", { name: /Preview restoring/ }).first()).toBeInViewport();
+      }
       await snapshot(page, `manage-${workspace.replaceAll("/", "-")}`);
     });
   }
+  test("settings confirmation beside the edited value", async ({ page }) => {
+    await fixedHistory(page);
+    await fixedSync(page);
+    await page.goto("/settings");
+    const row = page.locator('[data-settings-row="attachments.max_file_bytes"]');
+    await row.locator("[data-settings-edit]").click();
+    await row.locator("[data-settings-control]").fill("10485760");
+    await row.locator("[data-settings-save]").click();
+    await expect(row.locator("[data-settings-confirm]")).toBeFocused();
+    await expect(row.locator("[data-settings-status]")).toBeInViewport();
+    await expect(row.locator("[data-settings-confirm]")).toBeInViewport();
+    await snapshot(page, "settings-confirmation");
+  });
   test("restore content comparison", async ({ page }) => {
     await fixedHistory(page);
     await fixedSync(page);

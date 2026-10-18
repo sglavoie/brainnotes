@@ -87,3 +87,16 @@ test("Trash cancels with focus restored and never claims success for an HTML res
   await expect(page).toHaveURL(/\/n\/Reading$/);
   expect(writes).toBe(1);
 });
+
+test("reading opens on prose on a short phone screen and keeps search reachable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.goto("/n/Reading");
+  await expect(page.locator("[data-note-body] p").first()).toBeInViewport({ ratio: 1 });
+  await expect(page.locator("[data-source-editor-launch]")).toBeInViewport();
+  await expect(page.locator(".source-editor-workspace")).not.toHaveAttribute("open", "");
+  await page.keyboard.press("/");
+  await expect(page.locator("#search-input")).toBeFocused();
+  await expect(page.locator(".source-editor-workspace")).toHaveAttribute("open", "");
+  await page.locator("#search-input").fill("Alpha");
+  await expect(page.locator(".search-result-title").first()).toHaveText("Alpha");
+});

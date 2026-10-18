@@ -82,13 +82,14 @@ it("hides old help immediately during a new search and keeps it hidden after a f
   expect(help.hidden).toBe(true);
 });
 
-it("offers a reviewable title without carrying filters, and hides creation on replicas", async () => {
+it("offers a reviewable title with a return search, and hides creation on replicas", async () => {
   const title = '雪 & "new idea"';
   const { help } = await setup(`?${new URLSearchParams({ q: title, folder: "Notes" })}`);
   const create = help.querySelector<HTMLAnchorElement>("[data-empty-create-note]")!;
   expect(create.textContent).toBe(`Create a note titled “${title}”…`);
   expect(new URL(create.href).pathname).toBe("/new");
-  expect(new URL(create.href).searchParams.toString()).toBe(new URLSearchParams({ title }).toString());
+  expect(new URL(create.href).searchParams.get("title")).toBe(title);
+  expect(new URL(create.href).searchParams.get("return_to")).toBe(window.location.pathname + window.location.search);
   document.documentElement.dataset.readOnly = "true";
   const replica = await setup("?q=missing");
   expect(replica.help.querySelector("[data-empty-create-note]")).toBeNull();

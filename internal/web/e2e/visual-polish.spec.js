@@ -56,6 +56,8 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       await expect(page.locator("[data-note-body]")).toBeVisible();
       await expect(page.locator(".frontmatter-panel h2")).toHaveText("Properties");
       await expect(page.locator(".frontmatter-panel form:visible")).toHaveCount(0);
+      await expect(page.locator("[data-note-body] p").first()).toBeInViewport();
+      await snapshot(page, "reading-entry");
       await page.locator("#second-section").evaluate((heading) => heading.scrollIntoView());
       await snapshot(page, "reading");
     });

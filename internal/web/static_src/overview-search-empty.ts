@@ -24,7 +24,7 @@ const addCreateLink = (help: HTMLElement): void => {
   const title = readPageQuery();
   if (!title || document.documentElement.dataset.readOnly === "true") return;
   const link = document.createElement("a");
-  link.href = `/new?${new URLSearchParams({ title })}`;
+  link.href = `/new?${new URLSearchParams({ title, return_to: window.location.pathname + window.location.search + window.location.hash })}`;
   link.textContent = `Create a note titled “${title}”…`;
   link.dataset.emptyCreateNote = "";
   help.appendChild(link);

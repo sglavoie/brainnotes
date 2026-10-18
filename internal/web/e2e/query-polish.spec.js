@@ -27,6 +27,7 @@ test("saved-view retry works by keyboard without losing focus on mobile", async 
 
 test("header search hands its query to the Library with Enter or a link", async ({ page }) => {
   await page.goto("/n/Alpha");
+  await page.keyboard.press("/");
   const search = page.locator("#search-input");
   await search.fill("Beta");
   const library = page.locator("[data-search-library]");
@@ -37,6 +38,7 @@ test("header search hands its query to the Library with Enter or a link", async 
   await expect(page.locator("[data-overview-search-results]")).toContainText("Beta");
 
   await page.goto("/n/Alpha");
+  await page.keyboard.press("/");
   await search.fill("Alpha");
   await search.press("Tab");
   await expect(library).toBeFocused();
