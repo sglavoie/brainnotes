@@ -67,6 +67,7 @@ type historyWarningResponse struct {
 }
 
 type historyEntryResponse struct {
+	Summary   string `json:"summary"`
 	ID        string `json:"id"`
 	Timestamp string `json:"timestamp"`
 	Command   string `json:"command"`
@@ -146,6 +147,7 @@ func historyEntryForJournalEntry(entry journal.Entry, classifier historyPathClas
 	}
 	facts := classifier.entryFacts(entry)
 	return historyEntryResponse{
+		Summary:     historyActionSummary(entry, classifier),
 		ID:          entry.ID,
 		Timestamp:   entry.Timestamp.UTC().Format(time.RFC3339Nano),
 		Command:     entry.Command,

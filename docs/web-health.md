@@ -151,8 +151,7 @@ An unsupported value (a YAML null, mapping, or nested list) is shown by label
 only — never as text a write could reproduce — cannot be used as a value filter,
 and cannot be edited from the browser. Fix those in the file directly.
 
-Version one deliberately excludes: spreadsheet-style grid editing of many
-properties at once, advanced value transforms (regular expressions, split/join,
-case rules), saved or reusable edit recipes, browser editing of settings other
-than property definitions or of raw TOML, and any redesign of the note-body
-editor — bodies still open in your configured editor.
+The workbench does not provide spreadsheet-style editing, advanced value
+transforms (regular expressions, split/join or case rules), or reusable edit
+recipes. Use **Settings** for portable configuration and templates, and
+**Edit in browser** on a note to edit its Markdown body.

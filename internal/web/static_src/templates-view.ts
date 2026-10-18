@@ -57,7 +57,7 @@ export const readTemplatesElements = (root: HTMLElement): TemplatesElements | nu
 };
 
 export type TemplatesView = {
-  setStatus: (message: string, kind?: StatusKind) => void;
+  setStatus: (message: string, kind?: StatusKind, uncertain?: boolean) => void;
   showPending: (pending: TemplatePendingSave | null) => void;
   showDraft: (next: TemplateDraft) => void;
   absorb: (result: TemplatesResult) => void;
@@ -95,7 +95,10 @@ export const createTemplatesView = (elements: TemplatesElements): TemplatesView 
   };
 
   return {
-    setStatus: (message, kind = "") => setStatusText(elements.status, message, kind),
+    setStatus: (message, kind = "", uncertain = false) => {
+      setStatusText(elements.status, message, kind);
+      elements.status.dataset.writeUnconfirmed = String(uncertain);
+    },
     showPending: (pending) => {
       renderConfigDiff(elements.diff, pending ? pending.diff : []);
       // The editor is inert while a receipt is outstanding: the receipt describes
@@ -108,6 +111,7 @@ export const createTemplatesView = (elements: TemplatesElements): TemplatesView 
       elements.name.disabled = pending !== null;
       if (elements.confirm) {
         elements.confirm.hidden = pending === null;
+        elements.confirm.textContent = pending?.op === "delete" ? "Delete template" : "Save template";
       }
       if (elements.cancel) {
         elements.cancel.hidden = pending === null;

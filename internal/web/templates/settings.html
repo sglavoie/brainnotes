@@ -12,17 +12,15 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>Settings</h1>
-        <p class="page-subtitle">The settings and templates this vault carries to your other replicas. Settings that name <em>this machine</em> — your editor, the address the server listens on, the agent command — live in <code>brainnotes.local.toml</code> and are not shown here.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>Settings</h1>
+      {{template "workspaceMenu" "settings"}}
     </header>
-    {{template "siteNav" "settings"}}
+    {{template "siteSync" .}}
+    <div class="management-intro">
+      <p class="page-subtitle">Manage settings and note templates.</p>
+      <details><summary>About settings on this device</summary><p>The settings and templates this vault carries to your other replicas. Settings that name <em>this machine</em> — your editor, the address the server listens on, the agent command — live in <code>brainnotes.local.toml</code> and are not shown here.</p></details>
+    </div>
 
     <section id="workspace-content" tabindex="-1"
       class="panel settings-panel"
@@ -49,7 +47,7 @@
       <div class="settings-confirm" data-settings-confirm-block>
         <pre class="settings-diff" data-settings-diff hidden aria-label="Pending brainnotes.toml change"></pre>
         <div class="settings-confirm-actions">
-          <button class="settings-button settings-button-primary" type="button" data-settings-confirm hidden>Write it</button>
+          <button class="settings-button settings-button-primary" type="button" data-settings-confirm hidden>Save changes</button>
           <button class="settings-button" type="button" data-settings-cancel hidden>Cancel</button>
         </div>
       </div>
@@ -106,7 +104,7 @@
           <div class="settings-confirm-actions">
             <button class="settings-button settings-button-primary" type="button" data-templates-save>Save</button>
             <button class="settings-button settings-danger" type="button" data-templates-delete disabled>Delete</button>
-            <button class="settings-button settings-button-primary" type="button" data-templates-confirm hidden>Write it</button>
+            <button class="settings-button settings-button-primary" type="button" data-templates-confirm hidden>Save changes</button>
             <button class="settings-button" type="button" data-templates-cancel hidden>Cancel</button>
           </div>
         </div>

@@ -134,7 +134,7 @@ const applyOutcome = (
       return;
     case "conflict":
       state.pendingSave = null;
-      showConflict(elements, outcome.content, outcome.revision);
+      showConflict(elements, outcome.content, outcome.revision, currentDraft(state, submitted));
       ctx.panes.select("edit");
       ctx.setStatus(outcome.message, "is-error");
       return;
@@ -169,3 +169,5 @@ export const errorMessage = (error: unknown, fallback: string): string => {
   }
   return fallback;
 };
+
+const currentDraft = (state: EditorState, submitted: string): string => state.surface?.getValue() ?? submitted;

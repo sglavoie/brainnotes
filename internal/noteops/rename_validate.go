@@ -279,27 +279,34 @@ func RenameFile(vaultRoot, target, newPath string) error {
 	}
 	defer release()
 	if strings.EqualFold(target, newPath) && target != newPath {
-		dir := filepath.Dir(target)
-		tmp, err := os.CreateTemp(dir, ".rename-pivot-*")
-		if err != nil {
-			return fmt.Errorf("rename: tempfile in %q: %w", dir, err)
-		}
-		tmpPath := tmp.Name()
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		if err := os.Rename(target, tmpPath); err != nil {
-			return fmt.Errorf("rename: pivot %q -> %q: %w", target, tmpPath, err)
-		}
-		if err := os.Rename(tmpPath, newPath); err != nil {
-			if restoreErr := os.Rename(tmpPath, target); restoreErr != nil {
-				return fmt.Errorf("rename: pivot %q -> %q: %w; restore to %q failed: %v", tmpPath, newPath, err, target, restoreErr)
-			}
-			return fmt.Errorf("rename: pivot %q -> %q: %w", tmpPath, newPath, err)
-		}
-		return nil
+		return renameCaseOnly(target, newPath)
 	}
 	if err := os.Rename(target, newPath); err != nil {
 		return fmt.Errorf("rename: %q -> %q: %w", target, newPath, err)
+	}
+	return nil
+}
+
+// renameCaseOnly runs with both paths locked by RenameFile.
+//
+//bn:direct-write both paths are locked by RenameFile, reached through BeginOperation
+func renameCaseOnly(target, newPath string) error {
+	dir := filepath.Dir(target)
+	tmp, err := os.CreateTemp(dir, ".rename-pivot-*")
+	if err != nil {
+		return fmt.Errorf("rename: tempfile in %q: %w", dir, err)
+	}
+	tmpPath := tmp.Name()
+	_ = tmp.Close()
+	_ = os.Remove(tmpPath)
+	if err := os.Rename(target, tmpPath); err != nil {
+		return fmt.Errorf("rename: pivot %q -> %q: %w", target, tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, newPath); err != nil {
+		if restoreErr := os.Rename(tmpPath, target); restoreErr != nil {
+			return fmt.Errorf("rename: pivot %q -> %q: %w; restore to %q failed: %v", tmpPath, newPath, err, target, restoreErr)
+		}
+		return fmt.Errorf("rename: pivot %q -> %q: %w", tmpPath, newPath, err)
 	}
 	return nil
 }

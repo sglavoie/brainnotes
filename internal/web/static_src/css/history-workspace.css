@@ -269,3 +269,12 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.history-entry-title { display: block; color: var(--bn-text-strong); font-weight: 600; overflow-wrap: anywhere; }
+.history-entry-head { align-items: baseline; }
+.history-entry-head .history-origin { font-size: 0.8rem; font-weight: normal; }
+.history-entry-details { color: var(--bn-muted); font-size: 0.85rem; margin-block: 0.5rem; overflow-wrap: anywhere; }
+.history-entry-details summary { cursor: pointer; padding-block: 0.3rem; }
+.history-entry-details .history-command { display: block; margin-top: 0.4rem; }
+
+.history-entry > .history-entry-details { grid-column: 1 / -1; }

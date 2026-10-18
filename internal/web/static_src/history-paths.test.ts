@@ -30,7 +30,8 @@ it("shows the first three full paths and expands the remainder using native deta
 it.each([0, 1, 3])("needs no expander for %i paths and preserves undo identity", (count) => {
   const undo = render(Array.from({ length: count }, (_, i) => `Note ${i}.md`));
   expect(document.querySelectorAll(".history-paths li")).toHaveLength(count);
-  expect(document.querySelector("details")).toBeNull();
+  expect(document.querySelector(".history-more-paths")).toBeNull();
+  expect(document.querySelector<HTMLDetailsElement>(".history-entry-details")?.open).toBe(false);
   document.querySelector<HTMLButtonElement>("button")!.click();
   expect(undo).toHaveBeenCalledWith("entry-1");
 });

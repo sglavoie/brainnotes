@@ -137,3 +137,16 @@
 .brief-card-why[open] > :not(summary), .brief-ai[open] > :not(summary) { margin-top: 0.5rem; }
 .brief-card-actions [data-brief-action-open] { background: var(--bn-accent-subtle-bg); border-color: var(--bn-accent-subtle-border); color: var(--bn-accent-subtle-text); font-weight: 600; }
 .brief-card .brief-slot-status:empty { display: none; }
+
+/* Recommendations carry the visual weight; avoid a panel inside a panel. */
+.brief-panel { border: 0; padding: 0; background: transparent; gap: 0.6rem; }
+.brief-panel > .panel-header { justify-content: space-between; flex-wrap: wrap; gap: 0.4rem 1rem; }
+.brief-panel > .panel-header p { margin: 0; font-size: 0.85rem; color: var(--bn-muted); }
+.brief-slot .panel-header h3 { margin: 0 0 0.6rem; font-size: 0.9rem; color: var(--bn-muted); }
+.brief-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.brief-card > * { grid-column: 1 / -1; }
+.brief-card > .brief-card-why, .brief-card > .brief-ai { grid-column: auto; }
+.brief-card > details[open] { grid-column: 1 / -1; }
+.brief-card-title { font-size: 1.1rem; }
+.brief-card-excerpt { border-left: 0; padding: 0; }
+.brief-global-status:empty { display: none; }

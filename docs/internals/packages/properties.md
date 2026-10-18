@@ -1,0 +1,5 @@
+# internal/properties
+
+[Back to the architecture map](../architecture.md).
+
+- `internal/properties` — the reusable property index behind the web workbench. `typed.go` defines `TypedValue`, the transport form a caller sends when it wants a value written under a declared kind. `value.go` classifies a frontmatter value into a discriminated `Value` (`kind`/`text`/`value`/`items`/`supported`); anything YAML can hold but frontmatter text cannot safely reproduce (null, mapping, nested list) becomes `KindUnsupported` with a label and no reproducible text. `index.go` walks notes once to build per-property coverage, observed kinds, distinct logical values, note rows, and `internal/schema` violation counts, counting each logical value at most once per note so repeated list items never inflate statistics. `infer.go` proposes a `[frontmatter.properties.<key>]` block only for an unconfigured property whose observed values unanimously support one kind, and never infers `required` or `allowed`. The package deliberately does not depend on `internal/web`.

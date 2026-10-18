@@ -168,13 +168,15 @@ type historyPreviewPayload struct {
 }
 
 type historyPreviewChangePayload struct {
-	Path          string `json:"path"`
-	CurrentState  string `json:"current_state"`
-	RestoredState string `json:"restored_state"`
-	Class         string `json:"class"`
-	Recorded      bool   `json:"recorded"`
-	Travels       bool   `json:"travels"`
-	Conflict      bool   `json:"conflict"`
+	Comparison            *historyTextComparison `json:"comparison"`
+	ComparisonUnavailable string                 `json:"comparison_unavailable"`
+	Path                  string                 `json:"path"`
+	CurrentState          string                 `json:"current_state"`
+	RestoredState         string                 `json:"restored_state"`
+	Class                 string                 `json:"class"`
+	Recorded              bool                   `json:"recorded"`
+	Travels               bool                   `json:"travels"`
+	Conflict              bool                   `json:"conflict"`
 }
 
 type undoPayload struct {

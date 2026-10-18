@@ -16,7 +16,7 @@ import type { SourceDraftStore } from "./source-draft";
 import type { SourceEditorConfig, SourceEditorElements } from "./source-editor-elements";
 import type { SourceSurface, SourceSurfaceFactory } from "./source-surface";
 import { errorMessage, runSave } from "./source-editor-save";
-import { showConflict, wireConflict } from "./source-editor-conflict";
+import { showConflict, wireConflict, renderConflictComparison } from "./source-editor-conflict";
 
 // The editor's behaviour, written against the abstract surface.
 //
@@ -419,7 +419,7 @@ const restoreDraft = (
   state.surface?.setValue(offer.draft.content);
   if (offer.kind === "stale") {
     state.baseRevision = offer.draft.baseRevision;
-    showConflict(elements, offer.vaultContent, offer.vaultRevision);
+    showConflict(elements, offer.vaultContent, offer.vaultRevision, offer.draft.content);
     ctx.panes.select("edit");
   }
   ctx.refreshSaveButton();
@@ -443,6 +443,7 @@ const wireControls = (
 };
 
 const refreshEditStatus = (elements: SourceEditorElements, state: EditorState, ctx: SaveContext): void => {
+  renderConflictComparison(elements, state.surface?.getValue() ?? "");
   if (state.saving || state.pendingSave || elements.status?.matches(".is-error, .is-warning")) return;
   ctx.setStatus(state.surface?.getValue() === state.savedContent ? "No unsaved changes." : "Unsaved changes.");
 };

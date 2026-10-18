@@ -1,4 +1,5 @@
 import { test, expect } from "./fixture.js";
+import { reviewVisuals } from "./review-visuals.js";
 import { SURFACE } from "./editor-helpers.js";
 
 // Deliberately small, paired coverage: every key surface has both themes and
@@ -20,9 +21,12 @@ for (const [theme, width] of [["light", 1280], ["dark", 390]]) {
         mask: [page.locator(".recent-note-meta"), page.locator(".brief-panel time")],
       });
     };
+    reviewVisuals(snapshot);
     test("Library dense results and a long title", async ({ page }) => {
       await page.goto("/library?q=field&status=reference&sort=title");
       await expect(page.locator(".overview-result-link").first()).toBeVisible();
+      const first = await page.locator(".overview-result-link").first().boundingBox();
+      expect(first.y).toBeLessThan(width > 700 ? 560 : 650);
       await snapshot(page, "library-entry");
       await page.locator("[data-overview-search-results]").scrollIntoViewIfNeeded();
       await snapshot(page, "library");

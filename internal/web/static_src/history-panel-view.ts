@@ -1,3 +1,4 @@
+import { historyEntryDetails } from "./history-entry-details";
 import type { HistoryEntry, UndoConflict } from "./api";
 import { buildHistoryQuery } from "./api-history";
 import { queryAllElements, queryElement } from "./dom";
@@ -153,8 +154,8 @@ const historyEntryRow = (entry: HistoryEntry, onUndo: (entryID: string) => void)
   main.className = "history-item-main";
 
   const command = document.createElement("span");
-  command.className = "history-command";
-  command.textContent = entry.command || entry.id;
+  command.className = "history-entry-title";
+  command.textContent = entry.summary || "Recorded change";
   main.appendChild(command);
 
   const meta = document.createElement("span");
@@ -164,6 +165,7 @@ const historyEntryRow = (entry: HistoryEntry, onUndo: (entryID: string) => void)
   meta.textContent = time ? `${time} - ${count}` : count;
   main.appendChild(meta);
   appendHistoryPaths(main, entry);
+  main.append(historyEntryDetails(entry));
 
   const undoButton = document.createElement("button");
   undoButton.className = "history-button history-danger";

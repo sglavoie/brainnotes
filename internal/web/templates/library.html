@@ -19,8 +19,9 @@
     {{template "siteSync" .}}
 
     <section id="workspace-content" tabindex="-1" class="panel library-search" aria-labelledby="library-search-heading" data-library-search>
-      <div class="panel-header">
-        <h2 id="library-search-heading">Find notes</h2>
+      <h2 id="library-search-heading" class="visually-hidden">Find notes</h2>
+      <div class="library-search-primary">
+        {{template "librarySearch" .}}
         <div class="library-search-actions">
           <div data-copy-controls>
             <button class="copy-button" type="button" data-copy-search-link data-copy-text="" data-copy-label="Search link" hidden>Copy search link</button>
@@ -56,13 +57,14 @@
           </div>
         </div>
       </div>
-      {{template "librarySearch" .}}
-      <details class="library-search-help"><summary>Search help</summary><p>Search text, filters, and expressions apply together. Notes must match every active constraint. Press Enter in search to move to the results.</p></details>
       {{template "facetControls" .FacetControls}}
+      <div class="library-search-options">
+      <details class="library-search-help"><summary>Search help</summary><p>Search text, filters, and expressions apply together. Notes must match every active constraint. Press Enter in search to move to the results.</p></details>
       <details class="library-expression" data-library-expression>
         <summary>Query expression <span data-library-expression-indicator></span></summary>
         {{template "queryBar" ""}}
       </details>
+      </div>
     </section>
 
     <section
@@ -93,6 +95,7 @@
         aria-live="polite"
       >No query or filters selected.</p>
       <div class="overview-selection" data-overview-empty-help role="status" aria-live="polite" hidden></div>
+      <div class="library-results-tools">
       <div class="overview-selection">
         <button class="overview-bulk-button" type="button" data-overview-search-retry hidden>Retry search</button>
         <a href="/library" data-overview-search-reset>Reset search</a>
@@ -104,6 +107,7 @@
         <details class="overview-selection-help"><summary>Selection help</summary><p>Use the checkboxes to select notes. Shift-click a checkbox to select or clear a range. Actions apply only to selected notes.</p></details>
         <button class="overview-bulk-button" type="button" data-overview-copy-wikilinks data-copy-text="" data-copy-label="Wikilinks" disabled>Copy wikilinks</button>
         <span class="copy-status" data-copy-status role="status" aria-live="polite"></span>
+      </div>
       </div>
       <div
         class="overview-bulk-actions"

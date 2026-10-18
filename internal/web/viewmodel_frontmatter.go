@@ -86,14 +86,8 @@ func frontmatterEditValue(value any) string {
 		return frontmatter.FormatTimestamp(typed)
 	case bool:
 		return fmt.Sprintf("%t", typed)
-	case int:
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return fmt.Sprintf("%d", typed)
-	case int8, int16, int32, int64:
-		return fmt.Sprintf("%d", typed)
-	case uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", typed)
-	case float32, float64:
-		return fmt.Sprintf("%v", typed)
 	case []string:
 		return strings.Join(typed, ", ")
 	case []any:
@@ -129,36 +123,6 @@ func renderFrontmatterValue(value any, graph *query.Graph) frontmatterValue {
 			Text:    typed,
 			Anchors: frontmatterAnchorsForString(typed, graph),
 		}
-	case time.Time:
-		return frontmatterValue{
-			Kind: "scalar",
-			Text: frontmatter.FormatTimestamp(typed),
-		}
-	case bool:
-		return frontmatterValue{
-			Kind: "scalar",
-			Text: fmt.Sprintf("%t", typed),
-		}
-	case int:
-		return frontmatterValue{
-			Kind: "scalar",
-			Text: fmt.Sprintf("%d", typed),
-		}
-	case int8, int16, int32, int64:
-		return frontmatterValue{
-			Kind: "scalar",
-			Text: fmt.Sprintf("%d", typed),
-		}
-	case uint, uint8, uint16, uint32, uint64:
-		return frontmatterValue{
-			Kind: "scalar",
-			Text: fmt.Sprintf("%d", typed),
-		}
-	case float32, float64:
-		return frontmatterValue{
-			Kind: "scalar",
-			Text: fmt.Sprintf("%v", typed),
-		}
 	case []string:
 		items := make([]frontmatterValue, 0, len(typed))
 		for _, item := range typed {
@@ -178,26 +142,11 @@ func renderFrontmatterValue(value any, graph *query.Graph) frontmatterValue {
 			Items: items,
 		}
 	case map[string]any:
-		keys := make([]string, 0, len(typed))
-		for key := range typed {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		pairs := make([]frontmatterEntry, 0, len(keys))
-		for _, key := range keys {
-			pairs = append(pairs, frontmatterEntry{
-				Key:   key,
-				Value: renderFrontmatterValue(typed[key], graph),
-			})
-		}
-		return frontmatterValue{
-			Kind:  "map",
-			Pairs: pairs,
-		}
+		return renderFrontmatterMap(typed, graph)
 	default:
 		return frontmatterValue{
 			Kind: "scalar",
-			Text: fmt.Sprintf("%v", typed),
+			Text: frontmatterEditValue(typed),
 		}
 	}
 }
@@ -220,29 +169,10 @@ func frontmatterAnchorsForString(raw string, graph *query.Graph) []frontmatterAn
 		}
 
 		label := linkLabel(link)
-		resolved := graph.ResolveTarget(link.Target)
-		if len(resolved) == 1 {
-			path, err := notePathForKey(resolved[0])
-			if err != nil {
-				continue
-			}
-			signature := label + "\x00" + path
-			if _, ok := seen[signature]; ok {
-				continue
-			}
-			seen[signature] = struct{}{}
-			anchors = append(anchors, frontmatterAnchor{
-				Label: label,
-				Path:  path,
-			})
+		path := frontmatterAnchorPath(link, graph)
+		if path == "" {
 			continue
 		}
-
-		key := graph.UnresolvedTargetKey(link.Target)
-		if key == "" {
-			continue
-		}
-		path := "/broken?" + url.Values{"q": []string{key}}.Encode()
 		signature := label + "\x00" + path
 		if _, ok := seen[signature]; ok {
 			continue
@@ -254,4 +184,39 @@ func frontmatterAnchorsForString(raw string, graph *query.Graph) []frontmatterAn
 		})
 	}
 	return anchors
+}
+
+func frontmatterAnchorPath(link wikilink.Link, graph *query.Graph) string {
+	resolved := graph.ResolveTarget(link.Target)
+	if len(resolved) == 1 {
+		path, err := notePathForKey(resolved[0])
+		if err != nil {
+			return ""
+		}
+		return path
+	}
+	key := graph.UnresolvedTargetKey(link.Target)
+	if key == "" {
+		return ""
+	}
+	return "/broken?" + url.Values{"q": []string{key}}.Encode()
+}
+
+func renderFrontmatterMap(typed map[string]any, graph *query.Graph) frontmatterValue {
+	keys := make([]string, 0, len(typed))
+	for key := range typed {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	pairs := make([]frontmatterEntry, 0, len(keys))
+	for _, key := range keys {
+		pairs = append(pairs, frontmatterEntry{
+			Key:   key,
+			Value: renderFrontmatterValue(typed[key], graph),
+		})
+	}
+	return frontmatterValue{
+		Kind:  "map",
+		Pairs: pairs,
+	}
 }

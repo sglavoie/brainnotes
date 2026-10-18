@@ -206,9 +206,7 @@ func TestIntentRecoveryStepsAreWrittenForThePhase(t *testing.T) {
 	if err != nil || !present {
 		t.Fatalf("LoadIntent after promoteIntent = present %v, err %v", present, err)
 	}
-	if stored.Phase != IntentPhaseCommitted || stored.NewOID != head {
-		t.Fatalf("promoted record = phase %q new_oid %q", stored.Phase, stored.NewOID)
-	}
+	assertPromotedIntent(t, stored, head)
 	// The promoted record must not still be carrying the planned text: from here
 	// on there is an object to prove reachable, and the planned text says there is
 	// not.
@@ -262,5 +260,12 @@ func saveIntent(t *testing.T, h *testHarness, record IntentRecord) {
 	var stored IntentRecord
 	if err := json.Unmarshal(h.intentBytes(), &stored); err != nil {
 		t.Fatalf("the record this test wrote does not decode: %v", err)
+	}
+}
+
+func assertPromotedIntent(t *testing.T, stored IntentRecord, head string) {
+	t.Helper()
+	if stored.Phase != IntentPhaseCommitted || stored.NewOID != head {
+		t.Fatalf("promoted record = phase %q new_oid %q", stored.Phase, stored.NewOID)
 	}
 }

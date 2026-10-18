@@ -66,6 +66,7 @@ test.describe("without JavaScript", () => {
     await page.locator(".source-editor-workspace > summary").click();
     await page.locator(".manage-nav > summary").click();
     await page.getByRole("link", { name: "Settings", exact: true }).click();
+    await page.locator(".source-editor-workspace > summary").click();
     await expect(page.locator(".manage-nav")).toHaveAttribute("open");
     await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveAttribute("aria-current", "page");
   });

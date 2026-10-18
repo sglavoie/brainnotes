@@ -1,3 +1,4 @@
+import { renderTextComparison } from "./text-comparison";
 import type { HistoryPreviewChange, HistoryPreviewResult, UndoConflict } from "./api";
 import { formatHistoryTimestamp } from "./history-panel-view";
 import type { HistoryWorkspaceElements } from "./history-workspace-elements";
@@ -62,7 +63,7 @@ const renderRestoreChanges = (
     const detail = document.createElement("p");
     detail.className = "history-change-detail";
     detail.textContent =
-      `${change.current_state} -> ${change.restored_state} (${change.class}; ${historyChangeDurability(change)})`;
+      `${restoreEffect(change)}; ${historyChangeDurability(change)}.`;
     item.appendChild(detail);
 
     if (change.conflict) {
@@ -71,8 +72,25 @@ const renderRestoreChanges = (
       flag.textContent = "This path holds newer work that restoring would replace.";
       item.appendChild(flag);
     }
+    appendRestoreComparison(item, change);
     container.appendChild(item);
   }
+};
+
+const restoreEffect = (change: HistoryPreviewChange): string => {
+  if (change.restored_state === "missing") return "Remove the created file";
+  return change.current_state === "missing" ? "Bring back the removed file" : "Restore the earlier version";
+};
+
+const appendRestoreComparison = (item: HTMLElement, change: HistoryPreviewChange): void => {
+  const host = item.ownerDocument.createElement("div");
+  if (change.comparison) {
+    renderTextComparison(host, change.comparison.current, change.comparison.restored, change.class === "note" ? "Current note" : "Current file", "After restoring");
+  } else {
+    host.className = "comparison-unavailable";
+    host.textContent = change.comparison_unavailable || "Text comparison is unavailable.";
+  }
+  item.append(host);
 };
 
 const renderRestoreConflicts = (

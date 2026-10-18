@@ -312,3 +312,14 @@ describe("an answer that was not this API's", () => {
     expect(second).not.toBe(first);
   });
 });
+
+
+it("keeps the displayed comparison aligned with edits after a conflict", async () => {
+  const harness = await inConflict();
+  const comparison = harness.conflict().querySelector("[data-source-conflict-comparison]")!;
+  expect(comparison.querySelector(".comparison-added")?.textContent).toContain("my draft");
+  expect(comparison.querySelector(".comparison-removed")?.textContent).toContain("Somebody else's text.");
+  harness.surface().type("revised draft\n");
+  expect(comparison.querySelector(".comparison-added")?.textContent).toContain("revised draft");
+  expect(harness.client.save).toHaveBeenCalledTimes(1);
+});

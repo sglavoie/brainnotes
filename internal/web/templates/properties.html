@@ -12,17 +12,15 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>Properties</h1>
-        <p class="page-subtitle">Every configured property and every property your notes actually store, sorted so the ones needing attention come first.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>Properties</h1>
+      {{template "workspaceMenu" "properties"}}
     </header>
-    {{template "siteNav" "properties"}}
+    {{template "siteSync" .}}
+    <div class="management-intro">
+      <p class="page-subtitle">Review and edit the properties in your notes.</p>
+      <details><summary>About the property catalog</summary><p>Every configured property and every property your notes actually store, sorted so the ones needing attention come first.</p></details>
+    </div>
 
     <section id="workspace-content" tabindex="-1"
       class="panel properties-panel"
@@ -94,20 +92,17 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
+    <header class="site-header focused-workspace-header">
       <div class="site-header-copy">
         <nav class="properties-breadcrumbs" aria-label="Breadcrumb">
           <a href="{{ .PropertiesPath }}">Properties</a>
         </nav>
         <h1>{{ .Property }}</h1>
-        <p class="page-subtitle">Distinct values and every note that participates in this property.</p>
       </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+      {{template "workspaceMenu" "properties"}}
     </header>
-    {{template "siteNav" "properties"}}
+    {{template "siteSync" .}}
+    <p class="page-subtitle">Notes and values for this property.</p>
 
     <section id="workspace-content" tabindex="-1"
       class="panel properties-panel"

@@ -59,3 +59,19 @@ test("an unreadable template reply retains the draft and spends the preview", as
   await expect(page.locator("[data-templates-panel] .write-check-link")).toBeVisible();
   expect(gitStatus(manifest.localVault)).toBe("");
 });
+
+test("a refused settings preview offers correction without uncertain-write recovery", async ({ page }) => {
+  await page.goto("/settings");
+  await page.waitForLoadState("networkidle");
+  const recovery = page.locator("[data-settings-panel] .write-check-link");
+  await expect(recovery).toBeHidden();
+  await page.route("**/api/settings/preview", (route) => route.fulfill({ status: 400, json: {
+    ok: false, code: "invalid_request", message: "Choose a valid value.",
+  } }));
+  const row = page.locator('[data-settings-row="brief.exclude_types"]');
+  await row.locator("[data-settings-control]").fill("keep this input");
+  await row.locator("[data-settings-save]").click();
+  await expect(page.locator("[data-settings-status]")).toHaveText("Choose a valid value.");
+  await expect(recovery).toBeHidden();
+  await expect(row.locator("[data-settings-control]")).toHaveValue("keep this input");
+});

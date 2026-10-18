@@ -111,6 +111,12 @@
 }
 
 @media (max-width: 640px) {
+  .library-search .facet-control-row { flex-direction: row; align-items: flex-end; }
+  .library-search .facet-picker { flex: 1 1 0; width: auto; }
+  .library-search .facet-clear-all { width: auto; flex: 0 0 auto; }
+  .library-results-tools .overview-selection { flex-direction: row; align-items: center; width: auto; }
+  .library-results-tools .overview-bulk-button { width: auto; }
+
   main {
     margin-top: 1.4rem;
     padding: 0 0.85rem;

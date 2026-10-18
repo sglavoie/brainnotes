@@ -1,7 +1,7 @@
 # Browser workspace
 
 Start with `bn serve`, then choose a task below. Brief, Library, Pinned, and Graph
-are in the main navigation. On Brief, Library, and the editor, **Workspace** opens navigation and theme controls. **New note** is a separate action. **Manage** contains
+are in the main navigation. On Brief, Library, the editor, and management pages, **Workspace** opens navigation and theme controls. **New note** is a separate action. **Manage** contains
 Properties, Health, Settings, Sync, and History, subject to the server's capabilities.
 Saved views have their own row. In the source editor, **Workspace** opens this
 navigation, search, and theme controls without leaving your draft.
@@ -122,6 +122,17 @@ If the section was removed, reading position uses a proportional fallback.
 use the same application dialog as Undo: affected content and consequences are
 shown with an explicit action button, Cancel, Escape, and focus restoration.
 Sync decisions retain their preview and one-use receipt requirements.
+
+History leads with a readable action summary; **Details** keeps the exact command
+and entry identifier available. Choose **Preview restore** to inspect the change.
+For notes and templates, the preview highlights removed and added text and collapses
+long unchanged passages. It labels the current version and the version after
+restoring. Binary files, private state, and files above the comparison limits retain
+their path and restore effect with an explanation of why text is unavailable.
+
+If the editor encounters a changed note, it compares **Current note** with **Your
+draft**. The comparison follows edits to the draft; expanding unchanged context or
+full current text does not save anything.
 
 Undo previews the recorded action, time, and affected paths. Confirmation is
 bound to that entry and preview, so a newer change cannot become the target.

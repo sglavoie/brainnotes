@@ -1,3 +1,4 @@
+import { historyEntryDetails } from "./history-entry-details";
 import { setStatusText } from "./status";
 import type { HistoryEntry, HistoryQuery, HistoryResult, HistoryWarning } from "./api";
 import { appendHistoryPaths, formatHistoryTimestamp, historyFileCountLabel } from "./history-panel-view";
@@ -60,13 +61,10 @@ const historyEntryCard = (
   origin.textContent = entry.origin_label || entry.origin;
   head.appendChild(origin);
 
-  // The classified origin is a reading of the recorded command, so the command
-  // itself stays on the row: somebody who does not believe the label can check
-  // it without leaving the page.
-  const command = document.createElement("code");
-  command.className = "history-command";
-  command.textContent = entry.command || entry.id;
-  head.appendChild(command);
+  const title = document.createElement("strong");
+  title.className = "history-entry-title";
+  title.textContent = entry.summary || "Recorded change";
+  head.prepend(title);
 
   const meta = document.createElement("p");
   meta.className = "history-meta";
@@ -82,7 +80,7 @@ const historyEntryCard = (
   restore.type = "button";
   restore.setAttribute("data-history-preview-entry", entry.id);
   restore.setAttribute("aria-label", `Preview restoring ${entry.command || entry.id}`);
-  restore.textContent = "Restore...";
+  restore.textContent = "Preview restore";
   restore.addEventListener("click", () => {
     onRestore(entry.id, restore);
   });
@@ -90,6 +88,7 @@ const historyEntryCard = (
   item.appendChild(head);
   item.appendChild(meta);
   appendHistoryPaths(item, entry);
+  item.appendChild(historyEntryDetails(entry));
   item.appendChild(restore);
   return item;
 };

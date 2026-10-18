@@ -11,7 +11,7 @@ import type { StatusKind } from "./status";
 
 export type SettingsWriteHooks = {
   /** Reports progress, refusals and the final outcome. */
-  onStatus?: (message: string, kind: StatusKind) => void;
+  onStatus?: (message: string, kind: StatusKind, uncertain?: boolean) => void;
   /** Reports the receipt a write is waiting on, or null once nothing is pending. */
   onPending?: (pending: SettingPendingSave | null) => void;
   /** Fires once the write landed, carrying the reloaded settings table. */
@@ -51,8 +51,9 @@ export const createSettingsWriter = (deps: SettingsWriterDeps): SettingsWriter =
   let pending: SettingPendingSave | null = null;
   let busy = false;
 
-  const setStatus = (message: string, kind: StatusKind = ""): void => {
-    hooks.onStatus?.(message, kind);
+  const setStatus = (message: string, kind: StatusKind = "", uncertain = false): void => {
+    if (uncertain) hooks.onStatus?.(message, kind, true);
+    else hooks.onStatus?.(message, kind);
   };
 
   const setPending = (next: SettingPendingSave | null): void => {
@@ -79,7 +80,7 @@ export const createSettingsWriter = (deps: SettingsWriterDeps): SettingsWriter =
         value,
       });
       if (!outcome.ok) {
-        setStatus(outcome.message, "is-error");
+        setStatus(outcome.message, "is-error", outcome.uncertain);
         return;
       }
       // No receipt means the patch changed nothing: the file already says this.
@@ -110,7 +111,7 @@ export const createSettingsWriter = (deps: SettingsWriterDeps): SettingsWriter =
       const outcome = await applySetting(deps.fetch, deps.token, issued.previewID);
       setPending(null);
       if (!outcome.ok) {
-        setStatus(outcome.message, "is-error");
+        setStatus(outcome.message, "is-error", outcome.uncertain);
         return;
       }
       hooks.onSaved?.(outcome.result);

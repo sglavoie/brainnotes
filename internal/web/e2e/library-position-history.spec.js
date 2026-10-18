@@ -26,7 +26,7 @@ test("Library history exposes affected paths with an accessible mobile expander"
   await page.goto("/library");
   const entry = page.locator("[data-history-list] .history-item");
   await expect(entry.locator(".history-item-main > .history-paths li > span")).toHaveText(paths.slice(0, 3));
-  const summary = entry.locator("summary");
+  const summary = entry.locator(".history-more-paths > summary");
   await expect(summary).toHaveText("1 more path");
   await expect(entry.locator("details li")).toBeHidden();
   await summary.focus();

@@ -272,6 +272,8 @@ test("a note that changed under the edit offers the vault's version", async ({ p
   await expect(page.locator("[data-source-conflict-source]")).toContainText(
     phraseFor("other window"),
   );
+  await expect(conflict.locator(".comparison-added", { hasText: "my draft" })).toBeVisible();
+  await expect(conflict.locator(".comparison-removed", { hasText: phraseFor("other window") })).toBeVisible();
   // Nothing was written and the draft is still in the editor, which is the
   // promise the panel's own copy makes.
   await expect(page.locator(SURFACE)).toContainText("my draft");

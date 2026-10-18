@@ -118,14 +118,16 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     return null;
   }
 
-  const setStatus = (message: string, kind: StatusKind = ""): void => {
+  const setStatus = (message: string, kind: StatusKind = "", uncertain = false): void => {
     setStatusText(elements.status, message, kind);
+    elements.status.dataset.writeUnconfirmed = String(uncertain);
   };
 
   const showPending = (pending: SettingPendingSave | null): void => {
     renderConfigDiff(elements.diff, pending ? pending.diff : []);
     if (elements.confirm) {
       elements.confirm.hidden = pending === null;
+      elements.confirm.textContent = pending?.op === "unset" ? "Reset setting to default" : "Save setting";
     }
     if (elements.cancel) {
       elements.cancel.hidden = pending === null;

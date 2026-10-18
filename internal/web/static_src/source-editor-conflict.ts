@@ -1,3 +1,4 @@
+import { renderTextComparison } from "./text-comparison";
 import type { EditorState, SaveContext, SourceEditorController } from "./source-editor-controller";
 import type { SourceEditorElements } from "./source-editor-elements";
 
@@ -57,7 +58,8 @@ export const wireConflict = (
 export const showConflict = (
   elements: SourceEditorElements,
   content: string,
-  revision: string
+  revision: string,
+  draft = ""
 ): void => {
   if (!elements.conflict) {
     return;
@@ -67,6 +69,7 @@ export const showConflict = (
   }
   elements.conflict.setAttribute("data-source-conflict-revision", revision);
   elements.conflict.hidden = false;
+  renderConflictComparison(elements, draft);
 };
 
 export const hideConflict = (elements: SourceEditorElements): void => {
@@ -78,3 +81,9 @@ export const hideConflict = (elements: SourceEditorElements): void => {
 
 const conflictRevision = (elements: SourceEditorElements): string =>
   elements.conflict?.getAttribute("data-source-conflict-revision") ?? "";
+
+export const renderConflictComparison = (elements: SourceEditorElements, draft: string): void => {
+  if (elements.conflict?.hidden) return;
+  const host = elements.conflict?.querySelector<HTMLElement>("[data-source-conflict-comparison]");
+  if (host) renderTextComparison(host, elements.conflictSource?.textContent ?? "", draft, "Current note", "Your draft");
+};

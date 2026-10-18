@@ -12,17 +12,15 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>Synchronization</h1>
-        <p class="page-subtitle">What this vault has saved, what it has sent to your other replica, and what that replica has acknowledged. A change is only reported as arrived once the replica that sent it has a receipt.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>Synchronization</h1>
+      {{template "workspaceMenu" "sync"}}
     </header>
-    {{template "siteNav" "sync"}}
+    {{template "siteSync" .}}
+    <div class="management-intro">
+      <p class="page-subtitle">Check progress and review changes waiting for a decision.</p>
+      <details><summary>How synchronization is confirmed</summary><p>What this vault has saved, what it has sent to your other replica, and what that replica has acknowledged. A change is only reported as arrived once the replica that sent it has a receipt.</p></details>
+    </div>
 
     <section id="workspace-content" tabindex="-1"
       class="panel sync-panel"

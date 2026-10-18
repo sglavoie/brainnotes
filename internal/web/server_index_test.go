@@ -85,26 +85,16 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 		}
 	}
 
-	resp, err := http.Get(ts.URL + "/") // #nosec G107 -- test-only local URL
-	if err != nil {
-		t.Fatalf("GET /: %v", err)
-	}
-	body := readResponseBody(t, resp)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
-	}
+	body := readWorkspacePage(t, ts.URL+"/")
+	assertBriefHomepage(t, body)
+	health := readWorkspacePage(t, ts.URL+"/health")
+	assertHealthMetric(t, health, "Broken targets", "1")
+	assertHealthMetric(t, health, "Orphans", "2")
+	assertRecentNoteOrdering(t, readWorkspacePage(t, ts.URL+"/library"))
+}
 
-	assertHealthMetric := func(label, want string) {
-		t.Helper()
-		re := regexp.MustCompile(`(?s)<span class="diagnostic-card-label">` + regexp.QuoteMeta(label) + `</span>\s*<span class="metric-value">([0-9]+)</span>`)
-		match := re.FindStringSubmatch(body)
-		if len(match) != 2 {
-			t.Fatalf("metric %q missing in body: %q", label, body)
-		}
-		if match[1] != want {
-			t.Fatalf("metric %q: got %q, want %q", label, match[1], want)
-		}
-	}
+func assertBriefHomepage(t *testing.T, body string) {
+	t.Helper()
 
 	required := []string{
 		`data-brief-root`,
@@ -130,9 +120,10 @@ func TestServer_IndexViewStatsAndRecentOrdering(t *testing.T) {
 		strings.Contains(body, `id="diagnostics-heading"`) {
 		t.Fatalf("homepage leaked maintenance dashboard sections: %q", body)
 	}
-	assertHealthMetric("Broken targets", "1")
-	assertHealthMetric("Orphans", "2")
+}
 
+func assertRecentNoteOrdering(t *testing.T, body string) {
+	t.Helper()
 	recentStart := strings.Index(body, "<h2>Recently modified</h2>")
 	if recentStart < 0 {
 		t.Fatalf("recent notes section missing, got %q", body)
@@ -345,4 +336,29 @@ func TestServer_LibraryGroupsSearchAndOptionalExpression(t *testing.T) {
 	if searchAt < 0 || facetsAt < searchAt || disclosureAt < facetsAt || queryBarAt < disclosureAt {
 		t.Fatal("Library must group search and facets before the optional expression")
 	}
+}
+
+func assertHealthMetric(t *testing.T, body, label, want string) {
+	t.Helper()
+	re := regexp.MustCompile(`(?s)<h2>` + regexp.QuoteMeta(label) + `</h2>\s*<p class="metric-value">([0-9]+)</p>`)
+	match := re.FindStringSubmatch(body)
+	if len(match) != 2 {
+		t.Fatalf("metric %q missing in body: %q", label, body)
+	}
+	if match[1] != want {
+		t.Fatalf("metric %q: got %q, want %q", label, match[1], want)
+	}
+}
+
+func readWorkspacePage(t *testing.T, url string) string {
+	t.Helper()
+	resp, err := http.Get(url) // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s: %d %s", url, resp.StatusCode, body)
+	}
+	return body
 }

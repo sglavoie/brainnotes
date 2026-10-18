@@ -93,7 +93,7 @@ var barrierDoors = []barrierDoor{
 	{
 		file:  "internal/vaultgit/preflight.go",
 		recv:  "Manager",
-		fn:    "acquire",
+		fn:    "acquireWithin",
 		calls: joinsBarrier,
 		why:   "the autosave watcher commits the content history on its own schedule, with no joined caller above it",
 	},

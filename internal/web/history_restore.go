@@ -42,10 +42,9 @@ type historyRestoreRecord struct {
 // handleHistoryPreview answers what restoring one entry would do, and mints the
 // one-use receipt that authorizes forcing it.
 //
-// It writes nothing. PreviewRestore reads no snapshot and takes no lock, so a
-// vault that cannot currently be written can still be inspected for what is
-// recoverable — which is the state somebody is most likely to be in when they
-// come looking.
+// It writes nothing and takes no lock. After planning, bounded text readings
+// compare notes and templates with their verified snapshots. Each current
+// reading must match the receipt digest; unsupported content is named explicitly.
 func (s *Server) handleHistoryPreview(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != historyPreviewAPIRoutePath {
 		http.NotFound(w, r)
@@ -99,7 +98,9 @@ func (s *Server) handleHistoryPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeManagementJSON(w, http.StatusOK, s.historyPreviewResponse(receipt, plan, conflicts))
+	response := s.historyPreviewResponse(receipt, plan, conflicts)
+	s.addHistoryComparisons(&response, pins)
+	writeManagementJSON(w, http.StatusOK, response)
 }
 
 // resolveHistoryEntryID reads the requested entry, falling back to the newest
@@ -315,13 +316,15 @@ type historyPreviewResponse struct {
 // the history list reports about it, so the confirmation screen can say which of
 // the restored paths will reach the other replica and which stay here.
 type historyPreviewChange struct {
-	Path          string `json:"path"`
-	CurrentState  string `json:"current_state"`
-	RestoredState string `json:"restored_state"`
-	Class         string `json:"class"`
-	Recorded      bool   `json:"recorded"`
-	Travels       bool   `json:"travels"`
-	Conflict      bool   `json:"conflict"`
+	Comparison            *historyTextComparison `json:"comparison,omitempty"`
+	ComparisonUnavailable string                 `json:"comparison_unavailable,omitempty"`
+	Path                  string                 `json:"path"`
+	CurrentState          string                 `json:"current_state"`
+	RestoredState         string                 `json:"restored_state"`
+	Class                 string                 `json:"class"`
+	Recorded              bool                   `json:"recorded"`
+	Travels               bool                   `json:"travels"`
+	Conflict              bool                   `json:"conflict"`
 }
 
 func (s *Server) historyPreviewResponse(receipt propertyPreviewReceipt, plan *journal.RestorePlan, conflicts []journal.RestoreConflict) historyPreviewResponse {

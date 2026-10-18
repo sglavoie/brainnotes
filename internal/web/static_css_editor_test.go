@@ -56,6 +56,11 @@ func TestGraphViewControlsCSSContract(t *testing.T) {
 		}
 	}
 
+	assertGraphControlsResponsive(t, css)
+}
+
+func assertGraphControlsResponsive(t *testing.T, css string) {
+	t.Helper()
 	// The block is a cell of the .graph-controls grid, so it has to be re-checked
 	// at the same two breakpoints the grid changes its track count at. The 960px
 	// override is anchored on the two-column track list rather than on the media

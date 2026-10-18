@@ -71,7 +71,7 @@ export const editorMarkup = (): string => `
     </div>
   </div>
   <section data-source-conflict hidden>
-    <pre data-source-conflict-source></pre>
+    <div data-source-conflict-comparison></div><pre data-source-conflict-source></pre>
     <button type="button" data-source-conflict-overwrite>Save mine over it</button>
     <button type="button" data-source-conflict-discard>Discard mine</button>
   </section>

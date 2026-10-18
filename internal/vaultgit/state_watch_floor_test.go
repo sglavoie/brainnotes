@@ -25,13 +25,7 @@ func TestSettlingClosesTheScheduleWithoutMovingTheFloor(t *testing.T) {
 	if err != nil || !closed {
 		t.Fatalf("NoteSettled: closed=%v err=%v", closed, err)
 	}
-	settled := state.LoadWatchState()
-	if settled.NextCommitDueAt != nil {
-		t.Fatalf("a settled burst still publishes a due time: %v", settled.NextCommitDueAt)
-	}
-	if !settled.LastCommitAt.IsZero() {
-		t.Fatal("settling a burst claimed a snapshot that was never taken")
-	}
+	assertClosedWatchSchedule(t, state.LoadWatchState(), time.Time{})
 
 	// A second settle on an already-idle vault reports nothing to close, which is
 	// what keeps the watcher silent on an idle vault.
@@ -45,13 +39,7 @@ func TestSettlingClosesTheScheduleWithoutMovingTheFloor(t *testing.T) {
 	if _, err := state.NoteCommit(policy, watchStart.Add(2*time.Minute)); err != nil {
 		t.Fatalf("NoteCommit: %v", err)
 	}
-	committed := state.LoadWatchState()
-	if committed.NextCommitDueAt != nil {
-		t.Fatalf("a committed burst still publishes a due time: %v", committed.NextCommitDueAt)
-	}
-	if !committed.LastCommitAt.Equal(watchStart.Add(2 * time.Minute)) {
-		t.Fatalf("last_commit_at = %s, want the commit time", committed.LastCommitAt)
-	}
+	assertClosedWatchSchedule(t, state.LoadWatchState(), watchStart.Add(2*time.Minute))
 }
 
 // The persisted record is the schedule, so a restart resumes it rather than
@@ -122,9 +110,7 @@ func TestAPreSchedulingRecordIsUpgradedInPlace(t *testing.T) {
 	}
 	// last_commit_at + 5m beats last_change_at + 30s, so the floor binds.
 	want := watchStart.Add(-2 * time.Minute).Add(5 * time.Minute)
-	if refreshed.NextCommitDueAt == nil || !refreshed.NextCommitDueAt.Equal(want) {
-		t.Fatalf("next_commit_due_at = %v, want %s", refreshed.NextCommitDueAt, want)
-	}
+	assertWatchSchedule(t, refreshed, "5m", want)
 	// The burst it already held is untouched.
 	if !refreshed.FirstChangeAt.Equal(watchStart) || !refreshed.LastChangeAt.Equal(watchStart.Add(10*time.Second)) {
 		t.Fatalf("the upgrade rewrote the burst: %+v", refreshed)
@@ -132,9 +118,7 @@ func TestAPreSchedulingRecordIsUpgradedInPlace(t *testing.T) {
 
 	// And the republish is durable rather than in-memory only.
 	reloaded := state.LoadWatchState()
-	if reloaded.AutosaveMinInterval != "5m" || reloaded.NextCommitDueAt == nil || !reloaded.NextCommitDueAt.Equal(want) {
-		t.Fatalf("the upgraded record was not written to disk: %+v", reloaded)
-	}
+	assertWatchSchedule(t, reloaded, "5m", want)
 }
 
 // A change of interval republishes the schedule from the same burst, so the
@@ -179,38 +163,13 @@ func TestWatchStateSerializationIsStable(t *testing.T) {
 	if _, err := state.RefreshWatchState(policy); err != nil {
 		t.Fatalf("RefreshWatchState: %v", err)
 	}
-	idle := decodeWatchJSON(t, state)
-	if got := idle["version"]; got != float64(stateVersion) {
-		t.Fatalf("version = %v, want %d", got, stateVersion)
-	}
-	if got := idle["autosave_min_interval"]; got != "5m" {
-		t.Fatalf("autosave_min_interval = %v, want %q", got, "5m")
-	}
-	if _, present := idle["next_commit_due_at"]; present {
-		t.Fatalf("an idle vault published a due time: %v", idle["next_commit_due_at"])
-	}
-	if _, present := idle["external_commit_started_at"]; present {
-		t.Fatalf("a vault with no snapshot in flight published one: %v", idle["external_commit_started_at"])
-	}
+	assertIdleWatchJSON(t, state)
 
 	if _, err := state.NoteChange(policy, watchStart); err != nil {
 		t.Fatalf("NoteChange: %v", err)
 	}
 	pending := decodeWatchJSON(t, state)
-	due, ok := pending["next_commit_due_at"].(string)
-	if !ok {
-		t.Fatalf("next_commit_due_at = %v, want an RFC3339 string", pending["next_commit_due_at"])
-	}
-	parsed, err := time.Parse(time.RFC3339, due)
-	if err != nil {
-		t.Fatalf("next_commit_due_at %q is not RFC3339: %v", due, err)
-	}
-	if parsed.Location() != time.UTC {
-		t.Fatalf("next_commit_due_at %q is not UTC", due)
-	}
-	if !parsed.Equal(watchStart.Add(DebounceQuiet)) {
-		t.Fatalf("next_commit_due_at = %s, want %s", parsed, watchStart.Add(DebounceQuiet))
-	}
+	assertWatchJSONTime(t, pending, "next_commit_due_at", watchStart.Add(DebounceQuiet))
 
 	// The in-flight anchor is present only while a snapshot is unfinished, and it
 	// is written in the same shape as the due time — an absent key rather than a
@@ -220,17 +179,7 @@ func TestWatchStateSerializationIsStable(t *testing.T) {
 		t.Fatalf("BeginExternalCommit: %v", err)
 	}
 	inFlight := decodeWatchJSON(t, state)
-	started, ok := inFlight["external_commit_started_at"].(string)
-	if !ok {
-		t.Fatalf("external_commit_started_at = %v, want an RFC3339 string", inFlight["external_commit_started_at"])
-	}
-	startedAt, err := time.Parse(time.RFC3339, started)
-	if err != nil {
-		t.Fatalf("external_commit_started_at %q is not RFC3339: %v", started, err)
-	}
-	if startedAt.Location() != time.UTC || !startedAt.Equal(watchStart.Add(time.Minute)) {
-		t.Fatalf("external_commit_started_at = %q, want %s in UTC", started, watchStart.Add(time.Minute))
-	}
+	assertWatchJSONTime(t, inFlight, "external_commit_started_at", watchStart.Add(time.Minute))
 	// And the due time it implies is the floor it anchors, not the readiness the
 	// burst would otherwise have had.
 	if got := inFlight["next_commit_due_at"]; got != watchStart.Add(6*time.Minute).Format(time.RFC3339) {
@@ -276,4 +225,54 @@ func TestAnUnsetPolicyResolvesToTheVaultDefault(t *testing.T) {
 	if canonical.Canonical != "5m" {
 		t.Fatalf("canonical spelling = %q, want %q", canonical.Canonical, "5m")
 	}
+}
+
+func assertClosedWatchSchedule(t *testing.T, state WatchState, lastCommit time.Time) {
+	t.Helper()
+	if state.NextCommitDueAt != nil {
+		t.Fatalf("closed schedule still has a due time: %v", state.NextCommitDueAt)
+	}
+	if !state.LastCommitAt.Equal(lastCommit) {
+		t.Fatalf("last commit = %s, want %s", state.LastCommitAt, lastCommit)
+	}
+}
+
+func assertWatchSchedule(t *testing.T, state WatchState, interval string, due time.Time) {
+	t.Helper()
+	if state.AutosaveMinInterval != interval || state.NextCommitDueAt == nil || !state.NextCommitDueAt.Equal(due) {
+		t.Fatalf("schedule = %+v, want interval %s due %s", state, interval, due)
+	}
+}
+
+func assertWatchJSONTime(t *testing.T, fields map[string]any, key string, want time.Time) {
+	t.Helper()
+	value, ok := fields[key].(string)
+	if !ok {
+		t.Fatalf("%s = %v, want RFC3339 string", key, fields[key])
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatalf("%s is not RFC3339: %v", key, err)
+	}
+	if parsed.Location() != time.UTC || !parsed.Equal(want) {
+		t.Fatalf("%s = %s, want %s in UTC", key, parsed, want)
+	}
+}
+
+func assertIdleWatchJSON(t *testing.T, state *safetyState) {
+	t.Helper()
+	idle := decodeWatchJSON(t, state)
+	if got := idle["version"]; got != float64(stateVersion) {
+		t.Fatalf("version = %v, want %d", got, stateVersion)
+	}
+	if got := idle["autosave_min_interval"]; got != "5m" {
+		t.Fatalf("autosave_min_interval = %v, want %q", got, "5m")
+	}
+	if _, present := idle["next_commit_due_at"]; present {
+		t.Fatalf("an idle vault published a due time: %v", idle["next_commit_due_at"])
+	}
+	if _, present := idle["external_commit_started_at"]; present {
+		t.Fatalf("a vault with no snapshot in flight published one: %v", idle["external_commit_started_at"])
+	}
+
 }

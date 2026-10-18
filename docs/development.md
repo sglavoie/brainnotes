@@ -17,8 +17,8 @@ for CodeMirror; note reading loads only `app.js`. Each workspace loads its own
 small page bundle. `internal/cli/web-build-args.json` is the shared entry manifest
 for local builds, serve-time refresh, and CI drift checks. A Chromium CI job
 exercises core journeys, responsive layouts, and throttled reading/search.
-Visual baselines cover Library, reading, editing, confirmation, and empty/error
-states in light/dark themes at desktop/mobile widths. Run these on macOS with
+Visual baselines cover Library, Brief, reading, editing, management pages,
+conflict and restore comparisons, confirmation, and empty/error states in light/dark themes at desktop/mobile widths. Run these on macOS with
 `npm run test:e2e -- --project=visual-chromium`; after an intentional design change,
 append `--update-snapshots`, inspect the changed images in
 `internal/web/e2e/visual-baselines`, and commit them. CI compares on macOS to avoid

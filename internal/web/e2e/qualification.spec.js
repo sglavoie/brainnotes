@@ -74,7 +74,7 @@ function compositionEvent(surface, type, data) {
 for (const path of ["/", "/properties"]) {
   test(`header search opens a note from ${path} with one click or tap`, async ({ page }, testInfo) => {
     await page.goto(path);
-    if (path === "/") await page.locator(".source-editor-workspace > summary").click();
+    await page.locator(".source-editor-workspace > summary").click();
     const input = page.locator("#search-input");
     await input.fill("Alpha");
     const title = page.locator("#search-results .search-result-title").filter({ hasText: /^Alpha$/ });

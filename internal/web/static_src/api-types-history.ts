@@ -40,6 +40,7 @@ export type HistoryClassCount = {
 };
 
 export type HistoryEntry = {
+  summary?: string;
   id: string;
   timestamp: string;
   command: string;
@@ -110,6 +111,8 @@ export type UndoResult = ManagementResult & {
 };
 
 export type HistoryPreviewChange = UndoChange & {
+  comparison?: { current: string; restored: string };
+  comparison_unavailable?: string;
   class: string;
   recorded: boolean;
   travels: boolean;

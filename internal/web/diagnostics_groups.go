@@ -164,25 +164,7 @@ func diagnosticSchemaViolations(notes []diagnosticLoadedNote, graph *query.Graph
 }
 
 func diagnosticLongTailValues(notes []diagnosticLoadedNote, cfg *config.Config) []diagnosticLongTailGroup {
-	countsByProperty := map[string]map[string]int{}
-	for _, item := range notes {
-		front, err := item.note.Front()
-		if err != nil {
-			continue
-		}
-		for _, key := range front.Keys() {
-			value, ok := front.Get(key)
-			if !ok {
-				continue
-			}
-			counts := countsByProperty[key]
-			if counts == nil {
-				counts = map[string]int{}
-				countsByProperty[key] = counts
-			}
-			countDiagnosticValue(value, counts)
-		}
-	}
+	countsByProperty := diagnosticPropertyCounts(notes)
 
 	properties := make([]string, 0, len(countsByProperty))
 	for property := range countsByProperty {
@@ -314,4 +296,28 @@ func displayPath(absPath, vaultRoot string) string {
 		return absPath
 	}
 	return filepath.ToSlash(rel)
+}
+
+func diagnosticPropertyCounts(notes []diagnosticLoadedNote) map[string]map[string]int {
+	countsByProperty := map[string]map[string]int{}
+	for _, item := range notes {
+		front, err := item.note.Front()
+		if err != nil {
+			continue
+		}
+		for _, key := range front.Keys() {
+			value, ok := front.Get(key)
+			if !ok {
+				continue
+			}
+			counts := countsByProperty[key]
+			if counts == nil {
+				counts = map[string]int{}
+				countsByProperty[key] = counts
+			}
+			countDiagnosticValue(value, counts)
+		}
+	}
+
+	return countsByProperty
 }

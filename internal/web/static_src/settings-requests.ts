@@ -1,5 +1,5 @@
 import { announceConfirmedWrite } from "./write-notice";
-import { responseFailure, unansweredRequest, type RequestPurpose } from "./request-outcome";
+import { responseFailure, unansweredRequest, type RequestPurpose, type RequestFailure } from "./request-outcome";
 import {
   SETTINGS_APPLY_ENDPOINT,
   SETTINGS_ENDPOINT,
@@ -20,7 +20,7 @@ import {
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-export type Outcome<T> = { ok: true; result: T } | { ok: false; message: string };
+export type Outcome<T> = { ok: true; result: T } | RequestFailure;
 
 const readPayload = async (resp: Response): Promise<unknown> => {
   try {

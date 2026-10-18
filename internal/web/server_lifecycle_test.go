@@ -43,36 +43,13 @@ func TestServerRun_RandomPortAndGracefulShutdown(t *testing.T) {
 		t.Fatal("timeout waiting for listener notification")
 	}
 
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		t.Fatalf("parse baseURL: %v", err)
-	}
-	_, port, err := net.SplitHostPort(u.Host)
-	if err != nil {
-		t.Fatalf("split host/port: %v", err)
-	}
-	if port == "0" || port == "" {
-		t.Fatalf("expected random non-zero port, got %q", port)
-	}
+	assertRandomListenerPort(t, baseURL)
 
-	resp, err := awaitGET(t, baseURL+"/", 2*time.Second)
+	resp, err := awaitGET(t, baseURL+"/library", 2*time.Second)
 	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		t.Fatalf("GET /library: %v", err)
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read response: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-	if !strings.Contains(string(body), "Recently modified") {
-		t.Fatalf("index response missing recent notes section; got %q", string(body))
-	}
-	if !strings.Contains(string(body), `href="/n/note"`) {
-		t.Fatalf("index response missing note link; got %q", string(body))
-	}
+	assertServedLibraryResponse(t, resp)
 
 	cancel()
 	select {
@@ -211,5 +188,38 @@ func TestServer_EndToEnd_EndpointsStayResponsiveWithStalledNote(t *testing.T) {
 	// endpoint re-attempts (and re-blocks on) the stalled read.
 	if got := callCount(blockedPath); got != 1 {
 		t.Fatalf("stalled note read %d times across the endpoint sweep, want exactly 1", got)
+	}
+}
+
+func assertRandomListenerPort(t *testing.T, baseURL string) {
+	t.Helper()
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		t.Fatalf("parse baseURL: %v", err)
+	}
+	_, port, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		t.Fatalf("split host/port: %v", err)
+	}
+	if port == "0" || port == "" {
+		t.Fatalf("expected random non-zero port, got %q", port)
+	}
+}
+
+func assertServedLibraryResponse(t *testing.T, resp *http.Response) {
+	t.Helper()
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if !strings.Contains(string(body), "Recently modified") {
+		t.Fatalf("library response missing recent notes section; got %q", string(body))
+	}
+	if !strings.Contains(string(body), `href="/n/note"`) {
+		t.Fatalf("library response missing note link; got %q", string(body))
 	}
 }

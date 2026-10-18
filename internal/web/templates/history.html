@@ -12,17 +12,15 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>History</h1>
-        <p class="page-subtitle">Every change this vault recorded, with where it came from: saved here in the browser, landed from your other replica, decided in a conflict, or run at the terminal. Restoring one is previewed first, and never replaces newer work without showing you what it would replace.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>History</h1>
+      {{template "workspaceMenu" "history"}}
     </header>
-    {{template "siteNav" "history"}}
+    {{template "siteSync" .}}
+    <div class="management-intro">
+      <p class="page-subtitle">Find a change and preview its restoration.</p>
+      <details><summary>How restoration works</summary><p>Every change this vault recorded, with where it came from: saved here in the browser, landed from your other replica, decided in a conflict, or run at the terminal. Restoring one is previewed first, and never replaces newer work without showing you what it would replace.</p></details>
+    </div>
 
     {{/*
       One element owns the whole workspace. The list, the filters and the restore

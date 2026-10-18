@@ -18,7 +18,7 @@ export type TemplateWriteRequest = {
 };
 
 export type TemplatesWriteHooks = {
-  onStatus?: (message: string, kind: StatusKind) => void;
+  onStatus?: (message: string, kind: StatusKind, uncertain?: boolean) => void;
   onPending?: (pending: TemplatePendingSave | null) => void;
   /** Fires once the write landed, carrying the receipt it redeemed. */
   onSaved?: (pending: TemplatePendingSave, result: TemplatesResult) => void;
@@ -54,8 +54,9 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
   let pending: TemplatePendingSave | null = null;
   let busy = false;
 
-  const setStatus = (message: string, kind: StatusKind = ""): void => {
-    hooks.onStatus?.(message, kind);
+  const setStatus = (message: string, kind: StatusKind = "", uncertain = false): void => {
+    if (uncertain) hooks.onStatus?.(message, kind, true);
+    else hooks.onStatus?.(message, kind);
   };
 
   const setPending = (next: TemplatePendingSave | null): void => {
@@ -79,7 +80,7 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
         revision: request.revision,
       });
       if (!outcome.ok) {
-        setStatus(outcome.message, "is-error");
+        setStatus(outcome.message, "is-error", outcome.uncertain);
         return;
       }
       if (outcome.result.preview_id === "") {
@@ -110,7 +111,7 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
       const outcome = await applyTemplate(deps.fetch, deps.token, issued.previewID);
       setPending(null);
       if (!outcome.ok) {
-        setStatus(outcome.message, "is-error");
+        setStatus(outcome.message, "is-error", outcome.uncertain);
         return;
       }
       hooks.onSaved?.(issued, outcome.result);

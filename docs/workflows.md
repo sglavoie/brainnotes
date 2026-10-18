@@ -138,8 +138,8 @@ go test ./internal/recall -run '^$' \
 These benchmarks start from deterministic in-memory document models: ranking
 includes a fresh lexical/hybrid index build and query, while context generation
 includes its excerpt lexical index, selection, dual-format byte-budget checks,
-and canonical rendering. CLI runs additionally walk and parse the vault on each
-invocation; there is intentionally no persistent index to warm or invalidate.
+and canonical rendering. CLI runs additionally load the vault. Recall builds its ranking index in memory;
+the separate note-byte cache in `.bnotes/index/` is regenerable.
 
 Existing command measurements against a 309-note vault on Darwin/arm64:
 
@@ -159,19 +159,18 @@ compose over a plain-Markdown vault instead of recreating a general notes
 platform. Contextual recall follows the same rule—it is an in-memory,
 explainable query plus optional explicit local process execution, not an index,
 provider integration, or automatic content mutation. Omitted commands and the
-reason each was dropped:
+reason each remains omitted:
 
 | Command                              | Why dropped                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------ |
 | `touch`                              | Editors handle file creation; `bn new` covers templated cases.           |
-| `validate` / `lint`                  | Vault conventions are loose by design; no schema to validate.            |
-| `stats` / `analyze` / `health`       | Reports without an obvious next action.                                  |
+| `stats` / `analyze`                  | Use `bn doctor` and browser Health for actionable diagnostics.            |
 | `archive`                            | Composed from `bn move` + `bn set`.                                      |
 | `bases`                              | Obsidian-specific; ignored.                                              |
 | `ai` / `infer`                       | No implicit/provider AI command; `bn context --agent` runs only an explicitly configured local argv with inspectable stdin. |
 | `batch`                              | Compose pipelines with `find` + `xargs` instead.                         |
 | `export`                             | The vault is already plain Markdown.                                     |
-| `categories` / `links` / `discover`  | Hub-style navigation; the editor's outline + `find --orphan` cover it.   |
+| `categories` / `discover`  | Hub-style navigation; the editor's outline + `find --orphan` cover it.   |
 | `attachments`                        | Attachments folder is ignored; binary asset management isn't a fit.      |
 | `timeline`                           | `git log` is the canonical long-term history source; recall feedback is ranking state, not content history. |
 | `properties` / `content`             | Subsumed by `bn set` / `bn unset` / `bn find`.                           |

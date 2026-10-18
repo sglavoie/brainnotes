@@ -144,8 +144,9 @@
 
       <section class="source-editor-conflict" data-source-conflict hidden aria-labelledby="source-editor-conflict-heading">
         <h3 id="source-editor-conflict-heading">This note changed on disk</h3>
-        <p class="source-editor-conflict-lede">Your text is still in the editor and nothing has been written. Below is the version the vault holds now.</p>
-        <pre class="source-editor-conflict-source" data-source-conflict-source></pre>
+        <p class="source-editor-conflict-lede">Your draft is kept. Review what saving it would replace, or load the current note.</p>
+        <div data-source-conflict-comparison></div>
+        <details><summary>Current note — full text</summary><pre class="source-editor-conflict-source" data-source-conflict-source></pre></details>
         <div class="source-editor-conflict-actions">
           <button type="button" class="source-editor-conflict-overwrite" data-source-conflict-overwrite>Save mine over it</button>
           <button type="button" class="source-editor-conflict-discard" data-source-conflict-discard>Discard mine and load the note</button>

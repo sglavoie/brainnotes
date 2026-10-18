@@ -130,6 +130,7 @@ const normalizeEntry = (value: unknown): HistoryEntry[] => {
     id,
     timestamp: normalizeParamValue(record.timestamp),
     command: normalizeParamValue(record.command),
+    ...(typeof record.summary === "string" ? { summary: record.summary } : {}),
     origin: normalizeParamValue(record.origin),
     origin_label: normalizeParamValue(record.origin_label),
     file_count: readCount(record.file_count),
@@ -214,6 +215,14 @@ const normalizeConflicts = (value: unknown): UndoConflict[] => {
   });
 };
 
+const comparisonFields = (record: Record<string, unknown>): Pick<HistoryPreviewChange, "comparison" | "comparison_unavailable"> => {
+  const comparison = asRecord(record.comparison);
+  if (comparison && typeof comparison.current === "string" && typeof comparison.restored === "string") {
+    return { comparison: { current: comparison.current, restored: comparison.restored } };
+  }
+  return typeof record.comparison_unavailable === "string" ? { comparison_unavailable: record.comparison_unavailable } : {};
+};
+
 const normalizePreviewChange = (value: unknown): HistoryPreviewChange[] => {
   const record = asRecord(value);
   if (!record) {
@@ -227,6 +236,7 @@ const normalizePreviewChange = (value: unknown): HistoryPreviewChange[] => {
     recorded: readBoolean(record.recorded),
     travels: readBoolean(record.travels),
     conflict: readBoolean(record.conflict),
+    ...comparisonFields(record),
   }];
 };
 

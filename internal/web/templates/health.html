@@ -12,17 +12,15 @@
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main">
-    <header class="site-header">
-      <div class="site-header-copy">
-        <h1>{{ .Title }}</h1>
-        <p class="page-subtitle">Daily fixes, vault metrics, and full diagnostics from the shared snapshot.</p>
-      </div>
-      <div class="site-header-tools">
-        {{template "themeControl" .}}
-        {{template "headerSearch" .}}
-      </div>
+    <header class="site-header focused-workspace-header">
+      <h1>Health</h1>
+      {{template "workspaceMenu" "health"}}
     </header>
-    {{template "siteNav" "health"}}
+    {{template "siteSync" .}}
+    <div class="management-intro">
+      <p class="page-subtitle">Review daily fixes and vault health.</p>
+      <details><summary>About vault diagnostics</summary><p>Daily fixes, vault metrics, and full diagnostics from the shared snapshot.</p></details>
+    </div>
 
     <section id="workspace-content" tabindex="-1"
       class="panel review-panel fixes-panel"

@@ -53,10 +53,10 @@
       aria-describedby="brief-global-status"
     >
       <div class="panel-header">
-        <h2 id="brief-heading">Today&rsquo;s brief</h2>
+        <h2 id="brief-heading" class="visually-hidden">Today&rsquo;s brief</h2>
+        <p class="brief-intro">Choose one note to continue, one to rediscover, and one connection to sharpen.</p>
         <p><time datetime="{{.DateISO}}">{{.DateLabel}}</time></p>
       </div>
-      <p class="brief-intro">Choose one note to continue, one to rediscover, and one connection to sharpen.</p>
 
 
       {{if .StateUnreadable}}

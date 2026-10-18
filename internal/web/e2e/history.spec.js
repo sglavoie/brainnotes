@@ -184,6 +184,8 @@ test("a restore is previewed, puts the earlier bytes back, and is recorded as a 
   // vaultsync.Portable, which is the rule it is reading; it does not synchronize
   // anything, and no e2e test does.
   await expect(change).toContainText("travels to your other replica");
+  await expect(change.locator(".comparison-removed", { hasText: "Edited after the first save." })).toBeVisible();
+  await expect(change.locator(".comparison-legend")).toContainText("After restoring");
   // Nothing is contested, so there is no consent box and no forcing.
   await expect(page.locator("[data-history-restore-conflicts]")).toBeHidden();
   await expect(page.locator("[data-history-restore-confirm]")).toHaveText("Restore");

@@ -42,17 +42,7 @@ func TestIntentRecordHoldsNoNoteContent(t *testing.T) {
 	if len(record.Changes) != len(txnCrashPaths) || record.Recovery == "" {
 		t.Fatalf("record = %+v", record)
 	}
-	for _, change := range record.Changes {
-		if change.Remove {
-			if change.PriorSHA256 == "" || change.PriorSize == 0 {
-				t.Fatalf("a removal records no prior identity: %+v", change)
-			}
-			continue
-		}
-		if change.NewSHA256 == "" || change.Staged == "" {
-			t.Fatalf("a write records no replacement: %+v", change)
-		}
-	}
+	assertIntentChangeIdentities(t, record.Changes)
 }
 
 // Recovery rolls forward, and rolling forward must never overwrite a writer that
@@ -252,5 +242,20 @@ func TestIntentRecordCannotReachOutsideTheVault(t *testing.T) {
 	}
 	if _, err := os.Stat(outside); err != nil {
 		t.Fatalf("the out-of-vault file was touched: %v", err)
+	}
+}
+
+func assertIntentChangeIdentities(t *testing.T, changes []txnIntentChange) {
+	t.Helper()
+	for _, change := range changes {
+		if change.Remove {
+			if change.PriorSHA256 == "" || change.PriorSize == 0 {
+				t.Fatalf("a removal records no prior identity: %+v", change)
+			}
+			continue
+		}
+		if change.NewSHA256 == "" || change.Staged == "" {
+			t.Fatalf("a write records no replacement: %+v", change)
+		}
 	}
 }
