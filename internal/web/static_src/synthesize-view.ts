@@ -1,3 +1,4 @@
+import { synthesisDisclosure, synthesisNavigation } from "./synthesize-layout";
 import { element } from "./synthesize-view-elements";
 import {
   buildDraftSection,
@@ -83,12 +84,18 @@ export const createSynthesisView = (
 
   const columns = element(doc, "div", "synthesize-columns");
   const left = element(doc, "div", "synthesize-column");
-  left.append(sources.section, suggestions.section, search.section);
+  const discovery = synthesisDisclosure(doc, "Find supporting notes", suggestions.section, search.section);
+  const sourceDetails = synthesisDisclosure(doc, "Sources", sources.section, discovery);
+  left.append(draft.section);
   const right = element(doc, "div", "synthesize-column");
-  right.append(draft.section, context.section, generate.section, create.section);
+  const generation = synthesisDisclosure(doc, "Ask AI · optional", generate.section);
+  const agentStatus = mount.closest("[data-synthesize-root]")?.querySelector<HTMLElement>("[data-synthesize-agent-status]");
+  if (agentStatus) { agentStatus.hidden = false; generate.section.prepend(agentStatus); }
+  right.append(sourceDetails, context.section, generation, create.section);
+  const navigation = synthesisNavigation(doc, [["Draft", draft.section], ["Sources", sourceDetails], ["Preview", create.section]]);
   columns.append(left, right);
 
-  mount.replaceChildren(warning, columns);
+  mount.replaceChildren(warning, navigation, columns);
   return {
     root: mount,
     warning,

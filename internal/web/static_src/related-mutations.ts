@@ -1,3 +1,4 @@
+import { withLibraryContext } from "./note-navigation";
 import { requestRelatedItem } from "./related-actions";
 import { relatedErrorMessage, type RelatedLoader } from "./related-loader";
 import { relatedModeDefinitions, validateRelatedLaterDate, type RelatedModel } from "./related-model";
@@ -140,7 +141,7 @@ const reportOpenOutcome = (loader: RelatedLoader, result: RelatedItemResponse): 
   // A server that does not start editors answered with somewhere to go, and the
   // open is already in the recall history, so leaving the page loses nothing.
   if (result.destination) {
-    window.location.assign(result.destination);
+    window.location.assign(withLibraryContext(result.destination));
     return;
   }
   loader.setStatus("Opened in editor and recorded in recall history.", "is-success");

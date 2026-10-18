@@ -51,21 +51,6 @@
   font-size: 0.9rem;
 }
 
-.history-status.is-success {
-  color: var(--bn-success);
-}
-
-.history-status.is-error {
-  color: var(--bn-danger);
-}
-
-.history-status.is-loading {
-  color: var(--bn-muted);
-}
-
-.history-status.is-empty {
-  color: var(--bn-text-subtle);
-}
 
 .history-conflict {
   display: flex;

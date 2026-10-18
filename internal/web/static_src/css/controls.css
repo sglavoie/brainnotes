@@ -1,33 +1,6 @@
-/* Shared geometry; semantic colors remain with each surface. Loaded after components. */
-.open-editor-button,
-.trash-note-button,
-.pin-button,
-.note-sidebar-toggle,
-.frontmatter-button,
-.create-note-button,
-.copy-button,
-.synthesize-launch,
-.note-insight-button,
-.note-insight-copy,
-.history-button,
-.query-bar-button,
-.overview-bulk-button,
-.brief-action-button,
-.brief-insight-copy,
-.new-note button,
-.review-action,
-.settings-button,
-.properties-button,
-.saved-views-save-button,
-.source-editor-launch,
-.source-editor-command,
-.source-editor-save,
-.source-editor-tab,
-.source-editor-frontmatter,
-.sync-button,
-.facet-clear-all,
-.facet-input-clear,
-.new-note-action {
+/* Shared controls own geometry; workspace CSS owns placement and semantic variants. */
+/* Older property/fix builders migrate independently; these two aliases share the same primitive. */
+.bn-button, .properties-button, .review-action {
   min-height: var(--bn-control-height);
   border-radius: var(--bn-control-radius);
   padding: var(--bn-control-padding);
@@ -35,6 +8,26 @@
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
+
+.bn-field {
+  min-height: var(--bn-control-height);
+  border: 1px solid var(--bn-border);
+  border-radius: var(--bn-control-radius);
+  padding: var(--bn-control-padding);
+  color: var(--bn-text);
+  background: var(--bn-surface);
+  font: inherit;
+  font-size: var(--bn-control-font-size);
+  box-sizing: border-box;
+}
+.bn-button.bn-primary { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border: 1px solid var(--bn-accent-subtle-border); font-weight: 600; }
+.bn-button.bn-secondary { background: var(--bn-raised); color: var(--bn-text-subtle); border-color: var(--bn-border); font-weight: 400; }
+.bn-status { color: var(--bn-muted); overflow-wrap: anywhere; }
+.bn-status.is-success { color: var(--bn-success); }
+.bn-status.is-error { color: var(--bn-danger); }
+.bn-status.is-warning { color: var(--bn-warning); }
+.bn-status.is-empty { color: var(--bn-text-subtle); }
+.bn-disclosure > summary { cursor: pointer; min-height: var(--bn-control-height); padding-block: 0.4rem; box-sizing: border-box; }
 
 @media (pointer: coarse) {
   :root { --bn-control-height: 2.75rem; }

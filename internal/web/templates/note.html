@@ -79,44 +79,44 @@
       <div class="note-actions">
         {{if not readOnly}}
           <div class="note-action-group">
-            <a class="source-editor-launch" href="{{.EditSourcePath}}" data-source-editor-launch>Edit in browser</a>
+            <a class="source-editor-launch bn-button bn-primary" href="{{.EditSourcePath}}" data-source-editor-launch>Edit in browser</a>
           </div>
         {{end}}
         <div class="note-action-group" data-pin-note data-pin-key="{{.Key}}" data-pin-csrf="{{.CSRFToken}}" data-pin-state="{{if .Pinned}}pinned{{else}}unpinned{{end}}">
-          <button type="button" class="pin-button" data-pin-button aria-pressed="{{if .Pinned}}true{{else}}false{{end}}">{{if .Pinned}}Unpin{{else}}Pin{{end}}</button>
+          <button type="button" class="bn-button pin-button" data-pin-button aria-pressed="{{if .Pinned}}true{{else}}false{{end}}">{{if .Pinned}}Unpin{{else}}Pin{{end}}</button>
           <p class="pin-note-status" data-pin-status role="status" aria-live="polite"></p>
         </div>
 
         <details class="note-actions-more">
-          <summary class="copy-button">Actions</summary>
+          <summary class="bn-button copy-button">Actions</summary>
           <div class="note-more-options">
             <div class="note-action-group" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
-              <button type="button" class="open-editor-button" data-open-button>Open in external editor</button>
+              <button type="button" class="bn-button open-editor-button" data-open-button>Open in external editor</button>
               <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>
             </div>
             {{if not readOnly}}
               <div class="note-action-group">
-                <a class="source-editor-launch" href="/history?path={{.Copy.VaultPath}}&amp;path_match=exact" data-note-history>History for this note</a>
+                <a class="source-editor-launch bn-button bn-primary" href="/history?path={{.Copy.VaultPath}}&amp;path_match=exact" data-note-history>History for this note</a>
               </div>
             {{end}}
             {{if .Copy.Wikilink}}
               <div class="note-action-group note-copy-actions" data-copy-controls>
-                <button type="button" class="copy-button" data-copy-note-url data-copy-text="" data-copy-label="Note URL" hidden>Copy note URL</button>
-                <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
+                <button type="button" class="bn-button copy-button" data-copy-note-url data-copy-text="" data-copy-label="Note URL" hidden>Copy note URL</button>
+                <button type="button" class="bn-button copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
                 <div class="note-copy-options">
-                  <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
-                  <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
-                  <button type="button" class="copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
+                  <button type="button" class="bn-button copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
+                  <button type="button" class="bn-button copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
+                  <button type="button" class="bn-button copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
                 </div>
                 <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
               </div>
             {{end}}
             {{if not readOnly}}
               <div class="note-action-group">
-                <a class="synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
+                <a class="bn-button synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
               </div>
               <div class="note-action-group" data-trash-note data-trash-key="{{.Key}}" data-trash-csrf="{{.CSRFToken}}" data-trash-confirm="Move &quot;{{.Title}}&quot; to Trash?" data-trash-redirect="/">
-                <button type="button" class="trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
+                <button type="button" class="bn-button trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
                 <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
               </div>
             {{end}}
@@ -125,7 +125,7 @@
       </div>
 
       <div class="note-layout-toolbar">
-        <button type="button" class="note-sidebar-toggle" data-note-sidebar-toggle aria-controls="note-metadata-sidebar" aria-expanded="true" aria-label="Hide sidebar" title="Hide sidebar">
+        <button type="button" class="bn-button note-sidebar-toggle" data-note-sidebar-toggle aria-controls="note-metadata-sidebar" aria-expanded="true" aria-label="Hide sidebar" title="Hide sidebar">
           <svg class="note-sidebar-toggle-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
             <rect x="0.75" y="2.75" width="14.5" height="10.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
             <rect class="note-sidebar-toggle-panel" x="0.75" y="2.75" width="5" height="10.5" fill="currentColor" />
@@ -161,7 +161,7 @@
                               <span>Value</span>
                               <input type="text" name="value" value="{{.EditValue}}" {{if .Allowed}}list="{{.InputID}}-allowed"{{end}} />
                             </label>
-                            <button type="submit" class="frontmatter-button">Set</button>
+                            <button type="submit" class="bn-button frontmatter-button">Set</button>
                           </form>
                           {{if .IsList}}
                             <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="+=">
@@ -169,19 +169,19 @@
                                 <span>Add</span>
                                 <input type="text" name="value" {{if .Allowed}}list="{{.InputID}}-allowed"{{end}} />
                               </label>
-                              <button type="submit" class="frontmatter-button">Add</button>
+                              <button type="submit" class="bn-button frontmatter-button">Add</button>
                             </form>
                             <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="-=">
                               <label>
                                 <span>Remove</span>
                                 <input type="text" name="value" {{if .Allowed}}list="{{.InputID}}-allowed"{{end}} />
                               </label>
-                              <button type="submit" class="frontmatter-button">Remove</button>
+                              <button type="submit" class="bn-button frontmatter-button">Remove</button>
                             </form>
                           {{end}}
                         {{end}}
                         <form class="frontmatter-inline-form" data-frontmatter-unset data-frontmatter-property="{{.Key}}">
-                          <button type="submit" class="frontmatter-button frontmatter-unset-button">Unset</button>
+                          <button type="submit" class="bn-button frontmatter-button frontmatter-unset-button">Unset</button>
                         </form>
                         {{if .Allowed}}
                           <datalist id="{{.InputID}}-allowed">
@@ -212,7 +212,7 @@
                 <span>Value</span>
                 <input type="text" name="value" />
               </label>
-              <button type="submit" class="frontmatter-button">Add property</button>
+              <button type="submit" class="bn-button frontmatter-button">Add property</button>
             </form>
             </details>
             {{end}}
@@ -314,14 +314,14 @@
                 data-note-insight-prompt
                 {{if not .InsightConfigured}}disabled{{end}}
               ></textarea>
-              <button class="note-insight-button" type="button" data-note-insight-submit {{if not .InsightConfigured}}disabled{{end}}>Ask AI</button>
+              <button class="bn-button note-insight-button" type="button" data-note-insight-submit {{if not .InsightConfigured}}disabled{{end}}>Ask AI</button>
             </div>
             <p class="note-insight-hint">Press Ctrl/⌘ + Enter to ask. Your prompt and the AI output are not stored.</p>
             <p class="note-insight-status{{if not .InsightConfigured}} is-error{{end}}" data-note-insight-status role="status" aria-live="polite">{{.InsightStatusMsg}}</p>
             <section class="note-insight-result" data-note-insight-result hidden>
               <div class="note-insight-result-header">
                 <h3>AI response</h3>
-                <button class="note-insight-copy" type="button" data-note-insight-copy disabled>Copy Markdown</button>
+                <button class="bn-button note-insight-copy" type="button" data-note-insight-copy disabled>Copy Markdown</button>
               </div>
               <div class="note-body note-insight-body" data-note-insight-body></div>
             </section>
@@ -351,7 +351,7 @@
                         {{if .Location}}<span class="broken-location">({{.Location}})</span>{{end}}
                       </span>
                       <span class="broken-create-action" data-create-note data-create-source-key="{{$.Key}}" data-create-target="{{.Target}}" data-create-csrf="{{$.CSRFToken}}">
-                        <button type="button" class="create-note-button" data-create-button aria-label="Create missing note">Create note</button>
+                        <button type="button" class="bn-button create-note-button" data-create-button aria-label="Create missing note">Create note</button>
                         <span class="create-note-status" data-create-status role="status" aria-live="polite"> </span>
                       </span>
                     </div>

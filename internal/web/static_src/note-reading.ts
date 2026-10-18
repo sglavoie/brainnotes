@@ -57,7 +57,7 @@ export const addCodeCopyControls = (body: HTMLElement): void => {
     controls.dataset.copyControls = "";
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "copy-button";
+    button.className = "bn-button copy-button";
     button.textContent = "Copy code";
     button.dataset.copyText = code.textContent || "";
     button.dataset.copyLabel = "Code";
@@ -86,7 +86,7 @@ export const addSectionCopyControls = (body: HTMLElement): void => {
     controls.dataset.copyControls = "";
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "copy-button";
+    button.className = "bn-button copy-button";
     button.textContent = "#";
     button.setAttribute("aria-label", "Copy section link");
     button.title = "Copy section link";

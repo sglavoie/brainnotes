@@ -331,7 +331,7 @@ const initialSourceState = (state: EditorState): EditorState => {
 const frontmatterPlaceholder = (_view: EditorView, unfold: (event: Event) => void): HTMLElement => {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "source-editor-frontmatter";
+  button.className = "bn-button source-editor-frontmatter";
   button.textContent = "Show frontmatter";
   button.setAttribute("aria-label", "Show frontmatter in source editor");
   button.addEventListener("click", unfold);

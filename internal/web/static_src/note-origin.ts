@@ -1,5 +1,5 @@
 export const noteOrigins: Record<string, string> = {
-  "/library": "results", "/pinned": "Pinned", "/": "Brief", "/graph": "Graph",
+  "/library": "results", "/pinned": "Pinned", "/": "Brief", "/graph": "Graph", "/synthesize": "Synthesis",
 };
 
 // Put the origin in actual links, including asynchronously rendered Brief and
@@ -22,6 +22,11 @@ export const bindNoteOrigin = (): void => {
   const observer = new MutationObserver(update);
   observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["href"] });
   window.addEventListener("pagehide", () => observer.disconnect(), { once: true });
+};
+
+export const validNoteOrigin = (url: URL): boolean => {
+  if (url.origin !== window.location.origin || url.username || url.password || !(url.pathname in noteOrigins)) return false;
+  return url.pathname !== "/synthesize" || (url.searchParams.getAll("source").length === 1 && !!url.searchParams.get("source")?.trim());
 };
 
 export const withNoteOrigin = (target: string): string => {

@@ -168,7 +168,7 @@ const historyEntryRow = (entry: HistoryEntry, onUndo: (entryID: string) => void)
   main.append(historyEntryDetails(entry));
 
   const undoButton = document.createElement("button");
-  undoButton.className = "history-button history-danger";
+  undoButton.className = "bn-button history-button history-danger";
   undoButton.type = "button";
   undoButton.setAttribute("data-history-undo-entry", entry.id);
   undoButton.setAttribute("aria-label", `Undo ${entry.command || "change"}`);

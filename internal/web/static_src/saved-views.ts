@@ -101,7 +101,7 @@ const savedViewsFeedback = (): { root: HTMLElement; message: HTMLElement; retry:
   message.setAttribute("aria-live", "polite");
   const retry = document.createElement("button");
   retry.type = "button";
-  retry.className = "saved-views-save-button";
+  retry.className = "bn-button saved-views-save-button";
   retry.dataset.savedViewsRetry = "";
   retry.textContent = "Retry";
   retry.setAttribute("aria-label", "Retry saved views");

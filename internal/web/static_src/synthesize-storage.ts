@@ -3,7 +3,7 @@ import type { SynthesisModel } from "./synthesize-model";
 
 export const SYNTHESIS_STORAGE_VERSION = 2;
 
-export type SynthesisStorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+export type SynthesisStorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem"> & Partial<Pick<Storage, "key" | "length">>;
 
 // Only note keys, the text the user typed, and the generated candidate are
 // stored. Source bodies, excerpts, and the context packet stay in memory: they
@@ -21,8 +21,8 @@ export type SynthesisStoredState = {
   candidate: string;
 };
 
-export const synthesisStorageKey = (vaultID: string, anchorKey: string): string =>
-  `bn.synthesize.${vaultID}.${anchorKey}`;
+export const synthesisStorageKey = (vaultID: string, anchorKey: string, draftID?: string): string =>
+  draftID ? `bn.synthesis-draft.${JSON.stringify([vaultID, anchorKey])}.${draftID}` : `bn.synthesize.${vaultID}.${anchorKey}`;
 
 export const safeSynthesisStorage = (
   view: Window | null | undefined

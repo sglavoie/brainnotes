@@ -40,7 +40,7 @@ export const createUndoToast = (
 
   const undo = doc.createElement("button");
   undo.type = "button";
-  undo.className = "properties-button properties-toast-undo";
+  undo.className = "bn-button properties-button properties-toast-undo";
   undo.setAttribute("data-property-toast-undo", "");
   undo.textContent = "Undo";
   actions.appendChild(undo);
@@ -53,7 +53,7 @@ export const createUndoToast = (
 
   const dismiss = doc.createElement("button");
   dismiss.type = "button";
-  dismiss.className = "properties-button properties-toast-dismiss";
+  dismiss.className = "bn-button properties-button properties-toast-dismiss";
   dismiss.setAttribute("data-property-toast-dismiss", "");
   dismiss.textContent = "Dismiss";
   actions.appendChild(dismiss);

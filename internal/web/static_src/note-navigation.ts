@@ -1,4 +1,4 @@
-import { bindNoteOrigin, noteOrigins } from "./note-origin";
+import { bindNoteOrigin, noteOrigins, validNoteOrigin } from "./note-origin";
 import { initReadingPosition, carryReadingPosition } from "./note-reading-position";
 // Carry the Library URL in the link itself so reloads and new tabs retain it.
 export const libraryResultPath = (path: string, resultID?: string): string => {
@@ -15,7 +15,7 @@ const libraryReturnPath = (): string | null => {
   if (!value?.startsWith("/")) return null;
   try {
     const url = new URL(value, window.location.origin);
-    if (url.origin !== window.location.origin || !(url.pathname in noteOrigins) || url.username || url.password) return null;
+    if (!validNoteOrigin(url)) return null;
     return url.pathname + url.search + url.hash;
   } catch {
     return null;
@@ -25,7 +25,7 @@ const libraryReturnPath = (): string | null => {
 // Only propagate a validated Library destination to local note/editor routes.
 const isContextDestination = (url: URL, allowEditor: boolean): boolean =>
   url.origin === window.location.origin && !url.username && !url.password &&
-  (url.pathname.startsWith("/n/") || (allowEditor && url.pathname === "/edit"));
+  (url.pathname.startsWith("/n/") || (allowEditor && (url.pathname === "/edit" || url.pathname === "/synthesize")));
 
 export const withLibraryContext = (target: string, allowEditor = false): string => {
   target = carryReadingPosition(target);
@@ -40,10 +40,10 @@ export const withLibraryContext = (target: string, allowEditor = false): string 
 };
 
 const carryLibraryContext = (): void => {
-  const selector = "[data-note-context-links] a[href], a[data-source-editor-launch], a[data-source-note-return]";
+  const selector = "[data-note-context-links] a[href], a[data-source-editor-launch], a[data-source-note-return], a[data-synthesize-launch]";
   for (const link of document.querySelectorAll<HTMLAnchorElement>(selector)) {
     const target = link.getAttribute("href");
-    if (target) link.setAttribute("href", withLibraryContext(target, link.hasAttribute("data-source-editor-launch")));
+    if (target) link.setAttribute("href", withLibraryContext(target, link.hasAttribute("data-source-editor-launch") || link.hasAttribute("data-synthesize-launch")));
   }
 };
 

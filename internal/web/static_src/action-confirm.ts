@@ -23,11 +23,11 @@ export const confirmAction = (
     const actions = doc.createElement("div");
     actions.className = "history-actions";
     const cancel = doc.createElement("button");
-    cancel.className = "history-button";
+    cancel.className = "bn-button history-button";
     cancel.textContent = "Cancel";
     cancel.autofocus = true;
     const confirm = doc.createElement("button");
-    confirm.className = options.danger === false ? "history-button" : "history-button history-danger";
+    confirm.className = options.danger === false ? "bn-button history-button" : "bn-button history-button history-danger";
     confirm.textContent = options.confirmLabel;
     cancel.addEventListener("click", () => dialog.close("cancel"));
     confirm.addEventListener("click", () => dialog.close("confirm"));

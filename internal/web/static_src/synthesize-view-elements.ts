@@ -11,8 +11,11 @@ export const element = <K extends keyof HTMLElementTagNameMap>(
   attributes: Record<string, string> = {}
 ): HTMLElementTagNameMap[K] => {
   const node = doc.createElement(tag);
+  if (tag === "button") node.classList.add("bn-button");
+  if (["input", "select", "textarea"].includes(tag)) node.classList.add("bn-field");
+  if (tag === "details") node.classList.add("bn-disclosure");
   if (className !== "") {
-    node.className = className;
+    node.classList.add(...className.split(/\s+/));
   }
   for (const [name, value] of Object.entries(attributes)) {
     node.setAttribute(name, value);

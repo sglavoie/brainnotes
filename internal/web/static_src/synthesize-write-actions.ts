@@ -20,7 +20,9 @@ const focusInvalidField = (runtime: SynthesisRuntime): boolean => {
   if (!invalid) {
     return false;
   }
-  invalid[1].focus({ preventScroll: true });
+  const details = invalid[1].closest("details");
+  if (details) details.open = true;
+  invalid[1].focus();
   setStatusText(view.previewStatus, invalid[0], "is-error");
   return true;
 };

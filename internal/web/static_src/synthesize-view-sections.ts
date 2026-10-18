@@ -1,3 +1,4 @@
+import { synthesisDisclosure } from "./synthesize-layout";
 
 import { relatedModeDefinitions } from "./related-model";
 import { synthesisPurposeLabel, type SynthesisConfig } from "./synthesize-model";
@@ -159,7 +160,7 @@ export const buildDraftSection = (
   });
   const heading = element(doc, "h3", "synthesize-section-heading");
   heading.id = "synthesize-draft-heading";
-  heading.textContent = "New note";
+  heading.textContent = "Draft";
 
   const title = element(doc, "input", "synthesize-input", {
     "data-synthesize-title": "",
@@ -217,12 +218,12 @@ export const buildDraftSection = (
     "data-synthesize-draft-error"
   );
   const grid = element(doc, "div", "synthesize-field-grid");
-  grid.append(titleField.wrapper, folderField.wrapper, labelled(doc, "synthesize-purpose", "Purpose", purpose));
+  grid.append(folderField.wrapper, labelled(doc, "synthesize-purpose", "Purpose", purpose));
   section.append(
     heading,
-    grid,
-    labelled(doc, "synthesize-prompt", "Prompt", prompt),
-    draftField.wrapper
+    titleField.wrapper,
+    draftField.wrapper,
+    synthesisDisclosure(doc, "Destination and research options", grid, labelled(doc, "synthesize-prompt", "Prompt", prompt))
   );
   return {
     section,

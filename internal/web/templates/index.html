@@ -29,7 +29,7 @@
           {{if readOnly}}
             Add a Markdown note to the source vault and sync it to this replica.
           {{else}}
-            <a class="new-note-action" href="/new">Create your first note</a>
+            <a class="bn-button new-note-action" href="/new">Create your first note</a>
             {{if .CaptureConfigured}}
               or <a href="#capture-input">capture a thought</a> in your inbox.
             {{else}}
@@ -83,7 +83,7 @@
             {{if .Continue.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Continue.Card.Excerpt}}</blockquote>{{end}}
             <div class="brief-card-actions">
               <button
-                class="brief-action-button"
+                class="bn-button brief-action-button"
                 type="button"
                 data-brief-action-open
                 data-brief-action="open"
@@ -92,7 +92,7 @@
                 {{if not .Continue.Card.OpenEnabled}}disabled{{end}}
               >Open</button>
               <button
-                class="brief-action-button"
+                class="bn-button brief-action-button"
                 type="button"
                 data-brief-action-another
                 data-brief-action="another"
@@ -128,7 +128,7 @@
                     {{if not .Continue.Card.InsightEnabled}}disabled{{end}}
                   ></textarea>
                   <button
-                    class="brief-action-button"
+                    class="bn-button brief-action-button"
                     type="button"
                     data-brief-action-insight
                     data-brief-action="insight"
@@ -168,7 +168,7 @@
               {{if .Rediscover.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Rediscover.Card.Excerpt}}</blockquote>{{end}}
               <div class="brief-card-actions">
                 <button
-                  class="brief-action-button"
+                  class="bn-button brief-action-button"
                   type="button"
                   data-brief-action-open
                   data-brief-action="open"
@@ -177,7 +177,7 @@
                   {{if not .Rediscover.Card.OpenEnabled}}disabled{{end}}
                 >Open</button>
                 <button
-                  class="brief-action-button"
+                  class="bn-button brief-action-button"
                   type="button"
                   data-brief-action-another
                   data-brief-action="another"
@@ -213,7 +213,7 @@
                       {{if not .Rediscover.Card.InsightEnabled}}disabled{{end}}
                     ></textarea>
                     <button
-                      class="brief-action-button"
+                      class="bn-button brief-action-button"
                       type="button"
                       data-brief-action-insight
                       data-brief-action="insight"
@@ -256,7 +256,7 @@
               {{if .Connect.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Connect.Card.Excerpt}}</blockquote>{{end}}
               <div class="brief-card-actions">
                 <button
-                  class="brief-action-button"
+                  class="bn-button brief-action-button"
                   type="button"
                   data-brief-action-open
                   data-brief-action="open"
@@ -265,7 +265,7 @@
                   {{if not .Connect.Card.OpenEnabled}}disabled{{end}}
                 >Open</button>
                 <button
-                  class="brief-action-button"
+                  class="bn-button brief-action-button"
                   type="button"
                   data-brief-action-another
                   data-brief-action="another"
@@ -307,7 +307,7 @@
                       {{if not .Connect.Card.InsightEnabled}}disabled{{end}}
                     ></textarea>
                     <button
-                      class="brief-action-button"
+                      class="bn-button brief-action-button"
                       type="button"
                       data-brief-action-insight
                       data-brief-action="insight"
@@ -389,7 +389,7 @@
             {{if not .CaptureConfigured}}disabled{{end}}
           ></textarea>
           <button
-            class="brief-action-button"
+            class="bn-button brief-action-button"
             type="button"
             data-capture-submit
             {{if not .CaptureConfigured}}disabled{{end}}

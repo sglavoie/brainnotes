@@ -50,9 +50,11 @@ test("large vault Library search and filtering remain responsive", async ({ page
 
 test("long note editing remains responsive", async ({ page, context }, testInfo) => {
   await throttle(page, context);
+  const navigationStart = Date.now();
   await page.goto("/edit?key=LongWriting");
   const editor = page.locator(SURFACE);
   await expect(editor).toContainText("The morning trail");
+  const coldNavigationMilliseconds = Date.now() - navigationStart;
   await editor.click();
   await page.evaluate(() => { window.performanceTasks = []; });
   const samples = [];
@@ -62,7 +64,13 @@ test("long note editing remains responsive", async ({ page, context }, testInfo)
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     samples.push(Date.now() - start);
   }
-  await report(page, testInfo, { typingMilliseconds: samples });
+  const saveStart = Date.now();
+  await page.locator("[data-source-save]").click();
+  await expect(page.locator("[data-source-status]")).toContainText("Saved to vault");
+  const saveConfirmationMilliseconds = Date.now() - saveStart;
+  await report(page, testInfo, { typingMilliseconds: samples, coldNavigationMilliseconds, saveConfirmationMilliseconds });
+  expect(coldNavigationMilliseconds).toBeLessThan(8000);
+  expect(saveConfirmationMilliseconds).toBeLessThan(3000);
   expect(Math.max(...samples)).toBeLessThan(500);
 });
 

@@ -45,7 +45,7 @@ export const createActionButton = (
 ): HTMLButtonElement => {
   const button = doc.createElement("button");
   button.type = "button";
-  button.className = "brief-action-button";
+  button.className = "bn-button brief-action-button";
   button.setAttribute("data-brief-action", action);
   button.setAttribute(`data-brief-action-${action}`, "");
   button.setAttribute("data-brief-slot", slot);
@@ -114,7 +114,7 @@ export const ensureInsightPanel = (cardEl: HTMLElement, slot: BriefSlotKind): HT
   header.appendChild(title);
 
   const copy = doc.createElement("button");
-  copy.className = "brief-insight-copy";
+  copy.className = "bn-button brief-insight-copy";
   copy.type = "button";
   copy.hidden = true;
   copy.disabled = true;

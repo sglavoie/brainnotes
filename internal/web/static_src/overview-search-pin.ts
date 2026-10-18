@@ -15,7 +15,7 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
 } => {
   const button = doc.createElement("button");
   button.type = "button";
-  button.className = "pin-button overview-result-pin";
+  button.className = "bn-button pin-button overview-result-pin";
   button.setAttribute("data-pin-button", "");
 
   const feedback = doc.createElement("div");
@@ -26,7 +26,7 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
   status.setAttribute("aria-live", "polite");
   const retry = doc.createElement("button");
   retry.type = "button";
-  retry.className = "overview-bulk-button";
+  retry.className = "bn-button overview-bulk-button";
   retry.textContent = "Retry";
   retry.setAttribute("aria-label", `Retry pin action for ${result.title || result.key}`);
   retry.addEventListener("click", () => button.click());

@@ -22,15 +22,15 @@
             aria-controls="{{.IDPrefix}}-facet-options"
             aria-expanded="false"
           />
-          <button class="facet-input-clear" type="button" data-facet-input-clear hidden>Clear</button>
+          <button class="bn-button facet-input-clear" type="button" data-facet-input-clear hidden>Clear</button>
         </div>
         <ul id="{{.IDPrefix}}-facet-options" class="facet-options" role="listbox" hidden></ul>
       </div>
-      <button class="facet-clear-all" type="button" data-facet-clear-all hidden>Clear filters</button>
+      <button class="bn-button facet-clear-all" type="button" data-facet-clear-all hidden>Clear filters</button>
     </div>
     {{if or (eq .Mode "search") (eq .Mode "graph")}}</details>{{end}}
     <p data-facet-status role="status" aria-live="polite"></p>
-    <button class="facet-clear-all" type="button" data-facet-retry hidden>Retry filters</button>
+    <button class="bn-button facet-clear-all" type="button" data-facet-retry hidden>Retry filters</button>
     <div class="active-constraints" role="group" aria-label="Active constraints">
       <span data-library-text-constraint hidden></span>
     <div id="{{.IDPrefix}}-facet-chips" class="facet-chips" data-facet-chips hidden></div>

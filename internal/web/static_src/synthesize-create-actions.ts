@@ -1,3 +1,4 @@
+import type { SynthesisStoredState } from "./synthesize-storage";
 import { previewSynthesis, applySynthesis } from "./synthesize-write-actions";
 import { setStatusText } from "./status";
 import type { SynthesisSource } from "./synthesize-model";
@@ -14,7 +15,7 @@ export type SynthesisCreateActions = {
   preview: () => Promise<void>;
   apply: () => Promise<void>;
   discard: () => Promise<void>;
-  restore: () => Promise<void>;
+  restore: (saved?: SynthesisStoredState) => Promise<void>;
 };
 
 export const createSynthesisCreateActions = (runtime: SynthesisRuntime): SynthesisCreateActions => {
@@ -69,11 +70,15 @@ export const createSynthesisCreateActions = (runtime: SynthesisRuntime): Synthes
     } finally { discarding = false; }
   };
 
-  const restore = async (): Promise<void> => {
-    const stored = runtime.readSaved();
+  const restore = async (saved?: SynthesisStoredState): Promise<void> => {
+    const stored = saved || runtime.readSaved();
     if (!stored) {
       return;
     }
+    model.context = null;
+    model.preview = null;
+    model.contextStale = false;
+    model.previewStale = false;
     model.title = stored.title;
     model.folder = stored.folder;
     model.purpose = config.purposes.includes(stored.purpose)

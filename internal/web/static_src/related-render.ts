@@ -1,3 +1,4 @@
+import { withLibraryContext } from "./note-navigation";
 import {
   RELATED_MAX_LIMIT,
   addRelatedCalendarDays,
@@ -210,7 +211,7 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
   const heading = doc.createElement("h3");
   heading.className = "related-card-title";
   const link = doc.createElement("a");
-  link.href = result.candidate.route;
+  link.href = withLibraryContext(result.candidate.route);
   link.textContent = result.candidate.title || result.candidate.path;
   link.setAttribute("data-related-view-candidate", result.candidate.key);
   heading.appendChild(link);
@@ -228,7 +229,7 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
     const bridge = doc.createElement("p");
     bridge.className = "related-card-bridge";
     const bridgeLink = doc.createElement("a");
-    bridgeLink.href = result.bridge.route;
+    bridgeLink.href = withLibraryContext(result.bridge.route);
     bridgeLink.textContent = result.bridge.title || result.bridge.path;
     bridgeLink.setAttribute("data-related-view-candidate", result.bridge.key);
     bridge.append("Via ", bridgeLink);
@@ -284,7 +285,7 @@ export const renderRelatedFeedback = (view: RelatedView, feedback: RelatedFeedba
     row.className = "related-feedback-row";
     row.setAttribute("data-related-feedback-row", entry.candidate.key);
     const link = view.feedbackList.ownerDocument.createElement("a");
-    link.href = entry.candidate.route;
+    link.href = withLibraryContext(entry.candidate.route);
     link.textContent = entry.candidate.title || entry.candidate.path;
     link.setAttribute("data-related-view-candidate", entry.candidate.key);
     const state = view.feedbackList.ownerDocument.createElement("span");

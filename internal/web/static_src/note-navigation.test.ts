@@ -137,3 +137,20 @@ it.each([["/pinned", "Pinned"], ["/?day=2026-10-17", "Brief"], ["/graph?q=Alpha&
     expect(new URL(renamed, location.origin).searchParams.get("return_to")).toContain(origin);
   }
 );
+
+it("keeps Synthesis, its saved draft and the original search through note inspection", () => {
+  const source = "/synthesize?source=Alpha&resume=local-draft&return_to=%2Flibrary%3Fq%3Dbody#bn-origin-source";
+  history.replaceState(null, "", `/n/Beta?return_to=${encodeURIComponent(source)}`);
+  document.body.innerHTML = '<a data-note-back-results hidden></a>';
+  initNoteNavigation();
+  expect(document.querySelector("a")!.textContent).toBe("Back to Synthesis");
+  expect(document.querySelector("a")!.getAttribute("href")).toBe(source);
+  expect(new URL(withLibraryContext("/n/Gamma"), location.origin).searchParams.get("return_to")).toBe(source);
+});
+
+it.each(["/synthesize", "/synthesize?source=", "/synthesize?source=a&source=b"])(
+  "refuses an incomplete or ambiguous Synthesis return destination: %s", (path) => {
+    history.replaceState(null, "", `/n/Beta?return_to=${encodeURIComponent(path)}`);
+    expect(withLibraryContext("/n/Gamma")).toBe("/n/Gamma");
+  }
+);

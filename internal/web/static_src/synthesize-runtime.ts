@@ -1,3 +1,5 @@
+import { rememberSynthesisSession, synthesisResume } from "./synthesize-session";
+import { mountSynthesisRecovery, synthesisRecoveryKeys } from "./synthesize-recovery";
 import { confirmAction, type ConfirmAction } from "./action-confirm";
 import { SynthesisRequestError } from "./api";
 import { queryElement } from "./dom";
@@ -43,6 +45,7 @@ import type { RelatedMode } from "./related-types";
 export type WritableClipboard = Pick<Clipboard, "writeText">;
 
 export type SynthesisDeps = {
+  draftID?: string;
   fetch?: SynthesisFetch;
   storage?: SynthesisStorageLike | null;
   clipboard?: WritableClipboard | null;
@@ -107,6 +110,7 @@ export type SynthesisRuntime = {
   persist: () => void;
   clearSaved: () => boolean;
   readSaved: () => SynthesisStoredState | null;
+  offerRecovery: (restore: (state: SynthesisStoredState) => Promise<void>) => void;
   rememberCandidates: (entries: SynthesisCandidate[]) => void;
   renderCandidatePanels: () => void;
   renderFieldErrors: () => void;
@@ -124,14 +128,15 @@ export const createSynthesisRuntime = (
   const view = createSynthesisView(mount, config);
   const storage =
     deps.storage === undefined ? safeSynthesisStorage(root.ownerDocument.defaultView) : deps.storage;
-  const storageKey = synthesisStorageKey(config.vaultID, config.anchor.key);
+  const draftID = deps.draftID || crypto.randomUUID();
+  const storageKey = synthesisStorageKey(config.vaultID, config.anchor.key, draftID);
+  const resumed = synthesisResume(storage, config.vaultID, config.anchor.key);
   const statusEl = queryElement(root, "[data-synthesize-status]", HTMLElement);
   const fallback = queryElement(root, "[data-synthesize-fallback]", HTMLElement);
   if (fallback) {
     fallback.hidden = true;
   }
   let storageWarned = false;
-
   const runtime: SynthesisRuntime = {
     config,
     model,
@@ -144,9 +149,9 @@ export const createSynthesisRuntime = (
             : undefined) || null
         : deps.clipboard,
     confirmer: deps.confirm || ((message: string) => confirmAction({
-      title: message === DISCARD_CONFIRMATION ? "Discard this draft?" : "Send context to Ask AI?",
+      title: message === DISCLOSURE ? "Send context to Ask AI?" : "Change saved work?",
       description: message,
-      confirmLabel: message === DISCARD_CONFIRMATION ? "Discard draft and selection" : "Send context",
+      confirmLabel: message === DISCLOSURE ? "Send context" : "Confirm",
       danger: message === DISCARD_CONFIRMATION,
     }, root.ownerDocument, message === DISCARD_CONFIRMATION ? view.discardButton : view.generateButton)),
     redirect: deps.redirect || ((path: string): void => window.location.assign(path)),
@@ -164,6 +169,7 @@ export const createSynthesisRuntime = (
 
     persist: (): void => {
       if (writeSynthesisState(storage, storageKey, synthesisStateFromModel(model))) {
+        rememberSynthesisSession(draftID);
         return;
       }
       if (storage === null || storageWarned) {
@@ -180,7 +186,12 @@ export const createSynthesisRuntime = (
     // saved work behind for a later visit to restore.
     clearSaved: (): boolean => clearSynthesisState(storage, storageKey) || storage === null,
 
-    readSaved: (): SynthesisStoredState | null => readSynthesisState(storage, storageKey),
+    readSaved: (): SynthesisStoredState | null => readSynthesisState(storage, storageKey) || resumed,
+    offerRecovery: (restore): void => mountSynthesisRecovery({
+      root: mount, storage,
+      keys: synthesisRecoveryKeys(storage, config.vaultID, config.anchor.key, storageKey),
+      restore, confirm: runtime.confirmer,
+    }),
 
     rememberCandidates: (entries): void => {
       for (const entry of entries) {

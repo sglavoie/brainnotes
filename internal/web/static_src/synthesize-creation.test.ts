@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import type { SynthesisDeps } from "./synthesize";
 import {
@@ -24,7 +24,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("synthesis creation", () => {
   const ready = async (
     handlers: Parameters<typeof routedFetch>[0] = {},
     deps: SynthesisDeps = {}
@@ -147,7 +146,7 @@ describe("synthesis creation", () => {
     );
     expect(body.get("preview_id")).toBe("prev-1");
     expect(body.get("token")).toBe("csrf-token");
-    expect(storage.entries.has("bn.synthesize.vault-1.anchor")).toBe(false);
+    expect(storage.entries.has("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test")).toBe(false);
     expect(query<HTMLElement>("[data-synthesize-preview-status]").textContent).toContain(
       "Created Synthesis/Result.md"
     );
@@ -183,7 +182,7 @@ describe("synthesis creation", () => {
     expect(link.getAttribute("href")).toBe("/n/Synthesis/Result");
     expect(link.textContent).toBe("Open Synthesis/Result.md");
     expect(query<HTMLButtonElement>("[data-synthesize-apply]").disabled).toBe(true);
-    expect(storage.entries.has("bn.synthesize.vault-1.anchor")).toBe(true);
+    expect(storage.entries.has("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test")).toBe(true);
   });
 
   it("keeps the draft and spends the receipt when the create is refused", async () => {
@@ -218,7 +217,7 @@ describe("synthesis creation", () => {
       "what these add up to"
     );
     expect(
-      JSON.parse(String(storage.entries.get("bn.synthesize.vault-1.anchor"))).draft
+      JSON.parse(String(storage.entries.get("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test"))).draft
     ).toBe("what these add up to");
   });
 
@@ -305,4 +304,3 @@ describe("synthesis creation", () => {
     });
     expect(query<HTMLElement>("[data-synthesize-warning]").hidden).toBe(true);
   });
-});

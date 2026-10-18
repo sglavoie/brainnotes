@@ -3,13 +3,16 @@ import { test, expect } from "./fixture.js";
 test("reading loads only the reading bundle within its transfer budget", async ({ page, context }, testInfo) => {
   const session = await context.newCDPSession(page);
   await session.send("Performance.enable");
+  const navigationStart = Date.now();
   await page.goto("/n/Reading.md");
   await expect(page.locator("[data-note-body]")).toBeVisible();
+  const coldNavigationMilliseconds = Date.now() - navigationStart;
+  expect(coldNavigationMilliseconds).toBeLessThan(6000);
   const scripts = await page.evaluate(() => performance.getEntriesByType("resource")
     .filter((entry) => entry.initiatorType === "script")
     .map((entry) => ({ path: new URL(entry.name).pathname, bytes: entry.encodedBodySize, duration: entry.duration })));
   const { metrics } = await session.send("Performance.getMetrics");
-  const measurement = { scripts, scriptDurationSeconds: metrics.find((metric) => metric.name === "ScriptDuration")?.value };
+  const measurement = { scripts, coldNavigationMilliseconds, scriptDurationSeconds: metrics.find((metric) => metric.name === "ScriptDuration")?.value };
   await testInfo.attach("reading-performance", { body: JSON.stringify(measurement, null, 2), contentType: "application/json" });
   console.log(JSON.stringify(measurement));
   expect(scripts[0].bytes).toBeGreaterThan(0);
@@ -30,8 +33,11 @@ test("reading and search stay responsive with a slow CPU and connection", async 
       window.readingLongTasks.push(...list.getEntries().map((entry) => entry.duration));
     }).observe({ type: "longtask", buffered: true });
   });
+  const navigationStart = Date.now();
   await page.goto("/n/Reading.md");
   await expect(page.locator("[data-note-body]")).toBeVisible();
+  const coldNavigationMilliseconds = Date.now() - navigationStart;
+  expect(coldNavigationMilliseconds).toBeLessThan(6000);
   await page.keyboard.press("/");
   const search = page.locator("#search-input");
   const started = Date.now();
@@ -40,7 +46,7 @@ test("reading and search stay responsive with a slow CPU and connection", async 
   const searchMilliseconds = Date.now() - started;
   const longTasks = await page.evaluate(() => window.readingLongTasks);
   await testInfo.attach("throttled-reading", {
-    body: JSON.stringify({ searchMilliseconds, longTasks }), contentType: "application/json",
+    body: JSON.stringify({ coldNavigationMilliseconds, searchMilliseconds, longTasks }), contentType: "application/json",
   });
   // Broad ceilings catch an unusable page without turning machine speed into
   // a benchmark contest. The artifact retains the actual measurements.

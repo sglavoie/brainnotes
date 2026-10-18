@@ -35,7 +35,7 @@
       <div class="panel-header">
         <h2 id="properties-heading">Property catalog</h2>
         <div class="properties-actions">
-          <button class="properties-button" type="button" data-properties-refresh>Refresh</button>
+          <button class="bn-button properties-button" type="button" data-properties-refresh>Refresh</button>
         </div>
       </div>
       <p
@@ -121,7 +121,7 @@
       <div class="panel-header">
         <h2 id="property-detail-heading">Overview</h2>
         <div class="properties-actions">
-          <button class="properties-button" type="button" data-property-refresh>Refresh</button>
+          <button class="bn-button properties-button" type="button" data-property-refresh>Refresh</button>
         </div>
       </div>
       <p
@@ -157,9 +157,9 @@
         </div>
         <p class="properties-schema-error" data-property-schema-error role="alert" hidden></p>
         <div class="properties-schema-actions">
-          <button class="properties-button properties-button-primary" type="button" data-property-schema-save>Save definition</button>
-          <button class="properties-button" type="button" data-property-schema-delete disabled>Remove definition</button>
-          <button class="properties-button" type="button" data-property-schema-adopt hidden>Use inferred definition</button>
+          <button class="bn-button properties-button properties-button-primary" type="button" data-property-schema-save>Save definition</button>
+          <button class="bn-button properties-button" type="button" data-property-schema-delete disabled>Remove definition</button>
+          <button class="bn-button properties-button" type="button" data-property-schema-adopt hidden>Use inferred definition</button>
         </div>
       </section>
 
@@ -188,28 +188,28 @@
             spellcheck="false"
             data-property-filter-query
           >
-          <button class="properties-button" type="button" data-property-filter-clear hidden>Clear value filter</button>
+          <button class="bn-button properties-button" type="button" data-property-filter-clear hidden>Clear value filter</button>
         </div>
         <p class="properties-active-value" data-property-active-value hidden></p>
         <p class="properties-keyboard-hint">Press <kbd>/</kbd> to search, <kbd>Up</kbd> and <kbd>Down</kbd> to move, <kbd>Space</kbd> to select, <kbd>Enter</kbd> to edit, <kbd>Esc</kbd> to cancel.</p>
         <div class="properties-selection" role="group" aria-label="Selected notes">
           <p class="properties-selection-count" data-property-selection-count role="status" aria-live="polite">No notes selected.</p>
           <div class="properties-selection-actions">
-            <button class="properties-button" type="button" data-property-select-all>Select page</button>
-            <button class="properties-button" type="button" data-property-clear-selection disabled>Clear selection</button>
-            <button class="properties-button" type="button" data-property-action="set" disabled>Set value</button>
-            <button class="properties-button" type="button" data-property-action="replace_value" disabled>Replace value</button>
-            <button class="properties-button" type="button" data-property-action="unset" disabled>Remove property</button>
-            <button class="properties-button" type="button" data-property-action="rename_property" disabled>Rename property</button>
-            <button class="properties-button" type="button" data-property-action="repair" disabled>Repair</button>
+            <button class="bn-button properties-button" type="button" data-property-select-all>Select page</button>
+            <button class="bn-button properties-button" type="button" data-property-clear-selection disabled>Clear selection</button>
+            <button class="bn-button properties-button" type="button" data-property-action="set" disabled>Set value</button>
+            <button class="bn-button properties-button" type="button" data-property-action="replace_value" disabled>Replace value</button>
+            <button class="bn-button properties-button" type="button" data-property-action="unset" disabled>Remove property</button>
+            <button class="bn-button properties-button" type="button" data-property-action="rename_property" disabled>Rename property</button>
+            <button class="bn-button properties-button" type="button" data-property-action="repair" disabled>Repair</button>
           </div>
         </div>
         <div class="properties-editor-host" data-property-editor></div>
         <ul class="properties-row-list" data-property-rows></ul>
         <div class="properties-pagination">
-          <button class="properties-button" type="button" data-property-prev disabled>Previous</button>
+          <button class="bn-button properties-button" type="button" data-property-prev disabled>Previous</button>
           <p class="properties-pagination-status" data-property-pagination role="status" aria-live="polite"></p>
-          <button class="properties-button" type="button" data-property-next disabled>Next</button>
+          <button class="bn-button properties-button" type="button" data-property-next disabled>Next</button>
         </div>
       </section>
 
@@ -229,8 +229,8 @@
       <div class="panel-header history-header">
         <h2 id="history-heading">Recent changes</h2>
         <div class="history-actions">
-          <button class="history-button" type="button" data-history-refresh>Refresh</button>
-          <button class="history-button history-danger" type="button" data-history-undo-latest disabled>Undo latest change</button>
+          <button class="bn-button history-button" type="button" data-history-refresh>Refresh</button>
+          <button class="bn-button history-button history-danger" type="button" data-history-undo-latest disabled>Undo latest change</button>
         </div>
       </div>
       <p
@@ -242,7 +242,7 @@
       >Loading history...</p>
       <div class="history-conflict" data-history-conflict hidden>
         <p data-history-conflict-summary></p>
-        <button class="history-button history-danger" type="button" data-history-force disabled>Force undo</button>
+        <button class="bn-button history-button history-danger" type="button" data-history-force disabled>Force undo</button>
       </div>
       <ul class="history-list" data-history-list></ul>
     </section>

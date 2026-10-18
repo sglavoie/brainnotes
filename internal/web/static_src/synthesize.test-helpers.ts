@@ -91,6 +91,8 @@ export const memoryStorage = (): SynthesisStorageLike & { entries: Map<string, s
   const entries = new Map<string, string>();
   return {
     entries,
+    get length() { return entries.size; },
+    key: (index) => Array.from(entries.keys())[index] ?? null,
     getItem: (key) => (entries.has(key) ? String(entries.get(key)) : null),
     setItem: (key, value) => {
       entries.set(key, value);
@@ -144,7 +146,7 @@ export const start = async (
   agent: "enabled" | "disabled" = "enabled"
 ): Promise<void> => {
   mount(agent);
-  const controller = initSynthesize({ confirm: () => true, redirect: () => undefined, ...deps });
+  const controller = initSynthesize({ draftID: "test", confirm: () => true, redirect: () => undefined, ...deps });
   expect(controller).not.toBeNull();
   await controller?.ready;
   await Promise.resolve();
@@ -162,7 +164,7 @@ export const routedFetch = (
 ) =>
   vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input), "https://example.test");
-    const body = new URLSearchParams(String(init?.body || ""));
+    const body = requestBody(init);
     if (url.pathname === "/api/related") {
       return (
         handlers.related?.(url) ||
@@ -172,18 +174,13 @@ export const routedFetch = (
     if (url.pathname === "/api/search") {
       return handlers.search?.(url) || jsonResponse([]);
     }
-    if (url.pathname === "/api/synthesis/context") {
-      return handlers.context?.(body) || jsonResponse(contextPayload(body.getAll("candidate")));
-    }
-    if (url.pathname === "/api/synthesis/generate") {
-      return handlers.generate?.(body) || jsonResponse(generatePayload());
-    }
-    if (url.pathname === "/api/synthesis/preview") {
-      return handlers.preview?.(body) || jsonResponse(previewPayload(body));
-    }
-    if (url.pathname === "/api/synthesis/apply") {
-      return handlers.apply?.(body) || jsonResponse(applyPayload());
-    }
+    const routes: Record<string, () => Response | Promise<Response>> = {
+      "/api/synthesis/context": () => handlers.context?.(body) || jsonResponse(contextPayload(body.getAll("candidate"))),
+      "/api/synthesis/generate": () => handlers.generate?.(body) || jsonResponse(generatePayload()),
+      "/api/synthesis/preview": () => handlers.preview?.(body) || jsonResponse(previewPayload(body)),
+      "/api/synthesis/apply": () => handlers.apply?.(body) || jsonResponse(applyPayload()),
+    };
+    if (routes[url.pathname]) return routes[url.pathname]();
     throw new Error(`unexpected request to ${url.pathname}`);
   });
 
@@ -264,3 +261,5 @@ export const dragRow = (key: string, clientY: number): void => {
   window.dispatchEvent(new MouseEvent("pointermove", { clientY, bubbles: true }));
   window.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }));
 };
+
+const requestBody = (init?: RequestInit): URLSearchParams => new URLSearchParams(String(init?.body || ""));

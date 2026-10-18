@@ -79,7 +79,7 @@
 
 {{define "workspaceNav"}}
   <div class="workspace-navigation">
-    {{if and (not readOnly) (ne . "library") (ne . "brief")}}<a class="new-note-action" href="/new"{{if eq . "new"}} aria-current="page"{{end}}>New note</a>{{end}}
+    {{if and (not readOnly) (ne . "library") (ne . "brief")}}<a class="bn-button new-note-action" href="/new"{{if eq . "new"}} aria-current="page"{{end}}>New note</a>{{end}}
     <nav class="site-nav" aria-label="Primary">
       <a href="/"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
       <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
@@ -111,7 +111,7 @@
 
 {{define "workspaceMenu"}}
   <div class="focused-workspace-tools">
-  {{if and (not readOnly) (ne . "new")}}<a class="new-note-action" href="/new">New note</a>{{end}}
+  {{if and (not readOnly) (ne . "new")}}<a class="bn-button new-note-action{{if and (ne . "library") (ne . "brief")}} bn-secondary{{end}}" href="/new">New note</a>{{end}}
   <details class="source-editor-workspace">
     <summary>Workspace</summary>
     <div class="source-editor-workspace-content">

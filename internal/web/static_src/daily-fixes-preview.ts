@@ -73,14 +73,14 @@ export const renderPreview = (
   const controls = doc.createElement("div");
   controls.className = "fixes-preview-actions";
   const applyBtn = doc.createElement("button");
-  applyBtn.className = "review-action fixes-preview-apply";
+  applyBtn.className = "bn-button review-action fixes-preview-apply";
   applyBtn.type = "button";
   applyBtn.setAttribute("data-fixes-button", "");
   applyBtn.setAttribute("data-fixes-preview-apply", "");
   applyBtn.setAttribute("data-fixes-id", id);
   applyBtn.textContent = "Apply fix";
   const cancelBtn = doc.createElement("button");
-  cancelBtn.className = "review-action fixes-preview-cancel";
+  cancelBtn.className = "bn-button review-action fixes-preview-cancel";
   cancelBtn.type = "button";
   cancelBtn.setAttribute("data-fixes-button", "");
   cancelBtn.setAttribute("data-fixes-preview-cancel", "");

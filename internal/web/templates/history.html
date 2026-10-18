@@ -41,22 +41,19 @@
       <section id="workspace-content" tabindex="-1" class="panel history-filters-panel" aria-labelledby="history-filters-heading">
         <div class="panel-header">
           <h2 id="history-filters-heading">Find a change</h2>
-          <div class="history-actions">
-            <button class="history-button" type="button" data-history-refresh>Refresh</button>
-            <button class="history-button" type="button" data-history-clear-filters>Clear filters</button>
-          </div>
+
         </div>
         <form class="history-filters" data-history-filters>
           <label class="history-filter-field">
             <span>Path</span>
-            <input type="search" name="path" data-history-path autocomplete="off" placeholder="part of a note or attachment path">
+            <input class="bn-field" type="search" name="path" data-history-path autocomplete="off" placeholder="part of a note or attachment path">
           </label>
           <details class="history-advanced" data-history-advanced>
             <summary>More filters</summary>
             <div class="history-advanced-fields">
               <label class="history-filter-field">
                 <span>Path matching</span>
-                <select name="path_match" data-history-path-match>
+                <select class="bn-field" name="path_match" data-history-path-match>
                   <option value="contains">Contains</option>
                   <option value="exact">Exact path</option>
                 </select>
@@ -69,7 +66,7 @@
               </fieldset>
               <label class="history-filter-field">
                 <span>Entries per page</span>
-                <select data-history-page-size-select>
+                <select class="bn-field" data-history-page-size-select>
                   <option value="20">20</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
@@ -78,6 +75,7 @@
               </label>
             </div>
           </details>
+          <button class="bn-button history-button" type="button" data-history-clear-filters hidden>Clear filters</button>
           <p class="history-active-filters" data-history-active-filters hidden role="status"></p>
         </form>
       </section>
@@ -89,6 +87,7 @@
       >
         <div class="panel-header">
           <h2 id="history-list-heading">Recorded changes</h2>
+          <button class="bn-button history-button" type="button" data-history-refresh>Refresh</button>
         </div>
         <p
           id="history-list-status"
@@ -107,9 +106,9 @@
         <ul class="history-warnings" data-history-warnings role="status" aria-live="polite"></ul>
         <ul class="history-list" data-history-list></ul>
         <nav class="history-pager" data-history-pager aria-label="History pages">
-          <button class="history-button" type="button" data-history-previous>Newer</button>
+          <button class="bn-button history-button" type="button" data-history-previous>Newer</button>
           <p class="history-range" data-history-range role="status" aria-live="polite"></p>
-          <button class="history-button" type="button" data-history-next>Older</button>
+          <button class="bn-button history-button" type="button" data-history-next>Older</button>
         </nav>
       </section>
 
@@ -130,7 +129,7 @@
         <div class="panel-header">
           <h2 id="history-restore-heading" data-history-restore-heading tabindex="-1">Restore this change</h2>
           <div class="history-actions">
-            <button class="history-button" type="button" data-history-restore-cancel>Cancel</button>
+            <button class="bn-button history-button" type="button" data-history-restore-cancel>Cancel</button>
           </div>
         </div>
         <p
@@ -151,7 +150,7 @@
           </label>
         </div>
         <div class="history-restore-actions">
-          <button class="history-button is-primary" type="button" data-history-restore-confirm>Restore</button>
+          <button class="bn-button history-button is-primary" type="button" data-history-restore-confirm>Restore</button>
         </div>
       </section>
     </div>

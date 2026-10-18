@@ -48,12 +48,12 @@ export const createWorkbenchEditor = (doc: Document): WorkbenchEditor => {
     actions.className = "properties-editor-actions";
     const confirm = doc.createElement("button");
     confirm.type = "submit";
-    confirm.className = "properties-button properties-button-primary";
+    confirm.className = "bn-button properties-button properties-button-primary";
     confirm.setAttribute("data-property-editor-submit", "");
     confirm.textContent = submitLabel;
     const cancel = doc.createElement("button");
     cancel.type = "button";
-    cancel.className = "properties-button";
+    cancel.className = "bn-button properties-button";
     cancel.setAttribute("data-property-editor-cancel", "");
     cancel.textContent = "Cancel";
     actions.append(confirm, cancel);

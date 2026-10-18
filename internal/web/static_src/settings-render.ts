@@ -102,7 +102,7 @@ const buildButton = (
 ): HTMLButtonElement => {
   const button = doc.createElement("button");
   button.type = "button";
-  button.className = className;
+  button.className = `bn-button ${className}`;
   button.textContent = label;
   button.setAttribute(attribute, "");
   return button;

@@ -26,17 +26,6 @@
   font-size: 0.85rem;
 }
 
-.history-filter-field input,
-.history-filter-field select {
-  min-height: 2.2rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.35rem;
-  padding: 0.3rem 0.5rem;
-  color: var(--bn-text);
-  background: var(--bn-surface);
-  font: inherit;
-  font-size: 0.9rem;
-}
 
 .history-filter-group {
   display: flex;

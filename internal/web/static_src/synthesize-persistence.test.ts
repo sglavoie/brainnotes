@@ -34,7 +34,7 @@ it("saves note keys only and never the packet or excerpt text", async () => {
   typeInto("[data-synthesize-title]", "Result note");
   typeInto("[data-synthesize-draft]", "  draft body  ");
 
-  const raw = String(storage.entries.get("bn.synthesize.vault-1.anchor"));
+  const raw = String(storage.entries.get("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test"));
   expect(JSON.parse(raw)).toEqual({
     version: SYNTHESIS_STORAGE_VERSION,
     sources: ["one"],
@@ -51,7 +51,7 @@ it("saves note keys only and never the packet or excerpt text", async () => {
 it("rehydrates saved keys from the server and warns about a note the vault lost", async () => {
   const storage = memoryStorage();
   storage.entries.set(
-    "bn.synthesize.vault-1.anchor",
+    "bn.synthesis-draft.[\"vault-1\",\"anchor\"].test",
     JSON.stringify({
       version: SYNTHESIS_STORAGE_VERSION,
       sources: ["one", "gone", "two"],
@@ -85,7 +85,7 @@ it("rehydrates saved keys from the server and warns about a note the vault lost"
   const warning = query<HTMLElement>("[data-synthesize-warning]");
   expect(warning.hidden).toBe(false);
   expect(warning.textContent).toContain("gone");
-  expect(JSON.parse(String(storage.entries.get("bn.synthesize.vault-1.anchor"))).sources).toEqual([
+  expect(JSON.parse(String(storage.entries.get("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test"))).sources).toEqual([
     "one",
     "two",
   ]);
@@ -95,7 +95,7 @@ it("rehydrates saved keys from the server and warns about a note the vault lost"
 it("ignores a record written by an older schema", async () => {
   const storage = memoryStorage();
   storage.entries.set(
-    "bn.synthesize.vault-1.anchor",
+    "bn.synthesis-draft.[\"vault-1\",\"anchor\"].test",
     JSON.stringify({ version: 0, sources: ["one"], title: "Old" })
   );
   await start({ fetch: routedFetch(), storage, clipboard: null });
@@ -125,7 +125,7 @@ it("warns once when the browser refuses to store anything", async () => {
 it("restores a saved candidate as Markdown without any stored rendering", async () => {
   const storage = memoryStorage();
   storage.entries.set(
-    "bn.synthesize.vault-1.anchor",
+    "bn.synthesis-draft.[\"vault-1\",\"anchor\"].test",
     JSON.stringify({
       version: SYNTHESIS_STORAGE_VERSION,
       sources: [],
@@ -162,7 +162,7 @@ it("clears the saved record and the whole selection on a confirmed discard", asy
   query<HTMLButtonElement>("[data-synthesize-discard]").click();
   await vi.waitFor(() => expect(statusText()).toMatch(/Discarded|Kept|Cleared/));
   expect(confirm).toHaveBeenCalledTimes(1);
-  expect(storage.entries.has("bn.synthesize.vault-1.anchor")).toBe(false);
+  expect(storage.entries.has("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test")).toBe(false);
   expect(selectedKeys()).toEqual(["anchor"]);
   expect(query<HTMLTextAreaElement>("[data-synthesize-draft]").value).toBe("");
   expect(query<HTMLButtonElement>("[data-synthesize-add='one']").disabled).toBe(false);
@@ -183,7 +183,7 @@ it("keeps everything when the discard confirmation is declined", async () => {
   expect(selectedKeys()).toEqual(["anchor", "one"]);
   expect(query<HTMLTextAreaElement>("[data-synthesize-draft]").value).toBe("words");
   expect(
-    JSON.parse(String(storage.entries.get("bn.synthesize.vault-1.anchor"))).draft
+    JSON.parse(String(storage.entries.get("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test"))).draft
   ).toBe("words");
 });
 
@@ -198,7 +198,7 @@ it("warns instead of claiming a discard when the saved record cannot be deleted"
 
   query<HTMLButtonElement>("[data-synthesize-discard]").click();
   await vi.waitFor(() => expect(statusText()).toMatch(/Discarded|Kept|Cleared/));
-  expect(storage.entries.has("bn.synthesize.vault-1.anchor")).toBe(true);
+  expect(storage.entries.has("bn.synthesis-draft.[\"vault-1\",\"anchor\"].test")).toBe(true);
   expect(statusText()).toBe("Cleared this page, but the saved copy could not be deleted.");
   const warning = query<HTMLElement>("[data-synthesize-warning]");
   expect(warning.hidden).toBe(false);

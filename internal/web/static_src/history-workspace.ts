@@ -140,6 +140,7 @@ const bindHistoryWorkspace = (ctx: WorkspaceContext): void => {
       elements.path.value = "";
     }
     if (elements.pathMatch) elements.pathMatch.value = "contains";
+    if (elements.pageSizeSelect) elements.pageSizeSelect.value = String(elements.pageSize);
     clearHistoryFilterGroup(elements.originFilters);
     clearHistoryFilterGroup(elements.classFilters);
     reload(0);

@@ -2285,21 +2285,6 @@ code {
   font-size: 0.9rem;
 }
 
-.history-status.is-success {
-  color: var(--bn-success);
-}
-
-.history-status.is-error {
-  color: var(--bn-danger);
-}
-
-.history-status.is-loading {
-  color: var(--bn-muted);
-}
-
-.history-status.is-empty {
-  color: var(--bn-text-subtle);
-}
 
 .history-conflict {
   display: flex;
@@ -2414,17 +2399,6 @@ code {
   font-size: 0.85rem;
 }
 
-.history-filter-field input,
-.history-filter-field select {
-  min-height: 2.2rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.35rem;
-  padding: 0.3rem 0.5rem;
-  color: var(--bn-text);
-  background: var(--bn-surface);
-  font: inherit;
-  font-size: 0.9rem;
-}
 
 .history-filter-group {
   display: flex;
@@ -6811,33 +6785,6 @@ code {
   overflow-wrap: anywhere;
 }
 
-.synthesize-status.is-error,
-.synthesize-selection-status.is-error,
-.synthesize-suggestions-status.is-error,
-.synthesize-search-status.is-error,
-.synthesize-context-status.is-error,
-.synthesize-generate-status.is-error,
-.synthesize-preview-status.is-error {
-  color: var(--bn-danger);
-}
-
-.synthesize-status.is-success,
-.synthesize-suggestions-status.is-success,
-.synthesize-search-status.is-success,
-.synthesize-context-status.is-success,
-.synthesize-generate-status.is-success,
-.synthesize-preview-status.is-success {
-  color: var(--bn-success);
-}
-
-.synthesize-status.is-empty,
-.synthesize-suggestions-status.is-empty,
-.synthesize-search-status.is-empty,
-.synthesize-generate-status.is-empty,
-.synthesize-preview-status.is-empty {
-  color: var(--bn-text-subtle);
-}
-
 .synthesize-warning {
   margin: 0;
   border: 1px solid var(--bn-border-strong);
@@ -6901,6 +6848,19 @@ code {
   outline-offset: 2px;
 }
 
+
+.synthesize-anchor-summary { margin: 0; color: var(--bn-muted); font-size: 0.9rem; }
+.synthesize-navigation { display: flex; flex-wrap: wrap; gap: 0.5rem; position: sticky; top: 0; z-index: 5; background: var(--bn-surface); padding-block: 0.4rem; }
+.synthesize-navigation a { border: 1px solid var(--bn-border); background: var(--bn-raised); }
+.synthesize-disclosure { min-width: 0; }
+.synthesize-disclosure > summary { font-weight: 600; }
+.synthesize-disclosure[open] > summary { margin-bottom: 0.5rem; }
+.synthesize-disclosure > .synthesize-section + .synthesize-section { margin-top: 0.75rem; }
+.synthesize-panel :is(section, details)[id] { scroll-margin-top: 4rem; }
+.synthesize-status:empty { display: none; }
+.synthesize-recovery { border: 1px solid var(--bn-border); padding: 0.5rem; }
+.synthesize-recovery-row { padding-block: 0.5rem; border-top: 1px solid var(--bn-border); overflow-wrap: anywhere; }
+.synthesize-recovery-row button { margin-right: 0.5rem; }
 /* internal/web/static_src/css/synthesize-sources.css */
 .synthesize-source-list {
   display: grid;
@@ -9027,36 +8987,9 @@ dt.sync-fact {
   }
 }
 /* internal/web/static_src/css/controls.css */
-/* Shared geometry; semantic colors remain with each surface. Loaded after components. */
-.open-editor-button,
-.trash-note-button,
-.pin-button,
-.note-sidebar-toggle,
-.frontmatter-button,
-.create-note-button,
-.copy-button,
-.synthesize-launch,
-.note-insight-button,
-.note-insight-copy,
-.history-button,
-.query-bar-button,
-.overview-bulk-button,
-.brief-action-button,
-.brief-insight-copy,
-.new-note button,
-.review-action,
-.settings-button,
-.properties-button,
-.saved-views-save-button,
-.source-editor-launch,
-.source-editor-command,
-.source-editor-save,
-.source-editor-tab,
-.source-editor-frontmatter,
-.sync-button,
-.facet-clear-all,
-.facet-input-clear,
-.new-note-action {
+/* Shared controls own geometry; workspace CSS owns placement and semantic variants. */
+/* Older property/fix builders migrate independently; these two aliases share the same primitive. */
+.bn-button, .properties-button, .review-action {
   min-height: var(--bn-control-height);
   border-radius: var(--bn-control-radius);
   padding: var(--bn-control-padding);
@@ -9064,6 +8997,26 @@ dt.sync-fact {
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
+
+.bn-field {
+  min-height: var(--bn-control-height);
+  border: 1px solid var(--bn-border);
+  border-radius: var(--bn-control-radius);
+  padding: var(--bn-control-padding);
+  color: var(--bn-text);
+  background: var(--bn-surface);
+  font: inherit;
+  font-size: var(--bn-control-font-size);
+  box-sizing: border-box;
+}
+.bn-button.bn-primary { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border: 1px solid var(--bn-accent-subtle-border); font-weight: 600; }
+.bn-button.bn-secondary { background: var(--bn-raised); color: var(--bn-text-subtle); border-color: var(--bn-border); font-weight: 400; }
+.bn-status { color: var(--bn-muted); overflow-wrap: anywhere; }
+.bn-status.is-success { color: var(--bn-success); }
+.bn-status.is-error { color: var(--bn-danger); }
+.bn-status.is-warning { color: var(--bn-warning); }
+.bn-status.is-empty { color: var(--bn-text-subtle); }
+.bn-disclosure > summary { cursor: pointer; min-height: var(--bn-control-height); padding-block: 0.4rem; box-sizing: border-box; }
 
 @media (pointer: coarse) {
   :root { --bn-control-height: 2.75rem; }

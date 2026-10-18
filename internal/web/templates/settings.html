@@ -33,7 +33,7 @@
       <div class="panel-header">
         <h2 id="settings-heading">Portable settings</h2>
         <div class="settings-actions">
-          <button class="settings-button" type="button" data-settings-refresh>Refresh</button>
+          <button class="bn-button settings-button" type="button" data-settings-refresh>Refresh</button>
         </div>
       </div>
       <p
@@ -47,8 +47,8 @@
       <div class="settings-confirm" data-settings-confirm-block>
         <pre class="settings-diff" data-settings-diff hidden aria-label="Pending brainnotes.toml change"></pre>
         <div class="settings-confirm-actions">
-          <button class="settings-button settings-button-primary" type="button" data-settings-confirm hidden>Save changes</button>
-          <button class="settings-button" type="button" data-settings-cancel hidden>Cancel</button>
+          <button class="bn-button settings-button settings-button-primary" type="button" data-settings-confirm hidden>Save changes</button>
+          <button class="bn-button settings-button" type="button" data-settings-cancel hidden>Cancel</button>
         </div>
       </div>
       <ul class="settings-list" data-settings-list></ul>
@@ -65,8 +65,8 @@
       <div class="panel-header">
         <h2 id="templates-heading">Templates</h2>
         <div class="settings-actions">
-          <button class="settings-button" type="button" data-templates-new>New template</button>
-          <button class="settings-button" type="button" data-templates-refresh>Refresh</button>
+          <button class="bn-button settings-button" type="button" data-templates-new>New template</button>
+          <button class="bn-button settings-button" type="button" data-templates-refresh>Refresh</button>
         </div>
       </div>
       <p
@@ -102,10 +102,10 @@
           <p class="templates-hint">Template placeholders such as <code>{{"{{ .Title }}"}}</code> are stored exactly as typed and are never parsed here.</p>
           <pre class="settings-diff" data-templates-diff hidden aria-label="Pending template change"></pre>
           <div class="settings-confirm-actions">
-            <button class="settings-button settings-button-primary" type="button" data-templates-save>Save</button>
-            <button class="settings-button settings-danger" type="button" data-templates-delete disabled>Delete</button>
-            <button class="settings-button settings-button-primary" type="button" data-templates-confirm hidden>Save changes</button>
-            <button class="settings-button" type="button" data-templates-cancel hidden>Cancel</button>
+            <button class="bn-button settings-button settings-button-primary" type="button" data-templates-save>Save</button>
+            <button class="bn-button settings-button settings-danger" type="button" data-templates-delete disabled>Delete</button>
+            <button class="bn-button settings-button settings-button-primary" type="button" data-templates-confirm hidden>Save changes</button>
+            <button class="bn-button settings-button" type="button" data-templates-cancel hidden>Cancel</button>
           </div>
         </div>
       </div>
@@ -123,8 +123,8 @@
       <div class="panel-header history-header">
         <h2 id="settings-history-heading">Recent changes</h2>
         <div class="history-actions">
-          <button class="history-button" type="button" data-history-refresh>Refresh</button>
-          <button class="history-button history-danger" type="button" data-history-undo-latest disabled>Undo latest change</button>
+          <button class="bn-button history-button" type="button" data-history-refresh>Refresh</button>
+          <button class="bn-button history-button history-danger" type="button" data-history-undo-latest disabled>Undo latest change</button>
         </div>
       </div>
       <p
@@ -136,7 +136,7 @@
       >Loading history...</p>
       <div class="history-conflict" data-history-conflict hidden>
         <p data-history-conflict-summary></p>
-        <button class="history-button history-danger" type="button" data-history-force disabled>Force undo</button>
+        <button class="bn-button history-button history-danger" type="button" data-history-force disabled>Force undo</button>
       </div>
       <ul class="history-list" data-history-list></ul>
     </section>

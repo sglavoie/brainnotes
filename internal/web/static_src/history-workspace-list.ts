@@ -76,7 +76,7 @@ const historyEntryCard = (
   meta.textContent = classes ? `${parts.join(" - ")} - ${classes}` : parts.join(" - ");
 
   const restore = document.createElement("button");
-  restore.className = "history-button";
+  restore.className = "bn-button history-button";
   restore.type = "button";
   restore.setAttribute("data-history-preview-entry", entry.id);
   restore.setAttribute("aria-label", `Preview restoring ${entry.command || entry.id}`);
@@ -146,7 +146,7 @@ export const renderHistoryEmptyStatus = (
   if (!filtered) return;
   const clear = elements.status.ownerDocument.createElement("button");
   clear.type = "button";
-  clear.className = "history-button";
+  clear.className = "bn-button history-button";
   clear.textContent = "Clear filters";
   clear.addEventListener("click", () => {
     elements.clearFilters?.focus();

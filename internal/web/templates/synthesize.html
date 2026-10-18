@@ -14,9 +14,10 @@
   <main class="index-main">
     <header class="site-header focused-workspace-header">
       <h1>Synthesize</h1>
-      {{template "workspaceMenu" ""}}
+      {{template "workspaceMenu" "synthesize"}}
     </header>
     {{template "siteSync" .}}
+    <a data-note-back-results href="/library" hidden>Back to results</a>
     <p class="page-subtitle">Curate the notes worth reading together, then write one note that says what they add up to.</p>
 
 
@@ -42,34 +43,10 @@
       data-synthesize-search-endpoint="{{ .SearchPath }}"
       aria-labelledby="synthesize-heading"
     >
-      <div class="panel-header">
-        <h2 id="synthesize-heading">Anchor note</h2>
-      </div>
-      <dl class="synthesize-anchor">
-        <div class="synthesize-anchor-row">
-          <dt>Note</dt>
-          <dd><a class="synthesize-anchor-title" href="{{ .AnchorRoute }}">{{ .AnchorTitle }}</a></dd>
-        </div>
-        <div class="synthesize-anchor-row">
-          <dt>Vault path</dt>
-          <dd><code>{{ .AnchorRelPath }}</code></dd>
-        </div>
-        <div class="synthesize-anchor-row">
-          <dt>New note goes in</dt>
-          <dd><code data-synthesize-folder-default>{{if .DefaultFolder}}{{ .DefaultFolder }}{{else}}/{{end}}</code></dd>
-        </div>
-        <div class="synthesize-anchor-row">
-          <dt>Supporting notes</dt>
-          <dd>Up to {{ .MaxSupporters }}, in the order you choose.</dd>
-        </div>
-      </dl>
-
-      <p class="synthesize-purposes">
-        Research purposes available: {{range $index, $purpose := .Purposes}}{{if $index}}, {{end}}<code>{{ $purpose }}</code>{{end}}.
-      </p>
-
+      <h2 id="synthesize-heading" class="visually-hidden">Synthesis workbench</h2>
+      <p class="synthesize-anchor-summary">Based on <a href="{{ .AnchorRoute }}">{{ .AnchorTitle }}</a></p>
       {{if not .AgentConfigured}}
-        <p class="synthesize-agent-status" data-synthesize-agent-status role="status">{{ .AgentStatusMsg }}</p>
+        <p class="synthesize-agent-status" data-synthesize-agent-status hidden>{{ .AgentStatusMsg }}</p>
       {{end}}
 
       <p class="synthesize-fallback" data-synthesize-fallback>

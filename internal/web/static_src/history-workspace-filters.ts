@@ -93,6 +93,7 @@ export const readHistoryQuery = (
 // This summary stays visible when the advanced controls are collapsed.
 export const summarizeHistoryFilters = (elements: HistoryWorkspaceElements, query: HistoryQuery): void => {
   const summary = elements.root.querySelector<HTMLElement>("[data-history-active-filters]");
+  if (elements.clearFilters) elements.clearFilters.hidden = !hasHistoryConstraints(elements, query);
   if (!summary) return;
   const parts: string[] = [];
   if (query.path) parts.push(`${query.pathMatch === "exact" ? "Exact path" : "Path contains"}: ${query.path}`);
@@ -107,3 +108,6 @@ export const summarizeHistoryFilters = (elements: HistoryWorkspaceElements, quer
 const selectedHistoryLabels = (group: HTMLElement | null): string[] =>
   Array.from(group?.querySelectorAll<HTMLInputElement>("input:checked") || [])
     .map((input) => input.closest("label")?.textContent?.trim() || input.value);
+
+const hasHistoryConstraints = (elements: HistoryWorkspaceElements, query: HistoryQuery): boolean =>
+  !!(query.path || query.origins?.length || query.classes?.length || query.limit !== elements.pageSize || query.pathMatch === "exact");

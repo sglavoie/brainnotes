@@ -17,6 +17,7 @@ export const setStatusText = (
   if (!element) {
     return;
   }
+  element.classList.add("bn-status");
   element.textContent = message;
   element.classList.remove(...classNames);
   if (kind) {
