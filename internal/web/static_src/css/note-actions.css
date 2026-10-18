@@ -145,15 +145,8 @@
   border-radius: 0.4rem;
 }
 
-.note-copy-more {
-  order: 1;
-}
-
 .note-copy-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  display: contents;
 }
 
 .note-actions-more {
@@ -166,4 +159,11 @@
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  background: var(--bn-surface);
 }
+
+/* Keep secondary actions together without expanding the primary toolbar. */
+.note-actions-more[open] { flex: 1 1 100%; }

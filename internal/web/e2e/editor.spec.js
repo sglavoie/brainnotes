@@ -408,7 +408,7 @@ test("a note renamed under the edit offers the kept text back as a new note", as
   // The recovery is complete. Retire the renamed copy so later Library and
   // backlink journeys see the original fixture identity only.
   await page.goto(renamedNote.path);
-  await page.getByText("More actions", { exact: true }).click();
+  await page.getByText("Actions", { exact: true }).click();
   await page.locator("[data-trash-button]").click();
   await page.getByRole("dialog").getByRole("button", { name: "Move to Trash", exact: true }).click();
   await expect(page).toHaveURL(`${manifest.baseURL}/`);

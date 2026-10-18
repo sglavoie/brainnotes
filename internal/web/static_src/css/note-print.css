@@ -20,7 +20,6 @@
   .note-page .site-header > :not(h1),
   .note-page .note-layout > :not(.note-content),
   .note-page .note-content > :not(.note-print-body),
-  .note-page .note-print-body > h2,
   .note-page [data-copy-controls],
   .note-page .heading-anchor {
     display: none !important;

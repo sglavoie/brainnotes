@@ -57,6 +57,13 @@ should appear when they are useful, with keyboard access to each disclosure.
 
 ## Mobile and accessibility polish
 
+`screen-polish.spec.js` checks usable mobile Properties filters, actual properties
+on entry, reading content near the top, Library action placement, Health's real
+queue and read-error recovery, and exact MiB settings through save/reload. Normal
+Health visual baselines must load tasks; deliberate read failures have separate
+baselines. Visual approval must preserve these usability assertions as well as
+pixel consistency.
+
 `polish-refinement.spec.js` checks two visible Library results, collapsed controls
 with visible constraints, touch target sizes, keyboard disclosures, enlarged text,
 forced-color focus, and editor prose/Save in a reduced viewport. The ordinary

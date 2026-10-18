@@ -35,6 +35,7 @@ for (const mode of ["unavailable", "refused"]) {
         ? undefined : { writeText: () => Promise.reject(new Error("denied")) } });
     }, mode);
     await page.goto("/n/Notes/Gamma");
+    await page.locator(".note-actions-more > summary").click();
     const button = page.getByRole("button", { name: "Copy wikilink", exact: true });
     const expected = await button.getAttribute("data-copy-text");
     await button.click();
@@ -43,7 +44,6 @@ for (const mode of ["unavailable", "refused"]) {
     await expect(fallback).toBeFocused();
     await expect(fallback).toHaveValue(expected);
     expect(await fallback.evaluate((el) => el.value.slice(el.selectionStart, el.selectionEnd))).toBe(expected);
-    await page.getByText("More copy options", { exact: true }).click();
     await page.getByRole("button", { name: "Copy vault path", exact: true }).click();
     await expect(fallback).toHaveCount(1);
     await expect(fallback).toHaveValue("Notes/Gamma.md");
@@ -57,9 +57,9 @@ test("trash offers undo after navigation and restores the original file", async 
   const peerBytes = readFileSync(join(manifest.peerVault, "Notes/Gamma.md"), "utf8");
   await page.goto("/n/Notes/Gamma");
   await expect(page.getByRole("link", { name: "Edit in browser", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open in external editor", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open in external editor", exact: true })).toBeHidden();
   await expect(page.locator("[data-trash-button]")).toBeHidden();
-  await page.getByText("More actions", { exact: true }).focus();
+  await page.getByText("Actions", { exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("link", { name: "Synthesize from this note" })).toBeVisible();
   await page.locator("[data-trash-button]").click();

@@ -360,7 +360,7 @@ export const renderOverviewSearchResult = (
   row.appendChild(content);
   if (result.key) {
     const pin = renderOverviewPin(doc, result);
-    row.appendChild(pin.button);
+    context.appendChild(pin.button);
     item.appendChild(pin.feedback);
   }
   item.prepend(row);

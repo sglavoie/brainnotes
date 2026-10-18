@@ -155,3 +155,14 @@ The workbench does not provide spreadsheet-style editing, advanced value
 transforms (regular expressions, split/join or case rules), or reusable edit
 recipes. Use **Settings** for portable configuration and templates, and
 **Edit in browser** on a note to edit its Markdown body.
+
+## Compact summaries and recovery
+
+Properties leads with its filter and property list. **Property statistics** expands
+the full counts when needed. On phones, the filter retains a normal touch-sized
+height instead of stretching vertically.
+
+Health reports a failed fixes request once. **Reload fixes** reads the queue again
+without applying a fix. Counts and tasks remain visible with an out-of-date notice
+until a successful refresh. The shared **Sync:** status describes synchronization,
+separately from these vault-health results.

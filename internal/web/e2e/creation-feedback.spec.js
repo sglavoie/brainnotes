@@ -29,7 +29,7 @@ test("a lost create response can be checked without creating again", async ({ pa
   expect(requests).toBe(1);
   // Return the shared fixture to a broken target for later browsing tests.
   await page.goto(createdRoute);
-  await page.getByText("More actions", { exact: true }).click();
+  await page.getByText("Actions", { exact: true }).click();
   await page.locator("[data-trash-button]").click();
   await page.getByRole("dialog").getByRole("button", { name: "Move to Trash", exact: true }).click();
   await expect(page).toHaveURL(`${manifest.baseURL}/`);

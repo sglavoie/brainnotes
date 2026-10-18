@@ -28,7 +28,7 @@ export type SyncLineDeps = {
 const refusalCodes = ["forbidden", "not_found"];
 
 const renderLine = (line: HTMLElement, status: SyncStatusResult, doc: Document): void => {
-  line.textContent = syncLineSummary(status);
+  line.textContent = `Sync: ${syncLineSummary(status)}`;
   line.classList.toggle("is-attention", syncNeedsPerson(status));
   if (status.review_path === "") {
     return;

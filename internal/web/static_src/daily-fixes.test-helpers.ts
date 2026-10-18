@@ -162,7 +162,8 @@ export const renderPanel = (csrfToken = "csrf-token"): void => {
       <dd data-fixes-count-snoozed-hidden>0</dd>
       <dd data-fixes-count-total-generated>0</dd>
       <p data-fixes-status></p>
-      <p data-fixes-loading hidden></p>
+      <p data-fixes-stale hidden></p>
+      <button data-fixes-button data-fixes-reload>Reload fixes</button>
       <p data-fixes-error hidden></p>
       <p data-fixes-empty hidden></p>
       <ul data-fixes-warnings hidden></ul>

@@ -46,7 +46,7 @@ export type DailyFixesContext = {
   setStatus: (message: string, kind?: StatusKind) => void;
   setError: (message: string) => void;
   showError: (message: string) => void;
-  setLoading: (loading: boolean) => void;
+  setQueueStale: (stale: boolean) => void;
   renderResult: (result: CockpitQueueResult) => void;
   clearPreview: (id: string) => void;
   // loadQueue is in the context rather than imported directly because applying a
@@ -112,6 +112,7 @@ export const applyQueueResult = (
   }
   ctx.setError("");
   ctx.renderResult(result);
+  ctx.setQueueStale(false);
   const message = successMessage || fixCountsStatusMessage(result.counts);
   const kind = successKind || (result.counts.active === 0 ? "is-empty" : "");
   ctx.setStatus(message, kind);
@@ -120,7 +121,8 @@ export const applyQueueResult = (
 
 export const loadQueue = async (ctx: DailyFixesContext, successMessage = ""): Promise<void> => {
   ctx.setBusy(true);
-  ctx.setLoading(true);
+  ctx.setError("");
+  ctx.setQueueStale(true);
   ctx.setStatus("Loading fixes queue...", "is-loading");
   try {
     const resp = await ctx.fetcher(ctx.config.queueEndpoint, {
@@ -135,7 +137,6 @@ export const loadQueue = async (ctx: DailyFixesContext, successMessage = ""): Pr
   } catch {
     ctx.showError("Fixes queue unavailable.");
   } finally {
-    ctx.setLoading(false);
     ctx.setBusy(false);
   }
 };
@@ -350,6 +351,7 @@ const fixesClickHandlers: Array<{
   selector: string;
   run: (ctx: DailyFixesContext, button: HTMLButtonElement) => void;
 }> = [
+  { selector: "[data-fixes-reload]", run: (ctx) => void ctx.loadQueue("Fixes refreshed.") },
   { selector: "[data-fixes-fix-action]", run: (ctx, button) => void runPreview(ctx, button) },
   { selector: "[data-fixes-preview-apply]", run: (ctx, button) => void runApply(ctx, button) },
   {

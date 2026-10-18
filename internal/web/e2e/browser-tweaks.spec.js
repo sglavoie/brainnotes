@@ -45,7 +45,7 @@ for (const theme of ["light", "dark"]) {
     await expect(page.locator(".site-header h1")).toBeVisible();
     await expect(body).toBeVisible();
     for (const selector of [".site-nav", ".site-header-tools", ".note-meta-sidebar", ".note-toc-sidebar",
-      ".note-actions", ".note-insight", ".related-notes", ".note-print-body > h2", "[data-copy-controls]"]) {
+      ".note-actions", ".note-insight", ".related-notes", "[data-copy-controls]"]) {
       for (const element of await page.locator(selector).all()) await expect(element).toBeHidden();
     }
     await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 255, 255)");
@@ -58,6 +58,7 @@ for (const theme of ["light", "dark"]) {
     await page.emulateMedia({ media: "screen" });
     await page.getByText("Workspace", { exact: true }).click();
     await expect(page.locator(".site-nav")).toBeVisible();
-    await expect(page.locator(".note-print-body > h2")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Note content", exact: true })).toBeVisible();
+    await expect(page.locator(".note-print-body > h2")).toHaveCount(0);
   });
 }

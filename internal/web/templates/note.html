@@ -82,41 +82,36 @@
             <a class="source-editor-launch" href="{{.EditSourcePath}}" data-source-editor-launch>Edit in browser</a>
           </div>
         {{end}}
-        <div class="note-action-group" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
-          <button type="button" class="open-editor-button" data-open-button>Open in external editor</button>
-          <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>
-        </div>
-
         <div class="note-action-group" data-pin-note data-pin-key="{{.Key}}" data-pin-csrf="{{.CSRFToken}}" data-pin-state="{{if .Pinned}}pinned{{else}}unpinned{{end}}">
           <button type="button" class="pin-button" data-pin-button aria-pressed="{{if .Pinned}}true{{else}}false{{end}}">{{if .Pinned}}Unpin{{else}}Pin{{end}}</button>
           <p class="pin-note-status" data-pin-status role="status" aria-live="polite"></p>
         </div>
 
-        {{if not readOnly}}
-          <div class="note-action-group">
-            <a class="source-editor-launch" href="/history?path={{.Copy.VaultPath}}&amp;path_match=exact" data-note-history>History for this note</a>
-          </div>
-        {{end}}
-
-        {{if .Copy.Wikilink}}
-          <div class="note-action-group note-copy-actions" data-copy-controls>
-            <button type="button" class="copy-button" data-copy-note-url data-copy-text="" data-copy-label="Note URL" hidden>Copy note URL</button>
-            <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
-            <details class="note-copy-more">
-              <summary class="copy-button">More copy options</summary>
-              <div class="note-copy-options">
-                <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
-                <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
-                <button type="button" class="copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
+        <details class="note-actions-more">
+          <summary class="copy-button">Actions</summary>
+          <div class="note-more-options">
+            <div class="note-action-group" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
+              <button type="button" class="open-editor-button" data-open-button>Open in external editor</button>
+              <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>
+            </div>
+            {{if not readOnly}}
+              <div class="note-action-group">
+                <a class="source-editor-launch" href="/history?path={{.Copy.VaultPath}}&amp;path_match=exact" data-note-history>History for this note</a>
               </div>
-            </details>
-            <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
-          </div>
-        {{end}}
-        {{if not readOnly}}
-          <details class="note-actions-more">
-            <summary class="copy-button">More actions</summary>
-            <div class="note-more-options">
+            {{end}}
+            {{if .Copy.Wikilink}}
+              <div class="note-action-group note-copy-actions" data-copy-controls>
+                <button type="button" class="copy-button" data-copy-note-url data-copy-text="" data-copy-label="Note URL" hidden>Copy note URL</button>
+                <button type="button" class="copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
+                <div class="note-copy-options">
+                  <button type="button" class="copy-button" data-copy-text="{{.Copy.VaultPath}}" data-copy-label="Vault path">Copy vault path</button>
+                  <button type="button" class="copy-button" data-copy-text="{{.Copy.RoutePath}}" data-copy-label="Route path">Copy route</button>
+                  <button type="button" class="copy-button" data-copy-text="{{.Copy.MarkdownLink}}" data-copy-label="Markdown link">Copy Markdown link</button>
+                </div>
+                <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
+              </div>
+            {{end}}
+            {{if not readOnly}}
               <div class="note-action-group">
                 <a class="synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
               </div>
@@ -124,9 +119,9 @@
                 <button type="button" class="trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
                 <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
               </div>
-            </div>
-          </details>
-        {{end}}
+            {{end}}
+          </div>
+        </details>
       </div>
 
       <div class="note-layout-toolbar">
@@ -294,8 +289,7 @@
         {{end}}
 
         <div class="note-content">
-          <section class="panel note-print-body">
-            <h2>Body</h2>
+          <section class="note-print-body" aria-label="Note content">
             {{/* The colon cannot occur in Goldmark's generated heading IDs. */}}
             <div id="bn:note-body" class="note-body" tabindex="-1" data-note-body data-note-context-links>{{.BodyHTML}}</div>
           </section>

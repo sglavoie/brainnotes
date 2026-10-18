@@ -357,3 +357,6 @@
   margin-top: 0.55rem;
 }
 
+
+.properties-counts-details { margin-top: 0.25rem; color: var(--bn-muted); font-size: 0.85rem; }
+.properties-counts-details > summary { width: fit-content; }

@@ -291,7 +291,7 @@ describe("daily fixes panel errors and refresh", () => {
       expect(document.querySelector("[data-fixes-error]")?.textContent).toBe("Cockpit failed.");
     });
     expect(document.querySelector<HTMLElement>("[data-fixes-error]")?.hidden).toBe(false);
-    expect(document.querySelector("[data-fixes-status]")?.classList.contains("is-error")).toBe(true);
+    expect(document.querySelector("[data-fixes-status]")?.textContent).toBe("");
   });
 
   it("refreshes after management mutations", async () => {

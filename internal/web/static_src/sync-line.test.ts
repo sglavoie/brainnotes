@@ -43,7 +43,7 @@ it("writes the server's own sentence and links to where the decision is made", (
     document
   );
 
-  expect(line.textContent).toContain("2 changes are waiting for a decision.");
+  expect(line.textContent).toContain("Sync: 2 changes need review.");
   expect(line.classList.contains("is-attention")).toBe(true);
   const review = line.querySelector<HTMLAnchorElement>("a.sync-line-review");
   expect(review?.getAttribute("href")).toBe("/sync");

@@ -48,7 +48,9 @@ const count = (n: number, one: string, many: string): string =>
   n === 1 ? `1 ${one}` : `${n} ${many}`;
 
 /** The line the navigation shows on every page. */
-export const syncLineSummary = (status: SyncStatusResult): string => status.summary;
+export const syncLineSummary = (status: SyncStatusResult): string => status.summary
+  .replace(/^(\d+) changes are waiting for a decision\.$/, "$1 changes need review.")
+  .replace(/^1 change is waiting for a decision\.$/, "1 change needs review.");
 
 /**
  * Whether the status is worth a person's attention.

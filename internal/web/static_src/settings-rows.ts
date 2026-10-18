@@ -1,5 +1,6 @@
 import type { SettingSummary } from "./api";
-import { settingBlockedReason, settingEditorText, settingOriginLabel } from "./settings-model";
+import { settingBlockedReason, settingOriginLabel } from "./settings-model";
+import { settingControlText } from "./settings-units";
 import { settingDisplayValue } from "./settings-presentation";
 import type { SettingRow } from "./settings-render";
 
@@ -10,12 +11,12 @@ const setControl = (row: SettingRow, summary: SettingSummary): void => {
   if (row.control instanceof HTMLInputElement && row.control.type === "checkbox") {
     row.control.checked = summary.value.flag;
   } else {
-    row.control.value = settingEditorText(summary.value);
+    row.control.value = settingControlText(summary);
   }
 };
 
 export const markSettingDraft = (row: SettingRow): void => {
-  const dirty = controlText(row.control) !== settingEditorText(row.summary.value);
+  const dirty = controlText(row.control) !== settingControlText(row.summary);
   row.element.dataset.dirty = String(dirty);
   const marker = row.element.querySelector<HTMLElement>("[data-settings-dirty]");
   if (marker) marker.hidden = !dirty;
@@ -26,7 +27,7 @@ export const markSettingDraft = (row: SettingRow): void => {
 export const updateSettingRow = (row: SettingRow, summary: SettingSummary, savedText?: string): void => {
   const current = controlText(row.control);
   const keepDraft = savedText === undefined
-    ? current !== settingEditorText(row.summary.value)
+    ? current !== settingControlText(row.summary)
     : current !== savedText;
   if (!keepDraft) setControl(row, summary);
   row.summary = summary;

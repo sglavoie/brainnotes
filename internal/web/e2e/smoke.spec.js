@@ -86,11 +86,11 @@ test("note copy options expand with the keyboard and retain manual copying", asy
   });
   await page.goto("/n/Alpha");
   const controls = page.locator(".note-copy-actions");
-  await expect(controls.getByRole("button", { name: "Copy wikilink", exact: true })).toBeVisible();
-  await expect(controls.getByRole("button", { name: "Copy note URL", exact: true })).toBeVisible();
+  await expect(controls.getByRole("button", { name: "Copy wikilink", exact: true })).toBeHidden();
+  await expect(controls.getByRole("button", { name: "Copy note URL", exact: true })).toBeHidden();
   const path = controls.getByRole("button", { name: "Copy vault path", exact: true });
   await expect(path).toBeHidden();
-  const summary = controls.locator("summary");
+  const summary = page.locator(".note-actions-more > summary");
   await summary.focus();
   await summary.press("Enter");
   await expect(path).toBeVisible();

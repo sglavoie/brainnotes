@@ -44,16 +44,37 @@ export const reviewVisuals = (snapshot) => {
         await expect(page.locator("[data-history-entry]").first()).toBeInViewport();
         await expect(page.getByRole("button", { name: /Preview restoring/ }).first()).toBeInViewport();
       }
+      if (workspace === "health") {
+        await expect(page.locator("[data-fixes-panel]")).toHaveAttribute("aria-busy", "false");
+        await expect(page.locator("[data-fixes-error]")).toBeHidden();
+        await expect(page.locator("[data-fixes-task]").first()).toBeVisible();
+      }
+      if (workspace === "properties") {
+        await expect(page.locator(".properties-item").first()).toBeInViewport();
+        const input = await page.locator("[data-properties-query]").boundingBox();
+        expect(input.height).toBeLessThan(60);
+      }
       await snapshot(page, `manage-${workspace.replaceAll("/", "-")}`);
     });
   }
+  test("Health read failure is a separate recoverable state", async ({ page }) => {
+    await fixedSync(page);
+    await page.route("**/api/cockpit?view=daily", (route) => route.fulfill({
+      status: 503, json: { ok: false, message: "Fixes are temporarily unavailable." },
+    }));
+    await page.goto("/health");
+    await expect(page.getByText("Fixes are temporarily unavailable.", { exact: true })).toHaveCount(1);
+    await expect(page.locator("[data-fixes-stale]")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reload fixes" })).toBeEnabled();
+    await snapshot(page, "health-error");
+  });
   test("settings confirmation beside the edited value", async ({ page }) => {
     await fixedHistory(page);
     await fixedSync(page);
     await page.goto("/settings");
     const row = page.locator('[data-settings-row="attachments.max_file_bytes"]');
     await row.locator("[data-settings-edit]").click();
-    await row.locator("[data-settings-control]").fill("10485760");
+    await row.locator("[data-settings-control]").fill("10");
     await row.locator("[data-settings-save]").click();
     await expect(row.locator("[data-settings-confirm]")).toBeFocused();
     await expect(row.locator("[data-settings-status]")).toBeInViewport();

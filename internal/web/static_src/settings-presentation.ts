@@ -1,4 +1,5 @@
 import type { SettingSummary } from "./api";
+import { bytesAsMiB } from "./settings-units";
 import { formatSettingValue } from "./settings-model";
 
 const groups: Record<string, string> = {
@@ -29,7 +30,7 @@ const names: Record<string, string> = {
 export const settingGroup = (key: string): string => groups[key.split(".")[0]] || "Other settings";
 export const settingName = (key: string): string => names[key] || key.replaceAll(/[._]/g, " ");
 export const settingUnit = (key: string): string => {
-  if (key.endsWith("_bytes")) return "bytes";
+  if (key.endsWith("_bytes")) return "MiB";
   if (key.endsWith("_days")) return "days";
   return "";
 };
@@ -37,7 +38,7 @@ export const settingDisplayValue = (summary: SettingSummary): string => {
   if (summary.kind === "bool") return summary.value.flag ? "On" : "Off";
   if (summary.key.endsWith("_bytes")) {
     const bytes = summary.value.number;
-    return bytes >= 1048576 ? `${Number((bytes / 1048576).toFixed(2))} MiB` : `${bytes} bytes`;
+    return `${bytesAsMiB(bytes)} MiB`;
   }
   const unit = settingUnit(summary.key);
   return `${formatSettingValue(summary.value)}${unit ? ` ${unit}` : ""}`;

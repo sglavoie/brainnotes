@@ -32,8 +32,8 @@ remain visible with a link to History. The notice survives the redirect in
 this tab only and is scoped to the current server session. If browser storage
 is unavailable, the note page stays open with the same Undo control.
 
-Note pages keep **Copy wikilink** and **Copy note URL** visible, with vault path,
-route, and Markdown link under **More copy options**. Copy controls offer
+Note pages group **Copy wikilink**, **Copy note URL**, vault path,
+route, and Markdown link under **Actions**. Copy controls offer
 selected, read-only text for manual copying
 when clipboard access is unavailable or refused. Keyboard navigation in header
 search keeps the selected result visible within the dropdown without scrolling

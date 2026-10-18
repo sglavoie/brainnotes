@@ -50,7 +50,7 @@ func TestServer_NoteView200(t *testing.T) {
 		t.Fatalf("unsafe raw HTML rendered in note body, got %q", body)
 	}
 	insightIndex := strings.Index(body, `data-note-insight`)
-	bodyIndex := strings.Index(body, `<h2>Body</h2>`)
+	bodyIndex := strings.Index(body, `aria-label="Note content"`)
 	if insightIndex < 0 || bodyIndex < 0 || insightIndex <= bodyIndex {
 		t.Fatalf("Ask AI panel must render below note body: insight=%d body=%d", insightIndex, bodyIndex)
 	}

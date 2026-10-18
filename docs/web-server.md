@@ -86,6 +86,9 @@ result's position and keyboard focus after results load. If it no longer matches
 the search loads normally; interacting while loading cancels the automatic jump.
 Pinned, Brief, and Graph links also carry a named return destination.
 
+The reading toolbar keeps **Edit in browser**, **Pin**, and **Actions** visible.
+**Actions** groups copying, note history, external-editor access, synthesis, and Trash.
+
 Use **Copy code** in a code block’s header, the **#** button beside a heading
 (**Copy section link**), and
 **Copy note URL** for a clean note address without search context or a section
@@ -144,7 +147,9 @@ If the section was removed, reading position uses a proportional fallback.
 ## Adjust settings
 
 Settings groups portable configuration by purpose and shows readable names and
-current values. Choose **Edit** beside a setting to reveal its controls; size and
+current values. Group links jump directly to each section without discarding drafts.
+Upload sizes display and edit in MiB; conversion preserves exact byte counts and
+refuses values that would require rounding to a whole byte. Choose **Edit** beside a setting to reveal its controls; size and
 age fields name their units. **Configuration details** contains the exact key,
 type, and source file. Machine-local overrides remain visible as explanations of
 why a setting cannot be edited here.
@@ -156,7 +161,7 @@ Changing a value after preview requires another preview before it can be saved.
 
 ## Recover and resolve uncertain changes
 
-**More actions** on a note contains Synthesize and Trash. Destructive confirmations
+**Actions** on a note contains Synthesize and Trash. Destructive confirmations
 use the same application dialog as Undo: affected content and consequences are
 shown with an explicit action button, Cancel, Escape, and focus restoration.
 Sync decisions retain their preview and one-use receipt requirements.
@@ -205,7 +210,7 @@ transport details start collapsed; pending work or problems open them automatica
 Expand **Synchronization details** for the exact check time and the separate saved,
 packaged, acknowledged, and applied facts.
 
-The shared sync line refreshes after confirmed writes and polls pending work for
+The shared **Sync:** line refreshes after confirmed writes and polls pending work for
 up to one minute. It stops while the page is hidden and ignores superseded replies.
 
 ## Reference

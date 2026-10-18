@@ -103,7 +103,7 @@ func assertNoteLayoutOrder(t *testing.T, body string) {
 		},
 		{
 			`<div class="note-content">`,
-			`<h2>Body</h2>`,
+			`aria-label="Note content"`,
 			`<h2>Related Notes</h2>`,
 			`<h2>Broken links</h2>`,
 		},
@@ -194,7 +194,7 @@ func TestServer_NoteViewRelatedMountEscapesDataAttributes(t *testing.T) {
 			t.Fatalf("related mount missing escaped fragment %q: %s", want, body)
 		}
 	}
-	bodyIndex := strings.Index(body, `<h2>Body</h2>`)
+	bodyIndex := strings.Index(body, `aria-label="Note content"`)
 	relatedIndex := strings.Index(body, `<h2>Related Notes</h2>`)
 	brokenIndex := strings.Index(body, `<h2>Broken links</h2>`)
 	if bodyIndex < 0 || relatedIndex <= bodyIndex || brokenIndex <= relatedIndex {

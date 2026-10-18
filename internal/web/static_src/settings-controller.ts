@@ -2,7 +2,6 @@ import type { SettingSummary } from "./api";
 import { queryElement } from "./dom";
 import { createSettingsWriter, type SettingsWriter } from "./settings-actions";
 import {
-  parseSettingInput,
   settingBlockedReason,
   settingValueOf,
   type SettingPendingSave,
@@ -10,6 +9,7 @@ import {
 import { renderConfigDiff, renderSettingsList, type SettingRow } from "./settings-render";
 import { fetchSettings, type FetchLike } from "./settings-requests";
 import { setStatusText, type StatusKind } from "./status";
+import { parseDisplayedSetting } from "./settings-units";
 import { controlText, markSettingDraft, updateSettingRow } from "./settings-rows";
 
 export type SettingsPanelDeps = {
@@ -64,7 +64,13 @@ const focusLinkedSetting = (root: HTMLElement): void => {
   const id = doc.defaultView?.location.hash.slice(1);
   if (!id) return;
   const target = doc.getElementById(id);
-  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) || !root.contains(target)) return;
+  if (!target || !root.contains(target)) return;
+  focusSettingTarget(target);
+};
+
+const focusSettingTarget = (target: HTMLElement): void => {
+  if (target instanceof HTMLHeadingElement) { target.focus(); return; }
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
   const editor = target.closest("details");
   if (editor) editor.open = true;
   if (target.disabled) target.closest("[data-settings-row]")?.scrollIntoView({ block: "center" });
@@ -89,7 +95,7 @@ const bindRow = (
     const raw = controlText(row.control);
     const parsed = op === "unset"
       ? { ok: true as const, value: settingValueOf(row.summary.kind, {}) }
-      : parseSettingInput(row.summary.kind, raw);
+      : parseDisplayedSetting(row.summary, raw);
     if (!parsed.ok) { refuse(parsed.message); return; }
     await writer.preview(row.key, op, parsed.value);
     if (controlText(row.control) !== raw) writer.cancel();

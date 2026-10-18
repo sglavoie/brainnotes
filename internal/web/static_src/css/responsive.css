@@ -346,6 +346,12 @@
   }
 
   .properties-filter-input,
+  .properties-filter-select {
+    flex-basis: auto;
+    min-height: 2.75rem;
+  }
+
+  .properties-filter-input,
   .properties-filter-select,
   .properties-button {
     width: 100%;

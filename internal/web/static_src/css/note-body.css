@@ -51,3 +51,8 @@
   word-break: normal;
   overflow-wrap: normal;
 }
+
+.note-print-body { min-width: 0; padding: 0.5rem 1rem; }
+@media (max-width: 700px) {
+  .note-print-body { padding: 0.25rem 0; }
+}

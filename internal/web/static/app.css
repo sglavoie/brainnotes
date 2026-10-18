@@ -2724,14 +2724,14 @@ code {
 
 .overview-result-row.has-selection {
   display: grid;
-  grid-template-columns: 1.65rem minmax(0, 1fr) auto;
+  grid-template-columns: 1.65rem minmax(0, 1fr);
   gap: 0.45rem;
   align-items: start;
 }
 
 .overview-result-pin {
-  margin-top: 0.6rem;
-  justify-self: end;
+  margin: 0 0 0 auto;
+  flex: 0 0 auto;
 }
 
 .overview-pin-feedback,
@@ -2887,6 +2887,13 @@ code {
     -webkit-line-clamp: 3;
     overflow: hidden;
   }
+}
+
+@media (max-width: 700px) {
+  .overview-result-row.has-selection { grid-template-columns: 2.75rem minmax(0, 1fr); column-gap: 0.25rem; row-gap: 0; }
+  .overview-result-select { grid-column: 1; grid-row: 1; min-height: 2.75rem; box-sizing: border-box; }
+  .overview-result-content { grid-column: 2; grid-row: 1; }
+  .overview-result-row .overview-result-pin { min-height: 2.75rem; }
 }
 /* internal/web/static_src/css/review.css */
 .review-panel {
@@ -3666,15 +3673,8 @@ code {
   border-radius: 0.4rem;
 }
 
-.note-copy-more {
-  order: 1;
-}
-
 .note-copy-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  display: contents;
 }
 
 .note-actions-more {
@@ -3687,7 +3687,14 @@ code {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--bn-border);
+  border-radius: 0.5rem;
+  background: var(--bn-surface);
 }
+
+/* Keep secondary actions together without expanding the primary toolbar. */
+.note-actions-more[open] { flex: 1 1 100%; }
 /* internal/web/static_src/css/note-layout.css */
 .note-main {
   width: 100%;
@@ -4130,6 +4137,11 @@ code {
   white-space: pre;
   word-break: normal;
   overflow-wrap: normal;
+}
+
+.note-print-body { min-width: 0; padding: 0.5rem 1rem; }
+@media (max-width: 700px) {
+  .note-print-body { padding: 0.25rem 0; }
 }
 /* internal/web/static_src/css/chroma-light.css */
 /* Markdown code highlighting (Chroma classes). Light = github, dark =
@@ -6194,6 +6206,9 @@ code {
   margin-top: 0.55rem;
 }
 
+
+.properties-counts-details { margin-top: 0.25rem; color: var(--bn-muted); font-size: 0.85rem; }
+.properties-counts-details > summary { width: fit-content; }
 /* internal/web/static_src/css/properties-values.css */
 .properties-values,
 .properties-rows {
@@ -8305,6 +8320,19 @@ code {
 .settings-dirty[hidden], .settings-shadowed[hidden] { display: none; }
 .settings-feedback { scroll-margin-block: 1rem; }
 .settings-editor .settings-feedback { border-left: 2px solid var(--bn-border); padding-left: 0.75rem; margin-top: 0.5rem; }
+
+.settings-group-nav { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-top: 0.75rem; font-size: 0.85rem; }
+.settings-group-nav a { display: inline-flex; align-items: center; min-height: 2.75rem; }
+.settings-group h3 { scroll-margin-top: 1rem; }
+.settings-group .settings-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; padding-block: 0.6rem; }
+.settings-name { grid-column: 1; }
+.settings-current { grid-column: 2; grid-row: 1; align-self: baseline; margin: 0; max-width: 24ch; text-align: right; }
+.settings-summary, .settings-editor, .settings-dirty, .settings-shadowed { grid-column: 1 / -1; }
+.settings-editor > summary { padding-block: 0.35rem; }
+@media (max-width: 700px) {
+  .settings-group .settings-row { column-gap: 0.5rem; }
+  .settings-current { max-width: 16ch; }
+}
 /* internal/web/static_src/css/sync.css */
 /*
  * Synchronization: the one line every page carries, and the /sync page where a
@@ -8910,7 +8938,6 @@ dt.sync-fact {
   .note-page .site-header > :not(h1),
   .note-page .note-layout > :not(.note-content),
   .note-page .note-content > :not(.note-print-body),
-  .note-page .note-print-body > h2,
   .note-page [data-copy-controls],
   .note-page .heading-anchor {
     display: none !important;
@@ -9506,6 +9533,12 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   .properties-filters {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .properties-filter-input,
+  .properties-filter-select {
+    flex-basis: auto;
+    min-height: 2.75rem;
   }
 
   .properties-filter-input,

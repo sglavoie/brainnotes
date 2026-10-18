@@ -19,6 +19,7 @@ for (const width of [1280, 390]) {
     await page.keyboard.press("Space");
     await expect(hidden.first()).toBeHidden();
 
+    await page.locator(".note-actions-more > summary").click();
     await page.locator("[data-note-history]").click();
     await expect(page.locator("[data-history-path]")).toHaveValue("Beta.md");
     await expect(page.locator("[data-history-path-match]")).toHaveValue("exact");

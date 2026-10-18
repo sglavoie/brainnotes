@@ -38,6 +38,7 @@
       <div class="panel-header review-header">
         <div class="review-heading-copy">
           <h2 id="fixes-heading">Daily fixes</h2>
+          <button class="review-action" type="button" data-fixes-button data-fixes-reload>Reload fixes</button>
           <p class="review-summary">Vault health tasks ready to triage or fix.</p>
         </div>
         <dl class="review-counts" aria-label="Daily fixes counts">
@@ -67,7 +68,7 @@
         role="status"
         aria-live="polite"
       >{{if .Fixes.HasTasks}}{{.Fixes.Counts.Active}} active {{if eq .Fixes.Counts.Active 1}}fix{{else}}fixes{{end}}.{{else}}No active fixes.{{end}}</p>
-      <p class="review-status is-loading" data-fixes-loading role="status" aria-live="polite" hidden>Loading fixes queue...</p>
+      <p class="review-status" data-fixes-stale hidden>Counts and tasks are from the last successful load and may be out of date.</p>
       <p class="review-error" data-fixes-error role="alert" hidden></p>
       <p class="review-empty" data-fixes-empty {{if .Fixes.HasTasks}}hidden{{end}}>No active fixes.</p>
       {{if .Fixes.HasWarnings}}

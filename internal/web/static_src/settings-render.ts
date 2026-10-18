@@ -1,10 +1,10 @@
 import type { PropertyConfigDiffLine, SettingSummary, TemplateSummary } from "./api";
 import {
   settingBlockedReason,
-  settingEditorText,
   settingOriginLabel,
 } from "./settings-model";
 
+import { settingControlText, usesMiB } from "./settings-units";
 import { settingDisplayValue, settingGroup, settingName, settingUnit } from "./settings-presentation";
 
 /** Renders a configuration patch as the unified text a person reads. */
@@ -72,14 +72,15 @@ export const buildSettingControl = (
     area.className = "settings-control settings-control-list";
     area.rows = 3;
     area.spellcheck = false;
-    area.value = settingEditorText(summary.value);
+    area.value = settingControlText(summary);
     return area;
   }
   const field = doc.createElement("input");
   field.type = summary.kind === "int" ? "number" : "text";
   field.className = "settings-control settings-control-text";
+  if (usesMiB(summary)) field.step = "any";
   field.spellcheck = false;
-  field.value = settingEditorText(summary.value);
+  field.value = settingControlText(summary);
   return field;
 };
 
@@ -137,7 +138,7 @@ export const renderSettingRow = (doc: Document, summary: SettingSummary): Settin
   origin.setAttribute("data-settings-origin", summary.assigned ? summary.layer : "default");
   info.appendChild(header);
 
-  appendLabelled(item, "settings-summary", summary.summary);
+  appendLabelled(item, "settings-summary", usesMiB(summary) ? summary.summary.replace(/\bin bytes\b/g, "in MiB") : summary.summary);
   const current = appendLabelled(item, "settings-current", settingDisplayValue(summary));
   current.setAttribute("data-settings-current", "");
 
@@ -196,6 +197,11 @@ export const renderSettingsList = (
   const doc = list.ownerDocument;
   list.textContent = "";
   const groups = new Map<string, HTMLUListElement>();
+  const nav = doc.createElement("nav");
+  nav.className = "settings-group-nav";
+  nav.setAttribute("aria-label", "Settings groups");
+  list.parentElement?.querySelector(".settings-group-nav")?.remove();
+  list.before(nav);
   return settings.map((summary) => {
     const group = settingGroup(summary.key);
     let section = groups.get(group);
@@ -204,6 +210,12 @@ export const renderSettingsList = (
       item.className = "settings-group";
       const heading = doc.createElement("h3");
       heading.textContent = group;
+      heading.id = `settings-group-${summary.key.split(".")[0]}`;
+      heading.tabIndex = -1;
+      const link = doc.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = group;
+      nav.appendChild(link);
       section = doc.createElement("ul");
       section.className = "settings-group-list";
       item.append(heading, section);

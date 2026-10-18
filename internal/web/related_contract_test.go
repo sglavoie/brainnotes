@@ -25,7 +25,7 @@ func TestRelatedNotesCrossLayerContract(t *testing.T) {
 			t.Fatalf("note-page related mount missing %q", attribute)
 		}
 	}
-	if bodyIndex, relatedIndex, brokenIndex := strings.Index(templateBody, `<h2>Body</h2>`), strings.Index(templateBody, `data-related-notes`), strings.Index(templateBody, `<h2>Broken links</h2>`); bodyIndex < 0 || relatedIndex < bodyIndex || brokenIndex >= 0 && relatedIndex > brokenIndex {
+	if bodyIndex, relatedIndex, brokenIndex := strings.Index(templateBody, `aria-label="Note content"`), strings.Index(templateBody, `data-related-notes`), strings.Index(templateBody, `<h2>Broken links</h2>`); bodyIndex < 0 || relatedIndex < bodyIndex || brokenIndex >= 0 && relatedIndex > brokenIndex {
 		t.Fatalf("Related Notes mount must remain after Body and before Broken links: body=%d related=%d broken=%d", bodyIndex, relatedIndex, brokenIndex)
 	}
 

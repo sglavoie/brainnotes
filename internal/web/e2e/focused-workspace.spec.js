@@ -71,7 +71,7 @@ test("Trash cancels with focus restored and never claims success for an HTML res
     await route.fulfill({ status: 200, contentType: "text/html", body: "<html>Sign in</html>" });
   });
   await page.goto("/n/Reading");
-  await page.getByText("More actions", { exact: true }).click();
+  await page.getByText("Actions", { exact: true }).click();
   const trash = page.locator("[data-trash-button]");
   await trash.click();
   const dialog = page.getByRole("dialog");

@@ -56,8 +56,8 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
   }
 
   const statusEl = queryElement(root, "[data-fixes-status]", HTMLElement);
-  const loadingEl = queryElement(root, "[data-fixes-loading]", HTMLElement);
   const errorEl = queryElement(root, "[data-fixes-error]", HTMLElement);
+  const staleEl = queryElement(root, "[data-fixes-stale]", HTMLElement);
   const emptyEl = queryElement(root, "[data-fixes-empty]", HTMLElement);
   const warningListEl = queryElement(root, "[data-fixes-warnings]", HTMLElement);
   const listEl = queryElement(root, "[data-fixes-list]", HTMLElement);
@@ -105,7 +105,7 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
 
   const ctx: DailyFixesContext = {
     config: readDailyFixesConfig(root),
-    fetcher: deps.fetch || fetch,
+    fetcher: deps.fetch || ((input, init) => window.fetch(input, init)),
     listEl,
     previews,
     setBusy,
@@ -113,12 +113,10 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
     setError,
     showError: (message: string): void => {
       setError(message);
-      setStatus(message, "is-error");
+      setStatus("");
     },
-    setLoading: (loading: boolean): void => {
-      if (loadingEl) {
-        loadingEl.hidden = !loading;
-      }
+    setQueueStale: (stale: boolean): void => {
+      if (staleEl) staleEl.hidden = !stale;
     },
     renderResult,
     clearPreview: (id: string): void => {
