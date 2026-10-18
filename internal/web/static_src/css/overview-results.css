@@ -155,6 +155,7 @@
 
 .overview-selection[data-has-selection="false"] [data-overview-selected-count],
 .overview-selection[data-has-selection="false"] [data-overview-clear-selection],
+.overview-selection[data-has-selection="false"] [data-selection-help],
 .overview-selection[data-has-selection="false"] [data-overview-copy-wikilinks] { display: none; }
 .overview-selection-help { color: var(--bn-muted); font-size: 0.85rem; }
 .overview-selection-help summary { cursor: pointer; padding: 0.5rem 0; }
@@ -171,3 +172,13 @@
 .library-search-help > summary { cursor: pointer; padding-block: 0.35rem; }
 .library-search-help p { margin: 0.4rem 0; }
 .overview-result-snippet mark, .search-result-snippet mark { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); font-weight: 600; }
+
+/* Long excerpts and attachment URLs must not crowd all other results off a phone. */
+@media (max-width: 700px) {
+  .overview-result-snippet {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+  }
+}

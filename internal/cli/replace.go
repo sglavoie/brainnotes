@@ -28,7 +28,8 @@ transaction across files: if a mid-apply error occurs, prior writes stand.
 Use 'git diff' to inspect or recover.
 
 Use --dry-run to preview changes without writing. Each affected file is
-printed as a unified diff block; unchanged files are omitted.`,
+printed with a --- path header and frontmatter[key]: old -> new lines;
+unchanged files are omitted.`,
 		Args:          cobra.MinimumNArgs(3),
 		SilenceUsage:  true,
 		SilenceErrors: true,

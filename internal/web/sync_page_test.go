@@ -46,18 +46,16 @@ func TestSyncPage_NamesEveryAttributeTheReviewSurfaceReads(t *testing.T) {
 		`data-sync-conflicts-status`,
 		`data-sync-operations`,
 
-		// The one line every page carries (templates/theme.html), whose fixture is
-		// syncLineMarkup. Where the decision is made is deliberately *not* here: the
-		// status route answers it, so a mode that refuses the review page offers no
-		// link to it.
-		`data-sync-line`,
+		`data-sync-details`,
+		`data-sync-checked`,
+		`data-sync-checked-exact`,
 	} {
 		if !namesAttribute(body, want) {
 			t.Fatalf("sync page is missing %q", want)
 		}
 	}
-	if strings.Contains(body, "data-sync-review-path") {
-		t.Fatal("the sync line renders a review path the browser never reads")
+	if namesAttribute(body, "data-sync-line") {
+		t.Fatal("the Sync page duplicates its summary in the global sync line")
 	}
 }
 

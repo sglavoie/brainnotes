@@ -16,7 +16,6 @@
  */
 @import "tokens.css";
 @import "base.css";
-@import "controls.css";
 @import "chrome.css";
 @import "search.css";
 @import "query-bar.css";
@@ -67,5 +66,6 @@
 @import "sync-conflicts.css";
 @import "motion.css";
 @import "note-print.css";
+@import "controls.css";
 @import "workspace.css";
 @import "responsive.css";

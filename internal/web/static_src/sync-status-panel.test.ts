@@ -11,9 +11,8 @@ import type { FetchLike } from "./sync-requests";
 // shows, it stops vouching for facts it could not re-read, and it asks the server
 // again rather than adjusting a count in the browser.
 //
-// `observed_at` is an unparseable timestamp in most of these, deliberately. The
-// panel appends whatever formatSyncTimestamp returns, and a real timestamp would
-// make every assertion here an assertion about the machine's locale.
+// Most observations use a literal timestamp so the assertions do not depend
+// on the machine locale. Clock progression is exercised separately below.
 
 const hostOf = (selector: string): HTMLElement => {
   const host = document.querySelector<HTMLElement>(selector);
@@ -57,8 +56,10 @@ it("itemizes the facts and says when they were read", async () => {
   await panel?.load();
 
   expect(fetcher.mock.calls[0][0]).toBe("/api/sync/status");
-  expect(summary().textContent).toBe("Everything is up to date. Read whenever.");
+  expect(summary().textContent).toBe("Everything is up to date.");
   expect(summary().classList.contains("is-success")).toBe(true);
+  expect(hostOf("[data-sync-checked]").textContent).toBe("Checked whenever.");
+  expect(hostOf("[data-sync-details]").hasAttribute("open")).toBe(false);
   expect(terms()).toEqual([
     "Saved here",
     "Packaged for the other replica",
@@ -97,7 +98,8 @@ it("reports a vault that needs a person as a warning rather than a success", asy
 
   await panel?.load();
 
-  expect(summary().textContent).toBe("2 changes are waiting for a decision. Read whenever.");
+  expect(summary().textContent).toBe("2 changes are waiting for a decision.");
+  expect(hostOf("[data-sync-details]").hasAttribute("open")).toBe(true);
   expect(summary().classList.contains("is-warning")).toBe(true);
   expect(summary().classList.contains("is-success")).toBe(false);
   // The fact that needs attention is marked as such on both halves of the pair,
@@ -189,7 +191,7 @@ it("asks the server again when the refresh button is pressed", async () => {
 
   hostOf("[data-sync-refresh]").click();
 
-  await vi.waitFor(() => expect(summary().textContent).toBe("Everything is up to date. Read whenever."));
+  await vi.waitFor(() => expect(summary().textContent).toBe("Everything is up to date."));
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
@@ -202,4 +204,46 @@ it("is no panel at all when the page it was given has nowhere to put a fact", as
   // status as the whole of it.
   expect(createSyncStatusPanel({ root: panelRoot(), fetch: fetcher })).toBeNull();
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("opens pending transport details even when no human decision is needed", async () => {
+  const panel = createSyncStatusPanel({
+    root: panelRoot(), fetch: answering(syncStatus({ needs_person: false, export: { pending_commits: 2 } })),
+  });
+  await panel?.load();
+  expect(hostOf("[data-sync-details]").hasAttribute("open")).toBe(true);
+  panel?.dispose();
+});
+
+it("ignores a superseded response instead of restoring stale facts", async () => {
+  let answerFirst: (response: Response) => void = () => {};
+  const fetcher = vi.fn<FetchLike>()
+    .mockImplementationOnce(() => new Promise((resolve) => { answerFirst = resolve; }))
+    .mockResolvedValueOnce(syncJSON(syncStatus({ observed_at: "newest" })));
+  const panel = createSyncStatusPanel({ root: panelRoot(), fetch: fetcher });
+  const first = panel?.load();
+  await panel?.load();
+  answerFirst(syncJSON(syncStatus({ summary: "Old problem", needs_person: true, observed_at: "old" })));
+  await first;
+  expect(summary().textContent).toBe("Everything is up to date.");
+  expect(hostOf("[data-sync-checked]").textContent).toBe("Checked newest.");
+  panel?.dispose();
+});
+
+it("ages the observation without claiming a new server check", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-18T12:00:00Z"));
+  const panel = createSyncStatusPanel({
+    root: panelRoot(), fetch: answering(syncStatus({ observed_at: "2026-10-18T12:00:00Z" })),
+  });
+  try {
+    await panel?.load();
+    expect(hostOf("[data-sync-checked]").textContent).toBe("Checked just now.");
+    vi.advanceTimersByTime(120_000);
+    expect(hostOf("[data-sync-checked]").textContent).toBe("Checked 2 minutes ago.");
+    expect(hostOf("[data-sync-checked]").getAttribute("datetime")).toBe("2026-10-18T12:00:00Z");
+  } finally {
+    panel?.dispose();
+    vi.useRealTimers();
+  }
 });

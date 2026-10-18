@@ -2,11 +2,11 @@ import { test, expect } from "./fixture.js";
 import { reviewVisuals } from "./review-visuals.js";
 import { SURFACE } from "./editor-helpers.js";
 
-// Deliberately small, paired coverage: every key surface has both themes and
-// widths across the baseline set. Behavioral journeys use real API responses;
+// Every key surface covers both themes at both widths; theme and viewport
+// regressions cannot hide behind a paired-only matrix. Behavioral journeys use real API responses;
 // Confirmation uses a fixed preview; Brief copy is fixed because its recommendations
 // rotate by date. The real selection and Another flow are covered by journeys.
-for (const [theme, width] of [["light", 1280], ["dark", 390]]) {
+for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["dark", 1280]]) {
   test.describe(`${theme} ${width}`, () => {
     test.use({ viewport: { width, height: 900 } });
     test.beforeEach(async ({ page }) => {
@@ -26,7 +26,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390]]) {
       await page.goto("/library?q=field&status=reference&sort=title");
       await expect(page.locator(".overview-result-link").first()).toBeVisible();
       const first = await page.locator(".overview-result-link").first().boundingBox();
-      expect(first.y).toBeLessThan(width > 700 ? 560 : 650);
+      expect(first.y).toBeLessThan(500);
       await snapshot(page, "library-entry");
       await page.locator("[data-overview-search-results]").scrollIntoViewIfNeeded();
       await snapshot(page, "library");

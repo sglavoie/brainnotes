@@ -10,16 +10,11 @@
 
 .source-editor {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.5rem;
   min-width: 0;
+  container-type: inline-size;
 }
 
-.source-editor-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.6rem;
-}
 
 .source-editor-title {
   display: block;
@@ -52,11 +47,15 @@
 }
 
 .source-editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bn-surface);
+  padding: 0;
 }
 
 .source-editor-commands {
@@ -66,12 +65,9 @@
 }
 
 .source-editor-command {
-  padding: 0.3rem 0.6rem;
   border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
   background: var(--bn-raised);
   color: var(--bn-text);
-  font-size: 0.85rem;
   cursor: pointer;
 }
 
@@ -80,12 +76,9 @@
 }
 
 .source-editor-save {
-  padding: 0.35rem 0.9rem;
   border: 1px solid var(--bn-accent-subtle-border);
-  border-radius: 0.4rem;
   background: var(--bn-accent-subtle-bg);
   color: var(--bn-accent-subtle-text);
-  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -142,7 +135,7 @@
 .source-editor-panes {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.85rem;
+  gap: 0.35rem;
   min-width: 0;
 }
 
@@ -484,7 +477,6 @@
 }
 .source-editor-workspace .site-header-tools { margin-bottom: 1rem; }
 .source-editor-title[open] > summary { margin-bottom: 0.5rem; }
-.source-editor-main > .site-header { align-items: center; }
 .source-editor-main .source-editor-command,
 .source-editor-main .source-editor-save { min-height: var(--bn-control-height); }
 
@@ -511,9 +503,27 @@
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-popover);
 }
-.source-editor-actions { display: flex; gap: 0.4rem; }
-.source-editor-toolbar { position: sticky; top: 0; z-index: 10; background: var(--bn-surface); padding: 0.4rem 0; }
+.source-editor-actions { display: contents; }
+.source-editor-actions .source-editor-status { grid-column: 3; grid-row: 1; min-width: 0; text-align: right; font-size: 0.8rem; }
+.source-editor-actions [data-source-find] { grid-column: 2; grid-row: 1; }
+.source-editor-actions [data-source-save] { grid-column: 4; grid-row: 1; }
+.source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 2; text-align: left; }
+.source-editor-draft-status:empty { display: none; }
+.source-editor-main > .site-header { display: flex; align-items: center; flex-direction: row; justify-content: space-between; gap: 0.75rem; }
+.source-editor-main > .site-header h1 { min-width: 0; overflow-wrap: anywhere; }
+.source-editor-main > .site-header > details { flex-shrink: 0; }
 .source-editor-format .source-editor-command { min-height: 2.75rem; }
 .source-editor-manage > [data-note-history] { display: inline-block; margin-top: 0.75rem; }
 
 .source-editor-frontmatter { font: inherit; font-size: 0.85rem; color: var(--bn-muted); border: 1px solid var(--bn-border); border-radius: var(--bn-control-radius); background: var(--bn-raised); padding: 0.4rem 0.6rem; cursor: pointer; min-height: 2.75rem; }
+
+/* Reflow controls when enlarged text leaves too little room for a single row.
+   rem units make this follow text size as well as the available viewport. */
+@container (max-width: 16rem) {
+  .source-editor-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .source-editor-format { grid-column: 1; grid-row: 1; }
+  .source-editor-actions [data-source-find] { grid-column: 1; grid-row: 2; justify-self: start; }
+  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 1; }
+  .source-editor-actions .source-editor-status { grid-column: 2; grid-row: 2; text-align: left; }
+  .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; }
+}

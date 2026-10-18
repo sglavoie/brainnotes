@@ -1,14 +1,13 @@
 import { queryElement } from "./dom";
-import { setStatusText, type StatusKind } from "./status";
+import { setStatusText } from "./status";
+import { renderSyncChecked } from "./sync-checked";
 import { fetchSyncStatus, type FetchLike } from "./sync-requests";
 import {
-  formatSyncTimestamp,
   syncFacts,
   syncNeedsPerson,
   syncProblems,
   type SyncFact,
 } from "./sync-status-view";
-import type { SyncStatusResult } from "./api";
 
 // The status panel on /sync: the same facts the nav line summarizes, itemized.
 //
@@ -25,6 +24,7 @@ export type SyncStatusPanelDeps = {
 
 export type SyncStatusPanel = {
   load: () => Promise<void>;
+  dispose: () => void;
 };
 
 type SyncStatusElements = {
@@ -32,6 +32,8 @@ type SyncStatusElements = {
   facts: HTMLElement;
   problems: HTMLElement;
   refresh: HTMLButtonElement | null;
+  disclosure: HTMLDetailsElement | null;
+  checked: HTMLTimeElement | null;
 };
 
 const readElements = (root: HTMLElement): SyncStatusElements | null => {
@@ -46,6 +48,8 @@ const readElements = (root: HTMLElement): SyncStatusElements | null => {
     facts,
     problems,
     refresh: queryElement(root, "[data-sync-refresh]", HTMLButtonElement),
+    disclosure: queryElement(root, "[data-sync-details]", HTMLDetailsElement),
+    checked: queryElement(root, "[data-sync-checked]", HTMLTimeElement),
   };
 };
 
@@ -76,15 +80,6 @@ const renderProblems = (host: HTMLElement, problems: string[], doc: Document): v
   }
 };
 
-// summaryOf appends when the status was observed, because everything else on the
-// panel is a fact about a moment and a person re-reading the page needs to know
-// which moment they are looking at.
-const summaryOf = (status: SyncStatusResult): [string, StatusKind] => {
-  const at = formatSyncTimestamp(status.observed_at);
-  const observed = at === "" ? "" : ` Read ${at}.`;
-  return [`${status.summary}${observed}`, syncNeedsPerson(status) ? "is-warning" : "is-success"];
-};
-
 export const createSyncStatusPanel = (deps: SyncStatusPanelDeps): SyncStatusPanel | null => {
   const elements = readElements(deps.root);
   if (!elements) {
@@ -92,21 +87,38 @@ export const createSyncStatusPanel = (deps: SyncStatusPanelDeps): SyncStatusPane
   }
   const doc = deps.root.ownerDocument;
   const endpoint = deps.root.getAttribute("data-sync-status-endpoint") ?? "";
+  let generation = 0;
+  let observed = "";
+  const clock = doc.defaultView;
+  const timer = clock?.setInterval(() => renderSyncChecked(elements.checked, observed), 60_000);
 
   const load = async (): Promise<void> => {
+    const request = ++generation;
+    observed = "";
+    renderSyncChecked(elements.checked, observed);
     setStatusText(elements.summary, "Reading synchronization status...", "is-loading");
     const outcome = await fetchSyncStatus(deps.fetch, endpoint);
+    if (request !== generation) return;
     if (!outcome.ok) {
       setStatusText(elements.summary, outcome.message, "is-error");
       renderFacts(elements.facts, [], doc);
       renderProblems(elements.problems, [], doc);
       return;
     }
-    setStatusText(elements.summary, ...summaryOf(outcome.result));
-    renderFacts(elements.facts, syncFacts(outcome.result), doc);
-    renderProblems(elements.problems, syncProblems(outcome.result), doc);
+    const facts = syncFacts(outcome.result);
+    const problems = syncProblems(outcome.result);
+    setStatusText(elements.summary, outcome.result.summary, syncNeedsPerson(outcome.result) ? "is-warning" : "is-success");
+    observed = outcome.result.observed_at;
+    renderSyncChecked(elements.checked, observed);
+    renderFacts(elements.facts, facts, doc);
+    renderProblems(elements.problems, problems, doc);
+    // Reveal actionable or pending facts; a healthy refresh leaves the user's
+    // chosen disclosure state alone.
+    if (elements.disclosure && (syncNeedsPerson(outcome.result) || problems.length || facts.some((fact) => fact.kind !== ""))) {
+      elements.disclosure.open = true;
+    }
   };
 
   elements.refresh?.addEventListener("click", () => void load());
-  return { load };
+  return { load, dispose: () => { generation += 1; clock?.clearInterval(timer); } };
 };

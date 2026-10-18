@@ -46,6 +46,7 @@ test("header search hands its query to the Library with Enter or a link", async 
 
 test("save form shows all constraints before saving", async ({ page }) => {
   await page.goto("/library?expr=tag:focus&tag=work&q=Beta&sort=-modified&limit=10");
+  await page.locator(".library-search-menu > summary").click();
   await page.locator("[data-saved-views-open]").click();
   await expect(page.locator("[data-saved-views-scope]")).toHaveText(
     "This view will save:\nQuery: tag:focus\nText search: Beta\ntag: work\nSort: -modified\nLimit: 10"

@@ -57,6 +57,7 @@ test("Save as view preserves text, facets, expression, ordering and limit", asyn
   const links = page.locator(".overview-result-link");
   await expect(links).toHaveCount(2);
   const before = await links.allTextContents();
+  await page.locator(".library-search-menu > summary").click();
   await page.locator("[data-saved-views-open]").click();
   await expect(page.locator("[data-saved-views-scope]")).toContainText("Text search: body");
   await page.locator("[data-saved-views-name]").fill("Complete browser selection");

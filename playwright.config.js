@@ -23,13 +23,17 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
+import { browserSuites } from "./internal/web/e2e/suites.js";
+
 import { readManifest } from "./internal/web/e2e/manifest.mjs";
 
 const manifest = readManifest();
+const suite = process.env.BN_E2E_SUITE ?? "all";
+if (!["all", "pr"].includes(suite)) throw new Error(`Unknown browser suite: ${suite}`);
 
-const qualificationSpec = /qualification\.spec\.js$/;
-const visualSpec = /visual-polish\.spec\.js$/;
-const readOnlySpec = /read-only\.spec\.js$/;
+const qualificationSpec = browserSuites.hosted;
+const visualSpec = browserSuites.visual;
+const readOnlySpec = browserSuites.readOnly;
 
 const mobileLayout = (device) => ({
   ...device,
@@ -114,7 +118,7 @@ export default defineConfig({
     },
     {
       name: "local-chromium-regression",
-      testIgnore: [qualificationSpec, readOnlySpec, visualSpec],
+      testMatch: suite === "pr" ? browserSuites.pr : [...browserSuites.pr, ...browserSuites.weekly],
       use: { ...devices["Desktop Chrome"] },
     },
     qualificationProject("hosted-chromium-desktop", devices["Desktop Chrome"]),

@@ -13,6 +13,8 @@ These links and the navigation disclosures work without JavaScript.
 
 Use Library to combine text search, filters, and an optional **Query expression**.
 Library shows one results list as you type; Enter moves focus to its heading.
+**Filters** opens the filter picker; active constraints remain visible when it is
+closed. **Search actions** contains Copy search link and Save as view.
 Search on other pages still offers a quick-open popup. **Search help** explains
 how constraints combine when you need it.
 A note must match every active constraint. Expressions from a URL or saved view
@@ -27,13 +29,14 @@ copying is unavailable. Sort choices include **Oldest modified first** and
 
 Results emphasize titles, excerpts, and locations. Excerpts show readable link
 labels, highlight matching text, and finish boundary words where possible.
+Narrow screens show up to three excerpt lines; open the note to read the rest.
 Matching still uses the original note text. **Match details** expands the
 matching fields and structural information such as orphan or dead-end status;
 these are neutral facts. Broken links remain visible as warnings.
 
 Select notes with their checkboxes or **Select displayed**. The selected count,
 **Clear selection**, and **Copy wikilinks** appear once there is a selection.
-**Selection help** explains range selection: Shift-click a checkbox to select
+**Selection help** appears alongside the actions once notes are selected and explains range selection: Shift-click a checkbox to select
 or clear the range from the previous checkbox. Bulk actions apply only to the
 selected notes and still require a preview before applying changes.
 
@@ -152,6 +155,11 @@ Saves and captures retain their draft during delayed confirmation. **Draft kept
 in this browser** describes a local copy; **Saved to vault** confirms a save.
 **Save not confirmed** keeps Save available for a safe retry. Other uncertain
 changes point to checking the current values, inbox, or History before retrying.
+
+Synchronization shows one summary and when the server checked it. Healthy
+transport details start collapsed; pending work or problems open them automatically.
+Expand **Synchronization details** for the exact check time and the separate saved,
+packaged, acknowledged, and applied facts.
 
 The shared sync line refreshes after confirmed writes and polls pending work for
 up to one minute. It stops while the page is hidden and ignores superseded replies.

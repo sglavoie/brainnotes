@@ -227,7 +227,9 @@ export const syncStatusPanelMarkup = (): string => `
 >
   <button type="button" data-sync-refresh>Refresh</button>
   <p class="sync-status" data-sync-summary role="status"></p>
-  <dl class="sync-facts" data-sync-facts></dl>
+  <time data-sync-checked hidden></time>
+  <details data-sync-details><summary>Synchronization details</summary>
+  <dl class="sync-facts" data-sync-facts></dl></details>
   <ul class="sync-problems" data-sync-problems></ul>
 </section>
 `;

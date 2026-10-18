@@ -8,7 +8,7 @@ on:
 jobs:
   qualify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -20,8 +20,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
-      - name: Qualify all engines at desktop and mobile widths
-        run: npm run test:e2e -- --project='hosted-*'
+      - name: Run all regressions and qualify hosted browsers
+        run: npm run test:e2e:weekly
       - uses: actions/upload-artifact@v4
         if: always()
         with:

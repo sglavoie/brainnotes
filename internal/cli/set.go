@@ -37,7 +37,8 @@ Each file is rewritten atomically, but there is no cross-file transaction: if
 an error stops the run mid-way, prior writes stand. Use 'git diff' to recover.
 
 Use --dry-run to preview changes without writing. Each affected file is
-printed as a unified diff block; unchanged files are omitted.`,
+printed with a --- path header and frontmatter[key]: old -> new lines;
+unchanged files are omitted.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.MinimumNArgs(1),
@@ -47,7 +48,7 @@ printed as a unified diff block; unchanged files are omitted.`,
 	}
 
 	f := cmd.Flags()
-	f.StringVar(&opts.typeFlag, "type", "", "force value type: date|int|bool|raw (default: auto)")
+	f.StringVar(&opts.typeFlag, "type", "", "force value type: date|datetime|int|bool|float|raw (default: auto)")
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "read NUL-separated paths from stdin")
 	f.BoolVar(&opts.dryRun, "dry-run", false, "preview changes without writing")
 	return cmd

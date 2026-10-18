@@ -40,7 +40,7 @@ export class FacetController {
     this.inputClear?.addEventListener("click", () => {
       this.input.value = "";
       this.showOptions();
-      this.input.focus();
+      this.focusInput();
     });
     this.clearAll?.addEventListener("click", () => {
       this.selected.clear();
@@ -71,7 +71,7 @@ export class FacetController {
       this.state = "ready";
       this.renderChips();
       // Move focus before hiding the retry button, only if it still owns focus.
-      if (retrying && document.activeElement === this.retry) this.input.focus();
+      if (retrying && document.activeElement === this.retry) this.focusInput();
       this.setLoadFeedback(retrying ? "Filters loaded." : "", false, false);
     } catch {
       this.state = "error";
@@ -80,6 +80,12 @@ export class FacetController {
       this.inFlight = false;
       this.renderOptions();
     }
+  }
+
+  private focusInput(): void {
+    const disclosure = this.input.closest("details");
+    if (disclosure) disclosure.open = true;
+    this.input.focus();
   }
 
   private setLoadFeedback(message: string, showRetry: boolean, disabled: boolean): void {
@@ -168,7 +174,7 @@ export class FacetController {
     dispatchFiltersChange(window, {
       mode: this.root.getAttribute("data-facet-mode") || "", params: selectedParams,
     });
-    this.input.focus();
+    this.focusInput();
   }
 
   private toggleOption(option: FacetFilterOption): void {

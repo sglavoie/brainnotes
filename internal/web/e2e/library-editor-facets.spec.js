@@ -29,6 +29,7 @@ test("the filter picker recovers from a failed request without losing search sta
   await page.goto(library);
   const retry = page.getByRole("button", { name: "Retry filters" });
   await expect(retry).toBeVisible();
+  await page.locator(".library-filters > summary").click();
   const input = page.locator(".facet-input");
   await input.fill("draft");
   await expect(page.locator(".facet-options")).toContainText("Facets unavailable.");

@@ -15,10 +15,15 @@ not block while no new violation can land. The generated JavaScript is committed
 so Go-only builds do not need Node. The editor and Sync pages load `editing.js`
 for CodeMirror; note reading loads only `app.js`. Each workspace loads its own
 small page bundle. `internal/cli/web-build-args.json` is the shared entry manifest
-for local builds, serve-time refresh, and CI drift checks. A Chromium CI job
-exercises core journeys, responsive layouts, and throttled reading/search.
+for local builds, serve-time refresh, and CI drift checks. `npm run test:e2e:pr`
+runs the declared PR Chromium journeys plus the read-only
+profile. `npm run test:e2e:weekly` runs all local and read-only regressions plus
+the hosted cross-browser qualification. The weekly workflow runs that full suite.
+Assign every new spec in `internal/web/e2e/suites.js`: `lint:e2e` rejects missing,
+duplicate, or stale assignments before fixture setup. The Playwright projects
+consume that same catalog, so the CI commands need no filename allow-list.
 Visual baselines cover Library, Brief, reading, editing, management pages,
-conflict and restore comparisons, confirmation, and empty/error states in light/dark themes at desktop/mobile widths. Run these on macOS with
+conflict and restore comparisons, confirmation, and empty/error states in both light and dark themes at both desktop and mobile widths. Run these on macOS with
 `npm run test:e2e -- --project=visual-chromium`; after an intentional design change,
 append `--update-snapshots`, inspect the changed images in
 `internal/web/e2e/visual-baselines`, and commit them. CI compares on macOS to avoid
@@ -47,5 +52,21 @@ writing check models keyboard space, but does not emulate an operating system
 keyboard; include a real-device check when qualifying a mobile release. The mobile editor must show editable text on entry and keep
 Save reachable while writing. Property forms and Library selection controls
 should appear when they are useful, with keyboard access to each disclosure.
+
+## Mobile and accessibility polish
+
+`polish-refinement.spec.js` checks two visible Library results, collapsed controls
+with visible constraints, touch target sizes, keyboard disclosures, enlarged text,
+forced-color focus, and editor prose/Save in a reduced viewport. The ordinary
+editor and qualification suites also exercise dirty drafts, save failures and IME.
+These browser checks do not emulate an operating system keyboard.
+
+For physical-device qualification, open the updated workspace on an iOS or Android
+phone using a disposable vault. In the editor, focus prose, type at the end of a
+long note, switch Edit/Preview, open Format and Find, and save. Repeat in landscape
+and with larger system text. Confirm the caret and Save remain reachable while the
+keyboard is open, no toolbar obscures the selected text, and failed saves keep the
+draft. Record the device, OS/browser version, orientation, and result with release
+evidence; never perform this qualification against an ambient personal vault.
 
 [Back to the README](../README.md)

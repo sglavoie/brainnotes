@@ -1,4 +1,4 @@
-/* Shared geometry; each surface retains its own semantic colors and layout. */
+/* Shared geometry; semantic colors remain with each surface. Loaded after components. */
 .open-editor-button,
 .trash-note-button,
 .pin-button,
@@ -19,7 +19,15 @@
 .settings-button,
 .properties-button,
 .saved-views-save-button,
-.source-editor-launch {
+.source-editor-launch,
+.source-editor-command,
+.source-editor-save,
+.source-editor-tab,
+.source-editor-frontmatter,
+.sync-button,
+.facet-clear-all,
+.facet-input-clear,
+.new-note-action {
   min-height: var(--bn-control-height);
   border-radius: var(--bn-control-radius);
   padding: var(--bn-control-padding);
@@ -30,4 +38,21 @@
 
 @media (pointer: coarse) {
   :root { --bn-control-height: 2.75rem; }
+}
+
+/* Native disclosures share focus and touch geometry without imitating buttons. */
+summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: border-box; padding-block: 0.4rem; }
+:is(button, summary, select, input, textarea):focus-visible {
+  outline: 2px solid var(--bn-focus);
+  outline-offset: 3px;
+}
+@media (pointer: coarse) {
+  button, select, input:not([type="checkbox"]):not([type="radio"]), summary { min-height: 2.75rem; }
+  .facet-chip-remove { min-width: 2.75rem; }
+}
+@media (forced-colors: active) {
+  :is(button, summary, input, select, textarea):focus-visible { outline-color: Highlight; }
+  :is(button, input, select, textarea) { border: 1px solid ButtonText; }
+  button:disabled { color: GrayText; border-color: GrayText; opacity: 1; }
+  [aria-selected="true"], [aria-current] { outline: 2px solid Highlight; outline-offset: 2px; }
 }

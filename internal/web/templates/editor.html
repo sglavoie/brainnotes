@@ -13,11 +13,12 @@
   {{template "workspaceSkip" .}}
   <main class="index-main source-editor-main">
     <header class="site-header">
-      <h1>Edit source</h1>
+      <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h1>
       <details class="source-editor-workspace">
         <summary>Workspace</summary>
         <div class="source-editor-workspace-content">
           <p class="page-subtitle">Changes are saved only when you choose Save.</p>
+          <code class="source-editor-path">{{ .RelPath }}</code>
           <div class="site-header-tools">
             {{template "themeControl" .}}
             {{template "headerSearch" .}}
@@ -58,11 +59,6 @@
       data-source-undo-endpoint="{{ .UndoPath }}"
       aria-labelledby="source-editor-heading"
     >
-      <div class="panel-header source-editor-header">
-        <h2 id="source-editor-heading"><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h2>
-        <code class="source-editor-path">{{ .RelPath }}</code>
-      </div>
-
       <!--
         The gate. It is hidden until an action is asked for over unsaved text,
         and it is the only thing between that text and an operation that would
@@ -78,7 +74,7 @@
         </div>
       </section>
 
-      <div class="source-editor-toolbar" role="toolbar" aria-label="Formatting">
+      <div class="source-editor-toolbar" role="group" aria-label="Editing controls">
         <details class="source-editor-format">
           <summary>Format</summary>
           <div class="source-editor-commands">
@@ -92,12 +88,11 @@
           </div>
         </details>
         <div class="source-editor-actions">
+          <p class="source-editor-status" data-source-status role="status" aria-live="polite">Loading…</p>
           <button type="button" class="source-editor-command" data-source-find disabled title="Find and replace (Ctrl/⌘ + F in the editor)" aria-keyshortcuts="Control+F Meta+F">Find</button>
           <button type="button" class="source-editor-save" data-source-save disabled aria-keyshortcuts="Control+S Meta+S">Save</button>
         </div>
       </div>
-
-      <p class="source-editor-status" data-source-status role="status" aria-live="polite">Loading the note's source…</p>
 
       <!--
         The draft line is a second status deliberately, and never shares the one

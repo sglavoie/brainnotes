@@ -80,7 +80,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       # Test the committed embedded assets. Rebuilding here would conceal drift.
       - name: Check core journeys and responsive layouts
-        run: npm run test:e2e -- --project=local-chromium-regression smoke.spec.js editor.spec.js workspace-polish.spec.js reading-performance.spec.js settings-feedback.spec.js polish-continuity.spec.js
+        run: npm run test:e2e:pr
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4

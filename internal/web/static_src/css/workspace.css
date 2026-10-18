@@ -48,7 +48,6 @@
 .library-search-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
 .library-search .search-box { width: 100%; max-width: none; }
 .library-search-hint { color: var(--bn-muted); font-size: 0.9rem; margin-top: 0.65rem; }
-.library-search .facet-controls { margin-bottom: 0.65rem; }
 .library-expression summary, .brief-optional-setup summary { cursor: pointer; color: var(--bn-text-subtle); }
 .library-expression .query-bar { margin: 0.75rem 0 0; }
 .library-expression .query-bar > .panel-header { display: none; }
@@ -86,7 +85,7 @@
 @media (max-width: 700px) {
   .workspace-navigation .site-nav { flex: 1 1 100%; width: 100%; }
   .library-search .panel-header { flex-wrap: wrap; }
-  .library-search-actions { width: 100%; }
+
   .library-search .query-bar-row { flex-wrap: wrap; }
   .library-search .query-bar-field { flex-basis: 70%; }
 }
@@ -94,7 +93,7 @@
 .write-check-link { display: none; }
 [data-write-unconfirmed="true"] + .write-check-link { display: inline-block; margin-bottom: 0.75rem; }
 
-.focused-workspace-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
+.focused-workspace-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
 .focused-workspace-header > h1 { margin: 0; }
 @media (max-width: 600px) {
   .focused-workspace-header > h1 { font-size: 1.4rem; }
@@ -102,7 +101,6 @@
 }
 
 .focused-workspace-tools { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-.focused-workspace-header { flex-wrap: wrap; }
 
 /* Keep the same navigation and help placement on management workspaces. */
 .management-intro { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: baseline; margin-block: 0.75rem; }
@@ -112,26 +110,25 @@
 .management-intro summary { cursor: pointer; padding-block: 0.35rem; }
 .management-intro details p { max-width: 70ch; margin-top: 0.5rem; }
 
-/* Controls remain full-size; compact the space between groups instead. */
-.library-search-primary { display: flex; align-items: flex-end; gap: 1rem; margin-bottom: 0.65rem; }
-.library-search-primary > .search-box { flex: 1; min-width: 0; }
-.library-search-primary .library-search-actions { flex: 0 1 auto; }
-.library-search-options { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; color: var(--bn-text-subtle); font-size: 0.85rem; }
+/* A single grid keeps search, disclosures and active constraints in reading order. */
+.library-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.75rem; }
+.library-search-primary, .library-search .facet-controls { display: contents; }
+.library-search-primary > .search-box { grid-column: 1 / -1; min-width: 0; }
+.library-search-menu { grid-column: 2; grid-row: 2; }
+.library-filters { grid-column: 1; grid-row: 2; min-width: 0; }
+.library-search-menu[open], .library-filters[open] { grid-column: 1 / -1; grid-row: auto; }
+.library-search-menu > summary, .library-filters > summary { color: var(--bn-text-subtle); font-size: 0.85rem; }
+.library-search-menu .library-search-actions { margin-block: 0.5rem; }
+.library-filters[open] > summary { margin-bottom: 0.35rem; }
+.library-search :is(.active-constraints, [data-facet-status], [data-facet-retry]),
+.library-search-options { grid-column: 1 / -1; }
+.library-search [data-facet-status]:empty { display: none; }
+.library-search-options { display: flex; flex-wrap: wrap; gap: 0 1rem; color: var(--bn-text-subtle); font-size: 0.85rem; }
 .library-search-options details[open] { flex-basis: 100%; }
-.library-search-options summary { cursor: pointer; padding-block: 0.3rem; }
-.library-search .facet-controls { width: 100%; margin-bottom: 0.35rem; }
 .library-results-tools { display: flex; flex-wrap: wrap; gap: 0 1rem; align-items: baseline; }
-.library-results-tools > .overview-selection { margin-bottom: 0.4rem; }
+.library-results-tools > .overview-selection { margin-bottom: 0.25rem; }
 .library-results-tools [data-overview-search-reset] { font-size: 0.85rem; }
-.library-search-actions button { background: transparent; }
+.library-results-tools .overview-bulk-button { flex: 0 1 auto; }
 @media (max-width: 700px) {
-  .library-search-primary { flex-wrap: wrap; gap: 0.5rem; }
-  .library-search-primary > .search-box { flex-basis: 100%; }
-  .library-search-primary .library-search-actions { width: auto; }
+  .library-search { padding: 0.75rem; }
 }
-@media (pointer: coarse) {
-  .library-search-options summary, .management-intro summary { min-height: 2.75rem; box-sizing: border-box; padding-block: 0.7rem; }
-}
-
-.library-search-primary:has([data-saved-views-form]:not([hidden])) { flex-wrap: wrap; }
-.library-search-primary:has([data-saved-views-form]:not([hidden])) > .search-box { flex-basis: 100%; }

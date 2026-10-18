@@ -10,13 +10,15 @@ bn find --folder References/Books --missing categories |
 # Find orphan notes interactively.
 bn find --orphan -i
 
-# Sweep stale 'WIP' projects to an Archive folder, preserving wikilinks.
+# Move 'WIP' notes created more than 180 days ago, preserving wikilinks.
+# Preview each move first; remove --dry-run after reviewing the output.
 bn find --status WIP --created '>180d' -0 |
-  while IFS= read -r -d '' p; do bn move "$p" Archive/Projects; done
+  while IFS= read -r -d '' p; do bn move "$p" Archive/Projects --dry-run; done
 
 # Spot typo'd tags in the long tail, then rewrite every occurrence.
 bn tags | tail -20
-bn find --tag projetc | bn set - tags=project
+bn replace tags projetc project --tag projetc --dry-run
+bn replace tags projetc project --tag projetc
 
 # Mark every note linking to a hub note as 'referenced'.
 bn backlinks "Project Alpha" | bn set - status=referenced

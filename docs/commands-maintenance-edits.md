@@ -105,7 +105,7 @@ bn replace status wip done --dry-run                        # preview only
 ### `bn set` — write frontmatter properties
 
 ```sh
-bn set <note...> <key[=|+=|-=]value...> [--type date|int|bool|raw] [--dry-run] [-0]
+bn set <note...> <key[=|+=|-=]value...> [--type date|datetime|int|bool|float|raw] [--dry-run] [-0]
 ```
 
 Positional args are split: anything containing an operator (`=`, `+=`, `-=`)

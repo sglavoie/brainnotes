@@ -1,4 +1,5 @@
-import { setStatusText, type StatusKind } from "./status";
+import { setSourceStatus } from "./source-status";
+import type { StatusKind } from "./status";
 import { createEditorTitle } from "./source-editor-title";
 import { formatSource, type SourceFormatCommand, type SourceFormatOptions } from "./source-format";
 import type { PreviewScheduler } from "./source-preview";
@@ -102,7 +103,7 @@ export const createSourceEditorController = (
   };
 
   const setStatus = (message: string, kind: StatusKind = ""): void => {
-    setStatusText(elements.status, message, kind);
+    setSourceStatus(elements.status, message, kind);
   };
 
   const preview = createPreviewPanel(elements, (text) => client.preview(text),
@@ -370,7 +371,7 @@ const runLoad = async (
       ctx.drafts.keep();
     });
     ctx.adopt(loaded.content, loaded.revision, false);
-    ctx.setStatus("Ready to edit. Save writes to the vault.");
+    ctx.setStatus("Ready to edit.");
     ctx.preview.flush(loaded.content);
     ctx.drafts.present(kept, { kind: "loaded", revision: loaded.revision, content: loaded.content });
   } catch (error: unknown) {
