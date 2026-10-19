@@ -1,6 +1,7 @@
 package cockpit
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,15 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
+
+// ErrActionNotOffered reports a fix requested for an action the task does not
+// advertise in its Actions set. It is the caller's mistake, not a vault fault,
+// so a transport classifies it with errors.Is rather than by message.
+var ErrActionNotOffered = errors.New("cockpit: task does not offer action")
+
+// ErrNoFixPlanner reports an action that has no fix planner, such as a triage
+// action a task offers but that changes no note.
+var ErrNoFixPlanner = errors.New("cockpit: action has no fix planner")
 
 // defaultFixCommand is the label stored in undo-journal entries for cockpit
 // fixes when the caller does not override it.
@@ -160,7 +170,7 @@ func (f *Fixer) loadContext(task Task, action ActionKind) (vaultData, map[string
 		return vaultData{}, nil, fmt.Errorf("cockpit: nil fixer or vault")
 	}
 	if !taskOffersAction(task, action) {
-		return vaultData{}, nil, fmt.Errorf("cockpit: task %s does not offer action %q", task.ID, action)
+		return vaultData{}, nil, fmt.Errorf("%w %q (task %s)", ErrActionNotOffered, action, task.ID)
 	}
 	data, err := f.loadData()
 	if err != nil {
@@ -194,7 +204,7 @@ func taskOffersAction(task Task, action ActionKind) bool {
 }
 
 func unfixableAction(action ActionKind) error {
-	return fmt.Errorf("cockpit: action %q has no fix planner", action)
+	return fmt.Errorf("%w: %q", ErrNoFixPlanner, action)
 }
 
 // --- schema repair ---------------------------------------------------------

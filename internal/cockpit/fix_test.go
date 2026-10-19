@@ -1,6 +1,7 @@
 package cockpit
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -362,14 +363,14 @@ func TestFixerRejectsTriageAndUnofferedActions(t *testing.T) {
 	fixer := NewFixer(v, cfg, "")
 
 	// A triage action has no planner even when the task offers it.
-	if _, err := fixer.Plan(broken, ActionOpen); err == nil {
-		t.Fatal("Plan(ActionOpen) should error: no planner")
+	if _, err := fixer.Plan(broken, ActionOpen); !errors.Is(err, ErrNoFixPlanner) {
+		t.Fatalf("Plan(ActionOpen) error = %v, want ErrNoFixPlanner", err)
 	}
 	// A fix action the task does not offer is rejected before loading.
-	if _, err := fixer.Plan(orphan, ActionSchemaRepair); err == nil {
-		t.Fatal("Plan(orphan, ActionSchemaRepair) should error: not offered")
+	if _, err := fixer.Plan(orphan, ActionSchemaRepair); !errors.Is(err, ErrActionNotOffered) {
+		t.Fatalf("Plan(orphan, ActionSchemaRepair) error = %v, want ErrActionNotOffered", err)
 	}
-	if _, err := fixer.Apply(orphan, ActionRelink); err == nil {
-		t.Fatal("Apply(orphan, ActionRelink) should error: not offered")
+	if _, err := fixer.Apply(orphan, ActionRelink); !errors.Is(err, ErrActionNotOffered) {
+		t.Fatalf("Apply(orphan, ActionRelink) error = %v, want ErrActionNotOffered", err)
 	}
 }

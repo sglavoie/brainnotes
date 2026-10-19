@@ -1,6 +1,8 @@
 package web
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
 // --- fix preview + apply ---------------------------------------------------
@@ -320,5 +323,32 @@ func TestServer_FixesAPI_PreviewRejectsTriageAction(t *testing.T) {
 	}
 	if payload := decodeManagementError(t, body); payload.OK || payload.Code != "invalid_request" {
 		t.Fatalf("payload = %#v, want invalid_request", payload)
+	}
+}
+
+// TestCockpitFixErrorClassifiesCockpitSentinels pins the classification to the
+// cockpit package's sentinels rather than their wording: a wrapped sentinel is
+// still a client mistake, and a message that merely mentions one is not.
+func TestCockpitFixErrorClassifiesCockpitSentinels(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want noteops.ErrorCode
+	}{
+		{"not offered", fmt.Errorf("plan: %w", cockpit.ErrActionNotOffered), noteops.CodeInvalidRequest},
+		{"no planner", fmt.Errorf("apply: %w", cockpit.ErrNoFixPlanner), noteops.CodeInvalidRequest},
+		{"lookalike message", errors.New("vault read failed: does not offer action"), noteops.CodeInternal},
+		{"classified", noteops.Errorf(noteops.CodeConflict, "busy elsewhere"), noteops.CodeConflict},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cockpitFixError(tc.err)
+			if code := noteops.CodeOf(got); code != tc.want {
+				t.Fatalf("code = %q, want %q", code, tc.want)
+			}
+			if tc.want == noteops.CodeInvalidRequest && noteops.MessageOf(got) != tc.err.Error() {
+				t.Fatalf("message = %q, want %q", noteops.MessageOf(got), tc.err.Error())
+			}
+		})
 	}
 }
