@@ -37,63 +37,26 @@ func atomicWrite(dest string, data []byte, preimage FileExpectation, newFileMode
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("note: mkdir %q: %w", dir, err)
 	}
-	// Capture the existing mode, if any, before writing the temp file. Stat
-	// errors other than "not exist" propagate so we don't silently clobber a
-	// file we couldn't introspect. destExists distinguishes "file has 0o000
-	// permissions" from "file does not exist" so the mode check below does
-	// not silently widen a deliberately restrictive mode.
-	var destMode os.FileMode
-	var destExists bool
-	if info, err := os.Stat(dest); err == nil {
-		// An exchange against a directory would succeed and swap the note with
-		// it, where the old plain rename simply failed. Refuse anything that is
-		// not a regular file before the primitive can be that literal.
-		if !info.Mode().IsRegular() {
-			return &TxnConflictError{Path: dest, Expected: "file", Actual: nonRegularLabel(info)}
-		}
-		destMode = info.Mode().Perm()
-		destExists = true
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("note: stat %q: %w", dest, err)
-	}
-
-	tmp, tmpPath, err := openExclusiveTemp(dir, ".note-", ".tmp", 0o600)
+	destMode, destExists, err := statWriteDestination(dest)
 	if err != nil {
-		return fmt.Errorf("note: tempfile in %q: %w", dir, err)
+		return err
 	}
-	cleanup := func() { _ = os.Remove(tmpPath) }
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return fmt.Errorf("note: write %q: %w", tmpPath, err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return fmt.Errorf("note: fsync %q: %w", tmpPath, err)
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return fmt.Errorf("note: close %q: %w", tmpPath, err)
+	tmpPath, err := stageNoteTemp(dir, data)
+	if err != nil {
+		return err
 	}
 	// Apply the destination's prior mode (or a sensible default for a new file)
 	// before the rename so the final inode lands with the right perms. Doing
 	// this on the temp path keeps the operation atomic with respect to readers.
-	wantMode := destMode
-	if !destExists {
-		wantMode = newFileMode
-		if wantMode == 0 {
-			wantMode, err = defaultNewFileMode(dir)
-			if err != nil {
-				cleanup()
-				return err
-			}
+	wantMode, err := stagedNoteMode(dir, destMode, destExists, newFileMode)
+	if err == nil {
+		if chmodErr := os.Chmod(tmpPath, wantMode); chmodErr != nil {
+			err = fmt.Errorf("note: chmod %q: %w", tmpPath, chmodErr)
 		}
 	}
-	if err := os.Chmod(tmpPath, wantMode); err != nil {
-		cleanup()
-		return fmt.Errorf("note: chmod %q: %w", tmpPath, err)
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return err
 	}
 	if err := installNote(dest, tmpPath, destExists, preimage); err != nil {
 		return err
@@ -101,15 +64,88 @@ func atomicWrite(dest string, data []byte, preimage FileExpectation, newFileMode
 	// fsync the parent directory so the rename is durable across power loss.
 	// POSIX guarantees rename atomicity within a running system, but the
 	// directory entry update isn't persisted until the directory itself is
-	// synced. A failure to open or sync the directory is non-fatal — the file
-	// content is still written and visible to the running process — so callers
-	// only see this surface as a rare logged-once warning in practice.
-	if dirF, err := os.Open(dir); err == nil {
-		_ = dirF.Sync()
-		_ = dirF.Close()
+	// synced. The note is already installed when this fails, so the error says
+	// so: the caller can see the new content but cannot claim it is durable.
+	if err := SyncDir(dir); err != nil {
+		return &installedNotDurableError{Path: dest, Err: err}
 	}
 	return nil
 }
+
+// statWriteDestination captures the existing mode, if any, before the temp file
+// is written. Stat errors other than "not exist" propagate so a file that could
+// not be introspected is not silently clobbered. exists distinguishes "file has
+// 0o000 permissions" from "file does not exist", so the mode applied later does
+// not silently widen a deliberately restrictive mode.
+func statWriteDestination(dest string) (mode os.FileMode, exists bool, err error) {
+	info, err := os.Stat(dest)
+	if os.IsNotExist(err) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("note: stat %q: %w", dest, err)
+	}
+	// An exchange against a directory would succeed and swap the note with it,
+	// where the old plain rename simply failed. Refuse anything that is not a
+	// regular file before the primitive can be that literal.
+	if !info.Mode().IsRegular() {
+		return 0, false, &TxnConflictError{Path: dest, Expected: "file", Actual: nonRegularLabel(info)}
+	}
+	return info.Mode().Perm(), true, nil
+}
+
+// stageNoteTemp writes data to a fresh fsynced temp file in dir, removing it on
+// any failure.
+func stageNoteTemp(dir string, data []byte) (string, error) {
+	tmp, tmpPath, err := openExclusiveTemp(dir, ".note-", ".tmp", 0o600)
+	if err != nil {
+		return "", fmt.Errorf("note: tempfile in %q: %w", dir, err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		err = fmt.Errorf("note: write %q: %w", tmpPath, err)
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	if err := tmp.Sync(); err != nil {
+		err = fmt.Errorf("note: fsync %q: %w", tmpPath, err)
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("note: close %q: %w", tmpPath, err)
+	}
+	return tmpPath, nil
+}
+
+// stagedNoteMode is the mode the staged file must carry: the destination's own
+// when it exists, else newFileMode, else what a file created in dir would get.
+func stagedNoteMode(dir string, destMode os.FileMode, destExists bool, newFileMode os.FileMode) (os.FileMode, error) {
+	if destExists {
+		return destMode, nil
+	}
+	if newFileMode != 0 {
+		return newFileMode, nil
+	}
+	return defaultNewFileMode(dir)
+}
+
+// installedNotDurableError reports a write whose bytes are installed at Path but
+// whose directory entry could not be flushed. It is an error, not a warning:
+// the content may not survive a power loss. It stays distinguishable so a caller
+// tracking the on-disk revision knows the revision did change.
+type installedNotDurableError struct {
+	Path string
+	Err  error
+}
+
+func (e *installedNotDurableError) Error() string {
+	return fmt.Sprintf("note: %q installed but its directory could not be synced: %v", e.Path, e.Err)
+}
+
+func (e *installedNotDurableError) Unwrap() error { return e.Err }
 
 // installNote moves the staged bytes onto dest and owns the temp name from that
 // point on, including deciding when it may be deleted.

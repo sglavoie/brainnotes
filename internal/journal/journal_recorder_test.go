@@ -86,3 +86,45 @@ func TestRecorderCapturesFirstSnapshotAndWritesManifest(t *testing.T) {
 		t.Fatalf("loaded entry mismatch\nloaded: %#v\nentry:  %#v", *loaded, *entry)
 	}
 }
+
+// TestRecorderForgetSinceDropsOnlyLaterCaptures is the batch-item rollback: a
+// refused item's captures leave the entry, with their snapshots, and an earlier
+// item's stay, so undo neither reverses what lands later at the forgotten paths
+// nor loses what the landed item changed.
+func TestRecorderForgetSinceDropsOnlyLaterCaptures(t *testing.T) {
+	vaultRoot := t.TempDir()
+	journalRoot := filepath.Join(vaultRoot, ".bnotes", "journal")
+	kept := filepath.Join(vaultRoot, "A.md")
+	forgotten := filepath.Join(vaultRoot, "B.md")
+	writeFile(t, kept, "a\n")
+	writeFile(t, forgotten, "b\n")
+	rec, err := NewRecorder(vaultRoot, journalRoot, "bn bulk move",
+		WithIDGenerator(func(time.Time) (string, error) { return "entry-forget", nil }))
+	if err != nil {
+		t.Fatalf("new recorder: %v", err)
+	}
+	if err := rec.Capture(kept); err != nil {
+		t.Fatalf("capture kept: %v", err)
+	}
+	mark := rec.Mark()
+	if err := rec.Capture(forgotten); err != nil {
+		t.Fatalf("capture forgotten: %v", err)
+	}
+	if err := rec.ForgetSince(mark); err != nil {
+		t.Fatalf("forget since %d: %v", mark, err)
+	}
+	snapshot := filepath.Join(journalRoot, "entry-forget", SnapshotsDirName, snapshotFileName("B.md"))
+	if _, err := os.Stat(snapshot); !os.IsNotExist(err) {
+		t.Fatalf("forgotten snapshot stat err = %v, want missing", err)
+	}
+	entry, err := rec.Finalize()
+	if err != nil {
+		t.Fatalf("finalize: %v", err)
+	}
+	if len(entry.Files) != 1 || entry.Files[0].Path != "A.md" {
+		t.Fatalf("entry files = %+v, want only A.md", entry.Files)
+	}
+	if err := rec.ForgetSince(0); err == nil {
+		t.Fatal("ForgetSince after Finalize succeeded, want refusal")
+	}
+}

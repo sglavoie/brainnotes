@@ -145,7 +145,8 @@ func planMove(v *vault.Vault, cfg *config.Config, noteArg, newFolderArg string, 
 }
 
 // applyMove is the only writing path. The destination check runs a second time
-// here, after the journal exists, because the plan was built before it.
+// here, after the journal exists, because the plan was built before it, and
+// CommitMovePlan runs it a last time right before the first rewrite.
 func applyMove(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, plan *noteops.MovePlan, newFolderAbs string, force bool, out io.Writer) error {
 	// Ahead of the destination folder, which a refused move would otherwise
 	// leave behind empty.
@@ -168,12 +169,9 @@ func applyMove(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Co
 		return err
 	}
 
-	if err := noteops.ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "move: warning: interrupted; run 'git diff' to inspect partial state")
-		return err
-	}
-	if err := noteops.RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "move: warning: interrupted after content rewrites; run 'git diff' to inspect partial state")
+	relocate := noteops.RelocationOptions{Force: force, Out: out}
+	if err := noteops.CommitMovePlan(journaler, v.Root, plan, &cfg.Frontmatter, relocate); err != nil {
+		warnIncompleteRelocation(cmd, "move", err)
 		return err
 	}
 	if _, err := journaler.Finalize(); err != nil {

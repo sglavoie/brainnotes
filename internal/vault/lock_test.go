@@ -203,6 +203,54 @@ func TestEscalatedLockUsesOneDescriptorAndExcludesEveryPath(t *testing.T) {
 	after.release()
 }
 
+// TestPathLocksExcludeCaseAndNormalizationVariants is the reason lock names are
+// folded: on APFS, HFS+ and NTFS `Note.md`, `note.md` and the NFD spelling of an
+// accented name are one file, so two writers naming it differently must contend
+// for one lock. The key is folded on every volume, so this holds whether or not
+// the temp directory is case-sensitive.
+func TestPathLocksExcludeCaseAndNormalizationVariants(t *testing.T) {
+	requireLocking(t)
+
+	root := txnTestRoot(t, map[string]string{"Note.md": "n\n"})
+	for name, spellings := range map[string][2]string{
+		"case":          {"Note.md", "nOTE.md"},
+		"folder case":   {"Dir/Note.md", "dir/note.md"},
+		"normalization": {"café.md", "café.md"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			held, err := acquirePathLocks(root, 20*time.Millisecond, 0, []string{filepath.Join(root, spellings[0])})
+			if err != nil {
+				t.Fatalf("first acquire: %v", err)
+			}
+			defer held.release()
+			other, err := acquirePathLocks(root, 20*time.Millisecond, 0, []string{filepath.Join(root, spellings[1])})
+			if !IsTxnLockBusy(err) {
+				other.release()
+				t.Fatalf("%q while %q is held: err = %v, want *TxnLockBusyError", spellings[1], spellings[0], err)
+			}
+		})
+	}
+}
+
+// TestPathLocksCollapseVariantSpellingsInOneSet checks the other half of a
+// shared lock name: one caller naming a note under two spellings must take its
+// lock once, not wait out the budget against itself.
+func TestPathLocksCollapseVariantSpellingsInOneSet(t *testing.T) {
+	requireLocking(t)
+
+	root := txnTestRoot(t, map[string]string{"Note.md": "n\n"})
+	locks, err := acquirePathLocks(root, 20*time.Millisecond, 0,
+		[]string{filepath.Join(root, "Note.md"), filepath.Join(root, "note.md")})
+	if err != nil {
+		t.Fatalf("acquire both spellings: %v", err)
+	}
+	defer locks.release()
+	// The vault guard plus a single path lock.
+	if got := len(locks.files); got != 2 {
+		t.Fatalf("held %d lock descriptors, want 2 (guard and one path)", got)
+	}
+}
+
 // TestOrdinaryLocksShareTheVaultGuard checks the guard did not accidentally
 // serialize the ordinary case: two writers on different paths must still run at
 // the same time, or every concurrent bn write in the vault would queue.
@@ -223,6 +271,30 @@ func TestOrdinaryLocksShareTheVaultGuard(t *testing.T) {
 	second.release()
 }
 
+// lowerLockedPathsCeiling caps MaxLockedPaths for the length of the test. Tests
+// using it must not call t.Parallel: the ceiling is package state.
+func lowerLockedPathsCeiling(t *testing.T, ceiling int) {
+	t.Helper()
+	previous := maxLockedPathsCeiling
+	maxLockedPathsCeiling = ceiling
+	t.Cleanup(func() { maxLockedPathsCeiling = previous })
+}
+
+// seedNumberedFiles writes count files holding body under root and returns
+// their paths in order.
+func seedNumberedFiles(t *testing.T, root string, count int, body string) []string {
+	t.Helper()
+	paths := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		path := filepath.Join(root, fmt.Sprintf("n%05d.txt", i))
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("seed %s: %v", path, err)
+		}
+		paths = append(paths, path)
+	}
+	return paths
+}
+
 // TestFileTxnAtomicCommitBeyondLockedPathCeiling is the boundary itself: a
 // transaction planning more paths than MaxLockedPaths reports must still commit
 // as one action. It used to be impossible — every planned path needed its own
@@ -231,16 +303,13 @@ func TestOrdinaryLocksShareTheVaultGuard(t *testing.T) {
 func TestFileTxnAtomicCommitBeyondLockedPathCeiling(t *testing.T) {
 	requireLocking(t)
 
+	// A small ceiling crosses the same boundary the production one does, without
+	// seeding thousands of notes.
+	lowerLockedPathsCeiling(t, 32)
+
 	count := MaxLockedPaths() + 8
 	root := t.TempDir()
-	paths := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		path := filepath.Join(root, fmt.Sprintf("n%05d.txt", i))
-		if err := os.WriteFile(path, []byte("old\n"), 0o644); err != nil {
-			t.Fatalf("seed %s: %v", path, err)
-		}
-		paths = append(paths, path)
-	}
+	paths := seedNumberedFiles(t, root, count, "old\n")
 
 	txn, err := NewFileTxn(root)
 	if err != nil {

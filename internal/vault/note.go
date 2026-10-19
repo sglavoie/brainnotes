@@ -185,6 +185,12 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if err != nil {
 		return fmt.Errorf("note: marshal %q: %w", n.Path, err)
 	}
+	return n.writeVerified(data)
+}
+
+// writeVerified installs data at n.Path under the path lock, against the
+// revision Load read, and advances that revision to data once it is on disk.
+func (n *Note) writeVerified(data []byte) error {
 	// The lock keeps two bn writers off one note for the whole save, so the
 	// precondition check below is not racing another transaction's plan. It is not
 	// what makes the write safe against an editor, which takes no lock: the
@@ -200,12 +206,16 @@ func (n *Note) Save(fmCfg *config.FrontmatterConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicWrite(n.Path, data, preimage, 0); err != nil {
-		return err
+	err = atomicWrite(n.Path, data, preimage, 0)
+	// An installedNotDurableError means the bytes landed even though their
+	// directory entry is not durable, so the loaded revision is now the written
+	// one and a retry must not be refused as stale.
+	var notDurable *installedNotDurableError
+	if err == nil || errors.As(err, &notDurable) {
+		n.sourceHash = HashBytes(data)
+		n.sourcePath = n.Path
 	}
-	n.sourceHash = HashBytes(data)
-	n.sourcePath = n.Path
-	return nil
+	return err
 }
 
 // verifySourceUnchanged rejects a write planned against a revision that is no

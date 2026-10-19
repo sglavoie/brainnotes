@@ -1,7 +1,9 @@
 package journal
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -245,6 +247,45 @@ func (r *Recorder) Capture(path string) error {
 	}
 	r.index[relSlash] = len(r.files)
 	r.files = append(r.files, FileRecord{Path: relSlash, Before: state})
+	return nil
+}
+
+// Mark reports a position in the capture order for ForgetSince.
+func (r *Recorder) Mark() int {
+	if r == nil {
+		return 0
+	}
+	return len(r.files)
+}
+
+// ForgetSince drops every path captured after mark, together with its snapshot.
+//
+// It is for one part of an operation that shares this entry with others — an
+// item of a batch — whose own change was compensated away. The paths it was the
+// first to capture recorded nothing, and keeping them would make the entry claim
+// whatever lands at those paths before Finalize: undo would then reverse a note
+// somebody else wrote. Paths captured before mark belong to the parts that
+// landed and stay.
+func (r *Recorder) ForgetSince(mark int) error {
+	if r == nil {
+		return fmt.Errorf("journal: nil recorder")
+	}
+	if r.finalized {
+		return fmt.Errorf("journal: recorder already finalized")
+	}
+	if mark < 0 || mark > len(r.files) {
+		return fmt.Errorf("journal: forget since %d: recorder holds %d paths", mark, len(r.files))
+	}
+	for _, rec := range r.files[mark:] {
+		if rec.Before.Snapshot != "" {
+			snapshot := filepath.Join(r.entryDir, filepath.FromSlash(rec.Before.Snapshot))
+			if err := os.Remove(snapshot); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("journal: forget %q: remove snapshot: %w", rec.Path, err)
+			}
+		}
+		delete(r.index, rec.Path)
+	}
+	r.files = r.files[:mark]
 	return nil
 }
 

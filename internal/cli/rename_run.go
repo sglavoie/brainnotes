@@ -51,7 +51,7 @@ func runRenameCommand(cmd *cobra.Command, args []string, opts renameOptions) err
 	if opts.dryRun {
 		return noteops.PrintRenamePlan(out, v.Root, plan)
 	}
-	return applyRename(cmd, args, v, cfg, plan)
+	return applyRename(cmd, args, v, cfg, plan, opts.force)
 }
 
 // resolveRenameArgs splits the positionals into the note to rename and its new
@@ -110,10 +110,10 @@ func planRename(v *vault.Vault, cfg *config.Config, noteArg, newTitle string, fo
 }
 
 // applyRename journals the plan, rewrites every referring file, and only then
-// moves the note itself. The two interruption warnings name different states
-// and must stay distinct: the first means no file moved, the second means the
-// content rewrites landed but the note is still at its old path.
-func applyRename(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, plan *noteops.RenamePlan) error {
+// moves the note itself. A failure after the rewrites began puts them back, so
+// the only partial state left to warn about is one whose compensation was
+// itself refused: rewritten links while the note is still at its old path.
+func applyRename(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, plan *noteops.RenamePlan, force bool) error {
 	out := cmd.OutOrStdout()
 	journaler, err := noteops.BeginOperationContext(commandContext(cmd), v.Root, "rename", commandInvocation(cmd, args),
 		[]string{plan.Target, plan.NewPath})
@@ -125,18 +125,24 @@ func applyRename(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.
 		return err
 	}
 
-	if err := noteops.ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "rename: warning: interrupted; run 'git diff' to inspect partial state")
-		return err
-	}
-	if err := noteops.RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "rename: warning: interrupted after content rewrites; run 'git diff' to inspect partial state")
+	relocate := noteops.RelocationOptions{Force: force, Out: out}
+	if err := noteops.CommitRenamePlan(journaler, v.Root, plan, &cfg.Frontmatter, relocate); err != nil {
+		warnIncompleteRelocation(cmd, "rename", err)
 		return err
 	}
 	if _, err := journaler.Finalize(); err != nil {
 		return err
 	}
 	return printRenameResult(out, v.Root, plan)
+}
+
+// warnIncompleteRelocation tells the user when a failed rename or move could
+// not put its rewritten links back. Any other failure left the vault as it was.
+func warnIncompleteRelocation(cmd *cobra.Command, op string, err error) {
+	var incomplete *noteops.RelocationIncompleteError
+	if errors.As(err, &incomplete) {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s: warning: interrupted after content rewrites; run 'git diff' to inspect partial state\n", op)
+	}
 }
 
 // captureRenamePaths records the pre-state of the note's old path, its new
