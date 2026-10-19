@@ -83,13 +83,11 @@ forced-color focus, and editor prose/Save in a reduced viewport. The ordinary
 editor and qualification suites also exercise dirty drafts, save failures and IME.
 These browser checks do not emulate an operating system keyboard.
 
-For physical-device qualification, open the updated workspace on an iOS or Android
-phone using a disposable vault. In the editor, focus prose, type at the end of a
-long note, switch Edit/Preview, open Format and Find, and save. Repeat in landscape
-and with larger system text. Confirm the caret and Save remain reachable while the
-keyboard is open, no toolbar obscures the selected text, and failed saves keep the
-draft. Record the device, OS/browser version, orientation, and result with release
-evidence; never perform this qualification against an ambient personal vault.
+For physical-device qualification, use the
+[mobile editor qualification record](operations/mobile-editor-qualification.md)
+with a disposable vault. Record the device, OS/browser version, orientation,
+result, and failures with release evidence; never test against an ambient
+personal vault.
 
 ## Vault performance
 
@@ -102,17 +100,18 @@ Both PR and weekly browser gates run them. To run just these checks:
 npm run test:e2e -- '--project=performance-*'
 ```
 
-Measurements cover search, expression filtering, and typing into a long source
-note at 4× CPU throttling and 100 ms network latency. Each test attaches JSON
-measurements with corpus size and long tasks. Inspect those artifacts when a
-budget fails; do not raise a ceiling merely to pass a slower run.
-
-[Back to the README](../README.md)
-
-
 `continuity-refinement.spec.js` covers reading-to-source passage continuity,
 mobile Edit/Preview position, Library selection recovery and revalidation,
 keyboard Graph navigation, and bounded prose at a wide desktop viewport. Graph
 joins the light/dark, desktop/mobile visual matrix; its payload and final node
 positions are fixed for reproducible screenshots, while behavior tests use the
 real graph API.
+
+Measurements cover search, expression filtering, and typing into a long source
+note at 4× CPU throttling and 100 ms network latency. The reading page check also
+records the HTML document, every resource transfer, total transfer, and first
+contentful paint. Each test attaches JSON measurements with corpus size and long
+tasks. Inspect those artifacts when a budget fails; do not raise a ceiling
+merely to pass a slower run.
+
+[Back to the README](../README.md)

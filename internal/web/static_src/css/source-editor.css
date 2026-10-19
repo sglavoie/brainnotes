@@ -518,13 +518,22 @@
 
 .source-editor-frontmatter { font: inherit; font-size: 0.85rem; color: var(--bn-muted); border: 1px solid var(--bn-border); border-radius: var(--bn-control-radius); background: var(--bn-raised); padding: 0.4rem 0.6rem; cursor: pointer; min-height: 2.75rem; }
 
-/* Reflow controls when enlarged text leaves too little room for a single row.
-   rem units make this follow text size as well as the available viewport. */
-@container (max-width: 16rem) {
-  .source-editor-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+/* Keep Save and the vault status visible when a phone or enlarged text leaves
+   too little room for all four controls on one line. */
+@container (max-width: 28rem) {
+  .source-editor-toolbar { grid-template-columns: auto minmax(0, 1fr); }
   .source-editor-format { grid-column: 1; grid-row: 1; }
   .source-editor-actions [data-source-find] { grid-column: 1; grid-row: 2; justify-self: start; }
-  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 1; }
-  .source-editor-actions .source-editor-status { grid-column: 2; grid-row: 2; text-align: left; }
+  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 1; justify-self: end; }
+  .source-editor-actions .source-editor-status { grid-column: 2; grid-row: 2; text-align: right; }
   .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; }
+}
+
+@container (max-width: 13rem) {
+  .source-editor-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .source-editor-format { grid-column: 1 / -1; grid-row: 1; }
+  .source-editor-actions [data-source-find] { grid-column: 1; grid-row: 2; }
+  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 2; }
+  .source-editor-actions .source-editor-status,
+  .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; text-align: left; }
 }

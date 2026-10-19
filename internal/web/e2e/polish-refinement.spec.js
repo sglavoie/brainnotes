@@ -31,7 +31,9 @@ test.describe("touch layouts", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Editing Writing");
     const line = page.locator(".cm-line").filter({ hasText: "Field journal" });
     await expect(line).toBeVisible();
-    expect((await line.boundingBox()).y).toBeLessThan(280);
+    // The toolbar may use two touch-sized rows; prose should still appear
+    // without scrolling on this short phone viewport.
+    expect((await line.boundingBox()).y).toBeLessThan(350);
     for (const selector of ["[data-source-save]", "[data-source-find]", ".source-editor-format > summary"]) {
       expect((await page.locator(selector).boundingBox()).height).toBeGreaterThanOrEqual(44);
     }
@@ -40,6 +42,41 @@ test.describe("touch layouts", () => {
     await page.keyboard.press("ControlOrMeta+End");
     await expect(page.locator("[data-source-save]")).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+
+  test("editor toolbar and open Format menu fit after a save on a phone", async ({ page }) => {
+    await page.goto("/edit?key=Writing");
+    await expect(page.locator(".cm-content")).toBeVisible();
+    await page.locator("[data-source-status]").evaluate((status) => {
+      status.textContent = "Saved to vault.";
+      status.classList.add("is-success");
+    });
+    await page.addStyleTag({ content: ".source-editor-toolbar :is(summary, button, p) { font-size: 1.3em !important; }" });
+    await page.locator(".source-editor-format > summary").click();
+
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      const fit = await page.evaluate(() => {
+        const save = document.querySelector("[data-source-save]").getBoundingClientRect();
+        const menu = document.querySelector(".source-editor-commands").getBoundingClientRect();
+        const panel = document.querySelector(".source-editor").getBoundingClientRect();
+        return save.right <= innerWidth && menu.right <= innerWidth && panel.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth;
+      });
+      expect(fit).toBe(true);
+      expect(await page.locator(".cm-content").evaluate((content) => parseFloat(getComputedStyle(content).fontSize))).toBeGreaterThanOrEqual(16);
+    }
+  });
+
+  test("landscape gives the writing surface room to scroll", async ({ page }) => {
+    await page.goto("/edit?key=Writing");
+    await expect(page.locator(".cm-content")).toBeVisible();
+    for (const viewport of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
+      await page.setViewportSize(viewport);
+      const surface = await page.locator(".cm-editor").boundingBox();
+      expect(surface.height).toBeGreaterThanOrEqual(300);
+      expect(surface.x + surface.width).toBeLessThanOrEqual(viewport.width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
   });
 
   test("long excerpts leave room for the next result", async ({ page }) => {

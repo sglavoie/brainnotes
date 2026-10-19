@@ -74,6 +74,8 @@ afterEach(() => {
 
   it("previews the destination, the exact Markdown, the expiry, and the sources", async () => {
     const fetcher = await ready();
+    expect(query<HTMLElement>("[data-synthesize-next-step]").textContent).toContain("preview the exact note");
+    expect(query<HTMLButtonElement>("[data-synthesize-preview]").classList.contains("bn-primary")).toBe(true);
     await previewNote();
 
     const body = new URLSearchParams(
@@ -103,6 +105,10 @@ afterEach(() => {
       ).map((code) => code.textContent)
     ).toEqual(["Notes/anchor.md", "Notes/one.md"]);
     expect(query<HTMLButtonElement>("[data-synthesize-apply]").disabled).toBe(false);
+    expect(query<HTMLElement>("[data-synthesize-next-step]").textContent).toContain("create the note");
+    expect(query<HTMLButtonElement>("[data-synthesize-preview]").classList.contains("bn-primary")).toBe(false);
+    expect(query<HTMLButtonElement>("[data-synthesize-apply]").classList.contains("bn-primary")).toBe(true);
+    expect(query<HTMLElement>("[data-synthesize-create-hint]").textContent).toContain("content and destination");
   });
 
   it("invalidates the receipt when the note bytes or the packet would change", async () => {

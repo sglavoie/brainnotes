@@ -20,8 +20,21 @@
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
-.bn-button.bn-primary { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border: 1px solid var(--bn-accent-subtle-border); font-weight: 600; }
+.bn-button.bn-primary, .settings-button-primary, .properties-button-primary {
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  border: 1px solid var(--bn-accent-subtle-border);
+  font-weight: 600;
+}
+.bn-button.bn-primary:hover:not(:disabled),
+.settings-button-primary:hover:not(:disabled),
+.properties-button-primary:hover:not(:disabled) { border-color: var(--bn-accent); }
 .bn-button.bn-secondary { background: var(--bn-raised); color: var(--bn-text-subtle); border-color: var(--bn-border); font-weight: 400; }
+.bn-button.bn-danger, .settings-danger {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
 .bn-status { color: var(--bn-muted); overflow-wrap: anywhere; }
 .bn-status.is-success { color: var(--bn-success); }
 .bn-status.is-error { color: var(--bn-danger); }

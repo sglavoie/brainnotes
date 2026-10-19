@@ -18,7 +18,7 @@ export const buildSourcesSection = (
   });
   const heading = element(doc, "h3", "synthesize-section-heading");
   heading.id = "synthesize-sources-heading";
-  heading.textContent = "Sources";
+  heading.textContent = "Selected notes";
   const intro = element(doc, "p", "synthesize-section-intro");
   intro.textContent =
     "The anchor is always first. Drag a handle or press Up and Down on it to reorder supporting notes.";
@@ -160,7 +160,7 @@ export const buildDraftSection = (
   });
   const heading = element(doc, "h3", "synthesize-section-heading");
   heading.id = "synthesize-draft-heading";
-  heading.textContent = "Draft";
+  heading.textContent = "3. Write the draft";
 
   const title = element(doc, "input", "synthesize-input", {
     "data-synthesize-title": "",

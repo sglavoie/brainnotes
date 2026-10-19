@@ -2,6 +2,7 @@ import type { SynthesisStoredState } from "./synthesize-storage";
 import { previewSynthesis, applySynthesis } from "./synthesize-write-actions";
 import { setStatusText } from "./status";
 import type { SynthesisSource } from "./synthesize-model";
+import { synthesisHasSavedWork } from "./synthesize-model";
 import { setSynthesisWarning } from "./synthesize-render";
 import { resolveSynthesisSource } from "./synthesize-requests";
 import { dedupeSynthesisSources } from "./synthesize-sources";
@@ -21,19 +22,12 @@ export type SynthesisCreateActions = {
 export const createSynthesisCreateActions = (runtime: SynthesisRuntime): SynthesisCreateActions => {
   const { config, model, view } = runtime;
 
-  const hasMeaningfulWork = (): boolean =>
-    model.sources.length > 0 ||
-    model.title.trim() !== "" ||
-    model.prompt.trim() !== "" ||
-    model.draft.trim() !== "" ||
-    model.candidate !== null;
-
   let discarding = false;
   const discard = async (): Promise<void> => {
     if (discarding) return;
     discarding = true;
     try {
-      if (hasMeaningfulWork() && !await runtime.confirmer(DISCARD_CONFIRMATION)) {
+      if (synthesisHasSavedWork(model, config) && !await runtime.confirmer(DISCARD_CONFIRMATION)) {
         runtime.announce("Kept the saved selection and draft.", "");
         return;
       }

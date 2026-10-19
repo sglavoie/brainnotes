@@ -18,6 +18,11 @@ thing at the terminal and in the browser.
 
 ## Install
 
+Install [Go](https://go.dev/dl/) 1.26.2 or newer and
+[just](https://just.systems/man/en/) first. Add your Go install directory to
+`PATH` (`$(go env GOBIN)` if set, otherwise `$(go env GOPATH)/bin`) so `bn` is
+available in a new shell.
+
 ```sh
 git clone https://github.com/sglavoie/brainnotes.git
 cd brainnotes

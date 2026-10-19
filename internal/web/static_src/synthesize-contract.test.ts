@@ -64,6 +64,8 @@ describe("synthesis DOM contract", () => {
       "[data-synthesize-preview-markdown]",
       "[data-synthesize-preview-sources]",
       "[data-synthesize-warning]",
+      "[data-synthesize-next-step]",
+      "[data-synthesize-create-hint]",
     ]) {
       expect(document.querySelectorAll(selector)).toHaveLength(1);
     }
@@ -81,6 +83,11 @@ describe("synthesis DOM contract", () => {
     );
     expect(query<HTMLButtonElement>("[data-synthesize-generate]").disabled).toBe(true);
     expect(query<HTMLButtonElement>("[data-synthesize-apply]").disabled).toBe(true);
+    expect(query<HTMLElement>("[data-synthesize-next-step]").textContent).toContain("Prepare context");
+    expect(query<HTMLElement>("[data-synthesize-create-hint]").textContent).toContain("successful preview");
+    expect(query<HTMLButtonElement>("[data-synthesize-prepare]").classList.contains("bn-primary")).toBe(true);
+    expect(query<HTMLButtonElement>("[data-synthesize-preview]").classList.contains("bn-primary")).toBe(false);
+    expect(query<HTMLButtonElement>("[data-synthesize-discard]").hidden).toBe(true);
     for (const selector of [
       "[data-synthesize-generate-status]",
       "[data-synthesize-preview-status]",

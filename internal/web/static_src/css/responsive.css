@@ -437,6 +437,21 @@
   }
   .source-editor-actions .source-editor-command { padding-inline: 0.45rem; }
   .source-editor-actions .source-editor-save { padding-inline: 0.65rem; }
+  /* iOS zooms a focused editable field with text below 16px. Keep the writing
+     surface at the browser's comfortable size so focusing it does not widen
+     the visual layout beyond the phone screen. */
+  .source-editor-surface .cm-scroller { font-size: 1rem; }
+}
+
+@media (max-width: 960px) and (orientation: landscape) and (max-height: 500px) {
+  /* A short landscape viewport needs a scrollable writing surface taller than
+     the portrait 55vh cap, especially once the on-screen keyboard appears. */
+  .source-editor-surface .cm-editor,
+  .source-editor-preview {
+    height: 80vh;
+    min-height: 18rem;
+    max-height: none;
+  }
 }
 
 /* Reading uses the shared Workspace menu; keep note actions compact enough for

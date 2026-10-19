@@ -75,10 +75,3 @@
   gap: 0.4rem;
 }
 
-.properties-button-primary {
-  border-color: var(--bn-accent-subtle-border);
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-  font-weight: 600;
-}
-

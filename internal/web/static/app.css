@@ -6573,13 +6573,6 @@ code {
   gap: 0.4rem;
 }
 
-.properties-button-primary {
-  border-color: var(--bn-accent-subtle-border);
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-  font-weight: 600;
-}
-
 /* internal/web/static_src/css/properties-dialog.css */
 .properties-dialog-backdrop {
   position: fixed;
@@ -6743,6 +6736,73 @@ code {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.synthesize-next-step {
+  margin: 0;
+  border-left: 3px solid var(--bn-accent);
+  padding: 0.45rem 0.7rem;
+  color: var(--bn-text-subtle);
+  background: var(--bn-raised);
+}
+
+.synthesize-action-hint {
+  margin: 0;
+  color: var(--bn-muted);
+  font-size: 0.85rem;
+}
+
+.synthesize-panel .bn-button {
+  border: 1px solid var(--bn-border);
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  cursor: pointer;
+}
+
+.synthesize-panel .bn-button:hover:not(:disabled) {
+  background: var(--bn-hover);
+  border-color: var(--bn-border-strong);
+}
+
+.synthesize-panel .bn-button.bn-primary {
+  color: var(--bn-accent-subtle-text);
+  background: var(--bn-accent-subtle-bg);
+  border-color: var(--bn-accent-subtle-border);
+  font-weight: 600;
+}
+
+.synthesize-panel .bn-button.bn-primary:hover:not(:disabled) {
+  color: var(--bn-accent-subtle-text);
+  background: var(--bn-accent-subtle-bg);
+  border-color: var(--bn-accent);
+}
+
+.synthesize-panel .bn-button.bn-danger {
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+  border-color: var(--bn-danger-border);
+}
+
+.synthesize-panel .bn-button.bn-danger:hover:not(:disabled) {
+  border-color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
+
+.synthesize-panel .bn-button.is-quiet {
+  border-color: transparent;
+  color: var(--bn-muted);
+  background: transparent;
+}
+
+.synthesize-panel .bn-button.is-quiet:hover:not(:disabled) {
+  color: var(--bn-text-subtle);
+  background: var(--bn-hover);
+}
+
+.synthesize-panel .bn-button:disabled {
+  color: var(--bn-faint);
+  background: var(--bn-sunken);
+  cursor: default;
 }
 
 .synthesize-anchor {
@@ -6925,10 +6985,7 @@ code {
 .synthesize-candidate-add,
 .synthesize-search-submit,
 .synthesize-action {
-  min-height: 2rem;
-  padding: 0.38rem 0.58rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+  min-height: var(--bn-control-height);
 }
 
 .synthesize-source-handle {
@@ -6943,9 +7000,9 @@ code {
 }
 
 .synthesize-tab {
-  min-height: 2rem;
-  padding: 0.38rem 0.65rem;
-  font-size: 0.85rem;
+  min-height: var(--bn-control-height);
+  padding: var(--bn-control-padding);
+  font-size: var(--bn-control-font-size);
   font-weight: 600;
 }
 
@@ -7677,15 +7734,24 @@ code {
 
 .source-editor-frontmatter { font: inherit; font-size: 0.85rem; color: var(--bn-muted); border: 1px solid var(--bn-border); border-radius: var(--bn-control-radius); background: var(--bn-raised); padding: 0.4rem 0.6rem; cursor: pointer; min-height: 2.75rem; }
 
-/* Reflow controls when enlarged text leaves too little room for a single row.
-   rem units make this follow text size as well as the available viewport. */
-@container (max-width: 16rem) {
-  .source-editor-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+/* Keep Save and the vault status visible when a phone or enlarged text leaves
+   too little room for all four controls on one line. */
+@container (max-width: 28rem) {
+  .source-editor-toolbar { grid-template-columns: auto minmax(0, 1fr); }
   .source-editor-format { grid-column: 1; grid-row: 1; }
   .source-editor-actions [data-source-find] { grid-column: 1; grid-row: 2; justify-self: start; }
-  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 1; }
-  .source-editor-actions .source-editor-status { grid-column: 2; grid-row: 2; text-align: left; }
+  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 1; justify-self: end; }
+  .source-editor-actions .source-editor-status { grid-column: 2; grid-row: 2; text-align: right; }
   .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; }
+}
+
+@container (max-width: 13rem) {
+  .source-editor-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .source-editor-format { grid-column: 1 / -1; grid-row: 1; }
+  .source-editor-actions [data-source-find] { grid-column: 1; grid-row: 2; }
+  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 2; }
+  .source-editor-actions .source-editor-status,
+  .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; text-align: left; }
 }
 /* internal/web/static_src/css/source-editor-attachments.css */
 /*
@@ -8062,18 +8128,6 @@ code {
   color: var(--bn-faint);
   background: var(--bn-sunken);
   cursor: default;
-}
-
-.settings-button-primary {
-  border-color: var(--bn-accent-subtle-border);
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-}
-
-.settings-danger {
-  border-color: var(--bn-danger-border);
-  color: var(--bn-danger);
-  background: var(--bn-danger-bg);
 }
 
 .settings-status {
@@ -9015,8 +9069,21 @@ dt.sync-fact {
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
-.bn-button.bn-primary { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border: 1px solid var(--bn-accent-subtle-border); font-weight: 600; }
+.bn-button.bn-primary, .settings-button-primary, .properties-button-primary {
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  border: 1px solid var(--bn-accent-subtle-border);
+  font-weight: 600;
+}
+.bn-button.bn-primary:hover:not(:disabled),
+.settings-button-primary:hover:not(:disabled),
+.properties-button-primary:hover:not(:disabled) { border-color: var(--bn-accent); }
 .bn-button.bn-secondary { background: var(--bn-raised); color: var(--bn-text-subtle); border-color: var(--bn-border); font-weight: 400; }
+.bn-button.bn-danger, .settings-danger {
+  border-color: var(--bn-danger-border);
+  color: var(--bn-danger);
+  background: var(--bn-danger-bg);
+}
 .bn-status { color: var(--bn-muted); overflow-wrap: anywhere; }
 .bn-status.is-success { color: var(--bn-success); }
 .bn-status.is-error { color: var(--bn-danger); }
@@ -9645,6 +9712,21 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   }
   .source-editor-actions .source-editor-command { padding-inline: 0.45rem; }
   .source-editor-actions .source-editor-save { padding-inline: 0.65rem; }
+  /* iOS zooms a focused editable field with text below 16px. Keep the writing
+     surface at the browser's comfortable size so focusing it does not widen
+     the visual layout beyond the phone screen. */
+  .source-editor-surface .cm-scroller { font-size: 1rem; }
+}
+
+@media (max-width: 960px) and (orientation: landscape) and (max-height: 500px) {
+  /* A short landscape viewport needs a scrollable writing surface taller than
+     the portrait 55vh cap, especially once the on-screen keyboard appears. */
+  .source-editor-surface .cm-editor,
+  .source-editor-preview {
+    height: 80vh;
+    min-height: 18rem;
+    max-height: none;
+  }
 }
 
 /* Reading uses the shared Workspace menu; keep note actions compact enough for

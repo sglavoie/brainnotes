@@ -30,18 +30,6 @@
   cursor: default;
 }
 
-.settings-button-primary {
-  border-color: var(--bn-accent-subtle-border);
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-}
-
-.settings-danger {
-  border-color: var(--bn-danger-border);
-  color: var(--bn-danger);
-  background: var(--bn-danger-bg);
-}
-
 .settings-status {
   min-height: 1.2rem;
   margin: 0.75rem 0 0;

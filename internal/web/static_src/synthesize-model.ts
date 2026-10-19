@@ -63,6 +63,17 @@ export type SynthesisModel = {
   previewStale: boolean;
 };
 
+export const synthesisHasSavedWork = (model: SynthesisModel, config: SynthesisConfig): boolean =>
+  [
+    model.sources.length > 0,
+    model.title.trim() !== "",
+    model.folder !== config.defaultFolder,
+    model.purpose !== config.defaultPurpose,
+    model.prompt.trim() !== "",
+    model.draft.trim() !== "",
+    model.candidate !== null,
+  ].some(Boolean);
+
 const attribute = (root: HTMLElement, name: string): string =>
   (root.getAttribute(name) || "").trim();
 
@@ -84,6 +95,10 @@ export const synthesisSourceFromIdentity = (
   route: identity.route,
 });
 
+const firstNonempty = (...values: (string | undefined)[]): string => values.find(Boolean) || "";
+const synthesisEndpoint = (root: HTMLElement, name: string, fallback: string): string =>
+  firstNonempty(attribute(root, name), fallback);
+
 export const readSynthesisConfig = (root: HTMLElement): SynthesisConfig => {
   const anchorKey = attribute(root, "data-synthesize-anchor-key");
   const anchorPath = attribute(root, "data-synthesize-anchor-path");
@@ -97,22 +112,21 @@ export const readSynthesisConfig = (root: HTMLElement): SynthesisConfig => {
     vaultID: attribute(root, "data-synthesize-vault"),
     anchor: {
       key: anchorKey,
-      title: attribute(root, "data-synthesize-anchor-title") || anchorPath || anchorKey,
+      title: firstNonempty(attribute(root, "data-synthesize-anchor-title"), anchorPath, anchorKey),
       path: anchorPath,
       route: attribute(root, "data-synthesize-anchor-route"),
     },
     defaultFolder: attribute(root, "data-synthesize-default-folder"),
-    defaultPurpose: defaultPurpose || purposes[0] || "synthesis",
-    purposes: purposes.length > 0 ? purposes : [defaultPurpose || "synthesis"],
+    defaultPurpose: firstNonempty(defaultPurpose, purposes[0], "synthesis"),
+    purposes: purposes.length > 0 ? purposes : [firstNonempty(defaultPurpose, "synthesis")],
     maxSupporters: parseMaxSupporters(attribute(root, "data-synthesize-max-supporters")),
     agentEnabled: attribute(root, "data-synthesize-agent") === "enabled",
-    contextEndpoint: attribute(root, "data-synthesize-context-endpoint") || "/api/synthesis/context",
-    generateEndpoint:
-      attribute(root, "data-synthesize-generate-endpoint") || "/api/synthesis/generate",
-    previewEndpoint: attribute(root, "data-synthesize-preview-endpoint") || "/api/synthesis/preview",
-    applyEndpoint: attribute(root, "data-synthesize-apply-endpoint") || "/api/synthesis/apply",
-    relatedEndpoint: attribute(root, "data-synthesize-related-endpoint") || "/api/related",
-    searchEndpoint: attribute(root, "data-synthesize-search-endpoint") || "/api/search",
+    contextEndpoint: synthesisEndpoint(root, "data-synthesize-context-endpoint", "/api/synthesis/context"),
+    generateEndpoint: synthesisEndpoint(root, "data-synthesize-generate-endpoint", "/api/synthesis/generate"),
+    previewEndpoint: synthesisEndpoint(root, "data-synthesize-preview-endpoint", "/api/synthesis/preview"),
+    applyEndpoint: synthesisEndpoint(root, "data-synthesize-apply-endpoint", "/api/synthesis/apply"),
+    relatedEndpoint: synthesisEndpoint(root, "data-synthesize-related-endpoint", "/api/related"),
+    searchEndpoint: synthesisEndpoint(root, "data-synthesize-search-endpoint", "/api/search"),
   };
 };
 

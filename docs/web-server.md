@@ -122,7 +122,7 @@ The body appears before Ask AI, and **Skip to note** bypasses navigation and
 metadata controls. Skip links are omitted from print output.
 
 Explore further with the [Related Notes explorer](web-related-notes.md),
-[Graph](web-server-security.md), or [Synthesis workbench](web-synthesis.md).
+[Graph](#explore-graph), or [Synthesis workbench](web-synthesis.md).
 
 ## Create and edit
 
@@ -278,12 +278,3 @@ Each card shows its title, excerpt, and Open/Another actions. **Why this note?**
 reveals its location and recommendation reasons; **Ask AI** expands the prompt.
 Both start closed again when Another loads a replacement. Activity counts and
 optional tool setup follow the recommendations.
-
-## Daily Brief dogfood readout
-
-Over two weeks, from local state only:
-
-1. Count distinct visit days in the last 14 days from `.bnotes/brief.json` `visits`.
-2. Compute average visits per week as `visit_days / 2`.
-3. Compute open-day rate as `days_with_open / visit_days`, grouping `opens` by local date.
-4. Success threshold: at least 4 visits per week and opens on at least 50% of visited days.

@@ -17,6 +17,7 @@ import type { RelatedMode } from "./related-types";
 export type SynthesisView = {
   root: HTMLElement;
   warning: HTMLElement;
+  nextStep: HTMLElement;
   sourceList: HTMLOListElement;
   selectionStatus: HTMLElement;
   suggestionTabs: Record<RelatedMode, HTMLButtonElement>;
@@ -54,6 +55,7 @@ export type SynthesisView = {
   destination: HTMLElement;
   previewButton: HTMLButtonElement;
   applyButton: HTMLButtonElement;
+  createHint: HTMLElement;
   previewStatus: HTMLElement;
   previewPanel: HTMLElement;
   previewDestination: HTMLElement;
@@ -74,6 +76,9 @@ export const createSynthesisView = (
     "aria-live": "polite",
   });
   warning.hidden = true;
+  const nextStep = element(doc, "p", "synthesize-next-step", {
+    "data-synthesize-next-step": "",
+  });
   const sources = buildSourcesSection(doc);
   const suggestions = buildSuggestionsSection(doc);
   const search = buildSearchSection(doc);
@@ -85,20 +90,24 @@ export const createSynthesisView = (
   const columns = element(doc, "div", "synthesize-columns");
   const left = element(doc, "div", "synthesize-column");
   const discovery = synthesisDisclosure(doc, "Find supporting notes", suggestions.section, search.section);
-  const sourceDetails = synthesisDisclosure(doc, "Sources", sources.section, discovery);
-  left.append(draft.section);
+  const sourceDetails = synthesisDisclosure(doc, "1. Choose sources", sources.section, discovery);
+  sourceDetails.open = doc.defaultView?.matchMedia?.("(min-width: 800px)").matches ?? false;
+  const contextDetails = synthesisDisclosure(doc, "2. Prepare context", context.section);
+  contextDetails.open = doc.defaultView?.matchMedia?.("(min-width: 961px)").matches ?? true;
+  left.append(sourceDetails, contextDetails);
   const right = element(doc, "div", "synthesize-column");
   const generation = synthesisDisclosure(doc, "Ask AI · optional", generate.section);
   const agentStatus = mount.closest("[data-synthesize-root]")?.querySelector<HTMLElement>("[data-synthesize-agent-status]");
   if (agentStatus) { agentStatus.hidden = false; generate.section.prepend(agentStatus); }
-  right.append(sourceDetails, context.section, generation, create.section);
-  const navigation = synthesisNavigation(doc, [["Draft", draft.section], ["Sources", sourceDetails], ["Preview", create.section]]);
+  right.append(draft.section, generation, create.section);
+  const navigation = synthesisNavigation(doc, [["Sources", sourceDetails], ["Context", contextDetails], ["Draft", draft.section], ["Review", create.section]]);
   columns.append(left, right);
 
-  mount.replaceChildren(warning, navigation, columns);
+  mount.replaceChildren(warning, nextStep, navigation, columns);
   return {
     root: mount,
     warning,
+    nextStep,
     sourceList: sources.list,
     selectionStatus: sources.status,
     suggestionTabs: suggestions.tabs,
@@ -136,6 +145,7 @@ export const createSynthesisView = (
     destination: create.destination,
     previewButton: create.preview,
     applyButton: create.apply,
+    createHint: create.hint,
     previewStatus: create.status,
     previewPanel: create.panel,
     previewDestination: create.previewDestination,

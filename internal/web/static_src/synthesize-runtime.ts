@@ -13,6 +13,7 @@ import {
   synthesisDraftError,
   synthesisFolderError,
   synthesisSelectedKeys,
+  synthesisHasSavedWork,
   synthesisTitleError,
   type SynthesisConfig,
   type SynthesisModel,
@@ -256,8 +257,24 @@ const renderFieldErrors = (runtime: SynthesisRuntime): void => {
   setSynthesisFieldError(view.draftError, show ? synthesisDraftError(model.draft) : "");
 };
 
+const synthesisNextStep = (model: SynthesisModel): string => {
+  if (model.context === null) {
+    return model.contextStale
+      ? "Rebuild context to include your updated sources or research options. Your draft is unchanged."
+      : "Prepare context next. Add supporting notes only if they help; the anchor works on its own.";
+  }
+  if (model.title.trim() === "" || model.draft.trim() === "") {
+    return "Next: give the note a title and write the draft.";
+  }
+  if (model.preview === null) {
+    return "Next: preview the exact note before creating it.";
+  }
+  return "Next: review the preview, then create the note.";
+};
+
 const render = (runtime: SynthesisRuntime): void => {
   const { model, view, config } = runtime;
+  view.nextStep.textContent = synthesisNextStep(model);
   renderSynthesisSources(view, model, config);
   renderSynthesisContext(view, model);
   renderSynthesisCandidate(view, model);
@@ -269,4 +286,11 @@ const render = (runtime: SynthesisRuntime): void => {
   view.generateButton.disabled = model.context === null || runtime.generating;
   view.previewButton.disabled = runtime.previewing || runtime.applying;
   view.applyButton.disabled = model.preview === null || runtime.applying;
+  view.discardButton.hidden = !synthesisHasSavedWork(model, config);
+  view.prepareButton.classList.toggle("bn-primary", model.context === null);
+  view.previewButton.classList.toggle("bn-primary", model.context !== null && model.preview === null);
+  view.applyButton.classList.toggle("bn-primary", model.preview !== null);
+  view.createHint.textContent = model.preview === null
+    ? "Create note becomes available after a successful preview."
+    : "The note will use the content and destination shown in the preview.";
 };

@@ -100,6 +100,7 @@ export const buildCreateSection = (
   destination: HTMLElement;
   preview: HTMLButtonElement;
   apply: HTMLButtonElement;
+  hint: HTMLElement;
   status: HTMLElement;
   panel: HTMLElement;
   previewDestination: HTMLElement;
@@ -113,13 +114,13 @@ export const buildCreateSection = (
   });
   const heading = element(doc, "h3", "synthesize-section-heading");
   heading.id = "synthesize-create-heading";
-  heading.textContent = "Create note";
+  heading.textContent = "4. Review and create";
   const destination = element(doc, "p", "synthesize-destination", {
     "data-synthesize-destination": "",
   });
 
   const actions = element(doc, "div", "synthesize-create-actions");
-  const preview = element(doc, "button", "synthesize-action is-primary", {
+  const preview = element(doc, "button", "synthesize-action", {
     "data-synthesize-preview": "",
   });
   preview.type = "button";
@@ -129,6 +130,11 @@ export const buildCreateSection = (
   apply.textContent = "Create note";
   apply.disabled = true;
   actions.append(preview, apply);
+  const hint = element(doc, "p", "synthesize-action-hint", {
+    "data-synthesize-create-hint": "",
+    id: "synthesize-create-hint",
+  });
+  apply.setAttribute("aria-describedby", hint.id);
 
   const status = element(doc, "p", "synthesize-preview-status", {
     "data-synthesize-preview-status": "",
@@ -165,12 +171,13 @@ export const buildCreateSection = (
   });
   panel.append(previewDestination, expiry, rendered, markdownWrapper, sourcesHeading, sources);
 
-  section.append(heading, destination, actions, status, panel);
+  section.append(heading, destination, actions, hint, status, panel);
   return {
     section,
     destination,
     preview,
     apply,
+    hint,
     status,
     panel,
     previewDestination,
@@ -199,8 +206,10 @@ export const buildContextSection = (
   const heading = element(doc, "h3", "synthesize-section-heading");
   heading.id = "synthesize-context-heading";
   heading.textContent = "Context packet";
+  const intro = element(doc, "p", "synthesize-section-intro");
+  intro.textContent = "Required before preview. This gathers the selected notes; Ask AI remains optional.";
   const actions = element(doc, "div", "synthesize-context-actions");
-  const prepare = element(doc, "button", "synthesize-action is-primary", {
+  const prepare = element(doc, "button", "synthesize-action", {
     "data-synthesize-prepare": "",
   });
   prepare.type = "button";
@@ -209,7 +218,7 @@ export const buildContextSection = (
   copy.type = "button";
   copy.textContent = "Copy context";
   copy.disabled = true;
-  const discard = element(doc, "button", "synthesize-action is-quiet", {
+  const discard = element(doc, "button", "synthesize-action bn-danger", {
     "data-synthesize-discard": "",
   });
   discard.type = "button";
@@ -234,6 +243,6 @@ export const buildContextSection = (
     tabindex: "0",
   });
   packetWrapper.append(packetSummary, packet);
-  section.append(heading, actions, status, summary, manifest, packetWrapper);
+  section.append(heading, intro, actions, status, summary, manifest, packetWrapper);
   return { section, prepare, copy, discard, status, summary, manifest, packet };
 };

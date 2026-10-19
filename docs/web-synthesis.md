@@ -17,6 +17,14 @@ Sources list use. A supporter you previously dismissed in the Related explorer c
 still be chosen here — an explicit selection is authoritative, and recall
 suppression never drops a note you picked.
 
+The workbench follows four steps: choose sources, prepare context, write a draft,
+then review and create the exact note shown in the preview. The anchor works as
+the only source, so adding supporting notes is optional. A short prompt at the top
+shows the next step. Ask AI is optional and keeps its candidate separate from your
+draft. On narrow screens, Context starts folded so the title and draft stay
+visible on entry; open it to prepare the packet. **Create note** becomes
+available only after a successful preview.
+
 **Prepare context** builds the packet. `POST /api/synthesis/context` reloads
 configuration, resolves every key against the current vault, ranks the selection,
 and returns the anchor's complete body plus at least one exact excerpt per

@@ -18,10 +18,11 @@ test("mobile Synthesis opens on writing and keeps a draft through failed preview
   await title(page).fill("A considered conclusion");
   await draft(page).fill("Words to keep after a failed preview.");
   await page.getByRole("link", { name: "Sources", exact: true }).click();
+  await page.getByRole("link", { name: "Context", exact: true }).click();
   await page.locator("[data-synthesize-prepare]").click();
   await expect(page.locator("[data-synthesize-context-status]")).toContainText("Context ready");
   await page.route("**/api/synthesis/preview", (route) => route.abort());
-  await page.getByRole("link", { name: "Preview", exact: true }).click();
+  await page.getByRole("navigation", { name: "Synthesis sections" }).getByRole("link", { name: "Review" }).click();
   await page.locator("[data-synthesize-preview]").click();
   await expect(page.locator("[data-synthesize-preview-status]")).toHaveClass(/is-error/);
   await expect(page.locator("[data-synthesize-preview-status]")).toBeInViewport();

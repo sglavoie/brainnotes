@@ -63,10 +63,7 @@
 .synthesize-candidate-add,
 .synthesize-search-submit,
 .synthesize-action {
-  min-height: 2rem;
-  padding: 0.38rem 0.58rem;
-  font-size: 0.85rem;
-  font-weight: 600;
+  min-height: var(--bn-control-height);
 }
 
 .synthesize-source-handle {
@@ -81,9 +78,9 @@
 }
 
 .synthesize-tab {
-  min-height: 2rem;
-  padding: 0.38rem 0.65rem;
-  font-size: 0.85rem;
+  min-height: var(--bn-control-height);
+  padding: var(--bn-control-padding);
+  font-size: var(--bn-control-font-size);
   font-weight: 600;
 }
 
