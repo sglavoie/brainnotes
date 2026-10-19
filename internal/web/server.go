@@ -61,7 +61,10 @@ type Server struct {
 	// the former readOnly field outright: nothing in the package branches on the
 	// Options flags again after NewServer, so there is one source of truth for
 	// what this deployment may do.
-	caps              capabilities
+	caps capabilities
+	// rootRedactor is the caps.absolutePaths answer applied to this vault: it
+	// takes the root out of error messages sent to a remote reader.
+	rootRedactor      vaultRootRedactor
 	replicaStatusFile string
 	configState       *configManager
 	vault             *vault.Vault
@@ -202,6 +205,8 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	if err != nil {
 		return nil, err
 	}
+	rootRedactor := vaultRootRedactorFor(caps, v.Root)
+	configState.redactor = rootRedactor
 
 	// Resolve the vault's Git safety engine once, here, so a vault the engine
 	// cannot open at all is a startup failure rather than a surprise on the first
@@ -217,6 +222,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 
 	srv := &Server{
 		caps:              caps,
+		rootRedactor:      rootRedactor,
 		replicaStatusFile: opts.ReplicaStatusFile,
 		configState:       configState,
 		vault:             v,

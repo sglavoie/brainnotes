@@ -199,6 +199,9 @@ type configManager struct {
 	status          ReloadStatus
 	validationError string
 	restartRequired []string
+	// redactor takes the vault root out of the reported validation error in a
+	// mode whose readers are remote. The stored error keeps the full text.
+	redactor vaultRootRedactor
 }
 
 func newConfigManager(cfg *config.Config, v *vault.Vault) (*configManager, error) {
@@ -263,7 +266,7 @@ func (m *configManager) statusLocked() ConfigStatus {
 		LocalPresent:    m.fingerprint.LocalPresent,
 		CompositeHash:   m.fingerprint.Composite,
 		Status:          m.status,
-		Error:           m.validationError,
+		Error:           m.redactor.redact(m.validationError),
 		RestartRequired: append([]string(nil), m.restartRequired...),
 		Writable:        m.status == ReloadOK,
 	}
