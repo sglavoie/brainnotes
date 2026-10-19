@@ -198,6 +198,20 @@ export const scheduleLoad = (runtime: GraphRuntime, query: string, delay: number
 };
 
 /**
+ * Drops any pending or in-flight load (IME composition pauses the filter). The
+ * superseded load returns without touching the status, so put back the last
+ * settled line rather than leaving "Loading graph…" busy forever.
+ */
+export const cancelGraphLoad = (runtime: GraphRuntime): void => {
+  window.clearTimeout(runtime.publishToken);
+  window.clearTimeout(runtime.debounceToken);
+  runtime.requestToken += 1;
+  if (runtime.baseStatusKind === "is-loading") {
+    setStatus(runtime, runtime.settledStatusMessage, runtime.settledStatusKind);
+  }
+};
+
+/**
  * Announces that this page's filter state moved.
  *
  * The graph's own controls publish rather than reloading directly, so every

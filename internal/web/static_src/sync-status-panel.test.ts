@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest";
+import { unansweredRequest } from "./request-outcome";
 import { createSyncStatusPanel } from "./sync-status-panel";
 import { syncJSON, syncStatus, syncStatusPanelMarkup, syncWorker } from "./sync.test-helpers";
 import type { FetchLike } from "./sync-requests";
@@ -152,7 +153,7 @@ it("stops vouching for facts it could not read again", async () => {
   // A panel keeping the last good reading on screen beside an error would be
   // showing a moment it can no longer name, which is the one thing this surface
   // must not do: these counts are what a person decides from.
-  expect(summary().textContent).toBe("The server did not answer.");
+  expect(summary().textContent).toBe(unansweredRequest("read").message);
   expect(summary().classList.contains("is-error")).toBe(true);
   expect(summary().classList.contains("is-success")).toBe(false);
   expect(terms()).toEqual([]);

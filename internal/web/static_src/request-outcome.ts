@@ -16,6 +16,11 @@ export const unansweredRequest = (purpose: RequestPurpose): RequestFailure => ({
       : "Couldn't load the current values. Check your connection, then refresh. If sign-in expired, sign in again.",
 });
 
+// A list or queue that failed to load says what is missing, the likely cause,
+// and which control on screen loads it again.
+export const loadFailureMessage = (subject: string, retryLabel: string): string =>
+  `Couldn't load ${subject}. Check your connection, then select ${retryLabel}.`;
+
 // A redirect, HTML login page, truncated JSON or malformed envelope cannot
 // establish whether a write happened. Never turn these into a claimed refusal.
 export const responseFailure = (

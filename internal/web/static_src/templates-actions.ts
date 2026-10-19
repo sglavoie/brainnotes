@@ -128,7 +128,7 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
       return;
     }
     setPending(null);
-    setStatus("Change cancelled.", "");
+    setStatus("Change canceled. Nothing was changed.", "");
   };
 
   return { preview, confirm, cancel, pending: () => pending, busy: () => busy };

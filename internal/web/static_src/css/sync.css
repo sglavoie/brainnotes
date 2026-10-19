@@ -288,7 +288,7 @@ dt.sync-fact {
 .sync-path-name {
   margin: 0;
   color: var(--bn-text-strong);
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }

@@ -27,7 +27,7 @@ func TestServer_PagesIncludeSearchUI(t *testing.T) {
 		if !strings.Contains(body, `Search notes`) {
 			t.Fatalf("missing search label on %s, got %q", path, body)
 		}
-		if !strings.Contains(body, `placeholder="Search title or body..."`) {
+		if !strings.Contains(body, `placeholder="Search title or body…"`) {
 			t.Fatalf("missing search placeholder on %s, got %q", path, body)
 		}
 		if !strings.Contains(body, `id="search-results"`) {
@@ -118,7 +118,7 @@ func TestServer_PagesIncludeFacetControls(t *testing.T) {
 	}
 
 	assertFacetUI("/library", "overview", "search", "Filter notes")
-	assertFacetUI("/graph", "graph", "graph", "Filter graph facets")
+	assertFacetUI("/graph", "graph", "graph", "Filter graph notes")
 }
 
 func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
@@ -140,7 +140,7 @@ func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	if !strings.Contains(body, `Filter graph`) {
 		t.Fatalf("missing graph filter label on /graph, got %q", body)
 	}
-	if !strings.Contains(body, `placeholder="Filter graph by title or body..."`) {
+	if !strings.Contains(body, `placeholder="Filter graph by title or body…"`) {
 		t.Fatalf("missing graph filter placeholder on /graph, got %q", body)
 	}
 	if !strings.Contains(body, `id="graph-spread-input"`) {

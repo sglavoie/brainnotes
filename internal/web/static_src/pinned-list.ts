@@ -207,7 +207,7 @@ class PinnedList {
       this.cancelDrag = null;
       if (cancelled) {
         this.list.insertBefore(item, restore);
-        if (announce) this.setStatus("Pin reorder cancelled.");
+        if (announce) this.setStatus("Pin reorder canceled. Nothing was changed.");
         return;
       }
       if (item.nextElementSibling === restore) {

@@ -191,7 +191,7 @@ const cancel = (state: SaverState): void => {
     return;
   }
   setPending(state, null);
-  setStatus(state, "Overwrite cancelled.", "");
+  setStatus(state, "Overwrite canceled. Nothing was changed.", "");
 };
 
 /**

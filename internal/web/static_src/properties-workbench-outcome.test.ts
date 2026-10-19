@@ -89,7 +89,7 @@ describe("property change outcome check", () => {
     requireElement(".write-outcome-check", HTMLButtonElement).click();
     const status = requireElement("[data-property-status]", HTMLElement);
     await waitForExpect(() => {
-      expect(status.textContent).toMatch(/^Property unavailable\. Property change confirmed in History/);
+      expect(status.textContent).toMatch(/^Couldn't load this property\. Check your connection, then select Refresh\. Property change confirmed in History/);
     });
     expect(status.classList.contains("is-error")).toBe(true);
   });

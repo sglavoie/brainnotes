@@ -209,7 +209,7 @@ const loadHistoryPage = async (ctx: WorkspaceContext, success = ""): Promise<voi
   dismissHistoryPreview(ctx);
   const issue = ++state.issued;
   elements.root.setAttribute("aria-busy", "true");
-  ctx.setStatus("Reading the history…", "is-loading");
+  ctx.setStatus("Loading history…", "is-loading");
   const query = workspaceQuery(ctx);
   writeHistoryURL(query, "replace");
   summarizeHistoryFilters(elements, query);

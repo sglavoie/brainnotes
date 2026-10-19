@@ -209,7 +209,7 @@
 
 .sync-merge-host .cm-scroller {
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.85rem;
   line-height: 1.55;
 }
@@ -226,7 +226,7 @@
 .sync-merge-host .cm-gutters {
   border-right: 1px solid var(--bn-border);
   background: var(--bn-sunken);
-  color: var(--bn-faint);
+  color: var(--bn-muted);
 }
 
 /* The recovered-merge notice. A merge is the one text on this page that exists

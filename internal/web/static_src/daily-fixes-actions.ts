@@ -1,4 +1,4 @@
-import { responseFailure, unansweredRequest } from "./request-outcome";
+import { loadFailureMessage, responseFailure, unansweredRequest } from "./request-outcome";
 import {
   buildOpenNoteForm,
   managementMutationEventName,
@@ -138,7 +138,7 @@ export const loadQueue = async (ctx: DailyFixesContext, successMessage = ""): Pr
     }
     applyQueueResult(ctx, payload, successMessage, successMessage ? "is-success" : "");
   } catch {
-    ctx.showError("Fixes queue unavailable.");
+    ctx.showError(loadFailureMessage("the fixes queue", "Reload fixes"));
   } finally {
     ctx.setBusy(false);
   }

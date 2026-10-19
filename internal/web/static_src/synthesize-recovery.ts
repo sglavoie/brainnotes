@@ -1,5 +1,6 @@
 import { clearSynthesisState, readSynthesisState, synthesisStorageKey, type SynthesisStorageLike, type SynthesisStoredState } from "./synthesize-storage";
 import { element } from "./synthesize-view-elements";
+import type { Confirmation } from "./action-confirm";
 
 // Each document owns one slot. Reloads, duplicated tabs and independently opened
 // workbenches can recover a copy, but never write into another document's slot.
@@ -18,7 +19,7 @@ type RecoveryOptions = {
   storage: SynthesisStorageLike | null;
   keys: string[];
   restore: (state: SynthesisStoredState) => Promise<boolean>;
-  confirm: (message: string) => boolean | Promise<boolean>;
+  confirm: (confirmation: Confirmation, returnFocus: HTMLElement) => boolean | Promise<boolean>;
 };
 
 export const mountSynthesisRecovery = (options: RecoveryOptions): void => {
@@ -47,7 +48,11 @@ const recoveryRow = (options: RecoveryOptions, key: string, state: SynthesisStor
   restore.type = "button";
   restore.textContent = "Restore copy";
   restore.addEventListener("click", async () => {
-    if (!await options.confirm("Restore this saved work? This replaces the draft and selection on this page. Other saved copies are kept.")) return;
+    if (!await options.confirm({
+      title: "Restore saved work?",
+      description: "This replaces the draft and selection on this page. Other saved copies are kept.",
+      confirmLabel: "Restore",
+    }, restore)) return;
     restore.disabled = true;
     try {
       status.textContent = await options.restore(state)
@@ -60,7 +65,12 @@ const recoveryRow = (options: RecoveryOptions, key: string, state: SynthesisStor
   remove.type = "button";
   remove.textContent = "Delete saved copy";
   remove.addEventListener("click", async () => {
-    if (!await options.confirm("Delete this saved copy? This cannot be undone. Open workbenches keep their current text.")) return;
+    if (!await options.confirm({
+      title: "Delete saved copy?",
+      description: "This cannot be undone. Open workbenches keep their current text.",
+      confirmLabel: "Delete",
+      danger: true,
+    }, remove)) return;
     if (!clearSynthesisState(options.storage, key)) {
       status.textContent = "This browser refused to delete the saved copy.";
       return;

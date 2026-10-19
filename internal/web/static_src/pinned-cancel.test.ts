@@ -29,7 +29,7 @@ it.each(["pointercancel", "Escape"])("restores a cancelled drag (%s) without sav
   } else pointer(method);
   expect(rows()).toEqual(["a", "b", "c"]);
   expect(document.querySelector(".is-dragging, .is-drop-target")).toBeNull();
-  expect(document.querySelector("[data-pinned-status]")!.textContent).toBe("Pin reorder cancelled.");
+  expect(document.querySelector("[data-pinned-status]")!.textContent).toBe("Pin reorder canceled. Nothing was changed.");
   pointer("pointermove");
   pointer("pointerup");
   await Promise.resolve();

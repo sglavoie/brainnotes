@@ -45,5 +45,9 @@ export const renderStatus = (runtime: GraphRuntime): void => {
 export const setStatus = (runtime: GraphRuntime, message: string, kind: StatusKind = ""): void => {
   runtime.baseStatusMessage = message;
   runtime.baseStatusKind = kind;
+  if (kind !== "is-loading") {
+    runtime.settledStatusMessage = message;
+    runtime.settledStatusKind = kind;
+  }
   renderStatus(runtime);
 };

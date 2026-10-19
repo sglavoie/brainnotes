@@ -276,7 +276,7 @@ describe("saved view save: overwrite", () => {
     harness.saver.cancel();
 
     expect(harness.saver.pending()).toBeNull();
-    expect(lastStatus(harness)?.message).toBe("Overwrite cancelled.");
+    expect(lastStatus(harness)?.message).toBe("Overwrite canceled. Nothing was changed.");
     expect(harness.calls).toHaveLength(1);
   });
 

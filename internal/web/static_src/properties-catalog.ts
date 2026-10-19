@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "./request-outcome";
 import {
   normalizeOpenErrorMessage,
   normalizeManagementErrorMessage,
@@ -155,13 +156,13 @@ const loadCatalog = async (catalog: Catalog): Promise<boolean> => {
     }
     const result = normalizePropertiesResponse(payload);
     if (!result.ok) {
-      catalog.setStatus(result.message || "Properties unavailable.", "is-error");
+      catalog.setStatus(result.message || loadFailureMessage("properties", "Refresh"), "is-error");
       return false;
     }
     renderLoaded(catalog, result);
     return true;
   } catch {
-    catalog.setStatus("Properties unavailable.", "is-error");
+    catalog.setStatus(loadFailureMessage("properties", "Refresh"), "is-error");
     return false;
   } finally {
     root.setAttribute("aria-busy", "false");

@@ -294,6 +294,16 @@ describe("daily fixes panel errors and refresh", () => {
     expect(document.querySelector("[data-fixes-status]")?.textContent).toBe("");
   });
 
+  it("names the Reload fixes control when the queue cannot be reached", async () => {
+    renderPanel();
+    initDailyFixes({ fetch: vi.fn(async () => { throw new Error("offline"); }) as typeof fetch });
+    await waitForExpect(() => {
+      expect(document.querySelector("[data-fixes-error]")?.textContent).toBe(
+        "Couldn't load the fixes queue. Check your connection, then select Reload fixes."
+      );
+    });
+  });
+
   it("refreshes after management mutations", async () => {
     renderPanel();
     const fetchMock = vi.fn(async () => {

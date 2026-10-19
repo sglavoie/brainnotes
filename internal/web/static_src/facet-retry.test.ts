@@ -32,7 +32,7 @@ it("keeps failures visible while typing, retries once, and preserves the search 
   input.focus();
   input.value = "existing";
   input.dispatchEvent(new Event("input"));
-  expect(document.querySelector(".facet-options")!.textContent).toBe("Facets unavailable.");
+  expect(document.querySelector(".facet-options")!.textContent).toBe("Couldn't load filters.");
   retry.focus();
   retry.click();
   retry.click();
@@ -72,7 +72,7 @@ it("treats a successful empty catalog as empty, not as a retryable failure", asy
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
   const { input, retry } = mount();
   input.focus();
-  await vi.waitFor(() => expect(document.querySelector(".facet-options")!.textContent).toBe("No matching facets."));
+  await vi.waitFor(() => expect(document.querySelector(".facet-options")!.textContent).toBe("No matching filters."));
   expect(retry.hidden).toBe(true);
 });
 

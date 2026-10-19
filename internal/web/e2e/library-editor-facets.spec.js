@@ -32,7 +32,7 @@ test("the filter picker recovers from a failed request without losing search sta
   await page.locator(".library-filters > summary").click();
   const input = page.locator(".facet-input");
   await input.fill("draft");
-  await expect(page.locator(".facet-options")).toContainText("Facets unavailable.");
+  await expect(page.locator(".facet-options")).toContainText("Couldn't load filters.");
   await retry.focus();
   await page.keyboard.press("Enter");
   await expect(retry).toBeHidden();

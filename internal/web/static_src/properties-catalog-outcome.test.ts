@@ -94,7 +94,7 @@ describe("inferred definition outcome", () => {
 
     await waitForExpect(() => {
       expect(catalogReads).toBe(2);
-      expect(root.querySelector("[data-properties-status]")?.textContent).toBe("Properties unavailable.");
+      expect(root.querySelector("[data-properties-status]")?.textContent).toBe("Couldn't load properties. Check your connection, then select Refresh.");
     });
   });
 });

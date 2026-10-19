@@ -155,7 +155,7 @@ func overviewFacetControlsData() facetControlsData {
 		IDPrefix:    "overview",
 		Mode:        "search",
 		Label:       "Filter notes",
-		Placeholder: "Find tags, folders, properties...",
+		Placeholder: "Find tags, folders, properties…",
 	}
 }
 
@@ -163,8 +163,8 @@ func graphFacetControlsData() facetControlsData {
 	return facetControlsData{
 		IDPrefix:    "graph",
 		Mode:        "graph",
-		Label:       "Filter graph facets",
-		Placeholder: "Find tags, folders, properties...",
+		Label:       "Filter graph notes",
+		Placeholder: "Find tags, folders, properties…",
 	}
 }
 

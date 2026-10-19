@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "./request-outcome";
 import { normalizeFacetOptions, type FacetFilterOption } from "./api";
 import { dispatchFiltersChange, sharedFilterParamKeys, updateBrowserQuery } from "./filters";
 import {
@@ -48,10 +49,16 @@ export class FacetController {
     });
     this.retry?.addEventListener("click", () => { void this.load(true); });
     document.addEventListener("click", (event) => {
-      if (event.target instanceof Node && !this.root.contains(event.target)) {
-        this.setExpanded(false);
-        this.setActive(-1);
-      }
+      if (event.target instanceof Node && !this.root.contains(event.target)) this.collapse();
+    });
+    // Safari can blur the input without focusing a clicked option button; keep
+    // focus in the combobox so focusout does not close it before the click.
+    this.options.addEventListener("mousedown", (event) => {
+      if (event.button === 0) event.preventDefault();
+    });
+    this.root.addEventListener("focusout", (event) => {
+      const next = event.relatedTarget;
+      if (!(next instanceof Node) || !this.root.contains(next)) this.collapse();
     });
     this.renderChips();
     void this.load();
@@ -75,7 +82,7 @@ export class FacetController {
       this.setLoadFeedback(retrying ? "Filters loaded." : "", false, false);
     } catch {
       this.state = "error";
-      this.setLoadFeedback("Filters unavailable. Your selected filters are still applied.", true, false);
+      this.setLoadFeedback(`${loadFailureMessage("filters", "Retry filters")} Your selected filters are still applied.`, true, false);
     } finally {
       this.inFlight = false;
       this.renderOptions();
@@ -101,6 +108,11 @@ export class FacetController {
   private setExpanded(expanded: boolean): void {
     this.input.setAttribute("aria-expanded", String(expanded));
     this.options.hidden = !expanded;
+  }
+
+  private collapse(): void {
+    this.setExpanded(false);
+    this.setActive(-1);
   }
 
   private showOptions(): void {
@@ -142,13 +154,13 @@ export class FacetController {
   private renderOptions(): void {
     if (this.inputClear) this.inputClear.hidden = this.input.value.trim() === "";
     if (this.state !== "ready") {
-      this.renderEmpty(this.state === "error" ? "Facets unavailable." : "Loading facets…");
+      this.renderEmpty(this.state === "error" ? "Couldn't load filters." : "Loading filters…");
       return;
     }
     this.filteredOptions = this.allOptions
       .filter((option) => facetOptionMatchesQuery(option, this.input.value)).slice(0, 80);
     if (!this.filteredOptions.length) {
-      this.renderEmpty("No matching facets.");
+      this.renderEmpty("No matching filters.");
       return;
     }
     this.options.replaceChildren();

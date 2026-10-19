@@ -84,7 +84,7 @@
 
 .properties-dialog-changes {
   color: var(--bn-text-subtle);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.8rem;
 }
 

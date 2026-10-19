@@ -84,7 +84,7 @@ const get = async <T extends { ok: boolean; code?: string; message?: string }>(
     const resp = await fetcher(endpoint, { headers: { Accept: "application/json" } });
     return await finish(resp, normalize);
   } catch {
-    return { ok: false, code: "", message: "The server did not answer." };
+    return { ...unansweredRequest("read"), code: "" };
   }
 };
 

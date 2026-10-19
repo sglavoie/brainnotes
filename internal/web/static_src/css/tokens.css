@@ -6,6 +6,9 @@
 :root {
   color-scheme: light;
 
+  /* The one monospace stack: code, paths, editors and expression input. */
+  --bn-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
   --bn-bg: #f7f9fc;
   --bn-surface: #ffffff;
   --bn-raised: #f3f6fb;
@@ -19,6 +22,7 @@
   --bn-text-strong: #0b1220;
   --bn-text-subtle: #33404f;
   --bn-muted: #5d687a;
+  /* Disabled and refused states only: below AA, so never for readable text. */
   --bn-faint: #8a93a3;
 
   --bn-link: #2563eb;
