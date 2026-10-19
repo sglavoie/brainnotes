@@ -46,7 +46,7 @@ func TestWorkerTransitionWaitsForCheckpointBeforePublishingSchedule(t *testing.T
 		t.Fatalf("Hold: %v", err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- record.save(root) }()
+	go func() { done <- record.save(root, "") }()
 	select {
 	case err := <-done:
 		t.Fatalf("worker record completed during checkpoint: %v", err)

@@ -242,6 +242,15 @@ type Status struct {
 	Workers []WorkerStatus `json:"workers,omitempty"`
 	// Problems is everything this read could not determine. See Problem.
 	Problems []Problem `json:"problems,omitempty"`
+	// CompanionBuild is the build identifier the companion last wrote into its
+	// record (internal/buildinfo), empty when none was recorded.
+	CompanionBuild string `json:"companion_build,omitempty"`
+	// BuildMismatch reports that CompanionBuild and the reader's own build are
+	// both known and differ: the companion that last ran is not the binary doing
+	// this read, usually because an install replaced the file and the running
+	// LaunchAgent was not restarted. It is a warning, not a state, and it does
+	// not change NeedsPerson.
+	BuildMismatch bool `json:"build_mismatch,omitempty"`
 }
 
 // stateOrder is the order states are reported in, most urgent first. Headline

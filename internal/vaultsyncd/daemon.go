@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
@@ -57,6 +58,10 @@ type Options struct {
 	// AuthorizeDeletions is passed through for compatibility with older callers.
 	// Deprecated: committed regular-file deletions are exported automatically.
 	AuthorizeDeletions []string
+	// Build overrides the build identifier this companion writes into its record
+	// and compares against. Empty means internal/buildinfo.ID(); it exists so a
+	// test can be two different builds.
+	Build string
 	// Observe receives every event. A nil Observe discards them, which is only
 	// ever right in a test.
 	Observe func(Event)
@@ -69,6 +74,13 @@ func (o Options) now() time.Time {
 		return time.Now().UTC()
 	}
 	return o.Now().UTC()
+}
+
+func (o Options) build() string {
+	if o.Build == "" {
+		return buildinfo.ID()
+	}
+	return o.Build
 }
 
 func (o Options) interval() time.Duration {
@@ -90,6 +102,7 @@ func (o Options) readOptions() ReadOptions {
 		Now:               o.Now,
 		GitExecutable:     o.GitExecutable,
 		DisconnectedAfter: o.DisconnectedAfter,
+		Build:             o.Build,
 	}
 }
 
@@ -123,10 +136,16 @@ type Pass struct {
 	// the work rather than before it, so a report and the vault it describes
 	// cannot disagree about what the pass just did.
 	Status *Status `json:"status,omitempty"`
+	// Error is why the pass ran no worker at all when that is itself a failure,
+	// such as a companion record from a newer build. Empty otherwise.
+	Error string `json:"error,omitempty"`
 }
 
 // Failed reports whether any worker in the pass failed.
 func (p *Pass) Failed() bool {
+	if p.Error != "" {
+		return true
+	}
 	for _, unit := range p.Units {
 		if unit.Error != "" {
 			return true

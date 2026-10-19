@@ -33,6 +33,11 @@ footer still reports the full active/hidden totals. Use --review-context to emit
 a deterministic, redacted JSON snapshot of the daily queue for agent review; it
 implies --daily and never invokes any AI command.
 
+When a background companion (bn-vault-guard or bn-vault-sync) last recorded a
+different build from this bn, usually because an install replaced the binaries
+and the LaunchAgent was not restarted, doctor prints a warning on stderr. It
+does not change the queue or the exit code.
+
 Exit code is always 0 for a successful scan; an empty queue means the vault is
 clean.`,
 		Args:          cobra.NoArgs,
