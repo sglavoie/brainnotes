@@ -106,10 +106,11 @@ query: unclosed group opened at column 16: expected ")"
                           ^
 ```
 
-Two quoting rules follow from the lexer: an RFC3339 literal must be quoted
-(`reviewed="2026-05-19T10:30:00Z"`), because its `:` separators would otherwise
-end the word, and so must a negative relative offset (`due>"-7d"`), because a
-leading `-` is negation.
+An RFC3339 literal must be quoted (`reviewed="2026-05-19T10:30:00Z"`), because
+its `:` separators would otherwise end the word. A negative number or relative
+offset after a comparison operator needs no quotes (`rating>-1`,
+`prop:x>=-2.5`, `due>-7d`): a `-` written directly against a digit there is
+part of the value, while everywhere a term can start a leading `-` is negation.
 
 `-q` and `--view` are find filter flags, so like every other one they cannot be
 combined with positional note arguments on `bn search`, `bn replace`,

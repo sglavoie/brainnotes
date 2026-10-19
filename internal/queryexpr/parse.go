@@ -285,8 +285,36 @@ func (p *parser) parseAtom() (Atom, error) {
 	case tokWord, tokString, tokWikilink:
 		p.next()
 		return atomOf(tok), nil
+	case tokMinus:
+		if atom, ok := p.parseNegativeNumber(); ok {
+			return atom, nil
+		}
 	}
 	return Atom{}, p.errAt(tok, "expected a value, got "+tok.describe())
+}
+
+// parseNegativeNumber accepts a `-` written directly against a word that starts
+// with a digit or `.`, in value position, as one negative literal:
+// `pinned>-1`, `prop:x>=-2.5`, `due>-7d`. The lexer cannot decide this,
+// since a leading `-` is negation everywhere a term can start; a value
+// position is the one place negation cannot appear, so the parser can. A gap
+// after the minus (`>- 1`) or a non-numeric word (`>-foo`) is still an error.
+func (p *parser) parseNegativeNumber() (Atom, bool) {
+	minus := p.peek()
+	if p.pos+1 >= len(p.toks) {
+		return Atom{}, false
+	}
+	word := p.toks[p.pos+1]
+	if word.Kind != tokWord || word.Span.Start != minus.Span.End || !startsNumeric(word.Text) {
+		return Atom{}, false
+	}
+	p.next()
+	p.next()
+	return Atom{Text: "-" + word.Text, Span: join(minus.Span, word.Span)}, true
+}
+
+func startsNumeric(s string) bool {
+	return s != "" && (s[0] == '.' || (s[0] >= '0' && s[0] <= '9'))
 }
 
 func atomOf(tok token) Atom {
