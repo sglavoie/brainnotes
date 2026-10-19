@@ -107,7 +107,7 @@ func TestStateDirIsInsideGitDir(t *testing.T) {
 func TestPushFailureBackoff(t *testing.T) {
 	state := newState(t)
 	now := time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC)
-	first, err := state.RecordPushFailure(now, "connection refused")
+	first, err := state.RecordPushFailure(now, "connection refused", false)
 	if err != nil {
 		t.Fatalf("RecordPushFailure: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestPushFailureBackoff(t *testing.T) {
 		t.Fatal("a retry must be due after the backoff elapses")
 	}
 
-	second, err := state.RecordPushFailure(now.Add(time.Minute), "connection refused")
+	second, err := state.RecordPushFailure(now.Add(time.Minute), "connection refused", false)
 	if err != nil {
 		t.Fatalf("RecordPushFailure: %v", err)
 	}

@@ -21,6 +21,9 @@ type PushResult struct {
 	Remote string
 	// Retry carries the recorded backoff state after a failure.
 	Retry PushState
+	// RetryStateErr reports that the push succeeded but the previous failure
+	// streak's record could not be removed. The push itself is not failed by it.
+	RetryStateErr error
 }
 
 // Push publishes the current branch.
@@ -78,10 +81,13 @@ func (m *Manager) Push(ctx context.Context) (PushResult, error) {
 			Err:    errors.Join(errors.New(detail), saveErr),
 		}
 	}
-	if err := m.clearPushState(); err != nil {
-		// Failing to forget a resolved failure only costs a delayed next attempt.
-		_ = err
-	}
 	result.Pushed = true
+	if err := m.clearPushState(); err != nil {
+		// The push landed, so this is not a push failure. The streak is marked
+		// resolved in memory (see Manager.pushStale), so this process neither
+		// waits out the old backoff nor continues the old streak on the next
+		// failure; the error is reported so the stale file is not a silent one.
+		result.RetryStateErr = err
+	}
 	return result, nil
 }

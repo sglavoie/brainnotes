@@ -15,11 +15,11 @@ import (
 
 func TestBarrierJoinErrorOnlyTreatsAHeldCheckpointAsBusy(t *testing.T) {
 	held := fmt.Errorf("%w: it is copying the vault", checkpoint.ErrBarrierHeld)
-	if err := barrierJoinError(safetyLockName, "preflight", held); !IsBusy(err) || !errors.Is(err, checkpoint.ErrBarrierHeld) {
+	if err := barrierJoinError("preflight", "the safety.lock was not taken", held); !IsBusy(err) || !errors.Is(err, checkpoint.ErrBarrierHeld) {
 		t.Fatalf("held barrier = %v (kind %q), want busy wrapping ErrBarrierHeld", err, KindOf(err))
 	}
 	cause := errors.New("checkpoint record is unreadable")
-	err := barrierJoinError(safetyLockName, "preflight", cause)
+	err := barrierJoinError("preflight", "the safety.lock was not taken", cause)
 	if IsBusy(err) || KindOf(err) != KindRepositoryState || !errors.Is(err, cause) {
 		t.Fatalf("other join failure = %v (kind %q), want repository_state wrapping its cause", err, KindOf(err))
 	}
