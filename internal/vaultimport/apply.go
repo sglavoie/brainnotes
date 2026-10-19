@@ -136,9 +136,9 @@ type Result struct {
 //
 // It is the whole consumer side in one call, and the order of its five steps is
 // the contract rather than an arrangement: accept before reading, read before
-// touching the vault, commit before recording provenance, record provenance
-// before the snapshot, and the snapshot before the receipt. See doc.go for why
-// each of those is the only safe direction.
+// touching the vault, record provenance before the attempt is declared and the
+// transaction commits, commit before the snapshot, and the snapshot before the
+// receipt. See doc.go for why each of those is the only safe direction.
 //
 // A package this vault disagrees with is refused as ErrConflict with the
 // contested content untouched; a package this vault could not have accepted is
@@ -154,10 +154,12 @@ type Result struct {
 // about a receipt that was never published.
 //
 // Earlier failures that also leave the change on disk return a nil Result, and
-// the two worth naming carry the entry identity in the error instead:
-// recordProvenance names the entry, the operation and the origin device, and a
+// the one worth naming carries the entry identity in the error instead: a
 // *noteops.SnapshotError names the entry and says in so many words that the
-// change is on disk and nothing was rolled back. The rest of finalize's failures
+// change is on disk and nothing was rolled back. A provenance record that could
+// not be written is not among them — it is written before anything else, so it
+// refuses an import that has touched nothing, and its error names the package,
+// the entry, the operation and the origin device. The rest of finalize's failures
 // — an operation that captured nothing, a manifest the journal could not write —
 // name a path or nothing at all, but they are the defensive ones: a non-empty
 // package always captures, so reaching them means the recovery history itself is

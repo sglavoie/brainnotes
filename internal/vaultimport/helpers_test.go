@@ -120,9 +120,8 @@ func (r *replicas) mustApply(t *testing.T, packageDir string) *Result {
 // staged in the caller's hands.
 //
 // Several properties here are only observable between two of Apply's steps — the
-// configuration pin fires only if the configuration changes after planning, and
-// the provenance ordering is a claim about the gap between committing and
-// snapshotting — so those tests drive the steps rather than calling Apply.
+// configuration pin fires only if the configuration changes after planning — so
+// those tests drive the steps rather than calling Apply.
 func planned(t *testing.T, r *replicas, packageDir string) (*applier, *vault.FileTxn) {
 	t.Helper()
 	session, err := accept(r.root(), packageDir, Options{Now: r.clock.Now})

@@ -1,7 +1,6 @@
 package vaultimport
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
@@ -222,50 +221,58 @@ func classifyCommit(packageID string, err error) (cleanup, refusal error) {
 }
 
 // recordProvenance writes the peer operation against the local journal entry
-// that applying it produced, before that entry is finalized and committed.
+// this application is pinned to, before the attempt is declared and before the
+// first byte moves.
 //
 // The ordering is vaultexport.RecordImport's documented contract and it is
-// one-directional. Written after the commit, a crash in between leaves a commit
-// the exporter reads as this device's own work and publishes straight back to
-// the peer that sent it. Written before, the worst case is a ledger entry for a
-// journal entry that never commits, which the exporter never looks up.
+// one-directional: the ledger must know the entry before the commit carrying it
+// exists, or the exporter reads that commit as this device's own work and
+// publishes it straight back to the peer that sent it. Recording it here rather
+// than between the transaction and the snapshot is what makes the contract hold
+// on every path, failure included. Recorded after the content landed, a ledger
+// that could not be written — an export holding the record's lock past the
+// budget, a full disk — left a choice between an applied change outside the
+// recovery history and an undoable commit the exporter would echo, and this
+// package took the second. Recorded here, the same failure refuses an import
+// that has touched nothing: no attempt, no entry, no content, and the package
+// stays in the channel for the next pass.
 //
-// The identity itself is knowable earlier — this package mints it and pins it
-// onto the recorder before the transaction starts, because the attempt record
-// has to name it before the first byte moves. What is only knowable here is
-// whether there is an entry at all: noteops creates the recorder on the first
-// Capture, so EntryID answers empty for an operation that changed nothing, and
-// reading it after Commit is how this learns the application produced a real
-// entry rather than assuming the one it named was used.
-func (a *applier) recordProvenance(operation *noteops.Journal) error {
-	entryID := operation.EntryID()
-	if entryID == "" {
-		return fmt.Errorf("vaultimport: applying %s captured no recovery entry", a.manifest.PackageID)
-	}
+// The identity is knowable this early because this package mints it and pins it
+// onto the recorder; see recorderOptions. The worst a record made here can cost
+// is a ledger entry for an entry that never commits — the transaction refused,
+// or the process died before it — which the exporter never looks up, since it
+// consults the ledger only for entries a commit it is reading names.
+func (a *applier) recordProvenance(entryID string) error {
 	err := vaultexport.RecordImportContext(a.opts.checkpointContext, a.root, entryID, vaultexport.Import{
 		OperationID:  a.operation.OperationID,
 		OriginDevice: a.manifest.OriginDevice,
 	})
-	if err == nil {
-		return nil
+	if err != nil {
+		return fmt.Errorf("vaultimport: record import provenance for %s: entry %s applying operation %s from %s: %w",
+			a.manifest.PackageID, entryID, a.operation.OperationID, a.manifest.OriginDevice, err)
 	}
-	// Past the point where the peer's bytes are on this disk. Leaving them
-	// outside the recovery history is the worse of the two failures — nothing
-	// could undo them — so the entry is finalized anyway and both facts are
-	// reported. No receipt is minted, so the peer keeps its own copy.
-	//
-	// This is the one branch here that ends in a state only a person can put
-	// right: the change is applied, committed and undoable, and the ledger does
-	// not know it came from a peer, so the next export publishes the peer's own
-	// change back to it and the origin sees a spurious conflict on a change it
-	// authored. The repair is one RecordImport call, so the error names every
-	// argument it needs — the entry, the operation, and the device — rather than
-	// leaving them to be reconstructed from a journal listing.
-	_, finalizeErr := operation.Finalize()
-	return errors.Join(
-		fmt.Errorf("vaultimport: record import provenance for %s: entry %s applied operation %s from %s: %w",
-			a.manifest.PackageID, entryID, a.operation.OperationID, a.manifest.OriginDevice, err),
-		finalizeErr)
+	return nil
+}
+
+// requirePinnedEntry checks that the transaction recorded under the entry the
+// ledger and the attempt both name.
+//
+// noteops creates the recorder on the first Capture, so EntryID answers empty
+// for an operation that changed nothing, and reading it after Commit is how
+// this learns the application produced a real entry rather than assuming the
+// one it named was used. A different identity would be an entry the provenance
+// recorded above does not describe, so it is refused rather than finalized —
+// the recovery pass that unwinds the attempt is the one that can put it back.
+func (a *applier) requirePinnedEntry(operation *noteops.Journal, entryID string) error {
+	switch got := operation.EntryID(); got {
+	case entryID:
+		return nil
+	case "":
+		return fmt.Errorf("vaultimport: applying %s captured no recovery entry", a.manifest.PackageID)
+	default:
+		return fmt.Errorf("vaultimport: applying %s recorded entry %s, but provenance names %s",
+			a.manifest.PackageID, got, entryID)
+	}
 }
 
 // finalize writes the undo manifest, takes the Git snapshot, and proves the

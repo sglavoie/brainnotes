@@ -39,6 +39,9 @@ func (a *applier) apply() (*journal.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := a.recordProvenance(entryID); err != nil {
+		return nil, err
+	}
 	if err := a.declare(entryID); err != nil {
 		return nil, err
 	}
@@ -47,10 +50,9 @@ func (a *applier) apply() (*journal.Entry, error) {
 		return nil, err
 	}
 	importCrash(crashApplied)
-	if err := a.recordProvenance(operation); err != nil {
+	if err := a.requirePinnedEntry(operation, entryID); err != nil {
 		return nil, err
 	}
-	importCrash(crashProvenance)
 	entry, err := a.finalize(operation)
 	if err != nil {
 		return nil, err

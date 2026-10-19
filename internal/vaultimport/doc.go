@@ -63,21 +63,18 @@
 // never governed them. This package supplies the pins; internal/vault decides
 // when they are checked, and checks them both at staging and around every change.
 //
-// Provenance is durable before the commit that needs it. The identity of the
+// Provenance is durable before anything it describes. The identity of the
 // local journal entry is minted before the operation begins and pinned onto the
 // recorder, so it is knowable at every point after that; it is recorded through
-// vaultexport.RecordImport *before* the entry is finalized and snapshotted.
-// Written afterwards, a crash in between would leave a commit the exporter reads
-// as this device's own work and publishes straight back to the peer that sent it.
-//
-// When the ledger write itself fails there is no ordering left to choose: the
-// peer's bytes are already on this disk, so the entry is finalized and
-// snapshotted anyway — an applied change outside the recovery history would be
-// the worse failure — and both problems are reported together. No receipt is
-// minted, so the peer keeps its copy. That vault has an undoable commit the
-// ledger does not recognize as imported, and the error names the entry, the
-// operation, and the origin device, which is every argument the repairing
-// RecordImport call needs.
+// vaultexport.RecordImport *before* the attempt is declared and the transaction
+// commits. Written after the commit, a crash in between would leave a commit the
+// exporter reads as this device's own work and publishes straight back to the
+// peer that sent it — and so would a ledger write that merely failed, because by
+// then the peer's bytes are on the disk and the entry has to be finalized
+// anyway. Written first, that failure refuses an import that has touched
+// nothing, and the package stays in the channel for the next pass. The price is
+// a ledger entry for an entry that never commits when the transaction refuses
+// or the process dies before it, which the exporter never looks up.
 //
 // An ordinary acknowledgment is only ever minted for a durable, undoable
 // change. The receipt's recovery entry is read back from disk with

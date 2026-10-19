@@ -47,11 +47,21 @@ func interruptAfterCommit(t *testing.T, r *replicas, packageDir string) {
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
-	if err := session.declare(entryID); err != nil {
-		t.Fatalf("declare: %v", err)
-	}
+	declareRecorded(t, session, entryID)
 	if err := session.commit(txn, operation); err != nil {
 		t.Fatalf("commit: %v", err)
+	}
+}
+
+// declareRecorded takes the two steps apply takes before the transaction, in
+// its order: provenance first, then the attempt.
+func declareRecorded(t *testing.T, session *applier, entryID string) {
+	t.Helper()
+	if err := session.recordProvenance(entryID); err != nil {
+		t.Fatalf("recordProvenance: %v", err)
+	}
+	if err := session.declare(entryID); err != nil {
+		t.Fatalf("declare: %v", err)
 	}
 }
 
