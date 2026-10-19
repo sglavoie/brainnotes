@@ -31,7 +31,7 @@ var enumFlagValues = map[string]map[string][]string{
 	"bn graph":            {"format": {"dot", "mermaid", "code"}},
 	"bn related":          {"mode": {"balanced", "rediscover", "connect"}},
 	"bn related feedback": {"state": {"useful", "dismissed", "later", "clear"}},
-	"bn set":              {"type": {"date", "datetime", "int", "bool", "float", "raw"}},
+	"bn set":              {"value-type": {"date", "datetime", "int", "bool", "float", "raw"}},
 	"bn tags":             {"sort": {"count", "name"}},
 	"bn values":           {"sort": {"count", "name"}},
 	"bn find":             {"sort": findSortCandidates()},

@@ -29,9 +29,10 @@ left-to-right.
 
 A configured property is stored as the kind its definition declares. For
 properties with no definition, coercion is automatic: true/false -> bool,
-integer -> int, YYYY-MM-DD -> date, else string. Use --type to force
+integer -> int, YYYY-MM-DD -> date, else string. Use --value-type to force
 date|datetime|int|bool|float|raw. Wikilink-typed properties are auto-wrapped
-before mutation.
+before mutation. (--type is a deprecated spelling of --value-type: elsewhere
+--type filters notes by their type property.)
 
 Each file is rewritten atomically, but there is no cross-file transaction: if
 an error stops the run mid-way, prior writes stand. Use 'git diff' to recover.
@@ -48,7 +49,11 @@ unchanged files are omitted.`,
 	}
 
 	f := cmd.Flags()
-	f.StringVar(&opts.typeFlag, "type", "", "force value type: date|datetime|int|bool|float|raw (default: auto)")
+	f.StringVar(&opts.typeFlag, "value-type", "", "force value type: date|datetime|int|bool|float|raw (default: auto)")
+	// --type is the old spelling. It still works, hidden, with a note on
+	// stderr, because on every find-scoped command --type is a note filter.
+	f.StringVar(&opts.typeFlag, "type", "", "deprecated spelling of --value-type")
+	_ = f.MarkDeprecated("type", "use --value-type")
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "read NUL-separated paths from stdin")
 	f.BoolVar(&opts.dryRun, "dry-run", false, "preview changes without writing")
 	return cmd

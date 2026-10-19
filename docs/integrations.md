@@ -22,7 +22,7 @@ commands that take one note (`open`, `links`, `backlinks`, `related`,
 `context`, `pin`, `unpin`, `remove`, `move`, `rename`), and the values of
 `--view`, `--tag`, `--folder` and `--property`. Enumerated flags such as
 `related --mode`, `context --format`, `graph --format`, `find --sort` and
-`set --type` complete their fixed values. A vault that does not load completes
+`set --value-type` complete their fixed values. A vault that does not load completes
 nothing.
 
 ## Scripting: exit status and JSON

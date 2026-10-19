@@ -105,7 +105,7 @@ bn replace status wip done --dry-run                        # preview only
 ### `bn set` — write frontmatter properties
 
 ```sh
-bn set <note...> <key[=|+=|-=]value...> [--type date|datetime|int|bool|float|raw] [--dry-run] [-0]
+bn set <note...> <key[=|+=|-=]value...> [--value-type date|datetime|int|bool|float|raw] [--dry-run] [-0]
 ```
 
 Positional args are split: anything containing an operator (`=`, `+=`, `-=`)
@@ -125,7 +125,7 @@ the same way `=` does (`tags+=foo,bar` adds two entries). Operators can be
 mixed in one invocation and apply left-to-right.
 
 Type coercion is automatic: `true`/`false` → bool, integer → int, `YYYY-MM-DD`
-→ date, else string. Use `--type` to force. Wikilink-typed properties are
+→ date, else string. Use `--value-type` to force (`--type` is a deprecated alias that still works, with a note on stderr; elsewhere `--type` is the note filter). Wikilink-typed properties are
 wrapped in `[[ ]]` on write; for `+=`/`-=` the
 wrapping happens before the comparison so `tags+=Books` matches an existing
 `[[Books]]` entry.
@@ -147,7 +147,7 @@ Examples:
 ```sh
 bn set References/Books/Dune.md status=Reading rating=7
 bn set note.md categories=Books,Personal                    # → wikilink list
-bn set note.md created=2026-01-01 --type=date
+bn set note.md created=2026-01-01 --value-type=date
 bn set note.md tags+=project                                # append a tag
 bn set note.md tags+=foo,bar                                # append multiple
 bn set note.md tags-=draft                                  # drop a tag
