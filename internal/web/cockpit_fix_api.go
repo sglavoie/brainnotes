@@ -78,37 +78,9 @@ func (s *Server) handleFixesApply(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, err)
 		return
 	}
-
-	// Redeem the one-use receipt before touching the vault so an expired or
-	// replayed apply fails closed with preview_required.
-	record, err := s.fixPreviews.consume(r.Form.Get("preview_id"))
+	task, fixer, err := s.redeemFixPreview(r.Form.Get("preview_id"), id, action)
 	if err != nil {
 		writeManagementError(w, err)
-		return
-	}
-	if record.TaskID != id || record.Action != action {
-		writeManagementError(w, noteops.Errorf(noteops.CodePreviewRequired, "fix preview does not match the request"))
-		return
-	}
-
-	// Resolve the current task by the previewed id from a freshly refreshed
-	// snapshot. Because a task id embeds the on-disk hash of every affected note,
-	// any change to the underlying files yields a different id: the previewed task
-	// simply vanishes. A valid receipt whose task is gone means the world moved on
-	// since the preview — stale. The Fixer is bound to that same snapshot so the
-	// apply diffs against exactly the load the id was validated against.
-	queue, fixer, err := s.cockpitFixContext()
-	if err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
-		return
-	}
-	task, ok := cockpitTaskByID(queue, id)
-	if !ok {
-		writeManagementError(w, noteops.Errorf(noteops.CodePreviewStale, "fix preview is stale"))
-		return
-	}
-	if record.Signature != task.Signature {
-		writeManagementError(w, noteops.Errorf(noteops.CodePreviewStale, "fix preview is stale"))
 		return
 	}
 
@@ -127,6 +99,34 @@ func (s *Server) handleFixesApply(w http.ResponseWriter, r *http.Request) {
 		FixOutcome: outcome,
 		JournalID:  managementJournalID(outcome.Journal),
 	})
+}
+
+// redeemFixPreview redeems the one-use receipt before anything touches the
+// vault, so an expired or replayed apply fails closed with preview_required,
+// then finds the previewed task again in a freshly refreshed snapshot.
+//
+// Because a task id embeds the on-disk hash of every affected note, any change
+// to the underlying files yields a different id: the previewed task simply
+// vanishes. A valid receipt whose task is gone means the world moved on since
+// the preview — stale. The Fixer is bound to that same snapshot so the apply
+// diffs against exactly the load the id was validated against.
+func (s *Server) redeemFixPreview(previewID, id string, action cockpit.ActionKind) (cockpit.Task, *cockpit.Fixer, error) {
+	record, err := s.fixPreviews.consume(previewID)
+	if err != nil {
+		return cockpit.Task{}, nil, err
+	}
+	if record.TaskID != id || record.Action != action {
+		return cockpit.Task{}, nil, noteops.Errorf(noteops.CodePreviewRequired, "fix preview does not match the request")
+	}
+	queue, fixer, err := s.cockpitFixContext()
+	if err != nil {
+		return cockpit.Task{}, nil, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err)
+	}
+	task, ok := cockpitTaskByID(queue, id)
+	if !ok || record.Signature != task.Signature {
+		return cockpit.Task{}, nil, noteops.Errorf(noteops.CodePreviewStale, "fix preview is stale")
+	}
+	return task, fixer, nil
 }
 
 // parseFixRequest parses and authenticates a fix preview/apply request, then
