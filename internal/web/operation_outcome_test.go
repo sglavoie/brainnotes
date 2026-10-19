@@ -72,6 +72,22 @@ func TestOperationOutcomeFindsTemplateApply(t *testing.T) {
 	}
 }
 
+func TestOperationOutcomeFindsViewApply(t *testing.T) {
+	ts, _, _ := newViewsFixtureServer(t)
+	const id = "33333333333333333333333333333333"
+	preview := previewView(t, ts.URL, viewMutationRequest{
+		Op: viewOpUpsert, Name: "Matrix", View: &viewDefinition{Query: "status:draft"},
+	})
+	status, result := postViews(t, ts.URL, viewsApplyAPIRoutePath, propertyTestToken,
+		propertyApplyRequest{PreviewID: preview.PreviewID, OperationID: id})
+	if status != http.StatusOK {
+		t.Fatalf("view apply status = %d", status)
+	}
+	if got := checkOperationOutcome(t, ts.URL, id); got["status"] != "confirmed" || got["journal_id"] != result.JournalID {
+		t.Fatalf("view outcome = %#v, want journal %q", got, result.JournalID)
+	}
+}
+
 func checkOperationOutcome(t *testing.T, baseURL, id string) map[string]any {
 	t.Helper()
 	resp, err := http.Get(baseURL + operationOutcomeRoutePath + "?id=" + id)

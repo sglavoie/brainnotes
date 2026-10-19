@@ -203,6 +203,14 @@ func (s *Server) handleViewsPreview(w http.ResponseWriter, r *http.Request) {
 	writeManagementJSON(w, http.StatusOK, response)
 }
 
+// viewsPreviewMatches reports whether a replanned view change is still the one
+// the receipt was issued for: the same configuration generation, a change to
+// write, and the same file states the preview pinned.
+func viewsPreviewMatches(plan *viewsPlan, status ConfigStatus, record propertyPreviewRecord) bool {
+	return status.Generation == record.Generation && plan.Config != nil &&
+		reflect.DeepEqual(plan.fileStates(), record.Files)
+}
+
 // handleViewsApply redeems a view receipt and writes brainnotes.toml. It
 // accepts no plan of its own: the stored request is replanned and must reproduce
 // exactly the bytes the preview was pinned to, so an apply can never write what
@@ -235,13 +243,13 @@ func (s *Server) handleViewsApply(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, viewsWriteError(err))
 		return
 	}
-	if status.Generation != record.Generation || plan.Config == nil ||
-		!reflect.DeepEqual(plan.fileStates(), record.Files) {
+	if !viewsPreviewMatches(plan, status, record) {
 		writeManagementError(w, viewsStaleConfigError())
 		return
 	}
 
-	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, "views", viewsCommand(plan.Op), pin)
+	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, "views", viewsCommand(plan.Op), pin,
+		journalOptionsForOperation(req.OperationID)...)
 	if err != nil {
 		writeManagementError(w, viewsWriteError(err))
 		return
