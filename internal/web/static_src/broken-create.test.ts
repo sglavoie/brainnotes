@@ -109,7 +109,7 @@ describe("broken create DOM behavior", () => {
     button?.click();
 
     expect(button?.disabled).toBe(true);
-    expect(status?.textContent).toBe("Creating note...");
+    expect(status?.textContent).toBe("Creating note…");
 
     await waitForExpect(() => {
       expect(document.querySelector("[data-create-note] a")?.textContent).toBe("Open note");

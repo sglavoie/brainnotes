@@ -209,7 +209,7 @@ class OverviewSearch extends OverviewSearchBulk {
     this.updateBulkControls();
     this.els.listEl.dataset.updating = "true";
     this.loadingToken = window.setTimeout(() => this.setStatus(
-      this.els.listEl.hidden ? "Loading matching notes..." : "Updating results… Previous matches are shown.", "is-loading"
+      this.els.listEl.hidden ? "Loading matching notes…" : "Updating results… Previous matches are shown.", "is-loading"
     ), 350);
     this.debounceToken = window.setTimeout(async () => {
       try {

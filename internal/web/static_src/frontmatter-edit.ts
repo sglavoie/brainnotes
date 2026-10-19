@@ -119,7 +119,7 @@ export const initFrontmatterEditing = (deps: FrontmatterActionDeps = {}): void =
       }
       pending = true;
       const restore = disablePanel(panel);
-      setStatus("Updating frontmatter...");
+      setStatus("Updating frontmatter…");
       try {
         const resp = await fetcher(action.request.url, action.request.init);
         const outcome = await readFrontmatterOutcome(resp, action.message);

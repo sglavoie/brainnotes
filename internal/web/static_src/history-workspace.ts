@@ -209,7 +209,7 @@ const loadHistoryPage = async (ctx: WorkspaceContext, success = ""): Promise<voi
   dismissHistoryPreview(ctx);
   const issue = ++state.issued;
   elements.root.setAttribute("aria-busy", "true");
-  ctx.setStatus("Reading the history...", "is-loading");
+  ctx.setStatus("Reading the history…", "is-loading");
   const query = workspaceQuery(ctx);
   writeHistoryURL(query, "replace");
   summarizeHistoryFilters(elements, query);
@@ -320,7 +320,7 @@ const openHistoryPreview = async (
   state.previewTrigger = trigger;
   showHistoryPreviewPending(elements);
   focusHistoryPreview(elements);
-  ctx.setStatus("Checking what restoring this would do...", "is-loading");
+  ctx.setStatus("Checking what restoring this would do…", "is-loading");
   const outcome = await previewHistoryRestore(ctx.fetcher, elements.previewEndpoint, elements.token, entryID);
   if (issue !== state.previewIssue || !elements.root.isConnected) return;
   if (!outcome.ok) {
@@ -354,7 +354,7 @@ const applyHistoryRestore = async (ctx: WorkspaceContext): Promise<void> => {
   // Consume the local receipt before awaiting the write, preventing repeat clicks.
   state.restoring = true;
   dismissHistoryPreview(ctx, true);
-  ctx.setStatus("Restoring...", "is-loading");
+  ctx.setStatus("Restoring…", "is-loading");
   const outcome = await restoreHistoryEntry(ctx.fetcher, elements.undoEndpoint, {
     token: elements.token,
     entryID: preview.entry_id,

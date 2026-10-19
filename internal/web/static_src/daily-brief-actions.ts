@@ -65,7 +65,7 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
   }
 
   ctx.setSlotsBusy([slot], true);
-  ctx.setSlotStatus(slot, "Opening note...", "is-loading");
+  ctx.setSlotStatus(slot, "Opening note…", "is-loading");
   try {
     const body = buildBriefItemForm({ cardID, action: "open", token: ctx.config.csrfToken }).toString();
     const resp = await ctx.fetcher(ctx.config.itemEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
@@ -110,7 +110,7 @@ export const runAnother = async (
   const busySlots: BriefSlotKind[] = slot === "continue" ? ["continue", "connect"] : [slot];
 
   ctx.setSlotsBusy(busySlots, true);
-  ctx.setSlotStatus(slot, "Finding another card...", "is-loading");
+  ctx.setSlotStatus(slot, "Finding another card…", "is-loading");
   try {
     const body = buildBriefItemForm({ cardID, action: "another", token: ctx.config.csrfToken }).toString();
     const resp = await ctx.fetcher(ctx.config.itemEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
@@ -160,7 +160,7 @@ export const runInsight = async (
     ctx.setSlotsBusy([slot], false);
     return;
   }
-  ctx.setSlotStatus(slot, "Generating insight...", "is-loading");
+  ctx.setSlotStatus(slot, "Generating insight…", "is-loading");
   const requestID = ctx.insightCounter + 1;
   ctx.insightCounter = requestID;
   ctx.inflightInsight.set(slot, requestID);

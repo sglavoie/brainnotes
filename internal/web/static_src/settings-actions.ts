@@ -73,7 +73,7 @@ export const createSettingsWriter = (deps: SettingsWriterDeps): SettingsWriter =
     }
     busy = true;
     setPending(null);
-    setStatus(`Previewing "${key}"...`, "is-loading");
+    setStatus(`Previewing "${key}"…`, "is-loading");
     try {
       const outcome = await previewSetting(deps.fetch, deps.token, {
         token: deps.token,
@@ -109,7 +109,7 @@ export const createSettingsWriter = (deps: SettingsWriterDeps): SettingsWriter =
     }
     busy = true;
     const operationID = newWriteOperationID();
-    setStatus(`Saving "${issued.key}"...`, "is-loading");
+    setStatus(`Saving "${issued.key}"…`, "is-loading");
     try {
       const outcome = await applySetting(deps.fetch, deps.token, issued.previewID, operationID);
       setPending(null);

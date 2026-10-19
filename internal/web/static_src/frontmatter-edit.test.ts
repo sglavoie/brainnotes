@@ -113,7 +113,7 @@ describe("frontmatter DOM behavior", () => {
     form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     expect(button?.disabled).toBe(true);
-    expect(status?.textContent).toBe("Updating frontmatter...");
+    expect(status?.textContent).toBe("Updating frontmatter…");
 
     await waitForExpect(() => {
       expect(button?.disabled).toBe(false);

@@ -178,7 +178,7 @@ export const showHistoryPreviewPending = (elements: HistoryWorkspaceElements): v
     if (container) container.textContent = "";
   }
   if (elements.restoreSummary) {
-    elements.restoreSummary.textContent = "Checking what restoring this would do...";
+    elements.restoreSummary.textContent = "Checking what restoring this would do…";
     elements.restoreSummary.classList.remove("is-warning");
   }
   if (elements.restoreConfirm) elements.restoreConfirm.disabled = true;

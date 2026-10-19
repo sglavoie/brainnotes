@@ -145,7 +145,7 @@ class NoteInsight {
     if (this.els.submit.disabled) return;
     this.setBusy(true);
     if (!await this.canRun()) { this.setBusy(false); return; }
-    this.setStatus("Generating response...", "is-loading");
+    this.setStatus("Generating response…", "is-loading");
     try {
       const requestBody = buildNoteInsightForm({
         key: this.key, prompt: this.els.prompt.value, token: this.csrfToken,

@@ -63,40 +63,24 @@ export const fixOpenKeyFromRelPath = (relPath: string): string => {
   return segments.join("/");
 };
 
-export const fixKindLabel = (kind: string): string => {
-  switch (kind) {
-    case "frontmatter_error":
-      return "Frontmatter";
-    case "schema_violation":
-      return "Schema";
-    case "broken_target":
-      return "Broken target";
-    case "duplicate_title":
-      return "Duplicate title";
-    case "orphan_note":
-      return "Orphan";
-    case "dead_end_note":
-      return "Dead end";
-    case "long_tail_value":
-      return "Long-tail value";
-    case "sensitive_content":
-      return "Sensitive content";
-    case "missing_review_date":
-      return "Missing review date";
-    case "stale_status":
-      return "Stale status";
-    case "wip_limit":
-      return "WIP limit";
-    case "hub_needs_synthesis":
-      return "Hub needs synthesis";
-    case "capture_backlog":
-      return "Capture backlog";
-    case "ai_daily_review":
-      return "AI daily review";
-    default:
-      return "Fix";
-  }
-};
+const fixKindLabels: ReadonlyMap<string, string> = new Map([
+  ["frontmatter_error", "Frontmatter"],
+  ["schema_violation", "Schema"],
+  ["broken_target", "Broken target"],
+  ["duplicate_title", "Duplicate title"],
+  ["orphan_note", "Orphan"],
+  ["dead_end_note", "Dead end"],
+  ["long_tail_value", "Long-tail value"],
+  ["sensitive_content", "Sensitive content"],
+  ["missing_review_date", "Missing review date"],
+  ["stale_status", "Stale status"],
+  ["wip_limit", "WIP limit"],
+  ["hub_needs_synthesis", "Hub needs synthesis"],
+  ["capture_backlog", "Capture backlog"],
+  ["ai_daily_review", "AI daily review"],
+]);
+
+export const fixKindLabel = (kind: string): string => fixKindLabels.get(kind) ?? "Fix";
 
 export const fixTaskLabel = (task: CockpitTask): string =>
   task.title || task.summary || task.id || "Fix";
@@ -155,17 +139,17 @@ export const itemActionLoadingMessage = (
 ): string => {
   if (action === "snooze") {
     return snooze === "week"
-      ? "Snoozing fix for a week..."
-      : "Snoozing fix until tomorrow...";
+      ? "Snoozing fix for a week…"
+      : "Snoozing fix until tomorrow…";
   }
   if (action === "clear") {
-    return "Clearing fix state...";
+    return "Clearing fix state…";
   }
   if (action === "exempt_dead_end") {
-    return "Marking note as an intentional dead end...";
+    return "Marking note as an intentional dead end…";
   }
   if (action === "clean_long_tail") {
-    return "Removing property from affected notes...";
+    return "Removing property from affected notes…";
   }
-  return "Marking fix done...";
+  return "Marking fix done…";
 };

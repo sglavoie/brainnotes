@@ -102,7 +102,7 @@ export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void =
 
       button.disabled = true;
       let created = false;
-      setStatus("Creating note...");
+      setStatus("Creating note…");
 
       try {
         const request = buildCreateNoteFetchRequest(config);

@@ -160,7 +160,7 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
 
   const load = async (): Promise<void> => {
     view.showPending(null);
-    view.setStatus("Loading templates...", "is-loading");
+    view.setStatus("Loading templates…", "is-loading");
     const result = await reloadInto(deps.fetch, view);
     if (result) {
       view.setStatus(...listSummary(result));

@@ -119,7 +119,7 @@ export const createWorkbenchMutations = (
   const runApply = async (previewID: string): Promise<void> => {
     options.setBusy(true);
     const operationID = newWriteOperationID();
-    options.setStatus("Applying change...", "is-loading");
+    options.setStatus("Applying change…", "is-loading");
     try {
       const outcome = await applyPropertyMutation(options.fetcher, options.token, previewID, operationID);
       if (!announce(outcome, operationID)) {
@@ -134,7 +134,7 @@ export const createWorkbenchMutations = (
 
   const runPreview = async (request: PropertyMutationRequest): Promise<void> => {
     options.setBusy(true);
-    options.setStatus("Previewing change...", "is-loading");
+    options.setStatus("Previewing change…", "is-loading");
     try {
       const outcome = await previewPropertyMutation(options.fetcher, options.token, request);
       if (!announce(outcome)) {
@@ -162,7 +162,7 @@ export const createWorkbenchMutations = (
   const runSchemaApply = async (previewID: string): Promise<void> => {
     options.setBusy(true);
     const operationID = newWriteOperationID();
-    options.setStatus("Saving the definition...", "is-loading");
+    options.setStatus("Saving the definition…", "is-loading");
     try {
       const outcome = await applyPropertySchema(options.fetcher, options.token, previewID, operationID);
       if (announce(outcome, operationID)) {
@@ -178,7 +178,7 @@ export const createWorkbenchMutations = (
     definition?: PropertySchemaDefinitionInput
   ): Promise<void> => {
     options.setBusy(true);
-    options.setStatus("Previewing the definition...", "is-loading");
+    options.setStatus("Previewing the definition…", "is-loading");
     try {
       const outcome = await previewPropertySchema(options.fetcher, options.token, {
         op,
@@ -218,7 +218,7 @@ export const createWorkbenchMutations = (
   ): Promise<void> => {
     options.setBusy(true);
     const operationID = newWriteOperationID();
-    options.setStatus("Saving...", "is-loading");
+    options.setStatus("Saving…", "is-loading");
     try {
       const outcome = await savePropertyValue(options.fetcher, options.token, {
         operation_id: operationID,
@@ -241,7 +241,7 @@ export const createWorkbenchMutations = (
 
   const runUndo = async (journalID: string): Promise<void> => {
     options.setBusy(true);
-    options.setStatus("Undoing change...", "is-loading");
+    options.setStatus("Undoing change…", "is-loading");
     try {
       const outcome = await undoJournalEntry(options.fetcher, options.token, journalID);
       if (!outcome.ok) {

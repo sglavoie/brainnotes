@@ -108,7 +108,7 @@ const createHistoryPanelController = (
 
   const load = async (successMessage = ""): Promise<void> => {
     io.setBusy(true);
-    io.setStatus("Loading history...", "is-loading");
+    io.setStatus("Loading history…", "is-loading");
     const outcome = await fetchHistoryPage(io.fetcher, HISTORY_ENDPOINT, {});
     if (!outcome.ok) {
       io.setBusy(false);
@@ -179,7 +179,7 @@ const createHistoryPanelController = (
  * becomes available — not a fault to stop on. */
 const plainRestore = async (io: HistoryPanelIO, entryID: string): Promise<RestoreOutcome> => {
   io.setBusy(true);
-  io.setStatus("Checking what this would undo...", "is-loading");
+  io.setStatus("Checking what this would undo…", "is-loading");
   try {
     const preview = await previewHistoryRestore(io.fetcher, HISTORY_PREVIEW_ENDPOINT, io.token, entryID);
     if (!preview.ok) {
@@ -200,7 +200,7 @@ const plainRestore = async (io: HistoryPanelIO, entryID: string): Promise<Restor
       io.setStatus("Undo canceled.");
       return { kind: "halted" };
     }
-    io.setStatus("Undoing change...", "is-loading");
+    io.setStatus("Undoing change…", "is-loading");
     const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, {
       token: io.token, entryID: result.entry_id, previewID: result.preview_id,
     });
@@ -217,7 +217,7 @@ const plainRestore = async (io: HistoryPanelIO, entryID: string): Promise<Restor
  * worded from that preview rather than from the earlier refusal. */
 const forcedRestore = async (io: HistoryPanelIO, entryID: string): Promise<RestoreOutcome> => {
   io.setBusy(true);
-  io.setStatus("Checking what this would replace...", "is-loading");
+  io.setStatus("Checking what this would replace…", "is-loading");
   const preview = await previewHistoryRestore(io.fetcher, HISTORY_PREVIEW_ENDPOINT, io.token, entryID);
   io.setBusy(false);
   if (!preview.ok) {
@@ -230,7 +230,7 @@ const forcedRestore = async (io: HistoryPanelIO, entryID: string): Promise<Resto
     return { kind: "halted" };
   }
   io.setBusy(true);
-  io.setStatus("Forcing undo...", "is-loading");
+  io.setStatus("Forcing undo…", "is-loading");
   const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, {
     token: io.token,
     entryID: preview.result.entry_id || entryID,

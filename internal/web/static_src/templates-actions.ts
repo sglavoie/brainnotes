@@ -71,7 +71,7 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
     }
     busy = true;
     setPending(null);
-    setStatus(`Previewing "${request.name}"...`, "is-loading");
+    setStatus(`Previewing "${request.name}"…`, "is-loading");
     try {
       const outcome = await previewTemplate(deps.fetch, deps.token, {
         token: deps.token,
@@ -108,7 +108,7 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
     }
     busy = true;
     const operationID = newWriteOperationID();
-    setStatus(`Saving "${issued.name}"...`, "is-loading");
+    setStatus(`Saving "${issued.name}"…`, "is-loading");
     try {
       const outcome = await applyTemplate(deps.fetch, deps.token, issued.previewID, operationID);
       setPending(null);

@@ -171,7 +171,7 @@ it("says it is reading while it reads", async () => {
   const panel = createSyncStatusPanel({ root: panelRoot(), fetch: fetcher });
 
   const reading = panel?.load();
-  expect(summary().textContent).toBe("Reading synchronization status...");
+  expect(summary().textContent).toBe("Reading synchronization status…");
   expect(summary().classList.contains("is-loading")).toBe(true);
 
   answer(syncJSON(syncStatus({ observed_at: "whenever" })));

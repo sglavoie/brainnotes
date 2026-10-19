@@ -124,7 +124,7 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
         setStatus("Trash canceled.");
         return;
       }
-      setStatus("Moving note to Trash...");
+      setStatus("Moving note to Trash…");
       operationID = newWriteOperationID();
       const request = buildTrashNoteFetchRequest(config, operationID);
       const resp = await fetcher(request.url, request.init);
@@ -143,7 +143,7 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
         setStatus(message, "is-success");
         return;
       }
-      setStatus(`${message} Redirecting...`, "is-success");
+      setStatus(`${message} Redirecting…`, "is-success");
       redirect(config.redirectPath);
     } catch {
       setStatus(unansweredRequest("write").message, "is-error");
