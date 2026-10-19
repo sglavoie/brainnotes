@@ -24,8 +24,9 @@ const fixPreviewTTL = 5 * time.Minute
 // signature against the freshly generated task's signature detects any change to
 // the underlying files — the fix equivalent of the bulk store's digest check.
 type fixPreviewStore struct {
-	ttl time.Duration
-	now func() time.Time
+	ttl        time.Duration
+	maxRecords int
+	now        func() time.Time
 
 	mu      sync.Mutex
 	records map[string]fixPreviewRecord
@@ -52,9 +53,10 @@ func newFixPreviewStore(ttl time.Duration) *fixPreviewStore {
 		ttl = fixPreviewTTL
 	}
 	return &fixPreviewStore{
-		ttl:     ttl,
-		now:     time.Now,
-		records: make(map[string]fixPreviewRecord),
+		ttl:        ttl,
+		maxRecords: previewStoreMaxRecords,
+		now:        time.Now,
+		records:    make(map[string]fixPreviewRecord),
 	}
 }
 
@@ -85,6 +87,7 @@ func (s *fixPreviewStore) store(task cockpit.Task, action cockpit.ActionKind) (f
 	defer s.mu.Unlock()
 
 	s.pruneExpiredLocked(now)
+	evictOldestPreviewsLocked(s.records, s.maxRecords, func(r fixPreviewRecord) time.Time { return r.ExpiresAt })
 	s.records[id] = record
 	return receipt, nil
 }

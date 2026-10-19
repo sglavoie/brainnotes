@@ -44,8 +44,9 @@ const (
 // under, and the digest of every file the plan touches, so apply can refuse a
 // plan whose world moved on instead of writing against a stale preview.
 type propertyPreviewStore struct {
-	ttl time.Duration
-	now func() time.Time
+	ttl        time.Duration
+	maxRecords int
+	now        func() time.Time
 
 	mu      sync.Mutex
 	records map[string]propertyPreviewRecord
@@ -84,9 +85,10 @@ func newPropertyPreviewStore(ttl time.Duration) *propertyPreviewStore {
 		ttl = propertyPreviewTTL
 	}
 	return &propertyPreviewStore{
-		ttl:     ttl,
-		now:     time.Now,
-		records: make(map[string]propertyPreviewRecord),
+		ttl:        ttl,
+		maxRecords: previewStoreMaxRecords,
+		now:        time.Now,
+		records:    make(map[string]propertyPreviewRecord),
 	}
 }
 
@@ -106,6 +108,7 @@ func (s *propertyPreviewStore) store(record propertyPreviewRecord) (propertyPrev
 	defer s.mu.Unlock()
 
 	s.pruneExpiredLocked(now)
+	evictOldestPreviewsLocked(s.records, s.maxRecords, func(r propertyPreviewRecord) time.Time { return r.ExpiresAt })
 	s.records[id] = record
 	return propertyPreviewReceipt{ID: id, ExpiresAt: record.ExpiresAt}, nil
 }

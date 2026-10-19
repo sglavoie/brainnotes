@@ -17,8 +17,9 @@ import (
 const bulkPreviewTTL = 5 * time.Minute
 
 type bulkPreviewStore struct {
-	ttl time.Duration
-	now func() time.Time
+	ttl        time.Duration
+	maxRecords int
+	now        func() time.Time
 
 	mu      sync.Mutex
 	records map[string]bulkPreviewRecord
@@ -57,9 +58,10 @@ func newBulkPreviewStore(ttl time.Duration) *bulkPreviewStore {
 		ttl = bulkPreviewTTL
 	}
 	return &bulkPreviewStore{
-		ttl:     ttl,
-		now:     time.Now,
-		records: make(map[string]bulkPreviewRecord),
+		ttl:        ttl,
+		maxRecords: previewStoreMaxRecords,
+		now:        time.Now,
+		records:    make(map[string]bulkPreviewRecord),
 	}
 }
 
@@ -93,6 +95,7 @@ func (s *bulkPreviewStore) store(req bulkManagementRequest, result *noteops.Bulk
 	defer s.mu.Unlock()
 
 	s.pruneExpiredLocked(now)
+	evictOldestPreviewsLocked(s.records, s.maxRecords, func(r bulkPreviewRecord) time.Time { return r.ExpiresAt })
 	s.records[id] = record
 	return receipt, nil
 }
