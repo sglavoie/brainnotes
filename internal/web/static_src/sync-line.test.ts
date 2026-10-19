@@ -99,6 +99,25 @@ it("says a status it could not read is unavailable, and says why", () => {
   expect(line.classList.contains("is-attention")).toBe(true);
 });
 
+it("leaves an unchanged line alone so its live region is not announced again", () => {
+  const line = lineElement();
+  const outcome = {
+    ok: true as const,
+    result: syncStatus({ headline: "conflict", needs_person: true, review_path: "/sync", peer: { conflicts: 2 } }),
+  };
+  renderSyncLine(line, outcome, document);
+  const review = line.querySelector("a.sync-line-review");
+  expect(review).not.toBeNull();
+  const observer = new MutationObserver(() => undefined);
+  observer.observe(line, { childList: true, characterData: true, subtree: true, attributes: true });
+
+  renderSyncLine(line, outcome, document);
+
+  expect(observer.takeRecords()).toEqual([]);
+  expect(line.querySelector("a.sync-line-review")).toBe(review);
+  observer.disconnect();
+});
+
 it("reads once and reads again when the tab is looked at again", async () => {
   const fetcher = vi.fn<FetchLike>(async () =>
     syncJSON(syncStatus({ summary: "Everything is packaged." }))

@@ -35,7 +35,7 @@
               spellcheck="false"
             />
           </div>
-          <fieldset class="graph-search-mode" aria-label="Search mode">
+          <fieldset class="graph-search-mode">
             <legend class="graph-control-label">Search mode</legend>
             <div class="graph-search-mode-options">
               <label class="graph-search-mode-option">
@@ -110,14 +110,14 @@
               value="0"
             />
           </div>
-          <div class="graph-action-controls" aria-label="Graph viewport">
+          <div class="graph-action-controls" role="group" aria-label="Graph viewport">
             <button id="graph-fit-button" class="graph-control-button" type="button">Fit graph</button>
             <button id="graph-zoom-matches-button" class="graph-control-button" type="button" disabled>
               Zoom to matches
             </button>
             <button id="graph-reset-layout-button" class="graph-control-button" type="button">Reset layout</button>
           </div>
-          <fieldset class="graph-label-mode" aria-label="Label mode">
+          <fieldset class="graph-label-mode">
             <legend class="graph-control-label">Labels</legend>
             <div class="graph-label-mode-options">
               <label class="graph-label-mode-option">
@@ -137,7 +137,7 @@
         </section>
       <p id="graph-status" role="status">Loading graph...</p>
       <section class="graph-panel">
-        <div id="graph-canvas" aria-label="Notes graph" tabindex="0" aria-describedby="graph-keyboard-help"></div>
+        <div id="graph-canvas" aria-label="Notes graph" tabindex="0" role="application" aria-describedby="graph-keyboard-help"></div>
         <aside class="graph-sidebar">
           <div class="graph-hover" aria-live="polite">
           <h2>Node details</h2>

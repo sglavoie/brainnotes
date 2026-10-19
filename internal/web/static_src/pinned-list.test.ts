@@ -31,7 +31,7 @@ const renderPinnedFixture = (): void => {
         <li class="pinned-list-item" data-pinned-item data-pinned-key="${key}">
           <button type="button" data-pinned-handle>grip</button>
           <a href="/n/${key}">${key}</a>
-          <button type="button" class="pin-button" data-pin-button aria-pressed="true">Unpin</button>
+          <button type="button" class="pin-button" data-pin-button aria-label="Unpin ${key}">Unpin</button>
         </li>`
     )
     .join("");
@@ -167,6 +167,24 @@ describe("pinned list keyboard reorder", () => {
     expect(requestBody(fetchMock.mock.calls[0])).toBe(
       "key=b.md&token=csrf-token&before=&after=a.md"
     );
+  });
+
+  it("keeps focus on the moved handle so the next arrow key moves it again", async () => {
+    renderPinnedFixture();
+    const fetchMock = vi.fn(async () => pinResponse({ ok: true, message: "Reordered pins." }));
+
+    initPinnedList({ fetch: fetchMock as typeof fetch });
+    const handle = handleFor("c.md");
+    handle.focus();
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(handle);
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+
+    expect(renderedKeys()).toEqual(["c.md", "a.md", "b.md"]);
+    expect(document.activeElement).toBe(handle);
+    await waitForExpect(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("does not post when the row is already at the end of the list", () => {

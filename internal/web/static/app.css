@@ -3488,13 +3488,15 @@ code {
   white-space: nowrap;
 }
 
-.pin-button[aria-pressed='true'] {
+.pin-button[aria-pressed='true'],
+.pinned-list .pin-button {
   border-color: var(--bn-accent-subtle-border);
   color: var(--bn-accent-subtle-text);
   background: var(--bn-accent-subtle-bg);
 }
 
-.pin-button[aria-pressed='true']:hover {
+.pin-button[aria-pressed='true']:hover,
+.pinned-list .pin-button:hover {
   background: var(--bn-accent-subtle-bg);
 }
 
@@ -5007,12 +5009,12 @@ code {
 }
 
 .note-body .heading-anchor {
-  color: var(--bn-faint);
+  color: var(--bn-muted);
   font-weight: 500;
-  opacity: 0.72;
 }
 
-.note-body .heading-anchor:hover {
+.note-body .heading-anchor:hover,
+.note-body .heading-anchor:focus-visible {
   color: var(--bn-link);
   opacity: 1;
   text-decoration: none;
@@ -8356,7 +8358,7 @@ code {
 }
 
 .templates-size {
-  color: var(--bn-faint);
+  color: var(--bn-muted);
   font-size: 0.75rem;
 }
 
@@ -8479,7 +8481,7 @@ code {
 }
 
 .sync-status.is-empty {
-  color: var(--bn-faint);
+  color: var(--bn-muted);
 }
 
 .sync-status.is-success {
@@ -9129,6 +9131,10 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 @media (pointer: coarse) {
   button, select, input:not([type="checkbox"]):not([type="radio"]), summary { min-height: 2.75rem; }
   .facet-chip-remove { min-width: 2.75rem; }
+  /* iOS zooms the page into any focused field set below 16px. */
+  :is(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])) {
+    font-size: max(1rem, 16px) !important;
+  }
 }
 @media (forced-colors: active) {
   :is(button, summary, input, select, textarea):focus-visible { outline-color: Highlight; }

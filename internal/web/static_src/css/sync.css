@@ -76,7 +76,7 @@
 }
 
 .sync-status.is-empty {
-  color: var(--bn-faint);
+  color: var(--bn-muted);
 }
 
 .sync-status.is-success {

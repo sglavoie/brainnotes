@@ -83,13 +83,15 @@
   white-space: nowrap;
 }
 
-.pin-button[aria-pressed='true'] {
+.pin-button[aria-pressed='true'],
+.pinned-list .pin-button {
   border-color: var(--bn-accent-subtle-border);
   color: var(--bn-accent-subtle-text);
   background: var(--bn-accent-subtle-bg);
 }
 
-.pin-button[aria-pressed='true']:hover {
+.pin-button[aria-pressed='true']:hover,
+.pinned-list .pin-button:hover {
   background: var(--bn-accent-subtle-bg);
 }
 

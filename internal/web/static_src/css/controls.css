@@ -61,6 +61,10 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 @media (pointer: coarse) {
   button, select, input:not([type="checkbox"]):not([type="radio"]), summary { min-height: 2.75rem; }
   .facet-chip-remove { min-width: 2.75rem; }
+  /* iOS zooms the page into any focused field set below 16px. */
+  :is(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])) {
+    font-size: max(1rem, 16px) !important;
+  }
 }
 @media (forced-colors: active) {
   :is(button, summary, input, select, textarea):focus-visible { outline-color: Highlight; }

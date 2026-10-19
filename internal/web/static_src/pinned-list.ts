@@ -158,6 +158,9 @@ class PinnedList {
       }
       this.list.insertBefore(item, next.nextElementSibling);
     }
+    // Moving the row blurs the handle inside it; give focus back so pressing the
+    // arrow key again keeps moving the same pin.
+    queryElement(item, "[data-pinned-handle]", HTMLButtonElement)?.focus();
     this.enqueueMove(item, restore);
   };
 
