@@ -154,22 +154,6 @@ func (s *Server) parseFixRequest(r *http.Request) (string, cockpit.ActionKind, e
 	return id, action, nil
 }
 
-// cockpitQueue builds the raw, unfiltered generated queue from a freshly loaded
-// bounded snapshot. The content-addressed fix preview/apply and item triage
-// flows call it, so it forces a refresh (refreshSnapshot) to reflect a
-// concurrent on-disk edit immediately — a task id embeds the hash of every note
-// it touches, and receipt/stale validation depends on that id tracking the
-// current bytes. The refresh is bounded and honors the process-lifetime
-// quarantine, so a stalled note is never re-read; it just replaces the older
-// unbounded cockpit.BuildQueue walk.
-func (s *Server) cockpitQueue() (cockpit.Queue, error) {
-	snapshot, err := s.state.refreshSnapshot()
-	if err != nil {
-		return cockpit.Queue{}, err
-	}
-	return s.cockpitQueueFrom(diagnosticsDataFromSnapshot(snapshot, s.vault.Root)), nil
-}
-
 // cockpitQueueFiltered builds the generated queue from the shared resilient
 // snapshot and hides tasks the workflow state suppresses. It reads the cached
 // currentSnapshot rather than forcing a refresh: the read-only cockpit surfaces
