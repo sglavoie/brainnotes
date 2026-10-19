@@ -66,7 +66,7 @@ func SetRestoreCrashHookForTest(hook func(point string)) func() {
 // backup.Restore does not join on its own behalf. It is a leaf and its only
 // other caller is a test with no history to protect; this is the production
 // door, and it is the layer that already owns the operation's boundaries.
-func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (*backup.RestoreResult, error) {
+func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (result *backup.RestoreResult, err error) {
 	resolvedRoot, err := filepath.EvalSymlinks(vaultRoot)
 	if err != nil {
 		return nil, fmt.Errorf("backup restore: resolve vault: %w", err)
@@ -83,7 +83,14 @@ func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (*
 	if err != nil {
 		return nil, classifyBarrierError(err)
 	}
-	defer held.Release()
+	// As in backup.Create, a release failure is reported only when nothing else
+	// went wrong: a checkpoint record left behind is a liveness problem for the
+	// next writer, and it must not hide the failure that ended the restore.
+	defer func() {
+		if releaseErr := held.Release(); releaseErr != nil && err == nil {
+			err = fmt.Errorf("backup restore: release the checkpoint: %w", releaseErr)
+		}
+	}()
 	ctx := held.Context(context.Background())
 	return restoreBackupHeld(ctx, held.Root(), archivePath, opts)
 }
