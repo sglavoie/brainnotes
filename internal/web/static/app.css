@@ -9009,8 +9009,14 @@ dt.sync-fact {
   .related-later-control > summary,
   .related-feedback-drawer > summary,
   .capture-input,
-  .note-insight-prompt {
+  .note-insight-prompt,
+  .properties-item {
     transition: none;
+  }
+
+  /* The hover lift is motion too; the border and background still mark it. */
+  .properties-item:hover {
+    transform: none;
   }
 }
 
