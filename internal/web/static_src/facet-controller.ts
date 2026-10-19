@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "./request-outcome";
 import { normalizeFacetOptions, type FacetFilterOption } from "./api";
 import { dispatchFiltersChange, sharedFilterParamKeys, updateBrowserQuery } from "./filters";
 import {
@@ -81,7 +82,7 @@ export class FacetController {
       this.setLoadFeedback(retrying ? "Filters loaded." : "", false, false);
     } catch {
       this.state = "error";
-      this.setLoadFeedback("Filters unavailable. Your selected filters are still applied.", true, false);
+      this.setLoadFeedback(`${loadFailureMessage("filters", "Retry filters")} Your selected filters are still applied.`, true, false);
     } finally {
       this.inFlight = false;
       this.renderOptions();
@@ -153,7 +154,7 @@ export class FacetController {
   private renderOptions(): void {
     if (this.inputClear) this.inputClear.hidden = this.input.value.trim() === "";
     if (this.state !== "ready") {
-      this.renderEmpty(this.state === "error" ? "Facets unavailable." : "Loading facets…");
+      this.renderEmpty(this.state === "error" ? "Couldn't load filters." : "Loading facets…");
       return;
     }
     this.filteredOptions = this.allOptions

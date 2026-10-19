@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "./request-outcome";
 import { normalizeSearchResults, searchResultPath, type SearchResult } from "./api";
 import { getElementByID, queryElement } from "./dom";
 import { bindSearchShortcut } from "./search-shortcut";
@@ -163,7 +164,7 @@ class HeaderSearch {
   }
 
   showFailure(): void {
-    this.showFeedback("Search unavailable. Try again.");
+    this.showFeedback(loadFailureMessage("matching notes", "Retry search"));
     if (this.retryButton) this.retryButton.hidden = false;
   }
 

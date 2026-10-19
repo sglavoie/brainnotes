@@ -134,7 +134,7 @@ describe("search feedback", () => {
 
     typeQuery(input, "broken");
     await vi.runAllTimersAsync();
-    expect(feedback.textContent).toBe("Search unavailable. Try again.");
+    expect(feedback.textContent).toBe("Couldn't load matching notes. Check your connection, then select Retry search.");
     expect(results.hidden).toBe(true);
 
     typeQuery(input, "");

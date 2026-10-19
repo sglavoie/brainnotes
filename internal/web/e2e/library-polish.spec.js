@@ -33,7 +33,7 @@ test("Library retries a failed search without changing its query settings", asyn
   await page.goto(path);
   const retry = page.getByRole("button", { name: "Retry search", exact: true });
   await expect(retry).toBeVisible();
-  await expect(page.locator("[data-overview-search-status]")).toHaveText("Search unavailable.");
+  await expect(page.locator("[data-overview-search-status]")).toHaveText("Couldn't load matching notes. Check your connection, then select Retry search.");
   fail = false;
   await retry.click();
   await expect(retry).toBeHidden();

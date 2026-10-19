@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "./request-outcome";
 import {
   managementMutationEventName,
   normalizeBulkNoteKeys,
@@ -249,7 +250,7 @@ class OverviewSearch extends OverviewSearchBulk {
           window.clearTimeout(this.loadingToken);
           delete this.els.listEl.dataset.updating;
           this.pagination.failed();
-          this.clearResults("Search unavailable.", "is-error");
+          this.clearResults(loadFailureMessage("matching notes", "Retry search"), "is-error");
         }
       } finally {
         if (localToken === this.requestToken) {

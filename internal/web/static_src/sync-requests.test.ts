@@ -94,11 +94,7 @@ it("falls back to the status when the refusal carries no sentence", async () => 
 it("says the server did not answer rather than throwing at the page", async () => {
   const fetcher: FetchLike = () => Promise.reject(new Error("socket closed"));
 
-  expect(await fetchSyncStatus(fetcher)).toEqual({
-    ok: false,
-    code: "",
-    message: "The server did not answer.",
-  });
+  expect(await fetchSyncStatus(fetcher)).toEqual({ ...unansweredRequest("read"), code: "" });
   expect(await applySyncResolution(fetcher, "", "csrf-token", "preview-1")).toEqual({
     ...unansweredRequest("write"),
     code: "unconfirmed",

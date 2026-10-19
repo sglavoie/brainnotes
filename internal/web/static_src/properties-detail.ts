@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "./request-outcome";
 import {
   buildPropertyDetailURL,
   normalizeManagementErrorMessage,
@@ -142,10 +143,10 @@ const readDetail = async (
     const payload = await readPayload(resp);
     if (!resp.ok) return { ok: false, message: normalizeManagementErrorMessage(resp.status, payload) };
     const result = normalizePropertyDetailResponse(payload);
-    if (!result.ok) return { ok: false, message: result.message || "Property unavailable." };
+    if (!result.ok) return { ok: false, message: result.message || loadFailureMessage("this property", "Refresh") };
     return { ok: true, result };
   } catch {
-    return { ok: false, message: "Property unavailable." };
+    return { ok: false, message: loadFailureMessage("this property", "Refresh") };
   }
 };
 

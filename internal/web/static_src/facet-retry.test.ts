@@ -32,7 +32,7 @@ it("keeps failures visible while typing, retries once, and preserves the search 
   input.focus();
   input.value = "existing";
   input.dispatchEvent(new Event("input"));
-  expect(document.querySelector(".facet-options")!.textContent).toBe("Facets unavailable.");
+  expect(document.querySelector(".facet-options")!.textContent).toBe("Couldn't load filters.");
   retry.focus();
   retry.click();
   retry.click();
