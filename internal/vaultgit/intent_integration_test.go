@@ -48,6 +48,7 @@ func (h *testHarness) requireCleanWorkTree() {
 // it is what keeps the vault refused afterwards — including across a restart,
 // with a spotless working tree, and with no marker on disk at all.
 func TestSimultaneousCommitAndMarkerFailureLeavesADurableIntent(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()
@@ -151,6 +152,7 @@ fi`)
 // failure is not a block: nothing was written, nothing is in an unknown state,
 // and the next mutation is free to retry.
 func TestIntentCreationFailurePreventsTheCommitAttempt(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()
@@ -201,6 +203,7 @@ fi`)
 // reachability is the right test: a later commit by another writer does not
 // un-land the snapshot underneath it.
 func TestRecoveryRetiresAnIntentWhoseCommitLanded(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()

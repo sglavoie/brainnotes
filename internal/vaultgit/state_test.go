@@ -17,6 +17,7 @@ func newState(t *testing.T) *safetyState {
 }
 
 func TestBlockRoundTrip(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	if _, blocked, err := state.LoadBlock(); blocked || err != nil {
 		t.Fatalf("a fresh vault must not be blocked: blocked=%v err=%v", blocked, err)
@@ -54,6 +55,7 @@ func TestBlockRoundTrip(t *testing.T) {
 // A crash mid-write, a full disk, and a careless shell redirect all produce this
 // state, and every one of them means "something went wrong", not "all clear".
 func TestCorruptBlockMarkerStaysBlocked(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	if err := os.WriteFile(state.path(blockedFileName), []byte("{not json"), 0o644); err != nil {
 		t.Fatalf("write corrupt marker: %v", err)
@@ -71,6 +73,7 @@ func TestCorruptBlockMarkerStaysBlocked(t *testing.T) {
 }
 
 func TestEmptyBlockMarkerStaysBlocked(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	if err := os.WriteFile(state.path(blockedFileName), nil, 0o644); err != nil {
 		t.Fatalf("write empty marker: %v", err)
@@ -81,6 +84,7 @@ func TestEmptyBlockMarkerStaysBlocked(t *testing.T) {
 }
 
 func TestUnknownVersionBlockMarkerStaysBlocked(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	if err := os.WriteFile(state.path(blockedFileName), []byte(`{"version":99,"reason":"future"}`), 0o644); err != nil {
 		t.Fatalf("write marker: %v", err)
@@ -97,6 +101,7 @@ func TestUnknownVersionBlockMarkerStaysBlocked(t *testing.T) {
 // The state directory lives inside .git, which is what keeps the marker from
 // becoming a pending change the engine would then try to commit.
 func TestStateDirIsInsideGitDir(t *testing.T) {
+	t.Parallel()
 	gitDir := t.TempDir()
 	state := newSafetyState(gitDir)
 	if filepath.Dir(state.Dir()) != gitDir {
@@ -105,6 +110,7 @@ func TestStateDirIsInsideGitDir(t *testing.T) {
 }
 
 func TestPushFailureBackoff(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	now := time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC)
 	first, err := state.RecordPushFailure(now, "connection refused")
@@ -140,6 +146,7 @@ func TestPushFailureBackoff(t *testing.T) {
 // The plan requires an attempt at least every five minutes, so the backoff has
 // to stop doubling there rather than growing without bound.
 func TestPushBackoffCaps(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		attempts int
 		want     time.Duration
@@ -163,6 +170,7 @@ func TestPushBackoffCaps(t *testing.T) {
 // block marker: forgetting a backoff schedule costs one early retry, while
 // forgetting a block would cost a note.
 func TestCorruptPushStateIsForgotten(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	if err := os.WriteFile(state.path(pushStateFileName), []byte("{broken"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)

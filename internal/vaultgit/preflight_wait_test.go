@@ -14,6 +14,7 @@ import (
 )
 
 func TestBarrierJoinErrorOnlyTreatsAHeldCheckpointAsBusy(t *testing.T) {
+	t.Parallel()
 	held := fmt.Errorf("%w: it is copying the vault", checkpoint.ErrBarrierHeld)
 	if err := barrierJoinError("preflight", "the safety.lock was not taken", held); !IsBusy(err) || !errors.Is(err, checkpoint.ErrBarrierHeld) {
 		t.Fatalf("held barrier = %v (kind %q), want busy wrapping ErrBarrierHeld", err, KindOf(err))
@@ -26,6 +27,7 @@ func TestBarrierJoinErrorOnlyTreatsAHeldCheckpointAsBusy(t *testing.T) {
 }
 
 func TestPreflightDoesNotReportAPendingRestoreAsBusy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -48,6 +50,7 @@ func TestPreflightDoesNotReportAPendingRestoreAsBusy(t *testing.T) {
 }
 
 func TestPreflightWaitsForShortBackgroundOperation(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -80,6 +83,7 @@ func TestPreflightWaitsForShortBackgroundOperation(t *testing.T) {
 }
 
 func TestPreflightWaitIsBoundedAndOnlyRetriesBusy(t *testing.T) {
+	t.Parallel()
 	busy := safetyErrorf(KindBusy, "preflight", "busy")
 	refused := safetyErrorf(KindBlocked, "preflight", "blocked")
 	for _, tc := range []struct {
@@ -109,6 +113,7 @@ func TestPreflightWaitIsBoundedAndOnlyRetriesBusy(t *testing.T) {
 }
 
 func TestPreflightCancellationStopsAcquisition(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	calls := 0
 	_, err := waitForPreflight(ctx, time.Second, func() (func(), error) {

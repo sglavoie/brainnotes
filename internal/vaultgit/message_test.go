@@ -7,6 +7,7 @@ import (
 )
 
 func TestAutosaveMessageIsContentFree(t *testing.T) {
+	t.Parallel()
 	when := time.Date(2026, 8, 28, 14, 5, 9, 123456789, time.FixedZone("CEST", 2*60*60))
 	got := autosaveMessage(when)
 	if got != "brainnotes: autosave 2026-08-28T12:05:09Z" {
@@ -20,6 +21,7 @@ func TestAutosaveMessageIsContentFree(t *testing.T) {
 }
 
 func TestJournalMessageShape(t *testing.T) {
+	t.Parallel()
 	got := journalMessage("rename", "20260828T140509.000000000Z-abcd")
 	if got != "brainnotes: rename [20260828T140509.000000000Z-abcd]" {
 		t.Fatalf("journalMessage = %q", got)
@@ -30,6 +32,7 @@ func TestJournalMessageShape(t *testing.T) {
 // a caller could hand it something derived from user input. It is reduced to a
 // short identifier rather than escaped, so anything unexpected disappears.
 func TestSanitizeOperation(t *testing.T) {
+	t.Parallel()
 	cases := []struct{ in, want string }{
 		{"rename", "rename"},
 		{"Rename", "rename"},
@@ -53,6 +56,7 @@ func TestSanitizeOperation(t *testing.T) {
 }
 
 func TestSanitizeOperationIsBounded(t *testing.T) {
+	t.Parallel()
 	got := sanitizeOperation(strings.Repeat("abc", 200))
 	if len(got) > 32 {
 		t.Fatalf("sanitizeOperation produced %d characters", len(got))
@@ -62,6 +66,7 @@ func TestSanitizeOperationIsBounded(t *testing.T) {
 // A commit message must never carry a newline: it would let a caller forge
 // extra message body, and it would break every one-line log format.
 func TestSanitizedMessagesAreSingleLine(t *testing.T) {
+	t.Parallel()
 	message := journalMessage("bad\noperation", "entry-1")
 	if strings.ContainsAny(message, "\n\r") {
 		t.Fatalf("commit message contains a line break: %q", message)
@@ -69,6 +74,7 @@ func TestSanitizedMessagesAreSingleLine(t *testing.T) {
 }
 
 func TestValidEntryID(t *testing.T) {
+	t.Parallel()
 	valid := []string{
 		"20260828T140509.000000000Z-abcd1234",
 		"entry-1",
@@ -98,6 +104,7 @@ func TestValidEntryID(t *testing.T) {
 }
 
 func TestErrorHelpers(t *testing.T) {
+	t.Parallel()
 	deletion := &SafetyError{Kind: KindUnexplainedDeletion, Op: "commit-pending", Paths: []string{"Inbox/gone.md"}}
 	if !IsUnexplainedDeletion(deletion) || !Blocks(deletion) {
 		t.Fatalf("an unexplained deletion must be a blocking failure: %v", deletion)
@@ -125,6 +132,7 @@ func TestErrorHelpers(t *testing.T) {
 }
 
 func TestRecoveryInstructionsExistForEveryBlockingKind(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []Kind{KindUnexplainedDeletion, KindAmbiguousChange, KindRefConflict, KindCommitFailed} {
 		steps := recoveryFor(kind, []string{"Inbox/gone.md"})
 		if len(steps) == 0 {

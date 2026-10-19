@@ -9,6 +9,7 @@ import (
 )
 
 func TestWatchStateMutationWaitsForCheckpoint(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	held, err := checkpoint.Hold(h.root, checkpoint.Options{Reason: "test watch state", Drain: time.Second})
 	if err != nil {
@@ -45,6 +46,7 @@ func testPolicy(t *testing.T, spelling string) config.AutosavePolicy {
 var watchStart = time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC)
 
 func TestWatchDebounce(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	// The smallest legal floor, so this test is about readiness and only readiness.
 	policy := testPolicy(t, "30s")
@@ -88,6 +90,7 @@ func TestWatchDebounce(t *testing.T) {
 // 4 minutes apart. Under a five-minute floor the same edit pattern produces one
 // commit per five minutes and no more.
 func TestExternalAutosavesCannotOutpaceTheFloor(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 	now := watchStart
@@ -140,6 +143,7 @@ func TestExternalAutosavesCannotOutpaceTheFloor(t *testing.T) {
 // The floor pushes a due time later and never earlier, so an interval shorter
 // than the readiness window changes nothing about when a burst commits.
 func TestAFloorShorterThanReadinessNeverMovesTheDueTime(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "30s")
 	now := watchStart
@@ -162,6 +166,7 @@ func TestAFloorShorterThanReadinessNeverMovesTheDueTime(t *testing.T) {
 
 // And an interval longer than the readiness window is what actually binds.
 func TestAFloorLongerThanReadinessDefersTheDueTime(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "10m")
 	now := watchStart
@@ -193,6 +198,7 @@ func TestAFloorLongerThanReadinessDefersTheDueTime(t *testing.T) {
 // A disabled policy has no schedule at all: nothing is ever due and nothing is
 // published for a health consumer to read as a pending snapshot.
 func TestADisabledPolicyIsNeverDue(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	off := testPolicy(t, config.AutosaveOff)
 

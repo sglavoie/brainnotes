@@ -191,6 +191,7 @@ func readCommit(t *testing.T, view *History, commit string) {
 // repository alike, so it also covers the index, the refs, and the recovery
 // intent rather than only the one file the bug would most likely land in.
 func TestHistoryReadsWithoutDisturbingTheVault(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 
 	stateDir := h.mgr.StateDir()
@@ -215,6 +216,7 @@ func TestHistoryReadsWithoutDisturbingTheVault(t *testing.T) {
 // too: a mutation is still free to proceed while a History is open, so a
 // long-running export cannot stall a person's save.
 func TestHistoryTakesNoLock(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 
 	view, err := OpenHistory(context.Background(), h.root, HistoryOptions{})
@@ -249,6 +251,7 @@ func TestHistoryTakesNoLock(t *testing.T) {
 // every method reads committed objects, so a half-typed note is invisible by
 // construction rather than by a filter somebody has to remember to apply.
 func TestHistoryIgnoresUncommittedEdits(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 	view, err := OpenHistory(context.Background(), h.root, HistoryOptions{})
 	if err != nil {
@@ -293,10 +296,10 @@ func TestHistoryIgnoresUncommittedEdits(t *testing.T) {
 // repository the writer rejects would report a history nothing else can commit
 // to.
 func TestOpenHistoryRefusesWhatOpenRefuses(t *testing.T) {
+	t.Parallel()
 	requireGit(t)
 
 	t.Run("no repository", func(t *testing.T) {
-		isolateHome(t)
 		_, err := OpenHistory(context.Background(), t.TempDir(), HistoryOptions{})
 		if !IsUnmanaged(err) {
 			t.Fatalf("OpenHistory on a non-Git vault = %v, want ErrUnmanaged", err)
@@ -304,7 +307,6 @@ func TestOpenHistoryRefusesWhatOpenRefuses(t *testing.T) {
 	})
 
 	t.Run("linked worktree", func(t *testing.T) {
-		isolateHome(t)
 		root := t.TempDir()
 		if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: /elsewhere\n"), 0o644); err != nil {
 			t.Fatalf("write .git file: %v", err)
@@ -332,8 +334,8 @@ func TestOpenHistoryRefusesWhatOpenRefuses(t *testing.T) {
 // vault enrolled before its first commit and means there is nothing to export;
 // the second must never be read that way.
 func TestTipReportsAnUnbornBranchAsItsOwnThing(t *testing.T) {
+	t.Parallel()
 	requireGit(t)
-	isolateHome(t)
 	root := t.TempDir()
 	rawGit(t, root, "-c", "init.defaultBranch=main", "init", "-q")
 
@@ -351,6 +353,7 @@ func TestTipReportsAnUnbornBranchAsItsOwnThing(t *testing.T) {
 // the newest few in oldest-first order — which reads as correct and would replay
 // a vault's history backwards from the middle.
 func TestCommitsAfterIsOldestFirst(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 	view, err := OpenHistory(context.Background(), h.root, HistoryOptions{})
 	if err != nil {
@@ -383,6 +386,7 @@ func TestCommitsAfterIsOldestFirst(t *testing.T) {
 // these strings arrives is a corrupt cursor read back off a disk — and it must
 // fail as that, rather than reaching rev-list as a range of its own devising.
 func TestHistoryRefusesObjectNamesItDidNotProduce(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 	view, err := OpenHistory(context.Background(), h.root, HistoryOptions{})
 	if err != nil {

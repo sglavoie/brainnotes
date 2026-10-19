@@ -3,6 +3,7 @@ package vaultgit
 import "testing"
 
 func TestInScope(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		rel  string
@@ -51,6 +52,7 @@ func TestInScope(t *testing.T) {
 // in scope: the exclusion is for `.tmp` files the transaction layer creates, not
 // for every name beginning with a dot and a prefix.
 func TestInScopeScratchNeedsTmpSuffix(t *testing.T) {
+	t.Parallel()
 	if !InScope("Inbox/.note-keeper.md") {
 		t.Fatal("a .md file starting with .note- must stay in scope")
 	}
@@ -60,6 +62,7 @@ func TestInScopeScratchNeedsTmpSuffix(t *testing.T) {
 }
 
 func TestJournalEntryID(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		rel        string
 		wantID     string

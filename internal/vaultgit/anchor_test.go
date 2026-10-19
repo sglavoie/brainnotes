@@ -29,6 +29,7 @@ import (
 // exactly as a completed one does. This is the whole of the fail-closed rule,
 // stated at the level where the schedule is computed.
 func TestAnInFlightExternalSnapshotAnchorsTheFloor(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 
@@ -58,6 +59,7 @@ func TestAnInFlightExternalSnapshotAnchorsTheFloor(t *testing.T) {
 // attempt replaces it rather than adding to it: from then on the anchor names
 // when the snapshot finished.
 func TestCompletingAnExternalSnapshotRetiresTheInFlightAnchor(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 
@@ -85,6 +87,7 @@ func TestCompletingAnExternalSnapshotRetiresTheInFlightAnchor(t *testing.T) {
 // what stops a pass that recorded nothing from lifting a floor some other
 // attempt is still holding.
 func TestAbandoningAnAttemptRetiresOnlyItsOwnAnchor(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 
@@ -112,6 +115,7 @@ func TestAbandoningAnAttemptRetiresOnlyItsOwnAnchor(t *testing.T) {
 // alone: retiring it there would drop the only durable evidence of that
 // snapshot and hand the next burst a stale floor.
 func TestSettlingABurstKeepsTheInFlightAnchor(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 
@@ -288,6 +292,7 @@ func requireNoSnapshotBefore(t *testing.T, ctx context.Context, h *testHarness, 
 // An external commit keeps its deliberately preselected authored date, but the
 // floor is anchored at the later instant its ref was observed to land.
 func TestASlowSnapshotThatCompletesStillAnchorsAtItsCompletion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()
@@ -321,6 +326,7 @@ func TestASlowSnapshotThatCompletesStillAnchorsAtItsCompletion(t *testing.T) {
 // user-visible timestamp is chosen at commit creation, after intent creation and
 // staging, exactly as it was before external floor anchoring was introduced.
 func TestExplicitCommitTimestampIsChosenAtCommitCreation(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write(".bnotes/recall.json", `{"generation":1}`)
 
@@ -348,6 +354,7 @@ func TestExplicitCommitTimestampIsChosenAtCommitCreation(t *testing.T) {
 // sidecar rewriting its state, and a restore replacing the tree each commit
 // immediately and leave both anchors exactly where they were.
 func TestExplicitCommitsNeverAnchorTheExternalFloor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()
@@ -407,6 +414,7 @@ func TestExplicitCommitsNeverAnchorTheExternalFloor(t *testing.T) {
 // floor nothing either: the interval bounds how often history is written, and no
 // history was written. The marker it wrote on the way in is retired.
 func TestAScanThatRecordsNothingDoesNotSpendTheFloor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()

@@ -12,6 +12,7 @@ import (
 // Settling and committing both close the burst, and only one of them moves the
 // floor's anchor.
 func TestSettlingClosesTheScheduleWithoutMovingTheFloor(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 
@@ -46,6 +47,7 @@ func TestSettlingClosesTheScheduleWithoutMovingTheFloor(t *testing.T) {
 // recomputing a fresh one. This is the same guarantee the burst timestamps
 // already had, now extended to the floor.
 func TestTheFloorSurvivesARestart(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	policy := testPolicy(t, "5m")
 
@@ -80,6 +82,7 @@ func TestTheFloorSurvivesARestart(t *testing.T) {
 // deadline. Reading it republishes the derived fields from the timestamps it
 // already carries, and invents nothing else.
 func TestAPreSchedulingRecordIsUpgradedInPlace(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	legacy := `{
   "version": 1,
@@ -124,6 +127,7 @@ func TestAPreSchedulingRecordIsUpgradedInPlace(t *testing.T) {
 // A change of interval republishes the schedule from the same burst, so the
 // health check and the watcher never disagree about when the next snapshot is.
 func TestChangingTheIntervalRepublishesTheSchedule(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	short := testPolicy(t, "1m")
 	long := testPolicy(t, "20m")
@@ -157,6 +161,7 @@ func TestChangingTheIntervalRepublishesTheSchedule(t *testing.T) {
 // The serialized shape is a contract with the health consumer, which reads flat
 // top-level keys out of watch.json and treats an absent one as "no schedule".
 func TestWatchStateSerializationIsStable(t *testing.T) {
+	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 
@@ -210,6 +215,7 @@ func decodeWatchJSON(t *testing.T, state *safetyState) map[string]any {
 // A caller that names no policy must get the shipped default rather than no
 // floor, because "I did not say" is not a request to turn the protection off.
 func TestAnUnsetPolicyResolvesToTheVaultDefault(t *testing.T) {
+	t.Parallel()
 	resolved := resolveAutosavePolicy(config.AutosavePolicy{})
 	want := testPolicy(t, config.DefaultAutosaveMinInterval)
 	if resolved != want {

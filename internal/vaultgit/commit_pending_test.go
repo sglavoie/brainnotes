@@ -14,6 +14,7 @@ import (
 // commas (which `update-index --cacheinfo`'s comma form truncates), glob
 // characters (which a pathspec would expand), and a leading dash.
 func TestCommitPendingHandlesAwkwardNames(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	names := []string{
 		"Inbox/plain.md",
@@ -49,6 +50,7 @@ func TestCommitPendingHandlesAwkwardNames(t *testing.T) {
 }
 
 func TestCommitPendingRecordsModifications(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -68,6 +70,7 @@ func TestCommitPendingRecordsModifications(t *testing.T) {
 // A snapshot with nothing to record is a success, not a failure, and must not
 // add an empty commit to a history a person has to read.
 func TestCommitPendingNoChangesIsNoCommit(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -86,6 +89,7 @@ func TestCommitPendingNoChangesIsNoCommit(t *testing.T) {
 // backups, regenerable caches, and in-flight transaction scratch never enter
 // the history.
 func TestCommitPendingHonoursScope(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.write("brainnotes.toml", "vault = \".\"\n")
@@ -142,6 +146,7 @@ func TestExternalDeletionIsCommittedAndRecoverable(t *testing.T) {
 }
 
 func TestJournalRecordAuthorizesDeletion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/keep.md", "keep\n")
 	h.write("Inbox/gone.md", "goodbye\n")
@@ -178,6 +183,7 @@ func TestJournalRecordAuthorizesDeletion(t *testing.T) {
 }
 
 func TestJournalRecordAuthorizesRename(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/old name.md", "stable content\n")
 	h.commitPending()
@@ -202,6 +208,7 @@ func TestJournalRecordAuthorizesRename(t *testing.T) {
 }
 
 func TestRepeatedExternalDeletionNeedsNoNewJournal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("gone.md", "goodbye")
 	h.commitPending()
@@ -227,6 +234,7 @@ func soleManifest(t *testing.T, h *testHarness) string {
 
 // External changes do not depend on the health or contents of an undo manifest.
 func TestExternalDeletionDoesNotRequireJournalProof(t *testing.T) {
+	t.Parallel()
 	for _, malformed := range []bool{false, true} {
 		t.Run(fmt.Sprint(malformed), func(t *testing.T) {
 			h := newHarness(t)
@@ -253,6 +261,7 @@ func TestExternalDeletionDoesNotRequireJournalProof(t *testing.T) {
 // completeness guarantee nobody asked for, so an unreadable *addition* is
 // reported and skipped: nothing leaves the history by skipping it.
 func TestUnreadableNoteIsSkippedNotFatal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if os.Geteuid() == 0 {
 		t.Skip("root can read a mode-0000 file, so this case cannot be provoked")
@@ -283,6 +292,7 @@ func TestUnreadableNoteIsSkippedNotFatal(t *testing.T) {
 // exactly the kind of file that can be unreadable, and committing the delete
 // side of a pair whose add side was skipped would drop the content from the tip.
 func TestSkippedPathDefersProvenDeletions(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if os.Geteuid() == 0 {
 		t.Skip("root can read a mode-0000 file, so this case cannot be provoked")

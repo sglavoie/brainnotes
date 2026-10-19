@@ -3,6 +3,7 @@ package vaultgit
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,20 +53,52 @@ func requireGit(t *testing.T) string {
 	return exe
 }
 
-// isolateHome points HOME and the XDG directories at a scratch tree.
+// TestMain points HOME and the XDG directories at one scratch tree for the
+// whole package.
 //
 // Local plumbing already ignores the user's global config, but a push
 // deliberately reads it — that is where an SSH command or a URL rewrite lives.
 // Without this, a developer's own `~/.gitconfig` could change what these tests
 // observe. It also protects the tests from the very setting that motivated this
 // package: a global core.excludesFile matching `BRAIN[A-Z]*`.
-func isolateHome(t *testing.T) {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, ".gitconfig"))
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+//
+// It is set once here rather than per test with t.Setenv because t.Setenv
+// forbids t.Parallel, and every test builds its own temporary repository, so
+// nothing about the isolated home differs between tests. No test writes to it.
+//
+// Most tests run in parallel. Two kinds stay serial:
+//   - a test that hijacks the process environment with t.Setenv
+//     (TestStrayGitEnvironmentIsIgnored);
+//   - a test that drives the watcher (tick, Run) or a push. Those take a lock
+//     with a single try and report KindBusy on a miss, by design. A lock is
+//     released by closing its descriptor, not by LOCK_UN, so that an exec child
+//     can inherit it; while sibling tests fork git, a child that has forked but
+//     not yet exec'd still holds a duplicate of a just-released descriptor, and
+//     the next single try in the same test sees a spurious busy. Serial tests
+//     run before any parallel test resumes, so nothing forks beside them.
+func TestMain(m *testing.M) {
+	os.Exit(runIsolated(m))
+}
+
+func runIsolated(m *testing.M) int {
+	home, err := os.MkdirTemp("", "vaultgit-home-")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "vaultgit tests: create isolated HOME: %v\n", err)
+		return 1
+	}
+	defer os.RemoveAll(home)
+	for key, value := range map[string]string{
+		"HOME":                home,
+		"XDG_CONFIG_HOME":     filepath.Join(home, ".config"),
+		"GIT_CONFIG_GLOBAL":   filepath.Join(home, ".gitconfig"),
+		"GIT_CONFIG_NOSYSTEM": "1",
+	} {
+		if err := os.Setenv(key, value); err != nil {
+			fmt.Fprintf(os.Stderr, "vaultgit tests: set %s: %v\n", key, err)
+			return 1
+		}
+	}
+	return m.Run()
 }
 
 // userEnv is the environment the test's own git invocations run with. It is
@@ -111,7 +144,6 @@ func rawGit(t *testing.T, dir string, args ...string) string {
 func newHarness(t *testing.T) *testHarness {
 	t.Helper()
 	requireGit(t)
-	isolateHome(t)
 
 	root := t.TempDir()
 	rawGit(t, root, "-c", "init.defaultBranch=main", "init", "-q")
