@@ -87,6 +87,27 @@ jobs:
       - name: Run CI checks
         run: just ci
 
+  # The race detector over the concurrency-heavy packages (see `just test-race`).
+  # A separate job because -race multiplies test time, and the main job's
+  # envelope should stay what `just ci` runs locally.
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      - name: Run the race detector
+        run: just test-race
+
   browser:
     name: Browser polish and shipped assets
     runs-on: ubuntu-latest

@@ -60,6 +60,7 @@ golangci_version := "v2.13.2"
 # the only way to express it: neither `go` nor `gofmt` has an exclude flag.
 go_packages := "$(go list ./... | grep -v '/node_modules/')"
 gofmt_check := "gofmt -l . | grep -v '^node_modules/' || true"
+race_packages := "$(go list ./internal/vault/... ./internal/vaultgit/... ./internal/noteops/... ./internal/web/... ./internal/vaultsyncd/... ./internal/checkpoint/... | grep -v '/node_modules/')"
 
 # Show available recipes
 help:
@@ -93,6 +94,17 @@ install:
 test:
     @echo "Running tests..."
     go test {{ go_packages }}
+
+# The race detector over the packages that share state across goroutines: the
+# lock and transaction layer, the Git safety engine and its watcher, note
+# operations, the web server, the sync daemon and the checkpoint barrier. It is
+# several times slower than `just test`, so it is not part of `just ci`; CI runs
+# it as its own job. The package list goes through the same `node_modules`
+# filter as `go_packages`.
+
+# Run the concurrency-heavy packages under the race detector
+test-race:
+    go test -race {{ race_packages }}
 
 # `$BNOTES_VAULT` is usually set in a developer's shell and it overrides a `cd`,
 # so `cd $scratch && bn rename-key ...` runs against the real vault. That is not
