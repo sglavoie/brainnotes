@@ -162,6 +162,55 @@ const aggregateNode = (folder: string, members: NormalizedGraphNode[]): Normaliz
   memberIDs: members.map((member) => member.id),
 });
 
+const collapseNodes = (
+  sourceNodes: readonly NormalizedGraphNode[],
+  aggregateByMemberID: ReadonlyMap<string, NormalizedGraphNode>
+): { nodes: NormalizedGraphNode[]; aggregateCount: number } => {
+  const nodes: NormalizedGraphNode[] = [];
+  const emitted = new Set<string>();
+  for (const node of sourceNodes) {
+    const aggregate = aggregateByMemberID.get(node.id);
+    if (!aggregate) {
+      nodes.push(node);
+      continue;
+    }
+    if (!emitted.has(aggregate.id)) {
+      emitted.add(aggregate.id);
+      nodes.push(aggregate);
+    }
+  }
+  return { nodes, aggregateCount: emitted.size };
+};
+
+const collapseEdges = (
+  sourceEdges: readonly NormalizedGraphEdge[],
+  aggregateByMemberID: ReadonlyMap<string, NormalizedGraphNode>
+): NormalizedGraphEdge[] => {
+  const remap = (id: string): string => aggregateByMemberID.get(id)?.id || id;
+  const edges: NormalizedGraphEdge[] = [];
+  const indexByPair = new Map<string, number>();
+  for (const edge of sourceEdges) {
+    const source = remap(edge.source);
+    const target = remap(edge.target);
+    // Intra-group edges become self-edges before displayed degrees are computed.
+    if (source === target) {
+      continue;
+    }
+    const pairKey = `${source}\u0000${target}`;
+    const existingIndex = indexByPair.get(pairKey);
+    if (existingIndex !== undefined) {
+      // First-seen keeps its id, while any reciprocal edge makes the pair mutual.
+      if (edge.mutual && !edges[existingIndex].mutual) {
+        edges[existingIndex] = { ...edges[existingIndex], mutual: true };
+      }
+      continue;
+    }
+    indexByPair.set(pairKey, edges.length);
+    edges.push({ ...edge, source, target });
+  }
+  return edges;
+};
+
 // Groups surviving nodes by the first collapseDepth segments of their folder. A group of
 // more than one member that is not expanded becomes a single aggregate node placed at the
 // list position of its first member, which keeps the output ordering deterministic.
@@ -204,48 +253,10 @@ const collapseStage = (
     return { elements, aggregateCount: 0 };
   }
 
-  const nodes: NormalizedGraphNode[] = [];
-  const emitted = new Set<string>();
-  for (const node of elements.nodes) {
-    const aggregate = aggregateByMemberID.get(node.id);
-    if (!aggregate) {
-      nodes.push(node);
-      continue;
-    }
-    if (emitted.has(aggregate.id)) {
-      continue;
-    }
-    emitted.add(aggregate.id);
-    nodes.push(aggregate);
-  }
+  const { nodes, aggregateCount } = collapseNodes(elements.nodes, aggregateByMemberID);
+  const edges = collapseEdges(elements.edges, aggregateByMemberID);
 
-  const remap = (id: string): string => aggregateByMemberID.get(id)?.id || id;
-  const edges: NormalizedGraphEdge[] = [];
-  const indexByPair = new Map<string, number>();
-  for (const edge of elements.edges) {
-    const source = remap(edge.source);
-    const target = remap(edge.target);
-    // Intra-group edges become self-edges under the remap and are dropped here, before
-    // any degree recompute, so the displayed counts cannot disagree with the drawn edges.
-    if (source === target) {
-      continue;
-    }
-    const pairKey = `${source} ${target}`;
-    const existingIndex = indexByPair.get(pairKey);
-    if (existingIndex !== undefined) {
-      // First-seen wins the id, but `mutual` is a property of the *pair* the line stands
-      // for: dropping a flagged duplicate onto an unflagged survivor would lose the
-      // double-headed rendering for a folder pair that really is reciprocal.
-      if (edge.mutual && !edges[existingIndex].mutual) {
-        edges[existingIndex] = { ...edges[existingIndex], mutual: true };
-      }
-      continue;
-    }
-    indexByPair.set(pairKey, edges.length);
-    edges.push({ ...edge, source, target });
-  }
-
-  return { elements: { nodes, edges }, aggregateCount: emitted.size };
+  return { elements: { nodes, edges }, aggregateCount };
 };
 
 // Degrees are recomputed from the displayed edge set *before* the reciprocal merge, for

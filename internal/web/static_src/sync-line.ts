@@ -35,16 +35,25 @@ const renderLine = (line: HTMLElement, status: SyncStatusResult, doc: Document):
     line.classList.remove("is-attention");
     return;
   }
-  line.textContent = `Sync: ${syncLineSummary(status)}`;
   line.classList.add("is-attention");
-  if (status.review_path === "") {
-    return;
+  const hasReview = status.review_path !== "" && status.peer.conflicts > 0;
+  if (!hasReview || status.headline !== "conflict") {
+    line.textContent = `Sync: ${syncLineSummary(status)}`;
   }
+  if (!hasReview) return;
   const review = doc.createElement("a");
   review.className = "sync-line-review";
   review.href = status.review_path;
-  review.textContent = "Review";
-  line.append(" ", review);
+  const count = status.peer.conflicts;
+  review.textContent = status.headline === "conflict"
+    ? `Review ${count} incoming ${count === 1 ? "change" : "changes"}`
+    : "Review incoming changes";
+  review.title = syncLineSummary(status);
+  if (status.headline === "conflict") {
+    line.append(review);
+  } else {
+    line.append(" ", review);
+  }
 };
 
 const renderFailure = (line: HTMLElement, outcome: { code: string; message: string }): void => {

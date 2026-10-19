@@ -17,8 +17,7 @@ test("mobile Synthesis opens on writing and keeps a draft through failed preview
   await expect(page.locator("[data-synthesize-agent-status]")).toBeHidden();
   await title(page).fill("A considered conclusion");
   await draft(page).fill("Words to keep after a failed preview.");
-  await page.getByRole("button", { name: "Open context" }).click();
-  await page.locator("[data-synthesize-prepare]").click();
+  await page.getByRole("button", { name: "Prepare context" }).click();
   await expect(page.locator("[data-synthesize-context-status]")).toContainText("Context ready");
   await page.route("**/api/synthesis/preview", (route) => route.abort());
   await page.locator("[data-synthesize-preview]").click();

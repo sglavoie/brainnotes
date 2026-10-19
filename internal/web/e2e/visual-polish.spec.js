@@ -28,7 +28,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       test(`${name} focused workspace`, async ({ page }) => {
         await page.goto(path);
         await expect(page.locator(".focused-workspace-header")).toBeVisible();
-        await expect(page.locator("[data-sync-line]")).toContainText("5 changes");
+        await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
         await snapshot(page, name);
       });
     }

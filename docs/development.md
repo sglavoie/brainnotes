@@ -65,13 +65,11 @@ and errors remain visible below those controls.
 for Library, reading, and editing in the PR Chromium suite. It also audits open
 Library controls, reading actions and property editing, editor formatting and a
 confirmation dialog, plus search failure and a pending-write reminder. For a
-manual screen reader pass, use a disposable vault and the same three pages.
-With VoiceOver and Safari on macOS, move through landmarks and headings, search
-the Library, open a result, then open the editor and save a small change. Confirm
-every control has an understandable name and state, status updates are announced,
-and keyboard focus stays on the active task. Record the browser, OS, assistive technology version,
-pages, and any failures in the browser UI pull request checklist or with release
-evidence. Automation cannot verify spoken order or announcement quality.
+manual screen reader pass, use the
+[browser UI qualification](operations/ui-qualification.md) with a disposable
+vault. Record the exact build, device, OS, browser, assistive technology,
+observed results, and failures with release evidence. Automation cannot verify
+spoken order or announcement quality.
 
 `screen-polish.spec.js` checks usable mobile Properties filters, actual properties
 on entry, reading content near the top, Library action placement, Health's real
@@ -86,11 +84,13 @@ forced-color focus, and editor prose/Save in a reduced viewport. The ordinary
 editor and qualification suites also exercise dirty drafts, save failures and IME.
 These browser checks do not emulate an operating system keyboard.
 
-For physical-device qualification, use the
-[mobile editor qualification record](operations/mobile-editor-qualification.md)
-with a disposable vault. Record the device, OS/browser version, orientation,
-result, and failures with release evidence; never test against an ambient
-personal vault.
+For physical-device qualification, use the same
+[browser UI qualification](operations/ui-qualification.md). The
+[earlier mobile editor record](operations/mobile-editor-qualification.md) is
+historical evidence; its missing device and browser versions mean it cannot
+qualify a new build. The [2026-10-19 browser UI record](operations/ui-qualification-2026-10-19.md)
+captures the current worktree's physical-phone and VoiceOver pass. Never test
+against an ambient personal vault.
 
 ## Vault performance
 
@@ -113,7 +113,12 @@ real graph API.
 Measurements cover search, expression filtering, and typing into a long source
 note at 4× CPU throttling and 100 ms network latency. The reading page check also
 records the HTML document, every resource transfer, total transfer, and first
-contentful paint. Each test attaches JSON measurements with corpus size and long
+contentful paint. On 2026-10-19, local Chromium measured 100 ms to first paint
+without throttling and 1,928 ms with 4× CPU throttling and 100 ms latency. The
+reading gate allows 1,500 ms and 3,500 ms respectively; the throttled note body
+must also become visible within 5,000 ms. These ceilings leave room for CI
+variation while catching a blank first screen that a transfer-size check misses.
+Each test attaches JSON measurements with corpus size and long
 tasks. Inspect those artifacts when a budget fails; do not raise a ceiling
 merely to pass a slower run.
 

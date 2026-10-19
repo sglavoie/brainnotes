@@ -70,7 +70,9 @@ export type SynthesisView = {
 const bindContextShortcut = (button: HTMLButtonElement, context: HTMLDetailsElement): void => {
   button.addEventListener("click", () => {
     context.open = true;
-    context.querySelector("summary")?.focus();
+    const prepare = context.querySelector<HTMLButtonElement>("[data-synthesize-prepare]");
+    prepare?.focus();
+    prepare?.click();
   });
 };
 
@@ -90,7 +92,7 @@ export const createSynthesisView = (
   });
   const nextStepText = element(doc, "span", "synthesize-next-step-text");
   const nextStepAction = element(doc, "button", "synthesize-next-step-action", { type: "button" });
-  nextStepAction.textContent = "Open context";
+  nextStepAction.textContent = "Prepare context";
   nextStep.append(nextStepText, nextStepAction);
   const sources = buildSourcesSection(doc);
   const suggestions = buildSuggestionsSection(doc);

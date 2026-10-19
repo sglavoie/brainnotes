@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe("synthesis narrow-screen entry", () => {
-  it("keeps the draft available and opens context from the next-step prompt", async () => {
+  it("keeps the draft available and prepares context from the next-step prompt", async () => {
     vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
     await start({ fetch: routedFetch(), storage: memoryStorage(), clipboard: null });
     expect(query<HTMLDetailsElement>("#synthesis-context").open).toBe(false);
@@ -26,6 +26,7 @@ describe("synthesis narrow-screen entry", () => {
     expect(query<HTMLElement>("[data-synthesize-next-step]").textContent).toContain("Prepare context");
     query<HTMLButtonElement>(".synthesize-next-step-action").click();
     expect(query<HTMLDetailsElement>("#synthesis-context").open).toBe(true);
+    await vi.waitFor(() => expect(query<HTMLElement>("[data-synthesize-packet]").textContent).not.toBe(""));
   });
 });
 

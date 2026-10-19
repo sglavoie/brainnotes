@@ -248,8 +248,9 @@ transport details start collapsed; pending work or problems open them automatica
 Expand **Synchronization details** for the exact check time and the separate saved,
 packaged, acknowledged, and applied facts.
 
-The shared **Sync:** line appears when synchronization needs a person's attention
-or its status cannot be read. Routine status stays on the Sync page. The status
+The shared sync line links directly to review when incoming changes need decisions,
+using the count as its link text. Other problems and an unreadable status show a
+short explanation. Routine status stays on the Sync page. The status
 refreshes after confirmed writes and polls pending work for up to one minute. It
 stops while the page is hidden and ignores superseded replies.
 

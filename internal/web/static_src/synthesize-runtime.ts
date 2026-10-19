@@ -261,7 +261,7 @@ const synthesisNextStep = (model: SynthesisModel): string => {
   if (model.context === null) {
     return model.contextStale
       ? "Rebuild context to include your updated sources or research options. Your draft is unchanged."
-      : "Prepare context next. Add supporting notes only if they help; the anchor works on its own.";
+      : "Context is required before preview. You can write now; the anchor works without supporting notes.";
   }
   if (model.title.trim() === "" || model.draft.trim() === "") {
     return "Next: give the note a title and write the draft.";

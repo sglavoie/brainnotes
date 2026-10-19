@@ -36,18 +36,35 @@ it("writes the server's own sentence and links to where the decision is made", (
       ok: true,
       result: syncStatus({
         summary: "2 changes are waiting for a decision.",
+        headline: "conflict",
         needs_person: true,
         review_path: "/sync",
+        peer: { conflicts: 2 },
       }),
     },
     document
   );
 
-  expect(line.textContent).toContain("Sync: 2 changes need review.");
+  expect(line.textContent).toBe("Review 2 incoming changes");
   expect(line.classList.contains("is-attention")).toBe(true);
   const review = line.querySelector<HTMLAnchorElement>("a.sync-line-review");
   expect(review?.getAttribute("href")).toBe("/sync");
-  expect(review?.textContent).toBe("Review");
+  expect(review?.textContent).toBe("Review 2 incoming changes");
+  expect(review?.title).toBe("2 changes need review.");
+});
+
+it("keeps a more urgent problem visible when conflicts also need review", () => {
+  const line = lineElement();
+  renderSyncLine(line, { ok: true, result: syncStatus({
+    headline: "blocked",
+    summary: "Recording is blocked by a history error.",
+    needs_person: true,
+    review_path: "/sync",
+    peer: { conflicts: 2 },
+  }) }, document);
+
+  expect(line.textContent).toBe("Sync: Recording is blocked by a history error. Review incoming changes");
+  expect(line.querySelector<HTMLAnchorElement>("a")?.getAttribute("href")).toBe("/sync");
 });
 
 it("offers no review link when the server names no review path", () => {

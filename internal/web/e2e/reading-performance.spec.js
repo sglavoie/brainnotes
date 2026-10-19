@@ -39,6 +39,7 @@ test("reading page stays within its transfer budget", async ({ page, context }, 
   expect(navigationBytes).toBeGreaterThan(0);
   expect(totalTransferBytes).toBeLessThan(400_000);
   expect(firstContentfulPaintMilliseconds).not.toBeNull();
+  expect(firstContentfulPaintMilliseconds).toBeLessThan(1500);
 });
 
 test("reading and search stay responsive with a slow CPU and connection", async ({ page, context }, testInfo) => {
@@ -58,10 +59,13 @@ test("reading and search stay responsive with a slow CPU and connection", async 
   await page.goto("/n/Reading.md");
   await expect(page.locator("[data-note-body]")).toBeVisible();
   const coldNavigationMilliseconds = Date.now() - navigationStart;
-  expect(coldNavigationMilliseconds).toBeLessThan(6000);
+  expect(coldNavigationMilliseconds).toBeLessThan(5000);
   const firstContentfulPaintMilliseconds = await page.evaluate(() =>
     performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? null);
   expect(firstContentfulPaintMilliseconds).not.toBeNull();
+  // Paint is when the reading page first feels responsive; waiting for the
+  // document to finish is a separate budget and can hide a blank first screen.
+  expect(firstContentfulPaintMilliseconds).toBeLessThan(3500);
   await page.keyboard.press("/");
   const search = page.locator("#search-input");
   const started = Date.now();

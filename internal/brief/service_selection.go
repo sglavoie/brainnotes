@@ -8,6 +8,136 @@ import (
 	"time"
 )
 
+type selectionRepairNeeds struct {
+	continueSlot   bool
+	rediscoverSlot bool
+	connectSlot    bool
+	continueValid  bool
+}
+
+func cardSourceInCorpus(paths map[string]struct{}, card Card, present bool) bool {
+	return present && pathInCorpus(paths, card.Source.RelPath)
+}
+
+func connectCardInCorpus(paths map[string]struct{}, card Card, present bool, continueCard Card, continueValid bool) bool {
+	if !present || card.Candidate == nil || !pathInCorpus(paths, card.Source.RelPath) || !pathInCorpus(paths, card.Candidate.RelPath) {
+		return false
+	}
+	return !continueValid || card.Source.RelPath == continueCard.Source.RelPath
+}
+
+func shouldRepairConnect(present, valid, needsContinue bool) bool {
+	return present && (!valid || needsContinue)
+}
+
+func repairNeeds(bySlot map[SlotKind]Card, paths map[string]struct{}) selectionRepairNeeds {
+	continueCard, hasContinue := bySlot[SlotContinue]
+	continueValid := cardSourceInCorpus(paths, continueCard, hasContinue)
+	rediscoverCard, hasRediscover := bySlot[SlotRediscover]
+	rediscoverValid := cardSourceInCorpus(paths, rediscoverCard, hasRediscover)
+	connectCard, hasConnect := bySlot[SlotConnect]
+	connectValid := connectCardInCorpus(paths, connectCard, hasConnect, continueCard, continueValid)
+	needsContinue := hasContinue && !continueValid
+	return selectionRepairNeeds{
+		continueSlot:   needsContinue,
+		rediscoverSlot: hasRediscover && !rediscoverValid,
+		connectSlot:    shouldRepairConnect(hasConnect, connectValid, needsContinue),
+		continueValid:  continueValid,
+	}
+}
+
+func (needs selectionRepairNeeds) any() bool {
+	return needs.continueSlot || needs.rediscoverSlot || needs.connectSlot
+}
+
+type selectionRepairPlan struct {
+	date            LocalDate
+	corpus          CorpusSnapshot
+	replacements    map[SlotKind]Card
+	removed         map[SlotKind]struct{}
+	unavailable     map[SlotKind]UnavailableSlot
+	currentContinue *Card
+}
+
+func newSelectionRepairPlan(date LocalDate, corpus CorpusSnapshot, continueCard Card, continueValid bool) *selectionRepairPlan {
+	plan := &selectionRepairPlan{
+		date:         date,
+		corpus:       corpus,
+		replacements: make(map[SlotKind]Card),
+		removed:      make(map[SlotKind]struct{}),
+		unavailable:  make(map[SlotKind]UnavailableSlot),
+	}
+	if continueValid {
+		clone := cloneCard(continueCard)
+		plan.currentContinue = &clone
+	}
+	return plan
+}
+
+func (plan *selectionRepairPlan) record(slot SlotKind, result SlotResult, fallback string) error {
+	card, available, err := materializeSlotCard(plan.date, result)
+	if err != nil {
+		return err
+	}
+	if available {
+		plan.replacements[slot] = card
+	} else {
+		plan.removed[slot] = struct{}{}
+		plan.unavailable[slot] = unavailableFromResult(result, fallback)
+	}
+	if slot == SlotContinue {
+		plan.currentContinue = nil
+		if available {
+			clone := cloneCard(card)
+			plan.currentContinue = &clone
+		}
+	}
+	return nil
+}
+
+func (service *Service) repairContinueSlot(plan *selectionRepairPlan, excludePath string) error {
+	result, err := service.selectContinue(plan.corpus, excludePath)
+	if err != nil {
+		return err
+	}
+	return plan.record(SlotContinue, result, defaultUnavailableMessage(SlotContinue))
+}
+
+func (service *Service) repairRediscoverSlot(plan *selectionRepairPlan) error {
+	result, err := service.selector.SelectRediscover(plan.corpus, plan.currentContinue)
+	if err != nil {
+		return err
+	}
+	return plan.record(SlotRediscover, result, defaultUnavailableMessage(SlotRediscover))
+}
+
+func (service *Service) repairConnectSlot(plan *selectionRepairPlan) error {
+	result, err := service.selectConnect(plan.corpus, plan.currentContinue)
+	if err != nil {
+		return err
+	}
+	return plan.record(SlotConnect, result, defaultConnectUnavailableMessage(plan.currentContinue != nil))
+}
+
+func (service *Service) applySelectionRepairs(plan *selectionRepairPlan, needs selectionRepairNeeds, bySlot map[SlotKind]Card) error {
+	if needs.continueSlot {
+		if err := service.repairContinueSlot(plan, bySlot[SlotContinue].Source.RelPath); err != nil {
+			return err
+		}
+	}
+	if needs.rediscoverSlot {
+		if err := service.repairRediscoverSlot(plan); err != nil {
+			return err
+		}
+	}
+	if needs.connectSlot {
+		if err := service.repairConnectSlot(plan); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (service *Service) repairSelection(date LocalDate, selection DailySelection, corpus CorpusSnapshot) (DailySelection, map[SlotKind]UnavailableSlot, error) {
 	normalizedSelection, err := normalizeDailySelection(selection)
 	if err != nil {
@@ -18,100 +148,19 @@ func (service *Service) repairSelection(date LocalDate, selection DailySelection
 		return DailySelection{}, nil, err
 	}
 	bySlot := cardBySlot(normalizedSelection.Cards)
-	unavailable := make(map[SlotKind]UnavailableSlot)
-
-	continueCard, hasContinue := bySlot[SlotContinue]
-	continueValid := hasContinue && pathInCorpus(paths, continueCard.Source.RelPath)
-	rediscoverCard, hasRediscover := bySlot[SlotRediscover]
-	rediscoverValid := hasRediscover && pathInCorpus(paths, rediscoverCard.Source.RelPath)
-	connectCard, hasConnect := bySlot[SlotConnect]
-	connectValid := hasConnect &&
-		connectCard.Candidate != nil &&
-		pathInCorpus(paths, connectCard.Source.RelPath) &&
-		pathInCorpus(paths, connectCard.Candidate.RelPath)
-	if connectValid && continueValid && connectCard.Source.RelPath != continueCard.Source.RelPath {
-		connectValid = false
+	needs := repairNeeds(bySlot, paths)
+	if !needs.any() {
+		return normalizedSelection, map[SlotKind]UnavailableSlot{}, nil
 	}
-
-	needsContinue := hasContinue && !continueValid
-	needsRediscover := hasRediscover && !rediscoverValid
-	needsConnect := hasConnect && !connectValid
-	if needsContinue && hasConnect {
-		needsConnect = true
+	plan := newSelectionRepairPlan(date, corpus, bySlot[SlotContinue], needs.continueValid)
+	if err := service.applySelectionRepairs(plan, needs, bySlot); err != nil {
+		return DailySelection{}, nil, err
 	}
-
-	if !needsContinue && !needsRediscover && !needsConnect {
-		return normalizedSelection, unavailable, nil
-	}
-
-	replacements := make(map[SlotKind]Card)
-	removed := make(map[SlotKind]struct{})
-
-	var currentContinue *Card
-	if continueValid {
-		cloned := cloneCard(continueCard)
-		currentContinue = &cloned
-	}
-
-	if needsContinue {
-		result, err := service.selectContinue(corpus, continueCard.Source.RelPath)
-		if err != nil {
-			return DailySelection{}, nil, err
-		}
-		next, ok, err := materializeSlotCard(date, result)
-		if err != nil {
-			return DailySelection{}, nil, err
-		}
-		if ok {
-			replacements[SlotContinue] = next
-			cloned := cloneCard(next)
-			currentContinue = &cloned
-		} else {
-			removed[SlotContinue] = struct{}{}
-			currentContinue = nil
-			unavailable[SlotContinue] = unavailableFromResult(result, defaultUnavailableMessage(SlotContinue))
-		}
-	}
-
-	if needsRediscover {
-		result, err := service.selector.SelectRediscover(corpus, currentContinue)
-		if err != nil {
-			return DailySelection{}, nil, err
-		}
-		next, ok, err := materializeSlotCard(date, result)
-		if err != nil {
-			return DailySelection{}, nil, err
-		}
-		if ok {
-			replacements[SlotRediscover] = next
-		} else {
-			removed[SlotRediscover] = struct{}{}
-			unavailable[SlotRediscover] = unavailableFromResult(result, defaultUnavailableMessage(SlotRediscover))
-		}
-	}
-
-	if needsConnect {
-		result, err := service.selectConnect(corpus, currentContinue)
-		if err != nil {
-			return DailySelection{}, nil, err
-		}
-		next, ok, err := materializeSlotCard(date, result)
-		if err != nil {
-			return DailySelection{}, nil, err
-		}
-		if ok {
-			replacements[SlotConnect] = next
-		} else {
-			removed[SlotConnect] = struct{}{}
-			unavailable[SlotConnect] = unavailableFromResult(result, defaultConnectUnavailableMessage(currentContinue != nil))
-		}
-	}
-
-	updated, err := service.persistMutation(date, normalizedSelection, replacements, removed)
+	updated, err := service.persistMutation(date, normalizedSelection, plan.replacements, plan.removed)
 	if err != nil {
 		return DailySelection{}, nil, err
 	}
-	return updated, unavailable, nil
+	return updated, plan.unavailable, nil
 }
 
 func (service *Service) persistMutation(

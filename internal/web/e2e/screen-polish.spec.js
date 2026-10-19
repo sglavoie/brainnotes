@@ -35,11 +35,15 @@ test("reading puts prose first and keeps secondary actions keyboard accessible",
 });
 
 test("Health loads real tasks and recovers a failed read with one error", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/health");
   await expect(page.locator("[data-fixes-panel]")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("[data-fixes-error]")).toBeHidden();
   await expect(page.locator("[data-fixes-task]").first()).toBeVisible();
-  await expect(page.locator("[data-sync-line]")).toContainText("Sync:");
+  await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+  const review = page.locator("[data-sync-line] a");
+  await expect(review).toHaveAttribute("href", "/sync");
+  expect((await review.boundingBox()).height).toBeGreaterThanOrEqual(24);
   const counts = await page.locator("[data-fixes-count-active]").textContent();
   await page.route("**/api/cockpit?view=daily", (route) => route.fulfill({
     status: 503, json: { ok: false, message: "Fixes are temporarily unavailable." },

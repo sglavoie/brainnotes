@@ -22,7 +22,7 @@ then review and create the exact note shown in the preview. The anchor works as
 the only source, so adding supporting notes is optional. A short prompt at the top
 shows the next step. Ask AI is optional and keeps its candidate separate from your
 draft. On narrow screens, the draft stays visible on entry and the next-step
-prompt offers **Open context** to reach the required preparation step. Choose
+prompt offers **Prepare context** to open that step and build its packet. Choose
 sources and Prepare context start folded; their numbered headings provide
 navigation without a second jump row. **Create note** becomes
 available only after a successful preview.
