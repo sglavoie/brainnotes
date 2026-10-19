@@ -11,26 +11,21 @@ import {
   normalizeBriefViewResponse,
 } from "./api";
 import { initDailyBrief } from "./daily-brief";
+import { jsonResponse, waitForExpect } from "./shared.test-helpers";
 
-const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
+// activity is the Last7Days/Last14Days block a brief response carries.
+const activity = (
+  visitDays: number,
+  openCount: number,
+  visitDays14 = visitDays,
+  openCount14 = openCount
+): Record<string, unknown> => ({
+  Last7Days: { WindowDays: 7, VisitDays: visitDays, OpenCount: openCount },
+  Last14Days: { WindowDays: 14, VisitDays: visitDays14, OpenCount: openCount14 },
+});
 
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+// viewResponse answers the record-view request every controller test triggers on init.
+const viewResponse = (): Response => jsonResponse({ ok: true, activity: activity(1, 0) });
 
 const cardPayload = (
   id: string,
@@ -174,16 +169,13 @@ describe("brief API normalization", () => {
   });
 });
 
-describe("daily brief controller", () => {
+describe("daily brief view and open", () => {
   it("records view on init and refreshes activity", async () => {
     document.body.innerHTML = briefRootHTML();
     const fetchMock = vi.fn(async () =>
       jsonResponse({
         ok: true,
-        activity: {
-          Last7Days: { WindowDays: 7, VisitDays: 2, OpenCount: 1 },
-          Last14Days: { WindowDays: 14, VisitDays: 3, OpenCount: 1 },
-        },
+        activity: activity(2, 1, 3, 1),
       })
     );
 
@@ -201,26 +193,17 @@ describe("daily brief controller", () => {
 
   it("opens a card, updates activity, and keeps an Opened presentation", async () => {
     document.body.innerHTML = briefRootHTML();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === "/api/brief/item") {
         return jsonResponse({
           ok: true,
           action: "open",
           card_id: "continue-1",
           slot: "continue",
-          activity: {
-            Last7Days: { WindowDays: 7, VisitDays: 3, OpenCount: 2 },
-            Last14Days: { WindowDays: 14, VisitDays: 4, OpenCount: 2 },
-          },
+          activity: activity(3, 2, 4, 2),
         });
       }
-      return jsonResponse({
-        ok: true,
-        activity: {
-          Last7Days: { WindowDays: 7, VisitDays: 1, OpenCount: 0 },
-          Last14Days: { WindowDays: 14, VisitDays: 1, OpenCount: 0 },
-        },
-      });
+      return viewResponse();
     });
 
     initDailyBrief({ fetch: fetchMock as typeof fetch });
@@ -247,19 +230,10 @@ describe("daily brief controller", () => {
               action: "open",
               card_id: form.get("card_id"),
               slot,
-              activity: {
-                Last7Days: { WindowDays: 7, VisitDays: 2, OpenCount: 1 },
-                Last14Days: { WindowDays: 14, VisitDays: 2, OpenCount: 1 },
-              },
+              activity: activity(2, 1),
             });
           }
-          return jsonResponse({
-            ok: true,
-            activity: {
-              Last7Days: { WindowDays: 7, VisitDays: 1, OpenCount: 0 },
-              Last14Days: { WindowDays: 14, VisitDays: 1, OpenCount: 0 },
-            },
-          });
+          return viewResponse();
         }
       );
 
@@ -284,6 +258,9 @@ describe("daily brief controller", () => {
     }
   );
 
+});
+
+describe("daily brief card refresh and Ask AI", () => {
   it("replaces continue/connect atomically and restores focus after Another", async () => {
     document.body.innerHTML = briefRootHTML();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -299,10 +276,7 @@ describe("daily brief controller", () => {
           card_id: "continue-1",
           slot: "continue",
           message: "Updated Continue and Connect.",
-          activity: {
-            Last7Days: { WindowDays: 7, VisitDays: 4, OpenCount: 2 },
-            Last14Days: { WindowDays: 14, VisitDays: 5, OpenCount: 2 },
-          },
+          activity: activity(4, 2, 5, 2),
           affected: [
             { Slot: "continue", Card: continueCard },
             { Slot: "connect", Card: connectCard },
@@ -316,13 +290,7 @@ describe("daily brief controller", () => {
           },
         });
       }
-      return jsonResponse({
-        ok: true,
-        activity: {
-          Last7Days: { WindowDays: 7, VisitDays: 1, OpenCount: 0 },
-          Last14Days: { WindowDays: 14, VisitDays: 1, OpenCount: 0 },
-        },
-      });
+      return viewResponse();
     });
 
     initDailyBrief({ fetch: fetchMock as typeof fetch });
@@ -341,7 +309,7 @@ describe("daily brief controller", () => {
 
   it("requires disclosure for Ask AI and renders server-safe HTML with raw copy", async () => {
     document.body.innerHTML = briefRootHTML();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
       if (String(input) === "/api/brief/insight") {
         return jsonResponse({
           ok: true,
@@ -352,13 +320,7 @@ describe("daily brief controller", () => {
           rendered_html: "<p><strong>Summary</strong></p><p>raw HTML omitted</p>",
         });
       }
-      return jsonResponse({
-        ok: true,
-        activity: {
-          Last7Days: { WindowDays: 7, VisitDays: 1, OpenCount: 0 },
-          Last14Days: { WindowDays: 14, VisitDays: 1, OpenCount: 0 },
-        },
-      });
+      return viewResponse();
     });
     const confirmMock = vi.fn(() => true);
     const clipboardMock = vi.fn(async () => {});

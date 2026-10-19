@@ -20,24 +20,21 @@ import {
   type FiltersChangeDetail,
   type FiltersChangeEvent,
 } from "./filters";
+import { waitForExpect } from "./shared.test-helpers";
 
 const setURL = (url: string): void => {
   window.history.replaceState(null, "", url);
 };
 
-const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
+const facetControlsMarkup = `
+  <section data-facet-controls data-facet-mode="search">
+    <input id="search-facet-input" class="facet-input" aria-expanded="false" />
+    <button type="button" data-facet-input-clear hidden>Clear</button>
+    <ul class="facet-options" hidden></ul>
+    <button type="button" data-facet-clear-all hidden>Clear filters</button>
+    <div data-facet-chips hidden></div>
+  </section>
+`;
 
 const facetOption = (overrides: Partial<FacetFilterOption>): FacetFilterOption => ({
   param: "tag",
@@ -197,15 +194,7 @@ describe("facet selection state", () => {
 describe("facet DOM behavior", () => {
   it("hydrates selected chips, writes shared filters to the URL, and dispatches changes", async () => {
     setURL("/search?q=keep&tag=existing#results");
-    document.body.innerHTML = `
-      <section data-facet-controls data-facet-mode="search">
-        <input id="search-facet-input" class="facet-input" aria-expanded="false" />
-        <button type="button" data-facet-input-clear hidden>Clear</button>
-        <ul class="facet-options" hidden></ul>
-        <button type="button" data-facet-clear-all hidden>Clear filters</button>
-        <div data-facet-chips hidden></div>
-      </section>
-    `;
+    document.body.innerHTML = facetControlsMarkup;
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -268,15 +257,7 @@ describe("facet DOM behavior", () => {
   // the expression and the ordering exactly where they were.
   it("preserves expr, sort, and relative_to across a chip edit", async () => {
     setURL("/search?q=keep&expr=tag%3Afocus&sort=-modified&relative_to=Deep+Work");
-    document.body.innerHTML = `
-      <section data-facet-controls data-facet-mode="search">
-        <input id="search-facet-input" class="facet-input" aria-expanded="false" />
-        <button type="button" data-facet-input-clear hidden>Clear</button>
-        <ul class="facet-options" hidden></ul>
-        <button type="button" data-facet-clear-all hidden>Clear filters</button>
-        <div data-facet-chips hidden></div>
-      </section>
-    `;
+    document.body.innerHTML = facetControlsMarkup;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({

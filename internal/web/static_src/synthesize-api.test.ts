@@ -26,12 +26,7 @@ import {
   requestSynthesisSearch,
   requestSynthesisSuggestions,
 } from "./synthesize-requests";
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+import { jsonResponse } from "./shared.test-helpers";
 
 const identity = (key: string): Record<string, unknown> => ({
   key,
@@ -202,7 +197,7 @@ describe("requestSynthesisContext", () => {
   });
 });
 
-describe("synthesis generate, preview, and apply transport", () => {
+describe("synthesis generate transport", () => {
   it("sends only the identifiers each write step is entitled to", () => {
     expect(
       Array.from(buildSynthesisGenerateForm({ context_id: "ctx-1", token: "csrf-token" }).entries())
@@ -218,24 +213,6 @@ describe("synthesis generate, preview, and apply transport", () => {
     ]);
   });
 
-  it("sends the draft exactly as typed so the preview describes the same bytes", () => {
-    const form = buildSynthesisPreviewForm({
-      context_id: "ctx-1",
-      title: "Result",
-      folder: "Synthesis",
-      draft: "  spaced\r\n\r\nlines  \n",
-      token: "csrf-token",
-    });
-    expect(form.get("draft")).toBe("  spaced\r\n\r\nlines  \n");
-    expect(Array.from(form.keys())).toEqual([
-      "context_id",
-      "title",
-      "folder",
-      "draft",
-      "token",
-    ]);
-  });
-
   it("reads a disabled agent as a successful answer carrying a message", async () => {
     const normalized = normalizeSynthesisGenerateResponse({
       ok: true,
@@ -246,7 +223,7 @@ describe("synthesis generate, preview, and apply transport", () => {
     expect(normalized.enabled).toBe(false);
     expect(normalized.output).toBe("");
 
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+    const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({ ok: true, enabled: false, context_id: "ctx-1", message: "no agent" })
     );
     const response = await requestSynthesisGenerate(fetcher, "", {
@@ -275,13 +252,33 @@ describe("synthesis generate, preview, and apply transport", () => {
       })
     ).rejects.toThrow("returned no output");
   });
+});
+
+describe("synthesis preview and apply transport", () => {
+  it("sends the draft exactly as typed so the preview describes the same bytes", () => {
+    const form = buildSynthesisPreviewForm({
+      context_id: "ctx-1",
+      title: "Result",
+      folder: "Synthesis",
+      draft: "  spaced\r\n\r\nlines  \n",
+      token: "csrf-token",
+    });
+    expect(form.get("draft")).toBe("  spaced\r\n\r\nlines  \n");
+    expect(Array.from(form.keys())).toEqual([
+      "context_id",
+      "title",
+      "folder",
+      "draft",
+      "token",
+    ]);
+  });
 
   it("refuses a preview with no receipt or no destination", async () => {
     expect(normalizeSynthesisPreviewResponse({ ok: true, preview_id: "", destination: "a.md" })).toBeNull();
     expect(normalizeSynthesisPreviewResponse({ ok: true, preview_id: "p", destination: "" })).toBeNull();
     expect(normalizeSynthesisPreviewResponse(42)).toBeNull();
 
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+    const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({
         ok: true,
         preview_id: "prev-1",
@@ -316,7 +313,7 @@ describe("synthesis generate, preview, and apply transport", () => {
       journal_id: "",
     });
 
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+    const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({ ok: true, message: "Created note.", path: "/n/Result", journal_id: "j-1" })
     );
     const response = await requestSynthesisApply(fetcher, "", {
@@ -343,7 +340,7 @@ describe("synthesis generate, preview, and apply transport", () => {
 
 describe("synthesis suggestion and search requests", () => {
   it("asks the Related endpoint for a fixed suggestion limit", async () => {
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+    const fetcher = vi.fn<typeof fetch>(async () =>
       jsonResponse({
         server_date: "2026-08-19",
         source: identity("anchor"),

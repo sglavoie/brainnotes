@@ -4,20 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildNoteInsightForm, normalizeNoteInsightResponse } from "./api";
 import { initNoteInsight } from "./note-insight";
-
-const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
+import { jsonResponse, waitForExpect } from "./shared.test-helpers";
 
 const fixture = (enabled = true): string => `
   <section
@@ -36,12 +23,6 @@ const fixture = (enabled = true): string => `
     </section>
   </section>
 `;
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -74,7 +55,7 @@ describe("note insight API helpers", () => {
 describe("note insight controller", () => {
   it("sends the custom prompt, renders safe server HTML, and copies raw Markdown", async () => {
     document.body.innerHTML = fixture();
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+    const fetchMock = vi.fn<typeof fetch>(async () =>
       jsonResponse({
         ok: true,
         enabled: true,
