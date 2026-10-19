@@ -208,7 +208,13 @@ export abstract class OverviewSearchBulk {
     this.clearPreviewState();
     this.setBulkStatus(message, "is-error");
     if (this.els.bulkStatusEl) {
-      offerWriteOutcomeCheck(this.els.bulkStatusEl, operationID, this.fetcher, "Bulk change");
+      // A confirmed outcome is the same applied change, so it settles the page
+      // the way a direct success does: the selection is spent and rows moved.
+      offerWriteOutcomeCheck(this.els.bulkStatusEl, operationID, this.fetcher, "Bulk change", () => {
+        this.selectedKeys.clear();
+        this.updateBulkControls();
+        this.scheduleSearch(0);
+      });
     }
   };
 

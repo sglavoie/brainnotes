@@ -1,11 +1,9 @@
 import type { SynthesisStoredState } from "./synthesize-storage";
 import { previewSynthesis, applySynthesis } from "./synthesize-write-actions";
 import { setStatusText } from "./status";
-import type { SynthesisSource } from "./synthesize-model";
 import { synthesisHasSavedWork } from "./synthesize-model";
 import { setSynthesisWarning } from "./synthesize-render";
-import { resolveSynthesisSource } from "./synthesize-requests";
-import { dedupeSynthesisSources } from "./synthesize-sources";
+import { createSynthesisSourceRestorer } from "./synthesize-restore";
 import {
   DISCARD_CONFIRMATION,
   SAVED_STATE_STUCK,
@@ -16,11 +14,14 @@ export type SynthesisCreateActions = {
   preview: () => Promise<void>;
   apply: () => Promise<void>;
   discard: () => Promise<void>;
-  restore: (saved?: SynthesisStoredState) => Promise<void>;
+  // Resolves true when every saved source settled, false when some could not
+  // be reached and are kept in storage for a retry.
+  restore: (saved?: SynthesisStoredState) => Promise<boolean>;
 };
 
 export const createSynthesisCreateActions = (runtime: SynthesisRuntime): SynthesisCreateActions => {
   const { config, model, view } = runtime;
+  const restoreSources = createSynthesisSourceRestorer(runtime);
 
   let discarding = false;
   const discard = async (): Promise<void> => {
@@ -43,12 +44,14 @@ export const createSynthesisCreateActions = (runtime: SynthesisRuntime): Synthes
       model.preview = null;
       model.previewStale = false;
       runtime.showFieldErrors = false;
+      runtime.unresolvedSources = [];
       view.titleInput.value = "";
       view.folderInput.value = model.folder;
       view.purposeSelect.value = model.purpose;
       view.promptInput.value = "";
       view.draftInput.value = "";
       const cleared = runtime.clearSaved();
+      runtime.savedStateStuck = !cleared;
       setSynthesisWarning(view, cleared ? "" : SAVED_STATE_STUCK);
       runtime.render();
       runtime.renderCandidatePanels();
@@ -64,10 +67,10 @@ export const createSynthesisCreateActions = (runtime: SynthesisRuntime): Synthes
     } finally { discarding = false; }
   };
 
-  const restore = async (saved?: SynthesisStoredState): Promise<void> => {
+  const restore = async (saved?: SynthesisStoredState): Promise<boolean> => {
     const stored = saved || runtime.readSaved();
     if (!stored) {
-      return;
+      return true;
     }
     model.context = null;
     model.preview = null;
@@ -87,26 +90,7 @@ export const createSynthesisCreateActions = (runtime: SynthesisRuntime): Synthes
     view.promptInput.value = model.prompt;
     view.draftInput.value = model.draft;
 
-    const resolved: SynthesisSource[] = [];
-    const missing: string[] = [];
-    for (const key of stored.sources) {
-      const source = await resolveSynthesisSource(runtime.fetcher, config.relatedEndpoint, key);
-      if (source) {
-        resolved.push(source);
-      } else {
-        missing.push(key);
-      }
-    }
-    model.sources = dedupeSynthesisSources(resolved, config.anchor.key, config.maxSupporters);
-    runtime.render();
-    runtime.renderCandidatePanels();
-    if (missing.length > 0) {
-      setSynthesisWarning(
-        view,
-        `${missing.length} saved ${missing.length === 1 ? "note is" : "notes are"} no longer in this vault and ${missing.length === 1 ? "was" : "were"} removed from the selection: ${missing.join(", ")}.`
-      );
-    }
-    runtime.persist();
+    return restoreSources(stored.sources);
   };
 
   return { preview: () => previewSynthesis(runtime), apply: () => applySynthesis(runtime), discard, restore };

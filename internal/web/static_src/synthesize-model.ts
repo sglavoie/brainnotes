@@ -1,6 +1,5 @@
 import type {
   SynthesisContextResponse,
-  SynthesisNoteIdentity,
   SynthesisPreviewResponse,
 } from "./api";
 
@@ -85,15 +84,6 @@ const parseMaxSupporters = (value: string): number => {
   const truncated = Math.trunc(parsed);
   return truncated > 0 ? Math.min(truncated, SYNTHESIS_MAX_SUPPORTERS) : SYNTHESIS_MAX_SUPPORTERS;
 };
-
-export const synthesisSourceFromIdentity = (
-  identity: SynthesisNoteIdentity
-): SynthesisSource => ({
-  key: identity.key,
-  title: identity.title || identity.path,
-  path: identity.path,
-  route: identity.route,
-});
 
 const firstNonempty = (...values: (string | undefined)[]): string => values.find(Boolean) || "";
 const synthesisEndpoint = (root: HTMLElement, name: string, fallback: string): string =>
@@ -190,8 +180,6 @@ export const synthesisSourcePosition = (model: SynthesisModel, key: string): num
   const index = model.sources.findIndex((source) => source.key === key);
   return index < 0 ? 0 : index + 2;
 };
-
-export const synthesisSourceCount = (model: SynthesisModel): number => model.sources.length + 1;
 
 export const formatSynthesisBytes = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes < 0) {

@@ -55,3 +55,20 @@ it("waits for confirmation and blocks repeated submissions while the dialog is p
   expect(fetcher).not.toHaveBeenCalled();
   expect(ui.button.disabled).toBe(false);
 });
+
+it("retires Trash and offers the way off the note once Check outcome confirms it", async () => {
+  const fetcher = vi.fn(async (url: string) => {
+    if (String(url).startsWith("/api/operations/outcome")) {
+      return Response.json({ ok: true, status: "confirmed", journal_id: "entry-1" });
+    }
+    throw new TypeError("connection lost");
+  });
+  const ui = mount(fetcher as unknown as typeof fetch);
+  ui.button.click();
+  await vi.waitFor(() => expect(ui.status.querySelector(".write-outcome-check")).not.toBeNull());
+  ui.status.querySelector<HTMLButtonElement>(".write-outcome-check")!.click();
+  await vi.waitFor(() => expect(ui.status.textContent).toContain("Trash confirmed in History"));
+  expect(ui.button.disabled).toBe(true);
+  expect(ui.status.querySelector<HTMLAnchorElement>("a[href='/']")?.textContent).toBe("Leave this note");
+  expect(ui.redirect).not.toHaveBeenCalled();
+});

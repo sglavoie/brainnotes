@@ -149,7 +149,16 @@ export const applySynthesis = async (runtime: SynthesisRuntime): Promise<void> =
       "is-error"
     );
     if (errorCode(error) === "unconfirmed") {
-      offerWriteOutcomeCheck(view.previewStatus, operationID, runtime.fetcher, "Creation");
+      // A confirmed creation is the note a direct success would have opened,
+      // so the saved work it came from is spent the same way. The reply that
+      // named the note's route was lost, so the confirmation's History link is
+      // the way on rather than a redirect.
+      offerWriteOutcomeCheck(view.previewStatus, operationID, runtime.fetcher, "Creation", () => {
+        const cleared = runtime.clearSaved();
+        runtime.savedStateStuck = !cleared;
+        if (!cleared) setSynthesisWarning(view, SAVED_STATE_STUCK);
+        runtime.render();
+      });
     }
   } finally {
     runtime.applying = false;

@@ -1,16 +1,16 @@
 import type { TemplatesResult } from "./api";
-import { fetchTemplate, fetchTemplates, type FetchLike } from "./settings-requests";
+import { fetchTemplates, type FetchLike } from "./settings-requests";
 import type { StatusKind } from "./status";
 import { createTemplatesWriter } from "./templates-actions";
 import {
   emptyTemplateDraft,
   newTemplateDraft,
   suggestTemplateName,
-  templateDraftOf,
   templateSaveError,
   type TemplateDraft,
   type TemplatePendingSave,
 } from "./templates-model";
+import { createTemplateDraftGuard, type TemplateConfirm } from "./templates-draft-guard";
 import { createTemplatesView, readTemplatesElements, type TemplatesView } from "./templates-view";
 import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
@@ -18,6 +18,7 @@ export type TemplatesPanelDeps = {
   root: HTMLElement;
   fetch: FetchLike;
   token: string;
+  confirm?: TemplateConfirm;
 };
 
 export type TemplatesPanel = {
@@ -63,22 +64,20 @@ const reloadInto = async (
   return outcome.result;
 };
 
-/** Opens a template into the draft, reading its current bytes and revision. */
-const openInto = async (fetcher: FetchLike, view: TemplatesView, name: string): Promise<void> => {
-  view.setStatus(`Opening "${name}"...`, "is-loading");
-  const outcome = await fetchTemplate(fetcher, name);
-  if (!outcome.ok) {
-    view.setStatus(outcome.message, "is-error");
-    return;
-  }
-  const summary = outcome.result.templates[0];
-  if (!summary) {
-    view.setStatus(`"${name}" is no longer in the templates directory.`, "is-error");
-    return;
-  }
-  view.showDraft(templateDraftOf(summary));
-  view.setStatus(`Editing ${outcome.result.rel_path || name}.`, "");
-};
+// The draft is settled on the bytes the receipt carried — the ones the server
+// was asked to write and the diff described — rather than on whatever the
+// textarea holds now. They are the same thing for a person who confirmed what
+// they typed, and different for one who kept typing over the diff: settling on
+// the editor would leave unwritten bytes on screen under a "Saved" message.
+const savedSettler = (fetcher: FetchLike, view: TemplatesView) =>
+  (issued: TemplatePendingSave, result: TemplatesResult): void => {
+    view.showDraft(
+      issued.op === "delete"
+        ? emptyTemplateDraft()
+        : { name: issued.name, content: issued.content, revision: result.revision, created: false }
+    );
+    void reloadInto(fetcher, view);
+  };
 
 /**
  * Mounts the template editor.
@@ -101,37 +100,36 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
     return null;
   }
   const view = createTemplatesView(elements);
+  const guard = createTemplateDraftGuard({
+    root: deps.root, fetch: deps.fetch, view, writer: () => writer, confirm: deps.confirm,
+    reload: () => void reloadInto(deps.fetch, view),
+  });
 
-  // The draft is settled on the bytes the receipt carried — the ones the server
-  // was asked to write and the diff described — rather than on whatever the
-  // textarea holds now. They are the same thing for a person who confirmed what
-  // they typed, and different for one who kept typing over the diff: settling on
-  // the editor would leave unwritten bytes on screen under a "Saved" message.
-  const settle = (issued: TemplatePendingSave, result: TemplatesResult): void => {
-    view.showDraft(
-      issued.op === "delete"
-        ? emptyTemplateDraft()
-        : { name: issued.name, content: issued.content, revision: result.revision, created: false }
-    );
-    void reloadInto(deps.fetch, view);
-  };
+  const settle = savedSettler(deps.fetch, view);
 
+  let issued: TemplatePendingSave | null = null;
   const writer = createTemplatesWriter({
     fetch: deps.fetch,
     token: deps.token,
     hooks: {
       onStatus: (message, kind, uncertain, operationID) => {
         view.setStatus(message, kind, uncertain);
-        if (uncertain && operationID) {
-          offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Template change");
+        const unanswered = issued;
+        if (uncertain && operationID && unanswered) {
+          offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Template change",
+            () => void guard.settleConfirmed(unanswered));
         }
       },
-      onPending: view.showPending,
+      onPending: (pending) => {
+        if (pending) issued = pending;
+        view.showPending(pending);
+      },
       onSaved: settle,
     },
   });
 
   const requestSave = (): void => {
+    if (guard.refuseWhileOpening()) return;
     const draft = view.draft();
     const name = suggestTemplateName(view.typedName(), view.extension());
     const refusal = templateSaveError({ ...draft, name });
@@ -151,6 +149,7 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
   };
 
   const requestDelete = (): void => {
+    if (guard.refuseWhileOpening()) return;
     const draft = view.draft();
     if (draft.revision === "") {
       view.setStatus("Open a template before deleting it.", "is-error");
@@ -172,19 +171,18 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
     const name = clickedTemplate(event);
     // A click during a write would open a draft the pending receipt no longer
     // describes, so the list is inert until that write settles.
-    if (name !== "" && !writer.busy()) {
-      writer.cancel();
-      void openInto(deps.fetch, view, name);
+    if (name !== "") {
+      guard.replace(() => void guard.open(name));
     }
   });
   elements.save?.addEventListener("click", requestSave);
   elements.remove?.addEventListener("click", requestDelete);
-  elements.create?.addEventListener("click", () => {
-    writer.cancel();
+  elements.create?.addEventListener("click", () => guard.replace(() => {
+    guard.supersede();
     view.showDraft(newTemplateDraft("", ""));
     view.setStatus("Name the new template and save it.", "");
     view.focusName();
-  });
+  }));
   elements.confirm?.addEventListener("click", () => void writer.confirm());
   elements.cancel?.addEventListener("click", () => writer.cancel());
   elements.refresh?.addEventListener("click", () => void load());

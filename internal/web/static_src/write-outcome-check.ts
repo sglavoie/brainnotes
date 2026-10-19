@@ -41,6 +41,30 @@ export const newWriteOperationID = (): string => {
   }
 };
 
+// The journal entry that recorded the attempt, or "" while none has completed.
+// A reply that is not a well-formed answer throws, since it says nothing either way.
+const fetchConfirmedEntry = async (fetcher: FetchLike, operationID: string): Promise<string> => {
+  const response = await fetcher(`/api/operations/outcome?id=${operationID}`, {
+    headers: { Accept: "application/json" },
+  });
+  const result: unknown = await response.json();
+  if (!response.ok || !result || typeof result !== "object") throw new Error("unavailable");
+  const record = result as Record<string, unknown>;
+  if (record.ok !== true) throw new Error("unavailable");
+  return record.status === "confirmed" && typeof record.journal_id === "string" ? record.journal_id : "";
+};
+
+const showConfirmed = (status: HTMLElement, label: string, entry: string): HTMLAnchorElement => {
+  status.textContent = `${label} confirmed in History (entry ${entry}).`;
+  const history = status.ownerDocument.createElement("a");
+  history.href = "/history";
+  history.textContent = "View History";
+  status.append(" ", history);
+  status.classList.remove("is-error");
+  status.classList.add("is-success");
+  return history;
+};
+
 export const offerWriteOutcomeCheck = (
   status: HTMLElement,
   operationID: string,
@@ -55,35 +79,36 @@ export const offerWriteOutcomeCheck = (
   button.type = "button";
   button.className = "bn-button write-outcome-check";
   button.textContent = "Check outcome";
+  // The button stays focusable while the check runs: disabling it, or the
+  // status rewrite that detaches it, would drop focus to the page body.
+  let checking = false;
   const check = async (): Promise<void> => {
-    button.disabled = true;
+    if (checking) return;
+    checking = true;
+    const hadFocus = status.ownerDocument.activeElement === button;
+    button.setAttribute("aria-disabled", "true");
+    let entry = "";
     try {
-      const response = await fetcher(`/api/operations/outcome?id=${operationID}`, {
-        headers: { Accept: "application/json" },
-      });
-      const result: unknown = await response.json();
-      if (!response.ok || !result || typeof result !== "object") throw new Error("unavailable");
-      const record = result as Record<string, unknown>;
-      if (record.ok !== true) throw new Error("unavailable");
-      if (record.status === "confirmed" && typeof record.journal_id === "string" && record.journal_id) {
-        forgetPending(operationID);
-        announceConfirmedWrite();
-        status.textContent = `${label} confirmed in History (entry ${record.journal_id}).`;
-        const history = status.ownerDocument.createElement("a");
-        history.href = "/history";
-        history.textContent = "View History";
-        status.append(" ", history);
-        status.classList.remove("is-error");
-        status.classList.add("is-success");
-        onConfirmed?.();
-        return;
+      entry = await fetchConfirmedEntry(fetcher, operationID);
+      if (entry === "") {
+        status.textContent = `${label} is still unconfirmed. Do not resend this request; check again, then refresh current values before making a new preview if needed.`;
       }
-      status.textContent = `${label} is still unconfirmed. Do not resend this request; check again, then refresh current values before making a new preview if needed.`;
     } catch {
       status.textContent = "Could not check the outcome. Check again when the connection is available.";
+    } finally {
+      checking = false;
+      button.removeAttribute("aria-disabled");
     }
-    button.disabled = false;
+    if (entry !== "") {
+      forgetPending(operationID);
+      announceConfirmedWrite();
+      const history = showConfirmed(status, label, entry);
+      onConfirmed?.();
+      if (hadFocus) history.focus();
+      return;
+    }
     status.append(" ", button);
+    if (hadFocus) button.focus();
   };
   button.addEventListener("click", () => { void check(); });
   status.append(" ", button);

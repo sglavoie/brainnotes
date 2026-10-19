@@ -62,3 +62,36 @@ it("replaces a resolved reminder with a History action", async () => {
   expect(document.querySelector(".write-outcome-confirmation a")?.getAttribute("href")).toBe("/history");
   expect(sessionStorage.getItem("bn.pending-write-outcomes")).toBe("[]");
 });
+
+it("keeps focus on Check outcome while checking and after an unconfirmed answer", async () => {
+  document.body.innerHTML = '<p role="status" data-write-status>Change not confirmed.</p>';
+  const status = document.querySelector<HTMLElement>("[data-write-status]")!;
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({ ok: true, status: "unconfirmed" }), {
+    headers: { "Content-Type": "application/json" },
+  }));
+  offerWriteOutcomeCheck(status, "0123456789abcdef0123456789abcdef", fetcher);
+  const check = status.querySelector<HTMLButtonElement>("button")!;
+  check.focus();
+  check.click();
+  expect(check.getAttribute("aria-disabled")).toBe("true");
+  check.click();
+  await vi.waitFor(() => expect(status.textContent).toContain("still unconfirmed"));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(document.activeElement).toBe(check);
+  expect(check.hasAttribute("aria-disabled")).toBe(false);
+});
+
+it("moves focus to the History link when a focused check confirms", async () => {
+  document.body.innerHTML = '<p role="status" data-write-status>Change not confirmed.</p>';
+  const status = document.querySelector<HTMLElement>("[data-write-status]")!;
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({
+    ok: true, status: "confirmed", journal_id: "entry-123",
+  }), { headers: { "Content-Type": "application/json" } }));
+  const confirmed = vi.fn();
+  offerWriteOutcomeCheck(status, "0123456789abcdef0123456789abcdef", fetcher, "Change", confirmed);
+  const check = status.querySelector<HTMLButtonElement>("button")!;
+  check.focus();
+  check.click();
+  await vi.waitFor(() => expect(confirmed).toHaveBeenCalledTimes(1));
+  expect(document.activeElement).toBe(status.querySelector("a"));
+});
