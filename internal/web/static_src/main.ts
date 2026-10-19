@@ -1,6 +1,7 @@
 import { initBrokenCreateActions } from "./broken-create";
 import { initCapture } from "./capture";
 import { initCopyControls } from "./clipboard";
+import { initWorkspacePopovers } from "./disclosure-popover";
 import { initOpenInEditor } from "./editor-open";
 import { initFolderSuggestions } from "./folder-suggestions";
 import { initFrontmatterEditing } from "./frontmatter-edit";
@@ -25,6 +26,7 @@ import { initPendingWriteOutcomes } from "./write-outcome-check";
 (function () {
   const readOnly = document.documentElement.dataset.readOnly === "true";
   initTheme();
+  initWorkspacePopovers();
   if (!readOnly) {
     initPendingWriteOutcomes();
     initFolderSuggestions();
