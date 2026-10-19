@@ -110,7 +110,8 @@ func writeViewsJSON(out io.Writer, views []queryexpr.View) error {
 // `--view` actually runs, so seeing it is how a user confirms that what they
 // saved means what they think it means.
 func newViewsShowCmd() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "show <name>",
 		Short: "Show one saved view, with its query re-rendered canonically",
 		Long: `Show prints a single saved view: its description, its ordering and cap, and
@@ -125,49 +126,87 @@ A view that no longer compiles fails here with its parse error.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, views, err := resolveConfigViews(cmd)
-			if err != nil {
-				return err
-			}
-
-			name := strings.TrimSpace(args[0])
-			view, ok := lookupResolvedView(views, name)
-			if !ok {
-				return unknownViewError(cfg, name)
-			}
-			if !view.Enabled() {
-				return view.Err
-			}
-
-			saved := view.Saved
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintf(w, "Name:\t%s\n", saved.Name)
-			if saved.Description != "" {
-				fmt.Fprintf(w, "Description:\t%s\n", saved.Description)
-			}
-			canonical := view.Plan.Expr.String()
-			fmt.Fprintf(w, "Query:\t%s\n", canonical)
-			if strings.TrimSpace(saved.Query) != canonical {
-				fmt.Fprintf(w, "Stored as:\t%s\n", saved.Query)
-			}
-			if spec := view.Plan.Sort; spec.Key != "" {
-				fmt.Fprintf(w, "Sort:\t%s\n", spec.String())
-			}
-			if saved.RelativeTo != "" {
-				fmt.Fprintf(w, "Relative to:\t%s\n", saved.RelativeTo)
-			}
-			if saved.Limit > 0 {
-				fmt.Fprintf(w, "Limit:\t%d\n", saved.Limit)
-			}
-			w.Flush()
-			return nil
+			return runViewsShow(cmd, args[0], asJSON)
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false,
+		`print a JSON object {"name", "description", "query", "stored_query", "sort", "relative_to", "limit"}`)
+	return cmd
+}
+
+// viewShowJSON is `views show --json`: every field, always present, so a
+// script reads an unset sort as "" and an unset limit as 0 instead of testing
+// for absence. query is the canonical form, stored_query the text as saved.
+type viewShowJSON struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Query       string `json:"query"`
+	StoredQuery string `json:"stored_query"`
+	Sort        string `json:"sort"`
+	RelativeTo  string `json:"relative_to"`
+	Limit       int    `json:"limit"`
+}
+
+func runViewsShow(cmd *cobra.Command, rawName string, asJSON bool) error {
+	cfg, views, err := resolveConfigViews(cmd)
+	if err != nil {
+		return err
+	}
+	name := strings.TrimSpace(rawName)
+	view, ok := lookupResolvedView(views, name)
+	if !ok {
+		return unknownViewError(cfg, name)
+	}
+	if !view.Enabled() {
+		return view.Err
+	}
+	record := viewShowJSON{
+		Name:        view.Saved.Name,
+		Description: view.Saved.Description,
+		Query:       view.Plan.Expr.String(),
+		StoredQuery: view.Saved.Query,
+		RelativeTo:  view.Saved.RelativeTo,
+		Limit:       view.Saved.Limit,
+	}
+	if spec := view.Plan.Sort; spec.Key != "" {
+		record.Sort = spec.String()
+	}
+	if asJSON {
+		return writeJSON(cmd.OutOrStdout(), record)
+	}
+	return writeViewShow(cmd.OutOrStdout(), record)
+}
+
+// writeViewShow is the text form: optional fields only when set, and the
+// stored query only when it differs from the canonical one.
+func writeViewShow(out io.Writer, record viewShowJSON) error {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "Name:\t%s\n", record.Name)
+	optional := []struct{ label, value string }{
+		{"Description", record.Description},
+		{"Query", record.Query},
+	}
+	if strings.TrimSpace(record.StoredQuery) != record.Query {
+		optional = append(optional, struct{ label, value string }{"Stored as", record.StoredQuery})
+	}
+	optional = append(optional,
+		struct{ label, value string }{"Sort", record.Sort},
+		struct{ label, value string }{"Relative to", record.RelativeTo})
+	for _, field := range optional {
+		if field.value != "" {
+			fmt.Fprintf(w, "%s:\t%s\n", field.label, field.value)
+		}
+	}
+	if record.Limit > 0 {
+		fmt.Fprintf(w, "Limit:\t%d\n", record.Limit)
+	}
+	return w.Flush()
 }
 
 // newViewsCheckCmd compiles every saved view and reports the failures.
 func newViewsCheckCmd() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Compile every saved view and report the ones that no longer work",
 		Long: `Check compiles the query of every saved view against this vault and reports
@@ -182,36 +221,79 @@ rotted — a property it names was renamed, a field was removed — therefore lo
 without complaint, and is reported as a disabled entry wherever views are
 listed. Run 'bn views check' to find out why.
 
-It exits non-zero when any view fails, so it is usable as a config health gate.`,
+It exits non-zero when any view fails, so it is usable as a config health gate.
+With --json the report is printed first and the exit status is the same.`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, views, err := resolveConfigViews(cmd)
-			if err != nil {
-				return err
-			}
-			if len(views) == 0 {
-				writeViewsHint(cmd.ErrOrStderr(), "views check", cfg.SourcePath)
-				return nil
-			}
-
-			out := cmd.OutOrStdout()
-			failed := 0
-			for _, view := range views {
-				if view.Enabled() {
-					continue
-				}
-				failed++
-				fmt.Fprintf(out, "%s: view %q\n%s\n\n", cfg.SourcePath, view.Saved.Name, view.Detail())
-			}
-			if failed > 0 {
-				return fmt.Errorf("views check: %d of %d saved views failed to compile", failed, len(views))
-			}
-			fmt.Fprintf(out, "views check: %d saved %s\n", len(views), plural(len(views), "view compiles", "views compile"))
-			return nil
+			return runViewsCheck(cmd, asJSON)
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false,
+		`print a JSON object {"config", "total", "failed": [{"name", "error"}]}`)
+	return cmd
+}
+
+type viewsCheckJSON struct {
+	Config string            `json:"config"`
+	Total  int               `json:"total"`
+	Failed []viewFailureJSON `json:"failed"`
+}
+
+type viewFailureJSON struct {
+	Name  string `json:"name"`
+	Error string `json:"error"`
+}
+
+func runViewsCheck(cmd *cobra.Command, asJSON bool) error {
+	cfg, views, err := resolveConfigViews(cmd)
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		return writeViewsCheckJSON(cmd.OutOrStdout(), cfg.SourcePath, views)
+	}
+	if len(views) == 0 {
+		writeViewsHint(cmd.ErrOrStderr(), "views check", cfg.SourcePath)
+		return nil
+	}
+	out := cmd.OutOrStdout()
+	failed := 0
+	for _, view := range views {
+		if view.Enabled() {
+			continue
+		}
+		failed++
+		fmt.Fprintf(out, "%s: view %q\n%s\n\n", cfg.SourcePath, view.Saved.Name, view.Detail())
+	}
+	if failed > 0 {
+		return viewsCheckFailure(failed, len(views))
+	}
+	fmt.Fprintf(out, "views check: %d saved %s\n", len(views), plural(len(views), "view compiles", "views compile"))
+	return nil
+}
+
+// writeViewsCheckJSON prints the report, then fails exactly as the text form
+// does when any view did not compile. No views is an empty report, not a hint.
+func writeViewsCheckJSON(out io.Writer, configPath string, views []queryexpr.View) error {
+	report := viewsCheckJSON{Config: configPath, Total: len(views), Failed: []viewFailureJSON{}}
+	for _, view := range views {
+		if !view.Enabled() {
+			report.Failed = append(report.Failed, viewFailureJSON{Name: view.Saved.Name, Error: view.Err.Error()})
+		}
+	}
+	if err := writeJSON(out, report); err != nil {
+		return err
+	}
+	if len(report.Failed) > 0 {
+		return viewsCheckFailure(len(report.Failed), len(views))
+	}
+	return nil
+}
+
+func viewsCheckFailure(failed, total int) error {
+	return fmt.Errorf("views check: %d of %d saved views failed to compile", failed, total)
 }
 
 // resolveConfigViews loads the config from the command context and resolves

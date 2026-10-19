@@ -13,6 +13,7 @@ import (
 
 // NewConfigCmd builds the `config` command tree.
 func NewConfigCmd() *cobra.Command {
+	var asJSON bool
 	cmd := &cobra.Command{
 		Use:           "config",
 		Short:         "Show the active vault root and configuration file",
@@ -20,8 +21,10 @@ func NewConfigCmd() *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE:          func(cmd *cobra.Command, args []string) error { return runConfigSummary(cmd) },
+		RunE:          func(cmd *cobra.Command, args []string) error { return runConfigSummary(cmd, asJSON) },
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false,
+		`print a JSON object {"vault", "config", "overlay", "resolved_by"} (overlay is null when there is none)`)
 
 	cmd.AddCommand(newConfigEditCmd())
 	cmd.AddCommand(newConfigExplainCmd())

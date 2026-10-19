@@ -57,8 +57,9 @@ write or `bn serve`'s shutdown can finish cleanly; press it a second time to
 stop at once.
 
 Machine-readable output is spelled `--json` on `find`, `search`, `links`,
-`backlinks`, `values`/`tags`, `views`, `schema`, `lint`, `history`, `related`,
-`doctor` and `checkpoint status`; `context --json` is shorthand for
+`backlinks`, `values`/`tags`, `views`, `views show`, `views check`, `schema`,
+`lint`, `history`, `related`, `doctor`, `checkpoint status`, `config`,
+`config explain` and `index`; `context --json` is shorthand for
 `context --format json`. JSON output is indented and not HTML-escaped, and an
 empty result is `[]` rather than nothing.
 

@@ -10,8 +10,8 @@ find-scoped command with `--view`. The query language itself is documented in
 
 ```sh
 bn views [--json]
-bn views show <name>
-bn views check
+bn views show <name> [--json]
+bn views check [--json]
 ```
 
 A saved view is a named query stored as a `[[views]]` block in
@@ -23,8 +23,8 @@ link graph.
 | Subcommand | Output |
 | --- | --- |
 | `bn views` | A `NAME`/`DESCRIPTION`/`QUERY`/`STATUS` table, where `STATUS` is `ok` or `error`. `--json` prints the same columns as `{"name", "description", "query", "status", "error"}` records, `error` set only for a disabled view. |
-| `bn views show <name>` | One view's name, description, query, ordering, anchor, and cap. The query is re-rendered canonically — the spelling `--view` actually runs — with a `Stored as:` line added when the stored text differs. |
-| `bn views check` | One report per view that no longer compiles, then a non-zero exit. |
+| `bn views show <name>` | One view's name, description, query, ordering, anchor, and cap. The query is re-rendered canonically — the spelling `--view` actually runs — with a `Stored as:` line added when the stored text differs. `--json` prints `{"name", "description", "query", "stored_query", "sort", "relative_to", "limit"}`, every key always present (`query` canonical, `stored_query` as saved). |
+| `bn views check` | One report per view that no longer compiles, then a non-zero exit. `--json` prints `{"config", "total", "failed": [{"name", "error"}]}` and exits the same way. |
 
 `internal/config` cannot validate a saved expression without closing an import
 cycle, so its validation is shape-only and a view whose query rotted — a

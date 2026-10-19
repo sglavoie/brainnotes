@@ -13,11 +13,15 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
+// indexOptions is the flag state of one `bn index` invocation.
+type indexOptions struct {
+	status  bool
+	rebuild bool
+	asJSON  bool
+}
+
 func NewIndexCmd() *cobra.Command {
-	var (
-		status  bool
-		rebuild bool
-	)
+	var opts indexOptions
 
 	cmd := &cobra.Command{
 		Use:   "index",
@@ -32,35 +36,48 @@ That leaves '--rebuild' and 'rm -rf .bnotes/index' as the entire support
 surface, and they do the same thing.
 
 With no flags, 'bn index' prints the same report as '--status'. Neither form
-walks the vault: reporting on the cache must never be the thing that builds it.`,
+walks the vault: reporting on the cache must never be the thing that builds it.
+--json prints that report as a JSON object.`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := refuseCombinedFlags(cmd, "index", "status", "rebuild"); err != nil {
-				return err
-			}
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("index: no config in context")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-			if rebuild {
-				return runIndexRebuild(cmd, v)
-			}
-			// --status is the default and so needs no branch of its own; the
-			// flag exists so the report can be asked for explicitly.
-			return runIndexStatus(cmd.OutOrStdout(), v.Root)
+			return runIndexCommand(cmd, opts)
 		},
 	}
 
-	cmd.Flags().BoolVar(&status, "status", false, "report the cache state file: entry count, byte size, and last write (the default)")
-	cmd.Flags().BoolVar(&rebuild, "rebuild", false, "discard the cache and rebuild it from the vault")
+	cmd.Flags().BoolVar(&opts.status, "status", false, "report the cache state file: entry count, byte size, and last write (the default)")
+	cmd.Flags().BoolVar(&opts.rebuild, "rebuild", false, "discard the cache and rebuild it from the vault")
+	cmd.Flags().BoolVar(&opts.asJSON, "json", false,
+		`print the status report as a JSON object {"state_file", "status", "problem", "entries", "bytes", "last_write"}`)
 
 	return cmd
+}
+
+func runIndexCommand(cmd *cobra.Command, opts indexOptions) error {
+	if err := refuseCombinedFlags(cmd, "index", "status", "rebuild"); err != nil {
+		return err
+	}
+	if err := refuseCombinedFlags(cmd, "index", "json", "rebuild"); err != nil {
+		return err
+	}
+	cfg := ConfigFromContext(cmd.Context())
+	if cfg == nil {
+		return errors.New("index: no config in context")
+	}
+	v, err := vault.Open(cfg)
+	if err != nil {
+		return err
+	}
+	if opts.rebuild {
+		return runIndexRebuild(cmd, v)
+	}
+	// --status is the default and so needs no branch of its own; the flag
+	// exists so the report can be asked for explicitly.
+	if opts.asJSON {
+		return runIndexStatusJSON(cmd.OutOrStdout(), v.Root)
+	}
+	return runIndexStatus(cmd.OutOrStdout(), v.Root)
 }
 
 // runIndexStatus prints what the state file says about itself. It reads the
@@ -88,6 +105,40 @@ func runIndexStatus(out io.Writer, root string) error {
 	fmt.Fprintf(out, "%-12s %d B\n", "Size:", st.Bytes)
 	fmt.Fprintf(out, "%-12s %s\n", "Last write:", st.ModTime.UTC().Format(time.RFC3339))
 	return nil
+}
+
+// indexStatusJSON is `index --json`. Status is "not built", "unusable" or
+// "healthy", as in the text form; the fields the text form leaves out for a
+// state are null rather than absent, so every record has the same keys.
+type indexStatusJSON struct {
+	StateFile string  `json:"state_file"`
+	Status    string  `json:"status"`
+	Problem   *string `json:"problem"`
+	Entries   *int    `json:"entries"`
+	Bytes     *int64  `json:"bytes"`
+	LastWrite *string `json:"last_write"`
+}
+
+func runIndexStatusJSON(out io.Writer, root string) error {
+	st, err := index.Stat(root)
+	if err != nil {
+		return err
+	}
+	record := indexStatusJSON{StateFile: indexDisplayPath(root, st.Path), Status: "not built"}
+	if st.Exists {
+		size := int64(st.Bytes)
+		lastWrite := st.ModTime.UTC().Format(time.RFC3339)
+		record.Bytes, record.LastWrite = &size, &lastWrite
+		record.Status = "healthy"
+		if st.Problem != "" {
+			problem := st.Problem
+			record.Status, record.Problem = "unusable", &problem
+		} else {
+			entries := st.Entries
+			record.Entries = &entries
+		}
+	}
+	return writeJSON(out, record)
 }
 
 // runIndexRebuild throws the cache away and walks the vault to refill it. The
