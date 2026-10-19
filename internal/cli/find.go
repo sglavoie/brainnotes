@@ -32,7 +32,10 @@ or --relative-to replaces the view's ordering.
 
 --sort orders the matches. Results are path-ordered by default; --sort relevance
 ranks them against the note named by --relative-to, most related first, using the
-same signals bn related does. Sorting never changes which notes match.`,
+same signals bn related does. Sorting never changes which notes match.
+
+--limit N keeps the first N notes after sorting; it replaces a view's stored
+limit.`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -51,6 +54,7 @@ same signals bn related does. Sorting never changes which notes match.`,
 	f.BoolVar(&opts.listBrokenTargets, "list-broken-targets", false, "list unique broken targets (requires --broken-links)")
 	f.StringVar(&opts.sortText, "sort", "", findSortHelp())
 	f.StringVar(&opts.relativeTo, "relative-to", "", "anchor note for --sort relevance (title or path)")
+	f.IntVar(&opts.limit, "limit", 0, "print at most N notes, after sorting (replaces a view's stored limit)")
 
 	return cmd
 }

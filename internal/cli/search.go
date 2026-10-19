@@ -27,6 +27,9 @@ Output modes:
   --open           Open the first matching result in the configured editor at the matching line.
   --json           A JSON array of {path, abs_path, title, count, matches: [{line, text}]}.
 
+--limit N caps how many notes the paths, --count, --context and --json modes
+report, after their own ordering.
+
 Like grep, search exits 1 when nothing matches (and when an interactive picker
 selects nothing), and 2 on an error.
 
@@ -56,6 +59,7 @@ Examples:
 	f.IntVarP(&opts.contextN, "context", "C", 0, "show N lines of context around each match")
 	f.BoolVar(&opts.count, "count", false, "print match count per note, sorted by count desc")
 	f.BoolVar(&opts.openResult, "open", false, "open the first matching result in the configured editor at the matching line")
+	f.IntVar(&opts.limit, "limit", 0, "report at most N matching notes (paths, --count, --context, --json)")
 	f.BoolVar(&opts.asJSON, "json", false, `print a JSON array of {"path", "abs_path", "title", "count", "matches"} records`)
 
 	return cmd

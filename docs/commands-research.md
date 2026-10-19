@@ -14,7 +14,7 @@ The commands that read note bodies and the link graph. `bn search` and
 bn search [pattern] [note...] [find-flags]
           [-e | --regex] [--case-sensitive]
           [-C N | --context N] [--count] [--open] [--json]
-          [-i | --interactive] [-0]
+          [--limit N] [-i | --interactive] [-0]
 ```
 
 Searches note bodies for a literal string or regex, printing matching note paths one per line.
@@ -54,6 +54,11 @@ when an `-i` picker selects nothing. See
 combined with `-i`, `--open`, `-0`, `--count` or `--context`; its records already
 carry each note's count and matching lines, with `line` the 1-based file line
 `--context` prints.
+
+`--limit N` reports at most N matching notes, taken after the mode's own
+ordering (path order, or count order under `--count`). It applies to the paths,
+`--count`, `--context` and `--json` modes, and is refused with `-i` and
+`--open`, which report no list to cap. N must be 1 or more.
 
 Examples:
 
