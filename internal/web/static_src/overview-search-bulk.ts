@@ -213,6 +213,8 @@ export abstract class OverviewSearchBulk {
       offerWriteOutcomeCheck(this.els.bulkStatusEl, operationID, this.fetcher, "Bulk change", () => {
         this.selectedKeys.clear();
         this.updateBulkControls();
+        this.ignoreNextManagementMutationClear = true;
+        window.dispatchEvent(new CustomEvent(managementMutationEventName));
         this.scheduleSearch(0);
       });
     }

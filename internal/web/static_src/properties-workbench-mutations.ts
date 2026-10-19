@@ -51,7 +51,8 @@ export type WorkbenchMutationOptions = {
   fetcher: FetchLike;
   historyHref: string;
   property: string;
-  reload: () => Promise<void>;
+  // Resolves true only when this re-read rendered the page.
+  reload: () => Promise<boolean>;
   setBusy: (busy: boolean) => void;
   setStatus: (message: string, kind?: StatusKind) => void;
   toast: UndoToast;
@@ -64,6 +65,12 @@ export type WorkbenchMutationOptions = {
 export const createWorkbenchMutations = (
   options: WorkbenchMutationOptions
 ): WorkbenchMutations => {
+  const announceMutation = (detail?: PropertyMutationResult): void => {
+    options.doc.defaultView?.dispatchEvent(
+      new CustomEvent(managementMutationEventName, { detail })
+    );
+  };
+
   const announce = (
     outcome: MutationOutcome,
     operationID = ""
@@ -75,8 +82,15 @@ export const createWorkbenchMutations = (
         offerWriteOutcomeCheck(status, operationID, options.fetcher, "Property change", () => {
           // Re-reading rewrites the status line; the confirmation and its
           // History link are what the person asked to see, so they come back.
+          // A failed re-read keeps its error in front: the values on screen
+          // are not the ones the confirmed change wrote.
           const confirmation = [...status.childNodes];
-          void options.reload().then(() => {
+          announceMutation();
+          void options.reload().then((loaded) => {
+            if (!loaded) {
+              status.append(" ", ...confirmation);
+              return;
+            }
             options.setStatus("", "is-success");
             status.replaceChildren(...confirmation);
           });
@@ -87,17 +101,19 @@ export const createWorkbenchMutations = (
     return true;
   };
 
+  // The toast is the write's own record, so it appears whatever the re-read
+  // does; the status line waits for the re-read so that the reload cannot
+  // overwrite it, and a failed re-read keeps its error instead.
   const finishWrite = async (result: PropertyMutationResult): Promise<void> => {
-    options.setStatus(mutationSuccessMessage(result), "is-success");
     options.toast.show({
       message: undoToastMessage(result),
       journalID: result.journal_id,
       historyHref: options.historyHref,
     });
-    options.doc.defaultView?.dispatchEvent(
-      new CustomEvent(managementMutationEventName, { detail: result })
-    );
-    await options.reload();
+    announceMutation(result);
+    if (await options.reload()) {
+      options.setStatus(mutationSuccessMessage(result), "is-success");
+    }
   };
 
   const runApply = async (previewID: string): Promise<void> => {
@@ -228,10 +244,13 @@ export const createWorkbenchMutations = (
     options.setStatus("Undoing change...", "is-loading");
     try {
       const outcome = await undoJournalEntry(options.fetcher, options.token, journalID);
-      options.setStatus(outcome.message, outcome.ok ? "is-success" : "is-error");
-      if (outcome.ok) {
-        options.doc.defaultView?.dispatchEvent(new CustomEvent(managementMutationEventName));
-        await options.reload();
+      if (!outcome.ok) {
+        options.setStatus(outcome.message, "is-error");
+        return;
+      }
+      announceMutation();
+      if (await options.reload()) {
+        options.setStatus(outcome.message, "is-success");
       }
     } finally {
       options.setBusy(false);

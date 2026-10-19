@@ -27,7 +27,7 @@ export type WorkbenchHost = {
   property: string;
   token: string;
   historyHref: string;
-  reload: () => Promise<void>;
+  reload: () => Promise<boolean>;
   setStatus: (message: string, kind: StatusKind) => void;
 };
 
