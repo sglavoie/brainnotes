@@ -274,10 +274,13 @@ bn relink
 bn find --broken-links --show-broken
 ```
 
-Then (optionally) create stub notes for any remaining targets:
+Then (optionally) create stub notes for any remaining targets. `bn new` takes a
+template name before the title, so pick the template the stubs should start
+from (`note` below stands for any template in `<vault>/Templates/`; routing for
+that template decides the destination folder unless you pass `--folder`):
 
 ```sh
-bn find --broken-links --list-broken-targets | xargs -I{} bn new "{}"
+bn find --broken-links --list-broken-targets | xargs -I{} bn new note "{}"
 ```
 
 Re-run `bn find --broken-links` afterward to verify zero residue.
