@@ -55,6 +55,9 @@ writing check models keyboard space, but does not emulate an operating system
 keyboard; include a real-device check when qualifying a mobile release. The mobile editor must show editable text on entry and keep
 Save reachable while writing. Property forms and Library selection controls
 should appear when they are useful, with keyboard access to each disclosure.
+On phones, Format, Find, and Save share the first editor toolbar row when they
+fit; routine “Ready to edit” text does not consume a row, while save outcomes
+and errors remain visible below those controls.
 
 ## Mobile and accessibility polish
 

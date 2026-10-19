@@ -58,77 +58,16 @@ func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters
 		return graphJSON{}, errorsf("empty vault root")
 	}
 
-	noteByKey := make(map[string]*vault.Note, len(snapshot.notes))
-	for _, note := range snapshot.notes {
-		if note == nil {
-			continue
-		}
-		key := snapshot.graph.KeyForNote(note)
-		if key == "" {
-			continue
-		}
-		noteByKey[key] = note
+	noteByKey := graphNotesByKey(snapshot)
+	included, err := graphIncludedKeys(snapshot, filters, focusQuery)
+	if err != nil {
+		return graphJSON{}, err
+	}
+	matched, err := graphMatchedKeys(snapshot, filters, focusQuery, included)
+	if err != nil {
+		return graphJSON{}, err
 	}
 	degrees := graphNodeDegrees(snapshot)
-
-	inclusionFilters := filters
-	if focusQuery {
-		inclusionFilters = filters.withoutQuery()
-	}
-
-	included := make(map[string]struct{}, len(snapshot.graph.Titles))
-	if inclusionFilters.foldedQuery == "" && !inclusionFilters.hasNonTextFilters() {
-		for key := range snapshot.graph.Titles {
-			included[key] = struct{}{}
-		}
-	} else {
-		for _, note := range snapshot.notes {
-			if note == nil {
-				continue
-			}
-			key := snapshot.graph.KeyForNote(note)
-			if key == "" {
-				continue
-			}
-			_, ok, err := matchNoteWithFilters(note, inclusionFilters)
-			if err != nil {
-				return graphJSON{}, err
-			}
-			if ok {
-				included[key] = struct{}{}
-			}
-		}
-	}
-
-	matched := make(map[string]struct{}, len(included))
-	if filters.foldedQuery != "" {
-		if !focusQuery {
-			// Filter mode already required the text match for inclusion.
-			for key := range included {
-				matched[key] = struct{}{}
-			}
-		} else {
-			for _, note := range snapshot.notes {
-				if note == nil {
-					continue
-				}
-				key := snapshot.graph.KeyForNote(note)
-				if key == "" {
-					continue
-				}
-				if _, ok := included[key]; !ok {
-					continue
-				}
-				_, ok, err := matchNoteWithFilters(note, filters)
-				if err != nil {
-					return graphJSON{}, err
-				}
-				if ok {
-					matched[key] = struct{}{}
-				}
-			}
-		}
-	}
 	filteredDegrees := graphFilteredNodeDegrees(snapshot, included)
 
 	keys := make([]string, 0, len(included))
@@ -137,85 +76,178 @@ func buildGraphResponse(snapshot vaultSnapshot, root string, filters noteFilters
 	}
 	sort.Strings(keys)
 
-	orphan := query.Orphan(snapshot.graph)
-	deadEnd := query.DeadEnd(snapshot.graph)
+	nodeContext := graphResponseContext{
+		snapshot: snapshot, root: root, notes: noteByKey,
+		degrees: degrees, filteredDegrees: filteredDegrees, matched: matched,
+		orphan: query.Orphan(snapshot.graph), deadEnd: query.DeadEnd(snapshot.graph),
+	}
+	nodes, err := nodeContext.nodes(keys)
+	if err != nil {
+		return graphJSON{}, err
+	}
+	edges := graphResponseEdges(snapshot, included)
+
+	return graphJSON{
+		Nodes: nodes,
+		Edges: edges,
+	}, nil
+}
+
+func graphNotesByKey(snapshot vaultSnapshot) map[string]*vault.Note {
+	notes := make(map[string]*vault.Note, len(snapshot.notes))
+	for _, note := range snapshot.notes {
+		if note == nil {
+			continue
+		}
+		if key := snapshot.graph.KeyForNote(note); key != "" {
+			notes[key] = note
+		}
+	}
+	return notes
+}
+
+func graphIncludedKeys(snapshot vaultSnapshot, filters noteFilters, focusQuery bool) (map[string]struct{}, error) {
+	if focusQuery {
+		filters = filters.withoutQuery()
+	}
+	included := make(map[string]struct{}, len(snapshot.graph.Titles))
+	if filters.foldedQuery == "" && !filters.hasNonTextFilters() {
+		for key := range snapshot.graph.Titles {
+			included[key] = struct{}{}
+		}
+		return included, nil
+	}
+	for _, note := range snapshot.notes {
+		if note == nil {
+			continue
+		}
+		key := snapshot.graph.KeyForNote(note)
+		if key == "" {
+			continue
+		}
+		_, ok, err := matchNoteWithFilters(note, filters)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			included[key] = struct{}{}
+		}
+	}
+	return included, nil
+}
+
+func graphMatchedKeys(snapshot vaultSnapshot, filters noteFilters, focusQuery bool, included map[string]struct{}) (map[string]struct{}, error) {
+	matched := make(map[string]struct{}, len(included))
+	if filters.foldedQuery == "" {
+		return matched, nil
+	}
+	if !focusQuery {
+		// Filter mode already required the text match for inclusion.
+		for key := range included {
+			matched[key] = struct{}{}
+		}
+		return matched, nil
+	}
+	for _, note := range snapshot.notes {
+		if note == nil {
+			continue
+		}
+		key := snapshot.graph.KeyForNote(note)
+		if _, ok := included[key]; !ok || key == "" {
+			continue
+		}
+		_, ok, err := matchNoteWithFilters(note, filters)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			matched[key] = struct{}{}
+		}
+	}
+	return matched, nil
+}
+
+type graphResponseContext struct {
+	snapshot        vaultSnapshot
+	root            string
+	notes           map[string]*vault.Note
+	degrees         map[string]graphNodeDegree
+	filteredDegrees map[string]graphNodeDegree
+	matched         map[string]struct{}
+	orphan          query.Predicate
+	deadEnd         query.Predicate
+}
+
+func (ctx graphResponseContext) nodes(keys []string) ([]graphJSONNode, error) {
 	nodes := make([]graphJSONNode, 0, len(keys))
 	for _, key := range keys {
-		title := snapshot.graph.OriginalTitles[key]
-		if title == "" {
-			title = key
+		data, err := ctx.node(key)
+		if err != nil {
+			return nil, err
 		}
-		folder := ""
-		var hasBroken, isOrphan, isDeadEnd bool
-		var brokenCount int
-		if note := noteByKey[key]; note != nil {
-			var err error
-			folder, err = note.Folder(root)
-			if err != nil {
-				return graphJSON{}, fmt.Errorf("folder for %q: %w", key, err)
-			}
-			brokenCount = len(query.UnresolvedLinks(note, snapshot.graph))
-			hasBroken = brokenCount > 0
-			isOrphan = orphan(note)
-			isDeadEnd = deadEnd(note)
-		}
-		degree := degrees[key]
-		filteredDegree := filteredDegrees[key]
-		_, matchesQuery := matched[key]
-		nodes = append(nodes, graphJSONNode{
-			Data: graphJSONNodeData{
-				ID:                key,
-				Title:             title,
-				Folder:            folder,
-				InDegree:          degree.inDegree,
-				OutDegree:         degree.outDegree,
-				Degree:            degree.inDegree + degree.outDegree,
-				FilteredInDegree:  filteredDegree.inDegree,
-				FilteredOutDegree: filteredDegree.outDegree,
-				FilteredDegree:    filteredDegree.inDegree + filteredDegree.outDegree,
-				HasBroken:         hasBroken,
-				BrokenCount:       brokenCount,
-				IsOrphan:          isOrphan,
-				IsDeadEnd:         isDeadEnd,
-				MatchesQuery:      matchesQuery,
-			},
-		})
+		nodes = append(nodes, graphJSONNode{Data: data})
 	}
+	return nodes, nil
+}
 
+func (ctx graphResponseContext) node(key string) (graphJSONNodeData, error) {
+	title := ctx.snapshot.graph.OriginalTitles[key]
+	if title == "" {
+		title = key
+	}
+	degree := ctx.degrees[key]
+	filteredDegree := ctx.filteredDegrees[key]
+	data := graphJSONNodeData{
+		ID:                key,
+		Title:             title,
+		InDegree:          degree.inDegree,
+		OutDegree:         degree.outDegree,
+		Degree:            degree.inDegree + degree.outDegree,
+		FilteredInDegree:  filteredDegree.inDegree,
+		FilteredOutDegree: filteredDegree.outDegree,
+		FilteredDegree:    filteredDegree.inDegree + filteredDegree.outDegree,
+	}
+	_, data.MatchesQuery = ctx.matched[key]
+	note := ctx.notes[key]
+	if note == nil {
+		return data, nil
+	}
+	folder, err := note.Folder(ctx.root)
+	if err != nil {
+		return graphJSONNodeData{}, fmt.Errorf("folder for %q: %w", key, err)
+	}
+	data.Folder = folder
+	data.BrokenCount = len(query.UnresolvedLinks(note, ctx.snapshot.graph))
+	data.HasBroken = data.BrokenCount > 0
+	data.IsOrphan = ctx.orphan(note)
+	data.IsDeadEnd = ctx.deadEnd(note)
+	return data, nil
+}
+
+func graphResponseEdges(snapshot vaultSnapshot, included map[string]struct{}) []graphJSONEdge {
 	sources := make([]string, 0, len(snapshot.graph.Forward))
 	for source := range snapshot.graph.Forward {
 		sources = append(sources, source)
 	}
 	sort.Strings(sources)
-
 	edges := make([]graphJSONEdge, 0, len(sources))
 	seen := make(map[string]struct{})
 	for _, source := range sources {
 		if _, ok := included[source]; !ok {
 			continue
 		}
-
 		for _, target := range visibleGraphTargets(source, snapshot.graph.Forward[source], included) {
 			edgeID := source + "|" + target
 			if _, exists := seen[edgeID]; exists {
 				continue
 			}
 			seen[edgeID] = struct{}{}
-
-			edges = append(edges, graphJSONEdge{
-				Data: graphJSONEdgeData{
-					ID:     edgeID,
-					Source: source,
-					Target: target,
-				},
-			})
+			edges = append(edges, graphJSONEdge{Data: graphJSONEdgeData{
+				ID: edgeID, Source: source, Target: target,
+			}})
 		}
 	}
-
-	return graphJSON{
-		Nodes: nodes,
-		Edges: edges,
-	}, nil
+	return edges
 }
 
 type graphNodeDegree struct {

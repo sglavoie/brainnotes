@@ -12,6 +12,8 @@
   background: var(--bn-raised);
 }
 
+.synthesize-next-step-action { display: none; }
+
 .synthesize-action-hint {
   margin: 0;
   color: var(--bn-muted);

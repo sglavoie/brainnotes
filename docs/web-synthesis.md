@@ -21,8 +21,10 @@ The workbench follows four steps: choose sources, prepare context, write a draft
 then review and create the exact note shown in the preview. The anchor works as
 the only source, so adding supporting notes is optional. A short prompt at the top
 shows the next step. Ask AI is optional and keeps its candidate separate from your
-draft. On narrow screens, Context starts folded so the title and draft stay
-visible on entry; open it to prepare the packet. **Create note** becomes
+draft. On narrow screens, the draft stays visible on entry and the next-step
+prompt offers **Open context** to reach the required preparation step. Choose
+sources and Prepare context start folded; their numbered headings provide
+navigation without a second jump row. **Create note** becomes
 available only after a successful preview.
 
 **Prepare context** builds the packet. `POST /api/synthesis/context` reloads

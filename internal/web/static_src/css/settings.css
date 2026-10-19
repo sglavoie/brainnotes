@@ -50,6 +50,12 @@
   color: var(--bn-warning);
 }
 
+.settings-filter { display: grid; gap: 0.25rem; margin-top: 0.75rem; }
+.settings-filter label { font-weight: 600; font-size: 0.85rem; }
+.settings-filter input { width: 100%; max-width: 26rem; }
+.settings-filter p { margin: 0; color: var(--bn-muted); font-size: 0.82rem; }
+.settings-group[hidden], .settings-group .settings-row[hidden], .settings-group-nav a[hidden] { display: none; }
+
 /*
  * The pending-change block is always a question: both write classes on this page
  * stop on their rendered patch, so a visible diff always has a confirm button

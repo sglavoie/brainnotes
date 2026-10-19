@@ -3,6 +3,19 @@
 Measured at `HEAD 9d18e34` on 2026-09-01. This is the committed baseline every
 later refactoring session compares against.
 
+## Current comparison (2026-10-19)
+
+The historical measurements below retain their original denominator and remain
+the complexity ratchet's reference. `just metrics` now counts only tracked UTF-8
+text as LOC and reports binary assets separately. The current worktree has about
+343,000 text lines and 91 binary assets; screenshots no longer appear among the
+largest source files or as debt markers. It reports 165 Go source complexity
+findings and 27 TypeScript source findings. The graph response refactor removed
+`buildGraphResponse` (previously cognitive complexity 64) from the violation
+list. Re-run `just metrics` on a committed checkout for an exact comparison:
+its tracked-file denominator intentionally excludes new files until Git tracks
+them.
+
 Reproduce with:
 
 ```sh

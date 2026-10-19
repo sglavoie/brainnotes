@@ -29,6 +29,13 @@ LANGUAGES = [
     ("HTML", (".html",)),
 ]
 
+# A few TypeScript graph keys contain an actual NUL separator inside a template
+# string. NUL alone therefore does not make a known source file binary.
+TEXT_SUFFIXES = {
+    ".go", ".ts", ".js", ".mjs", ".css", ".md", ".py", ".html",
+    ".json", ".toml", ".yml", ".yaml", ".svg", ".txt", ".sh",
+}
+
 
 def translate(pattern: str) -> re.Pattern[str]:
     """Translate the gitignore subset used by `.refactorignore` into a regex.
@@ -80,7 +87,7 @@ def section(title: str) -> None:
 
 
 class Corpus:
-    """Tracked files minus `.refactorignore` matches, plus their line counts."""
+    """Tracked UTF-8 text minus `.refactorignore`, with binary assets separate."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -95,8 +102,23 @@ class Corpus:
         self.tracked = [f for f in out.split("\0") if f]
         self.excluded = [f for f in self.tracked if any(p.match(f) for p in patterns)]
         dropped = set(self.excluded)
-        self.files = [f for f in self.tracked if f not in dropped]
-        self.loc = {f: (root / f).read_bytes().count(b"\n") for f in self.files}
+        self.files: list[str] = []
+        self.assets: list[str] = []
+        self.loc: dict[str, int] = {}
+        for f in self.tracked:
+            if f in dropped:
+                continue
+            data = (root / f).read_bytes()
+            try:
+                data.decode("utf-8")
+            except UnicodeDecodeError:
+                self.assets.append(f)
+                continue
+            if b"\0" in data and Path(f).suffix not in TEXT_SUFFIXES:
+                self.assets.append(f)
+                continue
+            self.files.append(f)
+            self.loc[f] = data.count(b"\n") + (bool(data) and not data.endswith(b"\n"))
         self._text: dict[str, str] = {}
 
     def text(self, path: str) -> str:

@@ -177,6 +177,9 @@ current page.
 
 Settings groups portable configuration by purpose and shows readable names and
 current values. Group links jump directly to each section without discarding drafts.
+**Find a setting** narrows the list by name, group, key, or description; rows
+with unsaved edits and pending confirmations remain visible even when they do
+not match. Clearing the search restores the full list.
 Upload sizes display and edit in MiB; conversion preserves exact byte counts and
 refuses values that would require rounding to a whole byte. Choose **Edit** beside a setting to reveal its controls; size and
 age fields name their units. **Configuration details** contains the exact key,

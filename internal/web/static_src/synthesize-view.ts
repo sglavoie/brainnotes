@@ -18,6 +18,8 @@ export type SynthesisView = {
   root: HTMLElement;
   warning: HTMLElement;
   nextStep: HTMLElement;
+  nextStepText: HTMLElement;
+  nextStepAction: HTMLButtonElement;
   sourceList: HTMLOListElement;
   selectionStatus: HTMLElement;
   suggestionTabs: Record<RelatedMode, HTMLButtonElement>;
@@ -65,6 +67,13 @@ export type SynthesisView = {
   previewSources: HTMLOListElement;
 };
 
+const bindContextShortcut = (button: HTMLButtonElement, context: HTMLDetailsElement): void => {
+  button.addEventListener("click", () => {
+    context.open = true;
+    context.querySelector("summary")?.focus();
+  });
+};
+
 export const createSynthesisView = (
   mount: HTMLElement,
   config: SynthesisConfig
@@ -79,6 +88,10 @@ export const createSynthesisView = (
   const nextStep = element(doc, "p", "synthesize-next-step", {
     "data-synthesize-next-step": "",
   });
+  const nextStepText = element(doc, "span", "synthesize-next-step-text");
+  const nextStepAction = element(doc, "button", "synthesize-next-step-action", { type: "button" });
+  nextStepAction.textContent = "Open context";
+  nextStep.append(nextStepText, nextStepAction);
   const sources = buildSourcesSection(doc);
   const suggestions = buildSuggestionsSection(doc);
   const search = buildSearchSection(doc);
@@ -93,7 +106,10 @@ export const createSynthesisView = (
   const sourceDetails = synthesisDisclosure(doc, "1. Choose sources", sources.section, discovery);
   sourceDetails.open = doc.defaultView?.matchMedia?.("(min-width: 800px)").matches ?? false;
   const contextDetails = synthesisDisclosure(doc, "2. Prepare context", context.section);
+  // A narrow phone still opens on the draft. The prompt above it opens this
+  // required step directly when the person is ready to prepare the packet.
   contextDetails.open = doc.defaultView?.matchMedia?.("(min-width: 961px)").matches ?? true;
+  bindContextShortcut(nextStepAction, contextDetails);
   left.append(sourceDetails, contextDetails);
   const right = element(doc, "div", "synthesize-column");
   const generation = synthesisDisclosure(doc, "Ask AI · optional", generate.section);
@@ -108,6 +124,8 @@ export const createSynthesisView = (
     root: mount,
     warning,
     nextStep,
+    nextStepText,
+    nextStepAction,
     sourceList: sources.list,
     selectionStatus: sources.status,
     suggestionTabs: suggestions.tabs,

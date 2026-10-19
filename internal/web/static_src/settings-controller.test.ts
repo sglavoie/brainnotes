@@ -15,6 +15,8 @@ const jsonResponse = (body: unknown, status = 200): Response =>
 const PANEL_HTML = `
   <section data-settings-panel data-settings-csrf="csrf-token">
     <p data-settings-status></p>
+    <input type="search" data-settings-filter>
+    <p data-settings-filter-summary></p>
     <pre data-settings-diff hidden></pre>
     <button type="button" data-settings-confirm hidden></button>
     <button type="button" data-settings-cancel hidden></button>
@@ -248,6 +250,53 @@ describe("settings panel: rendering", () => {
 
     expect(rows(mounted.root)).toHaveLength(0);
     expect(statusText(mounted.root)).toBe("settings: unavailable");
+  });
+});
+
+describe("settings panel: filtering", () => {
+  it("filters by group while keeping an unsaved edit visible", async () => {
+    const mounted = mount({
+      "/api/settings": () => jsonResponse(listPayload([
+        setting(),
+        setting({ key: "capture.inbox_note" }),
+        setting({ key: "sync.auto", kind: "bool", value: { kind: "bool", flag: true } }),
+      ])),
+    });
+    await mounted.panel.load();
+    const edited = control(rowFor(mounted.root, "capture.file")) as HTMLInputElement;
+    edited.value = "Draft.md";
+    edited.dispatchEvent(new Event("input", { bubbles: true }));
+
+    const filter = mounted.root.querySelector<HTMLInputElement>("[data-settings-filter]")!;
+    filter.value = "sync";
+    filter.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(rowFor(mounted.root, "capture.file").hidden).toBe(false);
+    expect(rowFor(mounted.root, "capture.inbox_note").hidden).toBe(true);
+    expect(rowFor(mounted.root, "sync.auto").hidden).toBe(false);
+    expect(mounted.root.querySelector("[data-settings-filter-summary]")?.textContent).toContain("2 of 3");
+
+    edited.value = "Inbox.md";
+    edited.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(rowFor(mounted.root, "capture.file").hidden).toBe(true);
+    expect(mounted.root.querySelector("[data-settings-filter-summary]")?.textContent).toContain("1 of 3");
+  });
+
+  it("does not hide the setting whose preview is waiting for confirmation", async () => {
+    const mounted = mount({
+      "/api/settings": () => jsonResponse(listPayload([
+        setting(),
+        setting({ key: "sync.auto", kind: "bool", value: { kind: "bool", flag: true } }),
+      ])),
+      "/api/settings/preview": () => jsonResponse(previewPayload()),
+    });
+    await mounted.panel.load();
+    button(rowFor(mounted.root, "capture.file"), "data-settings-save").click();
+    await waitForExpect(() => expect(mounted.panel.pending()).not.toBeNull());
+    const filter = mounted.root.querySelector<HTMLInputElement>("[data-settings-filter]")!;
+    filter.value = "sync";
+    filter.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(rowFor(mounted.root, "capture.file").hidden).toBe(false);
+    expect((mounted.root.querySelector("[data-settings-confirm]") as HTMLButtonElement).hidden).toBe(false);
   });
 });
 

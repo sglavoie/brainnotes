@@ -274,7 +274,8 @@ const synthesisNextStep = (model: SynthesisModel): string => {
 
 const render = (runtime: SynthesisRuntime): void => {
   const { model, view, config } = runtime;
-  view.nextStep.textContent = synthesisNextStep(model);
+  view.nextStepText.textContent = synthesisNextStep(model);
+  view.nextStepAction.hidden = model.context !== null;
   renderSynthesisSources(view, model, config);
   renderSynthesisContext(view, model);
   renderSynthesisCandidate(view, model);

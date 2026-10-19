@@ -4,5 +4,8 @@ export const setSourceStatus = (element: HTMLElement | null, message: string, ki
   setStatusText(element, message, kind);
   // Detailed outcomes get the toolbar's full width; short save states stay
   // beside Save. This changes layout only, never the message or its meaning.
-  if (element) element.dataset.expanded = String(message.length > 25);
+  if (element) {
+    element.dataset.expanded = String(message.length > 25);
+    element.dataset.idle = String(message === "Ready to edit.");
+  }
 };

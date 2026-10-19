@@ -5,9 +5,10 @@ Pure measurement. This script writes nothing to the repository and nothing
 outside stdout; the single file it creates is an ephemeral golangci-lint config
 inside a `tempfile.TemporaryDirectory()` (see metrics_complexity.py for why).
 
-The denominator is `git ls-files` minus everything matched by `.refactorignore`
-at the repo root. `.refactorignore` is the source of record for that exclusion
-set — nothing here hard-codes it.
+The denominator is tracked UTF-8 text minus everything matched by
+`.refactorignore` at the repo root. Binary assets are counted separately, never
+as source lines or debt markers. `.refactorignore` remains the source of record
+for intentional exclusions.
 
 Run via `just metrics`. It is deliberately not part of `just ci` — it is a
 report, not a gate. Compare its output against
@@ -66,7 +67,7 @@ def main() -> int:
 
     head = corpus.git("rev-parse", "--short", "HEAD").strip()
     print(f"bn refactoring metrics — HEAD {head}")
-    print(f"Denominator: git ls-files minus {IGNORE_FILE}")
+    print(f"Denominator: tracked UTF-8 text minus {IGNORE_FILE}; binary assets separate")
 
     for name in args.section or SECTIONS:
         SECTIONS[name](corpus)

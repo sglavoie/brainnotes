@@ -521,12 +521,12 @@
 /* Keep Save and the vault status visible when a phone or enlarged text leaves
    too little room for all four controls on one line. */
 @container (max-width: 28rem) {
-  .source-editor-toolbar { grid-template-columns: auto minmax(0, 1fr); }
+  .source-editor-toolbar { grid-template-columns: auto auto minmax(0, 1fr); }
   .source-editor-format { grid-column: 1; grid-row: 1; }
-  .source-editor-actions [data-source-find] { grid-column: 1; grid-row: 2; justify-self: start; }
-  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 1; justify-self: end; }
-  .source-editor-actions .source-editor-status { grid-column: 2; grid-row: 2; text-align: right; }
-  .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; }
+  .source-editor-actions [data-source-find] { grid-column: 2; grid-row: 1; justify-self: start; }
+  .source-editor-actions [data-source-save] { grid-column: 3; grid-row: 1; justify-self: end; }
+  .source-editor-actions .source-editor-status { grid-column: 1 / -1; grid-row: 2; text-align: left; }
+  .source-editor-actions .source-editor-status[data-idle="true"] { display: none; }
 }
 
 @container (max-width: 13rem) {

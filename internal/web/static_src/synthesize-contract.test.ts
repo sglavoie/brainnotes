@@ -14,6 +14,19 @@ import {
 afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("synthesis narrow-screen entry", () => {
+  it("keeps the draft available and opens context from the next-step prompt", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+    await start({ fetch: routedFetch(), storage: memoryStorage(), clipboard: null });
+    expect(query<HTMLDetailsElement>("#synthesis-context").open).toBe(false);
+    expect(query<HTMLDetailsElement>("#synthesis-sources").open).toBe(false);
+    expect(query<HTMLElement>("[data-synthesize-next-step]").textContent).toContain("Prepare context");
+    query<HTMLButtonElement>(".synthesize-next-step-action").click();
+    expect(query<HTMLDetailsElement>("#synthesis-context").open).toBe(true);
+  });
 });
 
 describe("synthesis DOM contract", () => {

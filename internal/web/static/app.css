@@ -6746,6 +6746,8 @@ code {
   background: var(--bn-raised);
 }
 
+.synthesize-next-step-action { display: none; }
+
 .synthesize-action-hint {
   margin: 0;
   color: var(--bn-muted);
@@ -7737,12 +7739,12 @@ code {
 /* Keep Save and the vault status visible when a phone or enlarged text leaves
    too little room for all four controls on one line. */
 @container (max-width: 28rem) {
-  .source-editor-toolbar { grid-template-columns: auto minmax(0, 1fr); }
+  .source-editor-toolbar { grid-template-columns: auto auto minmax(0, 1fr); }
   .source-editor-format { grid-column: 1; grid-row: 1; }
-  .source-editor-actions [data-source-find] { grid-column: 1; grid-row: 2; justify-self: start; }
-  .source-editor-actions [data-source-save] { grid-column: 2; grid-row: 1; justify-self: end; }
-  .source-editor-actions .source-editor-status { grid-column: 2; grid-row: 2; text-align: right; }
-  .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; }
+  .source-editor-actions [data-source-find] { grid-column: 2; grid-row: 1; justify-self: start; }
+  .source-editor-actions [data-source-save] { grid-column: 3; grid-row: 1; justify-self: end; }
+  .source-editor-actions .source-editor-status { grid-column: 1 / -1; grid-row: 2; text-align: left; }
+  .source-editor-actions .source-editor-status[data-idle="true"] { display: none; }
 }
 
 @container (max-width: 13rem) {
@@ -8149,6 +8151,12 @@ code {
 .settings-status.is-warning {
   color: var(--bn-warning);
 }
+
+.settings-filter { display: grid; gap: 0.25rem; margin-top: 0.75rem; }
+.settings-filter label { font-weight: 600; font-size: 0.85rem; }
+.settings-filter input { width: 100%; max-width: 26rem; }
+.settings-filter p { margin: 0; color: var(--bn-muted); font-size: 0.82rem; }
+.settings-group[hidden], .settings-group .settings-row[hidden], .settings-group-nav a[hidden] { display: none; }
 
 /*
  * The pending-change block is always a question: both write classes on this page
@@ -9386,6 +9394,11 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 }
 
 @media (max-width: 640px) {
+  .source-editor-main > .sync-line:not(:empty) { margin-bottom: 0.2rem; font-size: 0.78rem; }
+  /* The numbered sections already provide mobile navigation. The jump row
+     repeats them and pushes the required Prepare action below the fold. */
+  .synthesize-navigation { display: none; }
+  .synthesize-next-step-action:not([hidden]) { display: block; margin-top: 0.35rem; padding: 0; border: 0; color: var(--bn-link); background: none; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
   .library-search .facet-control-row { flex-direction: row; align-items: flex-end; }
   .library-search .facet-picker { flex: 1 1 0; width: auto; }
   .library-search .facet-clear-all { width: auto; flex: 0 0 auto; }

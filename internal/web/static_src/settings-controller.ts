@@ -27,6 +27,8 @@ export type SettingsPanel = {
 type SettingsElements = {
   list: HTMLElement;
   status: HTMLElement;
+  filter: HTMLInputElement | null;
+  filterSummary: HTMLElement | null;
   diff: HTMLElement | null;
   confirm: HTMLButtonElement | null;
   cancel: HTMLButtonElement | null;
@@ -42,6 +44,8 @@ const readElements = (root: HTMLElement): SettingsElements | null => {
   return {
     list,
     status,
+    filter: queryElement(root, "[data-settings-filter]", HTMLInputElement),
+    filterSummary: queryElement(root, "[data-settings-filter-summary]", HTMLElement),
     diff: queryElement(root, "[data-settings-diff]", HTMLElement),
     confirm: queryElement(root, "[data-settings-confirm]", HTMLButtonElement),
     cancel: queryElement(root, "[data-settings-cancel]", HTMLButtonElement),
@@ -56,6 +60,61 @@ const summarize = (count: number): [string, StatusKind] =>
         `${count} portable settings. Machine-local settings stay in brainnotes.local.toml and are not editable here.`,
         "",
       ];
+
+const matchesSetting = (row: SettingRow, needle: string, pendingKey: string): boolean => {
+  if (needle === "" || row.element.dataset.dirty === "true" || row.key === pendingKey) return true;
+  const group = row.element.closest<HTMLElement>(".settings-group");
+  return [
+    row.key,
+    group?.querySelector("h3")?.textContent,
+    row.element.querySelector(".settings-name")?.textContent,
+    row.summary.summary,
+  ].join(" ").toLocaleLowerCase().includes(needle);
+};
+
+const syncSettingsGroupVisibility = (root: HTMLElement): void => {
+  for (const group of root.querySelectorAll<HTMLElement>(".settings-group")) {
+    const count = group.querySelectorAll(".settings-row:not([hidden])").length;
+    group.hidden = count === 0;
+    const heading = group.querySelector("h3");
+    const link = heading && root.querySelector<HTMLAnchorElement>(`.settings-group-nav a[href="#${heading.id}"]`);
+    if (link) link.hidden = count === 0;
+  }
+};
+
+const filterSettingsRows = (root: HTMLElement, rows: SettingRow[], term: string, pendingKey: string): number => {
+  const needle = term.trim().toLocaleLowerCase();
+  let visible = 0;
+  for (const row of rows) {
+    const show = matchesSetting(row, needle, pendingKey);
+    row.element.hidden = !show;
+    if (show) visible += 1;
+  }
+  syncSettingsGroupVisibility(root);
+  return visible;
+};
+
+const bindSettingsFilter = (
+  root: HTMLElement, elements: SettingsElements,
+  rows: () => SettingRow[], pendingKey: () => string
+): (() => void) => {
+  const apply = (): void => {
+    if (!elements.filter) return;
+    const current = rows();
+    const count = filterSettingsRows(root, current, elements.filter.value, pendingKey());
+    if (elements.filterSummary) {
+      const filtering = elements.filter.value.trim() !== "";
+      elements.filterSummary.hidden = !filtering;
+      elements.filterSummary.textContent = filtering
+        ? `${count} of ${current.length} settings shown. Unsaved edits stay visible.` : "";
+    }
+  };
+  elements.filter?.addEventListener("input", apply);
+  root.addEventListener("input", (event) => {
+    if (event.target instanceof HTMLElement && event.target.matches("[data-settings-control]")) apply();
+  });
+  return apply;
+};
 
 // Settings arrive after the browser's initial fragment navigation. Honor a
 // direct link once they exist, without taking focus from someone already typing.
@@ -151,6 +210,7 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
   let active: SettingRow | null = null;
   let submitted = "";
   let reading = 0;
+  const applyFilter = bindSettingsFilter(deps.root, elements, () => rows, () => writer.pending()?.key ?? "");
   const activate = (row: SettingRow): void => {
     reading += 1;
     active = row;
@@ -178,6 +238,7 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
       elements.cancel.hidden = pending === null;
     }
     if (pending) focusSettingFeedback(elements, active, true);
+    applyFilter();
   };
 
   const render = (settings: SettingSummary[], saved = false): void => {
@@ -187,12 +248,14 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
         writer.cancel();
         setStatus(message, "is-error");
       }));
+      applyFilter();
       return;
     }
     for (const row of rows) {
       const summary = settings.find((item) => item.key === row.key);
       if (summary) updateSettingRow(row, summary, saved && row === active ? submitted : undefined);
     }
+    applyFilter();
   };
 
   const writer = createSettingsWriter({

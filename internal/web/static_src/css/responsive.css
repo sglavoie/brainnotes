@@ -111,6 +111,11 @@
 }
 
 @media (max-width: 640px) {
+  .source-editor-main > .sync-line:not(:empty) { margin-bottom: 0.2rem; font-size: 0.78rem; }
+  /* The numbered sections already provide mobile navigation. The jump row
+     repeats them and pushes the required Prepare action below the fold. */
+  .synthesize-navigation { display: none; }
+  .synthesize-next-step-action:not([hidden]) { display: block; margin-top: 0.35rem; padding: 0; border: 0; color: var(--bn-link); background: none; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
   .library-search .facet-control-row { flex-direction: row; align-items: flex-end; }
   .library-search .facet-picker { flex: 1 1 0; width: auto; }
   .library-search .facet-clear-all { width: auto; flex: 0 0 auto; }

@@ -4,7 +4,7 @@ const draft = (page) => page.locator("[data-synthesize-draft]");
 const title = (page) => page.locator("[data-synthesize-title]");
 
 async function supportingNotes(page) {
-  await page.getByRole("link", { name: "Sources", exact: true }).click();
+  await page.locator("#synthesis-sources > summary").click();
   await page.getByText("Find supporting notes", { exact: true }).click();
   await expect(page.locator("[data-synthesize-add]").first()).toBeVisible();
 }
@@ -17,16 +17,14 @@ test("mobile Synthesis opens on writing and keeps a draft through failed preview
   await expect(page.locator("[data-synthesize-agent-status]")).toBeHidden();
   await title(page).fill("A considered conclusion");
   await draft(page).fill("Words to keep after a failed preview.");
-  await page.getByRole("link", { name: "Sources", exact: true }).click();
-  await page.getByRole("link", { name: "Context", exact: true }).click();
+  await page.getByRole("button", { name: "Open context" }).click();
   await page.locator("[data-synthesize-prepare]").click();
   await expect(page.locator("[data-synthesize-context-status]")).toContainText("Context ready");
   await page.route("**/api/synthesis/preview", (route) => route.abort());
-  await page.getByRole("navigation", { name: "Synthesis sections" }).getByRole("link", { name: "Review" }).click();
   await page.locator("[data-synthesize-preview]").click();
   await expect(page.locator("[data-synthesize-preview-status]")).toHaveClass(/is-error/);
   await expect(page.locator("[data-synthesize-preview-status]")).toBeInViewport();
-  await page.getByRole("link", { name: "Draft", exact: true }).click();
+  await draft(page).scrollIntoViewIfNeeded();
   await expect(draft(page)).toHaveValue("Words to keep after a failed preview.");
   await expect(draft(page)).toBeInViewport();
   await page.reload();

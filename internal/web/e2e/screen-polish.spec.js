@@ -92,6 +92,25 @@ test("settings group links preserve drafts and size preview uses exact bytes", a
   await expect(page.locator("#settings-group-cockpit")).toBeInViewport();
 });
 
+test("mobile Settings narrows groups while keeping an unsaved edit visible", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/settings");
+  const filter = page.locator("[data-settings-filter]");
+  await filter.fill("history");
+  await expect(page.locator("#settings-group-autosave")).toBeVisible();
+  await expect(page.locator("#settings-group-attachments")).toBeHidden();
+
+  await filter.fill("");
+  const row = page.locator('[data-settings-row="attachments.max_file_bytes"]');
+  await row.locator("[data-settings-edit]").click();
+  const control = row.getByRole("spinbutton", { name: "Maximum upload size (MiB)" });
+  await control.fill("10");
+  await filter.fill("history");
+  await expect(row).toBeVisible();
+  await expect(row.locator("[data-settings-dirty]")).toBeVisible();
+  await expect(page.locator("[data-settings-filter-summary]")).toContainText("Unsaved edits stay visible");
+});
+
 test("mobile Library gives the title the remaining row width and moves Pin below it", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/library?q=field&status=reference&sort=title");

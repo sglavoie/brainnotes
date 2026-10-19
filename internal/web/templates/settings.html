@@ -43,6 +43,12 @@
         role="status"
         aria-live="polite"
       >Loading settings...</p>
+      <div class="settings-filter">
+        <label for="settings-filter-input">Find a setting</label>
+        <input id="settings-filter-input" class="bn-field" type="search" autocomplete="off"
+          placeholder="Name, group, or description" data-settings-filter>
+        <p data-settings-filter-summary aria-live="polite"></p>
+      </div>
       <a class="write-check-link" href="/history" target="_blank" rel="noopener">Check History in a new tab</a>
       <div class="settings-confirm" data-settings-confirm-block>
         <pre class="settings-diff" data-settings-diff hidden aria-label="Pending brainnotes.toml change"></pre>
