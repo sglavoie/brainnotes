@@ -16,13 +16,13 @@ func NewLinksCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			opts.verbose = rootVerbose(cmd)
 			return runLinksCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline")
+	f.BoolVarP(&opts.verbose, "verbose", "v", false, "print each link with its file:line (or frontmatter key) and a snippet")
 	f.BoolVar(&opts.asJSON, "json", false, `print a JSON array of {"path", "abs_path", "title"} records (path is vault-relative)`)
 
 	return cmd

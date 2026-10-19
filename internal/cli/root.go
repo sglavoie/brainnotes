@@ -95,10 +95,7 @@ func RenderError(w io.Writer, err error) {
 
 // NewRootCmd builds the root cobra command with persistent flags wired up.
 func NewRootCmd() *cobra.Command {
-	var (
-		vaultPath string
-		verbose   bool
-	)
+	var vaultPath string
 
 	cmd := &cobra.Command{
 		Use:   "bn",
@@ -127,8 +124,6 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "path to vault root (overrides BNOTES_VAULT and the upward search)")
-	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
-		"more detail where a command offers it: file:line and a snippet per link in links/backlinks, skipped notes in values")
 
 	addRootCommandGroups(cmd)
 	registerCompletions(cmd)
@@ -147,14 +142,6 @@ func ConfigFromContext(ctx context.Context) *config.Config {
 		return v
 	}
 	return nil
-}
-
-// rootVerbose reports the root `--verbose` / `-v` flag. Commands read it rather
-// than declaring their own: a local `--verbose` would shadow the persistent one
-// and take its `-v` shorthand with it.
-func rootVerbose(cmd *cobra.Command) bool {
-	v, _ := cmd.Flags().GetBool("verbose")
-	return v
 }
 
 // refuseCombinedFlags is the one wording for two flags that cannot be given

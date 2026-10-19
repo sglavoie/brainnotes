@@ -131,7 +131,7 @@ not a copied closure.** `links` and `backlinks` are the same command up to one
 lookup: both take an optional note argument, fall back to the fzf picker, refuse
 an empty vault, open the vault, load the notes, and build the graph —
 thirteen duplicate windows of it. `linklist.go` is that prologue once:
-`linkListOptions` (the `--null`/root `--verbose` pair and their one rule),
+`linkListOptions` (the `--null`/`--verbose` pair and their one rule),
 `resolveLinkListTarget` returning `(target, ok, err)`, where an empty vault or
 an empty pick is `ErrNothingSelected` (exit 1, see `outcome.go`), and `newLinkListRun` returning the `linkListRun{target, notes,
 graph}` both runners then read. What is left in `links_run.go` and

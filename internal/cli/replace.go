@@ -9,7 +9,7 @@ func NewReplaceCmd() *cobra.Command {
 	opts := replaceOptions{ff: new(findFlags)}
 
 	cmd := &cobra.Command{
-		Use:   "replace <key> <from> <to> [notes...]",
+		Use:   "replace <key> <from> <to> [note...]",
 		Short: "Rewrite a frontmatter value across the vault or a scoped subset",
 		Long: `Replace rewrites the value of <key> from <from> to <to> in every matching
 note. The scope is selected as follows:

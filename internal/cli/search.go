@@ -54,7 +54,7 @@ Examples:
 	opts.ff.register(cmd)
 	f.BoolVarP(&opts.regex, "regex", "e", false, "treat pattern as a regular expression")
 	f.BoolVar(&opts.caseSensitive, "case-sensitive", false, "case-sensitive match (default: case-insensitive)")
-	f.BoolVarP(&opts.nullSep, "null", "0", false, "NUL-separate output paths")
+	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline, on stdin (with -) and stdout")
 	f.BoolVarP(&opts.interactive, "interactive", "i", false, "pipe matching note paths into fzf")
 	f.IntVarP(&opts.contextN, "context", "C", 0, "show N lines of context around each match")
 	f.BoolVar(&opts.count, "count", false, "print match count per note, sorted by count desc")

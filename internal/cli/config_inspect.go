@@ -15,7 +15,7 @@ import (
 func newConfigExplainCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
-		Use:           "explain KEY",
+		Use:           "explain <key>",
 		Short:         "Show an effective configuration value and where it came from",
 		Long:          "Show a loaded value after defaults and normalization, the file that assigned it, and the file that owns the key. For example: bn config explain open.editor. This command writes nothing.",
 		Args:          cobra.ExactArgs(1),

@@ -350,24 +350,25 @@ func TestValues_FilesMissingProperty(t *testing.T) {
 	}
 }
 
-// TestValues_MapElementSkippedWithoutVerbose verifies that a map element nested
-// inside a list value is silently skipped (no warning, count unaffected) when
-// -v is not passed. With -v, exactly one warning per affected note hits stderr.
-func TestValues_MapElementSkippedWithoutVerbose(t *testing.T) {
+// buildMapElementVault is a vault whose one note carries a map element inside
+// its tags list, which `values` skips.
+func buildMapElementVault(t *testing.T) string {
+	t.Helper()
 	isolateBnEnv(t)
 	root := t.TempDir()
 	markVaultRoot(t, root, "")
-	files := map[string]string{
-		"Mixed.md": "---\ntags:\n  - real\n  - {nested: oops}\n---\nBody.\n",
+	body := "---\ntags:\n  - real\n  - {nested: oops}\n---\nBody.\n"
+	if err := os.WriteFile(filepath.Join(root, "Mixed.md"), []byte(body), 0o644); err != nil {
+		t.Fatalf("write Mixed.md: %v", err)
 	}
-	for rel, body := range files {
-		full := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
-			t.Fatalf("write %s: %v", rel, err)
-		}
-	}
+	return root
+}
 
-	// Without -v: silent skip, only `real` counted.
+// TestValues_MapElementSkippedWithoutVerbose verifies that a map element nested
+// inside a list value is silently skipped (no warning, count unaffected) when
+// -v is not passed.
+func TestValues_MapElementSkippedWithoutVerbose(t *testing.T) {
+	root := buildMapElementVault(t)
 	stdout, stderr, err := runValuesCmd(t, root, "tags")
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -378,19 +379,20 @@ func TestValues_MapElementSkippedWithoutVerbose(t *testing.T) {
 	if stdout != "1  real\n" {
 		t.Fatalf("counts should ignore map element:\n got=%q\nwant=%q", stdout, "1  real\n")
 	}
+}
 
-	// With -v: warning to stderr (one per note).
-	stdout, stderr, err = runValuesCmd(t, root, "-v", "tags")
+// TestValues_MapElementWarnsWithVerbose verifies that with -v exactly one
+// warning per affected note hits stderr, and the counts are unchanged.
+func TestValues_MapElementWarnsWithVerbose(t *testing.T) {
+	root := buildMapElementVault(t)
+	stdout, stderr, err := runValuesCmd(t, root, "tags", "-v")
 	if err != nil {
 		t.Fatalf("execute with -v: %v", err)
 	}
 	if stdout != "1  real\n" {
 		t.Fatalf("counts should be unchanged by -v:\n got=%q\nwant=%q", stdout, "1  real\n")
 	}
-	if !strings.Contains(stderr, "skipping map-typed value") || !strings.Contains(stderr, "Mixed.md") {
-		t.Fatalf("expected one warning naming Mixed.md; got %q", stderr)
-	}
-	if strings.Count(stderr, "skipping map-typed value") != 1 {
-		t.Fatalf("expected exactly one warning per affected note; got %q", stderr)
+	if strings.Count(stderr, "skipping map-typed value") != 1 || !strings.Contains(stderr, "Mixed.md") {
+		t.Fatalf("expected exactly one warning naming Mixed.md; got %q", stderr)
 	}
 }

@@ -89,8 +89,7 @@ With `--verbose`, each occurrence is printed on its own line as
 `<path>:<line>\t<snippet>` for body links, or `<path>:fm:<key>\t<value>` for
 frontmatter links. Output is tab-separated so it pipes cleanly into
 `awk -F'\t'`. Snippets are trimmed and truncated to 120 characters with an
-`…` ellipsis. `--verbose` is the root flag, so `-v` works too; it cannot be
-combined with `-0`.
+`…` ellipsis. `-v` is its short form; it cannot be combined with `-0`.
 
 `--json` prints the same notes as an array of `{path, abs_path, title}` records
 (`path` vault-relative), `[]` when nothing links to the target. It cannot be

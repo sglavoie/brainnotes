@@ -45,7 +45,7 @@ var readConfigSource = os.ReadFile
 
 func newConfigGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "get KEY",
+		Use:   "get <key>",
 		Short: "Print one configuration value in its normalized form",
 		Long: "Print the effective value of a configuration key, normalized the way `bn` writes it: `bn config get " +
 			configScriptableKey + "` prints `5m` whether the file says `5m`, `300s`, or nothing at all.\n\n" +
@@ -68,7 +68,7 @@ func newConfigGetCmd() *cobra.Command {
 func newConfigSetCmd() *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
-		Use:   "set KEY VALUE",
+		Use:   "set <key> <value>",
 		Short: "Set one configuration value in the vault's brainnotes.toml",
 		Long: "Set a configuration key in the vault's brainnotes.toml, rewriting exactly that one assignment and leaving every other byte — including comments — where it was.\n\n" +
 			"The value is normalized before it is written, so `300s` is stored as `5m`. Setting a value that names the " +
@@ -115,7 +115,7 @@ func newConfigSetCmd() *cobra.Command {
 func newConfigUnsetCmd() *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
-		Use:   "unset KEY",
+		Use:   "unset <key>",
 		Short: "Remove one configuration assignment, restoring its default",
 		Long: "Remove a key's assignment from the vault's brainnotes.toml so the built-in default applies again. " +
 			"Unsetting `" + configScriptableKey + "` restores the " + config.DefaultAutosaveMinInterval + " floor.\n\n" +

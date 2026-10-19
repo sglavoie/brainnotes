@@ -17,7 +17,7 @@ safe to run against a vault you are not sure about.
 
 ```sh
 bn config [--json]
-bn config explain KEY [--json]
+bn config explain <key> [--json]
 bn config edit
 ```
 
@@ -31,7 +31,7 @@ that owns the key. Inspection accepts schema field keys and writes nothing.
 
 `--json` prints either report as an object: `bn config --json` as
 `{"vault", "config", "overlay", "resolved_by"}` with `overlay` null when no
-overlay is loaded, and `bn config explain KEY --json` as
+overlay is loaded, and `bn config explain <key> --json` as
 `{"key", "source", "owned_by", "value"}` with `source` null for a built-in
 default. `value` is the same value the text form prints, under its config key
 names, and an empty list or table is `[]` or `{}`.

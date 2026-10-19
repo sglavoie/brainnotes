@@ -9,7 +9,7 @@ func NewRelinkCmd() *cobra.Command {
 	opts := relinkOptions{ff: new(findFlags)}
 
 	cmd := &cobra.Command{
-		Use:   "relink [notes...]",
+		Use:   "relink [note...]",
 		Short: "Repair unresolved wikilinks with safe deterministic rewrites",
 		Long: `Relink scans unresolved wikilinks and applies only deterministic rewrites.
 
