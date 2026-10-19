@@ -169,20 +169,18 @@ func (r *renameKeyRun) previewNote(n *vault.Note, oldVal any) error {
 	return noteops.RenderNotePreview(r.dry.Out, preview)
 }
 
-// finish finalizes the journal and writes the summary. A dry-run has neither.
+// finish finalizes the journal and writes the summary. A dry run has no
+// journal and writes its would-be summary to stderr, keeping stdout the preview.
 func (r *renameKeyRun) finish() error {
 	if r.dry != nil {
+		fmt.Fprintln(r.stderr, "would "+r.summary("rename"))
 		return nil
 	}
 	if _, err := r.journaler.Finalize(); err != nil {
 		return err
 	}
 
-	summary := fmt.Sprintf("renamed %s -> %s in %d file(s)", r.oldKey, r.newKey, r.renamed)
-	if r.skipped > 0 {
-		summary += fmt.Sprintf(", %d skipped (conflict)", r.skipped)
-	}
-	fmt.Fprintln(r.out, summary)
+	fmt.Fprintln(r.out, r.summary("renamed"))
 
 	// Config-update warnings are only useful when files were actually
 	// rewritten; suppress during --dry-run and no-op runs to avoid confusing
@@ -193,4 +191,14 @@ func (r *renameKeyRun) finish() error {
 		}
 	}
 	return nil
+}
+
+// summary is the trailing count line, after verb ("renamed", or "rename" for a
+// dry run's "would rename ...").
+func (r *renameKeyRun) summary(verb string) string {
+	line := fmt.Sprintf("%s %s -> %s in %d file(s)", verb, r.oldKey, r.newKey, r.renamed)
+	if r.skipped > 0 {
+		line += fmt.Sprintf(", %d skipped (conflict)", r.skipped)
+	}
+	return line
 }

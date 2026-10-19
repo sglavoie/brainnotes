@@ -146,8 +146,8 @@ func (r *relinkRun) relinkNote(n *vault.Note) error {
 }
 
 // finish reports the skipped links on stderr — in both modes, since a dry run
-// still names what it could not resolve — and the applied count on stdout,
-// which a dry run omits.
+// still names what it could not resolve — and the applied count on stdout. A
+// dry run writes its would-be count to stderr, keeping stdout the preview.
 func (r *relinkRun) finish() error {
 	if err := printRelinkResidues(r.errOut, r.residues); err != nil {
 		return err
@@ -155,13 +155,15 @@ func (r *relinkRun) finish() error {
 	if len(r.residues) > 0 {
 		fmt.Fprintln(r.errOut, "\nhint: run 'bn find --broken-links --show-broken' for manual follow-up")
 	}
-	if r.dry != nil {
-		return nil
-	}
 	summary := fmt.Sprintf("relinked %d file(s)", r.relinked)
+	out := r.out
+	if r.dry != nil {
+		summary = fmt.Sprintf("would relink %d file(s)", r.relinked)
+		out = r.errOut
+	}
 	if len(r.residues) > 0 {
 		summary += fmt.Sprintf(", %d unresolved skipped", len(r.residues))
 	}
-	fmt.Fprintln(r.out, summary)
+	fmt.Fprintln(out, summary)
 	return nil
 }

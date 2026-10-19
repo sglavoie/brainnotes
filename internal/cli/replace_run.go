@@ -219,10 +219,13 @@ func (r *replaceRun) replaceNote(n *vault.Note) error {
 	return err
 }
 
-// finish prints the trailing count, which a dry run deliberately omits.
+// finish prints the trailing count. A dry run prints the would-be count on
+// stderr instead, so its stdout stays the preview alone and a run that matched
+// nothing still says so.
 func (r *replaceRun) finish() error {
 	if r.dry != nil {
-		return nil
+		_, err := fmt.Fprintf(r.errOut, "would replace %d file(s)\n", r.count)
+		return err
 	}
 	_, err := fmt.Fprintf(r.out, "replaced %d file(s)\n", r.count)
 	return err
