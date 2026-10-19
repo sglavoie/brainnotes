@@ -50,6 +50,7 @@ class OverviewSearch extends OverviewSearchBulk {
   private requestToken = 0;
   private loadingToken = 0;
   private activeRequest: AbortController | null = null;
+  private settledStatus: { message: string; kind: StatusKind } | null = null;
   private readonly selectionStore: LibrarySelectionStore;
   private readonly resultOrder = new Map<string, number>();
 
@@ -71,15 +72,25 @@ class OverviewSearch extends OverviewSearchBulk {
 
   protected selectionChanged(): void { this.selectionStore?.save(this.selectedKeys); }
 
+  // The aborted request's finally sees a newer token and skips its cleanup,
+  // so canceling owns resetting the busy state (IME composition pauses here).
   private cancelSearch = (): void => {
     window.clearTimeout(this.debounceToken);
     window.clearTimeout(this.loadingToken);
     this.activeRequest?.abort();
+    this.activeRequest = null;
     this.requestToken += 1;
     delete this.els.listEl.dataset.updating;
+    setOverviewBusy(this.els.root, false);
+    this.pagination.busy(false);
+    this.updateBulkControls();
+    if (this.els.statusEl.classList.contains("is-loading") && this.settledStatus) {
+      this.setStatus(this.settledStatus.message, this.settledStatus.kind);
+    }
   };
 
   private setStatus = (message: string, kind: StatusKind = ""): void => {
+    if (kind !== "is-loading") this.settledStatus = { message, kind };
     const emptyHelp = this.els.root.querySelector<HTMLElement>("[data-overview-empty-help]");
     if (emptyHelp) emptyHelp.hidden = true;
     setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);

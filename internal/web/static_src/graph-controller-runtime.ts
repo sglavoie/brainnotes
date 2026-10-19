@@ -80,6 +80,9 @@ export type GraphRuntime = {
    */
   baseStatusMessage: string;
   baseStatusKind: StatusKind;
+  /** The last status that was not "loading", restored when a load is canceled. */
+  settledStatusMessage: string;
+  settledStatusKind: StatusKind;
   /**
    * A one-off note about the display state itself, e.g. an isolate anchor that
    * the current query no longer contains.
@@ -132,6 +135,8 @@ export const createGraphRuntime = (
   displayedMatchIDs: new Set<string>(),
   baseStatusMessage: "",
   baseStatusKind: "",
+  settledStatusMessage: "",
+  settledStatusKind: "",
   displayNotice: "",
   toggleFolderExpansion: () => {},
 });

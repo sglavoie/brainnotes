@@ -16,7 +16,7 @@ import { bindGraphNoteList } from "./graph-note-list";
 import { bindSearchInput } from "./search-input";
 import { normalizeSearchMode } from "./graph-controller-labels";
 import { updateSpreadLabel } from "./graph-controller-layout";
-import { publishFilterChange, scheduleLoad, setSearchMode } from "./graph-controller-load";
+import { cancelGraphLoad, publishFilterChange, scheduleLoad, setSearchMode } from "./graph-controller-load";
 import {
   canonicalizeLegacyDisplayParams,
   clampCollapseDepth,
@@ -58,11 +58,7 @@ const bindControls = (runtime: GraphRuntime): void => {
     bindSearchInput(filterInput, () => {
       syncPageQueryParam(filterInput.value.trim());
       publishFilterChange(runtime, graphFilterDebounceMs);
-    }, () => {
-      window.clearTimeout(runtime.publishToken);
-      window.clearTimeout(runtime.debounceToken);
-      runtime.requestToken += 1;
-    });
+    }, () => cancelGraphLoad(runtime));
     filterInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.isComposing) {
         return;
