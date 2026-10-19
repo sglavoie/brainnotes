@@ -20,6 +20,7 @@ it("uses one opaque ID and confirms only the matching journaled attempt", async 
   offerWriteOutcomeCheck(status, id, fetcher, "Creation");
   status.querySelector<HTMLButtonElement>("button")!.click();
   await vi.waitFor(() => expect(status.textContent).toContain("Creation confirmed in History"));
+  expect(status.querySelector<HTMLAnchorElement>("a")?.getAttribute("href")).toBe("/history");
   expect(fetchedURLs[0]).toBe(`/api/operations/outcome?id=${id}`);
   expect(status.querySelector("button")).toBeNull();
 });
@@ -46,4 +47,18 @@ it("restores a check after reload in the same tab without storing note text", ()
   initPendingWriteOutcomes(document, vi.fn());
   expect(document.querySelector(".pending-write-outcomes")?.textContent).toContain("Trash was not confirmed");
   expect(document.querySelector(".pending-write-outcomes button")?.textContent).toBe("Check outcome");
+});
+
+it("replaces a resolved reminder with a History action", async () => {
+  const id = "0123456789abcdef0123456789abcdef";
+  const fetcher = vi.fn(async () => new Response(JSON.stringify({
+    ok: true, status: "confirmed", journal_id: "entry-123",
+  }), { headers: { "Content-Type": "application/json" } }));
+  document.body.innerHTML = "<main><header>Header</header></main>";
+  sessionStorage.setItem("bn.pending-write-outcomes", JSON.stringify([{ id, label: "Trash" }]));
+  initPendingWriteOutcomes(document, fetcher);
+  document.querySelector<HTMLButtonElement>(".write-outcome-check")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".pending-write-outcomes")).toBeNull());
+  expect(document.querySelector(".write-outcome-confirmation a")?.getAttribute("href")).toBe("/history");
+  expect(sessionStorage.getItem("bn.pending-write-outcomes")).toBe("[]");
 });

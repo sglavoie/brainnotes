@@ -1,8 +1,10 @@
 # Browser workspace
 
 Start with `bn serve`, then choose a task below. Brief, Library, Pinned, and Graph
-are in the main navigation. On Brief, Library, Pinned, New note, Synthesis, the
-editor, note reading, and management pages, **Workspace** opens navigation and theme controls.
+are in the main navigation. On wide screens, these destinations and **Search**
+are available in the header. On narrower screens, **Workspace** opens navigation,
+search, and theme controls on Brief, note reading, and other workspaces.
+On Library and Graph, the page's own search stays in the main content.
 **New note** is a separate action. **Manage** contains
 Properties, Health, Settings, Sync, and History, subject to the server's capabilities.
 Saved views have their own row. In the source editor, **Workspace** opens this
@@ -15,6 +17,7 @@ These links and the navigation disclosures work without JavaScript.
 
 Use Library to combine text search, filters, and an optional **Query expression**.
 Library shows one results list as you type; Enter moves focus to its heading.
+The matching count and result actions sit together above the list.
 **Filters** opens the filter picker; active constraints remain visible when it is
 closed. **Search actions** contains Copy search link and Save as view.
 While a search updates, previous results remain visible with an updating treatment;
@@ -164,6 +167,11 @@ returns focus to the preview when it disappears, unless you moved focus elsewher
 The note title link returns from editing to reading, preserving the originating
 workspace and reading position. This survives reloads, renames, and moves.
 If the section was removed, reading position uses a proportional fallback.
+
+If a write reply is lost, **Check outcome** checks the journaled attempt. A
+confirmed result links to History. A restored reminder disappears when its
+attempt is confirmed; the confirmation and History link remain visible on the
+current page.
 
 ## Adjust settings
 

@@ -45,7 +45,8 @@ export const offerWriteOutcomeCheck = (
   status: HTMLElement,
   operationID: string,
   fetcher: FetchLike,
-  label = "Change"
+  label = "Change",
+  onConfirmed?: () => void
 ): void => {
   if (!operationID) return;
   status.classList.add("has-write-outcome-check");
@@ -68,8 +69,13 @@ export const offerWriteOutcomeCheck = (
         forgetPending(operationID);
         announceConfirmedWrite();
         status.textContent = `${label} confirmed in History (entry ${record.journal_id}).`;
+        const history = status.ownerDocument.createElement("a");
+        history.href = "/history";
+        history.textContent = "View History";
+        status.append(" ", history);
         status.classList.remove("is-error");
         status.classList.add("is-success");
+        onConfirmed?.();
         return;
       }
       status.textContent = `${label} is still unconfirmed. Do not resend this request; check again, then refresh current values before making a new preview if needed.`;
@@ -103,7 +109,12 @@ export const initPendingWriteOutcomes = (
     const status = doc.createElement("p");
     status.setAttribute("role", "status");
     status.textContent = `${item.label} was not confirmed before this page loaded.`;
-    offerWriteOutcomeCheck(status, item.id, fetcher, item.label);
+    offerWriteOutcomeCheck(status, item.id, fetcher, item.label, () => {
+      status.classList.add("write-outcome-confirmation");
+      section.insertAdjacentElement("afterend", status);
+      row.remove();
+      if (!section.querySelector(".pending-write-outcome")) section.remove();
+    });
     const dismiss = doc.createElement("button");
     dismiss.type = "button";
     dismiss.className = "bn-button";

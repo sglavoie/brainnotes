@@ -29,6 +29,7 @@
 .bn-status.is-empty { color: var(--bn-text-subtle); }
 .pending-write-outcomes { margin-block: 0.75rem; }
 .pending-write-outcomes h2 { margin-top: 0; font-size: 1rem; }
+.write-outcome-confirmation { margin-block: 0.75rem; }
 .pending-write-outcome { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .pending-write-outcome p { margin: 0; }
 .has-write-outcome-check { overflow-wrap: anywhere; }

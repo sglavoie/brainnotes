@@ -511,6 +511,7 @@
 .source-editor-draft-status:empty { display: none; }
 .source-editor-main > .site-header { display: flex; align-items: center; flex-direction: row; justify-content: space-between; gap: 0.75rem; }
 .source-editor-main > .site-header h1 { min-width: 0; overflow-wrap: anywhere; }
+.source-editor-main > .site-header .desktop-workspace-nav { margin-left: auto; flex-shrink: 0; }
 .source-editor-main > .site-header > details { flex-shrink: 0; }
 .source-editor-format .source-editor-command { min-height: 2.75rem; }
 .source-editor-manage > [data-note-history] { display: inline-block; margin-top: 0.75rem; }

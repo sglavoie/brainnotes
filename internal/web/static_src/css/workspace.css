@@ -101,6 +101,15 @@
 }
 
 .focused-workspace-tools { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.desktop-workspace-nav { display: none; }
+@media (min-width: 1100px) {
+  .desktop-workspace-nav { display: flex; align-items: center; gap: 0.8rem; }
+  .desktop-workspace-nav a { color: var(--bn-text-subtle); font-size: 0.9rem; text-decoration: none; }
+  .desktop-workspace-nav a:hover, .desktop-workspace-nav a[aria-current="page"] { color: var(--bn-accent); text-decoration: underline; text-underline-offset: 0.25rem; }
+  .desktop-workspace-nav a[aria-current="page"] { font-weight: 700; }
+  .focused-workspace-tools:has(> .source-editor-workspace[open]) > .desktop-workspace-nav,
+  .source-editor-main > .site-header:has(> .source-editor-workspace[open]) > .desktop-workspace-nav { visibility: hidden; }
+}
 
 /* Keep the same navigation and help placement on management workspaces. */
 .management-intro { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: baseline; margin-block: 0.75rem; }
@@ -111,7 +120,7 @@
 .management-intro details p { max-width: 70ch; margin-top: 0.5rem; }
 
 /* A single grid keeps search, disclosures and active constraints in reading order. */
-.library-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.75rem; }
+.library-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.2rem 0.75rem; padding-block: 0.7rem; }
 .library-search-primary, .library-search .facet-controls { display: contents; }
 .library-search-primary > .search-box { grid-column: 1 / -1; min-width: 0; }
 .library-search-menu { grid-column: 2; grid-row: 2; }
@@ -126,18 +135,20 @@
 .library-search-options { display: flex; flex-wrap: wrap; gap: 0 1rem; color: var(--bn-text-subtle); font-size: 0.85rem; }
 .library-search-options details[open] { flex-basis: 100%; }
 .library-results-tools { display: flex; flex-wrap: wrap; gap: 0 1rem; align-items: baseline; }
-.library-results-tools > .overview-selection { margin-bottom: 0.25rem; }
+.library-results-overview { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25rem 0.8rem; margin: 0.3rem 0 0.45rem; }
+.library-results-overview .overview-results-status { margin: 0; min-height: 0; }
+.library-results-tools > .overview-selection { margin-bottom: 0; }
 .library-results-tools [data-overview-search-reset] { font-size: 0.85rem; }
 .library-results-tools .overview-bulk-button { flex: 0 1 auto; }
 @media (max-width: 700px) {
-  .library-search { padding: 0.75rem; }
+  .library-search { padding: 0.65rem; }
 }
 
 .library-activity { margin-top: 1.5rem; }
 .library-activity > summary { cursor: pointer; color: var(--bn-muted); padding-block: 0.65rem; }
 .library-activity[open] > summary { color: var(--bn-text-subtle); }
 .library-search + .overview-results { border: 0; background: transparent; padding-inline: 0; }
-.library-results-tools { margin-bottom: 0.65rem; }
+.library-results-tools { margin-bottom: 0; }
 
 .library-pagination { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-block: 1rem; flex-wrap: wrap; }
 .library-pagination[hidden] { display: none; }

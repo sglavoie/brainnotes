@@ -109,8 +109,19 @@
   <a class="workspace-skip-link" href="#workspace-content">Skip to content</a>
 {{end}}
 
+{{define "desktopWorkspaceNav"}}
+  <nav class="desktop-workspace-nav" aria-label="Main destinations">
+    <a href="/"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
+    <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
+    <a href="/pinned"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
+    <a href="/graph"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
+    {{if ne . "library"}}<a href="/library" class="desktop-search-link">Search</a>{{end}}
+  </nav>
+{{end}}
+
 {{define "workspaceMenu"}}
   <div class="focused-workspace-tools">
+  {{template "desktopWorkspaceNav" .}}
   {{if and (not readOnly) (ne . "new")}}<a class="bn-button new-note-action{{if and (ne . "library") (ne . "brief")}} bn-secondary{{end}}" href="/new">New note</a>{{end}}
   <details class="source-editor-workspace">
     <summary>Workspace</summary>

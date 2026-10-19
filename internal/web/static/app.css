@@ -4185,7 +4185,7 @@ code {
 
 .chroma .nb,
 :root[data-theme='light'] .chroma .nb {
-  color: #0086b3;
+  color: #006487;
 }
 
 .chroma .bp,
@@ -4265,57 +4265,57 @@ code {
 
 .chroma .s,
 :root[data-theme='light'] .chroma .s {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .sa,
 :root[data-theme='light'] .chroma .sa {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .sb,
 :root[data-theme='light'] .chroma .sb {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .sc,
 :root[data-theme='light'] .chroma .sc {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .dl,
 :root[data-theme='light'] .chroma .dl {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .sd,
 :root[data-theme='light'] .chroma .sd {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .s2,
 :root[data-theme='light'] .chroma .s2 {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .se,
 :root[data-theme='light'] .chroma .se {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .sh,
 :root[data-theme='light'] .chroma .sh {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .si,
 :root[data-theme='light'] .chroma .si {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .sx,
 :root[data-theme='light'] .chroma .sx {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .sr,
@@ -4325,7 +4325,7 @@ code {
 
 .chroma .s1,
 :root[data-theme='light'] .chroma .s1 {
-  color: #dd1144;
+  color: #b80f38;
 }
 
 .chroma .ss,
@@ -7670,6 +7670,7 @@ code {
 .source-editor-draft-status:empty { display: none; }
 .source-editor-main > .site-header { display: flex; align-items: center; flex-direction: row; justify-content: space-between; gap: 0.75rem; }
 .source-editor-main > .site-header h1 { min-width: 0; overflow-wrap: anywhere; }
+.source-editor-main > .site-header .desktop-workspace-nav { margin-left: auto; flex-shrink: 0; }
 .source-editor-main > .site-header > details { flex-shrink: 0; }
 .source-editor-format .source-editor-command { min-height: 2.75rem; }
 .source-editor-manage > [data-note-history] { display: inline-block; margin-top: 0.75rem; }
@@ -9023,6 +9024,7 @@ dt.sync-fact {
 .bn-status.is-empty { color: var(--bn-text-subtle); }
 .pending-write-outcomes { margin-block: 0.75rem; }
 .pending-write-outcomes h2 { margin-top: 0; font-size: 1rem; }
+.write-outcome-confirmation { margin-block: 0.75rem; }
 .pending-write-outcome { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .pending-write-outcome p { margin: 0; }
 .has-write-outcome-check { overflow-wrap: anywhere; }
@@ -9152,6 +9154,15 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 }
 
 .focused-workspace-tools { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.desktop-workspace-nav { display: none; }
+@media (min-width: 1100px) {
+  .desktop-workspace-nav { display: flex; align-items: center; gap: 0.8rem; }
+  .desktop-workspace-nav a { color: var(--bn-text-subtle); font-size: 0.9rem; text-decoration: none; }
+  .desktop-workspace-nav a:hover, .desktop-workspace-nav a[aria-current="page"] { color: var(--bn-accent); text-decoration: underline; text-underline-offset: 0.25rem; }
+  .desktop-workspace-nav a[aria-current="page"] { font-weight: 700; }
+  .focused-workspace-tools:has(> .source-editor-workspace[open]) > .desktop-workspace-nav,
+  .source-editor-main > .site-header:has(> .source-editor-workspace[open]) > .desktop-workspace-nav { visibility: hidden; }
+}
 
 /* Keep the same navigation and help placement on management workspaces. */
 .management-intro { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: baseline; margin-block: 0.75rem; }
@@ -9162,7 +9173,7 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 .management-intro details p { max-width: 70ch; margin-top: 0.5rem; }
 
 /* A single grid keeps search, disclosures and active constraints in reading order. */
-.library-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 0.75rem; }
+.library-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.2rem 0.75rem; padding-block: 0.7rem; }
 .library-search-primary, .library-search .facet-controls { display: contents; }
 .library-search-primary > .search-box { grid-column: 1 / -1; min-width: 0; }
 .library-search-menu { grid-column: 2; grid-row: 2; }
@@ -9177,18 +9188,20 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 .library-search-options { display: flex; flex-wrap: wrap; gap: 0 1rem; color: var(--bn-text-subtle); font-size: 0.85rem; }
 .library-search-options details[open] { flex-basis: 100%; }
 .library-results-tools { display: flex; flex-wrap: wrap; gap: 0 1rem; align-items: baseline; }
-.library-results-tools > .overview-selection { margin-bottom: 0.25rem; }
+.library-results-overview { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25rem 0.8rem; margin: 0.3rem 0 0.45rem; }
+.library-results-overview .overview-results-status { margin: 0; min-height: 0; }
+.library-results-tools > .overview-selection { margin-bottom: 0; }
 .library-results-tools [data-overview-search-reset] { font-size: 0.85rem; }
 .library-results-tools .overview-bulk-button { flex: 0 1 auto; }
 @media (max-width: 700px) {
-  .library-search { padding: 0.75rem; }
+  .library-search { padding: 0.65rem; }
 }
 
 .library-activity { margin-top: 1.5rem; }
 .library-activity > summary { cursor: pointer; color: var(--bn-muted); padding-block: 0.65rem; }
 .library-activity[open] > summary { color: var(--bn-text-subtle); }
 .library-search + .overview-results { border: 0; background: transparent; padding-inline: 0; }
-.library-results-tools { margin-bottom: 0.65rem; }
+.library-results-tools { margin-bottom: 0; }
 
 .library-pagination { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-block: 1rem; flex-wrap: wrap; }
 .library-pagination[hidden] { display: none; }

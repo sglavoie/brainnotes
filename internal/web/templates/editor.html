@@ -14,6 +14,7 @@
   <main class="index-main source-editor-main">
     <header class="site-header">
       <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h1>
+      {{template "desktopWorkspaceNav" ""}}
       <details class="source-editor-workspace">
         <summary>Workspace</summary>
         <div class="source-editor-workspace-content">
