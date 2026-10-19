@@ -60,6 +60,20 @@ The reserved vocabulary is twenty-one field names. Any other bare name is an
 error with did-you-mean candidates, unless it is a property you declared in
 `[frontmatter.properties]`.
 
+A reserved name always takes precedence over a declared property of the same
+name. In a vault that declares an `int` property called `pinned`, `pinned:true`
+is still the reserved pinned filter, and `pinned>-1` is refused because that
+field takes only `true` or `false`. Reach the property with `prop:`, which
+keeps its declared type: `prop:pinned>-1`. When a reserved field refuses a term
+and a property of that name is declared, the error says so:
+
+```
+$ bn find -q 'pinned>-1'
+query: operator ">" is not defined for field "pinned"; use ":", "=", or "!="; the reserved field "pinned" takes precedence over the declared property of that name, so write prop:pinned to compare the property
+  pinned>-1
+  ^^^^^^^^^
+```
+
 | Field | Selects |
 | --- | --- |
 | `tag` | Notes carrying a tag. |

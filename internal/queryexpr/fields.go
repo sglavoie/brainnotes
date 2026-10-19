@@ -1,6 +1,7 @@
 package queryexpr
 
 import (
+	"errors"
 	"sort"
 	"strings"
 
@@ -135,7 +136,7 @@ func termBuilder(t *Term, src string, env Env) (predicateBuilder, error) {
 	}
 	build, err := field.build(t, src, env)
 	if err != nil {
-		return nil, err
+		return nil, shadowedPropertyHint(err, field.name, env)
 	}
 	if !field.needsGraph {
 		return build, nil
@@ -149,6 +150,25 @@ func termBuilder(t *Term, src string, env Env) (predicateBuilder, error) {
 		}
 		return build(env)
 	}, nil
+}
+
+// shadowedPropertyHint extends a reserved field's lowering error when the vault
+// also declares a property of the same name. The reserved field wins (see
+// termBuilder), so `pinned>-1` in a vault declaring an int `pinned` reaches the
+// boolean pinned field and fails there; without the hint the error reads as if
+// the declared property did not exist. prop:<name> is the spelling that reaches
+// the property, and it keeps the declared type.
+func shadowedPropertyHint(err error, name string, env Env) error {
+	var pe *ParseError
+	if name == "prop" || !errors.As(err, &pe) {
+		return err
+	}
+	if _, declared := definitionFor(env, name); !declared {
+		return err
+	}
+	hinted := *pe
+	hinted.Msg += "; the reserved field " + quote(name) + " takes precedence over the declared property of that name, so write prop:" + name + " to compare the property"
+	return &hinted
 }
 
 // unknownField builds the ParseError for a field name nothing recognises,
