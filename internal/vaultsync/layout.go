@@ -3,6 +3,7 @@ package vaultsync
 import (
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
@@ -62,4 +63,28 @@ func ReceiptsDir(channelDir string) string { return filepath.Join(channelDir, re
 
 func syncSubdir(root, name string) string {
 	return filepath.Join(root, filepath.FromSlash(path.Join(syncStateDir, name)))
+}
+
+// The whole-operation guards beside the state they serialize. ImportLockName
+// excludes a second import and ExportLockName a second export; neither is a
+// note-path lock, which is why they live here rather than under `.bnotes/locks/`.
+const (
+	ImportLockName = "import.lock"
+	ExportLockName = "export.lock"
+)
+
+// StateLockPath returns the absolute path of one of the guards above.
+func StateLockPath(root, name string) string { return syncSubdir(root, name) }
+
+// IsStateLock reports whether a vault-relative slash path names one of the
+// guards above. A backup must neither archive nor restore one: the file carries
+// no state, and replacing its inode under a holder would let a second import or
+// export enter the section the first still believes it owns.
+func IsStateLock(rel string) bool {
+	for _, name := range []string{ImportLockName, ExportLockName} {
+		if strings.EqualFold(rel, path.Join(syncStateDir, name)) {
+			return true
+		}
+	}
+	return false
 }

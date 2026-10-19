@@ -3,8 +3,6 @@ package vaultimport
 import (
 	"context"
 	"fmt"
-	"path"
-	"path/filepath"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -18,7 +16,7 @@ import (
 // because it is not a note-path lock: it excludes *whole imports*, not writers of
 // one file, and the directory it sits in is the one this package already owns and
 // the content history already excludes.
-const lockFileName = "import.lock"
+const lockFileName = vaultsync.ImportLockName
 
 // lockImports takes the vault's import guard without waiting.
 //
@@ -55,8 +53,15 @@ const lockFileName = "import.lock"
 // A released import drops the barrier as well, so a caller that already defers
 // release owes nothing new.
 func lockImports(root string) (ctx context.Context, release func(), acquired bool, err error) {
+	return lockImportsContext(context.Background(), root)
+}
+
+// lockImportsContext is lockImports for a caller that already owns the
+// checkpoint admission — re-enrollment holds the checkpoint itself, and a fresh
+// join from context.Background would wait on that hold rather than ride it.
+func lockImportsContext(parent context.Context, root string) (ctx context.Context, release func(), acquired bool, err error) {
 	noop := func() {}
-	joinedCtx, barrier, err := checkpoint.JoinContext(context.Background(), root)
+	joinedCtx, barrier, err := checkpoint.JoinContext(parent, root)
 	if err != nil {
 		return context.Background(), noop, false, fmt.Errorf("vaultimport: %w", err)
 	}
@@ -72,5 +77,5 @@ func lockImports(root string) (ctx context.Context, release func(), acquired boo
 // reason StatePath is: a literal `.bnotes/sync/` beside a derived one would let
 // the two drift apart.
 func lockPath(root string) string {
-	return filepath.Join(root, filepath.FromSlash(path.Join(vaultsync.StateDir(), lockFileName)))
+	return vaultsync.StateLockPath(root, lockFileName)
 }
