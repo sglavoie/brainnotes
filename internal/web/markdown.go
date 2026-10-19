@@ -39,6 +39,26 @@ func newMarkdownRenderer(state *vaultState) (*markdownRenderer, error) {
 	}, nil
 }
 
+// focusablePre wraps a highlighted fence in a keyboard-focusable <pre>. A long
+// line scrolls the block horizontally, and a scroll region a keyboard cannot
+// reach is one only a mouse can read; Chroma used to emit this tabindex itself
+// and stopped, so it is stated here rather than inherited.
+type focusablePre struct{}
+
+func (focusablePre) Start(code bool, styleAttr string) string {
+	if code {
+		return fmt.Sprintf(`<pre tabindex="0"%s><code>`, styleAttr)
+	}
+	return fmt.Sprintf(`<pre tabindex="0"%s>`, styleAttr)
+}
+
+func (focusablePre) End(code bool) string {
+	if code {
+		return `</code></pre>`
+	}
+	return `</pre>`
+}
+
 func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithParserOptions(
@@ -52,7 +72,10 @@ func goldmarkWithResolver(resolver wikilinkResolver) goldmark.Markdown {
 				// Emit stable Chroma CSS classes instead of inline color
 				// styles so light/dark syntax palettes can be themed from
 				// app.css (scoped .chroma blocks) rather than baked into HTML.
-				highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+				highlighting.WithFormatOptions(
+					chromahtml.WithClasses(true),
+					chromahtml.WithPreWrapper(focusablePre{}),
+				),
 			),
 			// GFM bundles Linkify (bare URL support), Tables,
 			// Strikethrough, and read-only task lists. Footnote,
