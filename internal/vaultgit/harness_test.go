@@ -67,7 +67,10 @@ func requireGit(t *testing.T) string {
 // nothing about the isolated home differs between tests. No test writes to it.
 //
 // Every test runs in parallel except TestStrayGitEnvironmentIsIgnored, which
-// hijacks the process environment with t.Setenv.
+// hijacks the process environment with t.Setenv, and a few tests that already
+// exceed the complexity thresholds. Adding a line to one of those would make
+// `just lint-new` judge it as changed, so they are left untouched until someone
+// decomposes them.
 func TestMain(m *testing.M) {
 	os.Exit(runIsolated(m))
 }

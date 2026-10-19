@@ -293,7 +293,6 @@ func TestUnreadableNoteIsSkippedNotFatal(t *testing.T) {
 // exactly the kind of file that can be unreadable, and committing the delete
 // side of a pair whose add side was skipped would drop the content from the tip.
 func TestSkippedPathDefersProvenDeletions(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	if os.Geteuid() == 0 {
 		t.Skip("root can read a mode-0000 file, so this case cannot be provoked")

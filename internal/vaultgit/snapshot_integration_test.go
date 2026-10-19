@@ -326,7 +326,6 @@ fi`)
 // paper over: the working tree holds content the history does not, so it stops
 // and says so durably.
 func TestLocalCommitFailureLatchesABlock(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()

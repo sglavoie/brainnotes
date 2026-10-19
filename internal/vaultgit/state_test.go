@@ -17,7 +17,6 @@ func newState(t *testing.T) *safetyState {
 }
 
 func TestBlockRoundTrip(t *testing.T) {
-	t.Parallel()
 	state := newState(t)
 	if _, blocked, err := state.LoadBlock(); blocked || err != nil {
 		t.Fatalf("a fresh vault must not be blocked: blocked=%v err=%v", blocked, err)
@@ -110,7 +109,6 @@ func TestStateDirIsInsideGitDir(t *testing.T) {
 }
 
 func TestPushFailureBackoff(t *testing.T) {
-	t.Parallel()
 	state := newState(t)
 	now := time.Date(2026, 8, 28, 9, 0, 0, 0, time.UTC)
 	first, err := state.RecordPushFailure(now, "connection refused")

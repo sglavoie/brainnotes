@@ -222,7 +222,6 @@ fi`)
 // short of comparing the staged object against the file's current content can
 // tell a recorded modification from an unrecorded one.
 func TestExactSnapshotSuccessfulNoOpAdditionStagingFailsClosed(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	if os.Geteuid() == 0 {
 		t.Skip("root can read a mode-0000 file, so the external half of this test cannot be provoked")
@@ -300,7 +299,6 @@ func TestExactSnapshotSuccessfulNoOpAdditionStagingFailsClosed(t *testing.T) {
 // produces a tree identical to the tip — and the engine's identical-tree branch
 // turns that into a nil success naming deletions the history never recorded.
 func TestExactSnapshotSuccessfulNoOpRemovalStagingFailsClosed(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/kept.md", "kept\n")
 	h.write("Inbox/dropped.md", "dropped\n")

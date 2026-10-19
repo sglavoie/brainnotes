@@ -356,7 +356,6 @@ func TestExplicitCommitTimestampIsChosenAtCommitCreation(t *testing.T) {
 // sidecar rewriting its state, and a restore replacing the tree each commit
 // immediately and leave both anchors exactly where they were.
 func TestExplicitCommitsNeverAnchorTheExternalFloor(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()

@@ -90,7 +90,6 @@ func TestWatchDebounce(t *testing.T) {
 // 4 minutes apart. Under a five-minute floor the same edit pattern produces one
 // commit per five minutes and no more.
 func TestExternalAutosavesCannotOutpaceTheFloor(t *testing.T) {
-	t.Parallel()
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 	now := watchStart

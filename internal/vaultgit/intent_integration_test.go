@@ -48,7 +48,6 @@ func (h *testHarness) requireCleanWorkTree() {
 // it is what keeps the vault refused afterwards — including across a restart,
 // with a spotless working tree, and with no marker on disk at all.
 func TestSimultaneousCommitAndMarkerFailureLeavesADurableIntent(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()

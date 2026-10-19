@@ -24,7 +24,6 @@ func TestPushWithoutRemoteIsNotAFailure(t *testing.T) {
 }
 
 func TestPushFailureRecordsRetryStateAndNeverBlocks(t *testing.T) {
-	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
