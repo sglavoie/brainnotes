@@ -14,6 +14,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/editor"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
 const csrfHeaderName = "X-BN-CSRF"
@@ -78,11 +79,11 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 	notePath, found, err := s.openNotePath(key)
 	if err != nil {
-		writeOpenPathError(w, r, err, openSubjectNote)
+		writeOpenPathError(w, err, openSubjectNote)
 		return
 	}
 	if !found {
-		http.NotFound(w, r)
+		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "note not found"))
 		return
 	}
 	// A mode that cannot start a process answers with the route that displays
@@ -91,14 +92,14 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	if s.caps.browserOpen {
 		destination, err := s.noteNavigationTarget(notePath)
 		if err != nil {
-			writeOpenPathError(w, r, err, openSubjectNote)
+			writeOpenPathError(w, err, openSubjectNote)
 			return
 		}
 		writeManagementJSON(w, http.StatusOK, openNavigationResponse{OK: true, Destination: destination})
 		return
 	}
 	if err := s.openPath(notePath); err != nil {
-		writeOpenFailure(w, r, err, openSubjectNote)
+		writeOpenFailure(w, err, openSubjectNote)
 		return
 	}
 
@@ -107,36 +108,47 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 
 // readOpenNoteRequest performs the route, method, form, key and CSRF checks POST
 // /api/open shares with every other management POST, and reports whether the
-// request may proceed. It has already answered when it reports false.
+// request may proceed. It has already answered, in the management envelope,
+// when it reports false.
 func readOpenNoteRequest(s *Server, w http.ResponseWriter, r *http.Request) (string, bool) {
-	if r.URL.Path != openAPIRoutePath {
-		http.NotFound(w, r)
+	if !readOpenRequest(s, w, r, openAPIRoutePath) {
 		return "", false
 	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return "", false
-	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid request form", http.StatusBadRequest)
-		return "", false
-	}
-
 	key := strings.TrimSpace(r.Form.Get("key"))
 	if key == "" {
-		http.Error(w, "missing key", http.StatusBadRequest)
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "missing key"))
 		return "", false
 	}
 	if _, err := routePathForKey(noteRoutePrefix, key); err != nil {
-		http.Error(w, "invalid key", http.StatusBadRequest)
-		return "", false
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		http.Error(w, "csrf token required", http.StatusForbidden)
+		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidKey, "invalid key"))
 		return "", false
 	}
 	return key, true
+}
+
+// readOpenRequest is the preamble both open routes share. The CSRF token is
+// compared before the key is judged so a forged request learns nothing about
+// which keys are well formed; it is checked after ParseForm because the token
+// may arrive as a form field.
+func readOpenRequest(s *Server, w http.ResponseWriter, r *http.Request, route string) bool {
+	if r.URL.Path != route {
+		http.NotFound(w, r)
+		return false
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
+		return false
+	}
+	if err := r.ParseForm(); err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
+		return false
+	}
+	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
+		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+		return false
+	}
+	return true
 }
 
 // openNotePath resolves a route key to an absolute note path. A snapshot that
@@ -162,21 +174,7 @@ func (s *Server) openNotePath(key string) (string, bool, error) {
 // launching a process is a side effect, and therefore carries the same CSRF
 // protection as every other editor-open action.
 func (s *Server) handleConfigOpen(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != configOpenAPIRoutePath {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid request form", http.StatusBadRequest)
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		http.Error(w, "csrf token required", http.StatusForbidden)
+	if !readOpenRequest(s, w, r, configOpenAPIRoutePath) {
 		return
 	}
 
@@ -187,7 +185,7 @@ func (s *Server) handleConfigOpen(w http.ResponseWriter, r *http.Request) {
 		configPath = filepath.Join(s.vault.Root, config.FileName)
 	}
 	if err := s.openPath(configPath); err != nil {
-		writeOpenFailure(w, r, err, openSubjectConfig)
+		writeOpenFailure(w, err, openSubjectConfig)
 		return
 	}
 
@@ -212,47 +210,52 @@ var errOpenSnapshotUnavailable = errors.New("web: vault snapshot unavailable")
 // writeOpenPathError maps a path-resolution failure onto a status. Containment
 // is a 403 and an absent target a 404, so a caller cannot distinguish "outside
 // the vault" from "not there" by anything but a path it already supplied.
-func writeOpenPathError(w http.ResponseWriter, r *http.Request, err error, subject string) {
+func writeOpenPathError(w http.ResponseWriter, err error, subject string) {
 	switch {
 	case errors.Is(err, errOpenPathOutsideVault):
-		http.Error(w, "forbidden "+subject+" path", http.StatusForbidden)
+		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "forbidden %s path", subject))
 	case errors.Is(err, os.ErrNotExist):
-		http.NotFound(w, r)
+		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "%s not found", subject))
 	case errors.Is(err, errOpenSnapshotUnavailable):
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "snapshot error", err))
 	default:
-		http.Error(w, subject+" path error", http.StatusInternalServerError)
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, subject+" path error", err))
 	}
 }
 
 // writeOpenFailure maps an openPath failure onto a status. The stage says which
 // step failed and the subject says what was being opened; every editor stage is
 // about this machine's configuration rather than about the target, so those
-// messages are the same for a note and for the configuration file.
-func writeOpenFailure(w http.ResponseWriter, r *http.Request, err error, subject string) {
+// messages are the same for a note and for the configuration file. The panel
+// open actions answer through it too, so every Open speaks one envelope.
+//
+// An editor that is not configured, or whose target cannot be resolved, is a
+// 412 rather than the 400 its code would otherwise give: the request was well
+// formed and only this machine's configuration stands in the way.
+func writeOpenFailure(w http.ResponseWriter, err error, subject string) {
 	switch failureStage(err) {
 	case openFailureCapability:
 		// The sentinel's own text carries the package prefix every internal Go
 		// error here carries; what reaches the browser is written for a reader.
-		http.Error(w, "process launch is unavailable in this serving mode", http.StatusForbidden)
+		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "process launch is unavailable in this serving mode"))
 	case openFailureStat:
 		if errors.Is(err, os.ErrNotExist) {
-			http.NotFound(w, r)
+			writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "%s not found", subject))
 			return
 		}
-		http.Error(w, subject+" stat error", http.StatusInternalServerError)
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, subject+" stat error", err))
 	case openFailureResolvePath:
-		writeOpenPathError(w, r, err, subject)
+		writeOpenPathError(w, err, subject)
 	case openFailureEditorSpec:
 		if errors.Is(err, editor.ErrNoEditorConfigured) {
-			http.Error(w, "editor not configured", http.StatusPreconditionFailed)
+			writeManagementErrorStatus(w, http.StatusPreconditionFailed, noteops.Errorf(noteops.CodeInvalidRequest, "editor not configured"))
 			return
 		}
-		http.Error(w, "editor spec error", http.StatusInternalServerError)
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "editor spec error", err))
 	case openFailureEditorTarget:
-		http.Error(w, "editor resolve error", http.StatusPreconditionFailed)
+		writeManagementErrorStatus(w, http.StatusPreconditionFailed, noteops.Errorf(noteops.CodeInvalidRequest, "editor resolve error"))
 	default:
-		http.Error(w, "editor start error", http.StatusInternalServerError)
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "editor start error", err))
 	}
 }
 
