@@ -36,13 +36,14 @@ func ApplyPlan(root string, plan *Plan, now func() time.Time) (err error) {
 			err = fmt.Errorf("vault recovery: release checkpoint: %w", releaseErr)
 		}
 	}()
-	ctx := held.Context(context.Background())
+	return applyHeld(held.Context(context.Background()), root, plan, now)
+}
+
+// applyHeld is the acceptance itself, inside the checkpoint ApplyPlan holds.
+func applyHeld(ctx context.Context, root string, plan *Plan, now func() time.Time) error {
 	done, err := completedApply(root, plan)
-	if err != nil {
+	if err != nil || done {
 		return err
-	}
-	if done {
-		return nil
 	}
 	// Before prepareApply, so a refused survivor is not left quarantined by a
 	// marker it created for a decision it could not take, and on every resume,

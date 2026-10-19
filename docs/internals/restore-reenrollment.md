@@ -33,8 +33,14 @@ conflict, or a conflict decision still owed its revision
 empty one, which would strand the only copy of that work. The refusal comes
 before the inventory is printed, so the operator learns it before carrying the
 inventory to the peer, and before a survivor's acceptance writes its quarantine
-marker. Resolve held conflicts and let import recovery finish (any import, drain
-or conflict resolution runs it first), then rebuild both inventories.
+marker. A companion pass runs no worker under the marker, so the refusal names
+`bn-vault-sync -recover-import`: with the companion stopped, it runs import
+recovery alone — the pass every import, drain, and conflict resolution runs
+first — rolling an interrupted application back or forward and making an owed
+revision. It applies no package and reads no channel, prints what it did, and
+exits 1 while a held conflict is still left; resolve those in the web
+workspace. Recovery can change content an interrupted application half-landed,
+so rebuild both inventories afterwards.
 
 `-accept-review PLAN.json` refuses while any portable path differs. The operator
 must reconcile edits and deletions offline, regenerate both inventories, and

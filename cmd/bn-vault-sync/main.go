@@ -107,6 +107,7 @@ type modeOptions struct {
 	once           bool
 	inventory      bool
 	prepareRestore bool
+	recoverImport  bool
 	reviewPath     string
 	acceptPath     string
 	// authorizeDeletion is a deprecated compatibility option for older scripts.
@@ -145,6 +146,7 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 	once := flags.Bool("once", false, "run one bounded pass and exit")
 	inventory := flags.Bool("inventory", false, "print a portable restore-review inventory and exit")
 	prepareRestore := flags.Bool("restore-prepare", false, "quarantine restored synchronization state under a fresh restore identity and print its inventory")
+	recoverImport := flags.Bool("recover-import", false, "finish an interrupted import or owed conflict revision while the companion is stopped, and exit")
 	reviewPath := flags.String("review", "", "compare this vault with a peer inventory file and print a review plan")
 	acceptPath := flags.String("accept-review", "", "apply an explicitly reviewed plan while both peer services are stopped")
 	authorizeDeletion := flags.String("authorize-deletion", "", "deprecated compatibility option; regular-file deletions now publish automatically")
@@ -170,6 +172,7 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 		once:           *once,
 		inventory:      *inventory,
 		prepareRestore: *prepareRestore,
+		recoverImport:  *recoverImport,
 		reviewPath:     *reviewPath,
 		acceptPath:     *acceptPath,
 
@@ -194,7 +197,7 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 
 func (o modeOptions) selectedCount() int {
 	count := 0
-	for _, selected := range []bool{o.version, o.check, o.once, o.inventory, o.prepareRestore, o.reviewPath != "", o.acceptPath != ""} {
+	for _, selected := range []bool{o.version, o.check, o.once, o.inventory, o.prepareRestore, o.recoverImport, o.reviewPath != "", o.acceptPath != ""} {
 		if selected {
 			count++
 		}
@@ -212,6 +215,8 @@ func (o modeOptions) run(ctx context.Context, root string, stdout, stderr io.Wri
 		return runInventory(root, stdout, stderr)
 	case o.prepareRestore:
 		return runPrepareRestore(ctx, root, stdout, stderr)
+	case o.recoverImport:
+		return runRecoverImport(root, stdout, stderr)
 	case o.reviewPath != "":
 		return runReview(root, o.reviewPath, stdout, stderr)
 	case o.acceptPath != "":
@@ -302,6 +307,39 @@ func runAcceptReview(root, path string, stdout, stderr io.Writer) int {
 	if err := writeJSON(stdout, result); err != nil {
 		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
 		return exitUnreadable
+	}
+	return exitOK
+}
+
+// runRecoverImport runs import recovery alone, for a vault quarantined by a
+// restore review: a companion pass runs no worker under the marker, and
+// re-enrollment refuses while an interrupted import is pending. It holds the
+// companion lock like every review mode, and exits 1 when work recovery cannot
+// finish by itself — a held conflict — is still left.
+func runRecoverImport(root string, stdout, stderr io.Writer) int {
+	release, acquired, err := vault.TryLockPath(vaultsyncd.LockPath(root))
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitUnreadable
+	}
+	if !acquired {
+		fmt.Fprintln(stderr, "bn-vault-sync: stop the synchronization companion before recovering an import")
+		return exitNeedsPerson
+	}
+	defer release()
+	report, err := vaultrecovery.RecoverImport(root)
+	if report != nil {
+		if writeErr := writeJSON(stdout, report); writeErr != nil {
+			err = errors.Join(err, writeErr)
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		return exitNeedsPerson
+	}
+	if report.Remaining != "" {
+		fmt.Fprintf(stderr, "bn-vault-sync: %s\n", report.Remaining)
+		return exitNeedsPerson
 	}
 	return exitOK
 }
