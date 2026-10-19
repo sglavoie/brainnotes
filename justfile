@@ -82,6 +82,12 @@ install:
     @echo "Installing {{ sync_binary_name }}..."
     go install -ldflags '{{source_checkout_ldflags}}' {{ sync_pkg }}
     @echo "Installed {{ sync_binary_name }}"
+    @echo ""
+    @echo "Note: running LaunchAgents keep the previous companion binaries until restarted."
+    @echo "Restart them so all three run build $(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown):"
+    @echo '  launchctl kickstart -k "gui/$(id -u)/com.sglavoie.brainnotes-vault-guard"'
+    @echo '  launchctl kickstart -k "gui/$(id -u)/com.sglavoie.brainnotes.vault-sync"'
+    @echo "Then check: bn-vault-sync -check (build_mismatch) and bn doctor (stderr warnings)."
 
 # Run the full test suite
 test:

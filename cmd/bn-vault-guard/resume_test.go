@@ -107,7 +107,7 @@ func runOnePoll(t *testing.T) []map[string]any {
 		cancel: cancel,
 		after:  []vaultgit.WatchEventKind{vaultgit.WatchEventPushed, vaultgit.WatchEventPushFailed},
 	}
-	if code := run(ctx, out, &stderr); code != 0 {
+	if code := run(ctx, nil, out, &stderr); code != 0 {
 		t.Fatalf("exit code %d, want 0 (stderr: %q)", code, stderr.String())
 	}
 	return decodeLog(t, stdout.String())
@@ -240,7 +240,7 @@ func TestLogEventRendersTheReloadEvents(t *testing.T) {
 	for _, tc := range cases {
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-		logEvent(logger, tc.event)
+		logEvent(logger, tc.event, "")
 
 		records := decodeLog(t, buf.String())
 		if len(records) != 1 {
@@ -262,7 +262,7 @@ func TestLogEventRendersTheReloadEvents(t *testing.T) {
 	// shape depends on its content is one nobody can query.
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	logEvent(logger, vaultgit.WatchEvent{Kind: vaultgit.WatchEventStarted, Vault: "/v", Message: "started"})
+	logEvent(logger, vaultgit.WatchEvent{Kind: vaultgit.WatchEventStarted, Vault: "/v", Message: "started"}, "abc123")
 	if _, present := decodeLog(t, buf.String())[0]["autosave_min_interval"]; present {
 		t.Fatalf("an unrelated event carried a policy field: %q", buf.String())
 	}

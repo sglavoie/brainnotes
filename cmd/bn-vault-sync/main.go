@@ -13,6 +13,7 @@
 //	bn-vault-sync           run until stopped, one bounded pass every interval
 //	bn-vault-sync -once     run one bounded pass, print it as JSON, exit
 //	bn-vault-sync -check    print where synchronization has got to, exit
+//	bn-vault-sync -version  print the build identifier, exit
 //
 // The explicit -inventory, -restore-prepare, -review and -accept-review modes
 // are the offline recovery boundary documented in
@@ -38,6 +39,21 @@
 //
 // It is installed by `just install` and run by a LaunchAgent. `bn --help` does
 // not mention it and neither does the user documentation.
+//
+// The LaunchAgent restarts the loop whenever it exits non-zero (KeepAlive with
+// SuccessfulExit false). A loop that finds another companion already holding the
+// vault exits 2, the same status -once gives for that refusal and the guard
+// gives for its own duplicate: non-zero so the agent keeps retrying until the
+// vault is free, rather than exiting 0 and leaving it unsynchronized after the
+// other copy stops.
+//
+// Version skew. The loop writes its build identifier (internal/buildinfo) into
+// companion.json on every pass and logs it on the "started" record. `-check`
+// compares the recorded build with its own and, when both are known and differ,
+// reports build_mismatch in its JSON and a warning on stderr: the installed
+// binary is not the one the LaunchAgent is running, which a restart of the agent
+// fixes. The mismatch does not change the exit status — it is not a reason the
+// vault will fail to make progress.
 package main
 
 import (
@@ -53,6 +69,7 @@ import (
 	"regexp"
 	"syscall"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultrecovery"
@@ -69,7 +86,8 @@ const (
 	// other mode's ordinary failure.
 	exitNeedsPerson = 1
 	// exitUnreadable is "no answer could be produced": bad flags, an unresolvable
-	// vault, or another companion already holding this one.
+	// vault, or another companion already holding this one — in every mode,
+	// including the installed loop.
 	exitUnreadable = 2
 )
 
@@ -84,6 +102,7 @@ func main() {
 }
 
 type modeOptions struct {
+	version        bool
 	check          bool
 	once           bool
 	inventory      bool
@@ -97,10 +116,18 @@ type modeOptions struct {
 // fullCommitID retains validation of the legacy one-shot compatibility option.
 var fullCommitID = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
+// buildID is this binary's build identifier. It is a variable so a test can be
+// a different build from the companion record it reads.
+var buildID = buildinfo.ID
+
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	options, code, proceed := parseModeOptions(args, stderr)
 	if !proceed {
 		return code
+	}
+	if options.version {
+		fmt.Fprintf(stdout, "bn-vault-sync %s\n", buildID())
+		return exitOK
 	}
 	cfg, err := config.Load(config.LoadOptions{})
 	if err != nil {
@@ -113,6 +140,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) {
 	flags := flag.NewFlagSet("bn-vault-sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	version := flags.Bool("version", false, "print the build identifier and exit")
 	check := flags.Bool("check", false, "report where synchronization has got to and exit")
 	once := flags.Bool("once", false, "run one bounded pass and exit")
 	inventory := flags.Bool("inventory", false, "print a portable restore-review inventory and exit")
@@ -137,6 +165,7 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 		return modeOptions{}, exitUnreadable, false
 	}
 	options := modeOptions{
+		version:        *version,
 		check:          *check,
 		once:           *once,
 		inventory:      *inventory,
@@ -165,7 +194,7 @@ func parseModeOptions(args []string, stderr io.Writer) (modeOptions, int, bool) 
 
 func (o modeOptions) selectedCount() int {
 	count := 0
-	for _, selected := range []bool{o.check, o.once, o.inventory, o.prepareRestore, o.reviewPath != "", o.acceptPath != ""} {
+	for _, selected := range []bool{o.version, o.check, o.once, o.inventory, o.prepareRestore, o.reviewPath != "", o.acceptPath != ""} {
 		if selected {
 			count++
 		}
@@ -282,7 +311,7 @@ func runAcceptReview(root, path string, stdout, stderr io.Writer) int {
 // It takes no lock, so it is answerable while the companion is mid-drain — which
 // is when somebody is most likely to ask.
 func runCheck(ctx context.Context, root string, stdout, stderr io.Writer) int {
-	status, err := vaultsyncd.Read(ctx, root, vaultsyncd.ReadOptions{})
+	status, err := vaultsyncd.Read(ctx, root, vaultsyncd.ReadOptions{Build: buildID()})
 	if err != nil {
 		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
 		return exitUnreadable
@@ -290,6 +319,10 @@ func runCheck(ctx context.Context, root string, stdout, stderr io.Writer) int {
 	if err := writeJSON(stdout, status); err != nil {
 		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
 		return exitUnreadable
+	}
+	if status.BuildMismatch {
+		fmt.Fprintf(stderr, "bn-vault-sync: warning: the companion last ran as build %s but this binary is build %s; restart the LaunchAgent so the installed build runs\n",
+			buildinfo.Short(status.CompanionBuild), buildinfo.Short(buildID()))
 	}
 	if status.NeedsPerson() {
 		return exitNeedsPerson
@@ -303,11 +336,12 @@ func runCheck(ctx context.Context, root string, stdout, stderr io.Writer) int {
 // A worker that failed is reported as a failure of the run, because somebody is
 // watching this one: the whole point of running it by hand is to find out.
 //
-// authorizeDeletion, when set, is the one place a person can approve a commit
-// whose deletions carry no journal record. It lives here and nowhere else so the
-// approval covers exactly this pass and is never persisted.
+// authorizeDeletion is the deprecated -authorize-deletion value. Committed
+// regular-file deletions now publish automatically, so it approves nothing; it
+// is still validated and passed through only so older scripts that supply it
+// keep working, and it is never persisted.
 func runOnce(ctx context.Context, root, authorizeDeletion string, stdout, stderr io.Writer) int {
-	opts := vaultsyncd.Options{}
+	opts := vaultsyncd.Options{Build: buildID()}
 	if authorizeDeletion != "" {
 		opts.AuthorizeDeletions = []string{authorizeDeletion}
 	}
@@ -330,6 +364,9 @@ func runOnce(ctx context.Context, root, authorizeDeletion string, stdout, stderr
 }
 
 // runLoop is the installed mode.
+//
+// A companion already holding the vault is exitUnreadable here exactly as it is
+// for -once; see the package documentation for why that is non-zero.
 func runLoop(ctx context.Context, root string, stdout, stderr io.Writer) int {
 	// Structured for bn-vault-guard's reasons, and content-free for the same one:
 	// this log lives outside the vault's privacy boundary, so every field written
@@ -337,11 +374,16 @@ func runLoop(ctx context.Context, root string, stdout, stderr io.Writer) int {
 	// The exception is Event.Paths, which carries note paths and carries them
 	// deliberately — a conflict nobody can locate is a conflict nobody resolves.
 	logger := slog.New(slog.NewJSONHandler(stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	build := buildID()
 	err := vaultsyncd.Run(ctx, root, vaultsyncd.Options{
-		Observe: func(event vaultsyncd.Event) { logEvent(logger, event) },
+		Build:   build,
+		Observe: func(event vaultsyncd.Event) { logEvent(logger, event, build) },
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "bn-vault-sync: %v\n", err)
+		if errors.Is(err, vaultsyncd.ErrAlreadyRunning) {
+			return exitUnreadable
+		}
 		return exitNeedsPerson
 	}
 	return exitOK
@@ -364,10 +406,16 @@ func writeJSON(out io.Writer, value any) error {
 // The attribute set is fixed rather than derived from which fields happen to be
 // populated, minus the empty ones: a log whose shape changes with its content is
 // one nobody can write a query against.
-func logEvent(logger *slog.Logger, event vaultsyncd.Event) {
+//
+// The build identifier rides on the "started" record only, for bn-vault-guard's
+// reason: it is constant for the process.
+func logEvent(logger *slog.Logger, event vaultsyncd.Event, build string) {
 	attrs := []any{
 		slog.String("event", string(event.Kind)),
 		slog.String("vault", event.Vault),
+	}
+	if event.Kind == vaultsyncd.EventStarted {
+		attrs = append(attrs, slog.String("build", build))
 	}
 	attrs = appendString(attrs, "worker", string(event.Worker))
 	attrs = appendString(attrs, "state", string(event.State))

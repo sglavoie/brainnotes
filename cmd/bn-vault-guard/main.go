@@ -1,8 +1,9 @@
 // Command bn-vault-guard keeps a BrainNotes vault's content history current
 // while nothing is running `bn`.
 //
-// It is a private companion process, not a supported command. It takes no flags
-// and defines no policy of its own: the vault it watches comes from the same
+// It is a private companion process, not a supported command. Its one flag,
+// -version, prints the build identifier and exits; it defines no policy of its
+// own: the vault it watches comes from the same
 // resolution `bn` uses ($BNOTES_VAULT, then an upward search for
 // brainnotes.toml), and every deadline it obeys is either a fixed constant in
 // internal/vaultgit or the vault's own `[autosave] min_interval`.
@@ -25,11 +26,31 @@
 //
 // It is installed by `just install` and run by a LaunchAgent. `bn --help` does
 // not mention it and neither does the user documentation.
+//
+// Exit statuses are chosen against that LaunchAgent, which restarts the guard
+// whenever it exits non-zero (KeepAlive with SuccessfulExit false, throttled to
+// one start every 30 seconds):
+//
+//	0  nothing to do: stopped by a signal, or the vault has no content history
+//	1  could not start or keep watching: bad configuration, unusable repository
+//	2  no answer: bad flags, or another guard already holds this vault
+//
+// A duplicate is deliberately non-zero. The guard that lost the lock is usually
+// the LaunchAgent's copy while somebody runs one by hand, and exiting 0 would
+// tell launchd its job is done — the vault would stay unguarded after the manual
+// copy stopped. Exiting 2 keeps the agent retrying at the throttle interval
+// until the lock is free, and it is the same status bn-vault-sync uses for the
+// same refusal.
+//
+// At start the guard logs its build identifier on the "started" record and
+// writes it to `guard.json` in the engine's state directory, so `bn doctor` can
+// say when the running guard is not the build that is installed.
 package main
 
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -38,6 +59,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
@@ -49,6 +71,14 @@ import (
 // guard would then try to commit.
 const guardLockRelPath = ".bnotes/locks/vault-guard.lock"
 
+// Exit statuses; see the package documentation for why each is what it is.
+const (
+	exitOK             = 0
+	exitFailed         = 1
+	exitUsage          = 2
+	exitAlreadyRunning = 2
+)
+
 func main() {
 	// SIGINT and SIGTERM cancel the context rather than killing the process, so
 	// the poll in flight finishes and the loop stops between units of work. That
@@ -58,14 +88,40 @@ func main() {
 	// is already covered by the fsynced intent record.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	os.Exit(run(ctx, os.Stdout, os.Stderr))
+	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run(ctx context.Context, stdout, stderr io.Writer) int {
+// parseFlags reports whether the guard should go on to watch a vault, and the
+// exit status to return when it should not.
+func parseFlags(args []string, stdout, stderr io.Writer) (int, bool) {
+	flags := flag.NewFlagSet("bn-vault-guard", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	version := flags.Bool("version", false, "print the build identifier and exit")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK, false
+		}
+		return exitUsage, false
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "bn-vault-guard: unexpected positional arguments")
+		return exitUsage, false
+	}
+	if *version {
+		fmt.Fprintf(stdout, "bn-vault-guard %s\n", buildinfo.ID())
+		return exitOK, false
+	}
+	return exitOK, true
+}
+
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if code, proceed := parseFlags(args, stdout, stderr); !proceed {
+		return code
+	}
 	cfg, err := config.Load(config.LoadOptions{})
 	if err != nil {
 		fmt.Fprintf(stderr, "bn-vault-guard: %v\n", err)
-		return 1
+		return exitFailed
 	}
 
 	// Single instance per vault, not per machine. Two guards on two different
@@ -76,12 +132,12 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 	release, acquired, err := vault.TryLockPath(filepath.Join(cfg.Vault, guardLockRelPath))
 	if err != nil {
 		fmt.Fprintf(stderr, "bn-vault-guard: the single-instance lock could not be taken: %v\n", err)
-		return 1
+		return exitFailed
 	}
 	defer release()
 	if !acquired {
 		fmt.Fprintf(stderr, "bn-vault-guard: another guard is already watching %s\n", cfg.Vault)
-		return 1
+		return exitAlreadyRunning
 	}
 
 	// The one policy this process carries, and it is the vault's rather than its
@@ -98,10 +154,18 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 			// has nothing for this process to do. Exiting non-zero would make the
 			// LaunchAgent restart it forever.
 			fmt.Fprintf(stderr, "bn-vault-guard: %s has no content history to watch\n", cfg.Vault)
-			return 0
+			return exitOK
 		}
 		fmt.Fprintf(stderr, "bn-vault-guard: %v\n", err)
-		return 1
+		return exitFailed
+	}
+
+	// The build record is a report for version-skew checks and never a reason
+	// to stop guarding: a vault left unwatched because a status file could not
+	// be written would be the worse outcome.
+	build := buildinfo.ID()
+	if _, err := mgr.RecordGuardStart(build); err != nil {
+		fmt.Fprintf(stderr, "bn-vault-guard: the guard record could not be written: %v\n", err)
 	}
 
 	// Structured because these lines are read by a health script and by a person
@@ -116,16 +180,16 @@ func run(ctx context.Context, stdout, stderr io.Writer) int {
 
 	watcher := vaultgit.NewWatcher(mgr, vaultgit.WatcherOptions{
 		Observe: func(event vaultgit.WatchEvent) {
-			logEvent(logger, event)
+			logEvent(logger, event, build)
 			notifier.consider(event)
 		},
 		Policy: policySource(cfg),
 	})
 	if err := watcher.Run(ctx); err != nil {
 		fmt.Fprintf(stderr, "bn-vault-guard: %v\n", err)
-		return 1
+		return exitFailed
 	}
-	return 0
+	return exitOK
 }
 
 // policySource is the guard's half of live reload: it owns the file format so
@@ -172,10 +236,22 @@ func policySource(cfg *config.Config) vaultgit.PolicySource {
 // The attribute set is fixed rather than derived from which fields happen to be
 // populated, minus the empty ones: a log whose shape changes with its content
 // is one nobody can write a query against.
-func logEvent(logger *slog.Logger, event vaultgit.WatchEvent) {
+//
+// The build identifier rides on the "started" record only: it is constant for
+// the process, and one line per start is what a person comparing a log with an
+// install needs.
+func logEvent(logger *slog.Logger, event vaultgit.WatchEvent, build string) {
+	logger.LogAttrs(context.Background(), levelFor(event.Kind), event.Message, toAttrs(eventAttrs(event, build))...)
+}
+
+// eventAttrs is logEvent's fixed attribute set, minus the empty fields.
+func eventAttrs(event vaultgit.WatchEvent, build string) []any {
 	attrs := []any{
 		slog.String("event", string(event.Kind)),
 		slog.String("vault", event.Vault),
+	}
+	if event.Kind == vaultgit.WatchEventStarted {
+		attrs = append(attrs, slog.String("build", build))
 	}
 	if event.PathCount > 0 {
 		attrs = append(attrs, slog.Int("path_count", event.PathCount))
@@ -198,9 +274,13 @@ func logEvent(logger *slog.Logger, event vaultgit.WatchEvent) {
 	if event.Detail != "" {
 		attrs = append(attrs, slog.String("detail", event.Detail))
 	}
+	return attrs
+}
 
+// levelFor decides how loud one event is.
+func levelFor(kind vaultgit.WatchEventKind) slog.Level {
 	level := slog.LevelInfo
-	switch event.Kind {
+	switch kind {
 	case vaultgit.WatchEventBlocked, vaultgit.WatchEventError:
 		level = slog.LevelError
 	case vaultgit.WatchEventPushFailed, vaultgit.WatchEventPushFailing:
@@ -213,7 +293,7 @@ func logEvent(logger *slog.Logger, event vaultgit.WatchEvent) {
 	case vaultgit.WatchEventBusy, vaultgit.WatchEventPending:
 		level = slog.LevelDebug
 	}
-	logger.LogAttrs(context.Background(), level, event.Message, toAttrs(attrs)...)
+	return level
 }
 
 func toAttrs(values []any) []slog.Attr {
