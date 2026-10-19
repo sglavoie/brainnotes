@@ -73,6 +73,11 @@ func (s *Server) handleFixesApply(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, err)
 		return
 	}
+	operationID, err := operationIDFromForm(r)
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
 
 	// Redeem the one-use receipt before touching the vault so an expired or
 	// replayed apply fails closed with preview_required.
@@ -107,7 +112,7 @@ func (s *Server) handleFixesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outcome, err := fixer.Apply(task, action)
+	outcome, err := fixer.WithJournalOptions(journalOptionsForOperation(operationID)...).Apply(task, action)
 	if err != nil {
 		writeManagementError(w, cockpitFixError(err))
 		return

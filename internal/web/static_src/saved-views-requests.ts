@@ -15,7 +15,7 @@ import type { FetchLike } from "./saved-views-model";
 
 export type SavedViewsOutcome =
   | { ok: true; result: SavedViewsResult }
-  | { ok: false; message: string };
+  | { ok: false; message: string; uncertain?: boolean };
 
 const readPayload = async (resp: Response): Promise<unknown> => {
   try {
@@ -74,8 +74,10 @@ export const previewSavedView = (
 export const applySavedView = (
   fetcher: FetchLike,
   token: string,
-  previewID: string
+  previewID: string,
+  operationID = ""
 ): Promise<SavedViewsOutcome> =>
   postSavedViews(fetcher, SAVED_VIEWS_APPLY_ENDPOINT, token, {
     preview_id: previewID,
+    ...(operationID ? { operation_id: operationID } : {}),
   } satisfies SavedViewApplyRequest);

@@ -67,8 +67,10 @@ type ManageAction = {
 
 type PlannedRequest = { url: string; body: URLSearchParams };
 
-const identifyTrashAttempt = (planned: PlannedRequest, trashURL: string): string => {
-  if (planned.url !== trashURL) return "";
+// Trash and undo are the routes here that record an attempt ID, so only their
+// lost replies can be confirmed afterwards from the journal.
+const identifyAttempt = (planned: PlannedRequest, checkable: string[]): string => {
+  if (!checkable.includes(planned.url)) return "";
   const id = newWriteOperationID();
   if (id) planned.body.set("operation_id", id);
   return id;
@@ -82,6 +84,21 @@ const settleConfirmedTrash = ({ elements, config }: SourceManageDeps, status: HT
   onward.href = config.manage.home || "/";
   onward.textContent = "Leave this note";
   status.append(" ", onward);
+};
+
+const offerManageOutcomeCheck = (
+  deps: SourceManageDeps, action: ManageAction, target: HTMLElement, operationID: string
+): void => {
+  const fetcher = deps.fetch ?? fetch;
+  if (action.button === deps.elements.undo) {
+    // A confirmed undo may have rewritten this note. Re-reading it keeps the
+    // confirmation on screen, and is skipped while the buffer holds edits.
+    offerWriteOutcomeCheck(target, operationID, fetcher, "Undo", () => {
+      if (!deps.host.dirty()) void deps.host.reload();
+    });
+    return;
+  }
+  offerWriteOutcomeCheck(target, operationID, fetcher, "Trash", () => settleConfirmedTrash(deps, target));
 };
 
 export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
@@ -111,10 +128,7 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
 
   const reportUnconfirmed = (action: ManageAction, operationID: string): void => {
     setStatus(unconfirmedAction(action), "is-error");
-    if (status) {
-      const target = status;
-      offerWriteOutcomeCheck(target, operationID, deps.fetch ?? fetch, "Trash", () => settleConfirmedTrash(deps, target));
-    }
+    if (status) offerManageOutcomeCheck(deps, action, status, operationID);
   };
 
   const run = async (action: ManageAction): Promise<void> => {
@@ -129,7 +143,7 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
         setStatus(planned, "is-error");
         return;
       }
-      operationID = identifyTrashAttempt(planned, config.manage.trash);
+      operationID = identifyAttempt(planned, [config.manage.trash, config.manage.undo]);
       const outcome = await postManagement({
         url: planned.url,
         body: planned.body,

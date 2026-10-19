@@ -26,6 +26,9 @@ type UndoOptions struct {
 	// Context, when set, is the context the restore's operation runs under, so
 	// a CLI interrupt cancels it like any other journaled write.
 	Context context.Context
+	// JournalOptions are passed to the restore's own journal entry, which is how
+	// a browser attempt's operation ID ends up recorded against it.
+	JournalOptions []journal.RecorderOption
 }
 
 // Undo restores one journal entry through the same begin/finalize contract every
@@ -68,7 +71,7 @@ func Undo(vaultRoot, entryID string, opts UndoOptions) (*journal.RestorePlan, er
 	// it is loaded, and loading it is already inside Restore. The vault root is
 	// guarded here, and every individual path is guarded again by the transaction
 	// underneath, so nothing escapes — the early refusal is simply coarser.
-	j, err := BeginOperationContext(contextOrBackground(opts.Context), vaultRoot, "undo", command, nil)
+	j, err := BeginOperationContext(contextOrBackground(opts.Context), vaultRoot, "undo", command, nil, opts.JournalOptions...)
 	if err != nil {
 		return nil, err
 	}

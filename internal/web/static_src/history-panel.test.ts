@@ -186,7 +186,7 @@ describe("history panel exact undo", () => {
         return jsonResponse(preview);
       }
       if (target === "/api/undo") {
-        bodies.push(`undo:${String(init?.body)}`);
+        bodies.push(`undo:${String(init?.body).replace(/&operation_id=[0-9a-f]{32}$/, "&operation_id=<id>")}`);
         return jsonResponse({ ok: true, message: "Undo restored 1 path.", entry_id: "entry-new" });
       }
       return jsonResponse({ ok: true, entries: [historyEntry()] });
@@ -203,7 +203,7 @@ describe("history panel exact undo", () => {
     await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo restored 1 path."));
     expect(bodies).toEqual([
       "preview:token=csrf-token",
-      "undo:token=csrf-token&id=entry-new&preview_id=preview-1",
+      "undo:token=csrf-token&id=entry-new&preview_id=preview-1&operation_id=<id>",
     ]);
     expect(confirmer).toHaveBeenCalledWith(expect.stringContaining("bn web frontmatter set"));
     expect(confirmer).toHaveBeenCalledWith(expect.stringContaining("Source.md"));
@@ -228,7 +228,7 @@ describe("history panel exact undo", () => {
     expect(bodies).toEqual([
       "preview:token=csrf-token",
       "preview:token=csrf-token&id=entry-new",
-      "undo:token=csrf-token&id=entry-new&force=1&confirm_force=1&preview_id=preview-1",
+      "undo:token=csrf-token&id=entry-new&force=1&confirm_force=1&preview_id=preview-1&operation_id=<id>",
     ]);
     expect(confirmer).toHaveBeenCalledWith(expect.stringContaining("replaces newer work"));
   });
@@ -250,5 +250,32 @@ describe("history panel exact undo", () => {
     await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toContain("Preview expired"));
     expect(fetcher).toHaveBeenCalledTimes(3);
     expect(bodies).toEqual([]);
+  });
+});
+
+describe("history panel lost undo reply", () => {
+  it("offers an outcome check when the undo reply is lost, and reloads once it is confirmed", async () => {
+    renderPanel();
+    let operationID = "";
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const target = String(input);
+      if (target === "/api/history/preview") return jsonResponse(previewBody({ requires_force: false, conflicts: [] }));
+      if (target === "/api/undo") {
+        operationID = new URLSearchParams(String(init?.body)).get("operation_id") || "";
+        throw new TypeError("network down");
+      }
+      if (target.startsWith("/api/operations/outcome")) {
+        expect(target).toBe(`/api/operations/outcome?id=${operationID}`);
+        return jsonResponse({ ok: true, status: "confirmed", journal_id: "entry-undo" });
+      }
+      return jsonResponse({ ok: true, entries: [historyEntry()] });
+    });
+    initHistoryPanel({ fetch: fetcher, confirm: () => true });
+    await waitForExpect(() => expect(document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")?.disabled).toBe(false));
+    document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")!.click();
+    await waitForExpect(() => expect(document.querySelector(".write-outcome-check")).not.toBeNull());
+    expect(operationID).toMatch(/^[0-9a-f]{32}$/);
+    document.querySelector<HTMLButtonElement>(".write-outcome-check")!.click();
+    await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo confirmed."));
   });
 });

@@ -71,31 +71,34 @@ export const createWorkbenchMutations = (
     );
   };
 
+  const offerOutcomeCheck = (operationID: string, label: string): void => {
+    const status = options.doc.querySelector<HTMLElement>("[data-property-status]");
+    if (!status) return;
+    offerWriteOutcomeCheck(status, operationID, options.fetcher, label, () => {
+      // Re-reading rewrites the status line; the confirmation and its
+      // History link are what the person asked to see, so they come back.
+      // A failed re-read keeps its error in front: the values on screen
+      // are not the ones the confirmed change wrote.
+      const confirmation = [...status.childNodes];
+      announceMutation();
+      void options.reload().then((loaded) => {
+        if (!loaded) {
+          status.append(" ", ...confirmation);
+          return;
+        }
+        options.setStatus("", "is-success");
+        status.replaceChildren(...confirmation);
+      });
+    });
+  };
+
   const announce = (
     outcome: MutationOutcome,
     operationID = ""
   ): outcome is { ok: true; result: PropertyMutationResult } => {
     if (!outcome.ok) {
       options.setStatus(outcome.message, "is-error");
-      const status = options.doc.querySelector<HTMLElement>("[data-property-status]");
-      if (outcome.uncertain && status) {
-        offerWriteOutcomeCheck(status, operationID, options.fetcher, "Property change", () => {
-          // Re-reading rewrites the status line; the confirmation and its
-          // History link are what the person asked to see, so they come back.
-          // A failed re-read keeps its error in front: the values on screen
-          // are not the ones the confirmed change wrote.
-          const confirmation = [...status.childNodes];
-          announceMutation();
-          void options.reload().then((loaded) => {
-            if (!loaded) {
-              status.append(" ", ...confirmation);
-              return;
-            }
-            options.setStatus("", "is-success");
-            status.replaceChildren(...confirmation);
-          });
-        });
-      }
+      if (outcome.uncertain) offerOutcomeCheck(operationID, "Property change");
       return false;
     }
     return true;
@@ -243,9 +246,11 @@ export const createWorkbenchMutations = (
     options.setBusy(true);
     options.setStatus("Undoing change…", "is-loading");
     try {
-      const outcome = await undoJournalEntry(options.fetcher, options.token, journalID);
+      const operationID = newWriteOperationID();
+      const outcome = await undoJournalEntry(options.fetcher, options.token, journalID, operationID);
       if (!outcome.ok) {
         options.setStatus(outcome.message, "is-error");
+        if (outcome.uncertain) offerOutcomeCheck(operationID, "Undo");
         return;
       }
       announceMutation();

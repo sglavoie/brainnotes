@@ -92,7 +92,7 @@ export const applyPropertySchema = (
     operation_id: operationID,
   } satisfies PropertyApplyRequest);
 
-export type UndoOutcome = { ok: boolean; message: string };
+export type UndoOutcome = { ok: boolean; message: string; uncertain?: boolean };
 
 // undoJournalEntry reverses one journal entry through the same unified history
 // endpoint the history panel uses, so an undo from the toast and an undo from
@@ -100,7 +100,8 @@ export type UndoOutcome = { ok: boolean; message: string };
 export const undoJournalEntry = async (
   fetcher: FetchLike,
   token: string,
-  entryID: string
+  entryID: string,
+  operationID = ""
 ): Promise<UndoOutcome> => {
   try {
     const resp = await fetcher("/api/undo", {
@@ -110,7 +111,7 @@ export const undoJournalEntry = async (
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "X-BN-CSRF": token,
       },
-      body: buildUndoForm({ token, entryID }).toString(),
+      body: buildUndoForm({ token, entryID, operationID }).toString(),
     });
     const payload = await readPayload(resp);
     const failure = responseFailure(resp, payload, "write");

@@ -162,7 +162,7 @@ describe("property detail workbench", () => {
 
     await waitForExpect(() => {
       const undoCall = fetchMock.mock.calls.find(([url]) => String(url) === "/api/undo");
-      expect(String(undoCall?.[1]?.body)).toBe("token=tok&id=entry-9");
+      expect(String(undoCall?.[1]?.body)).toMatch(/^token=tok&id=entry-9&operation_id=[0-9a-f]{32}$/);
     });
   });
 

@@ -217,9 +217,10 @@ func latestHistoryEntryID(journalRoot string) (string, error) {
 // something a test can assert about directly.
 func undoOptionsFor(req undoRequest) noteops.UndoOptions {
 	return noteops.UndoOptions{
-		Force:   req.Force,
-		Command: "bn web undo",
-		Require: req.Require,
+		Force:          req.Force,
+		Command:        "bn web undo",
+		Require:        req.Require,
+		JournalOptions: journalOptionsForOperation(req.OperationID),
 	}
 }
 

@@ -169,6 +169,32 @@ func TestServer_FixesAPI_SchemaRepairPreviewAndApply(t *testing.T) {
 	}
 }
 
+func TestServer_FixesAPI_ApplyRecordsOperationID(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"Note.md": []byte("---\nstatus: Active\ntitle: Note\n---\nBody.\n"),
+	}, func(cfg *config.Config) {
+		cfg.Frontmatter.Properties = map[string]config.PropertyDefinition{
+			"status": {Type: config.KindString, Allowed: []string{"active", "done"}},
+		}
+	}, Options{CSRFToken: "csrf-token"})
+	const id = "77777777777777777777777777777777"
+
+	task := findCockpitTask(t, getCockpitPayload(t, ts.URL).Queue, cockpit.RuleSchemaViolation, `status invalid value "Active" (allowed: active, done)`)
+	preview := decodeFixPreview(t, readResponseBody(t, postFixPreview(t, ts.URL, task.ID, string(cockpit.ActionSchemaRepair), "csrf-token", "")))
+
+	form := fixForm(task.ID, string(cockpit.ActionSchemaRepair), preview.PreviewID, "")
+	form.Set("operation_id", id)
+	applyResp := doFormPost(t, ts.URL+"/api/fixes/apply", form, "csrf-token")
+	applyBody := readResponseBody(t, applyResp)
+	if applyResp.StatusCode != http.StatusOK {
+		t.Fatalf("apply status: got %d, want 200; body=%q", applyResp.StatusCode, applyBody)
+	}
+	apply := decodeFixApply(t, applyBody)
+	if got := checkOperationOutcome(t, ts.URL, id); got["status"] != "confirmed" || got["journal_id"] != apply.JournalID {
+		t.Fatalf("fix outcome = %#v, want journal %q", got, apply.JournalID)
+	}
+}
+
 func TestServer_FixesAPI_ApplyRequiresPreview(t *testing.T) {
 	ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\n[[Nowhere]]\n"),

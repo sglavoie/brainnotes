@@ -88,6 +88,45 @@ func TestOperationOutcomeFindsViewApply(t *testing.T) {
 	}
 }
 
+func TestOperationOutcomeFindsUndo(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"A.md": []byte("body\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+	const trashID = "44444444444444444444444444444444"
+	const undoID = "55555555555555555555555555555555"
+	postTrashWithOperationID(t, ts.URL, trashID)
+	trashEntry := checkOperationOutcome(t, ts.URL, trashID)["journal_id"]
+
+	form := url.Values{"token": {"csrf-token"}, "operation_id": {undoID}}
+	resp, err := http.PostForm(ts.URL+historyUndoAPIRoutePath, form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("undo status = %d", resp.StatusCode)
+	}
+	got := checkOperationOutcome(t, ts.URL, undoID)
+	if got["status"] != "confirmed" || got["journal_id"] == "" || got["journal_id"] == trashEntry {
+		t.Fatalf("undo outcome = %#v, want the restore's own entry (trash was %v)", got, trashEntry)
+	}
+}
+
+func TestUndoRefusesMalformedOperationID(t *testing.T) {
+	ts, _ := newHTTPServerForFilesWithOptions(t, map[string][]byte{
+		"A.md": []byte("body\n"),
+	}, nil, Options{CSRFToken: "csrf-token"})
+	postTrashWithOperationID(t, ts.URL, "66666666666666666666666666666666")
+	resp, err := http.PostForm(ts.URL+historyUndoAPIRoutePath, url.Values{"token": {"csrf-token"}, "operation_id": {"../A"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("undo with a malformed operation ID status = %d, want 400", resp.StatusCode)
+	}
+}
+
 func checkOperationOutcome(t *testing.T, baseURL, id string) map[string]any {
 	t.Helper()
 	resp, err := http.Get(baseURL + operationOutcomeRoutePath + "?id=" + id)

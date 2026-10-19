@@ -52,6 +52,9 @@ export type HistoryFailure = {
    * not offerable.
    */
   entryID: string;
+  /** uncertain is set when a write's reply never arrived or could not be read,
+   * so the restore may or may not have landed. */
+  uncertain?: boolean;
 };
 
 export type HistoryOutcome<T> = { ok: true; result: T } | HistoryFailure;
@@ -115,6 +118,7 @@ const unreachable = (write = false): HistoryFailure => ({
   message: unansweredRequest(write ? "write" : "read").message,
   conflicts: [],
   entryID: "",
+  ...(write ? { uncertain: true } : {}),
 });
 
 const formInit = (token: string, body: URLSearchParams): RequestInit => ({

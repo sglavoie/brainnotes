@@ -46,6 +46,7 @@ export type SavedViewMutationRequest = {
 
 export type SavedViewApplyRequest = {
   preview_id: string;
+  operation_id?: string;
 };
 
 export type SavedViewsRequestBody = SavedViewMutationRequest | SavedViewApplyRequest;

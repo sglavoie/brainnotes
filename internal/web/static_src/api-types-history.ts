@@ -11,6 +11,8 @@ export type UndoRequest = {
    * receipt is what proves somebody was shown what the restore would replace.
    */
   previewID?: string;
+  /** operationID correlates the restore with this attempt for "Check outcome". */
+  operationID?: string;
 };
 
 export type HistoryPreviewRequest = {

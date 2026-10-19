@@ -5,6 +5,7 @@ import {
   type PropertyProposal,
   type PropertySchemaDefinitionInput,
 } from "./api";
+import { readResponsePayload } from "./daily-brief-http";
 import { queryElement } from "./dom";
 import {
   catalogStatusMessage,
@@ -259,7 +260,7 @@ const openConfig = async (catalog: Catalog, button: HTMLButtonElement): Promise<
   try {
     const resp = await catalog.fetcher("/api/config/open", buildOpenConfigFetchRequest(catalog.config.token));
     if (!resp.ok) {
-      catalog.setStatus(normalizeOpenErrorMessage(resp.status, await resp.text()), "is-error");
+      catalog.setStatus(normalizeOpenErrorMessage(resp.status, await readResponsePayload(resp)), "is-error");
       return;
     }
     catalog.setStatus("Opened brainnotes.toml in the configured editor.", "is-success");

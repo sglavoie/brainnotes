@@ -126,6 +126,9 @@ type undoRequest struct {
 	// consent rather than this layer merely having checked it. Nil when no
 	// preview was supplied.
 	Require map[string]vault.FileExpectation
+	// OperationID correlates the restore with the browser attempt that asked
+	// for it, so a lost reply can still be confirmed from the journal.
+	OperationID string
 }
 
 // parseUndoRequest reads the request and decides whether it may proceed.
@@ -156,6 +159,10 @@ func (s *Server) parseUndoRequest(r *http.Request) (undoRequest, error) {
 	if err != nil {
 		return undoRequest{}, err
 	}
+	operationID, err := operationIDFromForm(r)
+	if err != nil {
+		return undoRequest{}, err
+	}
 
 	previewID, _ := managementFormValue(r, "preview_id")
 	previewID = strings.TrimSpace(previewID)
@@ -163,7 +170,7 @@ func (s *Server) parseUndoRequest(r *http.Request) (undoRequest, error) {
 		return undoRequest{}, noteops.Errorf(noteops.CodePreviewRequired,
 			"history: forcing a restore requires a preview of the newer work it would replace")
 	}
-	req := undoRequest{EntryID: entryID, Force: force}
+	req := undoRequest{EntryID: entryID, Force: force, OperationID: operationID}
 	if previewID != "" {
 		require, err := s.checkHistoryRestorePreview(previewID, entryID)
 		if err != nil {

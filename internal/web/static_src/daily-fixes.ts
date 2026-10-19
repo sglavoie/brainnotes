@@ -18,6 +18,7 @@ import {
 } from "./daily-fixes-render";
 import { queryAllElements, queryElement } from "./dom";
 import { setStatusText, type StatusKind } from "./status";
+import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export {
   fixCountsStatusMessage,
@@ -49,6 +50,17 @@ const readFixesCountElements = (root: HTMLElement): FixesCountElements => ({
 // wiring. Every queue action itself lives in daily-fixes-actions and receives
 // this context, so each one is a named function rather than a closure inside a
 // single very long arrow.
+// A confirmed fix changed notes other panels show, so it is announced the way a
+// fix that answered is; this queue reloads with the confirmation.
+const offerFixOutcomeCheck = (ctx: DailyFixesContext, errorEl: HTMLElement | null, operationID: string): void => {
+  if (!errorEl) return;
+  offerWriteOutcomeCheck(errorEl, operationID, ctx.fetcher, "Fix", () => {
+    ctx.suppressNextMutation();
+    window.dispatchEvent(new CustomEvent(managementMutationEventName));
+    void ctx.loadQueue("Fix confirmed.");
+  });
+};
+
 export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
   const root = queryElement(document, "[data-fixes-panel]", HTMLElement);
   if (!root) {
@@ -127,6 +139,7 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
     suppressNextMutation: (): void => {
       ignoreNextMutation = true;
     },
+    offerOutcomeCheck: (operationID: string): void => offerFixOutcomeCheck(ctx, errorEl, operationID),
   };
 
   root.addEventListener("click", (event) => {

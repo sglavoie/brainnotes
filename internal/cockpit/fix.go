@@ -69,6 +69,8 @@ type Fixer struct {
 	cfg      *config.Config
 	command  string
 	snapshot *Snapshot
+	// journalOptions are passed to every journal entry an Apply records.
+	journalOptions []journal.RecorderOption
 }
 
 // NewFixer returns a Fixer bound to a vault and its config. command, when set,
@@ -97,6 +99,13 @@ func NewFixerFromSnapshot(v *vault.Vault, cfg *config.Config, command string, sn
 	f := NewFixer(v, cfg, command)
 	snap := snapshot
 	f.snapshot = &snap
+	return f
+}
+
+// WithJournalOptions returns f with recorder options added to the journal entry
+// of each applied fix — how a browser attempt's operation ID is recorded.
+func (f *Fixer) WithJournalOptions(opts ...journal.RecorderOption) *Fixer {
+	f.journalOptions = append(f.journalOptions, opts...)
 	return f
 }
 
@@ -231,7 +240,7 @@ func (f *Fixer) planSchemaRepair(plan FixPlan, task Task, byRel map[string]*vaul
 
 func (f *Fixer) applySchemaRepair(out FixOutcome, task Task, byRel map[string]*vault.Note) (FixOutcome, error) {
 	property := schemaProperty(task)
-	j, err := noteops.BeginOperation(f.vault.Root, "cockpit-schema-repair", f.command, nil)
+	j, err := noteops.BeginOperation(f.vault.Root, "cockpit-schema-repair", f.command, nil, f.journalOptions...)
 	if err != nil {
 		return FixOutcome{}, err
 	}
@@ -342,7 +351,7 @@ func (f *Fixer) planRelink(plan FixPlan, task Task, data vaultData, byRel map[st
 
 func (f *Fixer) applyRelink(out FixOutcome, task Task, data vaultData, byRel map[string]*vault.Note) (FixOutcome, error) {
 	idx := newRelinkIndex(data.loaded)
-	j, err := noteops.BeginOperation(f.vault.Root, "cockpit-relink", f.command, nil)
+	j, err := noteops.BeginOperation(f.vault.Root, "cockpit-relink", f.command, nil, f.journalOptions...)
 	if err != nil {
 		return FixOutcome{}, err
 	}

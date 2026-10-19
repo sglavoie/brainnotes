@@ -119,7 +119,7 @@ describe("saved view save: create", () => {
       "/api/views/preview",
       "/api/views/apply",
     ]);
-    expect(harness.calls[1]?.body).toEqual({ preview_id: "receipt-1" });
+    expect(harness.calls[1]?.body).toEqual({ preview_id: "receipt-1", operation_id: expect.stringMatching(/^[0-9a-f]{32}$/) });
     expect(harness.saved).toHaveLength(1);
     expect(harness.saver.pending()).toBeNull();
     // Nothing pending is ever reported to the UI: there is nothing to confirm.
@@ -161,7 +161,9 @@ describe("saved view save: create", () => {
     expect(harness.receipts).toEqual([]);
     expect(lastStatus(harness)?.kind).toBe("is-error");
   });
+});
 
+describe("saved view save: create receipts", () => {
   it("issues a non-actionable create receipt that cannot re-apply the consumed preview", async () => {
     const harness = startSaver({
       "/api/views/preview": () => jsonResponse(previewPayload(true)),

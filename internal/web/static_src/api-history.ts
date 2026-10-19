@@ -35,6 +35,9 @@ export const buildUndoForm = (request: UndoRequest): URLSearchParams => {
   if (request.previewID !== undefined && request.previewID.trim() !== "") {
     body.set("preview_id", request.previewID.trim());
   }
+  if (request.operationID) {
+    body.set("operation_id", request.operationID);
+  }
   return body;
 };
 

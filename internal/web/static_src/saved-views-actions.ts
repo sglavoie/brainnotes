@@ -14,6 +14,7 @@ import {
 } from "./saved-views-model";
 import { applySavedView, previewSavedView } from "./saved-views-requests";
 import type { StatusKind } from "./status";
+import { newWriteOperationID } from "./write-outcome-check";
 
 export type SavedViewSaveHooks = {
   /** Reports progress, refusals and the final outcome. */
@@ -32,6 +33,8 @@ export type SavedViewSaveHooks = {
   onReceipt?: (receipt: SavedViewCreateReceipt | null) => void;
   /** Fires once the write landed, carrying the reloaded view list. */
   onSaved?: (result: SavedViewsResult) => void;
+  /** Reports an apply whose reply was lost, so its outcome can be checked. */
+  onUnconfirmed?: (operationID: string) => void;
 };
 
 export type SavedViewSaver = {
@@ -82,10 +85,12 @@ const setReceipt = (state: SaverState, next: SavedViewCreateReceipt | null): voi
 const runApply = async (state: SaverState, issued: SavedViewPendingSave): Promise<void> => {
   const { deps } = state;
   setStatus(state, `Saving view "${issued.name}"…`, "is-loading");
-  const outcome = await applySavedView(deps.fetch, deps.token, issued.previewID);
+  const operationID = newWriteOperationID();
+  const outcome = await applySavedView(deps.fetch, deps.token, issued.previewID, operationID);
   setPending(state, null);
   if (!outcome.ok) {
     setStatus(state, outcome.message, "is-error");
+    if (outcome.uncertain && operationID) state.hooks.onUnconfirmed?.(operationID);
     return;
   }
   setStatus(state, savedViewSavedMessage(issued.name, issued.created), "is-success");

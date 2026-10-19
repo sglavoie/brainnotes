@@ -32,6 +32,7 @@ import {
   readResponsePayload,
 } from "./daily-fixes-requests";
 import { type StatusKind } from "./status";
+import { newWriteOperationID } from "./write-outcome-check";
 
 // DailyFixesContext is what a queue action needs from the panel it lives in.
 // The runners moved out of initDailyFixes so each one is a named function of its
@@ -56,6 +57,8 @@ export type DailyFixesContext = {
   // suppressNextMutation tells the panel that the mutation event it is about to
   // see is its own, so it does not reload a queue it already rendered.
   suppressNextMutation: () => void;
+  // offerOutcomeCheck lets a lost apply reply be confirmed from the journal.
+  offerOutcomeCheck: (operationID: string) => void;
 };
 
 type ItemActionRequest = {
@@ -254,19 +257,22 @@ export const runApply = async (
 
   ctx.setBusy(true);
   ctx.setStatus("Applying fix…", "is-loading");
+  const operationID = newWriteOperationID();
   try {
     const request = buildFixesApplyFetchRequest(
       ctx.config.applyEndpoint,
       ctx.config.csrfToken,
       id,
       state.action,
-      state.previewID
+      state.previewID,
+      operationID
     );
     const resp = await ctx.fetcher(request.url, request.init);
-    await completeApply(ctx, id, resp, await readResponsePayload(resp));
+    await completeApply(ctx, id, resp, await readResponsePayload(resp), operationID);
   } catch {
     ctx.clearPreview(id);
     ctx.showError(unansweredRequest("write").message);
+    ctx.offerOutcomeCheck(operationID);
   } finally {
     ctx.setBusy(false);
   }
@@ -281,12 +287,14 @@ const completeApply = async (
   ctx: DailyFixesContext,
   id: string,
   resp: { ok: boolean; status: number; redirected?: boolean },
-  payload: unknown
+  payload: unknown,
+  operationID = ""
 ): Promise<void> => {
   const failure = responseFailure(resp, payload, "write");
   if (failure?.uncertain) {
     ctx.clearPreview(id);
     ctx.showError(failure.message);
+    ctx.offerOutcomeCheck(operationID);
     return;
   }
   const result = resp.ok ? normalizeFixApplyResponse(payload) : null;

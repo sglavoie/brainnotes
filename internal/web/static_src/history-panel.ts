@@ -23,6 +23,7 @@ import {
   type HistoryPanelElements,
 } from "./history-panel-view";
 import type { StatusKind } from "./status";
+import { newWriteOperationID, offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export {
   formatHistoryTimestamp,
@@ -75,7 +76,18 @@ type RestoreOutcome =
   // They differ for "undo the latest change", which is posted with no identifier
   // and can only be forced against the identifier the refusal answers with.
   | { kind: "conflict"; entryID: string }
+  // The reply was lost: the restore may have landed, and only the journal can say.
+  | { kind: "uncertain"; operationID: string }
   | { kind: "halted" };
+
+// A confirmed restore changed notes other panels show, so it is announced like
+// any other write; beforeAnnounce lets this panel's own reload keep the news.
+const offerUndoOutcomeCheck = (io: HistoryPanelIO, operationID: string, beforeAnnounce: () => void): void => {
+  offerWriteOutcomeCheck(io.elements.status, operationID, io.fetcher, "Undo", () => {
+    beforeAnnounce();
+    window.dispatchEvent(new CustomEvent(managementMutationEventName));
+  });
+};
 
 const createHistoryPanelController = (
   elements: HistoryPanelElements,
@@ -85,6 +97,8 @@ const createHistoryPanelController = (
   let entries: HistoryEntry[] = [];
   let conflictEntryID = "";
   let returnFocus: Element | null = null;
+  // The message the next mutation-event reload shows instead of the generic one.
+  let refreshMessage = "";
 
   const io: HistoryPanelIO = {
     elements,
@@ -147,6 +161,7 @@ const createHistoryPanelController = (
       hideConflict();
       await load(outcome.message);
     }
+    if (outcome.kind === "uncertain") offerUndoOutcomeCheck(io, outcome.operationID, () => { refreshMessage = "Undo confirmed."; });
   };
 
   const bind = (): void => {
@@ -166,7 +181,8 @@ const createHistoryPanelController = (
     });
     window.addEventListener(managementMutationEventName, () => {
       hideConflict();
-      void load("History refreshed.");
+      void load(refreshMessage || "History refreshed.");
+      refreshMessage = "";
     });
     hideConflict();
   };
@@ -201,12 +217,13 @@ const plainRestore = async (io: HistoryPanelIO, entryID: string): Promise<Restor
       return { kind: "halted" };
     }
     io.setStatus("Undoing change…", "is-loading");
+    const operationID = newWriteOperationID();
     const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, {
-      token: io.token, entryID: result.entry_id, previewID: result.preview_id,
+      token: io.token, entryID: result.entry_id, previewID: result.preview_id, operationID,
     });
     if (outcome.ok) return { kind: "restored", message: outcome.result.message || "Undo restored paths." };
     io.setStatus(outcome.message, "is-error");
-    return { kind: "halted" };
+    return outcome.uncertain ? { kind: "uncertain", operationID } : { kind: "halted" };
   } finally {
     io.setBusy(false);
   }
@@ -231,17 +248,19 @@ const forcedRestore = async (io: HistoryPanelIO, entryID: string): Promise<Resto
   }
   io.setBusy(true);
   io.setStatus("Forcing undo…", "is-loading");
+  const operationID = newWriteOperationID();
   const outcome = await restoreHistoryEntry(io.fetcher, UNDO_ENDPOINT, {
     token: io.token,
     entryID: preview.result.entry_id || entryID,
     force: true,
     confirmForce: true,
     previewID: preview.result.preview_id,
+    operationID,
   });
   io.setBusy(false);
   if (!outcome.ok) {
     io.setStatus(outcome.message, "is-error");
-    return { kind: "halted" };
+    return outcome.uncertain ? { kind: "uncertain", operationID } : { kind: "halted" };
   }
   return { kind: "restored", message: outcome.result.message || "Undo restored paths." };
 };

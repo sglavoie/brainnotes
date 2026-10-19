@@ -127,7 +127,7 @@ describe("daily fixes panel previewed and triaged actions", () => {
         });
       }
       if (url === "/api/fixes/apply") {
-        expect(String(init?.body)).toBe("id=task_broken&action=relink&token=csrf-token&preview_id=pv-1");
+        expect(String(init?.body)).toMatch(/^id=task_broken&action=relink&token=csrf-token&preview_id=pv-1&operation_id=[0-9a-f]{32}$/);
         return jsonResponse({
           ok: true,
           message: "Updated 1 note.",

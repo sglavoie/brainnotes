@@ -230,7 +230,7 @@ func (f *Fixer) applyCreateStub(out FixOutcome, task Task, data vaultData, byRel
 		return out, nil
 	}
 	result, err := noteops.CreateStubFromBrokenTarget(f.vault.Root, sourceRel, rawTarget,
-		noteops.WithCreateCommand(f.command))
+		noteops.WithCreateCommand(f.command), noteops.WithCreateJournalOptions(f.journalOptions...))
 	if err != nil {
 		return out, err
 	}

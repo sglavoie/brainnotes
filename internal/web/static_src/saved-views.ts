@@ -18,6 +18,7 @@ import {
 import { fetchSavedViews } from "./saved-views-requests";
 import { bindSavedViewScope } from "./saved-views-scope";
 import { setStatusText, type StatusKind } from "./status";
+import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export type { SavedViewsDeps } from "./saved-views-model";
 
@@ -237,6 +238,16 @@ export const initSavedViewsSave = (
         if (els.descriptionInput) {
           els.descriptionInput.value = "";
         }
+      },
+      onUnconfirmed: (operationID) => {
+        if (!els.statusEl) return;
+        // A confirmed save changed the list, so the navigation is re-read; the
+        // inputs are kept, since the person never saw the save succeed.
+        offerWriteOutcomeCheck(els.statusEl, operationID, fetcher, "View save", () => {
+          void fetchSavedViews(fetcher).then((outcome) => {
+            if (outcome.ok) nav?.render(outcome.result.views);
+          });
+        });
       },
     },
   });

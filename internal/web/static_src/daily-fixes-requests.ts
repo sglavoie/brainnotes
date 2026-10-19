@@ -51,9 +51,11 @@ export const buildFixesApplyFetchRequest = (
   csrfToken: string,
   id: string,
   action: FixAction,
-  previewID: string
+  previewID: string,
+  operationID = ""
 ): FixesFetchRequest => {
   const body = buildFixApplyForm({ id, action, token: csrfToken, previewID });
+  if (operationID) body.set("operation_id", operationID);
   return jsonPostRequest(endpoint, csrfToken, body.toString());
 };
 
