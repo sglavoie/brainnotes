@@ -11,7 +11,7 @@ import (
 func TestRestoreRejectsUnsafeArchiveEntries(t *testing.T) {
 	t.Parallel()
 
-	for _, test := range unsafeArchiveCases() {
+	for _, test := range append(unsafeArchiveCases(), normalizationConflictCases()...) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
@@ -251,5 +251,45 @@ func TestRestoreKeepsBnotesContainerOwnerAccessible(t *testing.T) {
 	}
 	if info.Mode().Perm()&0o700 != 0o700 {
 		t.Fatalf(".bnotes mode = %o, want owner rwx", info.Mode().Perm())
+	}
+}
+
+// normalizationConflictCases are archives whose entries name one file on a
+// case-insensitive, normalization-insensitive filesystem such as APFS, spelled
+// with composed and decomposed accents.
+func normalizationConflictCases() []unsafeArchiveCase {
+	return []unsafeArchiveCase{
+		{
+			name: "duplicate entry differing only in normalization",
+			entries: []archiveFixtureEntry{
+				{name: "Caf\u00e9.md", body: "composed"},
+				{name: "Cafe\u0301.md", body: "decomposed"},
+			},
+			wantErr: "duplicate entry",
+		},
+		{
+			name: "duplicate entry differing in normalization and case",
+			entries: []archiveFixtureEntry{
+				{name: "caf\u00e9.md", body: "composed"},
+				{name: "CAFE\u0301.MD", body: "decomposed"},
+			},
+			wantErr: "duplicate entry",
+		},
+		{
+			name: "file conflicts with decomposed descendant",
+			entries: []archiveFixtureEntry{
+				{name: "Cafe\u0301/Note.md", body: "child"},
+				{name: "Caf\u00e9", body: "file"},
+			},
+			wantErr: "conflicts with descendant",
+		},
+		{
+			name: "decomposed path conflicts with composed file prefix",
+			entries: []archiveFixtureEntry{
+				{name: "Caf\u00e9", body: "file"},
+				{name: "Cafe\u0301/Note.md", body: "child"},
+			},
+			wantErr: "conflicts with file",
+		},
 	}
 }
