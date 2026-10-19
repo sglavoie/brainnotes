@@ -118,6 +118,10 @@ export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void =
         }
 
         const result = normalizeManagementResult(payload);
+        if (!result.ok) {
+          showUnconfirmed(statusEl);
+          return;
+        }
         created = true;
         setStatus(result.message || "Created note.", "is-success");
         showCreatedNote(button, result.path);

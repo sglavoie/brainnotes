@@ -58,8 +58,9 @@ describe("inferred definition outcome", () => {
     await waitForExpect(() => {
       expect(root.querySelector(".write-outcome-check")).not.toBeNull();
     });
-    const apply = fetchMock.mock.calls.find(([url]) => String(url) === "/api/properties/schema/apply");
-    const body = JSON.parse(String((apply?.[1] as RequestInit | undefined)?.body));
+    const apply = fetchMock.mock.calls.find(([url]) => String(url) === "/api/properties/schema/apply") as
+      unknown as [string, RequestInit] | undefined;
+    const body = JSON.parse(String(apply?.[1].body));
     expect(body.operation_id).toMatch(/^[0-9a-f]{32}$/);
     const status = root.querySelector<HTMLElement>("[data-properties-status]");
     expect(status?.textContent).not.toContain("refused");
