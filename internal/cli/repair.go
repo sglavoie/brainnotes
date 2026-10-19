@@ -9,7 +9,7 @@ func NewRepairCmd() *cobra.Command {
 	opts := repairOptions{ff: new(findFlags)}
 
 	cmd := &cobra.Command{
-		Use:   "repair [notes...]",
+		Use:   "repair [note...]",
 		Short: "Apply safe mechanical fixes to frontmatter schema violations",
 		Long: `Repair inspects frontmatter against the property definitions in
 [frontmatter.properties] and applies safe, deterministic fixes. Fixes include:

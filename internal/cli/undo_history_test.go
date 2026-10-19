@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -390,4 +391,51 @@ func nonEmptyLines(s string) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+func TestUndoUnknownEntryNamesHistory(t *testing.T) {
+	buildSetFixture(t)
+	for _, args := range [][]string{
+		{"undo", "no-such-entry"},
+		{"undo", "no-such-entry", "--dry-run"},
+		{"undo", "../escape"},
+	} {
+		out, err := runCLI(t, "", args...)
+		if err == nil {
+			t.Fatalf("bn %v: want an error\n%s", args, out)
+		}
+		want := `undo: no journal entry "` + args[1] + `"; run 'bn history' to list IDs`
+		if err.Error() != want {
+			t.Fatalf("bn %v: err = %q, want %q", args, err.Error(), want)
+		}
+	}
+}
+
+func TestUndoUnreadableManifestOmitsRollbackAdvice(t *testing.T) {
+	root := buildSetFixture(t)
+	dir := filepath.Join(journalRootForVault(root), "entry-bad")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, journal.ManifestFileName), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := runCLI(t, "", "undo", "entry-bad")
+	if err == nil {
+		t.Fatal("undo of an unreadable manifest should fail")
+	}
+	if strings.Contains(err.Error(), undoPartialFailureGuidance) {
+		t.Fatalf("a restore that never began must not carry rollback advice: %v", err)
+	}
+}
+
+func TestDescribeUndoErrorDryRunOmitsRollbackAdvice(t *testing.T) {
+	err := describeUndoError(errors.New("journal: stat \"note.md\": boom"), true)
+	if strings.Contains(err.Error(), undoPartialFailureGuidance) {
+		t.Fatalf("dry-run error carries rollback advice: %v", err)
+	}
+	err = describeUndoError(errors.New("journal: restore x: boom"), false)
+	if !strings.Contains(err.Error(), undoPartialFailureGuidance) {
+		t.Fatalf("apply error lost rollback advice: %v", err)
+	}
 }

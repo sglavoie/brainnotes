@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 )
 
@@ -24,6 +26,16 @@ func enumValueError(name, flag, got string, allowed ...string) error {
 //	<cmd>: --<flag> must be <requirement> (got N)
 func rangeValueError(name, flag, requirement string, got any) error {
 	return fmt.Errorf("%s: --%s must be %s (got %v)", name, flag, requirement, got)
+}
+
+// validateLimitFlag refuses a --limit below 1. The option's zero value means
+// "no cap", so whether the flag was given at all is asked of cmd: an explicit
+// --limit 0 is a mistake, not a request for everything.
+func validateLimitFlag(cmd *cobra.Command, name string, limit int) error {
+	if cmd.Flags().Changed("limit") && limit < 1 {
+		return rangeValueError(name, "limit", "1 or more", limit)
+	}
+	return nil
 }
 
 // joinAlternatives renders a, b and c as "a, b, or c" and a and b as "a or b".

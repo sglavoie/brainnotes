@@ -10,6 +10,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 const undoPartialFailureGuidance = "undo: restore stages every file before applying any and rolls applied files back on failure; if the error reports a failed rollback, inspect 'git diff' to recover"
@@ -48,7 +49,7 @@ func runUndoCommand(cmd *cobra.Command, args []string, opts undoOptions) error {
 		Context: commandContext(cmd),
 	})
 	if err != nil {
-		return describeUndoError(err)
+		return describeUndoError(err, opts.dryRun)
 	}
 
 	if err := printUndoPlan(cmd.OutOrStdout(), plan); err != nil {
@@ -78,6 +79,9 @@ func resolveUndoEntryID(cmd *cobra.Command, vaultRoot string, args []string) (st
 		if entryID == "" {
 			return "", errors.New("undo: empty entry id")
 		}
+		if err := checkUndoEntry(journalRootForVault(vaultRoot), entryID); err != nil {
+			return "", err
+		}
 		return entryID, nil
 	}
 
@@ -96,6 +100,31 @@ func resolveUndoEntryID(cmd *cobra.Command, vaultRoot string, args []string) (st
 	return id, nil
 }
 
+// checkUndoEntry refuses a named entry ID before anything is staged or locked:
+// an ID that names no recorded entry is a typo, and the raw manifest ENOENT
+// (plus rollback advice for a restore that never started) said nothing useful
+// about it. A directory without a manifest is an operation that never finalized,
+// which `bn history` does not list either, so it is the same answer. A manifest
+// that exists but does not load is a real fault and is reported as such, still
+// without the rollback advice, since nothing was attempted.
+func checkUndoEntry(journalRoot, entryID string) error {
+	notFound := fmt.Errorf("undo: no journal entry %q; run 'bn history' to list IDs", entryID)
+	if strings.ContainsAny(entryID, `/\`) || entryID == "." || entryID == ".." {
+		return notFound
+	}
+	finalized, err := journal.Finalized(journalRoot, entryID)
+	if err != nil {
+		return fmt.Errorf("undo: %w", err)
+	}
+	if !finalized {
+		return notFound
+	}
+	if _, err := journal.LoadEntry(journalRoot, entryID); err != nil {
+		return fmt.Errorf("undo: %w", err)
+	}
+	return nil
+}
+
 // describeUndoError turns a restore failure into the message the user sees.
 // The three shapes are distinct on purpose:
 //
@@ -108,16 +137,25 @@ func resolveUndoEntryID(cmd *cobra.Command, vaultRoot string, args []string) (st
 // to their earlier state, so telling the user to inspect a rollback would send
 // them looking for damage that is not there.
 //
+// A failure before anything could have been applied is passed through bare as
+// well: a dry run never stages, and a refused storage location or a held lock
+// stops the restore before its first file. Advice about rolling applied files
+// back would describe a restore that never began.
+//
 // Anything else carries the partial-failure guidance.
-func describeUndoError(err error) error {
+func describeUndoError(err error, dryRun bool) error {
 	var conflictErr *journal.RestoreConflictError
 	if errors.As(err, &conflictErr) {
 		return fmt.Errorf("undo: %s", renderUndoConflict(conflictErr))
 	}
-	if noteops.IsSnapshotFailure(err) {
+	if dryRun || undoNeedsNoRollbackAdvice(err) {
 		return fmt.Errorf("undo: %w", err)
 	}
 	return fmt.Errorf("undo: %w\n%s", err, undoPartialFailureGuidance)
+}
+
+func undoNeedsNoRollbackAdvice(err error) bool {
+	return noteops.IsSnapshotFailure(err) || vault.IsForbiddenMutation(err) || vault.IsTxnLockBusy(err)
 }
 
 func latestJournalEntryID(journalRoot string) (string, []journal.Warning, error) {

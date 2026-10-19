@@ -265,12 +265,12 @@ func rejectUnrunnableView(command string, view queryexpr.View) error {
 	if sort := strings.TrimSpace(view.Saved.Sort); sort != "" {
 		return fmt.Errorf(
 			"view %q stores sort %q, which %s cannot apply; run it with 'bn find --view %s'",
-			name, sort, command, name)
+			name, sort, command, shellQuote(name))
 	}
 	if view.Saved.Limit > 0 {
 		return fmt.Errorf(
 			"view %q stores limit %d, which %s cannot apply; run it with 'bn find --view %s'",
-			name, view.Saved.Limit, command, name)
+			name, view.Saved.Limit, command, shellQuote(name))
 	}
 	return nil
 }

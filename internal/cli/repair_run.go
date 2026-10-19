@@ -216,16 +216,19 @@ func (r *repairRun) reportSkips(n *vault.Note, skips []schema.RepairSkip) {
 	}
 }
 
-// writeSummary emits the trailing counts. The dry-run has no summary line but
-// still emits the missing-required hint.
+// writeSummary emits the trailing counts, then the missing-required hint. A
+// dry run writes its would-be counts to stderr, keeping stdout the preview.
 func (r *repairRun) writeSummary() {
-	if r.dry == nil {
-		summary := fmt.Sprintf("repaired %d file(s)", r.repaired)
-		if r.skipped > 0 {
-			summary += fmt.Sprintf(", %d skipped", r.skipped)
-		}
-		fmt.Fprintln(r.out, summary)
+	summary := fmt.Sprintf("repaired %d file(s)", r.repaired)
+	out := r.out
+	if r.dry != nil {
+		summary = fmt.Sprintf("would repair %d file(s)", r.repaired)
+		out = r.stderr
 	}
+	if r.skipped > 0 {
+		summary += fmt.Sprintf(", %d skipped", r.skipped)
+	}
+	fmt.Fprintln(out, summary)
 	if r.hasMissingRequired {
 		fmt.Fprintln(r.stderr, "\nhint: set missing properties with: bn set <note> <property>=<value>")
 	}

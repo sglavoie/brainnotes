@@ -63,7 +63,14 @@ func skipsConfigLoad(cmd *cobra.Command) bool {
 func Execute() error {
 	ctx, stop := notifyInterrupt(os.Stderr)
 	defer stop()
-	return NewRootCmd().ExecuteContext(ctx)
+	return executeRoot(ctx, NewRootCmd())
+}
+
+// executeRoot runs root and names the failing command on a usage error Cobra
+// raised outside a validator or flag parse (see asUsageError).
+func executeRoot(ctx context.Context, root *cobra.Command) error {
+	cmd, err := root.ExecuteContextC(ctx)
+	return asUsageError(cmd, err)
 }
 
 // RenderError writes err in the form the terminal should see. Every command in
@@ -88,10 +95,7 @@ func RenderError(w io.Writer, err error) {
 
 // NewRootCmd builds the root cobra command with persistent flags wired up.
 func NewRootCmd() *cobra.Command {
-	var (
-		vaultPath string
-		verbose   bool
-	)
+	var vaultPath string
 
 	cmd := &cobra.Command{
 		Use:   "bn",
@@ -120,11 +124,14 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "path to vault root (overrides BNOTES_VAULT and the upward search)")
-	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
-		"more detail where a command offers it: file:line and a snippet per link in links/backlinks, skipped notes in values")
+	// Declared here so Cobra does not add its default -v shorthand for
+	// --version: -v is the local --verbose of links, backlinks and values, and
+	// 'bn -v tags' should be refused rather than silently print the version.
+	cmd.Flags().Bool("version", false, "print the bn version")
 
 	addRootCommandGroups(cmd)
 	registerCompletions(cmd)
+	installUsageErrors(cmd)
 
 	return cmd
 }
@@ -139,14 +146,6 @@ func ConfigFromContext(ctx context.Context) *config.Config {
 		return v
 	}
 	return nil
-}
-
-// rootVerbose reports the root `--verbose` / `-v` flag. Commands read it rather
-// than declaring their own: a local `--verbose` would shadow the persistent one
-// and take its `-v` shorthand with it.
-func rootVerbose(cmd *cobra.Command) bool {
-	v, _ := cmd.Flags().GetBool("verbose")
-	return v
 }
 
 // refuseCombinedFlags is the one wording for two flags that cannot be given

@@ -24,7 +24,9 @@ type searchOptions struct {
 	count         bool
 	openResult    bool
 	asJSON        bool
-	ff            *findFlags
+	// limit caps how many matching notes are reported; 0 is no cap.
+	limit int
+	ff    *findFlags
 }
 
 // validate holds every mutual-exclusion rule `search` enforces. The first rule
@@ -42,6 +44,9 @@ func (o searchOptions) validate(noteArgs []string, anyFlagSet bool) error {
 	}
 	if o.openResult && o.nullSep {
 		return errors.New("search: --open cannot be combined with --null")
+	}
+	if err := o.validateLimitCombos(); err != nil {
+		return err
 	}
 	return o.validateJSONCombos()
 }
@@ -64,6 +69,21 @@ func (o searchOptions) validateJSONCombos() error {
 		return errors.New("search: --json cannot be combined with --count")
 	case o.contextN > 0:
 		return errors.New("search: --json cannot be combined with --context")
+	}
+	return nil
+}
+
+// validateLimitCombos rejects the two modes that report no list to cap: -i
+// hands the whole corpus to fzf, and --open opens only the first match.
+func (o searchOptions) validateLimitCombos() error {
+	if o.limit == 0 {
+		return nil
+	}
+	switch {
+	case o.interactive:
+		return errors.New("search: --limit cannot be combined with --interactive")
+	case o.openResult:
+		return errors.New("search: --limit cannot be combined with --open")
 	}
 	return nil
 }
@@ -140,6 +160,9 @@ func runSearchCommand(cmd *cobra.Command, args []string, opts searchOptions) err
 		}
 	}
 
+	if err := validateLimitFlag(cmd, "search", opts.limit); err != nil {
+		return err
+	}
 	anyFlagSet := anyQueryFlagSet(cmd)
 	if err := opts.validate(noteArgs, anyFlagSet); err != nil {
 		return err
@@ -290,7 +313,11 @@ func runSearchContext(r *searchRun) error {
 	sort.Slice(r.notes, func(i, j int) bool { return r.notes[i].Path < r.notes[j].Path })
 	out := r.cmd.OutOrStdout()
 	first := true
+	printed := 0
 	for _, n := range r.notes {
+		if r.opts.limit > 0 && printed == r.opts.limit {
+			break
+		}
 		var buf bytes.Buffer
 		if err := contextOutput(&buf, n, r.root, r.matcher, r.opts.contextN); err != nil {
 			return err
@@ -302,6 +329,7 @@ func runSearchContext(r *searchRun) error {
 			fmt.Fprintln(out, "--")
 		}
 		first = false
+		printed++
 		if _, err := out.Write(buf.Bytes()); err != nil {
 			return err
 		}
@@ -320,7 +348,7 @@ func runSearchCount(r *searchRun) error {
 	if len(results) == 0 {
 		return noMatch("search")
 	}
-	return writeSearchCounts(r.cmd.OutOrStdout(), results)
+	return writeSearchCounts(r.cmd.OutOrStdout(), capResults(results, r.opts.limit))
 }
 
 // runSearchOpen opens the first match of the lexicographically first matching
@@ -370,7 +398,7 @@ func matchingSearchPaths(r *searchRun) ([]string, error) {
 		}
 	}
 	sort.Strings(paths)
-	return paths, nil
+	return capResults(paths, r.opts.limit), nil
 }
 
 // openSearchMatch resolves the editor and opens path at line. Resolution is

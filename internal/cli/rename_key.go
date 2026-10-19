@@ -9,7 +9,7 @@ func NewRenameKeyCmd() *cobra.Command {
 	opts := renameKeyOptions{ff: new(findFlags)}
 
 	cmd := &cobra.Command{
-		Use:   "rename-key <old-key> <new-key> [notes...]",
+		Use:   "rename-key <old-key> <new-key> [note...]",
 		Short: "Rename a frontmatter key across the vault or a scoped subset",
 		Long: `Rename-key changes a frontmatter key from <old-key> to <new-key> in every
 matching note. The value is preserved exactly (no type coercion, no wikilink

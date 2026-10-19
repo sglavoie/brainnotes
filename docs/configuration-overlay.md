@@ -62,7 +62,7 @@ on its own initiative. (A file already tracked in that history stays tracked —
 if you committed one before, remove it by hand.)
 
 `bn config` reports the portable file, the active local overlay (or `none`), and
-how the vault root was resolved. `bn config explain KEY` shows the effective
+how the vault root was resolved. `bn config explain <key>` shows the effective
 value after defaults and normalization, its source file (or built-in default),
 and the file that owns the key. For example:
 

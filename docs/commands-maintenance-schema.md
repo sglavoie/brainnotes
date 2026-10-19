@@ -44,7 +44,7 @@ bn lint -q 'status:wip'                   # scoped by query expression
 ### `bn rename-key` — rename a frontmatter key across notes
 
 ```sh
-bn rename-key <old-key> <new-key> [notes...] [find flags] [--dry-run]
+bn rename-key <old-key> <new-key> [note...] [find flags] [--dry-run]
 ```
 
 Renames a frontmatter key in every matching note, preserving the value exactly:
@@ -82,7 +82,7 @@ bn rename-key kind type Areas/Alpha.md            # explicit notes
 ### `bn repair` — fix safe schema violations in frontmatter
 
 ```sh
-bn repair [notes...] [find flags] [--property key] [--dry-run]
+bn repair [note...] [find flags] [--property key] [--dry-run]
 ```
 
 Inspects frontmatter against the property definitions in
@@ -139,7 +139,7 @@ bn repair note.md                           # single note
 ### `bn relink` — repair unresolved wikilinks with deterministic rewrites
 
 ```sh
-bn relink [notes...] [find flags] [--dry-run]
+bn relink [note...] [find flags] [--dry-run]
 ```
 
 Scans unresolved wikilinks and rewrites only links with a deterministic target:

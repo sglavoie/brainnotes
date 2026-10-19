@@ -16,8 +16,8 @@ safe to run against a vault you are not sure about.
 ### `bn config` — show or edit the vault configuration
 
 ```sh
-bn config
-bn config explain KEY
+bn config [--json]
+bn config explain <key> [--json]
 bn config edit
 ```
 
@@ -28,6 +28,13 @@ loaded, the active `brainnotes.local.toml` overlay (or `none`), and which of
 `bn config explain open.editor` shows the effective value after defaults and
 normalization, the file that supplied it (or built-in default), and the file
 that owns the key. Inspection accepts schema field keys and writes nothing.
+
+`--json` prints either report as an object: `bn config --json` as
+`{"vault", "config", "overlay", "resolved_by"}` with `overlay` null when no
+overlay is loaded, and `bn config explain <key> --json` as
+`{"key", "source", "owned_by", "value"}` with `source` null for a built-in
+default. `value` is the same value the text form prints, under its config key
+names, and an empty list or table is `[]` or `{}`.
 
 The optional `brainnotes.local.toml` overlay holds settings for this machine.
 It is listed when loaded, but `edit` continues to open the portable file.
@@ -186,7 +193,7 @@ tags        list      string    no
 ### `bn index` — report on or rebuild the note cache
 
 ```sh
-bn index [--status | --rebuild]
+bn index [--status | --rebuild] [--json]
 ```
 
 `bn` keeps a cache of the note bytes it has already read under
@@ -231,6 +238,11 @@ A state file that exists but cannot be used reports the failure class and what
 ```text
 Status:      unusable (state file could not be decoded); the next load rebuilds it
 ```
+
+`--json` prints the status report as
+`{"state_file", "status", "problem", "entries", "bytes", "last_write"}`, with
+`status` one of `not built`, `unusable` or `healthy` and the fields that state
+does not report set to null. It cannot be combined with `--rebuild`.
 
 `--status` and `--rebuild` are mutually exclusive: one asks what the cache is,
 the other replaces it, and combining them would only describe the file the same

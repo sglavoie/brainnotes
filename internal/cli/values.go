@@ -25,6 +25,7 @@ type valuesOptions struct {
 	showCount bool
 	showFiles bool
 	asJSON    bool
+	verbose   bool
 }
 
 // NewValuesCmd returns the `values` subcommand. Exported for tests.
@@ -111,6 +112,7 @@ func addValuesFlags(cmd *cobra.Command, opts *valuesOptions) {
 	f.BoolVar(&opts.showCount, "count", true, "prefix each line with its count (--count=false emits values only)")
 	f.BoolVar(&opts.showFiles, "files", false, "list the files containing each value")
 	f.BoolVar(&opts.asJSON, "json", false, `print {"property", "values": [{"value", "count", "files"}]} (files are vault-relative)`)
+	f.BoolVarP(&opts.verbose, "verbose", "v", false, "warn on stderr about each note whose map-typed value was skipped")
 }
 
 func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
@@ -131,7 +133,7 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 		return err
 	}
 
-	counts, files := collectValueCounts(v, notes, property, opts.showFiles || opts.asJSON, rootVerbose(cmd), cmd.ErrOrStderr())
+	counts, files := collectValueCounts(v, notes, property, opts.showFiles || opts.asJSON, opts.verbose, cmd.ErrOrStderr())
 	entries := sortValueEntries(counts, opts.sortMode)
 	if opts.asJSON {
 		return writeValuesJSON(cmd.OutOrStdout(), property, entries, files)

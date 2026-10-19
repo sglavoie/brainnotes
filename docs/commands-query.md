@@ -16,7 +16,7 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
         [--min-links n] [--max-links n] [--dead-end]
         [--broken-links [--show-broken | --list-broken-targets]]
         [--pinned] [-q EXPR | --query EXPR] [--view name]
-        [--sort KEY] [--relative-to note]
+        [--sort KEY] [--relative-to note] [--limit N]
         [-i | --interactive] [-0 | --json]
 ```
 
@@ -217,6 +217,9 @@ unpinned one under `--sort pinned` — sorts last in *both* directions, so
 `--sort -modified` means "newest first" rather than "undated first". Notes that
 tie are ordered by path.
 
+`--limit N` keeps the first N notes after ordering, and replaces the `limit` a
+`--view` stores, the way `--sort` replaces its ordering. N must be 1 or more.
+
 `--sort relevance` requires `--relative-to`, which names the anchor note by
 title or path; `--relative-to` without `--sort relevance` is likewise an error
 rather than a silently ignored flag. Ranking uses the same text, graph,
@@ -259,6 +262,7 @@ bn find --broken-links --show-broken      # per-link detail
 bn find --broken-links --list-broken-targets  # unique missing titles
 bn find --pinned                          # pinned notes, in pinned order
 bn find --status wip --sort -modified     # newest work in progress first
+bn find --sort -modified --limit 10       # the ten most recently modified notes
 bn find --tag books --sort relevance --relative-to "Deep Work"
 bn find --tag drafts -i                   # interactive fzf pick
 bn find --tag drafts -0 | xargs -0 nvim   # safe for spaces in paths
@@ -274,10 +278,13 @@ bn relink
 bn find --broken-links --show-broken
 ```
 
-Then (optionally) create stub notes for any remaining targets:
+Then (optionally) create stub notes for any remaining targets. `bn new` takes a
+template name before the title, so pick the template the stubs should start
+from (`note` below stands for any template in `<vault>/Templates/`; routing for
+that template decides the destination folder unless you pass `--folder`):
 
 ```sh
-bn find --broken-links --list-broken-targets | xargs -I{} bn new "{}"
+bn find --broken-links --list-broken-targets | xargs -I{} bn new note "{}"
 ```
 
 Re-run `bn find --broken-links` afterward to verify zero residue.

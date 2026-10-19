@@ -23,7 +23,9 @@ type findOptions struct {
 	listBrokenTargets bool
 	sortText          string
 	relativeTo        string
-	ff                *findFlags
+	// limit caps the output; 0 is no cap and defers to a view's stored limit.
+	limit int
+	ff    *findFlags
 }
 
 // validate holds every mutual-exclusion rule `find` enforces. Unlike search's,
@@ -99,6 +101,9 @@ func runFindCommand(cmd *cobra.Command, opts findOptions) error {
 	}
 	// Order is load-bearing: the flag matrix is refused first, then a --sort that
 	// disagrees with --relative-to, and both before the vault is opened.
+	if err := validateLimitFlag(cmd, "find", opts.limit); err != nil {
+		return err
+	}
 	if err := opts.validate(); err != nil {
 		return err
 	}
@@ -150,7 +155,8 @@ func runFindCommand(cmd *cobra.Command, opts findOptions) error {
 //
 // The cap is applied last, over the ordered result, so a view that saves "the 10
 // most recently modified" returns those ten rather than ten arbitrary matches
-// re-sorted.
+// re-sorted. An explicit --limit replaces the view's cap, the way --sort
+// replaces its ordering.
 func orderFindResults(in findSortInput, opts findOptions, plan *queryexpr.Plan, spec queryexpr.SortSpec) ([]*vault.Note, error) {
 	matched := in.matched
 	ordered := strings.TrimSpace(opts.sortText) != "" || strings.TrimSpace(opts.relativeTo) != ""
@@ -169,10 +175,7 @@ func orderFindResults(in findSortInput, opts findOptions, plan *queryexpr.Plan, 
 	case opts.ff.pinned:
 		matched = pinnedOrder(in.vault.Root, matched)
 	}
-	if limit := plan.Limit; limit > 0 && len(matched) > limit {
-		matched = matched[:limit]
-	}
-	return matched, nil
+	return capResults(matched, findLimit(opts.limit, plan.Limit)), nil
 }
 
 // runFindMode dispatches to the one output mode the flags select. validate() has
@@ -213,4 +216,20 @@ func runFindPaths(r *findRun) error {
 		return writeNotesJSON(r.cmd.OutOrStdout(), r.root, paths)
 	}
 	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
+}
+
+// findLimit is the cap find applies: --limit when given, else the view's.
+func findLimit(flag, view int) int {
+	if flag > 0 {
+		return flag
+	}
+	return view
+}
+
+// capResults keeps the first limit items; a limit of 0 keeps them all.
+func capResults[T any](items []T, limit int) []T {
+	if limit > 0 && len(items) > limit {
+		return items[:limit]
+	}
+	return items
 }

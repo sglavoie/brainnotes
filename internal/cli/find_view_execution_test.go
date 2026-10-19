@@ -321,7 +321,7 @@ query = "status:wip"
 			root := buildViewExecutionVault(t, views)
 
 			got := runFindError(t, root, append(append([]string{}, args...), "--view", "Recent WIP")...)
-			if !strings.Contains(got, `stores sort "-modified"`) || !strings.Contains(got, "bn find --view") {
+			if !strings.Contains(got, `stores sort "-modified"`) || !strings.Contains(got, `'bn find --view "Recent WIP"'`) {
 				t.Fatalf("%s --view 'Recent WIP': got %q, want a refusal naming the stored sort", args[0], got)
 			}
 			if !strings.Contains(got, args[0]) {

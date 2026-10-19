@@ -62,7 +62,7 @@ bn move "Old/Foo.md" .                           # move to vault root
 ### `bn replace` — rewrite a frontmatter value across notes
 
 ```sh
-bn replace <key> <from> <to> [notes...] [find flags] [--dry-run]
+bn replace <key> <from> <to> [note...] [find flags] [--dry-run]
 ```
 
 Rewrites the value of `<key>` from `<from>` to `<to>` in every matching note.
@@ -194,7 +194,7 @@ bn find --has rating | bn unset - rating                    # bulk wipe
 ### `bn values` — count occurrences of a frontmatter property's values
 
 ```sh
-bn values [property] [--sort count|name] [--count=false] [--files] [--json]
+bn values [property] [--sort count|name] [--count=false] [--files] [--json] [-v|--verbose]
 ```
 
 Walks every note, parses frontmatter, and counts how often each value of

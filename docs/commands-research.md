@@ -14,7 +14,7 @@ The commands that read note bodies and the link graph. `bn search` and
 bn search [pattern] [note...] [find-flags]
           [-e | --regex] [--case-sensitive]
           [-C N | --context N] [--count] [--open] [--json]
-          [-i | --interactive] [-0]
+          [--limit N] [-i | --interactive] [-0]
 ```
 
 Searches note bodies for a literal string or regex, printing matching note paths one per line.
@@ -55,6 +55,11 @@ combined with `-i`, `--open`, `-0`, `--count` or `--context`; its records alread
 carry each note's count and matching lines, with `line` the 1-based file line
 `--context` prints.
 
+`--limit N` reports at most N matching notes, taken after the mode's own
+ordering (path order, or count order under `--count`). It applies to the paths,
+`--count`, `--context` and `--json` modes, and is refused with `-i` and
+`--open`, which report no list to cap. N must be 1 or more.
+
 Examples:
 
 ```sh
@@ -84,8 +89,7 @@ With `--verbose`, each occurrence is printed on its own line as
 `<path>:<line>\t<snippet>` for body links, or `<path>:fm:<key>\t<value>` for
 frontmatter links. Output is tab-separated so it pipes cleanly into
 `awk -F'\t'`. Snippets are trimmed and truncated to 120 characters with an
-`…` ellipsis. `--verbose` is the root flag, so `-v` works too; it cannot be
-combined with `-0`.
+`…` ellipsis. `-v` is its short form; it cannot be combined with `-0`.
 
 `--json` prints the same notes as an array of `{path, abs_path, title}` records
 (`path` vault-relative), `[]` when nothing links to the target. It cannot be

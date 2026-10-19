@@ -52,12 +52,23 @@ does not load completes nothing.
 | `126`/`127` | A program you asked bn to run (editor, fzf, the `checkpoint run` command) could not be run or was not found. |
 | `130` | Interrupted: Ctrl-C, or a dismissed fzf picker. |
 
+An empty result is not the same answer everywhere. `bn search` follows grep and
+exits 1 when nothing matches, but the listing commands `bn find`, `bn links`
+and `bn backlinks` exit 0 with empty output (or `[]` under `--json`): an empty
+selection is a successful query, not a failed one. Under `set -o pipefail`,
+`bn search ... | ...` therefore fails on no match while `bn find ... | ...`
+does not; test for empty output rather than the status when you need the same
+check for both.
+
 `bn checkpoint run` exits with its child's status. Only those user-visible
 children pass their status through: when a Git command bn runs for its own
 safety checks fails, bn exits 2, never with Git's code. Messages for statuses 1
 and 2 go to stderr, prefixed with the command (`bn: search: no matches`,
 `bn: open: nothing selected`), so `p=$(bn open --print)` fails rather than
-succeeding with an empty value.
+succeeding with an empty value. A usage error — the wrong number of arguments,
+an unknown or malformed flag, an unknown subcommand — exits 2 and also points
+at the command's help:
+`bn: new: accepts 2 arg(s), received 1; see 'bn new --help'`.
 
 A command that asks before destroying something (`bn remove`,
 `bn restore --wipe`) asks only on a terminal. Without one it refuses with
@@ -69,8 +80,9 @@ write or `bn serve`'s shutdown can finish cleanly; press it a second time to
 stop at once.
 
 Machine-readable output is spelled `--json` on `find`, `search`, `links`,
-`backlinks`, `values`/`tags`, `views`, `schema`, `lint`, `history`, `related`,
-`doctor` and `checkpoint status`; `context --json` is shorthand for
+`backlinks`, `values`/`tags`, `views`, `views show`, `views check`, `schema`,
+`lint`, `history`, `related`, `doctor`, `checkpoint status`, `config`,
+`config explain` and `index`; `context --json` is shorthand for
 `context --format json`. JSON output is indented and not HTML-escaped, and an
 empty result is `[]` rather than nothing.
 
