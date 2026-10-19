@@ -30,7 +30,7 @@ func previewCapCases() []previewCapCase {
 				bulk.now, bulk.maxRecords = clock, maxRecords
 			},
 			store: func(t *testing.T) string {
-				receipt, err := bulk.store(bulkManagementRequest{Action: "move"}, nil)
+				receipt, err := bulk.store(bulkManagementRequest{Action: "move"}, nil, 0)
 				if err != nil {
 					t.Fatalf("store: %v", err)
 				}
