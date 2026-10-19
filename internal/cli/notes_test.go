@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -153,6 +154,37 @@ func TestResolveNoteInputs_DedupePreservesOrder(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != a || got[1] != b {
 		t.Fatalf("expected [a, b], got %v", got)
+	}
+}
+
+// TestResolveNoteInputs_DedupesCaseVariantsOfOneFile checks two spellings of
+// one note collapse to the first. On a case-sensitive volume `note.md` is a
+// different (missing) path, so both are kept and the assertion says so.
+func TestResolveNoteInputs_DedupesCaseVariantsOfOneFile(t *testing.T) {
+	root := t.TempDir()
+	upper := filepath.Join(root, "Note.md")
+	lower := filepath.Join(root, "note.md")
+	if err := os.WriteFile(upper, []byte("body"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{upper}
+	if !sameExistingFile(upper, lower) {
+		want = []string{upper, lower}
+	}
+	got, err := resolveNoteInputs(root, []string{upper, lower, upper}, nil, false)
+	if err != nil {
+		t.Fatalf("resolveNoteInputs: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("arguments: got %v, want %v", got, want)
+	}
+	stdin, err := readStdinPaths(strings.NewReader(upper+"\n"+lower+"\n"), root, false)
+	if err != nil {
+		t.Fatalf("readStdinPaths: %v", err)
+	}
+	if !reflect.DeepEqual(stdin, want) {
+		t.Fatalf("stdin: got %v, want %v", stdin, want)
 	}
 }
 

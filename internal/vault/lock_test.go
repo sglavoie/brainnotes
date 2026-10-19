@@ -203,6 +203,54 @@ func TestEscalatedLockUsesOneDescriptorAndExcludesEveryPath(t *testing.T) {
 	after.release()
 }
 
+// TestPathLocksExcludeCaseAndNormalizationVariants is the reason lock names are
+// folded: on APFS, HFS+ and NTFS `Note.md`, `note.md` and the NFD spelling of an
+// accented name are one file, so two writers naming it differently must contend
+// for one lock. The key is folded on every volume, so this holds whether or not
+// the temp directory is case-sensitive.
+func TestPathLocksExcludeCaseAndNormalizationVariants(t *testing.T) {
+	requireLocking(t)
+
+	root := txnTestRoot(t, map[string]string{"Note.md": "n\n"})
+	for name, spellings := range map[string][2]string{
+		"case":          {"Note.md", "nOTE.md"},
+		"folder case":   {"Dir/Note.md", "dir/note.md"},
+		"normalization": {"café.md", "café.md"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			held, err := acquirePathLocks(root, 20*time.Millisecond, 0, []string{filepath.Join(root, spellings[0])})
+			if err != nil {
+				t.Fatalf("first acquire: %v", err)
+			}
+			defer held.release()
+			other, err := acquirePathLocks(root, 20*time.Millisecond, 0, []string{filepath.Join(root, spellings[1])})
+			if !IsTxnLockBusy(err) {
+				other.release()
+				t.Fatalf("%q while %q is held: err = %v, want *TxnLockBusyError", spellings[1], spellings[0], err)
+			}
+		})
+	}
+}
+
+// TestPathLocksCollapseVariantSpellingsInOneSet checks the other half of a
+// shared lock name: one caller naming a note under two spellings must take its
+// lock once, not wait out the budget against itself.
+func TestPathLocksCollapseVariantSpellingsInOneSet(t *testing.T) {
+	requireLocking(t)
+
+	root := txnTestRoot(t, map[string]string{"Note.md": "n\n"})
+	locks, err := acquirePathLocks(root, 20*time.Millisecond, 0,
+		[]string{filepath.Join(root, "Note.md"), filepath.Join(root, "note.md")})
+	if err != nil {
+		t.Fatalf("acquire both spellings: %v", err)
+	}
+	defer locks.release()
+	// The vault guard plus a single path lock.
+	if got := len(locks.files); got != 2 {
+		t.Fatalf("held %d lock descriptors, want 2 (guard and one path)", got)
+	}
+}
+
 // TestOrdinaryLocksShareTheVaultGuard checks the guard did not accidentally
 // serialize the ordinary case: two writers on different paths must still run at
 // the same time, or every concurrent bn write in the vault would queue.

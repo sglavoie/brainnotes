@@ -8,6 +8,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
 const (
@@ -323,32 +325,11 @@ func acquirePathLocksRaw(root string, wait time.Duration, escalateAbove int, pat
 	if !lockingSupported || len(paths) == 0 {
 		return locks, nil
 	}
-	if wait <= 0 {
-		wait = pathLockTimeout
-	}
-	if escalateAbove <= 0 {
-		escalateAbove = MaxLockedPaths()
-	}
-	// Lock names have to be relative to the resolved root, or two processes
-	// reaching one vault by different symlinked names would hash different lock
-	// files and exclude nobody.
-	realRoot, err := filepath.EvalSymlinks(root)
+	wait, escalateAbove = lockDefaults(wait, escalateAbove)
+	realRoot, resolved, err := resolveLockTargets(root, paths)
 	if err != nil {
-		return nil, fmt.Errorf("vault: resolve vault root %q: %w", root, err)
+		return nil, err
 	}
-	resolved := make([]string, 0, len(paths))
-	for _, path := range paths {
-		abs, err := resolveVaultPath(root, path)
-		if err != nil {
-			return nil, err
-		}
-		resolved = append(resolved, abs)
-	}
-	// Duplicates would deadlock against themselves, so collapse them. They also
-	// must not count toward escalation, or two names for one note would push a
-	// small set over the budget.
-	sort.Strings(resolved)
-	resolved = dedupeSorted(resolved)
 
 	dir := filepath.Join(realRoot, filepath.FromSlash(pathLockRelDir))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -364,25 +345,78 @@ func acquirePathLocksRaw(root string, wait time.Duration, escalateAbove int, pat
 	if exclusiveGuard {
 		return locks, nil
 	}
-
-	for _, path := range resolved {
-		file, err := lockOne(filepath.Join(dir, lockFileName(realRoot, path)), path, true, wait)
-		if err != nil {
-			locks.release()
-			return nil, err
-		}
-		locks.files = append(locks.files, file)
+	if err := locks.lockEach(dir, resolved, wait); err != nil {
+		return nil, err
 	}
 	return locks, nil
 }
 
-func dedupeSorted(sorted []string) []string {
-	unique := sorted[:0]
-	for i, path := range sorted {
-		if i > 0 && path == sorted[i-1] {
+// lockDefaults fills a zero wait with pathLockTimeout and a zero escalation
+// threshold with MaxLockedPaths().
+func lockDefaults(wait time.Duration, escalateAbove int) (time.Duration, int) {
+	if wait <= 0 {
+		wait = pathLockTimeout
+	}
+	if escalateAbove <= 0 {
+		escalateAbove = MaxLockedPaths()
+	}
+	return wait, escalateAbove
+}
+
+// resolveLockTargets resolves the vault root and every path the way FileTxn
+// does, keys each by its lock name, and collapses duplicates.
+//
+// Lock names have to be relative to the resolved root, or two processes reaching
+// one vault by different symlinked names would hash different lock files and
+// exclude nobody. Duplicates would deadlock against themselves, so they are
+// collapsed — by key, because two spellings of one note on a case-insensitive
+// volume share a lock file. They also must not count toward escalation, or two
+// names for one note would push a small set over the budget. Sorting by key is
+// the global order every writer takes its locks in.
+func resolveLockTargets(root string, paths []string) (string, []lockTarget, error) {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", nil, fmt.Errorf("vault: resolve vault root %q: %w", root, err)
+	}
+	resolved := make([]lockTarget, 0, len(paths))
+	for _, path := range paths {
+		abs, err := resolveVaultPath(root, path)
+		if err != nil {
+			return "", nil, err
+		}
+		resolved = append(resolved, lockTarget{key: lockKey(realRoot, abs), path: abs})
+	}
+	return realRoot, dedupeLockTargets(resolved), nil
+}
+
+// lockEach takes one exclusive lock per target, in order, releasing everything
+// held (the guard included) if any acquisition fails.
+func (l *pathLocks) lockEach(dir string, targets []lockTarget, wait time.Duration) error {
+	for _, target := range targets {
+		file, err := lockOne(filepath.Join(dir, lockNameForKey(target.key)), target.path, true, wait)
+		if err != nil {
+			l.release()
+			return err
+		}
+		l.files = append(l.files, file)
+	}
+	return nil
+}
+
+// lockTarget pairs a resolved path with the key its lock file is named after.
+type lockTarget struct {
+	key  string
+	path string
+}
+
+func dedupeLockTargets(targets []lockTarget) []lockTarget {
+	sort.Slice(targets, func(i, j int) bool { return targets[i].key < targets[j].key })
+	unique := targets[:0]
+	for i, target := range targets {
+		if i > 0 && target.key == targets[i-1].key {
 			continue
 		}
-		unique = append(unique, path)
+		unique = append(unique, target)
 	}
 	return unique
 }
@@ -434,9 +468,26 @@ func (l *pathLocks) release() {
 // lockFileName hashes the path so one flat directory can hold a lock for every
 // note without mirroring the vault's folders or hitting name-length limits.
 func lockFileName(root, path string) string {
+	return lockNameForKey(lockKey(root, path))
+}
+
+func lockNameForKey(key string) string {
+	return HashBytes([]byte(key)) + ".lock"
+}
+
+// lockKey is the vault-relative path a lock is named after, case-folded and
+// NFC-normalized. On a case- or normalization-insensitive volume (APFS and HFS+
+// by default, NTFS) `Note.md`, `note.md` and the NFD spelling of an accented
+// name are one file, and hashing them as typed gave each spelling its own lock
+// file — two writers of one note excluded nobody. Folding unconditionally rather
+// than probing the volume keeps the key a pure function of the path: on a
+// case-sensitive volume it only makes two distinct case-variant files share a
+// lock, which costs a little concurrency and never correctness. NFC runs on both
+// sides of the fold for the reasons textnorm.Fold documents.
+func lockKey(root, path string) string {
 	name := path
 	if rel, err := filepath.Rel(root, path); err == nil {
 		name = filepath.ToSlash(rel)
 	}
-	return HashBytes([]byte(name)) + ".lock"
+	return textnorm.NFC(textnorm.Fold(textnorm.NFC(name)))
 }

@@ -9,7 +9,44 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
+
+// noteInputSet collapses note arguments that name the same file. A raw string
+// comparison misses `Note.md` and `note.md` on a case-insensitive volume, and a
+// note listed under both spellings would be planned — and locked — twice.
+// Candidates are bucketed by a case-folded, NFC key so the os.SameFile check
+// only runs between spellings that could be one file; a path that does not
+// exist yet is only ever equal to its exact spelling.
+type noteInputSet struct {
+	buckets map[string][]string
+}
+
+func newNoteInputSet() *noteInputSet {
+	return &noteInputSet{buckets: make(map[string][]string)}
+}
+
+// add reports whether abs is new to the set, recording it when it is.
+func (s *noteInputSet) add(abs string) bool {
+	key := textnorm.NFC(textnorm.Fold(textnorm.NFC(abs)))
+	for _, seen := range s.buckets[key] {
+		if seen == abs || sameExistingFile(seen, abs) {
+			return false
+		}
+	}
+	s.buckets[key] = append(s.buckets[key], abs)
+	return true
+}
+
+func sameExistingFile(a, b string) bool {
+	infoA, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	infoB, err := os.Stat(b)
+	return err == nil && os.SameFile(infoA, infoB)
+}
 
 // resolveNoteInputs turns positional note arguments into a deduplicated list of
 // absolute paths within vaultRoot. If args is exactly ["-"], paths are read
@@ -24,7 +61,7 @@ func resolveNoteInputs(vaultRoot string, args []string, in io.Reader, nullSep bo
 	}
 
 	var paths []string
-	seen := make(map[string]struct{})
+	seen := newNoteInputSet()
 	for _, a := range args {
 		if a == "-" {
 			return nil, errors.New("'-' may only be used as the sole note argument")
@@ -41,11 +78,9 @@ func resolveNoteInputs(vaultRoot string, args []string, in io.Reader, nullSep bo
 			if err != nil {
 				return nil, err
 			}
-			if _, ok := seen[abs]; ok {
-				continue
+			if seen.add(abs) {
+				paths = append(paths, abs)
 			}
-			seen[abs] = struct{}{}
-			paths = append(paths, abs)
 		}
 	}
 	return paths, nil
@@ -155,7 +190,7 @@ func readStdinPaths(in io.Reader, vaultRoot string, nullSep bool) ([]string, err
 		scanner.Split(splitNull)
 	}
 	var paths []string
-	seen := make(map[string]struct{})
+	seen := newNoteInputSet()
 	for scanner.Scan() {
 		// NUL-separated input is meant to preserve paths byte-for-byte (the
 		// whole point of -0 is to support paths with spaces/newlines), so we
@@ -181,11 +216,9 @@ func readStdinPaths(in io.Reader, vaultRoot string, nullSep bool) ([]string, err
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := seen[abs]; ok {
-			continue
+		if seen.add(abs) {
+			paths = append(paths, abs)
 		}
-		seen[abs] = struct{}{}
-		paths = append(paths, abs)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
