@@ -33,6 +33,9 @@
   --bn-scrollbar-thumb-hover: #9aa8c0;
 
   --bn-shadow-popover: 0 12px 26px rgba(15, 23, 42, 0.18);
+  /* Card lift and modal backdrop read the same in every theme. */
+  --bn-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --bn-backdrop: rgba(0, 0, 0, 0.45);
 
   --bn-code-bg: #edf2f7;
   --bn-code-text: #1f2b45;

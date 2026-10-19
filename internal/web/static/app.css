@@ -36,6 +36,9 @@
   --bn-scrollbar-thumb-hover: #9aa8c0;
 
   --bn-shadow-popover: 0 12px 26px rgba(15, 23, 42, 0.18);
+  /* Card lift and modal backdrop read the same in every theme. */
+  --bn-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --bn-backdrop: rgba(0, 0, 0, 0.45);
 
   --bn-code-bg: #edf2f7;
   --bn-code-text: #1f2b45;
@@ -2656,8 +2659,8 @@ code {
 .comparison-line { min-height: 1.5em; display: flex; gap: 0.5rem; padding: 0.15rem 0.65rem; font-size: 0.85rem; }
 .comparison-line code { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
 .comparison-marker { flex: 0 0 1ch; font-family: monospace; }
-.comparison-removed { background: color-mix(in srgb, #c04444 15%, var(--bn-surface)); }
-.comparison-added { background: color-mix(in srgb, #27824d 15%, var(--bn-surface)); }
+.comparison-removed { background: color-mix(in srgb, var(--bn-danger) 15%, var(--bn-surface)); }
+.comparison-added { background: color-mix(in srgb, var(--bn-success) 15%, var(--bn-surface)); }
 .comparison-ending { color: var(--bn-muted); font-size: 0.75rem; }
 .comparison-unchanged summary { padding: 0.5rem 0.65rem; color: var(--bn-muted); cursor: pointer; }
 .comparison-unavailable { color: var(--bn-muted); }
@@ -2669,7 +2672,8 @@ code {
   color: var(--bn-text);
 }
 
-.history-confirm::backdrop { background: rgba(0, 0, 0, 0.45); }
+/* Older engines do not let ::backdrop inherit custom properties. */
+.history-confirm::backdrop { background: var(--bn-backdrop, rgba(0, 0, 0, 0.45)); }
 
 .history-confirm-description {
   white-space: pre-wrap;
@@ -6075,7 +6079,7 @@ code {
   border-color: var(--bn-border);
   padding: 0.8rem;
   background: var(--bn-surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--bn-shadow-card);
   transition:
     border-color 120ms ease,
     background-color 120ms ease,
@@ -6587,7 +6591,7 @@ code {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--bn-backdrop);
 }
 
 .properties-dialog-backdrop[hidden] {

@@ -207,7 +207,7 @@
   border-color: var(--bn-border);
   padding: 0.8rem;
   background: var(--bn-surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--bn-shadow-card);
   transition:
     border-color 120ms ease,
     background-color 120ms ease,
