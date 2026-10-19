@@ -19,11 +19,26 @@ source <(bn completion zsh) && compdef _bn bn
 Beyond command and flag names, completion reads the vault the command would
 act on (`--vault`, `$BNOTES_VAULT`, or the upward search): note titles for the
 commands that take one note (`open`, `links`, `backlinks`, `related`,
-`context`, `pin`, `unpin`, `remove`, `move`, `rename`), and the values of
-`--view`, `--tag`, `--folder` and `--property`. Enumerated flags such as
-`related --mode`, `context --format`, `graph --format`, `find --sort` and
-`set --value-type` complete their fixed values. A vault that does not load completes
-nothing.
+`context`, `pin`, `unpin`, `remove`, `move`, `rename`), both notes of
+`related feedback`, `find --relative-to`, and the values of `--view`, `--tag`,
+`--folder` and `--property`. It also completes:
+
+| Argument | Candidates |
+| --- | --- |
+| `views show <name>` | saved view names |
+| `new <template>` | template names, shortest form (`Book Template.md` completes as `Book`) |
+| `undo [id]` | journal entry IDs, most recent first, described by their command |
+| `restore <archive>` | archives under `backups/`, most recent first |
+| `move <note> <folder>` | a note title, then a folder |
+| `capture --note` | vault-relative note paths |
+| `rename-key <key>`, `replace <key>` | frontmatter keys used in the vault |
+| `values <key>` | frontmatter keys used in the vault |
+| `config explain KEY` | every configuration key |
+| `config get/set/unset KEY` | the scriptable keys |
+
+Enumerated flags such as `related --mode`, `context --format`, `graph --format`,
+`find --sort` and `set --value-type` complete their fixed values. A vault that
+does not load completes nothing.
 
 ## Scripting: exit status and JSON
 

@@ -41,7 +41,34 @@ var enumFlagValues = map[string]map[string][]string{
 var noteArgCommands = map[string]bool{
 	"bn backlinks": true, "bn context": true, "bn links": true, "bn open": true,
 	"bn pin": true, "bn unpin": true, "bn related": true, "bn remove": true,
-	"bn move": true, "bn rename": true,
+	"bn rename": true,
+}
+
+// positionalCompleters complete the positional arguments of the commands whose
+// arguments are not a single note: each completer is chosen by position. They
+// live in completion_args.go.
+var positionalCompleters = map[string]completer{
+	"bn values":           positional(cobra.ShellCompDirectiveNoFileComp, vaultCompleter(frontmatterKeys)),
+	"bn move":             positional(cobra.ShellCompDirectiveNoFileComp, vaultCompleter(noteTitles), vaultCompleter(folderNames)),
+	"bn related feedback": positional(cobra.ShellCompDirectiveNoFileComp, vaultCompleter(noteTitles), vaultCompleter(noteTitles)),
+	"bn views show":       positional(cobra.ShellCompDirectiveNoFileComp, vaultCompleter(viewNames)),
+	"bn new":              positional(cobra.ShellCompDirectiveNoFileComp, vaultCompleter(templateNames)),
+	"bn undo":             positional(cobra.ShellCompDirectiveNoFileComp, journalEntryCompleter),
+	"bn restore":          positional(cobra.ShellCompDirectiveNoFileComp, backupArchiveCompleter),
+	"bn config explain":   positional(cobra.ShellCompDirectiveNoFileComp, staticCompleter(configKeys())),
+	"bn config get":       positional(cobra.ShellCompDirectiveNoFileComp, staticCompleter(scriptableConfigKeys())),
+	"bn config set":       positional(cobra.ShellCompDirectiveNoFileComp, staticCompleter(scriptableConfigKeys())),
+	"bn config unset":     positional(cobra.ShellCompDirectiveNoFileComp, staticCompleter(scriptableConfigKeys())),
+	// The trailing [notes...] keep their path completion.
+	"bn rename-key": positional(cobra.ShellCompDirectiveDefault, vaultCompleter(frontmatterKeys), noCompletion),
+	"bn replace":    positional(cobra.ShellCompDirectiveDefault, vaultCompleter(frontmatterKeys), noCompletion, noCompletion),
+}
+
+// vaultFlagValues complete flags whose names are too generic to register on
+// every command that defines them, by command path and flag name.
+var vaultFlagValues = map[string]map[string]func(*config.Config, *vault.Vault) []string{
+	"bn find":    {"relative-to": noteTitles},
+	"bn capture": {"note": notePaths},
 }
 
 func recallPurposes() []string {
@@ -65,17 +92,22 @@ func registerCompletions(root *cobra.Command) {
 		for flag, values := range enumFlagValues[path] {
 			registerFlagValues(cmd, flag, staticCompleter(values))
 		}
+		for flag, names := range vaultFlagValues[path] {
+			registerFlagValues(cmd, flag, vaultCompleter(names))
+		}
 		registerFlagValues(cmd, "view", vaultCompleter(viewNames))
 		registerFlagValues(cmd, "tag", vaultCompleter(tagNames))
 		registerFlagValues(cmd, "property", vaultCompleter(definedPropertyNames))
 		registerFlagValues(cmd, "folder", vaultCompleter(folderNames))
-		if noteArgCommands[path] && cmd.ValidArgsFunction == nil {
+		if cmd.ValidArgsFunction != nil {
+			return
+		}
+		if fn, ok := positionalCompleters[path]; ok {
+			cmd.ValidArgsFunction = fn
+		} else if noteArgCommands[path] {
 			cmd.ValidArgsFunction = firstArgCompleter(vaultCompleter(noteTitles))
 		}
 	})
-	if values := findCommand(root, "values"); values != nil && values.ValidArgsFunction == nil {
-		values.ValidArgsFunction = firstArgCompleter(vaultCompleter(frontmatterKeys))
-	}
 }
 
 func walkCommands(cmd *cobra.Command, visit func(*cobra.Command)) {
@@ -83,15 +115,6 @@ func walkCommands(cmd *cobra.Command, visit func(*cobra.Command)) {
 	for _, child := range cmd.Commands() {
 		walkCommands(child, visit)
 	}
-}
-
-func findCommand(root *cobra.Command, name string) *cobra.Command {
-	for _, child := range root.Commands() {
-		if child.Name() == name {
-			return child
-		}
-	}
-	return nil
 }
 
 type completer = func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective)
@@ -125,17 +148,27 @@ func firstArgCompleter(fn completer) completer {
 // it. Every failure completes nothing.
 func vaultCompleter(names func(*config.Config, *vault.Vault) []string) completer {
 	return func(cmd *cobra.Command, _ []string, _ string) ([]cobra.Completion, cobra.ShellCompDirective) {
-		vaultFlag, _ := cmd.Flags().GetString("vault")
-		cfg, err := config.Load(config.LoadOptions{VaultFlag: vaultFlag})
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		v, err := vault.Open(cfg)
-		if err != nil {
+		cfg, v, ok := loadCompletionVault(cmd)
+		if !ok {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		return names(cfg, v), cobra.ShellCompDirectiveNoFileComp
 	}
+}
+
+// loadCompletionVault loads the configuration and vault the command would act
+// on, reading only. ok is false when either does not load.
+func loadCompletionVault(cmd *cobra.Command) (*config.Config, *vault.Vault, bool) {
+	vaultFlag, _ := cmd.Flags().GetString("vault")
+	cfg, err := config.Load(config.LoadOptions{VaultFlag: vaultFlag})
+	if err != nil {
+		return nil, nil, false
+	}
+	v, err := vault.Open(cfg)
+	if err != nil {
+		return nil, nil, false
+	}
+	return cfg, v, true
 }
 
 func viewNames(cfg *config.Config, _ *vault.Vault) []string {
