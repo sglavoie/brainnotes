@@ -110,7 +110,7 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 	if err != nil {
 		return err
 	}
-	notes, err := v.Notes()
+	notes, err := loadReadableNotes(cmd, v)
 	if err != nil {
 		return err
 	}
@@ -122,9 +122,9 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 }
 
 // collectValueCounts walks the notes and tallies every occurrence of property.
-// A note whose frontmatter will not parse, or which does not carry the property,
-// is skipped silently — `values` reports on what it can read rather than
-// refusing the whole vault for one bad note. files is nil unless wantFiles.
+// A note which does not carry the property is skipped. A note whose frontmatter
+// will not parse never reaches here: loadReadableNotes already left it out and
+// warned about it on stderr. files is nil unless wantFiles.
 func collectValueCounts(v *vault.Vault, notes []*vault.Note, property string, wantFiles, verbose bool, errOut io.Writer) (map[string]int, map[string]map[string]struct{}) {
 	counts := map[string]int{}
 	var files map[string]map[string]struct{}

@@ -22,6 +22,19 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
 Prints matching absolute paths, one per line (or NUL-separated with `-0`).
 Pipe into `fzf` with `-i` for an interactive picker.
 
+A note whose frontmatter is not valid YAML does not stop the read. `bn find`,
+`bn search`, `bn links`, `bn backlinks`, `bn values`, `bn graph`,
+`bn related`, and `bn context` leave it out of their results and print one
+line per skipped note on stderr, so stdout stays a clean result:
+
+```
+find: warning: skipped Inbox/draft.md: frontmatter: parse yaml: yaml: line 1: did not find expected ',' or ']'
+```
+
+A skipped note is absent from the link graph too, so a link to it can read as
+broken until it is fixed. `bn lint` reports it as a violation instead, and the
+commands that change notes still refuse to run until it parses.
+
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.
 

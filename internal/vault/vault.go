@@ -244,6 +244,42 @@ func (v *Vault) Notes() ([]*Note, error) {
 	return notes, nil
 }
 
+// SkippedNote is a note NotesLenient left out because its frontmatter could
+// not be parsed.
+type SkippedNote struct {
+	// Path is the absolute path of the note.
+	Path string
+	// Err is the underlying parse error, without the path prefix.
+	Err error
+}
+
+// NotesLenient is Notes for read-only callers: a note whose frontmatter cannot
+// be parsed is left out of notes and reported in skipped, in walk order,
+// instead of aborting the whole load. Any other failure (an unreadable file, a
+// walk error) still aborts, because it says the result cannot be trusted.
+//
+// Mutating commands keep using Notes. A rewrite planned over a vault with
+// silently missing notes could leave links to those notes stale.
+func (v *Vault) NotesLenient() (notes []*Note, skipped []SkippedNote, err error) {
+	err = v.Walk(WalkFilter{}, func(n *Note) error {
+		loadErr := n.Load()
+		var parseErr *ParseError
+		if errors.As(loadErr, &parseErr) {
+			skipped = append(skipped, SkippedNote{Path: n.Path, Err: parseErr.Err})
+			return nil
+		}
+		if loadErr != nil {
+			return loadErr
+		}
+		notes = append(notes, n)
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return notes, skipped, nil
+}
+
 // ResolveByTitle finds a note by case-insensitive filename stem. When folder
 // is non-empty the search is scoped to that vault-relative folder (matched
 // against the note's containing folder); otherwise the entire vault is

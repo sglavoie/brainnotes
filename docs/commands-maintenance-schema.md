@@ -13,6 +13,11 @@ property definitions in `[frontmatter.properties]` and prints the violations.
 Nothing is written. Exit code `0` means clean; exit code `1` means violations
 were found, which makes `bn lint` usable directly as a CI or pre-commit gate.
 
+A note whose frontmatter cannot be parsed at all is reported as a
+`frontmatter: unparsable` violation carrying the parse error, rather than
+aborting the run. It is reported whatever the filters select, because a note
+that cannot be parsed cannot be matched against them either.
+
 `--property <key>` narrows the check to one declared property; naming a
 property that is not declared is an error rather than a silent pass. With no
 properties declared at all, `bn lint` prints a hint pointing at the config file

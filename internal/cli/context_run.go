@@ -53,7 +53,7 @@ func runContextCommand(cmd *cobra.Command, args []string, options contextOptions
 	if err != nil {
 		return err
 	}
-	payload, err := buildContextPayload(v, args[0], validated, setup.rankOptions())
+	payload, err := buildContextPayload(cmd.ErrOrStderr(), v, args[0], validated, setup.rankOptions())
 	if err != nil {
 		return err
 	}

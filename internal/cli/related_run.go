@@ -37,7 +37,7 @@ func runRelatedCommand(cmd *cobra.Command, args []string, options relatedOptions
 		return err
 	}
 
-	queryResult, err := buildRelatedQuery(v, args[0], mode, setup.rankOptions())
+	queryResult, err := buildRelatedQuery(cmd.ErrOrStderr(), cmd.Name(), v, args[0], mode, setup.rankOptions())
 	if err != nil {
 		return err
 	}
