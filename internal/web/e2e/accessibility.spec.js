@@ -88,7 +88,7 @@ test("main destinations and Search are directly available on desktop", async ({ 
   await page.goto("/n/Reading");
   const nav = page.getByRole("navigation", { name: "Main destinations" });
   await expect(nav).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Search" })).toHaveAttribute("href", "/library");
+  await expect(nav.getByRole("link", { name: "Search notes", exact: true })).toHaveAttribute("href", "/library");
   await expect(nav.getByRole("link", { name: "Brief" })).toBeVisible();
   await page.locator(".source-editor-workspace > summary").click();
   await expect(nav).toBeHidden();

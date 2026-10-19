@@ -66,18 +66,29 @@ const renderFailure = (line: HTMLElement, outcome: { code: string; message: stri
   line.classList.add("is-attention");
 };
 
-/** Reads the status once and writes the line. Exported for the panel's reload. */
+/**
+ * Reads the status once and writes the line. Exported for the panel's reload.
+ *
+ * The line is a live region and follow-up reads usually return the same answer,
+ * so an unchanged rendering leaves the DOM alone: rewriting identical text would
+ * have a screen reader announce it again after every read.
+ */
 export const renderSyncLine = (
   line: HTMLElement,
   outcome: SyncOutcome<SyncStatusResult>,
   doc: Document
 ): void => {
-  line.textContent = "";
+  const next = line.cloneNode(false) as HTMLElement;
   if (!outcome.ok) {
-    renderFailure(line, outcome);
+    renderFailure(next, outcome);
+  } else {
+    renderLine(next, outcome.result, doc);
+  }
+  if (next.innerHTML === line.innerHTML && next.className === line.className) {
     return;
   }
-  renderLine(line, outcome.result, doc);
+  line.className = next.className;
+  line.replaceChildren(...Array.from(next.childNodes));
 };
 
 const bindings = new WeakMap<Document, () => void>();

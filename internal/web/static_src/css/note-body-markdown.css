@@ -8,12 +8,12 @@
 }
 
 .note-body .heading-anchor {
-  color: var(--bn-faint);
+  color: var(--bn-muted);
   font-weight: 500;
-  opacity: 0.72;
 }
 
-.note-body .heading-anchor:hover {
+.note-body .heading-anchor:hover,
+.note-body .heading-anchor:focus-visible {
   color: var(--bn-link);
   opacity: 1;
   text-decoration: none;
