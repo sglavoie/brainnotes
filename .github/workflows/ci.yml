@@ -51,6 +51,19 @@ jobs:
       - name: Install the pinned golangci-lint
         run: just install-lint
 
+      # The job runs golangci-lint over the whole tree twice (the phase gate,
+      # then `just lint-new` inside `just ci`) plus two self-tests. Its analysis
+      # cache is keyed on what can change a result: dependencies and the linter
+      # configuration. A restored cache only skips re-analysis of unchanged
+      # packages; golangci-lint still re-checks anything whose source changed.
+      - name: Cache golangci-lint analysis
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-
+
       # The ratchet's own regression test, kept out of `just ci` because it
       # builds a throwaway repository and runs golangci-lint a second time — a
       # cost the local envelope should not pay on every run. It belongs here
