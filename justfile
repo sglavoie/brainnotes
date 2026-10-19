@@ -14,7 +14,7 @@ guard_pkg := "./cmd/bn-vault-guard"
 
 # bn-vault-sync is the second private companion, and it is installed on the same
 # terms and for the same reason: it applies the peer's packages through the same
-# import path `bn sync` uses, so a companion a version behind its CLI is two
+# import path the web workspace's sync review uses, so a companion a version behind its CLI is two
 # processes disagreeing about what a package means. It is a separate process from
 # the guard rather than another loop inside it because a vault that synchronizes
 # still needs its content history protected when this one is not installed.
@@ -335,10 +335,15 @@ lint-phase-gate: _require-golangci
 lint-phase-gate-selftest: _require-golangci
     @python3 -B scripts/lint_phase_gate_selftest.py
 
-# Format Go code with gofmt
+# Format Go code with gofmt (skipping node_modules, as `gofmt_check` does)
 fmt:
-    @echo "Formatting code..."
-    gofmt -w .
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Formatting code..."
+    files=$({{ gofmt_check }})
+    if [ -n "$files" ]; then
+        printf '%s\n' "$files" | while IFS= read -r f; do gofmt -w "$f"; done
+    fi
 
 # Check formatting, run vet, and gate new code on complexity
 lint:
@@ -375,7 +380,13 @@ ci:
     npm run lint:web
     npm run test:web
     npm run check:web-bundles
-    python3 -B scripts/test_ui_qualification.py
+    # Every scripts/test_*.py, not a hand-kept list: the vault-safety evidence
+    # verifier's own tests sat outside this recipe once, so a regression in the
+    # verifier would have read as a green run.
+    python3 -B -m unittest discover -s scripts -p 'test_*.py'
+    # A go.mod or go.sum that `go mod tidy` would rewrite is drift a reviewer
+    # cannot see in the diff that caused it.
+    go mod tidy -diff
     echo "CI clean"
 
 # `metrics` is deliberately absent from `just ci` and from `just lint`: it is a
@@ -383,12 +394,10 @@ ci:
 # Compare its output against docs/internals/refactor-baseline.md, which is the
 # committed baseline every refactoring session measures against.
 #
-# `-B` is load-bearing, not a style choice: metrics.py imports sibling
-# metrics_*.py modules, and without it Python would drop scripts/__pycache__/
-# into the working tree. That directory is ignored only by a *user's global*
-# gitignore, never by this repo's — the hazard the .gitignore comment already
-# warns about — so on any other machine a read-only report would leave
-# untracked files behind.
+# `-B` keeps a read-only report read-only: metrics.py imports sibling
+# metrics_*.py modules, and without it Python would write scripts/__pycache__/
+# into the working tree. The repo's .gitignore now covers that directory, but a
+# report that writes nothing is still the better contract.
 
 # Report the refactoring measurements (file size, complexity, duplication, dead code)
 metrics:

@@ -14,7 +14,7 @@ each of them is cheaper than fixing the thing the gate was watching.
 
 The tests are split across `test_verify_vault_safety_{record,results,claims}.py`;
 this module holds the shared fixture. Run them with
-`python3 -m unittest discover -s scripts -p "test_verify_vault_safety*.py"`.
+`python3 -B -m unittest discover -s scripts -p "test_verify_vault_safety*.py"`.
 """
 
 from __future__ import annotations

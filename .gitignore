@@ -1,6 +1,12 @@
 /bn
 node_modules/
 
+# Python bytecode from scripts/. The documented commands pass `-B`, but an
+# interpreter run without it must not leave untracked files behind, and a
+# contributor's global ignore file is not something this repository can count on.
+__pycache__/
+*.pyc
+
 # Everything `npm run test:e2e` generates: the fixture manifest naming this
 # run's throwaway vaults, and Playwright's traces and screenshots. The fixture
 # itself lives under the system temporary directory and is never in the
