@@ -160,7 +160,9 @@ func (r *RestoreReview) validateRotation() error {
 
 // PrepareRestoreReviewContext quarantines an enrolled vault after restore. It
 // is idempotent for one operationID so restore recovery can cross this boundary
-// more than once, while a later restore of the same bytes still rotates again.
+// more than once, while a later restore of the same bytes still rotates again:
+// a marker left by any other operation always remints, whatever phase it
+// records.
 func PrepareRestoreReviewContext(ctx context.Context, root, operationID string, now func() time.Time) (*RestoreReview, error) {
 	if !validReviewDigest(operationID) {
 		return nil, fmt.Errorf("vaultsync: restore operation identity must be 64 lowercase hex characters")
@@ -210,11 +212,16 @@ func replaceRestoreReview(ctx context.Context, root string, review *RestoreRevie
 	if err != nil {
 		return nil, err
 	}
+	// Same operation: a retry of one interrupted restore, which must keep the
+	// identity it already proposed. Any other marker — another restore's, or a
+	// survivor's, in whatever phase — is stale bytes the checkpoint carried, and
+	// is replaced rather than obeyed. Refusing a non-pending one would make a
+	// checkpoint captured mid-acceptance unrestorable for good, because every
+	// retry restores the same stuck marker; and a marker describing a decision
+	// taken before the rollback cannot describe the enrollment the rollback just
+	// put back.
 	if existing != nil && existing.Restored && existing.RestoreOperation == review.RestoreOperation {
 		return existing, nil
-	}
-	if existing != nil && existing.Phase != ReviewPending {
-		return nil, fmt.Errorf("vaultsync: cannot replace a restore review already in phase %q", existing.Phase)
 	}
 	if err := writeRestoreReview(root, review); err != nil {
 		return nil, err
