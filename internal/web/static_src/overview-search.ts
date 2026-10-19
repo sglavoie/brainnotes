@@ -287,6 +287,8 @@ export const initOverviewSearchResults = (deps: OverviewSearchDeps = {}): void =
 // Only a transition between browsing and searching changes the disclosure.
 // Opening activity during a search remains the reader's choice while typing.
 const syncLibraryActivity = (searching: boolean): void => {
+  const search = document.querySelector<HTMLElement>("[data-library-search]");
+  if (search) search.dataset.searching = String(searching);
   const activity = document.querySelector<HTMLDetailsElement>("[data-library-activity]");
   if (!activity || activity.dataset.searching === String(searching)) return;
   activity.dataset.searching = String(searching);

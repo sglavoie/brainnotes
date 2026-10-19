@@ -122,7 +122,8 @@
 {{define "workspaceMenu"}}
   <div class="focused-workspace-tools">
   {{template "desktopWorkspaceNav" .}}
-  {{if and (not readOnly) (ne . "new")}}<a class="bn-button new-note-action{{if and (ne . "library") (ne . "brief")}} bn-secondary{{end}}" href="/new">New note</a>{{end}}
+  {{if ne . "library"}}{{template "mobileSearchShortcut" .}}{{end}}
+  {{if and (not readOnly) (ne . "new")}}<a class="bn-button new-note-action{{if and (ne . "library") (ne . "brief")}} bn-secondary{{end}}" href="/new" aria-label="New note" title="New note"><span class="new-note-label">New note</span><span class="new-note-symbol" aria-hidden="true">+</span></a>{{end}}
   <details class="source-editor-workspace">
     <summary>Workspace</summary>
     <div class="source-editor-workspace-content">
@@ -134,4 +135,10 @@
     </div>
   </details>
   </div>
+{{end}}
+
+{{define "mobileSearchShortcut"}}
+  <a class="mobile-search-shortcut" href="/library" aria-label="Search notes" title="Search notes">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+  </a>
 {{end}}

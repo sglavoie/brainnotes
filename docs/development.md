@@ -89,7 +89,9 @@ For physical-device qualification, use the same
 [earlier mobile editor record](operations/mobile-editor-qualification.md) is
 historical evidence; its missing device and browser versions mean it cannot
 qualify a new build. The [2026-10-19 browser UI record](operations/ui-qualification-2026-10-19.md)
-captures the current worktree's physical-phone and VoiceOver pass. Never test
+captures a historical worktree's physical-phone and VoiceOver pass. Qualify the
+final release commit with the launcher's `--release --record` options; preserve
+its build identity and completed observation fields with the release. Never test
 against an ambient personal vault.
 
 ## Vault performance

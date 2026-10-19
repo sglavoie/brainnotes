@@ -19,7 +19,10 @@ The controller is one page's worth of behavior split across `graph-controller*.t
 
 ## Workspace and keyboard navigation
 
-Layout controls live in the native **Graph layout** disclosure. The expression
+Secondary controls live under **Refine graph**, with layout controls in the native
+**Graph layout** disclosure. An incoming filter or display adjustment opens Refine
+graph; its summary retains an active marker when a person collapses it. On phones,
+the canvas precedes the selected-note details. The expression
 editor opens for an incoming expression; navigation uses the shared Workspace
 menu without adding a second text-search input. `graph-note-list.ts` builds a
 native listbox from `displayGraphElements` only and reuses options until that

@@ -106,6 +106,17 @@ test("main destinations and Search are directly available on desktop", async ({ 
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(nav).toBeHidden();
+  for (const path of ["/", "/n/Reading", "/settings", "/graph", "/edit?key=Writing"]) {
+    await page.goto(path);
+    const search = page.getByRole("link", { name: "Search notes", exact: true });
+    await expect(search).toBeInViewport();
+    const bounds = await search.boundingBox();
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    await search.click();
+    await expect(page).toHaveURL(/\/library$/);
+  }
+  await page.goto("/edit?key=Writing");
   await page.locator(".source-editor-workspace > summary").click();
   await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" })).toBeVisible();
 });

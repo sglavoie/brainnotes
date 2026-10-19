@@ -53,10 +53,12 @@ test("reading opens the relevant source passage and mobile pane switches keep it
 });
 
 for (const width of [390, 1280]) test(`Graph keyboard navigation and layout controls at ${width}px`, async ({ page }) => {
-  await page.setViewportSize({ width, height: 900 });
+  await page.setViewportSize({ width, height: width === 390 ? 640 : 900 });
   await page.goto("/graph");
   const list = page.getByLabel("Notes and folders in this view");
   await expect(list.locator("option").first()).toBeAttached();
+  await expect(page.locator(".graph-refine-options")).not.toHaveAttribute("open");
+  if (width === 390) await expect(page.locator("#graph-canvas")).toBeInViewport({ ratio: 1 });
   await expect(page.locator("#graph-spread-input")).toBeHidden();
   await list.focus();
   await page.keyboard.press("Home");
@@ -69,17 +71,24 @@ for (const width of [390, 1280]) test(`Graph keyboard navigation and layout cont
   await expect(list).not.toHaveValue(selected);
   await page.keyboard.press("Escape");
   await expect(page.locator("#graph-open-note")).toHaveAttribute("aria-disabled", "true");
+  await page.locator(".graph-refine-options > summary").click();
   await page.getByText("Graph layout", { exact: true }).click();
   await expect(page.locator("#graph-spread-input")).toBeVisible();
   await page.locator("#graph-collapse-input").focus();
   await page.keyboard.press("Home");
   await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".graph-refine-options > summary")).toContainText("active");
   const folder = list.locator('option').filter({ hasText: "Expand folder: Notes" });
   await expect(folder).toHaveCount(1);
   await list.selectOption({ label: "Expand folder: Notes" });
   await expect(folder).toHaveCount(0);
   await expect(page.locator("#graph-open-note")).toHaveAttribute("aria-disabled", "true");
   await page.locator("#graph-filter-input").fill("Beta");
+  await expect(list.locator("option")).toHaveCount(3);
+  await page.locator(".graph-refine-options > summary").click();
+  await expect(page.locator(".graph-refine-options > summary")).toContainText("active");
+  await page.reload();
+  await expect(page.locator(".graph-refine-options")).toHaveAttribute("open", "");
   await expect(list.locator("option")).toHaveCount(3);
   await list.selectOption("beta");
   await page.locator("#graph-open-note").click();

@@ -10,8 +10,12 @@ export const formatHistoryTimestamp = (value: string): string => {
     return value;
   }
   return date.toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "longOffset",
   });
 };
 

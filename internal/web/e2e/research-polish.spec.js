@@ -15,10 +15,13 @@ test("mobile Synthesis opens on writing and keeps a draft through failed preview
   await expect(draft(page)).toBeInViewport();
   await expect(title(page)).toBeInViewport();
   await expect(page.locator("[data-synthesize-agent-status]")).toBeHidden();
+  await expect(page.locator("#synthesis-context > summary")).toContainText("not prepared");
   await title(page).fill("A considered conclusion");
   await draft(page).fill("Words to keep after a failed preview.");
   await page.getByRole("button", { name: "Prepare context" }).click();
   await expect(page.locator("[data-synthesize-context-status]")).toContainText("Context ready");
+  await expect(page.locator("#synthesis-context > summary")).toContainText("ready");
+  await expect(page.locator(".synthesize-next-step-action")).toBeHidden();
   await page.route("**/api/synthesis/preview", (route) => route.abort());
   await page.locator("[data-synthesize-preview]").click();
   await expect(page.locator("[data-synthesize-preview-status]")).toHaveClass(/is-error/);

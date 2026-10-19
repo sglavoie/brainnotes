@@ -2,6 +2,8 @@
 
 This record follows the [browser UI qualification checklist](ui-qualification.md).
 The results are the user's observations on the build below.
+This is historical evidence for that build only. Its uncommitted source and
+unspecified larger-text setting do not qualify the current checkout or a release.
 
 ## Build and environment
 

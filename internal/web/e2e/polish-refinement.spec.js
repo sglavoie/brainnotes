@@ -4,11 +4,12 @@ test.describe("touch layouts", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
   test("Library starts with two results and keeps constraints outside disclosures", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 640 });
     await page.goto("/library?q=body&status=draft&sort=title");
     const rows = page.locator(".overview-result-item");
     await expect(rows.nth(1)).toBeVisible();
     const second = await rows.nth(1).boundingBox();
-    expect(second.y + second.height).toBeLessThan(844);
+    expect(second.y + second.height).toBeLessThan(640);
     await expect(page.locator(".facet-input")).toBeHidden();
     await expect(page.locator(".facet-chip")).toContainText("draft");
     await expect(page.locator("[data-copy-search-link]")).toBeHidden();

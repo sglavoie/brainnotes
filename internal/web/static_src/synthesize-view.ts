@@ -91,7 +91,7 @@ export const createSynthesisView = (
     "data-synthesize-next-step": "",
   });
   const nextStepText = element(doc, "span", "synthesize-next-step-text");
-  const nextStepAction = element(doc, "button", "synthesize-next-step-action", { type: "button" });
+  const nextStepAction = element(doc, "button", "synthesize-next-step-action bn-button bn-primary", { type: "button" });
   nextStepAction.textContent = "Prepare context";
   nextStep.append(nextStepText, nextStepAction);
   const sources = buildSourcesSection(doc);

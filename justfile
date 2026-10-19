@@ -375,6 +375,7 @@ ci:
     npm run lint:web
     npm run test:web
     npm run check:web-bundles
+    python3 -B scripts/test_ui_qualification.py
     echo "CI clean"
 
 # `metrics` is deliberately absent from `just ci` and from `just lint`: it is a

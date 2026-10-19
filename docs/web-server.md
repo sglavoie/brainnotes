@@ -2,10 +2,11 @@
 
 Start with `bn serve`, then choose a task below. Brief, Library, Pinned, and Graph
 are in the main navigation. On wide screens, these destinations and **Search**
-are available in the header. On narrower screens, **Workspace** opens navigation,
+are available in the header. On narrower screens, the **Search notes** magnifying
+glass opens Library directly; **Workspace** opens the full navigation,
 search, and theme controls on Brief, note reading, and other workspaces.
 On Library and Graph, the page's own search stays in the main content.
-**New note** is a separate action. **Manage** contains
+**New note** is a separate action, shown as **+** beside Search on compact headers. **Manage** contains
 Properties, Health, Settings, Sync, and History, subject to the server's capabilities.
 Saved views have their own row. In the source editor, **Workspace** opens this
 navigation, search, and theme controls without leaving your draft.
@@ -18,6 +19,8 @@ These links and the navigation disclosures work without JavaScript.
 Use Library to combine text search, filters, and an optional **Query expression**.
 Library shows one results list as you type; Enter moves focus to its heading.
 The matching count and result actions sit together above the list.
+An active search uses a compact phone layout with two-line excerpts to leave more
+room for results.
 **Filters** opens the filter picker; active constraints remain visible when it is
 closed. **Search actions** contains Copy search link and Save as view.
 While a search updates, previous results remain visible with an updating treatment;
@@ -204,6 +207,8 @@ when those controls are collapsed.
 
 History leads with a readable action summary; **Details** keeps the exact command
 and entry identifier available. Choose **Preview restore** to inspect the change.
+Recorded dates show a named month, full year, and time-zone offset in the browser's
+local time, including restore previews and Undo confirmations.
 For notes and templates, the preview highlights removed and added text and collapses
 long unchanged passages. It labels the current version and the version after
 restoring. Binary files, private state, and files above the comparison limits retain
@@ -257,10 +262,13 @@ stops while the page is hidden and ignores superseded replies.
 ## Explore Graph
 
 Graph uses the same **Workspace** menu as the other pages. Search and its
-Filter/Focus mode stay visible; **Filters** opens the facet picker while active
-constraints stay visible. **Query expression** opens automatically for a
+Filter/Focus mode stay visible. **Refine graph** groups the facet picker, query
+expression, and layout controls; it opens for incoming filters or display options
+and shows an active marker when collapsed. Within it, **Filters** opens the picker
+while active constraints stay visible. **Query expression** opens automatically for a
 query loaded from a URL or saved view. **Graph layout** contains spread, minimum
 degree, folder collapsing, isolation, label mode, and viewport controls.
+On phones, the canvas appears before the selected-note details.
 
 Choose a note in **Notes and folders in this view**, or use arrow keys on the
 graph canvas to move through displayed notes in title order. Home/End select the

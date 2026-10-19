@@ -4,6 +4,11 @@ import { test, expect, manifest } from "./fixture.js";
 
 for (const path of ["/new", "/pinned", "/synthesize?source=Alpha"]) {
   test(`shared navigation works on ${path}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 640 });
+    await page.goto(path);
+    await page.getByRole("link", { name: "Search notes", exact: true }).click();
+    await expect(page).toHaveURL(/\/library$/);
+    await expect(page.locator("#search-input")).toBeInViewport();
     await page.goto(path);
     const workspace = page.locator(".focused-workspace-header summary", { hasText: "Workspace" });
     await expect(workspace).toBeVisible();

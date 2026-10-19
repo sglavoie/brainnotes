@@ -37,6 +37,7 @@ export function graphVisuals(snapshot) {
     await page.keyboard.press("Home");
     await page.locator("h1").click();
     await snapshot(page, "graph");
+    await page.locator(".graph-refine-options > summary").click();
     await page.getByText("Graph layout", { exact: true }).click();
     await snapshot(page, "graph-layout");
   });

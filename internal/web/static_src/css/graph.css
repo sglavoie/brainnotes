@@ -290,6 +290,7 @@
 }
 
 #graph-canvas {
+  box-sizing: border-box;
   min-width: 0;
   min-height: 72vh;
   height: 100%;
@@ -408,8 +409,10 @@
 .graph-main .graph-controls { width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .graph-controls > .graph-filter { grid-column: 1; }
 .graph-controls > .graph-search-mode { grid-column: 2; }
-.graph-controls > .graph-query-options,
-.graph-controls > .graph-layout-options { grid-column: 1 / -1; min-width: 0; }
+.graph-refine-options { grid-column: 1 / -1; min-width: 0; }
+.graph-refine-content { display: grid; gap: 0.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--bn-border); border-radius: 0.5rem; }
+.graph-refine-content .facet-controls { margin: 0; }
+.graph-refine-options > summary,
 .graph-query-options > summary,
 .graph-layout-options > summary { cursor: pointer; padding-block: 0.5rem; min-height: 2.75rem; box-sizing: border-box; }
 .graph-layout-options-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1rem; padding: 0.75rem; border: 1px solid var(--bn-border); border-radius: 0.5rem; }
@@ -424,7 +427,7 @@
   .graph-main .graph-panel { display: flex; flex-direction: column; }
   .graph-main #graph-canvas { height: 45vh; min-height: 16rem; flex: none; }
   .graph-sidebar { display: contents; }
-  .graph-hover { order: -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 0.75rem; }
+  .graph-hover { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 0.75rem; }
   .graph-hover h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .graph-hover #graph-hover-title { grid-column: 1; grid-row: 1; align-self: center; margin: 0; font-weight: 600; }
   .graph-hover .graph-open-note { grid-column: 2; grid-row: 1; margin: 0; }

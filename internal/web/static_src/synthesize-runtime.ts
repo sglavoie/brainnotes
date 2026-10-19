@@ -261,7 +261,7 @@ const synthesisNextStep = (model: SynthesisModel): string => {
   if (model.context === null) {
     return model.contextStale
       ? "Rebuild context to include your updated sources or research options. Your draft is unchanged."
-      : "Context is required before preview. You can write now; the anchor works without supporting notes.";
+      : "Next: prepare context to enable preview. You can draft below while choosing your sources.";
   }
   if (model.title.trim() === "" || model.draft.trim() === "") {
     return "Next: give the note a title and write the draft.";
@@ -272,10 +272,17 @@ const synthesisNextStep = (model: SynthesisModel): string => {
   return "Next: review the preview, then create the note.";
 };
 
-const render = (runtime: SynthesisRuntime): void => {
-  const { model, view, config } = runtime;
+const renderNextStep = (view: SynthesisView, model: SynthesisModel): void => {
   view.nextStepText.textContent = synthesisNextStep(model);
   view.nextStepAction.hidden = model.context !== null;
+  view.nextStepAction.textContent = model.contextStale ? "Rebuild context" : "Prepare context";
+  const contextStep = view.root.querySelector("#synthesis-context > summary");
+  if (contextStep) contextStep.textContent = `2. Prepare context · ${model.context !== null ? "ready" : model.contextStale ? "needs update" : "not prepared"}`;
+};
+
+const render = (runtime: SynthesisRuntime): void => {
+  const { model, view, config } = runtime;
+  renderNextStep(view, model);
   renderSynthesisSources(view, model, config);
   renderSynthesisContext(view, model);
   renderSynthesisCandidate(view, model);

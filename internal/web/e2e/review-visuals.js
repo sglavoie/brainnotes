@@ -95,6 +95,8 @@ export const reviewVisuals = (snapshot) => {
     await page.goto("/history");
     await page.getByRole("button", { name: /Preview restoring/ }).click();
     const panel = page.locator("[data-history-restore]");
+    await expect(panel.locator("[data-history-restore-facts]")).toContainText("Feb 3, 2026");
+    await expect(panel.locator("[data-history-restore-facts]")).toContainText("GMT");
     await expect(panel.locator(".comparison-added")).toContainText("earlier ending");
     await panel.scrollIntoViewIfNeeded();
     await snapshot(page, "restore-comparison");

@@ -296,7 +296,8 @@ test("a note that changed under the edit offers the vault's version", async ({ p
 // under a key built from the vault identity this server published. jsdom covers
 // what the editor decides; it cannot reload a page, and its storage goes away
 // with the test.
-test("unsaved text survives a reload and is offered back rather than saved", async ({ page }) => {
+test("unsaved text survives Search navigation and a reload and is offered back rather than saved", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const notePath = join(manifest.localVault, NOTE);
   const before = readFileSync(notePath, "utf8");
   const phrase = phraseFor("draft recovery");
@@ -323,6 +324,11 @@ test("unsaved text survives a reload and is offered back rather than saved", asy
   expect(kept.content).toContain(phrase);
   expect(readFileSync(notePath, "utf8"), "keeping a local copy wrote to the vault").toBe(before);
 
+  await page.getByRole("link", { name: "Search notes", exact: true }).click();
+  await expect(page).toHaveURL(/\/library$/);
+  await page.goto("/n/Alpha");
+  await page.locator("[data-source-editor-launch]").click();
+  await expect(page.locator("[data-source-recovery]")).toBeVisible();
   await page.reload();
 
   const recovery = page.locator("[data-source-recovery]");

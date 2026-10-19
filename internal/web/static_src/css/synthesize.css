@@ -12,7 +12,8 @@
   background: var(--bn-raised);
 }
 
-.synthesize-next-step-action { display: none; }
+.synthesize-next-step-action:not([hidden]) { display: block; margin-top: 0.5rem; }
+[data-synthesize-workbench]:has(#synthesis-context[open]) .synthesize-next-step-action { display: none; }
 
 .synthesize-action-hint {
   margin: 0;
