@@ -263,6 +263,9 @@ func (s *Server) requestGuard(next http.Handler) http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		// Inside the redacting writer, which redactForReader finds by type.
+		w, settle := s.refreshAfterFailedWrite(w, r)
+		defer settle()
 		if s.rootRedactor.active() {
 			w = &redactingResponseWriter{ResponseWriter: w, redactor: s.rootRedactor}
 		}
