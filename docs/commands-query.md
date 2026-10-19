@@ -12,6 +12,7 @@
 bn find [--tag t]... [--category c]... [--status s] [--type t]
         [--folder rel] [--has key] [--missing key]
         [--created EXPR] [--age EXPR] [--orphan]
+        [--min-backlinks n] [--max-backlinks n]
         [--min-links n] [--max-links n] [--dead-end]
         [--broken-links [--show-broken | --list-broken-targets]]
         [--pinned] [-q EXPR | --query EXPR] [--view name]
@@ -24,6 +25,15 @@ Pipe into `fzf` with `-i` for an interactive picker.
 
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.
+
+`--min-backlinks n` / `--max-backlinks n` bound a note's inbound links from
+other notes, and `--min-links n` / `--max-links n` bound its outgoing links to
+other notes. A note's links to itself count for neither. Both bounds are
+inclusive, so `--max-backlinks 0` selects the same notes as `--orphan` and
+`--min-backlinks 5` finds hub notes. The same counts are the `backlinks` and
+`links` query fields (`-q 'backlinks>=5'`). Like every find filter flag, these
+also scope `bn search`, `bn graph`, `bn replace`, `bn relink`, `bn rename-key`,
+`bn lint`, and `bn repair`.
 
 #### Query expressions (`-q`)
 

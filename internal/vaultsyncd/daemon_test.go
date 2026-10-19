@@ -325,7 +325,7 @@ func countKind(observed []EventKind, want EventKind) int {
 // clearing above, and the reason it is drawn at "the worker looked" rather than
 // at "the worker did not run".
 //
-// A `bn sync` the operator is running by hand holds the import guard, so the
+// Another import in this vault holds the import guard, so the
 // worker is due, is asked, and refuses — without ever getting as far as finding
 // out whether the thing it failed at last time would fail again. Clearing a
 // streak on that would both report a failing import as healthy and drop its
@@ -404,8 +404,8 @@ func corruptImportRecord(t *testing.T, root string) {
 }
 
 // importGuardPath is internal/vaultimport's whole-import guard, named here
-// because that package keeps its path private. Holding it is what a `bn sync`
-// running by hand does.
+// because that package keeps its path private. Holding it is what another
+// import in this vault, such as a web sync resolution, does.
 func importGuardPath(root string) string {
 	return filepath.Join(root, filepath.FromSlash(path.Join(vaultsync.StateDir(), "import.lock")))
 }

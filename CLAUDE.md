@@ -24,7 +24,7 @@ than duplicating it in this entry point.
 | Frontend checks | `just web-check` |
 | Required validation before completion | `just ci` |
 | Browser changes | `npm run test:e2e` |
-| Visual changes | `npm run test:e2e -- --project=visual-chromium` |
+| Visual changes (macOS only: baselines are macOS renders) | `npm run test:e2e -- --project=visual-chromium` |
 | Safe CLI mutation verification | `just vault-sandbox -- <bn args>` |
 
 Edit TypeScript and CSS under `internal/web/static_src`, then regenerate the

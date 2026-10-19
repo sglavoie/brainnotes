@@ -92,6 +92,7 @@ validation, and browser testing.
   - [Saved views](docs/commands-views.md)
   - [Research commands](docs/commands-research.md)
   - [Vault administration and recovery](docs/commands-vault.md)
+    - [Consistent external snapshots (`bn checkpoint`)](docs/commands-vault.md#bn-checkpoint--hold-the-vault-still-while-another-tool-copies-it)
   - [Note creation and navigation](docs/commands-notes.md)
   - [Local web server](docs/web-server.md)
     - [Related Notes explorer](docs/web-related-notes.md)

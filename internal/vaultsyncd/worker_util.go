@@ -34,9 +34,9 @@ func discard(root, path string) error {
 // do right now", as distinct from "this worker failed".
 //
 // The distinction decides whether a failure streak grows. A vault that is not
-// enrolled, has no content history, has no commits yet, or is being drained by a
-// `bn sync` command the operator is running by hand is a vault this companion
-// should leave alone and look at again next tick — recording those as failures
+// enrolled, has no content history, has no commits yet, or is already running
+// another import (a sync conflict being resolved in the web workspace, say) is a
+// vault this companion should leave alone and look at again next tick — recording those as failures
 // would put an idle vault into an ever-lengthening backoff and bury the one
 // error that does matter under a streak of ones that do not.
 func skippable(err error) bool {
@@ -53,7 +53,7 @@ func skippable(err error) bool {
 // carrying StateFailing and `bn-vault-sync -check`'s exit 1 on the evidence of a
 // failure nothing is retrying would be a false alarm nobody can clear.
 //
-// ErrImportBusy is deliberately not here. A `bn sync` holding the import guard
+// ErrImportBusy is deliberately not here. Another import holding the guard
 // says nothing about whether the last failure would happen again — the worker
 // never got as far as finding out — and clearing the streak on it would also
 // drop the backoff, so an import that fails and then meets a busy vault every

@@ -7,14 +7,14 @@ replace the phone pass: the operating system keyboard changes the visible page.
 From the repository root, after `npm ci`, run:
 
 ```sh
-python3 scripts/ui_qualification.py --port 8765
+python3 -B scripts/ui_qualification.py --port 8765
 ```
 
 For a release candidate, commit the final source and generated assets, then run
 from that clean checkout:
 
 ```sh
-python3 scripts/ui_qualification.py --release --record /tmp/brainnotes-ui-qualification.json --port 8765
+python3 -B scripts/ui_qualification.py --release --record /tmp/brainnotes-ui-qualification.json --port 8765
 ```
 
 The launcher refuses a dirty release checkout, checks that source files did not

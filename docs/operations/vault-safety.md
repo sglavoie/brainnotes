@@ -151,3 +151,4 @@ The rest of this guide is split by task:
 - [Operating the guard](vault-safety-operating.md) — deletions, logs and notifications, being offline, and checking on it.
 - [Recovering from a refusal](vault-safety-recovery.md) — block markers, interrupted snapshots, and clearing them in order.
 - [Restore drills](vault-safety-drills.md) — rehearsing restores, and what is deliberately absent.
+- [Vault migration evidence](vault-migration-evidence.md) — the redacted record of moving the live vault off File Provider storage and verifying its three recovery layers.

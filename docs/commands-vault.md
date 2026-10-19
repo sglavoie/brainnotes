@@ -284,6 +284,51 @@ other non-archived extra is removed. `bn backup` / `bn restore` are vault-level
 snapshot commands; they do not create undo journal entries, but a successful
 restore is recorded as a single content-history snapshot.
 
+### `bn checkpoint` — hold the vault still while another tool copies it
+
+```sh
+bn checkpoint run [--drain <duration>] [--lease <duration>] [--reason <text>] -- <command> [args...]
+bn checkpoint status [--json]
+```
+
+A checkpoint is the vault's quiet window. While one is held, every write that
+already reported success is durable and complete, and no write is part-way
+through its own steps — notes, configuration, the undo journal, the content
+history, staged uploads, activity state and synchronization transitions alike.
+A copy taken inside the window is therefore a state the vault was actually in.
+Use it to wrap an external snapshot tool (`tar`, `rsync`, a filesystem
+snapshot) that does not know about `bn`.
+
+`bn checkpoint run` takes the checkpoint, runs the command, and releases the
+checkpoint afterwards whether the command succeeded or not:
+
+```sh
+bn checkpoint run -- tar czf /backups/vault.tar.gz .
+bn checkpoint run --reason "nightly deployment snapshot" --drain 2m -- ./snapshot.sh
+```
+
+- The command is executed directly, with no shell and no expansion, and
+  inherits standard input, output and error. Its exit status becomes
+  `bn checkpoint run`'s exit status.
+- Writers are paused, not failed: a write that starts during the checkpoint
+  waits for it, and gives up only if the checkpoint outlasts the writer's own
+  wait budget.
+- `--drain` (default `30s`) is how long to wait for writers already in flight.
+  If they do not finish in time, or another checkpoint already holds the vault,
+  nothing is held and the command does not run.
+- `--lease` (default `10m`) is the lifetime recorded for observers, and
+  `--reason` is a short sentence recorded alongside it.
+- The command inherits the checkpoint locks. If `bn` dies first, the vault stays
+  held until the command exits, and only then can later writers proceed.
+
+`bn checkpoint status` reports what the checkpoint record says and whether the
+process that wrote it is still running. It takes no lock, creates nothing, never
+blocks, and always exits 0. With nothing held it prints `checkpoint: none`;
+`--json` emits the same report as `announced`, `live` and `blocking` fields. An
+announcement whose process is gone is reported as present but not live: it
+blocks nothing, and the next checkpoint clears it, so there is nothing to repair
+by hand.
+
 ### `bn history` — list recent undo journal entries
 
 ```sh
