@@ -75,60 +75,64 @@ func Parse(s string) []Link {
 	}
 	var links []Link
 	for _, m := range matches {
-		start, end := m[0], m[1]
-		if rangeOverlapsAny(start, end, mask) {
+		if rangeOverlapsAny(m[0], m[1], mask) {
 			continue
 		}
-		// Obsidian trims surrounding whitespace around the target, heading,
-		// and alias when resolving the link, so we normalize them here. This
-		// keeps Title()-based comparisons (used by rewrite, backlinks, orphan
-		// detection) consistent for inputs like `[[ Foo ]]` or `[[Foo | a ]]`.
-		// Raw/Start/End preserve the original byte range for rewrite spans.
-		rawTarget, rawHeading, escapedPipe := splitEscapedPipe(s, m)
-		target := trimASCIISpace(rawTarget)
-		var heading, alias string
-		if m[4] != -1 {
-			heading = trimASCIISpace(rawHeading)
+		if link, ok := linkFromMatch(s, m); ok {
+			links = append(links, link)
 		}
-		if m[6] != -1 {
-			alias = trimASCIISpace(s[m[6]:m[7]])
-		}
-		// An all-whitespace target is not a real link.
-		if target == "" {
-			continue
-		}
-		// A heading or alias that is all whitespace after trimming means the
-		// separator (`#` or `|`) was present but the content was empty or
-		// blank. These are not valid Obsidian links; more importantly,
-		// FormatLink would silently drop the separator on rewrite, changing
-		// the link form. Reject them so rewrites never alter link semantics.
-		if m[4] != -1 && heading == "" {
-			continue
-		}
-		if m[6] != -1 && alias == "" {
-			continue
-		}
-		folder := ""
-		if idx := strings.LastIndex(target, "/"); idx >= 0 {
-			folder = target[:idx]
-			// A target like "Folder/" has an empty title component after the
-			// last slash. Obsidian does not allow empty note names, so reject.
-			if idx == len(target)-1 {
-				continue
-			}
-		}
-		links = append(links, Link{
-			Raw:         s[start:end],
-			Target:      target,
-			Folder:      folder,
-			Heading:     heading,
-			Alias:       alias,
-			EscapedPipe: escapedPipe,
-			Start:       start,
-			End:         end,
-		})
 	}
 	return links
+}
+
+// linkFromMatch builds the Link for one regex match m in s, reporting false for
+// a match that is not a valid Obsidian link.
+func linkFromMatch(s string, m []int) (Link, bool) {
+	// Obsidian trims surrounding whitespace around the target, heading,
+	// and alias when resolving the link, so we normalize them here. This
+	// keeps Title()-based comparisons (used by rewrite, backlinks, orphan
+	// detection) consistent for inputs like `[[ Foo ]]` or `[[Foo | a ]]`.
+	// Raw/Start/End preserve the original byte range for rewrite spans.
+	rawTarget, rawHeading, escapedPipe := splitEscapedPipe(s, m)
+	target := trimASCIISpace(rawTarget)
+	var heading, alias string
+	if m[4] != -1 {
+		heading = trimASCIISpace(rawHeading)
+	}
+	if m[6] != -1 {
+		alias = trimASCIISpace(s[m[6]:m[7]])
+	}
+	// An all-whitespace target is not a real link.
+	if target == "" {
+		return Link{}, false
+	}
+	// A heading or alias that is all whitespace after trimming means the
+	// separator (`#` or `|`) was present but the content was empty or
+	// blank. These are not valid Obsidian links; more importantly,
+	// FormatLink would silently drop the separator on rewrite, changing
+	// the link form. Reject them so rewrites never alter link semantics.
+	if (m[4] != -1 && heading == "") || (m[6] != -1 && alias == "") {
+		return Link{}, false
+	}
+	folder := ""
+	if idx := strings.LastIndex(target, "/"); idx >= 0 {
+		folder = target[:idx]
+		// A target like "Folder/" has an empty title component after the
+		// last slash. Obsidian does not allow empty note names, so reject.
+		if idx == len(target)-1 {
+			return Link{}, false
+		}
+	}
+	return Link{
+		Raw:         s[m[0]:m[1]],
+		Target:      target,
+		Folder:      folder,
+		Heading:     heading,
+		Alias:       alias,
+		EscapedPipe: escapedPipe,
+		Start:       m[0],
+		End:         m[1],
+	}, true
 }
 
 // splitEscapedPipe returns the raw target and heading of match m, with the one
