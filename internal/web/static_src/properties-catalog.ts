@@ -298,7 +298,9 @@ export const initPropertiesCatalog = (deps: PropertiesDeps = {}): void => {
   const catalog: Catalog = {
     els: { ...found, statusEl, listEl },
     config,
-    fetcher: deps.fetch || fetch,
+    // Called as a method of this record, so the native fetch is wrapped:
+    // invoked with another `this`, it throws "Illegal invocation".
+    fetcher: deps.fetch || ((input, init) => fetch(input, init)),
     dialog: config.token !== "" && found.dialogHost
       ? createPreviewDialog(root.ownerDocument, found.dialogHost)
       : null,
