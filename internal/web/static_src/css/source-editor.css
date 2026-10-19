@@ -206,7 +206,7 @@
 .source-editor-surface .cm-gutters {
   border-right: 1px solid var(--bn-border);
   background: var(--bn-sunken);
-  color: var(--bn-faint);
+  color: var(--bn-muted);
 }
 
 .source-editor-surface .cm-tooltip-autocomplete {

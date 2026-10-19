@@ -311,7 +311,7 @@
 }
 
 .note-breadcrumbs li + li::before {
-  color: var(--bn-faint);
+  color: var(--bn-muted);
   content: '/';
 }
 

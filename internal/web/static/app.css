@@ -22,6 +22,7 @@
   --bn-text-strong: #0b1220;
   --bn-text-subtle: #33404f;
   --bn-muted: #5d687a;
+  /* Disabled and refused states only: below AA, so never for readable text. */
   --bn-faint: #8a93a3;
 
   --bn-link: #2563eb;
@@ -637,7 +638,7 @@ a:hover {
 }
 
 .note-breadcrumbs li + li::before {
-  color: var(--bn-faint);
+  color: var(--bn-muted);
   content: '/';
 }
 
@@ -7390,7 +7391,7 @@ code {
 .source-editor-surface .cm-gutters {
   border-right: 1px solid var(--bn-border);
   background: var(--bn-sunken);
-  color: var(--bn-faint);
+  color: var(--bn-muted);
 }
 
 .source-editor-surface .cm-tooltip-autocomplete {
@@ -8913,7 +8914,7 @@ dt.sync-fact {
 .sync-merge-host .cm-gutters {
   border-right: 1px solid var(--bn-border);
   background: var(--bn-sunken);
-  color: var(--bn-faint);
+  color: var(--bn-muted);
 }
 
 /* The recovered-merge notice. A merge is the one text on this page that exists
