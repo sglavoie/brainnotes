@@ -59,6 +59,7 @@ func mutations() []mutation {
 	all = append(all, cliMutations()...)
 	all = append(all, sourceMutations()...)
 	all = append(all, settingsMutations()...)
+	all = append(all, webWriteMutations()...)
 	return append(all, surfaceMutations()...)
 }
 
