@@ -24,6 +24,7 @@ type valuesOptions struct {
 	sortMode  string
 	showCount bool
 	showFiles bool
+	asJSON    bool
 }
 
 // NewValuesCmd returns the `values` subcommand. Exported for tests.
@@ -38,37 +39,51 @@ func NewValuesCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				return runValues(cmd, args[0], opts)
-			}
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("values: no config in context")
-			}
-			v, err := vault.Open(cfg)
-			if err != nil {
-				return err
-			}
-			keys, err := collectPropertyKeys(v)
-			if err != nil {
-				return err
-			}
-			if len(keys) == 0 {
-				fmt.Fprintln(cmd.ErrOrStderr(), "values: no properties in vault")
-				return nil
-			}
-			selected, err := propertyPicker(keys, cfg.Fzf.Args)
-			if err != nil {
-				return err
-			}
-			if len(selected) == 0 {
-				return nil
-			}
-			return runValues(cmd, selected[0], opts)
+			return runValuesCommand(cmd, args, opts)
 		},
 	}
 	addValuesFlags(cmd, &opts)
 	return cmd
+}
+
+// runValuesCommand tallies the named property, or the one the picker selects
+// when no property is named.
+func runValuesCommand(cmd *cobra.Command, args []string, opts valuesOptions) error {
+	if len(args) == 1 {
+		return runValues(cmd, args[0], opts)
+	}
+	property, err := pickValuesProperty(cmd)
+	if err != nil {
+		return err
+	}
+	return runValues(cmd, property, opts)
+}
+
+// pickValuesProperty offers every frontmatter key in the vault. A vault with no
+// properties, and a picker that selected nothing, are ErrNothingSelected
+// (exit 1), as every other empty picker is.
+func pickValuesProperty(cmd *cobra.Command) (string, error) {
+	cfg := ConfigFromContext(cmd.Context())
+	if cfg == nil {
+		return "", errors.New("values: no config in context")
+	}
+	v, err := vault.Open(cfg)
+	if err != nil {
+		return "", err
+	}
+	keys, err := collectPropertyKeys(v)
+	if err != nil {
+		return "", err
+	}
+	if len(keys) == 0 {
+		return "", nothingSelected("values", "no properties in vault")
+	}
+	picked, err := propertyPicker(keys, cfg.Fzf.Args)
+	selected, err := requireSelection("values", picked, err)
+	if err != nil {
+		return "", err
+	}
+	return selected[0], nil
 }
 
 // NewTagsCmd returns the `tags` subcommand, an alias for `values tags`.
@@ -95,11 +110,12 @@ func addValuesFlags(cmd *cobra.Command, opts *valuesOptions) {
 	f.StringVar(&opts.sortMode, "sort", "count", "sort by 'count' (desc, alpha tie-break) or 'name' (alpha)")
 	f.BoolVar(&opts.showCount, "count", true, "prefix each line with its count (--count=false emits values only)")
 	f.BoolVar(&opts.showFiles, "files", false, "list the files containing each value")
+	f.BoolVar(&opts.asJSON, "json", false, `print {"property", "values": [{"value", "count", "files"}]} (files are vault-relative)`)
 }
 
 func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 	if opts.sortMode != "count" && opts.sortMode != "name" {
-		return fmt.Errorf("%s: --sort must be count or name (got %q)", cmd.Name(), opts.sortMode)
+		return enumValueError(cmd.Name(), "sort", opts.sortMode, "count", "name")
 	}
 
 	cfg := ConfigFromContext(cmd.Context())
@@ -115,9 +131,32 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 		return err
 	}
 
-	counts, files := collectValueCounts(v, notes, property, opts.showFiles, rootVerbose(cmd), cmd.ErrOrStderr())
+	counts, files := collectValueCounts(v, notes, property, opts.showFiles || opts.asJSON, rootVerbose(cmd), cmd.ErrOrStderr())
 	entries := sortValueEntries(counts, opts.sortMode)
+	if opts.asJSON {
+		return writeValuesJSON(cmd.OutOrStdout(), property, entries, files)
+	}
 	return writeValuesOutput(cmd.OutOrStdout(), entries, files, opts)
+}
+
+type valuesJSONEntry struct {
+	Value string   `json:"value"`
+	Count int      `json:"count"`
+	Files []string `json:"files"`
+}
+
+// writeValuesJSON emits the tally in the order --sort chose. Every entry lists
+// its files, whether or not --files was given: the cost is already paid, and a
+// script should not need a second flag to get the paths.
+func writeValuesJSON(out io.Writer, property string, entries []valEntry, files map[string]map[string]struct{}) error {
+	payload := struct {
+		Property string            `json:"property"`
+		Values   []valuesJSONEntry `json:"values"`
+	}{Property: property, Values: make([]valuesJSONEntry, 0, len(entries))}
+	for _, e := range entries {
+		payload.Values = append(payload.Values, valuesJSONEntry{Value: e.value, Count: e.count, Files: sortedKeys(files[e.value])})
+	}
+	return writeJSON(out, payload)
 }
 
 // collectValueCounts walks the notes and tallies every occurrence of property.

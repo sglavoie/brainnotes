@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -27,8 +28,8 @@ func TestSearch_DoesNotMatchFilename(t *testing.T) {
 	})
 
 	stdout, err := runSearch(t, root, "filename-only-term")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if !errors.Is(err, ErrNoMatch) {
+		t.Fatalf("err = %v, want ErrNoMatch", err)
 	}
 	if stdout != "" {
 		t.Fatalf("expected filename-only term not to match, got: %q", stdout)
@@ -55,8 +56,8 @@ func TestSearch_CaseSensitive(t *testing.T) {
 	root := buildSearchVault(t)
 
 	stdout, err := runSearch(t, root, "--case-sensitive", "uppercase")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if !errors.Is(err, ErrNoMatch) {
+		t.Fatalf("err = %v, want ErrNoMatch", err)
 	}
 	got := searchRels(t, root, stdout)
 	if len(got) != 0 {
@@ -68,9 +69,13 @@ func TestSearch_NoMatches(t *testing.T) {
 	isolateBnEnv(t)
 	root := buildSearchVault(t)
 
+	// grep's convention: no match is exit 1, with nothing on stdout.
 	stdout, err := runSearch(t, root, "xyzzy_no_such_word")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if !errors.Is(err, ErrNoMatch) || !IsNegativeOutcome(err) {
+		t.Fatalf("err = %v, want ErrNoMatch", err)
+	}
+	if err.Error() != "search: no matches" {
+		t.Fatalf("message = %q", err.Error())
 	}
 	if stdout != "" {
 		t.Fatalf("expected empty output, got: %q", stdout)

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,9 +44,10 @@ func TestSearch_NoPatterRequired_WithInteractive(t *testing.T) {
 		return cmd
 	}
 
+	// fzf's exit 1 (nothing matched the query) is the empty picker: exit 1.
 	_, err := runSearch(t, root, "-i")
-	if err != nil {
-		t.Fatalf("expected no error with -i and no pattern, got: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("expected ErrNothingSelected with -i and no pattern, got: %v", err)
 	}
 }
 
@@ -72,8 +74,8 @@ func TestSearch_InteractiveNoPatternPreviewUsesLiveQuery(t *testing.T) {
 	}
 
 	_, err := runSearch(t, root, "-i")
-	if err != nil {
-		t.Fatalf("expected no error with -i and no pattern, got: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("expected ErrNothingSelected with -i and no pattern, got: %v", err)
 	}
 
 	preview, ok := fzfArgValue(capturedArgs, "--preview")

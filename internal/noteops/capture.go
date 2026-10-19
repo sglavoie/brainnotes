@@ -1,6 +1,7 @@
 package noteops
 
 import (
+	"context"
 	"os"
 	"path"
 	"strings"
@@ -48,6 +49,7 @@ type CaptureResult struct {
 type captureOptions struct {
 	command        string
 	journalOptions []journal.RecorderOption
+	ctx            context.Context
 }
 
 // CaptureOption customizes ApplyCapture.
@@ -57,6 +59,14 @@ type CaptureOption func(*captureOptions)
 func WithCaptureCommand(command string) CaptureOption {
 	return func(o *captureOptions) {
 		o.command = strings.TrimSpace(command)
+	}
+}
+
+// WithCaptureContext makes the operation honour ctx, so a CLI interrupt
+// cancels it at the same boundaries as every other journaled write.
+func WithCaptureContext(ctx context.Context) CaptureOption {
+	return func(o *captureOptions) {
+		o.ctx = ctx
 	}
 }
 
@@ -210,7 +220,8 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 	}
 	// A bootstrapping capture journals a file that does not exist yet, so `bn
 	// undo` deletes the note it created.
-	j, err := BeginOperation(vaultRoot, "capture", cfg.command, []string{plan.destination.AbsPath}, cfg.journalOptions...)
+	j, err := BeginOperationContext(contextOrBackground(cfg.ctx), vaultRoot, "capture", cfg.command,
+		[]string{plan.destination.AbsPath}, cfg.journalOptions...)
 	if err != nil {
 		return nil, err
 	}

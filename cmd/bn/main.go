@@ -53,7 +53,19 @@ func exitCode(err error) int {
 // processExitCode maps a failure to run or finish an external program to the
 // shell's own codes: the child's status, 126 for "cannot execute", 127 for
 // "not found", 128+N for a signal.
+//
+// Only a child the user asked for — the `bn checkpoint run` command, the
+// editor, fzf — is mapped, and cli marks those with *cli.ChildProcessError.
+// A git subprocess bn runs for its own bookkeeping fails as an *exec.ExitError
+// too, but its 128 would read as "killed by a signal", so it is an ordinary
+// error (exit 2).
 func processExitCode(err error) (int, bool) {
+	var child *cli.ChildProcessError
+	if !errors.As(err, &child) {
+		return 0, false
+	}
+	err = child.Err
+
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
 		if code := exitErr.ExitCode(); code >= 0 {

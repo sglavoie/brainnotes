@@ -101,7 +101,7 @@ func validateUnsetProps(props []string) error {
 // is a silent no-op and must not open a journal for zero paths.
 func resolveUnsetPaths(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, noteArgs []string, nullSep bool) ([]string, bool, error) {
 	if len(noteArgs) == 0 {
-		selected, err := pickNotes(v, cfg, true)
+		selected, err := pickNotes("unset", v, cfg, true)
 		if err != nil {
 			return nil, false, err
 		}

@@ -66,10 +66,8 @@ func validateRelatedFeedbackOptions(
 ) (recall.FeedbackState, time.Time, error) {
 	feedback := recall.FeedbackState(strings.TrimSpace(options.stateText))
 	if !feedback.Valid() {
-		return "", time.Time{}, fmt.Errorf(
-			"related feedback: --state must be useful, dismissed, later, or clear (got %q)",
-			options.stateText,
-		)
+		return "", time.Time{}, enumValueError("related feedback", "state", options.stateText,
+			"useful", "dismissed", "later", "clear")
 	}
 	untilText := strings.TrimSpace(options.untilText)
 	if feedback != recall.FeedbackLater {
@@ -94,7 +92,7 @@ func validateRelatedFeedbackOptions(
 }
 
 func relatedFeedbackNotePath(v *vault.Vault, argument string) (string, error) {
-	note, err := resolveNoteTarget(v, argument)
+	note, err := resolveNoteTarget("related feedback", v, argument)
 	if err != nil {
 		return "", err
 	}

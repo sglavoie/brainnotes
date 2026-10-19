@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 
@@ -16,17 +17,33 @@ import (
 type linkListOptions struct {
 	nullSep bool
 	verbose bool
+	asJSON  bool
 }
 
-// validate holds the single mutual-exclusion rule both commands enforce: NUL
-// separation is a property of a path list, and verbose mode does not emit one.
-// The command name is a parameter because the two refusals are otherwise
-// identical and the message has to say which command produced it.
+// validate holds the mutual-exclusion rules both commands enforce: NUL
+// separation is a property of a path list, which neither verbose mode nor JSON
+// emits, and JSON has no verbose form. The command name is a parameter because
+// the refusals are otherwise identical and the message has to say which command
+// produced it.
 func (o linkListOptions) validate(name string) error {
-	if o.nullSep && o.verbose {
+	switch {
+	case o.nullSep && o.verbose:
 		return fmt.Errorf("%s: --null cannot be combined with --verbose", name)
+	case o.asJSON && o.nullSep:
+		return fmt.Errorf("%s: --json cannot be combined with --null", name)
+	case o.asJSON && o.verbose:
+		return fmt.Errorf("%s: --json cannot be combined with --verbose", name)
 	}
 	return nil
+}
+
+// writePaths renders the path list in the form the flags chose: the shared
+// JSON note records, or one path per line (or NUL-separated).
+func (o linkListOptions) writePaths(out io.Writer, root string, paths []string) error {
+	if o.asJSON {
+		return writeNotesJSON(out, root, paths)
+	}
+	return writePathList(out, paths, o.nullSep)
 }
 
 // linkListRun is the resolved state a link-listing command renders from: the
@@ -34,6 +51,7 @@ func (o linkListOptions) validate(name string) error {
 // graph built over them. `links` needs the graph alone; `backlinks` needs the
 // note list as well, to walk each referrer's body in verbose mode.
 type linkListRun struct {
+	root   string
 	target *vault.Note
 	notes  []*vault.Note
 	graph  *query.Graph
@@ -77,6 +95,7 @@ func newLinkListRun(cmd *cobra.Command, name string, args []string, opts linkLis
 		return nil, false, err
 	}
 	return &linkListRun{
+		root:   v.Root,
 		target: target,
 		notes:  notes,
 		graph:  query.BuildGraphForRoot(v.Root, notes),
@@ -97,7 +116,7 @@ func resolveLinkListTarget(
 	args []string,
 ) (*vault.Note, bool, error) {
 	if len(args) > 0 {
-		target, err := resolveNoteTarget(v, args[0])
+		target, err := resolveNoteTarget(name, v, args[0])
 		if err != nil {
 			return nil, false, err
 		}
@@ -111,7 +130,8 @@ func resolveLinkListTarget(
 	if len(paths) == 0 {
 		return nil, false, nothingSelected(name, "no notes in vault")
 	}
-	selected, err := requireSelection(notePicker(paths, append([]string(nil), fzfArgs...)))
+	picked, err := notePicker(paths, append([]string(nil), fzfArgs...))
+	selected, err := requireSelection(name, picked, err)
 	if err != nil {
 		return nil, false, err
 	}

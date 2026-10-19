@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -26,7 +25,7 @@ func (o graphOptions) validate() error {
 	case "dot", "mermaid", "code":
 		return nil
 	default:
-		return fmt.Errorf("graph: unknown format %q (must be dot, mermaid, or code)", o.format)
+		return enumValueError("graph", "format", o.format, "dot", "mermaid", "code")
 	}
 }
 

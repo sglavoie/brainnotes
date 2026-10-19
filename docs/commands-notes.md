@@ -170,20 +170,35 @@ bn unpin --dry-run "Reading List"
 ### `bn remove` — move a note to Trash
 
 ```sh
-bn remove [note] [--yes]
+bn remove [note] [-y | --yes] [--dry-run]
 ```
 
 Accepts a note title (case-insensitive) or path. Without a note argument, opens
-the normal single-note `fzf` picker. Both forms ask for confirmation, on stderr:
+the normal single-note `fzf` picker. On a terminal both forms ask for
+confirmation, on stderr:
 
 ```text
 Move Projects/Ideas.md to Trash? [y/N]
 ```
 
 Only `y` or `yes` confirms; blank input, `n`, or EOF reports `remove: canceled`,
-leaves the vault unchanged, and exits 1. `--yes` skips that prompt. An empty
-vault or a picker that selects nothing also changes nothing and exits 1 (see
+leaves the vault unchanged, and exits 1. `--yes` (`-y`) skips that prompt.
+Without a terminal — a script, a pipe — `bn remove` refuses (exit 2) unless
+`--yes` is given, rather than reading an answer from stdin; `bn restore --wipe`
+follows the same rule. An empty vault or a picker that selects nothing also
+changes nothing and exits 1 (see
 [exit status](integrations.md#scripting-exit-status-and-json)).
+
+`--dry-run` prints the move in the shared `--dry-run` format and writes
+nothing, without asking:
+
+```text
+--- Projects/Ideas.md
+path: Projects/Ideas.md -> Trash/Projects/Ideas.md
+```
+
+When `Trash/` already holds that path, the preview shows a collision-suffixed
+destination whose short ID is chosen afresh by the real move.
 
 Removal is recoverable: the note moves to `<vault>/Trash/`, retaining its
 vault-relative folder (for example, `Projects/Ideas.md` becomes
@@ -196,7 +211,8 @@ command.
 bn remove
 bn remove "Remove me"
 bn remove Projects/Ideas.md --yes
-bn remove --yes
+bn remove --dry-run "Remove me"
+bn remove -y
 # restore the printed journal entry:
 bn undo 20260817T093000.000000000Z-1a2b3c4d
 ```

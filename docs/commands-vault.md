@@ -159,7 +159,7 @@ for when to run this.
 ### `bn schema` — show the configured frontmatter property schema
 
 ```sh
-bn schema
+bn schema [--json]
 ```
 
 Prints the `[frontmatter.properties]` declarations as a table — one row per
@@ -171,7 +171,9 @@ This is the reference to read next to a `bn lint` or `bn repair` report: those
 commands enforce exactly these declarations, and a property that is not listed
 here has no list semantics, no wikilink wrapping, and no validation. With no
 properties declared at all, `bn schema` prints a hint pointing at the config
-file rather than an empty table.
+file rather than an empty table. `--json` prints an array of
+`{"name", "type", "items", "required", "allowed"}` records in the same order
+(`[]` when nothing is declared).
 
 ```text
 $ bn schema

@@ -86,7 +86,8 @@ Use --dry-run to preview the append without writing.`,
 			}
 
 			result, err := noteops.ApplyCapture(cfg.Vault, dest, req, &cfg.Frontmatter,
-				noteops.WithCaptureCommand(commandInvocation(cmd, args)))
+				noteops.WithCaptureCommand(commandInvocation(cmd, args)),
+				noteops.WithCaptureContext(commandContext(cmd)))
 			if err != nil {
 				return captureError(err)
 			}

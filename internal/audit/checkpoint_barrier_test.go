@@ -75,6 +75,12 @@ var barrierDoors = []barrierDoor{
 	{
 		file:  "internal/noteops/backup_restore.go",
 		fn:    "RestoreBackup",
+		calls: []string{"RestoreBackupContext"},
+		why:   "the context-free door every non-CLI caller restores through",
+	},
+	{
+		file:  "internal/noteops/backup_restore.go",
+		fn:    "RestoreBackupContext",
 		calls: holdsBarrier,
 		why:   "--wipe empties the vault before it writes anything back, so the window holds a vault with no notes in it",
 	},

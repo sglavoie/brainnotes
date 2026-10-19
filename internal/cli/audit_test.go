@@ -78,18 +78,44 @@ func TestSet_NormalIntStillCoerces(t *testing.T) {
 	}
 }
 
-// TestSet_ForceIntStripsLeadingZero documents that --type int still parses
-// leading-zero strings as ints (the user explicitly opted in).
+// TestSet_ForceIntStripsLeadingZero documents that --value-type int still
+// parses leading-zero strings as ints (the user explicitly opted in).
 func TestSet_ForceIntStripsLeadingZero(t *testing.T) {
 	root := buildSetFixture(t)
 	notePath := filepath.Join(root, "note.md")
 
-	if _, err := runCLI(t, "", "set", "--type", "int", notePath, "version=01"); err != nil {
+	if _, err := runCLI(t, "", "set", "--value-type", "int", notePath, "version=01"); err != nil {
 		t.Fatalf("set: %v", err)
 	}
 	got := readNote(t, notePath)
 	if !strings.Contains(got, "version: 1\n") {
-		t.Fatalf("expected version: 1 with --type int, got:\n%s", got)
+		t.Fatalf("expected version: 1 with --value-type int, got:\n%s", got)
+	}
+}
+
+// TestSet_DeprecatedTypeFlagStillWorks keeps the old --type spelling working,
+// with a deprecation note, and out of the help where it would be confused with
+// the --type note filter every find-scoped command has.
+func TestSet_DeprecatedTypeFlagStillWorks(t *testing.T) {
+	root := buildSetFixture(t)
+	notePath := filepath.Join(root, "note.md")
+
+	out, err := runCLI(t, "", "set", "--type", "int", notePath, "version=01")
+	if err != nil {
+		t.Fatalf("set --type: %v\n%s", err, out)
+	}
+	if !strings.Contains(readNote(t, notePath), "version: 1\n") {
+		t.Fatalf("--type int was not applied:\n%s", readNote(t, notePath))
+	}
+	if !strings.Contains(out, "--type has been deprecated, use --value-type") {
+		t.Fatalf("expected a deprecation note, got:\n%s", out)
+	}
+	help, err := runCLI(t, "", "set", "--help")
+	if err != nil {
+		t.Fatalf("set --help: %v", err)
+	}
+	if strings.Contains(help, "  --type ") || !strings.Contains(help, "--value-type") {
+		t.Fatalf("help should list --value-type and hide --type:\n%s", help)
 	}
 }
 

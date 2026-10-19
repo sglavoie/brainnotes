@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -200,29 +199,18 @@ func runFindPaths(r *findRun) error {
 	}
 
 	if r.opts.interactive {
-		selected, err := requireSelection(RunFZF(paths, r.cfg.Fzf.Args))
+		picked, err := RunFZF(paths, r.cfg.Fzf.Args)
+		selected, err := requireSelection("find", picked, err)
 		if err != nil {
 			return err
 		}
 		paths = selected
 	}
 	if r.opts.asJSON {
-		return writeFindJSON(r.cmd.OutOrStdout(), paths)
+		// The shared {path, abs_path, title} record: `path` is vault-relative,
+		// as in `related --json` and `lint --json`, and `abs_path` is the path
+		// the plain listing prints.
+		return writeNotesJSON(r.cmd.OutOrStdout(), r.root, paths)
 	}
 	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
-}
-
-type findJSONNote struct {
-	Path  string `json:"path"`
-	Title string `json:"title"`
-}
-
-// writeFindJSON emits the selected notes in result order as an array of the
-// same {path, title} records `bn related --json` uses.
-func writeFindJSON(w io.Writer, paths []string) error {
-	notes := make([]findJSONNote, 0, len(paths))
-	for _, p := range paths {
-		notes = append(notes, findJSONNote{Path: p, Title: (&vault.Note{Path: p}).Title()})
-	}
-	return writeJSON(w, notes)
 }

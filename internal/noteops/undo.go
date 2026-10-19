@@ -1,6 +1,7 @@
 package noteops
 
 import (
+	"context"
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
@@ -22,6 +23,9 @@ type UndoOptions struct {
 	// there for why a caller that showed somebody what would be replaced has to
 	// state it inside the transaction rather than check it beforehand.
 	Require map[string]vault.FileExpectation
+	// Context, when set, is the context the restore's operation runs under, so
+	// a CLI interrupt cancels it like any other journaled write.
+	Context context.Context
 }
 
 // Undo restores one journal entry through the same begin/finalize contract every
@@ -64,7 +68,7 @@ func Undo(vaultRoot, entryID string, opts UndoOptions) (*journal.RestorePlan, er
 	// it is loaded, and loading it is already inside Restore. The vault root is
 	// guarded here, and every individual path is guarded again by the transaction
 	// underneath, so nothing escapes — the early refusal is simply coarser.
-	j, err := BeginOperation(vaultRoot, "undo", command, nil)
+	j, err := BeginOperationContext(contextOrBackground(opts.Context), vaultRoot, "undo", command, nil)
 	if err != nil {
 		return nil, err
 	}

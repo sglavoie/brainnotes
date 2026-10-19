@@ -93,14 +93,11 @@ func (options relatedOptions) validate() (recall.Mode, error) {
 		return "", err
 	}
 	if options.limit < 1 || options.limit > maxRelatedLimit {
-		return "", fmt.Errorf("related: --limit must be between 1 and %d (got %d)", maxRelatedLimit, options.limit)
+		return "", rangeValueError("related", "limit", fmt.Sprintf("between 1 and %d", maxRelatedLimit), options.limit)
 	}
 	mode, err := recall.ParseMode(options.modeText)
 	if err != nil {
-		return "", fmt.Errorf(
-			"related: --mode must be balanced, rediscover, or connect (got %q)",
-			options.modeText,
-		)
+		return "", enumValueError("related", "mode", options.modeText, "balanced", "rediscover", "connect")
 	}
 	return mode, nil
 }
@@ -147,9 +144,11 @@ func (options relatedOptions) validateOutputCombos() error {
 	return nil
 }
 
+// selectRelatedPath runs the related-notes picker. No related notes, and a
+// picker that selected nothing, are both ErrNothingSelected (exit 1).
 func selectRelatedPath(root string, results []recall.Result, extraArgs []string) (relatedSelection, error) {
 	if len(results) == 0 {
-		return relatedSelection{}, nil
+		return relatedSelection{}, nothingSelected("related", "no related notes")
 	}
 
 	rows := make([]string, len(results))
@@ -171,12 +170,10 @@ func selectRelatedPath(root string, results []recall.Result, extraArgs []string)
 		selectionsByRow[row] = relatedSelection{absolutePath: absolute, relativePath: result.Path}
 	}
 
-	selected, err := relatedPicker(rows, relatedFZFArgs(extraArgs))
+	picked, err := relatedPicker(rows, relatedFZFArgs(extraArgs))
+	selected, err := requireSelection("related", picked, err)
 	if err != nil {
 		return relatedSelection{}, err
-	}
-	if len(selected) == 0 {
-		return relatedSelection{}, nil
 	}
 	if len(selected) != 1 {
 		return relatedSelection{}, fmt.Errorf("related: fzf returned %d selections; expected exactly one", len(selected))
@@ -230,7 +227,7 @@ func buildRelatedQuery(
 	mode recall.Mode,
 	rankOptions recall.RankOptions,
 ) (relatedQuery, error) {
-	source, err := resolveNoteTarget(v, sourceArg)
+	source, err := resolveNoteTarget("related", v, sourceArg)
 	if err != nil {
 		return relatedQuery{}, err
 	}

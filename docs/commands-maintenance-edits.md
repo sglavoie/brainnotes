@@ -106,7 +106,7 @@ bn replace status wip done --dry-run                        # preview only
 ### `bn set` — write frontmatter properties
 
 ```sh
-bn set <note...> <key[=|+=|-=]value...> [--type date|datetime|int|bool|float|raw] [--dry-run] [-0]
+bn set <note...> <key[=|+=|-=]value...> [--value-type date|datetime|int|bool|float|raw] [--dry-run] [-0]
 ```
 
 Positional args are split: anything containing an operator (`=`, `+=`, `-=`)
@@ -126,7 +126,7 @@ the same way `=` does (`tags+=foo,bar` adds two entries). Operators can be
 mixed in one invocation and apply left-to-right.
 
 Type coercion is automatic: `true`/`false` → bool, integer → int, `YYYY-MM-DD`
-→ date, else string. Use `--type` to force. Wikilink-typed properties are
+→ date, else string. Use `--value-type` to force (`--type` is a deprecated alias that still works, with a note on stderr; elsewhere `--type` is the note filter). Wikilink-typed properties are
 wrapped in `[[ ]]` on write; for `+=`/`-=` the
 wrapping happens before the comparison so `tags+=Books` matches an existing
 `[[Books]]` entry.
@@ -148,7 +148,7 @@ Examples:
 ```sh
 bn set References/Books/Dune.md status=Reading rating=7
 bn set note.md categories=Books,Personal                    # → wikilink list
-bn set note.md created=2026-01-01 --type=date
+bn set note.md created=2026-01-01 --value-type=date
 bn set note.md tags+=project                                # append a tag
 bn set note.md tags+=foo,bar                                # append multiple
 bn set note.md tags-=draft                                  # drop a tag
@@ -161,7 +161,7 @@ bn find --tag drafts | bn set - tags+=triage                # bulk append
 ### `bn tags` — count tag occurrences
 
 ```sh
-bn tags [--sort count|name] [--count=false] [--files]
+bn tags [--sort count|name] [--count=false] [--files] [--json]
 ```
 
 Alias for `bn values tags`. See `bn values` for flag behavior.
@@ -194,7 +194,7 @@ bn find --has rating | bn unset - rating                    # bulk wipe
 ### `bn values` — count occurrences of a frontmatter property's values
 
 ```sh
-bn values <property> [--sort count|name] [--count=false] [--files]
+bn values [property] [--sort count|name] [--count=false] [--files] [--json]
 ```
 
 Walks every note, parses frontmatter, and counts how often each value of
@@ -211,6 +211,10 @@ variants surface in the long tail.
   piping to `grep` or `fzf`.
 - `--files` groups output by value and lists the vault-relative path of every
   note containing that value. Combines with `--sort` and `--count=false`.
+- `--json` prints `{"property", "values": [{"value", "count", "files"}]}` in the
+  `--sort` order; `files` (vault-relative) is always present.
+- Without `<property>`, an fzf picker offers every frontmatter key in the vault.
+  A vault with no properties, or a picker that selects nothing, exits 1.
 
 Examples:
 

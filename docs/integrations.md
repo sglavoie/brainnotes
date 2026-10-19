@@ -22,7 +22,7 @@ commands that take one note (`open`, `links`, `backlinks`, `related`,
 `context`, `pin`, `unpin`, `remove`, `move`, `rename`), and the values of
 `--view`, `--tag`, `--folder` and `--property`. Enumerated flags such as
 `related --mode`, `context --format`, `graph --format`, `find --sort` and
-`set --type` complete their fixed values. A vault that does not load completes
+`set --value-type` complete their fixed values. A vault that does not load completes
 nothing.
 
 ## Scripting: exit status and JSON
@@ -32,22 +32,39 @@ nothing.
 | Status | Meaning |
 | --- | --- |
 | `0` | Success. |
-| `1` | The command ran and the answer was negative: `bn lint` found violations, a picker came back empty (an empty vault, or an fzf query that matched nothing), or a confirmation was declined. |
-| `2` | An error: an unknown flag, a vault that does not load, a refused write. |
-| `126`/`127` | An external program (editor, fzf) could not be run or was not found. |
+| `1` | The command ran and the answer was negative: `bn lint` found violations, `bn search` found no match, a picker came back empty (an empty vault, no related notes or properties to offer, or an fzf query that matched nothing), or a confirmation was declined. |
+| `2` | An error: an unknown flag, a vault that does not load, a refused write, a confirmation refused for want of a terminal. |
+| `126`/`127` | A program you asked bn to run (editor, fzf, the `checkpoint run` command) could not be run or was not found. |
 | `130` | Interrupted: Ctrl-C, or a dismissed fzf picker. |
 
-`bn checkpoint run` exits with its child's status. Messages for statuses 1 and
-2 go to stderr, so `p=$(bn open --print)` fails rather than succeeding with an
-empty value.
+`bn checkpoint run` exits with its child's status. Only those user-visible
+children pass their status through: when a Git command bn runs for its own
+safety checks fails, bn exits 2, never with Git's code. Messages for statuses 1
+and 2 go to stderr, prefixed with the command (`bn: search: no matches`,
+`bn: open: nothing selected`), so `p=$(bn open --print)` fails rather than
+succeeding with an empty value.
+
+A command that asks before destroying something (`bn remove`,
+`bn restore --wipe`) asks only on a terminal. Without one it refuses with
+exit 2 and names the flag to pass (`--yes`, or `-y`); it never reads an answer
+from a pipe.
 
 Ctrl-C asks a running command to stop rather than killing it, so a journaled
 write or `bn serve`'s shutdown can finish cleanly; press it a second time to
 stop at once.
 
-Machine-readable output is spelled `--json` on `find`, `lint`, `history`,
-`related`, `doctor` and `checkpoint status`; `context --json` is shorthand for
-`context --format json`. JSON output is indented and not HTML-escaped.
+Machine-readable output is spelled `--json` on `find`, `search`, `links`,
+`backlinks`, `values`/`tags`, `views`, `schema`, `lint`, `history`, `related`,
+`doctor` and `checkpoint status`; `context --json` is shorthand for
+`context --format json`. JSON output is indented and not HTML-escaped, and an
+empty result is `[]` rather than nothing.
+
+Paths in JSON are vault-relative with forward slashes, under the key `path`.
+The commands that list notes — `find`, `search`, `links` and `backlinks` —
+share one record, `{"path", "abs_path", "title"}`, where `abs_path` is the
+absolute path their plain output prints; `search` adds `count` and `matches`.
+`bn doctor --json` is the one exception: it predates the convention and keeps
+`rel_path`.
 
 ## Editor integration
 

@@ -22,8 +22,9 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
 
 Prints matching absolute paths, one per line (or NUL-separated with `-0`).
 Pipe into `fzf` with `-i` for an interactive picker; a picker that selects
-nothing exits 1. `--json` prints an array of `{"path", "title"}` records in the
-same order instead.
+nothing exits 1. `--json` prints an array of `{"path", "abs_path", "title"}`
+records in the same order instead: `path` is vault-relative, like every other
+`--json` output, and `abs_path` is the path the plain listing prints.
 
 A note whose frontmatter is not valid YAML does not stop the read. `bn find`,
 `bn search`, `bn links`, `bn backlinks`, `bn values`, `bn graph`,

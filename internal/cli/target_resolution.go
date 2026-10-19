@@ -14,7 +14,7 @@ import (
 // resolveNoteTarget turns one positional argument into a note. It first tries
 // the vault's NFC-aware, case-insensitive title lookup, preserving ambiguity
 // errors, then falls back to the shared path/glob resolver.
-func resolveNoteTarget(v *vault.Vault, arg string) (*vault.Note, error) {
+func resolveNoteTarget(name string, v *vault.Vault, arg string) (*vault.Note, error) {
 	note, err := v.ResolveByTitle(arg, "")
 	if err == nil {
 		return note, nil
@@ -31,13 +31,13 @@ func resolveNoteTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 		return nil, pathErr
 	}
 	if len(paths) != 1 {
-		return nil, fmt.Errorf("expected exactly one path for %q, got %d", arg, len(paths))
+		return nil, errors.New(prefixed(name, fmt.Sprintf("expected exactly one path for %q, got %d", arg, len(paths))))
 	}
 	if _, statErr := os.Stat(paths[0]); statErr != nil {
 		if errors.Is(statErr, fs.ErrNotExist) {
 			// A bare stat error would report an absolute path the user never
 			// typed when what they typed was a title.
-			return nil, &noteTargetNotFoundError{arg: arg}
+			return nil, &noteTargetNotFoundError{name: name, arg: arg}
 		}
 		return nil, statErr
 	}
@@ -45,16 +45,18 @@ func resolveNoteTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 }
 
 // noteTargetNotFoundError is a target that matched neither a title nor a file.
-// It names what the user typed, in the form they typed it.
+// It names what the user typed, in the form they typed it, under the command
+// that was looking.
 type noteTargetNotFoundError struct {
-	arg string
+	name string
+	arg  string
 }
 
 func (e *noteTargetNotFoundError) Error() string {
 	if looksLikePath(e.arg) {
-		return fmt.Sprintf("no note at %s", e.arg)
+		return prefixed(e.name, fmt.Sprintf("no note at %s", e.arg))
 	}
-	return fmt.Sprintf("no note titled %q, and no note at that path", e.arg)
+	return prefixed(e.name, fmt.Sprintf("no note titled %q, and no note at that path", e.arg))
 }
 
 func (e *noteTargetNotFoundError) Is(target error) bool {

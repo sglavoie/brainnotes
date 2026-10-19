@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,16 +60,13 @@ func runConfigEdit(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	spec, err := editutil.Spec(configured, os.Getenv("EDITOR"))
-	if errors.Is(err, editutil.ErrNoEditorConfigured) {
-		return fmt.Errorf("%s: set [open].editor or $EDITOR", label)
-	}
+	spec, err := resolveEditorSpec(label, configured)
 	if err != nil {
-		return fmt.Errorf("%s: %w", label, err)
+		return err
 	}
 	bin, argv, err := editutil.Resolve(spec, path, 0)
 	if err != nil {
-		return fmt.Errorf("%s: %w", label, err)
+		return childProcessError(fmt.Errorf("%s: %w", label, err))
 	}
 	if err := execEditor(bin, argv); err != nil {
 		return fmt.Errorf("%s: %w", label, err)

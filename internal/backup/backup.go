@@ -3,6 +3,7 @@ package backup
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,9 @@ type CreateOptions struct {
 	// gives up on taking a consistent copy. Anything non-positive means
 	// checkpoint.DefaultDrain.
 	Drain time.Duration
+	// Context, when set, lets an interrupt stop the archive between entries.
+	// A cancelled backup removes its temporary file and publishes nothing.
+	Context context.Context
 }
 
 type CreateResult struct {
@@ -142,12 +146,19 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 		return nil, err
 	}
 
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	held, err := checkpoint.Hold(root, checkpoint.Options{Reason: "backup archive", Drain: opts.Drain})
 	if err != nil {
 		return nil, fmt.Errorf("backup: hold the vault still: %w", err)
 	}
 
-	result, createErr := createArchive(root, backupsDir, now)
+	result, createErr := createArchive(ctx, root, backupsDir, now)
 	// The release is reported only when nothing else went wrong. A released
 	// checkpoint that could not clear its record is a liveness problem for the
 	// next writer, not a reason to call a finished archive a failure.
@@ -162,7 +173,7 @@ func Create(vaultRoot string, opts CreateOptions) (*CreateResult, error) {
 // Everything here runs inside that window, including the rename that publishes
 // the archive: `backups/` is excluded from the walk, so the bytes this writes
 // are never bytes it also reads.
-func createArchive(root, backupsDir string, now func() time.Time) (*CreateResult, error) {
+func createArchive(ctx context.Context, root, backupsDir string, now func() time.Time) (*CreateResult, error) {
 	if err := vault.EnsureDirDurable(backupsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("backup: create backups directory: %w", err)
 	}
@@ -193,7 +204,7 @@ func createArchive(root, backupsDir string, now func() time.Time) (*CreateResult
 	tw := tar.NewWriter(gzw)
 
 	result := &CreateResult{ArchivePath: archivePath}
-	walkErr := archiveTree(tw, root, result)
+	walkErr := archiveTree(ctx, tw, root, result)
 
 	closeErr := closeArchiveWriter(tw, gzw, tmp)
 	if walkErr != nil {
@@ -224,11 +235,15 @@ func publishArchive(tempPath, archivePath, backupsDir string) error {
 	return nil
 }
 
-// archiveTree walks the vault and hands every eligible entry to archiveOne.
-func archiveTree(tw *tar.Writer, root string, result *CreateResult) error {
+// archiveTree walks the vault and hands every eligible entry to archiveOne,
+// stopping at the next entry once ctx is cancelled.
+func archiveTree(ctx context.Context, tw *tar.Writer, root string, result *CreateResult) error {
 	return filepath.WalkDir(root, func(current string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 
 		if current == root {

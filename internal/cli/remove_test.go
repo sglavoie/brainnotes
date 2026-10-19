@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,7 @@ func pickRemoveNote(t *testing.T, root string) {
 }
 
 func TestRemove_ConfirmedMovesNestedNoteAndJournals(t *testing.T) {
+	pretendTerminal(t)
 	root := buildRemoveFixture(t)
 	pickRemoveNote(t, root)
 
@@ -84,6 +86,7 @@ func TestRemove_YesSkipsConfirmationInput(t *testing.T) {
 }
 
 func TestRemove_CancelledResponsesLeaveNoteUnchanged(t *testing.T) {
+	pretendTerminal(t)
 	for _, tc := range []struct {
 		name  string
 		stdin string
@@ -185,6 +188,7 @@ func TestRemove_PropagatesTrashFailureWithoutArtifacts(t *testing.T) {
 }
 
 func TestRemove_ExplicitTargetSkipsPickerAndCanBeUndone(t *testing.T) {
+	pretendTerminal(t)
 	for _, target := range []string{"remove ME", "Projects/Nested/Remove me.md"} {
 		t.Run(target, func(t *testing.T) {
 			root := buildRemoveFixture(t)
@@ -219,6 +223,7 @@ func TestRemove_ExplicitTargetSkipsPickerAndCanBeUndone(t *testing.T) {
 }
 
 func TestRemove_ExplicitTargetDeclined(t *testing.T) {
+	pretendTerminal(t)
 	root := buildRemoveFixture(t)
 	if _, err := runCLI(t, "n\n", "remove", "Remove me"); !errors.Is(err, ErrCanceled) {
 		t.Fatalf("err = %v, want ErrCanceled", err)
@@ -248,5 +253,57 @@ func TestRemove_ExplicitInvalidTargetsDoNotWrite(t *testing.T) {
 				t.Fatal("invalid target created a journal entry")
 			}
 		})
+	}
+}
+
+// pretendTerminal makes stdin count as a terminal, so a test can answer the
+// confirmation prompt from a buffer.
+func pretendTerminal(t *testing.T) {
+	t.Helper()
+	prev := stdinIsTerminal
+	stdinIsTerminal = func(io.Reader) bool { return true }
+	t.Cleanup(func() { stdinIsTerminal = prev })
+}
+
+// Without a terminal remove refuses rather than reading an answer from stdin,
+// the same rule `restore --wipe` follows; --yes is the scripted spelling.
+func TestRemove_WithoutTerminalRefusesUnlessYes(t *testing.T) {
+	root := buildRemoveFixture(t)
+	source := filepath.Join(root, "Projects", "Nested", "Remove me.md")
+
+	out, err := runCLI(t, "yes\n", "remove", "Remove me")
+	if err == nil || IsNegativeOutcome(err) || !strings.Contains(err.Error(), "remove: no terminal to confirm on; pass --yes") {
+		t.Fatalf("err = %v, want the no-terminal refusal (exit 2)\n%s", err, out)
+	}
+	if _, statErr := os.Stat(source); statErr != nil {
+		t.Fatalf("refused remove moved the note: %v", statErr)
+	}
+
+	if out, err := runCLI(t, "", "remove", "-y", "Remove me"); err != nil {
+		t.Fatalf("remove -y: %v\n%s", err, out)
+	}
+	if _, statErr := os.Stat(source); !os.IsNotExist(statErr) {
+		t.Fatalf("remove -y left the note in place: %v", statErr)
+	}
+}
+
+// --dry-run prints the shared preview format and neither asks nor writes.
+func TestRemove_DryRunPreviewsTheMove(t *testing.T) {
+	root := buildRemoveFixture(t)
+	source := filepath.Join(root, "Projects", "Nested", "Remove me.md")
+
+	out, err := runCLI(t, "", "remove", "--dry-run", "Remove me")
+	if err != nil {
+		t.Fatalf("remove --dry-run: %v\n%s", err, out)
+	}
+	want := "--- Projects/Nested/Remove me.md\npath: Projects/Nested/Remove me.md -> Trash/Projects/Nested/Remove me.md\n"
+	if out != want {
+		t.Fatalf("dry-run output = %q, want %q", out, want)
+	}
+	if _, statErr := os.Stat(source); statErr != nil {
+		t.Fatalf("dry run moved the note: %v", statErr)
+	}
+	if entries := loadJournalEntries(t, root); len(entries) != 0 {
+		t.Fatalf("dry run journaled %d entries", len(entries))
 	}
 }

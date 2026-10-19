@@ -39,6 +39,7 @@ func NewBacklinksCmd() *cobra.Command {
 
 	f := cmd.Flags()
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline")
+	f.BoolVar(&opts.asJSON, "json", false, `print a JSON array of {"path", "abs_path", "title"} records (path is vault-relative)`)
 
 	return cmd
 }

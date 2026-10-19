@@ -9,7 +9,7 @@ find-scoped command with `--view`. The query language itself is documented in
 ### `bn views` — inspect saved views
 
 ```sh
-bn views
+bn views [--json]
 bn views show <name>
 bn views check
 ```
@@ -22,7 +22,7 @@ link graph.
 
 | Subcommand | Output |
 | --- | --- |
-| `bn views` | A `NAME`/`DESCRIPTION`/`QUERY`/`STATUS` table, where `STATUS` is `ok` or `error`. |
+| `bn views` | A `NAME`/`DESCRIPTION`/`QUERY`/`STATUS` table, where `STATUS` is `ok` or `error`. `--json` prints the same columns as `{"name", "description", "query", "status", "error"}` records, `error` set only for a disabled view. |
 | `bn views show <name>` | One view's name, description, query, ordering, anchor, and cap. The query is re-rendered canonically — the spelling `--view` actually runs — with a `Stored as:` line added when the stored text differs. |
 | `bn views check` | One report per view that no longer compiles, then a non-zero exit. |
 

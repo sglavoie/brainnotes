@@ -108,8 +108,8 @@ func TestGraph_InvalidFormat(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid format")
 	}
-	if !strings.Contains(err.Error(), "unknown format") {
-		t.Fatalf("expected 'unknown format' error, got: %v", err)
+	if !strings.Contains(err.Error(), `graph: --format must be dot, mermaid, or code (got "json")`) {
+		t.Fatalf("expected the shared enum wording, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "code") {
 		t.Fatalf("expected error message to list 'code' as a valid format, got: %v", err)

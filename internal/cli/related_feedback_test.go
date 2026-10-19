@@ -31,7 +31,7 @@ func TestRelatedInteractivePreservesFZFExitBehavior(t *testing.T) {
 		err     error
 		wantErr error
 	}{
-		{name: "no match"},
+		{name: "no match", wantErr: ErrNothingSelected},
 		{name: "cancelled", err: ErrFZFInterrupted, wantErr: ErrFZFInterrupted},
 		{name: "missing binary", err: ErrFZFNotFound, wantErr: ErrFZFNotFound},
 	}
@@ -41,14 +41,8 @@ func TestRelatedInteractivePreservesFZFExitBehavior(t *testing.T) {
 				return test.result, test.err
 			}
 			stdout, stderr, err := runRelatedWithConfig(t, cfg, "Source", "-i")
-			if test.wantErr == nil {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if stdout != "" || stderr != "" {
-					t.Fatalf("no-match output: stdout=%q stderr=%q", stdout, stderr)
-				}
-				return
+			if errors.Is(test.wantErr, ErrNothingSelected) && (stdout != "" || stderr != "") {
+				t.Fatalf("no-match output: stdout=%q stderr=%q", stdout, stderr)
 			}
 			if !errors.Is(err, test.wantErr) {
 				t.Fatalf("error = %v, want errors.Is(_, %v)", err, test.wantErr)

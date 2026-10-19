@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -87,7 +88,7 @@ func runPin(cmd *cobra.Command, args []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	note, err := resolveNoteTarget(v, args[0])
+	note, err := resolveNoteTarget("pin", v, args[0])
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func runPin(cmd *cobra.Command, args []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	return applyOrPreviewPin(v.Root, writes, &cfg.Frontmatter, rel, commandInvocation(cmd, args), out, dryRun)
+	return applyOrPreviewPin(cmd, args, v.Root, writes, &cfg.Frontmatter, rel, dryRun)
 }
 
 // reportAlreadyPinned is the no-op path for a note that already carries a rank.
@@ -134,12 +135,14 @@ func planPinWrites(v *vault.Vault, fm *config.FrontmatterConfig, rel string) ([]
 	return pinAssignmentWrites(plan.Assignments, fm)
 }
 
-// applyOrPreviewPin is the one branch between previewing the plan and writing it.
-func applyOrPreviewPin(root string, writes []noteops.NoteFrontmatterWrite, fm *config.FrontmatterConfig, rel, command string, out io.Writer, dryRun bool) error {
+// applyOrPreviewPin is the one branch between previewing the plan and writing
+// it. The write runs under the command's context, so Ctrl-C cancels it.
+func applyOrPreviewPin(cmd *cobra.Command, args []string, root string, writes []noteops.NoteFrontmatterWrite, fm *config.FrontmatterConfig, rel string, dryRun bool) error {
+	out := cmd.OutOrStdout()
 	if dryRun {
 		return renderPinPreviews(out, root, writes, fm)
 	}
-	if err := applyPinWrites(root, writes, fm, command); err != nil {
+	if err := applyPinWrites(commandContext(cmd), root, writes, fm, commandInvocation(cmd, args)); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintf(out, "pinned: %s\n", rel)
@@ -155,7 +158,7 @@ func runUnpin(cmd *cobra.Command, args []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	note, err := resolveNoteTarget(v, args[0])
+	note, err := resolveNoteTarget("unpin", v, args[0])
 	if err != nil {
 		return err
 	}
@@ -174,7 +177,8 @@ func runUnpin(cmd *cobra.Command, args []string, dryRun bool) error {
 	}
 
 	result, err := noteops.UnsetFrontmatter(v.Root, rel, []string{pins.PropertyName}, &cfg.Frontmatter,
-		noteops.WithFrontmatterCommand(commandInvocation(cmd, args)))
+		noteops.WithFrontmatterCommand(commandInvocation(cmd, args)),
+		noteops.WithFrontmatterContext(commandContext(cmd)))
 	if err != nil {
 		return err
 	}
@@ -222,16 +226,16 @@ func pinAssignmentWrites(assignments []pins.Assignment, fm *config.FrontmatterCo
 
 // applyPinWrites journals and commits the plan. A plan that renormalized the
 // whole list goes through one transaction so the ordering cannot half-apply.
-func applyPinWrites(root string, writes []noteops.NoteFrontmatterWrite, fm *config.FrontmatterConfig, command string) error {
+func applyPinWrites(ctx context.Context, root string, writes []noteops.NoteFrontmatterWrite, fm *config.FrontmatterConfig, command string) error {
 	if len(writes) == 0 {
 		return nil
 	}
-	opt := noteops.WithFrontmatterCommand(command)
+	opts := []noteops.FrontmatterOption{noteops.WithFrontmatterCommand(command), noteops.WithFrontmatterContext(ctx)}
 	if len(writes) == 1 {
-		_, err := noteops.SetFrontmatter(root, writes[0].RelPath, writes[0].Mutations, fm, opt)
+		_, err := noteops.SetFrontmatter(root, writes[0].RelPath, writes[0].Mutations, fm, opts...)
 		return err
 	}
-	_, err := noteops.SetFrontmatterAtomic(root, writes, fm, opt)
+	_, err := noteops.SetFrontmatterAtomic(root, writes, fm, opts...)
 	return err
 }
 

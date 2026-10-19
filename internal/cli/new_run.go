@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -184,12 +183,9 @@ func writeNewNote(cmd *cobra.Command, args []string, cfg *config.Config, plan ne
 // `new --edit` on a machine with no editor still creates the note before it
 // reports that it cannot open it.
 func editNewNote(configured, outPath string) error {
-	editorSpec, err := editutil.Spec(configured, os.Getenv("EDITOR"))
-	if errors.Is(err, editutil.ErrNoEditorConfigured) {
-		return errors.New("new: --edit requires [open].editor or $EDITOR to be set")
-	}
+	editorSpec, err := resolveEditorSpec("new", configured)
 	if err != nil {
-		return fmt.Errorf("new: %w", err)
+		return err
 	}
 	if err := runEditor(editorSpec, outPath); err != nil {
 		return fmt.Errorf("new: %w", err)

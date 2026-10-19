@@ -53,7 +53,7 @@ func TestRunBrokenPipeIsSilent(t *testing.T) {
 
 func TestRunPreservesSubprocessExitCode(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error {
+	stubChildExecute(t, func() error {
 		return fmt.Errorf("wrapped: %w", shellExitError(t, "exit 23"))
 	})
 
@@ -67,7 +67,7 @@ func TestRunPreservesSubprocessExitCode(t *testing.T) {
 
 func TestRunMapsCommandNotFoundTo127(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error {
+	stubChildExecute(t, func() error {
 		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "missing-editor", Err: exec.ErrNotFound})
 	})
 
@@ -81,7 +81,7 @@ func TestRunMapsCommandNotFoundTo127(t *testing.T) {
 
 func TestRunMapsMissingCommandPathTo127(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error {
+	stubChildExecute(t, func() error {
 		return fmt.Errorf("wrapped: %w", &exec.Error{
 			Name: "./missing-editor",
 			Err:  &os.PathError{Op: "stat", Path: "./missing-editor", Err: fs.ErrNotExist},
@@ -98,7 +98,7 @@ func TestRunMapsMissingCommandPathTo127(t *testing.T) {
 
 func TestRunMapsNonExecutableCommandTo126(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error {
+	stubChildExecute(t, func() error {
 		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "non-executable", Err: fs.ErrPermission})
 	})
 
@@ -112,7 +112,7 @@ func TestRunMapsNonExecutableCommandTo126(t *testing.T) {
 
 func TestRunMapsExecFormatExecErrorTo126(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error {
+	stubChildExecute(t, func() error {
 		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "bad-binary", Err: syscall.ENOEXEC})
 	})
 
@@ -126,7 +126,7 @@ func TestRunMapsExecFormatExecErrorTo126(t *testing.T) {
 
 func TestRunMapsWrappedErrDotTo126(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error {
+	stubChildExecute(t, func() error {
 		return fmt.Errorf("wrapped: %w", &exec.Error{Name: "./editor", Err: exec.ErrDot})
 	})
 
@@ -145,7 +145,7 @@ func TestExitCodeMapsForkExecPermissionDeniedTo126(t *testing.T) {
 		Err:  fs.ErrPermission,
 	})
 
-	if code := exitCode(err); code != 126 {
+	if code := exitCode(&cli.ChildProcessError{Err: err}); code != 126 {
 		t.Fatalf("exitCode() = %d, want 126", code)
 	}
 }
@@ -157,7 +157,7 @@ func TestExitCodeMapsExecMissingPathTo127(t *testing.T) {
 		Err:  fs.ErrNotExist,
 	})
 
-	if code := exitCode(err); code != 127 {
+	if code := exitCode(&cli.ChildProcessError{Err: err}); code != 127 {
 		t.Fatalf("exitCode() = %d, want 127", code)
 	}
 }
@@ -169,14 +169,14 @@ func TestExitCodeMapsExecFormatErrorTo126(t *testing.T) {
 		Err:  syscall.ENOEXEC,
 	})
 
-	if code := exitCode(err); code != 126 {
+	if code := exitCode(&cli.ChildProcessError{Err: err}); code != 126 {
 		t.Fatalf("exitCode() = %d, want 126", code)
 	}
 }
 
 func TestRunMapsWrappedExecErrnoNotFoundTo127(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error { return fmt.Errorf("open: %w", syscall.ENOENT) })
+	stubChildExecute(t, func() error { return fmt.Errorf("open: %w", syscall.ENOENT) })
 
 	if code := run(stderr); code != 127 {
 		t.Fatalf("run() exit code = %d, want 127", code)
@@ -188,7 +188,7 @@ func TestRunMapsWrappedExecErrnoNotFoundTo127(t *testing.T) {
 
 func TestRunMapsWrappedExecErrnoPermissionTo126(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error { return fmt.Errorf("open: %w", syscall.EACCES) })
+	stubChildExecute(t, func() error { return fmt.Errorf("open: %w", syscall.EACCES) })
 
 	if code := run(stderr); code != 126 {
 		t.Fatalf("run() exit code = %d, want 126", code)
@@ -200,7 +200,7 @@ func TestRunMapsWrappedExecErrnoPermissionTo126(t *testing.T) {
 
 func TestRunMapsWrappedExecErrnoExecFormatTo126(t *testing.T) {
 	stderr := &bytes.Buffer{}
-	stubExecute(t, func() error { return fmt.Errorf("open: %w", syscall.ENOEXEC) })
+	stubChildExecute(t, func() error { return fmt.Errorf("open: %w", syscall.ENOEXEC) })
 
 	if code := run(stderr); code != 126 {
 		t.Fatalf("run() exit code = %d, want 126", code)
@@ -287,5 +287,53 @@ func TestRunMapsNegativeOutcomesToOne(t *testing.T) {
 				t.Fatal("a negative outcome must still say why")
 			}
 		})
+	}
+}
+
+// stubChildExecute is stubExecute for a failure of a user-visible child (the
+// editor, fzf, the `checkpoint run` command), which cli marks as such.
+func stubChildExecute(t *testing.T, fn func() error) {
+	t.Helper()
+	stubExecute(t, func() error {
+		if err := fn(); err != nil {
+			return &cli.ChildProcessError{Err: err}
+		}
+		return nil
+	})
+}
+
+// A subprocess bn runs for itself (git, npm) is not the user's child: its exit
+// status must not leak out as bn's. Git's 128 would otherwise read as a signal.
+func TestRunDoesNotLeakInternalSubprocessExitCode(t *testing.T) {
+	for name, err := range map[string]error{
+		"git exit":    fmt.Errorf("git preflight: %w", shellExitError(t, "exit 128")),
+		"git missing": fmt.Errorf("git: %w", &exec.Error{Name: "git", Err: exec.ErrNotFound}),
+		"bare errno":  fmt.Errorf("open note: %w", syscall.ENOENT),
+	} {
+		t.Run(name, func(t *testing.T) {
+			stderr := &bytes.Buffer{}
+			stubExecute(t, func() error { return err })
+			if code := run(stderr); code != 2 {
+				t.Fatalf("run() exit code = %d, want 2", code)
+			}
+		})
+	}
+}
+
+func TestRunMapsChildExitCodeThroughWrapping(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error {
+		return fmt.Errorf("checkpoint run: %w", &cli.ChildProcessError{Err: shellExitError(t, "exit 7")})
+	})
+	if code := run(stderr); code != 7 {
+		t.Fatalf("run() exit code = %d, want 7", code)
+	}
+}
+
+func TestRunMapsNoMatchToOne(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	stubExecute(t, func() error { return fmt.Errorf("search: %w", cli.ErrNoMatch) })
+	if code := run(stderr); code != 1 {
+		t.Fatalf("run() exit code = %d, want 1", code)
 	}
 }

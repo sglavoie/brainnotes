@@ -91,7 +91,7 @@ func TestPickNotes_MultiFlag(t *testing.T) {
 		return []string{items[0]}, nil
 	}
 
-	_, err := pickNotes(v, cfg, true)
+	_, err := pickNotes("test", v, cfg, true)
 	if err != nil {
 		t.Fatalf("pickNotes: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestPickNotes_EmptyVault(t *testing.T) {
 		return nil, nil
 	}
 
-	selected, err := pickNotes(v, cfg, false)
+	selected, err := pickNotes("test", v, cfg, false)
 	if !errors.Is(err, ErrNothingSelected) {
 		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}

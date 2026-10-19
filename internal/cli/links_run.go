@@ -25,7 +25,7 @@ func runLinksCommand(cmd *cobra.Command, args []string, opts linkListOptions) er
 	if opts.verbose {
 		return writeVerboseLinks(out, r.target, r.graph)
 	}
-	return writePathList(out, forwardLinkPaths(r.graph, r.target), opts.nullSep)
+	return opts.writePaths(out, r.root, forwardLinkPaths(r.graph, r.target))
 }
 
 // forwardLinkPaths returns the sorted paths of the notes the target resolves a

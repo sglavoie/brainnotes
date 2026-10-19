@@ -66,7 +66,18 @@ func SetRestoreCrashHookForTest(hook func(point string)) func() {
 // backup.Restore does not join on its own behalf. It is a leaf and its only
 // other caller is a test with no history to protect; this is the production
 // door, and it is the layer that already owns the operation's boundaries.
-func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (result *backup.RestoreResult, err error) {
+func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (*backup.RestoreResult, error) {
+	return RestoreBackupContext(context.Background(), vaultRoot, archivePath, opts)
+}
+
+// RestoreBackupContext is RestoreBackup under ctx, so an interrupt cancels the
+// restore at its Git preflight and history commit rather than killing it. The
+// content swap itself is not interruptible: once it starts it is finished or
+// left resumable by the restore intent, never abandoned half-way.
+func RestoreBackupContext(ctx context.Context, vaultRoot, archivePath string, opts backup.RestoreOptions) (result *backup.RestoreResult, err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	resolvedRoot, err := filepath.EvalSymlinks(vaultRoot)
 	if err != nil {
 		return nil, fmt.Errorf("backup restore: resolve vault: %w", err)
@@ -91,8 +102,7 @@ func RestoreBackup(vaultRoot, archivePath string, opts backup.RestoreOptions) (r
 			err = fmt.Errorf("backup restore: release the checkpoint: %w", releaseErr)
 		}
 	}()
-	ctx := held.Context(context.Background())
-	return restoreBackupHeld(ctx, held.Root(), archivePath, opts)
+	return restoreBackupHeld(held.Context(ctx), held.Root(), archivePath, opts)
 }
 
 func restoreBackupHeld(ctx context.Context, root, archivePath string, opts backup.RestoreOptions) (*backup.RestoreResult, error) {

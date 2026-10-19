@@ -3,11 +3,8 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
-
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 )
 
 // vaultExec is the editor invocation used by `vault`. Tests swap it to avoid
@@ -18,7 +15,7 @@ var vaultExec = func(editor, path string) error { return runEditor(editor, path)
 func NewVaultCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:           "vault",
-		Short:         "Open the vault root directory in $EDITOR",
+		Short:         "Open the vault root directory in [open].editor or $EDITOR",
 		Long:          "Exec-replace with the configured editor opened on the vault root directory ([open].editor in config, or $EDITOR as fallback).",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
@@ -28,12 +25,9 @@ func NewVaultCmd() *cobra.Command {
 			if cfg == nil {
 				return errors.New("vault: no config in context")
 			}
-			editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
-			if errors.Is(err, editutil.ErrNoEditorConfigured) {
-				return errors.New("vault: no editor configured (set [open].editor in config or $EDITOR)")
-			}
+			editorSpec, err := resolveEditorSpec("vault", cfg.Open.Editor)
 			if err != nil {
-				return fmt.Errorf("vault: %w", err)
+				return err
 			}
 			if err := vaultExec(editorSpec, cfg.Vault); err != nil {
 				return fmt.Errorf("vault: %w", err)

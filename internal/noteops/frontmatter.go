@@ -1,6 +1,7 @@
 package noteops
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -48,6 +49,7 @@ type fileRequirement struct {
 type frontmatterOptions struct {
 	command        string
 	journalOptions []journal.RecorderOption
+	ctx            context.Context
 	requires       []fileRequirement
 	// lockEscalation overrides the transaction's production-derived threshold.
 	// Only tests set it so an atomic caller in another package can exercise the
@@ -67,6 +69,14 @@ type FrontmatterOption func(*frontmatterOptions)
 func WithFrontmatterCommand(command string) FrontmatterOption {
 	return func(o *frontmatterOptions) {
 		o.command = strings.TrimSpace(command)
+	}
+}
+
+// WithFrontmatterContext makes the operation honour ctx, so a CLI interrupt
+// cancels it at the same boundaries as every other journaled write.
+func WithFrontmatterContext(ctx context.Context) FrontmatterOption {
+	return func(o *frontmatterOptions) {
+		o.ctx = ctx
 	}
 }
 

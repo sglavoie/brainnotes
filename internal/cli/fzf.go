@@ -11,9 +11,11 @@ import (
 )
 
 // ErrFZFNotFound is returned when the fzf binary cannot be located in PATH.
-// It wraps exec.ErrNotFound so that callers (including the main exit-code
-// mapper) can detect it with errors.Is and map it to exit code 127.
-var ErrFZFNotFound = fmt.Errorf("fzf not found; install via 'brew install fzf' or provide arguments explicitly: %w", exec.ErrNotFound)
+// It is a ChildProcessError wrapping exec.ErrNotFound, so callers can detect it
+// with errors.Is and the main exit-code mapper turns it into 127.
+var ErrFZFNotFound error = &ChildProcessError{
+	Err: fmt.Errorf("fzf not found; install via 'brew install fzf' or provide arguments explicitly: %w", exec.ErrNotFound),
+}
 
 // ErrFZFInterrupted is returned when the user cancels fzf with Ctrl-C or
 // Escape (exit code 130). Callers should exit with code 130 without printing
@@ -58,7 +60,7 @@ func runFZFProcess(args []string, input string) ([]string, error) {
 				return nil, ErrFZFInterrupted
 			}
 		}
-		return nil, fmt.Errorf("fzf: %w", err)
+		return nil, childProcessError(fmt.Errorf("fzf: %w", err))
 	}
 	return splitSelection(out.String()), nil
 }

@@ -17,8 +17,8 @@ func NewOpenCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "open [query]",
-		Short:         "Pick a note with fzf and open it in $EDITOR",
-		Long:          "Pipe every vault note path into fzf for selection, then exec $EDITOR on the chosen path. With a positional query, fzf opens pre-filtered (the picker is not auto-confirmed). Use --print to emit the selected path instead of invoking the editor.",
+		Short:         "Pick a note with fzf and open it in [open].editor or $EDITOR",
+		Long:          "Pipe every vault note path into fzf for selection, then exec the configured editor ([open].editor in config, or $EDITOR as fallback) on the chosen path. With a positional query, fzf opens pre-filtered (the picker is not auto-confirmed). Use --print to emit the selected path instead of invoking the editor.",
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -28,7 +28,7 @@ func NewOpenCmd() *cobra.Command {
 	}
 
 	f := cmd.Flags()
-	f.BoolVar(&opts.printOnly, "print", false, "print the selected path instead of invoking $EDITOR")
+	f.BoolVar(&opts.printOnly, "print", false, "print the selected path instead of invoking the editor")
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "with --print, terminate the path with NUL instead of newline")
 
 	return cmd
