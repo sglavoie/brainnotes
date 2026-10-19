@@ -286,5 +286,5 @@ func intentRecovery(phase IntentPhase, path string) []string {
 		)
 	}
 	return append(steps,
-		"Run `bn` block-clearing recovery, or delete "+path+" together with any blocked.json beside it, to allow mutation snapshots again.")
+		"Once you have looked, remove "+path+" together with any blocked.json beside it while a checkpoint holds the vault, to allow mutation snapshots again: `bn checkpoint run --reason \"clear Git safety block\" -- rm -f <state dir>/blocked.json <state dir>/intent.json` (docs/operations/vault-safety-recovery.md, \"Clearing, in order\").")
 }

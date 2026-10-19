@@ -20,7 +20,7 @@ func TestRunRefusesToStartOnAnInvalidConfig(t *testing.T) {
 	writeConfig(t, root, "[autosave]\nmin_interval = \"nope\"\n")
 
 	var stdout, stderr bytes.Buffer
-	if code := run(context.Background(), &stdout, &stderr); code != 1 {
+	if code := run(context.Background(), nil, &stdout, &stderr); code != 1 {
 		t.Fatalf("exit code %d, want 1", code)
 	}
 	if !strings.Contains(stderr.String(), "bn-vault-guard:") {
@@ -37,7 +37,7 @@ func TestRunExitsCleanlyWhenTheVaultHasNoHistory(t *testing.T) {
 	newVault(t, "5m")
 
 	var stdout, stderr bytes.Buffer
-	if code := run(context.Background(), &stdout, &stderr); code != 0 {
+	if code := run(context.Background(), nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit code %d, want 0", code)
 	}
 	if !strings.Contains(stderr.String(), "no content history") {
@@ -76,7 +76,7 @@ func TestRunStartsUnderTheConfiguredPolicyAndStopsOnCancellation(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	out := &cancelOnFirstWrite{buf: &stdout, cancel: cancel}
-	if code := run(ctx, out, &stderr); code != 0 {
+	if code := run(ctx, nil, out, &stderr); code != 0 {
 		t.Fatalf("exit code %d, want 0 (stderr: %q)", code, stderr.String())
 	}
 
@@ -108,8 +108,8 @@ func TestRunRefusesASecondGuardOnTheSameVault(t *testing.T) {
 	defer release()
 
 	var stdout, stderr bytes.Buffer
-	if code := run(context.Background(), &stdout, &stderr); code != 1 {
-		t.Fatalf("exit code %d, want 1", code)
+	if code := run(context.Background(), nil, &stdout, &stderr); code != exitAlreadyRunning {
+		t.Fatalf("exit code %d, want %d", code, exitAlreadyRunning)
 	}
 	if !strings.Contains(stderr.String(), "another guard") {
 		t.Fatalf("stderr does not explain the refusal: %q", stderr.String())

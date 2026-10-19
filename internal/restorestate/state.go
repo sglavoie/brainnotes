@@ -49,14 +49,14 @@ func Load(root string) (*Intent, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("restore state: read intent: %w", err)
+		return nil, fmt.Errorf("restore state: read intent %s: %w", path(root), err)
 	}
 	var intent Intent
 	if err := json.Unmarshal(data, &intent); err != nil {
-		return nil, fmt.Errorf("restore state: decode intent: %w", err)
+		return nil, fmt.Errorf("restore state: decode intent %s: %w", path(root), err)
 	}
 	if intent.Version != version || intent.Archive == "" || (intent.Phase != PhaseContent && intent.Phase != PhaseHistory) {
-		return nil, fmt.Errorf("restore state: unsupported or incomplete intent")
+		return nil, fmt.Errorf("restore state: unsupported or incomplete intent %s", path(root))
 	}
 	wantArchive := filepath.Join(root, RelDir, archiveName)
 	if filepath.Clean(intent.Archive) != filepath.Clean(wantArchive) {
@@ -151,32 +151,33 @@ func write(root string, intent *Intent) error {
 	//bn:direct-write creates a unique intent temporary inside the excluded restore directory while the exclusive checkpoint is held
 	tmp, err := os.CreateTemp(dir, ".intent-*.tmp")
 	if err != nil {
-		return fmt.Errorf("restore state: create intent: %w", err)
+		return fmt.Errorf("restore state: create intent temporary for %s: %w", path(root), err)
 	}
 	name := tmp.Name()
 	//bn:direct-write removes only the unique intent temporary created immediately above
 	defer os.Remove(name)
+	target := path(root)
 	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
-		return err
+		return fmt.Errorf("restore state: secure intent temporary for %s: %w", target, err)
 	}
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return err
+		return fmt.Errorf("restore state: write intent temporary for %s: %w", target, err)
 	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
-		return err
+		return fmt.Errorf("restore state: sync intent temporary for %s: %w", target, err)
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		return fmt.Errorf("restore state: close intent temporary for %s: %w", target, err)
 	}
 	//bn:direct-write atomically publishes the fsynced outer restore intent under the exclusive checkpoint before the next restore phase proceeds
-	if err := os.Rename(name, path(root)); err != nil {
-		return err
+	if err := os.Rename(name, target); err != nil {
+		return fmt.Errorf("restore state: publish intent %s: %w", target, err)
 	}
 	if err := vault.SyncDir(dir); err != nil {
-		return err
+		return fmt.Errorf("restore state: sync recovery directory after publishing %s: %w", target, err)
 	}
 	return nil
 }
@@ -185,7 +186,7 @@ func Clear(root string) error {
 	dir := filepath.Join(root, RelDir)
 	//bn:direct-write removes the completed outer intent only after content and Git history have converged under the exclusive checkpoint
 	if err := os.Remove(path(root)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("restore state: remove intent: %w", err)
+		return fmt.Errorf("restore state: remove intent %s: %w", path(root), err)
 	}
 	if err := vault.SyncDir(dir); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("restore state: sync recovery directory: %w", err)
@@ -194,5 +195,8 @@ func Clear(root string) error {
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("restore state: remove recovery directory: %w", err)
 	}
-	return vault.SyncDir(filepath.Join(root, ".bnotes"))
+	if err := vault.SyncDir(filepath.Join(root, ".bnotes")); err != nil {
+		return fmt.Errorf("restore state: sync sidecar directory after removing %s: %w", path(root), err)
+	}
+	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
@@ -25,6 +26,16 @@ type ReadOptions struct {
 	// DisconnectedAfter overrides DefaultDisconnectedAfter. A negative value
 	// turns the inference off, which is what a test that is not about it wants.
 	DisconnectedAfter time.Duration
+	// Build overrides the reader's own build identifier, which the recorded
+	// companion build is compared against. Empty means internal/buildinfo.ID().
+	Build string
+}
+
+func (o ReadOptions) build() string {
+	if o.Build == "" {
+		return buildinfo.ID()
+	}
+	return o.Build
 }
 
 func (o ReadOptions) now() time.Time {
@@ -79,7 +90,7 @@ func Read(ctx context.Context, root string, opts ReadOptions) (*Status, error) {
 	status.readExport(root)
 	status.readTransport(root, local)
 	status.readPeer(root)
-	status.readWorkers(root, opts.now())
+	status.readWorkers(root, opts.now(), opts.build())
 	status.States = deriveStates(status, opts)
 	return status, nil
 }
@@ -333,12 +344,14 @@ func summarizeConflicts(record *vaultimport.State) []ConflictSummary {
 // have never failed. A worker failing for two days behind a truncated record
 // would then read as healthy and `-check` would exit zero, which is exactly the
 // silence this package exists to refuse.
-func (s *Status) readWorkers(root string, now time.Time) {
+func (s *Status) readWorkers(root string, now time.Time, build string) {
 	record, err := LoadRecord(root)
 	if err != nil {
 		s.problem("companion record", err)
 	}
 	s.Workers = record.statuses(now)
+	s.CompanionBuild = record.Build
+	s.BuildMismatch = buildinfo.Mismatch(record.Build, build)
 }
 
 // deriveStates turns the measurements into the set of states that hold, in

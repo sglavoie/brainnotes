@@ -89,6 +89,14 @@ type Manager struct {
 	// which decides whether a staged mode may be compared exactly.
 	execBitOnce    sync.Once
 	execBitTrusted bool
+
+	// pushStale records that a push succeeded but push.json could not be
+	// removed afterwards. The file on disk then describes a streak that is over,
+	// and every reader in this process ignores it until a later write replaces
+	// it: otherwise the next failure would continue the old streak and double a
+	// backoff the remote never earned.
+	pushMu    sync.Mutex
+	pushStale bool
 }
 
 // Open prepares the safety engine for a vault.
@@ -298,7 +306,19 @@ func (m *Manager) Interrupted() (IntentRecord, bool) {
 }
 
 // PushStatus reports the remote retry state.
-func (m *Manager) PushStatus() (PushState, bool) { return m.state.LoadPushState() }
+func (m *Manager) PushStatus() (PushState, bool) { return m.loadPushState() }
+
+// loadPushState is LoadPushState with a resolved-but-unremoved streak treated
+// as absent; see pushStale.
+func (m *Manager) loadPushState() (PushState, bool) {
+	m.pushMu.Lock()
+	stale := m.pushStale
+	m.pushMu.Unlock()
+	if stale {
+		return PushState{}, false
+	}
+	return m.state.LoadPushState()
+}
 
 // AutosavePolicy reports the external autosave floor this engine is enforcing
 // right now. A caller that has to act on it more than once in a row should read
@@ -418,28 +438,47 @@ func (m *Manager) ExternalCommitDue() bool {
 func (m *Manager) checkpointMutation(op string, mutate func() error) error {
 	release, err := checkpoint.Join(m.root)
 	if err != nil {
-		return safetyErrorf(KindBusy, op, "a checkpoint is copying this vault; try again shortly")
+		return barrierJoinError(op, "nothing was written", err)
 	}
 	defer release()
 	return mutate()
 }
 
+// recordPushFailure advances the retry streak. A streak this process already
+// saw resolved starts again from one attempt, and the stale marker is dropped
+// only once a record describing the new streak is on disk.
 func (m *Manager) recordPushFailure(now time.Time, detail string) (state PushState, err error) {
+	m.pushMu.Lock()
+	defer m.pushMu.Unlock()
 	err = m.checkpointMutation("record push failure", func() error {
-		state, err = m.state.RecordPushFailure(now, detail)
+		record := m.state.RecordPushFailure
+		if m.pushStale {
+			record = m.state.StartPushStreak
+		}
+		state, err = record(now, detail)
 		return err
 	})
+	if err == nil {
+		m.pushStale = false
+	}
 	return state, err
 }
 
+// clearPushState forgets a resolved streak. When the record cannot be removed
+// the streak is still over, so it is marked stale in memory rather than left to
+// lengthen the next outage's backoff.
 func (m *Manager) clearPushState() error {
-	return m.checkpointMutation("clear push retry", m.state.ClearPushState)
+	m.pushMu.Lock()
+	defer m.pushMu.Unlock()
+	err := m.checkpointMutation("clear push retry", m.state.ClearPushState)
+	m.pushStale = err != nil
+	return err
 }
 
 // PushDue reports whether a retry is worth attempting now. A vault with no
 // recorded failure is always due.
 func (m *Manager) PushDue() bool {
-	state, ok := m.state.LoadPushState()
+	state, ok := m.loadPushState()
 	if !ok {
 		return true
 	}

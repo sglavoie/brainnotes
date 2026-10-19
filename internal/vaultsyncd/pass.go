@@ -2,6 +2,7 @@ package vaultsyncd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -93,6 +94,17 @@ func (c *companion) pass(ctx context.Context) *Pass {
 	}
 
 	record, loadErr := LoadRecord(c.root)
+	if errors.Is(loadErr, ErrNewerRecord) {
+		c.emit(Event{
+			Kind:    EventProblem,
+			Subject: "companion record",
+			Message: "the companion record was written by a newer build, so this companion leaves it alone and runs nothing; restart the companion from the matching build",
+			Detail:  sanitize(loadErr),
+		})
+		pass.Error = sanitize(loadErr)
+		pass.Status, pass.FinishedAt = before, c.opts.now()
+		return pass
+	}
 	if loadErr != nil {
 		c.emit(Event{
 			Kind:    EventProblem,
@@ -247,7 +259,7 @@ func (c *companion) runUnit(ctx context.Context, name WorkerName, state *passSta
 // detail. The failure is announced, because a backoff that is not durable is a
 // backoff a restart forgets, and that is worth knowing.
 func (c *companion) persist(record *Record) {
-	if err := record.save(c.root); err != nil {
+	if err := record.save(c.root, c.opts.build()); err != nil {
 		c.emit(Event{
 			Kind:    EventProblem,
 			Subject: "companion record",

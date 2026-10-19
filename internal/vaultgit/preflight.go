@@ -3,6 +3,7 @@ package vaultgit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -125,8 +126,7 @@ func (m *Manager) acquireWithin(name, op string, ctx context.Context, budget tim
 	if name == safetyLockName {
 		_, joined, err := checkpoint.JoinContext(ctx, m.root)
 		if err != nil {
-			return nil, safetyErrorf(KindBusy, op,
-				"a checkpoint is copying this vault, so the %s was not taken; try again shortly", name)
+			return nil, barrierJoinError(op, fmt.Sprintf("the %s was not taken", name), err)
 		}
 		barrier = joined
 	}
@@ -209,6 +209,20 @@ func (m *Manager) recoverDeletionBlock(ctx context.Context, op string) error {
 		return err
 	}
 	return m.state.ClearBlock()
+}
+
+// barrierJoinError classifies a refused checkpoint join. Only a checkpoint that
+// held the barrier past the writer's wait is contention, and only contention is
+// KindBusy: callers retry busy errors, and retrying a pending restore, an
+// unresolvable root or an unreadable checkpoint record would loop on a failure
+// that never clears by itself. Everything else keeps its cause.
+func barrierJoinError(op, consequence string, err error) *SafetyError {
+	if errors.Is(err, checkpoint.ErrBarrierHeld) {
+		return &SafetyError{Kind: KindBusy, Op: op, Err: err,
+			Reason: fmt.Sprintf("a checkpoint is copying this vault, so %s; try again shortly", consequence)}
+	}
+	return &SafetyError{Kind: KindRepositoryState, Op: op, Err: err,
+		Reason: fmt.Sprintf("the checkpoint barrier could not be joined, so %s", consequence)}
 }
 
 func (m *Manager) tryGitLock(name, op string) (func(), error) {

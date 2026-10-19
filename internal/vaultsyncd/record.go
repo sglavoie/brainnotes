@@ -2,6 +2,7 @@ package vaultsyncd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
@@ -78,9 +80,21 @@ type WorkerRecord struct {
 // from. This file only decides *when* to try next, which is why losing it is
 // cheap.
 type Record struct {
-	Version int                         `json:"version"`
+	Version int `json:"version"`
+	// Build is the build identifier (internal/buildinfo) of the companion that
+	// last wrote the record. A status read compares it with its own, which is
+	// how a companion binary that was replaced on disk but never restarted is
+	// noticed. Empty when the writer could not say what it was.
+	Build   string                      `json:"build,omitempty"`
 	Workers map[WorkerName]WorkerRecord `json:"workers,omitempty"`
 }
+
+// ErrNewerRecord is LoadRecord's refusal of a record written by a newer schema.
+// Unlike every other unusable record it is not discarded: an older companion
+// that reset it would overwrite a newer companion's schedule and failure
+// evidence with a format that newer companion then has to throw away. The record
+// is left exactly as it is and the pass does no work until a matching build runs.
+var ErrNewerRecord = errors.New("vaultsyncd: the companion record was written by a newer bn-vault-sync")
 
 // RecordPath returns the absolute path of the companion record for the vault at
 // root.
@@ -106,7 +120,9 @@ func RecordPath(root string) string {
 // synchronizing at all, which is a strictly worse outcome than one early retry.
 //
 // The error is returned alongside the empty record rather than swallowed, so a
-// caller that wants to say so can. Nothing is obliged to act on it.
+// caller that wants to say so can. Nothing is obliged to act on it — except for
+// a record from a newer schema, which wraps ErrNewerRecord and is the one case
+// the empty record must not be saved over; see ErrNewerRecord.
 func LoadRecord(root string) (*Record, error) {
 	fresh := &Record{Version: recordVersion, Workers: map[WorkerName]WorkerRecord{}}
 	data, err := os.ReadFile(RecordPath(root))
@@ -119,6 +135,10 @@ func LoadRecord(root string) (*Record, error) {
 	var record Record
 	if err := json.Unmarshal(data, &record); err != nil {
 		return fresh, fmt.Errorf("vaultsyncd: parse companion record: %w", err)
+	}
+	if record.Version > recordVersion {
+		return fresh, fmt.Errorf("%w: it is version %d and this build writes %d; run the matching build rather than letting this one reset it",
+			ErrNewerRecord, record.Version, recordVersion)
 	}
 	if record.Version != recordVersion {
 		return fresh, fmt.Errorf("vaultsyncd: companion record is version %d, this build writes %d",
@@ -146,13 +166,16 @@ func LoadRecord(root string) (*Record, error) {
 // copied half-written. A worker transition recorded here is what a restored
 // vault resumes from, and one captured mid-replacement would resume from a state
 // no pass ever reached.
-func (r *Record) save(root string) error {
+func (r *Record) save(root, build string) error {
 	barrier, err := checkpoint.Join(root)
 	if err != nil {
 		return fmt.Errorf("vaultsyncd: %w", err)
 	}
 	defer barrier()
 	r.Version = recordVersion
+	if buildinfo.Known(build) {
+		r.Build = build
+	}
 	data, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return fmt.Errorf("vaultsyncd: encode companion record: %w", err)

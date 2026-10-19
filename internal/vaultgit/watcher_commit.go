@@ -151,6 +151,14 @@ func (w *Watcher) maybePush(ctx context.Context, urgent bool) {
 		Message: "the content history was published",
 		Branch:  result.Branch,
 	})
+	if result.RetryStateErr != nil {
+		w.emit(WatchEvent{
+			Kind:    WatchEventError,
+			Message: "the push succeeded but the old push retry record could not be removed; this process treats it as resolved",
+			Branch:  result.Branch,
+			Detail:  agent.SanitizedDiagnostic(result.RetryStateErr),
+		})
+	}
 }
 
 // maybeAnnouncePushStreak emits one WatchEventPushFailing per outage.

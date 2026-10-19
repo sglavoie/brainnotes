@@ -21,7 +21,7 @@ useful next step is for a person to look.
 ### A block marker
 
 ```
-$ cat "$(git -C ~/BrainNotesVault rev-parse --git-dir)/brainnotes-safety/blocked.json"
+$ cat "$(git -C ~/BrainNotesVault rev-parse --absolute-git-dir)/brainnotes-safety/blocked.json"
 {
   "version": 1,
   "kind": "ambiguous_change",
@@ -42,7 +42,7 @@ behavior.
 ### An interrupted snapshot
 
 ```
-$ cat "$(git -C ~/BrainNotesVault rev-parse --git-dir)/brainnotes-safety/intent.json"
+$ cat "$(git -C ~/BrainNotesVault rev-parse --absolute-git-dir)/brainnotes-safety/intent.json"
 {
   "version": 1,
   "operation": "…",
@@ -134,17 +134,25 @@ contents, so it is safe to open and read.
    $ check-brainnotes-vault-health.sh --json
    ```
 
-3. **Remove both records together, and only then.**
+3. **Remove both records together, under a checkpoint, and only then.**
 
    ```
-   $ safety="$(git -C ~/BrainNotesVault rev-parse --git-dir)/brainnotes-safety"
-   $ rm -f "$safety/blocked.json" "$safety/intent.json"
+   $ cd ~/BrainNotesVault
+   $ safety="$(git rev-parse --absolute-git-dir)/brainnotes-safety"
+   $ bn checkpoint run --reason "clear Git safety block" -- \
+       rm -f "$safety/blocked.json" "$safety/intent.json"
    ```
 
-   Both, always, even when only one is present — that is what `bn`'s own
-   `ClearBlock` does, and removing one while leaving the other keeps the vault
-   refusing for a reason whose marker you just deleted. `-f` is there so the
-   pair is one command whether or not both files exist.
+   This is the one supported procedure; `bn` has no separate unblock command,
+   and the recovery text inside `intent.json` points here. Both files, always,
+   even when only one is present — that is what the engine's own
+   `Manager.ClearBlock` does, and removing one while leaving the other keeps the
+   vault refusing for a reason whose marker you just deleted. `-f` is there so
+   the pair is one command whether or not both files exist. `bn checkpoint run`
+   keeps the removal inside the checkpoint barrier, exactly as `ClearBlock`'s
+   own write is: no backup or deployment snapshot can copy the safety directory
+   halfway through it, and the command refuses rather than runs if another
+   checkpoint already holds the vault.
 
 4. **Restart the guard**, so it re-reads state from a clean start:
 

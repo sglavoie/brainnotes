@@ -18,9 +18,20 @@ func (s *safetyState) LoadPushState() (PushState, bool) {
 
 // RecordPushFailure advances the retry schedule and persists it.
 func (s *safetyState) RecordPushFailure(now time.Time, detail string) (PushState, error) {
+	return s.recordPushFailure(now, detail, false)
+}
+
+// StartPushStreak records a failure as the first of a new streak whatever the
+// file says, for a caller that knows the recorded streak already ended in a
+// success it could not write down.
+func (s *safetyState) StartPushStreak(now time.Time, detail string) (PushState, error) {
+	return s.recordPushFailure(now, detail, true)
+}
+
+func (s *safetyState) recordPushFailure(now time.Time, detail string, fresh bool) (PushState, error) {
 	now = now.UTC()
 	state, ok := s.LoadPushState()
-	if !ok {
+	if !ok || fresh {
 		state = PushState{FirstFailureAt: now}
 	}
 	state.Version = stateVersion

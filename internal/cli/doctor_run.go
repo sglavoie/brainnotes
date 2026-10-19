@@ -63,6 +63,9 @@ func runDoctorCommand(cmd *cobra.Command, opts doctorOptions) error {
 		queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
 	}
 
+	// Companion version skew is a health finding but not a hygiene task, so it
+	// goes to stderr and leaves the queue (and its JSON) exactly as it was.
+	writeCompanionBuildWarnings(cmd.ErrOrStderr(), v.Root)
 	return writeDoctorQueue(cmd, queue, opts)
 }
 

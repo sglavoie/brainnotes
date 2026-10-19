@@ -197,6 +197,11 @@ func (s *safetyState) readJSON(name string, dst any) (found bool, err error) {
 }
 
 func (s *safetyState) remove(name string) error {
+	if s.failWrite != nil {
+		if err := s.failWrite(name); err != nil {
+			return err
+		}
+	}
 	if err := os.Remove(s.path(name)); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil

@@ -18,7 +18,7 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
-func ApplyPlan(root string, plan *Plan, now func() time.Time) error {
+func ApplyPlan(root string, plan *Plan, now func() time.Time) (err error) {
 	if err := plan.Validate(); err != nil {
 		return err
 	}
@@ -29,7 +29,13 @@ func ApplyPlan(root string, plan *Plan, now func() time.Time) error {
 	if err != nil {
 		return fmt.Errorf("vault recovery: hold checkpoint: %w", err)
 	}
-	defer held.Release()
+	// As in backup.Create, a release failure is reported only when nothing else
+	// went wrong, so it never hides the failure that ended the apply.
+	defer func() {
+		if releaseErr := held.Release(); releaseErr != nil && err == nil {
+			err = fmt.Errorf("vault recovery: release checkpoint: %w", releaseErr)
+		}
+	}()
 	ctx := held.Context(context.Background())
 	done, err := completedApply(root, plan)
 	if err != nil {

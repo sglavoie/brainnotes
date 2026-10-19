@@ -9,6 +9,27 @@ It is installed alongside `bn` and supervised by a LaunchAgent. It is not a `bn`
 subcommand and it does not appear in `bn --help`, because there is nothing about
 it to operate on a good day.
 
+### Installing a new build
+
+`just install` replaces `bn`, `bn-vault-guard` and `bn-vault-sync` together, but
+the LaunchAgents keep running the companion binaries they started until they are
+restarted; the recipe ends by printing the two `launchctl kickstart -k` lines.
+Every binary reports the same build identifier (the Git revision it was built
+from, `-dirty` for an uncommitted tree): `bn --version`,
+`bn-vault-guard -version` and `bn-vault-sync -version`. The running companions
+write theirs to `guard.json` (beside `blocked.json`) and `.bnotes/sync/companion.json`,
+log it on their `started` record, and `bn doctor` warns on stderr when either
+differs from the running `bn`. `bn-vault-sync -check` reports the same skew as
+`build_mismatch` without changing its exit status.
+
+The guard's exit statuses are chosen for the LaunchAgent, which restarts it on
+any non-zero exit: `0` when it stops on a signal or the vault has no content
+history, `1` when it cannot start or keep watching, and `2` for bad flags or when
+another guard already holds the vault. The duplicate is non-zero on purpose, as it
+is for `bn-vault-sync`: the copy that lost the lock is usually the LaunchAgent's
+own while a guard runs by hand, and it must keep retrying so the vault is guarded
+again once that copy stops.
+
 ## What is protected
 
 The vault's tracked scope is fixed and is not configurable:

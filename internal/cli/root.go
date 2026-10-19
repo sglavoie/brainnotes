@@ -94,9 +94,12 @@ func NewRootCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:           "bn",
-		Short:         "Brain Notes: tools for plain-Markdown vaults",
-		Long:          "Brain Notes (bn) helps you capture, find, edit, and maintain a plain-Markdown notes vault. Run 'bn serve' to open the browser workspace. Use --dry-run previews where available, inspect with 'git diff', and use 'bn history' / 'bn undo' for short-term rollback.",
+		Use:   "bn",
+		Short: "Brain Notes: tools for plain-Markdown vaults",
+		Long:  "Brain Notes (bn) helps you capture, find, edit, and maintain a plain-Markdown notes vault. Run 'bn serve' to open the browser workspace. Use --dry-run previews where available, inspect with 'git diff', and use 'bn history' / 'bn undo' for short-term rollback.",
+		// The same build identifier bn-vault-guard -version and bn-vault-sync
+		// -version print, so the three can be compared by eye.
+		Version:       bnBuildID(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
