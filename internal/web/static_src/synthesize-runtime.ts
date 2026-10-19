@@ -107,16 +107,40 @@ export type SynthesisRuntime = {
   // Validation messages stay hidden until the user asks for something that needs
   // valid fields, so an untouched form does not open covered in refusals.
   showFieldErrors: boolean;
+  // Saved keys that could not be resolved because the vault was unreachable,
+  // not because the note is gone. They stay in storage until a retry settles
+  // them, so a transport failure never rewrites the saved selection.
+  unresolvedSources: string[];
+  // Set when the browser refused to delete the saved copy, so the discard
+  // control stays offered even though the page itself is empty.
+  savedStateStuck: boolean;
   announce: (message: string, kind?: StatusKind) => void;
   persist: () => void;
   clearSaved: () => boolean;
   readSaved: () => SynthesisStoredState | null;
-  offerRecovery: (restore: (state: SynthesisStoredState) => Promise<void>) => void;
+  offerRecovery: (restore: (state: SynthesisStoredState) => Promise<boolean>) => void;
   rememberCandidates: (entries: SynthesisCandidate[]) => void;
   renderCandidatePanels: () => void;
   renderFieldErrors: () => void;
   render: () => void;
   forgetContext: (target: HTMLElement) => void;
+};
+
+const dialogConfirmer = (root: HTMLElement, view: SynthesisView): ConfirmAction =>
+  (message: string) => confirmAction({
+    title: message === DISCLOSURE ? "Send context to Ask AI?" : "Change saved work?",
+    description: message,
+    confirmLabel: message === DISCLOSURE ? "Send context" : "Confirm",
+    danger: message === DISCARD_CONFIRMATION,
+  }, root.ownerDocument, message === DISCARD_CONFIRMATION ? view.discardButton : view.generateButton);
+
+// Unresolved keys ride along in every save, so a save made before a retry
+// settles them never drops a note the vault only failed to answer for.
+const storedState = (runtime: SynthesisRuntime): SynthesisStoredState => {
+  const state = synthesisStateFromModel(runtime.model);
+  const kept = new Set(state.sources);
+  state.sources.push(...runtime.unresolvedSources.filter((key) => !kept.has(key)));
+  return state;
 };
 
 export const createSynthesisRuntime = (
@@ -149,12 +173,7 @@ export const createSynthesisRuntime = (
             ? (navigator.clipboard as WritableClipboard | undefined)
             : undefined) || null
         : deps.clipboard,
-    confirmer: deps.confirm || ((message: string) => confirmAction({
-      title: message === DISCLOSURE ? "Send context to Ask AI?" : "Change saved work?",
-      description: message,
-      confirmLabel: message === DISCLOSURE ? "Send context" : "Confirm",
-      danger: message === DISCARD_CONFIRMATION,
-    }, root.ownerDocument, message === DISCARD_CONFIRMATION ? view.discardButton : view.generateButton)),
+    confirmer: deps.confirm || dialogConfirmer(root, view),
     redirect: deps.redirect || ((path: string): void => window.location.assign(path)),
     candidates: new Map<string, SynthesisCandidate>(),
     suggestionEntries: { balanced: null, rediscover: null, connect: null },
@@ -163,13 +182,16 @@ export const createSynthesisRuntime = (
     previewing: false,
     applying: false,
     showFieldErrors: false,
+    unresolvedSources: [],
+    savedStateStuck: false,
 
     announce: (message, kind = ""): void => {
       setStatusText(statusEl, message, kind);
     },
 
     persist: (): void => {
-      if (writeSynthesisState(storage, storageKey, synthesisStateFromModel(model))) {
+      if (writeSynthesisState(storage, storageKey, storedState(runtime))) {
+        runtime.savedStateStuck = false;
         rememberSynthesisSession(draftID);
         return;
       }
@@ -260,11 +282,19 @@ const renderFieldErrors = (runtime: SynthesisRuntime): void => {
 const synthesisNextStep = (model: SynthesisModel): string => {
   if (model.context === null) {
     return model.contextStale
-      ? "Rebuild context to include your updated sources or research options. Your draft is unchanged."
+      ? "Rebuild context to include your updated sources, purpose, or prompt. Your draft is unchanged."
       : "Next: prepare context to enable preview. You can draft below while choosing your sources.";
   }
-  if (model.title.trim() === "" || model.draft.trim() === "") {
+  const needsTitle = model.title.trim() === "";
+  const needsDraft = model.draft.trim() === "";
+  if (needsTitle && needsDraft) {
     return "Next: give the note a title and write the draft.";
+  }
+  if (needsTitle) {
+    return "Next: give the note a title.";
+  }
+  if (needsDraft) {
+    return "Next: write the draft.";
   }
   if (model.preview === null) {
     return "Next: preview the exact note before creating it.";
@@ -294,7 +324,7 @@ const render = (runtime: SynthesisRuntime): void => {
   view.generateButton.disabled = model.context === null || runtime.generating;
   view.previewButton.disabled = runtime.previewing || runtime.applying;
   view.applyButton.disabled = model.preview === null || runtime.applying;
-  view.discardButton.hidden = !synthesisHasSavedWork(model, config);
+  view.discardButton.hidden = !synthesisHasSavedWork(model, config) && !runtime.savedStateStuck;
   view.prepareButton.classList.toggle("bn-primary", model.context === null);
   view.previewButton.classList.toggle("bn-primary", model.context !== null && model.preview === null);
   view.applyButton.classList.toggle("bn-primary", model.preview !== null);

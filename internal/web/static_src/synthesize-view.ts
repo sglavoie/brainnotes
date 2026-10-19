@@ -17,7 +17,6 @@ import type { RelatedMode } from "./related-types";
 export type SynthesisView = {
   root: HTMLElement;
   warning: HTMLElement;
-  nextStep: HTMLElement;
   nextStepText: HTMLElement;
   nextStepAction: HTMLButtonElement;
   sourceList: HTMLOListElement;
@@ -67,6 +66,11 @@ export type SynthesisView = {
   previewSources: HTMLOListElement;
 };
 
+// The workbench stacks into one column below this width (responsive.css), so
+// both steps open together in the two-column layout and start closed when
+// stacked, leaving the draft in reach on a phone.
+const WIDE_LAYOUT = "(min-width: 961px)";
+
 const bindContextShortcut = (button: HTMLButtonElement, context: HTMLDetailsElement): void => {
   button.addEventListener("click", () => {
     context.open = true;
@@ -106,11 +110,11 @@ export const createSynthesisView = (
   const left = element(doc, "div", "synthesize-column");
   const discovery = synthesisDisclosure(doc, "Find supporting notes", suggestions.section, search.section);
   const sourceDetails = synthesisDisclosure(doc, "1. Choose sources", sources.section, discovery);
-  sourceDetails.open = doc.defaultView?.matchMedia?.("(min-width: 800px)").matches ?? false;
+  sourceDetails.open = doc.defaultView?.matchMedia?.(WIDE_LAYOUT).matches ?? false;
   const contextDetails = synthesisDisclosure(doc, "2. Prepare context", context.section);
-  // A narrow phone still opens on the draft. The prompt above it opens this
-  // required step directly when the person is ready to prepare the packet.
-  contextDetails.open = doc.defaultView?.matchMedia?.("(min-width: 961px)").matches ?? true;
+  // The prompt above the steps opens this required step directly when the
+  // person is ready to prepare the packet.
+  contextDetails.open = doc.defaultView?.matchMedia?.(WIDE_LAYOUT).matches ?? true;
   bindContextShortcut(nextStepAction, contextDetails);
   left.append(sourceDetails, contextDetails);
   const right = element(doc, "div", "synthesize-column");
@@ -125,7 +129,6 @@ export const createSynthesisView = (
   return {
     root: mount,
     warning,
-    nextStep,
     nextStepText,
     nextStepAction,
     sourceList: sources.list,

@@ -1,5 +1,4 @@
 import { relatedModeDefinitions } from "./related-model";
-import { setStatusText, type StatusKind } from "./status";
 import {
   formatSynthesisBytes,
   formatSynthesisExpiry,
@@ -157,30 +156,36 @@ export const renderSynthesisCandidates = (
 };
 
 export type SynthesisWarningLink = { href: string; label: string };
+export type SynthesisWarningAction = { label: string; run: () => void };
 
-export const setSynthesisWarning = (
-  view: SynthesisView,
-  message: string,
-  link?: SynthesisWarningLink
-): void => {
-  view.warning.textContent = message;
-  if (message !== "" && link) {
-    const anchor = element(view.warning.ownerDocument, "a", "synthesize-warning-link", {
+const warningControl = (doc: Document, link: SynthesisWarningLink | SynthesisWarningAction): HTMLElement => {
+  if ("href" in link) {
+    const anchor = element(doc, "a", "synthesize-warning-link", {
       "data-synthesize-warning-link": "",
       href: link.href,
     });
     anchor.textContent = link.label;
-    view.warning.append(" ", anchor);
+    return anchor;
   }
-  view.warning.hidden = message === "";
+  const button = element(doc, "button", "synthesize-warning-action", {
+    "data-synthesize-warning-action": "",
+    type: "button",
+  });
+  button.textContent = link.label;
+  button.addEventListener("click", link.run);
+  return button;
 };
 
-export const setSynthesisStatus = (
-  target: HTMLElement,
+export const setSynthesisWarning = (
+  view: SynthesisView,
   message: string,
-  kind: StatusKind = ""
+  link?: SynthesisWarningLink | SynthesisWarningAction
 ): void => {
-  setStatusText(target, message, kind);
+  view.warning.textContent = message;
+  if (message !== "" && link) {
+    view.warning.append(" ", warningControl(view.warning.ownerDocument, link));
+  }
+  view.warning.hidden = message === "";
 };
 
 const excerptLabel = (path: string, start: number, end: number): string =>

@@ -100,6 +100,17 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
     setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
   };
 
+  // A confirmed trash is the same move a direct success made, so the note is no
+  // longer here to act on. The confirmation stays readable, with the way on
+  // that a direct success would have taken offered beside it.
+  const settleTrashedNote = (): void => {
+    button.disabled = true;
+    const onward = statusEl.ownerDocument.createElement("a");
+    onward.href = config.redirectPath;
+    onward.textContent = "Leave this note";
+    statusEl.append(" ", onward);
+  };
+
   button.addEventListener("click", async () => {
     if (!config.key || !config.csrfToken) {
       setStatus("Trash action unavailable.", "is-error");
@@ -121,7 +132,7 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
       const failure = responseFailure(resp, payload, "write");
       if (failure) {
         setStatus(failure.message, "is-error");
-        if (failure.uncertain) offerWriteOutcomeCheck(statusEl, operationID, fetcher, "Trash");
+        if (failure.uncertain) offerWriteOutcomeCheck(statusEl, operationID, fetcher, "Trash", settleTrashedNote);
         return;
       }
 
@@ -136,7 +147,7 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
       redirect(config.redirectPath);
     } catch {
       setStatus(unansweredRequest("write").message, "is-error");
-      offerWriteOutcomeCheck(statusEl, operationID, fetcher, "Trash");
+      offerWriteOutcomeCheck(statusEl, operationID, fetcher, "Trash", settleTrashedNote);
     } finally {
       button.disabled = false;
     }

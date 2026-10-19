@@ -86,7 +86,10 @@ export type Mounted = {
   panel: NonNullable<ReturnType<typeof createTemplatesPanel>>;
 };
 
-export const mount = (routes: Record<string, () => Response>): Mounted => {
+export const mount = (
+  routes: Record<string, () => Response | Promise<Response>>,
+  confirm: (message: string) => boolean | Promise<boolean> = () => true
+): Mounted => {
   document.body.innerHTML = PANEL_HTML;
   const root = document.querySelector("[data-templates-panel]") as HTMLElement;
   const calls: Call[] = [];
@@ -99,7 +102,7 @@ export const mount = (routes: Record<string, () => Response>): Mounted => {
     }
     return route();
   };
-  const panel = createTemplatesPanel({ root, fetch: fetcher, token: "csrf-token" });
+  const panel = createTemplatesPanel({ root, fetch: fetcher, token: "csrf-token", confirm });
   if (!panel) {
     throw new Error("panel did not mount");
   }

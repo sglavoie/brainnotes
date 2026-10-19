@@ -61,8 +61,8 @@ const summarize = (count: number): [string, StatusKind] =>
         "",
       ];
 
-const matchesSetting = (row: SettingRow, needle: string, pendingKey: string): boolean => {
-  if (needle === "" || row.element.dataset.dirty === "true" || row.key === pendingKey) return true;
+const matchesSetting = (row: SettingRow, needle: string, keptKeys: string[]): boolean => {
+  if (needle === "" || row.element.dataset.dirty === "true" || keptKeys.includes(row.key)) return true;
   const group = row.element.closest<HTMLElement>(".settings-group");
   return [
     row.key,
@@ -82,11 +82,11 @@ const syncSettingsGroupVisibility = (root: HTMLElement): void => {
   }
 };
 
-const filterSettingsRows = (root: HTMLElement, rows: SettingRow[], term: string, pendingKey: string): number => {
+const filterSettingsRows = (root: HTMLElement, rows: SettingRow[], term: string, keptKeys: string[]): number => {
   const needle = term.trim().toLocaleLowerCase();
   let visible = 0;
   for (const row of rows) {
-    const show = matchesSetting(row, needle, pendingKey);
+    const show = matchesSetting(row, needle, keptKeys);
     row.element.hidden = !show;
     if (show) visible += 1;
   }
@@ -94,14 +94,17 @@ const filterSettingsRows = (root: HTMLElement, rows: SettingRow[], term: string,
   return visible;
 };
 
+// Rows the filter would hide stay visible while they hold something the person
+// is still looking at: an unsaved edit, a pending preview, or the confirmation
+// of the save just made. The last of those lasts until the filter text changes.
 const bindSettingsFilter = (
   root: HTMLElement, elements: SettingsElements,
-  rows: () => SettingRow[], pendingKey: () => string
+  rows: () => SettingRow[], keptKeys: () => string[], onFilterInput: () => void
 ): (() => void) => {
   const apply = (): void => {
     if (!elements.filter) return;
     const current = rows();
-    const count = filterSettingsRows(root, current, elements.filter.value, pendingKey());
+    const count = filterSettingsRows(root, current, elements.filter.value, keptKeys());
     if (elements.filterSummary) {
       const filtering = elements.filter.value.trim() !== "";
       elements.filterSummary.hidden = !filtering;
@@ -109,7 +112,7 @@ const bindSettingsFilter = (
         ? `${count} of ${current.length} settings shown. Unsaved edits stay visible.` : "";
     }
   };
-  elements.filter?.addEventListener("input", apply);
+  elements.filter?.addEventListener("input", () => { onFilterInput(); apply(); });
   root.addEventListener("input", (event) => {
     if (event.target instanceof HTMLElement && event.target.matches("[data-settings-control]")) apply();
   });
@@ -192,6 +195,33 @@ const focusSettingFeedback = (elements: SettingsElements, row: SettingRow | null
   if (!pending && (focused === elements.confirm || focused === elements.cancel)) row.save.focus();
 };
 
+const statusSetter = (root: HTMLElement, elements: SettingsElements) =>
+  (message: string, kind: StatusKind = "", uncertain = false): void => {
+    setStatusText(elements.status, message, kind);
+    elements.status.dataset.writeUnconfirmed = String(uncertain);
+    // The status text can grow after focus moved to Confirm. Keep the focused
+    // action reachable after that layout change without moving anyone else's focus.
+    if (elements.confirm === root.ownerDocument.activeElement) {
+      elements.confirm?.scrollIntoView?.({ block: "nearest" });
+    }
+  };
+
+const pendingRenderer = (
+  elements: SettingsElements, active: () => SettingRow | null, applyFilter: () => void
+) => (pending: SettingPendingSave | null): void => {
+  if (!pending) focusSettingFeedback(elements, active(), false);
+  renderConfigDiff(elements.diff, pending ? pending.diff : []);
+  if (elements.confirm) {
+    elements.confirm.hidden = pending === null;
+    elements.confirm.textContent = pending?.op === "unset" ? "Reset setting to default" : "Save setting";
+  }
+  if (elements.cancel) {
+    elements.cancel.hidden = pending === null;
+  }
+  if (pending) focusSettingFeedback(elements, active(), true);
+  applyFilter();
+};
+
 /**
  * Mounts the portable-settings panel.
  *
@@ -210,36 +240,20 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
   let active: SettingRow | null = null;
   let submitted = "";
   let reading = 0;
-  const applyFilter = bindSettingsFilter(deps.root, elements, () => rows, () => writer.pending()?.key ?? "");
+  let savedKey = "";
+  const applyFilter = bindSettingsFilter(
+    deps.root, elements, () => rows,
+    () => [writer.pending()?.key ?? "", savedKey].filter(Boolean),
+    () => { savedKey = ""; }
+  );
   const activate = (row: SettingRow): void => {
     reading += 1;
     active = row;
     submitted = controlText(row.control);
     row.editor.appendChild(feedback);
   };
-  const setStatus = (message: string, kind: StatusKind = "", uncertain = false): void => {
-    setStatusText(elements.status, message, kind);
-    elements.status.dataset.writeUnconfirmed = String(uncertain);
-    // The status text can grow after focus moved to Confirm. Keep the focused
-    // action reachable after that layout change without moving anyone else's focus.
-    if (elements.confirm === deps.root.ownerDocument.activeElement) {
-      elements.confirm?.scrollIntoView?.({ block: "nearest" });
-    }
-  };
-
-  const showPending = (pending: SettingPendingSave | null): void => {
-    if (!pending) focusSettingFeedback(elements, active, false);
-    renderConfigDiff(elements.diff, pending ? pending.diff : []);
-    if (elements.confirm) {
-      elements.confirm.hidden = pending === null;
-      elements.confirm.textContent = pending?.op === "unset" ? "Reset setting to default" : "Save setting";
-    }
-    if (elements.cancel) {
-      elements.cancel.hidden = pending === null;
-    }
-    if (pending) focusSettingFeedback(elements, active, true);
-    applyFilter();
-  };
+  const setStatus = statusSetter(deps.root, elements);
+  const showPending = pendingRenderer(elements, () => active, () => applyFilter());
 
   const render = (settings: SettingSummary[], saved = false): void => {
     if (rows.length === 0) {
@@ -264,12 +278,22 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     hooks: {
       onStatus: setStatus,
       onPending: showPending,
-      onSaved: (result) => { reading += 1; render(result.settings, true); },
+      onSaved: (result) => { reading += 1; savedKey = active?.key ?? ""; render(result.settings, true); },
       onOutcomeCheck: (operationID) => {
-        offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Setting change");
+        offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Setting change", () => void refreshConfirmed());
       },
     },
   });
+
+  // A confirmed outcome is the save that went unanswered, so the rows take the
+  // values it wrote as a direct save would, without replacing its confirmation.
+  const refreshConfirmed = async (): Promise<void> => {
+    const issue = ++reading;
+    const outcome = await fetchSettings(deps.fetch);
+    if (issue !== reading || !outcome.ok) return;
+    savedKey = active?.key ?? "";
+    render(outcome.result.settings, true);
+  };
 
   let linkedSettingVisited = false;
   const load = async (): Promise<void> => {

@@ -17,7 +17,7 @@ type RecoveryOptions = {
   root: HTMLElement;
   storage: SynthesisStorageLike | null;
   keys: string[];
-  restore: (state: SynthesisStoredState) => Promise<void>;
+  restore: (state: SynthesisStoredState) => Promise<boolean>;
   confirm: (message: string) => boolean | Promise<boolean>;
 };
 
@@ -42,7 +42,7 @@ const recoveryRow = (options: RecoveryOptions, key: string, state: SynthesisStor
   const doc = options.root.ownerDocument;
   const row = element(doc, "div", "synthesize-recovery-row");
   const label = element(doc, "p", "");
-  label.textContent = `${state.title || "Untitled draft"} — ${state.draft.slice(0, 100) || "Sources and research settings"}`;
+  label.textContent = `${state.title || "Untitled draft"} — ${state.draft.slice(0, 100) || "Sources and research options"}`;
   const restore = element(doc, "button", "bn-button");
   restore.type = "button";
   restore.textContent = "Restore copy";
@@ -50,8 +50,9 @@ const recoveryRow = (options: RecoveryOptions, key: string, state: SynthesisStor
     if (!await options.confirm("Restore this saved work? This replaces the draft and selection on this page. Other saved copies are kept.")) return;
     restore.disabled = true;
     try {
-      await options.restore(state);
-      status.textContent = "Restored a copy. The original saved draft is still available.";
+      status.textContent = await options.restore(state)
+        ? "Restored a copy. The original saved draft is still available."
+        : "Restored a copy, but some sources could not be reached. Retry from the warning above; the original saved draft is still available.";
     } catch { status.textContent = "Could not restore the sources. Your saved copy is still available. Try again."; }
     finally { restore.disabled = false; }
   });
