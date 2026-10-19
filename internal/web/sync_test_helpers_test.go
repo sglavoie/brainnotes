@@ -304,17 +304,6 @@ func (w *syncWorld) dependent(t *testing.T, label, path, body, predecessor strin
 	})
 }
 
-// packageOf and operationOf are the two identities a delivered package carries.
-func (w *syncWorld) packageOf(t *testing.T, label string) string {
-	t.Helper()
-
-	packageID, known := w.packages[label]
-	if !known {
-		t.Fatalf("no package was delivered as %q", label)
-	}
-	return packageID
-}
-
 func (w *syncWorld) operationOf(t *testing.T, label string) string {
 	t.Helper()
 

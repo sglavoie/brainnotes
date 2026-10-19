@@ -29,33 +29,13 @@ func splitSetArgs(args []string) (notes, pairs []string, err error) {
 	return notes, pairs, nil
 }
 
-// setOp identifies the mutation requested for a single pair.
-type setOp = noteops.FrontmatterOp
-
-const (
-	opSet    = noteops.FrontmatterSet
-	opAdd    = noteops.FrontmatterListAdd
-	opRemove = noteops.FrontmatterListRemove
-)
-
 type setPair = noteops.FrontmatterMutation
 
 var pairKeyRe = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-
-// splitPairOp finds the leftmost operator ('=', '+=', or '-=') in p and
-// returns the key, the operator literal, and the raw value. Two-character
-// operators take precedence when they share a starting position with '='.
-func splitPairOp(p string) (key, op, val string, ok bool) {
-	return noteops.SplitFrontmatterPairOp(p)
-}
 
 // parsePairs converts raw pair strings into typed setPair entries, applying
 // list splitting for keys defined as lists and wikilink wrapping for keys
 // defined as wikilinks in [frontmatter.properties].
 func parsePairs(pairs []string, typeFlag string, cfg *config.Config) ([]setPair, error) {
 	return noteops.ParseFrontmatterMutations(pairs, typeFlag, cfg)
-}
-
-func parsePair(rawPair, typeFlag string, fm *config.FrontmatterConfig) (setPair, error) {
-	return noteops.ParseFrontmatterMutation(rawPair, typeFlag, fm)
 }

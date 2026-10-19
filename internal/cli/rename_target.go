@@ -44,18 +44,6 @@ func resolveVaultPathArg(vaultRoot, arg string) (string, error) {
 	return absInVault(vaultRoot, p)
 }
 
-func ensureUniqueRenameSourceTitle(v *vault.Vault, targetPath, title string) error {
-	duplicates, err := collectDuplicateRenameTitles(v, targetPath, title)
-	if err != nil {
-		return fmt.Errorf("rename: scan vault for duplicate titles: %w", err)
-	}
-	if len(duplicates) == 0 {
-		return nil
-	}
-	sort.Strings(duplicates)
-	return fmt.Errorf("rename: title %q is duplicated elsewhere in the vault (%s); refusing title-only rewrite", title, strings.Join(duplicates, ", "))
-}
-
 func ensureUniqueRenameDestinationTitle(v *vault.Vault, targetPath, newPath, title string, force bool) error {
 	duplicates, err := collectDuplicateRenameTitles(v, targetPath, title)
 	if err != nil {

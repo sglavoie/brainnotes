@@ -2,19 +2,6 @@ package schema
 
 import "strings"
 
-func repairWikilinkTarget(s string) string {
-	parts, ok := parseWikilinkRepairParts(s)
-	if !ok {
-		return s
-	}
-	return parts.target
-}
-
-func isFullWikilink(s string) bool {
-	parts, ok := parseWikilinkRepairParts(s)
-	return ok && parts.full
-}
-
 func wrapAllWikilinks(val any) any {
 	switch v := val.(type) {
 	case string:
@@ -47,19 +34,6 @@ func wrapSingleWikilink(s string) string {
 		return s
 	}
 	return formatWikilinkRepairParts(parts, true)
-}
-
-// wikilinkRepairTarget extracts the target from forms that are safe for repair:
-// bare strings, fully wrapped `[[target]]`, and simple one-sided partial wraps
-// (`[[target` or `target]]`). Values containing embedded bracket markers or
-// extra text around a wrapped link are left untouched because wrapping them
-// would produce malformed output such as `[[[[X]] B]]`.
-func wikilinkRepairTarget(s string) (target string, full bool, ok bool) {
-	parts, ok := parseWikilinkRepairParts(s)
-	if !ok {
-		return "", false, false
-	}
-	return parts.target, parts.full, true
 }
 
 func parseWikilinkRepairParts(s string) (wikilinkRepairParts, bool) {
