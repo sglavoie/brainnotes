@@ -3,6 +3,7 @@ import { withLibraryContext } from "./note-navigation";
 import { normalizeSearchResults } from "./api";
 import { queryElement } from "./dom";
 import { setSourceStatus } from "./source-status";
+import { setStatusText } from "./status";
 import {
   createSourceEditorController,
   type SourceEditorController,
@@ -135,7 +136,10 @@ const initAttachments = (
     newID: () => randomID("attachment"),
     host: {
       insertLink: (markdown) => current()?.insertText(markdown),
-      setStatus: (message, kind) => setSourceStatus(elements.status, message, kind),
+      setStatus: (message, kind) =>
+        attachmentElements.status
+          ? setStatusText(attachmentElements.status, message, kind)
+          : setSourceStatus(elements.status, message, kind),
       changed: () =>
         renderAttachmentList(attachmentElements.list, tracker.entries(), document),
     },

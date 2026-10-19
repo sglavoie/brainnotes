@@ -53,16 +53,16 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
   const { elements } = options;
   let held: GuardedAction | null = null;
   let saving = false;
+  const focus = createFocusReturn(elements.panel);
 
   const hide = (): void => {
     held = null;
-    if (elements.panel) {
-      elements.panel.hidden = true;
-    }
+    focus.hide();
   };
 
   const show = (action: GuardedAction): void => {
     held = action;
+    focus.remember();
     if (elements.message) {
       elements.message.textContent = gateMessage(action);
     }
@@ -144,6 +144,27 @@ export const createDirtyGate = (options: DirtyGateOptions): DirtyGate => {
       elements.save?.removeEventListener("click", onSave);
       elements.proceed?.removeEventListener("click", onProceed);
       elements.cancel?.removeEventListener("click", onCancel);
+    },
+  };
+};
+
+// createFocusReturn remembers the control that asked for the action. Hiding the
+// panel takes the focused button out of the page, so focus is handed back to it
+// rather than dropped on <body>, where a keyboard user starts from the top.
+const createFocusReturn = (panel: HTMLElement | null): { remember(): void; hide(): void } => {
+  let returnTo: HTMLElement | null = null;
+  return {
+    remember(): void {
+      const active = panel?.ownerDocument.activeElement;
+      returnTo = active instanceof HTMLElement && !panel?.contains(active) ? active : null;
+    },
+    hide(): void {
+      if (panel) {
+        const hadFocus = panel.contains(panel.ownerDocument.activeElement);
+        panel.hidden = true;
+        if (hadFocus && returnTo?.isConnected) returnTo.focus();
+      }
+      returnTo = null;
     },
   };
 };

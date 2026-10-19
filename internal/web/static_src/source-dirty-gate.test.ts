@@ -186,6 +186,27 @@ describe("createDirtyGate", () => {
 
 // The order of the sentence is the point: somebody who has just pressed a button
 // they now suspect was destructive reads the first clause and stops worrying.
+describe("focus", () => {
+  // Hiding the panel takes the focused button out of the page. Focus goes back
+  // to the control that asked, not to <body>.
+  it.each([
+    ["cancel", { allowDirty: false }],
+    ["proceed", { allowDirty: true }],
+  ] as const)("returns focus to the requesting control on %s", (button, over) => {
+    const h = harness({ dirty: true });
+    const trigger = document.createElement("button");
+    document.body.append(trigger);
+    trigger.focus();
+    h.gate.guard(action(over, h.ran));
+    expect(document.activeElement).toBe(h.elements.save);
+
+    h.elements[button]?.click();
+
+    expect(h.elements.panel?.hidden).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
 describe("gateMessage", () => {
   it("leads with what has not happened", () => {
     expect(gateMessage(action({ label: "Move this note to Trash" }))).toMatch(

@@ -475,6 +475,12 @@
   border-radius: var(--bn-control-radius);
   box-shadow: var(--bn-shadow-popover);
 }
+/* Anchoring to the summary's right edge fails once a long title wraps the
+   tools onto their own line at the left: the panel then opens off-screen. On
+   a narrow screen it spans the viewport instead, below the summary. */
+@media (max-width: 700px) {
+  .source-editor-workspace-content { position: fixed; left: 1rem; right: 1rem; width: auto; }
+}
 .source-editor-workspace .site-header-tools { margin-bottom: 1rem; }
 .source-editor-title[open] > summary { margin-bottom: 0.5rem; }
 .source-editor-main .source-editor-command,
@@ -508,7 +514,8 @@
 .source-editor-actions [data-source-find] { grid-column: 2; grid-row: 1; }
 .source-editor-actions [data-source-save] { grid-column: 4; grid-row: 1; }
 .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 2; text-align: left; }
-.source-editor-draft-status:empty { display: none; }
+.source-editor-draft-status:empty,
+.source-editor-attach-status:empty { display: none; }
 .source-editor-main > .site-header { display: flex; align-items: center; flex-direction: row; justify-content: space-between; gap: 0.75rem; }
 .source-editor-main > .site-header h1 { min-width: 0; overflow-wrap: anywhere; }
 .source-editor-main > .site-header .desktop-workspace-nav { margin-left: auto; flex-shrink: 0; }
@@ -526,7 +533,16 @@
   .source-editor-actions [data-source-find] { grid-column: 2; grid-row: 1; justify-self: start; }
   .source-editor-actions [data-source-save] { grid-column: 3; grid-row: 1; justify-self: end; }
   .source-editor-actions .source-editor-status { grid-column: 1 / -1; grid-row: 2; text-align: left; }
-  .source-editor-actions .source-editor-status[data-idle="true"] { display: none; }
+  /* Collapsed visually, never removed: the line is a live region, and one
+     revealed in the same update that fills it is often not announced. */
+  .source-editor-actions .source-editor-status[data-idle="true"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 @container (max-width: 13rem) {
