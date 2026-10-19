@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -316,8 +317,19 @@ func TestWatcherEventsCarryPathsButNeverNoteBodies(t *testing.T) {
 func TestWatcherRunStopsOnContextCancellation(t *testing.T) {
 	h := newHarness(t)
 	rec := &watchRecorder{}
+	// Cancel only once the loop has said it started. A fixed sleep before
+	// cancelling races a slow machine: Run can observe the cancelled context
+	// before it emits Started, and the assertion below then fails on timing
+	// rather than on behaviour. The recorder is read only after Run returns.
+	started := make(chan struct{})
+	var once sync.Once
 	w := NewWatcher(h.mgr, WatcherOptions{
-		Observe:      rec.observe,
+		Observe: func(event WatchEvent) {
+			rec.observe(event)
+			if event.Kind == WatchEventStarted {
+				once.Do(func() { close(started) })
+			}
+		},
 		Now:          func() time.Time { return h.clock },
 		PollInterval: time.Millisecond,
 	})
@@ -326,7 +338,15 @@ func TestWatcherRunStopsOnContextCancellation(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- w.Run(ctx) }()
 
-	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-started:
+	case err := <-done:
+		cancel()
+		t.Fatalf("Run returned %v before it started", err)
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("Run never emitted Started")
+	}
 	cancel()
 	select {
 	case err := <-done:
