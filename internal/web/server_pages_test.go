@@ -121,6 +121,43 @@ func TestServer_PagesIncludeFacetControls(t *testing.T) {
 	assertFacetUI("/graph", "graph", "graph", "Filter graph notes")
 }
 
+// graphPageMarkup lists what /graph must render, each control by the markup
+// that proves it, so a failure names the missing control.
+var graphPageMarkup = []struct{ what, markup string }{
+	{"graph filter input", `id="graph-filter-input"`},
+	{"graph filter label", `Filter graph`},
+	{"graph filter placeholder", `placeholder="Filter graph by title or body…"`},
+	{"graph spread slider", `id="graph-spread-input"`},
+	{"graph spread min", `min="0.8"`},
+	{"graph spread max", `max="6.0"`},
+	{"graph spread step", `step="0.1"`},
+	{"graph spread default value", `value="2.0"`},
+	{"graph spread value text", `id="graph-spread-value"`},
+	{"default spread multiplier", `>2.0x</output>`},
+	{"graph fit button", `id="graph-fit-button"`},
+	{"graph reset layout button", `id="graph-reset-layout-button"`},
+	{"graph zoom to matches button", `id="graph-zoom-matches-button"`},
+	{"graph filter search mode control", `id="graph-search-mode-filter"`},
+	{"checked filter search mode", `name="graph-search-mode" value="filter" checked`},
+	{"graph focus search mode control", `id="graph-search-mode-focus"`},
+	{"graph auto label control", `id="graph-label-mode-auto"`},
+	{"checked auto label mode", `name="graph-label-mode" value="auto" checked`},
+	{"graph all label control", `id="graph-label-mode-all"`},
+	{"graph open note link", `id="graph-open-note"`},
+	{"graph degree detail", `id="graph-hover-degree"`},
+	{"graph issue detail", `id="graph-hover-issues"`},
+	{"initially disabled graph open note link", `aria-disabled="true"`},
+	{"focusable graph canvas", `id="graph-canvas" aria-label="Notes graph" tabindex="0"`},
+	{"app.js asset", `/static/app.js`},
+}
+
+// graphPageAbsentMarkup is the shared search chrome /graph replaces with its
+// own filter.
+var graphPageAbsentMarkup = []struct{ what, markup string }{
+	{"shared search input", `id="search-input"`},
+	{"shared search result list", `id="search-results"`},
+}
+
 func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	ts, _ := newHTTPServerForFiles(t, map[string][]byte{
 		"Source.md": []byte("---\ntitle: Source\n---\nBody\n"),
@@ -134,86 +171,15 @@ func TestServer_GraphPageIncludesGraphControls(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status for /graph: got %d, want %d", resp.StatusCode, http.StatusOK)
 	}
-	if !strings.Contains(body, `id="graph-filter-input"`) {
-		t.Fatalf("missing graph filter input on /graph, got %q", body)
+	for _, want := range graphPageMarkup {
+		if !strings.Contains(body, want.markup) {
+			t.Fatalf("missing %s on /graph, got %q", want.what, body)
+		}
 	}
-	if !strings.Contains(body, `Filter graph`) {
-		t.Fatalf("missing graph filter label on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `placeholder="Filter graph by title or body…"`) {
-		t.Fatalf("missing graph filter placeholder on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-spread-input"`) {
-		t.Fatalf("missing graph spread slider on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `min="0.8"`) {
-		t.Fatalf("missing graph spread min on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `max="6.0"`) {
-		t.Fatalf("missing graph spread max on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `step="0.1"`) {
-		t.Fatalf("missing graph spread step on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `value="2.0"`) {
-		t.Fatalf("missing graph spread default value on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-spread-value"`) {
-		t.Fatalf("missing graph spread value text on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `>2.0x</output>`) {
-		t.Fatalf("missing default spread multiplier on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-fit-button"`) {
-		t.Fatalf("missing graph fit button on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-reset-layout-button"`) {
-		t.Fatalf("missing graph reset layout button on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-zoom-matches-button"`) {
-		t.Fatalf("missing graph zoom to matches button on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-search-mode-filter"`) {
-		t.Fatalf("missing graph filter search mode control on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `name="graph-search-mode" value="filter" checked`) {
-		t.Fatalf("missing checked filter search mode on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-search-mode-focus"`) {
-		t.Fatalf("missing graph focus search mode control on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-label-mode-auto"`) {
-		t.Fatalf("missing graph auto label control on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `name="graph-label-mode" value="auto" checked`) {
-		t.Fatalf("missing checked auto label mode on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-label-mode-all"`) {
-		t.Fatalf("missing graph all label control on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-open-note"`) {
-		t.Fatalf("missing graph open note link on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-hover-degree"`) {
-		t.Fatalf("missing graph degree detail on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-hover-issues"`) {
-		t.Fatalf("missing graph issue detail on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `aria-disabled="true"`) {
-		t.Fatalf("missing initially disabled graph open note link on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `id="graph-canvas" aria-label="Notes graph" tabindex="0"`) {
-		t.Fatalf("missing focusable graph canvas on /graph, got %q", body)
-	}
-	if strings.Contains(body, `id="search-input"`) {
-		t.Fatalf("unexpected shared search input on /graph, got %q", body)
-	}
-	if strings.Contains(body, `id="search-results"`) {
-		t.Fatalf("unexpected shared search result list on /graph, got %q", body)
-	}
-	if !strings.Contains(body, `/static/app.js`) {
-		t.Fatalf("missing app.js asset on /graph, got %q", body)
+	for _, absent := range graphPageAbsentMarkup {
+		if strings.Contains(body, absent.markup) {
+			t.Fatalf("unexpected %s on /graph, got %q", absent.what, body)
+		}
 	}
 }
 
