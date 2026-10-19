@@ -47,7 +47,6 @@
 
 .library-search-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
 .library-search .search-box { width: 100%; max-width: none; }
-.library-search-hint { color: var(--bn-muted); font-size: 0.9rem; margin-top: 0.65rem; }
 .library-expression summary, .brief-optional-setup summary { cursor: pointer; color: var(--bn-text-subtle); }
 .library-expression .query-bar { margin: 0.75rem 0 0; }
 .library-expression .query-bar > .panel-header { display: none; }

@@ -614,10 +614,6 @@ a:hover {
   outline-offset: -2px;
 }
 
-.graph-header-copy .theme-control {
-  margin-top: 0.6rem;
-}
-
 .note-breadcrumbs {
   margin-bottom: 0.75rem;
   color: var(--bn-muted);
@@ -5443,18 +5439,6 @@ code {
   gap: 1rem;
 }
 
-.graph-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.graph-header-copy {
-  min-width: 12rem;
-}
-
 .graph-controls {
   width: min(60rem, 100%);
   display: grid;
@@ -5681,10 +5665,6 @@ code {
   background: var(--bn-hover);
 }
 
-.graph-header h1 {
-  margin: 0;
-}
-
 #graph-status {
   margin: 0.25rem 0 0;
   color: var(--bn-muted);
@@ -5701,13 +5681,6 @@ code {
 
 #graph-status.is-error {
   color: var(--bn-danger);
-}
-
-.graph-links {
-  margin: 0.5rem 0 0;
-  display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
 }
 
 .graph-panel {
@@ -6821,23 +6794,6 @@ code {
   display: grid;
   gap: 0.4rem;
   margin: 0;
-}
-
-.synthesize-anchor-row {
-  display: grid;
-  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.synthesize-anchor-row dt {
-  color: var(--bn-text-subtle);
-  font-weight: 600;
-}
-
-.synthesize-anchor-row dd {
-  margin: 0;
-  overflow-wrap: anywhere;
 }
 
 .synthesize-purposes,
@@ -9218,7 +9174,6 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 
 .library-search-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
 .library-search .search-box { width: 100%; max-width: none; }
-.library-search-hint { color: var(--bn-muted); font-size: 0.9rem; margin-top: 0.65rem; }
 .library-expression summary, .brief-optional-setup summary { cursor: pointer; color: var(--bn-text-subtle); }
 .library-expression .query-bar { margin: 0.75rem 0 0; }
 .library-expression .query-bar > .panel-header { display: none; }
@@ -9476,11 +9431,6 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   main {
     margin-top: 1.4rem;
     padding: 0 0.85rem;
-  }
-
-  .synthesize-anchor-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.15rem;
   }
 
   .synthesize-source {

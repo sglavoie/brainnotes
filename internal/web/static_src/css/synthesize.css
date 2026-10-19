@@ -80,23 +80,6 @@
   margin: 0;
 }
 
-.synthesize-anchor-row {
-  display: grid;
-  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.synthesize-anchor-row dt {
-  color: var(--bn-text-subtle);
-  font-weight: 600;
-}
-
-.synthesize-anchor-row dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
 .synthesize-purposes,
 .synthesize-agent-status,
 .synthesize-fallback {
