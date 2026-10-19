@@ -72,7 +72,7 @@ at `bn find --view`:
 
 ```
 $ bn replace status wip done --view "Recent WIP"
-bn: view "Recent WIP" stores limit 2, which replace cannot apply; run it with 'bn find --view Recent WIP'
+bn: view "Recent WIP" stores limit 2, which replace cannot apply; run it with 'bn find --view "Recent WIP"'
 ```
 
 Refusing rather than ignoring matters most on the mutators: silently dropping
