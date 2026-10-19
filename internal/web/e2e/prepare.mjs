@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { performanceNotes } from "./performance-seed.mjs";
+import { PERFORMANCE_COUNTS } from "./performance-selection.mjs";
 // Build the disposable world `npm run test:e2e` runs against, and write the
 // manifest playwright.config.js reads.
 //
@@ -302,8 +303,12 @@ export async function prepare() {
   const readOnlyPort = await reservePort();
   const readOnlyState = join(fixtureRoot, "read-only-state");
   mkdirSync(readOnlyState, { recursive: true });
+  // The performance vaults are the slowest thing here to seed, and only the
+  // performance projects use them. run.mjs decides from the --project filters;
+  // a direct invocation without the variable keeps preparing them.
   const performance = [];
-  for (const count of [1000, 10000]) {
+  const performanceCounts = process.env.BN_E2E_PERFORMANCE === "0" ? [] : PERFORMANCE_COUNTS;
+  for (const count of performanceCounts) {
     const vault = join(fixtureRoot, `performance-${count}`);
     buildVault(vault, `performance-${count}`, home, `performance ${count} ${marker}`, performanceNotes(count));
     const performancePort = await reservePort();

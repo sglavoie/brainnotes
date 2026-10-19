@@ -110,6 +110,10 @@ export default defineConfig({
     video: "off",
   },
 
+  // manifest.performance is empty unless the requested projects can include a
+  // performance project (see e2e/performance-selection.mjs), so a run that
+  // never needs those vaults neither defines their projects nor starts their
+  // servers.
   projects: [
     ...manifest.performance.map((profile) => ({
       name: `performance-chromium-${profile.count}`,
