@@ -33,7 +33,7 @@ type searchOptions struct {
 // is a property of the *cobra.Command — so it arrives as a parameter.
 func (o searchOptions) validate(noteArgs []string, anyFlagSet bool) error {
 	if len(noteArgs) > 0 && anyFlagSet {
-		return errors.New("search: note arguments and find flags are mutually exclusive")
+		return errors.New("search: note arguments cannot be combined with find flags")
 	}
 	if err := o.validateContextCombos(); err != nil {
 		return err
@@ -47,9 +47,13 @@ func (o searchOptions) validate(noteArgs []string, anyFlagSet bool) error {
 	return nil
 }
 
-// validateContextCombos rejects the four modes --context cannot share output with.
+// validateContextCombos rejects a negative --context and the four modes
+// --context cannot share output with.
 func (o searchOptions) validateContextCombos() error {
-	if o.contextN <= 0 {
+	if o.contextN < 0 {
+		return fmt.Errorf("search: --context must be 0 or more (got %d)", o.contextN)
+	}
+	if o.contextN == 0 {
 		return nil
 	}
 	switch {

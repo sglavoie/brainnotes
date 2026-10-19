@@ -221,16 +221,16 @@ func TestRelatedValidatesFlagsBeforeOpeningVault(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "JSON and paths", args: []string{"Source", "--json", "--paths"}, want: "--json cannot be used with --paths"},
-		{name: "JSON and null", args: []string{"Source", "--json", "--null"}, want: "--json cannot be used with --null"},
+		{name: "JSON and paths", args: []string{"Source", "--json", "--paths"}, want: "--json cannot be combined with --paths"},
+		{name: "JSON and null", args: []string{"Source", "--json", "--null"}, want: "--json cannot be combined with --null"},
 		{name: "null requires paths", args: []string{"Source", "--null"}, want: "--null requires --paths"},
 		{name: "limit too low", args: []string{"Source", "--limit", "0"}, want: "--limit must be between 1 and 100"},
 		{name: "limit too high", args: []string{"Source", "--limit", "101"}, want: "--limit must be between 1 and 100"},
 		{name: "unknown mode", args: []string{"Source", "--mode", "surprise"}, want: "--mode must be balanced, rediscover, or connect"},
 		{name: "open requires interactive", args: []string{"Source", "--open"}, want: "--open requires --interactive"},
-		{name: "interactive and JSON", args: []string{"Source", "--interactive", "--json"}, want: "--interactive cannot be used with --json"},
-		{name: "interactive and paths", args: []string{"Source", "--interactive", "--paths"}, want: "--interactive cannot be used with --paths"},
-		{name: "interactive and null", args: []string{"Source", "--interactive", "--null"}, want: "--interactive cannot be used with --null"},
+		{name: "interactive and JSON", args: []string{"Source", "--interactive", "--json"}, want: "--interactive cannot be combined with --json"},
+		{name: "interactive and paths", args: []string{"Source", "--interactive", "--paths"}, want: "--interactive cannot be combined with --paths"},
+		{name: "interactive and null", args: []string{"Source", "--interactive", "--null"}, want: "--interactive cannot be combined with --null"},
 	}
 
 	for _, test := range tests {

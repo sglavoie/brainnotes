@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
@@ -16,10 +19,10 @@ func resolveNoteTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 	if err == nil {
 		return note, nil
 	}
-	// "no note titled" is the only title-resolution failure that means the
-	// caller may have supplied a path or glob. Ambiguity and walk errors retain
-	// their original semantics.
-	if !strings.Contains(err.Error(), "no note titled") {
+	// Not-found is the only title-resolution failure that means the caller may
+	// have supplied a path or glob. Ambiguity and walk errors retain their
+	// original semantics.
+	if !errors.Is(err, vault.ErrNoteNotFound) {
 		return nil, err
 	}
 
@@ -31,7 +34,35 @@ func resolveNoteTarget(v *vault.Vault, arg string) (*vault.Note, error) {
 		return nil, fmt.Errorf("expected exactly one path for %q, got %d", arg, len(paths))
 	}
 	if _, statErr := os.Stat(paths[0]); statErr != nil {
+		if errors.Is(statErr, fs.ErrNotExist) {
+			// A bare stat error would report an absolute path the user never
+			// typed when what they typed was a title.
+			return nil, &noteTargetNotFoundError{arg: arg}
+		}
 		return nil, statErr
 	}
 	return &vault.Note{Path: paths[0]}, nil
+}
+
+// noteTargetNotFoundError is a target that matched neither a title nor a file.
+// It names what the user typed, in the form they typed it.
+type noteTargetNotFoundError struct {
+	arg string
+}
+
+func (e *noteTargetNotFoundError) Error() string {
+	if looksLikePath(e.arg) {
+		return fmt.Sprintf("no note at %s", e.arg)
+	}
+	return fmt.Sprintf("no note titled %q, and no note at that path", e.arg)
+}
+
+func (e *noteTargetNotFoundError) Is(target error) bool {
+	return target == vault.ErrNoteNotFound || target == fs.ErrNotExist
+}
+
+// looksLikePath reports whether arg reads as a path rather than a title: it
+// names a folder, a Markdown file, or a glob.
+func looksLikePath(arg string) bool {
+	return strings.ContainsAny(arg, "/\\*?[") || strings.EqualFold(filepath.Ext(arg), ".md")
 }

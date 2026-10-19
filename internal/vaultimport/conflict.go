@@ -173,19 +173,10 @@ func conflictDir(root, packageID string) (string, error) {
 	return filepath.Join(conflictsRoot(root), packageID), nil
 }
 
-// verdict is what inspecting one change decided.
-type verdict int
-
-const (
-	// verdictApply means the path holds what the package expected.
-	verdictApply verdict = iota
-	// verdictConverged means it already holds what the package installs.
-	verdictConverged
-	// verdictConflict means it holds neither.
-	verdictConflict
-)
-
-// disposition is one package's changes sorted into those three answers.
+// disposition is one package's changes sorted into the three answers
+// inspecting a change can give: the path holds what the package expected (it
+// is staged), already holds what the package installs (converged), or holds
+// neither (a conflict).
 type disposition struct {
 	// converged are the paths already at the result, by path.
 	converged map[string]bool

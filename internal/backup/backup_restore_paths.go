@@ -122,15 +122,6 @@ func isRootExcluded(relPath string) bool {
 	return strings.EqualFold(firstSegment, backupDirName) || strings.EqualFold(firstSegment, gitDirName)
 }
 
-func targetsBackupDirectory(relPath string) bool {
-	firstSegment := relPath
-	if index := strings.IndexByte(relPath, '/'); index >= 0 {
-		firstSegment = relPath[:index]
-	}
-
-	return strings.EqualFold(firstSegment, backupDirName)
-}
-
 func hasDotDotSegment(name string) bool {
 	for _, segment := range strings.Split(name, "/") {
 		if segment == ".." {

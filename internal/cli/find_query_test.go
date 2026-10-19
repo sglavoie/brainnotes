@@ -245,7 +245,7 @@ func TestQueryFlagsRejectPositionalNotes(t *testing.T) {
 					t.Fatalf("%s %v: expected mutual-exclusion error, got none\noutput: %s", tc.name, flag, out.String())
 				}
 				if !strings.Contains(err.Error(), "find filter flags") &&
-					!strings.Contains(err.Error(), "find flags are mutually exclusive") {
+					!strings.Contains(err.Error(), "cannot be combined with find flags") {
 					t.Fatalf("%s %v: unexpected error %v", tc.name, flag, err)
 				}
 			})

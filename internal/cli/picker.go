@@ -57,11 +57,23 @@ func pickNotes(v *vault.Vault, cfg *config.Config, multi bool) ([]string, error)
 		return nil, err
 	}
 	if len(paths) == 0 {
-		return nil, nil
+		return nil, nothingSelected("", "no notes in vault")
 	}
 	extraArgs := append([]string(nil), cfg.Fzf.Args...)
 	if multi {
 		extraArgs = append(extraArgs, "--multi")
 	}
-	return notePicker(paths, extraArgs)
+	return requireSelection(notePicker(paths, extraArgs))
+}
+
+// requireSelection turns a picker that came back empty into ErrNothingSelected,
+// so a script sees exit 1 instead of a success with nothing to act on.
+func requireSelection(selected []string, err error) ([]string, error) {
+	if err != nil {
+		return nil, err
+	}
+	if len(selected) == 0 {
+		return nil, ErrNothingSelected
+	}
+	return selected, nil
 }

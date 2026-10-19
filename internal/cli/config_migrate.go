@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -78,7 +79,7 @@ func runConfigMigrate(cmd *cobra.Command, args []string, dryRun bool) error {
 	if dryRun {
 		return writeMigrationPreview(cmd.OutOrStdout(), root, plan)
 	}
-	if err := commitMigration(root, plan, commandInvocation(cmd, args)); err != nil {
+	if err := commitMigration(commandContext(cmd), root, plan, commandInvocation(cmd, args)); err != nil {
 		return err
 	}
 	return writeMigrationSummary(cmd.OutOrStdout(), plan)
@@ -143,7 +144,7 @@ func migrationFiles(root string, plan config.MigrationPlan) []migrationFile {
 // intent either rolls forward to the migrated pair or rolls back to the
 // originals, and `bn undo` restores the originals afterwards from the manifest
 // Finalize wrote.
-func commitMigration(root string, plan config.MigrationPlan, command string) error {
+func commitMigration(ctx context.Context, root string, plan config.MigrationPlan, command string) error {
 	const label = "config migrate"
 	files := migrationFiles(root, plan)
 
@@ -151,7 +152,7 @@ func commitMigration(root string, plan config.MigrationPlan, command string) err
 	for _, file := range files {
 		paths = append(paths, file.path)
 	}
-	journaler, err := noteops.BeginOperation(root, configMigrateOperation, command, paths)
+	journaler, err := noteops.BeginOperationContext(ctx, root, configMigrateOperation, command, paths)
 	if err != nil {
 		return fmt.Errorf("%s: %w", label, err)
 	}

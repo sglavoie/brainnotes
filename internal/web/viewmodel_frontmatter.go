@@ -101,15 +101,6 @@ func frontmatterEditValue(value any) string {
 	}
 }
 
-func stringInSlice(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
-	}
-	return false
-}
-
 func renderFrontmatterValue(value any, graph *query.Graph) frontmatterValue {
 	switch typed := value.(type) {
 	case nil:

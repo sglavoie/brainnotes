@@ -219,13 +219,13 @@ func writeArchiveFixtureEntry(t *testing.T, tw *tar.Writer, entry archiveFixture
 		kind = tar.TypeReg
 	}
 	header := &tar.Header{Name: entry.name, Typeflag: kind, Mode: fixtureMode(entry), Linkname: entry.linkname}
-	if kind == tar.TypeReg || kind == tar.TypeRegA {
+	if kind == tar.TypeReg {
 		header.Size = int64(len(entry.body))
 	}
 	if err := tw.WriteHeader(header); err != nil {
 		t.Fatalf("WriteHeader(%q): %v", entry.name, err)
 	}
-	if kind == tar.TypeReg || kind == tar.TypeRegA {
+	if kind == tar.TypeReg {
 		if _, err := io.WriteString(tw, entry.body); err != nil {
 			t.Fatalf("Write(%q): %v", entry.name, err)
 		}

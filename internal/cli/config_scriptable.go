@@ -382,7 +382,7 @@ func applyConfigPatch(cmd *cobra.Command, cfg *config.Config, patch configPatch)
 			patch.label, patch.target.layer.FileName(), err)
 	}
 
-	journaler, err := noteops.BeginOperation(cfg.Vault, patch.operation, patch.command, []string{patch.target.path})
+	journaler, err := noteops.BeginOperationContext(commandContext(cmd), cfg.Vault, patch.operation, patch.command, []string{patch.target.path})
 	if err != nil {
 		return fmt.Errorf("%s: %w", patch.label, err)
 	}

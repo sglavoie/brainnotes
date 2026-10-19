@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,11 +97,11 @@ func TestRemove_CancelledResponsesLeaveNoteUnchanged(t *testing.T) {
 			pickRemoveNote(t, root)
 
 			out, err := runCLI(t, tc.stdin, "remove")
-			if err != nil {
-				t.Fatalf("remove: %v\n%s", err, out)
+			if !errors.Is(err, ErrCanceled) {
+				t.Fatalf("err = %v, want ErrCanceled\n%s", err, out)
 			}
-			if !strings.Contains(out, "canceled") {
-				t.Fatalf("expected cancellation output:\n%s", out)
+			if err.Error() != "remove: canceled" {
+				t.Fatalf("err = %q, want %q", err, "remove: canceled")
 			}
 			if _, err := os.Stat(filepath.Join(root, "Projects", "Nested", "Remove me.md")); err != nil {
 				t.Fatalf("source should remain: %v", err)
@@ -121,8 +122,8 @@ func TestRemove_EmptyOrDismissedPickerIsNoOp(t *testing.T) {
 		useVaultRoot(t, root, testPropertyDefinitions)
 
 		out, err := runCLI(t, "", "remove")
-		if err != nil {
-			t.Fatalf("remove: %v\n%s", err, out)
+		if !errors.Is(err, ErrNothingSelected) {
+			t.Fatalf("err = %v, want ErrNothingSelected\n%s", err, out)
 		}
 		if out != "" {
 			t.Fatalf("empty vault output = %q, want empty", out)
@@ -139,8 +140,8 @@ func TestRemove_EmptyOrDismissedPickerIsNoOp(t *testing.T) {
 		notePicker = func(items []string, extraArgs []string) ([]string, error) { return nil, nil }
 
 		out, err := runCLI(t, "", "remove")
-		if err != nil {
-			t.Fatalf("remove: %v\n%s", err, out)
+		if !errors.Is(err, ErrNothingSelected) {
+			t.Fatalf("err = %v, want ErrNothingSelected\n%s", err, out)
 		}
 		if out != "" {
 			t.Fatalf("dismissed picker output = %q, want empty", out)
@@ -219,8 +220,8 @@ func TestRemove_ExplicitTargetSkipsPickerAndCanBeUndone(t *testing.T) {
 
 func TestRemove_ExplicitTargetDeclined(t *testing.T) {
 	root := buildRemoveFixture(t)
-	if _, err := runCLI(t, "n\n", "remove", "Remove me"); err != nil {
-		t.Fatal(err)
+	if _, err := runCLI(t, "n\n", "remove", "Remove me"); !errors.Is(err, ErrCanceled) {
+		t.Fatalf("err = %v, want ErrCanceled", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "Projects/Nested/Remove me.md")); err != nil {
 		t.Fatal(err)

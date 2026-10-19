@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -15,9 +14,7 @@ import (
 // The struct is the contract, not this function: a deployment script reads
 // `blocking` and nothing else has to be parsed out of prose.
 func renderCheckpointStatusJSON(w io.Writer, state checkpoint.State) error {
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(state); err != nil {
+	if err := writeJSON(w, state); err != nil {
 		return fmt.Errorf("checkpoint status: encode JSON: %w", err)
 	}
 	return nil

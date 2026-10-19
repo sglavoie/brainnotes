@@ -24,7 +24,7 @@ type linkListOptions struct {
 // identical and the message has to say which command produced it.
 func (o linkListOptions) validate(name string) error {
 	if o.nullSep && o.verbose {
-		return fmt.Errorf("%s: --null cannot be used with --verbose", name)
+		return fmt.Errorf("%s: --null cannot be combined with --verbose", name)
 	}
 	return nil
 }
@@ -109,15 +109,11 @@ func resolveLinkListTarget(
 		return nil, false, err
 	}
 	if len(paths) == 0 {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s: no notes in vault\n", name)
-		return nil, false, nil
+		return nil, false, nothingSelected(name, "no notes in vault")
 	}
-	selected, err := notePicker(paths, append([]string(nil), fzfArgs...))
+	selected, err := requireSelection(notePicker(paths, append([]string(nil), fzfArgs...)))
 	if err != nil {
 		return nil, false, err
-	}
-	if len(selected) == 0 {
-		return nil, false, nil
 	}
 	return &vault.Note{Path: selected[0]}, true, nil
 }

@@ -17,11 +17,13 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
         [--broken-links [--show-broken | --list-broken-targets]]
         [--pinned] [-q EXPR | --query EXPR] [--view name]
         [--sort KEY] [--relative-to note]
-        [-i | --interactive] [-0]
+        [-i | --interactive] [-0 | --json]
 ```
 
 Prints matching absolute paths, one per line (or NUL-separated with `-0`).
-Pipe into `fzf` with `-i` for an interactive picker.
+Pipe into `fzf` with `-i` for an interactive picker; a picker that selects
+nothing exits 1. `--json` prints an array of `{"path", "title"}` records in the
+same order instead.
 
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -191,9 +192,9 @@ func TestSet_FzfAbort(t *testing.T) {
 		return nil, nil
 	}
 
-	out, err := runCLI(t, "", "set", "status=reading")
-	if err != nil {
-		t.Fatalf("execute: %v\n%s", err, out)
+	_, err := runCLI(t, "", "set", "status=reading")
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 
 	for _, name := range []string{"a.md", "b.md", "note.md"} {

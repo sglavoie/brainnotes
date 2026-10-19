@@ -13,6 +13,7 @@ import (
 
 // NewHistoryCmd returns the `history` subcommand. Exported for tests.
 func NewHistoryCmd() *cobra.Command {
+	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "history",
 		Short: "List recent undo journal entries",
@@ -22,52 +23,23 @@ TIMESTAMP<TAB>ID<TAB>COMMAND.
 
 Use this with the safety workflow: preview with --dry-run when available,
 apply, inspect with 'git diff', then run 'bn undo <id>' to roll back if
-needed.`,
+needed.
+
+With --json, the output is one object: {"entries": [...]}, newest first, each
+entry carrying its id, timestamp, command and the vault-relative paths it
+changed. An empty journal prints no rows (or an empty "entries" array) and says
+so on stderr.`,
 		Example: `  bn history
-  bn history | head -n 10`,
+  bn history | head -n 10
+  bn history --json | jq -r '.entries[0].id'`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("history: no config in context")
-			}
-
-			entries, warnings, err := journal.ListEntries(journalRootForVault(cfg.Vault))
-			if err != nil {
-				return fmt.Errorf("history: %w", err)
-			}
-
-			out := cmd.OutOrStdout()
-			if len(entries) == 0 {
-				if _, err := fmt.Fprintln(out, "history: no journal entries"); err != nil {
-					return err
-				}
-				return writeHistoryWarnings(cmd.ErrOrStderr(), warnings)
-			}
-
-			if _, err := fmt.Fprintln(out, "TIMESTAMP\tID\tCOMMAND"); err != nil {
-				return err
-			}
-			for _, e := range entries {
-				if _, err := fmt.Fprintf(
-					out,
-					"%s\t%s\t%s\n",
-					e.Timestamp.UTC().Format(time.RFC3339Nano),
-					e.ID,
-					e.Command,
-				); err != nil {
-					return err
-				}
-			}
-			// Warnings go to stderr, after the entries, so `bn history | head` keeps
-			// producing the tab-separated records it promises even when part of the
-			// journal is damaged. A corrupt entry is worth reporting; it is not worth
-			// contaminating a stream other tools parse.
-			return writeHistoryWarnings(cmd.ErrOrStderr(), warnings)
+			return runHistory(cmd, asJSON)
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the entries as a JSON object instead of tab-separated text")
 	return cmd
 }
 
@@ -81,4 +53,85 @@ func writeHistoryWarnings(w io.Writer, warnings []journal.Warning) error {
 		}
 	}
 	return nil
+}
+
+func runHistory(cmd *cobra.Command, asJSON bool) error {
+	cfg := ConfigFromContext(cmd.Context())
+	if cfg == nil {
+		return errors.New("history: no config in context")
+	}
+
+	entries, warnings, err := journal.ListEntries(journalRootForVault(cfg.Vault))
+	if err != nil {
+		return fmt.Errorf("history: %w", err)
+	}
+	if len(entries) == 0 {
+		// stderr, not stdout: on stdout this sentence would be read as a
+		// record by `bn history | cut -f2`.
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "history: no journal entries"); err != nil {
+			return err
+		}
+	}
+	if asJSON {
+		err = writeHistoryJSON(cmd.OutOrStdout(), entries)
+	} else {
+		err = writeHistoryText(cmd.OutOrStdout(), entries)
+	}
+	if err != nil {
+		return err
+	}
+	// Warnings go to stderr, after the entries, so `bn history | head` keeps
+	// producing the records it promises even when part of the journal is
+	// damaged. A corrupt entry is worth reporting; it is not worth
+	// contaminating a stream other tools parse.
+	return writeHistoryWarnings(cmd.ErrOrStderr(), warnings)
+}
+
+func writeHistoryText(out io.Writer, entries []journal.Entry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintln(out, "TIMESTAMP\tID\tCOMMAND"); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if _, err := fmt.Fprintf(
+			out,
+			"%s\t%s\t%s\n",
+			e.Timestamp.UTC().Format(time.RFC3339Nano),
+			e.ID,
+			e.Command,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type historyJSON struct {
+	Entries []historyJSONEntry `json:"entries"`
+}
+
+type historyJSONEntry struct {
+	ID        string    `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	Command   string    `json:"command"`
+	Files     []string  `json:"files"`
+}
+
+func writeHistoryJSON(out io.Writer, entries []journal.Entry) error {
+	payload := historyJSON{Entries: make([]historyJSONEntry, 0, len(entries))}
+	for _, e := range entries {
+		files := make([]string, 0, len(e.Files))
+		for _, f := range e.Files {
+			files = append(files, f.Path)
+		}
+		payload.Entries = append(payload.Entries, historyJSONEntry{
+			ID:        e.ID,
+			Timestamp: e.Timestamp.UTC(),
+			Command:   e.Command,
+			Files:     files,
+		})
+	}
+	return writeJSON(out, payload)
 }

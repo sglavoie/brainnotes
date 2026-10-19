@@ -244,6 +244,10 @@ func (v *Vault) Notes() ([]*Note, error) {
 	return notes, nil
 }
 
+// ErrNoteNotFound is wrapped by ResolveByTitle when no note carries the title,
+// so a caller can fall back to path resolution without matching message text.
+var ErrNoteNotFound = errors.New("vault: no note titled")
+
 // ResolveByTitle finds a note by case-insensitive filename stem. When folder
 // is non-empty the search is scoped to that vault-relative folder (matched
 // against the note's containing folder); otherwise the entire vault is
@@ -263,6 +267,25 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 		return nil, fmt.Errorf("vault: folder %q escapes vault", folder)
 	}
 
+	matches, err := v.titleMatches(title, wantFolder)
+	if err != nil {
+		return nil, err
+	}
+	switch len(matches) {
+	case 0:
+		if wantFolder != "" {
+			return nil, fmt.Errorf("%w %q in %q", ErrNoteNotFound, title, wantFolder)
+		}
+		return nil, fmt.Errorf("%w %q", ErrNoteNotFound, title)
+	case 1:
+		return matches[0], nil
+	}
+	return nil, v.ambiguousTitleError(title, matches)
+}
+
+// titleMatches walks the vault for notes whose stem is title, limited to the
+// folder wantFolder when it is non-empty.
+func (v *Vault) titleMatches(title, wantFolder string) ([]*Note, error) {
 	var matches []*Note
 	err := v.Walk(WalkFilter{}, func(n *Note) error {
 		stem := strings.TrimSuffix(filepath.Base(n.Path), filepath.Ext(n.Path))
@@ -270,49 +293,45 @@ func (v *Vault) ResolveByTitle(title, folder string) (*Note, error) {
 			return nil
 		}
 		if wantFolder != "" {
-			rel, relErr := filepath.Rel(v.Root, n.Path)
-			if relErr != nil {
-				return relErr
-			}
-			noteFolder := filepath.ToSlash(filepath.Dir(rel))
-			if noteFolder == "." {
-				noteFolder = ""
-			}
-			if !strings.EqualFold(textnorm.NFC(noteFolder), textnorm.NFC(wantFolder)) {
-				return nil
+			inFolder, err := v.noteInFolder(n, wantFolder)
+			if err != nil || !inFolder {
+				return err
 			}
 		}
 		matches = append(matches, n)
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
+	return matches, err
+}
 
-	switch len(matches) {
-	case 0:
-		if wantFolder != "" {
-			return nil, fmt.Errorf("vault: no note titled %q in %q", title, wantFolder)
-		}
-		return nil, fmt.Errorf("vault: no note titled %q", title)
-	case 1:
-		return matches[0], nil
-	default:
-		paths := make([]string, len(matches))
-		for i, n := range matches {
-			rel, relErr := filepath.Rel(v.Root, n.Path)
-			if relErr != nil {
-				paths[i] = filepath.ToSlash(n.Path)
-			} else {
-				paths[i] = filepath.ToSlash(rel)
-			}
-		}
-		// Sort so the error message is deterministic across filesystems with
-		// non-stable directory iteration order. Without this, two callers can
-		// see different orderings for the same ambiguity.
-		sort.Strings(paths)
-		return nil, fmt.Errorf("vault: %q is ambiguous; candidates: %s", title, strings.Join(paths, ", "))
+func (v *Vault) noteInFolder(n *Note, wantFolder string) (bool, error) {
+	rel, err := filepath.Rel(v.Root, n.Path)
+	if err != nil {
+		return false, err
 	}
+	noteFolder := filepath.ToSlash(filepath.Dir(rel))
+	if noteFolder == "." {
+		noteFolder = ""
+	}
+	return strings.EqualFold(textnorm.NFC(noteFolder), textnorm.NFC(wantFolder)), nil
+}
+
+// ambiguousTitleError lists every candidate so the CLI can echo them.
+func (v *Vault) ambiguousTitleError(title string, matches []*Note) error {
+	paths := make([]string, len(matches))
+	for i, n := range matches {
+		rel, relErr := filepath.Rel(v.Root, n.Path)
+		if relErr != nil {
+			paths[i] = filepath.ToSlash(n.Path)
+		} else {
+			paths[i] = filepath.ToSlash(rel)
+		}
+	}
+	// Sort so the error message is deterministic across filesystems with
+	// non-stable directory iteration order. Without this, two callers can
+	// see different orderings for the same ambiguity.
+	sort.Strings(paths)
+	return fmt.Errorf("vault: %q is ambiguous; candidates: %s", title, strings.Join(paths, ", "))
 }
 
 // resolveRootSymlink checks whether abs itself is a symlink; if so it reads

@@ -16,13 +16,13 @@ func NewLinksCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.verbose = rootVerbose(cmd)
 			return runLinksCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline")
-	f.BoolVar(&opts.verbose, "verbose", false, "show file:line and a snippet for each forward link (long-only; -v is reserved by the root command)")
 
 	return cmd
 }

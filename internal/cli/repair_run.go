@@ -116,7 +116,7 @@ func newRepairRun(
 		r.dry = &DryRun{Out: r.out}
 		return r, nil
 	}
-	journaler, err := noteops.BeginOperation(root, "repair", commandInvocation(cmd, args), nil)
+	journaler, err := noteops.BeginOperationContext(commandContext(cmd), root, "repair", commandInvocation(cmd, args), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (r *repairRun) applyNote(n *vault.Note, result schema.RepairResult) error {
 
 	changed, err := applyRepairs(n, result, &r.cfg.Frontmatter, r.root, r.dry)
 	if err != nil {
-		_, _ = fmt.Fprintln(r.stderr, "WARN: repair interrupted; run 'git diff' to inspect partial state")
+		_, _ = fmt.Fprintln(r.stderr, "repair: warning: interrupted; run 'git diff' to inspect partial state")
 		return err
 	}
 	if !changed {

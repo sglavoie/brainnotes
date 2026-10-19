@@ -119,38 +119,49 @@ func ParseSort(value string) (SortSpec, error) {
 		return SortSpec{Key: SortPath}, nil
 	}
 
-	var spec SortSpec
-	signed := false
-	switch raw[0] {
-	case '-':
-		spec.Descending = true
-		signed = true
-		raw = raw[1:]
-	case '+':
-		signed = true
-		raw = raw[1:]
-	}
-
+	raw, descending, signed := splitSortSign(raw)
+	spec := SortSpec{Descending: descending}
 	if key, suffix, found := strings.Cut(raw, ":"); found {
 		if signed {
-			return SortSpec{}, errors.New("queryexpr: sort direction given twice in " + quote(strings.TrimSpace(value)))
+			return SortSpec{}, errors.New("sort direction given twice in " + quote(strings.TrimSpace(value)))
 		}
-		switch strings.ToLower(strings.TrimSpace(suffix)) {
-		case "desc", "descending":
-			spec.Descending = true
-		case "asc", "ascending":
-		default:
-			return SortSpec{}, errors.New("queryexpr: unknown sort direction " + quote(suffix) + "; use \"asc\" or \"desc\"")
+		descending, err := parseSortDirection(suffix)
+		if err != nil {
+			return SortSpec{}, err
 		}
+		spec.Descending = descending
 		raw = key
 	}
 
 	spec.Key = strings.ToLower(strings.TrimSpace(raw))
 	if spec.Key == "" {
-		return SortSpec{}, errors.New("queryexpr: sort needs a key; valid keys are " + strings.Join(sortKeys, ", "))
+		return SortSpec{}, errors.New("sort needs a key; valid keys are " + strings.Join(sortKeys, ", "))
 	}
 	if !ValidSortKey(spec.Key) {
-		return SortSpec{}, errors.New("queryexpr: unknown sort key " + quote(spec.Key) + "; valid keys are " + strings.Join(sortKeys, ", "))
+		return SortSpec{}, errors.New("unknown sort key " + quote(spec.Key) + "; valid keys are " + strings.Join(sortKeys, ", "))
 	}
 	return spec, nil
+}
+
+// splitSortSign strips a leading '-' (descending) or '+' (ascending) and
+// reports whether one was present.
+func splitSortSign(raw string) (rest string, descending, signed bool) {
+	switch raw[0] {
+	case '-':
+		return raw[1:], true, true
+	case '+':
+		return raw[1:], false, true
+	}
+	return raw, false, false
+}
+
+// parseSortDirection reads the ":asc" / ":desc" suffix.
+func parseSortDirection(suffix string) (descending bool, err error) {
+	switch strings.ToLower(strings.TrimSpace(suffix)) {
+	case "desc", "descending":
+		return true, nil
+	case "asc", "ascending":
+		return false, nil
+	}
+	return false, errors.New("unknown sort direction " + quote(suffix) + "; use \"asc\" or \"desc\"")
 }

@@ -133,8 +133,8 @@ func TestOpen_PickerAbort(t *testing.T) {
 	t.Setenv("EDITOR", "true")
 
 	stdout, stderr, err := runOpen(t, vaultRoot, "open")
-	if err != nil {
-		t.Fatalf("execute: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 	if editorCalled {
 		t.Fatalf("editor should not run on abort")
@@ -190,8 +190,8 @@ func TestOpen_EmptyVault(t *testing.T) {
 	openExec = func(editor, file string) error { return nil }
 
 	stdout, stderr, err := runOpen(t, vaultRoot, "open")
-	if err != nil {
-		t.Fatalf("execute: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 	if pickerCalled {
 		t.Fatalf("picker should not be called on empty vault")
@@ -199,8 +199,8 @@ func TestOpen_EmptyVault(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "no notes in vault") {
-		t.Fatalf("expected stderr to mention 'no notes in vault'; got %q", stderr)
+	if stderr != "" || !strings.Contains(err.Error(), "no notes in vault") {
+		t.Fatalf("the error, not stderr, should say 'no notes in vault'; err=%v stderr=%q", err, stderr)
 	}
 }
 

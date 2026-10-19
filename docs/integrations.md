@@ -16,6 +16,39 @@ For a one-shot zsh session:
 source <(bn completion zsh) && compdef _bn bn
 ```
 
+Beyond command and flag names, completion reads the vault the command would
+act on (`--vault`, `$BNOTES_VAULT`, or the upward search): note titles for the
+commands that take one note (`open`, `links`, `backlinks`, `related`,
+`context`, `pin`, `unpin`, `remove`, `move`, `rename`), and the values of
+`--view`, `--tag`, `--folder` and `--property`. Enumerated flags such as
+`related --mode`, `context --format`, `graph --format`, `find --sort` and
+`set --type` complete their fixed values. A vault that does not load completes
+nothing.
+
+## Scripting: exit status and JSON
+
+`bn` follows grep's exit-status convention:
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | The command ran and the answer was negative: `bn lint` found violations, a picker came back empty (an empty vault, or an fzf query that matched nothing), or a confirmation was declined. |
+| `2` | An error: an unknown flag, a vault that does not load, a refused write. |
+| `126`/`127` | An external program (editor, fzf) could not be run or was not found. |
+| `130` | Interrupted: Ctrl-C, or a dismissed fzf picker. |
+
+`bn checkpoint run` exits with its child's status. Messages for statuses 1 and
+2 go to stderr, so `p=$(bn open --print)` fails rather than succeeding with an
+empty value.
+
+Ctrl-C asks a running command to stop rather than killing it, so a journaled
+write or `bn serve`'s shutdown can finish cleanly; press it a second time to
+stop at once.
+
+Machine-readable output is spelled `--json` on `find`, `lint`, `history`,
+`related`, `doctor` and `checkpoint status`; `context --json` is shorthand for
+`context --format json`. JSON output is indented and not HTML-escaped.
+
 ## Editor integration
 
 ### Neovim

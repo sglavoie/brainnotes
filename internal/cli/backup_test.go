@@ -140,7 +140,7 @@ func TestRestoreCommandWipePreservesBackupsDirectory(t *testing.T) {
 		{name: ".obsidian/workspace.json", body: "{}"},
 	})
 
-	out, err := runCLI(t, "", "restore", "backups/wipe.tar.gz", "--wipe")
+	out, err := runCLI(t, "", "restore", "backups/wipe.tar.gz", "--wipe", "--yes")
 	if err != nil {
 		t.Fatalf("restore wipe: %v\n%s", err, out)
 	}
@@ -264,28 +264,7 @@ func writeBackupArchive(t *testing.T, archivePath string, entries []archiveFixtu
 	tw := tar.NewWriter(gzw)
 
 	for _, entry := range entries {
-		kind := entry.kind
-		if kind == 0 {
-			kind = tar.TypeReg
-		}
-		header := &tar.Header{
-			Name:     entry.name,
-			Typeflag: kind,
-			Mode:     0o644,
-			Size:     int64(len(entry.body)),
-		}
-		if kind == tar.TypeDir {
-			header.Mode = 0o755
-			header.Size = 0
-		}
-		if err := tw.WriteHeader(header); err != nil {
-			t.Fatalf("write header %q: %v", entry.name, err)
-		}
-		if kind == tar.TypeReg || kind == tar.TypeRegA {
-			if _, err := io.WriteString(tw, entry.body); err != nil {
-				t.Fatalf("write body %q: %v", entry.name, err)
-			}
-		}
+		writeBackupArchiveEntry(t, tw, entry)
 	}
 
 	if err := tw.Close(); err != nil {
@@ -293,6 +272,32 @@ func writeBackupArchive(t *testing.T, archivePath string, entries []archiveFixtu
 	}
 	if err := gzw.Close(); err != nil {
 		t.Fatalf("close gzip writer: %v", err)
+	}
+}
+
+func writeBackupArchiveEntry(t *testing.T, tw *tar.Writer, entry archiveFixtureEntry) {
+	t.Helper()
+	kind := entry.kind
+	if kind == 0 {
+		kind = tar.TypeReg
+	}
+	header := &tar.Header{
+		Name:     entry.name,
+		Typeflag: kind,
+		Mode:     0o644,
+		Size:     int64(len(entry.body)),
+	}
+	if kind == tar.TypeDir {
+		header.Mode = 0o755
+		header.Size = 0
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		t.Fatalf("write header %q: %v", entry.name, err)
+	}
+	if kind == tar.TypeReg {
+		if _, err := io.WriteString(tw, entry.body); err != nil {
+			t.Fatalf("write body %q: %v", entry.name, err)
+		}
 	}
 }
 
@@ -345,4 +350,48 @@ func resolveTestPath(t *testing.T, path string) string {
 		t.Fatalf("resolve path %q: %v", path, err)
 	}
 	return resolved
+}
+
+// A wipe cannot be undone with `bn undo`, so without --yes and without a
+// terminal to ask on it is refused before anything is touched, and --dry-run
+// lists exactly what it would do.
+func TestRestoreCommandWipeRequiresConfirmationAndPreviews(t *testing.T) {
+	root := buildBackupFixture(t, map[string]string{
+		"Daily.md":         "old\n",
+		"Same.md":          "same\n",
+		"Scratch/keep.txt": "wipe me\n",
+	})
+	writeBackupArchive(t, filepath.Join(root, "backups", "wipe.tar.gz"), []archiveFixtureEntry{
+		{name: "Daily.md", body: "restored\n"},
+		{name: "Same.md", body: "same\n"},
+		{name: "New.md", body: "new\n"},
+	})
+
+	out, err := runCLI(t, "", "restore", "backups/wipe.tar.gz", "--wipe")
+	if err == nil || !strings.Contains(err.Error(), "pass --yes to confirm") {
+		t.Fatalf("err = %v, want the --yes refusal\n%s", err, out)
+	}
+	assertBackupFileContent(t, filepath.Join(root, "Daily.md"), "old\n")
+	assertBackupFileContent(t, filepath.Join(root, "Scratch", "keep.txt"), "wipe me\n")
+
+	out, err = runCLI(t, "", "restore", "backups/wipe.tar.gz", "--wipe", "--dry-run")
+	if err != nil {
+		t.Fatalf("dry run: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"create     New.md\n",
+		"overwrite  Daily.md\n",
+		"remove     Scratch/\n",
+		// The fixture's own configuration is not in the archive either.
+		"remove     brainnotes.toml\n",
+		"summary: create=1 overwrite=1 unchanged=1 remove=2\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dry-run output missing %q:\n%s", want, out)
+		}
+	}
+	assertBackupFileContent(t, filepath.Join(root, "Daily.md"), "old\n")
+	if _, err := os.Stat(filepath.Join(root, "New.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dry run created New.md, stat err = %v", err)
+	}
 }

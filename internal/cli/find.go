@@ -46,6 +46,7 @@ same signals bn related does. Sorting never changes which notes match.`,
 	f := cmd.Flags()
 	f.BoolVarP(&opts.interactive, "interactive", "i", false, "pipe matches into fzf for selection")
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline")
+	f.BoolVar(&opts.asJSON, "json", false, `print a JSON array of {"path", "title"} records instead of paths`)
 	f.BoolVar(&opts.showBroken, "show-broken", false, "show each broken link (requires --broken-links)")
 	f.BoolVar(&opts.listBrokenTargets, "list-broken-targets", false, "list unique broken targets (requires --broken-links)")
 	f.StringVar(&opts.sortText, "sort", "", findSortHelp())

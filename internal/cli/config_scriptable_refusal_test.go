@@ -129,8 +129,8 @@ func TestConfigSet_RefusesWhenAnOverlayAppearedUnderIt(t *testing.T) {
 
 // A configuration the loader rejects stops every one of these commands in
 // PersistentPreRunE, exactly as it always has. Nothing here is a repair path:
-// the file has to be edited, which is what `bn config edit` is for, and the two
-// report the same failure so neither looks like the way out of it.
+// the file has to be edited, which is what `bn config edit` is for, and the
+// three report the same failure so none looks like the way out of it.
 func TestConfigCommands_ReportTheLoadFailureOnAnInvalidConfig(t *testing.T) {
 	const broken = "[autosave]\nmin_interval = \"soon\"\n"
 	root, cfgPath := configVault(t, broken)
@@ -142,7 +142,6 @@ func TestConfigCommands_ReportTheLoadFailureOnAnInvalidConfig(t *testing.T) {
 		{"config", "get", "autosave.min_interval"},
 		{"config", "set", "autosave.min_interval", "1m"},
 		{"config", "unset", "autosave.min_interval"},
-		{"config", "edit"},
 	} {
 		t.Run(strings.Join(args[1:], " "), func(t *testing.T) {
 			_, _, err := runConfig(t, args...)
@@ -208,4 +207,24 @@ func stubBeforeConfigCommit(t *testing.T, hook func()) {
 	prev := beforeConfigCommit
 	beforeConfigCommit = hook
 	t.Cleanup(func() { beforeConfigCommit = prev })
+}
+
+// `config edit` is the way out, so it must not stop at the same refusal: it
+// opens the file and says why the configuration did not load.
+func TestConfigEdit_OpensAConfigThatDoesNotLoad(t *testing.T) {
+	const broken = "[open\n"
+	_, cfgPath := configVault(t, broken)
+	t.Setenv("EDITOR", "go env")
+	captured := stubExecReplace(t)
+
+	_, stderr, err := runConfig(t, "config", "edit")
+	if err != nil {
+		t.Fatalf("config edit: %v", err)
+	}
+	if got := *captured; len(got) != 3 || got[2] != cfgPath {
+		t.Fatalf("editor argv = %v, want [go env %s]", got, cfgPath)
+	}
+	if !strings.Contains(stderr, "config edit: warning: config: parse") {
+		t.Fatalf("stderr = %q, want the load failure as a warning", stderr)
+	}
 }

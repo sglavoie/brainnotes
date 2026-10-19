@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -109,10 +108,7 @@ func writeRelatedJSON(w io.Writer, queryResult relatedQuery) error {
 		Results: results,
 	}
 
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(response)
+	return writeJSON(w, response)
 }
 
 // relatedJSONResultFor projects one ranked result onto the wire shape. Bridge

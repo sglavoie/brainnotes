@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -69,7 +71,7 @@ This is a vault-level safety snapshot, separate from the undo journal used by
 
 // NewRestoreCmd returns the `restore` subcommand. Exported for tests.
 func NewRestoreCmd() *cobra.Command {
-	var wipe bool
+	var opts restoreOptions
 
 	cmd := &cobra.Command{
 		Use:   "restore <archive>",
@@ -86,39 +88,106 @@ With --wipe, restore deletes everything in the vault, then applies the archive.
 The two directories no archive ever contains are kept, because nothing could
 put them back: the root backups/ directory holding your other archives, and
 .git/ holding the vault's content history, including every version the wipe
-discards. Any other non-archived extra is removed.
+discards. Any other non-archived extra is removed. Because a wipe cannot be
+undone with 'bn undo', it asks for confirmation first; --yes skips the prompt
+and is required when stdin is not a terminal.
+
+--dry-run validates the archive and lists what the restore would create,
+overwrite, and (with --wipe) remove, without changing the vault.
 
 Relative archive paths are resolved from the vault root; absolute paths are
 also accepted. This command is separate from the undo journal, so inspect with
 'git diff' after restoring if you need to verify or recover changes.`,
 		Example: `  bn restore backups/backup-20260528T232425.123456789Z.tar.gz
   bn restore /absolute/path/to/backup.tar.gz
+  bn restore backups/backup-20260528T232425.123456789Z.tar.gz --wipe --dry-run
   bn restore backups/backup-20260528T232425.123456789Z.tar.gz --wipe`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := ConfigFromContext(cmd.Context())
-			if cfg == nil {
-				return errors.New("restore: no config in context")
-			}
-
-			result, err := noteops.RestoreBackup(cfg.Vault, args[0], backup.RestoreOptions{Wipe: wipe})
-			if err != nil {
-				return err
-			}
-
-			_, err = fmt.Fprintf(
-				cmd.OutOrStdout(),
-				"restore: restored %s (mode=%s files=%d)\n",
-				result.ArchivePath,
-				result.Mode,
-				result.Files,
-			)
-			return err
+			return runRestore(cmd, args[0], opts)
 		},
 	}
 
-	cmd.Flags().BoolVar(&wipe, "wipe", false, "delete existing vault contents except backups/ and .git/ before restoring")
+	cmd.Flags().BoolVar(&opts.wipe, "wipe", false, "delete existing vault contents except backups/ and .git/ before restoring")
+	cmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "list what the restore would create, overwrite, and remove without changing the vault")
+	cmd.Flags().BoolVar(&opts.yes, "yes", false, "skip the --wipe confirmation prompt")
 	return cmd
+}
+
+type restoreOptions struct {
+	wipe   bool
+	dryRun bool
+	yes    bool
+}
+
+func runRestore(cmd *cobra.Command, archive string, opts restoreOptions) error {
+	cfg := ConfigFromContext(cmd.Context())
+	if cfg == nil {
+		return errors.New("restore: no config in context")
+	}
+	restoreOpts := backup.RestoreOptions{Wipe: opts.wipe}
+	if opts.dryRun || (opts.wipe && !opts.yes) {
+		preview, err := backup.PreviewRestore(cfg.Vault, archive, restoreOpts)
+		if err != nil {
+			return err
+		}
+		if opts.dryRun {
+			return writeRestorePreview(cmd.OutOrStdout(), preview)
+		}
+		if err := confirmWipe(cmd, preview); err != nil {
+			return err
+		}
+	}
+
+	result, err := noteops.RestoreBackup(cfg.Vault, archive, restoreOpts)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(
+		cmd.OutOrStdout(),
+		"restore: restored %s (mode=%s files=%d)\n",
+		result.ArchivePath,
+		result.Mode,
+		result.Files,
+	)
+	return err
+}
+
+// confirmWipe asks before a wipe deletes what the archive does not hold. A
+// script cannot answer a prompt, so without a terminal the refusal says which
+// flag to pass instead of reading an EOF as "no".
+func confirmWipe(cmd *cobra.Command, preview *backup.RestorePreview) error {
+	question := fmt.Sprintf("Delete %d path(s) not in the archive, then restore %d file(s) from %s?",
+		len(preview.Remove), len(preview.Create)+len(preview.Overwrite)+preview.Unchanged, preview.ArchivePath)
+	in := cmd.InOrStdin()
+	if !isTerminal(in) {
+		return fmt.Errorf("restore: --wipe would delete %d path(s) not in the archive; pass --yes to confirm, or --dry-run to list them",
+			len(preview.Remove))
+	}
+	ok, err := confirm(in, cmd.ErrOrStderr(), "restore", question)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return canceled("restore")
+	}
+	return nil
+}
+
+func writeRestorePreview(w io.Writer, p *backup.RestorePreview) error {
+	bw := bufio.NewWriter(w)
+	fmt.Fprintf(bw, "restore: would restore %s (mode=%s)\n", p.ArchivePath, p.Mode)
+	for _, group := range []struct {
+		verb  string
+		paths []string
+	}{{"create", p.Create}, {"overwrite", p.Overwrite}, {"remove", p.Remove}} {
+		for _, path := range group.paths {
+			fmt.Fprintf(bw, "%-9s  %s\n", group.verb, path)
+		}
+	}
+	fmt.Fprintf(bw, "summary: create=%d overwrite=%d unchanged=%d remove=%d\n",
+		len(p.Create), len(p.Overwrite), p.Unchanged, len(p.Remove))
+	return bw.Flush()
 }

@@ -61,7 +61,7 @@ func runUndoCommand(cmd *cobra.Command, args []string, opts undoOptions) error {
 	// would say the content did not come back; staying silent would leave the one
 	// file nothing else will ever mention again.
 	if plan.Cleanup != nil {
-		if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", plan.Cleanup); err != nil {
+		if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "undo: warning: %v\n", plan.Cleanup); err != nil {
 			return err
 		}
 	}

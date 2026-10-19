@@ -122,23 +122,23 @@ func (options relatedOptions) validateInteractiveCombos() error {
 		return nil
 	}
 	if options.asJSON {
-		return errors.New("related: --interactive cannot be used with --json")
+		return errors.New("related: --interactive cannot be combined with --json")
 	}
 	if options.paths {
-		return errors.New("related: --interactive cannot be used with --paths")
+		return errors.New("related: --interactive cannot be combined with --paths")
 	}
 	if options.nullSep {
-		return errors.New("related: --interactive cannot be used with --null")
+		return errors.New("related: --interactive cannot be combined with --null")
 	}
 	return nil
 }
 
 func (options relatedOptions) validateOutputCombos() error {
 	if options.asJSON && options.paths {
-		return errors.New("related: --json cannot be used with --paths")
+		return errors.New("related: --json cannot be combined with --paths")
 	}
 	if options.asJSON && options.nullSep {
-		return errors.New("related: --json cannot be used with --null")
+		return errors.New("related: --json cannot be combined with --null")
 	}
 	if options.nullSep && !options.paths {
 		return errors.New("related: --null requires --paths")

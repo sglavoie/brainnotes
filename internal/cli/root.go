@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -55,9 +56,14 @@ func skipsConfigLoad(cmd *cobra.Command) bool {
 	return false
 }
 
-// Execute runs the root command and returns any error from the chosen subcommand.
+// Execute runs the root command and returns any error from the chosen
+// subcommand. SIGINT and SIGTERM cancel the command's context instead of
+// killing the process, so a journaled write and `bn serve`'s graceful shutdown
+// get to finish; see notifyInterrupt.
 func Execute() error {
-	return NewRootCmd().Execute()
+	ctx, stop := notifyInterrupt(os.Stderr)
+	defer stop()
+	return NewRootCmd().ExecuteContext(ctx)
 }
 
 // RenderError writes err in the form the terminal should see. Every command in
@@ -111,9 +117,11 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "path to vault root (overrides BNOTES_VAULT and the upward search)")
-	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
+		"more detail where a command offers it: file:line and a snippet per link in links/backlinks, skipped notes in values")
 
 	addRootCommandGroups(cmd)
+	registerCompletions(cmd)
 
 	return cmd
 }
@@ -126,6 +134,25 @@ func ConfigFromContext(ctx context.Context) *config.Config {
 	}
 	if v, ok := ctx.Value(configKey).(*config.Config); ok {
 		return v
+	}
+	return nil
+}
+
+// rootVerbose reports the root `--verbose` / `-v` flag. Commands read it rather
+// than declaring their own: a local `--verbose` would shadow the persistent one
+// and take its `-v` shorthand with it.
+func rootVerbose(cmd *cobra.Command) bool {
+	v, _ := cmd.Flags().GetBool("verbose")
+	return v
+}
+
+// refuseCombinedFlags is the one wording for two flags that cannot be given
+// together. Cobra's own MarkFlagsMutuallyExclusive message ("if any flags in
+// the group [a b] are set none of the others can be") is the alternative, and
+// it reads like nothing else bn prints.
+func refuseCombinedFlags(cmd *cobra.Command, label, a, b string) error {
+	if cmd.Flags().Changed(a) && cmd.Flags().Changed(b) {
+		return fmt.Errorf("%s: --%s cannot be combined with --%s", label, a, b)
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -121,8 +122,8 @@ func TestPickNotes_EmptyVault(t *testing.T) {
 	}
 
 	selected, err := pickNotes(v, cfg, false)
-	if err != nil {
-		t.Fatalf("pickNotes: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 	if selected != nil {
 		t.Fatalf("expected nil selection, got %v", selected)

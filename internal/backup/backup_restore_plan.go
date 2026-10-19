@@ -151,13 +151,6 @@ func currentExpectation(path string) (vault.FileExpectation, error) {
 	}
 	return vault.ExpectHash(digest), nil
 }
-func applyRestoredDirectories(root string, entries []archiveEntry) error {
-	dirs := restoredDirectories(entries)
-	if err := materializeRestoreDirs(root, dirs); err != nil {
-		return err
-	}
-	return applyRestoreDirModes(root, dirs)
-}
 
 func restoredDirectories(entries []archiveEntry) []archiveEntry {
 	dirs := make([]archiveEntry, 0, len(entries))

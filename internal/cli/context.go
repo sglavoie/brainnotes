@@ -28,6 +28,12 @@ type contextOptions struct {
 	formatText  string
 	purposeText string
 	runAgent    bool
+	// json is `--json`, the spelling every other command uses, accepted as
+	// an alias for `--format json`.
+	json bool
+	// formatSet records an explicit --format, so `--json --format markdown`
+	// is refused rather than resolved by flag order.
+	formatSet bool
 }
 
 type validatedContextOptions struct {
@@ -35,6 +41,25 @@ type validatedContextOptions struct {
 	maxBytes int
 	format   string
 	purpose  recall.ContextPurpose
+}
+
+// contextFormat resolves --json and --format into one format and refuses the
+// combinations that cannot be honoured.
+func contextFormat(options contextOptions) (string, error) {
+	format := options.formatText
+	if options.json {
+		if options.formatSet && format != contextFormatJSON {
+			return "", fmt.Errorf("context: --json cannot be combined with --format %s", format)
+		}
+		format = contextFormatJSON
+	}
+	if format != contextFormatMarkdown && format != contextFormatJSON {
+		return "", fmt.Errorf("context: --format must be markdown or json (got %q)", format)
+	}
+	if options.runAgent && format == contextFormatJSON {
+		return "", errors.New("context: --agent requires --format markdown")
+	}
+	return format, nil
 }
 
 // NewContextCmd returns the deterministic context-bundle export command.
@@ -58,6 +83,7 @@ func newContextCmd(agentRunner agent.Runner) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.formatSet = cmd.Flags().Changed("format")
 			return runContextCommand(cmd, args, options, agentRunner)
 		},
 	}
@@ -66,6 +92,7 @@ func newContextCmd(agentRunner agent.Runner) *cobra.Command {
 	flags.IntVar(&options.related, "related", options.related, "maximum related notes to include (0-10)")
 	flags.IntVar(&options.maxBytes, "max-bytes", options.maxBytes, "maximum serialized packet size in bytes (1024-1048576)")
 	flags.StringVar(&options.formatText, "format", options.formatText, "output format: markdown or json")
+	flags.BoolVar(&options.json, "json", false, "shorthand for --format json")
 	flags.StringVar(&options.purposeText, "purpose", options.purposeText, "research purpose: synthesis, contradictions, or questions")
 	flags.BoolVar(&options.runAgent, "agent", false, "send the Markdown packet to the configured local agent")
 
@@ -73,9 +100,11 @@ func newContextCmd(agentRunner agent.Runner) *cobra.Command {
 }
 
 func validateContextOptions(options contextOptions) (validatedContextOptions, error) {
-	if options.runAgent && options.formatText == contextFormatJSON {
-		return validatedContextOptions{}, errors.New("context: --agent requires --format markdown")
+	format, err := contextFormat(options)
+	if err != nil {
+		return validatedContextOptions{}, err
 	}
+	options.formatText = format
 	if options.related < minContextRelated || options.related > maxContextRelated {
 		return validatedContextOptions{}, fmt.Errorf(
 			"context: --related must be between %d and %d (got %d)",
@@ -90,12 +119,6 @@ func validateContextOptions(options contextOptions) (validatedContextOptions, er
 			minContextBytes,
 			maxContextBytes,
 			options.maxBytes,
-		)
-	}
-	if options.formatText != contextFormatMarkdown && options.formatText != contextFormatJSON {
-		return validatedContextOptions{}, fmt.Errorf(
-			"context: --format must be markdown or json (got %q)",
-			options.formatText,
 		)
 	}
 	purpose, ok := recall.StandardPurpose(options.purposeText)

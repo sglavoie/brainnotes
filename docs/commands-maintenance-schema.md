@@ -5,13 +5,17 @@ Part of [Maintenance and bulk-edit commands](commands-maintenance.md).
 ### `bn lint` — report schema violations without changing anything
 
 ```sh
-bn lint [find flags] [-q EXPR] [--view name] [--property key]
+bn lint [find flags] [-q EXPR] [--view name] [--property key] [--json]
 ```
 
 Checks every note — or the subset the find filters select — against the
 property definitions in `[frontmatter.properties]` and prints the violations.
 Nothing is written. Exit code `0` means clean; exit code `1` means violations
-were found, which makes `bn lint` usable directly as a CI or pre-commit gate.
+were found, which makes `bn lint` usable directly as a CI or pre-commit gate;
+exit code `2` means lint could not run at all (for example, an unknown
+`--property`), so a gate can tell a dirty vault from a broken invocation.
+`--json` prints `{"count", "violations": [{"path", "property", "kind",
+"detail"}]}` instead of the grouped report, with the same exit codes.
 
 `--property <key>` narrows the check to one declared property; naming a
 property that is not declared is an error rather than a silent pass. With no
@@ -43,7 +47,7 @@ no type coercion and no wikilink wrapping, since only the key changes. Keys are
 limited to letters, digits, `_`, and `-`, and the two keys must differ.
 
 Notes where `<old-key>` is absent are skipped silently. Notes where
-`<new-key>` already exists are skipped with a `WARN:` line on stderr and
+`<new-key>` already exists are skipped with a `rename-key: warning:` line on stderr and
 counted in the summary, so a rename never merges two keys or overwrites the
 destination value.
 
@@ -57,7 +61,7 @@ an error stops the run mid-way, prior writes stand — use `git diff` to recover
 old key and the addition of the new one as `frontmatter[<key>]` lines) and
 writes nothing.
 
-Renaming a key that is declared in `[frontmatter.properties]` prints a `WARN:`
+Renaming a key that is declared in `[frontmatter.properties]` prints a `rename-key: warning:` line
 reminding you that `brainnotes.toml` still names the old key — `bn` does not
 edit your declarations for you.
 

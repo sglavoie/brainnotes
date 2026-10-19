@@ -83,7 +83,7 @@ func runRenameKeyCommand(cmd *cobra.Command, args []string, opts renameKeyOption
 	if opts.dryRun {
 		r.dry = &DryRun{Out: r.out}
 	} else {
-		r.journaler, err = noteops.BeginOperation(v.Root, "rename-key", commandInvocation(cmd, args), nil)
+		r.journaler, err = noteops.BeginOperationContext(commandContext(cmd), v.Root, "rename-key", commandInvocation(cmd, args), nil)
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func (r *renameKeyRun) renameNote(n *vault.Note) error {
 	changed, err := front.RenameKey(r.oldKey, r.newKey)
 	if err != nil {
 		if errors.Is(err, frontmatter.ErrKeyConflict) {
-			fmt.Fprintf(r.stderr, "WARN: %s: skipped, key %q already exists\n",
+			fmt.Fprintf(r.stderr, "rename-key: warning: %s: skipped, key %q already exists\n",
 				displayPath(n.Path, r.root), r.newKey)
 			r.skipped++
 			return nil
@@ -189,7 +189,7 @@ func (r *renameKeyRun) finish() error {
 	// users.
 	if r.renamed > 0 {
 		if _, defined := r.cfg.Frontmatter.Definition(r.oldKey); defined {
-			fmt.Fprintf(r.stderr, "WARN: key %q is defined in [frontmatter.properties]; update your brainnotes.toml to use %q\n", r.oldKey, r.newKey)
+			fmt.Fprintf(r.stderr, "rename-key: warning: key %q is defined in [frontmatter.properties]; update your brainnotes.toml to use %q\n", r.oldKey, r.newKey)
 		}
 	}
 	return nil

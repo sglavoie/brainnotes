@@ -51,26 +51,6 @@ func loadSetNote(path string) (*vault.Note, *frontmatter.Map, error) {
 	return note, front, nil
 }
 
-func applySetPairs(front *frontmatter.Map, pairs []setPair, fm *config.FrontmatterConfig) (bool, error) {
-	return noteops.ApplyFrontmatterMutationsToMap(front, pairs, fm)
-}
-
-func applySetPair(front *frontmatter.Map, pair setPair, fm *config.FrontmatterConfig) (bool, error) {
-	return noteops.ApplyFrontmatterMutation(front, pair, fm)
-}
-
-func applySetListMutation(front *frontmatter.Map, key string, value any, op string) (bool, error) {
-	mutationOp := noteops.FrontmatterListAdd
-	if op == "-=" {
-		mutationOp = noteops.FrontmatterListRemove
-	}
-	return noteops.ApplyFrontmatterMutation(front, noteops.FrontmatterMutation{
-		Key:   key,
-		Op:    mutationOp,
-		Value: value,
-	}, nil)
-}
-
 func setPairsNetChanged(front *frontmatter.Map, before map[string]snapshot, pairs []setPair) bool {
 	for _, key := range orderedKeys(pairs) {
 		snap := before[key]

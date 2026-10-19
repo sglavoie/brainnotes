@@ -105,7 +105,7 @@ func newRelinkRun(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config
 		r.dry = &DryRun{Out: out}
 		return r, nil
 	}
-	journaler, err := noteops.BeginOperation(v.Root, "relink", commandInvocation(cmd, args), nil)
+	journaler, err := noteops.BeginOperationContext(commandContext(cmd), v.Root, "relink", commandInvocation(cmd, args), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (r *relinkRun) relinkAll(candidates []*vault.Note) error {
 func (r *relinkRun) relinkNote(n *vault.Note) error {
 	changed, noteResidues, err := applyRelink(n, r.idx, r.graph, r.fm, r.root, r.dry, r.journaler)
 	if err != nil {
-		_, _ = fmt.Fprintln(r.errOut, "WARN: relink interrupted; run 'git diff' to inspect partial state")
+		_, _ = fmt.Fprintln(r.errOut, "relink: warning: interrupted; run 'git diff' to inspect partial state")
 		return err
 	}
 	// Residues accumulate even for an unchanged note: a link with no

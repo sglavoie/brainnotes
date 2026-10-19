@@ -7,10 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 func checkArchiveConflicts(pathKey string, kind entryKind, seen map[string]entryKind) error {
@@ -45,7 +42,7 @@ func entryKindFromHeader(header *tar.Header) (entryKind, error) {
 	switch header.Typeflag {
 	case tar.TypeDir:
 		return entryDir, nil
-	case tar.TypeReg, tar.TypeRegA:
+	case tar.TypeReg:
 		return entryFile, nil
 	case tar.TypeSymlink:
 		return "", fmt.Errorf("backup restore: archive entry %q is a symlink", header.Name)
@@ -112,60 +109,6 @@ func checkDestinationConflict(root string, entry archiveEntry) error {
 	return nil
 }
 
-func applyStage(root, stageDir string, entries []archiveEntry) error {
-	dirEntries := make([]archiveEntry, 0, len(entries))
-	fileEntries := make([]archiveEntry, 0, len(entries))
-	for _, entry := range entries {
-		if entry.Kind == entryDir {
-			dirEntries = append(dirEntries, entry)
-			continue
-		}
-
-		fileEntries = append(fileEntries, entry)
-	}
-
-	sort.Slice(dirEntries, func(i, j int) bool {
-		depthI := strings.Count(dirEntries[i].Path, "/")
-		depthJ := strings.Count(dirEntries[j].Path, "/")
-		if depthI != depthJ {
-			return depthI < depthJ
-		}
-
-		return dirEntries[i].Path < dirEntries[j].Path
-	})
-
-	for _, entry := range dirEntries {
-		dest := filepath.Join(root, filepath.FromSlash(entry.Path))
-		if err := os.MkdirAll(dest, normalizeDirMode(entry.Mode)); err != nil {
-			return fmt.Errorf("backup restore: create directory %s: %w", dest, err)
-		}
-		if err := os.Chmod(dest, normalizeDirMode(entry.Mode)); err != nil {
-			return fmt.Errorf("backup restore: chmod directory %s: %w", dest, err)
-		}
-	}
-
-	for _, entry := range fileEntries {
-		src := filepath.Join(stageDir, filepath.FromSlash(entry.Path))
-		dest := filepath.Join(root, filepath.FromSlash(entry.Path))
-
-		file, err := os.Open(src)
-		if err != nil {
-			return fmt.Errorf("backup restore: open staged file %s: %w", src, err)
-		}
-
-		writeErr := writeReaderAtomic(dest, file, normalizeFileMode(entry.Mode))
-		closeErr := file.Close()
-		if writeErr != nil {
-			return fmt.Errorf("backup restore: restore %s: %w", entry.Path, writeErr)
-		}
-		if closeErr != nil {
-			return fmt.Errorf("backup restore: close staged file %s: %w", src, closeErr)
-		}
-	}
-
-	return nil
-}
-
 // applyTransactionalRestore plans every regular-file replacement and wipe
 // removal in one recoverable vault transaction. Its intent is durable before
 // the first destination changes, so a killed restore is rolled forward by the
@@ -197,28 +140,6 @@ func applyTransactionalRestore(root, stageDir string, entries []archiveEntry, wi
 		}
 	}
 	return applyRestoreDirModes(root, dirs)
-}
-
-func enableRestoreParents(root string, entries []archiveEntry) error {
-	for _, entry := range entries {
-		dest := filepath.Join(root, filepath.FromSlash(entry.Path))
-		if entry.Kind == entryFile {
-			dest = filepath.Dir(dest)
-		}
-		if err := vault.EnsureDirDurable(dest, 0o755); err != nil {
-			return err
-		}
-		for current := dest; current != root; current = filepath.Dir(current) {
-			info, err := os.Stat(current)
-			if err != nil {
-				return err
-			}
-			if err := os.Chmod(current, info.Mode().Perm()|0o700); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func enableExistingRestoreAncestors(root string, entries []archiveEntry) error {

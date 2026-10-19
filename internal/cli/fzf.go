@@ -48,7 +48,7 @@ func runFZFProcess(args []string, input string) ([]string, error) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
-	if err := cmd.Run(); err != nil {
+	if err := withInteractiveChild(cmd.Run); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			switch exitErr.ExitCode() {

@@ -37,6 +37,9 @@ walks the vault: reporting on the cache must never be the thing that builds it.`
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := refuseCombinedFlags(cmd, "index", "status", "rebuild"); err != nil {
+				return err
+			}
 			cfg := ConfigFromContext(cmd.Context())
 			if cfg == nil {
 				return errors.New("index: no config in context")
@@ -56,7 +59,6 @@ walks the vault: reporting on the cache must never be the thing that builds it.`
 
 	cmd.Flags().BoolVar(&status, "status", false, "report the cache state file: entry count, byte size, and last write (the default)")
 	cmd.Flags().BoolVar(&rebuild, "rebuild", false, "discard the cache and rebuild it from the vault")
-	cmd.MarkFlagsMutuallyExclusive("status", "rebuild")
 
 	return cmd
 }

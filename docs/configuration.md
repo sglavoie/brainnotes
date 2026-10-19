@@ -14,7 +14,7 @@ Vault root resolution, in order:
 
 All three require the directory to actually contain `brainnotes.toml`. Run
 `bn config` to see the resolved vault root, both configuration paths, and which of the
-three resolved it; `bn config edit` opens the portable file in `$EDITOR`.
+three resolved it; `bn config edit` opens the portable file in `[open].editor` (falling back to `$EDITOR`), even when it no longer parses.
 Use `bn config explain KEY` to inspect an effective value and its source.
 
 A vault with no `brainnotes.local.toml` is the normal shape, not a degraded

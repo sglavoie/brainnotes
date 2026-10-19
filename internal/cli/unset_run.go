@@ -126,7 +126,7 @@ func unsetAll(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Con
 	var journaler *noteops.Journal
 	if dry == nil {
 		var err error
-		journaler, err = noteops.BeginOperation(v.Root, "unset", commandInvocation(cmd, args), paths)
+		journaler, err = noteops.BeginOperationContext(commandContext(cmd), v.Root, "unset", commandInvocation(cmd, args), paths)
 		if err != nil {
 			return err
 		}
