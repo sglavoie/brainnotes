@@ -79,6 +79,9 @@ func NewServeCmd() *cobra.Command {
 		Short: "Serve a local web view of your vault",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := refuseCombinedFlags(cmd, "serve", "read-only", "hosted"); err != nil {
+				return err
+			}
 			cfg := ConfigFromContext(cmd.Context())
 			if cfg == nil {
 				return errors.New("serve: missing config in command context")
@@ -138,8 +141,7 @@ func NewServeCmd() *cobra.Command {
 	// The two published profiles are different deployments of different vaults,
 	// so asking for both is a question rather than something to resolve. The
 	// library boundary refuses the same pair in web.modeFor; this is only the
-	// clearer message for a person at a shell.
-	cmd.MarkFlagsMutuallyExclusive("read-only", "hosted")
+	// clearer message for a person at a shell (refuseCombinedFlags in RunE).
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "external directory for Daily Brief activity (required with --read-only)")
 	cmd.Flags().StringVar(&replicaStatusFile, "replica-status-file", "", "replica synchronization status JSON")
 	cmd.Flags().StringVar(&addr, "addr", "", "listen address host:port (overrides [serve].addr)")

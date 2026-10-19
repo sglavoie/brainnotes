@@ -111,8 +111,8 @@ func TestRenameKey_ConflictSkipping(t *testing.T) {
 	if !strings.Contains(out, "1 skipped (conflict)") {
 		t.Fatalf("expected conflict skip, got: %q", out)
 	}
-	if !strings.Contains(out, "WARN") {
-		t.Fatalf("expected WARN for conflict, got: %q", out)
+	if !strings.Contains(out, "rename-key: warning:") {
+		t.Fatalf("expected a warning for the conflict, got: %q", out)
 	}
 	if strings.Contains(out, "[frontmatter.properties]") {
 		t.Fatalf("expected no config warnings when no files were renamed, got:\n%s", out)

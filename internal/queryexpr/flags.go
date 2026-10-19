@@ -163,7 +163,7 @@ func validateFlagBounds(f query.Flags) error {
 		{flag: "--max-links", value: f.MaxLinks},
 	} {
 		if spec.value < -1 {
-			return fmt.Errorf("queryexpr: %s must be >= 0 (or -1 to disable), got %d", spec.flag, spec.value)
+			return fmt.Errorf("%s must be >= 0 (or -1 to disable), got %d", spec.flag, spec.value)
 		}
 	}
 	for _, spec := range []struct {
@@ -176,7 +176,7 @@ func validateFlagBounds(f query.Flags) error {
 		{minFlag: "--min-links", min: f.MinLinks, maxFlag: "--max-links", max: f.MaxLinks},
 	} {
 		if spec.min >= 0 && spec.max >= 0 && spec.min > spec.max {
-			return fmt.Errorf("queryexpr: %s (%d) cannot exceed %s (%d)", spec.minFlag, spec.min, spec.maxFlag, spec.max)
+			return fmt.Errorf("%s (%d) cannot exceed %s (%d)", spec.minFlag, spec.min, spec.maxFlag, spec.max)
 		}
 	}
 	return nil
@@ -188,7 +188,7 @@ func validateFlagBounds(f query.Flags) error {
 // so the split below can trust that the first byte is one of >, <, or =.
 func ageTerm(flag, prop, expr string) (*Term, error) {
 	if _, _, err := query.ParseAge(expr); err != nil {
-		return nil, fmt.Errorf("queryexpr: %s: %w", flag, err)
+		return nil, fmt.Errorf("%s: %w", flag, err)
 	}
 	var op Op
 	switch expr[0] {
@@ -199,7 +199,7 @@ func ageTerm(flag, prop, expr string) (*Term, error) {
 	case '=':
 		op = OpEq
 	default:
-		return nil, fmt.Errorf("queryexpr: %s: unsupported age operator %q", flag, string(expr[0]))
+		return nil, fmt.Errorf("%s: unsupported age operator %q", flag, string(expr[0]))
 	}
 	t := &Term{Field: "age", Op: op, Value: literalValue(expr[1:])}
 	if prop != "" {

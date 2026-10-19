@@ -248,7 +248,7 @@ func TestFind_BrokenLinks_ErrorCombinations(t *testing.T) {
 		{
 			name: "show-broken and list-broken-targets",
 			args: []string{"--vault", root, "find", "--broken-links", "--show-broken", "--list-broken-targets"},
-			want: "--show-broken and --list-broken-targets are mutually exclusive",
+			want: "--show-broken cannot be combined with --list-broken-targets",
 		},
 	}
 

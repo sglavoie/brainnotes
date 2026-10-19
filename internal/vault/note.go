@@ -93,7 +93,7 @@ func (n *Note) Load() error {
 	}
 	data, err := os.ReadFile(n.Path)
 	if err != nil {
-		return fmt.Errorf("note: read %q: %w", n.Path, err)
+		return fmt.Errorf("read note: %w", err)
 	}
 	doc, err := frontmatter.Parse(data)
 	if err != nil {

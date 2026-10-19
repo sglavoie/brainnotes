@@ -10,7 +10,8 @@ bn new <template> <title> [--folder rel] [--var k=v]... [--force] [--edit]
 
 Renders `<template>` from `<vault>/Templates/` and writes it to the routed (or
 `--folder`) destination as `<title>.md`. Template lookup is case-insensitive
-and tries: `<name>`, `<name>.md`, `<name> Template.md`.
+and tries: `<name>`, `<name>.md`, `<name> Template.md`. `--edit` then opens the
+created note in `[open].editor`, falling back to `$EDITOR`, as `bn open` does.
 
 Available template functions:
 
@@ -173,15 +174,16 @@ bn remove [note] [--yes]
 ```
 
 Accepts a note title (case-insensitive) or path. Without a note argument, opens
-the normal single-note `fzf` picker. Both forms ask for confirmation:
+the normal single-note `fzf` picker. Both forms ask for confirmation, on stderr:
 
 ```text
 Move Projects/Ideas.md to Trash? [y/N]
 ```
 
-Only `y` or `yes` confirms; blank input, `n`, or EOF prints `canceled` and
-leaves the vault unchanged. `--yes` skips that prompt. An empty vault or a
-dismissed picker is a successful no-op.
+Only `y` or `yes` confirms; blank input, `n`, or EOF reports `remove: canceled`,
+leaves the vault unchanged, and exits 1. `--yes` skips that prompt. An empty
+vault or a picker that selects nothing also changes nothing and exits 1 (see
+[exit status](integrations.md#scripting-exit-status-and-json)).
 
 Removal is recoverable: the note moves to `<vault>/Trash/`, retaining its
 vault-relative folder (for example, `Projects/Ideas.md` becomes

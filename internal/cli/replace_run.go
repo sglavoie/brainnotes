@@ -182,7 +182,7 @@ func newReplaceRun(cmd *cobra.Command, args []string, v *vault.Vault, cfg *confi
 		r.dry = &DryRun{Out: out}
 		return r, nil
 	}
-	journaler, err := noteops.BeginOperation(v.Root, "replace", commandInvocation(cmd, args), nil)
+	journaler, err := noteops.BeginOperationContext(commandContext(cmd), v.Root, "replace", commandInvocation(cmd, args), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (r *replaceRun) replaceAll(candidates []*vault.Note) error {
 func (r *replaceRun) replaceNote(n *vault.Note) error {
 	changed, err := applyReplace(n, r.target.key, r.target.from, r.target.to, r.fm, r.root, r.dry, r.journaler)
 	if err != nil {
-		_, _ = fmt.Fprintln(r.errOut, "WARN: replace interrupted; run 'git diff' to inspect partial state")
+		_, _ = fmt.Fprintln(r.errOut, "replace: warning: interrupted; run 'git diff' to inspect partial state")
 		return err
 	}
 	if !changed {

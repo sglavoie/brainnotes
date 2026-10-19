@@ -3,6 +3,8 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -20,6 +22,7 @@ import (
 // combination of them is meaningful.
 type lintOptions struct {
 	property string
+	asJSON   bool
 	ff       *findFlags
 }
 
@@ -45,7 +48,7 @@ func runLintCommand(cmd *cobra.Command, opts lintOptions) error {
 
 	if len(cfg.Frontmatter.Properties) == 0 {
 		writeSchemaHint(cmd.ErrOrStderr(), "lint", cfg.SourcePath)
-		return nil
+		return reportLint(cmd, opts, nil)
 	}
 	props, err := lintProperties(cfg, opts.property)
 	if err != nil {
@@ -65,13 +68,57 @@ func runLintCommand(cmd *cobra.Command, opts lintOptions) error {
 	if err != nil {
 		return err
 	}
+	return reportLint(cmd, opts, violations)
+}
+
+// reportLint writes the report in the requested form. LintError is what turns
+// a report with violations into exit code 1; main.go prints it on stderr, so
+// it never interrupts the JSON on stdout.
+func reportLint(cmd *cobra.Command, opts lintOptions, violations []schema.Violation) error {
+	if opts.asJSON {
+		if err := writeLintJSON(cmd.OutOrStdout(), violations); err != nil {
+			return err
+		}
+	} else {
+		formatViolations(cmd, violations)
+	}
 	if len(violations) == 0 {
 		return nil
 	}
-
-	formatViolations(cmd, violations)
-	// LintError is what turns a report into exit code 1; main.go prints it.
 	return &LintError{Count: len(violations)}
+}
+
+type lintJSONViolation struct {
+	Path     string `json:"path"`
+	Property string `json:"property"`
+	Kind     string `json:"kind"`
+	Detail   string `json:"detail"`
+}
+
+// writeLintJSON emits one record per violation, ordered by path and then by the
+// same keys the text report groups on, so the output is stable across runs.
+func writeLintJSON(w io.Writer, violations []schema.Violation) error {
+	records := make([]lintJSONViolation, 0, len(violations))
+	for _, v := range violations {
+		records = append(records, lintJSONViolation{Path: v.NotePath, Property: v.Property, Kind: v.Kind, Detail: v.Detail})
+	}
+	sort.Slice(records, func(i, j int) bool {
+		a, b := records[i], records[j]
+		if a.Path != b.Path {
+			return a.Path < b.Path
+		}
+		if a.Property != b.Property {
+			return a.Property < b.Property
+		}
+		if a.Kind != b.Kind {
+			return a.Kind < b.Kind
+		}
+		return a.Detail < b.Detail
+	})
+	return writeJSON(w, struct {
+		Count      int                 `json:"count"`
+		Violations []lintJSONViolation `json:"violations"`
+	}{Count: len(records), Violations: records})
 }
 
 // lintProperties narrows the configured definitions to the one --property names,

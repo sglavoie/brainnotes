@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -115,9 +114,7 @@ func taskUnderFolder(task cockpit.Task, prefix string) bool {
 // queue (--json) and the redacted review context (--review-context), so it takes
 // any serializable payload rather than only cockpit.Queue.
 func writeDoctorJSON(w io.Writer, payload any) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(payload)
+	return writeJSON(w, payload)
 }
 
 func writeDoctorHuman(w io.Writer, queue cockpit.Queue) {

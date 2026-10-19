@@ -27,7 +27,8 @@ func NewLintCmd() *cobra.Command {
 		Long: `Lint checks every note (or a scoped subset) against the property definitions
 in [frontmatter.properties] and reports violations without modifying files.
 
-Exit code 0 means clean; exit code 1 means violations were found.`,
+Exit code 0 means clean; exit code 1 means violations were found; exit code 2
+means lint could not run (for example, an unknown --property).`,
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -38,6 +39,7 @@ Exit code 0 means clean; exit code 1 means violations were found.`,
 
 	opts.ff.register(cmd)
 	cmd.Flags().StringVar(&opts.property, "property", "", "lint only this schema property")
+	cmd.Flags().BoolVar(&opts.asJSON, "json", false, `print {"count", "violations": [{"path", "property", "kind", "detail"}]} instead of the grouped report`)
 
 	return cmd
 }

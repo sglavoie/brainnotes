@@ -80,8 +80,8 @@ func TestSearch_NoteArgsAndFindFlags_Error(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when combining note args and find flags, got nil")
 	}
-	if !strings.Contains(err.Error(), "mutually exclusive") {
-		t.Fatalf("error should mention mutually exclusive, got: %v", err)
+	if !strings.Contains(err.Error(), "cannot be combined with find flags") {
+		t.Fatalf("error should refuse the combination, got: %v", err)
 	}
 }
 

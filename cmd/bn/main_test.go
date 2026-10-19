@@ -27,12 +27,12 @@ func TestRunSuccess(t *testing.T) {
 	}
 }
 
-func TestRunErrorPrintsAndReturnsOne(t *testing.T) {
+func TestRunErrorPrintsAndReturnsTwo(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	stubExecute(t, func() error { return errors.New("boom") })
 
-	if code := run(stderr); code != 1 {
-		t.Fatalf("run() exit code = %d, want 1", code)
+	if code := run(stderr); code != 2 {
+		t.Fatalf("run() exit code = %d, want 2", code)
 	}
 	if got := stderr.String(); got != "bn: boom\n" {
 		t.Fatalf("stderr = %q, want %q", got, "bn: boom\n")
@@ -267,4 +267,25 @@ func shellExitError(t *testing.T, script string) error {
 		t.Fatalf("expected *exec.ExitError, got %T", err)
 	}
 	return err
+}
+
+// Exit 1 is reserved for a run that completed with a negative answer, so a
+// script can tell it from an error (exit 2). Each is still printed.
+func TestRunMapsNegativeOutcomesToOne(t *testing.T) {
+	for name, err := range map[string]error{
+		"lint":     &cli.LintError{Count: 3},
+		"selected": fmt.Errorf("open: %w", cli.ErrNothingSelected),
+		"canceled": fmt.Errorf("remove: %w", cli.ErrCanceled),
+	} {
+		t.Run(name, func(t *testing.T) {
+			stderr := &bytes.Buffer{}
+			stubExecute(t, func() error { return err })
+			if code := run(stderr); code != 1 {
+				t.Fatalf("run() exit code = %d, want 1", code)
+			}
+			if stderr.Len() == 0 {
+				t.Fatal("a negative outcome must still say why")
+			}
+		})
+	}
 }

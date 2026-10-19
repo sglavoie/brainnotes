@@ -99,7 +99,7 @@ func addValuesFlags(cmd *cobra.Command, opts *valuesOptions) {
 
 func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 	if opts.sortMode != "count" && opts.sortMode != "name" {
-		return fmt.Errorf("--sort: invalid value %q (must be 'count' or 'name')", opts.sortMode)
+		return fmt.Errorf("%s: --sort must be count or name (got %q)", cmd.Name(), opts.sortMode)
 	}
 
 	cfg := ConfigFromContext(cmd.Context())
@@ -115,8 +115,7 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 		return err
 	}
 
-	verbose, _ := cmd.Root().PersistentFlags().GetBool("verbose")
-	counts, files := collectValueCounts(v, notes, property, opts.showFiles, verbose, cmd.ErrOrStderr())
+	counts, files := collectValueCounts(v, notes, property, opts.showFiles, rootVerbose(cmd), cmd.ErrOrStderr())
 	entries := sortValueEntries(counts, opts.sortMode)
 	return writeValuesOutput(cmd.OutOrStdout(), entries, files, opts)
 }

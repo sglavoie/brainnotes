@@ -47,7 +47,7 @@ func runSetCommand(cmd *cobra.Command, args []string, opts setOptions) error {
 	}
 	var journaler *noteops.Journal
 	if dry == nil {
-		journaler, err = noteops.BeginOperation(v.Root, "set", commandInvocation(cmd, args), paths)
+		journaler, err = noteops.BeginOperationContext(commandContext(cmd), v.Root, "set", commandInvocation(cmd, args), paths)
 		if err != nil {
 			return err
 		}

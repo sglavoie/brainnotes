@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -74,15 +76,23 @@ func (opts *checkpointOptions) holdReason(argv []string) string {
 // An *exec.ExitError is returned unwrapped, because cmd/bn turns exactly that
 // into this process's exit status — wrapping it would still propagate the code
 // and would prefix the child's failure with a sentence about bn.
+// checkpointChildWaitDelay bounds how long a forwarded SIGTERM may take before
+// the child is killed.
+const checkpointChildWaitDelay = 10 * time.Second
+
 func runCheckpointChild(cmd *cobra.Command, argv []string, inherited []*os.File) error {
 	child := exec.CommandContext(cmd.Context(), argv[0], argv[1:]...)
 	child.Stdin = cmd.InOrStdin()
 	child.Stdout = cmd.OutOrStdout()
 	child.Stderr = cmd.ErrOrStderr()
 	child.ExtraFiles = inherited
+	// The terminal already hands Ctrl-C to the child, which owns it; a SIGTERM
+	// sent to bn alone is forwarded rather than escalated straight to a kill.
+	child.Cancel = func() error { return child.Process.Signal(syscall.SIGTERM) }
+	child.WaitDelay = checkpointChildWaitDelay
 
 	var exitErr *exec.ExitError
-	switch err := child.Run(); {
+	switch err := withInteractiveChild(child.Run); {
 	case err == nil:
 		return nil
 	case errors.As(err, &exitErr):

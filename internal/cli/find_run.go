@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,6 +19,7 @@ import (
 type findOptions struct {
 	interactive       bool
 	nullSep           bool
+	asJSON            bool
 	showBroken        bool
 	listBrokenTargets bool
 	sortText          string
@@ -33,6 +35,9 @@ func (o findOptions) validate() error {
 	if err := o.validateBrokenLinkRequirements(); err != nil {
 		return err
 	}
+	if err := o.validateJSONOutput(); err != nil {
+		return err
+	}
 	return o.validateBrokenOutputCombos()
 }
 
@@ -40,13 +45,13 @@ func (o findOptions) validate() error {
 // without the filter that produces them, and the two of them asked for at once.
 func (o findOptions) validateBrokenLinkRequirements() error {
 	if o.showBroken && !o.ff.brokenLinks {
-		return errors.New("--show-broken requires --broken-links")
+		return errors.New("find: --show-broken requires --broken-links")
 	}
 	if o.listBrokenTargets && !o.ff.brokenLinks {
-		return errors.New("--list-broken-targets requires --broken-links")
+		return errors.New("find: --list-broken-targets requires --broken-links")
 	}
 	if o.showBroken && o.listBrokenTargets {
-		return errors.New("--show-broken and --list-broken-targets are mutually exclusive")
+		return errors.New("find: --show-broken cannot be combined with --list-broken-targets")
 	}
 	return nil
 }
@@ -60,9 +65,19 @@ func (o findOptions) validateBrokenOutputCombos() error {
 	}
 	switch {
 	case o.interactive:
-		return errors.New("--interactive cannot be used with --show-broken or --list-broken-targets")
+		return errors.New("find: --interactive cannot be combined with --show-broken or --list-broken-targets")
 	case o.nullSep:
-		return errors.New("--null cannot be used with --show-broken or --list-broken-targets")
+		return errors.New("find: --null cannot be combined with --show-broken or --list-broken-targets")
+	case o.asJSON:
+		return errors.New("find: --json cannot be combined with --show-broken or --list-broken-targets")
+	}
+	return nil
+}
+
+// validateJSONOutput rejects the one path-list option JSON replaces.
+func (o findOptions) validateJSONOutput() error {
+	if o.asJSON && o.nullSep {
+		return errors.New("find: --json cannot be combined with --null")
 	}
 	return nil
 }
@@ -185,11 +200,29 @@ func runFindPaths(r *findRun) error {
 	}
 
 	if r.opts.interactive {
-		selected, err := RunFZF(paths, r.cfg.Fzf.Args)
+		selected, err := requireSelection(RunFZF(paths, r.cfg.Fzf.Args))
 		if err != nil {
 			return err
 		}
 		paths = selected
 	}
+	if r.opts.asJSON {
+		return writeFindJSON(r.cmd.OutOrStdout(), paths)
+	}
 	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
+}
+
+type findJSONNote struct {
+	Path  string `json:"path"`
+	Title string `json:"title"`
+}
+
+// writeFindJSON emits the selected notes in result order as an array of the
+// same {path, title} records `bn related --json` uses.
+func writeFindJSON(w io.Writer, paths []string) error {
+	notes := make([]findJSONNote, 0, len(paths))
+	for _, p := range paths {
+		notes = append(notes, findJSONNote{Path: p, Title: (&vault.Note{Path: p}).Title()})
+	}
+	return writeJSON(w, notes)
 }

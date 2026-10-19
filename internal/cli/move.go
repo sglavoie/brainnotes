@@ -149,7 +149,7 @@ func planMove(v *vault.Vault, cfg *config.Config, noteArg, newFolderArg string, 
 func applyMove(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, plan *noteops.MovePlan, newFolderAbs string, force bool, out io.Writer) error {
 	// Ahead of the destination folder, which a refused move would otherwise
 	// leave behind empty.
-	journaler, err := noteops.BeginOperation(v.Root, "move", commandInvocation(cmd, args),
+	journaler, err := noteops.BeginOperationContext(commandContext(cmd), v.Root, "move", commandInvocation(cmd, args),
 		[]string{plan.Target, plan.NewPath, newFolderAbs})
 	if err != nil {
 		return err
@@ -169,11 +169,11 @@ func applyMove(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Co
 	}
 
 	if err := noteops.ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted; run 'git diff' to inspect partial state")
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "move: warning: interrupted; run 'git diff' to inspect partial state")
 		return err
 	}
 	if err := noteops.RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: move interrupted after content rewrites; run 'git diff' to inspect partial state")
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "move: warning: interrupted after content rewrites; run 'git diff' to inspect partial state")
 		return err
 	}
 	if _, err := journaler.Finalize(); err != nil {

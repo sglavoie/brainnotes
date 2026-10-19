@@ -60,7 +60,7 @@ Use --dry-run to preview the append without writing.`,
 				return errors.New("capture: no config in context")
 			}
 
-			text, err := captureInputText(cmd.InOrStdin(), args)
+			text, err := captureInputText(cmd.InOrStdin(), cmd.ErrOrStderr(), args)
 			if err != nil {
 				return err
 			}
@@ -102,8 +102,9 @@ Use --dry-run to preview the append without writing.`,
 
 // captureInputText joins the positional text, or reads it from in when there is
 // none. Normalization and validation belong to noteops; this only rejects the
-// case where no text was supplied at all.
-func captureInputText(in io.Reader, args []string) (string, error) {
+// case where no text was supplied at all. Reading a terminal says so first:
+// otherwise `bn capture` with no arguments just sits there until Ctrl-D.
+func captureInputText(in io.Reader, errOut io.Writer, args []string) (string, error) {
 	if len(args) > 0 {
 		text := strings.Join(args, " ")
 		if strings.TrimSpace(text) == "" {
@@ -113,6 +114,9 @@ func captureInputText(in io.Reader, args []string) (string, error) {
 	}
 	if in == nil {
 		return "", errors.New("capture: no text given and no stdin to read")
+	}
+	if isTerminal(in) {
+		_, _ = fmt.Fprintln(errOut, "capture: reading text from stdin; press Ctrl-D to finish (or pass the text as arguments)")
 	}
 	data, err := io.ReadAll(in)
 	if err != nil {

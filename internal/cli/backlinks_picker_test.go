@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -38,8 +39,8 @@ func TestBacklinks_FzfAbort(t *testing.T) {
 	}
 
 	stdout, stderr, err := runBacklinks(t, root, "backlinks")
-	if err != nil {
-		t.Fatalf("execute: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout on abort, got %q", stdout)
@@ -63,8 +64,8 @@ func TestBacklinks_FzfEmptyVault(t *testing.T) {
 	}
 
 	stdout, stderr, err := runBacklinks(t, root, "backlinks")
-	if err != nil {
-		t.Fatalf("execute: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 	if pickerCalled {
 		t.Fatalf("picker should not be called on empty vault")
@@ -72,7 +73,7 @@ func TestBacklinks_FzfEmptyVault(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
 	}
-	if !strings.Contains(stderr, "no notes in vault") {
-		t.Fatalf("expected stderr to mention 'no notes in vault'; got %q", stderr)
+	if stderr != "" || !strings.Contains(err.Error(), "no notes in vault") {
+		t.Fatalf("the error, not stderr, should say 'no notes in vault'; err=%v stderr=%q", err, stderr)
 	}
 }

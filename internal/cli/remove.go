@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
 	"strings"
 
@@ -58,23 +56,18 @@ func runRemove(cmd *cobra.Command, args []string, opts *removeOptions) error {
 	if err != nil {
 		return err
 	}
-	if len(selected) == 0 {
-		return nil
-	}
-
 	sourceRel, err := selectedNoteRel(v.Root, selected[0])
 	if err != nil {
 		return err
 	}
 	out := cmd.OutOrStdout()
 	if !opts.yes {
-		confirmed, err := confirmRemove(cmd.InOrStdin(), out, sourceRel)
+		confirmed, err := confirm(cmd.InOrStdin(), cmd.ErrOrStderr(), "remove", fmt.Sprintf("Move %s to Trash?", sourceRel))
 		if err != nil {
 			return err
 		}
 		if !confirmed {
-			_, err := fmt.Fprintln(out, "canceled")
-			return err
+			return canceled("remove")
 		}
 	}
 
@@ -109,24 +102,4 @@ func selectedNoteRel(vaultRoot, selected string) (string, error) {
 		return "", errors.New("remove: selected note is outside the vault")
 	}
 	return filepath.ToSlash(rel), nil
-}
-
-// confirmRemove accepts only a complete y/yes response. EOF is a cancellation:
-// it prevents a non-interactive invocation from accidentally removing a note.
-func confirmRemove(in io.Reader, out io.Writer, note string) (bool, error) {
-	if _, err := fmt.Fprintf(out, "Move %s to Trash? [y/N] ", note); err != nil {
-		return false, err
-	}
-	if in == nil {
-		return false, nil
-	}
-	response, err := bufio.NewReader(in).ReadString('\n')
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return false, nil
-		}
-		return false, fmt.Errorf("remove: read confirmation: %w", err)
-	}
-	response = strings.TrimSpace(response)
-	return strings.EqualFold(response, "y") || strings.EqualFold(response, "yes"), nil
 }

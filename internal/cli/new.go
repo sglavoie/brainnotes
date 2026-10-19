@@ -39,7 +39,7 @@ func NewNewCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&opts.folder, "folder", "", "destination folder, vault-relative (overrides config route)")
 	f.StringArrayVar(&opts.vars, "var", nil, "template variable as key=value (repeatable)")
-	f.BoolVar(&opts.edit, "edit", false, "exec $EDITOR on the created note")
+	f.BoolVar(&opts.edit, "edit", false, "open the created note in [open].editor or $EDITOR")
 	f.BoolVar(&opts.force, "force", false, "overwrite the destination file if it already exists")
 
 	return cmd

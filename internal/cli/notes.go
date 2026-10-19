@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -18,6 +19,7 @@ import (
 // Out-of-vault paths are rejected.
 func resolveNoteInputs(vaultRoot string, args []string, in io.Reader, nullSep bool) ([]string, error) {
 	if len(args) == 1 && args[0] == "-" {
+		hintTerminalStdin(in)
 		return readStdinPaths(in, vaultRoot, nullSep)
 	}
 
@@ -208,4 +210,12 @@ func splitNull(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		return len(data), data, nil
 	}
 	return 0, nil, nil
+}
+
+// hintTerminalStdin says why `-` is waiting when stdin is a terminal rather
+// than a pipe. Only a person at a terminal sees it.
+func hintTerminalStdin(in io.Reader) {
+	if isTerminal(in) {
+		_, _ = fmt.Fprintln(os.Stderr, "reading note paths from stdin, one per line; press Ctrl-D to finish")
+	}
 }

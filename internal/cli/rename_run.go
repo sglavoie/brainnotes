@@ -115,7 +115,7 @@ func planRename(v *vault.Vault, cfg *config.Config, noteArg, newTitle string, fo
 // content rewrites landed but the note is still at its old path.
 func applyRename(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Config, plan *noteops.RenamePlan) error {
 	out := cmd.OutOrStdout()
-	journaler, err := noteops.BeginOperation(v.Root, "rename", commandInvocation(cmd, args),
+	journaler, err := noteops.BeginOperationContext(commandContext(cmd), v.Root, "rename", commandInvocation(cmd, args),
 		[]string{plan.Target, plan.NewPath})
 	if err != nil {
 		return err
@@ -126,11 +126,11 @@ func applyRename(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.
 	}
 
 	if err := noteops.ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, out); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted; run 'git diff' to inspect partial state")
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "rename: warning: interrupted; run 'git diff' to inspect partial state")
 		return err
 	}
 	if err := noteops.RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "WARN: rename interrupted after content rewrites; run 'git diff' to inspect partial state")
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "rename: warning: interrupted after content rewrites; run 'git diff' to inspect partial state")
 		return err
 	}
 	if _, err := journaler.Finalize(); err != nil {

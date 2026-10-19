@@ -23,7 +23,7 @@ bn config edit
 
 `bn config` prints the resolved vault root, the `brainnotes.toml` that was
 loaded, the active `brainnotes.local.toml` overlay (or `none`), and which of
-`--vault` / `$BNOTES_VAULT` / the upward search resolved it. `bn config edit` opens the portable file in `$EDITOR`.
+`--vault` / `$BNOTES_VAULT` / the upward search resolved it. `bn config edit` opens the portable file in `[open].editor` (falling back to `$EDITOR`), even when it no longer parses.
 
 `bn config explain open.editor` shows the effective value after defaults and
 normalization, the file that supplied it (or built-in default), and the file
@@ -258,7 +258,7 @@ count instead of aborting the snapshot.
 ### `bn restore` — restore a vault snapshot archive
 
 ```sh
-bn restore <archive> [--wipe]
+bn restore <archive> [--wipe [--yes]] [--dry-run]
 ```
 
 By default, restore runs in overlay mode: files from the archive overwrite any
@@ -284,10 +284,21 @@ other non-archived extra is removed. `bn backup` / `bn restore` are vault-level
 snapshot commands; they do not create undo journal entries, but a successful
 restore is recorded as a single content-history snapshot.
 
+Because a wipe cannot be undone with `bn undo`, `--wipe` asks before deleting
+anything, naming how many paths it would remove. `--yes` skips the prompt, and
+is required when stdin is not a terminal: a script gets a refusal (exit 2)
+rather than a wipe it never confirmed. `--dry-run` validates the archive and
+lists what the restore would `create`, `overwrite` and (with `--wipe`)
+`remove`, then a `summary:` line, without changing the vault:
+
+```sh
+bn restore backups/backup-20260528T232425.123456789Z.tar.gz --wipe --dry-run
+```
+
 ### `bn history` — list recent undo journal entries
 
 ```sh
-bn history
+bn history [--json]
 ```
 
 Lists entries newest-first from `<vault>/.bnotes/journal/`. Output is
@@ -296,6 +307,10 @@ tab-separated with columns:
 - `TIMESTAMP` (RFC3339Nano UTC),
 - `ID` (entry id),
 - `COMMAND` (recorded source command).
+
+`--json` prints `{"entries": [...]}` instead, each entry with its `id`,
+`timestamp`, `command` and the vault-relative `files` it changed. An empty
+journal prints nothing on stdout and says so on stderr.
 
 Use the entry ID with `bn undo <id>`.
 

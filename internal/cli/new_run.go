@@ -54,7 +54,7 @@ func runNewCommand(cmd *cobra.Command, args []string, opts newOptions) error {
 	if !opts.edit {
 		return nil
 	}
-	return editNewNote(plan.outPath)
+	return editNewNote(cfg.Open.Editor, plan.outPath)
 }
 
 // planNewNote resolves everything the write needs and refuses everything it can
@@ -148,7 +148,7 @@ func checkNewDestinationFree(outPath string, force bool) error {
 // BeginOperation runs ahead of the folder, which is the first artifact here and
 // would otherwise survive a write the policy goes on to refuse.
 func writeNewNote(cmd *cobra.Command, args []string, cfg *config.Config, plan newPlan) error {
-	journaler, err := noteops.BeginOperation(cfg.Vault, "new", commandInvocation(cmd, args),
+	journaler, err := noteops.BeginOperationContext(commandContext(cmd), cfg.Vault, "new", commandInvocation(cmd, args),
 		[]string{plan.dest, plan.outPath})
 	if err != nil {
 		return err
@@ -178,14 +178,15 @@ func writeNewNote(cmd *cobra.Command, args []string, cfg *config.Config, plan ne
 	return err
 }
 
-// editNewNote hands the created note to $EDITOR. Resolution is deliberately
+// editNewNote hands the created note to the configured editor ([open].editor,
+// then $EDITOR), the same choice `bn open` makes. Resolution is deliberately
 // lazy — it runs only after the note exists and its path has been printed — so
-// `new --edit` on a machine with no $EDITOR still creates the note before it
+// `new --edit` on a machine with no editor still creates the note before it
 // reports that it cannot open it.
-func editNewNote(outPath string) error {
-	editorSpec, err := editutil.Spec("", os.Getenv("EDITOR"))
+func editNewNote(configured, outPath string) error {
+	editorSpec, err := editutil.Spec(configured, os.Getenv("EDITOR"))
 	if errors.Is(err, editutil.ErrNoEditorConfigured) {
-		return errors.New("new: --edit requires $EDITOR to be set")
+		return errors.New("new: --edit requires [open].editor or $EDITOR to be set")
 	}
 	if err != nil {
 		return fmt.Errorf("new: %w", err)

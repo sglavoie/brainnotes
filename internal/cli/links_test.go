@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -291,8 +292,8 @@ func TestLinks_FzfAbort(t *testing.T) {
 	}
 
 	stdout, stderr, err := runLinks(t, root, "links")
-	if err != nil {
-		t.Fatalf("execute: %v", err)
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout on abort, got %q", stdout)

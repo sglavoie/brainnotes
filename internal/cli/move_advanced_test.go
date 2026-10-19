@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,9 +122,9 @@ func TestMove_FzfAbort(t *testing.T) {
 		return nil, nil
 	}
 
-	out, err := runCLI(t, "", "move", "References/Books")
-	if err != nil {
-		t.Fatalf("execute: %v\n%s", err, out)
+	_, err := runCLI(t, "", "move", "References/Books")
+	if !errors.Is(err, ErrNothingSelected) {
+		t.Fatalf("err = %v, want ErrNothingSelected", err)
 	}
 
 	after := snapshotVault(t, root)

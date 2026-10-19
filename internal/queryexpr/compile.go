@@ -61,7 +61,7 @@ type MissingStateError struct {
 }
 
 func (e *MissingStateError) Error() string {
-	return "queryexpr: field \"" + e.Field + "\" requires a " + e.Need
+	return "field \"" + e.Field + "\" requires a " + e.Need
 }
 
 // Compile parses src and validates every term in it, returning a plan whose

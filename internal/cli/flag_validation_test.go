@@ -68,7 +68,7 @@ func TestLinksNullCannotBeVerbose(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected --null/--verbose validation error, got nil")
 	}
-	if !strings.Contains(err.Error(), "--null cannot be used with --verbose") {
+	if !strings.Contains(err.Error(), "--null cannot be combined with --verbose") {
 		t.Fatalf("expected --null/--verbose error, got %v", err)
 	}
 	if stdout != "" || stderr != "" {
@@ -84,7 +84,7 @@ func TestBacklinksNullCannotBeVerbose(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected --null/--verbose validation error, got nil")
 	}
-	if !strings.Contains(err.Error(), "--null cannot be used with --verbose") {
+	if !strings.Contains(err.Error(), "--null cannot be combined with --verbose") {
 		t.Fatalf("expected --null/--verbose error, got %v", err)
 	}
 	if stdout != "" || stderr != "" {

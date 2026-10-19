@@ -51,7 +51,11 @@ single method rather than by grepping a closure. Inputs that are properties of
 the `*cobra.Command` rather than of the options — "was any find flag set", which
 comes from `Flag(name).Changed` — are passed in as parameters instead of being
 re-derived inside, which is what keeps `validate()` a pure function of its
-inputs and therefore directly testable.
+inputs and therefore directly testable. A refusal is spelled
+`<cmd>: --a cannot be combined with --b`; two flags that only exclude each other
+use `refuseCombinedFlags` rather than cobra's `MarkFlagsMutuallyExclusive`,
+whose message reads like nothing else bn prints. Diagnostics and prompts go to
+stderr, and warnings are spelled `<cmd>: warning: ...`.
 
 Split the method when the rules outgrow one threshold-clean function
 (`validateContextCombos`, `validateCountCombos`), with the guard clause inside
@@ -124,12 +128,12 @@ the constructor and nothing else.
 
 **When two commands share a whole prologue, the shared thing is a run builder,
 not a copied closure.** `links` and `backlinks` are the same command up to one
-lookup: both take an optional note argument, fall back to the fzf picker, report
-an empty vault on stderr, open the vault, load the notes, and build the graph —
+lookup: both take an optional note argument, fall back to the fzf picker, refuse
+an empty vault, open the vault, load the notes, and build the graph —
 thirteen duplicate windows of it. `linklist.go` is that prologue once:
-`linkListOptions` (the `--null`/`--verbose` pair and their one rule),
-`resolveLinkListTarget` returning `(target, ok, err)` so a dismissed picker is a
-silent success, and `newLinkListRun` returning the `linkListRun{target, notes,
+`linkListOptions` (the `--null`/root `--verbose` pair and their one rule),
+`resolveLinkListTarget` returning `(target, ok, err)`, where an empty vault or
+an empty pick is `ErrNothingSelected` (exit 1, see `outcome.go`), and `newLinkListRun` returning the `linkListRun{target, notes,
 graph}` both runners then read. What is left in `links_run.go` and
 `backlinks_run.go` is only what actually differs: which direction of the graph
 is read, and how the verbose form is rendered. The verbose renderers were

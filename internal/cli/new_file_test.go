@@ -71,19 +71,20 @@ func TestNewEdit_EditorArgsSupported(t *testing.T) {
 	}
 }
 
-func TestNewEdit_UsesOnlyEnvEditor(t *testing.T) {
+func TestNewEdit_PrefersConfiguredEditor(t *testing.T) {
 	root := buildNewFixture(t)
 	cfgPath := filepath.Join(root, config.FileName)
 	cfg, err := os.ReadFile(cfgPath)
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	cfg = append(cfg, []byte("\n[open]\neditor = \"configured-editor\"\n")...)
+	cfg = append(cfg, []byte("\n[open]\neditor = \"go env\"\n")...)
 	if err := os.WriteFile(cfgPath, cfg, 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
-	t.Setenv("EDITOR", "go env")
+	// [open].editor wins over $EDITOR, as it does for `bn open`.
+	t.Setenv("EDITOR", "env-editor-that-does-not-exist")
 	captured := stubExecReplace(t)
 
 	out, err := runNew(t, "new", "book", "Dune", "--var", "author=Herbert", "--edit")

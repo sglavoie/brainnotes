@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -34,14 +32,13 @@ func NewBacklinksCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.verbose = rootVerbose(cmd)
 			return runBacklinksCommand(cmd, args, opts)
 		},
 	}
 
 	f := cmd.Flags()
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "separate paths with NUL instead of newline")
-	// Long-only `--verbose`: a `-v` short would shadow the root `--verbose`.
-	f.BoolVar(&opts.verbose, "verbose", false, "show file:line and a snippet for each backlink (long-only; -v is reserved by the root command)")
 
 	return cmd
 }
@@ -62,13 +59,6 @@ func backlinkReferrers(g *query.Graph, target *vault.Note) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// backlinkKey returns the lowercased filename stem used as the backlink-index
-// lookup key for a note.
-func backlinkKey(n *vault.Note) string {
-	stem := strings.TrimSuffix(filepath.Base(n.Path), filepath.Ext(n.Path))
-	return strings.ToLower(textnorm.NFC(stem))
 }
 
 // verboseRow is a single line of verbose-mode output. Frontmatter rows have

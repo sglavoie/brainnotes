@@ -1,8 +1,10 @@
 # Research commands
 
-The commands that read note bodies and the link graph. They all accept the
-find-scoping flags documented in [Finding notes](commands-query.md), and
-`--view` names a view from [Saved views](commands-views.md).
+The commands that read note bodies and the link graph. `bn search` and
+`bn graph` accept the find-scoping flags documented in
+[Finding notes](commands-query.md), including `--view`, which names a view from
+[Saved views](commands-views.md). `bn backlinks`, `bn links`, `bn related` and
+`bn context` start from one target note instead and take no scoping flags.
 
 ## Command reference
 
@@ -61,7 +63,7 @@ bn find --tag drafts | bn search "review" -
 ### `bn backlinks` — list notes that link to a target
 
 ```sh
-bn backlinks <note> [-0] [--verbose]
+bn backlinks <note> [-0] [-v|--verbose]
 ```
 
 `<note>` is either a bare title (case-insensitive stem lookup) or a path/glob.
@@ -73,8 +75,8 @@ With `--verbose`, each occurrence is printed on its own line as
 `<path>:<line>\t<snippet>` for body links, or `<path>:fm:<key>\t<value>` for
 frontmatter links. Output is tab-separated so it pipes cleanly into
 `awk -F'\t'`. Snippets are trimmed and truncated to 120 characters with an
-`…` ellipsis. `--verbose` has no `-v` short form because the root `--verbose`
-already claims `-v`.
+`…` ellipsis. `--verbose` is the root flag, so `-v` works too; it cannot be
+combined with `-0`.
 
 Examples:
 
@@ -88,7 +90,7 @@ bn backlinks Dune --verbose | awk -F'\t' '{print $1}'
 ### `bn links` — list the notes a target links to
 
 ```sh
-bn links [note] [-0] [--verbose]
+bn links [note] [-0] [-v|--verbose]
 ```
 
 The outgoing counterpart of `bn backlinks`. `<note>` is either a bare title
@@ -101,9 +103,8 @@ and links inside fenced, indented, or inline code are not counted.
 
 `--verbose` prints one line per occurrence instead, in the same tab-separated
 shape `bn backlinks --verbose` uses: `<path>:<line>\t<snippet>` for body links
-and `<path>:fm:<key>\t<value>` for frontmatter links, frontmatter first. It has
-no `-v` short form (the root `--verbose` claims `-v`) and cannot be combined
-with `-0`.
+and `<path>:fm:<key>\t<value>` for frontmatter links, frontmatter first. `-v`
+is its short form, and it cannot be combined with `-0`.
 
 Examples:
 
@@ -228,7 +229,7 @@ bn related feedback Notes/Current.md Notes/Detour.md --state later --until 2026-
 bn context <note>
   [--related N]
   [--max-bytes N]
-  [--format markdown|json]
+  [--format markdown|json | --json]
   [--purpose synthesis|contradictions|questions]
   [--agent]
 ```
@@ -241,7 +242,7 @@ and records the final serialized byte count. Markdown and JSON select identical
 notes and excerpts; only their framing and byte counts differ.
 
 The defaults are `--related 5`, `--max-bytes 65536`, `--format markdown`, and
-`--purpose synthesis`. `--related 0` exports only the source. Related excerpts
+`--purpose synthesis`. `--json` is shorthand for `--format json`. `--related 0` exports only the source. Related excerpts
 are truncated at Unicode rune boundaries, but the source body is never
 truncated: if the complete source and required framing cannot fit, the command
 fails. The command reads recall feedback so dismissed or currently snoozed

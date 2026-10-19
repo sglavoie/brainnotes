@@ -60,17 +60,16 @@ func runOpenCommand(cmd *cobra.Command, args []string, opts openOptions) error {
 }
 
 // selectOpenTarget runs the picker over every note in the vault, pre-filtered
-// by the optional positional query. It reports (…, false, nil) for the two
-// silent successes — an empty vault, which says so on stderr, and a dismissed
-// picker — because neither is an error and neither has a path to act on.
+// by the optional positional query. An empty vault and a picker that matched
+// nothing are both ErrNothingSelected: there is no path to act on, and
+// `p=$(bn open --print)` must not succeed with an empty value.
 func selectOpenTarget(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, args []string) (string, bool, error) {
 	paths, err := collectNotePaths(v)
 	if err != nil {
 		return "", false, err
 	}
 	if len(paths) == 0 {
-		fmt.Fprintln(cmd.ErrOrStderr(), "open: no notes in vault")
-		return "", false, nil
+		return "", false, nothingSelected("open", "no notes in vault")
 	}
 
 	extraArgs := append([]string(nil), cfg.Fzf.Args...)
@@ -80,12 +79,9 @@ func selectOpenTarget(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, ar
 		extraArgs = append(extraArgs, "--query", args[0])
 	}
 
-	selected, err := openPicker(paths, extraArgs)
+	selected, err := requireSelection(openPicker(paths, extraArgs))
 	if err != nil {
 		return "", false, err
-	}
-	if len(selected) == 0 {
-		return "", false, nil
 	}
 	return selected[0], true, nil
 }
