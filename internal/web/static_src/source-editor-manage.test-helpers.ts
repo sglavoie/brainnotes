@@ -3,6 +3,7 @@ import { undoDescription } from "./history-confirm";
 
 import { readSourceManageElements, type SourceEditorConfig } from "./source-editor-elements";
 import { initSourceManage, type ManageHost } from "./source-editor-manage";
+import { jsonResponse as sharedJsonResponse } from "./shared.test-helpers";
 
 export const manageMarkup = `
 <section data-source-editor>
@@ -66,10 +67,7 @@ export const config: SourceEditorConfig = {
 };
 
 export const jsonResponse = (status: number, payload: unknown): Response =>
-  new Response(JSON.stringify(payload), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+  sharedJsonResponse(payload, status);
 
 export type Harness = {
   elements: NonNullable<ReturnType<typeof readSourceManageElements>>;

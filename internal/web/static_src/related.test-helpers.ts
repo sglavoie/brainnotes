@@ -1,24 +1,8 @@
 import type { RelatedMode } from "./related-types";
+import { jsonResponse, waitForExpect as sharedWaitForExpect } from "./shared.test-helpers";
 
-export const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
-
-export const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+export const waitForExpect = (assertion: () => void): Promise<void> =>
+  sharedWaitForExpect(assertion, { attempts: 30 });
 
 export const deferred = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
   let resolve!: (value: T) => void;
@@ -95,3 +79,5 @@ export const itemPayload = (
     : {}),
   ...overrides,
 });
+
+export { jsonResponse };

@@ -14,20 +14,7 @@ import {
   historyForceConsentMessage,
   initHistoryPanel,
 } from "./history-panel";
-
-const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
+import { jsonResponse, waitForExpect } from "./shared.test-helpers";
 
 const historyEntry = (overrides: Partial<HistoryEntry> = {}): HistoryEntry => ({
   id: "entry-new",
@@ -47,12 +34,6 @@ const historyEntry = (overrides: Partial<HistoryEntry> = {}): HistoryEntry => ({
   }],
   ...overrides,
 });
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 
 const renderPanel = (): void => {
   document.body.innerHTML = `

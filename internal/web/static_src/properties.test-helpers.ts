@@ -1,24 +1,4 @@
-import { vi } from "vitest";
-
-export const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
-
-export const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+import { jsonResponse, waitForExpect } from "./shared.test-helpers";
 
 export const catalogPayload = () => ({
   ok: true,
@@ -210,4 +190,4 @@ export const mountDetail = (property = "status"): HTMLElement => {
   return root;
 };
 
-
+export { jsonResponse, waitForExpect };

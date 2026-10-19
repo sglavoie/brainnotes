@@ -15,12 +15,7 @@ import {
   stalePreview,
   type HistoryFetch,
 } from "./history-requests";
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+import { jsonResponse } from "./shared.test-helpers";
 
 describe("history query building", () => {
   it("omits what it has nothing to say about and repeats what the route reads", () => {

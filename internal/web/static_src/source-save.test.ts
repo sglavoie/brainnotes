@@ -2,12 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { normalizeSourceDocument, normalizeSourceSaveResponse, sourceSaveConflict } from "./api";
 import { classifySaveResponse, createSourceClient, newSaveID } from "./source-save";
+import { jsonResponse as sharedJsonResponse } from "./shared.test-helpers";
 
 const jsonResponse = (status: number, payload: unknown): Response =>
-  new Response(JSON.stringify(payload), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+  sharedJsonResponse(payload, status);
 
 const client = (fetcher: typeof fetch) =>
   createSourceClient({
