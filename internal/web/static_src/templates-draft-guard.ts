@@ -40,7 +40,7 @@ const openInto = async (
   name: string,
   current: () => boolean
 ): Promise<void> => {
-  view.setStatus(`Opening "${name}"...`, "is-loading");
+  view.setStatus(`Opening "${name}"…`, "is-loading");
   const outcome = await fetchTemplate(fetcher, name);
   if (!current()) {
     return;

@@ -125,7 +125,7 @@ describe("search feedback", () => {
     initSearch();
 
     typeQuery(input, "missing");
-    expect(feedback.textContent).toBe("Searching...");
+    expect(feedback.textContent).toBe("Searching…");
     await vi.runAllTimersAsync();
     expect(feedback.textContent).toBe("No matching notes.");
     expect(feedback.hidden).toBe(false);
@@ -158,7 +158,7 @@ describe("search feedback", () => {
     typeQuery(input, "other");
     expect(results.hidden).toBe(true);
     expect(results.childElementCount).toBe(0);
-    expect(feedback.textContent).toBe("Searching...");
+    expect(feedback.textContent).toBe("Searching…");
     await vi.runAllTimersAsync();
     expect(feedback.textContent).toBe("No matching notes.");
   });

@@ -63,6 +63,34 @@ export const isBlankQuery = (text: string): boolean => text.trim() === "";
  * the one that matters, because an error's offsets index the text it was
  * computed from and would point at the wrong column on any other.
  */
+const reduceInput = (state: QueryBarValidation, text: string): QueryBarValidation => {
+  if (isBlankQuery(text)) {
+    return emptyQueryBarValidation();
+  }
+  if (text === state.query && state.phase !== "empty") {
+    return state;
+  }
+  // The previous error is dropped rather than carried: its offsets index
+  // the previous text, so keeping it would drift the caret while typing.
+  return {
+    phase: "typing",
+    query: text,
+    normalized: "",
+    fieldsUsed: [],
+    needsGraph: false,
+    error: null,
+  };
+};
+
+const validatedState = (text: string, response: QueryValidateResponse): QueryBarValidation => ({
+  phase: response.ok ? "valid" : "invalid",
+  query: text,
+  normalized: response.normalized,
+  fieldsUsed: response.fields_used,
+  needsGraph: response.needs_graph,
+  error: response.ok ? null : response.error,
+});
+
 export const reduceQueryBar = (
   state: QueryBarValidation,
   event: QueryBarEvent
@@ -71,24 +99,8 @@ export const reduceQueryBar = (
     case "reset":
       return emptyQueryBarValidation();
 
-    case "input": {
-      if (isBlankQuery(event.text)) {
-        return emptyQueryBarValidation();
-      }
-      if (event.text === state.query && state.phase !== "empty") {
-        return state;
-      }
-      // The previous error is dropped rather than carried: its offsets index
-      // the previous text, so keeping it would drift the caret while typing.
-      return {
-        phase: "typing",
-        query: event.text,
-        normalized: "",
-        fieldsUsed: [],
-        needsGraph: false,
-        error: null,
-      };
-    }
+    case "input":
+      return reduceInput(state, event.text);
 
     case "request":
       if (event.text !== state.query || isBlankQuery(event.text)) {
@@ -96,20 +108,8 @@ export const reduceQueryBar = (
       }
       return { ...state, phase: "checking" };
 
-    case "response": {
-      if (event.text !== state.query) {
-        return state;
-      }
-      const { response } = event;
-      return {
-        phase: response.ok ? "valid" : "invalid",
-        query: event.text,
-        normalized: response.normalized,
-        fieldsUsed: response.fields_used,
-        needsGraph: response.needs_graph,
-        error: response.ok ? null : response.error,
-      };
-    }
+    case "response":
+      return event.text === state.query ? validatedState(event.text, event.response) : state;
 
     case "failure":
       if (event.text !== state.query) {
@@ -133,7 +133,7 @@ export const queryBarStatus = (state: QueryBarValidation): QueryBarStatus => {
       return { message: "Type an expression to filter the vault.", kind: "" };
     case "typing":
     case "checking":
-      return { message: "Checking expression...", kind: "is-loading" };
+      return { message: "Checking expression…", kind: "is-loading" };
     case "valid":
       return {
         message: state.needsGraph

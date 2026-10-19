@@ -170,7 +170,7 @@ export abstract class OverviewSearchBulk {
     }
 
     this.setBulkBusy(true);
-    this.setBulkStatus("Previewing bulk action...", "is-loading");
+    this.setBulkStatus("Previewing bulk action…", "is-loading");
     try {
       const { resp, payload } = await postBulkPreview(
         this.fetcher,
@@ -213,6 +213,8 @@ export abstract class OverviewSearchBulk {
       offerWriteOutcomeCheck(this.els.bulkStatusEl, operationID, this.fetcher, "Bulk change", () => {
         this.selectedKeys.clear();
         this.updateBulkControls();
+        this.ignoreNextManagementMutationClear = true;
+        window.dispatchEvent(new CustomEvent(managementMutationEventName));
         this.scheduleSearch(0);
       });
     }
@@ -235,7 +237,7 @@ export abstract class OverviewSearchBulk {
 
     this.setBulkBusy(true);
     const operationID = newWriteOperationID();
-    this.setBulkStatus("Applying bulk action...", "is-loading");
+    this.setBulkStatus("Applying bulk action…", "is-loading");
     try {
       const { resp, payload } = await postBulkApply(
         this.fetcher,

@@ -36,6 +36,9 @@
   --bn-scrollbar-thumb-hover: #9aa8c0;
 
   --bn-shadow-popover: 0 12px 26px rgba(15, 23, 42, 0.18);
+  /* Card lift and modal backdrop read the same in every theme. */
+  --bn-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --bn-backdrop: rgba(0, 0, 0, 0.45);
 
   --bn-code-bg: #edf2f7;
   --bn-code-text: #1f2b45;
@@ -609,10 +612,6 @@ a:hover {
 .theme-control-option input:focus-visible + span {
   outline: 2px solid var(--bn-focus);
   outline-offset: -2px;
-}
-
-.graph-header-copy .theme-control {
-  margin-top: 0.6rem;
 }
 
 .note-breadcrumbs {
@@ -2656,8 +2655,8 @@ code {
 .comparison-line { min-height: 1.5em; display: flex; gap: 0.5rem; padding: 0.15rem 0.65rem; font-size: 0.85rem; }
 .comparison-line code { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
 .comparison-marker { flex: 0 0 1ch; font-family: monospace; }
-.comparison-removed { background: color-mix(in srgb, #c04444 15%, var(--bn-surface)); }
-.comparison-added { background: color-mix(in srgb, #27824d 15%, var(--bn-surface)); }
+.comparison-removed { background: color-mix(in srgb, var(--bn-danger) 15%, var(--bn-surface)); }
+.comparison-added { background: color-mix(in srgb, var(--bn-success) 15%, var(--bn-surface)); }
 .comparison-ending { color: var(--bn-muted); font-size: 0.75rem; }
 .comparison-unchanged summary { padding: 0.5rem 0.65rem; color: var(--bn-muted); cursor: pointer; }
 .comparison-unavailable { color: var(--bn-muted); }
@@ -2669,7 +2668,8 @@ code {
   color: var(--bn-text);
 }
 
-.history-confirm::backdrop { background: rgba(0, 0, 0, 0.45); }
+/* Older engines do not let ::backdrop inherit custom properties. */
+.history-confirm::backdrop { background: var(--bn-backdrop, rgba(0, 0, 0, 0.45)); }
 
 .history-confirm-description {
   white-space: pre-wrap;
@@ -5439,18 +5439,6 @@ code {
   gap: 1rem;
 }
 
-.graph-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.graph-header-copy {
-  min-width: 12rem;
-}
-
 .graph-controls {
   width: min(60rem, 100%);
   display: grid;
@@ -5677,10 +5665,6 @@ code {
   background: var(--bn-hover);
 }
 
-.graph-header h1 {
-  margin: 0;
-}
-
 #graph-status {
   margin: 0.25rem 0 0;
   color: var(--bn-muted);
@@ -5697,13 +5681,6 @@ code {
 
 #graph-status.is-error {
   color: var(--bn-danger);
-}
-
-.graph-links {
-  margin: 0.5rem 0 0;
-  display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
 }
 
 .graph-panel {
@@ -6075,7 +6052,7 @@ code {
   border-color: var(--bn-border);
   padding: 0.8rem;
   background: var(--bn-surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--bn-shadow-card);
   transition:
     border-color 120ms ease,
     background-color 120ms ease,
@@ -6587,7 +6564,7 @@ code {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--bn-backdrop);
 }
 
 .properties-dialog-backdrop[hidden] {
@@ -6817,23 +6794,6 @@ code {
   display: grid;
   gap: 0.4rem;
   margin: 0;
-}
-
-.synthesize-anchor-row {
-  display: grid;
-  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.synthesize-anchor-row dt {
-  color: var(--bn-text-subtle);
-  font-weight: 600;
-}
-
-.synthesize-anchor-row dd {
-  margin: 0;
-  overflow-wrap: anywhere;
 }
 
 .synthesize-purposes,
@@ -9009,8 +8969,14 @@ dt.sync-fact {
   .related-later-control > summary,
   .related-feedback-drawer > summary,
   .capture-input,
-  .note-insight-prompt {
+  .note-insight-prompt,
+  .properties-item {
     transition: none;
+  }
+
+  /* The hover lift is motion too; the border and background still mark it. */
+  .properties-item:hover {
+    transform: none;
   }
 }
 
@@ -9208,7 +9174,6 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 
 .library-search-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
 .library-search .search-box { width: 100%; max-width: none; }
-.library-search-hint { color: var(--bn-muted); font-size: 0.9rem; margin-top: 0.65rem; }
 .library-expression summary, .brief-optional-setup summary { cursor: pointer; color: var(--bn-text-subtle); }
 .library-expression .query-bar { margin: 0.75rem 0 0; }
 .library-expression .query-bar > .panel-header { display: none; }
@@ -9466,11 +9431,6 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   main {
     margin-top: 1.4rem;
     padding: 0 0.85rem;
-  }
-
-  .synthesize-anchor-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.15rem;
   }
 
   .synthesize-source {

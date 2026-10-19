@@ -142,7 +142,7 @@ export class FacetController {
   private renderOptions(): void {
     if (this.inputClear) this.inputClear.hidden = this.input.value.trim() === "";
     if (this.state !== "ready") {
-      this.renderEmpty(this.state === "error" ? "Facets unavailable." : "Loading facets...");
+      this.renderEmpty(this.state === "error" ? "Facets unavailable." : "Loading facets…");
       return;
     }
     this.filteredOptions = this.allOptions

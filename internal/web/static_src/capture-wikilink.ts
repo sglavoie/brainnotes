@@ -25,6 +25,11 @@ export class CaptureWikilinks {
     this.list.setAttribute("aria-label", "Note suggestions");
     this.list.hidden = true;
     (input.closest(".capture-controls") || input).after(this.list);
+    // As in the query bar, focus stays in the field while the active option
+    // is announced through aria-activedescendant, which needs combobox
+    // semantics and an expanded state that follows the visible list.
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-expanded", "false");
     input.setAttribute("aria-autocomplete", "list");
     input.setAttribute("aria-controls", this.list.id);
     input.setAttribute("aria-haspopup", "listbox");
@@ -48,6 +53,7 @@ export class CaptureWikilinks {
     this.request?.abort();
     this.list.hidden = true;
     this.options = [];
+    this.input.setAttribute("aria-expanded", "false");
     this.input.removeAttribute("aria-activedescendant");
   }
 
@@ -95,6 +101,7 @@ export class CaptureWikilinks {
   private render(): void {
     this.list.replaceChildren();
     this.list.hidden = this.options.length === 0;
+    this.input.setAttribute("aria-expanded", String(!this.list.hidden));
     this.options.forEach((option, index) => {
       const row = this.input.ownerDocument.createElement("li");
       row.id = `${this.list.id}-${index}`;

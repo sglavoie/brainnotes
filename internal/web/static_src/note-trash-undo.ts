@@ -46,7 +46,7 @@ export const showTrashUndo = (
   const historyHref = "/history";
   const toast = createUndoToast(document, host, {
     onUndo: (journalID) => {
-      toast.show({ message: "Restoring note...", journalID: "", historyHref });
+      toast.show({ message: "Restoring note…", journalID: "", historyHref });
       void undoJournalEntry(fetcher, notice.token, journalID).then((outcome) => {
         if (outcome.ok) {
           redirect(notePath(notice.path));

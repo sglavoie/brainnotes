@@ -12,18 +12,6 @@
   gap: 1rem;
 }
 
-.graph-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.graph-header-copy {
-  min-width: 12rem;
-}
-
 .graph-controls {
   width: min(60rem, 100%);
   display: grid;
@@ -250,10 +238,6 @@
   background: var(--bn-hover);
 }
 
-.graph-header h1 {
-  margin: 0;
-}
-
 #graph-status {
   margin: 0.25rem 0 0;
   color: var(--bn-muted);
@@ -270,13 +254,6 @@
 
 #graph-status.is-error {
   color: var(--bn-danger);
-}
-
-.graph-links {
-  margin: 0.5rem 0 0;
-  display: flex;
-  gap: 0.8rem;
-  flex-wrap: wrap;
 }
 
 .graph-panel {

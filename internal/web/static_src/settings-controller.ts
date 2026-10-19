@@ -301,7 +301,7 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
     writer.cancel();
     const issue = ++reading;
     showPending(null);
-    setStatus("Loading settings...", "is-loading");
+    setStatus("Loading settings…", "is-loading");
     const outcome = await fetchSettings(deps.fetch);
     if (issue !== reading) return;
     if (!outcome.ok) {

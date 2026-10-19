@@ -55,6 +55,7 @@ it.each([
   () => json({ ok: "true" }),
   () => json(null),
   () => new Response("<html>Oops</html>", { headers: { "Content-Type": "text/html" } }),
+  () => new Response("<html>Bad gateway</html>", { status: 502, headers: { "Content-Type": "text/html" } }),
   () => new Response("{", { headers: { "Content-Type": "application/json" } }),
   () => { throw new Error("lost connection after write"); },
 ])("offers verification for an uncertain write", async (response) => {

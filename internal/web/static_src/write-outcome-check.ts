@@ -1,3 +1,4 @@
+import { managementMutationEventName } from "./api-notes";
 import { announceConfirmedWrite } from "./write-notice";
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -135,6 +136,10 @@ export const initPendingWriteOutcomes = (
     status.setAttribute("role", "status");
     status.textContent = `${item.label} was not confirmed before this page loaded.`;
     offerWriteOutcomeCheck(status, item.id, fetcher, item.label, () => {
+      // The banner cannot know which workspace the change belonged to, so it
+      // tells every History, Fixes or Library view on this page to re-read,
+      // as the direct success of a management write does.
+      doc.defaultView?.dispatchEvent(new CustomEvent(managementMutationEventName));
       status.classList.add("write-outcome-confirmation");
       section.insertAdjacentElement("afterend", status);
       row.remove();

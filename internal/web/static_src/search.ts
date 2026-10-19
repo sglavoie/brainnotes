@@ -234,7 +234,7 @@ class HeaderSearch {
       this.clearResults();
       return;
     }
-    this.showFeedback("Searching...");
+    this.showFeedback("Searching…");
     this.debounceToken = window.setTimeout(() => {
       void this.fetchResults(query, localToken);
     }, delay);

@@ -105,7 +105,7 @@ class Capture {
   }
 
   private unconfirmed(): void {
-    this.setStatus("Capture not confirmed. Check / retry capture safely: an attempt already recorded will not be added again.", "is-error");
+    this.setStatus("Capture not confirmed. Retry safely with the same text; a recorded attempt will not be added again.", "is-error");
     const link = queryElement(this.root, "[data-capture-view-inbox]", HTMLAnchorElement);
     if (link?.getAttribute("href")?.startsWith("/n/")) link.hidden = false;
   }
@@ -128,7 +128,7 @@ class Capture {
     this.input.disabled = true;
     this.submit.disabled = true;
     const returnFocus = captureFocusReturn(this.input, this.submit);
-    this.setStatus("Capturing...", "is-loading");
+    this.setStatus("Capturing…", "is-loading");
     const waiting = window.setTimeout(() =>
       this.setStatus("Waiting for capture confirmation… Your text is kept here.", "is-loading"), 500);
     try {

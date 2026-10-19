@@ -5,7 +5,8 @@
   color: var(--bn-text);
 }
 
-.history-confirm::backdrop { background: rgba(0, 0, 0, 0.45); }
+/* Older engines do not let ::backdrop inherit custom properties. */
+.history-confirm::backdrop { background: var(--bn-backdrop, rgba(0, 0, 0, 0.45)); }
 
 .history-confirm-description {
   white-space: pre-wrap;

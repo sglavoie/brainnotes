@@ -109,7 +109,7 @@ describe("broken create DOM behavior", () => {
     button?.click();
 
     expect(button?.disabled).toBe(true);
-    expect(status?.textContent).toBe("Creating note...");
+    expect(status?.textContent).toBe("Creating note…");
 
     await waitForExpect(() => {
       expect(document.querySelector("[data-create-note] a")?.textContent).toBe("Open note");
@@ -152,5 +152,30 @@ describe("broken create DOM behavior", () => {
 
     expect(status?.textContent).toBe("destination already exists");
     expect(status?.classList.contains("is-error")).toBe(true);
+  });
+});
+
+describe("broken link create replies", () => {
+  it("does not claim a refusal for an HTML gateway reply", async () => {
+    document.body.innerHTML = `
+      <div data-create-note data-create-source-key="source" data-create-target="Missing" data-create-csrf="csrf-token">
+        <button type="button" data-create-button>Create note</button>
+        <span data-create-status> </span>
+      </div>
+    `;
+    const fetchMock = vi.fn(async () =>
+      new Response("<html>Bad gateway</html>", { status: 502, headers: { "Content-Type": "text/html" } })
+    );
+
+    initBrokenCreateActions({ fetch: fetchMock as typeof fetch });
+    const button = document.querySelector<HTMLButtonElement>("[data-create-button]");
+    const status = document.querySelector<HTMLElement>("[data-create-status]");
+    button?.click();
+
+    await waitForExpect(() => {
+      expect(button?.disabled).toBe(false);
+    });
+    expect(status?.textContent).toContain("Creation not confirmed.");
+    expect(status?.querySelector("a")?.textContent).toBe("Refresh to check");
   });
 });

@@ -2,11 +2,11 @@ import { announceConfirmedWrite } from "./write-notice";
 import {
   buildFrontmatterSetForm,
   buildFrontmatterUnsetForm,
-  normalizeManagementErrorMessage,
   type FrontmatterSetRequest,
 } from "./api";
 import { asRecord } from "./api-internal";
 import { queryAllElements, queryElement } from "./dom";
+import { responseFailure } from "./request-outcome";
 import { setStatusText } from "./status";
 
 type FrontmatterStatusKind = "" | "is-success" | "is-error";
@@ -119,7 +119,7 @@ export const initFrontmatterEditing = (deps: FrontmatterActionDeps = {}): void =
       }
       pending = true;
       const restore = disablePanel(panel);
-      setStatus("Updating frontmatter...");
+      setStatus("Updating frontmatter…");
       try {
         const resp = await fetcher(action.request.url, action.request.init);
         const outcome = await readFrontmatterOutcome(resp, action.message);
@@ -153,12 +153,14 @@ type FrontmatterOutcome = { message: string; kind: FrontmatterStatusKind; refres
 
 const readFrontmatterOutcome = async (resp: Response, fallback: string): Promise<FrontmatterOutcome> => {
   const payload = await readFrontmatterResponsePayload(resp);
-  if (!resp.ok) return { message: normalizeManagementErrorMessage(resp.status, payload), kind: "is-error" };
+  // An HTML gateway page or a redirect cannot say whether the change landed;
+  // only a well-formed refusal is reported as one.
+  const failure = responseFailure(resp, payload, "write");
+  if (failure?.uncertain) return { message: unconfirmedMessage, kind: "is-error", refresh: "Refresh to check" };
+  if (failure) return { message: failure.message, kind: "is-error" };
   const record = asRecord(payload);
   const message = typeof record?.message === "string" ? record.message : "";
-  if (record?.ok === true) return { message: message || fallback, kind: "is-success", refresh: "Refresh properties" };
-  if (record?.ok === false) return { message: message || "The property change was refused.", kind: "is-error" };
-  return { message: unconfirmedMessage, kind: "is-error", refresh: "Refresh to check" };
+  return { message: message || fallback, kind: "is-success", refresh: "Refresh properties" };
 };
 
 const addFrontmatterRefresh = (status: HTMLElement, label: string): void => {

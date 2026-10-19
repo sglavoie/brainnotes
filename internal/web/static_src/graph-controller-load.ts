@@ -58,45 +58,59 @@ export const refreshMatchHighlighting = (
   applyGraphVisualState(runtime);
 };
 
+// null means a newer load superseded this one, which then owns the status.
+type GraphFetch = { ok: true; payload: unknown } | { ok: false; message: string } | null;
+
+const fetchGraphPayload = async (
+  runtime: GraphRuntime,
+  query: string,
+  localToken: number
+): Promise<GraphFetch> => {
+  const current = (): boolean => localToken === runtime.requestToken;
+  try {
+    const resp = await fetch(buildQueryURL(runtime, query), {
+      headers: { Accept: "application/json" },
+    });
+    if (!current()) {
+      return null;
+    }
+    if (!resp.ok) {
+      return { ok: false, message: `Graph load failed (${resp.status}).` };
+    }
+    const payload: unknown = await resp.json();
+    return current() ? { ok: true, payload } : null;
+  } catch {
+    return current() ? { ok: false, message: "Graph load failed." } : null;
+  }
+};
+
 export const loadGraph = async (
   runtime: GraphRuntime,
   query: string,
   localToken: number
 ): Promise<void> => {
-  const { state } = runtime;
   if (typeof window.cytoscape !== "function") {
     setStatus(runtime, "Graph library failed to load.", "is-error");
     return;
   }
 
-  setStatus(runtime, "Loading graph...", "is-loading");
+  setStatus(runtime, "Loading graph…", "is-loading");
 
-  let payload: unknown;
-  try {
-    const resp = await fetch(buildQueryURL(runtime, query), {
-      headers: { Accept: "application/json" },
-    });
-    if (localToken !== runtime.requestToken) {
-      return;
-    }
-    if (!resp.ok) {
-      setStatus(runtime, `Graph load failed (${resp.status}).`, "is-error");
-      return;
-    }
-    payload = await resp.json();
-  } catch (error) {
-    if (localToken !== runtime.requestToken) {
-      return;
-    }
-    setStatus(runtime, "Graph load failed.", "is-error");
+  const fetched = await fetchGraphPayload(runtime, query, localToken);
+  if (!fetched) {
     return;
   }
-
-  if (localToken !== runtime.requestToken) {
+  if (!fetched.ok) {
+    setStatus(runtime, fetched.message, "is-error");
     return;
   }
+  const graphElements = normalizeGraphPayload(fetched.payload);
+  mountGraph(runtime, graphElements);
+  reportGraphLoaded(runtime, query, graphElements);
+};
 
-  const graphElements = normalizeGraphPayload(payload);
+const mountGraph = (runtime: GraphRuntime, graphElements: GraphElements): void => {
+  const { state } = runtime;
   const focusMode = state.searchMode === "focus";
   state.matchIDs = matchIDsFor(graphElements);
   // Before anything is built from the new payload, so the signature compared
@@ -125,7 +139,15 @@ export const loadGraph = async (
     );
   }
   updateZoomMatchesButton(runtime);
+};
 
+const reportGraphLoaded = (
+  runtime: GraphRuntime,
+  query: string,
+  graphElements: GraphElements
+): void => {
+  const { state } = runtime;
+  const focusMode = state.searchMode === "focus";
   // The expression counts as an active filter here: a graph narrowed only by
   // `expr=` would otherwise report an unscoped node count.
   const hasFilters = hasActiveFilters();

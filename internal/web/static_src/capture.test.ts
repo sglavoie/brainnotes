@@ -209,7 +209,7 @@ describe("capture errors and keyboard", () => {
     submit.click();
     await waitForExpect(() => expect(submit.disabled).toBe(false));
     expect(input.value).toBe("Possibly already captured");
-    expect(status.textContent).toBe("Capture not confirmed. Check / retry capture safely: an attempt already recorded will not be added again.");
+    expect(status.textContent).toBe("Capture not confirmed. Retry safely with the same text; a recorded attempt will not be added again.");
     expect(document.querySelector<HTMLAnchorElement>("[data-capture-view-inbox]")!.hidden).toBe(false);
     expect(recent.children).toHaveLength(0);
     expect(fetcher).toHaveBeenCalledOnce();

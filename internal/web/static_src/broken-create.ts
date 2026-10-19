@@ -1,9 +1,7 @@
-import {
-  buildCreateNoteForm,
-  normalizeManagementErrorMessage,
-} from "./api";
+import { buildCreateNoteForm } from "./api";
 import { normalizeManagementResult } from "./api-internal";
 import { queryAllElements, queryElement } from "./dom";
+import { responseFailure } from "./request-outcome";
 import { setStatusText } from "./status";
 
 type CreateNoteStatusKind = "" | "is-success" | "is-error";
@@ -104,23 +102,26 @@ export const initBrokenCreateActions = (deps: CreateNoteActionDeps = {}): void =
 
       button.disabled = true;
       let created = false;
-      setStatus("Creating note...");
+      setStatus("Creating note…");
 
       try {
         const request = buildCreateNoteFetchRequest(config);
         const resp = await fetcher(request.url, request.init);
         const payload = await readCreateResponsePayload(resp);
-        const result = normalizeManagementResult(payload);
-        if (!resp.ok) {
-          setStatus(normalizeManagementErrorMessage(resp.status, payload), "is-error");
-          return;
-        }
-        if (!result.ok) {
-          if (result.message) setStatus(result.message, "is-error");
-          else showUnconfirmed(statusEl);
+        // An HTML gateway page or a redirect says nothing about whether the
+        // note was created, so only a well-formed refusal is reported as one.
+        const failure = responseFailure(resp, payload, "write");
+        if (failure) {
+          if (failure.uncertain) showUnconfirmed(statusEl);
+          else setStatus(failure.message, "is-error");
           return;
         }
 
+        const result = normalizeManagementResult(payload);
+        if (!result.ok) {
+          showUnconfirmed(statusEl);
+          return;
+        }
         created = true;
         setStatus(result.message || "Created note.", "is-success");
         showCreatedNote(button, result.path);

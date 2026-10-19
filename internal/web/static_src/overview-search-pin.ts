@@ -62,7 +62,7 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
     retry.disabled = true;
     retry.hidden = false;
     if (!feedback.hidden) {
-      report(pinned ? "Unpinning note..." : "Pinning note...");
+      report(pinned ? "Unpinning note…" : "Pinning note…");
     }
     try {
       const request = pinned

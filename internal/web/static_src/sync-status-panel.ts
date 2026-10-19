@@ -96,7 +96,7 @@ export const createSyncStatusPanel = (deps: SyncStatusPanelDeps): SyncStatusPane
     const request = ++generation;
     observed = "";
     renderSyncChecked(elements.checked, observed);
-    setStatusText(elements.summary, "Reading synchronization status...", "is-loading");
+    setStatusText(elements.summary, "Reading synchronization status…", "is-loading");
     const outcome = await fetchSyncStatus(deps.fetch, endpoint);
     if (request !== generation) return;
     if (!outcome.ok) {

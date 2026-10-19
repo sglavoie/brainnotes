@@ -80,7 +80,7 @@ describe("note pin DOM behavior", () => {
     button?.click();
 
     expect(button?.disabled).toBe(true);
-    expect(status?.textContent).toBe("Pinning note...");
+    expect(status?.textContent).toBe("Pinning note…");
 
     await waitForExpect(() => {
       expect(button?.disabled).toBe(false);

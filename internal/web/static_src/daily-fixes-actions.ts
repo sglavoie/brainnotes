@@ -123,7 +123,7 @@ export const loadQueue = async (ctx: DailyFixesContext, successMessage = ""): Pr
   ctx.setBusy(true);
   ctx.setError("");
   ctx.setQueueStale(true);
-  ctx.setStatus("Loading fixes queue...", "is-loading");
+  ctx.setStatus("Loading fixes queue…", "is-loading");
   try {
     const resp = await ctx.fetcher(ctx.config.queueEndpoint, {
       headers: { Accept: "application/json" },
@@ -202,7 +202,7 @@ export const runPreview = async (
   }
 
   ctx.setBusy(true);
-  ctx.setStatus("Previewing fix...", "is-loading");
+  ctx.setStatus("Previewing fix…", "is-loading");
   try {
     const fetchRequest = buildFixesPreviewFetchRequest(
       ctx.config.previewEndpoint,
@@ -253,7 +253,7 @@ export const runApply = async (
   }
 
   ctx.setBusy(true);
-  ctx.setStatus("Applying fix...", "is-loading");
+  ctx.setStatus("Applying fix…", "is-loading");
   try {
     const request = buildFixesApplyFetchRequest(
       ctx.config.applyEndpoint,
@@ -320,7 +320,7 @@ export const runOpen = async (
     return;
   }
   ctx.setBusy(true);
-  ctx.setStatus("Opening note...", "is-loading");
+  ctx.setStatus("Opening note…", "is-loading");
   try {
     const body = buildOpenNoteForm({ key, token: ctx.config.csrfToken });
     const request = jsonPostRequest(ctx.config.openEndpoint, ctx.config.csrfToken, body.toString());

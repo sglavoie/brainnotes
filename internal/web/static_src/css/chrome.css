@@ -288,10 +288,6 @@
   outline-offset: -2px;
 }
 
-.graph-header-copy .theme-control {
-  margin-top: 0.6rem;
-}
-
 .note-breadcrumbs {
   margin-bottom: 0.75rem;
   color: var(--bn-muted);

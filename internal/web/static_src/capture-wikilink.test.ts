@@ -34,6 +34,8 @@ describe("capture wikilinks", () => {
     type(input, "Ask [[Bo tomorrow", 8);
     await vi.advanceTimersByTimeAsync(150);
     expect(fetcher.mock.calls[0][0]).toBe("/api/search?q=Bo&limit=12");
+    expect(input.getAttribute("role")).toBe("combobox");
+    expect(input.getAttribute("aria-expanded")).toBe("true");
     key(input, "ArrowDown");
     const changed = vi.fn();
     input.addEventListener("input", changed);
@@ -42,6 +44,7 @@ describe("capture wikilinks", () => {
     expect(changed).toHaveBeenCalledOnce();
     expect(input.selectionStart).toBe("Ask [[Books/Bobby]]".length);
     expect(input.hasAttribute("aria-activedescendant")).toBe(false);
+    expect(input.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("supports clicking without doubling closing brackets", async () => {

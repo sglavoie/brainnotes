@@ -90,7 +90,7 @@ class PinnedList {
       this.setStatus("Reorder unavailable.", "is-error");
       return false;
     }
-    this.setStatus("Saving pin order...");
+    this.setStatus("Saving pin order…");
     return this.post(
       buildNotePinReorderFetchRequest({
         key: move.key,
@@ -121,7 +121,7 @@ class PinnedList {
     const position = this.rows().indexOf(item) + 1;
     const title = item.querySelector("a")?.textContent || move.key;
     const message = `Moved ${title} to position ${position} of ${this.rows().length}.`;
-    this.setStatus("Saving pin order...");
+    this.setStatus("Saving pin order…");
     this.moveQueue = this.moveQueue.then(async () => {
       if (this.resyncing) {
         return;
@@ -267,7 +267,7 @@ class PinnedList {
       // Let already queued moves settle before removing one of their neighbors.
       await this.moveQueue;
       if (this.resyncing) return;
-      this.setStatus("Unpinning note...");
+      this.setStatus("Unpinning note…");
       const ok = await this.post(
         buildNotePinRemoveFetchRequest({ key, token: this.csrfToken }),
         "Unpinned note."

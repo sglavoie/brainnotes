@@ -3,8 +3,8 @@
 .comparison-line { min-height: 1.5em; display: flex; gap: 0.5rem; padding: 0.15rem 0.65rem; font-size: 0.85rem; }
 .comparison-line code { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
 .comparison-marker { flex: 0 0 1ch; font-family: monospace; }
-.comparison-removed { background: color-mix(in srgb, #c04444 15%, var(--bn-surface)); }
-.comparison-added { background: color-mix(in srgb, #27824d 15%, var(--bn-surface)); }
+.comparison-removed { background: color-mix(in srgb, var(--bn-danger) 15%, var(--bn-surface)); }
+.comparison-added { background: color-mix(in srgb, var(--bn-success) 15%, var(--bn-surface)); }
 .comparison-ending { color: var(--bn-muted); font-size: 0.75rem; }
 .comparison-unchanged summary { padding: 0.5rem 0.65rem; color: var(--bn-muted); cursor: pointer; }
 .comparison-unavailable { color: var(--bn-muted); }

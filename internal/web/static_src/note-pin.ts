@@ -67,7 +67,7 @@ export const initNotePinAction = (deps: NotePinActionDeps = {}): void => {
 
     const pinning = !config.pinned;
     button.disabled = true;
-    setStatus(pinning ? "Pinning note..." : "Unpinning note...");
+    setStatus(pinning ? "Pinning note…" : "Unpinning note…");
 
     try {
       const request = buildNotePinToggleRequest(config);
