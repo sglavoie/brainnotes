@@ -391,7 +391,7 @@ func RequireResolved(root string) error {
 // a held package needs a person's decision.
 func (s *State) requireResolved() error {
 	if s.Pending != nil {
-		return fmt.Errorf("%w: package %s was being applied under entry %s when it was interrupted; let import recovery finish it (any import, drain, or conflict resolution runs it first), then rebuild the inventory",
+		return fmt.Errorf("%w: package %s was being applied under entry %s when it was interrupted; run import recovery to finish it, then rebuild the inventory",
 			ErrUnresolvedImport, s.Pending.PackageID(), s.Pending.JournalEntry)
 	}
 	if len(s.Conflicts) > 0 {
@@ -399,7 +399,7 @@ func (s *State) requireResolved() error {
 			ErrUnresolvedImport, len(s.Conflicts), strings.Join(sortedKeys(s.Conflicts), ", "))
 	}
 	if len(s.Resolutions) > 0 {
-		return fmt.Errorf("%w: a conflict decision for %s is still owed its revision; let import recovery finish it, then rebuild the inventory",
+		return fmt.Errorf("%w: a conflict decision for %s is still owed its revision; run import recovery to make it, then rebuild the inventory",
 			ErrUnresolvedImport, strings.Join(sortedKeys(s.Resolutions), ", "))
 	}
 	return nil

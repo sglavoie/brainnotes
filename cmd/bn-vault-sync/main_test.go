@@ -214,6 +214,32 @@ func prepareRestoreCLI(t *testing.T) vaultrecovery.Inventory {
 	return restored
 }
 
+// TestRecoverImportRunsUnderTheReviewMarkerAndNotBesideACompanion is the mode
+// the re-enrollment refusal names. It runs under the quarantine marker, prints
+// what recovery did, and like every review mode refuses while a companion holds
+// the vault.
+func TestRecoverImportRunsUnderTheReviewMarkerAndNotBesideACompanion(t *testing.T) {
+	pair := enrolledPair(t)
+	prepareRestoreCLI(t)
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	if code := run(context.Background(), []string{"-recover-import"}, stdout, stderr); code != exitOK {
+		t.Fatalf("-recover-import exited %d: %s", code, stderr)
+	}
+	var report vaultrecovery.ImportRecovery
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil || report.Outcome != "none" {
+		t.Fatalf("-recover-import report = %+v, %v", report, err)
+	}
+
+	release, acquired, err := vault.TryLockPath(vaultsyncd.LockPath(pair.Local.Root))
+	if err != nil || !acquired {
+		t.Fatalf("take companion lock: acquired=%v err=%v", acquired, err)
+	}
+	defer release()
+	if code := run(context.Background(), []string{"-recover-import"}, &bytes.Buffer{}, stderr); code != exitNeedsPerson {
+		t.Fatalf("-recover-import beside a companion exited %d: %s", code, stderr)
+	}
+}
+
 func TestRestorePrepareRefusesWhileCompanionHoldsTheVault(t *testing.T) {
 	pair := enrolledPair(t)
 	release, acquired, err := vault.TryLockPath(vaultsyncd.LockPath(pair.Local.Root))

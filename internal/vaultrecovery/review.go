@@ -150,7 +150,8 @@ func BuildInventory(root string) (*Inventory, error) {
 
 func requireResolvedImports(root string) error {
 	if err := vaultimport.RequireResolved(root); err != nil {
-		return fmt.Errorf("vault recovery: re-enrollment would discard unresolved import work: %w", err)
+		return fmt.Errorf("vault recovery: re-enrollment would discard unresolved import work: %w (import recovery under review: %s; held conflicts: resolve them in the web workspace)",
+			err, RecoverImportCommand)
 	}
 	return nil
 }
