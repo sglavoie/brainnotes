@@ -3,9 +3,49 @@ package vaultgit
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
 )
+
+func TestBarrierJoinErrorOnlyTreatsAHeldCheckpointAsBusy(t *testing.T) {
+	held := fmt.Errorf("%w: it is copying the vault", checkpoint.ErrBarrierHeld)
+	if err := barrierJoinError(safetyLockName, "preflight", held); !IsBusy(err) || !errors.Is(err, checkpoint.ErrBarrierHeld) {
+		t.Fatalf("held barrier = %v (kind %q), want busy wrapping ErrBarrierHeld", err, KindOf(err))
+	}
+	cause := errors.New("checkpoint record is unreadable")
+	err := barrierJoinError(safetyLockName, "preflight", cause)
+	if IsBusy(err) || KindOf(err) != KindRepositoryState || !errors.Is(err, cause) {
+		t.Fatalf("other join failure = %v (kind %q), want repository_state wrapping its cause", err, KindOf(err))
+	}
+}
+
+func TestPreflightDoesNotReportAPendingRestoreAsBusy(t *testing.T) {
+	h := newHarness(t)
+	h.write("Inbox/note.md", "one\n")
+	h.commitPending()
+	root, err := filepath.EvalSymlinks(h.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, restorestate.RelDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	intent := fmt.Sprintf(`{"version":1,"archive":%q,"phase":"content"}`, filepath.Join(dir, "archive.tar.gz"))
+	if err := os.WriteFile(filepath.Join(dir, "intent.json"), []byte(intent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = h.mgr.Preflight(context.Background())
+	if err == nil || IsBusy(err) || !errors.Is(err, checkpoint.ErrRestorePending) {
+		t.Fatalf("preflight with a pending restore = %v (kind %q), want a non-busy error wrapping ErrRestorePending", err, KindOf(err))
+	}
+}
 
 func TestPreflightWaitsForShortBackgroundOperation(t *testing.T) {
 	h := newHarness(t)
