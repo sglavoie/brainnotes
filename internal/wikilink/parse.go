@@ -17,14 +17,26 @@ import (
 // the optional fragment and display text. Start/End are byte offsets in the
 // source text — End is exclusive (`text[Start:End]` returns the full `[[...]]`
 // span).
+//
+// EscapedPipe records the Obsidian table form `[[Target\|Alias]]`, where the
+// alias separator is written `\|` so it does not split a Markdown table cell.
+// The backslash belongs to the separator, not to Target (or Heading), and a
+// rewrite must write the separator back the same way: see WithTarget.
 type Link struct {
-	Raw     string
-	Target  string
-	Folder  string
-	Heading string
-	Alias   string
-	Start   int
-	End     int
+	Raw         string
+	Target      string
+	Folder      string
+	Heading     string
+	Alias       string
+	EscapedPipe bool
+	Start       int
+	End         int
+}
+
+// WithTarget renders l pointing at target, keeping its heading, alias and
+// alias-separator form, so a rename inside a Markdown table keeps `\|`.
+func (l Link) WithTarget(target string) string {
+	return formatLink(target, l.Heading, l.Alias, l.EscapedPipe)
 }
 
 // Title returns the last path segment of Target — the bit after the final `/`,
@@ -72,10 +84,11 @@ func Parse(s string) []Link {
 		// keeps Title()-based comparisons (used by rewrite, backlinks, orphan
 		// detection) consistent for inputs like `[[ Foo ]]` or `[[Foo | a ]]`.
 		// Raw/Start/End preserve the original byte range for rewrite spans.
-		target := trimASCIISpace(s[m[2]:m[3]])
+		rawTarget, rawHeading, escapedPipe := splitEscapedPipe(s, m)
+		target := trimASCIISpace(rawTarget)
 		var heading, alias string
 		if m[4] != -1 {
-			heading = trimASCIISpace(s[m[4]:m[5]])
+			heading = trimASCIISpace(rawHeading)
 		}
 		if m[6] != -1 {
 			alias = trimASCIISpace(s[m[6]:m[7]])
@@ -105,16 +118,41 @@ func Parse(s string) []Link {
 			}
 		}
 		links = append(links, Link{
-			Raw:     s[start:end],
-			Target:  target,
-			Folder:  folder,
-			Heading: heading,
-			Alias:   alias,
-			Start:   start,
-			End:     end,
+			Raw:         s[start:end],
+			Target:      target,
+			Folder:      folder,
+			Heading:     heading,
+			Alias:       alias,
+			EscapedPipe: escapedPipe,
+			Start:       start,
+			End:         end,
 		})
 	}
 	return links
+}
+
+// splitEscapedPipe returns the raw target and heading of match m, with the one
+// backslash of an Obsidian table-escaped alias separator (`\|`) removed from
+// whichever of them precedes the `|`. Without an alias there is no separator
+// to escape, so a trailing backslash is left where it is.
+func splitEscapedPipe(s string, m []int) (target, heading string, escaped bool) {
+	target = s[m[2]:m[3]]
+	if m[4] != -1 {
+		heading = s[m[4]:m[5]]
+	}
+	if m[6] == -1 {
+		return target, heading, false
+	}
+	if m[4] != -1 {
+		if strings.HasSuffix(heading, `\`) {
+			return target, heading[:len(heading)-1], true
+		}
+		return target, heading, false
+	}
+	if strings.HasSuffix(target, `\`) {
+		return target[:len(target)-1], heading, true
+	}
+	return target, heading, false
 }
 
 // byteRange is a half-open [start, end) span in the source.

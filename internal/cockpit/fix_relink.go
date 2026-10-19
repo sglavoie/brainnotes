@@ -46,7 +46,7 @@ func planNoteRelink(note *vault.Note, rel string, g *query.Graph, idx *relinkInd
 			matchedResidue = true
 			return "", false
 		}
-		replacement := wikilink.FormatLink(newTarget, link.Heading, link.Alias)
+		replacement := link.WithTarget(newTarget)
 		if replacement == link.Raw {
 			return "", false
 		}

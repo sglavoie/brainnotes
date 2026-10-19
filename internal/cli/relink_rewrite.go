@@ -214,7 +214,7 @@ func rewriteRelinkText(text string, idx *relinkIndex, frontmatterKey string, bod
 		if !ok {
 			return "", false
 		}
-		replacement := wikilink.FormatLink(newTarget, link.Heading, link.Alias)
+		replacement := link.WithTarget(newTarget)
 		if replacement == link.Raw {
 			return "", false
 		}
