@@ -13,6 +13,7 @@ import {
   selectOverviewResult,
 } from "./search-rendering.test-helpers";
 import { searchResult, setURL } from "./search-test-helpers";
+import { waitForExpect } from "./shared.test-helpers";
 
 const trashPreviewFetch = () => vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   if (String(input) === "/api/notes/bulk/preview") {
@@ -70,20 +71,6 @@ const trashPreviewFetch = () => vi.fn(async (input: RequestInfo | URL, init?: Re
     headers: { "Content-Type": "application/json" },
   });
 });
-
-const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
 
 afterEach(() => {
   vi.useRealTimers();

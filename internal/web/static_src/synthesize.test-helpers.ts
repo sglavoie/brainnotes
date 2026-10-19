@@ -3,11 +3,9 @@ import { expect, vi } from "vitest";
 import { initSynthesize, type SynthesisDeps } from "./synthesize";
 import type { SynthesisStorageLike } from "./synthesize-storage";
 
-export const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+import { jsonResponse } from "./shared.test-helpers";
+
+export { jsonResponse };
 
 export const identity = (key: string): Record<string, unknown> => ({
   key,
