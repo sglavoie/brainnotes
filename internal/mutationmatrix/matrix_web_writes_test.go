@@ -53,7 +53,8 @@ const matrixSynthesisRel = "Matrix Synthesis.md"
 func webWriteMutations() []mutation {
 	all := webPropertyMutations()
 	all = append(all, webNoteMutations()...)
-	return append(all, webCockpitMutations()...)
+	all = append(all, webCockpitMutations()...)
+	return append(all, webSyncMutation())
 }
 
 // webPropertyMutations are the commitPropertyPlan writers: the one unpreviewed
