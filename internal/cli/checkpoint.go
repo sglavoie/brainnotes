@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -30,10 +29,10 @@ func (opts *checkpointOptions) validate(argv []string) error {
 		return errors.New("checkpoint run: no command given after --")
 	}
 	if opts.drain < 0 {
-		return fmt.Errorf("checkpoint run: --drain must not be negative (got %s)", opts.drain)
+		return rangeValueError("checkpoint run", "drain", "0 or more", opts.drain)
 	}
 	if opts.lease < 0 {
-		return fmt.Errorf("checkpoint run: --lease must not be negative (got %s)", opts.lease)
+		return rangeValueError("checkpoint run", "lease", "0 or more", opts.lease)
 	}
 	return nil
 }

@@ -3,12 +3,10 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -73,9 +71,6 @@ func runRelatedInteractive(
 	if err != nil {
 		return err
 	}
-	if selection.absolutePath == "" {
-		return nil
-	}
 	if err := setup.store.RecordOpened(queryResult.source.Path, selection.relativePath); err != nil {
 		return fmt.Errorf("related: record selected note: %w", err)
 	}
@@ -92,12 +87,9 @@ func runRelatedInteractive(
 // the selection is recorded whether or not an editor turns out to be
 // configured, so a missing $EDITOR does not silently drop the signal.
 func openRelatedSelection(cfg *config.Config, absolutePath string) error {
-	editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
-	if errors.Is(err, editutil.ErrNoEditorConfigured) {
-		return errors.New("related: --open requires [open].editor or $EDITOR")
-	}
+	editorSpec, err := resolveEditorSpec("related", cfg.Open.Editor)
 	if err != nil {
-		return fmt.Errorf("related: resolve editor: %w", err)
+		return err
 	}
 	if err := relatedOpenExec(editorSpec, absolutePath); err != nil {
 		return fmt.Errorf("related: open selected note: %w", err)

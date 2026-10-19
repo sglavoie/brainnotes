@@ -66,7 +66,7 @@ func resolveRenameArgs(v *vault.Vault, cfg *config.Config, args []string) (noteA
 	if err := noteops.ValidateRenameTitle(newTitle); err != nil {
 		return "", "", false, err
 	}
-	selected, err := pickNotes(v, cfg, false)
+	selected, err := pickNotes("rename", v, cfg, false)
 	if err != nil {
 		return "", "", false, err
 	}

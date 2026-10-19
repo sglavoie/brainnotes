@@ -87,7 +87,7 @@ func runPin(cmd *cobra.Command, args []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	note, err := resolveNoteTarget(v, args[0])
+	note, err := resolveNoteTarget("pin", v, args[0])
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func runUnpin(cmd *cobra.Command, args []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	note, err := resolveNoteTarget(v, args[0])
+	note, err := resolveNoteTarget("unpin", v, args[0])
 	if err != nil {
 		return err
 	}

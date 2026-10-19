@@ -92,7 +92,7 @@ func resolveMoveArgs(v *vault.Vault, cfg *config.Config, args []string) (noteArg
 	if len(args) == 2 {
 		return args[0], args[1], true, nil
 	}
-	selected, err := pickNotes(v, cfg, false)
+	selected, err := pickNotes("move", v, cfg, false)
 	if err != nil {
 		return "", "", false, err
 	}

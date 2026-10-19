@@ -200,7 +200,8 @@ func runFindPaths(r *findRun) error {
 	}
 
 	if r.opts.interactive {
-		selected, err := requireSelection(RunFZF(paths, r.cfg.Fzf.Args))
+		picked, err := RunFZF(paths, r.cfg.Fzf.Args)
+		selected, err := requireSelection("find", picked, err)
 		if err != nil {
 			return err
 		}

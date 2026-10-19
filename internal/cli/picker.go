@@ -51,29 +51,33 @@ func collectPropertyKeys(v *vault.Vault) ([]string, error) {
 	return keys, nil
 }
 
-func pickNotes(v *vault.Vault, cfg *config.Config, multi bool) ([]string, error) {
+// pickNotes runs the note picker for the command name, which prefixes the
+// message when the vault is empty or nothing is selected.
+func pickNotes(name string, v *vault.Vault, cfg *config.Config, multi bool) ([]string, error) {
 	paths, err := collectNotePaths(v)
 	if err != nil {
 		return nil, err
 	}
 	if len(paths) == 0 {
-		return nil, nothingSelected("", "no notes in vault")
+		return nil, nothingSelected(name, "no notes in vault")
 	}
 	extraArgs := append([]string(nil), cfg.Fzf.Args...)
 	if multi {
 		extraArgs = append(extraArgs, "--multi")
 	}
-	return requireSelection(notePicker(paths, extraArgs))
+	selected, err := notePicker(paths, extraArgs)
+	return requireSelection(name, selected, err)
 }
 
-// requireSelection turns a picker that came back empty into ErrNothingSelected,
-// so a script sees exit 1 instead of a success with nothing to act on.
-func requireSelection(selected []string, err error) ([]string, error) {
+// requireSelection turns a picker that came back empty into ErrNothingSelected
+// under the command name, so a script sees exit 1 instead of a success with
+// nothing to act on, and the terminal says which command stopped.
+func requireSelection(name string, selected []string, err error) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
 	if len(selected) == 0 {
-		return nil, ErrNothingSelected
+		return nil, nothingSelected(name, "nothing selected")
 	}
 	return selected, nil
 }

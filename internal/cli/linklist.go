@@ -97,7 +97,7 @@ func resolveLinkListTarget(
 	args []string,
 ) (*vault.Note, bool, error) {
 	if len(args) > 0 {
-		target, err := resolveNoteTarget(v, args[0])
+		target, err := resolveNoteTarget(name, v, args[0])
 		if err != nil {
 			return nil, false, err
 		}
@@ -111,7 +111,8 @@ func resolveLinkListTarget(
 	if len(paths) == 0 {
 		return nil, false, nothingSelected(name, "no notes in vault")
 	}
-	selected, err := requireSelection(notePicker(paths, append([]string(nil), fzfArgs...)))
+	picked, err := notePicker(paths, append([]string(nil), fzfArgs...))
+	selected, err := requireSelection(name, picked, err)
 	if err != nil {
 		return nil, false, err
 	}

@@ -289,7 +289,7 @@ func TestFindSort_UndatedNotesSortLast(t *testing.T) {
 func TestFindSort_UnknownKeyIsRejected(t *testing.T) {
 	root := buildQueryFixtureVault(t)
 	err := runFindSortError(t, root, "find", "--sort", "backlinkz")
-	if !strings.Contains(err.Error(), "unknown sort key") {
+	if !strings.Contains(err.Error(), `find: --sort must be`) || !strings.Contains(err.Error(), `(got "backlinkz")`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -256,7 +256,7 @@ func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bo
 
 func replaceAddressPort(addr string, port int) (string, error) {
 	if port < 0 || port > 65535 {
-		return "", fmt.Errorf("serve: --port must be between 0 and 65535, got %d", port)
+		return "", rangeValueError("serve", "port", "between 0 and 65535", port)
 	}
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {

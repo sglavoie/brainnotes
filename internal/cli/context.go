@@ -54,7 +54,7 @@ func contextFormat(options contextOptions) (string, error) {
 		format = contextFormatJSON
 	}
 	if format != contextFormatMarkdown && format != contextFormatJSON {
-		return "", fmt.Errorf("context: --format must be markdown or json (got %q)", format)
+		return "", enumValueError("context", "format", format, contextFormatMarkdown, contextFormatJSON)
 	}
 	if options.runAgent && format == contextFormatJSON {
 		return "", errors.New("context: --agent requires --format markdown")
@@ -123,10 +123,7 @@ func validateContextOptions(options contextOptions) (validatedContextOptions, er
 	}
 	purpose, ok := recall.StandardPurpose(options.purposeText)
 	if !ok {
-		return validatedContextOptions{}, fmt.Errorf(
-			"context: --purpose must be synthesis, contradictions, or questions (got %q)",
-			options.purposeText,
-		)
+		return validatedContextOptions{}, enumValueError("context", "purpose", options.purposeText, recallPurposes()...)
 	}
 	return validatedContextOptions{
 		related:  options.related,

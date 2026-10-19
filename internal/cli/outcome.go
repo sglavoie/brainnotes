@@ -16,6 +16,9 @@ var (
 	// ErrCanceled is a confirmation the user declined, or could not give
 	// because stdin ended first.
 	ErrCanceled = errors.New("canceled")
+	// ErrNoMatch is a search that completed and found nothing, which is
+	// grep's exit 1.
+	ErrNoMatch = errors.New("no matches")
 )
 
 // negativeOutcome is a negative answer with a message naming the command.
@@ -30,6 +33,11 @@ func (e *negativeOutcome) Unwrap() error { return e.kind }
 // nothingSelected reports that name had nothing to act on, and why.
 func nothingSelected(name, why string) error {
 	return &negativeOutcome{msg: prefixed(name, why), kind: ErrNothingSelected}
+}
+
+// noMatch reports that name searched and found nothing.
+func noMatch(name string) error {
+	return &negativeOutcome{msg: prefixed(name, "no matches"), kind: ErrNoMatch}
 }
 
 // canceled reports that name stopped at a declined confirmation.
@@ -48,5 +56,6 @@ func prefixed(name, msg string) string {
 // answer, which exits 1 rather than 2.
 func IsNegativeOutcome(err error) bool {
 	var lint *LintError
-	return errors.As(err, &lint) || errors.Is(err, ErrNothingSelected) || errors.Is(err, ErrCanceled)
+	return errors.As(err, &lint) || errors.Is(err, ErrNothingSelected) ||
+		errors.Is(err, ErrCanceled) || errors.Is(err, ErrNoMatch)
 }

@@ -100,7 +100,7 @@ func sortByRelevance(in findSortInput, spec queryexpr.SortSpec) ([]*vault.Note, 
 // relevanceAnchorPath resolves --relative-to to the vault-relative path the
 // ranker keys on.
 func relevanceAnchorPath(v *vault.Vault, relativeTo string) (string, error) {
-	anchorNote, err := resolveNoteTarget(v, relativeTo)
+	anchorNote, err := resolveNoteTarget("find", v, relativeTo)
 	if err != nil {
 		return "", err
 	}
@@ -160,16 +160,28 @@ func relevanceCandidates(in findSortInput, corpus *recallCorpus, anchorPath stri
 func validateFindSort(sortText, relativeTo string) (queryexpr.SortSpec, error) {
 	spec, err := queryexpr.ParseSort(sortText)
 	if err != nil {
-		return queryexpr.SortSpec{}, err
+		if key := findSortKey(sortText); key != "" && !queryexpr.ValidSortKey(key) {
+			return queryexpr.SortSpec{}, enumValueError("find", "sort", key, queryexpr.SortKeys()...)
+		}
+		return queryexpr.SortSpec{}, fmt.Errorf("find: --sort: %w", err)
 	}
 	spec.RelativeTo = strings.TrimSpace(relativeTo)
 	if spec.Key == queryexpr.SortRelevance && spec.RelativeTo == "" {
-		return queryexpr.SortSpec{}, fmt.Errorf("--sort %s requires --relative-to", queryexpr.SortRelevance)
+		return queryexpr.SortSpec{}, fmt.Errorf("find: --sort %s requires --relative-to", queryexpr.SortRelevance)
 	}
 	if spec.RelativeTo != "" && spec.Key != queryexpr.SortRelevance {
-		return queryexpr.SortSpec{}, fmt.Errorf("--relative-to requires --sort %s", queryexpr.SortRelevance)
+		return queryexpr.SortSpec{}, fmt.Errorf("find: --relative-to requires --sort %s", queryexpr.SortRelevance)
 	}
 	return spec, nil
+}
+
+// findSortKey is the key part of a --sort value, without its direction sign or
+// suffix, so an unknown key is reported in the shared enum wording rather than
+// the query language's.
+func findSortKey(sortText string) string {
+	key := strings.TrimLeft(strings.TrimSpace(sortText), "+-")
+	key, _, _ = strings.Cut(key, ":")
+	return strings.ToLower(strings.TrimSpace(key))
 }
 
 // findSortHelp renders the --sort flag help from the vocabulary itself, so a

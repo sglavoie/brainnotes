@@ -82,9 +82,9 @@ func runRemove(cmd *cobra.Command, args []string, opts *removeOptions) error {
 
 func removeSelection(v *vault.Vault, cfg *config.Config, args []string) ([]string, error) {
 	if len(args) == 0 {
-		return pickNotes(v, cfg, false)
+		return pickNotes("remove", v, cfg, false)
 	}
-	note, err := resolveNoteTarget(v, args[0])
+	note, err := resolveNoteTarget("remove", v, args[0])
 	if err != nil {
 		return nil, err
 	}

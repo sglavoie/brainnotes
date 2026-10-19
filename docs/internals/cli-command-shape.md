@@ -173,8 +173,10 @@ Decomposition preserves the order in which a command refuses things, and that
 order is observable. In `search`, an unparseable pattern is reported before the
 flag matrix, and both before the vault is opened, so a bad regex is a regex error
 rather than a vault error. `--open` resolves the editor **lazily**, only once a
-match exists, so `--open` against a vault with no match succeeds on a machine
-with no `$EDITOR`. Neither is incidental; both are pinned by tests.
+match exists, so `--open` against a vault with no match reports
+`search: no matches` (exit 1, as every search mode does) rather than an editor
+error on a machine with no `$EDITOR`. Neither is incidental; both are pinned by
+tests.
 
 When a rewrite would collapse two branches that look identical, check the empty
 case first. `search --count` skips a note with an empty body *before* matching,
@@ -226,7 +228,8 @@ all, including on its `--agent` path.
 
 **A resolver that can legally select nothing returns `(value, ok, err)`, not a
 nil sentinel.** `unset` and `rename` both offer an fzf picker, and an empty
-selection is a silent success — not an error, and *not* a run that continues
+selection ends the run — exit 1 through `requireSelection`'s
+`ErrNothingSelected`, under the command's name, and *not* a run that continues
 with zero paths, because `noteops.BeginOperation` would then open a journal for
 an operation the user cancelled. Extracting that branch is also what clears the
 `nestif` the picker's `if len(noteArgs) == 0 { ... } else { ... }` costs, so

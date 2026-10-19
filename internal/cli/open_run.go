@@ -3,12 +3,10 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -79,7 +77,8 @@ func selectOpenTarget(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, ar
 		extraArgs = append(extraArgs, "--query", args[0])
 	}
 
-	selected, err := requireSelection(openPicker(paths, extraArgs))
+	picked, err := openPicker(paths, extraArgs)
+	selected, err := requireSelection("open", picked, err)
 	if err != nil {
 		return "", false, err
 	}
@@ -88,15 +87,12 @@ func selectOpenTarget(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, ar
 
 // openTargetInEditor resolves the configured editor and execs it on the
 // selected path. Every failure is reported under the `open:` prefix, including
-// the "no editor configured" case, which is reworded rather than wrapped so it
-// names both places an editor can come from.
+// the "no editor configured" case, which names both places an editor can come
+// from (resolveEditorSpec).
 func openTargetInEditor(cfg *config.Config, target string) error {
-	editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
-	if errors.Is(err, editutil.ErrNoEditorConfigured) {
-		return errors.New("open: no editor configured (set [open].editor in config or $EDITOR)")
-	}
+	editorSpec, err := resolveEditorSpec("open", cfg.Open.Editor)
 	if err != nil {
-		return fmt.Errorf("open: %w", err)
+		return err
 	}
 	if err := openExec(editorSpec, target); err != nil {
 		return fmt.Errorf("open: %w", err)

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,8 +169,8 @@ func TestValues_FzfAbort(t *testing.T) {
 	}
 
 	stdout, stderr, err := runValuesCmd(t, root, "values")
-	if err != nil {
-		t.Fatalf("execute: %v", err)
+	if !errors.Is(err, ErrNothingSelected) || err.Error() != "values: nothing selected" {
+		t.Fatalf("err = %v, want values: nothing selected (exit 1)", err)
 	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout on abort, got %q", stdout)
@@ -196,18 +197,15 @@ func TestValues_FzfNoProperties(t *testing.T) {
 		return nil, nil
 	}
 
-	stdout, stderr, err := runValuesCmd(t, root, "values")
-	if err != nil {
-		t.Fatalf("execute: %v", err)
+	stdout, _, err := runValuesCmd(t, root, "values")
+	if !errors.Is(err, ErrNothingSelected) || err.Error() != "values: no properties in vault" {
+		t.Fatalf("err = %v, want values: no properties in vault (exit 1)", err)
 	}
 	if pickerCalled {
 		t.Fatalf("picker should not be called when no properties exist")
 	}
 	if stdout != "" {
 		t.Fatalf("expected empty stdout, got %q", stdout)
-	}
-	if !strings.Contains(stderr, "no properties in vault") {
-		t.Fatalf("expected stderr to mention 'no properties in vault'; got %q", stderr)
 	}
 }
 

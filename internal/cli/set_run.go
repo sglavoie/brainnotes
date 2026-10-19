@@ -105,7 +105,7 @@ func applySetPaths(paths []string, pairs []setPair, cfg *config.Config, vaultRoo
 
 func resolveSetPaths(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, noteArgs []string, nullSep bool) ([]string, error) {
 	if len(noteArgs) == 0 {
-		selected, err := pickNotes(v, cfg, true)
+		selected, err := pickNotes("set", v, cfg, true)
 		if err != nil {
 			return nil, err
 		}

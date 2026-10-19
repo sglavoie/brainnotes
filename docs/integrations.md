@@ -32,14 +32,22 @@ nothing.
 | Status | Meaning |
 | --- | --- |
 | `0` | Success. |
-| `1` | The command ran and the answer was negative: `bn lint` found violations, a picker came back empty (an empty vault, or an fzf query that matched nothing), or a confirmation was declined. |
-| `2` | An error: an unknown flag, a vault that does not load, a refused write. |
-| `126`/`127` | An external program (editor, fzf) could not be run or was not found. |
+| `1` | The command ran and the answer was negative: `bn lint` found violations, `bn search` found no match, a picker came back empty (an empty vault, no related notes or properties to offer, or an fzf query that matched nothing), or a confirmation was declined. |
+| `2` | An error: an unknown flag, a vault that does not load, a refused write, a confirmation refused for want of a terminal. |
+| `126`/`127` | A program you asked bn to run (editor, fzf, the `checkpoint run` command) could not be run or was not found. |
 | `130` | Interrupted: Ctrl-C, or a dismissed fzf picker. |
 
-`bn checkpoint run` exits with its child's status. Messages for statuses 1 and
-2 go to stderr, so `p=$(bn open --print)` fails rather than succeeding with an
-empty value.
+`bn checkpoint run` exits with its child's status. Only those user-visible
+children pass their status through: when a Git command bn runs for its own
+safety checks fails, bn exits 2, never with Git's code. Messages for statuses 1
+and 2 go to stderr, prefixed with the command (`bn: search: no matches`,
+`bn: open: nothing selected`), so `p=$(bn open --print)` fails rather than
+succeeding with an empty value.
+
+A command that asks before destroying something (`bn remove`,
+`bn restore --wipe`) asks only on a terminal. Without one it refuses with
+exit 2 and names the flag to pass (`--yes`, or `-y`); it never reads an answer
+from a pipe.
 
 Ctrl-C asks a running command to stop rather than killing it, so a journaled
 write or `bn serve`'s shutdown can finish cleanly; press it a second time to

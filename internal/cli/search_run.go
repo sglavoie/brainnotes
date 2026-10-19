@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -51,7 +49,7 @@ func (o searchOptions) validate(noteArgs []string, anyFlagSet bool) error {
 // --context cannot share output with.
 func (o searchOptions) validateContextCombos() error {
 	if o.contextN < 0 {
-		return fmt.Errorf("search: --context must be 0 or more (got %d)", o.contextN)
+		return rangeValueError("search", "context", "0 or more", o.contextN)
 	}
 	if o.contextN == 0 {
 		return nil
@@ -240,7 +238,8 @@ func runSearchInteractive(r *searchRun) error {
 	if r.opts.openResult {
 		return runSearchInteractiveOpen(r, corpusLines, fzfArgs)
 	}
-	selected, err := RunFZFLines(corpusLines, fzfArgs)
+	picked, err := RunFZFLines(corpusLines, fzfArgs)
+	selected, err := requireSelection("search", picked, err)
 	if err != nil {
 		return err
 	}
@@ -248,14 +247,14 @@ func runSearchInteractive(r *searchRun) error {
 }
 
 // runSearchInteractiveOpen is `-i --open`: fzf selects the line, the editor
-// opens it. Selecting nothing is a success that opens nothing.
+// opens it. Selecting nothing is a negative answer (exit 1) that opens nothing.
 func runSearchInteractiveOpen(r *searchRun, corpusLines, fzfArgs []string) error {
 	selected, err := runFZFLinesSelections(corpusLines, fzfArgs)
 	if err != nil {
 		return err
 	}
 	if len(selected) == 0 {
-		return nil
+		return nothingSelected("search", "nothing selected")
 	}
 	return openSearchMatch(r.cfg, selected[0].path, selected[0].line)
 }
@@ -282,6 +281,9 @@ func runSearchContext(r *searchRun) error {
 			return err
 		}
 	}
+	if first {
+		return noMatch("search")
+	}
 	return nil
 }
 
@@ -290,11 +292,14 @@ func runSearchCount(r *searchRun) error {
 	if err != nil {
 		return err
 	}
+	if len(results) == 0 {
+		return noMatch("search")
+	}
 	return writeSearchCounts(r.cmd.OutOrStdout(), results)
 }
 
 // runSearchOpen opens the first match of the lexicographically first matching
-// note. No match is a success that opens nothing.
+// note. No match is a negative answer (exit 1) that opens nothing.
 func runSearchOpen(r *searchRun) error {
 	var matched []searchMatch
 	for _, n := range r.notes {
@@ -308,42 +313,48 @@ func runSearchOpen(r *searchRun) error {
 	}
 	sort.Slice(matched, func(i, j int) bool { return matched[i].path < matched[j].path })
 	if len(matched) == 0 {
-		return nil
+		return noMatch("search")
 	}
 	return openSearchMatch(r.cfg, matched[0].path, matched[0].line)
 }
 
-// runSearchPaths is the default mode: one absolute path per matching note.
+// runSearchPaths is the default mode: one absolute path per matching note. No
+// match is grep's exit 1.
 func runSearchPaths(r *searchRun) error {
-	var matched []*vault.Note
+	paths, err := matchingSearchPaths(r)
+	if err != nil {
+		return err
+	}
+	if len(paths) == 0 {
+		return noMatch("search")
+	}
+	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
+}
+
+// matchingSearchPaths is the sorted absolute paths of the notes whose body has
+// a matching line: the set the paths and JSON modes both report.
+func matchingSearchPaths(r *searchRun) ([]string, error) {
+	var paths []string
 	for _, n := range r.notes {
 		body, err := n.Body()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if bodyHasMatch(body, r.matcher) {
-			matched = append(matched, n)
+			paths = append(paths, n.Path)
 		}
 	}
-	sort.Slice(matched, func(i, j int) bool { return matched[i].Path < matched[j].Path })
-
-	paths := make([]string, len(matched))
-	for i, n := range matched {
-		paths[i] = n.Path
-	}
-	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
+	sort.Strings(paths)
+	return paths, nil
 }
 
 // openSearchMatch resolves the editor and opens path at line. Resolution is
 // deliberately lazy — it runs only once a match exists — so `--open` against a
 // vault with no match succeeds without an editor configured.
 func openSearchMatch(cfg *config.Config, path string, line int) error {
-	editorSpec, err := editutil.Spec(cfg.Open.Editor, os.Getenv("EDITOR"))
-	if errors.Is(err, editutil.ErrNoEditorConfigured) {
-		return errors.New("search: --open requires [open].editor or $EDITOR")
-	}
+	editorSpec, err := resolveEditorSpec("search", cfg.Open.Editor)
 	if err != nil {
-		return fmt.Errorf("search: %w", err)
+		return err
 	}
 	if err := searchOpenExec(editorSpec, path, line); err != nil {
 		return fmt.Errorf("search: %w", err)
