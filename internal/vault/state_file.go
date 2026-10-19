@@ -3,7 +3,6 @@ package vault
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // WriteStateFile installs data at path through the same path-continuous
@@ -35,16 +34,11 @@ func WriteStateFile(path string, data []byte, perm os.FileMode) error {
 	// process lock over a read-modify-write of the whole file, so there is no
 	// preimage to compare against and nothing for a compare-and-swap to add. The
 	// expectation still matters — it is what makes the replacement judge that a
-	// destination it displaced actually existed.
+	// destination it displaced actually existed. The write fsyncs the directory
+	// and reports a failure to do so, which is what lets a caller tell a person
+	// the state was saved.
 	if err := atomicWrite(path, data, ExpectAnyContent(), perm); err != nil {
 		return fmt.Errorf("vault: write state file %q: %w", path, err)
-	}
-	// The write itself already fsyncs the directory best-effort. Doing it again
-	// here and reporting the failure is the difference between a note (whose
-	// content the caller can still see) and state a caller is about to tell a
-	// person was saved.
-	if err := SyncDir(filepath.Dir(path)); err != nil {
-		return fmt.Errorf("vault: sync state directory for %q: %w", path, err)
 	}
 	return nil
 }
