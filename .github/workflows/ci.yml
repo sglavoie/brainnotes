@@ -51,6 +51,19 @@ jobs:
       - name: Install the pinned golangci-lint
         run: just install-lint
 
+      # The job runs golangci-lint over the whole tree twice (the phase gate,
+      # then `just lint-new` inside `just ci`) plus two self-tests. Its analysis
+      # cache is keyed on what can change a result: dependencies and the linter
+      # configuration. A restored cache only skips re-analysis of unchanged
+      # packages; golangci-lint still re-checks anything whose source changed.
+      - name: Cache golangci-lint analysis
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-
+
       # The ratchet's own regression test, kept out of `just ci` because it
       # builds a throwaway repository and runs golangci-lint a second time — a
       # cost the local envelope should not pay on every run. It belongs here
@@ -73,6 +86,27 @@ jobs:
 
       - name: Run CI checks
         run: just ci
+
+  # The race detector over the concurrency-heavy packages (see `just test-race`).
+  # A separate job because -race multiplies test time, and the main job's
+  # envelope should stay what `just ci` runs locally.
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      - name: Run the race detector
+        run: just test-race
 
   browser:
     name: Browser polish and shipped assets

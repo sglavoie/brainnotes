@@ -8,6 +8,7 @@ import (
 )
 
 func TestLegacyDeletionBlockRecovery(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []Kind{KindUnexplainedDeletion, KindCommitFailed, KindAmbiguousChange} {
 		t.Run(string(kind), func(t *testing.T) {
 			h := newHarness(t)
@@ -35,6 +36,7 @@ func TestLegacyDeletionBlockRecovery(t *testing.T) {
 }
 
 func TestLegacyDeletionBlockDoesNotBypassRepositoryChecks(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("gone.md", "recoverable")
 	h.commitPending()
@@ -61,6 +63,7 @@ func TestLegacyDeletionBlockDoesNotBypassRepositoryChecks(t *testing.T) {
 }
 
 func TestLegacyDeletionMigrationPreservesDamagedState(t *testing.T) {
+	t.Parallel()
 	for _, data := range []string{
 		`{"version":`,
 		`{"version":999,"kind":"unexplained_deletion"}`,
@@ -81,6 +84,7 @@ func TestLegacyDeletionMigrationPreservesDamagedState(t *testing.T) {
 }
 
 func TestLegacyDeletionMigrationPreservesInterruptedSnapshot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("gone.md", "recoverable")
 	h.commitPending()
@@ -100,6 +104,7 @@ func TestLegacyDeletionMigrationPreservesInterruptedSnapshot(t *testing.T) {
 }
 
 func TestExternalDirectoryRemovalAndRename(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Folder/a.md", "a")
 	h.write("Folder/b.md", "b")
@@ -118,6 +123,7 @@ func TestExternalDirectoryRemovalAndRename(t *testing.T) {
 }
 
 func TestRecreatedRemovalRetriesWithoutBlockOrIntent(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("note.md", "original")
 	h.commitPending()
@@ -150,6 +156,7 @@ fi`)
 }
 
 func TestExternalRemovalStagingNoOpFailsClosed(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("note.md", "original")
 	h.commitPending()

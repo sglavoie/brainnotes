@@ -26,6 +26,7 @@ func openHistory(t *testing.T, h *testHarness) *History {
 // write. Reading the record the writer publishes means the observer and the
 // scheduler cannot disagree about whether a vault is mid-burst.
 func TestHistoryWatchSeesTheSameBurstTheWriterPublished(t *testing.T) {
+	t.Parallel()
 	h, _ := historyFixture(t)
 	view := openHistory(t, h)
 
@@ -61,6 +62,7 @@ func TestHistoryWatchSeesTheSameBurstTheWriterPublished(t *testing.T) {
 // none. The alternative — a status probe that treats an unreadable schedule as
 // unsaved work — would cry wolf on every vault that never had a burst.
 func TestHistoryWatchReportsNothingRatherThanFailing(t *testing.T) {
+	t.Parallel()
 	h, _ := historyFixture(t)
 	view := openHistory(t, h)
 
@@ -77,6 +79,7 @@ func TestHistoryWatchReportsNothingRatherThanFailing(t *testing.T) {
 // opening one resolves a recovery intent — an observer would be mutating the
 // thing it was sent to look at.
 func TestHistoryBlockedSeesTheMarker(t *testing.T) {
+	t.Parallel()
 	h, _ := historyFixture(t)
 	view := openHistory(t, h)
 
@@ -115,6 +118,7 @@ func TestHistoryBlockedSeesTheMarker(t *testing.T) {
 // treat an unreadable marker as more reason to stop, not less — and it cannot
 // make it from a record alone.
 func TestHistoryBlockedFailsClosed(t *testing.T) {
+	t.Parallel()
 	h, _ := historyFixture(t)
 	view := openHistory(t, h)
 

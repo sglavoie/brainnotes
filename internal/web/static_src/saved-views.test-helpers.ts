@@ -1,22 +1,4 @@
-export const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-
-export const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
+import { jsonResponse, waitForExpect } from "./shared.test-helpers";
 
 export const rottedDetail = `unknown field "statuz"
   statuz:wip
@@ -148,3 +130,5 @@ export const submitSave = async (name: string): Promise<void> => {
   );
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
+
+export { jsonResponse, waitForExpect };

@@ -18,6 +18,7 @@ import (
 // trusted it alone would answer "already off" and leave the pending edits
 // outside the history for good.
 func TestWatcherResumesAnOffTransitionAfterARestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -62,6 +63,7 @@ func TestWatcherResumesAnOffTransitionAfterARestart(t *testing.T) {
 // rather than of live reload, so a watcher that will never re-read a
 // configuration still discharges it.
 func TestWatcherResumesAnOffTransitionWithoutAPolicySource(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()
@@ -87,6 +89,7 @@ func TestWatcherResumesAnOffTransitionWithoutAPolicySource(t *testing.T) {
 // dirty its working tree is. `off` in the record is published only after the
 // owed snapshot has landed, so a record that says `off` says nothing is owed.
 func TestWatcherRestartingAnAlreadyOffVaultTakesNoSnapshot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -127,6 +130,7 @@ func TestWatcherRestartingAnAlreadyOffVaultTakesNoSnapshot(t *testing.T) {
 // is not evidence of an interrupted transition. Reading it as one would put a
 // commit on the first start of every off vault.
 func TestWatcherFirstStartUnderOffTakesNoSnapshot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 
@@ -151,6 +155,7 @@ func TestWatcherFirstStartUnderOffTakesNoSnapshot(t *testing.T) {
 // vault enforcing the outgoing floor, and the durable record still says so, so
 // even a guard that dies again resumes again.
 func TestWatcherResumedOffTransitionRetriesAfterContention(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()
@@ -192,6 +197,7 @@ func TestWatcherResumedOffTransitionRetriesAfterContention(t *testing.T) {
 // does not get to stop taking snapshots, whether the transition was read from
 // the file a moment ago or rebuilt from the record at startup.
 func TestWatcherResumedOffTransitionStaysOnWhenTheSnapshotIsRefused(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()
@@ -242,6 +248,7 @@ func TestWatcherResumedOffTransitionStaysOnWhenTheSnapshotIsRefused(t *testing.T
 // taken rather than discarded, and the corrupt token is replaced by one the
 // vault's consumers can act on.
 func TestWatcherResumesOnACorruptPublishedPolicy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()

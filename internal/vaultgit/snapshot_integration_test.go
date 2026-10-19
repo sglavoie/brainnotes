@@ -9,6 +9,7 @@ import (
 )
 
 func TestPreflightCleanVault(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if err := h.mgr.Preflight(context.Background()); err != nil {
 		t.Fatalf("Preflight on an unborn branch: %v", err)
@@ -21,6 +22,7 @@ func TestPreflightCleanVault(t *testing.T) {
 }
 
 func TestPreflightAllowsExternalDeletion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one")
 	h.commitPending()
@@ -34,6 +36,7 @@ func TestPreflightAllowsExternalDeletion(t *testing.T) {
 }
 
 func TestPreflightRefusesInProgressGitOperation(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -54,6 +57,7 @@ func TestPreflightRefusesInProgressGitOperation(t *testing.T) {
 // The loser is told it is busy, which is retryable and says nothing about the
 // vault's health.
 func TestConcurrentManagersSerialize(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -86,6 +90,7 @@ func TestConcurrentManagersSerialize(t *testing.T) {
 // The mutation lock and the push lock are independent, so a push stuck on an
 // unreachable network cannot delay a note save.
 func TestPushLockDoesNotBlockSnapshots(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	release, err := h.mgr.acquire(pushLockName, "test")
 	if err != nil {
@@ -102,6 +107,7 @@ func TestPushLockDoesNotBlockSnapshots(t *testing.T) {
 // --- Journal-entry commits ---------------------------------------------------
 
 func TestCommitJournalEntryStagesOnlyItsOwnPaths(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/tracked.md", "one\n")
 	h.commitPending()
@@ -136,6 +142,7 @@ func TestCommitJournalEntryStagesOnlyItsOwnPaths(t *testing.T) {
 }
 
 func TestCommitJournalEntryDeletion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/gone.md", "goodbye\n")
 	h.commitPending()
@@ -159,6 +166,7 @@ func TestCommitJournalEntryDeletion(t *testing.T) {
 // stale rather than dangerous: nothing is committed, nothing is blocked, and the
 // next pending-change scan picks up whatever the vault actually holds.
 func TestCommitJournalEntryRefusesStaleRequest(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -189,6 +197,7 @@ func TestCommitJournalEntryRefusesStaleRequest(t *testing.T) {
 }
 
 func TestCommitJournalEntryRejectsBadEntryID(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for _, id := range []string{"", "../escape", "entry/1"} {
 		if _, err := h.mgr.CommitJournalEntry(context.Background(), id, "set"); KindOf(err) != KindStaleRequest {
@@ -203,6 +212,7 @@ func TestCommitJournalEntryRejectsBadEntryID(t *testing.T) {
 // like a staged revert and is invited to "fix" it with a checkout that would
 // discard the snapshot.
 func TestSnapshotLeavesUserStatusClean(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.write("Inbox/other.md", "two\n")
@@ -230,6 +240,7 @@ func TestSnapshotLeavesUserStatusClean(t *testing.T) {
 // working tree through a private index and never touches an entry the user has
 // moved away from HEAD.
 func TestUserStagedWorkSurvivesASnapshot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.write("Inbox/staged.md", "v1\n")
@@ -265,6 +276,7 @@ func TestUserStagedWorkSurvivesASnapshot(t *testing.T) {
 // is rebuilt against the new tip rather than forced onto the old one, so the
 // other writer's commit survives.
 func TestRefConflictIsRetriedNotForced(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -363,6 +375,7 @@ fi`)
 // A block marker written by an older or newer build, or truncated by a crash,
 // keeps refusing rather than silently re-enabling mutations.
 func TestCorruptBlockMarkerRefusesMutations(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()

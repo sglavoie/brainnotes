@@ -1,26 +1,10 @@
 import { vi } from "vitest";
 
 import type { PropertyMutationResult, PropertySummary } from "./api";
+import { jsonResponse, waitForExpect as sharedWaitForExpect } from "./shared.test-helpers";
 
-export const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
-
-export const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+export const waitForExpect = (assertion: () => void): Promise<void> =>
+  sharedWaitForExpect(assertion, { attempts: 30 });
 
 export const summaryFixture = (overrides: Partial<PropertySummary> = {}): PropertySummary => ({
   name: "status",
@@ -235,4 +219,4 @@ export const submitEditor = (): void => {
   form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 };
 
-
+export { jsonResponse };

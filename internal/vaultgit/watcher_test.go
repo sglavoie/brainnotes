@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -77,6 +78,7 @@ func requireNoKind(t *testing.T, rec *watchRecorder, kind WatchEventKind) {
 }
 
 func TestWatcherCommitsExternalChangeOnlyAfterTheQuietPeriod(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -110,6 +112,7 @@ func TestWatcherCommitsExternalChangeOnlyAfterTheQuietPeriod(t *testing.T) {
 }
 
 func TestWatcherRestartsTheQuietPeriodWhenTheFileChangesAgain(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -135,6 +138,7 @@ func TestWatcherRestartsTheQuietPeriodWhenTheFileChangesAgain(t *testing.T) {
 }
 
 func TestWatcherCommitsAtMaximumLatencyDespiteContinuousChange(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -165,6 +169,7 @@ func TestWatcherCommitsAtMaximumLatencyDespiteContinuousChange(t *testing.T) {
 }
 
 func TestWatcherRestartResumesTheBurstWithoutExtendingItsMaximum(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 
@@ -198,6 +203,7 @@ func TestWatcherRestartResumesTheBurstWithoutExtendingItsMaximum(t *testing.T) {
 }
 
 func TestWatcherRecordsExternalDeletionAfterRestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 	h.write("vanishes.md", "about to disappear")
@@ -225,6 +231,7 @@ func TestWatcherRecordsExternalDeletionAfterRestart(t *testing.T) {
 }
 
 func TestWatcherClosesABurstThatResolvesItself(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -253,6 +260,7 @@ func TestWatcherClosesABurstThatResolvesItself(t *testing.T) {
 }
 
 func TestWatcherEventsCarryPathsButNeverNoteBodies(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 	rawGit(t, h.root, "remote", "add", "origin", filepath.Join(t.TempDir(), "no-such-remote"))
@@ -314,10 +322,22 @@ func TestWatcherEventsCarryPathsButNeverNoteBodies(t *testing.T) {
 }
 
 func TestWatcherRunStopsOnContextCancellation(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
+	// Cancel only once the loop has said it started. A fixed sleep before
+	// cancelling races a slow machine: Run can observe the cancelled context
+	// before it emits Started, and the assertion below then fails on timing
+	// rather than on behaviour. The recorder is read only after Run returns.
+	started := make(chan struct{})
+	var once sync.Once
 	w := NewWatcher(h.mgr, WatcherOptions{
-		Observe:      rec.observe,
+		Observe: func(event WatchEvent) {
+			rec.observe(event)
+			if event.Kind == WatchEventStarted {
+				once.Do(func() { close(started) })
+			}
+		},
 		Now:          func() time.Time { return h.clock },
 		PollInterval: time.Millisecond,
 	})
@@ -326,7 +346,15 @@ func TestWatcherRunStopsOnContextCancellation(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- w.Run(ctx) }()
 
-	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-started:
+	case err := <-done:
+		cancel()
+		t.Fatalf("Run returned %v before it started", err)
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("Run never emitted Started")
+	}
 	cancel()
 	select {
 	case err := <-done:

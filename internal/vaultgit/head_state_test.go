@@ -25,6 +25,7 @@ fi`)
 // the guard latched a block naming the whole vault — on a working tree that had
 // not changed at all.
 func TestTransientBranchLookupFailureIsNotAnUnbornBranch(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, exitCode string }{
 		{"lookup could not run", "128"},
 		{"branch with a reflog did not resolve", "1"},
@@ -64,6 +65,7 @@ func TestTransientBranchLookupFailureIsNotAnUnbornBranch(t *testing.T) {
 // The history view resolves the tip the same way, and its callers act on
 // ErrUnbornBranch: the importer reads it as "nothing is committed yet".
 func TestTipDoesNotReportAFailedLookupAsUnborn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()

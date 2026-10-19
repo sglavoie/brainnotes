@@ -4,12 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { createSettingsPanel } from "./settings-controller";
 import type { FetchLike } from "./settings-requests";
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+import { jsonResponse, waitForExpect } from "./shared.test-helpers";
 
 /** The markup `templates/settings.html` renders for the settings panel. */
 const PANEL_HTML = `
@@ -107,20 +102,6 @@ const statusText = (root: HTMLElement): string =>
  * A click handler returns before the request it started, and reading a `Response`
  * body is itself several turns, so a fixed number of microtasks would be a guess.
  */
-const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
-
 beforeEach(() => {
   document.body.innerHTML = "";
   window.history.replaceState(null, "", "/settings");

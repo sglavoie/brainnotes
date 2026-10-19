@@ -10,6 +10,7 @@ import (
 // else: the scan, the deletion check it performs, and the pending event all
 // continue, and the schedule stays empty because there is nothing to schedule.
 func TestWatcherWhileOffScansAndReportsButDoesNotCommit(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	stub := &stubPolicySource{}
@@ -59,6 +60,7 @@ func TestWatcherWhileOffScansAndReportsButDoesNotCommit(t *testing.T) {
 
 // Deletions remain pending while autosave is off, without blocking mutations.
 func TestWatcherWhileOffReportsExternalDeletion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	stub := &stubPolicySource{}
@@ -97,6 +99,7 @@ func TestWatcherWhileOffReportsExternalDeletion(t *testing.T) {
 // Pushes are not autosaves. Local history the vault already holds still belongs
 // on the remote, so an off vault keeps publishing it.
 func TestWatcherWhileOffStillPushes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	remote := t.TempDir()
@@ -129,6 +132,7 @@ func TestWatcherWhileOffStillPushes(t *testing.T) {
 // The alternative would commit instantly on a readiness deadline that expired
 // while the user had asked for nothing to be committed at all.
 func TestWatcherReenablingOpensAFreshBurst(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	stub := &stubPolicySource{}
@@ -176,6 +180,7 @@ func TestWatcherReenablingOpensAFreshBurst(t *testing.T) {
 // Re-enabling keeps the previous external snapshot as the floor's anchor, so a
 // vault cannot buy itself an extra commit by cycling the policy.
 func TestWatcherReenablingKeepsTheFloorAnchor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("10m")
 	stub := &stubPolicySource{}

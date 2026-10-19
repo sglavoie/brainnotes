@@ -41,6 +41,7 @@ fi`)
 // nothing to record: no commit, no error, and a `bn` command that printed
 // "updated" and exited 0 while the history stayed where it was.
 func TestCommitJournalEntryStagingFailureOfEveryPathLatchesABlock(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -82,6 +83,7 @@ func TestCommitJournalEntryStagingFailureOfEveryPathLatchesABlock(t *testing.T) 
 // would hold the journal record without the note it describes. Nothing is
 // committed, and the vault is blocked rather than left looking healthy.
 func TestCommitJournalEntryPartialStagingFailureLatchesABlock(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -126,6 +128,7 @@ func TestCommitJournalEntryPartialStagingFailureLatchesABlock(t *testing.T) {
 // allowed to skip a note it can read perfectly well, because a git that refuses
 // one of those is failing for a reason that applies to the whole vault.
 func TestCommitPendingRepositoryWideStagingFailureIsFatal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -158,6 +161,7 @@ func TestCommitPendingRepositoryWideStagingFailureIsFatal(t *testing.T) {
 // omits it. The same unreadable file is a tolerated skip on the external path,
 // and TestUnreadableNoteIsSkippedNotFatal is what pins that half down.
 func TestCommitPathsFailsClosedOnAnUnreadableRequiredPath(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if os.Geteuid() == 0 {
 		t.Skip("root can read a mode-0000 file, so this case cannot be provoked")

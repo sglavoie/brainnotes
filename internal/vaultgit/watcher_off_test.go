@@ -12,6 +12,7 @@ import (
 // dirty. `off` becomes effective only after one immediate full snapshot, which
 // bypasses both the quiet period and the floor.
 func TestWatcherTurningOffSnapshotsTheDirtyTreeFirst(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("10m")
 	stub := &stubPolicySource{}
@@ -64,6 +65,7 @@ func TestWatcherTurningOffSnapshotsTheDirtyTreeFirst(t *testing.T) {
 // so the watcher meets a clean working tree. There is nothing to snapshot, so
 // the switch is immediate and adds no commit of its own.
 func TestWatcherTurningOffOnACleanTreeSwitchesWithoutCommitting(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -93,6 +95,7 @@ func TestWatcherTurningOffOnACleanTreeSwitchesWithoutCommitting(t *testing.T) {
 // Contention is a retry, not a lost transition. The intent lives in the watcher
 // and the poll that could not take the lock does not consume it.
 func TestWatcherRetriesTheOffTransitionAfterContention(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -135,6 +138,7 @@ func TestWatcherRetriesTheOffTransitionAfterContention(t *testing.T) {
 // A safety failure is fail-closed: a vault that cannot take its final snapshot
 // does not get to stop taking snapshots.
 func TestWatcherKeepsAutosaveOnWhenTheFinalSnapshotIsRefused(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -183,6 +187,7 @@ func TestWatcherKeepsAutosaveOnWhenTheFinalSnapshotIsRefused(t *testing.T) {
 // A transition withdrawn before it lands leaves no trace: `off` was never
 // published, so there is nothing to undo.
 func TestWatcherWithdrawsAnOffTransitionThatNeverLanded(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -232,6 +237,7 @@ func TestWatcherWithdrawsAnOffTransitionThatNeverLanded(t *testing.T) {
 // announced as owed is no longer owed, and a log that never says so leaves a
 // reader believing the vault is about to stop autosaving.
 func TestWatcherReportsAWithdrawalBackToTheSamePolicy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -278,6 +284,7 @@ func TestWatcherReportsAWithdrawalBackToTheSamePolicy(t *testing.T) {
 // already-off vault has nothing to publish, and a loop that announced one on
 // every unrelated edit to the file would be noise.
 func TestWatcherDoesNotRepeatATransitionThatAlreadyLanded(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}

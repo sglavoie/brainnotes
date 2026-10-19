@@ -5,12 +5,7 @@ import { createSettingsWriter } from "./settings-actions";
 import { settingValueOf } from "./settings-model";
 import { createTemplatesWriter } from "./templates-actions";
 import type { StatusKind } from "./status";
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+import { jsonResponse } from "./shared.test-helpers";
 
 type Call = { url: string; token: string | null; body: unknown };
 

@@ -8,12 +8,7 @@ import type {
   SavedViewSaveInput,
 } from "./saved-views-model";
 import type { StatusKind } from "./status";
-
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+import { jsonResponse } from "./shared.test-helpers";
 
 const savedViewsPayload = (overrides: Record<string, unknown> = {}) => ({
   ok: true,

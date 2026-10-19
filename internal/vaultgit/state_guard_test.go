@@ -6,6 +6,7 @@ import (
 )
 
 func TestGuardStartIsRecordedAndReadableWithoutOpeningTheEngine(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if _, found, err := ReadGuardRecord(h.root); found || err != nil {
 		t.Fatalf("before any guard = found %v, %v", found, err)
@@ -24,6 +25,7 @@ func TestGuardStartIsRecordedAndReadableWithoutOpeningTheEngine(t *testing.T) {
 }
 
 func TestAGuardRecordFromAnotherSchemaIsAnErrorNotAbsence(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if err := h.mgr.state.writeJSON(guardRecordFileName, GuardRecord{Version: stateVersion + 1, Build: "newer"}); err != nil {
 		t.Fatal(err)

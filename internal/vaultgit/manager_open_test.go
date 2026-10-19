@@ -14,6 +14,7 @@ import (
 // A vault without Git is not a broken vault. It reports ErrUnmanaged so callers
 // carry on with no content history rather than treating it as damage.
 func TestOpenUnmanagedVault(t *testing.T) {
+	t.Parallel()
 	_, err := Open(context.Background(), t.TempDir(), Options{})
 	if !IsUnmanaged(err) {
 		t.Fatalf("Open on a non-Git vault = %v, want ErrUnmanaged", err)
@@ -21,8 +22,8 @@ func TestOpenUnmanagedVault(t *testing.T) {
 }
 
 func TestOpenRejectsGitFile(t *testing.T) {
+	t.Parallel()
 	requireGit(t)
-	isolateHome(t)
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: /elsewhere\n"), 0o644); err != nil {
 		t.Fatalf("write .git file: %v", err)
@@ -39,8 +40,8 @@ func TestOpenRejectsGitFile(t *testing.T) {
 // A `.git` directory that is not a repository is the partially-initialized case:
 // the user believes they have history and must be told plainly that they do not.
 func TestOpenRejectsMalformedRepository(t *testing.T) {
+	t.Parallel()
 	requireGit(t)
-	isolateHome(t)
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".git", "objects"), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -56,6 +57,7 @@ func TestOpenRejectsMalformedRepository(t *testing.T) {
 // computed would otherwise be relative to the wrong root, and it would commit
 // the vault into a history that is not the vault's.
 func TestOpenIgnoresRepositoryAboveTheVault(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	nested := filepath.Join(h.root, "sub", "vault")
 	if err := os.MkdirAll(nested, 0o755); err != nil {
@@ -68,6 +70,7 @@ func TestOpenIgnoresRepositoryAboveTheVault(t *testing.T) {
 }
 
 func TestOpenRejectsDetachedHead(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -106,6 +109,7 @@ func TestStrayGitEnvironmentIsIgnored(t *testing.T) {
 // A NUL byte can never be a legal argument, and rejecting it here means no
 // caller can smuggle one into a git invocation.
 func TestGitArgumentsRejectNULBytes(t *testing.T) {
+	t.Parallel()
 	requireGit(t)
 	g := &gitExec{exe: requireGit(t), dir: t.TempDir()}
 	_, err := g.run(context.Background(), gitCall{args: []string{"status", "bad\x00arg"}})
@@ -115,6 +119,7 @@ func TestGitArgumentsRejectNULBytes(t *testing.T) {
 }
 
 func TestOpenRequiresAVaultRoot(t *testing.T) {
+	t.Parallel()
 	if _, err := Open(context.Background(), "  ", Options{}); err == nil {
 		t.Fatal("Open with an empty root must fail")
 	}

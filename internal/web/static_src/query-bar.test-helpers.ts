@@ -1,29 +1,10 @@
 import type { Scheduler } from "./query-bar-model";
+import { jsonResponse, waitForExpect } from "./shared.test-helpers";
 
 /**
  * Shared fixtures for the query-bar tests, following the same
  * `<cluster>.test-helpers.ts` convention as daily-fixes and synthesize.
  */
-
-export const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-
-export const waitForExpect = async (assertion: () => void): Promise<void> => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      assertion();
-      return;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  throw lastError;
-};
 
 /**
  * A scheduler whose timers only fire when a test says so, so the debounce
@@ -199,3 +180,5 @@ export const routedFetch = (routes: QueryRoutes) => {
   };
   return { fetcher, calls };
 };
+
+export { jsonResponse, waitForExpect };

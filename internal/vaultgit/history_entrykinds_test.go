@@ -18,6 +18,7 @@ import (
 // learn "occupied" would refuse the one history where that is exactly what
 // legitimately happened.
 func TestEntryKindsAsksAboutExactlyTheNamesItIsGiven(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 	view, err := OpenHistory(context.Background(), h.root, HistoryOptions{})
 	if err != nil {
@@ -93,6 +94,7 @@ func TestEntryKindsAsksAboutExactlyTheNamesItIsGiven(t *testing.T) {
 // the caller this exists for — a gate that refuses to publish a path a peer
 // cannot hold — "holds nothing" is the answer that publishes.
 func TestEntryKindsRefusesACommitItCannotResolve(t *testing.T) {
+	t.Parallel()
 	h, _ := historyFixture(t)
 	view, err := OpenHistory(context.Background(), h.root, HistoryOptions{})
 	if err != nil {
@@ -119,6 +121,7 @@ func TestEntryKindsRefusesACommitItCannotResolve(t *testing.T) {
 // mode. All three are the same entry, and a caller that saw two of those spellings
 // would have to know which road its path took to read the answer.
 func TestEntryKindsNamesAGitlinkOneWay(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 	// The resolvable spelling points at a commit this repository has; the absent
 	// one does not, which is what a real submodule looks like from outside.
@@ -176,6 +179,7 @@ func TestEntryKindsNamesAGitlinkOneWay(t *testing.T) {
 // resolves as `Alpha.md` and comes back as a blob — a kind for a name the tree
 // does not hold, which in the collision gate is a rival that is not there.
 func TestEntryKindsRefusesANameANULWouldTruncate(t *testing.T) {
+	t.Parallel()
 	h, commits := historyFixture(t)
 	view, err := OpenHistory(context.Background(), h.root, HistoryOptions{})
 	if err != nil {
@@ -197,6 +201,7 @@ func TestEntryKindsRefusesANameANULWouldTruncate(t *testing.T) {
 // that is actually in the tree, so "the newline road works" is not proved only by
 // a path that was missing either way.
 func TestEntryKindsReadsANameItCannotFrameOnStdin(t *testing.T) {
+	t.Parallel()
 	h, _ := historyFixture(t)
 	const awkward = "Two\nLines.md"
 	h.record("bn new", []string{awkward, "Plain.md"}, func() {

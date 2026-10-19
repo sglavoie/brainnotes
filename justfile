@@ -60,6 +60,7 @@ golangci_version := "v2.13.2"
 # the only way to express it: neither `go` nor `gofmt` has an exclude flag.
 go_packages := "$(go list ./... | grep -v '/node_modules/')"
 gofmt_check := "gofmt -l . | grep -v '^node_modules/' || true"
+race_packages := "$(go list ./internal/vault/... ./internal/vaultgit/... ./internal/noteops/... ./internal/web/... ./internal/vaultsyncd/... ./internal/checkpoint/... | grep -v '/node_modules/')"
 
 # Show available recipes
 help:
@@ -93,6 +94,17 @@ install:
 test:
     @echo "Running tests..."
     go test {{ go_packages }}
+
+# The race detector over the packages that share state across goroutines: the
+# lock and transaction layer, the Git safety engine and its watcher, note
+# operations, the web server, the sync daemon and the checkpoint barrier. It is
+# several times slower than `just test`, so it is not part of `just ci`; CI runs
+# it as its own job. The package list goes through the same `node_modules`
+# filter as `go_packages`.
+
+# Run the concurrency-heavy packages under the race detector
+test-race:
+    go test -race {{ race_packages }}
 
 # `$BNOTES_VAULT` is usually set in a developer's shell and it overrides a `cd`,
 # so `cd $scratch && bn rename-key ...` runs against the real vault. That is not
@@ -198,10 +210,7 @@ web-build:
     go run ./internal/web/cssbuild/gen
 
 # Type-check, lint, and build the browser assets
-web-check:
-    npm run typecheck:web
-    npm run lint:web
-    npm run test:web
+web-check: _web-static
     npm run build:web
     go run ./internal/web/cssbuild/gen
 
@@ -241,9 +250,8 @@ _require-golangci:
 #
 # `just lint-ratchet-selftest` is the regression test for exactly that hole.
 #
-# This is wired into both `lint` and `ci`. Those two recipes duplicate their
-# gofmt and vet steps rather than sharing them, so a gate added to only one of
-# them would be half-enforced.
+# This is wired into both `lint` and `ci`, as a dependency of each next to the
+# shared `_go-static` gate.
 #
 # `just --list` shows only the last line of the comment block above a recipe,
 # which is why the rationale sits above a blank line and a one-line summary sits
@@ -351,23 +359,15 @@ fmt:
         printf '%s\n' "$files" | while IFS= read -r f; do gofmt -w "$f"; done
     fi
 
-# Check formatting, run vet, and gate new code on complexity
-lint:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    out=$({{ gofmt_check }})
-    if [ -n "$out" ]; then
-        echo "gofmt issues:"
-        echo "$out"
-        exit 1
-    fi
-    go vet {{ go_packages }}
-    just lint-new
-    just web-check
-    echo "Lint clean"
+# `lint` and `ci` share their static gates through the two private recipes
+# below rather than each inlining them, so a gate added to one cannot be
+# half-enforced by being forgotten in the other. The one deliberate difference
+# is the bundle step: `lint` goes through `web-check`, which *rebuilds* the
+# committed bundles, while `ci` only *checks* them with `check:web-bundles`, so
+# a stale bundle fails `ci` instead of being silently regenerated.
 
-# Run the full CI validation envelope (fmt, vet, complexity ratchet, tests, web, bundle drift)
-ci:
+# gofmt (skipping node_modules) and go vet over the filtered package list
+_go-static:
     #!/usr/bin/env bash
     set -euo pipefail
     out=$({{ gofmt_check }})
@@ -377,15 +377,28 @@ ci:
         exit 1
     fi
     go vet {{ go_packages }}
-    just lint-new
-    go test {{ go_packages }}
+
+# Frontend typecheck, the TypeScript complexity ratchet, and Vitest
+_web-static:
     npm run typecheck:web
-    # The TypeScript half of the complexity ratchet. `ci` inlines the frontend
-    # steps rather than calling `just web-check`, so — exactly like `lint-new`
-    # above — a gate wired into only one of the two recipes is half-enforced.
     npm run lint:web
     npm run test:web
+
+# Check formatting, run vet, and gate new code on complexity
+lint: _go-static lint-new web-check
+    @echo "Lint clean"
+
+# Run the full CI validation envelope (fmt, vet, complexity ratchet, tests, web, bundle drift)
+ci: _go-static lint-new
+    #!/usr/bin/env bash
+    set -euo pipefail
+    go test {{ go_packages }}
+    just _web-static
     npm run check:web-bundles
+    # The browser suite's static gate: every spec assigned to exactly one suite
+    # in internal/web/e2e/suites.js, the checker's own tests, and ESLint over
+    # the specs and playwright.config.js. It needs no browser, unlike the suite.
+    npm run lint:e2e
     # Every scripts/test_*.py, not a hand-kept list: the vault-safety evidence
     # verifier's own tests sat outside this recipe once, so a regression in the
     # verifier would have read as a green run.

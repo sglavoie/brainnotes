@@ -2,23 +2,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { noteNavigationDestination, normalizeOpenErrorMessage } from "./api";
 import { initOpenInEditor } from "./editor-open";
+import { waitForExpect as sharedWaitForExpect } from "./shared.test-helpers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
 
-const waitForExpect = async (assertion: () => void, attempts = 20): Promise<void> => {
-  for (let i = 0; i < attempts; i += 1) {
-    try {
-      assertion();
-      return;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-  }
-  assertion();
-};
+const waitForExpect = (assertion: () => void): Promise<void> =>
+  sharedWaitForExpect(assertion, { delayMs: 5 });
 
 describe("noteNavigationDestination", () => {
   it("reads the route a server without an editor answers with", () => {

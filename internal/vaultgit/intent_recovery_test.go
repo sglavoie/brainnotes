@@ -12,6 +12,7 @@ import (
 // The mirror image: a commit that exists as an object but that nothing points at
 // is a snapshot that never landed, and it keeps the vault refused.
 func TestRecoveryRefusesAnIntentWhoseCommitNeverLanded(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()
@@ -57,6 +58,7 @@ func TestRecoveryRefusesAnIntentWhoseCommitNeverLanded(t *testing.T) {
 // sharper reason: proving a snapshot landed requires the object name the
 // unreadable bytes were supposed to hold.
 func TestUnreadableIntentRecordRefusesMutations(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		body string
@@ -97,6 +99,7 @@ func TestUnreadableIntentRecordRefusesMutations(t *testing.T) {
 // A record belonging to a live operation in another process is not abandoned,
 // and Open must leave it alone rather than adjudicate it.
 func TestOpenLeavesALiveOperationsIntentAlone(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()
@@ -128,6 +131,7 @@ func TestOpenLeavesALiveOperationsIntentAlone(t *testing.T) {
 // An ordinary successful snapshot leaves nothing behind, so the recovery pass on
 // the next open is a no-op and costs one failed file open.
 func TestSuccessfulSnapshotLeavesNoIntent(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	if !h.commitPending().Committed {
@@ -152,6 +156,7 @@ func TestSuccessfulSnapshotLeavesNoIntent(t *testing.T) {
 // The state directory lives inside .git, so nothing it holds can become a
 // pending change the engine would then try to commit.
 func TestIntentRecordIsInvisibleToGit(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()
@@ -179,6 +184,7 @@ func TestIntentRecordIsInvisibleToGit(t *testing.T) {
 // promises a self-retirement they cannot get, or sends them looking for a commit
 // that was never built.
 func TestIntentRecoveryStepsAreWrittenForThePhase(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", secretBody)
 	h.commitPending()

@@ -10,6 +10,7 @@ func status(x, y byte, path string) statusEntry {
 }
 
 func TestClassifyPendingRecognizedStates(t *testing.T) {
+	t.Parallel()
 	changes, err := classifyPending([]statusEntry{
 		status('?', '?', "Inbox/new.md"),
 		status(' ', 'M', "Inbox/edited.md"),
@@ -37,6 +38,7 @@ func TestClassifyPendingRecognizedStates(t *testing.T) {
 // change in particular looks harmless and is not: a note replaced by a symlink
 // or a directory would otherwise be committed as if the user had edited it.
 func TestClassifyPendingRefusesAmbiguity(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		entry statusEntry
@@ -68,6 +70,7 @@ func TestClassifyPendingRefusesAmbiguity(t *testing.T) {
 // One ambiguous path poisons the whole pass. Committing the rest and silently
 // leaving the ambiguous one behind would make a partial snapshot look complete.
 func TestClassifyPendingRefusesWholeSetOnAmbiguity(t *testing.T) {
+	t.Parallel()
 	_, err := classifyPending([]statusEntry{
 		status('?', '?', "Inbox/fine.md"),
 		status(' ', 'T', "Inbox/broken.md"),
@@ -85,6 +88,7 @@ func TestClassifyPendingRefusesWholeSetOnAmbiguity(t *testing.T) {
 }
 
 func TestInTrackedScope(t *testing.T) {
+	t.Parallel()
 	// An out-of-scope path that git already tracks stays in scope, so it can
 	// never fall out of the history because the policy narrowed underneath it.
 	tracked := pendingChange{path: "backups/old.md", kind: changeModified, tracked: true}

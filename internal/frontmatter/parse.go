@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // Parse extracts frontmatter and body from a markdown document. A file that
