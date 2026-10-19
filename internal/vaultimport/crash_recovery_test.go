@@ -136,7 +136,9 @@ func requireRollbackResumed(t *testing.T, report crashReport, entry, edited stri
 	// Not requireBooks: the edit is deliberately left in the working tree, so this
 	// is the one recovered vault in this file that is legitimately dirty.
 	requireHistory(t, report, Record{}, false)
-	requireImports(t, report.Root, false)
+	// The ledger was written before the interrupted application began, and
+	// outlives its rollback harmlessly: see the crashApplied case above.
+	requireImports(t, report.Root, true)
 	settled, err := LoadState(report.Root)
 	if err != nil {
 		t.Fatalf("LoadState: %v", err)
