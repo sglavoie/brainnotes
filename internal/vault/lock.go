@@ -28,10 +28,6 @@ const (
 	// of one per path: the shared vault guard. It is subtracted from the budget so
 	// the threshold describes paths the process can actually add locks for.
 	pathLockGuardFDs = 1
-	// maxLockedPathsCeiling bounds how many paths are locked individually even on
-	// a process with a huge descriptor budget: every one of them is held for the
-	// whole commit. A larger set is not refused, it escalates to vaultLockFileName.
-	maxLockedPathsCeiling = 4096
 	// vaultLockFileName is the single guard every bn writer takes before it locks
 	// anything else. Ordinary writers take it shared, so they still exclude each
 	// other only per path; a set too large to hold one descriptor per path takes it
@@ -39,6 +35,13 @@ const (
 	// descriptor no matter how many paths the set covers.
 	vaultLockFileName = "vault.lock"
 )
+
+// maxLockedPathsCeiling bounds how many paths are locked individually even on a
+// process with a huge descriptor budget: every one of them is held for the whole
+// commit. A larger set is not refused, it escalates to vaultLockFileName. It is a
+// variable only so tests can cross the boundary without creating thousands of
+// files; production code never assigns it.
+var maxLockedPathsCeiling = 4096
 
 // MaxLockedPaths reports how many paths one transaction locks individually
 // before it escalates to the vault-wide guard. Per-path locks are held together

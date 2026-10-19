@@ -223,6 +223,30 @@ func TestOrdinaryLocksShareTheVaultGuard(t *testing.T) {
 	second.release()
 }
 
+// lowerLockedPathsCeiling caps MaxLockedPaths for the length of the test. Tests
+// using it must not call t.Parallel: the ceiling is package state.
+func lowerLockedPathsCeiling(t *testing.T, ceiling int) {
+	t.Helper()
+	previous := maxLockedPathsCeiling
+	maxLockedPathsCeiling = ceiling
+	t.Cleanup(func() { maxLockedPathsCeiling = previous })
+}
+
+// seedNumberedFiles writes count files holding body under root and returns
+// their paths in order.
+func seedNumberedFiles(t *testing.T, root string, count int, body string) []string {
+	t.Helper()
+	paths := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		path := filepath.Join(root, fmt.Sprintf("n%05d.txt", i))
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatalf("seed %s: %v", path, err)
+		}
+		paths = append(paths, path)
+	}
+	return paths
+}
+
 // TestFileTxnAtomicCommitBeyondLockedPathCeiling is the boundary itself: a
 // transaction planning more paths than MaxLockedPaths reports must still commit
 // as one action. It used to be impossible — every planned path needed its own
@@ -231,16 +255,13 @@ func TestOrdinaryLocksShareTheVaultGuard(t *testing.T) {
 func TestFileTxnAtomicCommitBeyondLockedPathCeiling(t *testing.T) {
 	requireLocking(t)
 
+	// A small ceiling crosses the same boundary the production one does, without
+	// seeding thousands of notes.
+	lowerLockedPathsCeiling(t, 32)
+
 	count := MaxLockedPaths() + 8
 	root := t.TempDir()
-	paths := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		path := filepath.Join(root, fmt.Sprintf("n%05d.txt", i))
-		if err := os.WriteFile(path, []byte("old\n"), 0o644); err != nil {
-			t.Fatalf("seed %s: %v", path, err)
-		}
-		paths = append(paths, path)
-	}
+	paths := seedNumberedFiles(t, root, count, "old\n")
 
 	txn, err := NewFileTxn(root)
 	if err != nil {
