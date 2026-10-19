@@ -45,6 +45,7 @@ func runUndoCommand(cmd *cobra.Command, args []string, opts undoOptions) error {
 		Force:   opts.force,
 		DryRun:  opts.dryRun,
 		Command: commandInvocation(cmd, args),
+		Context: commandContext(cmd),
 	})
 	if err != nil {
 		return describeUndoError(err)

@@ -13,8 +13,11 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
+// removeOptions has no validate(): --yes and --dry-run compose (a dry run
+// never asks), so there is no flag matrix to check.
 type removeOptions struct {
-	yes bool
+	yes    bool
+	dryRun bool
 }
 
 // NewRemoveCmd returns the `remove` subcommand. Exported for tests.
@@ -29,7 +32,10 @@ picker when no note is supplied, then moves the selected note to Trash/ without
 rewriting backlinks. The original vault-relative folder is preserved below Trash/.
 The operation is journaled, so 'bn undo <id>' restores the note.
 
-Use --yes to skip the confirmation prompt.`,
+Remove asks for confirmation on a terminal. Without one (a script, a pipe) it
+refuses unless --yes is given, rather than reading an answer from stdin.
+--dry-run prints the path change the move would make, in the --dry-run format
+every mutating command shares, and writes nothing.`,
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -38,7 +44,8 @@ Use --yes to skip the confirmation prompt.`,
 		},
 	}
 
-	cmd.Flags().BoolVar(&opts.yes, "yes", false, "skip the confirmation prompt")
+	cmd.Flags().BoolVarP(&opts.yes, "yes", "y", false, "skip the confirmation prompt (required without a terminal)")
+	cmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "preview the move to Trash/ without writing")
 	return cmd
 }
 
@@ -61,17 +68,23 @@ func runRemove(cmd *cobra.Command, args []string, opts *removeOptions) error {
 		return err
 	}
 	out := cmd.OutOrStdout()
-	if !opts.yes {
-		confirmed, err := confirm(cmd.InOrStdin(), cmd.ErrOrStderr(), "remove", fmt.Sprintf("Move %s to Trash?", sourceRel))
+	if opts.dryRun {
+		preview, err := noteops.PreviewTrash(v.Root, sourceRel)
 		if err != nil {
-			return err
+			return fmt.Errorf("remove: %w", err)
 		}
-		if !confirmed {
-			return canceled("remove")
+		return noteops.RenderNotePreview(out, preview)
+	}
+	if !opts.yes {
+		if err := confirmTerminal(cmd, "remove", fmt.Sprintf("Move %s to Trash?", sourceRel),
+			"no terminal to confirm on; pass --yes to move the note to Trash, or --dry-run to preview"); err != nil {
+			return err
 		}
 	}
 
-	result, err := noteops.TrashNote(v.Root, sourceRel, noteops.WithTrashCommand(commandInvocation(cmd, args)))
+	result, err := noteops.TrashNote(v.Root, sourceRel,
+		noteops.WithTrashCommand(commandInvocation(cmd, args)),
+		noteops.WithTrashContext(commandContext(cmd)))
 	if err != nil {
 		return err
 	}

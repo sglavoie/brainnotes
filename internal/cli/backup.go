@@ -41,7 +41,8 @@ This is a vault-level safety snapshot, separate from the undo journal used by
 			}
 
 			result, err := backup.Create(cfg.Vault, backup.CreateOptions{
-				Now: func() time.Time { return nowForBackup() },
+				Now:     func() time.Time { return nowForBackup() },
+				Context: commandContext(cmd),
 			})
 			if err != nil {
 				return err
@@ -112,7 +113,7 @@ also accepted. This command is separate from the undo journal, so inspect with
 
 	cmd.Flags().BoolVar(&opts.wipe, "wipe", false, "delete existing vault contents except backups/ and .git/ before restoring")
 	cmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "list what the restore would create, overwrite, and remove without changing the vault")
-	cmd.Flags().BoolVar(&opts.yes, "yes", false, "skip the --wipe confirmation prompt")
+	cmd.Flags().BoolVarP(&opts.yes, "yes", "y", false, "skip the --wipe confirmation prompt (required without a terminal)")
 	return cmd
 }
 
@@ -141,7 +142,7 @@ func runRestore(cmd *cobra.Command, archive string, opts restoreOptions) error {
 		}
 	}
 
-	result, err := noteops.RestoreBackup(cfg.Vault, archive, restoreOpts)
+	result, err := noteops.RestoreBackupContext(commandContext(cmd), cfg.Vault, archive, restoreOpts)
 	if err != nil {
 		return err
 	}
@@ -157,23 +158,13 @@ func runRestore(cmd *cobra.Command, archive string, opts restoreOptions) error {
 
 // confirmWipe asks before a wipe deletes what the archive does not hold. A
 // script cannot answer a prompt, so without a terminal the refusal says which
-// flag to pass instead of reading an EOF as "no".
+// flag to pass instead of reading an EOF as "no" (confirmTerminal).
 func confirmWipe(cmd *cobra.Command, preview *backup.RestorePreview) error {
 	question := fmt.Sprintf("Delete %d path(s) not in the archive, then restore %d file(s) from %s?",
 		len(preview.Remove), len(preview.Create)+len(preview.Overwrite)+preview.Unchanged, preview.ArchivePath)
-	in := cmd.InOrStdin()
-	if !isTerminal(in) {
-		return fmt.Errorf("restore: --wipe would delete %d path(s) not in the archive; pass --yes to confirm, or --dry-run to list them",
-			len(preview.Remove))
-	}
-	ok, err := confirm(in, cmd.ErrOrStderr(), "restore", question)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return canceled("restore")
-	}
-	return nil
+	refusal := fmt.Sprintf("--wipe would delete %d path(s) not in the archive; pass --yes to confirm, or --dry-run to list them",
+		len(preview.Remove))
+	return confirmTerminal(cmd, "restore", question, refusal)
 }
 
 func writeRestorePreview(w io.Writer, p *backup.RestorePreview) error {
