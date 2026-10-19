@@ -71,44 +71,54 @@ func JoinContextWithin(ctx context.Context, root string, wait time.Duration) (co
 	if wait <= 0 {
 		wait = DefaultWriterWait
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	deadline := time.Now().Add(wait)
 	refs := slotFor(paths.root)
 	for {
-		refs.mu.Lock()
-		if refs.depth == 0 {
-			release, acquireErr := acquireShared(paths, remaining(deadline))
-			if acquireErr != nil {
-				refs.mu.Unlock()
-				return ctx, noop, acquireErr
-			}
-			refs.depth = 1
-			refs.release = release
-			handle := refs.handle()
-			refs.mu.Unlock()
-			return markActiveContext(ctx, paths.root, handle)
-		}
-
-		// The process already owns the shared flock. It is safe to count this
-		// admission only while no checkpoint has announced. Once announced, this
-		// is a new writer and must stand aside just like a writer in another
-		// process; true nested work has been identified by contextCovers above.
-		blocked, announceErr := announced(paths)
-		if announceErr != nil {
-			refs.mu.Unlock()
-			return ctx, noop, announceErr
+		handle, blocked, admitErr := refs.admit(ctx, paths, deadline)
+		if admitErr != nil {
+			return ctx, noop, admitErr
 		}
 		if !blocked {
-			refs.depth++
-			handle := refs.handle()
-			refs.mu.Unlock()
 			return markActiveContext(ctx, paths.root, handle)
 		}
-		refs.mu.Unlock()
 		if !time.Now().Before(deadline) {
 			return ctx, noop, fmt.Errorf("%w: it is copying the vault; retry once it finishes", ErrBarrierHeld)
 		}
-		time.Sleep(joinPollInterval)
+		if err := pollPause(ctx); err != nil {
+			return ctx, noop, err
+		}
 	}
+}
+
+// admit makes one attempt to count a fresh logical write against this root and
+// returns its release handle. blocked reports a fresh in-process writer that
+// must wait for an announced checkpoint to clear before trying again.
+func (r *references) admit(ctx context.Context, paths vaultPaths, deadline time.Time) (func(), bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.depth == 0 {
+		release, err := acquireShared(ctx, paths, remaining(deadline))
+		if err != nil {
+			return nil, false, err
+		}
+		r.depth = 1
+		r.release = release
+		return r.handle(), false, nil
+	}
+
+	// The process already owns the shared flock. It is safe to count this
+	// admission only while no checkpoint has announced. Once announced, this
+	// is a new writer and must stand aside just like a writer in another
+	// process; true nested work has been identified by contextCovers.
+	blocked, err := announced(paths)
+	if err != nil || blocked {
+		return nil, blocked, err
+	}
+	r.depth++
+	return r.handle(), false, nil
 }
 
 type joinedContext struct {
@@ -176,7 +186,7 @@ func Joined(root string) bool {
 // slips in between the check and the acquisition is admitted, and the
 // checkpoint's drain budget covers it — the record is written once, so at most
 // the writers already in flight at that instant can win the race.
-func acquireShared(paths vaultPaths, wait time.Duration) (func(), error) {
+func acquireShared(ctx context.Context, paths vaultPaths, wait time.Duration) (func(), error) {
 	if wait <= 0 {
 		wait = DefaultWriterWait
 	}
@@ -199,7 +209,23 @@ func acquireShared(paths vaultPaths, wait time.Duration) (func(), error) {
 		if !time.Now().Before(deadline) {
 			return nil, fmt.Errorf("%w: it is copying the vault; retry once it finishes", ErrBarrierHeld)
 		}
-		time.Sleep(joinPollInterval)
+		if err := pollPause(ctx); err != nil {
+			return nil, err
+		}
+	}
+}
+
+// pollPause waits one poll interval for an announced checkpoint to clear, or
+// returns early when the caller's context ends. A request whose client has gone
+// away must not keep holding the per-root mutex for the whole writer budget.
+func pollPause(ctx context.Context) error {
+	timer := time.NewTimer(joinPollInterval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("checkpoint: wait for checkpoint to clear: %w", ctx.Err())
+	case <-timer.C:
+		return nil
 	}
 }
 

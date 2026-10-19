@@ -5,10 +5,50 @@ import (
 	"time"
 )
 
+// TestAgeComparesLocalDaysInAZoneBehindUTC pins every operator to local
+// calendar days at 21:00 in UTC-4, when the UTC date has already rolled over.
+// A YAML date `2026-05-18` parses as midnight UTC; measured with time.Since it
+// is 3d01h old at 2026-05-20 21:00 -04:00 (01:00 UTC on the 21st), which used
+// to make `>2d` match a note that is two local days old while `=2d` matched it
+// too.
+func TestAgeComparesLocalDaysInAZoneBehindUTC(t *testing.T) {
+	zone := time.FixedZone("UTC-4", -4*60*60)
+	now := func() time.Time { return time.Date(2026, 5, 20, 21, 0, 0, 0, zone) }
+	_, notes := newVault(t, map[string]string{
+		"two.md":   "---\ncreated: 2026-05-18\n---\n",
+		"today.md": "---\ncreated: 2026-05-20\n---\n",
+	})
+
+	cases := []struct {
+		note string
+		op   string
+		dur  time.Duration
+		want bool
+	}{
+		{"two.md", "=", 2 * ageDay, true},
+		{"two.md", ">", 2 * ageDay, false},
+		{"two.md", "<", 2 * ageDay, false},
+		{"two.md", ">", 1 * ageDay, true},
+		{"two.md", "<", 3 * ageDay, true},
+		{"today.md", "=", 0, true},
+		{"today.md", "<", 1 * ageDay, true},
+		{"today.md", ">", 0, false},
+		// Sub-day durations measure elapsed time from the local midnight of
+		// the date, not from midnight UTC: 21h have passed, not 25h.
+		{"today.md", "<", 22 * time.Hour, true},
+		{"today.md", ">", 22 * time.Hour, false},
+	}
+	for _, c := range cases {
+		if got := ageAt(c.op, c.dur, "created", now)(notes[c.note]); got != c.want {
+			t.Errorf("age%s%s on %s = %v, want %v", c.op, c.dur, c.note, got, c.want)
+		}
+	}
+}
+
 // TestAgeFutureDate documents how the predicate handles a date in the future
-// (e.g. a note dated tomorrow). `time.Since` returns a negative duration for
-// future timestamps, so `>30d` rejects it (a future note is not "older than
-// 30 days") while `<30d` accepts it (it is trivially "younger than 30 days").
+// (e.g. a note dated tomorrow). A future date has a negative day age, so
+// `>30d` rejects it (a future note is not "older than 30 days") while `<30d`
+// accepts it (it is trivially "younger than 30 days").
 // `=0d` rejects unless today.
 func TestAgeFutureDate(t *testing.T) {
 	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
@@ -124,13 +164,13 @@ func TestAgeEqualSubDayDuration(t *testing.T) {
 // TestAgePredicateMonthBoundary verifies that the `=` operator's calendar-day
 // math correctly walks across month boundaries (e.g. =1d on March 1 matches a
 // note dated Feb 28 or Feb 29). time.Time.AddDate handles this automatically;
-// this test pins down the integration so a future refactor of equalDayAge that
+// this test pins down the integration so a future refactor of the day-age math that
 // reinvented the math would not silently break.
 
 // TestAgePredicateMonthBoundary verifies that the `=` operator's calendar-day
 // math correctly walks across month boundaries (e.g. =1d on March 1 matches a
 // note dated Feb 28 or Feb 29). time.Time.AddDate handles this automatically;
-// this test pins down the integration so a future refactor of equalDayAge that
+// this test pins down the integration so a future refactor of the day-age math that
 // reinvented the math would not silently break.
 func TestAgePredicateMonthBoundary(t *testing.T) {
 	// Pick a known month-boundary date: yesterday from "today" reliably

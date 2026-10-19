@@ -142,19 +142,31 @@ func DeadEnd(g *Graph) Predicate {
 
 // Age matches notes whose date at prop satisfies the comparison. op is one of
 // ">", "<", or "=":
-//   - ">": note is older than dur (i.e. now - prop > dur).
+//   - ">": note is older than dur.
 //   - "<": note is younger than dur.
 //   - "=": note's age in days equals dur in days (e.g. =0d → today).
 //
-// For "=" comparisons, the comparison is performed on calendar dates in the
-// local time zone. This matters because YAML date scalars like `2026-05-19`
-// parse as midnight UTC, so a naive `time.Since` measurement can land on the
-// wrong side of a day boundary when the local zone differs from UTC. The
-// frontmatter date is interpreted as a local-time date when its time-of-day
-// component is zero and the zone is UTC (the YAML-date convention).
+// Ages are measured on calendar dates in the local time zone. This matters
+// because YAML date scalars like `2026-05-19` parse as midnight UTC, so a naive
+// `time.Since` measurement can land on the wrong side of a day boundary when the
+// local zone differs from UTC. The frontmatter date is interpreted as a
+// local-time date when its time-of-day component is zero and the zone is UTC
+// (the YAML-date convention).
+//
+// "=" and whole-day ">"/"<" durations compare local day numbers, so for any
+// whole number of days exactly one of the three operators matches. A ">" or "<"
+// duration with a sub-day remainder (e.g. `<36h`) compares elapsed time since
+// the local reading of the value instead, which keeps hour-level queries on
+// timestamped properties meaningful.
 //
 // Notes without a parseable timestamp at prop never match.
 func Age(op string, dur time.Duration, prop string) Predicate {
+	return ageAt(op, dur, prop, time.Now)
+}
+
+// ageAt is Age with an injectable clock; the clock's location is the local zone
+// day boundaries are evaluated in.
+func ageAt(op string, dur time.Duration, prop string, now func() time.Time) Predicate {
 	return func(n *vault.Note) bool {
 		fm, err := n.Front()
 		if err != nil {
@@ -164,29 +176,41 @@ func Age(op string, dur time.Duration, prop string) Predicate {
 		if !ok {
 			return false
 		}
-		switch op {
-		case ">":
-			return time.Since(t) > dur
-		case "<":
-			return time.Since(t) < dur
-		case "=":
-			return equalDayAge(t, dur)
-		}
-		return false
+		return compareAge(op, dur, t, now())
 	}
 }
 
-// equalDayAge reports whether t is exactly dur days old, with day boundaries
-// evaluated in the local time zone. A YAML date scalar (midnight UTC, zero
-// time-of-day) is reinterpreted as the same calendar date in local time so
-// that `=0d` reliably means "today" regardless of the user's timezone.
-func equalDayAge(t time.Time, dur time.Duration) bool {
-	now := time.Now()
-	noteDate := localDate(t, now.Location())
-	wantDate := now.AddDate(0, 0, -int(dur/(24*time.Hour))).In(now.Location())
-	wantY, wantM, wantD := wantDate.Date()
-	gotY, gotM, gotD := noteDate.Date()
-	return gotY == wantY && gotM == wantM && gotD == wantD
+// compareAge applies op to t's age as of now, per the rules documented on Age.
+func compareAge(op string, dur time.Duration, t, now time.Time) bool {
+	if op == "=" {
+		return LocalDayAge(t, now) == wholeDays(dur)
+	}
+	if dur%ageDay != 0 {
+		elapsed := now.Sub(localDate(t, now.Location()))
+		return (op == ">" && elapsed > dur) || (op == "<" && elapsed < dur)
+	}
+	age := LocalDayAge(t, now)
+	return (op == ">" && age > wholeDays(dur)) || (op == "<" && age < wholeDays(dur))
+}
+
+const ageDay = 24 * time.Hour
+
+// wholeDays truncates dur to a whole number of days, so `=23h` means `=0d`.
+func wholeDays(dur time.Duration) int {
+	return int(dur / ageDay)
+}
+
+// LocalDayAge returns how many calendar days t lies before now, with both read
+// as dates in now's location. A future date is negative. A YAML date scalar
+// (midnight UTC, zero time-of-day) keeps its calendar date, per LocalDate, so a
+// `2026-05-19` value is one day old on 2026-05-20 at any hour in any zone.
+func LocalDayAge(t, now time.Time) int {
+	ny, nm, nd := now.Date()
+	ty, tm, td := localDate(t, now.Location()).Date()
+	// Subtracting UTC midnights counts calendar days without a DST-shortened
+	// or lengthened local day skewing the division.
+	diff := time.Date(ny, nm, nd, 0, 0, 0, 0, time.UTC).Sub(time.Date(ty, tm, td, 0, 0, 0, 0, time.UTC))
+	return int(diff / ageDay)
 }
 
 // localDate returns t shifted into loc. When t has no time-of-day component

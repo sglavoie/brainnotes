@@ -115,7 +115,11 @@ func normalizeArchiveEntry(header *tar.Header, seen map[string]entryKind) (archi
 		return archiveEntry{}, fmt.Errorf("backup restore: archive entry %q cannot replace the live sidecar directory", header.Name)
 	}
 
-	key := strings.ToLower(cleaned)
+	// The key is the name a case-insensitive, normalization-insensitive
+	// filesystem such as APFS treats as one file: composed and decomposed
+	// spellings of `café.md` must collide, or one entry silently overwrites
+	// the other on extraction.
+	key := vaultsync.CollisionKey(cleaned)
 	if err := checkArchiveConflicts(key, kind, seen); err != nil {
 		return archiveEntry{}, err
 	}

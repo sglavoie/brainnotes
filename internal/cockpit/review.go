@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 )
 
 // statusProperty is the frontmatter key the review-metadata rules read a note's
@@ -95,15 +96,17 @@ func noteTimestamp(front *frontmatter.Map, properties ...string) (time.Time, boo
 	return time.Time{}, false
 }
 
-// daysSince returns the whole number of days elapsed from then until now,
-// floored at zero: a zero, equal, or future timestamp reports 0. It underlies
-// the stale-status age check, which compares the result against
-// [cockpit] stale_status_days.
+// daysSince returns how many local calendar days then lies before now, floored
+// at zero: a zero, same-day, or future timestamp reports 0. Days are counted in
+// now's location with query.LocalDayAge, so a YAML review date (midnight UTC)
+// ages by the user's calendar like `bn find --age` does, rather than turning a
+// day older at UTC midnight. It underlies the stale-status age check, which
+// compares the result against [cockpit] stale_status_days.
 func daysSince(now, then time.Time) int {
-	if then.IsZero() || !then.Before(now) {
+	if then.IsZero() {
 		return 0
 	}
-	return int(now.Sub(then).Hours() / 24)
+	return max(query.LocalDayAge(then, now), 0)
 }
 
 // isHubNote reports whether a note's type/kind frontmatter names it a hub/MOC

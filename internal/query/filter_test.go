@@ -335,17 +335,17 @@ func TestAgeEqualUTCDateConvention(t *testing.T) {
 	// Build a frontmatter time exactly as the YAML parser would: midnight UTC.
 	now := time.Now()
 	utcMidnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	if !equalDayAge(utcMidnight, 0) {
-		t.Errorf("equalDayAge(midnight-UTC, 0) = false; want true (today)")
+	if !compareAge("=", 0, utcMidnight, now) {
+		t.Errorf("compareAge(=, midnight-UTC, 0) = false; want true (today)")
 	}
 
 	// And a UTC midnight from three days ago should match =3d.
 	threeBack := utcMidnight.AddDate(0, 0, -3)
-	if !equalDayAge(threeBack, 3*24*time.Hour) {
-		t.Errorf("equalDayAge(midnight-UTC-3d, 3d) = false; want true")
+	if !compareAge("=", 3*24*time.Hour, threeBack, now) {
+		t.Errorf("compareAge(=, midnight-UTC-3d, 3d) = false; want true")
 	}
-	if equalDayAge(threeBack, 0) {
-		t.Errorf("equalDayAge(midnight-UTC-3d, 0) = true; want false")
+	if compareAge("=", 0, threeBack, now) {
+		t.Errorf("compareAge(=, midnight-UTC-3d, 0) = true; want false")
 	}
 }
 

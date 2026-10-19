@@ -113,6 +113,31 @@ func TestDaysSince(t *testing.T) {
 	}
 }
 
+// TestDaysSinceCountsLocalCalendarDays pins the age to the user's calendar at
+// 21:00 in UTC-4, when the UTC date has already rolled over. A YAML review date
+// parses as midnight UTC, and measuring elapsed hours from that instant made a
+// date reviewed two local days ago read as three.
+func TestDaysSinceCountsLocalCalendarDays(t *testing.T) {
+	zone := time.FixedZone("UTC-4", -4*60*60)
+	now := time.Date(2026, 5, 20, 21, 0, 0, 0, zone)
+	cases := []struct {
+		name string
+		then time.Time
+		want int
+	}{
+		{"YAML date two local days back", time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC), 2},
+		{"YAML date today", time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC), 0},
+		{"YAML date tomorrow", time.Date(2026, 5, 21, 0, 0, 0, 0, time.UTC), 0},
+		{"local timestamp late yesterday", time.Date(2026, 5, 19, 23, 30, 0, 0, zone), 1},
+		{"local timestamp earlier today", time.Date(2026, 5, 20, 0, 30, 0, 0, zone), 0},
+	}
+	for _, tc := range cases {
+		if got := daysSince(now, tc.then); got != tc.want {
+			t.Errorf("%s: daysSince = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestIsHubNote(t *testing.T) {
 	hubTypes := []string{"moc", "hub"}
 	if !isHubNote(frontFrom(t, "type: MOC"), hubTypes) {
