@@ -21,6 +21,7 @@ func TestUsageErrorsNameTheCommand(t *testing.T) {
 		{"unknown shorthand", []string{"find", "-Z"}, "bn: find: unknown shorthand flag: 'Z' in -Z; see 'bn find --help'\n"},
 		{"missing flag value", []string{"find", "--sort"}, "bn: find: flag needs an argument: --sort; see 'bn find --help'\n"},
 		{"root flag", []string{"--bogus"}, "bn: unknown flag: --bogus; see 'bn --help'\n"},
+		{"no root -v", []string{"-v", "tags"}, "bn: unknown shorthand flag: 'v' in -v; see 'bn --help'\n"},
 		{"unknown command", []string{"bogus"}, "bn: unknown command \"bogus\" for \"bn\"; see 'bn --help'\n"},
 		{"unknown subcommand", []string{"config", "bogus"}, "bn: config: unknown command \"bogus\" for \"bn config\"; see 'bn config --help'\n"},
 		{"prefixed validator", []string{"config", "get"}, "bn: config get: expected 1 argument(s), got 0; usage: bn config get autosave.min_interval; see 'bn config get --help'\n"},

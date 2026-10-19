@@ -124,6 +124,10 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "path to vault root (overrides BNOTES_VAULT and the upward search)")
+	// Declared here so Cobra does not add its default -v shorthand for
+	// --version: -v is the local --verbose of links, backlinks and values, and
+	// 'bn -v tags' should be refused rather than silently print the version.
+	cmd.Flags().Bool("version", false, "print the bn version")
 
 	addRootCommandGroups(cmd)
 	registerCompletions(cmd)
