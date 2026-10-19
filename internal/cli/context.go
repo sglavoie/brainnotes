@@ -137,12 +137,13 @@ func validateContextOptions(options contextOptions) (validatedContextOptions, er
 }
 
 func buildContextPayload(
+	errOut io.Writer,
 	v *vault.Vault,
 	sourceArg string,
 	options validatedContextOptions,
 	rankOptions recall.RankOptions,
 ) ([]byte, error) {
-	queryResult, err := buildRelatedQuery(v, sourceArg, recall.ModeBalanced, rankOptions)
+	queryResult, err := buildRelatedQuery(errOut, "context", v, sourceArg, recall.ModeBalanced, rankOptions)
 	if err != nil {
 		return nil, err
 	}

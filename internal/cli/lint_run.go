@@ -55,7 +55,7 @@ func runLintCommand(cmd *cobra.Command, opts lintOptions) error {
 		return err
 	}
 
-	notes, err := v.Notes()
+	notes, skipped, err := v.NotesLenient()
 	if err != nil {
 		return err
 	}
@@ -68,6 +68,7 @@ func runLintCommand(cmd *cobra.Command, opts lintOptions) error {
 	if err != nil {
 		return err
 	}
+	violations = append(violations, unparsableViolations(skipped, v.Root)...)
 	return reportLint(cmd, opts, violations)
 }
 
@@ -135,10 +136,27 @@ func lintProperties(cfg *config.Config, property string) (map[string]config.Prop
 	return map[string]config.PropertyDefinition{property: def}, nil
 }
 
-// collectLintViolations validates every selected note in selection order. A
-// note whose frontmatter cannot be parsed aborts the whole run rather than
-// being reported as a violation: an unreadable note is a lint failure, not a
-// schema finding.
+// unparsableViolations turns every note whose frontmatter could not be parsed
+// into a "parse" violation, so one malformed note is reported alongside the
+// schema findings instead of aborting the run. They are reported whatever the
+// find flags select: a note that cannot be parsed cannot be matched against a
+// filter either, and staying silent would read as a clean vault.
+func unparsableViolations(skipped []vault.SkippedNote, root string) []schema.Violation {
+	out := make([]schema.Violation, 0, len(skipped))
+	for _, s := range skipped {
+		out = append(out, schema.Violation{
+			Property: "frontmatter",
+			Kind:     schema.KindParse,
+			Detail:   s.Err.Error(),
+			NotePath: displayPath(s.Path, root),
+		})
+	}
+	return out
+}
+
+// collectLintViolations validates every selected note in selection order. The
+// notes come from NotesLenient, so an unparsable one has already been diverted
+// to unparsableViolations; an error here is a genuine load failure.
 func collectLintViolations(notes []*vault.Note, root string, props map[string]config.PropertyDefinition) ([]schema.Violation, error) {
 	var all []schema.Violation
 	for _, n := range notes {

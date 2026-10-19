@@ -12,9 +12,15 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 )
 
+// KindParse is the Violation kind for a note whose frontmatter could not be
+// parsed at all. ValidateNote never produces it; `bn lint` reports it for the
+// notes vault.NotesLenient skipped, with Property "frontmatter" and the parse
+// error as Detail.
+const KindParse = "parse"
+
 type Violation struct {
 	Property string
-	Kind     string // "missing", "type", "value"
+	Kind     string // "missing", "type", "value", or KindParse
 	Detail   string
 	NotePath string
 }

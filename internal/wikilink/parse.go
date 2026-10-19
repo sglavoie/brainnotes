@@ -17,14 +17,26 @@ import (
 // the optional fragment and display text. Start/End are byte offsets in the
 // source text — End is exclusive (`text[Start:End]` returns the full `[[...]]`
 // span).
+//
+// EscapedPipe records the Obsidian table form `[[Target\|Alias]]`, where the
+// alias separator is written `\|` so it does not split a Markdown table cell.
+// The backslash belongs to the separator, not to Target (or Heading), and a
+// rewrite must write the separator back the same way: see WithTarget.
 type Link struct {
-	Raw     string
-	Target  string
-	Folder  string
-	Heading string
-	Alias   string
-	Start   int
-	End     int
+	Raw         string
+	Target      string
+	Folder      string
+	Heading     string
+	Alias       string
+	EscapedPipe bool
+	Start       int
+	End         int
+}
+
+// WithTarget renders l pointing at target, keeping its heading, alias and
+// alias-separator form, so a rename inside a Markdown table keeps `\|`.
+func (l Link) WithTarget(target string) string {
+	return formatLink(target, l.Heading, l.Alias, l.EscapedPipe)
 }
 
 // Title returns the last path segment of Target — the bit after the final `/`,
@@ -63,58 +75,88 @@ func Parse(s string) []Link {
 	}
 	var links []Link
 	for _, m := range matches {
-		start, end := m[0], m[1]
-		if rangeOverlapsAny(start, end, mask) {
+		if rangeOverlapsAny(m[0], m[1], mask) {
 			continue
 		}
-		// Obsidian trims surrounding whitespace around the target, heading,
-		// and alias when resolving the link, so we normalize them here. This
-		// keeps Title()-based comparisons (used by rewrite, backlinks, orphan
-		// detection) consistent for inputs like `[[ Foo ]]` or `[[Foo | a ]]`.
-		// Raw/Start/End preserve the original byte range for rewrite spans.
-		target := trimASCIISpace(s[m[2]:m[3]])
-		var heading, alias string
-		if m[4] != -1 {
-			heading = trimASCIISpace(s[m[4]:m[5]])
+		if link, ok := linkFromMatch(s, m); ok {
+			links = append(links, link)
 		}
-		if m[6] != -1 {
-			alias = trimASCIISpace(s[m[6]:m[7]])
-		}
-		// An all-whitespace target is not a real link.
-		if target == "" {
-			continue
-		}
-		// A heading or alias that is all whitespace after trimming means the
-		// separator (`#` or `|`) was present but the content was empty or
-		// blank. These are not valid Obsidian links; more importantly,
-		// FormatLink would silently drop the separator on rewrite, changing
-		// the link form. Reject them so rewrites never alter link semantics.
-		if m[4] != -1 && heading == "" {
-			continue
-		}
-		if m[6] != -1 && alias == "" {
-			continue
-		}
-		folder := ""
-		if idx := strings.LastIndex(target, "/"); idx >= 0 {
-			folder = target[:idx]
-			// A target like "Folder/" has an empty title component after the
-			// last slash. Obsidian does not allow empty note names, so reject.
-			if idx == len(target)-1 {
-				continue
-			}
-		}
-		links = append(links, Link{
-			Raw:     s[start:end],
-			Target:  target,
-			Folder:  folder,
-			Heading: heading,
-			Alias:   alias,
-			Start:   start,
-			End:     end,
-		})
 	}
 	return links
+}
+
+// linkFromMatch builds the Link for one regex match m in s, reporting false for
+// a match that is not a valid Obsidian link.
+func linkFromMatch(s string, m []int) (Link, bool) {
+	// Obsidian trims surrounding whitespace around the target, heading,
+	// and alias when resolving the link, so we normalize them here. This
+	// keeps Title()-based comparisons (used by rewrite, backlinks, orphan
+	// detection) consistent for inputs like `[[ Foo ]]` or `[[Foo | a ]]`.
+	// Raw/Start/End preserve the original byte range for rewrite spans.
+	rawTarget, rawHeading, escapedPipe := splitEscapedPipe(s, m)
+	target := trimASCIISpace(rawTarget)
+	var heading, alias string
+	if m[4] != -1 {
+		heading = trimASCIISpace(rawHeading)
+	}
+	if m[6] != -1 {
+		alias = trimASCIISpace(s[m[6]:m[7]])
+	}
+	// An all-whitespace target is not a real link.
+	if target == "" {
+		return Link{}, false
+	}
+	// A heading or alias that is all whitespace after trimming means the
+	// separator (`#` or `|`) was present but the content was empty or
+	// blank. These are not valid Obsidian links; more importantly,
+	// FormatLink would silently drop the separator on rewrite, changing
+	// the link form. Reject them so rewrites never alter link semantics.
+	if (m[4] != -1 && heading == "") || (m[6] != -1 && alias == "") {
+		return Link{}, false
+	}
+	folder := ""
+	if idx := strings.LastIndex(target, "/"); idx >= 0 {
+		folder = target[:idx]
+		// A target like "Folder/" has an empty title component after the
+		// last slash. Obsidian does not allow empty note names, so reject.
+		if idx == len(target)-1 {
+			return Link{}, false
+		}
+	}
+	return Link{
+		Raw:         s[m[0]:m[1]],
+		Target:      target,
+		Folder:      folder,
+		Heading:     heading,
+		Alias:       alias,
+		EscapedPipe: escapedPipe,
+		Start:       m[0],
+		End:         m[1],
+	}, true
+}
+
+// splitEscapedPipe returns the raw target and heading of match m, with the one
+// backslash of an Obsidian table-escaped alias separator (`\|`) removed from
+// whichever of them precedes the `|`. Without an alias there is no separator
+// to escape, so a trailing backslash is left where it is.
+func splitEscapedPipe(s string, m []int) (target, heading string, escaped bool) {
+	target = s[m[2]:m[3]]
+	if m[4] != -1 {
+		heading = s[m[4]:m[5]]
+	}
+	if m[6] == -1 {
+		return target, heading, false
+	}
+	if m[4] != -1 {
+		if strings.HasSuffix(heading, `\`) {
+			return target, heading[:len(heading)-1], true
+		}
+		return target, heading, false
+	}
+	if strings.HasSuffix(target, `\`) {
+		return target[:len(target)-1], heading, true
+	}
+	return target, heading, false
 }
 
 // byteRange is a half-open [start, end) span in the source.

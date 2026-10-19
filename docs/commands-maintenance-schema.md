@@ -17,6 +17,11 @@ exit code `2` means lint could not run at all (for example, an unknown
 `--json` prints `{"count", "violations": [{"path", "property", "kind",
 "detail"}]}` instead of the grouped report, with the same exit codes.
 
+A note whose frontmatter cannot be parsed at all is reported as a
+`frontmatter: unparsable` violation carrying the parse error, rather than
+aborting the run. It is reported whatever the filters select, because a note
+that cannot be parsed cannot be matched against them either.
+
 `--property <key>` narrows the check to one declared property; naming a
 property that is not declared is an error rather than a silent pass. With no
 properties declared at all, `bn lint` prints a hint pointing at the config file

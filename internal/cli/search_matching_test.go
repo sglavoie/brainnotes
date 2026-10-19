@@ -129,3 +129,29 @@ func TestSearch_MultipleMatchingNotes(t *testing.T) {
 		t.Fatalf("search keyword:\n got=%v\nwant=%v", got, want)
 	}
 }
+
+// A decomposed (NFD) pattern must match composed (NFC) note text and vice
+// versa, in every matcher mode, the way queryexpr already compares in NFC.
+func TestBuildMatcherNormalizesToNFC(t *testing.T) {
+	const composed, decomposed = "café crème", "café crème"
+	modes := []struct {
+		name                   string
+		isRegex, caseSensitive bool
+	}{
+		{"substring", false, false},
+		{"case-sensitive", false, true},
+		{"regex", true, false},
+		{"case-sensitive regex", true, true},
+	}
+	for _, m := range modes {
+		for _, pair := range [][2]string{{decomposed, composed}, {composed, decomposed}} {
+			match, err := buildMatcher(pair[0], m.isRegex, m.caseSensitive)
+			if err != nil {
+				t.Fatalf("%s: buildMatcher(%q): %v", m.name, pair[0], err)
+			}
+			if !match("a line about " + pair[1] + " here") {
+				t.Errorf("%s: pattern %+q did not match text %+q", m.name, pair[0], pair[1])
+			}
+		}
+	}
+}

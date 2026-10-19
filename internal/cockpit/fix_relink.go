@@ -23,43 +23,11 @@ type relinkRewrite struct {
 // that match the task but have no deterministic target are recorded as skips so
 // callers know to fall back to stub creation.
 func planNoteRelink(note *vault.Note, rel string, g *query.Graph, idx *relinkIndex, targetKey string) (relinkRewrite, error) {
-	var rewrite relinkRewrite
-
-	broken := query.UnresolvedLinks(note, g)
-	bodyLineByStart := make(map[int]int, len(broken))
-	matchedResidue := false
-	for _, bl := range broken {
-		if brokenTargetKey(g, bl.Link.Target) != targetKey {
-			continue
-		}
-		if bl.FrontmatterKey == "" {
-			bodyLineByStart[bl.Link.Start] = bl.Line
-		}
-	}
-
-	replace := func(link wikilink.Link, key string) (string, bool) {
-		if brokenTargetKey(g, link.Target) != targetKey {
-			return "", false
-		}
-		newTarget, ok := idx.deterministicTarget(link)
-		if !ok {
-			matchedResidue = true
-			return "", false
-		}
-		replacement := wikilink.FormatLink(newTarget, link.Heading, link.Alias)
-		if replacement == link.Raw {
-			return "", false
-		}
-		change := noteops.PreviewChange{Old: noteops.PresentText(link.Raw), New: noteops.PresentText(replacement)}
-		if key == "" {
-			change.Kind = noteops.PreviewBody
-			change.Line = bodyLineByStart[link.Start]
-		} else {
-			change.Kind = noteops.PreviewFrontmatter
-			change.Key = key
-		}
-		rewrite.changes = append(rewrite.changes, change)
-		return replacement, true
+	p := &noteRelinkPlan{
+		g:               g,
+		idx:             idx,
+		targetKey:       targetKey,
+		bodyLineByStart: brokenBodyLines(note, g, targetKey),
 	}
 
 	body, err := note.Body()
@@ -67,10 +35,10 @@ func planNoteRelink(note *vault.Note, rel string, g *query.Graph, idx *relinkInd
 		return relinkRewrite{}, err
 	}
 	newBody := wikilink.Rewrite(body, func(link wikilink.Link) (string, bool) {
-		return replace(link, "")
+		return p.replace(link, "")
 	})
 	if newBody != body {
-		rewrite.newBody = &newBody
+		p.rewrite.newBody = &newBody
 	}
 
 	front, err := note.Front()
@@ -82,21 +50,79 @@ func planNoteRelink(note *vault.Note, rel string, g *query.Graph, idx *relinkInd
 		if !ok {
 			continue
 		}
-		newValue, changed := rewriteRelinkValue(value, key, replace)
-		if !changed {
-			continue
-		}
-		if rewrite.newFront == nil {
-			rewrite.newFront = map[string]any{}
-		}
-		rewrite.newFront[key] = newValue
+		p.rewriteFrontmatterValue(key, value)
 	}
 
-	sortPreviewChanges(rewrite.changes)
-	if len(rewrite.changes) == 0 && matchedResidue {
-		rewrite.skips = append(rewrite.skips, FixSkip{RelPath: rel, Target: targetKey, Reason: "no deterministic relink target"})
+	sortPreviewChanges(p.rewrite.changes)
+	if len(p.rewrite.changes) == 0 && p.matchedResidue {
+		p.rewrite.skips = append(p.rewrite.skips, FixSkip{RelPath: rel, Target: targetKey, Reason: "no deterministic relink target"})
 	}
-	return rewrite, nil
+	return p.rewrite, nil
+}
+
+// noteRelinkPlan is the state one planNoteRelink call accumulates while it
+// walks a note's body and frontmatter links.
+type noteRelinkPlan struct {
+	g               *query.Graph
+	idx             *relinkIndex
+	targetKey       string
+	bodyLineByStart map[int]int
+	// matchedResidue records a link that matched the task but had no
+	// deterministic destination.
+	matchedResidue bool
+	rewrite        relinkRewrite
+}
+
+// brokenBodyLines maps the start offset of each matching broken body link to its
+// line, which is what a body preview change reports.
+func brokenBodyLines(note *vault.Note, g *query.Graph, targetKey string) map[int]int {
+	broken := query.UnresolvedLinks(note, g)
+	lines := make(map[int]int, len(broken))
+	for _, bl := range broken {
+		if bl.FrontmatterKey == "" && brokenTargetKey(g, bl.Link.Target) == targetKey {
+			lines[bl.Link.Start] = bl.Line
+		}
+	}
+	return lines
+}
+
+// replace rewrites one link when it matches the task and has a deterministic
+// destination, recording the preview change. key is the frontmatter key the
+// link was found under, or "" for a body link.
+func (p *noteRelinkPlan) replace(link wikilink.Link, key string) (string, bool) {
+	if brokenTargetKey(p.g, link.Target) != p.targetKey {
+		return "", false
+	}
+	newTarget, ok := p.idx.deterministicTarget(link)
+	if !ok {
+		p.matchedResidue = true
+		return "", false
+	}
+	replacement := link.WithTarget(newTarget)
+	if replacement == link.Raw {
+		return "", false
+	}
+	change := noteops.PreviewChange{Old: noteops.PresentText(link.Raw), New: noteops.PresentText(replacement)}
+	if key == "" {
+		change.Kind = noteops.PreviewBody
+		change.Line = p.bodyLineByStart[link.Start]
+	} else {
+		change.Kind = noteops.PreviewFrontmatter
+		change.Key = key
+	}
+	p.rewrite.changes = append(p.rewrite.changes, change)
+	return replacement, true
+}
+
+func (p *noteRelinkPlan) rewriteFrontmatterValue(key string, value any) {
+	newValue, changed := rewriteRelinkValue(value, key, p.replace)
+	if !changed {
+		return
+	}
+	if p.rewrite.newFront == nil {
+		p.rewrite.newFront = map[string]any{}
+	}
+	p.rewrite.newFront[key] = newValue
 }
 
 // rewriteRelinkValue applies replace to every string leaf of a frontmatter

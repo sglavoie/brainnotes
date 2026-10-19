@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -222,6 +223,8 @@ func relatedFZFArgs(extraArgs []string) []string {
 }
 
 func buildRelatedQuery(
+	errOut io.Writer,
+	command string,
 	v *vault.Vault,
 	sourceArg string,
 	mode recall.Mode,
@@ -231,7 +234,7 @@ func buildRelatedQuery(
 	if err != nil {
 		return relatedQuery{}, err
 	}
-	notes, err := v.Notes()
+	notes, err := loadReadableNotesTo(errOut, command, v)
 	if err != nil {
 		return relatedQuery{}, err
 	}

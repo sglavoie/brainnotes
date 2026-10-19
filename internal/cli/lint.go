@@ -110,6 +110,8 @@ func violationHeadline(key groupKey, n int) string {
 		return fmt.Sprintf("%s: wrong type in %d %s (%s)\n", key.Property, n, noun, key.Detail)
 	case "value":
 		return fmt.Sprintf("%s: %s in %d %s\n", key.Property, key.Detail, n, noun)
+	case schema.KindParse:
+		return fmt.Sprintf("%s: unparsable in %d %s (%s)\n", key.Property, n, noun, key.Detail)
 	}
 	return ""
 }

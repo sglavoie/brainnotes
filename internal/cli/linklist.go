@@ -72,7 +72,7 @@ func newLinkListRun(cmd *cobra.Command, name string, args []string, opts linkLis
 		return nil, false, err
 	}
 
-	notes, err := v.Notes()
+	notes, err := loadReadableNotes(cmd, v)
 	if err != nil {
 		return nil, false, err
 	}

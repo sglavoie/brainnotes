@@ -26,7 +26,9 @@ func collectNotePaths(v *vault.Vault) ([]string, error) {
 }
 
 func collectPropertyKeys(v *vault.Vault) ([]string, error) {
-	notes, err := v.Notes()
+	// Completion candidates: a note with unparsable frontmatter has no keys
+	// to offer, and a warning here would corrupt the completion output.
+	notes, _, err := v.NotesLenient()
 	if err != nil {
 		return nil, err
 	}

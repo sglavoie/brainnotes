@@ -25,6 +25,19 @@ Pipe into `fzf` with `-i` for an interactive picker; a picker that selects
 nothing exits 1. `--json` prints an array of `{"path", "title"}` records in the
 same order instead.
 
+A note whose frontmatter is not valid YAML does not stop the read. `bn find`,
+`bn search`, `bn links`, `bn backlinks`, `bn values`, `bn graph`,
+`bn related`, and `bn context` leave it out of their results and print one
+line per skipped note on stderr, so stdout stays a clean result:
+
+```
+find: warning: skipped Inbox/draft.md: frontmatter: parse yaml: yaml: line 1: did not find expected ',' or ']'
+```
+
+A skipped note is absent from the link graph too, so a link to it can read as
+broken until it is fixed. `bn lint` reports it as a violation instead, and the
+commands that change notes still refuse to run until it parses.
+
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.
 
@@ -58,6 +71,20 @@ stored `sort`, `relative_to`, and `limit`; see
 The reserved vocabulary is twenty-one field names. Any other bare name is an
 error with did-you-mean candidates, unless it is a property you declared in
 `[frontmatter.properties]`.
+
+A reserved name always takes precedence over a declared property of the same
+name. In a vault that declares an `int` property called `pinned`, `pinned:true`
+is still the reserved pinned filter, and `pinned>-1` is refused because that
+field takes only `true` or `false`. Reach the property with `prop:`, which
+keeps its declared type: `prop:pinned>-1`. When a reserved field refuses a term
+and a property of that name is declared, the error says so:
+
+```
+$ bn find -q 'pinned>-1'
+query: operator ">" is not defined for field "pinned"; use ":", "=", or "!="; the reserved field "pinned" takes precedence over the declared property of that name, so write prop:pinned to compare the property
+  pinned>-1
+  ^^^^^^^^^
+```
 
 | Field | Selects |
 | --- | --- |
@@ -105,10 +132,11 @@ query: unclosed group opened at column 16: expected ")"
                           ^
 ```
 
-Two quoting rules follow from the lexer: an RFC3339 literal must be quoted
-(`reviewed="2026-05-19T10:30:00Z"`), because its `:` separators would otherwise
-end the word, and so must a negative relative offset (`due>"-7d"`), because a
-leading `-` is negation.
+An RFC3339 literal must be quoted (`reviewed="2026-05-19T10:30:00Z"`), because
+its `:` separators would otherwise end the word. A negative number or relative
+offset after a comparison operator needs no quotes (`rating>-1`,
+`prop:x>=-2.5`, `due>-7d`): a `-` written directly against a digit there is
+part of the value, while everywhere a term can start a leading `-` is negation.
 
 `-q` and `--view` are find filter flags, so like every other one they cannot be
 combined with positional note arguments on `bn search`, `bn replace`,

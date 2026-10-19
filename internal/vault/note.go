@@ -97,7 +97,7 @@ func (n *Note) Load() error {
 	}
 	doc, err := frontmatter.Parse(data)
 	if err != nil {
-		return fmt.Errorf("note: parse %q: %w", n.Path, err)
+		return &ParseError{Path: n.Path, Err: err}
 	}
 	n.doc = doc
 	n.sourceHash = HashBytes(data)
@@ -105,6 +105,22 @@ func (n *Note) Load() error {
 	n.loaded = true
 	return nil
 }
+
+// ParseError reports a note whose file was read but whose frontmatter could
+// not be parsed. It is a distinct type so a read-only caller can tell a single
+// malformed note (skippable, see Vault.NotesLenient) from an I/O failure that
+// says the walk itself cannot be trusted.
+type ParseError struct {
+	// Path is the absolute path of the note.
+	Path string
+	Err  error
+}
+
+func (e *ParseError) Error() string {
+	return fmt.Sprintf("note: parse %q: %v", e.Path, e.Err)
+}
+
+func (e *ParseError) Unwrap() error { return e.Err }
 
 // Loaded reports whether the note has been read from disk.
 func (n *Note) Loaded() bool { return n != nil && n.loaded }

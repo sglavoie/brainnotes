@@ -191,7 +191,7 @@ func selectSearchNotes(
 	case anyFlagSet:
 		return searchNotesByFlags(cmd, cfg, v, opts.ff)
 	default:
-		return v.Notes()
+		return loadReadableNotes(cmd, v)
 	}
 }
 
@@ -200,7 +200,7 @@ func searchNotesByArgs(cmd *cobra.Command, v *vault.Vault, noteArgs []string, nu
 	if err != nil {
 		return nil, err
 	}
-	allNotes, err := v.Notes()
+	allNotes, err := loadReadableNotes(cmd, v)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func searchNotesByArgs(cmd *cobra.Command, v *vault.Vault, noteArgs []string, nu
 }
 
 func searchNotesByFlags(cmd *cobra.Command, cfg *config.Config, v *vault.Vault, ff *findFlags) ([]*vault.Note, error) {
-	allNotes, err := v.Notes()
+	allNotes, err := loadReadableNotes(cmd, v)
 	if err != nil {
 		return nil, err
 	}

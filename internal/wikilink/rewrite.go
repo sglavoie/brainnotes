@@ -116,8 +116,13 @@ func Rewrite(text string, fn func(Link) (string, bool)) string {
 }
 
 // FormatLink reassembles a wikilink from its constituent parts. Empty heading
-// and alias are omitted.
+// and alias are omitted. To rewrite an existing link, use Link.WithTarget,
+// which also preserves a table-escaped `\|` separator.
 func FormatLink(target, heading, alias string) string {
+	return formatLink(target, heading, alias, false)
+}
+
+func formatLink(target, heading, alias string, escapedPipe bool) string {
 	var b strings.Builder
 	b.Grow(len(target) + len(heading) + len(alias) + 6)
 	b.WriteString("[[")
@@ -127,6 +132,9 @@ func FormatLink(target, heading, alias string) string {
 		b.WriteString(heading)
 	}
 	if alias != "" {
+		if escapedPipe {
+			b.WriteByte('\\')
+		}
 		b.WriteByte('|')
 		b.WriteString(alias)
 	}
@@ -168,7 +176,7 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 			return "", false
 		}
 		newTarget := targetPrefix(l.Target) + newBase + ext
-		return FormatLink(newTarget, l.Heading, l.Alias), true
+		return l.WithTarget(newTarget), true
 	})
 }
 
@@ -201,6 +209,6 @@ func RewriteMove(text, oldPath, newPath string) string {
 		if !strings.EqualFold(textnorm.NFC(targetBase), textnorm.NFC(oldBase)) {
 			return "", false
 		}
-		return FormatLink(newBase+ext, l.Heading, l.Alias), true
+		return l.WithTarget(newBase + ext), true
 	})
 }

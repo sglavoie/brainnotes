@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -297,6 +298,38 @@ func TestNotesLoadsAll(t *testing.T) {
 		if !n.Loaded() {
 			t.Fatalf("Notes() must return loaded notes; %s is lazy", n.Path)
 		}
+	}
+}
+
+func TestNotesLenientSkipsUnparsableFrontmatter(t *testing.T) {
+	files := map[string]string{
+		"a.md":   "---\ntitle: A\n---\nbody A\n",
+		"bad.md": "---\ntitle: [unclosed\n---\nbody\n",
+		"c.md":   "---\ntitle: C\n---\nbody C\n",
+	}
+	v := newTestVault(t, nil, files)
+
+	if _, err := v.Notes(); err == nil {
+		t.Fatal("Notes() must stay strict and fail on unparsable frontmatter")
+	} else {
+		var parseErr *ParseError
+		if !errors.As(err, &parseErr) {
+			t.Fatalf("Notes() error = %v, want a *ParseError", err)
+		}
+	}
+
+	notes, skipped, err := v.NotesLenient()
+	if err != nil {
+		t.Fatalf("NotesLenient: %v", err)
+	}
+	if len(notes) != 2 {
+		t.Fatalf("want 2 parsed notes, got %d", len(notes))
+	}
+	if len(skipped) != 1 || filepath.Base(skipped[0].Path) != "bad.md" || skipped[0].Err == nil {
+		t.Fatalf("skipped = %+v, want only bad.md with its parse error", skipped)
+	}
+	if strings.Contains(skipped[0].Err.Error(), skipped[0].Path) {
+		t.Fatalf("skipped error should not repeat the path: %v", skipped[0].Err)
 	}
 }
 

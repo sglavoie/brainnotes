@@ -112,7 +112,7 @@ func runFindCommand(cmd *cobra.Command, opts findOptions) error {
 	if err != nil {
 		return err
 	}
-	notes, err := v.Notes()
+	notes, err := loadReadableNotes(cmd, v)
 	if err != nil {
 		return err
 	}

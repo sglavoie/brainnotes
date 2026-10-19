@@ -11,10 +11,23 @@ import (
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
+// buildMatcher returns the line predicate for a search pattern. Pattern and line
+// are both compared in NFC, the form queryexpr normalizes query text to, so a
+// pattern typed in decomposed form (or a note saved that way, as macOS file
+// names and some editors do) still matches the same visible text.
 func buildMatcher(pattern string, isRegex, caseSensitive bool) (func(string) bool, error) {
+	match, err := buildNFCMatcher(textnorm.NFC(pattern), isRegex, caseSensitive)
+	if err != nil {
+		return nil, err
+	}
+	return func(s string) bool { return match(textnorm.NFC(s)) }, nil
+}
+
+func buildNFCMatcher(pattern string, isRegex, caseSensitive bool) (func(string) bool, error) {
 	if strings.TrimSpace(pattern) == "" {
 		return nil, errors.New("search: pattern must not be empty")
 	}

@@ -13,7 +13,8 @@ filename, or a bare title (resolved case-insensitively against the vault).
 
 Rewrites every `[[wikilink]]` in the vault that pointed at the old title —
 including folder-prefixed (`[[Books/Old]]`), aliased (`[[Old|alt]]`), and
-heading (`[[Old#Section]]`) forms. Wikilink-typed frontmatter values
+heading (`[[Old#Section]]`) forms, and the table-escaped alias Obsidian writes
+inside a Markdown table (`[[Old\|alt]]`), which keeps its `\|`. Wikilink-typed frontmatter values
 (`categories`, `parent`, …) are also rewritten.
 
 Atomicity: each affected file is rewritten via temp-file + rename. There is no

@@ -165,7 +165,7 @@ func frontmatterKeys(_ *config.Config, v *vault.Vault) []string {
 }
 
 func tagNames(_ *config.Config, v *vault.Vault) []string {
-	notes, err := v.Notes()
+	notes, _, err := v.NotesLenient()
 	if err != nil {
 		return nil
 	}
