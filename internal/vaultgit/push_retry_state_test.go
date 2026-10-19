@@ -12,6 +12,7 @@ import (
 // record steering the schedule: the next failure is the first of a new streak,
 // and nothing waits out the old backoff.
 func TestPushSuccessWithUnremovableRetryStateStartsTheNextStreakFresh(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()

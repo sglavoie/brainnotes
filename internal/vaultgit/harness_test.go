@@ -66,16 +66,8 @@ func requireGit(t *testing.T) string {
 // forbids t.Parallel, and every test builds its own temporary repository, so
 // nothing about the isolated home differs between tests. No test writes to it.
 //
-// Most tests run in parallel. Two kinds stay serial:
-//   - a test that hijacks the process environment with t.Setenv
-//     (TestStrayGitEnvironmentIsIgnored);
-//   - a test that drives the watcher (tick, Run) or a push. Those take a lock
-//     with a single try and report KindBusy on a miss, by design. A lock is
-//     released by closing its descriptor, not by LOCK_UN, so that an exec child
-//     can inherit it; while sibling tests fork git, a child that has forked but
-//     not yet exec'd still holds a duplicate of a just-released descriptor, and
-//     the next single try in the same test sees a spurious busy. Serial tests
-//     run before any parallel test resumes, so nothing forks beside them.
+// Every test runs in parallel except TestStrayGitEnvironmentIsIgnored, which
+// hijacks the process environment with t.Setenv.
 func TestMain(m *testing.M) {
 	os.Exit(runIsolated(m))
 }

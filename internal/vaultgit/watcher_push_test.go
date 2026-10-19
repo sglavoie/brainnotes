@@ -8,6 +8,7 @@ import (
 )
 
 func TestWatcherPushesAtStartupAndAtTheInterval(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 	remote := t.TempDir()
@@ -34,6 +35,7 @@ func TestWatcherPushesAtStartupAndAtTheInterval(t *testing.T) {
 }
 
 func TestWatcherKeepsCommittingLocallyWhileTheRemoteIsUnreachable(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 	rawGit(t, h.root, "remote", "add", "origin", filepath.Join(t.TempDir(), "no-such-remote"))
@@ -71,6 +73,7 @@ func TestWatcherKeepsCommittingLocallyWhileTheRemoteIsUnreachable(t *testing.T) 
 }
 
 func TestWatcherPushesAutomaticallyOnceTheRemoteComesBack(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 	remote := filepath.Join(t.TempDir(), "origin.git")

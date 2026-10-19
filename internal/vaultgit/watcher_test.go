@@ -78,6 +78,7 @@ func requireNoKind(t *testing.T, rec *watchRecorder, kind WatchEventKind) {
 }
 
 func TestWatcherCommitsExternalChangeOnlyAfterTheQuietPeriod(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -111,6 +112,7 @@ func TestWatcherCommitsExternalChangeOnlyAfterTheQuietPeriod(t *testing.T) {
 }
 
 func TestWatcherRestartsTheQuietPeriodWhenTheFileChangesAgain(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -136,6 +138,7 @@ func TestWatcherRestartsTheQuietPeriodWhenTheFileChangesAgain(t *testing.T) {
 }
 
 func TestWatcherCommitsAtMaximumLatencyDespiteContinuousChange(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -166,6 +169,7 @@ func TestWatcherCommitsAtMaximumLatencyDespiteContinuousChange(t *testing.T) {
 }
 
 func TestWatcherRestartResumesTheBurstWithoutExtendingItsMaximum(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 
@@ -199,6 +203,7 @@ func TestWatcherRestartResumesTheBurstWithoutExtendingItsMaximum(t *testing.T) {
 }
 
 func TestWatcherRecordsExternalDeletionAfterRestart(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 	h.write("vanishes.md", "about to disappear")
@@ -226,6 +231,7 @@ func TestWatcherRecordsExternalDeletionAfterRestart(t *testing.T) {
 }
 
 func TestWatcherClosesABurstThatResolvesItself(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	w := h.newWatcher(rec)
@@ -254,6 +260,7 @@ func TestWatcherClosesABurstThatResolvesItself(t *testing.T) {
 }
 
 func TestWatcherEventsCarryPathsButNeverNoteBodies(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ctx := context.Background()
 	rawGit(t, h.root, "remote", "add", "origin", filepath.Join(t.TempDir(), "no-such-remote"))
@@ -315,6 +322,7 @@ func TestWatcherEventsCarryPathsButNeverNoteBodies(t *testing.T) {
 }
 
 func TestWatcherRunStopsOnContextCancellation(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	rec := &watchRecorder{}
 	// Cancel only once the loop has said it started. A fixed sleep before

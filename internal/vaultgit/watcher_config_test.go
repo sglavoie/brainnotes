@@ -10,6 +10,7 @@ import (
 // A broken file is reported once per broken version, not once per poll, and the
 // last valid policy keeps running the vault the whole time.
 func TestWatcherReportsOneDiagnosticPerInvalidConfigVersion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	stub := &stubPolicySource{}
@@ -77,6 +78,7 @@ func TestWatcherReportsOneDiagnosticPerInvalidConfigVersion(t *testing.T) {
 // Reverting a broken edit to the exact bytes that were valid before is a
 // recovery even though the fingerprint is one the watcher has already acted on.
 func TestWatcherRecoversWhenABrokenEditIsRevertedToTheSameBytes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("1m")
 	stub := &stubPolicySource{}
@@ -106,6 +108,7 @@ func TestWatcherRecoversWhenABrokenEditIsRevertedToTheSameBytes(t *testing.T) {
 // under the last valid policy — otherwise the one edit a user is most likely to
 // get wrong is the one edit the vault would not preserve.
 func TestWatcherSnapshotsAManuallyBrokenConfigUnderTheLastValidPolicy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	rec := &watchRecorder{}
@@ -159,6 +162,7 @@ func TestWatcherSnapshotsAManuallyBrokenConfigUnderTheLastValidPolicy(t *testing
 // path, a count, an object name, a closed-vocabulary policy token, or a
 // sanitized diagnostic, and never a note's bytes.
 func TestWatcherReloadEventsCarryNoNoteContents(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	rec := &watchRecorder{}
@@ -217,6 +221,7 @@ func TestWatcherReloadEventsCarryNoNoteContents(t *testing.T) {
 // A watcher with no PolicySource is the pre-reload watcher, exactly. Every other
 // test in this package builds one, so this states the guarantee they rely on.
 func TestWatcherWithoutAPolicySourceNeverChangesTheEnforcedPolicy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}

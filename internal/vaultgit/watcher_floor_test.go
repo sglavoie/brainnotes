@@ -13,6 +13,7 @@ import (
 // observed history was commits 2, 3, 1, and 4 minutes apart — because readiness
 // was the only deadline the loop had.
 func TestWatcherDoesNotSnapshotFasterThanTheFloor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}
@@ -57,6 +58,7 @@ func TestWatcherDoesNotSnapshotFasterThanTheFloor(t *testing.T) {
 // Readiness still decides eligibility: inside the floor a ready burst waits, and
 // the moment the floor elapses the same burst commits without a further edit.
 func TestWatcherCommitsAsSoonAsTheFloorElapses(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}
@@ -105,6 +107,7 @@ func TestWatcherCommitsAsSoonAsTheFloorElapses(t *testing.T) {
 // shorter than DebounceMaxLatency, a burst that never goes quiet still commits at
 // its latency bound.
 func TestWatcherStillHonoursMaximumLatencyUnderAFloor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("1m")
 	rec := &watchRecorder{}
@@ -159,6 +162,7 @@ func TestWatcherStillHonoursMaximumLatencyUnderAFloor(t *testing.T) {
 // floor is measured from the last external snapshot, not from the last quiet
 // period, so five bursts inside one interval produce one commit.
 func TestWatcherCollapsesRepeatedRapidBurstsIntoOneSnapshot(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}
@@ -199,6 +203,7 @@ func TestWatcherCollapsesRepeatedRapidBurstsIntoOneSnapshot(t *testing.T) {
 // has not asked to be rate limited, and the watcher's own budget is not theirs to
 // spend.
 func TestExplicitCommitsDoNotMoveTheExternalFloor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}
@@ -245,6 +250,7 @@ func TestExplicitCommitsDoNotMoveTheExternalFloor(t *testing.T) {
 // A poll that loses the safety lock is contention, not a lost schedule. The due
 // state is persisted, so the next poll that wins the lock still commits.
 func TestWatcherRetriesAfterABusyPoll(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("30s")
 	rec := &watchRecorder{}
@@ -290,6 +296,7 @@ func TestWatcherRetriesAfterABusyPoll(t *testing.T) {
 // rather than starting a fresh one — and must not commit early because its own
 // memory of the last snapshot is gone.
 func TestWatcherRestartResumesTheFloor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()
@@ -332,6 +339,7 @@ func TestWatcherRestartResumesTheFloor(t *testing.T) {
 // watch.json as flat top-level JSON. Absence is how "no snapshot is scheduled" is
 // expressed, so it has to survive a real poll cycle and not just a unit test.
 func TestWatcherPublishesTheScheduleForTheHealthConsumer(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}

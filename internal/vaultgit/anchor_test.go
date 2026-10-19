@@ -146,6 +146,7 @@ func TestSettlingABurstKeepsTheInFlightAnchor(t *testing.T) {
 // must still refuse a second external snapshot for the whole configured interval
 // after the first ref was observed to land.
 func TestLostCompletionWriteHoldsFloorAfterObservedRefLanding(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	rec := &watchRecorder{}
@@ -192,6 +193,7 @@ func TestLostCompletionWriteHoldsFloorAfterObservedRefLanding(t *testing.T) {
 // watch.json and must schedule from what a crash left there — including how long
 // the snapshot it is recovering from took.
 func TestARestartAfterALostCompletionWriteStillHoldsTheFloor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	ctx := context.Background()

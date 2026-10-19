@@ -117,6 +117,7 @@ func TestCommitPendingHonoursScope(t *testing.T) {
 
 // External deletion is recorded and published while the parent keeps the bytes.
 func TestExternalDeletionIsCommittedAndRecoverable(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	bare := t.TempDir()
 	rawGit(t, bare, "-c", "init.defaultBranch=main", "init", "--bare", "-q")

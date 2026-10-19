@@ -39,6 +39,7 @@ func requirePolicy(t *testing.T, h *testHarness, want string) {
 // new fingerprint but not a new policy, and a loop that logged every read would
 // announce a change on every restart that changed nothing.
 func TestWatcherSaysNothingWhenAConfigEditDoesNotChangeThePolicy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("5m")
 	stub := &stubPolicySource{}
@@ -65,6 +66,7 @@ func TestWatcherSaysNothingWhenAConfigEditDoesNotChangeThePolicy(t *testing.T) {
 // burst is ready and deferred; the new floor has already elapsed, so the poll
 // that reads the change is the poll that commits.
 func TestWatcherShorterFloorMakesAReadyBurstDueOnThatPoll(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("10m")
 	stub := &stubPolicySource{}
@@ -110,6 +112,7 @@ func TestWatcherShorterFloorMakesAReadyBurstDueOnThatPoll(t *testing.T) {
 // by how much. Nothing is lost: the burst stays open and commits at the new due
 // time.
 func TestWatcherLongerFloorPostponesAReadyBurst(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("1m")
 	stub := &stubPolicySource{}
@@ -164,6 +167,7 @@ func TestWatcherLongerFloorPostponesAReadyBurst(t *testing.T) {
 // An ordinary enabled-to-enabled change does not bypass readiness. A burst that
 // has not gone quiet yet is still not due, however short the new floor is.
 func TestWatcherAShorterFloorStillObeysTheQuietPeriod(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.setAutosave("10m")
 	stub := &stubPolicySource{}

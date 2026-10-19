@@ -9,6 +9,7 @@ import (
 )
 
 func TestPushWithoutRemoteIsNotAFailure(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -23,6 +24,7 @@ func TestPushWithoutRemoteIsNotAFailure(t *testing.T) {
 }
 
 func TestPushFailureRecordsRetryStateAndNeverBlocks(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
@@ -81,6 +83,7 @@ func TestPushFailureRecordsRetryStateAndNeverBlocks(t *testing.T) {
 // A remote that rejects the push — because it holds commits this clone does not
 // — must never be resolved by rewriting history.
 func TestPushNeverForces(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.write("Inbox/note.md", "one\n")
 	h.commitPending()
