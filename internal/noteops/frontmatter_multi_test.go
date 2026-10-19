@@ -10,7 +10,6 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // withFrontmatterBeforeAtomicCommit is a test-only seam: it runs in the window
@@ -220,7 +219,8 @@ func TestSetFrontmatterAtomicCommitsPastTheLegacyCap(t *testing.T) {
 	root := t.TempDir()
 	rels, ranks := largeAtomicSet(t, root)
 
-	result, err := SetFrontmatterAtomic(root, atomicPinWrites(t, rels, ranks), &config.FrontmatterConfig{})
+	result, err := SetFrontmatterAtomic(root, atomicPinWrites(t, rels, ranks), &config.FrontmatterConfig{},
+		WithFrontmatterLockEscalationForTest(testLockEscalation))
 	if err != nil {
 		t.Fatalf("SetFrontmatterAtomic over %d notes: %v", len(rels), err)
 	}
@@ -245,14 +245,18 @@ func TestSetFrontmatterAtomicCommitsPastTheLegacyCap(t *testing.T) {
 	}
 }
 
+// testLockEscalation stands in for vault.MaxLockedPaths so the escalation
+// boundary is crossed with dozens of notes rather than thousands of fsyncs.
+const testLockEscalation = 32
+
 // beyondLockedPathCeiling builds a set larger than the number of paths one
 // transaction locks individually, so the commit has to escalate to the
 // vault-wide lock. It is the size this call used to refuse outright, which left a
 // pinned list past that boundary orderable in the browser and unorderable on
-// disk.
+// disk. Callers pass WithFrontmatterLockEscalationForTest(testLockEscalation).
 func beyondLockedPathCeiling(t *testing.T, root string) (rels []string, ranks []string) {
 	t.Helper()
-	return atomicSetOfSize(t, root, vault.MaxLockedPaths()+8)
+	return atomicSetOfSize(t, root, testLockEscalation+8)
 }
 
 // TestSetFrontmatterAtomicCommitsBeyondLockedPathCeiling is the size boundary
@@ -307,6 +311,7 @@ func TestSetFrontmatterAtomicRefusesAStaleNoteBeyondLockedPathCeiling(t *testing
 	stale := rels[len(rels)/2]
 	concurrent := "---\npinned: 99.0\n---\nSomeone else wrote it.\n"
 	_, err := SetFrontmatterAtomic(root, atomicPinWrites(t, rels, ranks), &config.FrontmatterConfig{},
+		WithFrontmatterLockEscalationForTest(testLockEscalation),
 		withFrontmatterBeforeAtomicCommit(func() error {
 			return os.WriteFile(filepath.Join(root, stale), []byte(concurrent), 0o644)
 		}),
