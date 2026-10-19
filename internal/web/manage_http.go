@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -88,6 +89,10 @@ func (s *Server) requireManagementPost(w http.ResponseWriter, r *http.Request, r
 }
 
 func writeManagementError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errRequestBodyTooLarge) {
+		writeManagementErrorStatus(w, http.StatusRequestEntityTooLarge, err)
+		return
+	}
 	writeManagementErrorStatus(w, noteops.HTTPStatusForError(err), err)
 }
 

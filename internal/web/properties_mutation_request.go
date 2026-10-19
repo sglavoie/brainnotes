@@ -2,6 +2,8 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -110,16 +112,47 @@ func (d propertySchemaDefinition) definition() config.PropertyDefinition {
 	}
 }
 
-// decodePropertyRequest reads a bounded JSON body into dst.
+// errRequestBodyTooLarge marks a JSON body refused for its size rather than its
+// shape. writeManagementError answers it with 413, the same status requestGuard
+// gives a body whose declared length is already over the bound, so a chunked or
+// under-declared body is not reported as malformed JSON instead.
+var errRequestBodyTooLarge = errors.New("request body too large")
+
+// decodePropertyRequest reads a bounded JSON body holding exactly one value into
+// dst.
+//
+// The bound is a MaxBytesReader rather than a LimitReader: a LimitReader ends an
+// oversized body at the limit as if it were complete, so the refusal surfaced
+// as a syntax error. The ResponseWriter is nil because requestGuard already
+// wrapped this body with one, which is what closes the connection after an
+// overrun; this reader only tightens the bound for these routes.
 func decodePropertyRequest(r *http.Request, dst any) error {
 	if r.Body == nil {
 		return noteops.Errorf(noteops.CodeInvalidRequest, "properties: request body is required")
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, propertyRequestBodyLimit))
+	decoder := json.NewDecoder(http.MaxBytesReader(nil, r.Body, propertyRequestBodyLimit))
 	if err := decoder.Decode(dst); err != nil {
-		return noteops.WrapError(noteops.CodeInvalidRequest, "properties: invalid request body", err)
+		return propertyRequestBodyError("properties: invalid request body", err)
+	}
+	if err := decoder.Decode(&json.RawMessage{}); err != io.EOF {
+		return propertyRequestBodyError("properties: request body must hold a single JSON value", err)
 	}
 	return nil
+}
+
+// propertyRequestBodyError classifies a failed body read: an overrun is the
+// too-large refusal, anything else is a malformed request.
+func propertyRequestBodyError(message string, err error) error {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return noteops.WrapError(noteops.CodeInvalidRequest,
+			fmt.Sprintf("properties: request body exceeds %d bytes", tooLarge.Limit),
+			fmt.Errorf("%w: %w", errRequestBodyTooLarge, err))
+	}
+	if err == nil {
+		return noteops.Errorf(noteops.CodeInvalidRequest, "%s", message)
+	}
+	return noteops.WrapError(noteops.CodeInvalidRequest, message, err)
 }
 
 // checkPropertyCSRF accepts the token from the request header, falling back to
