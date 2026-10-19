@@ -47,6 +47,8 @@ export const wireConflict = (
     ctx.adopt(incoming, conflictRevision(elements));
     hideConflict(elements);
     ctx.preview.flush(incoming);
+    // The refusal that raised the panel is answered, so its error goes too.
+    ctx.setStatus("Loaded the note's current version. No unsaved changes.", "is-success");
   });
 };
 

@@ -142,7 +142,7 @@ test("a staged file removed before the save never reaches the vault", async ({ p
   // server to drop rather than a request to abandon.
   await page.locator("[data-source-attachment-cancel]").click();
   await expect(page.locator("[data-source-attachments]")).toBeHidden();
-  await expect(page.locator("[data-source-status]")).toContainText("It is not in the vault.");
+  await expect(page.locator("[data-source-attachment-status]")).toContainText("It is not in the vault.");
   // Removed from staging too, not just from the list. A row can go away with the
   // bytes still on the server, and no other assertion in this suite would see it.
   await expect

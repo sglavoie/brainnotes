@@ -102,8 +102,8 @@ export const createSourceEditorController = (
     saving: false,
   };
 
-  const setStatus = (message: string, kind: StatusKind = ""): void => {
-    setSourceStatus(elements.status, message, kind);
+  const setStatus = (message: string, kind: StatusKind = "", idle = false): void => {
+    setSourceStatus(elements.status, message, kind, idle);
   };
 
   const preview = createPreviewPanel(elements, (text) => client.preview(text),
@@ -338,7 +338,7 @@ const mountSurface = (
 };
 
 export type SaveContext = {
-  setStatus(message: string, kind?: StatusKind): void;
+  setStatus(message: string, kind?: StatusKind, idle?: boolean): void;
   adopt(content: string, revision: string, settled?: boolean): void;
   refreshSaveButton(): void;
   preview: PreviewScheduler;
@@ -356,11 +356,18 @@ const runLoad = async (
   // tab's own slot, and after a reload that slot holds precisely the draft this
   // page exists to offer back.
   const kept = ctx.drafts.kept();
+  // A reload over a live editor leaves it editable while the read is in
+  // flight, so what is on screen now is compared with what comes back.
+  const before = state.surface?.getValue() ?? null;
   try {
     const loaded = await deps.client.read();
+    if (before !== null && state.surface !== null && state.surface.getValue() !== before) {
+      keepTypedOverReload(deps.elements, state, ctx, loaded);
+      return;
+    }
     mountSurface(deps, state, loaded.content, () => {
       ctx.refreshSaveButton();
-      refreshEditStatus(deps.elements, state, ctx);
+      refreshEditStatus(deps.elements, state, ctx.setStatus);
       // The preview is scheduled on every edit regardless of which pane is
       // showing. On a wide screen both are, so this is simply correct; on a
       // narrow one it costs a debounced request for a hidden pane, and the
@@ -371,7 +378,7 @@ const runLoad = async (
       ctx.drafts.keep();
     });
     ctx.adopt(loaded.content, loaded.revision, false);
-    ctx.setStatus("Ready to edit.");
+    ctx.setStatus("Ready to edit.", "", true);
     ctx.preview.flush(loaded.content);
     ctx.drafts.present(kept, { kind: "loaded", revision: loaded.revision, content: loaded.content });
   } catch (error: unknown) {
@@ -381,6 +388,34 @@ const runLoad = async (
     // offer says which of the two failures this was.
     ctx.drafts.present(kept, readingFor(error));
   }
+};
+
+// keepTypedOverReload is a reload that lost the race with the keyboard. The
+// text typed while the read was in flight exists only on screen, so it stays
+// there, and the base revision stays where it was: the vault has moved on, and
+// the next save goes through the server's conflict refusal rather than over the
+// top of it. The vault's version goes on the conflict panel now, so the two
+// choices are on offer before the person has to find them by saving.
+const keepTypedOverReload = (
+  elements: SourceEditorElements,
+  state: EditorState,
+  ctx: SaveContext,
+  loaded: { content: string; revision: string }
+): void => {
+  const typed = state.surface?.getValue() ?? "";
+  if (loaded.content === state.savedContent) {
+    // Nothing moved after all, so the reload has nothing to tell the editor.
+    ctx.refreshSaveButton();
+    refreshEditStatus(elements, state, ctx.setStatus);
+    return;
+  }
+  showConflict(elements, loaded.content, loaded.revision, typed);
+  ctx.panes.select("edit");
+  ctx.refreshSaveButton();
+  ctx.setStatus(
+    "The note changed on disk while you were typing. Your text is still here; choose a version below or save to compare.",
+    "is-warning"
+  );
 };
 
 // readingFor separates the note being gone from nobody having answered.
@@ -398,6 +433,7 @@ type RestoreContext = {
   preview: PreviewScheduler;
   panes: SourcePanes;
   refreshSaveButton(): void;
+  setStatus(message: string, kind?: StatusKind, idle?: boolean): void;
 };
 
 // restoreDraft puts kept text back in the editor, and nothing else. No request
@@ -425,6 +461,9 @@ const restoreDraft = (
   }
   ctx.refreshSaveButton();
   ctx.preview.flush(offer.draft.content);
+  // setValue is not an edit, so nothing else will say the restored text is
+  // unsaved; "Ready to edit." would otherwise stay over a dirty editor.
+  refreshEditStatus(elements, state, ctx.setStatus);
 };
 
 const wireControls = (
@@ -443,8 +482,26 @@ const wireControls = (
   elements.find?.addEventListener("click", () => controller.openSearch());
 };
 
-const refreshEditStatus = (elements: SourceEditorElements, state: EditorState, ctx: SaveContext): void => {
+const statusHeld = (elements: SourceEditorElements, state: EditorState): boolean => {
+  if (state.saving || state.pendingSave) return true;
+  const conflictShown = elements.conflict ? !elements.conflict.hidden : false;
+  return conflictShown && (elements.status?.matches(".is-error, .is-warning") ?? false);
+};
+
+// refreshEditStatus says whether the text is saved, from the save state rather
+// than from whatever the line last said. An in-flight or unanswered save owns
+// the line, and so does an error or warning while the conflict panel it
+// explains is still up; any other outcome is history once the text changes.
+export const refreshEditStatus = (
+  elements: SourceEditorElements,
+  state: EditorState,
+  setStatus: (message: string, kind?: StatusKind, idle?: boolean) => void
+): void => {
   renderConflictComparison(elements, state.surface?.getValue() ?? "");
-  if (state.saving || state.pendingSave || elements.status?.matches(".is-error, .is-warning")) return;
-  ctx.setStatus(state.surface?.getValue() === state.savedContent ? "No unsaved changes." : "Unsaved changes.");
+  if (statusHeld(elements, state)) return;
+  if (state.surface?.getValue() === state.savedContent) {
+    setStatus("No unsaved changes.", "", true);
+  } else {
+    setStatus("Unsaved changes.");
+  }
 };

@@ -31,6 +31,25 @@ for (const width of [390, 1280]) {
   });
 }
 
+// Under a long title the tools wrap onto their own line at the left, and a
+// panel anchored to the summary's right edge then opened off-screen.
+for (const path of ["/n/Reading", "/library", "/edit?key=Reading"]) {
+  test(`the Workspace panel stays on screen under a long title at 390px on ${path}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(path);
+    // Set in the page rather than the fixture, so no note has to be renamed.
+    await page.locator("main h1").first().evaluate((heading) => {
+      heading.textContent = "A deliberately long note title that wraps the header onto several lines";
+    });
+    await page.locator(".source-editor-workspace > summary").click();
+    const panel = page.locator(".source-editor-workspace-content");
+    await expect(panel).toBeVisible();
+    const box = await panel.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  });
+}
+
 test("reading shows values and opens only the selected property editor", async ({ page }) => {
   await page.goto("/n/Reading");
   const panel = page.locator("[data-frontmatter-panel]");

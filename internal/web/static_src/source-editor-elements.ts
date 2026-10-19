@@ -204,7 +204,7 @@ export const readSourceEditorElements = (panel: HTMLElement): SourceEditorElemen
   };
 };
 
-// readAttachmentElements answers the panel's four parts, and the drop zone is
+// readAttachmentElements answers the panel's parts and its status line. The drop zone is
 // the editing surface rather than the panel: a file is dropped where the text
 // is, and a drop target that was the attachment list would mean aiming at a box
 // that is hidden until something is already in it.
@@ -214,6 +214,7 @@ export const readAttachmentElements = (panel: HTMLElement): AttachmentElements =
   choose: queryElement(panel, "[data-source-attachment-choose]", HTMLButtonElement),
   list: queryElement(panel, "[data-source-attachment-list]", HTMLElement),
   dropZone: queryElement(panel, "[data-source-surface]", HTMLElement),
+  status: queryElement(panel, "[data-source-attachment-status]", HTMLElement),
 });
 
 export const readSourceManageElements = (panel: HTMLElement): SourceManageElements | null => {

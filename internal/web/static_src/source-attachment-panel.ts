@@ -22,6 +22,9 @@ export type AttachmentElements = {
   // swallowing it would stop the browser from doing the obvious thing with a
   // file dragged onto a link.
   dropZone: HTMLElement | null;
+  // status is the attachments' own line, so an upload's outcome neither
+  // overwrites nor is overwritten by what the save line says about the text.
+  status: HTMLElement | null;
 };
 
 export type AttachmentPanelOptions = {

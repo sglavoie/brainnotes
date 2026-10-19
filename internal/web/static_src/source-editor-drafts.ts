@@ -54,7 +54,14 @@ export const createDraftKeeper = (options: DraftKeeperOptions): DraftKeeper => {
     flush: writer.flush,
 
     adopted(content: string, revision: string): void {
-      writer.adopted();
+      // The vault holds `content`, but the editor may already hold more: text
+      // typed while the save was in flight. That text exists nowhere else, so
+      // the record is rewritten against the new revision rather than dropped.
+      if (host.currentContent() !== content) {
+        writer.flush();
+      } else {
+        writer.adopted();
+      }
       presenter.revised(content, revision);
     },
 
