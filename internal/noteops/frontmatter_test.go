@@ -375,7 +375,7 @@ func TestClassifyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			classified := classifyTxnError("frontmatter: save note", err)
+			classified := ClassifyTxnError("frontmatter: save note", err)
 			if got := CodeOf(classified); got != CodeInternal {
 				t.Fatalf("code = %q, want %q", got, CodeInternal)
 			}
@@ -407,7 +407,7 @@ func TestClassifyTxnErrorTreatsFailedRollbackOverConflictAsInternal(t *testing.T
 		RollbackErrs: []error{errors.New("permission denied")},
 	}
 
-	classified := classifyTxnError("frontmatter: save note", err)
+	classified := ClassifyTxnError("frontmatter: save note", err)
 	if got := CodeOf(classified); got != CodeInternal {
 		t.Fatalf("code = %q, want %q", got, CodeInternal)
 	}
@@ -450,7 +450,7 @@ func TestClassifyTxnErrorSurfacesReplacementRefusals(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			classified := classifyTxnError("frontmatter: save note", testCase.err)
+			classified := ClassifyTxnError("frontmatter: save note", testCase.err)
 			if got := CodeOf(classified); got != CodeInternal {
 				t.Fatalf("code = %q, want %q", got, CodeInternal)
 			}

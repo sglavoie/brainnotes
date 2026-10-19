@@ -242,7 +242,7 @@ func (s *Server) commitPropertyPlan(plan *propertyPlan, operation, command strin
 		s.beforePropertyCommit()
 	}
 	if err := txn.Commit(entry); err != nil {
-		return nil, classifyPropertyTxnError("properties: write", err)
+		return nil, noteops.ClassifyTxnError("properties: write", err)
 	}
 	return entry.Finalize()
 }
@@ -253,12 +253,12 @@ func (s *Server) commitPropertyPlan(plan *propertyPlan, operation, command strin
 func stagePropertyPlan(txn *vault.FileTxn, plan *propertyPlan, pin configPin) error {
 	for _, note := range plan.Notes {
 		if err := txn.Write(note.AbsPath, note.Data, 0, vault.ExpectHash(note.SourceHash)); err != nil {
-			return classifyPropertyTxnError("properties: plan write", err)
+			return noteops.ClassifyTxnError("properties: plan write", err)
 		}
 	}
 	if plan.Config != nil {
 		if err := txn.Write(plan.Config.AbsPath, plan.Config.Data, 0, vault.ExpectHash(plan.Config.SourceHash)); err != nil {
-			return classifyPropertyTxnError("properties: plan configuration write", err)
+			return noteops.ClassifyTxnError("properties: plan configuration write", err)
 		}
 	}
 	return pinPlanConfig(txn, plan, pin)
@@ -315,34 +315,6 @@ func pinPlanConfig(txn *vault.FileTxn, plan *propertyPlan, pin configPin) error 
 func configPlanRaceError(name string) error {
 	return noteops.Errorf(noteops.CodeConflict,
 		"properties: %s changed while the change was being planned", name)
-}
-
-// classifyPropertyTxnError maps transaction failures onto the stable API codes.
-// A precondition mismatch is a conflict the caller can retry after a fresh
-// preview; a failed rollback is internal and its message carries the recovery
-// hint.
-//
-// A transaction that left displaced content in a recovery file is checked
-// first: it also unwraps to a conflict, and answering "retry" would hide the
-// one message telling the caller where their note went.
-func classifyPropertyTxnError(message string, err error) error {
-	if err == nil {
-		return nil
-	}
-	switch {
-	case vault.IsForbiddenMutation(err):
-		// A location the policy refuses is not a malfunction, so it is a 403 with
-		// its own message rather than a 500 with a generic one.
-		return noteops.WrapError(noteops.CodeForbidden, err.Error(), err)
-	case vault.IsTxnRecoveryNeeded(err):
-		return noteops.WrapError(noteops.CodeInternal, err.Error(), err)
-	case vault.IsTxnRollbackFailure(err):
-		return noteops.WrapError(noteops.CodeInternal, err.Error(), err)
-	case vault.IsTxnConflict(err):
-		return noteops.WrapError(noteops.CodeConflict, noteops.MessageOf(err), err)
-	default:
-		return noteops.WrapError(noteops.CodeInternal, message, err)
-	}
 }
 
 // propertyMutationCommand names the journal entry for one action.

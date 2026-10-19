@@ -168,12 +168,12 @@ func commitFrontmatterWrites(vaultRoot string, planned []plannedFrontmatterWrite
 	txn.SetLockEscalationThresholdForTest(lockEscalation)
 	for _, write := range planned {
 		if err := txn.Write(write.path, write.data, 0, write.expect); err != nil {
-			return classifyTxnError("frontmatter: plan write", err)
+			return ClassifyTxnError("frontmatter: plan write", err)
 		}
 	}
 	for _, requirement := range requires {
 		if err := txn.Require(requirement.path, requirement.expect); err != nil {
-			return classifyTxnError("frontmatter: pin dependency", err)
+			return ClassifyTxnError("frontmatter: pin dependency", err)
 		}
 	}
 	var txnJournal vault.TxnJournal
@@ -181,7 +181,7 @@ func commitFrontmatterWrites(vaultRoot string, planned []plannedFrontmatterWrite
 		txnJournal = journaler
 	}
 	if err := txn.Commit(txnJournal); err != nil {
-		return classifyTxnError("frontmatter: save notes", err)
+		return ClassifyTxnError("frontmatter: save notes", err)
 	}
 	return nil
 }

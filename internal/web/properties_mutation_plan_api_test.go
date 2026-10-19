@@ -306,7 +306,7 @@ func TestProperties_HistoryAndUndoRestoreTheWrite(t *testing.T) {
 // the file holding its content. The API must forward that guidance instead of
 // answering with a retryable conflict or a generic write error, because the
 // recovery file is the only place the note still exists.
-func TestClassifyPropertyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) {
+func TestPropertyTxnClassificationPlacementFailureSurfacesRecovery(t *testing.T) {
 	recovery := &vault.TxnRecoveryError{
 		Path:         "/vault/Alpha.md",
 		RecoveryPath: "/vault/.txn-custody-123.tmp",
@@ -324,7 +324,7 @@ func TestClassifyPropertyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) 
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			classified := classifyPropertyTxnError("properties: write", err)
+			classified := noteops.ClassifyTxnError("properties: write", err)
 			if got := noteops.CodeOf(classified); got != noteops.CodeInternal {
 				t.Fatalf("code = %q, want %q", got, noteops.CodeInternal)
 			}
@@ -345,7 +345,7 @@ func TestClassifyPropertyTxnErrorPlacementFailureSurfacesRecovery(t *testing.T) 
 	}
 }
 
-func TestClassifyPropertyTxnErrorTreatsFailedRollbackOverConflictAsInternal(t *testing.T) {
+func TestPropertyTxnClassificationTreatsFailedRollbackOverConflictAsInternal(t *testing.T) {
 	err := &vault.TxnRollbackError{
 		Path: "/vault/Alpha.md",
 		Err: &vault.TxnConflictError{
@@ -357,7 +357,7 @@ func TestClassifyPropertyTxnErrorTreatsFailedRollbackOverConflictAsInternal(t *t
 		RollbackErrs: []error{errors.New("permission denied")},
 	}
 
-	classified := classifyPropertyTxnError("properties: write", err)
+	classified := noteops.ClassifyTxnError("properties: write", err)
 	if got := noteops.CodeOf(classified); got != noteops.CodeInternal {
 		t.Fatalf("code = %q, want %q", got, noteops.CodeInternal)
 	}
@@ -366,5 +366,23 @@ func TestClassifyPropertyTxnErrorTreatsFailedRollbackOverConflictAsInternal(t *t
 	}
 	if message := noteops.MessageOf(classified); !strings.Contains(message, "inspect 'git diff' to recover") {
 		t.Fatalf("message must preserve rollback recovery guidance, got %q", message)
+	}
+}
+
+// A lock wait that timed out changed nothing, so the property surface answers it
+// as the retryable conflict the shared classifier gives every other writer,
+// keeping the "retry" sentence instead of a generic write failure.
+func TestPropertyTxnClassificationTreatsLockBusyAsRetryableConflict(t *testing.T) {
+	err := &vault.TxnLockBusyError{Path: "/vault/Alpha.md"}
+
+	classified := noteops.ClassifyTxnError("properties: write", err)
+	if got := noteops.CodeOf(classified); got != noteops.CodeConflict {
+		t.Fatalf("code = %q, want %q", got, noteops.CodeConflict)
+	}
+	if got := noteops.HTTPStatusForError(classified); got != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", got, http.StatusConflict)
+	}
+	if message := noteops.MessageOf(classified); !strings.Contains(message, "retry") {
+		t.Fatalf("message must keep the retry advice, got %q", message)
 	}
 }

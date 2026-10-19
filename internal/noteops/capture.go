@@ -203,7 +203,7 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 		return nil, WrapError(CodeInternal, "capture: open transaction", err)
 	}
 	if err := txn.Write(plan.destination.AbsPath, plan.content, 0, plan.expect); err != nil {
-		return nil, classifyTxnError("capture: plan append", err)
+		return nil, ClassifyTxnError("capture: plan append", err)
 	}
 	if err := stageCaptureReceipt(txn, vaultRoot, plan); err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func commitCapture(vaultRoot string, plan capturePlan, cfg captureOptions) (*Cap
 	}
 	defer j.Release()
 	if err := txn.Commit(j); err != nil {
-		return nil, classifyTxnError("capture: append to note", err)
+		return nil, ClassifyTxnError("capture: append to note", err)
 	}
 	result := plan.result()
 	entry, err := j.Finalize()

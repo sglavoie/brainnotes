@@ -222,7 +222,7 @@ func stageSourceSaveLedger(txn *vault.FileTxn, ledger *sourceSaveLedgerWrite) er
 		return WrapError(CodeInternal, "source: render save record", err)
 	}
 	if err := txn.Write(ledger.destination.AbsPath, append(data, '\n'), 0, ledger.expect); err != nil {
-		return classifyTxnError("source: plan save record", err)
+		return ClassifyTxnError("source: plan save record", err)
 	}
 	return nil
 }
