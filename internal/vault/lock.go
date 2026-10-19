@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -127,12 +128,16 @@ type FileLock struct {
 	file *os.File
 	once sync.Once
 	err  error
+	// handedOut records that File exposed the descriptor, so a child may share
+	// this open file description and its flock.
+	handedOut atomic.Bool
 }
 
 func (l *FileLock) File() *os.File {
 	if l == nil {
 		return nil
 	}
+	l.handedOut.Store(true)
 	return l.file
 }
 
@@ -145,6 +150,15 @@ func (l *FileLock) Release() error {
 		// inheritance: a duplicated descriptor in the child keeps the same flock
 		// until the last process closes it. LOCK_UN here would drop that shared
 		// open-file-description lock out from under a still-running descendant.
+		//
+		// A lock whose descriptor was never handed out is unlocked first. Any
+		// other goroutine's fork briefly duplicates every descriptor into a
+		// child that has not exec'd yet; close-on-exec drops the copy only at
+		// exec, so Close alone would leave the flock held by that child for the
+		// window and the holder's next single-try acquisition would read busy.
+		if !l.handedOut.Load() {
+			_ = unlockFile(l.file)
+		}
 		l.err = l.file.Close()
 	})
 	return l.err
