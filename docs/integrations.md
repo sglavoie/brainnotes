@@ -42,7 +42,10 @@ children pass their status through: when a Git command bn runs for its own
 safety checks fails, bn exits 2, never with Git's code. Messages for statuses 1
 and 2 go to stderr, prefixed with the command (`bn: search: no matches`,
 `bn: open: nothing selected`), so `p=$(bn open --print)` fails rather than
-succeeding with an empty value.
+succeeding with an empty value. A usage error — the wrong number of arguments,
+an unknown or malformed flag, an unknown subcommand — exits 2 and also points
+at the command's help:
+`bn: new: accepts 2 arg(s), received 1; see 'bn new --help'`.
 
 A command that asks before destroying something (`bn remove`,
 `bn restore --wipe`) asks only on a terminal. Without one it refuses with

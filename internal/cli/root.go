@@ -63,7 +63,14 @@ func skipsConfigLoad(cmd *cobra.Command) bool {
 func Execute() error {
 	ctx, stop := notifyInterrupt(os.Stderr)
 	defer stop()
-	return NewRootCmd().ExecuteContext(ctx)
+	return executeRoot(ctx, NewRootCmd())
+}
+
+// executeRoot runs root and names the failing command on a usage error Cobra
+// raised outside a validator or flag parse (see asUsageError).
+func executeRoot(ctx context.Context, root *cobra.Command) error {
+	cmd, err := root.ExecuteContextC(ctx)
+	return asUsageError(cmd, err)
 }
 
 // RenderError writes err in the form the terminal should see. Every command in
@@ -125,6 +132,7 @@ func NewRootCmd() *cobra.Command {
 
 	addRootCommandGroups(cmd)
 	registerCompletions(cmd)
+	installUsageErrors(cmd)
 
 	return cmd
 }
