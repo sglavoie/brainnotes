@@ -48,10 +48,16 @@ export class FacetController {
     });
     this.retry?.addEventListener("click", () => { void this.load(true); });
     document.addEventListener("click", (event) => {
-      if (event.target instanceof Node && !this.root.contains(event.target)) {
-        this.setExpanded(false);
-        this.setActive(-1);
-      }
+      if (event.target instanceof Node && !this.root.contains(event.target)) this.collapse();
+    });
+    // Safari can blur the input without focusing a clicked option button; keep
+    // focus in the combobox so focusout does not close it before the click.
+    this.options.addEventListener("mousedown", (event) => {
+      if (event.button === 0) event.preventDefault();
+    });
+    this.root.addEventListener("focusout", (event) => {
+      const next = event.relatedTarget;
+      if (!(next instanceof Node) || !this.root.contains(next)) this.collapse();
     });
     this.renderChips();
     void this.load();
@@ -101,6 +107,11 @@ export class FacetController {
   private setExpanded(expanded: boolean): void {
     this.input.setAttribute("aria-expanded", String(expanded));
     this.options.hidden = !expanded;
+  }
+
+  private collapse(): void {
+    this.setExpanded(false);
+    this.setActive(-1);
   }
 
   private showOptions(): void {
