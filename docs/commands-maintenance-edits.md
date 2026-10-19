@@ -160,7 +160,7 @@ bn find --tag drafts | bn set - tags+=triage                # bulk append
 ### `bn tags` — count tag occurrences
 
 ```sh
-bn tags [--sort count|name] [--count=false] [--files]
+bn tags [--sort count|name] [--count=false] [--files] [--json]
 ```
 
 Alias for `bn values tags`. See `bn values` for flag behavior.
@@ -193,7 +193,7 @@ bn find --has rating | bn unset - rating                    # bulk wipe
 ### `bn values` — count occurrences of a frontmatter property's values
 
 ```sh
-bn values <property> [--sort count|name] [--count=false] [--files]
+bn values [property] [--sort count|name] [--count=false] [--files] [--json]
 ```
 
 Walks every note, parses frontmatter, and counts how often each value of
@@ -210,6 +210,10 @@ variants surface in the long tail.
   piping to `grep` or `fzf`.
 - `--files` groups output by value and lists the vault-relative path of every
   note containing that value. Combines with `--sort` and `--count=false`.
+- `--json` prints `{"property", "values": [{"value", "count", "files"}]}` in the
+  `--sort` order; `files` (vault-relative) is always present.
+- Without `<property>`, an fzf picker offers every frontmatter key in the vault.
+  A vault with no properties, or a picker that selects nothing, exits 1.
 
 Examples:
 

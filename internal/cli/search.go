@@ -25,6 +25,10 @@ Output modes:
   --context N      Each match with N lines of surrounding body context (grep-style).
   --count          Match count per note, sorted by count descending then path.
   --open           Open the first matching result in the configured editor at the matching line.
+  --json           A JSON array of {path, abs_path, title, count, matches: [{line, text}]}.
+
+Like grep, search exits 1 when nothing matches (and when an interactive picker
+selects nothing), and 2 on an error.
 
 Find flags (--tag, --category, --status, --type, --folder, etc.) scope the search to
 matching notes. Positional note arguments and find flags are mutually exclusive.
@@ -52,6 +56,7 @@ Examples:
 	f.IntVarP(&opts.contextN, "context", "C", 0, "show N lines of context around each match")
 	f.BoolVar(&opts.count, "count", false, "print match count per note, sorted by count desc")
 	f.BoolVar(&opts.openResult, "open", false, "open the first matching result in the configured editor at the matching line")
+	f.BoolVar(&opts.asJSON, "json", false, `print a JSON array of {"path", "abs_path", "title", "count", "matches"} records`)
 
 	return cmd
 }

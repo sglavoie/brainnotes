@@ -20,6 +20,7 @@ import (
 // a view whose query stopped compiling is reported as disabled rather than
 // dropped or fatal — listing views must keep working when one of them rotted.
 func NewViewsCmd() *cobra.Command {
+	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "views",
 		Short: "List the saved views defined in the vault config",
@@ -34,33 +35,74 @@ A saved view is used from any find-scoped command with --view.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, views, err := resolveConfigViews(cmd)
-			if err != nil {
-				return err
-			}
-			if len(views) == 0 {
-				writeViewsHint(cmd.ErrOrStderr(), "views", cfg.SourcePath)
-				return nil
-			}
-
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "NAME\tDESCRIPTION\tQUERY\tSTATUS")
-			for _, view := range views {
-				status := "ok"
-				if !view.Enabled() {
-					status = "error"
-				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-					view.Saved.Name, view.Saved.Description, displayedViewQuery(view), status)
-			}
-			w.Flush()
-			return nil
+			return runViewsList(cmd, asJSON)
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false,
+		`print a JSON array of {"name", "description", "query", "status", "error"} records`)
 
 	cmd.AddCommand(newViewsShowCmd())
 	cmd.AddCommand(newViewsCheckCmd())
 	return cmd
+}
+
+// runViewsList prints every saved view as a table, or as JSON records. A
+// vault with no views prints the hint on stderr; as JSON it is `[]`.
+func runViewsList(cmd *cobra.Command, asJSON bool) error {
+	cfg, views, err := resolveConfigViews(cmd)
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		return writeViewsJSON(cmd.OutOrStdout(), views)
+	}
+	if len(views) == 0 {
+		writeViewsHint(cmd.ErrOrStderr(), "views", cfg.SourcePath)
+		return nil
+	}
+
+	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tDESCRIPTION\tQUERY\tSTATUS")
+	for _, view := range views {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+			view.Saved.Name, view.Saved.Description, displayedViewQuery(view), viewStatus(view))
+	}
+	return w.Flush()
+}
+
+func viewStatus(view queryexpr.View) string {
+	if view.Enabled() {
+		return "ok"
+	}
+	return "error"
+}
+
+type viewJSON struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Query       string `json:"query"`
+	Status      string `json:"status"`
+	Error       string `json:"error,omitempty"`
+}
+
+// writeViewsJSON emits one record per view in config order. query is the same
+// text the table's QUERY column shows; error is set exactly when status is
+// "error".
+func writeViewsJSON(out io.Writer, views []queryexpr.View) error {
+	records := make([]viewJSON, 0, len(views))
+	for _, view := range views {
+		record := viewJSON{
+			Name:        view.Saved.Name,
+			Description: view.Saved.Description,
+			Query:       displayedViewQuery(view),
+			Status:      viewStatus(view),
+		}
+		if view.Err != nil {
+			record.Error = view.Err.Error()
+		}
+		records = append(records, record)
+	}
+	return writeJSON(out, records)
 }
 
 // newViewsShowCmd renders one view in full, with its query put back through

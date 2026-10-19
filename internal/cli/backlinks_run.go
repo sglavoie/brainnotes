@@ -18,5 +18,5 @@ func runBacklinksCommand(cmd *cobra.Command, args []string, opts linkListOptions
 	if opts.verbose {
 		return writeVerboseBacklinks(out, r.notes, r.target, referrers, r.graph)
 	}
-	return writePathList(out, referrers, opts.nullSep)
+	return opts.writePaths(out, r.root, referrers)
 }

@@ -13,7 +13,7 @@ The commands that read note bodies and the link graph. `bn search` and
 ```sh
 bn search [pattern] [note...] [find-flags]
           [-e | --regex] [--case-sensitive]
-          [-C N | --context N] [--count] [--open]
+          [-C N | --context N] [--count] [--open] [--json]
           [-i | --interactive] [-0]
 ```
 
@@ -45,6 +45,15 @@ selected fzf row instead.
 | context | `--context N` / `-C N` | Each match with N lines of surrounding body context (grep-style). |
 | count | `--count` | Match count per note, sorted by count descending then path. |
 | open | `--open` | Open the first matching note at its first matching line, or the selected row with `-i`. |
+| JSON | `--json` | An array of `{path, abs_path, title, count, matches: [{line, text}]}`, in path order. |
+
+Like grep, `bn search` exits 1 when nothing matches — in every mode, including
+`--open` (which then opens nothing) and `--json` (which still prints `[]`) — and
+when an `-i` picker selects nothing. See
+[exit status](integrations.md#scripting-exit-status-and-json). `--json` cannot be
+combined with `-i`, `--open`, `-0`, `--count` or `--context`; its records already
+carry each note's count and matching lines, with `line` the 1-based file line
+`--context` prints.
 
 Examples:
 
@@ -63,7 +72,7 @@ bn find --tag drafts | bn search "review" -
 ### `bn backlinks` — list notes that link to a target
 
 ```sh
-bn backlinks <note> [-0] [-v|--verbose]
+bn backlinks <note> [-0] [-v|--verbose] [--json]
 ```
 
 `<note>` is either a bare title (case-insensitive stem lookup) or a path/glob.
@@ -78,6 +87,10 @@ frontmatter links. Output is tab-separated so it pipes cleanly into
 `…` ellipsis. `--verbose` is the root flag, so `-v` works too; it cannot be
 combined with `-0`.
 
+`--json` prints the same notes as an array of `{path, abs_path, title}` records
+(`path` vault-relative), `[]` when nothing links to the target. It cannot be
+combined with `-0` or `--verbose`.
+
 Examples:
 
 ```sh
@@ -90,7 +103,7 @@ bn backlinks Dune --verbose | awk -F'\t' '{print $1}'
 ### `bn links` — list the notes a target links to
 
 ```sh
-bn links [note] [-0] [-v|--verbose]
+bn links [note] [-0] [-v|--verbose] [--json]
 ```
 
 The outgoing counterpart of `bn backlinks`. `<note>` is either a bare title
@@ -104,7 +117,8 @@ and links inside fenced, indented, or inline code are not counted.
 `--verbose` prints one line per occurrence instead, in the same tab-separated
 shape `bn backlinks --verbose` uses: `<path>:<line>\t<snippet>` for body links
 and `<path>:fm:<key>\t<value>` for frontmatter links, frontmatter first. `-v`
-is its short form, and it cannot be combined with `-0`.
+is its short form, and it cannot be combined with `-0`. `--json` prints the
+same `{path, abs_path, title}` records as `bn backlinks --json`.
 
 Examples:
 

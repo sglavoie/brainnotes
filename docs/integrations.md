@@ -53,9 +53,18 @@ Ctrl-C asks a running command to stop rather than killing it, so a journaled
 write or `bn serve`'s shutdown can finish cleanly; press it a second time to
 stop at once.
 
-Machine-readable output is spelled `--json` on `find`, `lint`, `history`,
-`related`, `doctor` and `checkpoint status`; `context --json` is shorthand for
-`context --format json`. JSON output is indented and not HTML-escaped.
+Machine-readable output is spelled `--json` on `find`, `search`, `links`,
+`backlinks`, `values`/`tags`, `views`, `schema`, `lint`, `history`, `related`,
+`doctor` and `checkpoint status`; `context --json` is shorthand for
+`context --format json`. JSON output is indented and not HTML-escaped, and an
+empty result is `[]` rather than nothing.
+
+Paths in JSON are vault-relative with forward slashes, under the key `path`.
+The commands that list notes — `find`, `search`, `links` and `backlinks` —
+share one record, `{"path", "abs_path", "title"}`, where `abs_path` is the
+absolute path their plain output prints; `search` adds `count` and `matches`.
+`bn doctor --json` is the one exception: it predates the convention and keeps
+`rel_path`.
 
 ## Editor integration
 

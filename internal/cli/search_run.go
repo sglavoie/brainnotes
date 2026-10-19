@@ -23,6 +23,7 @@ type searchOptions struct {
 	contextN      int
 	count         bool
 	openResult    bool
+	asJSON        bool
 	ff            *findFlags
 }
 
@@ -41,6 +42,28 @@ func (o searchOptions) validate(noteArgs []string, anyFlagSet bool) error {
 	}
 	if o.openResult && o.nullSep {
 		return errors.New("search: --open cannot be combined with --null")
+	}
+	return o.validateJSONCombos()
+}
+
+// validateJSONCombos rejects the modes --json cannot share output with. The
+// JSON records already carry each note's count and matching lines, so --count
+// and --context have nothing to add.
+func (o searchOptions) validateJSONCombos() error {
+	if !o.asJSON {
+		return nil
+	}
+	switch {
+	case o.interactive:
+		return errors.New("search: --json cannot be combined with --interactive")
+	case o.openResult:
+		return errors.New("search: --json cannot be combined with --open")
+	case o.nullSep:
+		return errors.New("search: --json cannot be combined with --null")
+	case o.count:
+		return errors.New("search: --json cannot be combined with --count")
+	case o.contextN > 0:
+		return errors.New("search: --json cannot be combined with --context")
 	}
 	return nil
 }
@@ -156,6 +179,8 @@ func runSearchMode(r *searchRun) error {
 		return runSearchCount(r)
 	case r.opts.openResult:
 		return runSearchOpen(r)
+	case r.opts.asJSON:
+		return runSearchJSON(r)
 	default:
 		return runSearchPaths(r)
 	}

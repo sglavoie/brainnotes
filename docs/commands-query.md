@@ -22,8 +22,9 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
 
 Prints matching absolute paths, one per line (or NUL-separated with `-0`).
 Pipe into `fzf` with `-i` for an interactive picker; a picker that selects
-nothing exits 1. `--json` prints an array of `{"path", "title"}` records in the
-same order instead.
+nothing exits 1. `--json` prints an array of `{"path", "abs_path", "title"}`
+records in the same order instead: `path` is vault-relative, like every other
+`--json` output, and `abs_path` is the path the plain listing prints.
 
 Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
 `--created` reads the `created` property, `--age` reads `last`.
