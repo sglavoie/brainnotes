@@ -247,6 +247,36 @@ func TestConfigWriteErrors_LeaveAFailedRollbackSayingSo(t *testing.T) {
 	}
 }
 
+// TestConfigWriteErrors_KeepTheRecoveryPath covers the third shape that
+// unwraps to a conflict: a compare-and-swap rejected another writer's bytes and
+// could not put them back, so they live only in a recovery file. The classifier
+// codes it internal, but the rewrite must also leave a conflict-coded copy alone,
+// because "re-check the diff" would replace the one sentence naming that file.
+func TestConfigWriteErrors_KeepTheRecoveryPath(t *testing.T) {
+	recovery := &vault.TxnRecoveryError{
+		Path:         config.FileName,
+		RecoveryPath: ".txn-custody-1.tmp",
+		Foreign:      true,
+		Err:          &vault.TxnConflictError{Path: config.FileName, Expected: "sha256:a", Actual: "sha256:b"},
+	}
+	for name, err := range map[string]error{
+		"classified": noteops.ClassifyTxnError("settings: write", recovery),
+		"conflict":   noteops.WrapError(noteops.CodeConflict, recovery.Error(), recovery),
+	} {
+		for surface, got := range map[string]error{
+			"settings":  settingsWriteError(err),
+			"templates": templatesWriteError(err),
+		} {
+			if noteops.CodeOf(got) == noteops.CodePreviewStale {
+				t.Fatalf("%s/%s reported a needed recovery as a stale diff: %q", surface, name, got)
+			}
+			if !strings.Contains(noteops.MessageOf(got), "preserved at "+recovery.RecoveryPath) {
+				t.Fatalf("%s/%s dropped the recovery path: %q", surface, name, got)
+			}
+		}
+	}
+}
+
 // TestSettings_RefusesAKeyTheOverlayShadows: writing the portable file would
 // report a save for a value the vault never adopts.
 func TestSettings_RefusesAKeyTheOverlayShadows(t *testing.T) {

@@ -88,8 +88,10 @@ func settingsWriteError(err error) error {
 	// and could not put the rest back, so the file is in a state nobody wrote and
 	// the message naming it is the only one that helps. Rewriting that into
 	// "re-check the diff" would report a vault needing manual recovery as a
-	// routine race somebody else won.
-	if vault.IsTxnRollbackFailure(err) {
+	// routine race somebody else won. A transaction that preserved displaced
+	// content in a recovery file unwraps to a conflict for the same reason, and
+	// its message is the only place that names where the content went.
+	if vault.IsTxnRollbackFailure(err) || vault.IsTxnRecoveryNeeded(err) {
 		return err
 	}
 	if noteops.CodeOf(err) == noteops.CodePreviewStale || vault.IsTxnConflict(err) {
