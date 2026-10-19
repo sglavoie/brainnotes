@@ -6,6 +6,9 @@
 :root {
   color-scheme: light;
 
+  /* The one monospace stack: code, paths, editors and expression input. */
+  --bn-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
   --bn-bg: #f7f9fc;
   --bn-surface: #ffffff;
   --bn-raised: #f3f6fb;

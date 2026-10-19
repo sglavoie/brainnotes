@@ -490,7 +490,7 @@ describe("settings panel: unset, cancel and refresh", () => {
 
     expect(mounted.panel.pending()).toBeNull();
     expect((mounted.root.querySelector("[data-settings-diff]") as HTMLElement).hidden).toBe(true);
-    expect(statusText(mounted.root)).toBe("Change cancelled.");
+    expect(statusText(mounted.root)).toBe("Change canceled. Nothing was changed.");
   });
 
   it("re-reads the table when Refresh is clicked", async () => {

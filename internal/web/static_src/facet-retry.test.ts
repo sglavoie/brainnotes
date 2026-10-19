@@ -72,7 +72,7 @@ it("treats a successful empty catalog as empty, not as a retryable failure", asy
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
   const { input, retry } = mount();
   input.focus();
-  await vi.waitFor(() => expect(document.querySelector(".facet-options")!.textContent).toBe("No matching facets."));
+  await vi.waitFor(() => expect(document.querySelector(".facet-options")!.textContent).toBe("No matching filters."));
   expect(retry.hidden).toBe(true);
 });
 

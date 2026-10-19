@@ -228,7 +228,7 @@ describe("settings writer: receipts", () => {
     harness.writer.cancel();
 
     expect(harness.writer.pending()).toBeNull();
-    expect(lastStatus(harness)?.message).toBe("Change cancelled.");
+    expect(lastStatus(harness)?.message).toBe("Change canceled. Nothing was changed.");
   });
 });
 

@@ -209,7 +209,7 @@
 
 .sync-merge-host .cm-scroller {
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.85rem;
   line-height: 1.55;
 }

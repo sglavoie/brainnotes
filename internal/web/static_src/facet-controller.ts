@@ -154,13 +154,13 @@ export class FacetController {
   private renderOptions(): void {
     if (this.inputClear) this.inputClear.hidden = this.input.value.trim() === "";
     if (this.state !== "ready") {
-      this.renderEmpty(this.state === "error" ? "Couldn't load filters." : "Loading facets…");
+      this.renderEmpty(this.state === "error" ? "Couldn't load filters." : "Loading filters…");
       return;
     }
     this.filteredOptions = this.allOptions
       .filter((option) => facetOptionMatchesQuery(option, this.input.value)).slice(0, 80);
     if (!this.filteredOptions.length) {
-      this.renderEmpty("No matching facets.");
+      this.renderEmpty("No matching filters.");
       return;
     }
     this.options.replaceChildren();

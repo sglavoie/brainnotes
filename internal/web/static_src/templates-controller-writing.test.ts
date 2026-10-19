@@ -116,7 +116,7 @@ describe("templates panel: abandoning a write", () => {
 
     expect(mounted.panel.pending()).toBeNull();
     expect(element<HTMLElement>(mounted.root, "[data-templates-diff]").hidden).toBe(true);
-    expect(statusText(mounted.root)).toBe("Change cancelled.");
+    expect(statusText(mounted.root)).toBe("Change canceled. Nothing was changed.");
   });
 
   it("reports bytes the file already holds without offering a confirmation", async () => {

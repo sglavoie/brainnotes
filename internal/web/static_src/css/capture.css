@@ -91,7 +91,7 @@
 
 .capture-recent-item {
   color: var(--bn-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.82rem;
   overflow-wrap: anywhere;
 }

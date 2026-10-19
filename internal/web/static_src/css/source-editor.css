@@ -189,7 +189,7 @@
 
 .source-editor-surface .cm-scroller {
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.9rem;
   line-height: 1.55;
 }

@@ -165,7 +165,7 @@
 
 .synthesize-draft-body {
   min-height: 12rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--bn-mono);
 }
 
 .synthesize-context-actions {

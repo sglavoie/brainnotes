@@ -76,7 +76,7 @@
 
 .fixes-preview-path {
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.78rem;
   color: var(--bn-muted);
 }
@@ -91,7 +91,7 @@
 }
 
 .fixes-preview-changes li {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.78rem;
   color: var(--bn-text-subtle);
   word-break: break-word;

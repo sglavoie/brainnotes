@@ -88,7 +88,7 @@
 }
 
 .source-editor-attachment-name {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--bn-mono);
   overflow-wrap: anywhere;
 }
 

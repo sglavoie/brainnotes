@@ -104,7 +104,7 @@
 
 .settings-key {
   color: var(--bn-text-strong);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.9rem;
 }
 
@@ -256,7 +256,7 @@
 
 .templates-content {
   width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--bn-mono);
   font-size: 0.85rem;
   line-height: 1.45;
 }
