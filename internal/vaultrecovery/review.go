@@ -104,9 +104,16 @@ func ReadPlan(path string) (*Plan, error) {
 	return &plan, nil
 }
 
+// BuildInventory refuses while the import record holds unresolved work, so an
+// operator learns it before carrying an inventory to the peer: acceptance would
+// archive that record and start an empty one, and an interrupted application or
+// a held conflict archived that way is no longer anything this vault acts on.
 func BuildInventory(root string) (*Inventory, error) {
 	local, err := vaultsync.Load(root)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireResolvedImports(root); err != nil {
 		return nil, err
 	}
 	exportSequence, applied, err := loadCausalState(root)
@@ -139,6 +146,13 @@ func BuildInventory(root string) (*Inventory, error) {
 	}
 	inventory.Digest, err = inventory.digest()
 	return inventory, err
+}
+
+func requireResolvedImports(root string) error {
+	if err := vaultimport.RequireResolved(root); err != nil {
+		return fmt.Errorf("vault recovery: re-enrollment would discard unresolved import work: %w", err)
+	}
+	return nil
 }
 
 func loadCausalState(root string) (uint64, map[string]uint64, error) {

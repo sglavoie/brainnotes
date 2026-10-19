@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
@@ -333,20 +333,83 @@ func LoadState(root string) (*State, error) {
 // enrollment. Restored acknowledgments and applied high-water marks are never
 // carried across this boundary; doing so would let a peer mistake a position in
 // the old device stream for one in the newly reviewed stream.
+//
+// It takes the import guard like every other writer of this record, not the
+// record's path lock: the guard is what excludes an import, and a reset that an
+// import could interleave with would be written over by that import's next
+// state write. And it refuses a record still holding unresolved work rather than
+// discarding it. The review coordinator archives the record before calling this,
+// so the record found here is one written since; RequireResolved is checked
+// again because it is this write, not the coordinator, that would destroy it.
 func ResetAfterReviewContext(ctx context.Context, root string) error {
 	local, err := vaultsync.Load(root)
 	if err != nil {
 		return err
 	}
-	_, barrier, err := checkpoint.JoinContext(ctx, root)
+	_, release, acquired, err := lockImportsContext(ctx, root)
 	if err != nil {
-		return fmt.Errorf("vaultimport: %w", err)
-	}
-	defer barrier()
-	release, err := vault.LockPaths(root, StatePath(root))
-	if err != nil {
-		return fmt.Errorf("vaultimport: lock import state: %w", err)
+		return err
 	}
 	defer release()
+	if !acquired {
+		return fmt.Errorf("%w: the import record was not reset", ErrImportBusy)
+	}
+	if err := RequireResolved(root); err != nil {
+		return err
+	}
 	return saveState(root, newState(local))
+}
+
+// RequireResolved refuses while the import record at root holds work an empty
+// record would discard: an interrupted application, a package held on a
+// conflict, or a conflict decision still owed its revision. It reads the record
+// without the identity check loadState makes, because re-enrollment asks it
+// across an identity change, and the question — is anything here unfinished —
+// does not depend on whose record it is. Absence is the answer "nothing".
+func RequireResolved(root string) error {
+	statePath := StatePath(root)
+	data, err := os.ReadFile(statePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("vaultimport: read import state %q: %w", statePath, err)
+	}
+	var record State
+	if err := json.Unmarshal(data, &record); err != nil {
+		return fmt.Errorf("%w: parse %q: %v", ErrCorruptState, statePath, err)
+	}
+	if err := record.validate(); err != nil {
+		return fmt.Errorf("%s: %w", statePath, err)
+	}
+	return record.requireResolved()
+}
+
+// requireResolved names the first kind of unresolved work the record holds, and
+// what clears it. Every vaultimport entry point resolves an interrupted attempt
+// and owed revisions before doing anything else, so recovery is "let one run";
+// a held package needs a person's decision.
+func (s *State) requireResolved() error {
+	if s.Pending != nil {
+		return fmt.Errorf("%w: package %s was being applied under entry %s when it was interrupted; let import recovery finish it (any import, drain, or conflict resolution runs it first), then rebuild the inventory",
+			ErrUnresolvedImport, s.Pending.PackageID(), s.Pending.JournalEntry)
+	}
+	if len(s.Conflicts) > 0 {
+		return fmt.Errorf("%w: %d package(s) are held on conflicts (%s); resolve them, then rebuild the inventory",
+			ErrUnresolvedImport, len(s.Conflicts), strings.Join(sortedKeys(s.Conflicts), ", "))
+	}
+	if len(s.Resolutions) > 0 {
+		return fmt.Errorf("%w: a conflict decision for %s is still owed its revision; let import recovery finish it, then rebuild the inventory",
+			ErrUnresolvedImport, strings.Join(sortedKeys(s.Resolutions), ", "))
+	}
+	return nil
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

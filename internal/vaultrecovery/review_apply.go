@@ -38,6 +38,12 @@ func ApplyPlan(root string, plan *Plan, now func() time.Time) error {
 	if done {
 		return nil
 	}
+	// Before prepareApply, so a refused survivor is not left quarantined by a
+	// marker it created for a decision it could not take, and on every resume,
+	// because the record is archived only once the decision is applying.
+	if err := requireResolvedImports(root); err != nil {
+		return err
+	}
 	review, err := prepareApply(ctx, root, plan, now)
 	if err != nil {
 		return err
