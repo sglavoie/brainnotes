@@ -37,6 +37,14 @@ nothing.
 | `126`/`127` | A program you asked bn to run (editor, fzf, the `checkpoint run` command) could not be run or was not found. |
 | `130` | Interrupted: Ctrl-C, or a dismissed fzf picker. |
 
+An empty result is not the same answer everywhere. `bn search` follows grep and
+exits 1 when nothing matches, but the listing commands `bn find`, `bn links`
+and `bn backlinks` exit 0 with empty output (or `[]` under `--json`): an empty
+selection is a successful query, not a failed one. Under `set -o pipefail`,
+`bn search ... | ...` therefore fails on no match while `bn find ... | ...`
+does not; test for empty output rather than the status when you need the same
+check for both.
+
 `bn checkpoint run` exits with its child's status. Only those user-visible
 children pass their status through: when a Git command bn runs for its own
 safety checks fails, bn exits 2, never with Git's code. Messages for statuses 1
