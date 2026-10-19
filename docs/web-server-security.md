@@ -204,7 +204,8 @@ download; a type merely sniffed from the bytes is downgraded to
 dot-path are never attachments, symlink aliases included. Overview bulk
 automation must `POST /api/notes/bulk/preview` first, then send the returned
 one-use `preview_id` to `POST /api/notes/bulk`; missing, stale, mismatched, or
-reused previews are rejected with `409`. Preview receipts stay process-local,
+reused previews, and previews taken before the configuration last changed, are
+rejected with `409`. Preview receipts stay process-local,
 expire after five minutes, and never write journal entries by themselves.
 Cockpit fixes follow the same preview-then-apply contract via
 `POST /api/fixes/preview` and `POST /api/fixes/apply`, and property changes

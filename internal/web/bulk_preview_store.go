@@ -36,6 +36,10 @@ type bulkPreviewRecord struct {
 	Destinations []bulkPreviewPlannedDestination
 	Affected     []bulkPreviewAffectedState
 	TrashPlans   []noteops.TrashDestinationPlan
+	// Generation is the configuration generation the preview was planned
+	// against. Move and property actions read the configuration, so an apply
+	// after it changed would carry out a plan nobody was shown.
+	Generation int64
 }
 
 type bulkPreviewPlannedDestination struct {
@@ -63,7 +67,7 @@ func newBulkPreviewStore(ttl time.Duration) *bulkPreviewStore {
 	}
 }
 
-func (s *bulkPreviewStore) store(req bulkManagementRequest, result *noteops.BulkPreviewResult) (bulkPreviewReceipt, error) {
+func (s *bulkPreviewStore) store(req bulkManagementRequest, result *noteops.BulkPreviewResult, generation int64) (bulkPreviewReceipt, error) {
 	if s == nil {
 		return bulkPreviewReceipt{}, noteops.Errorf(noteops.CodeInternal, "bulk preview store is unavailable")
 	}
@@ -87,6 +91,7 @@ func (s *bulkPreviewStore) store(req bulkManagementRequest, result *noteops.Bulk
 		Destinations: bulkPreviewDestinations(result),
 		Affected:     states,
 		TrashPlans:   bulkPreviewTrashPlans(result),
+		Generation:   generation,
 	}
 
 	s.mu.Lock()
