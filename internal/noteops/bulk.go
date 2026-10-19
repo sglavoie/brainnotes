@@ -437,25 +437,15 @@ func bulkMoveOne(v *vault.Vault, cfg *config.Config, item BulkSource, newFolderR
 	if err != nil {
 		return BulkItemResult{}, err
 	}
-	if err := CheckMoveDestination(plan.Target, plan.NewPath, options.force); err != nil {
+	// CommitMovePlan re-checks the destination after the captures, right before
+	// the first rewrite, so no second check is needed here.
+	// The batch journal records every item, so a refused item compensates its
+	// own rewrites and forgets only the captures it added after this mark.
+	relocate := RelocationOptions{Force: options.force, Out: options.out, batch: true, batchMark: j.captureMark()}
+	if err := captureRelocation(j, plan.Target, plan.NewPath, plan.FileOrder); err != nil {
 		return BulkItemResult{}, err
 	}
-	if err := j.Capture(plan.Target); err != nil {
-		return BulkItemResult{}, err
-	}
-	if err := j.Capture(plan.NewPath); err != nil {
-		return BulkItemResult{}, err
-	}
-	for _, p := range plan.FileOrder {
-		if err := j.Capture(p); err != nil {
-			return BulkItemResult{}, err
-		}
-	}
-
-	if err := ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
-		return BulkItemResult{}, err
-	}
-	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
+	if err := CommitMovePlan(j, v.Root, plan, &cfg.Frontmatter, relocate); err != nil {
 		return BulkItemResult{}, err
 	}
 	return BulkItemResult{

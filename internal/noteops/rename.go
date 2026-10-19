@@ -146,7 +146,9 @@ func resolveRenameDestination(v *vault.Vault, cfg *config.Config, sourceAbs, new
 }
 
 // applyRename is the mutating half: it opens the operation, captures everything
-// the plan touches, rewrites the backlinks, moves the file, and finalizes.
+// the plan touches, then re-checks the destination, rewrites the backlinks and
+// moves the file through CommitRenamePlan, which undoes the rewrites if the
+// move is refused, and finalizes.
 //
 // BeginOperation runs ahead of the first Capture. RenameFile takes locks and
 // would be refused there anyway, but by then the journal entry and every
@@ -160,10 +162,7 @@ func applyRename(v *vault.Vault, cfg *config.Config, plan *RenamePlan, options r
 	if err := captureRelocation(j, plan.Target, plan.NewPath, plan.FileOrder); err != nil {
 		return nil, err
 	}
-	if err := ApplyRenamePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
-		return nil, err
-	}
-	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
+	if err := CommitRenamePlan(j, v.Root, plan, &cfg.Frontmatter, RelocationOptions{Force: options.force, Out: options.out}); err != nil {
 		return nil, err
 	}
 	return j.Finalize()

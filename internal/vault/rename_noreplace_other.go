@@ -2,9 +2,12 @@
 
 package vault
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
-var errRenameNoReplaceUnsupported = errors.New("atomic no-replace rename is unsupported on this platform")
+var errRenameNoReplaceUnsupported = fmt.Errorf("atomic no-replace rename is unsupported on this platform: %w", errors.ErrUnsupported)
 
 func renameNoReplace(_, _ string) error {
 	return errRenameNoReplaceUnsupported

@@ -160,8 +160,10 @@ func resolveMoveDestination(v *vault.Vault, source PathResolution, title, newFol
 }
 
 // applyMove is the mutating half: it opens the operation, creates the
-// destination folder, captures everything the plan touches, rewrites the
-// folder-qualified links, moves the file, and finalizes.
+// destination folder, captures everything the plan touches, and hands the
+// rewrite and the move to CommitMovePlan, which re-checks the destination last
+// and undoes the rewrites if the move is refused, then finalizes. The early
+// check only keeps an obvious conflict from creating a journal entry.
 //
 // BeginOperation runs ahead of the destination folder, which a refused move
 // would otherwise leave behind empty, and names it as a target so the refusal
@@ -182,10 +184,7 @@ func applyMove(v *vault.Vault, cfg *config.Config, plan *MovePlan, dst moveDesti
 	if err := captureRelocation(j, plan.Target, plan.NewPath, plan.FileOrder); err != nil {
 		return nil, err
 	}
-	if err := ApplyMovePlan(v.Root, plan, &cfg.Frontmatter, options.out); err != nil {
-		return nil, err
-	}
-	if err := RenameFile(v.Root, plan.Target, plan.NewPath); err != nil {
+	if err := CommitMovePlan(j, v.Root, plan, &cfg.Frontmatter, RelocationOptions{Force: options.force, Out: options.out}); err != nil {
 		return nil, err
 	}
 	return j.Finalize()
@@ -270,7 +269,7 @@ func CheckMoveDestination(targetPath, newPath string, force bool) error {
 	if force {
 		return nil
 	}
-	return Errorf(CodeConflict, "move: destination %s already exists (use --force to overwrite)", newPath)
+	return destinationExistsError("move", newPath)
 }
 
 func ValidateMoveTargetPath(newFolderArg, folder string) error {
@@ -343,48 +342,6 @@ func PrintMovePlan(out io.Writer, vaultRoot string, plan *MovePlan) error {
 	previews := planPreviews(vaultRoot, plan.Target,
 		relOrAbs(vaultRoot, plan.Target), relOrAbs(vaultRoot, plan.NewPath), plan.Changes)
 	return RenderNotePreviews(out, previews)
-}
-
-func ApplyMovePlan(vaultRoot string, plan *MovePlan, fmCfg *config.FrontmatterConfig, out io.Writer) error {
-	if out == nil {
-		out = io.Discard
-	}
-	for _, file := range plan.FileOrder {
-		if err := RewriteFileMove(vaultRoot, file, plan.OldRel, plan.NewRel, fmCfg); err != nil {
-			return fmt.Errorf("move: rewrite %s: %w", file, err)
-		}
-		rel, err := filepath.Rel(vaultRoot, file)
-		if err != nil {
-			rel = file
-		}
-		if _, err := fmt.Fprintf(out, "%s: updated\n", rel); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func RewriteFileMove(vaultRoot, path, oldRel, newRel string, fmCfg *config.FrontmatterConfig) error {
-	note := vault.NewNote(vaultRoot, path)
-	if err := note.Load(); err != nil {
-		return err
-	}
-	body, err := note.Body()
-	if err != nil {
-		return err
-	}
-	newBody := wikilink.RewriteMove(body, oldRel, newRel)
-	if newBody != body {
-		if err := note.SetBody(newBody); err != nil {
-			return err
-		}
-	}
-	front, err := note.Front()
-	if err != nil {
-		return err
-	}
-	RewriteFrontmatterMove(front, oldRel, newRel, fmCfg)
-	return note.Save(fmCfg)
 }
 
 func RewriteFrontmatterMove(front *frontmatter.Map, oldRel, newRel string, fmCfg *config.FrontmatterConfig) {

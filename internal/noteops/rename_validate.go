@@ -89,7 +89,7 @@ func CheckRenameDestination(targetPath, newPath string, force bool) error {
 	if force {
 		return nil
 	}
-	return Errorf(CodeConflict, "rename: destination %s already exists (use --force to overwrite)", newPath)
+	return destinationExistsError("rename", newPath)
 }
 
 func EnsureUniqueRenameSourceTitle(v *vault.Vault, targetPath, title string) error {
@@ -213,50 +213,19 @@ func PrintRenamePlan(out io.Writer, vaultRoot string, plan *RenamePlan) error {
 	return RenderNotePreviews(out, previews)
 }
 
-func ApplyRenamePlan(vaultRoot string, plan *RenamePlan, fmCfg *config.FrontmatterConfig, out io.Writer) error {
-	if out == nil {
-		out = io.Discard
-	}
-	for _, file := range plan.FileOrder {
-		if err := RewriteFileRename(vaultRoot, file, plan.OldTitle, plan.NewTitle, fmCfg); err != nil {
-			return fmt.Errorf("rename: rewrite %s: %w", file, err)
-		}
-		rel, err := filepath.Rel(vaultRoot, file)
-		if err != nil {
-			rel = file
-		}
-		if _, err := fmt.Fprintf(out, "%s: updated\n", rel); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func RewriteFileRename(vaultRoot, path, oldTitle, newTitle string, fmCfg *config.FrontmatterConfig) error {
-	n := vault.NewNote(vaultRoot, path)
-	if err := n.Load(); err != nil {
-		return err
-	}
-	body, err := n.Body()
-	if err != nil {
-		return err
-	}
-	newBody := wikilink.RewriteTitle(body, oldTitle, newTitle)
-	if newBody != body {
-		if err := n.SetBody(newBody); err != nil {
-			return err
-		}
-	}
-	front, err := n.Front()
-	if err != nil {
-		return err
-	}
-	RewriteFrontmatterRename(front, oldTitle, newTitle, fmCfg)
-	return n.Save(fmCfg)
-}
-
 func RewriteFrontmatterRename(front *frontmatter.Map, oldTitle, newTitle string, fmCfg *config.FrontmatterConfig) {
 	rewriteFrontmatterProps(front, oldTitle, newTitle, fmCfg, wikilink.RewriteTitle)
+}
+
+// RenameFileOptions tunes RenameFile. The zero value refuses to replace an
+// existing destination and words its refusals as a rename.
+type RenameFileOptions struct {
+	// Force allows replacing a destination that already exists, matching the
+	// --force the caller's destination check accepted.
+	Force bool
+	// Op names the operation in error messages ("rename" or "move"), so a refusal
+	// reads the same as the CheckRenameDestination or CheckMoveDestination one.
+	Op string
 }
 
 // RenameFile moves target to newPath, holding the path lock on both ends for the
@@ -268,45 +237,125 @@ func RewriteFrontmatterRename(front *frontmatter.Map, oldTitle, newTitle string,
 // through a replacement primitive; the lock above and the BeginOperation the
 // caller went through are what make it safe.
 //
+// Without Force the move never replaces a destination. The caller's destination
+// check ran before the backlinks were rewritten, and a note created at newPath
+// since then — by an editor, which no bn lock binds — must survive: the move is
+// made with vault.RenameNoReplace, and a destination that exists is reported as
+// the same CodeConflict the destination check would have returned.
+//
+// Both parent directories are fsynced afterwards, so a move the caller is about
+// to report as done survives power loss on both ends.
+//
 //bn:direct-write the rename is the operation, locked on both ends, reached through BeginOperation
-func RenameFile(vaultRoot, target, newPath string) error {
+func RenameFile(vaultRoot, target, newPath string, opts RenameFileOptions) error {
+	_, err := renameFile(vaultRoot, target, newPath, opts)
+	return err
+}
+
+// renameFile is RenameFile reporting whether the note moved, which a failed
+// directory sync after the move needs: the note is at newPath, so a caller must
+// not compensate as though it were still at target.
+func renameFile(vaultRoot, target, newPath string, opts RenameFileOptions) (moved bool, err error) {
 	if target == newPath {
-		return nil
+		return false, nil
+	}
+	op := opts.Op
+	if op == "" {
+		op = "rename"
 	}
 	release, err := vault.LockPaths(vaultRoot, target, newPath)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer release()
-	if strings.EqualFold(target, newPath) && target != newPath {
-		return renameCaseOnly(target, newPath)
+	if err := renameLocked(target, newPath, op, opts.Force); err != nil {
+		return false, err
 	}
-	if err := os.Rename(target, newPath); err != nil {
-		return fmt.Errorf("rename: %q -> %q: %w", target, newPath, err)
+	for _, dir := range uniqueParents(newPath, target) {
+		if err := vault.SyncDir(dir); err != nil {
+			return true, WrapError(CodeInternal, fmt.Sprintf("%s: sync %q", op, dir), err)
+		}
+	}
+	return true, nil
+}
+
+func uniqueParents(a, b string) []string {
+	if filepath.Dir(a) == filepath.Dir(b) {
+		return []string{filepath.Dir(a)}
+	}
+	return []string{filepath.Dir(a), filepath.Dir(b)}
+}
+
+// renameLocked runs with both paths locked by RenameFile. A newPath that names
+// target itself — a case-only change, or a Unicode-normalization variant on a
+// volume that treats the two as one name — goes through the pivot, since a
+// no-replace rename would see the note as its own conflicting destination.
+//
+//bn:direct-write both paths are locked by RenameFile, reached through BeginOperation
+func renameLocked(target, newPath, op string, force bool) error {
+	if strings.EqualFold(target, newPath) || sameExistingFile(target, newPath) {
+		return renameCaseOnly(target, newPath, op, force)
+	}
+	if force {
+		if err := os.Rename(target, newPath); err != nil {
+			return fmt.Errorf("%s: %q -> %q: %w", op, target, newPath, err)
+		}
+		return nil
+	}
+	if err := vault.RenameNoReplace(target, newPath); err != nil {
+		if os.IsExist(err) {
+			return destinationExistsError(op, newPath)
+		}
+		return fmt.Errorf("%s: %q -> %q: %w", op, target, newPath, err)
 	}
 	return nil
 }
 
-// renameCaseOnly runs with both paths locked by RenameFile.
+// destinationExistsError is the refusal CheckRenameDestination and
+// CheckMoveDestination give an occupied destination, so a conflict detected by
+// the rename itself reads exactly like one detected by the check.
+func destinationExistsError(op, newPath string) error {
+	return Errorf(CodeConflict, "%s: destination %s already exists (use --force to overwrite)", op, newPath)
+}
+
+func sameExistingFile(a, b string) bool {
+	infoA, err := os.Lstat(a)
+	if err != nil {
+		return false
+	}
+	infoB, err := os.Lstat(b)
+	return err == nil && os.SameFile(infoA, infoB)
+}
+
+// renameCaseOnly runs with both paths locked by RenameFile. On a case-sensitive
+// volume newPath can be a different note, so without force the second leg is a
+// no-replace rename too, and a refusal puts target back.
 //
 //bn:direct-write both paths are locked by RenameFile, reached through BeginOperation
-func renameCaseOnly(target, newPath string) error {
+func renameCaseOnly(target, newPath, op string, force bool) error {
 	dir := filepath.Dir(target)
 	tmp, err := os.CreateTemp(dir, ".rename-pivot-*")
 	if err != nil {
-		return fmt.Errorf("rename: tempfile in %q: %w", dir, err)
+		return fmt.Errorf("%s: tempfile in %q: %w", op, dir, err)
 	}
 	tmpPath := tmp.Name()
 	_ = tmp.Close()
 	_ = os.Remove(tmpPath)
 	if err := os.Rename(target, tmpPath); err != nil {
-		return fmt.Errorf("rename: pivot %q -> %q: %w", target, tmpPath, err)
+		return fmt.Errorf("%s: pivot %q -> %q: %w", op, target, tmpPath, err)
 	}
-	if err := os.Rename(tmpPath, newPath); err != nil {
+	place := vault.RenameNoReplace
+	if force {
+		place = os.Rename
+	}
+	if err := place(tmpPath, newPath); err != nil {
 		if restoreErr := os.Rename(tmpPath, target); restoreErr != nil {
-			return fmt.Errorf("rename: pivot %q -> %q: %w; restore to %q failed: %v", tmpPath, newPath, err, target, restoreErr)
+			return fmt.Errorf("%s: pivot %q -> %q: %w; restore to %q failed: %v", op, tmpPath, newPath, err, target, restoreErr)
 		}
-		return fmt.Errorf("rename: pivot %q -> %q: %w", tmpPath, newPath, err)
+		if os.IsExist(err) {
+			return destinationExistsError(op, newPath)
+		}
+		return fmt.Errorf("%s: pivot %q -> %q: %w", op, tmpPath, newPath, err)
 	}
 	return nil
 }
