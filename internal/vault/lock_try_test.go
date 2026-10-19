@@ -86,11 +86,13 @@ func TestTryLockPathContendsWithinOneProcess(t *testing.T) {
 
 	const goroutines = 8
 	var (
-		wg    sync.WaitGroup
-		mu    sync.Mutex
-		wins  int
-		start = make(chan struct{})
+		wg        sync.WaitGroup
+		attempted sync.WaitGroup
+		mu        sync.Mutex
+		wins      int
+		start     = make(chan struct{})
 	)
+	attempted.Add(goroutines)
 	for i := 0; i < goroutines; i++ {
 		wg.Add(1)
 		go func() {
@@ -102,10 +104,11 @@ func TestTryLockPathContendsWithinOneProcess(t *testing.T) {
 				wins++
 			}
 			mu.Unlock()
+			attempted.Done()
 			if acquired {
-				// Hold it long enough that every other goroutine's attempt overlaps
-				// this one, or a fast loser could win after an early winner released.
-				time.Sleep(50 * time.Millisecond)
+				// Hold it until every other goroutine has made its attempt, or a
+				// late loser could win after an early winner released.
+				attempted.Wait()
 			}
 			release()
 		}()
