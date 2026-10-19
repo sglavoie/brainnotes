@@ -1,6 +1,6 @@
 import { rememberSynthesisSession, synthesisResume } from "./synthesize-session";
 import { mountSynthesisRecovery, synthesisRecoveryKeys } from "./synthesize-recovery";
-import { confirmAction, type ConfirmAction } from "./action-confirm";
+import { confirmAction, type Confirmation, type ConfirmAction } from "./action-confirm";
 import { SynthesisRequestError } from "./api";
 import { queryElement } from "./dom";
 import { hasWritableClipboard } from "./clipboard";
@@ -127,12 +127,17 @@ export type SynthesisRuntime = {
 };
 
 const dialogConfirmer = (root: HTMLElement, view: SynthesisView): ConfirmAction =>
-  (message: string) => confirmAction({
-    title: message === DISCLOSURE ? "Send context to Ask AI?" : "Change saved work?",
-    description: message,
-    confirmLabel: message === DISCLOSURE ? "Send context" : "Confirm",
-    danger: message === DISCARD_CONFIRMATION,
-  }, root.ownerDocument, message === DISCARD_CONFIRMATION ? view.discardButton : view.generateButton);
+  (message: string) => confirmAction(message === DISCLOSURE ? {
+    title: "Send context to Ask AI?", description: message, confirmLabel: "Send context",
+  } : {
+    title: "Discard this draft?", description: message, confirmLabel: "Discard draft and selection", danger: true,
+  }, root.ownerDocument, message === DISCLOSURE ? view.generateButton : view.discardButton);
+
+// Recovery rows describe their own dialog. An injected confirmer (tests, embeds)
+// still receives the description and the button to return focus to.
+const recoveryConfirmer = (root: HTMLElement, injected: ConfirmAction | undefined) =>
+  (confirmation: Confirmation, returnFocus: HTMLElement): boolean | Promise<boolean> =>
+    injected ? injected(confirmation.description, returnFocus) : confirmAction(confirmation, root.ownerDocument, returnFocus);
 
 // Unresolved keys ride along in every save, so a save made before a retry
 // settles them never drops a note the vault only failed to answer for.
@@ -213,7 +218,7 @@ export const createSynthesisRuntime = (
     offerRecovery: (restore): void => mountSynthesisRecovery({
       root: mount, storage,
       keys: synthesisRecoveryKeys(storage, config.vaultID, config.anchor.key, storageKey),
-      restore, confirm: runtime.confirmer,
+      restore, confirm: recoveryConfirmer(root, deps.confirm),
     }),
 
     rememberCandidates: (entries): void => {

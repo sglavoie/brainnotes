@@ -1,6 +1,6 @@
 export type ConfirmAction = (message: string, returnFocus?: Element | null) => boolean | Promise<boolean>;
 
-type Confirmation = { title: string; description: string; confirmLabel: string; danger?: boolean };
+export type Confirmation = { title: string; description: string; confirmLabel: string; danger?: boolean };
 
 // One native dialog owns keyboard containment, Escape, and focus restoration.
 // Vault-authored names and paths are assigned as text, never markup.
