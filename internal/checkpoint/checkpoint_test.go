@@ -317,3 +317,69 @@ func TestStatusOnAQuietVaultCreatesNothing(t *testing.T) {
 		t.Fatalf("Status created %v in a vault it was only inspecting", entries)
 	}
 }
+
+// A writer waiting out a checkpoint gives up as soon as its context ends rather
+// than spending the rest of its budget, so a request whose client has gone away
+// does not keep the per-root mutex for up to DefaultWriterWait.
+func TestCancelledContextStopsTheWaitPromptly(t *testing.T) {
+	root := newBarrierVault(t)
+	held := mustHold(t, root, "copying the vault")
+	defer func() {
+		if err := held.Release(); err != nil {
+			t.Fatalf("Release: %v", err)
+		}
+	}()
+
+	assertCancelledJoinReturnsPromptly(t, root)
+}
+
+// The in-process path, where this process already holds the shared flock and a
+// fresh writer waits for an announcement to clear, honours the context too.
+func TestCancelledContextStopsTheInProcessWaitPromptly(t *testing.T) {
+	root := newBarrierVault(t)
+	_, outer, err := JoinContextWithin(context.Background(), root, shortWait)
+	if err != nil {
+		t.Fatalf("JoinContextWithin: %v", err)
+	}
+	defer outer()
+
+	paths, err := resolve(root)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	claim, acquired, err := vault.TryLockPathHandle(paths.claim)
+	if err != nil || !acquired {
+		t.Fatalf("claim checkpoint: acquired=%v err=%v", acquired, err)
+	}
+	defer claim.Release()
+	rec, err := intent(Options{Reason: "wait for older writer"})
+	if err != nil {
+		t.Fatalf("intent: %v", err)
+	}
+	if err := writeRecord(paths.record, rec); err != nil {
+		t.Fatalf("writeRecord: %v", err)
+	}
+	defer clearRecord(paths.record)
+
+	assertCancelledJoinReturnsPromptly(t, root)
+}
+
+// assertCancelledJoinReturnsPromptly joins with the full writer budget and
+// cancels shortly after, expecting the cancellation rather than a refusal.
+func assertCancelledJoinReturnsPromptly(t *testing.T, root string) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	time.AfterFunc(50*time.Millisecond, cancel)
+
+	start := time.Now()
+	_, release, err := JoinContextWithin(ctx, root, DefaultWriterWait)
+	waited := time.Since(start)
+	release()
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("JoinContextWithin with cancelled context = %v, want context.Canceled", err)
+	}
+	if waited > 2*time.Second {
+		t.Fatalf("JoinContextWithin waited %s after its context was cancelled", waited)
+	}
+}
