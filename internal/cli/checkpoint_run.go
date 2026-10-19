@@ -73,9 +73,9 @@ func (opts *checkpointOptions) holdReason(argv []string) string {
 
 // runCheckpointChild executes argv with no shell and no expansion.
 //
-// An *exec.ExitError is returned unwrapped, because cmd/bn turns exactly that
-// into this process's exit status — wrapping it would still propagate the code
-// and would prefix the child's failure with a sentence about bn.
+// An *exec.ExitError is returned as a ChildProcessError with no added text,
+// because cmd/bn turns exactly that into this process's exit status, and a
+// prefix would put a sentence about bn in front of the child's failure.
 // checkpointChildWaitDelay bounds how long a forwarded SIGTERM may take before
 // the child is killed.
 const checkpointChildWaitDelay = 10 * time.Second
@@ -96,8 +96,8 @@ func runCheckpointChild(cmd *cobra.Command, argv []string, inherited []*os.File)
 	case err == nil:
 		return nil
 	case errors.As(err, &exitErr):
-		return err
+		return childProcessError(err)
 	default:
-		return fmt.Errorf("checkpoint run: %s: %w", argv[0], err)
+		return childProcessError(fmt.Errorf("checkpoint run: %s: %w", argv[0], err))
 	}
 }

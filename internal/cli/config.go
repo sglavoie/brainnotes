@@ -66,7 +66,7 @@ func runConfigEdit(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("%s: set [open].editor or $EDITOR", label)
 	}
 	if err != nil {
-		return fmt.Errorf("%s: %w", label, err)
+		return childProcessError(fmt.Errorf("%s: %w", label, err))
 	}
 	bin, argv, err := editutil.Resolve(spec, path, 0)
 	if err != nil {
