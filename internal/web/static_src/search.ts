@@ -78,9 +78,14 @@ export const renderSearchResultOption = (
   return item;
 };
 
+// Matches the Library's delayed loading status: quick answers never flash it.
+export const searchingFeedbackDelay = 350;
+
 class HeaderSearch {
   private debounceToken = 0;
+  private loadingToken = 0;
   private requestToken = 0;
+  private activeRequest: AbortController | null = null;
   private results: SearchResult[] = [];
   private activeIndex = -1;
   private readonly retryButton: HTMLButtonElement | null;
@@ -162,8 +167,16 @@ class HeaderSearch {
     if (this.retryButton) this.retryButton.hidden = false;
   }
 
-  dismiss(): void {
+  private cancelPending(): void {
     window.clearTimeout(this.debounceToken);
+    window.clearTimeout(this.loadingToken);
+    this.activeRequest?.abort();
+    this.activeRequest = null;
+    this.resultsEl.removeAttribute("aria-busy");
+  }
+
+  dismiss(): void {
+    this.cancelPending();
     this.requestToken += 1;
     this.clearResults();
     if (this.libraryLink) {
@@ -224,7 +237,7 @@ class HeaderSearch {
 
   scheduleSearch(delay: number): void {
     const query = this.input.value.trim();
-    window.clearTimeout(this.debounceToken);
+    this.cancelPending();
     if (this.syncSearchURL) {
       syncPageQueryParam(query);
     }
@@ -234,30 +247,47 @@ class HeaderSearch {
       this.clearResults();
       return;
     }
-    this.showFeedback("Searching…");
+    // Keep the current results (and the highlighted option) while the next
+    // search is pending; announce progress only when nothing is displayed.
+    if (this.hasResults()) this.resultsEl.setAttribute("aria-busy", "true");
+    else this.clearResults();
+    this.loadingToken = window.setTimeout(() => {
+      if (localToken === this.requestToken && !this.hasResults()) this.showFeedback("Searching…");
+    }, searchingFeedbackDelay);
+    const controller = new AbortController();
+    this.activeRequest = controller;
     this.debounceToken = window.setTimeout(() => {
-      void this.fetchResults(query, localToken);
+      void this.fetchResults(query, localToken, controller.signal);
     }, delay);
   }
 
-  private async fetchResults(query: string, localToken: number): Promise<void> {
+  private settle(localToken: number): boolean {
+    if (localToken !== this.requestToken) return false;
+    window.clearTimeout(this.loadingToken);
+    this.activeRequest = null;
+    this.resultsEl.removeAttribute("aria-busy");
+    return true;
+  }
+
+  private async fetchResults(query: string, localToken: number, signal: AbortSignal): Promise<void> {
     try {
       const resp = await fetch(buildSearchAPIURL(query, this.syncSearchURL), {
         headers: { Accept: "application/json" },
+        signal,
       });
       if (localToken !== this.requestToken) {
         return;
       }
       if (!resp.ok) {
-        this.showFailure();
+        if (this.settle(localToken)) this.showFailure();
         return;
       }
       const payload = await resp.json();
-      if (localToken === this.requestToken) {
+      if (this.settle(localToken)) {
         this.renderResults(normalizeSearchResults(payload));
       }
     } catch {
-      if (localToken === this.requestToken) {
+      if (this.settle(localToken)) {
         this.showFailure();
       }
     }

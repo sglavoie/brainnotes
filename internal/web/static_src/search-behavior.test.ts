@@ -92,9 +92,9 @@ describe("search keyboard and filter-change behavior", () => {
     await vi.runAllTimersAsync();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith("/api/search?tag=work", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/search?tag=work", expect.objectContaining({
       headers: { Accept: "application/json" },
-    });
+    }));
     const input = document.getElementById("search-input") as HTMLInputElement;
     const resultsEl = document.getElementById("search-results") as HTMLElement;
     expect(resultsEl.hidden).toBe(false);
@@ -125,7 +125,7 @@ describe("search feedback", () => {
     initSearch();
 
     typeQuery(input, "missing");
-    expect(feedback.textContent).toBe("Searching…");
+    expect(feedback.hidden).toBe(true);
     await vi.runAllTimersAsync();
     expect(feedback.textContent).toBe("No matching notes.");
     expect(feedback.hidden).toBe(false);
@@ -142,25 +142,72 @@ describe("search feedback", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("removes old results as soon as the query changes", async () => {
+  it("keeps current results and the highlighted option while the next search is pending", async () => {
     vi.useFakeTimers();
     const { input, results, feedback } = renderSearch();
+    let resolveSecond: (value: unknown) => void = () => {};
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => [searchResult()] })
-      .mockResolvedValueOnce({ ok: true, json: async () => [] });
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
     vi.stubGlobal("fetch", fetchMock);
     initSearch();
 
     typeQuery(input, "note");
     await vi.runAllTimersAsync();
-    expect(results.hidden).toBe(false);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(input.getAttribute("aria-activedescendant")).toBe("search-option-0");
 
     typeQuery(input, "other");
-    expect(results.hidden).toBe(true);
-    expect(results.childElementCount).toBe(0);
-    expect(feedback.textContent).toBe("Searching…");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(results.hidden).toBe(false);
+    expect(results.childElementCount).toBe(1);
+    expect(results.getAttribute("aria-busy")).toBe("true");
+    expect(input.getAttribute("aria-activedescendant")).toBe("search-option-0");
+    expect(feedback.hidden).toBe(true);
+    expect(feedback.textContent).toBe("");
+
+    resolveSecond({ ok: true, json: async () => [] });
     await vi.runAllTimersAsync();
+    expect(results.hasAttribute("aria-busy")).toBe(false);
     expect(feedback.textContent).toBe("No matching notes.");
+  });
+
+  it("shows Searching… only after a delay when nothing is displayed", async () => {
+    vi.useFakeTimers();
+    const { input, feedback } = renderSearch();
+    let resolveResponse: (value: unknown) => void = () => {};
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { resolveResponse = resolve; })));
+    initSearch();
+
+    typeQuery(input, "note");
+    await vi.advanceTimersByTimeAsync(349);
+    expect(feedback.hidden).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(feedback.hidden).toBe(false);
+    expect(feedback.textContent).toBe("Searching…");
+    resolveResponse({ ok: true, json: async () => [searchResult()] });
+    await vi.runAllTimersAsync();
+    expect(feedback.hidden).toBe(true);
+  });
+
+  it("aborts a superseded in-flight request", async () => {
+    vi.useFakeTimers();
+    const { input } = renderSearch();
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+      signals.push(init.signal!);
+      return new Promise(() => {});
+    }));
+    initSearch();
+
+    typeQuery(input, "one");
+    await vi.advanceTimersByTimeAsync(150);
+    typeQuery(input, "two");
+    expect(signals[0].aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(signals[1].aborted).toBe(false);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(signals[1].aborted).toBe(true);
   });
 });
 
