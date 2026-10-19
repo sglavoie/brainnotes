@@ -18,19 +18,15 @@ var importCrashHook func(point string)
 
 const (
 	// crashDeclared fires once the attempt record is durable and before the
-	// transaction is committed. Nothing of this import is on the disk yet: no
-	// content, no journal entry, no provenance.
+	// transaction is committed. The anti-echo ledger already names the pinned
+	// entry; nothing else of this import is on the disk yet: no content and no
+	// journal entry.
 	crashDeclared = "declared"
 	// crashApplied fires once the package's content is durably on this disk and
 	// its pre-change state is captured, and before anything says so. The journal
 	// entry exists and has no manifest, which is what makes this the last point
 	// the import is still undoable rather than undone.
 	crashApplied = "applied"
-	// crashProvenance fires once the anti-echo ledger knows the entry came from a
-	// peer, and before the entry is finalized. Still no manifest, so this is the
-	// application boundary again with one more durable fact behind it — and the
-	// fact is about an entry a rollback is about to remove.
-	crashProvenance = "provenance"
 	// crashFinalized fires once the undo manifest and the content-history commit
 	// are both durable, and before the peer is told anything. The change has
 	// stopped being something this vault is doing and become something it did.

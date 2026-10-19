@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
@@ -43,9 +42,9 @@ func Reset(root string) error {
 		return err
 	}
 	defer barrier()
-	release, err := vault.LockPaths(root, StatePath(root))
+	release, err := lockProducerState(root)
 	if err != nil {
-		return fmt.Errorf("vaultexport: lock export state: %w", err)
+		return err
 	}
 	defer release()
 
@@ -81,14 +80,32 @@ func RebaselineAfterReviewContext(ctx context.Context, root string, sequence uin
 		return err
 	}
 	defer barrier()
-	release, err := vault.LockPaths(root, StatePath(root))
+	release, err := lockProducerState(root)
 	if err != nil {
-		return fmt.Errorf("vaultexport: lock export state: %w", err)
+		return err
 	}
 	defer release()
 	next := newState(local)
 	next.Sequence = sequence
 	return saveState(root, next)
+}
+
+// lockProducerState takes the producer guard and then the record's own lock, for
+// a writer that replaces producer fields in one write rather than over a pass.
+// The guard is what stops it landing between two writes of a running pass,
+// which would then put the old cursor back; the record lock is still taken for
+// the write itself so RecordImport cannot interleave with it.
+func lockProducerState(root string) (func(), error) {
+	producer, err := lockProducer(root)
+	if err != nil {
+		return nil, err
+	}
+	state, err := lockState(root)
+	if err != nil {
+		producer()
+		return nil, err
+	}
+	return func() { state(); producer() }, nil
 }
 
 // hexObjectName reports whether s is a full lowercase hex Git object name.

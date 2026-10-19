@@ -65,6 +65,18 @@ var (
 	// interrupted publication of it. Something else writes into this channel,
 	// and continuing would interleave two producers' streams.
 	ErrChannelConflict = errors.New("vaultexport: outgoing channel holds an unexpected package")
+
+	// ErrExportBusy reports another export, reset, or rebaseline already running
+	// in this vault. It is retryable contention and not a fault: nothing was read
+	// or written, and the pass holding the guard is doing this pass's work.
+	ErrExportBusy = errors.New("vaultexport: another export is running in this vault")
+
+	// ErrStateMoved reports an export record that changed on disk under a pass,
+	// in a field only a producer writes. The producer guard excludes every writer
+	// of those fields, so this is a record replaced by hand or archived by a
+	// re-enrollment mid-pass. Writing over it would put a stale cursor or sequence
+	// back, so the pass stops and the next one starts from the disk.
+	ErrStateMoved = errors.New("vaultexport: export state changed under this pass")
 )
 
 // One halt has no sentinel here on purpose. A package that would send a name the

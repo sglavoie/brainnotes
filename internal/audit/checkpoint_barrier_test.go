@@ -120,8 +120,14 @@ var barrierDoors = []barrierDoor{
 	{
 		file:  "internal/vaultimport/lock.go",
 		fn:    "lockImports",
-		calls: joinsBarrier,
+		calls: []string{"lockImportsContext"},
 		why:   "one import is one join: Apply, Resolve, Recover and Drain all pass through this guard",
+	},
+	{
+		file:  "internal/vaultimport/lock.go",
+		fn:    "lockImportsContext",
+		calls: joinsBarrier,
+		why:   "the import guard's join, shared by imports and by re-enrollment's reset, which rides its held checkpoint",
 	},
 	{
 		file:  "internal/vaultexport/state_reset.go",
@@ -216,7 +222,7 @@ var barrierDoors = []barrierDoor{
 	{
 		file:  "internal/vaultimport/state_validate.go",
 		fn:    "ResetAfterReviewContext",
-		calls: joinsBarrier,
+		calls: []string{"lockImportsContext"},
 		why:   "stale applications and receipts must disappear atomically under the reviewed enrollment",
 	},
 	{

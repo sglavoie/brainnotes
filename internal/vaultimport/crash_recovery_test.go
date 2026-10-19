@@ -29,17 +29,17 @@ func TestImportRecoversFromEveryDurableTransition(t *testing.T) {
 	cases := []killPoint{
 		// The attempt is durable and the transaction has not been committed, so no
 		// content moved, no entry directory exists, and there is nothing to undo.
-		{point: crashDeclared, interrupted: crashBefore(), wantOutcome: OutcomeDiscarded, wantState: crashBefore()},
+		// The provenance ledger already names the entry, and the record outlives
+		// the discard harmlessly: it is keyed on a journal entry that never existed
+		// and can never be committed, so the only reader — the exporter, asking
+		// whether a commit it is about to publish came from a peer — never looks it
+		// up. Removing it would mean a second durable write on the recovery path to
+		// tidy something unreachable.
+		{point: crashDeclared, interrupted: crashBefore(), wantOutcome: OutcomeDiscarded, wantState: crashBefore(), provenance: true},
 		// The peer's bytes are on the disk and the journal captured what they
-		// replaced, with no manifest to say so. Not history yet, so it comes back out.
-		{point: crashApplied, interrupted: crashAfter(), wantOutcome: OutcomeRolledBack, wantState: crashBefore(), entryDir: true},
-		// Same, with the provenance ledger written. The ledger record outlives the
-		// rollback and is harmless: it is keyed on a journal entry that no longer
-		// exists and can never be committed, so the only reader — the exporter,
-		// asking whether a commit it is about to publish came from a peer — never
-		// looks it up. Removing it would mean a second durable write on the recovery
-		// path to tidy something unreachable.
-		{point: crashProvenance, interrupted: crashAfter(), wantOutcome: OutcomeRolledBack, wantState: crashBefore(), provenance: true, entryDir: true},
+		// replaced, with no manifest to say so. Not history yet, so it comes back
+		// out, and the ledger record outlives the rollback for the same reason.
+		{point: crashApplied, interrupted: crashAfter(), wantOutcome: OutcomeRolledBack, wantState: crashBefore(), provenance: true, entryDir: true},
 		// The manifest and the commit are both durable. The change is this vault's
 		// own history now, and the peer has not been told.
 		{point: crashFinalized, interrupted: crashAfter(), wantOutcome: OutcomeCompleted, wantState: crashAfter(), applied: true, provenance: true, entryDir: true},
@@ -136,7 +136,9 @@ func requireRollbackResumed(t *testing.T, report crashReport, entry, edited stri
 	// Not requireBooks: the edit is deliberately left in the working tree, so this
 	// is the one recovered vault in this file that is legitimately dirty.
 	requireHistory(t, report, Record{}, false)
-	requireImports(t, report.Root, false)
+	// The ledger was written before the interrupted application began, and
+	// outlives its rollback harmlessly: see the crashApplied case above.
+	requireImports(t, report.Root, true)
 	settled, err := LoadState(report.Root)
 	if err != nil {
 		t.Fatalf("LoadState: %v", err)

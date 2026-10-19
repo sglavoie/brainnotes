@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
@@ -38,9 +39,11 @@ func discard(root, path string) error {
 // another import (a sync conflict being resolved in the web workspace, say) is a
 // vault this companion should leave alone and look at again next tick — recording those as failures
 // would put an idle vault into an ever-lengthening backoff and bury the one
-// error that does matter under a streak of ones that do not.
+// error that does matter under a streak of ones that do not. A producer guard
+// another export, reset, or rebaseline holds is the export side of the same
+// contention.
 func skippable(err error) bool {
-	return vacant(err) || errors.Is(err, vaultimport.ErrImportBusy)
+	return vacant(err) || errors.Is(err, vaultimport.ErrImportBusy) || errors.Is(err, vaultexport.ErrExportBusy)
 }
 
 // vacant reports the subset of skippable refusals that mean the worker looked

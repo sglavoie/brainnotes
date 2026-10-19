@@ -7,14 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
 // defaultMaxPackages bounds how many packages one call publishes, so a vault
 // with a long unexported history makes progress in bounded passes rather than
-// holding the state lock for the length of its whole history. The cursor is
+// holding the producer guard for the length of its whole history. The cursor is
 // durable after every package, so the next call resumes exactly where this one
 // stopped.
 const defaultMaxPackages = 64
@@ -135,17 +134,19 @@ func Export(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	// One lock for the whole pass. The cursor, the sequence, and the reservation
-	// are read, decided, and written together, and a second exporter that
-	// interleaved with this one would publish two packages under one sequence.
+	// One producer guard for the whole pass, and the record's own lock only per
+	// write. The cursor, the sequence, and the reservation are read, decided, and
+	// written together, and a second exporter that interleaved with this one
+	// would publish two packages under one sequence — but an import recording
+	// provenance must not wait behind a whole pass. See lockProducer.
 	barrier, err := joinBarrier(root)
 	if err != nil {
 		return nil, err
 	}
 	defer barrier()
-	release, err := vault.LockPaths(root, StatePath(root))
+	release, err := lockProducer(root)
 	if err != nil {
-		return nil, fmt.Errorf("vaultexport: lock export state: %w", err)
+		return nil, err
 	}
 	defer release()
 
@@ -178,6 +179,11 @@ type exporter struct {
 
 	state  *State
 	result *Result
+	// consumed are the import ledger entries this pass has deleted. The ledger
+	// has a second writer that holds no producer guard — RecordImport — so every
+	// write merges what is on the disk back in, and this is what keeps that merge
+	// from resurrecting an entry the pass already used. See commitState.
+	consumed map[string]struct{}
 }
 
 func newExporter(root string, local *vaultsync.Enrollment, history *vaultgit.History, opts Options) (*exporter, error) {
@@ -195,6 +201,7 @@ func newExporter(root string, local *vaultsync.Enrollment, history *vaultgit.His
 		maxBytes:    opts.MaxBaselineBytes,
 		state:       state,
 		result:      &Result{},
+		consumed:    map[string]struct{}{},
 	}
 	if exp.channelDir == "" {
 		exp.channelDir = vaultsync.OutgoingDir(root)

@@ -16,15 +16,14 @@
 //
 // internal/vaultimport holds its own import guard for a whole drain, and an
 // application inside that drain calls vaultexport.RecordImport, which takes the
-// export state lock. internal/vaultexport holds that same export state lock for
-// a whole pass. Two goroutines running a drain and an export at once would
-// therefore contend for the export state lock from opposite directions, and the
-// loser does not merely wait — internal/vault's path locks have a bounded
-// acquisition budget, so it fails, and a drain that fails at RecordImport fails
-// *after* the peer's change is already committed. Running the two units in one
-// goroutine in a fixed order means this process never holds two subsystem locks
-// at once, which is the same rule internal/vault's lock.go states for path sets:
-// a caller holding a lock must not nest another.
+// export state lock for one write. internal/vaultexport holds its producer guard
+// for a whole pass and the same export state lock only around each write, so a
+// drain and an export no longer contend for a lock either holds for a pass, and
+// RecordImport runs before an application touches the vault, so losing that
+// race refuses the import rather than committing it unrecognized. Running the
+// two units in one goroutine in a fixed order still means this process never
+// holds two subsystem guards at once, which is the same rule internal/vault's
+// lock.go states for path sets: a caller holding a lock must not nest another.
 //
 // Import runs before export because a commit produced by an application is
 // already in the export ledger when the exporter reaches it, so the pass that

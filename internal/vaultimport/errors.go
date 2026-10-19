@@ -119,6 +119,14 @@ var (
 	// application is already this vault's history, so the attempt is settled and
 	// the ledger records it with no receipt. See resolver.complete.
 	ErrStrandedImport = errors.New("vaultimport: an interrupted import cannot be resolved without losing content")
+
+	// ErrUnresolvedImport reports an import record still holding work: an
+	// interrupted application, a package held on a conflict, or a conflict
+	// decision whose revision is still owed. Re-enrollment refuses it, because
+	// re-enrollment starts an empty record and would discard the only copy of
+	// that work — the attempt that can roll an application back, the hold naming
+	// where each contested version was kept, the choice somebody made.
+	ErrUnresolvedImport = errors.New("vaultimport: the import record holds unresolved work")
 )
 
 // The three below are about resolving a hold, and each names a different reason

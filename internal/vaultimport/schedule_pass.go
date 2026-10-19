@@ -256,8 +256,8 @@ func fatalToDrain(err error) bool {
 // Apply resolves an interrupted attempt before every single application, so it
 // can never hold two. A drain applies many under one guard and resolves once, at
 // the top — so an application that fails in a way its own in-process recovery
-// also cannot finish (a snapshot the autosave watcher's lock refuses twice, a
-// provenance write that fails twice) leaves State.Pending set and returns an
+// also cannot finish (a snapshot the autosave watcher's lock refuses twice)
+// leaves State.Pending set and returns an
 // error that is none of the fatal sentinels. Carrying on would be destructive
 // rather than merely wrong: the next package's declare overwrites State.Pending,
 // and the record naming the first package's journal entry and manifest is the

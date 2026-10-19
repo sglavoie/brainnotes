@@ -10,6 +10,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
 func extractArchive(archivePath string) (string, []archiveEntry, error) {
@@ -44,7 +46,7 @@ func extractArchive(archivePath string) (string, []archiveEntry, error) {
 	seen := make(map[string]entryKind)
 
 	for {
-		header, err := reader.Next()
+		header, err := nextArchiveHeader(reader)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -66,6 +68,20 @@ func extractArchive(archivePath string) (string, []archiveEntry, error) {
 
 	success = true
 	return stageDir, entries, nil
+}
+
+// nextArchiveHeader is tar.Reader.Next without the synchronization guards that
+// archives made before those guards were excluded still carry. They are skipped
+// rather than refused like the rest of isRootExcluded: the file is empty and
+// carries no state, refusing it would make every such archive unrestorable, and
+// restoring it would replace the inode a live import or export may hold.
+func nextArchiveHeader(reader *tar.Reader) (*tar.Header, error) {
+	for {
+		header, err := reader.Next()
+		if err != nil || !vaultsync.IsStateLock(path.Clean(strings.ReplaceAll(header.Name, "\\", "/"))) {
+			return header, err
+		}
+	}
 }
 
 func extractArchiveEntry(stageDir string, entry archiveEntry, reader io.Reader) error {

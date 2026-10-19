@@ -368,9 +368,12 @@ func RecordImportContext(ctx context.Context, root, journalEntryID string, recor
 		return err
 	}
 	defer barrier()
-	release, err := vault.LockPaths(root, StatePath(root))
+	// The record's lock alone, never the producer guard: a running export pass
+	// holds that for its whole length, and provenance that waited for it would
+	// time out and leave an applied import the pass then echoes.
+	release, err := lockState(root)
 	if err != nil {
-		return fmt.Errorf("vaultexport: lock export state: %w", err)
+		return err
 	}
 	defer release()
 

@@ -44,6 +44,12 @@ func ApplyPlan(root string, plan *Plan, now func() time.Time) (err error) {
 	if done {
 		return nil
 	}
+	// Before prepareApply, so a refused survivor is not left quarantined by a
+	// marker it created for a decision it could not take, and on every resume,
+	// because the record is archived only once the decision is applying.
+	if err := requireResolvedImports(root); err != nil {
+		return err
+	}
 	review, err := prepareApply(ctx, root, plan, now)
 	if err != nil {
 		return err
@@ -74,6 +80,7 @@ func advanceApply(ctx context.Context, root string, plan *Plan, review *vaultsyn
 	if err := publishCompletion(root, plan, review); err != nil {
 		return err
 	}
+	applyCrash(crashCompleted)
 	return vaultsync.ClearRestoreReviewContext(ctx, root)
 }
 
@@ -224,6 +231,7 @@ func applyEnrollment(ctx context.Context, root string, plan *Plan, review *vault
 	if _, err := vaultsync.ReplaceEnrollmentForReviewContext(ctx, root, review.ProposedDeviceID, peer, plan.TargetEpoch, now); err != nil {
 		return nil, err
 	}
+	applyCrash(crashEnrolled)
 	return vaultsync.UpdateRestoreReviewContext(ctx, root, func(record *vaultsync.RestoreReview) error {
 		record.Phase = vaultsync.ReviewEnrolled
 		return nil
@@ -234,6 +242,7 @@ func resetCausalState(ctx context.Context, root string, review *vaultsync.Restor
 	if err := vaultexport.RebaselineAfterReviewContext(ctx, root, review.PreservedSequence); err != nil {
 		return nil, err
 	}
+	applyCrash(crashRebaselined)
 	if err := vaultimport.ResetAfterReviewContext(ctx, root); err != nil {
 		return nil, err
 	}
@@ -262,15 +271,29 @@ func archiveCausalState(root, planSHA string) error {
 		if err := archiveOne(source, base); err != nil {
 			return err
 		}
+		applyCrash(crashArchivedPrefix + filepath.Base(source))
 	}
 	return nil
 }
 
+// archiveOne moves one source into the plan's archive, idempotently.
+//
+// A source present beside its archived copy is not the restored state: the
+// rename is atomic, and nothing in this flow writes a source after archiving it.
+// It is something written since — the transport delivering into a recreated
+// incoming channel while an interrupted acceptance waited for its retry is the
+// ordinary case, and a deployment backup publishing coverage is another. The
+// archived copy is the one this plan reviewed and is kept; the newcomer is left
+// where it is, because it is no part of the old causal state the archive exists
+// to quarantine — packages from the old epoch fail by stale epoch or unknown
+// origin, and one from the reviewed epoch is exactly what the new enrollment
+// should read. Refusing here instead made the acceptance unfinishable: no retry
+// could ever find the source gone.
 func archiveOne(source, base string) error {
 	destination := filepath.Join(base, filepath.Base(source))
 	_, sourceErr := os.Lstat(source)
 	_, destinationErr := os.Lstat(destination)
-	if errors.Is(sourceErr, fs.ErrNotExist) {
+	if errors.Is(sourceErr, fs.ErrNotExist) || (sourceErr == nil && destinationErr == nil) {
 		if destinationErr == nil {
 			return errors.Join(vault.SyncDir(filepath.Dir(source)), vault.SyncDir(base))
 		}
@@ -281,9 +304,6 @@ func archiveOne(source, base string) error {
 	}
 	if sourceErr != nil {
 		return sourceErr
-	}
-	if destinationErr == nil {
-		return fmt.Errorf("vault recovery: both active and archived causal state exist for %s", filepath.Base(source))
 	}
 	if !errors.Is(destinationErr, fs.ErrNotExist) {
 		return destinationErr

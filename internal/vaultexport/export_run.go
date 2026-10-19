@@ -158,6 +158,11 @@ func (e *exporter) exportCommit(ctx context.Context, commit string, info vaultgi
 // arise from this codebase — and if it ever does, treating it as an import would
 // silently drop the local half and treating it as local would echo the peer's.
 func (e *exporter) importedOperation(entryIDs []string) (Import, bool, error) {
+	if !e.knowsAll(entryIDs) {
+		if err := e.refreshImported(); err != nil {
+			return Import{}, false, err
+		}
+	}
 	var found []Import
 	for _, id := range entryIDs {
 		if record, known := e.state.Imported[id]; known {
@@ -176,6 +181,18 @@ func (e *exporter) importedOperation(entryIDs []string) (Import, bool, error) {
 		}
 	}
 	return found[0], true, nil
+}
+
+// knowsAll reports whether the in-memory ledger already answers for every entry,
+// so the common commit — a local one naming one entry the ledger lacks — is the
+// only kind that pays for re-reading the record.
+func (e *exporter) knowsAll(entryIDs []string) bool {
+	for _, id := range entryIDs {
+		if _, known := e.state.Imported[id]; !known {
+			return false
+		}
+	}
+	return true
 }
 
 // skipImported advances past a commit that applied a peer operation, recording
@@ -222,11 +239,95 @@ func (e *exporter) skipCommit(commit string, reason SkipReason, portable []vault
 // commitState makes a record durable and only then adopts it in memory, so a
 // failed write can never leave this pass believing something a restart would
 // not.
+//
+// The record's lock is taken here, for this one write, rather than for the pass.
+// Every producer field is this pass's alone — the producer guard excludes the
+// other writers of them — but the import ledger is not: RecordImport adds to it
+// while the pass runs, and writing the pass's copy over the disk would drop the
+// provenance of an import whose commit the next pass then publishes straight
+// back to its origin. So the disk is re-read under the lock, its producer fields
+// are required to be the ones this pass last wrote, and every ledger entry the
+// pass has not consumed is carried into the record being written.
 func (e *exporter) commitState(next *State) error {
+	release, err := lockState(e.root)
+	if err != nil {
+		return err
+	}
+	defer release()
+	current, err := loadState(e.root, e.local)
+	if err != nil {
+		return err
+	}
+	if !sameProducer(current, e.state) {
+		return fmt.Errorf("%w: %s", ErrStateMoved, StatePath(e.root))
+	}
+	consuming := e.mergeImported(next, current)
 	if err := saveState(e.root, next); err != nil {
 		return err
 	}
+	for id := range consuming {
+		e.consumed[id] = struct{}{}
+	}
 	e.state = next
+	return nil
+}
+
+// mergeImported carries into next every ledger entry the disk holds that this
+// pass has neither consumed already nor is consuming in next, and returns the
+// ones next consumes. An entry the pass knew and next drops is being consumed
+// by this very write, and must not be merged back from the disk that still
+// holds it.
+func (e *exporter) mergeImported(next, current *State) map[string]struct{} {
+	consuming := map[string]struct{}{}
+	for id := range e.state.Imported {
+		if _, kept := next.Imported[id]; !kept {
+			consuming[id] = struct{}{}
+		}
+	}
+	for id, record := range current.Imported {
+		_, consumed := e.consumed[id]
+		_, dropped := consuming[id]
+		if _, known := next.Imported[id]; !known && !consumed && !dropped {
+			next.Imported[id] = record
+		}
+	}
+	return consuming
+}
+
+// sameProducer reports whether two records agree on every field only a producer
+// writes. The path ledger is left out: it is written only alongside the cursor,
+// so a record that agrees on the cursor and the sequence agrees on it too.
+func sameProducer(a, b *State) bool {
+	if a.Epoch != b.Epoch || a.Branch != b.Branch || a.Commit != b.Commit ||
+		a.Baseline != b.Baseline || a.Sequence != b.Sequence {
+		return false
+	}
+	if a.Pending == nil || b.Pending == nil {
+		return a.Pending == nil && b.Pending == nil
+	}
+	return *a.Pending == *b.Pending
+}
+
+// refreshImported adopts ledger entries recorded since this pass read the record.
+//
+// An import records its provenance before its commit exists, and the pass reads
+// the tip after it reads the record, so a commit in this pass's range can carry
+// an entry the in-memory ledger has never seen. The disk already holds it —
+// RecordImport is durable before the commit it describes — so adopting it is
+// reading a durable fact rather than believing something a restart would not.
+func (e *exporter) refreshImported() error {
+	current, err := loadState(e.root, e.local)
+	if err != nil {
+		return err
+	}
+	for id, record := range current.Imported {
+		if _, consumed := e.consumed[id]; consumed {
+			continue
+		}
+		if _, known := e.state.Imported[id]; !known {
+			e.state.Imported[id] = record
+		}
+	}
 	return nil
 }
 

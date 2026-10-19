@@ -13,6 +13,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
 func resolveVaultRoot(vaultRoot string) (string, error) {
@@ -98,19 +99,7 @@ func isWithinRoot(root, candidate string) bool {
 }
 
 func isRootExcluded(relPath string) bool {
-	// Checkpoint artifacts describe a live process on this machine, not vault
-	// state. Copying the announcement would restore a dead client's identity,
-	// and copying lock files would make the archive's file/byte accounting depend
-	// on whether the vault happened to have been written before the backup.
-	// Preserve the lock directory during a wipe for the same reason .git is
-	// preserved: a running process may still hold one of its inodes.
-	if strings.EqualFold(relPath, checkpoint.RecordRel) ||
-		strings.EqualFold(relPath, ".bnotes/locks") ||
-		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/locks/") ||
-		strings.EqualFold(relPath, ".bnotes/txn") ||
-		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/txn/") ||
-		strings.EqualFold(relPath, ".bnotes/restore") ||
-		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/restore/") {
+	if isMachineLocalSidecar(relPath) {
 		return true
 	}
 
@@ -120,6 +109,28 @@ func isRootExcluded(relPath string) bool {
 	}
 
 	return strings.EqualFold(firstSegment, backupDirName) || strings.EqualFold(firstSegment, gitDirName)
+}
+
+// isMachineLocalSidecar reports the .bnotes entries that describe a live
+// process on this machine rather than vault state.
+//
+// Checkpoint artifacts describe a live process on this machine, not vault
+// state. Copying the announcement would restore a dead client's identity, and
+// copying lock files would make the archive's file/byte accounting depend on
+// whether the vault happened to have been written before the backup. Preserve
+// the lock directory during a wipe for the same reason .git is preserved: a
+// running process may still hold one of its inodes. The synchronization guards
+// live beside the state they serialize rather than under .bnotes/locks, and are
+// machine-local for the same reason.
+func isMachineLocalSidecar(relPath string) bool {
+	return strings.EqualFold(relPath, checkpoint.RecordRel) ||
+		strings.EqualFold(relPath, ".bnotes/locks") ||
+		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/locks/") ||
+		strings.EqualFold(relPath, ".bnotes/txn") ||
+		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/txn/") ||
+		strings.EqualFold(relPath, ".bnotes/restore") ||
+		strings.HasPrefix(strings.ToLower(relPath), ".bnotes/restore/") ||
+		vaultsync.IsStateLock(relPath)
 }
 
 func hasDotDotSegment(name string) bool {
