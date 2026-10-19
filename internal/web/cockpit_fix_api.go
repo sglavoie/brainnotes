@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -323,9 +324,8 @@ func cockpitFixError(err error) error {
 	if noteops.CodeOf(err) != noteops.CodeInternal {
 		return err
 	}
-	msg := err.Error()
-	if strings.Contains(msg, "does not offer action") || strings.Contains(msg, "no fix planner") {
-		return noteops.Errorf(noteops.CodeInvalidRequest, "%s", msg)
+	if errors.Is(err, cockpit.ErrActionNotOffered) || errors.Is(err, cockpit.ErrNoFixPlanner) {
+		return noteops.WrapError(noteops.CodeInvalidRequest, err.Error(), err)
 	}
 	return noteops.WrapError(noteops.CodeInternal, "apply fix", err)
 }
