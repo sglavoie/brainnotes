@@ -451,7 +451,11 @@ func (m *Manager) recordPushFailure(now time.Time, detail string) (state PushSta
 	m.pushMu.Lock()
 	defer m.pushMu.Unlock()
 	err = m.checkpointMutation("record push failure", func() error {
-		state, err = m.state.RecordPushFailure(now, detail, m.pushStale)
+		record := m.state.RecordPushFailure
+		if m.pushStale {
+			record = m.state.StartPushStreak
+		}
+		state, err = record(now, detail)
 		return err
 	})
 	if err == nil {

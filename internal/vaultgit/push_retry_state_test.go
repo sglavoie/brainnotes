@@ -18,15 +18,46 @@ func TestPushSuccessWithUnremovableRetryStateStartsTheNextStreakFresh(t *testing
 	missing := filepath.Join(t.TempDir(), "missing.git")
 	rawGit(t, h.root, "remote", "add", "origin", missing)
 	for i := 0; i < 3; i++ {
-		if _, err := h.mgr.Push(context.Background()); !IsPushFailure(err) {
-			t.Fatalf("Push to a missing remote = %v, want a push failure", err)
-		}
+		requirePushFailure(t, h)
 		h.advance(10 * time.Minute)
 	}
-	if state, ok := h.mgr.PushStatus(); !ok || state.Attempts != 3 {
-		t.Fatalf("push state = %+v (ok=%v), want three attempts", state, ok)
+	requirePushAttempts(t, h, 3)
+
+	pushWithUnremovableRetryState(t, h)
+	if _, ok := h.mgr.PushStatus(); ok || !h.mgr.PushDue() {
+		t.Fatal("a resolved streak must be neither reported nor hold the next push back")
 	}
 
+	rawGit(t, h.root, "remote", "set-url", "origin", missing)
+	retry := requirePushFailure(t, h)
+	if retry.Attempts != 1 || retry.NextAttemptAfter.Sub(retry.LastAttemptAt) != pushBackoffBase {
+		t.Fatalf("retry after a resolved streak = %+v, want a fresh first attempt", retry)
+	}
+	h.advance(time.Minute)
+	requirePushFailure(t, h)
+	requirePushAttempts(t, h, 2)
+}
+
+func requirePushFailure(t *testing.T, h *testHarness) PushState {
+	t.Helper()
+	result, err := h.mgr.Push(context.Background())
+	if !IsPushFailure(err) {
+		t.Fatalf("Push to a missing remote = %v, want a push failure", err)
+	}
+	return result.Retry
+}
+
+func requirePushAttempts(t *testing.T, h *testHarness, want int) {
+	t.Helper()
+	if state, ok := h.mgr.PushStatus(); !ok || state.Attempts != want {
+		t.Fatalf("push state = %+v (ok=%v), want %d attempts", state, ok, want)
+	}
+}
+
+// pushWithUnremovableRetryState points origin at a reachable remote and pushes
+// while removing push.json fails.
+func pushWithUnremovableRetryState(t *testing.T, h *testHarness) {
+	t.Helper()
 	bare := t.TempDir()
 	rawGit(t, bare, "-c", "init.defaultBranch=main", "init", "--bare", "-q")
 	rawGit(t, h.root, "remote", "set-url", "origin", bare)
@@ -36,31 +67,9 @@ func TestPushSuccessWithUnremovableRetryStateStartsTheNextStreakFresh(t *testing
 		}
 		return nil
 	}
+	defer func() { h.mgr.state.failWrite = nil }()
 	result, err := h.mgr.Push(context.Background())
 	if err != nil || !result.Pushed || result.RetryStateErr == nil {
 		t.Fatalf("Push with an unremovable retry record = %+v, %v; want pushed with RetryStateErr", result, err)
-	}
-	h.mgr.state.failWrite = nil
-	if _, ok := h.mgr.PushStatus(); ok {
-		t.Fatal("a resolved streak must not be reported after a successful push")
-	}
-	if !h.mgr.PushDue() {
-		t.Fatal("a resolved streak must not hold the next push back")
-	}
-
-	rawGit(t, h.root, "remote", "set-url", "origin", missing)
-	result, err = h.mgr.Push(context.Background())
-	if !IsPushFailure(err) {
-		t.Fatalf("Push to a missing remote = %v, want a push failure", err)
-	}
-	if result.Retry.Attempts != 1 || result.Retry.NextAttemptAfter.Sub(result.Retry.LastAttemptAt) != pushBackoffBase {
-		t.Fatalf("retry after a resolved streak = %+v, want a fresh first attempt", result.Retry)
-	}
-	h.advance(time.Minute)
-	if _, err := h.mgr.Push(context.Background()); !IsPushFailure(err) {
-		t.Fatalf("second failure = %v", err)
-	}
-	if state, ok := h.mgr.PushStatus(); !ok || state.Attempts != 2 {
-		t.Fatalf("push state = %+v (ok=%v), want the new streak to keep counting", state, ok)
 	}
 }
