@@ -74,6 +74,16 @@ const identifyTrashAttempt = (planned: PlannedRequest, trashURL: string): string
   return id;
 };
 
+// A confirmed trash leaves no note to act on, but navigating away would hide
+// the confirmation, so the page offers the way out instead.
+const settleConfirmedTrash = ({ elements, config }: SourceManageDeps, status: HTMLElement): void => {
+  if (elements.trash) elements.trash.disabled = true;
+  const onward = status.ownerDocument.createElement("a");
+  onward.href = config.manage.home || "/";
+  onward.textContent = "Leave this note";
+  status.append(" ", onward);
+};
+
 export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
   const { elements, config, host } = deps;
   let status = elements.status;
@@ -101,7 +111,10 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
 
   const reportUnconfirmed = (action: ManageAction, operationID: string): void => {
     setStatus(unconfirmedAction(action), "is-error");
-    if (status) offerWriteOutcomeCheck(status, operationID, deps.fetch ?? fetch, "Trash");
+    if (status) {
+      const target = status;
+      offerWriteOutcomeCheck(target, operationID, deps.fetch ?? fetch, "Trash", () => settleConfirmedTrash(deps, target));
+    }
   };
 
   const run = async (action: ManageAction): Promise<void> => {

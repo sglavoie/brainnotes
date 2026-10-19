@@ -72,7 +72,15 @@ export const createWorkbenchMutations = (
       options.setStatus(outcome.message, "is-error");
       const status = options.doc.querySelector<HTMLElement>("[data-property-status]");
       if (outcome.uncertain && status) {
-        offerWriteOutcomeCheck(status, operationID, options.fetcher, "Property change");
+        offerWriteOutcomeCheck(status, operationID, options.fetcher, "Property change", () => {
+          // Re-reading rewrites the status line; the confirmation and its
+          // History link are what the person asked to see, so they come back.
+          const confirmation = [...status.childNodes];
+          void options.reload().then(() => {
+            options.setStatus("", "is-success");
+            status.replaceChildren(...confirmation);
+          });
+        });
       }
       return false;
     }

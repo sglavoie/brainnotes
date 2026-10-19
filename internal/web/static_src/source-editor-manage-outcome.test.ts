@@ -173,3 +173,23 @@ describe("editor management local feedback", () => {
     expect(h.status().text).toBe("");
   });
 });
+
+describe("editor trash outcome check", () => {
+  it("disables Trash and offers a way out once a lost trash is confirmed", async () => {
+    const h = harness();
+    h.fetcher.mockRejectedValueOnce(new Error("response lost"));
+    h.click("[data-source-trash]");
+    const check = await vi.waitFor(() => {
+      const button = document.querySelector<HTMLButtonElement>(".write-outcome-check");
+      expect(button).not.toBeNull();
+      return button!;
+    });
+    h.fetcher.mockResolvedValueOnce(jsonResponse(200, { ok: true, status: "confirmed", journal_id: "j1" }));
+    check.click();
+    await vi.waitFor(() => expect(h.status().text).toContain("Trash confirmed in History"));
+    expect(h.elements.trash?.disabled).toBe(true);
+    const onward = [...document.querySelectorAll("a")].find((a) => a.textContent === "Leave this note");
+    expect(onward?.getAttribute("href")).toBe("/");
+    expect(h.navigated).toEqual([]);
+  });
+});
