@@ -300,7 +300,7 @@ func newAttachmentExistsError(relPath string) error {
 func stageAttachments(txn *vault.FileTxn, plan attachmentPlan) error {
 	for _, item := range plan.pending {
 		if err := txn.WriteFrom(item.abs, item.source, item.size, item.digest, 0); err != nil {
-			return classifyTxnError("source: plan attachment", err)
+			return ClassifyTxnError("source: plan attachment", err)
 		}
 	}
 	return nil

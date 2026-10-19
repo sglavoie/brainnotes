@@ -3,13 +3,11 @@ package web
 import (
 	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/editor"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
@@ -241,54 +239,7 @@ func writeBriefOpenError(w http.ResponseWriter, err error) {
 		writeManagementError(w, err)
 		return
 	}
-	writeBriefLaunchFailure(w, err)
-}
-
-// writeBriefLaunchFailure maps a launch that was actually attempted onto the
-// status its stage owes. Every arm here describes an editor, which is why the
-// caller above keeps the navigating modes out of it.
-func writeBriefLaunchFailure(w http.ResponseWriter, err error) {
-	switch failureStage(err) {
-	case openFailureCapability:
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "process launch is unavailable in this serving mode"))
-		return
-	case openFailureStat:
-		if errors.Is(err, os.ErrNotExist) {
-			writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "note not found"))
-			return
-		}
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "note stat error", err))
-		return
-	case openFailureResolvePath:
-		writeBriefResolvePathFailure(w, err)
-		return
-	case openFailureEditorSpec:
-		if errors.Is(err, editor.ErrNoEditorConfigured) {
-			writeManagementErrorStatus(w, http.StatusPreconditionFailed, noteops.Errorf(noteops.CodeInvalidRequest, "editor not configured"))
-			return
-		}
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "editor spec error", err))
-		return
-	case openFailureEditorTarget:
-		writeManagementErrorStatus(w, http.StatusPreconditionFailed, noteops.Errorf(noteops.CodeInvalidRequest, "editor resolve error"))
-		return
-	case openFailureEditorStart:
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "editor start error", err))
-		return
-	default:
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "editor start error", err))
-	}
-}
-
-func writeBriefResolvePathFailure(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, errOpenPathOutsideVault):
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "forbidden note path"))
-	case errors.Is(err, os.ErrNotExist):
-		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "note not found"))
-	default:
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "note path error", err))
-	}
+	writeOpenFailure(w, err, openSubjectNote)
 }
 
 func (s *Server) parseBriefItemRequest(w http.ResponseWriter, r *http.Request) (brief.CardID, string, bool) {

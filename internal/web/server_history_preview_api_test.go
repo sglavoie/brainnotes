@@ -429,6 +429,34 @@ func TestUndoRestoreError_DoesNotCallAnUnfinalizedRestoreFinished(t *testing.T) 
 	}
 }
 
+// A restore that could not put displaced content back has one actionable fact:
+// the file that content now lives in. The answer the client sees must carry it,
+// not only the error chain behind it.
+func TestUndoRestoreError_NamesTheRecoveryPath(t *testing.T) {
+	recovery := &vault.TxnRecoveryError{
+		Path:         "Source.md",
+		RecoveryPath: ".txn-custody-1.tmp",
+		Err:          &vault.TxnConflictError{Path: "Source.md", Expected: "missing", Actual: "file"},
+	}
+	for name, cause := range map[string]error{
+		"recovery": recovery,
+		"rollback": &vault.TxnRollbackError{
+			Path:         "Source.md",
+			Err:          recovery,
+			Failed:       []string{"Other.md"},
+			RollbackErrs: []error{errors.New("permission denied")},
+		},
+	} {
+		err := undoRestoreError(cause)
+		if got := noteops.CodeOf(err); got != noteops.CodeInternal {
+			t.Fatalf("%s: code = %q, want %q", name, got, noteops.CodeInternal)
+		}
+		if message := noteops.MessageOf(err); !strings.Contains(message, recovery.RecoveryPath) {
+			t.Fatalf("%s: message hides the recovery path: %q", name, message)
+		}
+	}
+}
+
 // A cache the server could not refresh must not be reported as a failed restore:
 // the content is back on disk, and answering with the reload's error would both
 // say otherwise and throw away the one mention a leftover temp file ever gets.

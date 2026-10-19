@@ -146,11 +146,12 @@ func TestCapabilityTableIsThreeIndependentProfiles(t *testing.T) {
 		documentWrites bool
 		processLaunch  bool
 		browserOpen    bool
+		absolutePaths  bool
 		maxRequestBody int64
 	}{
-		{ModeLocal, true, true, false, localMaxRequestBody},
-		{ModeReadOnly, false, false, true, remoteMaxRequestBody},
-		{ModeHosted, true, false, true, remoteMaxRequestBody},
+		{ModeLocal, true, true, false, true, localMaxRequestBody},
+		{ModeReadOnly, false, false, true, false, remoteMaxRequestBody},
+		{ModeHosted, true, false, true, false, remoteMaxRequestBody},
 	} {
 		got := capabilitiesFor(tc.mode)
 		want := capabilities{
@@ -158,6 +159,7 @@ func TestCapabilityTableIsThreeIndependentProfiles(t *testing.T) {
 			documentWrites: tc.documentWrites,
 			processLaunch:  tc.processLaunch,
 			browserOpen:    tc.browserOpen,
+			absolutePaths:  tc.absolutePaths,
 			maxRequestBody: tc.maxRequestBody,
 		}
 		if got != want {

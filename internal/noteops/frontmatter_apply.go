@@ -134,11 +134,11 @@ func commitNoteWrite(vaultRoot string, note *vault.Note, fm *config.FrontmatterC
 		return WrapError(CodeInternal, "frontmatter: open transaction", err)
 	}
 	if err := txn.Write(note.Path, data, 0, vault.ExpectHash(note.SourceHash())); err != nil {
-		return classifyTxnError("frontmatter: plan write", err)
+		return ClassifyTxnError("frontmatter: plan write", err)
 	}
 	for _, requirement := range requires {
 		if err := txn.Require(requirement.path, requirement.expect); err != nil {
-			return classifyTxnError("frontmatter: pin dependency", err)
+			return ClassifyTxnError("frontmatter: pin dependency", err)
 		}
 	}
 	var txnJournal vault.TxnJournal
@@ -146,12 +146,12 @@ func commitNoteWrite(vaultRoot string, note *vault.Note, fm *config.FrontmatterC
 		txnJournal = journaler
 	}
 	if err := txn.Commit(txnJournal); err != nil {
-		return classifyTxnError("frontmatter: save note", err)
+		return ClassifyTxnError("frontmatter: save note", err)
 	}
 	return nil
 }
 
-// classifyTxnError maps transaction failures onto the stable operation codes the
+// ClassifyTxnError maps transaction failures onto the stable operation codes the
 // web APIs answer with. A precondition mismatch is a conflict the caller can
 // retry; a failed rollback is an internal error whose message already carries
 // recovery guidance.
@@ -174,7 +174,7 @@ func commitNoteWrite(vaultRoot string, note *vault.Note, fm *config.FrontmatterC
 // internal: nothing failed and nothing is broken — the vault is somewhere writes
 // are not allowed to land. It is the one class here that is a policy answer, so
 // it maps to 403 on the web and keeps its own message on the CLI.
-func classifyTxnError(message string, err error) error {
+func ClassifyTxnError(message string, err error) error {
 	if err == nil {
 		return nil
 	}

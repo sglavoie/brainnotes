@@ -95,7 +95,9 @@ func writeManagementErrorStatus(w http.ResponseWriter, status int, err error) {
 	if err == nil {
 		err = noteops.Errorf(noteops.CodeInternal, "internal error")
 	}
-	writeManagementJSON(w, status, noteops.ErrorResponse(err))
+	response := noteops.ErrorResponse(err)
+	response.Message = redactForReader(w, response.Message)
+	writeManagementJSON(w, status, response)
 }
 
 func writeManagementJSON(w http.ResponseWriter, status int, payload any) {

@@ -85,11 +85,15 @@ func routeBodyLimit(path string) int64 {
 //   - browserOpen: an Open action answers with a route to navigate to instead of
 //     starting an editor. Every mode without processLaunch sets it, which is what
 //     makes "Open" mean something in a mode that cannot start a process.
+//   - absolutePaths: an error message may name the vault's absolute location.
+//     Only local sets it; every profile reachable from another machine has the
+//     root taken out (vaultRootRedactor), since the reader is not on that disk.
 type capabilities struct {
 	mode           Mode
 	documentWrites bool
 	processLaunch  bool
 	browserOpen    bool
+	absolutePaths  bool
 	maxRequestBody int64
 }
 
@@ -113,6 +117,7 @@ func capabilitiesFor(mode Mode) capabilities {
 			mode:           ModeLocal,
 			documentWrites: true,
 			processLaunch:  true,
+			absolutePaths:  true,
 			maxRequestBody: localMaxRequestBody,
 		}
 	}
@@ -258,6 +263,9 @@ func (s *Server) requestGuard(next http.Handler) http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		if s.rootRedactor.active() {
+			w = &redactingResponseWriter{ResponseWriter: w, redactor: s.rootRedactor}
+		}
 		next.ServeHTTP(w, r)
 	})
 }

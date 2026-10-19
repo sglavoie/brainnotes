@@ -121,15 +121,28 @@ func TestServer_OpenAPI_BadKeyResponses(t *testing.T) {
 	})
 
 	resp := postOpenRequest(t, ts.URL, "../source", "csrf-token", "")
-	readResponseBody(t, resp)
+	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid key status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
+	requireOpenErrorCode(t, body, "invalid_key")
 
 	resp = postOpenRequest(t, ts.URL, "missing", "csrf-token", "")
-	readResponseBody(t, resp)
+	body = readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown key status: got %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+	requireOpenErrorCode(t, body, "not_found")
+}
+
+// requireOpenErrorCode asserts the open routes answer failures in the shared
+// management envelope rather than as plain text, so every panel that reads
+// {"ok":false,"code","message"} can show the message as written.
+func requireOpenErrorCode(t *testing.T, body, code string) {
+	t.Helper()
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != code || payload.Message == "" {
+		t.Fatalf("payload = %#v, want code %q with a message (body %q)", payload, code, body)
 	}
 }
 
@@ -193,9 +206,13 @@ func TestServer_OpenAPI_MissingEditorConfigured(t *testing.T) {
 	})
 
 	resp := postOpenRequest(t, ts.URL, "source", "csrf-token", "")
-	readResponseBody(t, resp)
+	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusPreconditionFailed {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusPreconditionFailed)
+	}
+	requireOpenErrorCode(t, body, "invalid_request")
+	if !strings.Contains(body, "editor not configured") {
+		t.Fatalf("body does not say the editor is missing: %q", body)
 	}
 }
 
@@ -263,10 +280,11 @@ func TestServer_ConfigOpenAPI_RequiresCSRF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST %s: %v", configOpenAPIRoutePath, err)
 	}
-	readResponseBody(t, resp)
+	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusForbidden)
 	}
+	requireOpenErrorCode(t, body, "forbidden")
 	if called {
 		t.Fatal("start editor should not be called without csrf")
 	}

@@ -108,7 +108,7 @@ func (s *Server) commitTemplatePlan(plan *templatePlan, pin configPin, opts ...j
 	}
 
 	if err := txn.Commit(entry); err != nil {
-		return nil, classifyPropertyTxnError("templates: write", err)
+		return nil, noteops.ClassifyTxnError("templates: write", err)
 	}
 	return entry.Finalize()
 }
@@ -119,12 +119,12 @@ func (s *Server) commitTemplatePlan(plan *templatePlan, pin configPin, opts ...j
 func stageTemplateChange(txn *vault.FileTxn, plan *templatePlan) error {
 	if plan.Removed {
 		if err := txn.Remove(plan.AbsPath, plan.Expect); err != nil {
-			return classifyPropertyTxnError("templates: plan removal", err)
+			return noteops.ClassifyTxnError("templates: plan removal", err)
 		}
 		return nil
 	}
 	if err := txn.Write(plan.AbsPath, plan.Data, 0, plan.Expect); err != nil {
-		return classifyPropertyTxnError("templates: plan write", err)
+		return noteops.ClassifyTxnError("templates: plan write", err)
 	}
 	return nil
 }

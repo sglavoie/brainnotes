@@ -350,3 +350,46 @@ func TestServer_BulkAPI_RejectsStalePreviewFileStateWithoutInvalidatingState(t *
 		t.Fatalf("state was invalidated after rejected apply: status=%d body=%q", cachedResp.StatusCode, cachedBody)
 	}
 }
+
+// A configuration edited between preview and apply changes what move and
+// property actions mean, so the receipt is refused as stale even though every
+// note it pinned still holds the previewed bytes.
+func TestServer_BulkAPI_RejectsPreviewAfterConfigurationChange(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "Source.md", "---\nstatus: draft\ntitle: Source\n---\nBody\n")
+	writeTestFile(t, root, config.FileName, "")
+
+	cfg, v := testVaultOpen(t, root, "127.0.0.1:0")
+	srv, err := NewServer(cfg, v, Options{CSRFToken: "csrf-token"})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	keys := []string{"source"}
+	fields := map[string]string{"property": "status", "value": "done"}
+	previewResp := postBulkPreviewRequest(t, ts.URL, "frontmatter_set", keys, fields, "csrf-token", "")
+	previewBody := readResponseBody(t, previewResp)
+	if previewResp.StatusCode != http.StatusOK {
+		t.Fatalf("preview status: got %d, want %d; body=%q", previewResp.StatusCode, http.StatusOK, previewBody)
+	}
+	previewPayload := decodeBulkPreviewResult(t, previewBody)
+
+	// A comment is the smallest edit that moves the generation: the
+	// configuration means the same, but nobody previewed against these bytes.
+	writeTestFile(t, root, config.FileName, "# edited\n")
+	resp := postBulkRequest(t, ts.URL, "frontmatter_set", keys,
+		bulkFieldsWithPreviewID(fields, previewPayload.PreviewID), "csrf-token", "")
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status: got %d, want %d; body=%q", resp.StatusCode, http.StatusConflict, body)
+	}
+	payload := decodeManagementError(t, body)
+	if payload.OK || payload.Code != "preview_stale" || !strings.Contains(payload.Message, "configuration changed") {
+		t.Fatalf("payload = %#v, want preview_stale naming the configuration", payload)
+	}
+	if got := readNoteFile(t, filepath.Join(root, "Source.md")); !strings.Contains(got, "status: draft") {
+		t.Fatalf("stale preview wrote note:\n%s", got)
+	}
+}

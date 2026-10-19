@@ -98,6 +98,13 @@ func (s *Server) handleNotesBulkPreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// The generation is read before planning, so a configuration that changes
+	// while the preview runs makes the receipt stale rather than misattributed.
+	generation, err := s.bulkConfigGeneration()
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
 	result, err := s.runBulkPreview(req)
 	if err != nil {
 		writeManagementError(w, err)
@@ -105,7 +112,7 @@ func (s *Server) handleNotesBulkPreview(w http.ResponseWriter, r *http.Request) 
 	}
 	result.Failures = append(req.KeyFailures, result.Failures...)
 
-	receipt, err := s.previewStore.store(req, result)
+	receipt, err := s.previewStore.store(req, result, generation)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -191,7 +198,25 @@ func (s *Server) runBulkPreview(req bulkManagementRequest, opts ...noteops.BulkO
 	}
 }
 
+// bulkConfigGeneration reloads the configuration and reports the generation a
+// bulk preview is planned against or an apply is judged by. It reloads first
+// for the reason the history receipt does: comparing against whatever this
+// process happened to be holding would miss an edit made on disk.
+func (s *Server) bulkConfigGeneration() (int64, error) {
+	if err := s.reloadConfig(); err != nil {
+		return 0, noteops.WrapError(noteops.CodeInternal, "config: reload failed", err)
+	}
+	return s.configState.Status().Generation, nil
+}
+
 func (s *Server) validateBulkPreviewForApply(req bulkManagementRequest, record bulkPreviewRecord) error {
+	generation, err := s.bulkConfigGeneration()
+	if err != nil {
+		return err
+	}
+	if generation != record.Generation {
+		return noteops.Errorf(noteops.CodePreviewStale, "bulk preview is stale: the configuration changed since the preview")
+	}
 	currentStates, err := bulkPreviewCurrentAffectedStates(record.Affected)
 	if err != nil {
 		return err

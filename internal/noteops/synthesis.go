@@ -179,11 +179,11 @@ func ApplySynthesisNote(vaultRoot string, plan *SynthesisPlan, opts ...Synthesis
 	}
 	for _, requirement := range plan.Requirements {
 		if err := txn.Require(requirement.Path, requirement.Expect); err != nil {
-			return nil, classifyTxnError("synthesize: pin dependency", err)
+			return nil, ClassifyTxnError("synthesize: pin dependency", err)
 		}
 	}
 	if err := txn.Write(plan.Destination.AbsPath, plan.Content, 0, plan.Expect); err != nil {
-		return nil, classifyTxnError("synthesize: plan note", err)
+		return nil, ClassifyTxnError("synthesize: plan note", err)
 	}
 
 	j, err := BeginOperation(vaultRoot, "synthesize", cfg.command, []string{plan.Destination.AbsPath}, cfg.journalOptions...)
@@ -192,7 +192,7 @@ func ApplySynthesisNote(vaultRoot string, plan *SynthesisPlan, opts ...Synthesis
 	}
 	defer j.Release()
 	if err := txn.Commit(j); err != nil {
-		return nil, classifyTxnError("synthesize: create note", err)
+		return nil, ClassifyTxnError("synthesize: create note", err)
 	}
 	entry, err := j.Finalize()
 	if err != nil {
@@ -296,7 +296,7 @@ func resolveSynthesisRequires(vaultRoot string, requires []SynthesisRequirement)
 func verifySynthesisRequirements(requirements []SynthesisRequirement) error {
 	for _, requirement := range requirements {
 		if err := vault.VerifyState(requirement.Path, requirement.Expect); err != nil {
-			return classifyTxnError("synthesize: verify dependency", err)
+			return ClassifyTxnError("synthesize: verify dependency", err)
 		}
 	}
 	return nil

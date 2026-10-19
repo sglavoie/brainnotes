@@ -148,7 +148,7 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 func moveToTrash(vaultRoot, source, dest string) error {
 	release, err := vault.LockPaths(vaultRoot, source, dest)
 	if err != nil {
-		return classifyTxnError("move note to trash", err)
+		return ClassifyTxnError("move note to trash", err)
 	}
 	defer release()
 	if exists, err := pathExists(dest); err != nil {

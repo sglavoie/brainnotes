@@ -353,7 +353,7 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 		return nil, WrapError(CodeInternal, "source: open transaction", err)
 	}
 	if err := txn.Write(plan.destination.AbsPath, plan.content, 0, plan.expect); err != nil {
-		return nil, classifyTxnError("source: plan save", err)
+		return nil, ClassifyTxnError("source: plan save", err)
 	}
 	if err := stageAttachments(txn, plan.attachments); err != nil {
 		return nil, err
@@ -363,7 +363,7 @@ func commitSourceSave(vaultRoot string, plan sourceSavePlan, cfg sourceOptions) 
 	}
 	for _, requirement := range cfg.requires {
 		if err := txn.Require(requirement.path, requirement.expect); err != nil {
-			return nil, classifyTxnError("source: pin configuration", err)
+			return nil, ClassifyTxnError("source: pin configuration", err)
 		}
 	}
 	// A create journals a file that does not exist yet, so `bn undo` deletes the
@@ -430,12 +430,12 @@ func prunePlannedSourceLedger(plan sourceSavePlan) {
 // a fresh id.
 func classifySourceSaveTxnError(plan sourceSavePlan, err error) error {
 	if vault.IsTxnRecoveryNeeded(err) || vault.IsTxnRollbackFailure(err) {
-		return classifyTxnError("source: save note", err)
+		return ClassifyTxnError("source: save note", err)
 	}
 	if vault.IsTxnConflict(err) {
 		return newSourceRevisionError(plan.destination.RelPath, plan.base, "")
 	}
-	return classifyTxnError("source: save note", err)
+	return ClassifyTxnError("source: save note", err)
 }
 
 // replaySourceSaveAfterConflict answers a conflict that a duplicate of this very

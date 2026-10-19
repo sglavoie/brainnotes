@@ -151,7 +151,7 @@ func CreateStubFromBrokenTarget(vaultRoot, sourceRel, rawTarget string, opts ...
 	// custody, stranding that transaction's content in a recovery file.
 	release, err := vault.LockPaths(vaultRoot, dest.AbsPath)
 	if err != nil {
-		return nil, classifyTxnError("create: write stub note", err)
+		return nil, ClassifyTxnError("create: write stub note", err)
 	}
 	defer release()
 	if err := writeNewFileExclusive(dest.AbsPath, body); err != nil {

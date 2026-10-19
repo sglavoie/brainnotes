@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // cockpitFixCommand labels the undo-journal entries cockpit fixes create when
@@ -136,7 +138,6 @@ func (s *Server) handleDailyReviewContext(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
-	cfg := s.config()
 	if r.URL.Path != "/api/cockpit/item" {
 		http.NotFound(w, r)
 		return
@@ -146,133 +147,14 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
 		return
 	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
-		return
-	}
-
-	id := strings.TrimSpace(r.Form.Get("id"))
-	if id == "" {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "cockpit task id is required"))
-		return
-	}
-	action := strings.TrimSpace(r.Form.Get("action"))
-	if action == "" {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "cockpit task action is required"))
-		return
-	}
-
-	// Look up the task from the raw generated queue: a done/snoozed task is still
-	// generated (only FilterQueue hides it), so it must be resolvable here to be
-	// cleared or re-suppressed.
-	rawQueue, err := s.cockpitQueue()
+	id, action, err := parseCockpitItemRequest(r, s.csrfToken)
 	if err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err))
+		writeManagementError(w, err)
 		return
 	}
-	task, ok := cockpitTaskByID(rawQueue, id)
-	if !ok {
-		writeManagementError(w, noteops.Errorf(noteops.CodeNotFound, "cockpit task not found or stale"))
-		return
-	}
-
-	store := s.cockpitStore()
-	message := ""
-	mutationWarning := ""
-	switch action {
-	case cockpitItemActionDone, "done":
-		if err := store.MarkDone(task); err != nil {
-			writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "update cockpit state", err))
-			return
-		}
-		message = "Marked task done."
-	case cockpitItemActionSnooze:
-		option := strings.TrimSpace(r.Form.Get("snooze"))
-		if option == "" {
-			option = cockpit.SnoozeTomorrow
-		}
-		if option != cockpit.SnoozeTomorrow && option != cockpit.SnoozeNextWeek {
-			writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported snooze %q", option))
-			return
-		}
-		if err := store.Snooze(task, option); err != nil {
-			writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "update cockpit state", err))
-			return
-		}
-		message = cockpitSnoozeMessage(option)
-	case cockpitItemActionClear:
-		if err := store.Clear(task); err != nil {
-			writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "update cockpit state", err))
-			return
-		}
-		message = "Cleared task state."
-	case cockpitItemActionExemptDeadEnd:
-		if task.Kind != cockpit.RuleDeadEndNote || len(task.Affected) != 1 {
-			writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "dead-end exemption is unavailable for this task"))
-			return
-		}
-		result, err := noteops.SetFrontmatter(
-			s.vault.Root,
-			task.Affected[0].RelPath,
-			[]noteops.FrontmatterMutation{{Key: "dead_end", Op: noteops.FrontmatterSet, Value: false}},
-			&cfg.Frontmatter,
-			noteops.WithFrontmatterCommand(cockpitDeadEndExemptionCommand),
-		)
-		if err != nil {
-			writeManagementError(w, err)
-			return
-		}
-		if !result.Changed {
-			writeManagementError(w, noteops.Errorf(noteops.CodeConflict, "dead-end exemption did not change the note"))
-			return
-		}
-		s.state.invalidate()
-		message = "Marked " + task.Affected[0].Title + " as an intentional dead end."
-	case cockpitItemActionCleanLongTail:
-		property, ok := cockpitLongTailProperty(task)
-		if !ok {
-			writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "long-tail cleanup is unavailable for this task"))
-			return
-		}
-		sources := make([]noteops.BulkSource, 0, len(task.Affected))
-		seen := make(map[string]bool, len(task.Affected))
-		for _, affected := range task.Affected {
-			relPath := strings.TrimSpace(affected.RelPath)
-			if relPath == "" || seen[relPath] {
-				continue
-			}
-			seen[relPath] = true
-			sources = append(sources, noteops.BulkSource{
-				Key:     managementRouteKeyForRelPath(relPath),
-				RelPath: relPath,
-			})
-		}
-		result, err := noteops.BulkUnsetFrontmatter(
-			s.vault.Root,
-			sources,
-			[]string{property},
-			&cfg.Frontmatter,
-			noteops.WithBulkCommand(cockpitLongTailCleanupCommand),
-		)
-		if err != nil {
-			writeManagementError(w, err)
-			return
-		}
-		if result.Changed == 0 {
-			writeManagementError(w, noteops.Errorf(noteops.CodeConflict, "long-tail cleanup did not change any affected note"))
-			return
-		}
-		s.state.invalidate()
-		message = fmt.Sprintf("Removed property %q from %d affected %s.", property, result.Changed, pluralizeNote(result.Changed))
-		if len(result.Failures) > 0 {
-			mutationWarning = fmt.Sprintf("Long-tail cleanup failed for %d affected %s; the successful removals remain undoable as one journal entry.", len(result.Failures), pluralizeNote(len(result.Failures)))
-		}
-	default:
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported cockpit action %q", action))
+	outcome, err := s.applyCockpitItemAction(r, id, action)
+	if err != nil {
+		writeManagementError(w, err)
 		return
 	}
 
@@ -286,12 +168,212 @@ func (s *Server) handleCockpitItem(w http.ResponseWriter, r *http.Request) {
 	// cockpit.daily_limit after a triage action; any other view (including none)
 	// keeps the full filtered queue unchanged.
 	if r.URL.Query().Get("view") == "daily" {
-		queue = cockpit.LimitDaily(queue, cfg.Cockpit.DailyLimit)
+		queue = cockpit.LimitDaily(queue, s.config().Cockpit.DailyLimit)
 	}
-	if mutationWarning != "" {
-		queue.Warnings = append(queue.Warnings, cockpit.Warning{Message: mutationWarning})
+	if outcome.warning != "" {
+		queue.Warnings = append(queue.Warnings, cockpit.Warning{Message: outcome.warning})
 	}
-	writeManagementJSON(w, http.StatusOK, cockpitAPIResponse{OK: true, Message: message, Queue: queue})
+	writeManagementJSON(w, http.StatusOK, cockpitAPIResponse{OK: true, Message: outcome.message, Queue: queue})
+}
+
+// cockpitItemOutcome is what a triage action reports back: the sentence the
+// panel shows, and a warning folded into the refreshed queue.
+type cockpitItemOutcome struct {
+	message string
+	warning string
+}
+
+// cockpitNoteWrite carries what a note-writing triage action is planned
+// against: the configuration and its pin, and the snapshot the task was
+// generated from, whose note revisions the write must still find on disk.
+type cockpitNoteWrite struct {
+	cfg      *config.Config
+	pin      configPin
+	snapshot vaultSnapshot
+}
+
+func parseCockpitItemRequest(r *http.Request, csrfToken string) (string, string, error) {
+	if err := r.ParseForm(); err != nil {
+		return "", "", noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err)
+	}
+	if !csrfTokenMatches(csrfToken, requestCSRFToken(r)) {
+		return "", "", noteops.Errorf(noteops.CodeForbidden, "csrf token required")
+	}
+	id := strings.TrimSpace(r.Form.Get("id"))
+	if id == "" {
+		return "", "", noteops.Errorf(noteops.CodeInvalidRequest, "cockpit task id is required")
+	}
+	action := strings.TrimSpace(r.Form.Get("action"))
+	if action == "" {
+		return "", "", noteops.Errorf(noteops.CodeInvalidRequest, "cockpit task action is required")
+	}
+	return id, action, nil
+}
+
+// cockpitItemWritesNotes reports whether an action edits note frontmatter, and
+// so must hold the same configuration guarantees every other property write
+// does, rather than only the cockpit's own workflow-state file.
+func cockpitItemWritesNotes(action string) bool {
+	return action == cockpitItemActionExemptDeadEnd || action == cockpitItemActionCleanLongTail
+}
+
+// applyCockpitItemAction resolves the task and carries out one triage action.
+//
+// A note-writing action reloads and checks the configuration first, the way
+// manage.go and pins_api.go do, and plans with the pinned configuration, so a
+// definition edited in between is refused at the commit boundary. The task is
+// looked up in a queue built from the same snapshot whose revisions those
+// writes check: the queue decided which notes to change, so a note edited
+// since must not be changed on that decision.
+func (s *Server) applyCockpitItemAction(r *http.Request, id, action string) (cockpitItemOutcome, error) {
+	if cockpitItemWritesNotes(action) {
+		if err := s.ensureConfigWritable(); err != nil {
+			return cockpitItemOutcome{}, err
+		}
+	}
+	cfg, _, pin := s.pinnedConfig()
+	// Look up the task from the raw generated queue: a done/snoozed task is still
+	// generated (only FilterQueue hides it), so it must be resolvable here to be
+	// cleared or re-suppressed.
+	snapshot, err := s.state.refreshSnapshot()
+	if err != nil {
+		return cockpitItemOutcome{}, noteops.WrapError(noteops.CodeInternal, "build cockpit queue", err)
+	}
+	task, ok := cockpitTaskByID(s.cockpitQueueFrom(diagnosticsDataFromSnapshot(snapshot, s.vault.Root)), id)
+	if !ok {
+		return cockpitItemOutcome{}, noteops.Errorf(noteops.CodeNotFound, "cockpit task not found or stale")
+	}
+
+	write := cockpitNoteWrite{cfg: cfg, pin: pin, snapshot: snapshot}
+	switch action {
+	case cockpitItemActionDone, "done":
+		return s.cockpitStateChange(s.cockpitStore().MarkDone(task), "Marked task done.")
+	case cockpitItemActionSnooze:
+		return s.snoozeCockpitTask(r, task)
+	case cockpitItemActionClear:
+		return s.cockpitStateChange(s.cockpitStore().Clear(task), "Cleared task state.")
+	case cockpitItemActionExemptDeadEnd:
+		return s.exemptCockpitDeadEnd(write, task)
+	case cockpitItemActionCleanLongTail:
+		return s.cleanCockpitLongTail(write, task)
+	}
+	return cockpitItemOutcome{}, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported cockpit action %q", action)
+}
+
+func (s *Server) cockpitStateChange(err error, message string) (cockpitItemOutcome, error) {
+	if err != nil {
+		return cockpitItemOutcome{}, noteops.WrapError(noteops.CodeInternal, "update cockpit state", err)
+	}
+	return cockpitItemOutcome{message: message}, nil
+}
+
+func (s *Server) snoozeCockpitTask(r *http.Request, task cockpit.Task) (cockpitItemOutcome, error) {
+	option := strings.TrimSpace(r.Form.Get("snooze"))
+	if option == "" {
+		option = cockpit.SnoozeTomorrow
+	}
+	if option != cockpit.SnoozeTomorrow && option != cockpit.SnoozeNextWeek {
+		return cockpitItemOutcome{}, noteops.Errorf(noteops.CodeInvalidRequest, "unsupported snooze %q", option)
+	}
+	return s.cockpitStateChange(s.cockpitStore().Snooze(task, option), cockpitSnoozeMessage(option))
+}
+
+func (s *Server) exemptCockpitDeadEnd(write cockpitNoteWrite, task cockpit.Task) (cockpitItemOutcome, error) {
+	if task.Kind != cockpit.RuleDeadEndNote || len(task.Affected) != 1 {
+		return cockpitItemOutcome{}, noteops.Errorf(noteops.CodeInvalidRequest, "dead-end exemption is unavailable for this task")
+	}
+	relPath := task.Affected[0].RelPath
+	if err := verifyCockpitAffected(s.vault.Root, write.snapshot, []string{relPath}); err != nil {
+		return cockpitItemOutcome{}, err
+	}
+	result, err := noteops.SetFrontmatter(
+		s.vault.Root,
+		relPath,
+		[]noteops.FrontmatterMutation{{Key: "dead_end", Op: noteops.FrontmatterSet, Value: false}},
+		&write.cfg.Frontmatter,
+		append(frontmatterConfigPinOptions(write.pin), noteops.WithFrontmatterCommand(cockpitDeadEndExemptionCommand))...,
+	)
+	if err != nil {
+		return cockpitItemOutcome{}, err
+	}
+	if !result.Changed {
+		return cockpitItemOutcome{}, noteops.Errorf(noteops.CodeConflict, "dead-end exemption did not change the note")
+	}
+	s.state.invalidate()
+	return cockpitItemOutcome{message: "Marked " + task.Affected[0].Title + " as an intentional dead end."}, nil
+}
+
+func (s *Server) cleanCockpitLongTail(write cockpitNoteWrite, task cockpit.Task) (cockpitItemOutcome, error) {
+	property, ok := cockpitLongTailProperty(task)
+	if !ok {
+		return cockpitItemOutcome{}, noteops.Errorf(noteops.CodeInvalidRequest, "long-tail cleanup is unavailable for this task")
+	}
+	sources := cockpitAffectedSources(task)
+	relPaths := make([]string, 0, len(sources))
+	for _, source := range sources {
+		relPaths = append(relPaths, source.RelPath)
+	}
+	if err := verifyCockpitAffected(s.vault.Root, write.snapshot, relPaths); err != nil {
+		return cockpitItemOutcome{}, err
+	}
+	result, err := noteops.BulkUnsetFrontmatter(s.vault.Root, sources, []string{property}, &write.cfg.Frontmatter,
+		append(bulkConfigPinOptions(write.pin), noteops.WithBulkCommand(cockpitLongTailCleanupCommand))...)
+	if err != nil {
+		return cockpitItemOutcome{}, err
+	}
+	if result.Changed == 0 {
+		return cockpitItemOutcome{}, noteops.Errorf(noteops.CodeConflict, "long-tail cleanup did not change any affected note")
+	}
+	s.state.invalidate()
+	outcome := cockpitItemOutcome{
+		message: fmt.Sprintf("Removed property %q from %d affected %s.", property, result.Changed, pluralizeNote(result.Changed)),
+	}
+	if len(result.Failures) > 0 {
+		outcome.warning = fmt.Sprintf("Long-tail cleanup failed for %d affected %s; the successful removals remain undoable as one journal entry.", len(result.Failures), pluralizeNote(len(result.Failures)))
+	}
+	return outcome, nil
+}
+
+func cockpitAffectedSources(task cockpit.Task) []noteops.BulkSource {
+	sources := make([]noteops.BulkSource, 0, len(task.Affected))
+	seen := make(map[string]bool, len(task.Affected))
+	for _, affected := range task.Affected {
+		relPath := strings.TrimSpace(affected.RelPath)
+		if relPath == "" || seen[relPath] {
+			continue
+		}
+		seen[relPath] = true
+		sources = append(sources, noteops.BulkSource{
+			Key:     managementRouteKeyForRelPath(relPath),
+			RelPath: relPath,
+		})
+	}
+	return sources
+}
+
+// verifyCockpitAffected refuses a triage write when an affected note no longer
+// holds the revision the task was generated from, the way /api/properties/value
+// refuses a stale echoed hash. These notes are the ones being written, so the
+// revision cannot be a FileTxn requirement (Require refuses a planned path);
+// each write's own compare-and-swap then covers the window after this check.
+// A note the snapshot did not load, or loaded without a hash, is left to that
+// compare-and-swap alone, as pinnedListRequirements leaves it.
+func verifyCockpitAffected(root string, snapshot vaultSnapshot, relPaths []string) error {
+	wanted := make(map[string]bool, len(relPaths))
+	for _, relPath := range relPaths {
+		wanted[relPath] = true
+	}
+	for _, note := range snapshot.notes {
+		hash := note.SourceHash()
+		if !wanted[noteVaultPath(root, note)] || hash == "" {
+			continue
+		}
+		if err := vault.VerifyState(note.Path, vault.ExpectHash(hash)); err != nil {
+			return noteops.WrapError(noteops.CodeConflict,
+				"cockpit: an affected note changed since the task was generated; refresh and retry", err)
+		}
+	}
+	return nil
 }
 
 func cockpitLongTailProperty(task cockpit.Task) (string, bool) {

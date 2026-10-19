@@ -206,9 +206,10 @@ func undoRestoreError(err error) error {
 	case vault.IsTxnRollbackFailure(err), vault.IsTxnRecoveryNeeded(err):
 		// The one state where content is provably somewhere nobody asked for it.
 		// CodeInternal rather than CodeSafety, which is documented as the engine
-		// refusing *before* anything changed; the error's own text names the file.
+		// refusing *before* anything changed. The error's own text names the file,
+		// so it is the message: a fixed sentence would hide the recovery path.
 		return noteops.WrapError(noteops.CodeInternal,
-			"history: the restore failed partway and could not put everything back", err)
+			"history: the restore failed partway and could not put everything back: "+err.Error(), err)
 	case vault.IsTxnConflict(err), vault.IsTxnLockBusy(err):
 		// A path that moved between the plan and the commit, or away from the state
 		// a preview pinned. It is the same refusal a preflight conflict is, made

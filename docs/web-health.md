@@ -57,7 +57,10 @@ enough to receive a new signature. `GET /api/cockpit` returns active tasks plus
 `active`, `done_hidden`, `snoozed_hidden`, and `total_generated` counts.
 `POST /api/cockpit/item` requires CSRF and form fields `id`,
 `action=mark_done|snooze|clear` (`done` is accepted as an alias for
-`mark_done`), plus optional `snooze=tomorrow|week`.
+`mark_done`), plus optional `snooze=tomorrow|week`. The note-writing actions
+`exempt_dead_end` and `clean_long_tail` are property writes: they are refused
+with `409` while the configuration is invalid, pin the configuration they were
+planned with, and refuse an affected note that changed since the queue was built.
 
 Fixable tasks advertise a fix action (schema repair, deterministic relink, or
 blank-stub creation for a broken target). Applying a fix is preview-gated:

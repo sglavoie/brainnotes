@@ -432,11 +432,12 @@ func templatesStalePreviewError(relPath string) error {
 // transaction precondition that failed is this file having changed, and every
 // other conflict — a busy safety lock, a revision the request planned against, a
 // templates.dir this surface cannot write into, a rollback that left the file
-// mixed — already says what it is and what to do about it. See
-// settingsWriteError for why the distinction is drawn on vault.IsTxnConflict
-// rather than on the error code, and why a failed rollback is asked about first.
+// mixed, content preserved in a recovery file — already says what it is and
+// what to do about it. See settingsWriteError for why the distinction is drawn
+// on vault.IsTxnConflict rather than on the error code, and why a failed
+// rollback or a needed recovery is asked about first.
 func templatesWriteError(err error) error {
-	if vault.IsTxnRollbackFailure(err) {
+	if vault.IsTxnRollbackFailure(err) || vault.IsTxnRecoveryNeeded(err) {
 		return err
 	}
 	if noteops.CodeOf(err) == noteops.CodePreviewStale || vault.IsTxnConflict(err) {
