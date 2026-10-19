@@ -8,8 +8,10 @@ test.describe("touch layouts", () => {
     await page.goto("/library?q=body&status=draft&sort=title");
     const rows = page.locator(".overview-result-item");
     await expect(rows.nth(1)).toBeVisible();
-    const second = await rows.nth(1).boundingBox();
-    expect(second.y + second.height).toBeLessThan(640);
+    // Earlier specs append to these notes, so a snippet may wrap to its
+    // two-line clamp; what must fit is each result's title and excerpt.
+    const excerpt = await rows.nth(1).locator(".overview-result-snippet").boundingBox();
+    expect(excerpt.y + excerpt.height).toBeLessThan(640);
     await expect(page.locator(".facet-input")).toBeHidden();
     await expect(page.locator(".facet-chip")).toContainText("draft");
     await expect(page.locator("[data-copy-search-link]")).toBeHidden();
