@@ -1,5 +1,5 @@
 import { announceConfirmedWrite } from "./write-notice";
-import { responseFailure, unansweredRequest } from "./request-outcome";
+import { responseFailure, unansweredRequest, type RequestFailure } from "./request-outcome";
 import {
   PROPERTY_APPLY_ENDPOINT,
   PROPERTY_PREVIEW_ENDPOINT,
@@ -20,7 +20,7 @@ import type { FetchLike } from "./properties-model";
 
 export type MutationOutcome =
   | { ok: true; result: PropertyMutationResult }
-  | { ok: false; message: string };
+  | RequestFailure;
 
 const readPayload = async (resp: Response): Promise<unknown> => {
   try {
@@ -60,10 +60,12 @@ export const previewPropertyMutation = (
 export const applyPropertyMutation = (
   fetcher: FetchLike,
   token: string,
-  previewID: string
+  previewID: string,
+  operationID = ""
 ): Promise<MutationOutcome> =>
   postProperty(fetcher, PROPERTY_APPLY_ENDPOINT, token, {
     preview_id: previewID,
+    operation_id: operationID,
   } satisfies PropertyApplyRequest);
 
 export const savePropertyValue = (
@@ -82,10 +84,12 @@ export const previewPropertySchema = (
 export const applyPropertySchema = (
   fetcher: FetchLike,
   token: string,
-  previewID: string
+  previewID: string,
+  operationID = ""
 ): Promise<MutationOutcome> =>
   postProperty(fetcher, PROPERTY_SCHEMA_APPLY_ENDPOINT, token, {
     preview_id: previewID,
+    operation_id: operationID,
   } satisfies PropertyApplyRequest);
 
 export type UndoOutcome = { ok: boolean; message: string };

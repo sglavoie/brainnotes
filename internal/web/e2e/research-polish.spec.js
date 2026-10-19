@@ -84,7 +84,7 @@ test("related note links keep the originating Library search", async ({ page }) 
 test("History exposes clear only for active constraints and keeps the latest change reachable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await page.goto("/history");
-  await expect(page.locator("[data-history-list-status]")).not.toHaveClass(/is-loading/);
+  await expect(page.locator("#history-list-status")).not.toHaveClass(/is-loading/);
   await expect(page.locator("[data-history-clear-filters]")).toBeHidden();
   await expect(page.locator("[data-history-refresh]")).toBeInViewport();
   await page.locator("[data-history-path]").fill("Alpha");

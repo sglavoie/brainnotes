@@ -218,14 +218,14 @@ func snapshotParseErrorsByRelPath(root string, snapshot vaultSnapshot) map[strin
 // is pinned to the bytes the plan was computed from, so a concurrent edit is a
 // conflict, and a failure mid-commit rolls the earlier writes back. pin adds the
 // configuration the plan was validated against to that set of preconditions.
-func (s *Server) commitPropertyPlan(plan *propertyPlan, operation, command string, pin configPin) (*journal.Entry, error) {
+func (s *Server) commitPropertyPlan(plan *propertyPlan, operation, command string, pin configPin, opts ...journal.RecorderOption) (*journal.Entry, error) {
 	if plan == nil || (len(plan.Notes) == 0 && plan.Config == nil) {
 		return nil, nil
 	}
 	// Before the transaction rather than just before its commit: the location and
 	// Git safety refusals both belong ahead of the first artifact, and a property
 	// plan's first artifact is the transaction's staged temp files.
-	entry, err := noteops.BeginOperation(s.vault.Root, operation, command, propertyPlanPaths(plan))
+	entry, err := noteops.BeginOperation(s.vault.Root, operation, command, propertyPlanPaths(plan), opts...)
 	if err != nil {
 		return nil, err
 	}

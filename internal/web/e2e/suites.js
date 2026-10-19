@@ -1,6 +1,7 @@
 // Every spec has one declared home; CI checks this catalog before preparing vaults.
 export const browserSuites = {
   "pr": [
+    "accessibility.spec.js",
     "research-polish.spec.js",
     "smoke.spec.js",
     "screen-polish.spec.js",
@@ -16,7 +17,6 @@ export const browserSuites = {
     "library-position-history.spec.js",
     "note-navigation.spec.js",
     "sync.spec.js",
-    "new-note.spec.js",
     "polish-refinement.spec.js",
     "workflow-completion.spec.js"
   ],
@@ -43,6 +43,9 @@ export const browserSuites = {
   ],
   "hosted": [
     "qualification.spec.js"
+  ],
+  "hostedPr": [
+    "new-note.spec.js"
   ],
   "readOnly": [
     "read-only.spec.js"

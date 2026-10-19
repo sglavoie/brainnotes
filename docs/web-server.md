@@ -209,9 +209,15 @@ A stale preview requires another review. Use **History** for recovery, and
 
 When a write loses its response, the outcome is **unconfirmed**: it may already
 have happened. This includes Trash, which stays on the note until success can be
-established. Check the current note, values, inbox, or History before retrying;
-the browser does not automatically resend an unanswered write. Settings and
-Templates offer **Check History in a new tab**, preserving typed inputs.
+established. For Trash, Synthesize, Library bulk changes, Property workbench
+changes, portable settings, and Templates, choose **Check outcome**. The browser
+checks the exact attempt against
+the journal and identifies a confirmed History entry. An unconfirmed result can
+mean the write is still running or recovery needs attention; check again, then
+refresh current values and make a new preview if needed. The browser never
+resends an unanswered write. Pending checks remain available after navigation or
+reload in the same tab. Settings and Templates also offer **Check History in a
+new tab**, preserving typed inputs.
 A failed preview is reported separately because it submitted no change.
 
 If creating a missing note is unconfirmed, **Refresh to check** reloads the page
@@ -224,15 +230,17 @@ Unanswered capture IDs survive reloads in the same tab when browser storage is
 available. The editor's capture control uses the same receipt protection.
 **Draft kept in this browser** describes a local copy; **Saved to vault** confirms a save.
 **Save not confirmed** keeps Save available for a safe retry. Other uncertain
-changes point to checking the current values, inbox, or History before retrying.
+changes point to the applicable outcome check or current values before retrying.
 
 Synchronization shows one summary and when the server checked it. Healthy
 transport details start collapsed; pending work or problems open them automatically.
 Expand **Synchronization details** for the exact check time and the separate saved,
 packaged, acknowledged, and applied facts.
 
-The shared **Sync:** line refreshes after confirmed writes and polls pending work for
-up to one minute. It stops while the page is hidden and ignores superseded replies.
+The shared **Sync:** line appears when synchronization needs a person's attention
+or its status cannot be read. Routine status stays on the Sync page. The status
+refreshes after confirmed writes and polls pending work for up to one minute. It
+stops while the page is hidden and ignores superseded replies.
 
 ## Explore Graph
 

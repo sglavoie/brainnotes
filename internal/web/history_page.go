@@ -78,6 +78,7 @@ func (s *Server) handleHistoryPage(w http.ResponseWriter, r *http.Request) {
 // receipt.
 func (srv *Server) registerHistoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(historyListAPIRoutePath, srv.handleHistory)
+	mux.HandleFunc(operationOutcomeRoutePath, srv.handleOperationOutcome)
 	mux.HandleFunc(historyPreviewAPIRoutePath, srv.handleHistoryPreview)
 	mux.HandleFunc(historyUndoAPIRoutePath, srv.handleUndo)
 	mux.HandleFunc(historyRoutePath, srv.handleHistoryPage)

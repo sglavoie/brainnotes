@@ -15,6 +15,7 @@ export type BulkNotesRequest = {
   op?: "=" | "+=" | "-=";
   value?: string;
   previewID?: string;
+  operationID?: string;
 };
 
 export type BulkPreviewRequest = BulkNotesRequest;

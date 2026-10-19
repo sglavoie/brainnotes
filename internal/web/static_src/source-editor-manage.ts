@@ -18,6 +18,7 @@ import { editorURLForKey, postManagement, type ManageOutcome } from "./source-ma
 import type { SourceEditorConfig } from "./source-editor-elements";
 import type { SourceManageElements } from "./source-editor-elements";
 import { confirmUndo, prepareExactUndo } from "./history-confirm";
+import { newWriteOperationID, offerWriteOutcomeCheck } from "./write-outcome-check";
 
 // The note's own management, reachable from the page that is editing it.
 //
@@ -66,6 +67,13 @@ type ManageAction = {
 
 type PlannedRequest = { url: string; body: URLSearchParams };
 
+const identifyTrashAttempt = (planned: PlannedRequest, trashURL: string): string => {
+  if (planned.url !== trashURL) return "";
+  const id = newWriteOperationID();
+  if (id) planned.body.set("operation_id", id);
+  return id;
+};
+
 export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
   const { elements, config, host } = deps;
   let status = elements.status;
@@ -91,10 +99,16 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
     setBusy,
   });
 
+  const reportUnconfirmed = (action: ManageAction, operationID: string): void => {
+    setStatus(unconfirmedAction(action), "is-error");
+    if (status) offerWriteOutcomeCheck(status, operationID, deps.fetch ?? fetch, "Trash");
+  };
+
   const run = async (action: ManageAction): Promise<void> => {
     if (busy) return;
     setBusy(true);
     setStatus(`${action.label}…`, "is-loading");
+    let operationID = "";
     try {
       const candidate = action.plan();
       const planned = candidate instanceof Promise ? await candidate : candidate;
@@ -102,6 +116,7 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
         setStatus(planned, "is-error");
         return;
       }
+      operationID = identifyTrashAttempt(planned, config.manage.trash);
       const outcome = await postManagement({
         url: planned.url,
         body: planned.body,
@@ -109,14 +124,14 @@ export const initSourceManage = (deps: SourceManageDeps): (() => void) => {
         fetch: deps.fetch,
       });
       if (isUnconfirmed(action, outcome)) {
-        setStatus(unconfirmedAction(action), "is-error");
+        reportUnconfirmed(action, operationID);
       } else if (!outcome.ok) {
         setStatus(action.refused?.(outcome) ?? outcome.message, "is-error");
       } else {
         action.after(outcome);
       }
     } catch {
-      setStatus(unconfirmedAction(action), "is-error");
+      reportUnconfirmed(action, operationID);
     } finally {
       setBusy(false);
     }

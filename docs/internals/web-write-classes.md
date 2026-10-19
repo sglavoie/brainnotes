@@ -1,5 +1,14 @@
 # Web write classes
 
+Trash, synthesis, Library bulk changes, immediate property values, and
+previewed property, settings, and template applies attach a random
+`operation_id` to the request. A finalized journal entry stores that ID, and
+`GET /api/operations/outcome?id=…` reports its exact History entry. An absent
+entry is **unconfirmed**, since the request may still be running or need recovery.
+The client retains unresolved IDs in tab session storage and never automatically
+replays the write. The ID only correlates an attempt; the existing CSRF, preview,
+revision, and journal checks still govern the mutation.
+
 Companion to `CLAUDE.md`; read before adding or changing any mutating web API route.
 
 Every class below is reached only after the serving mode has allowed the request.

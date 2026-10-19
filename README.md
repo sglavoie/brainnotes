@@ -35,7 +35,23 @@ export BNOTES_VAULT=/path/to/vault
 
 # Open the browser workspace.
 bn serve
+```
 
+In the browser, choose **Create your first note** (or **New note**), enter a
+title, and select **Create and write**. Add a sentence in the editor and select
+**Save**. Open **Library** and search for a word from that sentence to find the
+note you just saved. Your note is a Markdown file in the vault; you can also edit
+it with your usual text editor.
+
+Capture a thought from the terminal without choosing a filename:
+
+```sh
+bn capture "ask [[Bob]] about the migration"
+```
+
+### Go further
+
+```sh
 # Find every book note that's still 'To Read'.
 bn find --category Books --status "To Read"
 
@@ -52,9 +68,6 @@ bn find --category Books -i
 # Revisit the current note through related notes and an inspectable context packet.
 bn related Notes/Current.md -i
 bn context Notes/Current.md --purpose questions
-
-# Dump a passing thought into the inbox note without picking a file or a title.
-bn capture "ask [[Bob]] about the migration"
 
 # Set a property across many notes.
 bn find --tag drafts | bn set - status=done

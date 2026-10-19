@@ -57,6 +57,7 @@ it("offers no review link when the server names no review path", () => {
 
   expect(line.querySelector("a.sync-line-review")).toBeNull();
   expect(line.classList.contains("is-attention")).toBe(false);
+  expect(line.textContent).toBe("");
 });
 
 it("leaves the line empty on a mode that refuses the route", () => {
@@ -87,7 +88,8 @@ it("reads once and reads again when the tab is looked at again", async () => {
   );
 
   initSyncLine({ doc: document, fetch: fetcher });
-  await vi.waitFor(() => expect(lineElement().textContent).toContain("Everything is packaged."));
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+  expect(lineElement().textContent).toBe("");
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(fetcher.mock.calls[0][0]).toBe("/api/sync/status");
 

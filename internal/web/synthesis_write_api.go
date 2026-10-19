@@ -92,6 +92,11 @@ func (s *Server) handleSynthesisApply(w http.ResponseWriter, r *http.Request) {
 	if !s.requireSynthesisPost(w, r, synthesisApplyAPIRoutePath, synthesisApplyBodyLimit) {
 		return
 	}
+	operationID, err := operationIDFromForm(r)
+	if err != nil {
+		writeManagementError(w, err)
+		return
+	}
 
 	record, err := s.synthesisPreviews.consume(r.Form.Get("preview_id"))
 	if err != nil {
@@ -106,7 +111,8 @@ func (s *Server) handleSynthesisApply(w http.ResponseWriter, r *http.Request) {
 		s.beforeSynthesisCommit()
 	}
 
-	result, err := noteops.ApplySynthesisNote(s.vault.Root, record.Plan)
+	result, err := noteops.ApplySynthesisNote(s.vault.Root, record.Plan,
+		noteops.WithSynthesisJournalOptions(journalOptionsForOperation(operationID)...))
 	if err != nil {
 		writeManagementError(w, err)
 		return

@@ -25,6 +25,7 @@ import {
   type MutationOutcome,
 } from "./properties-workbench-requests";
 import type { StatusKind } from "./status";
+import { newWriteOperationID, offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export type WorkbenchMutations = {
   previewSchema: (
@@ -58,14 +59,21 @@ export type WorkbenchMutationOptions = {
   updateRowText: (relPath: string, text: string) => void;
 };
 
+// The existing factory keeps one set of closures around the workbench state.
+/* eslint-disable max-lines-per-function */
 export const createWorkbenchMutations = (
   options: WorkbenchMutationOptions
 ): WorkbenchMutations => {
   const announce = (
-    outcome: MutationOutcome
+    outcome: MutationOutcome,
+    operationID = ""
   ): outcome is { ok: true; result: PropertyMutationResult } => {
     if (!outcome.ok) {
       options.setStatus(outcome.message, "is-error");
+      const status = options.doc.querySelector<HTMLElement>("[data-property-status]");
+      if (outcome.uncertain && status) {
+        offerWriteOutcomeCheck(status, operationID, options.fetcher, "Property change");
+      }
       return false;
     }
     return true;
@@ -86,10 +94,11 @@ export const createWorkbenchMutations = (
 
   const runApply = async (previewID: string): Promise<void> => {
     options.setBusy(true);
+    const operationID = newWriteOperationID();
     options.setStatus("Applying change...", "is-loading");
     try {
-      const outcome = await applyPropertyMutation(options.fetcher, options.token, previewID);
-      if (!announce(outcome)) {
+      const outcome = await applyPropertyMutation(options.fetcher, options.token, previewID, operationID);
+      if (!announce(outcome, operationID)) {
         return;
       }
       options.clearSelection();
@@ -128,10 +137,11 @@ export const createWorkbenchMutations = (
 
   const runSchemaApply = async (previewID: string): Promise<void> => {
     options.setBusy(true);
+    const operationID = newWriteOperationID();
     options.setStatus("Saving the definition...", "is-loading");
     try {
-      const outcome = await applyPropertySchema(options.fetcher, options.token, previewID);
-      if (announce(outcome)) {
+      const outcome = await applyPropertySchema(options.fetcher, options.token, previewID, operationID);
+      if (announce(outcome, operationID)) {
         await finishWrite(outcome.result);
       }
     } finally {
@@ -183,16 +193,18 @@ export const createWorkbenchMutations = (
     displayText: string
   ): Promise<void> => {
     options.setBusy(true);
+    const operationID = newWriteOperationID();
     options.setStatus("Saving...", "is-loading");
     try {
       const outcome = await savePropertyValue(options.fetcher, options.token, {
+        operation_id: operationID,
         note: relPath,
         property: options.property,
         op,
         expected_hash: hash,
         value,
       });
-      if (!announce(outcome)) {
+      if (!announce(outcome, operationID)) {
         return;
       }
       options.closeEditor();
@@ -220,3 +232,4 @@ export const createWorkbenchMutations = (
 
   return { previewSchema, runImmediate, runPreview, runUndo };
 };
+/* eslint-enable max-lines-per-function */

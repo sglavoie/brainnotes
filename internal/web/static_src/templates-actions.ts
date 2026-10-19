@@ -1,6 +1,7 @@
 import type { TemplatesResult } from "./api";
 import { previewTemplate, applyTemplate, type FetchLike } from "./settings-requests";
 import type { StatusKind } from "./status";
+import { newWriteOperationID } from "./write-outcome-check";
 import {
   templateConfirmMessage,
   templateNoChangeMessage,
@@ -18,7 +19,7 @@ export type TemplateWriteRequest = {
 };
 
 export type TemplatesWriteHooks = {
-  onStatus?: (message: string, kind: StatusKind, uncertain?: boolean) => void;
+  onStatus?: (message: string, kind: StatusKind, uncertain?: boolean, operationID?: string) => void;
   onPending?: (pending: TemplatePendingSave | null) => void;
   /** Fires once the write landed, carrying the receipt it redeemed. */
   onSaved?: (pending: TemplatePendingSave, result: TemplatesResult) => void;
@@ -54,8 +55,8 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
   let pending: TemplatePendingSave | null = null;
   let busy = false;
 
-  const setStatus = (message: string, kind: StatusKind = "", uncertain = false): void => {
-    if (uncertain) hooks.onStatus?.(message, kind, true);
+  const setStatus = (message: string, kind: StatusKind = "", uncertain = false, operationID = ""): void => {
+    if (uncertain) hooks.onStatus?.(message, kind, true, operationID);
     else hooks.onStatus?.(message, kind);
   };
 
@@ -106,12 +107,13 @@ export const createTemplatesWriter = (deps: TemplatesWriterDeps): TemplatesWrite
       return;
     }
     busy = true;
+    const operationID = newWriteOperationID();
     setStatus(`Saving "${issued.name}"...`, "is-loading");
     try {
-      const outcome = await applyTemplate(deps.fetch, deps.token, issued.previewID);
+      const outcome = await applyTemplate(deps.fetch, deps.token, issued.previewID, operationID);
       setPending(null);
       if (!outcome.ok) {
-        setStatus(outcome.message, "is-error", outcome.uncertain);
+        setStatus(outcome.message, "is-error", outcome.uncertain, operationID);
         return;
       }
       hooks.onSaved?.(issued, outcome.result);

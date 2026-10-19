@@ -16,7 +16,8 @@ so Go-only builds do not need Node. The editor and Sync pages load `editing.js`
 for CodeMirror; note reading loads only `app.js`. Each workspace loads its own
 small page bundle. `internal/cli/web-build-args.json` is the shared entry manifest
 for local builds, serve-time refresh, and CI drift checks. `npm run test:e2e:pr`
-runs the declared PR Chromium journeys, the read-only profile, and the dedicated
+runs the declared PR Chromium journeys, an explicit hosted creation and save profile,
+the read-only profile, and the dedicated
 performance profiles. `npm run test:e2e:weekly` runs all local and read-only regressions plus
 the hosted cross-browser qualification. The weekly workflow runs that full suite.
 Assign every new spec in `internal/web/e2e/suites.js`: `lint:e2e` rejects missing,
@@ -56,6 +57,16 @@ Save reachable while writing. Property forms and Library selection controls
 should appear when they are useful, with keyboard access to each disclosure.
 
 ## Mobile and accessibility polish
+
+`accessibility.spec.js` runs axe WCAG A/AA checks and 320 px/200% reflow checks
+for Library, reading, and editing in the PR Chromium suite. For a manual screen
+reader pass, use a disposable vault and the same three pages. With VoiceOver and
+Safari on macOS, move through landmarks and headings, search the Library, open a
+result, then open the editor and save a small change. Confirm every control has an
+understandable name and state, status updates are announced, and keyboard focus
+stays on the active task. Record the browser, OS, assistive technology version,
+pages, and any failures in the browser UI pull request checklist or with release
+evidence. Automation cannot verify spoken order or announcement quality.
 
 `screen-polish.spec.js` checks usable mobile Properties filters, actual properties
 on entry, reading content near the top, Library action placement, Health's real

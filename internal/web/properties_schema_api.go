@@ -97,20 +97,13 @@ func (s *Server) handlePropertySchemaApply(w http.ResponseWriter, r *http.Reques
 		writeManagementError(w, err)
 		return
 	}
-	if status.Generation != record.Generation {
-		writeManagementError(w, noteops.Errorf(noteops.CodePreviewStale, "properties: %s changed since the preview", config.FileName))
-		return
-	}
-	if plan.Config == nil {
-		writeManagementError(w, noteops.Errorf(noteops.CodePreviewStale, "properties: %s changed since the preview", config.FileName))
-		return
-	}
-	if !reflect.DeepEqual(plan.fileStates(), record.Files) {
+	if !propertySchemaPreviewMatches(plan, status, record) {
 		writeManagementError(w, noteops.Errorf(noteops.CodePreviewStale, "properties: %s changed since the preview", config.FileName))
 		return
 	}
 
-	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, "property-schema", propertySchemaCommand(plan.Op), pin)
+	entry, err := s.commitPropertyPlan(&propertyPlan{Config: plan.Config}, "property-schema", propertySchemaCommand(plan.Op), pin,
+		journalOptionsForOperation(req.OperationID)...)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -121,6 +114,11 @@ func (s *Server) handlePropertySchemaApply(w http.ResponseWriter, r *http.Reques
 	response := propertySchemaResponseForPlan(plan, status)
 	response.JournalID = managementJournalID(entry)
 	writeManagementJSON(w, http.StatusOK, response)
+}
+
+func propertySchemaPreviewMatches(plan *propertySchemaPlan, status ConfigStatus, record propertyPreviewRecord) bool {
+	return status.Generation == record.Generation && plan.Config != nil &&
+		reflect.DeepEqual(plan.fileStates(), record.Files)
 }
 
 func (s *Server) planPropertySchemaRequest(req propertySchemaRequest) (*propertySchemaPlan, ConfigStatus, configPin, error) {

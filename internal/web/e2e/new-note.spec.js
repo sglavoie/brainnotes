@@ -3,8 +3,6 @@ import { join } from "node:path";
 import { expect, manifest, test } from "./fixture.js";
 import { caretToEnd, SURFACE } from "./editor-helpers.js";
 
-test.use({ baseURL: manifest.hostedBaseURL });
-
 test("hosted New note creates, opens the editor, saves and reopens", async ({ page }) => {
   await page.goto("/library");
   await page.getByRole("link", { name: "New note", exact: true }).click();
@@ -87,4 +85,27 @@ test("a lost creation reply survives reload and checks the original receipt", as
   expect(requests[0]).toBe(requests[1]);
   await page.goto("/new");
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("");
+});
+
+test("a lost Trash reply can be checked by its exact journaled attempt", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/new");
+  await page.getByLabel("Title", { exact: true }).fill("Outcome check temporary note");
+  await page.getByRole("button", { name: "Create and write" }).click();
+  await page.locator("[data-source-note-return]").click();
+  await page.getByText("Actions", { exact: true }).click();
+  await page.route("**/api/notes/trash", async (route) => {
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    await route.abort("failed");
+  });
+  await page.locator("[data-trash-button]").click();
+  await page.getByRole("dialog").getByRole("button", { name: "Move to Trash", exact: true }).click();
+  const status = page.locator("[data-trash-status]");
+  await expect(status).toContainText("not confirmed");
+  await status.getByRole("button", { name: "Check outcome" }).click();
+  await expect(status).toContainText("Trash confirmed in History");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto("/");
+  await expect(page.locator(".pending-write-outcomes")).toHaveCount(0);
 });

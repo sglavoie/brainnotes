@@ -8,6 +8,7 @@ import {
 import { queryElement } from "./dom";
 import { setStatusText } from "./status";
 import { rememberTrashUndo, showTrashUndo } from "./note-trash-undo";
+import { newWriteOperationID, offerWriteOutcomeCheck } from "./write-outcome-check";
 
 type TrashNoteStatusKind = "" | "is-success" | "is-error";
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -38,9 +39,11 @@ export const readTrashNoteConfig = (container: HTMLElement): TrashNoteConfig => 
 });
 
 export const buildTrashNoteFetchRequest = (
-  config: Pick<TrashNoteConfig, "key" | "csrfToken">
+  config: Pick<TrashNoteConfig, "key" | "csrfToken">,
+  operationID = ""
 ): TrashNoteFetchRequest => {
   const body = buildNoteKeyMutationForm({ key: config.key, token: config.csrfToken });
+  if (operationID) body.set("operation_id", operationID);
   return {
     url: "/api/notes/trash",
     init: {
@@ -104,18 +107,21 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
     }
     if (button.disabled) return;
     button.disabled = true;
+    let operationID = "";
     try {
       if (!await confirmTrash(config.confirmMessage)) {
         setStatus("Trash canceled.");
         return;
       }
       setStatus("Moving note to Trash...");
-      const request = buildTrashNoteFetchRequest(config);
+      operationID = newWriteOperationID();
+      const request = buildTrashNoteFetchRequest(config, operationID);
       const resp = await fetcher(request.url, request.init);
       const payload = await readTrashResponsePayload(resp);
       const failure = responseFailure(resp, payload, "write");
       if (failure) {
         setStatus(failure.message, "is-error");
+        if (failure.uncertain) offerWriteOutcomeCheck(statusEl, operationID, fetcher, "Trash");
         return;
       }
 
@@ -130,6 +136,7 @@ export const initTrashNoteAction = (deps: TrashNoteActionDeps = {}): void => {
       redirect(config.redirectPath);
     } catch {
       setStatus(unansweredRequest("write").message, "is-error");
+      offerWriteOutcomeCheck(statusEl, operationID, fetcher, "Trash");
     } finally {
       button.disabled = false;
     }

@@ -12,8 +12,9 @@ import (
 )
 
 type recorderOptions struct {
-	now   func() time.Time
-	idGen func(time.Time) (string, error)
+	now         func() time.Time
+	idGen       func(time.Time) (string, error)
+	operationID string
 }
 
 // RecorderOption customizes recorder construction.
@@ -35,6 +36,13 @@ func WithIDGenerator(gen func(time.Time) (string, error)) RecorderOption {
 			o.idGen = gen
 		}
 	}
+}
+
+// WithOperationID records an opaque browser attempt ID beside the journal
+// entry so a lost HTTP response can be checked without guessing from filenames
+// or timestamps. The web layer validates its format before a write starts.
+func WithOperationID(id string) RecorderOption {
+	return func(o *recorderOptions) { o.operationID = id }
 }
 
 // NewEntryID mints the identity an entry recorded at ts would be created under.
@@ -116,9 +124,10 @@ func NewRecorder(vaultRoot, journalRoot, command string, opts ...RecorderOption)
 		journalRoot: journalAbs,
 		entryDir:    entryDir,
 		entry: Entry{
-			ID:        id,
-			Timestamp: ts,
-			Command:   command,
+			ID:          id,
+			Timestamp:   ts,
+			Command:     command,
+			OperationID: cfg.operationID,
 		},
 		index: make(map[string]int),
 	}, nil

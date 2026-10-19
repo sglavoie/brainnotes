@@ -90,13 +90,14 @@ export const previewSetting = (
 export const applySetting = (
   fetcher: FetchLike,
   token: string,
-  previewID: string
+  previewID: string,
+  operationID = ""
 ): Promise<Outcome<SettingsResult>> =>
   post(
     fetcher,
     SETTINGS_APPLY_ENDPOINT,
     token,
-    { preview_id: previewID },
+    { preview_id: previewID, operation_id: operationID },
     normalizeSettingsResponse
   );
 
@@ -130,12 +131,13 @@ export const previewTemplate = (
 export const applyTemplate = (
   fetcher: FetchLike,
   token: string,
-  previewID: string
+  previewID: string,
+  operationID = ""
 ): Promise<Outcome<TemplatesResult>> =>
   post(
     fetcher,
     TEMPLATES_APPLY_ENDPOINT,
     token,
-    { preview_id: previewID },
+    { preview_id: previewID, operation_id: operationID },
     normalizeTemplatesResponse
   );

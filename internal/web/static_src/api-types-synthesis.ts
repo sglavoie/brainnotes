@@ -79,6 +79,7 @@ export type SynthesisPreviewResponse = {
 export type SynthesisApplyRequest = {
   preview_id: string;
   token: string;
+  operation_id?: string;
 };
 
 export type SynthesisApplyResponse = {

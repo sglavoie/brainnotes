@@ -253,7 +253,8 @@ func (s *Server) handleSettingsApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entry, err := s.commitPropertyPlan(
-		&propertyPlan{Config: plan.Config}, "settings", settingsCommand(plan.Op), pin)
+		&propertyPlan{Config: plan.Config}, "settings", settingsCommand(plan.Op), pin,
+		journalOptionsForOperation(req.OperationID)...)
 	if err != nil {
 		writeManagementError(w, settingsWriteError(err))
 		return

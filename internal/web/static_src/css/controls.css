@@ -27,6 +27,11 @@
 .bn-status.is-error { color: var(--bn-danger); }
 .bn-status.is-warning { color: var(--bn-warning); }
 .bn-status.is-empty { color: var(--bn-text-subtle); }
+.pending-write-outcomes { margin-block: 0.75rem; }
+.pending-write-outcomes h2 { margin-top: 0; font-size: 1rem; }
+.pending-write-outcome { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.pending-write-outcome p { margin: 0; }
+.has-write-outcome-check { overflow-wrap: anywhere; }
 .bn-disclosure > summary { cursor: pointer; min-height: var(--bn-control-height); padding-block: 0.4rem; box-sizing: border-box; }
 
 @media (pointer: coarse) {

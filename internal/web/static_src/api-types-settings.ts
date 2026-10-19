@@ -43,6 +43,7 @@ export type SettingMutationRequest = {
 
 export type SettingsApplyRequest = {
   preview_id: string;
+  operation_id?: string;
 };
 
 export type SettingsRequestBody = SettingMutationRequest | SettingsApplyRequest;

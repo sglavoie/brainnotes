@@ -58,6 +58,8 @@ test("an unreadable template reply retains the draft and spends the preview", as
   await expect(page.locator("[data-templates-content]")).toHaveValue("# Keep these exact bytes\n");
   await expect(page.locator("[data-templates-confirm]")).toBeHidden();
   await expect(page.locator("[data-templates-panel] .write-check-link")).toBeVisible();
+  await page.locator("[data-templates-status]").getByRole("button", { name: "Check outcome" }).click();
+  await expect(page.locator("[data-templates-status]")).toContainText("still unconfirmed");
   expect(gitStatus(manifest.localVault)).toBe("");
 });
 

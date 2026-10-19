@@ -123,10 +123,11 @@ func (r FileRecord) validate() error {
 
 // Entry is one operation journal record.
 type Entry struct {
-	ID        string       `json:"id"`
-	Timestamp time.Time    `json:"timestamp"`
-	Command   string       `json:"command"`
-	Files     []FileRecord `json:"files"`
+	ID          string       `json:"id"`
+	Timestamp   time.Time    `json:"timestamp"`
+	Command     string       `json:"command"`
+	OperationID string       `json:"operation_id,omitempty"`
+	Files       []FileRecord `json:"files"`
 }
 
 func (e *Entry) validate() error {

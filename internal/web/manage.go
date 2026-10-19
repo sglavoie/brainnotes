@@ -21,7 +21,6 @@ func (s *Server) handleNoteTrash(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
 		return
 	}
-
 	token := requestCSRFToken(r)
 	if !csrfTokenMatches(s.csrfToken, token) {
 		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
@@ -45,7 +44,7 @@ func (s *Server) handleNoteTrash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := noteops.TrashNote(s.vault.Root, source.RelPath)
+	result, err := s.trashNoteForRequest(r, source.RelPath)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -63,6 +62,15 @@ func (s *Server) handleNoteTrash(w http.ResponseWriter, r *http.Request) {
 		result.Destination.RelPath,
 		journalID,
 	))
+}
+
+func (s *Server) trashNoteForRequest(r *http.Request, relPath string) (*noteops.TrashResult, error) {
+	operationID, err := operationIDFromForm(r)
+	if err != nil {
+		return nil, err
+	}
+	return noteops.TrashNote(s.vault.Root, relPath,
+		noteops.WithTrashJournalOptions(journalOptionsForOperation(operationID)...))
 }
 
 func (s *Server) handleNoteCreate(w http.ResponseWriter, r *http.Request) {

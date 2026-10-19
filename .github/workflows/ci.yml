@@ -79,7 +79,7 @@ jobs:
       - name: Install Chromium and system dependencies
         run: npx playwright install --with-deps chromium
       # Test the committed embedded assets. Rebuilding here would conceal drift.
-      - name: Check core journeys and responsive layouts
+      - name: Check local, hosted and read-only journeys and responsive layouts
         run: npm run test:e2e:pr
       - name: Upload browser evidence
         if: always()

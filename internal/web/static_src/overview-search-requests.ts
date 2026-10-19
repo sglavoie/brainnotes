@@ -62,7 +62,8 @@ export const postBulkApply = async (
   action: BulkAction,
   keys: string[],
   fields: BulkActionFields,
-  previewID: string
+  previewID: string,
+  operationID = ""
 ): Promise<BulkResponse> => {
   const body = buildBulkApplyForm({
     action,
@@ -73,6 +74,7 @@ export const postBulkApply = async (
     op: normalizeBulkFrontmatterOp(fields.op),
     value: fields.value,
     previewID,
+    operationID,
   });
   const resp = await fetcher("/api/notes/bulk", bulkRequestInit(csrfToken, body));
   return { resp, payload: await readBulkResponsePayload(resp) };

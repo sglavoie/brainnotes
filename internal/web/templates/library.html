@@ -62,9 +62,9 @@
       </div>
       {{template "facetControls" .FacetControls}}
       <div class="library-search-options">
-      <details class="library-search-help"><summary>Search help</summary><p>Search text, filters, and expressions apply together. Notes must match every active constraint. Press Enter in search to move to the results.</p></details>
       <details class="library-expression" data-library-expression>
         <summary>Query expression <span data-library-expression-indicator></span></summary>
+        <p class="library-expression-help">Search text, filters, and expressions apply together. Notes must match every active constraint. Press Enter in search to move to the results.</p>
         {{template "queryBar" ""}}
       </details>
       </div>

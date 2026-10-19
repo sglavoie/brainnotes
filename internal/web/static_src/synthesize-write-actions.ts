@@ -1,5 +1,6 @@
 import { announceConfirmedWrite } from "./write-notice";
 import { requestSynthesisApply, requestSynthesisPreview } from "./api";
+import { newWriteOperationID, offerWriteOutcomeCheck } from "./write-outcome-check";
 import { setStatusText } from "./status";
 import { invalidateSynthesisPreview, synthesisDraftError, synthesisFolderError, synthesisPreviewSignature, synthesisTitleError } from "./synthesize-model";
 import { setSynthesisWarning } from "./synthesize-render";
@@ -104,12 +105,14 @@ export const applySynthesis = async (runtime: SynthesisRuntime): Promise<void> =
     return;
   }
   runtime.applying = true;
+  const operationID = newWriteOperationID();
   runtime.render();
   setStatusText(view.previewStatus, `Creating ${receipt.destination}…`, "is-loading");
   try {
     const response = await requestSynthesisApply(runtime.fetcher, config.applyEndpoint, {
       preview_id: receipt.preview_id,
       token: config.csrfToken,
+      operation_id: operationID,
     });
     announceConfirmedWrite();
     const created = response.rel_path || receipt.destination;
@@ -141,10 +144,13 @@ export const applySynthesis = async (runtime: SynthesisRuntime): Promise<void> =
     setStatusText(
       view.previewStatus,
       errorCode(error) === "unconfirmed"
-        ? errorMessage(error, "Creation not confirmed. Check History before retrying.")
+        ? errorMessage(error, "Creation not confirmed. Choose Check outcome before previewing again.")
         : `${errorMessage(error, "The note could not be created.")} Preview again to retry; nothing you wrote was lost.`,
       "is-error"
     );
+    if (errorCode(error) === "unconfirmed") {
+      offerWriteOutcomeCheck(view.previewStatus, operationID, runtime.fetcher, "Creation");
+    }
   } finally {
     runtime.applying = false;
     runtime.render();

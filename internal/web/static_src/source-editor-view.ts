@@ -65,6 +65,7 @@ export const createSourceSurfaceFactory = (
           // scrolling sideways — a note written in one paragraph per line is
           // otherwise unreadable in a pane half a window wide.
           EditorView.lineWrapping,
+          EditorView.contentAttributes.of({ "aria-labelledby": "source-editor-heading" }),
           markdown({ base: markdownLanguage }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),

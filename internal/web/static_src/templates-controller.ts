@@ -12,6 +12,7 @@ import {
   type TemplatePendingSave,
 } from "./templates-model";
 import { createTemplatesView, readTemplatesElements, type TemplatesView } from "./templates-view";
+import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export type TemplatesPanelDeps = {
   root: HTMLElement;
@@ -118,7 +119,16 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
   const writer = createTemplatesWriter({
     fetch: deps.fetch,
     token: deps.token,
-    hooks: { onStatus: view.setStatus, onPending: view.showPending, onSaved: settle },
+    hooks: {
+      onStatus: (message, kind, uncertain, operationID) => {
+        view.setStatus(message, kind, uncertain);
+        if (uncertain && operationID) {
+          offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Template change");
+        }
+      },
+      onPending: view.showPending,
+      onSaved: settle,
+    },
   });
 
   const requestSave = (): void => {

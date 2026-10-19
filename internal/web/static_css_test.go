@@ -100,9 +100,9 @@ func TestNoteInsightCSSContract(t *testing.T) {
 	for _, want := range []string{
 		".note-insight",
 		".note-insight-controls",
-		"grid-template-columns: minmax(300px, 1fr) auto;",
+		"grid-template-columns: minmax(0, 1fr) auto;",
 		".note-insight-prompt",
-		"min-width: 300px;",
+		"min-width: 0;",
 		".note-insight-button:focus-visible",
 		".note-insight-result",
 		".note-insight-copy",

@@ -11,6 +11,7 @@ import { fetchSettings, type FetchLike } from "./settings-requests";
 import { setStatusText, type StatusKind } from "./status";
 import { parseDisplayedSetting } from "./settings-units";
 import { controlText, markSettingDraft, updateSettingRow } from "./settings-rows";
+import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export type SettingsPanelDeps = {
   root: HTMLElement;
@@ -201,6 +202,9 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
       onStatus: setStatus,
       onPending: showPending,
       onSaved: (result) => { reading += 1; render(result.settings, true); },
+      onOutcomeCheck: (operationID) => {
+        offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Setting change");
+      },
     },
   });
 

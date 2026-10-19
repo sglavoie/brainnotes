@@ -286,6 +286,7 @@ export const buildSynthesisApplyForm = (
   const body = new URLSearchParams();
   body.set("preview_id", request.preview_id);
   body.set("token", request.token);
+  if (request.operation_id) body.set("operation_id", request.operation_id);
   return body;
 };
 

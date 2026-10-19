@@ -113,7 +113,10 @@ describe("settings writer", () => {
       "/api/settings/preview",
       "/api/settings/apply",
     ]);
-    expect(harness.calls[1]?.body).toEqual({ preview_id: "receipt-1" });
+    expect(harness.calls[1]?.body).toMatchObject({
+      preview_id: "receipt-1",
+      operation_id: expect.stringMatching(/^[0-9a-f]{32}$/),
+    });
     expect(harness.saved).toHaveLength(1);
     expect(harness.writer.pending()).toBeNull();
     expect(lastStatus(harness)).toEqual({ message: 'Saved "capture.file".', kind: "is-success" });

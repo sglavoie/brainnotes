@@ -168,9 +168,7 @@
 .overview-result-context { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 0.75rem; }
 .overview-result-content .overview-result-link { padding-bottom: 0.2rem; }
 
-.library-search-help { font-size: 0.85rem; color: var(--bn-muted); }
-.library-search-help > summary { cursor: pointer; padding-block: 0.35rem; }
-.library-search-help p { margin: 0.4rem 0; }
+.library-expression-help { font-size: 0.85rem; color: var(--bn-muted); margin: 0.5rem 0; }
 .overview-result-snippet mark, .search-result-snippet mark { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); font-weight: 600; }
 
 /* Long excerpts and attachment URLs must not crowd all other results off a phone. */

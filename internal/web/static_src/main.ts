@@ -20,11 +20,13 @@ import { initSearch } from "./search";
 import { initNewNote } from "./new-note";
 import { initSyncLine } from "./sync-line";
 import { initTheme } from "./theme";
+import { initPendingWriteOutcomes } from "./write-outcome-check";
 
 (function () {
   const readOnly = document.documentElement.dataset.readOnly === "true";
   initTheme();
   if (!readOnly) {
+    initPendingWriteOutcomes();
     initFolderSuggestions();
     initCapture();
     initNewNote();

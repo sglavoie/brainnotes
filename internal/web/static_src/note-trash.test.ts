@@ -124,8 +124,11 @@ describe("trash note DOM behavior", () => {
     expect(url).toBe("/api/notes/trash");
     expect(init).toMatchObject({
       method: "POST",
-      body: "key=folder%2Fnote.md&token=csrf-token",
     });
+    const body = new URLSearchParams(String(init.body));
+    expect(body.get("key")).toBe("folder/note.md");
+    expect(body.get("token")).toBe("csrf-token");
+    expect(body.get("operation_id")).toMatch(/^[0-9a-f]{32}$/);
     expect(status?.textContent).toBe("Moved note to Trash. Redirecting...");
     expect(status?.classList.contains("is-success")).toBe(true);
     expect(redirectMock).toHaveBeenCalledWith("/");

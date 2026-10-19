@@ -94,6 +94,7 @@ export type PropertyMutationRequest = {
 };
 
 export type PropertyValueEditRequest = {
+  operation_id?: string;
   note: string;
   property: string;
   op: PropertyValueOp;
@@ -116,6 +117,7 @@ export type PropertySchemaRequest = {
 
 export type PropertyApplyRequest = {
   preview_id: string;
+  operation_id?: string;
 };
 
 // PropertyPendingPreview is an issued receipt held by the browser between the

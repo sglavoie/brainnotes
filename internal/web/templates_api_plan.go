@@ -86,12 +86,12 @@ func templateRevisionError(relPath string) error {
 // them, but the destination was derived from templates.dir, so a configuration
 // replaced between planning and committing would mean the file lands in a
 // directory the preview never named.
-func (s *Server) commitTemplatePlan(plan *templatePlan, pin configPin) (*journal.Entry, error) {
+func (s *Server) commitTemplatePlan(plan *templatePlan, pin configPin, opts ...journal.RecorderOption) (*journal.Entry, error) {
 	if plan == nil || !plan.Changed {
 		return nil, nil
 	}
 	entry, err := noteops.BeginOperation(
-		s.vault.Root, "templates", templateCommand(plan.Op), []string{plan.AbsPath})
+		s.vault.Root, "templates", templateCommand(plan.Op), []string{plan.AbsPath}, opts...)
 	if err != nil {
 		return nil, err
 	}

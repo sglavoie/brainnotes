@@ -2,39 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { PropertyMutationResult, PropertySummary } from "./api";
 import { initPropertyDetail } from "./properties";
-import {
-  configInvalidMessage,
-  configRestartMessage,
-  createConfigStatusPoller,
-} from "./properties-config-status";
-import { createPreviewDialog, previewSummaryLabel } from "./properties-preview-dialog";
-import { renderRows } from "./properties-render";
-import {
-  createPropertySchemaEditor,
-  definitionError,
-  parseAllowedValues,
-} from "./properties-schema-editor";
-import { createUndoToast } from "./properties-toast";
-import {
-  createValueControl,
-  datetimeLocalToRFC3339,
-  rfc3339ToDatetimeLocal,
-  scalarValueError,
-  wikilinkTargetError,
-} from "./properties-value-control";
-import {
-  actionConfirmLabel,
-  actionTitle,
-  editItemKind,
-  editKind,
-  mutationSuccessMessage,
-  rowIsEditable,
-  selectionLabel,
-  typedValueFrom,
-  undoToastMessage,
-} from "./properties-workbench-model";
 
 import {
   detailPayload,
@@ -44,7 +12,6 @@ import {
   requireElement,
   routedFetch,
   submitEditor,
-  summaryFixture,
   waitForExpect,
 } from "./properties-workbench.test-helpers";
 
@@ -53,6 +20,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// This existing integration suite groups a full workbench journey in one fixture.
+// eslint-disable-next-line max-lines-per-function
 describe("property detail workbench", () => {
   it("renders no mutation control without a CSRF token", async () => {
     const fetchMock = routedFetch({ "/api/properties/detail": () => detailPayload() });
@@ -107,6 +76,7 @@ describe("property detail workbench", () => {
       (init?.headers as Record<string, string> | undefined)?.["X-BN-CSRF"]
     ).toBe("tok");
     expect(JSON.parse(String(init?.body))).toEqual({
+      operation_id: expect.stringMatching(/^[0-9a-f]{32}$/),
       note: "Notes/Alpha.md",
       property: "status",
       op: "replace",
@@ -159,7 +129,10 @@ describe("property detail workbench", () => {
       const applyCall = fetchMock.mock.calls.find(
         ([url]) => String(url) === "/api/properties/apply"
       );
-      expect(JSON.parse(String(applyCall?.[1]?.body))).toEqual({ preview_id: "receipt-1" });
+      expect(JSON.parse(String(applyCall?.[1]?.body))).toMatchObject({
+        preview_id: "receipt-1",
+        operation_id: expect.stringMatching(/^[0-9a-f]{32}$/),
+      });
     });
   });
 

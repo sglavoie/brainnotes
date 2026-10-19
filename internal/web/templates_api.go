@@ -290,7 +290,7 @@ func (s *Server) handleTemplatesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, err := s.commitTemplatePlan(plan, pin)
+	entry, err := s.commitTemplatePlan(plan, pin, journalOptionsForOperation(req.OperationID)...)
 	if err != nil {
 		writeManagementError(w, templatesWriteError(err))
 		return

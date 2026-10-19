@@ -28,8 +28,15 @@ export type SyncLineDeps = {
 const refusalCodes = ["forbidden", "not_found"];
 
 const renderLine = (line: HTMLElement, status: SyncStatusResult, doc: Document): void => {
+  // Keep routine synchronization details on the Sync page. This shared line
+  // interrupts every reading and writing surface only when a person can act.
+  if (!syncNeedsPerson(status)) {
+    line.textContent = "";
+    line.classList.remove("is-attention");
+    return;
+  }
   line.textContent = `Sync: ${syncLineSummary(status)}`;
-  line.classList.toggle("is-attention", syncNeedsPerson(status));
+  line.classList.add("is-attention");
   if (status.review_path === "") {
     return;
   }

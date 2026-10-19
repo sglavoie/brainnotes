@@ -32,6 +32,7 @@ const suite = process.env.BN_E2E_SUITE ?? "all";
 if (!["all", "pr"].includes(suite)) throw new Error(`Unknown browser suite: ${suite}`);
 
 const qualificationSpec = browserSuites.hosted;
+const hostedPrSpec = browserSuites.hostedPr;
 const visualSpec = browserSuites.visual;
 const readOnlySpec = browserSuites.readOnly;
 
@@ -128,6 +129,11 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
     qualificationProject("hosted-chromium-desktop", devices["Desktop Chrome"]),
+    {
+      name: "hosted-chromium-pr",
+      testMatch: hostedPrSpec,
+      use: { ...devices["Desktop Chrome"], baseURL: manifest.hostedBaseURL },
+    },
     qualificationProject("hosted-firefox-desktop", devices["Desktop Firefox"]),
     qualificationProject("hosted-webkit-desktop", devices["Desktop Safari"]),
     qualificationProject("hosted-chromium-mobile", mobileLayout(devices["Desktop Chrome"])),

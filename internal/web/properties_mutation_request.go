@@ -70,14 +70,16 @@ type propertyMutationRequest struct {
 // propertyApplyRequest redeems a preview receipt. It carries no plan of its
 // own, so an apply can never describe work the preview did not show.
 type propertyApplyRequest struct {
-	Token     string `json:"token"`
-	PreviewID string `json:"preview_id"`
+	Token       string `json:"token"`
+	PreviewID   string `json:"preview_id"`
+	OperationID string `json:"operation_id,omitempty"`
 }
 
 // propertyValueRequest is one immediate single-note edit, guarded by the note
 // hash the browser rendered.
 type propertyValueRequest struct {
 	Token        string                 `json:"token"`
+	OperationID  string                 `json:"operation_id,omitempty"`
 	Note         string                 `json:"note"`
 	Property     string                 `json:"property"`
 	Op           propertyValueOp        `json:"op"`
@@ -208,6 +210,9 @@ func (s *Server) parsePropertyApplyRequest(r *http.Request) (propertyApplyReques
 	}
 	req.Token = ""
 	req.PreviewID = strings.TrimSpace(req.PreviewID)
+	if req.OperationID != "" && !validOperationID(req.OperationID) {
+		return propertyApplyRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "invalid operation ID")
+	}
 	if req.PreviewID == "" {
 		return propertyApplyRequest{}, noteops.Errorf(noteops.CodePreviewRequired, "properties: preview required")
 	}
@@ -226,25 +231,35 @@ func (s *Server) parsePropertyValueRequest(r *http.Request) (propertyValueReques
 	req.Note = normalizePropertyNotePath(req.Note)
 	req.Property = strings.TrimSpace(req.Property)
 	req.ExpectedHash = strings.TrimSpace(req.ExpectedHash)
+	if err := validatePropertyValueRequest(req); err != nil {
+		return propertyValueRequest{}, err
+	}
+	return req, nil
+}
+
+func validatePropertyValueRequest(req propertyValueRequest) error {
+	if req.OperationID != "" && !validOperationID(req.OperationID) {
+		return noteops.Errorf(noteops.CodeInvalidRequest, "invalid operation ID")
+	}
 
 	if req.Note == "" {
-		return propertyValueRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "properties: note is required")
+		return noteops.Errorf(noteops.CodeInvalidRequest, "properties: note is required")
 	}
 	if req.Property == "" {
-		return propertyValueRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "properties: property is required")
+		return noteops.Errorf(noteops.CodeInvalidRequest, "properties: property is required")
 	}
 	if req.ExpectedHash == "" {
-		return propertyValueRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "properties: expected_hash is required")
+		return noteops.Errorf(noteops.CodeInvalidRequest, "properties: expected_hash is required")
 	}
 	if req.Value == nil {
-		return propertyValueRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "properties: value is required")
+		return noteops.Errorf(noteops.CodeInvalidRequest, "properties: value is required")
 	}
 	switch req.Op {
 	case propertyValueOpReplace, propertyValueOpListAdd:
 	default:
-		return propertyValueRequest{}, noteops.Errorf(noteops.CodeInvalidRequest, "properties: unsupported op %q", string(req.Op))
+		return noteops.Errorf(noteops.CodeInvalidRequest, "properties: unsupported op %q", string(req.Op))
 	}
-	return req, nil
+	return nil
 }
 
 func (s *Server) parsePropertySchemaRequest(r *http.Request) (propertySchemaRequest, error) {

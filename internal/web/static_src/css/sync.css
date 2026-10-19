@@ -39,6 +39,13 @@
 
 .sync-line-review {
   color: var(--bn-link);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.write-outcome-check {
+  margin-inline-start: 0.35rem;
+  font-size: inherit;
 }
 
 .sync-panel,

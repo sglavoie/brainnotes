@@ -8,6 +8,7 @@ import {
 } from "./settings-model";
 import { applySetting, previewSetting, type FetchLike } from "./settings-requests";
 import type { StatusKind } from "./status";
+import { newWriteOperationID } from "./write-outcome-check";
 
 export type SettingsWriteHooks = {
   /** Reports progress, refusals and the final outcome. */
@@ -16,6 +17,7 @@ export type SettingsWriteHooks = {
   onPending?: (pending: SettingPendingSave | null) => void;
   /** Fires once the write landed, carrying the reloaded settings table. */
   onSaved?: (result: SettingsResult) => void;
+  onOutcomeCheck?: (operationID: string) => void;
 };
 
 export type SettingsWriter = {
@@ -106,12 +108,14 @@ export const createSettingsWriter = (deps: SettingsWriterDeps): SettingsWriter =
       return;
     }
     busy = true;
+    const operationID = newWriteOperationID();
     setStatus(`Saving "${issued.key}"...`, "is-loading");
     try {
-      const outcome = await applySetting(deps.fetch, deps.token, issued.previewID);
+      const outcome = await applySetting(deps.fetch, deps.token, issued.previewID, operationID);
       setPending(null);
       if (!outcome.ok) {
         setStatus(outcome.message, "is-error", outcome.uncertain);
+        if (outcome.uncertain) hooks.onOutcomeCheck?.(operationID);
         return;
       }
       hooks.onSaved?.(outcome.result);

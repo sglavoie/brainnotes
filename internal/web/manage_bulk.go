@@ -22,7 +22,6 @@ func (s *Server) handleNotesBulk(w http.ResponseWriter, r *http.Request) {
 		writeManagementError(w, err)
 		return
 	}
-
 	record, err := s.previewStore.consume(r.Form.Get("preview_id"))
 	if err != nil {
 		writeManagementError(w, err)
@@ -44,7 +43,7 @@ func (s *Server) handleNotesBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.runBulkAction(req, bulkPreviewApplyOptions(record)...)
+	result, err := s.runBulkActionForRequest(r, req, record)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -55,6 +54,18 @@ func (s *Server) handleNotesBulk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeManagementJSON(w, http.StatusOK, bulkManagementResponseForResult(req.Action, result))
+}
+
+func (s *Server) runBulkActionForRequest(r *http.Request, req bulkManagementRequest, record bulkPreviewRecord) (*noteops.BulkResult, error) {
+	operationID, err := operationIDFromForm(r)
+	if err != nil {
+		return nil, err
+	}
+	options := bulkPreviewApplyOptions(record)
+	if operationID != "" {
+		options = append(options, noteops.WithBulkJournalOptions(journalOptionsForOperation(operationID)...))
+	}
+	return s.runBulkAction(req, options...)
 }
 
 func (s *Server) handleNotesBulkPreview(w http.ResponseWriter, r *http.Request) {

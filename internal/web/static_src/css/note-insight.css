@@ -16,14 +16,14 @@
 
 .note-insight-controls {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   gap: 0.45rem;
 }
 
 .note-insight-prompt {
   width: 100%;
-  min-width: 300px;
+  min-width: 0;
   min-height: 3.7rem;
   resize: vertical;
   border: 1px solid var(--bn-border);

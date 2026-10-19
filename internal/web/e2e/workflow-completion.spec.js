@@ -9,7 +9,7 @@ for (const path of ["/new", "/pinned", "/synthesize?source=Alpha"]) {
     await expect(workspace).toBeVisible();
     await workspace.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("link", { name: "Library", exact: true })).toBeVisible();
+    await expect(page.locator(".focused-workspace-header").getByRole("link", { name: "Library", exact: true })).toBeVisible();
     await page.locator("#search-input").fill("Alpha");
     await expect(page.locator(".search-result-title").first()).toHaveText("Alpha");
     await page.setViewportSize({ width: 390, height: 640 });

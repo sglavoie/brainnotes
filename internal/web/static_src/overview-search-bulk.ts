@@ -29,6 +29,7 @@ import { renderPreviewPanel, syncPreviewAttributes } from "./overview-search-ren
 import { postBulkApply, postBulkPreview } from "./overview-search-requests";
 import { setStatusText } from "./status";
 import { syncOverviewSelectionControls } from "./overview-search-selection";
+import { newWriteOperationID, offerWriteOutcomeCheck } from "./write-outcome-check";
 
 // The bulk-action half of the overview search: selection-driven preview/apply
 // state and its controls. OverviewSearch extends it with the search half.
@@ -203,6 +204,14 @@ export abstract class OverviewSearchBulk {
     }
   };
 
+  private reportUnconfirmedBulkApply = (message: string, operationID: string): void => {
+    this.clearPreviewState();
+    this.setBulkStatus(message, "is-error");
+    if (this.els.bulkStatusEl) {
+      offerWriteOutcomeCheck(this.els.bulkStatusEl, operationID, this.fetcher, "Bulk change");
+    }
+  };
+
   protected runBulkApply = async (
     action: BulkAction,
     fields: BulkActionFields,
@@ -219,6 +228,7 @@ export abstract class OverviewSearchBulk {
     }
 
     this.setBulkBusy(true);
+    const operationID = newWriteOperationID();
     this.setBulkStatus("Applying bulk action...", "is-loading");
     try {
       const { resp, payload } = await postBulkApply(
@@ -227,12 +237,12 @@ export abstract class OverviewSearchBulk {
         action,
         keys,
         fields,
-        this.previewState.previewID
+        this.previewState.previewID,
+        operationID
       );
       const failure = responseFailure(resp, payload, "write");
       if (failure?.uncertain) {
-        this.clearPreviewState();
-        this.setBulkStatus(failure.message, "is-error");
+        this.reportUnconfirmedBulkApply(failure.message, operationID);
         return;
       }
       if (!resp.ok) {
@@ -255,8 +265,7 @@ export abstract class OverviewSearchBulk {
       }));
       this.scheduleSearch(0);
     } catch {
-      this.clearPreviewState();
-      this.setBulkStatus(unansweredRequest("write").message, "is-error");
+      this.reportUnconfirmedBulkApply(unansweredRequest("write").message, operationID);
     } finally {
       this.setBulkBusy(false);
     }
