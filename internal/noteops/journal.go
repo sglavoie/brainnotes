@@ -98,11 +98,26 @@ func BeginOperation(vaultRoot, operation, command string, targets []string, opts
 	return BeginOperationContext(context.Background(), vaultRoot, operation, command, targets, opts...)
 }
 
+// contextOrBackground is ctx, or a background context for an options struct a
+// caller built without one. Every option type that carries a context reads it
+// through this, so leaving it unset keeps the pre-context behaviour.
+func contextOrBackground(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
 // BeginOperationContext is BeginOperation for a caller that may already own a
 // checkpoint admission. The returned context token is kept by the Journal and
 // passed to Git safety, so its nested durable work cannot deadlock a checkpoint
 // that is waiting for this operation to finish.
 func BeginOperationContext(ctx context.Context, vaultRoot, operation, command string, targets []string, opts ...journal.RecorderOption) (*Journal, error) {
+	// An operation whose caller has already gone — a CLI interrupted before
+	// the write began — is refused here, before it creates anything.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	joinedCtx, barrier, err := checkpoint.JoinContext(ctx, vaultRoot)
 	if err != nil {
 		return nil, classifyBarrierError(err)

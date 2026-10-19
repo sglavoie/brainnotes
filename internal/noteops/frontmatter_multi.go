@@ -60,7 +60,8 @@ func SetFrontmatterAtomic(vaultRoot string, writes []NoteFrontmatterWrite, fm *c
 		}
 	}
 
-	j, err := BeginOperation(vaultRoot, "frontmatter-set", options.command, plannedPaths(planned), options.journalOptions...)
+	j, err := BeginOperationContext(contextOrBackground(options.ctx), vaultRoot, "frontmatter-set", options.command,
+		plannedPaths(planned), options.journalOptions...)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package noteops
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -34,6 +35,7 @@ type TrashResult struct {
 }
 
 type trashOptions struct {
+	ctx            context.Context
 	command        string
 	now            func() time.Time
 	shortID        func() (string, error)
@@ -47,6 +49,14 @@ type TrashOption func(*trashOptions)
 func WithTrashCommand(command string) TrashOption {
 	return func(o *trashOptions) {
 		o.command = strings.TrimSpace(command)
+	}
+}
+
+// WithTrashContext makes the operation honour ctx, so a CLI interrupt cancels
+// it at the same boundaries as every other journaled write.
+func WithTrashContext(ctx context.Context) TrashOption {
+	return func(o *trashOptions) {
+		o.ctx = ctx
 	}
 }
 
@@ -89,6 +99,32 @@ func newTrashOptions(opts []TrashOption) trashOptions {
 	return cfg
 }
 
+// PreviewTrash describes what TrashNote would do to sourceRel without writing
+// anything: one path change from the note to its Trash/ destination, in the
+// NotePreview every --dry-run renders. It returns the same source and
+// destination refusals TrashNote would. When Trash/ already holds a note at the
+// same path, the destination carries a collision suffix whose short ID is drawn
+// afresh by the real move, so only that suffix may differ.
+func PreviewTrash(vaultRoot, sourceRel string, opts ...TrashOption) (NotePreview, error) {
+	cfg := newTrashOptions(opts)
+	source, err := resolveTrashSource(vaultRoot, sourceRel)
+	if err != nil {
+		return NotePreview{}, err
+	}
+	dest, err := resolveTrashDestination(vaultRoot, path.Join("Trash", source.RelPath), cfg)
+	if err != nil {
+		return NotePreview{}, err
+	}
+	return NotePreview{
+		RelPath: source.RelPath,
+		Changes: []PreviewChange{{
+			Kind: PreviewPath,
+			Old:  PresentText(source.RelPath),
+			New:  PresentText(dest.RelPath),
+		}},
+	}, nil
+}
+
 // TrashNote moves sourceRel to Trash/<sourceRel> without rewriting backlinks.
 func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, error) {
 	cfg := newTrashOptions(opts)
@@ -104,7 +140,8 @@ func TrashNote(vaultRoot, sourceRel string, opts ...TrashOption) (*TrashResult, 
 
 	// Ahead of the first Capture, which creates the journal entry directory and
 	// writes a snapshot of the note before anything else runs.
-	j, err := BeginOperation(vaultRoot, "trash", cfg.command, []string{source.AbsPath, dest.AbsPath}, cfg.journalOptions...)
+	j, err := BeginOperationContext(contextOrBackground(cfg.ctx), vaultRoot, "trash", cfg.command,
+		[]string{source.AbsPath, dest.AbsPath}, cfg.journalOptions...)
 	if err != nil {
 		return nil, err
 	}
